@@ -1,3 +1,4 @@
+import { normalizeProposalDetails, normalizeProposalItemFields } from './quotationProposalDetails.js';
 export const QUOTATION_VALIDITY_DAYS = 15;
 
 const DAY_IN_MS = 24 * 60 * 60 * 1000;
@@ -178,6 +179,7 @@ export const prepareQuotationItems = (items, catalogServices = [], trustedExisti
       ...(serviceId ? { serviceId } : {}),
       name: name.slice(0, 200),
       description: String(item.description || '').slice(0, 5000),
+      ...normalizeProposalItemFields(item),
       price,
       quantity,
       note: String(item.note || '').slice(0, 2000),
@@ -360,6 +362,7 @@ export const normalizeQuotationExchangeRate = ({
 const serializePublicItem = (item) => ({
   name: String(item?.name || ''),
   description: String(item?.description || ''),
+  ...normalizeProposalItemFields(item || {}),
   price: Number(item?.price) || 0,
   quantity: Number(item?.quantity) || 0,
   note: String(item?.note || ''),
@@ -429,6 +432,7 @@ export const serializePublicQuotation = (quotation) => {
     'total_amount',
     'terms_and_conditions',
     'created_at',
+    'updated_at',
     'issued_at',
     'reactivated_at',
     'accepted_at',
@@ -442,6 +446,15 @@ export const serializePublicQuotation = (quotation) => {
 
   return {
     ...serialized,
+    ...(normalizedQuotation.proposal_details ? { proposal_details: normalizeProposalDetails(normalizedQuotation.proposal_details) } : {}),
     items: Array.isArray(normalizedQuotation.items) ? normalizedQuotation.items.map(serializePublicItem) : []
   };
+};
+
+export const quotationProposalTotals = (items, isTaxExempt, options = {}) => {
+  const scenarios = groupQuotationScenarios(items);
+  return scenarios.length ? scenarios.map(scenario => ({
+    id: scenario.id, name: scenario.name,
+    totals: calculateQuotationTotals(scenario.items, isTaxExempt, { ...options, discountType: scenario.discountType, discountValue: scenario.discountValue })
+  })) : [{ id: null, name: 'Propuesta completa', totals: calculateQuotationTotals(items, isTaxExempt, options) }];
 };

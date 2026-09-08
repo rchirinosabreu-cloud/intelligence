@@ -1,10 +1,12 @@
 import prisma from '../lib/prisma.js';
 import crypto from 'crypto';
+import { Prisma } from '@prisma/client';
+import { normalizeProposalDetails, ProposalValidationError } from '../services/quotationProposalDetails.js';
 import { generateQuotationPdfBuffer } from '../services/quotationPdfService.js';
 import {
     buildContractTermsText,
     resolveSuggestedContractTermIds,
-    sanitizeContractTermsText
+    sanitizeContractTermsText, termsWithProposalPayments
 } from '../services/quotationContractTerms.js';
 import {
     QuotationValidationError,
@@ -20,7 +22,8 @@ import {
     prepareQuotationItems,
     resolveQuotationTaxExemption,
     serializeCatalogService,
-    serializePublicQuotation
+    serializePublicQuotation,
+    quotationProposalTotals
 } from '../services/quotationDomainService.js';
 import { fetchOfficialUsdCopRate } from '../services/exchangeRateService.js';
 import {
@@ -66,7 +69,7 @@ const findCatalogServicesForItems = async (items = []) => {
 };
 
 const sendQuotationError = (res, error, fallbackMessage) => {
-    if (error instanceof QuotationValidationError) {
+    if (error instanceof QuotationValidationError || error instanceof ProposalValidationError) {
         return res.status(error.statusCode).json({ error: error.message });
     }
     if (error?.code === 'P2025') {
@@ -159,6 +162,7 @@ export const createQuotation = async (req, res) => {
             : buildQuotationTerms({ services: catalogServices, emisorType: emisor_type, currency, isTaxExempt: is_tax_exempt });
 
         // 6. Persistence
+        const proposalDetails = normalizeProposalDetails(req.body.proposal_details, { issue: !isDraft, totalsByScenario: quotationProposalTotals(preparedItems, is_tax_exempt, { durationMonths, ...discount }) });
         const quotation = await prisma.quotation.create({
             data: {
                 uuid_slug,
@@ -170,6 +174,7 @@ export const createQuotation = async (req, res) => {
                 client_phone: client_phone || '',
                 is_tax_exempt,
                 items: preparedItems,
+                ...(proposalDetails ? { proposal_details: proposalDetails } : {}),
                 duration_months: durationMonths,
                 discount_type: scenarioMode ? null : discount.discountType,
                 discount_value: scenarioMode ? 0 : discount.discountValue,
@@ -180,7 +185,7 @@ export const createQuotation = async (req, res) => {
                 subtotal: totals.subtotal,
                 tax_amount: totals.taxAmount,
                 total_amount: totals.totalAmount,
-                terms_and_conditions: final_terms,
+                terms_and_conditions: termsWithProposalPayments(final_terms, Boolean(proposalDetails?.paymentPlans?.length)),
                 created_at,
                 ...validity
             }
@@ -279,8 +284,10 @@ export const updateQuotation = async (req, res) => {
             ? adaptTermsForIssuer(sanitizeContractTermsText(terms_and_conditions), targetEmisor)
             : existing.terms_and_conditions;
 
+        const proposalDetails = normalizeProposalDetails(Object.hasOwn(req.body, 'proposal_details') ? req.body.proposal_details : existing.proposal_details, { issue: !isDraft, totalsByScenario: quotationProposalTotals(preparedItems, is_tax_exempt, { durationMonths, ...discount }) });
+
         const quotation = await prisma.quotation.update({
-            where: { id },
+            where: { id, status: { not: 'APROBADA' }, updated_at: existing.updated_at },
             data: {
                 emisor_type: targetEmisor,
                 status: targetStatus,
@@ -290,6 +297,7 @@ export const updateQuotation = async (req, res) => {
                 client_phone,
                 is_tax_exempt,
                 items: preparedItems,
+                ...(proposalDetails ? { proposal_details: proposalDetails } : Object.hasOwn(req.body, 'proposal_details') ? { proposal_details: Prisma.DbNull } : {}),
                 duration_months: durationMonths,
                 discount_type: scenarioMode ? null : discount.discountType,
                 discount_value: scenarioMode ? 0 : discount.discountValue,
@@ -300,7 +308,7 @@ export const updateQuotation = async (req, res) => {
                 subtotal: totals.subtotal,
                 tax_amount: totals.taxAmount,
                 total_amount: totals.totalAmount,
-                terms_and_conditions: final_terms,
+                terms_and_conditions: termsWithProposalPayments(final_terms, Boolean(proposalDetails?.paymentPlans?.length)),
                 ...buildQuotationValidityUpdate(existing, targetStatus)
             }
         });
@@ -312,6 +320,7 @@ export const updateQuotation = async (req, res) => {
 
     } catch (error) {
         console.error("[QuotationController] Update failed:", error);
+        if (error?.code === 'P2025') return res.status(409).json({ error: 'La propuesta cambió mientras la editabas. Recarga para revisar su versión actual.' });
         sendQuotationError(res, error, "Error al actualizar la cotizacion");
     }
 };
@@ -355,11 +364,12 @@ export const getPublicQuotation = async (req, res) => {
 
 export const acceptPublicQuotation = async (req, res) => {
     try {
-        const { scenarioId } = req.body || {};
+        const { scenarioId, expectedUpdatedAt } = req.body || {};
         const { quotation, alreadyAccepted } = await acceptQuotationBySlug({
             db: prisma,
             slug: req.params.uuid_slug,
-            scenarioId
+            scenarioId,
+            expectedUpdatedAt
         });
         const publicQuotation = serializePublicQuotation(quotation);
         const emisor_data = EMISORES_DATA[quotation.emisor_type] || {};

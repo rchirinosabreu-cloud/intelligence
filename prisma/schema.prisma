@@ -1654,6 +1654,7 @@ model Quotation {
   client_phone         String                 @default("")
   is_tax_exempt        Boolean                @default(false)
   items                Json
+  proposal_details     Json?
   duration_months      Int                    @default(1)
   discount_type        QuotationDiscountType?
   discount_value       Decimal                @default(0)

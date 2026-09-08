@@ -22,12 +22,15 @@ const ensureAcceptableQuotation = (quotation, now) => {
   return 'ACCEPTABLE';
 };
 
-export const acceptQuotationBySlug = async ({ db, slug, scenarioId, now = new Date() }) => (
+export const acceptQuotationBySlug = async ({ db, slug, scenarioId, expectedUpdatedAt, now = new Date() }) => (
   db.$transaction(async (tx) => {
     const quotation = await tx.quotation.findUnique({ where: { uuid_slug: slug } });
     const acceptanceState = ensureAcceptableQuotation(quotation, now);
     if (acceptanceState === 'ALREADY_ACCEPTED') {
       return { quotation, alreadyAccepted: true };
+    }
+    if (quotation.proposal_details && (!expectedUpdatedAt || new Date(expectedUpdatedAt).getTime() !== new Date(quotation.updated_at).getTime())) {
+      throw new QuotationAcceptanceError('La versión de la propuesta cambió. Recarga y revisa su contenido antes de aceptar.', 409);
     }
 
     const scenarioItems = Array.isArray(quotation.items) && quotation.items.some((item) => item?.scenarioId)
@@ -66,6 +69,7 @@ export const acceptQuotationBySlug = async ({ db, slug, scenarioId, now = new Da
       where: {
         id: quotation.id,
         status: 'ACTIVA',
+        ...(quotation.updated_at ? { updated_at: quotation.updated_at } : {}),
         expires_at: { gte: now }
       },
       data: {

@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { jsPDF } from 'jspdf';
 import { parseContractTermsText } from './quotationContractTerms.js';
 import { calculateQuotationTotals, groupQuotationScenarios } from './quotationDomainService.js';
+import { proposalRichTextBlocks, plainTextToProposalHtml, formatExecution, paymentPlanForScenario, calculateProposalPayments, formatInstallmentDue } from './quotationProposalDetails.js';
 
 const PAGE = { width: 210, height: 297, left: 18, right: 18, top: 18, bottom: 20 };
 const CONTENT_WIDTH = PAGE.width - PAGE.left - PAGE.right;
@@ -132,6 +133,7 @@ const drawSectionHeading = (doc, y, eyebrow, title) => {
 };
 
 const drawService = (doc, item, index, y, formatMoney) => {
+  if (item.descriptionHtml !== undefined || item.execution || item.group) return drawRichService(doc, item, index, y, formatMoney);
   const { body: description, serviceTime } = splitServiceTime(item.description);
   const note = String(item.note || '').trim();
   setText(doc, { size: 11, style: 'bold' });
@@ -201,8 +203,8 @@ const drawService = (doc, item, index, y, formatMoney) => {
   return y + 6;
 };
 
-const drawTerms = (doc, terms, y) => {
-  if (PAGE.height - PAGE.bottom - y < 120) y = addPage(doc);
+const drawTerms = (doc, terms, y, compact = false) => {
+  if (PAGE.height - PAGE.bottom - y < (compact ? 50 : 120)) y = addPage(doc);
   else y = ensureSpace(doc, y, 34);
   y = drawSectionHeading(doc, y, 'Información contractual', 'Términos y condiciones');
   const columnGap = 6;
@@ -332,6 +334,11 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
   doc.text(formatDate(quotation.expires_at), PDF_LAYOUT.rightEdge, y + 19, { align: 'right' });
 
   y += 42;
+  const details = quotation.proposal_details;
+  if (details?.title) y = drawRichText(doc, plainTextToProposalHtml(details.title), y, { size: 14 });
+  if (details?.introductionHtml) y = drawRichText(doc, details.introductionHtml, y);
+  if (details?.execution) y = drawRichText(doc, plainTextToProposalHtml(`Ejecución estimada: ${formatExecution(details.execution)}`), y);
+  y = ensureSpace(doc, y + (details ? 8 : 0), 50);
   const allScenarios = groupQuotationScenarios(quotation.items || []);
   const selectedScenario = allScenarios.find(({ selected }) => selected);
   const scenarios = selectedScenario ? [selectedScenario] : allScenarios;
@@ -350,15 +357,15 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
         y += lines.length * 3.7;
       }
       y += 18;
-      scenario.items.forEach((item, index) => { y = drawService(doc, item, index, y, formatMoney); });
+      y = drawServices(doc, scenario.items, y, formatMoney, quotation.duration_months || 1);
       const amounts = calculateQuotationTotals(scenario.items, quotation.is_tax_exempt || quotation.currency === 'USD', {
         durationMonths: quotation.duration_months || 1,
         discountType: scenario.discountType,
         discountValue: scenario.discountValue
       });
       const commercialLines = [
-        { label: 'Inversión mensual', amount: amounts.monthlySubtotal },
-        ...(amounts.durationMonths > 1 ? [{ label: `${amounts.durationMonths} meses × mensualidad`, amount: amounts.monthlySubtotal * amounts.durationMonths }] : []),
+        ...(amounts.monthlySubtotal > 0 ? [{ label: 'Inversión mensual', amount: amounts.monthlySubtotal }] : []),
+        ...(amounts.monthlySubtotal > 0 && amounts.durationMonths > 1 ? [{ label: `${amounts.durationMonths} meses × mensualidad`, amount: amounts.monthlySubtotal * amounts.durationMonths }] : []),
         ...(amounts.oneTimeSubtotal > 0 ? [{ label: 'Servicios de pago único', amount: amounts.oneTimeSubtotal }] : []),
         ...(amounts.discountAmount > 0 ? [{ label: 'Valor antes del descuento', amount: amounts.grossSubtotal, isOriginal: true }] : []),
         ...(amounts.discountAmount > 0 ? [{ label: scenario.discountLabel || 'Descuento', amount: -amounts.discountAmount, isDiscount: true }] : []),
@@ -389,6 +396,7 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
       setText(doc, { size: amounts.discountAmount > 0 ? 16 : 14, style: 'bold' });
       doc.text(formatMoney.format(amounts.totalAmount), PDF_LAYOUT.rightEdge, y, { align: 'right' });
       y += 7;
+      if (!selectedScenario) y = drawPayments(doc, paymentPlanForScenario(details, scenario.id), amounts, y, formatMoney);
       if (scenario.externalBudget !== null && scenario.externalBudget !== undefined) {
         setText(doc, { size: 8, style: 'bold', color: COLORS.muted });
         doc.text(`Presupuesto externo: ${formatMoney.format(Number(scenario.externalBudget))}`, PAGE.left, y);
@@ -401,10 +409,11 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
       y += 7;
     });
   } else {
-    (quotation.items || []).forEach((item, index) => { y = drawService(doc, item, index, y, formatMoney); });
+    y = drawServices(doc, quotation.items || [], y, formatMoney, quotation.duration_months || 1);
   }
 
   const hasPendingScenarioSelection = scenarios.length > 0 && !selectedScenario;
+  let summaryBottom = y + 7;
   if (!hasPendingScenarioSelection) {
     const summaryItems = selectedScenario ? selectedScenario.items : (quotation.items || []);
     const amounts = calculateQuotationTotals(summaryItems, quotation.is_tax_exempt || quotation.currency === 'USD', {
@@ -413,8 +422,8 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
       discountValue: quotation.discount_value
     });
     const summaryLines = [
-      { label: 'Inversión mensual', amount: amounts.monthlySubtotal },
-      ...(amounts.durationMonths > 1 ? [{ label: `${amounts.durationMonths} meses × mensualidad`, amount: amounts.monthlySubtotal * amounts.durationMonths }] : []),
+      ...(amounts.monthlySubtotal > 0 ? [{ label: 'Inversión mensual', amount: amounts.monthlySubtotal }] : []),
+      ...(amounts.monthlySubtotal > 0 && amounts.durationMonths > 1 ? [{ label: `${amounts.durationMonths} meses × mensualidad`, amount: amounts.monthlySubtotal * amounts.durationMonths }] : []),
       ...(amounts.oneTimeSubtotal > 0 ? [{ label: 'Servicios de pago único', amount: amounts.oneTimeSubtotal }] : []),
       ...(amounts.discountAmount > 0 ? [{ label: 'Valor antes del descuento', amount: amounts.grossSubtotal, isOriginal: true }] : []),
       ...(amounts.discountAmount > 0 ? [{ label: quotation.discount_label || 'Descuento', amount: -amounts.discountAmount, isDiscount: true }] : []),
@@ -461,6 +470,8 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
     doc.text(amounts.discountAmount > 0 ? 'VALOR FINAL CON DESCUENTO' : 'INVERSIÓN TOTAL', 112, summaryY + 7);
     setText(doc, { size: amounts.discountAmount > 0 ? 23 : 21, style: 'bold', color: COLORS.white });
     doc.text(formatMoney.format(amounts.totalAmount), 112, summaryY + 19);
+    summaryBottom = y + investmentHeight + 14;
+    summaryBottom = drawPayments(doc, paymentPlanForScenario(details, selectedScenario?.id), amounts, summaryBottom, formatMoney);
   }
 
   const normalSummaryHeight = hasPendingScenarioSelection ? 0 : 32 + [
@@ -471,9 +482,108 @@ export const generateQuotationPdfBuffer = (quotation, issuer) => {
     Number(quotation.discount_amount || 0) > 0 ? 1 : 0,
     quotation.currency !== 'USD' && !quotation.is_tax_exempt ? 1 : 0
   ].reduce((sum, value) => sum + value, 0) * 5;
-  drawTerms(doc, splitTerms(quotation.terms_and_conditions), y + (hasPendingScenarioSelection ? 7 : normalSummaryHeight + 14));
+  y = details ? summaryBottom : y + (hasPendingScenarioSelection ? 7 : normalSummaryHeight + 14);
+  if (details?.phases?.length) {
+    y = drawSectionHeading(doc, ensureSpace(doc, y, 45), 'Cronograma', 'Etapas de implementación');
+    for (const [index, phase] of details.phases.entries()) {
+      y = ensureSpace(doc, y, 30);
+      y = drawRichText(doc, plainTextToProposalHtml(`${index + 1}. ${phase.title} · ${formatExecution(phase.execution)}`), y, { size: 10 });
+      y = drawRichText(doc, plainTextToProposalHtml({ AT_START: 'Al inicio del proyecto', AFTER_PREVIOUS: 'Después de la etapa anterior', PARALLEL: 'En paralelo' }[phase.starts]), y, { size: 8 });
+      y = drawRichText(doc, phase.descriptionHtml, y);
+      if (phase.completion) y = drawRichText(doc, plainTextToProposalHtml(`Entregable: ${phase.completion}`), y, { size: 8 });
+      y += 5;
+    }
+  }
+  for (const [key, title] of [['bonusHtml', 'Beneficios incluidos'], ['exclusionsHtml', 'Exclusiones'], ['referencesHtml', 'Referencias y trabajos de Brainstudio']]) {
+    if (!details?.[key]) continue;
+    y = drawSectionHeading(doc, ensureSpace(doc, y + 5, 40), 'Información adicional', title);
+    y = drawRichText(doc, details[key], y);
+  }
+  drawTerms(doc, splitTerms(quotation.terms_and_conditions), y + (details ? 6 : 0), Boolean(details));
   drawFooters(doc, issuer);
   return Buffer.from(doc.output('arraybuffer'));
 };
 
 export { splitTerms };
+
+// Flow rich text line by line, so long scopes never overflow or disappear at a page break.
+const drawRichText = (doc, html, startY, { left = PAGE.left, width = CONTENT_WIDTH, size = 9 } = {}) => {
+  let y = startY;
+  for (const block of proposalRichTextBlocks(html)) {
+    const fontSize = block.heading ? size + 2 : size;
+    const lineHeight = fontSize * 0.49;
+    y = ensureSpace(doc, y, lineHeight * (block.heading ? 3 : 1));
+    let x = left + (block.bullet ? 4 : 0);
+    const lineLeft = x;
+    if (block.bullet) { setText(doc, { size: fontSize }); doc.text(block.ordinal ? `${block.ordinal}.` : '-', left, y); }
+    for (const run of block.runs) {
+      const bold = run.bold || Boolean(block.heading);
+      setText(doc, { size: fontSize, style: bold ? 'bold' : 'normal', color: run.href ? COLORS.brand : COLORS.muted });
+      if (run.italic) doc.setFont('helvetica', bold ? 'bolditalic' : 'italic');
+      for (const token of run.text.split(/(\s+)/)) {
+        if (!token) continue;
+        if (token.includes('\n')) { y = ensureSpace(doc, y + lineHeight, lineHeight); x = lineLeft; continue; }
+        let remaining = token;
+        while (remaining) {
+          if (x > lineLeft && x + doc.getTextWidth(remaining) > left + width) { y = ensureSpace(doc, y + lineHeight, lineHeight); x = lineLeft; }
+          if (x === lineLeft && !remaining.trim()) break;
+          let piece = remaining;
+          while (piece.length > 1 && doc.getTextWidth(piece) > width - (lineLeft - left)) piece = piece.slice(0, -1);
+          const measured = doc.getTextWidth(piece);
+          doc.text(piece, x, y);
+          if (run.underline || run.href) { doc.setDrawColor(...(run.href ? COLORS.brand : COLORS.muted)); doc.setLineWidth(0.15); doc.line(x, y + 0.7, x + measured, y + 0.7); }
+          if (run.href) doc.link(x, y - fontSize * 0.35, measured, lineHeight, { url: run.href });
+          x += measured; remaining = remaining.slice(piece.length);
+        }
+      }
+    }
+    y += lineHeight + 2;
+  }
+  return y;
+};
+const drawRichService = (doc, item, index, y, money) => {
+  y = ensureSpace(doc, y, 34);
+  doc.setDrawColor(...COLORS.border); doc.setLineWidth(0.2); doc.line(PAGE.left, y, PDF_LAYOUT.rightEdge, y);
+  y += 7;
+  setText(doc, { size: 10, style: 'bold' });
+  const title = doc.splitTextToSize(`${index + 1}. ${item.name}`, 122);
+  const titleY = y;
+  for (const line of title) { y = ensureSpace(doc, y, 6); doc.text(line, PAGE.left, y); y += 5; }
+  setText(doc, { size: 10, style: 'bold', color: COLORS.brand });
+  doc.text(money.format(Number(item.price) * Number(item.quantity)), PDF_LAYOUT.rightEdge, titleY, { align: 'right' });
+  setText(doc, { size: 7, color: COLORS.subtle });
+  doc.text(`${item.quantity} unidad(es) · ${item.billingType === 'ONE_TIME' ? 'Pago único' : 'Mensual'}`, PDF_LAYOUT.rightEdge, titleY + 5, { align: 'right' });
+  y = drawRichText(doc, item.descriptionHtml ?? plainTextToProposalHtml(item.description), y + 4);
+  if (item.execution) y = drawRichText(doc, plainTextToProposalHtml(`Ejecución: ${formatExecution(item.execution)}`), y + 1, { size: 8 });
+  if (item.note) y = drawRichText(doc, plainTextToProposalHtml(`Nota: ${item.note}`), y + 1, { size: 8 });
+  return y + 5;
+};
+const drawServices = (doc, items, y, money, durationMonths) => {
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (item.group && item.group !== items[i - 1]?.group) {
+      y = ensureSpace(doc, y + (i ? 5 : 0), 45);
+      y = drawRichText(doc, `<h2>${plainTextToProposalHtml(item.group).replace(/^<p>|<\/p>$/g, '')}</h2>`, y);
+    }
+    y = drawService(doc, item, i, y, money);
+    if (item.group && !items.slice(i + 1).some(next => next.group === item.group)) {
+      const subtotal = calculateQuotationTotals(items.filter(next => next.group === item.group), true, { durationMonths }).subtotal;
+      y = drawRichText(doc, plainTextToProposalHtml(`Subtotal del desarrollo: ${money.format(subtotal)} (antes de descuentos e impuestos)`), y, { size: 8 });
+    }
+  }
+  return y;
+};
+const drawPayments = (doc, plan, totals, y, money) => {
+  if (!plan) return y;
+  const rows = calculateProposalPayments(plan, totals);
+  y = drawSectionHeading(doc, ensureSpace(doc, y, 42), 'Inversión por partes', 'Plan de pagos');
+  y = drawRichText(doc, plainTextToProposalHtml(`Total ${money.format(totals.totalAmount)} · ${rows.length} pagos${totals.taxAmount ? ' · impuestos incluidos' : ''}`), y);
+  for (const row of rows) {
+    y = ensureSpace(doc, y, 27);
+    y = drawRichText(doc, plainTextToProposalHtml(`${row.label}${plan.mode === 'PERCENTAGE' ? ` · ${row.value}%` : ''}: ${money.format(row.amount)}`), y, { size: 10 });
+    y = drawRichText(doc, plainTextToProposalHtml(formatInstallmentDue(row)), y, { size: 8 });
+    if (row.taxAmount) y = drawRichText(doc, plainTextToProposalHtml(`Base ${money.format(row.baseAmount)} + IVA ${money.format(row.taxAmount)}`), y, { size: 8 });
+    y += 4;
+  }
+  return y + 4;
+};

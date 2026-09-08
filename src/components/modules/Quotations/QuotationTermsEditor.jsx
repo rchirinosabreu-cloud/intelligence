@@ -5,10 +5,10 @@ import {
     CONTRACT_TERM_LIBRARY,
     buildContractTermsText,
     parseContractTermsText,
-    resolveSuggestedContractTermIds
+    resolveSuggestedContractTermIds, termsWithProposalPayments
 } from '@/services/quotationContractTerms';
 
-const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, isEditing, onChange }) => {
+const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, isEditing, onChange, paymentPlanEnabled = false }) => {
     const [preserveExisting, setPreserveExisting] = useState(isEditing);
     const [existingTerms, setExistingTerms] = useState([]);
     const [manualIds, setManualIds] = useState([]);
@@ -25,8 +25,8 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
     }, [existingInitialized, existingText, isEditing]);
 
     const suggestedIds = useMemo(
-        () => resolveSuggestedContractTermIds(services, { currency, isTaxExempt }),
-        [services, currency, isTaxExempt]
+        () => resolveSuggestedContractTermIds(services, { currency, isTaxExempt }).filter(id => !paymentPlanEnabled || id !== 'general-payment'),
+        [services, currency, isTaxExempt, paymentPlanEnabled]
     );
 
     const effectiveIds = useMemo(() => {
@@ -38,8 +38,8 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
     }, [excludedIds, manualIds, preserveExisting, suggestedIds]);
 
     const effectiveCustomTerms = useMemo(
-        () => preserveExisting ? [...existingTerms, ...customTerms] : customTerms,
-        [customTerms, existingTerms, preserveExisting]
+        () => { const terms = preserveExisting ? [...existingTerms, ...customTerms] : customTerms; return paymentPlanEnabled ? parseContractTermsText(termsWithProposalPayments(buildContractTermsText([], terms), true)) : terms; },
+        [customTerms, existingTerms, preserveExisting, paymentPlanEnabled]
     );
     const finalText = useMemo(
         () => buildContractTermsText(effectiveIds, effectiveCustomTerms),

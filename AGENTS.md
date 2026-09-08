@@ -133,3 +133,11 @@ Todo bloque catch en llamadas a la API debe hacer un console.error del mensaje r
 - Revalidar conciliación contra datos vigentes, cuenta/moneda/periodo y estado; nunca aprobar una propuesta obsoleta ni inventar saldo cero ante extracción incompleta. Saldo inicial de cuenta tiene un día de corte explícito.
 - Acceso a Financiero: solo `User.role === ADMIN` o casilla `modulePermissions.financiero === true` habilitada por un admin en Equipo. Nombres de cuenta, `hasFinancialAccess` antiguo o un nivel financiero sin casilla no conceden entrada. Desmarcar revoca acceso. Los niveles VIEWER/EDITOR/APPROVER limitan acciones dentro del módulo; una casilla histórica habilitada con nivel NONE/ausente conserva EDITOR, sin conceder aprobación. Compartir `hasFinancialPermission` entre API/UI y comprobar permisos vigentes y usuario activo en backend. No reasignar permisos productivos automáticamente.
 - Pruebas reales de finanzas solo contra `TEST_DATABASE_URL` aislada y validada. Nunca usar la conexión productiva de `.env` para pruebas, seed o limpieza. No confundir pruebas con dobles de persistencia con verificación real de concurrencia.
+
+## 9. Propuestas y cotizaciones
+
+- Estado y despliegue: `docs/QUOTATION_PROPOSALS.md`. `proposal_details` es un snapshot opcional/versionado y requiere la columna nullable en PostgreSQL antes de publicar el backend; la muestra local no equivale a persistencia real.
+- Servicios personalizados no crean catálogo ni costos ficticios. Ejecución por servicio/etapa es independiente de mensualidades de cobro. Grupos son complementarios; escenarios, alternativas.
+- Cuotas suman exactamente el total contractual con descuentos e impuestos configurados; distribuir redondeo en centavos y no registrar dinero ni cartera por definir un calendario de pagos. No confundir cuotas con recurrencia de servicios.
+- HTML permitido y enlaces HTTP(S) se validan en servidor y se conservan en web/PDF. No publicar scripts, imágenes o estilos arbitrarios; no truncar silenciosamente texto enriquecido.
+- El plan de pagos sustituye solo la cláusula genérica conocida del anticipo. Preservar acuerdos personalizados y requerir confirmación de compatibilidad al emitir. Propuestas aprobadas son inmutables; proteger versión tanto al guardar como al aceptar.

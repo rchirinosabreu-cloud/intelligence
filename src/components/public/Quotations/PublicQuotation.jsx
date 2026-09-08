@@ -17,6 +17,8 @@ import { Button } from '@/components/ui/button';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { calculateQuotationTotals, groupQuotationScenarios } from '@/services/quotationDomainService';
 import { parseContractTermsText } from '@/services/quotationContractTerms';
+import { formatExecution, paymentPlanForScenario } from '@/services/quotationProposalDetails';
+import { ProposalRichText, ProposalPayments, ProposalTimeline, ProposalClosing } from '@/components/modules/Quotations/ProposalContent';
 
 const WHATSAPP_NUMBER = '573004329276';
 
@@ -48,7 +50,7 @@ const PublicQuotation = () => {
             const res = await fetch(`${getApiBaseUrl()}/api/quotations/public/${slug}/accept`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ scenarioId: scenarioId || undefined })
+                body: JSON.stringify({ scenarioId: scenarioId || undefined, expectedUpdatedAt: quotation.updated_at })
             });
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || 'No fue posible aceptar la cotización');
@@ -166,6 +168,7 @@ const PublicQuotation = () => {
     const displayedAmounts = chosenAmounts || quotationAmounts;
     const displayedDiscountLabel = chosenScenario?.discountLabel || quotation.discount_label || 'Descuento';
     const terms = parseContractTermsText(quotation.terms_and_conditions);
+    const details = quotation.proposal_details;
 
     return (
         <div className="min-h-screen bg-[#f7f7fa] text-zinc-950 dark:bg-zinc-950 dark:text-white">
@@ -206,9 +209,11 @@ const PublicQuotation = () => {
                             <h1 className="mt-6 text-3xl font-bold leading-tight sm:text-4xl">
                                 {quotation.client_company || quotation.client_name}
                             </h1>
+                            {details?.title && <h2 className="mt-4 text-xl font-semibold">{details.title}</h2>}
+                            {details?.introductionHtml ? <div className="mt-5"><ProposalRichText html={details.introductionHtml} /></div> :
                             <p className="mt-5 max-w-2xl text-base leading-7 text-zinc-600 dark:text-zinc-300 sm:text-lg sm:leading-8">
                                 Reunimos los servicios, alcances e inversión necesarios para avanzar con claridad hacia los objetivos acordados.
-                            </p>
+                            </p>}
                         </div>
 
                         <dl className="grid grid-cols-2 gap-x-6 gap-y-5 border-l-0 border-zinc-200 lg:grid-cols-1 lg:border-l lg:pl-8 dark:border-zinc-800">
@@ -220,10 +225,8 @@ const PublicQuotation = () => {
                                 <dt className="flex items-center gap-2 text-xs font-semibold uppercase text-zinc-400"><Clock className="h-4 w-4" /> Vigencia</dt>
                                 <dd className="mt-1.5 text-sm font-semibold">{formatDate(quotation.expires_at)}</dd>
                             </div>
-                            <div>
-                                <dt className="flex items-center gap-2 text-xs font-semibold uppercase text-zinc-400"><Calendar className="h-4 w-4" /> Duración del servicio</dt>
-                                <dd className="mt-1.5 text-sm font-semibold">{quotation.duration_months || 1} {Number(quotation.duration_months || 1) === 1 ? 'mes' : 'meses'}</dd>
-                            </div>
+                            {details?.execution && <div><dt className="text-xs font-semibold uppercase text-zinc-400">Ejecución estimada</dt><dd className="mt-1.5 text-sm font-semibold">{formatExecution(details.execution)}</dd></div>}
+                            {(quotation.items || []).some(item => item.billingType !== 'ONE_TIME') && <div><dt className="text-xs font-semibold uppercase text-zinc-400">Periodo de servicios recurrentes</dt><dd className="mt-1.5 text-sm font-semibold">{quotation.duration_months || 1} meses</dd></div>}
                         </dl>
                     </div>
                 </section>
@@ -250,12 +253,12 @@ const PublicQuotation = () => {
                                                 <h3 className="mt-2 text-xl font-bold">{scenario.name}</h3>
                                                 {scenario.description && <p className="mt-3 text-sm leading-6 text-zinc-500">{scenario.description}</p>}
                                                 <div className="mt-5 space-y-4 border-t border-zinc-200 pt-5 dark:border-zinc-800">
-                                                    {scenario.items.map((item, index) => <div key={`${item.name}-${index}`}><div className="flex items-start justify-between gap-3"><p className="min-w-0 text-sm font-bold leading-5">{item.name}</p><span className="shrink-0 text-[10px] font-bold uppercase text-zinc-400">{item.billingType === 'ONE_TIME' ? 'Pago único' : 'Pago mensual'}</span></div>{item.description && <p className="mt-1 text-xs leading-5 text-zinc-500">{item.description}</p>}</div>)}
+                                                    {scenario.items.map((item, index) => <div key={`${item.name}-${index}`}><div className="flex items-start justify-between gap-3"><p className="min-w-0 text-sm font-bold leading-5">{item.name}</p><span className="shrink-0 text-[10px] font-bold uppercase text-zinc-400">{item.billingType === 'ONE_TIME' ? 'Pago único' : 'Pago mensual'}</span></div>{item.group && <p className="my-2 text-xs font-semibold">{item.group}</p>}{item.descriptionHtml ? <ProposalRichText html={item.descriptionHtml} /> : item.description && <p className="mt-1 text-xs leading-5 text-zinc-500">{item.description}</p>}{item.execution && <p className="mt-2 text-xs text-primary">Ejecución: {formatExecution(item.execution)}</p>}{item.note && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">{item.note}</p>}</div>)}
                                                 </div>
                                                 <div className="mt-auto pt-6">
                                                     <div className="space-y-1.5 border-t border-zinc-200 pt-3 text-xs dark:border-zinc-800">
-                                                        <div className="flex justify-between"><span className="text-zinc-500">Mensual</span><span>{formatCurrency(amounts.monthlySubtotal)}</span></div>
-                                                        {amounts.durationMonths > 1 && <div className="flex justify-between"><span className="text-zinc-500">{amounts.durationMonths} meses × mensualidad</span><span>{formatCurrency(amounts.monthlySubtotal * amounts.durationMonths)}</span></div>}
+                                                        {amounts.monthlySubtotal > 0 && <div className="flex justify-between"><span className="text-zinc-500">Mensual</span><span>{formatCurrency(amounts.monthlySubtotal)}</span></div>}
+                                                        {amounts.monthlySubtotal > 0 && amounts.durationMonths > 1 && <div className="flex justify-between"><span className="text-zinc-500">{amounts.durationMonths} meses × mensualidad</span><span>{formatCurrency(amounts.monthlySubtotal * amounts.durationMonths)}</span></div>}
                                                         {amounts.oneTimeSubtotal > 0 && <div className="flex justify-between"><span className="text-zinc-500">Pagos únicos</span><span>{formatCurrency(amounts.oneTimeSubtotal)}</span></div>}
                                                         {amounts.discountAmount > 0 && <div className="flex justify-between gap-3 font-semibold text-zinc-500 dark:text-zinc-400"><span>Valor antes del descuento</span><span className="line-through decoration-2">{formatCurrency(amounts.grossSubtotal)}</span></div>}
                                                         {amounts.discountAmount > 0 && <div className="flex justify-between gap-3 rounded-md bg-emerald-100 px-3 py-2 font-bold text-emerald-800 dark:bg-emerald-500/15 dark:text-emerald-300"><span>Ahorro · {scenario.discountLabel || 'Descuento'}</span><span>-{formatCurrency(amounts.discountAmount)}</span></div>}
@@ -275,6 +278,7 @@ const PublicQuotation = () => {
                             ) : <div className="space-y-3">
                                 {(quotation.items || []).map((item, index) => (
                                     <div key={`${item.name}-${index}`} className="space-y-3">
+                                        {item.group && quotation.items[index - 1]?.group !== item.group && <h3 className="pb-2 pt-5 text-lg font-semibold">{item.group}</h3>}
                                         <article className="rounded-lg border border-zinc-200 p-5 dark:border-zinc-800 sm:p-6">
                                             <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-start">
                                                 <div>
@@ -282,7 +286,8 @@ const PublicQuotation = () => {
                                                         <span className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-zinc-100 text-xs font-bold text-zinc-500 dark:bg-zinc-800 dark:text-zinc-300">{index + 1}</span>
                                                         <div>
                                                             <h3 className="text-base font-bold">{item.name}</h3>
-                                                            {item.description && <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{item.description}</p>}
+                                                            {item.descriptionHtml ? <div className="mt-3"><ProposalRichText html={item.descriptionHtml} /></div> : item.description && <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">{item.description}</p>}
+                                                            {item.execution && <p className="mt-3 text-xs font-medium text-primary">Ejecución: {formatExecution(item.execution)}</p>}
                                                         </div>
                                                     </div>
                                                 </div>
@@ -299,6 +304,7 @@ const PublicQuotation = () => {
                                                 <p className="mt-1 text-sm font-normal leading-6 text-zinc-600 dark:text-zinc-300">{item.note}</p>
                                             </div>
                                         )}
+                                        {item.group && !quotation.items.slice(index + 1).some(next => next.group === item.group) && <p className="pb-4 text-right text-sm font-medium">Subtotal del desarrollo: {formatCurrency(calculateQuotationTotals(quotation.items.filter(next => next.group === item.group), true, { durationMonths: quotation.duration_months || 1 }).subtotal)} <span className="text-xs font-normal text-zinc-500">antes de descuentos e impuestos</span></p>}
                                     </div>
                                 ))}
                             </div>}
@@ -306,6 +312,8 @@ const PublicQuotation = () => {
                     </div>
                 </section>
 
+                <ProposalTimeline details={details} />
+                {(scenarios.length === 0 || chosenScenario) && paymentPlanForScenario(details, chosenScenario?.id) && <section className="mx-auto max-w-6xl px-5 py-10 sm:px-8"><h2 className="mb-5 text-2xl font-semibold">Plan de pagos</h2><ProposalPayments plan={paymentPlanForScenario(details, chosenScenario?.id)} totals={displayedAmounts} currency={quotation.currency} /></section>}
                 <section className="px-5 py-12 sm:px-8 sm:py-16">
                     <div className="mx-auto max-w-4xl space-y-8">
                         <div className="space-y-6">
@@ -325,8 +333,8 @@ const PublicQuotation = () => {
                             <p className="text-xs font-semibold uppercase text-violet-200">{scenarios.length > 0 ? (chosenScenario ? chosenScenario.name : 'Selecciona un escenario') : 'Inversión total'}</p>
                             {scenarios.length === 0 || chosenAmounts ? <>
                                 <div className="mt-5 space-y-2 border-t border-white/20 pt-5 text-sm">
-                                    <div className="flex justify-between gap-4"><span className="text-violet-100">Inversión mensual</span><span>{formatCurrency(displayedAmounts.monthlySubtotal)}</span></div>
-                                    {displayedAmounts.durationMonths > 1 && <div className="flex justify-between gap-4"><span className="text-violet-100">{displayedAmounts.durationMonths} meses × mensualidad</span><span>{formatCurrency(displayedAmounts.monthlySubtotal * displayedAmounts.durationMonths)}</span></div>}
+                                    {displayedAmounts.monthlySubtotal > 0 && <div className="flex justify-between gap-4"><span className="text-violet-100">Inversión mensual</span><span>{formatCurrency(displayedAmounts.monthlySubtotal)}</span></div>}
+                                    {displayedAmounts.monthlySubtotal > 0 && displayedAmounts.durationMonths > 1 && <div className="flex justify-between gap-4"><span className="text-violet-100">{displayedAmounts.durationMonths} meses × mensualidad</span><span>{formatCurrency(displayedAmounts.monthlySubtotal * displayedAmounts.durationMonths)}</span></div>}
                                     {displayedAmounts.oneTimeSubtotal > 0 && <div className="flex justify-between gap-4"><span className="text-violet-100">Servicios de pago único</span><span>{formatCurrency(displayedAmounts.oneTimeSubtotal)}</span></div>}
                                     {displayedAmounts.discountAmount > 0 && <div className="flex justify-between gap-4 font-semibold text-violet-100"><span>Valor antes del descuento</span><span className="line-through decoration-2">{formatCurrency(displayedAmounts.grossSubtotal)}</span></div>}
                                     {displayedAmounts.discountAmount > 0 && <div className="flex justify-between gap-4 rounded-md bg-emerald-400/20 px-3 py-2 font-bold text-emerald-50"><span>Ahorro · {displayedDiscountLabel}</span><span>-{formatCurrency(displayedAmounts.discountAmount)}</span></div>}
@@ -368,6 +376,7 @@ const PublicQuotation = () => {
                     </div>
                 </section>
 
+                <ProposalClosing details={details} />
                 <section className="border-t border-zinc-200 bg-white px-5 py-12 dark:border-zinc-800 dark:bg-zinc-900 sm:px-8 sm:py-16">
                     <div className="mx-auto max-w-4xl">
                         <div className="flex items-start gap-3">

@@ -102,6 +102,14 @@ const normalizeTermIdentity = (value) => normalizeServiceSearchText(String(value
   .trim();
 
 const libraryById = new Map(CONTRACT_TERM_LIBRARY.map((entry) => [entry.id, entry]));
+
+export const termsWithProposalPayments = (original, enabled) => {
+  if (!enabled) return original;
+  const defaultPayment = libraryById.get('general-payment').text;
+  const clause = 'Los pagos se realizarán según el plan de pagos detallado en esta propuesta.';
+  const terms = parseContractTermsText(original).filter(value => value !== defaultPayment && value !== clause);
+  return buildContractTermsText([], [clause, ...terms]);
+};
 const consolidatedReplacementByIdentity = new Map([
   ['marketing-adjustments', 'general-adjustments'],
   ['branding-adjustments', 'general-adjustments'],

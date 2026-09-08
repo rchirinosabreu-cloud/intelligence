@@ -10,6 +10,8 @@ import { useNavigate, useParams } from 'react-router-dom';
 import SuccessModal from './SuccessModal';
 import QuotationTermsEditor from './QuotationTermsEditor';
 import ServiceCatalogModal from './ServiceCatalogModal';
+import ProposalDetailsEditor, { ExecutionEditor, ProposalRichField, proposalInput } from './ProposalDetailsEditor';
+import { normalizeProposalDetails, plainTextToProposalHtml } from '@/services/quotationProposalDetails';
 import { calculateQuotationEconomics, calculateQuotationTotals, normalizeQuotationItemTitle } from '@/services/quotationDomainService';
 import { matchesServiceSearch } from '@/utils/serviceCatalogSearch';
 
@@ -32,6 +34,7 @@ const QuotationForm = () => {
     const [discountValue, setDiscountValue] = useState('');
     const [discountLabel, setDiscountLabel] = useState('');
     const [selectedItems, setSelectedItems] = useState([]);
+    const [proposalDetails, setProposalDetails] = useState(null);
     const [searchTerm, setSearchText] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     const [generatedLink, setGeneratedLink] = useState('');
@@ -84,6 +87,7 @@ const QuotationForm = () => {
             setExchangeRateSource(data.exchange_rate_source || null);
             setExchangeRateDate(data.exchange_rate_date || null);
             setContractTermsText(data.terms_and_conditions || '');
+            setProposalDetails(data.proposal_details || null);
 
             // Robust parsing for items to prevent crash
             let parsedItems = [];
@@ -212,6 +216,10 @@ const QuotationForm = () => {
 
     const handleCurrencyChange = async (nextCurrency) => {
         if (nextCurrency === currency) return;
+        if (proposalDetails?.paymentPlans?.some(plan => plan.mode === 'FIXED')) {
+            toast.error('Antes de cambiar la moneda, convierte las cuotas a porcentajes o retira el plan de importes exactos.');
+            return;
+        }
         let usableRate = Number(exchangeRate);
         if (nextCurrency === 'USD' && (!Number.isFinite(usableRate) || usableRate <= 0)) {
             usableRate = await loadOfficialExchangeRate();
@@ -361,6 +369,7 @@ const QuotationForm = () => {
 
         setIsSaving(true);
         try {
+            const normalizedDetails = normalizeProposalDetails(proposalDetails, { issue: targetStatus === 'ACTIVA', totalsByScenario: proposalTotals });
             const url = isEditing ? `${getApiBaseUrl()}/api/quotations/${id}` : `${getApiBaseUrl()}/api/quotations`;
             const method = isEditing ? 'PUT' : 'POST';
 
@@ -393,6 +402,7 @@ const QuotationForm = () => {
                         };
                     }),
                     currency,
+                    proposal_details: normalizedDetails,
                     duration_months: Number(durationMonths),
                     discount_type: quotationMode === 'STANDARD' ? (discountType || null) : null,
                     discount_value: quotationMode === 'STANDARD' ? (Number(discountValue) || 0) : 0,
@@ -446,6 +456,7 @@ const QuotationForm = () => {
     };
 
     const totals = calculateTotals();
+    const proposalTotals = quotationMode === 'SCENARIOS' ? scenarios.map(scenario => ({ id: scenario.id, name: scenario.name, totals: calculateQuotationTotals(selectedItems.filter(item => item.scenarioId === scenario.id), currency === 'USD' || isTaxExempt, { durationMonths, discountType: scenario.discountType, discountValue: scenario.discountValue }) })) : [{ id: null, name: 'Propuesta completa', totals }];
     const activeScenarioItems = quotationMode === 'SCENARIOS'
         ? selectedItems.filter((item) => item.scenarioId === activeScenarioId)
         : selectedItems;
@@ -720,6 +731,10 @@ const QuotationForm = () => {
                             </div>
 
                             {/* Selected Items */}
+                            <Button type="button" variant="outline" onClick={() => setSelectedItems(items => [...items, { name: '', description: '', price: 0, quantity: 1, billingType: 'ONE_TIME', note: '', estimatedCost: null, ...(quotationMode === 'SCENARIOS' ? { scenarioId: activeScenarioId } : {}) }])}>
+                                <Plus className="mr-2 h-4 w-4" />Añadir servicio personalizado
+                            </Button>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400">Solo se guarda en esta propuesta, sin crear un producto en el catálogo.</p>
                             <div className="space-y-4">
                                 <label className="text-xs font-bold text-zinc-500 uppercase">Servicios Incluidos</label>
                                 {!Array.isArray(selectedItems) || selectedItems.length === 0 ? (
@@ -734,20 +749,21 @@ const QuotationForm = () => {
                                             <div key={idx} className="p-4 bg-zinc-50 dark:bg-zinc-900/50 rounded-2xl border border-zinc-100 dark:border-zinc-800 space-y-3">
                                                 <div className="flex justify-between items-start">
                                                     <input
+                                                        aria-label={`Nombre del servicio ${idx + 1}`}
                                                         className="flex-1 bg-transparent font-bold text-sm outline-none border-b border-transparent focus:border-primary/20"
                                                         value={item.name}
                                                         onChange={(e) => updateItem(idx, 'name', e.target.value)}
                                                         onBlur={() => updateItem(idx, 'name', normalizeQuotationItemTitle(item.name))}
                                                     />
-                                                    <button onClick={() => removeItem(idx)} className="brain-danger-button-icon rounded-lg p-1">
+                                                    <button aria-label={`Eliminar servicio ${idx + 1}`} onClick={() => removeItem(idx)} className="brain-danger-button-icon min-h-11 min-w-11 rounded-lg p-1">
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
                                                 </div>
-                                                <textarea
-                                                    className="w-full bg-transparent text-xs text-zinc-500 outline-none resize-none border-none p-0 h-16"
-                                                    value={item.description}
-                                                    onChange={(e) => updateItem(idx, 'description', e.target.value)}
-                                                />
+                                                <ProposalRichField label={`Descripción del servicio ${idx + 1}`} value={item.descriptionHtml ?? plainTextToProposalHtml(item.description)} onChange={html => updateItem(idx, 'descriptionHtml', html)} />
+                                                <details className="py-2"><summary className="cursor-pointer text-xs font-medium text-zinc-500 dark:text-zinc-400">Grupo y duración de este servicio (opcional)</summary><div className="mt-4 space-y-4">
+                                                    <input aria-label={`Grupo del servicio ${idx + 1}`} className={proposalInput} placeholder="Ej. Desarrollo 1 · CRM" value={item.group || ''} onChange={e => updateItem(idx, 'group', e.target.value)} />
+                                                    <ExecutionEditor label={`Ejecución del servicio ${idx + 1}`} value={item.execution} onChange={execution => updateItem(idx, 'execution', execution)} />
+                                                </div></details>
                                                 <div className="space-y-1">
                                                     <label className="text-[10px] font-bold text-zinc-400 uppercase">Nota o aclaración sobre este servicio</label>
                                                     <textarea
@@ -757,7 +773,7 @@ const QuotationForm = () => {
                                                         onChange={(e) => updateItem(idx, 'note', e.target.value)}
                                                     />
                                                 </div>
-                                                <div className="flex items-center gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/50">
+                                                <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/50">
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[10px] font-bold text-zinc-400 uppercase">Cobro</span>
                                                         <select
@@ -807,7 +823,9 @@ const QuotationForm = () => {
                                 )}
                             </div>
 
+                            <ProposalDetailsEditor value={proposalDetails} onChange={setProposalDetails} totalsByScenario={proposalTotals} currency={currency} />
                             <QuotationTermsEditor
+                                paymentPlanEnabled={Boolean(proposalDetails?.paymentPlans?.length)}
                                 services={selectedItems}
                                 currency={currency}
                                 isTaxExempt={isTaxExempt}
@@ -837,10 +855,10 @@ const QuotationForm = () => {
                             </div>
                         </div>
 
-                        <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
+                        {selectedItems.some(item => item.billingType !== 'ONE_TIME') && <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
                             <div>
                                 <p className="text-[10px] font-bold uppercase text-zinc-500">Duración de la propuesta</p>
-                                <p className="mt-1 text-[11px] leading-4 text-zinc-400">Periodo del servicio. La vigencia para aceptar la cotización sigue siendo de 15 días.</p>
+                                <p className="mt-1 text-[11px] leading-4 text-zinc-400">Periodo de cobro de los servicios mensuales, no plazo de implementación. Vigencia para aceptar: 15 días.</p>
                             </div>
                             <div className="flex flex-wrap gap-2">
                                 {[1, 2, 3, 6].map((months) => (
@@ -853,8 +871,7 @@ const QuotationForm = () => {
                                     <input type="number" min="1" max="60" value={durationMonths} onChange={(e) => setDurationMonths(Math.max(1, Math.min(60, Number(e.target.value) || 1)))} className="w-12 bg-transparent text-right font-bold text-zinc-900 outline-none dark:text-zinc-100" aria-label="Meses de duración" />
                                 </label>
                             </div>
-                        </div>
-
+                        </div>}
                         {quotationMode === 'STANDARD' && (
                             <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/60 p-4 dark:border-violet-900/50 dark:bg-violet-950/20">
                                 <p className="text-[10px] font-bold uppercase text-violet-700 dark:text-violet-300">Descuento comercial</p>
@@ -919,8 +936,8 @@ const QuotationForm = () => {
                                 <p className="text-[10px] font-bold uppercase text-primary">Valor de la opción activa</p>
                                 <div className="flex justify-between text-base font-bold"><span>{activeScenario?.name}</span><span className="text-primary">{formatCurrency(activeScenarioTotals.totalAmount)}</span></div>
                                 <div className="space-y-2 border-t border-zinc-100 pt-3 text-xs dark:border-zinc-800">
-                                    <div className="flex justify-between"><span className="text-zinc-500">Mensual</span><span>{formatCurrency(activeScenarioTotals.monthlySubtotal)}</span></div>
-                                    {durationMonths > 1 && <div className="flex justify-between"><span className="text-zinc-500">{durationMonths} meses × mensualidad</span><span>{formatCurrency(activeScenarioTotals.monthlySubtotal * durationMonths)}</span></div>}
+                                    {activeScenarioTotals.monthlySubtotal > 0 && <div className="flex justify-between"><span className="text-zinc-500">Mensual</span><span>{formatCurrency(activeScenarioTotals.monthlySubtotal)}</span></div>}
+                                    {activeScenarioTotals.monthlySubtotal > 0 && durationMonths > 1 && <div className="flex justify-between"><span className="text-zinc-500">{durationMonths} meses × mensualidad</span><span>{formatCurrency(activeScenarioTotals.monthlySubtotal * durationMonths)}</span></div>}
                                     {activeScenarioTotals.oneTimeSubtotal > 0 && <div className="flex justify-between"><span className="text-zinc-500">Pagos únicos</span><span>{formatCurrency(activeScenarioTotals.oneTimeSubtotal)}</span></div>}
                                     {activeScenarioTotals.discountAmount > 0 && <div className="flex justify-between text-violet-700 dark:text-violet-300"><span>{activeScenario?.discountLabel || 'Descuento'}</span><span>-{formatCurrency(activeScenarioTotals.discountAmount)}</span></div>}
                                     <div className="flex justify-between font-semibold"><span>Subtotal contractual</span><span>{formatCurrency(activeScenarioTotals.subtotal)}</span></div>
@@ -930,10 +947,10 @@ const QuotationForm = () => {
                             </div>
                         ) : <div className="space-y-3 pt-4 border-t border-zinc-100 dark:border-zinc-800">
                             <div className="flex justify-between text-xs">
-                                <span className="text-zinc-500">Inversión mensual</span>
-                                <span className="font-medium">{formatCurrency(totals.monthlySubtotal)}</span>
+                                <span className="text-zinc-500">{totals.monthlySubtotal > 0 ? "Inversión mensual" : "Servicios recurrentes"}</span>
+                                <span className="font-medium">{totals.monthlySubtotal > 0 ? formatCurrency(totals.monthlySubtotal) : "No incluidos"}</span>
                             </div>
-                            {durationMonths > 1 && <div className="flex justify-between text-xs"><span className="text-zinc-500">{durationMonths} meses × mensualidad</span><span className="font-medium">{formatCurrency(totals.monthlySubtotal * durationMonths)}</span></div>}
+                            {totals.monthlySubtotal > 0 && durationMonths > 1 && <div className="flex justify-between text-xs"><span className="text-zinc-500">{durationMonths} meses × mensualidad</span><span className="font-medium">{formatCurrency(totals.monthlySubtotal * durationMonths)}</span></div>}
                             {totals.oneTimeSubtotal > 0 && <div className="flex justify-between text-xs"><span className="text-zinc-500">Servicios de pago único</span><span className="font-medium">{formatCurrency(totals.oneTimeSubtotal)}</span></div>}
                             {totals.discountAmount > 0 && <div className="flex justify-between text-xs text-violet-700 dark:text-violet-300"><span>{discountLabel || 'Descuento'}</span><span className="font-medium">-{formatCurrency(totals.discountAmount)}</span></div>}
                             <div className="flex justify-between border-t border-zinc-100 pt-3 text-xs dark:border-zinc-800"><span className="text-zinc-500">Subtotal contractual</span><span className="font-medium">{formatCurrency(totals.subtotal)}</span></div>
@@ -969,14 +986,14 @@ const QuotationForm = () => {
                                         <p className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400">Margen estimado</p>
                                         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Solo visible dentro de Brainstudio</p>
                                     </div>
-                                    {profitabilityAvailable && (
+                                    {profitabilityAvailable && profitability.pricedItems > 0 && (
                                         <span className="text-xl font-black text-emerald-700 dark:text-emerald-400">
                                             {profitability.estimatedMargin}%
                                         </span>
                                     )}
                                 </div>
 
-                                {profitabilityAvailable ? (
+                                {profitabilityAvailable && profitability.pricedItems > 0 ? (
                                     <div className="mt-4 space-y-2 border-t border-emerald-200/70 pt-3 text-xs dark:border-emerald-900/40">
                                         <div className="flex justify-between">
                                             <span className="text-zinc-500">Costo estimado</span>
@@ -994,7 +1011,7 @@ const QuotationForm = () => {
                                     </div>
                                 ) : (
                                     <p className="mt-3 border-t border-emerald-200/70 pt-3 text-[10px] leading-relaxed text-amber-700 dark:border-emerald-900/40 dark:text-amber-400">
-                                        Registra una tasa USD/COP para calcular el margen estimado.
+                                        {profitabilityAvailable ? "Sin costos registrados: no se puede estimar el margen de estos servicios." : "Registra una tasa USD/COP para calcular el margen estimado."}
                                     </p>
                                 )}
                             </div>
