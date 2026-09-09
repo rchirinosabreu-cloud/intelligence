@@ -4,7 +4,7 @@ import * as service from '../src/services/operationalEventService.js';
 
 const now = new Date('2026-09-07T16:00:00Z');
 const schedule = (startAt, isAllDay = false) => ({ startAt, endAt: new Date(new Date(startAt).getTime() + (isAllDay ? 86400000 : 3600000)), isAllDay });
-const input = { title: 'Reunión', type: 'MEETING', requestId: 'schedule-request-1', ...schedule('2026-09-08T14:00:00Z') };
+const input = { title: 'Reunión', type: 'MEETING', requestId: 'schedule-request-1', googleConnectionId: 'selected', ...schedule('2026-09-08T14:00:00Z') };
 
 test('new API requests cannot create past events, including an explicitly supplied year 2001', async () => {
   for (const startAt of ['2001-09-11T13:00:00Z', '2026-09-07T15:59:59Z']) {
@@ -55,6 +55,7 @@ test('new creation rechecks the start after authorization before persisting its 
   let currentTime = new Date('2026-09-08T13:59:59Z');
   await assert.rejects(service.createOperationalEvent(input, 'actor', {
     lock: task => task(), now: () => currentTime,
+    resolveCreationTarget: async () => ({ calendarId: 'primary' }),
     db: { operationalEvent: { findUnique: async () => null, create: async () => assert.fail('must not persist a start that elapsed') } },
     authorize: async () => { currentTime = new Date('2026-09-08T14:00:01Z'); return { connection: { id: 'selected' } }; }
   }), error => error.code === 'INVALID_EVENT_PAST');

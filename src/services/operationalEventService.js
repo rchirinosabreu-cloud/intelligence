@@ -2,6 +2,7 @@ import prisma from '../lib/prisma.js';
 import { google } from 'googleapis';
 import {
   getAuthorizedGoogleOAuthClient,
+  resolveGoogleCalendarCreationTarget,
   getGoogleCalendarConnections,
   getPendingGoogleCalendarWhere,
   CENTRAL_GOOGLE_CALENDAR_EMAIL,
@@ -578,7 +579,7 @@ async function syncOperationalEventToGoogleUnlocked(event, { db, authorize, crea
       where: { id: event.id },
       data: {
         source: event.source || 'BRAIN',
-        organizerEmail: googleEvent.organizer?.email || CENTRAL_GOOGLE_CALENDAR_EMAIL,
+        organizerEmail: googleEvent.organizer?.email || null,
         attendeeEmails: (googleEvent.attendees || []).map(attendee => attendee.email).filter(Boolean),
         attendeeResponses: Object.fromEntries((googleEvent.attendees || []).filter(attendee => attendee.email).map(attendee => [attendee.email, attendee.responseStatus || 'needsAction'])),
         googleConnectionId: auth.connection.id,
@@ -1079,7 +1080,8 @@ export function getOperationalEventRequestIdentity(data, createdById) {
 }
 
 export async function createOperationalEvent(data, createdById = null, {
-  db = prisma, authorize = getAuthorizedGoogleOAuthClient, syncToGoogle = syncOperationalEventToGoogle, lock = withCalendarSyncLock, now = () => new Date()
+  db = prisma, authorize = getAuthorizedGoogleOAuthClient, syncToGoogle = syncOperationalEventToGoogle, lock = withCalendarSyncLock, now = () => new Date(),
+  resolveCreationTarget = resolveGoogleCalendarCreationTarget
 } = {}) {
   return lock(async () => {
   const validated = validateOperationalEventInput(data);
@@ -1093,8 +1095,15 @@ export async function createOperationalEvent(data, createdById = null, {
     return existing.googleSyncStatus === 'SYNCED' ? existing : syncToGoogle(existing);
   }
   validateOperationalEventSchedule(data, null, now());
-  const auth = await authorize(data.googleConnectionId || null);
+  if (typeof data.googleConnectionId !== 'string' || !data.googleConnectionId.trim() || data.googleConnectionId !== data.googleConnectionId.trim()) {
+    throw createOperationalEventError('INVALID_GOOGLE_CALENDAR_ACCOUNT', 'Selecciona una cuenta de Google antes de guardar el evento.');
+  }
+  const auth = await authorize(data.googleConnectionId);
   if (!auth) throw createOperationalEventError('GOOGLE_CALENDAR_NOT_CONNECTED', 'Conecta una cuenta de Google Calendar antes de guardar el evento.');
+  if (auth.connection.id !== data.googleConnectionId) {
+    throw createOperationalEventError('GOOGLE_CALENDAR_ACCOUNT_MISMATCH', 'La cuenta autorizada no coincide con la cuenta elegida. No se creó el evento.');
+  }
+  const target = await resolveCreationTarget(auth);
   const range = { startAt: validated.startAt, endAt: validated.endAt };
   const externalEmails = (data.attendeeEmails || []).filter(email => email?.toLowerCase() !== FIREFLIES_BOT_EMAIL);
   if (data.captureWithFireflies) externalEmails.push(FIREFLIES_BOT_EMAIL);
@@ -1122,7 +1131,7 @@ export async function createOperationalEvent(data, createdById = null, {
         source: 'BRAIN',
         createdById,
         googleConnectionId: auth.connection.id,
-        googleCalendarId: auth.connection.calendarId || 'primary',
+        googleCalendarId: target.calendarId,
         googleSyncStatus: 'PENDING',
         googleNextRetryAt: new Date(),
         googleMeetAccessType: data.googleMeetAccessType || (data.type === 'MEETING' ? 'OPEN' : null)
@@ -1134,13 +1143,19 @@ export async function createOperationalEvent(data, createdById = null, {
   });
 }
 
-export async function updateOperationalEvent(id, data) {
-  return withCalendarSyncLock(() => updateOperationalEventUnlocked(id, data));
+export async function updateOperationalEvent(id, data, {
+  db = prisma, syncToGoogle = syncOperationalEventToGoogle, lock = withCalendarSyncLock
+} = {}) {
+  return lock(() => updateOperationalEventUnlocked(id, data, { db, syncToGoogle }));
 }
 
-async function updateOperationalEventUnlocked(id, data) {
-  const current = await prisma.operationalEvent.findUnique({ where: { id } });
+async function updateOperationalEventUnlocked(id, data, { db, syncToGoogle }) {
+  const current = await db.operationalEvent.findUnique({ where: { id } });
   if (!current) throw createOperationalEventError('EVENT_NOT_FOUND', 'El evento ya no existe.');
+  if ((data.googleConnectionId !== undefined && data.googleConnectionId !== (current.googleConnectionId || '')) ||
+      (data.googleCalendarId !== undefined && data.googleCalendarId !== current.googleCalendarId)) {
+    throw createOperationalEventError('GOOGLE_CALENDAR_MOVE_REQUIRED', 'Este evento conserva su calendario de origen. Cambiarlo requiere trasladar el evento; no se modificó su cuenta.');
+  }
   if (current.googleCancelled || ['DELETED', 'MERGED'].includes(current.googleSyncStatus)) throw createOperationalEventError('EVENT_NOT_FOUND', 'El evento ya no está activo.');
   if (['PENDING', 'PENDING_DELETE', 'DELETED'].includes(current.googleSyncStatus)) {
     throw createOperationalEventError('EVENT_SYNC_IN_PROGRESS', 'Confirma la sincronización pendiente antes de modificar este evento.');
@@ -1152,11 +1167,11 @@ async function updateOperationalEventUnlocked(id, data) {
   const captureWithFireflies = data.captureWithFireflies ?? current?.captureWithFireflies ?? false;
   const externalEmails = (data.attendeeEmails ?? current?.attendeeEmails ?? []).filter(email => email?.toLowerCase() !== FIREFLIES_BOT_EMAIL);
   if (captureWithFireflies) externalEmails.push(FIREFLIES_BOT_EMAIL);
-  const attendeeEmails = await normalizeAttendeeEmails(memberIds, externalEmails);
+  const attendeeEmails = await normalizeAttendeeEmails(memberIds, externalEmails, db);
   validateOperationalEventSchedule(data, current);
   return await updateSyncedOperationalEvent({
     updateLocalEvent: async () => {
-      const event = await prisma.operationalEvent.update({
+      const event = await db.operationalEvent.update({
         where: { id },
         data: {
           googleSyncStatus: 'PENDING',
@@ -1183,10 +1198,10 @@ async function updateOperationalEventUnlocked(id, data) {
           googleMeetAccessType: data.googleMeetAccessType
         }
       });
-      return await prisma.operationalEvent.findUnique({ where: { id: event.id }, include: { googleLinks: true } });
+      return await db.operationalEvent.findUnique({ where: { id: event.id }, include: { googleLinks: true } });
     },
-    syncToGoogle: syncOperationalEventToGoogle,
-    restoreLocalEvent: () => prisma.operationalEvent.update({
+    syncToGoogle,
+    restoreLocalEvent: () => db.operationalEvent.update({
       where: { id },
       data: {
         googleSyncStatus: current.googleSyncStatus,

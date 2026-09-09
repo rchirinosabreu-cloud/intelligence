@@ -73,6 +73,102 @@ const settleAnimations = page => page.evaluate(() => Promise.all(document.getAni
   .filter(animation => animation.effect?.getTiming().iterations !== Infinity)
   .map(animation => animation.finished.catch(() => {}))));
 
+test('account routing: late connections never display Social while submitting an empty account', async () => {
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const writes = [];
+  const { page, context } = await calendarPage({
+    status: async route => { await gate; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ connected: true, connections: [
+      { id: 'social', email: 'social.brainstudio@gmail.com', isActive: true },
+      { id: 'coordinator', email: 'coordinadorbrainstudio@gmail.com', isActive: true }
+    ] }) }); },
+    save: route => { writes.push(route.request().postDataJSON()); return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'saved', googleSyncStatus: 'SYNCED' }) }); }
+  });
+  try {
+    await page.getByRole('button', { name: 'Evento', exact: true }).click();
+    release();
+    const selector = page.getByLabel('Cuenta de Google', { exact: true });
+    await selector.waitFor();
+    await selector.locator('option[value="social"]').waitFor({ state: 'attached' });
+    assert.equal(await selector.inputValue(), '', 'Loading accounts must not create an implicit DOM-only selection');
+    assert.equal(await page.getByRole('button', { name: 'Guardar evento' }).isDisabled(), true);
+    await selector.selectOption('social');
+    await page.getByLabel('Título del evento').fill('Selección de cuenta comprobada');
+    await settleAnimations(page);
+    await page.screenshot({ path: path.join(output, 'calendar-account-routing-light.png'), fullPage: true });
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await settleAnimations(page);
+    await page.screenshot({ path: path.join(output, 'calendar-account-routing-dark.png'), fullPage: true });
+    await page.getByRole('button', { name: 'Guardar evento' }).click();
+    await page.getByText('Evento creado y sincronizado con Google Calendar', { exact: true }).waitFor();
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].googleConnectionId, 'social');
+  } finally { release(); await context.close(); }
+});
+
+test('account routing: editing displays and locks the original account instead of offering a silent move', async () => {
+  const writes = [];
+  const { page, context } = await calendarPage({
+    events: [{ id: 'existing', title: 'Evento con cuenta de origen', type: 'PRODUCTION', startAt: '2026-09-07T14:00:00Z', endAt: '2026-09-07T15:00:00Z', memberIds: [], googleConnectionId: 'test-google', googleCalendarId: 'primary' }],
+    update: route => { writes.push(route.request().postDataJSON()); return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ id: 'existing', googleSyncStatus: 'SYNCED' }) }); }
+  });
+  try {
+    await page.locator('[data-operational-calendar]').getByRole('button', { name: /Evento con cuenta de origen/ }).first().click();
+    const selector = page.getByLabel('Cuenta de Google', { exact: true });
+    assert.equal(await selector.isDisabled(), true);
+    assert.equal(await selector.inputValue(), 'test-google');
+    await page.getByText('El evento conserva su calendario de origen.', { exact: true }).waitFor();
+    await page.getByLabel('Título del evento').fill('Edición sin traslado');
+    await page.getByRole('button', { name: 'Actualizar evento' }).click();
+    await page.getByText('Evento actualizado y sincronizado con Google Calendar', { exact: true }).waitFor();
+    assert.equal(writes[0].googleConnectionId, 'test-google');
+  } finally { await context.close(); }
+});
+
+test('account routing: disconnected accounts cannot be selected for new events', async () => {
+  const { page, context } = await calendarPage({ status: route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ connected: true, connections: [
+    { id: 'revoked', email: 'social.brainstudio@gmail.com', isActive: false, reconnectRequired: true },
+    { id: 'active', email: 'coordinadorbrainstudio@gmail.com', isActive: true }
+  ] }) }) });
+  try {
+    await page.getByRole('button', { name: /social\.brainstudio/ }).waitFor();
+    await page.getByRole('button', { name: 'Evento', exact: true }).click();
+    const selector = page.getByLabel('Cuenta de Google', { exact: true });
+    assert.equal(await selector.locator('option[value="revoked"]').isDisabled(), true);
+    assert.equal(await selector.inputValue(), 'active');
+  } finally { await context.close(); }
+});
+
+test('account routing: refreshed connections preserve the choice and block a newly disconnected selection', async () => {
+  let connections = [
+    { id: 'social', email: 'social.brainstudio@gmail.com', isActive: true },
+    { id: 'coordinator', email: 'coordinadorbrainstudio@gmail.com', isActive: true }
+  ];
+  const { page, context } = await calendarPage({ status: route => route.fulfill({
+    status: 200, contentType: 'application/json', body: JSON.stringify({ connected: true, connections })
+  }) });
+  try {
+    await page.getByRole('button', { name: /social\.brainstudio/ }).waitFor();
+    await page.getByRole('button', { name: 'Evento', exact: true }).click();
+    const selector = page.getByLabel('Cuenta de Google', { exact: true });
+    await selector.selectOption('social');
+    await page.getByLabel('Título del evento').fill('Conservar mi selección');
+    const refresh = async () => {
+      const response = page.waitForResponse(response => response.url().includes('/google-calendar/status'));
+      await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
+      await response;
+    };
+    connections = [...connections].reverse();
+    await refresh();
+    assert.equal(await selector.inputValue(), 'social');
+    connections = connections.map(connection => connection.id === 'social' ? { ...connection, isActive: false, reconnectRequired: true } : connection);
+    await refresh();
+    await selector.locator('option[value="social"][disabled]').waitFor({ state: 'attached' });
+    assert.equal(await selector.inputValue(), 'social', 'Do not silently switch to the other healthy account');
+    assert.equal(await page.getByRole('button', { name: 'Guardar evento' }).isDisabled(), true);
+  } finally { await context.close(); }
+});
+
 async function assertAccessibleErrorContrast(locator) {
   const colors = await locator.evaluate(element => {
     const canvas = document.createElement('canvas');

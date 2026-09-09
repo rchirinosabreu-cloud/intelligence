@@ -193,12 +193,52 @@ export const getGoogleCalendarConnections = async () => prisma.googleCalendarCon
   select: { id: true, email: true, calendarId: true, scopes: true, isActive: true, connectedAt: true, lastSyncedAt: true }
 });
 
-export const getAuthorizedGoogleOAuthClient = async (connectionId = null) => {
-  const connections = await prisma.googleCalendarConnection.findMany({
+export const verifyGoogleCalendarAccountIdentity = async (auth, {
+  readProfile = oauth2Client => google.oauth2({ version: 'v2', auth: oauth2Client }).userinfo.get({}, googleCalendarRequestOptions())
+} = {}) => {
+  const { data } = await readProfile(auth.oauth2Client);
+  const email = data?.email?.trim().toLowerCase();
+  if (!email || data.verified_email !== true || email !== auth.connection.email?.trim().toLowerCase()) {
+    throw Object.assign(new Error('La identidad autorizada por Google no coincide con la cuenta elegida. Reconecta esa cuenta; no se usará otra en su lugar.'), { code: 'GOOGLE_CALENDAR_ACCOUNT_MISMATCH' });
+  }
+  return email;
+};
+
+// The event form selects an account, not a hidden shared calendar. Resolve its
+// primary calendar without silently changing existing connection configuration.
+export const resolveGoogleCalendarCreationTarget = async (auth, {
+  createCalendar = oauth2Client => google.calendar({ version: 'v3', auth: oauth2Client })
+} = {}) => {
+  const { data } = await createCalendar(auth.oauth2Client).calendarList.get({ calendarId: 'primary' }, googleCalendarRequestOptions());
+  const calendarId = auth.connection.calendarId || 'primary';
+  if (!data?.id || data.primary !== true || !['owner', 'writer'].includes(data.accessRole) ||
+      (calendarId !== 'primary' && calendarId !== data.id)) {
+    throw Object.assign(new Error('El calendario configurado no coincide con el calendario principal de la cuenta elegida o no permite escribir. Revisa la conexión; no se enviará a otro calendario.'), { code: 'GOOGLE_CALENDAR_DESTINATION_MISMATCH' });
+  }
+  return { calendarId, resolvedCalendarId: data.id };
+};
+
+export const getAuthorizedGoogleOAuthClient = async (connectionId = null, {
+  db = prisma, authorize = authorizeGoogleCalendarConnections, verifyIdentity = verifyGoogleCalendarAccountIdentity,
+  markReauthRequired = markGoogleCalendarReauthRequired
+} = {}) => {
+  const connections = await db.googleCalendarConnection.findMany({
     where: connectionId ? { id: connectionId, isActive: true } : { isActive: true },
     orderBy: ACTIVE_CONNECTION_ORDER
   });
-  return await authorizeGoogleCalendarConnections(orderGoogleCalendarConnections(connections));
+  const auth = await authorize(orderGoogleCalendarConnections(connections));
+  if (auth) {
+    try {
+      await verifyIdentity(auth);
+    } catch (error) {
+      console.error('[Google Calendar OAuth] Identity verification failed:', error.response?.data || error.message);
+      if (error.code === 'GOOGLE_CALENDAR_ACCOUNT_MISMATCH' || isGoogleOAuthReauthError(error)) {
+        await markReauthRequired(auth.connection, db);
+      }
+      throw error;
+    }
+  }
+  return auth;
 };
 
 export const getAuthorizedGoogleOAuthClients = async () => {

@@ -67,8 +67,8 @@ test('durable request retries return the same row after local and remote persist
     get: async ({ eventId }) => { if (!remote.has(eventId)) throw { code: 404 }; return { data: remote.get(eventId) }; },
     insert: async ({ requestBody }) => { inserts++; const result = { ...requestBody, iCalUID: `${prefix}-write`, etag: 'etag', organizer: { email: a.email } }; remote.set(result.id, result); throw { code: 'ECONNRESET' }; }
   } };
-  const deps = { db, authorize, now: () => new Date('2026-09-01T00:00:00Z'), syncToGoogle: event => service.syncOperationalEventToGoogle(event, { db, authorize, createCalendar: () => calendar }) };
-  const input = { requestId: `${prefix}-request`, title: 'Intent', type: 'PROJECT', startAt: '2026-09-10T14:00:00Z', endAt: '2026-09-10T15:00:00Z' };
+  const deps = { db, authorize, resolveCreationTarget: async () => ({ calendarId: 'primary' }), now: () => new Date('2026-09-01T00:00:00Z'), syncToGoogle: event => service.syncOperationalEventToGoogle(event, { db, authorize, createCalendar: () => calendar }) };
+  const input = { requestId: `${prefix}-request`, googleConnectionId: a.id, title: 'Intent', type: 'PROJECT', startAt: '2026-09-10T14:00:00Z', endAt: '2026-09-10T15:00:00Z' };
   const first = await service.createOperationalEvent(input, null, deps);
   const second = await service.createOperationalEvent(input, null, deps);
   assert.equal(first.googleSyncStatus, 'SYNCED'); assert.equal(first.id, second.id); assert.equal(inserts, 1);

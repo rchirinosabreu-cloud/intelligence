@@ -181,7 +181,11 @@ const OperationalCalendar = () => {
     refetchInterval: 15_000
   });
 
-  const googleConnections = googleCalendarStatus?.connections || [];
+  const googleConnections = useMemo(() => [...(googleCalendarStatus?.connections || [])]
+    .sort((left, right) => String(left.email).localeCompare(String(right.email)) || String(left.id).localeCompare(String(right.id))), [googleCalendarStatus?.connections]);
+  const selectedGoogleConnection = googleConnections.find(connection => connection.id === formData.googleConnectionId);
+  const hasValidGoogleSelection = !googleStatusLoadFailed && Boolean(selectedGoogleConnection && selectedGoogleConnection.isActive !== false && !selectedGoogleConnection.reconnectRequired);
+  const hasInvalidCreationAccount = !editingEventId && !hasValidGoogleSelection;
   const isGoogleAccountConnected = email => googleConnections.some(connection => !connection.reconnectRequired && connection.isActive !== false && connection.email.toLowerCase() === email.toLowerCase());
 
   const eventsByDay = useMemo(() => {
@@ -514,7 +518,7 @@ const OperationalCalendar = () => {
       googleMeetSpaceName: '',
       description: '',
       attendeeEmails: [],
-      googleConnectionId: googleConnections[0]?.id || ''
+      googleConnectionId: googleConnections.find(connection => connection.isActive !== false && !connection.reconnectRequired)?.id || ''
     });
     setExternalEmailDraft('');
     setExternalEmailError('');
@@ -552,7 +556,7 @@ const OperationalCalendar = () => {
       googleMeetSpaceName: event.googleMeetSpaceName || '',
       description: normalizeCalendarDescription(event.description || ''),
       attendeeEmails: getExternalAttendeeEmails(event.attendeeEmails || [], team),
-      googleConnectionId: event.googleConnectionId || googleConnections[0]?.id || ''
+      googleConnectionId: event.googleConnectionId || ''
     });
     setExternalEmailDraft('');
     setExternalEmailError('');
@@ -622,6 +626,7 @@ const OperationalCalendar = () => {
   const handleSubmit = (e) => {
     e.preventDefault();
     if (saveInFlightRef.current || eventMutation.isPending) return;
+    if (hasInvalidCreationAccount) return;
     if (hasDateInputErrors) return;
     const currentStartError = isUnchangedCreationRetry() ? '' : getCalendarStartValidationError(formData, originalEventDatesRef.current);
     if (currentStartError) {
@@ -648,6 +653,7 @@ const OperationalCalendar = () => {
   };
 
   const generateMeetLink = async () => {
+    if (!hasValidGoogleSelection) return;
     if (hasDateInputErrors) return;
     const currentStartError = getCalendarStartValidationError(formData);
     if (currentStartError) {
@@ -1243,19 +1249,23 @@ const OperationalCalendar = () => {
                 </div>
               </div>
 
-              {googleConnections.length > 0 && (
+              {(
                 <div className="space-y-1.5">
                   <label htmlFor="operational-event-google-account" className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Cuenta de Google</label>
                   <select
                     id="operational-event-google-account"
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5 dark:text-zinc-100"
                     value={formData.googleConnectionId}
+                    disabled={Boolean(editingEventId) || googleStatusLoadFailed}
                     onChange={event => setFormData({ ...formData, googleConnectionId: event.target.value })}
                   >
+                    <option value="" disabled>{editingEventId ? 'Calendario de origen no identificado' : 'Selecciona una cuenta de Google'}</option>
+                    {editingEventId && formData.googleConnectionId && !selectedGoogleConnection && <option value={formData.googleConnectionId}>Cuenta de origen no disponible</option>}
                     {googleConnections.map(connection => (
-                      <option key={connection.id} value={connection.id}>{connection.email}</option>
+                      <option key={connection.id} value={connection.id} disabled={connection.isActive === false || connection.reconnectRequired}>{connection.email}{connection.isActive === false || connection.reconnectRequired ? ' · Requiere reconexión' : ''}</option>
                     ))}
                   </select>
+                  <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">{editingEventId ? 'El evento conserva su calendario de origen.' : 'Se guardará en el calendario principal de esta cuenta.'}</p>
                 </div>
               )}
 
@@ -1311,7 +1321,7 @@ const OperationalCalendar = () => {
                     <button
                       type="button"
                       onClick={generateMeetLink}
-                      disabled={isGeneratingLink || hasDateInputErrors || Boolean(meetStartValidationError)}
+                      disabled={isGeneratingLink || !hasValidGoogleSelection || hasDateInputErrors || Boolean(meetStartValidationError)}
                       className="inline-flex items-center gap-1.5 rounded-full bg-indigo-600 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white transition hover:bg-indigo-700 disabled:opacity-50"
                     >
                       {isGeneratingLink ? <Loader2 className="h-3 w-3 animate-spin" /> : <Sparkles className="h-3 w-3" />}
@@ -1392,7 +1402,7 @@ const OperationalCalendar = () => {
                 )}
                 <button
                   type="submit"
-                  disabled={eventMutation.isPending || hasDateInputErrors || Boolean(startValidationError)}
+                  disabled={eventMutation.isPending || hasInvalidCreationAccount || hasDateInputErrors || Boolean(startValidationError)}
                   className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-primary py-2.5 text-sm font-medium text-primary-foreground shadow-sm transition hover:bg-primary/90 disabled:opacity-60"
                 >
                   {eventMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <PlusCircle className="h-4 w-4" />}

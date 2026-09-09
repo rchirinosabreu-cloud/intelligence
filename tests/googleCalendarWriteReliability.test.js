@@ -110,7 +110,8 @@ test('durable retry schema is additive and creation/recovery share a persisted r
 
 test('duplicate create requests reuse one durable record; changed payload cannot reuse its key', async () => {
   const rows = []; let syncs = 0;
-  const deps = { lock: task => task(), now: () => new Date('2026-09-01T00:00:00Z'), authorize: async () => ({ connection: { id: 'c1', calendarId: 'primary' } }),
+  const deps = { lock: task => task(), now: () => new Date('2026-09-01T00:00:00Z'), authorize: async () => ({ connection: { id: 'connection-1', calendarId: 'primary' } }),
+    resolveCreationTarget: async () => ({ calendarId: 'primary' }),
     db: { operationalEvent: {
       findUnique: async ({ where }) => rows.find(row => row.requestId === where.requestId),
       create: async ({ data }) => { const row = { id: 'saved', ...data }; rows.push(row); return row; }, delete: async () => assert.fail('must not delete')

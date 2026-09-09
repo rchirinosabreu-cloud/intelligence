@@ -29,13 +29,13 @@ import { requireManagerRole } from '../../middlewares/authMiddleware.js';
 
 const router = express.Router();
 
-const sendOperationalEventSaveError = (res, error, fallbackError) => {
+export const sendOperationalEventSaveError = (res, error, fallbackError) => {
   if (error.preserveLocal && error.eventId) {
     return res.status(503).json({ error: 'El evento está guardado; falta confirmar Google Calendar',
       code: error.code, eventId: error.eventId, preserveLocal: true, googleSyncStatus: 'PENDING',
       details: 'Se reintentará automáticamente con el mismo evento. No es necesario crearlo de nuevo.' });
   }
-  if (['GOOGLE_CALENDAR_BUSY', 'EVENT_REQUEST_CONFLICT', 'EVENT_SYNC_IN_PROGRESS'].includes(error.code)) {
+  if (['GOOGLE_CALENDAR_BUSY', 'EVENT_REQUEST_CONFLICT', 'EVENT_SYNC_IN_PROGRESS', 'GOOGLE_CALENDAR_MOVE_REQUIRED', 'GOOGLE_CALENDAR_ACCOUNT_MISMATCH', 'GOOGLE_CALENDAR_DESTINATION_MISMATCH'].includes(error.code)) {
     return res.status(409).json({ error: error.message, code: error.code, details: error.message });
   }
   if (error.code === 'GOOGLE_CALENDAR_NOT_CONNECTED') {
@@ -44,7 +44,7 @@ const sendOperationalEventSaveError = (res, error, fallbackError) => {
   if (error.code === 'EVENT_NOT_FOUND') {
     return res.status(404).json({ error: 'El evento ya no existe', code: error.code, details: error.message });
   }
-  if (['INVALID_EVENT_PAST', 'INVALID_EVENT_REQUEST_ID', 'INVALID_EVENT_RANGE', 'INVALID_GOOGLE_EVENT_TIME', 'INVALID_EVENT_TITLE', 'INVALID_EVENT_TYPE', 'INVALID_EVENT_RECURRENCE', 'INVALID_EVENT_ATTENDEES'].includes(error.code)) {
+  if (['INVALID_GOOGLE_CALENDAR_ACCOUNT', 'INVALID_EVENT_PAST', 'INVALID_EVENT_REQUEST_ID', 'INVALID_EVENT_RANGE', 'INVALID_GOOGLE_EVENT_TIME', 'INVALID_EVENT_TITLE', 'INVALID_EVENT_TYPE', 'INVALID_EVENT_RECURRENCE', 'INVALID_EVENT_ATTENDEES'].includes(error.code)) {
     return res.status(422).json({
       error: ['INVALID_EVENT_PAST', 'INVALID_EVENT_RANGE', 'INVALID_GOOGLE_EVENT_TIME'].includes(error.code)
         ? 'Revisa las fechas y horas del evento'
@@ -119,6 +119,9 @@ router.post('/events', requireManagerRole, async (req, res) => {
 router.post('/events/generate-meet', requireManagerRole, async (req, res) => {
   const { title, startAt, endAt, description, googleConnectionId } = req.body;
   try {
+    if (typeof googleConnectionId !== 'string' || !googleConnectionId.trim() || googleConnectionId !== googleConnectionId.trim()) {
+      throw Object.assign(new Error('Selecciona una cuenta de Google antes de generar el enlace de Meet.'), { code: 'INVALID_GOOGLE_CALENDAR_ACCOUNT' });
+    }
     const meeting = await createMeetEvent(title, startAt, endAt, description, googleConnectionId);
     if (!meeting?.meetingLink) throw new Error('No se pudo generar el enlace');
     res.json(meeting);
@@ -132,7 +135,7 @@ router.post('/events/generate-meet', requireManagerRole, async (req, res) => {
         details: error.message
       });
     }
-    res.status(500).json({ error: 'Failed to generate Meet link', details: error.message });
+    return sendOperationalEventSaveError(res, error, 'Failed to generate Meet link');
   }
 });
 
