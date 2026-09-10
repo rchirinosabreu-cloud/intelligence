@@ -19,8 +19,8 @@ before(async () => {
 });
 after(async () => { await browser?.close(); await server?.close(); });
 
-async function demo({ legacy = false, send, delayPreview, viewport = { width: 1440, height: 1080 } } = {}) {
-  const page = await browser.newPage({ viewport, reducedMotion: 'reduce' });
+async function demo({ legacy = false, send, delayPreview, viewport = { width: 1440, height: 1080 }, reducedMotion = 'reduce' } = {}) {
+  const page = await browser.newPage({ viewport, reducedMotion });
   page.setDefaultTimeout(8000);
   const errors = [], requests = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -211,6 +211,80 @@ test('mobile: pending files can be removed individually and Ctrl+Enter submits t
     assert.ok(submissions[0].includes('Revisión móvil'));
     assert.ok(submissions[0].includes('conservar.png'));
     assert.ok(!submissions[0].includes('quitar.png'));
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+async function sampleFormatToggle(page) {
+  return page.evaluate(() => new Promise(resolve => {
+    const button = document.querySelector('[aria-label="Opciones de formato"]');
+    const shell = button.closest('[data-rich-text-editor-shell]');
+    const samples = [];
+    const start = performance.now();
+    const sample = () => {
+      const rect = shell.getBoundingClientRect();
+      samples.push({ time: performance.now() - start, top: rect.top, bottom: rect.bottom, height: rect.height });
+    };
+    sample();
+    button.click();
+    const frame = () => {
+      sample();
+      // Observe painted frames, after ResizeObserver/layout compensation, not
+      // the intermediate layout that a synchronous rAF read can force.
+      if (performance.now() - start < 650) requestAnimationFrame(() => setTimeout(frame, 0));
+      else resolve(samples);
+    };
+    requestAnimationFrame(() => setTimeout(frame, 0));
+  }));
+}
+
+for (const viewport of [{ width: 1440, height: 1080 }, { width: 390, height: 844 }]) {
+  test(`format ${viewport.width}px: expands upward smoothly with the bottom anchored and no manual scroll`, async () => {
+    const { page, errors } = await demo({ viewport, reducedMotion: 'no-preference' });
+    try {
+      const editor = page.locator('[contenteditable="true"]').last();
+      await editor.fill('Texto que debe conservarse al abrir Formato.');
+      await settleAnimations(page);
+      await page.locator('[data-rich-text-editor-shell]').last().scrollIntoViewIfNeeded();
+      const opening = await sampleFormatToggle(page);
+      await page.screenshot({ path: path.join(output, `format-${viewport.width}-open.png`) });
+      const first = opening[0], last = opening.at(-1);
+      assert.ok(last.height > first.height + 40, 'Format exposes a larger editing area');
+      assert.ok(opening.every(frame => Math.abs(frame.bottom - first.bottom) <= 3), 'Opening must keep the bottom edge stable instead of centering/jumping');
+      assert.ok(new Set(opening.filter(frame => frame.height > first.height + 2 && frame.height < last.height - 2).map(frame => Math.round(frame.height))).size >= 3, 'Expansion must have visible intermediate frames');
+      assert.ok(last.top < first.top && last.top >= 0 && last.bottom <= viewport.height, 'Toolbar and editor stay visible without manual scroll');
+      assert.match(await editor.innerText(), /Texto que debe conservarse/);
+      const closing = await sampleFormatToggle(page);
+      assert.ok(closing.every(frame => Math.abs(frame.bottom - closing[0].bottom) <= 3), 'Closing also keeps the bottom edge stable');
+      assert.ok(Math.abs(closing.at(-1).height - first.height) <= 2, 'Closing returns to compact height');
+      assert.deepEqual(errors, []);
+    } finally { await page.close(); }
+  });
+}
+
+test('format: reduced motion and repeated toggles preserve the draft, selection and attachments', async () => {
+  const { page, errors } = await demo();
+  try {
+    const editor = page.locator('[contenteditable="true"]').last();
+    const draft = Array.from({ length: 12 }, (_, i) => `Línea ${i + 1}: conservar este comentario.`).join('\n');
+    await editor.fill(draft);
+    await page.locator('#task-file-upload-focus').setInputFiles([{ name: 'conservar.png', mimeType: 'image/png', buffer: Buffer.from('local attachment') }]);
+    await page.locator('[data-rich-text-editor-shell]').last().scrollIntoViewIfNeeded();
+    const frames = await sampleFormatToggle(page);
+    assert.ok(frames.slice(1).every(frame => Math.abs(frame.height - frames.at(-1).height) <= 1), 'Reduced motion must finish without intermediate animation frames');
+    await editor.press('Control+Home');
+    await editor.press('Control+Shift+End');
+    await page.getByRole('button', { name: 'Negrita', exact: true }).click();
+    assert.ok(await editor.locator('strong').count() > 0, 'Formatting applies to the selected text');
+    assert.match(await editor.innerText(), /Línea 12: conservar este comentario/);
+    await page.getByRole('button', { name: 'Opciones de formato' }).click();
+    assert.equal(await page.getByRole('button', { name: 'Negrita', exact: true }).count(), 0, 'Closed formatting controls are not accessible');
+    await page.getByRole('button', { name: 'Opciones de formato' }).focus();
+    await page.keyboard.press('Enter');
+    await page.getByRole('button', { name: 'Negrita', exact: true }).waitFor();
+    await page.getByText('conservar.png', { exact: true }).waitFor();
+    await page.evaluate(() => document.documentElement.classList.add('dark'));
+    await capture(page, 'format-dark-open.png');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

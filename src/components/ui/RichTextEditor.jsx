@@ -238,21 +238,49 @@ const RichTextEditor = React.forwardRef(({
   });
 
   const composerRef = React.useRef(null);
+  const previousToolbarOpen = React.useRef(isToolbarOpen);
+  const toolbarId = React.useId();
   React.useLayoutEffect(() => {
-    if (!isToolbarOpen) return undefined;
+    if (previousToolbarOpen.current === isToolbarOpen) return undefined;
+    previousToolbarOpen.current = isToolbarOpen;
+    const composer = composerRef.current;
+    if (!composer) return undefined;
 
-    const keepComposerBottomVisible = () => {
-      composerRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    // Keep the action row in place as the in-flow editor grows upward. Repeated
+    // scrollIntoView calls race CSS height changes and visibly re-center the chat.
+    let scroller = composer.parentElement;
+    while (scroller && !/(auto|scroll)/.test(getComputedStyle(scroller).overflowY)) {
+      scroller = scroller.parentElement;
+    }
+    scroller ||= document.scrollingElement;
+    if (!scroller) return undefined;
+    const viewportBottom = Math.min(window.visualViewport ? window.visualViewport.offsetTop + window.visualViewport.height : window.innerHeight,
+      scroller === document.scrollingElement ? window.innerHeight : scroller.getBoundingClientRect().bottom);
+    const bottom = Math.min(composer.getBoundingClientRect().bottom, viewportBottom);
+    const previousAnchor = scroller.style.overflowAnchor;
+    const previousBehavior = scroller.style.scrollBehavior;
+    scroller.style.overflowAnchor = 'none';
+    scroller.style.scrollBehavior = 'auto';
+    const alignBottom = () => {
+      const delta = composer.getBoundingClientRect().bottom - bottom;
+      if (Math.abs(delta) > 0.5) scroller.scrollTop += delta;
     };
-
-    keepComposerBottomVisible();
-    const frameId = requestAnimationFrame(keepComposerBottomVisible);
-    const timeoutId = window.setTimeout(keepComposerBottomVisible, 220);
-
-    return () => {
-      cancelAnimationFrame(frameId);
+    const observer = new ResizeObserver(alignBottom);
+    observer.observe(composer);
+    alignBottom();
+    // This timer only releases the temporary anchor; it never triggers a scroll.
+    const timeoutId = window.setTimeout(release, 300);
+    function release() {
+      observer.disconnect();
       window.clearTimeout(timeoutId);
-    };
+      scroller.style.overflowAnchor = previousAnchor;
+      scroller.style.scrollBehavior = previousBehavior;
+      scroller.removeEventListener('wheel', release);
+      scroller.removeEventListener('touchstart', release);
+    }
+    scroller.addEventListener('wheel', release, { passive: true });
+    scroller.addEventListener('touchstart', release, { passive: true });
+    return release;
   }, [isToolbarOpen]);
 
   const executeFormat = (event, command) => {
@@ -312,15 +340,20 @@ const RichTextEditor = React.forwardRef(({
     <Popover.Root open={isToolbarOpen} onOpenChange={handleToggleToolbar}>
       <div
         ref={composerRef}
-        style={{ scrollMarginBlock: isToolbarOpen ? '120px' : undefined }}
-        className={cn('relative w-full flex flex-col justify-end transition-all duration-200 ease-out', isToolbarOpen && 'z-20')}
+        className={cn('relative w-full flex flex-col justify-end', isToolbarOpen && 'z-20')}
       >
         <Popover.Anchor asChild>
           <div
             data-rich-text-editor-shell="true"
-            className="w-full overflow-hidden bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus-within:border-primary/30 rounded-xl shadow-inner transition-all relative flex flex-col justify-end"
+            className="w-full overflow-hidden bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 focus-within:border-primary/30 rounded-xl shadow-inner transition-colors relative flex flex-col justify-end"
           >
-            {isToolbarOpen && (
+            <div
+              id={toolbarId}
+              aria-hidden={!isToolbarOpen}
+              inert={isToolbarOpen ? undefined : ''}
+              className={cn('grid transition-[grid-template-rows] duration-200 ease-out motion-reduce:transition-none', isToolbarOpen ? 'grid-rows-[1fr]' : 'grid-rows-[0fr]')}
+            >
+              <div className="min-h-0 overflow-hidden">
               <TopToolbarSurface>
                 <button type="button" aria-label="Negrita" aria-pressed={formattingState.bold} onMouseDown={(e) => executeFormat(e, chain => chain.toggleBold())} className={formatButtonClass(formattingState.bold)} title="Negrita">
                   <Bold className="h-4 w-4" />
@@ -352,10 +385,11 @@ const RichTextEditor = React.forwardRef(({
                   <ListOrdered className="h-4 w-4" />
                 </button>
               </TopToolbarSurface>
-            )}
+              </div>
+            </div>
 
             <div className={cn(
-              'w-full overflow-y-auto overscroll-contain transition-[min-height,max-height] duration-200 ease-in-out scrollbar-thin',
+              'w-full overflow-y-auto overscroll-contain transition-[min-height,max-height] duration-200 ease-out motion-reduce:transition-none scrollbar-thin',
               'min-h-[48px] max-h-[120px]',
               isToolbarOpen && 'min-h-[144px] max-h-[min(42vh,260px)]',
               '[&_.ProseMirror]:min-h-full [&_.ProseMirror]:break-all [&_.ProseMirror]:focus:outline-none'
@@ -376,6 +410,7 @@ const RichTextEditor = React.forwardRef(({
                     )}
                     title="Formato"
                     aria-label="Opciones de formato"
+                    aria-controls={toolbarId}
                   >
                     A
                   </button>
