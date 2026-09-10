@@ -1,5 +1,6 @@
 import React from 'react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { commentFileUrls, commentDownloadFilename } from '@/lib/taskCommentAttachments';
 import { FileText, Music, FileSpreadsheet, File, Download, Image as ImageIcon, Eye } from '@/components/ui/icons';
 
 /**
@@ -89,12 +90,19 @@ export const AttachmentCard = ({ url, fileType, fileName, fileExt, downloadUrl, 
             const target = downloadUrl || url;
             const parsed = new URL(target, window.location.href);
             if (parsed.pathname.startsWith('/api/')) {
-                const response = await fetch(target);
-                if (!response.ok) throw new Error(`Download failed with status ${response.status}`);
+                const token = localStorage.getItem('authToken');
+                const api = new URL(getApiBaseUrl(), window.location.href);
+                const headers = token && parsed.origin === api.origin ? { Authorization: `Bearer ${token}` } : {};
+                const response = await fetch(target, { headers });
+                if (!response.ok) {
+                    const errorBody = await response.json().catch(() => ({}));
+                    console.error('[CommentFile] Download rejected:', errorBody);
+                    throw new Error(errorBody.error || `Download failed with status ${response.status}`);
+                }
                 const blobUrl = URL.createObjectURL(await response.blob());
                 const anchor = document.createElement('a');
                 anchor.href = blobUrl;
-                anchor.download = fileName || 'archivo';
+                anchor.download = commentDownloadFilename(response.headers.get('content-disposition'), fileName || 'archivo');
                 anchor.click();
                 setTimeout(() => URL.revokeObjectURL(blobUrl), 1000);
                 return;
@@ -106,7 +114,7 @@ export const AttachmentCard = ({ url, fileType, fileName, fileExt, downloadUrl, 
     };
 
     return (
-        <div className="flex items-center justify-between gap-4 p-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl my-2 max-w-md shadow-sm transition-all hover:bg-zinc-100 dark:hover:bg-zinc-800/80">
+        <div className="flex flex-col items-stretch justify-between gap-3 p-3 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl my-2 max-w-md shadow-sm transition-all hover:bg-zinc-100 dark:hover:bg-zinc-800/80 sm:flex-row sm:items-center sm:gap-4">
             <div className="flex items-center gap-3 min-w-0">
                 <div className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${iconBgColor}`}>
                     <Icon size={20} />
@@ -168,44 +176,31 @@ export const linkify = (text, onImageClick = null, contextData = {}) => {
 
             const fileType = getFileType(href);
             const isImage = fileType === 'image';
-            const isS3Bucket = href.includes('t3.storageapi.dev');
+            let isS3Bucket = false;
+            try { isS3Bucket = new URL(href).hostname === 't3.storageapi.dev'; } catch { /* Malformed links remain plain links. */ }
 
             // Proxy logic for S3 images if metadata is available
-            let displaySrc = href;
-            if (isS3Bucket && contextData.taskId && contextData.commentId) {
-                displaySrc = `${getApiBaseUrl()}/api/tasks/${contextData.taskId}/comments/${contextData.commentId}/file`;
-            }
+            const managed = isS3Bucket && contextData.taskId && contextData.commentId;
+            const fileUrls = managed ? commentFileUrls(getApiBaseUrl(), contextData.taskId, contextData.commentId, { url: href }) : { previewUrl: href, downloadUrl: href };
+            const displaySrc = fileUrls.previewUrl;
 
             // Render files, including images, as AttachmentCard. Images keep a preview affordance.
-            const { name, ext } = getFileNameAndExtension(href);
+            const { ext, fullName } = getFileNameAndExtension(href);
 
             if (fileType !== 'other' || isS3Bucket) {
-                let downloadUrl = href;
-                if (isS3Bucket && contextData.taskId && contextData.commentId) {
-                    downloadUrl = `${getApiBaseUrl()}/api/tasks/${contextData.taskId}/comments/${contextData.commentId}/download`;
-                }
+                const downloadUrl = fileUrls.downloadUrl;
 
-                const handlePreview = isImage && onImageClick ? async () => {
-                    try {
-                        if (isS3Bucket) {
-                            const response = await fetch(displaySrc);
-                            if (!response.ok) throw new Error(`Preview failed with status ${response.status}`);
-                            const blobUrl = URL.createObjectURL(await response.blob());
-                            onImageClick({ direct: blobUrl, proxy: blobUrl, commentId: contextData.commentId, name });
-                            return;
-                        }
-                        onImageClick({ direct: href, proxy: displaySrc, commentId: contextData.commentId, name });
-                    } catch (error) {
-                        console.error('Attachment preview failed:', error);
-                    }
-                } : null;
+                const handlePreview = isImage && onImageClick ? () => onImageClick({
+                    direct: href, proxy: managed ? displaySrc : undefined,
+                    downloadUrl, commentId: contextData.commentId, name: fullName
+                }) : null;
 
                 return (
                     <AttachmentCard
                         key={index}
                         url={href}
                         fileType={fileType}
-                        fileName={name}
+                        fileName={fullName}
                         fileExt={ext}
                         downloadUrl={downloadUrl}
                         previewUrl={displaySrc}

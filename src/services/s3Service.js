@@ -1,5 +1,6 @@
 import { S3Client, PutObjectCommand, PutBucketCorsCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { validateUploadFile } from '../config/security.js';
+import { randomUUID } from 'node:crypto';
 
 /**
  * S3-Compatible Storage Service (Railway / T3)
@@ -110,7 +111,7 @@ export const uploadToS3 = async (file, folder = "chat") => {
 
     const timestamp = Date.now();
     const sanitizedName = file.originalname.replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
-    const key = `${folder}/${timestamp}_${sanitizedName}`;
+    const key = `${folder}/${timestamp}_${randomUUID()}_${sanitizedName}`;
 
     const command = new PutObjectCommand({
         Bucket: bucketName,

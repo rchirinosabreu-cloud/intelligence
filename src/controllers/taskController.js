@@ -11,11 +11,13 @@ const sanitizeHTML = (html) => {
 
 import { getDashboardMetrics, getQualityStreak, getCompletedTasks, getTasks, createTask, updateTask, auditAndDeleteTask, toggleTaskFollow, checkIsFollowing } from '../services/nativeTaskService.js';
 import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from '../services/clientTaskService.js';
-import { uploadToS3, getFromS3Stream } from '../services/s3Service.js';
+import { uploadToS3, getFromS3Stream, deleteFromS3 } from '../services/s3Service.js';
+import { resolveTaskCommentFile } from '../services/taskCommentFileService.js';
 import { createNotification, processMentionsAndNotifications } from '../services/notificationService.js';
 import { recordTaskListSync } from '../services/operationalTraceService.js';
 import { traceTaskOpenHandler } from './operationalTraceController.js';
-import { canDeleteTask, canUpdateTask, isManagerRole, pickAllowedTaskUpdates } from '../config/security.js';
+import { canDeleteTask, canUpdateTask, isManagerRole, pickAllowedTaskUpdates, validateUploadFile } from '../config/security.js';
+import { commentFilesValidationMessage, MAX_COMMENT_FILE_BYTES } from '../lib/taskCommentAttachments.js';
 import { listTaskWorkHistory } from '../services/taskWorkSessionService.js';
 export { getMyExcessiveTaskAlertsHandler as getMyExcessiveTaskAlerts } from './excessiveTaskAlertController.js';
 export { confirmExcessiveTaskWorkHandler as confirmExcessiveTaskWork } from './excessiveTaskAlertController.js';
@@ -283,210 +285,60 @@ const streamTaskAttachment = async (req, res, disposition) => {
 export const getTaskAttachmentFileProxy = (req, res) => streamTaskAttachment(req, res, 'inline');
 export const getTaskAttachmentDownloadProxy = (req, res) => streamTaskAttachment(req, res, 'attachment');
 
-export const getCommentFileProxy = async (req, res) => {
+const streamCommentFile = async (req, res, disposition) => {
     try {
         const { taskId, commentId } = req.params;
         const comment = await prisma.taskComment.findUnique({
             where: { id: commentId },
             select: { content: true, taskId: true }
         });
-
         if (!comment || comment.taskId !== taskId) {
             return res.status(404).json({ error: "Comment not found or doesn't belong to this task" });
         }
-
-        const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
-        let key = null;
-
-        // 1. Structured DB lookup first (TaskAttachment relation)
-        const attachment = await prisma.taskAttachment.findFirst({
-            where: { commentId }
+        const attachments = await prisma.taskAttachment.findMany({ where: { taskId, commentId } });
+        const file = resolveTaskCommentFile({ attachments, content: comment.content, selector: req.query });
+        const object = await getFromS3Stream(file.key);
+        const filename = safeDownloadName(file.name);
+        const asciiName = filename.replace(/[^\x20-\x7E]/g, '_');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+        res.setHeader('Content-Type', object.ContentType || 'application/octet-stream');
+        res.setHeader('Content-Disposition', `${disposition}; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(filename).replace(/['()*]/g, char => '%' + char.charCodeAt(0).toString(16))}`);
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        object.Body.on('error', (error) => {
+            console.error('[CommentFile] Stream failed:', error);
+            if (!res.headersSent) res.status(500).json({ error: 'No se pudo cargar el archivo seleccionado.' });
+            else res.destroy(error);
         });
-
-        if (attachment) {
-            try {
-                if (attachment.url.includes(bucketName)) {
-                    const url = new URL(attachment.url);
-                    const parts = url.pathname.split('/');
-                    const bucketIndex = parts.indexOf(bucketName);
-                    if (bucketIndex !== -1 && parts.length > bucketIndex + 1) {
-                        key = parts.slice(bucketIndex + 1).join('/');
-                    }
-                }
-            } catch (e) {}
-
-            if (!key) {
-                const regex = new RegExp(`${bucketName}/([^\\s\\n?]+)`);
-                const match = attachment.url.match(regex);
-                if (match) key = match[1].trim();
-            }
-        }
-
-        // 2. Text parsing fallback for historic records
-        if (!key) {
-            try {
-                // Find the URL within the content (it's usually at the end)
-                const lines = comment.content.split('\n');
-                const lastLine = lines[lines.length - 1].trim();
-
-                if (lastLine.includes(bucketName)) {
-                    const url = new URL(lastLine);
-                    // Pathname usually is /{bucket}/{key}
-                    const parts = url.pathname.split('/');
-                    const bucketIndex = parts.indexOf(bucketName);
-                    if (bucketIndex !== -1 && parts.length > bucketIndex + 1) {
-                        key = parts.slice(bucketIndex + 1).join('/');
-                    }
-                }
-            } catch (e) {
-                console.error("URL parsing failed, falling back to regex", e);
-            }
-
-            if (!key) {
-                const regex = new RegExp(`${bucketName}/([^\\s\\n?]+)`);
-                const match = comment.content.match(regex);
-                if (match) key = match[1].trim();
-            }
-        }
-
-        if (!key) return res.status(404).json({ error: "No storage key found in comment" });
-
-        try {
-            const s3Response = await getFromS3Stream(key);
-
-            res.setHeader('Content-Type', s3Response.ContentType || 'image/jpeg');
-            res.setHeader('Content-Disposition', 'inline');
-
-            // Attach error listener to stream to prevent crashes on network issues
-            s3Response.Body.on('error', (err) => {
-                console.error("S3 Stream Error:", err);
-                if (!res.headersSent) {
-                    res.status(500).json({ error: "Stream error" });
-                }
-            });
-
-            s3Response.Body.pipe(res);
-        } catch (s3Error) {
-            if (s3Error.name === 'NoSuchKey') {
-                return res.status(404).json({ error: "Resource not found in storage (NoSuchKey)" });
-            }
-            throw s3Error;
-        }
+        return object.Body.pipe(res);
     } catch (error) {
-        console.error("Proxy error:", error);
-        if (!res.headersSent) {
-            res.status(500).json({ error: "Failed to proxy file", details: error.message });
-        }
+        console.error('[CommentFile] Could not serve selected attachment:', error?.message || error);
+        if (res.headersSent) return;
+        const status = error.name === 'NoSuchKey' ? 404 : (error.status || 500);
+        return res.status(status).json({
+            error: status === 500 ? 'No se pudo cargar el archivo seleccionado.' : (error.name === 'NoSuchKey' ? 'El archivo ya no está disponible.' : error.message)
+        });
     }
 };
 
-export const getCommentFileDownloadProxy = async (req, res) => {
-    try {
-        const { taskId, commentId } = req.params;
-        const comment = await prisma.taskComment.findUnique({
-            where: { id: commentId },
-            select: { content: true, taskId: true }
-        });
-
-        if (!comment || comment.taskId !== taskId) {
-            return res.status(404).json({ error: "Comment not found or doesn't belong to this task" });
-        }
-
-        const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
-        let key = null;
-        let originalName = null;
-
-        // 1. Structured DB lookup first (TaskAttachment relation)
-        const attachment = await prisma.taskAttachment.findFirst({
-            where: { commentId }
-        });
-
-        if (attachment) {
-            originalName = attachment.name;
-            try {
-                if (attachment.url.includes(bucketName)) {
-                    const url = new URL(attachment.url);
-                    const parts = url.pathname.split('/');
-                    const bucketIndex = parts.indexOf(bucketName);
-                    if (bucketIndex !== -1 && parts.length > bucketIndex + 1) {
-                        key = parts.slice(bucketIndex + 1).join('/');
-                    }
-                }
-            } catch (e) {}
-
-            if (!key) {
-                const regex = new RegExp(`${bucketName}/([^\\s\\n?]+)`);
-                const match = attachment.url.match(regex);
-                if (match) key = match[1].trim();
-            }
-        }
-
-        // 2. Text parsing fallback for historic records
-        if (!key) {
-            try {
-                const lines = comment.content.split('\n');
-                const lastLine = lines[lines.length - 1].trim();
-                if (lastLine.includes(bucketName)) {
-                    const url = new URL(lastLine);
-                    const parts = url.pathname.split('/');
-                    const bucketIndex = parts.indexOf(bucketName);
-                    if (bucketIndex !== -1 && parts.length > bucketIndex + 1) {
-                        key = parts.slice(bucketIndex + 1).join('/');
-                    }
-                }
-            } catch (e) {}
-
-            if (!key) {
-                const regex = new RegExp(`${bucketName}/([^\\s\\n?]+)`);
-                const match = comment.content.match(regex);
-                if (match) key = match[1].trim();
-            }
-        }
-
-        if (!key) return res.status(404).json({ error: "No storage key found in comment" });
-        const fileName = originalName || key.split('/').pop() || 'adjunto_tarea.jpg';
-
-        try {
-            const s3Response = await getFromS3Stream(key);
-
-            res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
-            res.setHeader('Content-Type', 'application/octet-stream');
-            res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
-
-            s3Response.Body.on('error', (err) => {
-                console.error("S3 Download Stream Error:", err);
-                if (!res.headersSent) {
-                    res.status(500).json({ error: "Stream error during download" });
-                }
-            });
-
-            s3Response.Body.pipe(res);
-        } catch (s3Error) {
-            if (s3Error.name === 'NoSuchKey') {
-                return res.status(404).json({ error: "File not found in storage (NoSuchKey)" });
-            }
-            throw s3Error;
-        }
-    } catch (error) {
-        console.error("Download proxy error:", error);
-        if (!res.headersSent) {
-            res.status(500).json({ error: "Failed to download file", details: error.message });
-        }
-    }
-};
+export const getCommentFileProxy = (req, res) => streamCommentFile(req, res, 'inline');
+export const getCommentFileDownloadProxy = (req, res) => streamCommentFile(req, res, 'attachment');
 
 export const addTaskComment = async (req, res) => {
+    const uploads = [];
+    let committed = false;
     try {
         const content = req.body?.content;
         const { taskId } = req.params;
         const authorId = req.user.userId;
+        const files = Array.isArray(req.files) ? req.files : (req.file ? [req.file] : []);
 
         if (String(content || '').length > COMMENT_MAX_LENGTH) {
             return res.status(400).json({ error: `El comentario no puede superar ${COMMENT_MAX_LENGTH} caracteres` });
         }
 
         // Allow empty content if a file is present
-        if (!content?.trim() && !req.file) {
+        if (!content?.trim() && files.length === 0) {
             return res.status(400).json({ error: "Content or file is required" });
         }
 
@@ -494,9 +346,12 @@ export const addTaskComment = async (req, res) => {
         if (finalContent) {
             finalContent = sanitizeHTML(finalContent);
         }
-        let publicUrl = null;
+        const validationMessage = commentFilesValidationMessage(files);
+        if (validationMessage) return res.status(413).json({ error: validationMessage });
+        // Validate the whole batch before uploading the first object.
+        for (const file of files) validateUploadFile(file, { maxBytes: MAX_COMMENT_FILE_BYTES });
 
-        if (req.file) {
+        if (files.length > 0) {
             const task = await prisma.task.findUnique({
                 where: { id: taskId },
                 select: { clientId: true, client: { select: { name: true } } }
@@ -507,8 +362,9 @@ export const addTaskComment = async (req, res) => {
             // Structure path: clientes/{client_id}/tareas/{task_id}/imagenes
             const folderPrefix = `clientes/${task.clientId}/tareas/${taskId}/imagenes`;
 
-            const uploadResult = await uploadToS3(req.file, folderPrefix);
-            publicUrl = uploadResult.url;
+            for (const file of files) {
+                uploads.push(await uploadToS3(file, folderPrefix));
+            }
         }
 
         const comment = await prisma.$transaction(async (tx) => {
@@ -521,15 +377,15 @@ export const addTaskComment = async (req, res) => {
                 }
             });
 
-            if (req.file && publicUrl) {
-                await tx.taskAttachment.create({
-                    data: {
+            if (uploads.length > 0) {
+                await tx.taskAttachment.createMany({
+                    data: uploads.map((upload) => ({
                         taskId,
                         commentId: createdComment.id,
-                        url: publicUrl,
-                        name: req.file.originalname || "Adjunto de Chat",
+                        url: upload.url,
+                        name: upload.name || "Adjunto de Chat",
                         category: "REFERENCIA"
-                    }
+                    }))
                 });
             }
 
@@ -538,6 +394,7 @@ export const addTaskComment = async (req, res) => {
                 include: { author: { select: taskCommentAuthorSelect }, attachments: true }
             });
         });
+        committed = true;
 
         // Trigger mentions & assignee notifications
         processMentionsAndNotifications(taskId, finalContent, authorId).catch(err => {
@@ -547,7 +404,15 @@ export const addTaskComment = async (req, res) => {
         res.status(201).json(comment);
     } catch (error) {
         console.error("Error adding comment:", error);
-        res.status(500).json({ error: "Failed to add comment", details: error.message });
+        // Never delete existing attachments, or uploads after a confirmed commit.
+        if (!committed) {
+            for (const upload of uploads) {
+                try { await deleteFromS3(upload.key); }
+                catch (cleanupError) { console.error('[TaskComment] Failed to clean new upload:', cleanupError?.message || cleanupError); }
+            }
+        }
+        const status = error.code === 'UNSAFE_FILE_TYPE' ? 415 : error.code === 'FILE_TOO_LARGE' ? 413 : 500;
+        res.status(status).json({ error: status === 500 ? 'No se pudo enviar el comentario con sus archivos. Intenta nuevamente.' : error.message });
     }
 };
 

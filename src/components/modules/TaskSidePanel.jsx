@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { commentFileUrls, commentFilesValidationMessage, commentDownloadFilename } from '@/lib/taskCommentAttachments';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { triggerConfetti } from '@/utils/confetti';
@@ -261,11 +262,20 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [isSendingComment, setIsSendingComment] = useState(false);
     const [isFollowing, setIsFollowing] = useState(false);
     const [isTogglingFollow, setIsTogglingFollow] = useState(false);
-    const [selectedFile, setSelectedFile] = useState(null);
+    const [selectedFiles, setSelectedFiles] = useState([]);
+    const sendingCommentRef = useRef(false);
     const [showReintegratePrompt, setShowReintegratePrompt] = useState(false);
     const [reintegrateReason, setReintegrateReason] = useState("");
     const [isDragging, setIsDragging] = useState(false);
     const [previewImage, setPreviewImage] = useState(null);
+    const previewRequestRef = useRef(0);
+    useEffect(() => {
+        previewRequestRef.current++;
+        return () => { previewRequestRef.current++; };
+    }, [isOpen, taskData?.id]);
+    useEffect(() => () => {
+        if (previewImage?.displayUrl?.startsWith('blob:')) URL.revokeObjectURL(previewImage.displayUrl);
+    }, [previewImage]);
 
     // States for Task Creation mode
     const [tempReferences, setTempReferences] = useState([]); // Array of { url, name }
@@ -301,7 +311,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         try {
             const token = localStorage.getItem('authToken');
             const headers = {};
-            if (token) {
+            const target = new URL(url, window.location.href);
+            const api = new URL(getApiBaseUrl(), window.location.href);
+            if (token && target.origin === api.origin && target.pathname.startsWith('/api/')) {
                 headers['Authorization'] = `Bearer ${token}`;
             }
 
@@ -317,11 +329,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             let fileName = 'descarga_archivo';
             const contentDisposition = response.headers.get('content-disposition');
             if (contentDisposition) {
-                const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
-                const matches = filenameRegex.exec(contentDisposition);
-                if (matches != null && matches[1]) {
-                    fileName = decodeURIComponent(matches[1].replace(/['"]/g, ''));
-                }
+                fileName = commentDownloadFilename(contentDisposition, fileName);
             } else {
                 try {
                     const parsedUrl = new URL(url, window.location.href);
@@ -505,7 +513,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         setNewRefName("");
         setNewInpUrl("");
         setNewInpName("");
-        setSelectedFile(null);
+        setSelectedFiles([]);
         toast({ title: "Borrador limpiado", description: "Los campos han sido reiniciados." });
     };
 
@@ -525,7 +533,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         setNewRefName("");
         setNewInpUrl("");
         setNewInpName("");
-        setSelectedFile(null);
+        setSelectedFiles([]);
         toast({ title: "Borrador descartado" });
         onClose();
     };
@@ -545,7 +553,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     useEffect(() => {
         if (isOpen) {
             setPreviewImage(null); // Clear image viewer state when opening a task
-            setSelectedFile(null); // Clear pending attachment
+            setSelectedFiles([]); // Clear pending attachments
             setNewComment("");    // Clear pending comment draft
             setNewCommentText("");
             setEditingCommentText("");
@@ -1102,9 +1110,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
     const handleAddComment = async (fileToUpload = null) => {
         const validFile = (fileToUpload instanceof File) ? fileToUpload : null;
-        const file = validFile || selectedFile;
+        const files = validFile ? [validFile] : selectedFiles;
 
-        if (!newComment.trim() && !file) return;
+        if (!newCommentText.trim() && files.length === 0) return;
 
         // If in creation mode, simulate adding comment to local state
         if (!isEdition) {
@@ -1123,8 +1131,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             return;
         }
 
-        if (isSendingComment) return;
+        if (sendingCommentRef.current) return;
 
+        sendingCommentRef.current = true;
         setIsSendingComment(true);
         try {
             const baseUrl = getApiBaseUrl();
@@ -1133,7 +1142,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             const commentFormData = new FormData();
             commentFormData.append('content', newComment || "");
             commentFormData.append('type', 'human');
-            if (file) {
+            for (const file of files) {
                 commentFormData.append('file', file);
             }
 
@@ -1155,14 +1164,21 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         taskComments: updatedComments
                     };
                 });
-                setNewComment("");
-                setSelectedFile(null);
+                // Preserve anything added to the composer while this request was in flight.
+                setNewComment(current => current === newComment ? '' : current);
+                setSelectedFiles(current => current.filter(file => !files.includes(file)));
                 toast({ title: "Comentario enviado" });
                 setTimeout(scrollToBottomSmooth, 50);
+            } else {
+                const errorBody = await res.json().catch(() => ({}));
+                console.error('[TaskComment] Send rejected:', errorBody);
+                throw new Error(errorBody.error || 'No se pudo enviar el comentario con sus archivos.');
             }
         } catch (err) {
-            toast({ variant: "destructive", title: "Error", description: "No se pudo enviar el comentario." });
+            console.error('[TaskComment] Send failed:', err);
+            toast({ variant: "destructive", title: "Error", description: err.message || 'No se pudo enviar el comentario.' });
         } finally {
+            sendingCommentRef.current = false;
             setIsSendingComment(false);
         }
     };
@@ -1353,44 +1369,50 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
     };
 
-    const handleChatFileSelected = (file) => {
-        if (!file) return;
+    const handleChatFilesSelected = async (incomingFiles) => {
+        const files = Array.from(incomingFiles || []);
+        if (!files.length || sendingCommentRef.current) return;
+        const validationMessage = commentFilesValidationMessage([...(isEdition ? selectedFiles : tempAttachments), ...files]);
+        if (validationMessage) {
+            toast({ variant: 'destructive', title: 'No se pudieron adjuntar los archivos', description: validationMessage });
+            return;
+        }
         if (isEdition) {
-            setSelectedFile(file);
+            setSelectedFiles(current => [...current, ...files]);
         } else {
-            handleUploadTempFile(file);
+            for (const file of files) await handleUploadTempFile(file);
         }
     };
 
     const handleDroppedChatFiles = (files) => {
-        const [file] = Array.from(files || []);
-        handleChatFileSelected(file);
+        handleChatFilesSelected(files);
     };
 
     const handleImagePreview = async (imgData) => {
-        if (imgData.proxy && imgData.commentId) {
-            let downloadUrl = `${getApiBaseUrl()}/api/tasks/${formData.id}/comments/${imgData.commentId}/download`;
-            const params = [];
-            if (imgData.name) {
-                params.push(`filename=${encodeURIComponent(imgData.name)}`);
-            }
-            if (params.length > 0) {
-                downloadUrl += `?${params.join('&')}`;
-            }
-
+        const requestId = ++previewRequestRef.current;
+        if (imgData.proxy) {
+            const downloadUrl = imgData.downloadUrl || imgData.proxy;
             try {
-                const response = await fetch(imgData.proxy);
-                if (!response.ok) throw new Error(`Preview failed with status ${response.status}`);
-                const displayUrl = URL.createObjectURL(await response.blob());
+                const token = localStorage.getItem('authToken');
+                const response = await fetch(imgData.proxy, { headers: token ? { Authorization: `Bearer ${token}` } : {} });
+                if (!response.ok) {
+                    const errorBody = await response.json().catch(() => ({}));
+                    console.error('[TaskComment] Preview rejected:', errorBody);
+                    throw new Error(errorBody.error || 'No se pudo abrir la vista previa');
+                }
+                const blob = await response.blob();
+                if (requestId !== previewRequestRef.current) return;
+                const displayUrl = URL.createObjectURL(blob);
                 setPreviewImage({ displayUrl, downloadUrl });
             } catch (error) {
+                if (requestId !== previewRequestRef.current) return;
                 console.error('Image preview failed:', error);
-                toast({ variant: 'destructive', title: 'No se pudo abrir la vista previa' });
+                toast({ variant: 'destructive', title: 'No se pudo abrir la vista previa', description: error.message });
             }
         } else {
             setPreviewImage({
                 displayUrl: imgData.direct || imgData,
-                downloadUrl: imgData.direct || imgData
+                downloadUrl: imgData.downloadUrl || imgData.direct || imgData
             });
         }
     };
@@ -1432,14 +1454,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const renderCommentAttachment = (attachment, commentId) => {
         const visualMeta = getFileVisualMeta({ name: attachment.name, mimeType: attachment.mimeType });
         const FileIcon = visualMeta.icon;
-        const params = [];
-        if (attachment.name) params.push(`filename=${encodeURIComponent(attachment.name)}`);
-        const suffix = params.length > 0 ? `?${params.join('&')}` : '';
-        const fileUrl = `${getApiBaseUrl()}/api/tasks/${formData.id}/comments/${commentId}/file${suffix}`;
-        const downloadUrl = `${getApiBaseUrl()}/api/tasks/${formData.id}/comments/${commentId}/download${suffix}`;
+        const { previewUrl: fileUrl, downloadUrl } = commentFileUrls(getApiBaseUrl(), formData.id, commentId, attachment);
 
         return (
-            <div key={attachment.id || attachment.url} className="mt-2 flex items-center justify-between gap-4 p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl max-w-md shadow-sm">
+            <div key={attachment.id || attachment.url} className="mt-2 flex flex-col items-stretch justify-between gap-3 p-3 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl max-w-md shadow-sm sm:flex-row sm:items-center sm:gap-4">
                 <div className="flex items-center gap-3 min-w-0">
                     <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-primary/10 text-primary">
                         <FileIcon size={18} />
@@ -1457,7 +1475,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     {visualMeta.isImage && (
                         <button
                             type="button"
-                            onClick={() => handleImagePreview({ proxy: fileUrl, commentId, name: attachment.name })}
+                            onClick={() => handleImagePreview({ proxy: fileUrl, downloadUrl, commentId, name: attachment.name })}
                             className="p-2 bg-white hover:bg-zinc-100 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-primary rounded-lg border border-zinc-200 dark:border-zinc-800 transition-colors"
                             title="Vista previa"
                         >
@@ -1591,7 +1609,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
                         </div>
                     ) : (
-                        <div className="relative inline-block max-w-[80%] md:max-w-3xl mr-6 pr-6">
+                        <div className="relative inline-block w-full max-w-full sm:w-auto sm:max-w-[80%] md:max-w-3xl sm:mr-6 sm:pr-6">
                             <div className="bg-white dark:bg-zinc-900 p-3.5 pr-10 rounded-2xl rounded-tl-none block shadow-sm border border-zinc-100 dark:border-zinc-800 relative group/card">
                                 <div className="pb-1">
                                     <RichCommentContent
@@ -1775,7 +1793,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         <Dialog open={isOpen} onOpenChange={(open) => !open && (isEdition ? handleClosePanel() : handlePassiveClose())}>
             <DialogContent
                 data-task-panel-content
-                className="left-0 top-0 h-[100dvh] w-screen max-h-none max-w-none translate-x-0 translate-y-0 rounded-none p-0 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col shadow-2xl z-[100] overflow-hidden sm:left-[50%] sm:top-[50%] sm:h-[85vh] sm:w-[92vw] sm:max-h-[92dvh] sm:max-w-6xl sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-2xl"
+                className="left-0 top-0 h-[100dvh] w-screen max-h-none max-w-none translate-x-0 translate-y-0 rounded-none p-0 bg-zinc-50 dark:bg-zinc-950 border-zinc-200 dark:border-zinc-800 flex flex-col shadow-2xl z-[100] overflow-clip sm:left-[50%] sm:top-[50%] sm:h-[85vh] sm:w-[92vw] sm:max-h-[92dvh] sm:max-w-6xl sm:translate-x-[-50%] sm:translate-y-[-50%] sm:rounded-2xl"
                 onPointerDownOutside={(e) => {
                     const target = e.target;
                     const isToolbar = target && (target.closest('[data-task-format-toolbar]') || target.hasAttribute('data-task-format-toolbar'));
@@ -2591,12 +2609,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         {/* Input Area */}
                         <div className="shrink-0 bg-transparent">
                             <div className="flex flex-col gap-2">
-                                {selectedFile && isEdition && (
-                                    (() => {
+                                {selectedFiles.length > 0 && isEdition && (
+                                    <div className="flex max-h-40 flex-col gap-2 overflow-y-auto">
+                                    {selectedFiles.map((selectedFile, index) => {
                                         const visualMeta = getFileVisualMeta(selectedFile);
                                         const FileIcon = visualMeta.icon;
                                         return (
-                                            <div className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/10 rounded-lg animate-in fade-in slide-in-from-bottom-1">
+                                            <div key={`${index}-${selectedFile.name}`} className="flex items-center gap-2 p-2 bg-primary/5 border border-primary/10 rounded-lg animate-in fade-in slide-in-from-bottom-1">
                                                 <div className="w-8 h-8 bg-primary/10 rounded flex items-center justify-center text-primary">
                                                     <FileIcon size={14} />
                                                 </div>
@@ -2609,7 +2628,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                         type="button"
                                                         onClick={() => {
                                                             const localUrl = URL.createObjectURL(selectedFile);
-                                                            setPreviewImage({ displayUrl: localUrl, downloadUrl: localUrl });
+                                                            handleImagePreview({ direct: localUrl, downloadUrl: localUrl });
                                                         }}
                                                         className="p-1 hover:bg-primary/10 rounded text-primary"
                                                         title="Vista previa"
@@ -2620,7 +2639,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 )}
                                                 <button
                                                     type="button"
-                                                    onClick={() => setSelectedFile(null)}
+                                                    onClick={() => setSelectedFiles(current => current.filter((_, fileIndex) => fileIndex !== index))}
+                                                    disabled={isSendingComment}
                                                     className="p-1 hover:bg-primary/10 rounded text-primary"
                                                     aria-label="Quitar archivo seleccionado"
                                                 >
@@ -2628,7 +2648,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 </button>
                                             </div>
                                         );
-                                    })()
+                                    })}
+                                    </div>
                                 )}
 
                                 {/* Temp attachments for creation mode */}
@@ -2681,13 +2702,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 <div className="w-9 h-9 flex items-center justify-center">
                                                     <input
                                                         type="file"
+                                                        multiple
+                                                        disabled={isSendingComment || isUploadingTemp}
                                                         id="task-file-upload-focus"
                                                         className="hidden"
                                                         accept="image/*,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,audio/*"
                                                         onChange={(e) => {
-                                                            const file = e.target.files[0];
-                                                            if (!file) return;
-                                                            handleChatFileSelected(file);
+                                                            handleChatFilesSelected(e.target.files);
                                                             e.target.value = "";
                                                         }}
                                                     />
@@ -2720,11 +2741,11 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 <button
                                                     type="button"
                                                     onClick={() => handleAddComment()}
-                                                    disabled={isEdition ? ((!newCommentText && !selectedFile) || isSendingComment) : !newCommentText}
+                                                    disabled={isEdition ? ((!newCommentText && selectedFiles.length === 0) || isSendingComment) : !newCommentText}
                                                     aria-label="Enviar comentario"
                                                     className={cn(
                                                         "w-9 h-9 flex items-center justify-center rounded-lg transition-all",
-                                                        (newCommentText || (selectedFile && isEdition)) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
+                                                        (newCommentText || (selectedFiles.length > 0 && isEdition)) ? "bg-primary text-white shadow-md shadow-primary/10 active:scale-90" : "bg-zinc-200 dark:bg-zinc-800 text-zinc-400"
                                                     )}
                                                 >
                                                     {isSendingComment ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
@@ -2785,7 +2806,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             {/* Media Viewer Lightbox wrapped in an inner controlled Radix Dialog overlay */}
             <MediaPreviewModal
                 isOpen={!!previewImage}
-                onClose={() => setPreviewImage(null)}
+                onClose={() => { previewRequestRef.current++; setPreviewImage(null); }}
                 previewImage={previewImage}
                 handleDownloadImage={handleDownloadImage}
             />

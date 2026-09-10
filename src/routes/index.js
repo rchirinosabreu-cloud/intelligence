@@ -15,6 +15,7 @@ import * as briaObserverController from '../controllers/briaObserverController.j
 import { authenticateToken, requireManagerRole, requireModulePermission } from '../middlewares/authMiddleware.js';
 import prisma from '../lib/prisma.js';
 import multer from 'multer';
+import { MAX_COMMENT_FILES, MAX_COMMENT_FILE_BYTES } from '../lib/taskCommentAttachments.js';
 
 // Import existing modular routers
 import teamRouter from './api/team.js';
@@ -44,6 +45,10 @@ const router = express.Router();
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 25 * 1024 * 1024, files: 1 }
+});
+const commentUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: MAX_COMMENT_FILE_BYTES, files: MAX_COMMENT_FILES }
 });
 
 // --- Public Routes (No Auth) ---
@@ -183,7 +188,7 @@ router.get('/tasks/:taskId/work-history', taskController.getTaskWorkHistory);
 router.get('/tasks/:taskId/attachments/:attachmentId/file', taskController.getTaskAttachmentFileProxy);
 router.get('/tasks/:taskId/attachments/:attachmentId/download', taskController.getTaskAttachmentDownloadProxy);
 router.get('/tasks/:taskId/comments', taskController.getTaskComments);
-router.post('/tasks/:taskId/comments', upload.single('file'), taskController.addTaskComment);
+router.post('/tasks/:taskId/comments', commentUpload.array('file', MAX_COMMENT_FILES), taskController.addTaskComment);
 router.get('/tasks/:taskId/comments/:commentId/file', taskController.getCommentFileProxy);
 router.get('/tasks/:taskId/comments/:commentId/download', taskController.getCommentFileDownloadProxy);
 router.post('/tasks/:taskId/comments/:commentId/reactions', taskController.toggleCommentReaction);
