@@ -35,8 +35,10 @@ test('announcements and recent achievements share the same fixed-height dashboar
   assert.equal(
     (dashboardSource.match(/topDashboardPanelClass/g) || []).length,
     3,
-    'the shared height contract must be declared once and applied to both widgets'
+    'the shared height contract must be declared once and applied to announcements and the original achievements widget'
   );
+  assert.doesNotMatch(dashboardSource, /RecognitionFeed/, 'recognitions must not replace the original completed-task feed');
+  assert.match(dashboardSource, /<TaskRecognitionLabels task=\{task\}/, 'recognition titles complement each task');
   assert.match(
     announcementsSource,
     /className="flex-1[^"\n]*overflow-y-auto[^"\n]*min-h-0/,

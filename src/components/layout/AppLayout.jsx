@@ -14,8 +14,10 @@ import { getNotificationDisplayParts } from '@/utils/notificationUtils';
 import PushNotificationControl from '@/components/notifications/PushNotificationControl';
 import ExcessiveTaskAlertDialog from '@/components/tasks/ExcessiveTaskAlertDialog';
 import ReturnedTaskAlertDialog from '@/components/tasks/ReturnedTaskAlertDialog';
+import { useRecognitionExperience } from '@/components/recognitions/RecognitionContext';
 
 const AppLayout = ({ children }) => {
+  const recognitionExperience = useRecognitionExperience();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isReturnedTaskAlertBlocking, setIsReturnedTaskAlertBlocking] = useState(true);
@@ -467,6 +469,7 @@ const AppLayout = ({ children }) => {
       {/* Main Content Area - z-0 (above background) */}
       <main className="relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8 lg:ml-64">
         <div className="mx-auto min-w-0 max-w-7xl space-y-8 animate-in fade-in duration-700">
+          {recognitionExperience?.controls}
           {children}
         </div>
       </main>

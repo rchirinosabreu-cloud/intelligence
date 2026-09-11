@@ -155,3 +155,11 @@ Todo bloque catch en llamadas a la API debe hacer un console.error del mensaje r
 - Los adjuntos históricos se seleccionan por una URL que ya figure en ese comentario; nunca aceptar una clave libre del almacenamiento. Sin selector, solo servir un archivo inequívoco; ante ambigüedad o selección inválida, devolver un error sin sustituirlo por otro.
 - En una tarea existente, texto y archivos seleccionados se envían juntos al pulsar Enviar. Guardar comentario y relaciones en una transacción; limpiar el borrador solo después del éxito confirmado y conservarlo ante error. Límites compartidos: 10 archivos, 25 MB totales por mensaje. Las cargas utilizan claves únicas, incluso con nombres iguales o subidas simultáneas.
 - Verificación y límites de alcance: `docs/TASK_COMMENT_ATTACHMENTS.md`. Los dobles de base de datos/almacenamiento y las capturas locales no certifican el estado de archivos históricos de producción.
+
+## 12. Reconocimientos del equipo
+
+- Catálogo y estado: `docs/RECOGNITION_ANIMATIONS.md`. Conservar únicamente los seis reconocimientos seleccionados y sus textos; no reintroducir propuestas descartadas ni «Bria celebra contigo».
+- «On fire» significa ocho tareas distintas en el día; «Ya son 50» significa 50 en la misma semana, no un acumulado histórico. Usar calendario de Bogotá y evitar premios duplicados por reabrir/completar.
+- Conservar el widget «Logros recientes» y el «Historial de logros» original: tareas, cliente, hora, agrupación por miembro, búsqueda, fecha y reapertura según permisos. Añadir títulos cortos de reconocimiento como metadatos, nunca reemplazar las tareas por una lista de premios. Solo asociar una etiqueta por identidad explícita de tarea y usuario; no inventar una tarea para una aprobación de parrilla.
+- En «Buen comienzo», «Cada avance cuenta» empieza en una línea nueva. El mensaje de parrilla es «El cliente aprobó tu parrilla, mandemos a producción»; el aviso no despacha tareas automáticamente.
+- La muestra local es simulada, no un motor de otorgamiento productivo. No presentar pruebas de interfaz como verificación de elegibilidad real, persistencia o entrega multiusuario.

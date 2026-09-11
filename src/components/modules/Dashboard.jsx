@@ -29,6 +29,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
 import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
 import DashboardAnnouncements from './DashboardAnnouncements';
+import TaskRecognitionLabels from '@/components/recognitions/TaskRecognitionLabels';
 
 const container = {
   hidden: { opacity: 0 },
@@ -447,7 +448,7 @@ const Dashboard = () => {
               className={topDashboardPanelClass}
             />
 
-            <Card className={cn(topDashboardPanelClass, 'flex flex-col p-0')}>
+            <Card data-achievements-feed className={cn(topDashboardPanelClass, 'flex flex-col p-0')}>
               <div className="px-5 py-5 border-b border-zinc-100 dark:border-zinc-800 shrink-0">
                 <div className="flex items-center gap-3">
                   <span className="w-9 h-9 rounded-lg bg-emerald-50 dark:bg-emerald-500/10 flex items-center justify-center">
@@ -465,7 +466,7 @@ const Dashboard = () => {
                   <EmptyState icon={Trophy} title="Aún no hay logros hoy" description="Las tareas completadas por el equipo aparecerán aquí." />
                 ) : (
                   completedFeed.map((task, idx) => (
-                    <div key={task.id || idx} className="relative pl-5 pb-6 last:pb-0">
+                    <div key={task.id || idx} data-completed-task-id={task.id} className="relative pl-5 pb-6 last:pb-0">
                       {idx < completedFeed.length - 1 && (
                         <div className="absolute left-[3.5px] top-2 w-px h-full bg-zinc-200 dark:bg-zinc-800" />
                       )}
@@ -501,6 +502,7 @@ const Dashboard = () => {
                             </>
                           )}
                         </div>
+                        <TaskRecognitionLabels task={task} />
                       </div>
                     </div>
                   ))

@@ -3,6 +3,7 @@ import { X, Search, Filter, Loader2, CalendarDays, TaskReintegrateIcon } from '@
 import { useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
 import TeamAvatar from '@/components/ui/TeamAvatar';
+import TaskRecognitionLabels from '@/components/recognitions/TaskRecognitionLabels';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/components/ui/use-toast';
@@ -293,7 +294,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                         {/* Task Cards Grid */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-2 sm:pl-11">
                             {userGroup.items.map(task => (
-                                <Card key={task.id} className="relative p-3 pr-11 border-zinc-200 dark:border-zinc-800 hover:border-emerald-200 dark:hover:border-emerald-900/50 transition-colors group">
+                                <Card key={task.id} data-completed-task-id={task.id} className="relative p-3 pr-11 border-zinc-200 dark:border-zinc-800 hover:border-emerald-200 dark:hover:border-emerald-900/50 transition-colors group">
                                     {canReopenTasks && (
                                       <button
                                           type="button"
@@ -326,6 +327,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                                                     </>
                                                 )}
                                             </div>
+                                            <TaskRecognitionLabels task={task} />
                                         </div>
                                     </div>
                                 </Card>
