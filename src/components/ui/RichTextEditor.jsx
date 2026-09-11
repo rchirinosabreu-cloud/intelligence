@@ -159,6 +159,8 @@ const RichTextEditor = React.forwardRef(({
               setSuggestion(prev => ({
                 ...prev,
                 items: props.items,
+                // Each command captures the current @query range, not only the initial @.
+                command: props.command,
                 x: rect ? rect.left : prev.x,
                 y: rect ? rect.bottom + window.scrollY : prev.y,
                 selectedIndex: 0,
@@ -256,7 +258,9 @@ const RichTextEditor = React.forwardRef(({
     if (!scroller) return undefined;
     const viewportBottom = Math.min(window.visualViewport ? window.visualViewport.offsetTop + window.visualViewport.height : window.innerHeight,
       scroller === document.scrollingElement ? window.innerHeight : scroller.getBoundingClientRect().bottom);
-    const bottom = Math.min(composer.getBoundingClientRect().bottom, viewportBottom);
+    // Preserve breathing room below the entire composer, including its actions.
+    // Anchoring directly to the viewport edge leaves the controls flush with it.
+    const bottom = Math.min(composer.getBoundingClientRect().bottom, viewportBottom - 24);
     const previousAnchor = scroller.style.overflowAnchor;
     const previousBehavior = scroller.style.scrollBehavior;
     scroller.style.overflowAnchor = 'none';
@@ -430,7 +434,7 @@ const RichTextEditor = React.forwardRef(({
             left: `${suggestion.x}px`,
             top: `${suggestion.y + 4}px`,
           }}
-          className="z-[9999] w-56 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-1.5 flex flex-col max-h-60 overflow-y-auto"
+          className="brain-popover-surface pointer-events-auto z-[9999] w-56 p-1.5 flex flex-col max-h-60 overflow-y-auto"
         >
           {suggestion.items.map((member, idx) => (
             <button
