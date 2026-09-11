@@ -35,6 +35,7 @@ import quotationsRouter from './api/quotations.js';
 import operativeIntelligenceRouter from './api/operativeIntelligence.js';
 import financialsRouter from './api/financials.js';
 import dashboardRouter from './api/dashboard.js';
+import recognitionRouter from './api/recognitions.js';
 import reportPdfRouter from './api/reportPdf.js';
 import minutesRouter from './api/minutes.js';
 import driveRouter from './api/drive.js';
@@ -272,6 +273,7 @@ router.use('/clients/:clientId', requireModulePermission('clientes'), clientFile
 router.use('/talent-radar', talentRadarRouter);
 router.use('/activity', requireModulePermission('actividad'), activityRouter);
 router.use('/dashboard', dashboardRouter);
+router.use('/recognitions', recognitionRouter);
 router.use('/reports', requireModulePermission('reportes'), reportsRouter);
 router.use('/brain-core', brainCoreRouter);
 router.use('/boards', requireModulePermission('inspiracion'), boardsRouter);

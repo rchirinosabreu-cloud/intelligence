@@ -15,6 +15,7 @@ import PushNotificationControl from '@/components/notifications/PushNotification
 import ExcessiveTaskAlertDialog from '@/components/tasks/ExcessiveTaskAlertDialog';
 import ReturnedTaskAlertDialog from '@/components/tasks/ReturnedTaskAlertDialog';
 import { useRecognitionExperience } from '@/components/recognitions/RecognitionContext';
+import RecognitionRuntime from '@/components/recognitions/RecognitionRuntime';
 
 const AppLayout = ({ children }) => {
   const recognitionExperience = useRecognitionExperience();
@@ -197,6 +198,7 @@ const AppLayout = ({ children }) => {
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-primary/20 relative transition-colors duration-300 font-sans">
       {/* Sidebar - z-[60] (Internal) */}
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <RecognitionRuntime userId={currentUser?.id} disabled={Boolean(recognitionExperience)} />
       <ReturnedTaskAlertDialog
         userId={displayUser?.id}
         userName={displayUser?.name}

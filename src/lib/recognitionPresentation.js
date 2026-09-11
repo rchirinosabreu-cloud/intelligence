@@ -1,4 +1,4 @@
-// Presentation only. Award eligibility and persistence belong to a future server service.
+// Shared presentation only. Eligibility and persistence live in services/recognitionService.js.
 export const recognitionLabels = Object.freeze({
   FIRST_TASK: 'Buen comienzo',
   EARLY_DELIVERY: 'Entrega anticipada',

@@ -13,7 +13,7 @@ test('task lifecycle, mirror updates, comments, and attachments share one transa
   const source = await readService();
   const updateBody = source.slice(source.indexOf('export const updateTask'), source.indexOf('export const auditAndDeleteTask'));
 
-  assert.match(updateBody, /prisma\.\$transaction\(async \(tx\) =>/);
+  assert.match(updateBody, /recognitionTransaction\(prisma, async \(tx\) =>/);
   assert.match(updateBody, /await tx\.task\.update/);
   assert.match(updateBody, /await tx\.contentItem\.update/);
   assert.match(updateBody, /await tx\.taskComment\.create/);
@@ -25,7 +25,9 @@ test('publication handoff is idempotent and runs under serializable isolation', 
   const updateBody = source.slice(source.indexOf('export const updateTask'), source.indexOf('export const auditAndDeleteTask'));
 
   assert.match(updateBody, /existingPublicationTask/);
-  assert.match(updateBody, /isolationLevel:\s*['"]Serializable['"]/);
+  assert.match(updateBody, /recognitionTransaction\(prisma/);
+  const transaction = await readFile(new URL('../src/services/recognitionService.js', import.meta.url), 'utf8');
+  assert.match(transaction, /isolationLevel:\s*['"]Serializable['"]/);
 });
 
 test('linked content tasks still reach post-commit notifications', async () => {

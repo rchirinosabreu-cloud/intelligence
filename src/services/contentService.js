@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, recordPlanRecognition } from './recognitionService.js';
 import { createTask } from './nativeTaskService.js';
 import { uploadToS3, deleteFromS3 } from './s3Service.js';
 import { randomBytes } from 'node:crypto';
@@ -523,11 +524,12 @@ export const updateContentItem = async (id, data) => {
 
   const safeData = await filterContentItemData(normalizedData);
   const itemSelect = await getContentItemSelect();
-  const updatedItem = await prisma.$transaction(async (tx) => {
+  const updatedItem = await recognitionTransaction(prisma, async (tx) => {
     const previousItem = await tx.contentItem.findUnique({
       where: { id },
       select: {
         id: true,
+        status: true,
         objective: true,
         format: true,
         publishDate: true,
@@ -559,18 +561,21 @@ export const updateContentItem = async (id, data) => {
       select: itemSelect
     });
 
-    await Promise.all(linkedTaskUpdates.map(({ id: taskId, data: taskData }) => (
-      tx.task.update({
+    for (const { id: taskId, data: taskData } of linkedTaskUpdates) {
+      const before = await prepareTaskRecognition(tx, taskId);
+      const after = await tx.task.update({
         where: { id: taskId },
         data: taskData,
-        select: { id: true }
-      })
-    )));
+      });
+      await finishTaskRecognition(tx, before, after);
+    }
+
+    await recordPlanRecognition(tx, item.planId, new Date(), { allowAward: safeData.status === 'APROBADO' && previousItem.status !== 'APROBADO' });
 
     await markContentPlanReviewPending(item.planId, { db: tx });
 
     return item;
-  }, { isolationLevel: 'Serializable' });
+  });
 
   // --- AUTOMATION: Auto-finalize ContentPlan ---
   if (normalizedData.status === 'PUBLICADO') {
@@ -767,7 +772,8 @@ export const deleteContentItemFinalAssetById = async (itemId, assetId) => {
 };
 
 export const addClientComment = async (itemId, comment) => {
-  const item = await prisma.contentItem.findUnique({ where: { id: itemId } });
+  return await recognitionTransaction(prisma, async (tx) => {
+  const item = await tx.contentItem.findUnique({ where: { id: itemId } });
   if (!item) throw new Error('Content item not found');
 
   const now = new Intl.DateTimeFormat('es-CO', {
@@ -779,7 +785,6 @@ export const addClientComment = async (itemId, comment) => {
     ? `${item.comments}\n\n[Cliente - ${now}]: ${comment}`
     : `[Cliente - ${now}]: ${comment}`;
 
-  return await prisma.$transaction(async (tx) => {
     const updated = await tx.contentItem.update({
       where: { id: itemId },
       data: {
@@ -787,6 +792,7 @@ export const addClientComment = async (itemId, comment) => {
         status: 'DEVUELTO'
       }
     });
+    await recordPlanRecognition(tx, updated.planId, new Date(), { allowAward: false });
     await markContentPlanReviewPending(updated.planId, { db: tx });
     return updated;
   });

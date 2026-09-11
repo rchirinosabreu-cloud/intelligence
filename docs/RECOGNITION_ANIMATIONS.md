@@ -92,7 +92,7 @@ Esta selección sustituye las propuestas anteriores de diez reconocimientos. No 
 
 Se elimina «Bria celebra contigo». El encabezado contiene solo el título del logro junto a la mascota. «Buen comienzo» sigue siendo la primera tarea del **equipo en el día**, aunque «del día» ya no figure en su mensaje. La muestra reemplaza al ganador ficticio al repetir ese escenario; esto no implementa exclusión mutua ni otorgamiento en servidor.
 
-Las condiciones están acordadas para diseñar el motor, pero **todavía no se evalúan ni otorgan premios reales**. La simulación no prueba transacciones, conteos ni sincronización entre usuarios.
+Las seis condiciones ya se evalúan en el servicio de servidor descrito abajo. La simulación visual sigue separada: por sí sola no prueba transacciones, conteos ni sincronización entre usuarios.
 
 | Título | Condición seleccionada | Mensaje |
 | --- | --- | --- |
@@ -103,7 +103,7 @@ Las condiciones están acordadas para diseñar el motor, pero **todavía no se e
 | Parrilla aprobada | Todas las piezas activas están aprobadas; destinatario: responsable de la parrilla | El cliente aprobó tu parrilla, mandemos a producción |
 | Ya son 50 | Cincuenta tareas distintas cumplidas por la persona en la misma semana | Llevas 50 tareas cumplidas en esta semana, puro trabajo y dedicación. ¡Felicidades! |
 
-Precisiones para la implementación futura:
+Precisiones de la implementación:
 
 - «On fire» sustituye a constancia: **ocho tareas al día**, no cinco entregas puntuales ni días consecutivos. El umbral anterior de seis queda sustituido.
 - En «Buen comienzo», «Cada avance cuenta» tiene un salto de línea explícito. «Mandemos a producción» es solo el texto del reconocimiento, no una instrucción para despachar tareas automáticamente.
@@ -111,27 +111,43 @@ Precisiones para la implementación futura:
 - Completar/reabrir/completar no multiplica tareas ni avisos. Los conteos requieren evidencia de servidor y tareas distintas, no clics ni una lectura parcial del tablero.
 - Ponerse al día exige completar las vencidas: no otorgarlo por borrarlas, reasignarlas, cambiarles la fecha, aplicar un filtro o fallar una consulta. No otorgarlo a quien nunca tuvo vencidas.
 - La aprobación total requiere al menos una pieza activa y todas aprobadas; no basta estar pendientes de aprobación. Considerar aprobación del cliente y estados aprobados guardados en plataforma, siempre sobre la misma versión. El responsable recibe el reconocimiento; no quien hizo el último clic. No dispararlo por una aprobación parcial ni duplicarlo al guardar de nuevo.
-- Resolver antes de producción cómo conservar evidencia de fechas comprometidas y episodios de vencimiento, cómo tratar reaperturas/cambios posteriores y cómo serializar eventos concurrentes. Estos controles no están implementados en el laboratorio.
+- La evidencia de fechas comprometidas, episodios de vencimiento y primera finalización está en PostgreSQL, no en el laboratorio visual.
 
-## Qué falta antes de activar reconocimientos reales
+## Motor real y activación — 11 de septiembre de 2026
 
-1. **Cerrar detalles de elegibilidad:** aplicar únicamente las seis condiciones seleccionadas, con evidencia y destinatarios confirmados en servidor. Definir límites de día/semana y tratamiento de correcciones históricas. No inferir calidad de un conteo ni premiar horarios extendidos.
-2. **Persistencia en servidor:** registro con destinatario, regla/versionado, evidencia, fecha de Colombia y clave única de otorgamiento. Determinar qué ocurre ante reaperturas, eliminación de tareas y correcciones del historial sin fabricar nuevos premios.
-3. **Integración transaccional:** emitir solo después de confirmar una transición válida. Reintentos, pestañas múltiples y completar/reabrir/completar no deben multiplicar logros.
-4. **Entrega y privacidad:** alimentar el widget compartido según permisos, mostrar únicamente avisos personales relevantes, sincronizar lectura entre sesiones y no exponer títulos de tareas restringidas. El componente actual no implementa ese control de entrega.
-5. **Calma operativa:** definir cola, caducidad y frecuencia máxima; no interrumpir modales críticos ni reproducir de golpe todos los logros antiguos al entrar. El laboratorio muestra un ejemplo a la vez; todavía no es una cola productiva.
-6. **Piloto medible:** validar textos y animaciones, observar si se cierran de inmediato o resultan útiles y revisar falsos reconocimientos. Comparar experiencia con y sin partículas antes de elegir el valor predeterminado.
+- `recognitionService.js` se integra en creación/actualización/eliminación de tareas, sincronización de tareas vinculadas y aprobación/comentarios de parrillas. Transacciones serializables, bloqueo compartido antes de leer y reintentos por conflicto conservan tarea y premio juntos. Un rollback no deja un reconocimiento huérfano.
+- `RecognitionAward` conserva destinatario, tipo, versión, evidencia, día/semana Bogotá y clave única. `RecognitionTaskState` conserva primera finalización y fecha comprometida inicial; reabrir, reasignar o borrar no aumenta conteos. Una fecha cambiada hacia adelante no crea entrega anticipada. Se exige terminar en un día anterior, no unas horas antes del mismo día.
+- `RecognitionDebtState` registra el conjunto vencido. Borrar, reasignar o aplazar una pendiente invalida ese episodio para «Al día». Un episodio nuevo puede empezar después; como máximo un premio por persona/día. La tarea que cierra el episodio recibe su etiqueta.
+- `RecognitionPlanState` conserva aprobación explícita por pieza activa. Un estado de producción por sí solo no demuestra aprobación; un comentario de devolución invalida esa evidencia. Se otorga una sola vez por parrilla al responsable activo. Cambiar responsable no traslada premios ni crea otro. No se crean tareas de producción por celebrar.
+- `ensure-recognitions-schema.js` corre antes del servidor mediante `npm start`. Es aditivo, transaccional e idempotente; si falla, el arranque falla explícitamente. Captura historia conocida de tareas/ciclos y parrillas ya aprobadas sin otorgar premios históricos. Las completadas conocidas de la semana participan en los conteos, pero no se emiten umbrales ya superados antes de activar. La fecha comprometida inicial de tareas antiguas es la que existe al activar: no se inventa historia de fechas no registrada.
+- Los premios futuros nacen de transiciones nuevas. Crear directamente una tarea ya realizada se registra como base, no como una nueva transición a premiar. No hay puntos, dinero ni decisiones laborales asociados a estos conteos.
 
-El diseño visual puede aprobarse de forma independiente. No habilitar un sistema de recompensas globales hasta completar estos controles.
+### Entrega y experiencia
+
+`RecognitionRuntime` está montado en `AppLayout`, fuera del laboratorio. Consulta `POST /api/recognitions/claim` cada 20 segundos mientras la página está visible y no hay un modal abierto. La identidad viene de la sesión; no se acepta un destinatario enviado por el navegador. Se comprueban usuario activo, permiso de Gestión/Parrillas y recurso todavía perteneciente a esa persona.
+
+Cada reserva dura 60 segundos y es exclusiva entre sesiones. `POST /:id/acknowledge` confirma la misma reserva y revalida el recurso; solo después de un 200 se muestra el popup. La confirmación es persistente y no se repite al recargar. Una reserva no confirmada puede recuperarse al expirar. Si el navegador se cierra exactamente después de confirmar y antes de pintar, el aviso puede no verse; no se promete entrega visual exactamente una vez ante un cierre abrupto. El premio sigue guardado.
+
+Se muestra uno a la vez, con separación mínima de 30 segundos entre confirmaciones; no sustituye el aviso que alguien mantiene abierto con el cursor. Dura 9 segundos de lectura activa, se puede cerrar, respeta movimiento reducido y no reproduce avisos de más de 24 horas. El estilo inicial es sutil, sin partículas; el laboratorio conserva las variantes para comparar.
+
+«Logros recientes» y «Historial de logros» mantienen tareas, clientes, fechas, búsqueda, agrupación y reapertura. Añaden únicamente etiquetas del premio persistido que coincide con tarea/persona. No hay tarea ficticia para «Parrilla aprobada»: ese reconocimiento se guarda asociado a la parrilla y se entrega por popup, no como fila de tarea. Una tarea reabierta sale del historial de completadas sin borrar su evidencia ni generar otro premio al cerrarla otra vez.
+
+### Despliegue y siguiente revisión
+
+Railway construye frontend y backend desde `main` usando `Dockerfile` y `npm start`. La activación no depende de una bandera de demostración. Confirmar el SHA y el estado `SUCCESS`, además del mensaje de arranque `[Recognition schema] Ready`, antes de afirmar que está activo en producción. No crear premios sintéticos en producción para probarlo.
+
+Después del estreno conviene observar el uso real y los cierres, revisar falsos positivos con el equipo y ajustar frecuencia antes de añadir más categorías. Las pruebas locales no certifican por sí solas que un miembro concreto haya visto un aviso productivo.
 
 ## Comprobaciones reproducibles
 
 - `node --test tests/recognitionPresentation.test.js`: categorías, saneamiento, duplicados por ID, orden, cambio de día en Bogotá y movimiento reducido.
 - `node --test tests/browser/recognitions.mjs`: dashboard real, altura compartida, aviso no bloqueante, historial, cierre, movimiento intermedio, móvil oscuro, navegación y aislamiento de escrituras.
 - `node --test tests/personalDashboardLayout.test.js tests/personalDashboardUi.test.js`: protección de la distribución y funciones existentes.
+- `node --test tests/recognitionRules.test.js tests/recognitionSchema.test.js tests/recognitionIntegration.test.js tests/recognitionController.test.js tests/recognitionRuntimeContract.test.js`: reglas, contratos y validación API.
+- `tests/recognitionPostgres.integration.mjs`: PostgreSQL real aislado, concurrencia, rollback, 8/50 tareas distintas, historial, vencidas, aprobación mediante el servicio real, permisos, reservas/expiración y popup real en Chrome con sesión autenticada. Exige `TEST_DATABASE_URL=postgresql://recognition_test@127.0.0.1:55448/recognition_test` y rechaza cualquier otro destino. Preparar exclusivamente ese clúster, generar cliente con `npx prisma generate` y DDL con `npx prisma migrate diff --from-empty --to-schema-datamodel prisma/schema.prisma --script --output output/recognition-test-schema.sql`; ejecutar con `NODE_ENV=test`. El test limpia únicamente sus tablas en ese clúster explícito.
 - `npm run lint` y `npm run build`: validación del repositorio sin publicar.
 
-Las capturas quedan en `output/recognitions`. Ni las capturas ni los datos simulados prueban otorgamiento automático, persistencia, entrega multiusuario o comportamiento en producción. No se han comprado recursos ni añadido runtimes nuevos.
+Las capturas quedan en `output/recognitions`. `real-api-popup.png` procede de una transición real, PostgreSQL aislado y API autenticada; las demás muestras visuales son simuladas. Ninguna captura local certifica el despliegue productivo. No se han comprado recursos ni añadido runtimes nuevos.
 
 ## Fuentes
 

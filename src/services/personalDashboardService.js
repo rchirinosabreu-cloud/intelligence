@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { attachTaskRecognitions } from './recognitionService.js';
 import DOMPurify from 'isomorphic-dompurify';
 import { createNotification } from './notificationService.js';
 import { getVisibleOperationalEventWhere, isVisibleOperationalEvent } from './operationalEventVisibility.js';
@@ -124,6 +125,7 @@ const formatTask = (task) => ({
   status: task.status,
   dueDate: task.dueDate,
   completedAt: task.completedAt,
+  recognitions: task.recognitions || [],
   creatorId: task.creatorId || null,
   assigneeId: task.assigneeId || null,
   isPriority: task.isPriority,
@@ -131,6 +133,7 @@ const formatTask = (task) => ({
   isSpecial: task.isSpecial,
   assignee: task.assignee ? {
     id: task.assignee.id,
+    userId: task.assignee.userId,
     name: task.assignee.name,
     role: task.assignee.role,
     avatarUrl: task.assignee.avatarUrl || null
@@ -556,6 +559,7 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
         assignee: {
           select: {
             id: true,
+            userId: true,
             name: true,
             role: true,
             avatarUrl: true
@@ -675,7 +679,7 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
 
   return buildPersonalDashboard({
     member: { ...member, announcements, createdTasks, authoredAnnouncements, authoredOperationalEvents, returnedTasks },
-    globalAchievements,
+    globalAchievements: await attachTaskRecognitions(prisma, globalAchievements),
     now: dashboardNow
   });
 };

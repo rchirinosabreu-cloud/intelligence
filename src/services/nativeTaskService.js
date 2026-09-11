@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, attachTaskRecognitions, recordPlanRecognition } from './recognitionService.js';
 import { createNotification, processMentionsAndNotifications } from './notificationService.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
 import { classifyTaskDeterministically } from './deterministicTaskClassifier.js';
@@ -391,7 +392,7 @@ export const createTask = async ({
         });
 
         // Use a Prisma transaction to ensure atomicity
-        const newTask = await prisma.$transaction(async (tx) => {
+        const newTask = await recognitionTransaction(prisma, async (tx) => {
             // 1. Create the task
             const task = await tx.task.create({
                 data: {
@@ -414,6 +415,7 @@ export const createTask = async ({
                 }
             });
 
+            await prepareTaskRecognition(tx, task.id);
             if (mappedStatus === 'DEVUELTA') {
                 await resetSystemStreak(tx);
             }
@@ -652,7 +654,7 @@ export const getCompletedTasks = async (dateString, searchTerm) => {
             }
             // Removed take: 100 as we are now strictly filtering by day
         });
-        return tasks;
+        return await attachTaskRecognitions(prisma, tasks);
     } catch (error) {
         console.error("Error fetching completed tasks:", error);
         throw error;
@@ -661,7 +663,8 @@ export const getCompletedTasks = async (dateString, searchTerm) => {
 
 export const updateTask = async (id, data, updaterId = null) => {
     try {
-        const transition = await prisma.$transaction(async (tx) => {
+        const transition = await recognitionTransaction(prisma, async (tx) => {
+        const recognitionBefore = await prepareTaskRecognition(tx, id);
         // 1. Fetch current task state to evaluate transitions (TDD Edge Cases)
         const currentTask = await tx.task.findUnique({
             where: { id },
@@ -801,13 +804,14 @@ export const updateTask = async (id, data, updaterId = null) => {
                 select: { id: true }
             });
 
-            await Promise.all(siblingTaskUpdates.map(({ id: taskId, data: taskData }) => (
-                tx.task.update({
+            for (const { id: taskId, data: taskData } of siblingTaskUpdates) {
+                const siblingBefore = await prepareTaskRecognition(tx, taskId);
+                const siblingAfter = await tx.task.update({
                     where: { id: taskId },
                     data: taskData,
-                    select: { id: true }
-                })
-            )));
+                });
+                await finishTaskRecognition(tx, siblingBefore, siblingAfter);
+            }
         }
 
         delete updateData.contentObjective;
@@ -1089,8 +1093,11 @@ export const updateTask = async (id, data, updaterId = null) => {
             }
         });
 
+        const recognitionAt = recognitionBefore?.task.status !== 'REALIZADA' && updatedTask.status === 'REALIZADA' ? updatedTask.completedAt : new Date();
+        await finishTaskRecognition(tx, recognitionBefore, updatedTask, recognitionAt);
+        if (updatedTask.contentItem) await recordPlanRecognition(tx, updatedTask.contentItem.planId, recognitionAt, { allowAward: false });
         return { currentTask, updatedTask, isCorrected, isReturned };
-        }, { isolationLevel: 'Serializable' });
+        });
 
         const { currentTask, updatedTask, isCorrected, isReturned } = transition;
 
@@ -1271,7 +1278,8 @@ export const updateTask = async (id, data, updaterId = null) => {
 export const auditAndDeleteTask = async (id, reason, deletedByUserId = null) => {
     try {
         // Use a transaction to ensure we log and delete atomically
-        return await prisma.$transaction(async (tx) => {
+        return await recognitionTransaction(prisma, async (tx) => {
+            const recognitionBefore = await prepareTaskRecognition(tx, id);
             // 1. Get task data for the log
             const task = await tx.task.findUnique({
                 where: { id },
@@ -1297,6 +1305,7 @@ export const auditAndDeleteTask = async (id, reason, deletedByUserId = null) => 
             await tx.task.delete({
                 where: { id }
             });
+            await finishTaskRecognition(tx, recognitionBefore, null);
 
             console.log(`[nativeTaskService] Task ${id} ("${task.title}") hard deleted with reason: ${reason}`);
             return { success: true };
@@ -1309,8 +1318,10 @@ export const auditAndDeleteTask = async (id, reason, deletedByUserId = null) => 
 
 export const deleteTask = async (id) => {
     try {
-        await prisma.task.delete({
-            where: { id }
+        await recognitionTransaction(prisma, async tx => {
+            const recognitionBefore = await prepareTaskRecognition(tx, id);
+            await tx.task.delete({ where: { id } });
+            await finishTaskRecognition(tx, recognitionBefore, null);
         });
         return { success: true };
     } catch (error) {

@@ -70,6 +70,57 @@ model User {
   financialCollaborators      FinancialCollaborator[]
   passwordResetCodes          PasswordResetCode[]
   teamMember                  TeamMember?
+  recognitionAwards           RecognitionAward[]
+  recognitionDebt             RecognitionDebtState?
+}
+
+model RecognitionAward {
+  id           String   @id @default(uuid())
+  dedupeKey    String   @unique
+  kind         String
+  ruleVersion  Int      @default(1)
+  recipientId  String
+  taskId       String?
+  planId       String?
+  occurredAt   DateTime @default(now()) @db.Timestamptz()
+  dayKey       String
+  weekKey      String
+  evidence     Json
+  seenAt       DateTime? @db.Timestamptz()
+  leaseToken   String?
+  leaseUntil   DateTime? @db.Timestamptz()
+  recipient    User @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  @@index([recipientId, seenAt, occurredAt])
+  @@index([taskId])
+  @@index([planId])
+}
+
+// Minimal immutable evidence survives task deletion/reopening; no task text is retained.
+model RecognitionTaskState {
+  taskId            String @id
+  originalDueDate   DateTime? @db.Timestamptz()
+  firstCompletedAt  DateTime? @db.Timestamptz()
+  recipientId       String?
+  dayKey            String?
+  weekKey           String?
+
+  @@index([dayKey])
+  @@index([recipientId, dayKey])
+  @@index([recipientId, weekKey])
+}
+
+model RecognitionDebtState {
+  userId      String @id
+  taskIds     String[] @default([])
+  blocked     Boolean @default(false)
+  user        User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RecognitionPlanState {
+  planId        String @id
+  approvedIds   String[] @default([])
+  awarded       Boolean @default(false)
 }
 
 model MeetingMinute {
