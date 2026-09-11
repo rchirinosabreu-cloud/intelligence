@@ -24,9 +24,12 @@ import ClientAvatar from '@/components/ui/ClientAvatar';
 import { toast } from 'react-hot-toast';
 import { Badge } from '@/components/ui/Badge';
 import ClientExpandedDetail from './Clients/ClientExpandedDetail';
+import EditClientDialog from './Clients/EditClientDialog';
+import { useQueryClient } from '@tanstack/react-query';
 
 const Clients = () => {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [clients, setClients] = useState([]);
   const [pms, setPms] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -38,6 +41,7 @@ const Clients = () => {
 
   // Modal States
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState(null);
 
   const [newClientName, setNewClientName] = useState('');
   const [newClientSlug, setNewClientSlug] = useState('');
@@ -381,7 +385,7 @@ const Clients = () => {
                              </button>
                              <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <button className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-xl transition-colors text-zinc-500 opacity-0 group-hover:opacity-100">
+                                <button aria-label={`Opciones de ${client.name}`} className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-xl transition-colors text-zinc-500 opacity-0 group-hover:opacity-100 focus-visible:opacity-100">
                                   <MoreVertical className="w-4 h-4" />
                                 </button>
                               </DropdownMenuTrigger>
@@ -390,7 +394,7 @@ const Clients = () => {
                                   <Activity className="w-4 h-4" />
                                   <span>{isExpanded ? 'Cerrar Detalle' : 'Configurar Salud'}</span>
                                 </DropdownMenuItem>
-                                <DropdownMenuItem className="gap-2 py-2.5">
+                                <DropdownMenuItem className="gap-2 py-2.5" onSelect={() => setEditingClient(client)}>
                                   <Edit className="w-4 h-4" />
                                   <span>Editar Cliente</span>
                                 </DropdownMenuItem>
@@ -528,6 +532,16 @@ const Clients = () => {
           )}
         </AnimatePresence>
       </div>
+
+      {editingClient && <EditClientDialog key={editingClient.id} client={editingClient}
+        onClose={() => setEditingClient(null)}
+        onSaved={updated => {
+          // PATCH does not include the health/PM relations returned by the list.
+          setClients(previous => previous.map(client => client.id === updated.id ? { ...client, ...updated } : client));
+          for (const key of ['clients-list', 'clientsDropdown', 'clientsHealth', 'dashboard-assignment-clients', 'financial-record-clients']) {
+            queryClient.invalidateQueries({ queryKey: [key] });
+          }
+        }} />}
 
       {/* Create Client Modal */}
       <Dialog.Root open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>

@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma.js';
 import { getClients, createClient, getClientLinks, addClientLink, removeClientLink } from '../services/clientService.js';
 import { fetchClientHealth } from '../services/healthService.js';
+import { createUpdateClientHandler } from './clientUpdateHandler.js';
 
 export const listClients = async (req, res) => {
     try {
@@ -35,18 +36,7 @@ export const createNewClient = async (req, res) => {
     }
 };
 
-export const updateClient = async (req, res) => {
-    try {
-        const { name, slug } = req.body;
-        const updatedClient = await prisma.client.update({
-            where: { id: req.params.id },
-            data: { name, slug }
-        });
-        res.json(updatedClient);
-    } catch (error) {
-        res.status(500).json({ error: "Failed to update client" });
-    }
-};
+export const updateClient = createUpdateClientHandler({ db: prisma });
 
 export const archiveClientHandler = async (req, res) => {
     try {
