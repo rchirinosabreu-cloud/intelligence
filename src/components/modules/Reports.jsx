@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -1539,14 +1540,14 @@ const Reports = () => {
          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="space-y-4">
               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Cliente</label>
-              <select
+              <Select
                 className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 text-sm font-medium"
                 value={selectedClientId}
                 onChange={(e) => setSelectedClientId(e.target.value)}
               >
                 <option value="">Marca...</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
+              </Select>
               <div className="grid grid-cols-2 gap-3">
                 <label className="space-y-1.5">
                   <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Desde</span>

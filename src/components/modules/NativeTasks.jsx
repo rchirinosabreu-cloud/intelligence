@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import UserAvatarPopover from "../../components/ui/UserAvatarPopover";
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -13,7 +14,6 @@ import {
     CheckCircle2,
     Clock,
     AlertCircle,
-    ChevronDown,
     User,
     Loader2,
     AlertTriangle,
@@ -863,39 +863,40 @@ const NativeTasks = () => {
                     </Button>
                     <div className="task-filter-grid">
                         <div className="group relative min-w-0">
-                            <select
+                            <Select
+                                aria-label="Responsable"
                                 value={responsibleFilter}
                                 onChange={(e) => setResponsibleFilter(e.target.value)}
                                 className="min-h-11 w-full min-w-0 appearance-none truncate rounded-xl border border-zinc-200 bg-white py-2 pl-9 pr-8 text-sm font-medium text-zinc-700 shadow-sm transition-all hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
                             >
-                                {responsibles.map((r, i) => (
-                                    <option key={i} value={r}>
+                                {responsibles.map(r => (
+                                    <option key={r} value={r}>
                                         {r === 'Todos' ? 'Todos los responsables' : r}
                                     </option>
                                 ))}
-                            </select>
+                            </Select>
                             <User className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-zinc-400" />
-                            <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-zinc-400 transition-colors group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
                         </div>
 
                         <div className="group relative min-w-0">
-                            <select
+                            <Select
+                                aria-label="Cliente"
                                 value={clientFilter}
                                 onChange={(e) => setClientFilter(e.target.value)}
                                 className="min-h-11 w-full min-w-0 appearance-none truncate rounded-xl border border-zinc-200 bg-white py-2 pl-9 pr-8 text-sm font-medium text-zinc-700 shadow-sm transition-all hover:border-zinc-300 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-300 dark:hover:border-zinc-700"
                             >
-                                {clients.map((c, i) => (
-                                    <option key={i} value={c}>
+                                {clients.map(c => (
+                                    <option key={c} value={c}>
                                         {c === 'Todos' ? 'Todos los clientes' : c}
                                     </option>
                                 ))}
-                            </select>
+                            </Select>
                             <Filter className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-zinc-400" />
-                            <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-zinc-400 transition-colors group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
                         </div>
 
                         <div className="group relative min-w-0">
-                            <select
+                            <Select
+                                aria-label="Periodo"
                                 value={dateFilter}
                                 onChange={(e) => setDateFilter(e.target.value)}
                                 className={cn(
@@ -909,13 +910,12 @@ const NativeTasks = () => {
                                 <option value="Solo Vencidos">⚠️ Solo Vencidos</option>
                                 <option value="Esta Semana">Esta Semana</option>
                                 <option value="Todos">Todos</option>
-                            </select>
+                            </Select>
                             {dateFilter === 'Solo Vencidos' ? (
                                 <AlertTriangle className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-destructive" />
                             ) : (
                                 <Calendar className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-zinc-400" />
                             )}
-                            <ChevronDown className="pointer-events-none absolute right-3 top-3.5 h-4 w-4 text-zinc-400 transition-colors group-hover:text-zinc-600 dark:group-hover:text-zinc-200" />
                         </div>
                     </div>
                 </div>

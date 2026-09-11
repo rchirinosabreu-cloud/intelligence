@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
@@ -305,7 +306,7 @@ const Dashboard = () => {
               <LayoutDashboard className="w-4.5 h-4.5 text-primary" />
             </span>
             <span className="sr-only">Colaborador</span>
-            <select
+            <Select
               value={selectedMemberUserId}
               onChange={(event) => setSelectedUserId(event.target.value)}
               aria-label="Colaborador"
@@ -319,7 +320,7 @@ const Dashboard = () => {
                     {member.name} - {member.role}
                   </option>
                 ))}
-            </select>
+            </Select>
           </label>
         )}
       </motion.header>
@@ -652,7 +653,7 @@ const Dashboard = () => {
                   <h3 className="text-lg font-semibold text-zinc-950 dark:text-white">Asignar cliente</h3>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <select
+                  <Select
                     value={assignClientId}
                     onChange={(event) => setAssignClientId(event.target.value)}
                     className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -661,8 +662,8 @@ const Dashboard = () => {
                     {clients.map((client) => (
                       <option key={client.id} value={client.id}>{client.name}</option>
                     ))}
-                  </select>
-                  <select
+                  </Select>
+                  <Select
                     value={assignMemberId}
                     onChange={(event) => setAssignMemberId(event.target.value)}
                     className="rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -671,7 +672,7 @@ const Dashboard = () => {
                     {communityManagers.map((member) => (
                       <option key={member.id} value={member.id}>{member.name}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 {assignClientMutation.error && (
                   <p className="mt-3 text-xs font-semibold text-destructive">{assignClientMutation.error.message}</p>

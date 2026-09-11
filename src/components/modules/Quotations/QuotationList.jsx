@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -129,7 +130,7 @@ const QuotationList = () => {
                 </div>
                 <div className="flex items-center gap-2 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2">
                     <Filter className="w-4 h-4 text-zinc-400" />
-                    <select
+                    <Select
                         className="bg-transparent text-sm outline-none font-medium"
                         value={statusFilter}
                         onChange={(e) => setStatusFilter(e.target.value)}
@@ -139,7 +140,7 @@ const QuotationList = () => {
                         <option value="EXPIRADA">Expiradas</option>
                         <option value="APROBADA">Aprobadas</option>
                         <option value="BORRADOR">Borradores</option>
-                    </select>
+                    </Select>
                 </div>
             </Card>
 

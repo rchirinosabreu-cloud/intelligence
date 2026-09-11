@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React from 'react';
 import {
   Dialog,
@@ -71,7 +72,7 @@ export default function TaskLifecycleDialog({
           {hasReasons && (
             <label className="block space-y-1.5">
               <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">{reasonLabel}</span>
-              <select
+              <Select
                 autoFocus
                 value={reasonValue}
                 onChange={(event) => onReasonChange?.(event.target.value)}
@@ -83,7 +84,7 @@ export default function TaskLifecycleDialog({
                 {reasons.map(reason => (
                   <option key={reason.value} value={reason.value}>{reason.label}</option>
                 ))}
-              </select>
+              </Select>
             </label>
           )}
 

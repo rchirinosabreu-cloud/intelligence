@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -260,7 +261,7 @@ const ContentItemCard = ({
                   {item.format === 'Reel' || item.format === 'Video' ? <Video className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
                 </div>
                 {isEditing ? (
-                  <select
+                  <Select
                     value={item.format}
                     onChange={(e) => onUpdate({ id: item.id, format: e.target.value })}
                     className="bg-transparent border-none p-0 text-sm font-bold text-zinc-900 dark:text-white focus:ring-0"
@@ -269,7 +270,7 @@ const ContentItemCard = ({
                     <option value="Carrusel">Carrusel</option>
                     <option value="Post">Post</option>
                     <option value="Otro">Otro</option>
-                  </select>
+                  </Select>
                 ) : (
                   <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-tight">{item.format}</span>
                 )}
@@ -325,7 +326,7 @@ const ContentItemCard = ({
 
               <div className="space-y-1">
                 <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] block mb-1">Estado Pieza</label>
-                <select
+                <Select
                   value={item.status}
                   onChange={(e) => onUpdate({ id: item.id, status: e.target.value })}
                   className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border transition-all outline-none ${
@@ -343,7 +344,7 @@ const ContentItemCard = ({
                   <option value="DEVUELTO">Devuelto</option>
                   <option value="REALIZADO">Realizado</option>
                   <option value="PUBLICADO">Publicado</option>
-                </select>
+                </Select>
               </div>
             </div>
 
@@ -602,7 +603,7 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
         <div className="space-y-4 py-4">
           <div className="space-y-2">
             <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500">Responsable</label>
-            <select
+            <Select
               value={data.assigneeId}
               onChange={(e) => setData({ ...data, assigneeId: e.target.value })}
               className="w-full h-11 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all text-sm"
@@ -611,7 +612,7 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
               {team?.map(member => (
                 <option key={member.id} value={member.id}>{member.name}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="space-y-2">
@@ -952,7 +953,7 @@ const ContentPlanDetail = () => {
       >
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full sm:w-auto">
           <div className="flex items-center gap-3 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-white/5">
-            <select
+            <Select
               value={plan.status}
               onChange={(e) => updatePlanMutation.mutate({ status: e.target.value })}
               className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest focus:ring-0 cursor-pointer px-3 py-1.5"
@@ -961,7 +962,7 @@ const ContentPlanDetail = () => {
               <option value="EN_APROBACION">En Aprobación</option>
               <option value="ACTIVO">Activo</option>
               <option value="FINALIZADO">Finalizado</option>
-            </select>
+            </Select>
 
             <div className="w-px h-4 bg-zinc-200 dark:bg-white/10" />
 
@@ -990,7 +991,7 @@ const ContentPlanDetail = () => {
       <div className="flex flex-wrap items-center gap-x-6 gap-y-2 px-1">
           <div className="flex items-center gap-2">
             <Users className="w-3.5 h-3.5 text-zinc-400" />
-            <select
+            <Select
               value={plan.clientId}
               onChange={(e) => updatePlanMutation.mutate({ clientId: e.target.value })}
               className="bg-transparent border-none text-zinc-500 dark:text-zinc-400 font-medium p-0 focus:ring-0 text-sm cursor-pointer hover:text-indigo-600 transition-colors"
@@ -998,12 +999,12 @@ const ContentPlanDetail = () => {
               {clients?.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           <div className="flex items-center gap-2">
             <UserCheck className="w-3.5 h-3.5 text-zinc-400" />
-            <select
+            <Select
               value={plan.ownerId || ''}
               onChange={(e) => updatePlanMutation.mutate({ ownerId: e.target.value || null })}
               className="bg-transparent border-none text-zinc-500 dark:text-zinc-400 font-medium p-0 focus:ring-0 text-sm cursor-pointer hover:text-indigo-600 transition-colors"
@@ -1012,7 +1013,7 @@ const ContentPlanDetail = () => {
               {team?.map(member => (
                 <option key={member.id} value={member.id}>{member.name}</option>
               ))}
-            </select>
+            </Select>
           </div>
       </div>
 

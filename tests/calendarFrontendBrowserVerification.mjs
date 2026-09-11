@@ -4,6 +4,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createServer } from 'vite';
 import { chromium } from 'playwright-core';
+import { chooseOption, nativeSelect } from './browser/selectHelpers.mjs';
 
 // Explicit local UI verification: intercepted API responses, no production connections.
 const root = process.cwd();
@@ -89,10 +90,10 @@ test('account routing: late connections never display Social while submitting an
     release();
     const selector = page.getByLabel('Cuenta de Google', { exact: true });
     await selector.waitFor();
-    await selector.locator('option[value="social"]').waitFor({ state: 'attached' });
-    assert.equal(await selector.inputValue(), '', 'Loading accounts must not create an implicit DOM-only selection');
+    await nativeSelect(selector).locator('option[value="social"]').waitFor({ state: 'attached' });
+    assert.equal(await nativeSelect(selector).inputValue(), '', 'Loading accounts must not create an implicit DOM-only selection');
     assert.equal(await page.getByRole('button', { name: 'Guardar evento' }).isDisabled(), true);
-    await selector.selectOption('social');
+    await chooseOption(selector, 'social');
     await page.getByLabel('Título del evento').fill('Selección de cuenta comprobada');
     await settleAnimations(page);
     await page.screenshot({ path: path.join(output, 'calendar-account-routing-light.png'), fullPage: true });
@@ -116,7 +117,7 @@ test('account routing: editing displays and locks the original account instead o
     await page.locator('[data-operational-calendar]').getByRole('button', { name: /Evento con cuenta de origen/ }).first().click();
     const selector = page.getByLabel('Cuenta de Google', { exact: true });
     assert.equal(await selector.isDisabled(), true);
-    assert.equal(await selector.inputValue(), 'test-google');
+    assert.equal(await nativeSelect(selector).inputValue(), 'test-google');
     await page.getByText('El evento conserva su calendario de origen.', { exact: true }).waitFor();
     await page.getByLabel('Título del evento').fill('Edición sin traslado');
     await page.getByRole('button', { name: 'Actualizar evento' }).click();
@@ -134,8 +135,8 @@ test('account routing: disconnected accounts cannot be selected for new events',
     await page.getByRole('button', { name: /social\.brainstudio/ }).waitFor();
     await page.getByRole('button', { name: 'Evento', exact: true }).click();
     const selector = page.getByLabel('Cuenta de Google', { exact: true });
-    assert.equal(await selector.locator('option[value="revoked"]').isDisabled(), true);
-    assert.equal(await selector.inputValue(), 'active');
+    assert.equal(await nativeSelect(selector).locator('option[value="revoked"]').isDisabled(), true);
+    assert.equal(await nativeSelect(selector).inputValue(), 'active');
   } finally { await context.close(); }
 });
 
@@ -151,7 +152,7 @@ test('account routing: refreshed connections preserve the choice and block a new
     await page.getByRole('button', { name: /social\.brainstudio/ }).waitFor();
     await page.getByRole('button', { name: 'Evento', exact: true }).click();
     const selector = page.getByLabel('Cuenta de Google', { exact: true });
-    await selector.selectOption('social');
+    await chooseOption(selector, 'social');
     await page.getByLabel('Título del evento').fill('Conservar mi selección');
     const refresh = async () => {
       const response = page.waitForResponse(response => response.url().includes('/google-calendar/status'));
@@ -160,11 +161,11 @@ test('account routing: refreshed connections preserve the choice and block a new
     };
     connections = [...connections].reverse();
     await refresh();
-    assert.equal(await selector.inputValue(), 'social');
+    assert.equal(await nativeSelect(selector).inputValue(), 'social');
     connections = connections.map(connection => connection.id === 'social' ? { ...connection, isActive: false, reconnectRequired: true } : connection);
     await refresh();
-    await selector.locator('option[value="social"][disabled]').waitFor({ state: 'attached' });
-    assert.equal(await selector.inputValue(), 'social', 'Do not silently switch to the other healthy account');
+    await nativeSelect(selector).locator('option[value="social"][disabled]').waitFor({ state: 'attached' });
+    assert.equal(await nativeSelect(selector).inputValue(), 'social', 'Do not silently switch to the other healthy account');
     assert.equal(await page.getByRole('button', { name: 'Guardar evento' }).isDisabled(), true);
   } finally { await context.close(); }
 });
@@ -424,7 +425,7 @@ test('a delayed Meet response preserves edits made while it was generating', asy
   try {
     await page.getByRole('button', { name: 'Evento', exact: true }).click();
     await page.getByLabel('Título del evento').fill('Reunión original');
-    await page.getByLabel('Tipo', { exact: true }).selectOption('MEETING');
+    await chooseOption(page.getByLabel('Tipo', { exact: true }), 'MEETING');
     await page.getByRole('button', { name: 'Generar', exact: true }).click();
     await page.getByLabel('Título del evento').fill('Reunión editada');
     await completeMeet();
@@ -565,7 +566,7 @@ test('past starts block creation and Meet generation while unchanged historical 
   try {
     await page.getByRole('button', { name: 'Evento', exact: true }).click();
     await page.getByLabel('Título del evento').fill('Evento fuera de tiempo');
-    await page.getByLabel('Tipo', { exact: true }).selectOption('MEETING');
+    await chooseOption(page.getByLabel('Tipo', { exact: true }), 'MEETING');
     await page.getByLabel('Inicio', { exact: true }).fill('07/09/2026 14:00');
     await page.getByLabel('Título del evento').click();
     await page.getByText('No puedes elegir una fecha y hora que ya pasó', { exact: true }).waitFor({ timeout: 5000 });
@@ -644,7 +645,7 @@ test('Meet generation rechecks elapsed time and reports a single inline past-dat
   try {
     await page.getByRole('button', { name: 'Evento', exact: true }).click();
     await page.getByLabel('Título del evento').fill('Reunión cuyo inicio ya pasó');
-    await page.getByLabel('Tipo', { exact: true }).selectOption('MEETING');
+    await chooseOption(page.getByLabel('Tipo', { exact: true }), 'MEETING');
     await page.clock.setFixedTime(new Date('2026-09-07T22:00:00Z'));
     await page.getByRole('button', { name: 'Generar', exact: true }).click();
     await page.getByRole('alert').getByText('No puedes elegir una fecha y hora que ya pasó', { exact: true }).waitFor();

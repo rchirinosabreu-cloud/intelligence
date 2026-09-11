@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
 import { Send, Brain, User, Paperclip, Sparkles, AlertCircle, Info, MessageSquare, Image as ImageIcon, Loader2, Zap, Target, ShieldCheck, CheckCircle2, History, ChevronRight, Trash2, Edit3, X, QrCode, Smartphone, Wifi, RefreshCw, Settings2, Check, ExternalLink, Search, Mail, Video, Calendar, Layout, Plus, StickyNote, Clock, ChevronDown, ListTodo, MoreHorizontal, ArrowRight, Activity, Users, Database, Filter } from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -337,14 +338,14 @@ const BrainCore = () => {
                     <div className="p-8 space-y-6 bg-card">
                         <div className="space-y-3">
                             <label className="text-[9px] font-black uppercase text-muted-foreground tracking-widest px-1">Contexto</label>
-                            <select
+                            <Select
                                 value={selectedClientId || ''}
                                 onChange={(e) => setSelectedClientId(e.target.value || null)}
                                 className="w-full bg-muted/50 border border-border rounded-xl px-4 py-3 text-xs font-bold uppercase focus:ring-1 ring-primary/20 outline-none"
                             >
                                 <option value="">Global / Agencia</option>
                                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
+                            </Select>
                         </div>
                         <div className="space-y-3">
                             <label className="text-[9px] font-black uppercase text-muted-foreground tracking-widest px-1">Nota</label>

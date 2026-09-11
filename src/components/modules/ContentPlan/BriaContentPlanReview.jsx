@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -456,9 +457,9 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
           <div className="space-y-5 p-6">
             <label className="grid gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">
               Motivo
-              <select value={dismissReason} onChange={(event) => setDismissReason(event.target.value)} className="min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-950 focus:outline-none focus:ring-2 focus:ring-destructive/30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white">
+              <Select value={dismissReason} onChange={(event) => setDismissReason(event.target.value)} className="min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-950 focus:outline-none focus:ring-2 focus:ring-destructive/30 dark:border-zinc-700 dark:bg-zinc-900 dark:text-white">
                 {dismissReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
-              </select>
+              </Select>
             </label>
             {dismissReason === 'Otro motivo' && (
               <label className="grid gap-2 text-sm font-medium text-zinc-700 dark:text-zinc-200">

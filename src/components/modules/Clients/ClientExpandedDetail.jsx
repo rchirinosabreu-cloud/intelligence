@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState } from 'react';
 import {
   Loader2, Save, Activity, Settings2, Clock,
@@ -109,7 +110,7 @@ const ClientExpandedDetail = ({ client, onUpdate }) => {
         <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/5 rounded-2xl p-5 space-y-4 shadow-sm">
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Estado de Avance</label>
-            <select
+            <Select
               value={reportStatus}
               onChange={(e) => setReportStatus(e.target.value)}
               className="w-full bg-zinc-50 dark:bg-zinc-800 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500"
@@ -118,12 +119,12 @@ const ClientExpandedDetail = ({ client, onUpdate }) => {
               <option value="CRITICO">Crítico</option>
               <option value="EN_PROCESO">Parrilla en proceso</option>
               <option value="SIN_PARRILLA">Sin parrilla</option>
-            </select>
+            </Select>
           </div>
 
           <div className="space-y-1.5">
             <label className="text-[10px] font-bold text-zinc-400 uppercase tracking-widest">Fase de Aprobación</label>
-            <select
+            <Select
               value={contentStatus}
               onChange={(e) => setContentStatus(e.target.value)}
               className="w-full bg-zinc-50 dark:bg-zinc-800 border-none rounded-xl text-sm font-medium focus:ring-2 focus:ring-indigo-500"
@@ -132,7 +133,7 @@ const ClientExpandedDetail = ({ client, onUpdate }) => {
               <option value="EN_ESPERA">En espera</option>
               <option value="PROGRAMADA">Programada</option>
               <option value="APROBADA">Aprobada</option>
-            </select>
+            </Select>
           </div>
 
           <div className="flex items-center justify-between py-2 border-t border-zinc-100 dark:border-white/5 mt-4">

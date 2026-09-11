@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useRef, useState } from 'react';
 import { Edit2, History, Loader2, Megaphone, Plus, Send, Trash2, X } from '@/components/ui/icons';
 import { Card } from '@/components/ui/Card';
@@ -328,7 +329,7 @@ const DashboardAnnouncements = ({
                     {scope === 'MEMBER' && (
                       <label className="block">
                         <span className="block text-xs font-semibold text-zinc-600 dark:text-zinc-300 mb-2">Destinatario</span>
-                        <select
+                        <Select
                           value={targetUserId}
                           onChange={(event) => setTargetUserId(event.target.value)}
                           className="w-full rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 px-4 py-3 text-sm font-semibold text-zinc-800 dark:text-zinc-100 focus:outline-none focus:ring-2 focus:ring-primary/30"
@@ -337,7 +338,7 @@ const DashboardAnnouncements = ({
                           {activeMembers.map((member) => (
                             <option key={member.userId} value={member.userId}>{member.name} - {member.role}</option>
                           ))}
-                        </select>
+                        </Select>
                       </label>
                     )}
                   </>
@@ -381,7 +382,7 @@ const DashboardAnnouncements = ({
                   />
 
                   {showEmojiPicker && (
-                    <div data-side-panel-ignore="true" className="absolute right-2 bottom-12 z-30 w-[280px] max-w-[calc(100vw-3rem)] rounded-lg border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xl p-2">
+                    <div data-side-panel-ignore="true" className="brain-popover-surface absolute right-2 bottom-12 z-30 w-[280px] p-2">
                       <div className="grid grid-cols-7 gap-1 max-h-44 overflow-y-auto">
                         {APPROVED_EMOJIS.map((emoji) => (
                           <button

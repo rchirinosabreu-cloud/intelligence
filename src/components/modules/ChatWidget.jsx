@@ -341,7 +341,7 @@ const ChatWidget = ({
         <div className={cn("relative", isModal ? "p-6 border-t border-zinc-100 dark:border-zinc-800 bg-white dark:bg-zinc-900" : "")}>
             {/* Mentions Dropdown */}
             {showMentionDropdown && filteredMembers.length > 0 && (
-                <div className="absolute bottom-full left-0 mb-2 w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden z-50">
+                <div className="brain-popover-surface absolute bottom-full left-0 mb-2 w-full overflow-hidden z-50">
                     <div className="p-2 border-b border-zinc-100 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-900/50">
                         <span className="text-[10px] font-bold text-zinc-400 uppercase tracking-wider">Mencionar a...</span>
                     </div>

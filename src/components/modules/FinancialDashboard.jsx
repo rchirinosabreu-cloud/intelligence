@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState, useMemo } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -619,7 +620,7 @@ await invalidateFinancialQueries(queryClient);
                 subtitle="Flujo de caja, cuentas por cobrar y costos operativos."
             >
                 <div className="flex min-w-0 flex-wrap items-center gap-2 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-white/5 shadow-sm">
-                    <select
+                    <Select
                         value={selectedScenario}
                         onChange={(e) => setSelectedScenario(e.target.value)}
                         aria-label="Escenario financiero"
@@ -628,9 +629,9 @@ await invalidateFinancialQueries(queryClient);
                         <option value="ACTUAL">Ejecutado</option>
                         <option value="FORECAST">Proyección</option>
                         <option value="BUDGET">Presupuesto</option>
-                    </select>
+                    </Select>
                     <div className="w-px h-4 bg-zinc-200 dark:bg-white/10 mx-1" />
-                    <select
+                    <Select
                         value={selectedYear}
                         aria-label="Año financiero"
                         onChange={(e) => setSelectedYear(parseInt(e.target.value))}
@@ -639,9 +640,9 @@ await invalidateFinancialQueries(queryClient);
                         {[2021, 2022, 2023, 2024, 2025, 2026].map(y => (
                             <option key={y} value={y}>{y}</option>
                         ))}
-                    </select>
+                    </Select>
                     <div className="w-px h-4 bg-zinc-200 dark:bg-white/10 mx-1" />
-                    <select
+                    <Select
                         value={selectedQuarter}
                         aria-label="Trimestre del análisis"
                         onChange={(e) => setSelectedQuarter(e.target.value)}
@@ -652,14 +653,14 @@ await invalidateFinancialQueries(queryClient);
                         <option value="2">Trimestre 2 (Abr-Jun)</option>
                         <option value="3">Trimestre 3 (Jul-Sep)</option>
                         <option value="4">Trimestre 4 (Oct-Dic)</option>
-                    </select>
+                    </Select>
                 </div>
                 {canApproveFinancials && <div className="flex flex-wrap items-center gap-2">
                     <label className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-300">
                         Mes ejecutado hasta
-                        <select value={actualThroughMonth} onChange={(event) => setActualThroughMonth(Number(event.target.value))} className="bg-transparent font-medium text-zinc-900 outline-none dark:text-white">
+                        <Select value={actualThroughMonth} onChange={(event) => setActualThroughMonth(Number(event.target.value))} className="bg-transparent font-medium text-zinc-900 outline-none dark:text-white">
                             {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((month, index) => <option key={month} value={index + 1}>{month}</option>)}
-                        </select>
+                        </Select>
                     </label>
                     <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-black uppercase tracking-widest shadow-sm cursor-pointer transition-colors">
                         {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
@@ -1041,7 +1042,7 @@ await invalidateFinancialQueries(queryClient);
                                                                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
                                                                     <label className="space-y-1">
                                                                         <span className="text-[9px] font-medium text-zinc-400">Estado de seguimiento</span>
-                                                                        <select
+                                                                        <Select
                                                                             value={debt.status}
                                                                             disabled={!canWriteFinancials || debt.balanceReviewRequired || savingReceivableId === debt.id}
                                                                             onChange={(event) => handleReceivableUpdate(debt, { status: event.target.value })}
@@ -1050,7 +1051,7 @@ await invalidateFinancialQueries(queryClient);
                                                                             <option value="DEBE">Debe</option>
                                                                             <option value="PROMESADO">Promesado</option>
                                                                             {(debt.status === 'PAGADO' || debt.outstanding <= 0.005) && <option value="PAGADO">Pagado</option>}
-                                                                        </select>
+                                                                        </Select>
                                                                     </label>
                                                                     {canWriteFinancials && debt.status !== 'PAGADO' && debt.outstanding > 0.005 && <button type="button" onClick={() => openReceivablePayment(debt)} className="min-h-11 self-end rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Registrar pago</button>}
                                                                 </div>
@@ -1097,9 +1098,9 @@ await invalidateFinancialQueries(queryClient);
                                 </p>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
-                                <select value={payrollMonth} onChange={(event) => setPayrollMonth(Number(event.target.value))} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100">
+                                <Select value={payrollMonth} onChange={(event) => setPayrollMonth(Number(event.target.value))} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100">
                                     {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((month, index) => <option key={month} value={index + 1}>{month}</option>)}
-                                </select>
+                                </Select>
                                 <span className="rounded-lg bg-violet-600/10 px-3 py-2 text-xs font-semibold text-violet-700 dark:text-violet-300" title={`Total contractual: ${formatCurrency(editablePayrollTotal || 0)}`}>
                                     {formatCurrency(editablePayrollTotal || 0)}
                                 </span>
@@ -1360,7 +1361,7 @@ await invalidateFinancialQueries(queryClient);
                                                             {(row.recordCount || 0) + (row.receivableCount || 0)}
                                                         </td>
                                                         <td className="p-4">
-                                                            <select
+                                                            <Select
                                                                 value={targetId}
                                                                 disabled={isSaving || !canWriteFinancials}
                                                                 onChange={(event) => setClientLinkTargets(prev => ({
@@ -1375,7 +1376,7 @@ await invalidateFinancialQueries(queryClient);
                                                                     .map((target) => (
                                                                         <option key={target.id} value={target.id}>{target.name}</option>
                                                                     ))}
-                                                            </select>
+                                                            </Select>
                                                         </td>
                                                         <td className="p-4 text-right">
                                                             {canWriteFinancials && <button
@@ -1646,7 +1647,7 @@ await invalidateFinancialQueries(queryClient);
                         <DialogDescription>Registra el valor causado; los abonos posteriores actualizarán automáticamente el saldo.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleCreateReceivable} className="space-y-4">
-                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<select required value={receivableForm.clientId} onChange={(event) => setReceivableForm((current) => ({ ...current, clientId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{(clientReconciliation?.targets || []).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
+                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<Select required value={receivableForm.clientId} onChange={(event) => setReceivableForm((current) => ({ ...current, clientId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{(clientReconciliation?.targets || []).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</Select></label>
                         <div className="grid gap-4 sm:grid-cols-2">
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Valor<input required min="0.01" step="0.01" type="number" value={receivableForm.amount} onChange={(event) => setReceivableForm((current) => ({ ...current, amount: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Periodo<DatePicker {...brainDatePickerProps} selected={receivableForm.period ? new Date(`${receivableForm.period}T12:00:00`) : null} onChange={(date) => setReceivableForm((current) => ({ ...current, period: date ? format(date, 'yyyy-MM-01') : '' }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" dateFormat="MMMM yyyy" showMonthYearPicker /></label>
@@ -1676,7 +1677,7 @@ await invalidateFinancialQueries(queryClient);
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2">
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Fecha<DatePicker {...brainDatePickerProps} required selected={payrollPaymentForm.paidAt ? new Date(`${payrollPaymentForm.paidAt}T12:00:00`) : null} onChange={(date) => setPayrollPaymentForm((current) => ({ ...current, paidAt: date ? format(date, 'yyyy-MM-dd') : '' }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" dateFormat="dd/MM/yyyy" /></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cuenta<select required value={payrollPaymentForm.accountId} onChange={(event) => setPayrollPaymentForm((current) => ({ ...current, accountId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{(financialAccounts?.accounts || []).map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cuenta<Select required value={payrollPaymentForm.accountId} onChange={(event) => setPayrollPaymentForm((current) => ({ ...current, accountId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{(financialAccounts?.accounts || []).map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</Select></label>
                         </div>
                         <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Referencia<input value={payrollPaymentForm.reference} onChange={(event) => setPayrollPaymentForm((current) => ({ ...current, reference: event.target.value }))} placeholder="Transferencia, comprobante..." className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                         <DialogFooter><button type="button" onClick={() => setPayrollPayment(null)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingPayrollPayment} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingPayrollPayment && <Loader2 className="h-4 w-4 animate-spin" />}Guardar pago</button></DialogFooter>

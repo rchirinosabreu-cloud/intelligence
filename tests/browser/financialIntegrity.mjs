@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
+import { chooseOption } from './selectHelpers.mjs';
 const base = process.env.FINANCIAL_DEMO_URL || 'http://127.0.0.1:3006/tests/fixtures/financial-integrity.html';
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
 try {
@@ -14,13 +15,13 @@ try {
   await row.click();
   assert.match(await page.locator('body').innerText(), /septiembre de 2026/i);
   await page.getByRole('button', { name: 'Registrar pago', exact: true }).click();
-  await page.getByLabel('Origen del pago').selectOption('EXISTING');
-  await page.getByLabel('Ingreso registrado').selectOption('demo-record-0');
+  await chooseOption(page.getByLabel('Origen del pago'), 'EXISTING');
+  await chooseOption(page.getByLabel('Ingreso registrado'), 'demo-record-0');
   assert.match(await page.getByRole('dialog').innerText(), /No se creará otro ingreso/);
   const controlsAlign = await page.getByRole('dialog').evaluate(dialog => {
     const labels = [...dialog.querySelectorAll('label')];
     const dateY = labels.find(label => label.textContent.startsWith('Fecha')).querySelector('input').getBoundingClientRect().y;
-    const accountY = labels.find(label => label.textContent.startsWith('Cuenta')).querySelector('select').getBoundingClientRect().y;
+    const accountY = labels.find(label => label.textContent.startsWith('Cuenta')).querySelector('[data-brain-select], select:not([aria-hidden="true"])').getBoundingClientRect().y;
     return Math.abs(dateY - accountY) <= 1;
   });
   assert.ok(controlsAlign, 'date and account controls must align below their labels');
@@ -64,8 +65,8 @@ try {
   await page.getByRole('button', { name: /Cartera/ }).click();
   await page.getByRole('button', { name: /Cliente de muestra/ }).click();
   await page.getByRole('button', { name: 'Registrar pago', exact: true }).click();
-  await page.getByLabel('Concepto del ingreso').selectOption('SERVICIO');
-  await page.getByRole('dialog').getByLabel('Cuenta').selectOption('demo-account');
+  await chooseOption(page.getByLabel('Concepto del ingreso'), 'SERVICIO');
+  await chooseOption(page.getByRole('dialog').getByLabel('Cuenta'), 'demo-account');
   await page.getByRole('button', { name: 'Guardar pago', exact: true }).click();
   await page.getByRole('dialog').getByText('Pago no guardado (simulado)').waitFor();
   assert.equal(await page.getByText('Pago de cartera registrado.').count(), 0);

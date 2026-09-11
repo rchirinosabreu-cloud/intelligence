@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -116,9 +117,9 @@ export default function BriaClientCriteria({ planId, onChanged }) {
           {form ? <form onSubmit={save} className="space-y-5">
             {drafting ? <>
               <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">La propuesta no se aplica hasta que la valide el responsable de esta parrilla, un PM o un admin. Descartar un hallazgo no crea una regla.</p>
-              <label className="grid gap-2 text-sm font-medium">Categoría<select value={category} disabled={saving} onChange={e => setCategory(e.target.value)} className={inputClass}>{Object.entries(categories).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</select></label>
+              <label className="grid gap-2 text-sm font-medium">Categoría<Select value={category} disabled={saving} onChange={e => setCategory(e.target.value)} className={inputClass}>{Object.entries(categories).map(([key, label]) => <option value={key} key={key}>{label}</option>)}</Select></label>
               <label className="grid gap-2 text-sm font-medium">Criterio<textarea required maxLength={800} rows={3} disabled={saving} value={text} onChange={e => setText(e.target.value)} placeholder="Describe una regla concreta, vigente y aplicable a este cliente." className={inputClass} /></label>
-              {editing && <label className="grid gap-2 text-sm font-medium">Alcance<select value={scope} disabled={saving} onChange={e => setScope(e.target.value)} className={inputClass}><option value="PLAN">Solo parrilla de origen</option><option value="CLIENT">Todo el cliente</option></select></label>}
+              {editing && <label className="grid gap-2 text-sm font-medium">Alcance<Select value={scope} disabled={saving} onChange={e => setScope(e.target.value)} className={inputClass}><option value="PLAN">Solo parrilla de origen</option><option value="CLIENT">Todo el cliente</option></Select></label>}
             </> : <>
               <p className="break-words text-sm font-medium leading-relaxed">{form.criterion.text}</p>
               <p className="text-sm leading-relaxed text-zinc-600 dark:text-zinc-300">{deleting ? 'Se eliminarán este criterio y todo su historial. Bria dejará de usarlo. Esta acción no se puede deshacer. Las revisiones ya guardadas se conservarán.' : form.action === 'APPROVE' ? form.criterion.scope === 'PLAN' ? 'Bria usará este criterio solo en la parrilla de origen. No se aplicará a otras parrillas del cliente.' : 'Bria usará este criterio en las revisiones de este cliente. Las parrillas activas se revisarán de nuevo.' : form.action === 'REVOKE' ? 'Bria dejará de usar este criterio. La decisión y su historial se conservarán.' : 'La propuesta no se incorporará a la memoria. El motivo quedará en el historial.'}</p>
@@ -156,7 +157,7 @@ export default function BriaClientCriteria({ planId, onChanged }) {
                   <span className="ml-auto">v{criterion.version}</span>
                   {(criterion.canDelete || (criterion.canValidate && ['PROPOSED', 'APPROVED'].includes(criterion.status))) && <DropdownMenu>
                     <DropdownMenuTrigger asChild><Button type="button" variant="ghost" aria-label="Más opciones" className="h-11 w-11 shrink-0 p-0 text-xl text-zinc-500 dark:text-zinc-400">⋯</Button></DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="brain-popover-surface z-[72] overflow-y-auto motion-reduce:data-[state=open]:animate-none motion-reduce:data-[state=closed]:animate-none" collisionPadding={16}>
+                    <DropdownMenuContent align="end" collisionPadding={16}>
                       {criterion.canValidate && criterion.status === 'PROPOSED' && <DropdownMenuItem className={menuActionClass} onSelect={() => start('EDIT', criterion)}>Ajustar</DropdownMenuItem>}
                       {criterion.canValidate && criterion.status === 'APPROVED' && <DropdownMenuItem className={`${menuActionClass} text-destructive brain-destructive-text focus:text-destructive`} onSelect={() => start('REVOKE', criterion)}>Revocar</DropdownMenuItem>}
                       {criterion.canDelete && <DropdownMenuItem className={`${menuActionClass} text-destructive brain-destructive-text focus:text-destructive`} onSelect={() => start('DELETE', criterion)}>Eliminar</DropdownMenuItem>}

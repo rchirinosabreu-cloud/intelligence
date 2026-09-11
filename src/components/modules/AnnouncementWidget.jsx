@@ -310,7 +310,7 @@ const AnnouncementWidget = ({ scope = "client", clientId = null }) => {
                         </div>
 
                         {showMentionDropdown && filteredMembers.length > 0 && (
-                            <div className="absolute top-full left-0 mt-1 w-full bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl shadow-xl overflow-hidden z-50">
+                            <div className="brain-popover-surface absolute top-full left-0 mt-1 w-full overflow-hidden z-50">
                                 <div className="max-h-48 overflow-y-auto">
                                     {filteredMembers.map(member => (
                                         <button

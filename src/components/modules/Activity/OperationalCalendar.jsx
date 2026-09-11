@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -1094,9 +1095,9 @@ const OperationalCalendar = () => {
             <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-800 dark:bg-amber-500/10 dark:text-amber-200">Confirma únicamente eventos vigentes: sincronizarlos puede enviar invitaciones a sus asistentes.</p>
             <label className="mt-4 block text-xs font-bold text-zinc-500 dark:text-zinc-400">
               Cuenta organizadora
-              <select value={reconciliationConnectionId} onChange={event => setReconciliationConnectionId(event.target.value)} className="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm text-zinc-900 dark:border-white/10 dark:bg-white/5 dark:text-white">
+              <Select value={reconciliationConnectionId} onChange={event => setReconciliationConnectionId(event.target.value)} className="mt-1 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-sm text-zinc-900 dark:border-white/10 dark:bg-white/5 dark:text-white">
                 {googleConnections.map(connection => <option key={connection.id} value={connection.id}>{connection.email}</option>)}
-              </select>
+              </Select>
             </label>
             <div className="mt-4 space-y-2">
               {(reconciliationPreview?.events || []).map(event => (
@@ -1150,7 +1151,7 @@ const OperationalCalendar = () => {
               <div className="grid grid-cols-1 gap-4 md:col-span-2 md:grid-cols-2">
                 <div className="space-y-1.5">
                   <label htmlFor="operational-event-type" className="text-xs font-bold text-zinc-500">Tipo</label>
-                  <select
+                  <Select
                     id="operational-event-type"
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5"
                     value={formData.type}
@@ -1159,11 +1160,11 @@ const OperationalCalendar = () => {
                     {EVENT_TYPES.map(type => (
                       <option key={type.value} value={type.value}>{type.label}</option>
                     ))}
-                  </select>
+                  </Select>
                 </div>
                 <div className="space-y-1.5">
                   <label htmlFor="operational-event-recurrence" className="text-xs font-bold text-zinc-500">Recurrencia</label>
-                  <select
+                  <Select
                     id="operational-event-recurrence"
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5"
                     value={formData.recurrence}
@@ -1172,7 +1173,7 @@ const OperationalCalendar = () => {
                     <option value="NONE">Única vez</option>
                     <option value="WEEKLY">Semanal</option>
                     {formData.recurrence === 'GOOGLE' && <option value="GOOGLE">Personalizada en Google</option>}
-                  </select>
+                  </Select>
                   {formData.recurrence === 'GOOGLE' && <p className="text-[11px] text-zinc-500 dark:text-zinc-400">Esta serie conserva su regla avanzada de Google Calendar.</p>}
                 </div>
               </div>
@@ -1252,7 +1253,7 @@ const OperationalCalendar = () => {
               {(
                 <div className="space-y-1.5">
                   <label htmlFor="operational-event-google-account" className="text-xs font-bold text-zinc-500 dark:text-zinc-400">Cuenta de Google</label>
-                  <select
+                  <Select
                     id="operational-event-google-account"
                     className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-sm text-zinc-900 outline-none transition focus:ring-2 focus:ring-indigo-600/20 dark:border-white/10 dark:bg-white/5 dark:text-zinc-100"
                     value={formData.googleConnectionId}
@@ -1264,7 +1265,7 @@ const OperationalCalendar = () => {
                     {googleConnections.map(connection => (
                       <option key={connection.id} value={connection.id} disabled={connection.isActive === false || connection.reconnectRequired}>{connection.email}{connection.isActive === false || connection.reconnectRequired ? ' · Requiere reconexión' : ''}</option>
                     ))}
-                  </select>
+                  </Select>
                   <p className="mt-2 text-[11px] text-zinc-500 dark:text-zinc-400">{editingEventId ? 'El evento conserva su calendario de origen.' : 'Se guardará en el calendario principal de esta cuenta.'}</p>
                 </div>
               )}

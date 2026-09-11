@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
@@ -83,7 +84,7 @@ const OperationalTracePanel = () => {
 
           <div className="flex flex-col gap-2 sm:flex-row">
             <label className="sr-only" htmlFor="trace-user">Miembro del equipo</label>
-            <select
+            <Select
               id="trace-user"
               value={userId}
               onChange={(event) => setUserId(event.target.value)}
@@ -91,10 +92,10 @@ const OperationalTracePanel = () => {
             >
               <option value="">Todo el equipo</option>
               {(data?.users || []).map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
-            </select>
+            </Select>
 
             <label className="sr-only" htmlFor="trace-period">Período</label>
-            <select
+            <Select
               id="trace-period"
               value={days}
               onChange={(event) => setDays(event.target.value)}
@@ -103,7 +104,7 @@ const OperationalTracePanel = () => {
               <option value="1">Últimas 24 horas</option>
               <option value="7">Últimos 7 días</option>
               <option value="30">Últimos 30 días</option>
-            </select>
+            </Select>
 
             <form onSubmit={submitSearch} className="flex min-w-0 sm:w-72">
               <label className="sr-only" htmlFor="trace-task-search">Buscar por tarea</label>

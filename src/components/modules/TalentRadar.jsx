@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -97,7 +98,7 @@ const TalentRadar = () => {
 
             >
                 <div className="flex items-center gap-1 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-white/5">
-                    <select
+                    <Select
                         value={selectedMonth}
                         onChange={(e) => setSelectedMonth(e.target.value)}
                         className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest px-3 py-1.5 focus:ring-0 cursor-pointer"
@@ -105,15 +106,15 @@ const TalentRadar = () => {
                         {Array.from({ length: 12 }, (_, i) => (
                             <option key={i+1} value={i+1}>{format(new Date(2025, i, 1), 'MMMM', { locale: es }).toUpperCase()}</option>
                         ))}
-                    </select>
+                    </Select>
                     <div className="w-px h-4 bg-zinc-200 dark:bg-white/10 mx-1" />
-                    <select
+                    <Select
                         value={selectedYear}
                         onChange={(e) => setSelectedYear(e.target.value)}
                         className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest px-3 py-1.5 focus:ring-0 cursor-pointer"
                     >
                         {[2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-                    </select>
+                    </Select>
                 </div>
             </PageHeader>
 

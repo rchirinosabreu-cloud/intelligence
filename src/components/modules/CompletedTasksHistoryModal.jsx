@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useMemo, useState, useEffect } from 'react';
 import { X, Search, Filter, Loader2, CalendarDays, TaskReintegrateIcon } from '@/components/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
@@ -243,7 +244,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
 
                 <div className="relative flex-1">
                     <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                    <select
+                    <Select
                         value={selectedUser}
                         onChange={(e) => setSelectedUser(e.target.value)}
                         disabled={isGlobalSearchActive}
@@ -253,10 +254,7 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                         {uniqueUsers.map(u => (
                             <option key={u.id} value={u.id}>{u.name}</option>
                         ))}
-                    </select>
-                    <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                        <svg className="w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path></svg>
-                    </div>
+                    </Select>
                 </div>
             </div>
           </div>
@@ -357,13 +355,13 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
           <div className="space-y-4 py-1">
             <label className="block space-y-1.5">
               <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Motivo</span>
-              <select
+              <Select
                 value={reopenReason}
                 onChange={event => setReopenReason(event.target.value)}
                 className="min-h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-[#009EB9]/20 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white"
               >
                 {REOPEN_REASONS.map(reason => <option key={reason.value} value={reason.value}>{reason.label}</option>)}
-              </select>
+              </Select>
             </label>
             <label className="block space-y-1.5">
               <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300">Nota de corrección</span>

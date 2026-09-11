@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -375,26 +376,26 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
             <div className="grid grid-cols-1 gap-3 border-y border-zinc-200 py-4 dark:border-white/10 sm:grid-cols-3">
                 <label className="space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300">
                     Escenario
-                    <select className={inputClass} value={filters.scenario} onChange={(event) => setFilters((current) => ({ ...current, scenario: event.target.value }))}>
+                    <Select className={inputClass} value={filters.scenario} onChange={(event) => setFilters((current) => ({ ...current, scenario: event.target.value }))}>
                         {SCENARIOS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </select>
+                    </Select>
                 </label>
                 <label className="space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300">
                     Mes
-                    <select className={inputClass} value={filters.month} onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value }))}>
+                    <Select className={inputClass} value={filters.month} onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value }))}>
                         <option value="">Todo el año</option>
                         {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((month, index) => (
                             <option key={month} value={index + 1}>{month}</option>
                         ))}
-                    </select>
+                    </Select>
                 </label>
                 <label className="space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300">
                     Tipo
-                    <select className={inputClass} value={filters.type} onChange={(event) => setFilters((current) => ({ ...current, type: event.target.value }))}>
+                    <Select className={inputClass} value={filters.type} onChange={(event) => setFilters((current) => ({ ...current, type: event.target.value }))}>
                         <option value="">Ingresos y egresos</option>
                         <option value="INCOME">Ingresos</option>
                         <option value="EXPENSE">Egresos</option>
-                    </select>
+                    </Select>
                 </label>
             </div>
 
@@ -472,13 +473,13 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
                         <div className="grid gap-4 sm:grid-cols-2">
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Valor<input required min="0.01" step="0.01" type="number" className={inputClass} value={form.amount} onChange={(event) => setField('amount', event.target.value)} /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Fecha<div className="relative"><Calendar className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-zinc-400" /><DatePicker {...brainDatePickerProps} selected={form.date ? new Date(`${form.date}T12:00:00`) : null} onChange={(date) => setField('date', date ? format(date, 'yyyy-MM-dd') : '')} className={`${inputClass} pl-9`} dateFormat="dd/MM/yyyy" /></div></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Categoría<select className={inputClass} value={form.category} onChange={(event) => setField('category', event.target.value)}>{CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Escenario<select className={inputClass} value={form.scenario} onChange={(event) => setField('scenario', event.target.value)}>{SCENARIOS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cuenta de caja o banco<select required={form.scenario === 'ACTUAL'} className={inputClass} value={form.accountId} onChange={(event) => setField('accountId', event.target.value)}><option value="">{form.scenario === 'ACTUAL' ? 'Seleccionar cuenta...' : 'Sin cuenta definida'}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Categoría<Select className={inputClass} value={form.category} onChange={(event) => setField('category', event.target.value)}>{CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Escenario<Select className={inputClass} value={form.scenario} onChange={(event) => setField('scenario', event.target.value)}>{SCENARIOS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cuenta de caja o banco<Select required={form.scenario === 'ACTUAL'} className={inputClass} value={form.accountId} onChange={(event) => setField('accountId', event.target.value)}><option value="">{form.scenario === 'ACTUAL' ? 'Seleccionar cuenta...' : 'Sin cuenta definida'}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</Select></label>
                         </div>
                         <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Descripción<input required className={inputClass} value={form.description} onChange={(event) => setField('description', event.target.value)} placeholder="Ej. Mensualidad de agosto" /></label>
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<select className={inputClass} value={form.clientId} onChange={(event) => setField('clientId', event.target.value)}><option value="">Sin cliente relacionado</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</select></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<Select className={inputClass} value={form.clientId} onChange={(event) => setField('clientId', event.target.value)}><option value="">Sin cliente relacionado</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</Select></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Contraparte<input className={inputClass} value={form.counterparty} onChange={(event) => setField('counterparty', event.target.value)} placeholder="Proveedor o persona" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Referencia<input className={inputClass} value={form.reference} onChange={(event) => setField('reference', event.target.value)} placeholder="Factura, transferencia..." /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Notas<input className={inputClass} value={form.notes} onChange={(event) => setField('notes', event.target.value)} /></label>
@@ -494,7 +495,7 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
                     <form onSubmit={saveAccount} className="space-y-4">
                         <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Nombre<input required className={inputClass} value={accountForm.name} onChange={(event) => setAccountForm((current) => ({ ...current, name: event.target.value }))} placeholder="Ej. Bancolombia principal" /></label>
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Tipo<select className={inputClass} value={accountForm.type} onChange={(event) => setAccountForm((current) => ({ ...current, type: event.target.value }))}><option value="BANK">Banco</option><option value="CASH">Caja</option><option value="OTHER">Otra</option></select></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Tipo<Select className={inputClass} value={accountForm.type} onChange={(event) => setAccountForm((current) => ({ ...current, type: event.target.value }))}><option value="BANK">Banco</option><option value="CASH">Caja</option><option value="OTHER">Otra</option></Select></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Saldo inicial<input required type="number" step="0.01" className={inputClass} value={accountForm.openingBalance} onChange={(event) => setAccountForm((current) => ({ ...current, openingBalance: event.target.value }))} /></label>
                         </div>
                         <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Fecha del saldo inicial<DatePicker {...brainDatePickerProps} selected={accountForm.openingBalanceDate ? new Date(`${accountForm.openingBalanceDate}T12:00:00`) : null} onChange={(date) => setAccountForm((current) => ({ ...current, openingBalanceDate: date ? format(date, 'yyyy-MM-dd') : '' }))} className={inputClass} dateFormat="dd/MM/yyyy" /></label>

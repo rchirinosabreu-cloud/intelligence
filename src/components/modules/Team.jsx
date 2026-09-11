@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useEffect } from 'react';
 import { Plus, MoreVertical, Edit2, UserX, UserCheck, Eye, Users } from '@/components/ui/icons';
@@ -397,7 +398,7 @@ export default function Team() {
               <div className="space-y-4 p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Rol de Permisos del Sistema</label>
-                  <select
+                  <Select
                     value={systemRole}
                     onChange={(e) => handleRolePresetChange(e.target.value)}
                     className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/50 text-zinc-900 dark:text-white"
@@ -406,7 +407,7 @@ export default function Team() {
                     <option value="PROJECT_MANAGER">PROJECT_MANAGER (PM)</option>
                     <option value="EDITOR">EDITOR (Colaborador)</option>
                     <option value="VIEWER">VIEWER (Lector)</option>
-                  </select>
+                  </Select>
                 </div>
 
                 <div>
@@ -455,7 +456,7 @@ export default function Team() {
                 {(systemRole === 'ADMIN' || modulePermissions.financiero) && (
                   <div>
                     <label className="block text-xs font-medium text-zinc-600 dark:text-zinc-300 mb-1.5">Nivel financiero</label>
-                    <select
+                    <Select
                       value={systemRole === 'ADMIN' ? 'ADMIN' : financialRole}
                       disabled={systemRole === 'ADMIN'}
                       onChange={(e) => setFinancialRole(e.target.value)}
@@ -465,7 +466,7 @@ export default function Team() {
                       <option value="VIEWER">Solo lectura</option>
                       <option value="EDITOR">Registrar y editar</option>
                       <option value="APPROVER">Aprobar importaciones y cierres</option>
-                    </select>
+                    </Select>
                     <p className="mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
                       Los cierres mensuales y las importaciones requieren nivel aprobador.
                     </p>

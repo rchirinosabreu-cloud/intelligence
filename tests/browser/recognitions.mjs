@@ -2,6 +2,7 @@ import test, { before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
+import { chooseOption } from './selectHelpers.mjs';
 
 let server, browser, origin;
 const errors = [];
@@ -41,9 +42,9 @@ test('keeps completed tasks, original achievements titles and history filters in
   assert.match(await recognized.innerText(), /Definir concepto de campaña/);
   assert.equal(await recognized.getByText('Buen comienzo', { exact: true }).count(), 1);
   assert.equal(await dialog.getByRole('button', { name: 'Regresar al tablero' }).count(), 0, 'editor cannot reopen tasks');
-  await dialog.locator('select').selectOption('recognition-demo-member');
+  await chooseOption(dialog.getByRole('combobox'), 'recognition-demo-member');
   assert.equal(await dialog.getByText('Diseñar parrilla', { exact: true }).count(), 0);
-  await dialog.locator('select').selectOption('all');
+  await chooseOption(dialog.getByRole('combobox'), 'all');
   const previousDay = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
   await dialog.locator('input[type="date"]').fill(previousDay);
   await dialog.getByText('Revisar calendario editorial', { exact: true }).waitFor();

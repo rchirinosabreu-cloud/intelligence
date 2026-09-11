@@ -270,7 +270,7 @@ const AppLayout = ({ children }) => {
                     )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden rounded-2xl border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-2xl z-[80]">
+              <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
                 <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
                     <h4 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
                         <Bell className="w-4 h-4 text-primary" />
@@ -450,7 +450,7 @@ const AppLayout = ({ children }) => {
                   <span>Ajustes</span>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-red-500 focus:text-red-500">
+                <DropdownMenuItem onClick={handleLogout} className="text-destructive brain-destructive-text focus:text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
                   <span>Cerrar Sesión</span>
                 </DropdownMenuItem>

@@ -23,6 +23,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import ReferenceCard from './ReferenceCard';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 
 const MoodboardCanvas = () => {
   const { boardId } = useParams();
@@ -349,45 +350,43 @@ const MoodboardCanvas = () => {
         )}
 
         <div className="relative pointer-events-auto">
-          <button
-            onClick={() => setIsAdding(!isAdding)}
+          <DropdownMenu open={isAdding} onOpenChange={setIsAdding}>
+          <DropdownMenuTrigger asChild><button
             className="flex items-center gap-2 bg-[#009EB9] hover:bg-[#008CA4] text-white px-6 py-3 rounded-2xl text-sm font-black transition-all shadow-2xl shadow-[#009EB9]/25 active:scale-95"
           >
             <Plus className="w-5 h-5" />
             <span>AÑADIR</span>
-          </button>
-
-          {isAdding && (
-            <div className="absolute right-0 mt-3 w-56 bg-white dark:bg-zinc-900 rounded-3xl shadow-2xl border border-zinc-200 dark:border-zinc-800 py-3 z-50 animate-in fade-in zoom-in-95 duration-200 overflow-hidden">
-              <button
-                onClick={() => { fileInputRef.current?.click(); setIsAdding(false); }}
-                className="flex items-center gap-4 w-full px-5 py-3 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+          </button></DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="z-[100000] w-56">
+              <DropdownMenuItem
+                onSelect={() => { fileInputRef.current?.click(); setIsAdding(false); }}
+                className="gap-3"
               >
                 <div className="p-2 bg-blue-500/10 rounded-xl">
                   <ImageIcon className="w-4 h-4 text-blue-500" />
                 </div>
                 Imagen
-              </button>
-              <button
-                onClick={() => handleAddItem('link')}
-                className="flex items-center gap-4 w-full px-5 py-3 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => handleAddItem('link')}
+                className="gap-3"
               >
                 <div className="p-2 bg-green-500/10 rounded-xl">
                   <LinkIcon className="w-4 h-4 text-green-500" />
                 </div>
                 Enlace
-              </button>
-              <button
-                onClick={() => handleAddItem('text')}
-                className="flex items-center gap-4 w-full px-5 py-3 text-sm font-bold text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onSelect={() => handleAddItem('text')}
+                className="gap-3"
               >
                 <div className="p-2 bg-amber-500/10 rounded-xl">
                   <Type className="w-4 h-4 text-amber-500" />
                 </div>
                 Nota
-              </button>
-            </div>
-          )}
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 

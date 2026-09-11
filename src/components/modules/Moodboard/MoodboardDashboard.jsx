@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState, useEffect } from 'react';
 import {
   Plus,
@@ -217,7 +218,7 @@ const MoodboardDashboard = () => {
 
               <div>
                 <label className="block text-xs font-bold text-zinc-400 uppercase mb-1 ml-1">Cliente (Opcional)</label>
-                <select
+                <Select
                   className="w-full px-4 py-3 bg-zinc-50 dark:bg-zinc-800 border-none rounded-xl text-zinc-900 dark:text-zinc-100 focus:ring-2 focus:ring-indigo-500"
                   value={newBoard.clientId || ''}
                   onChange={(e) => setNewBoard({ ...newBoard, clientId: e.target.value || null })}
@@ -226,7 +227,7 @@ const MoodboardDashboard = () => {
                   {clients.map(client => (
                     <option key={client.id} value={client.id}>{client.name}</option>
                   ))}
-                </select>
+                </Select>
               </div>
             </div>
 

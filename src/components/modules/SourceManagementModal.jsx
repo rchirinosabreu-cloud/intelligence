@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState, useEffect, useCallback } from 'react';
 import { X, Plus, Trash2, Globe, Database, Mail, Layout, Loader2, Link as LinkIcon, ShieldCheck, AlertCircle, Info } from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -204,7 +205,7 @@ const SourceManagementModal = ({ isOpen, onClose, onRefresh }) => {
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-[9px] font-black uppercase text-zinc-400 mb-2">Tipo de API</label>
-                                        <select
+                                        <Select
                                             value={newSource.type}
                                             onChange={e => setNewSource({...newSource, type: e.target.value})}
                                             className="w-full bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 ring-primary/20 outline-none"
@@ -212,18 +213,18 @@ const SourceManagementModal = ({ isOpen, onClose, onRefresh }) => {
                                             <option value="SHEETS">Google Sheets</option>
                                             <option value="GMAIL">Gmail Inbox</option>
                                             <option value="SLIDES">Google Slides</option>
-                                        </select>
+                                        </Select>
                                     </div>
                                     <div>
                                         <label className="block text-[9px] font-black uppercase text-zinc-400 mb-2">Cliente Asociado</label>
-                                        <select
+                                        <Select
                                             value={newSource.clientId}
                                             onChange={e => setNewSource({...newSource, clientId: e.target.value})}
                                             className="w-full bg-white border border-zinc-200 rounded-xl px-4 py-3 text-sm font-medium focus:ring-2 ring-primary/20 outline-none"
                                         >
                                             <option value="">Uso Global</option>
                                             {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                        </select>
+                                        </Select>
                                     </div>
                                 </div>
 

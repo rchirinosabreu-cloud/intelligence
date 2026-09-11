@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState, useEffect } from 'react';
 import { Loader2, Zap, Star, Link as LinkIcon } from '@/components/ui/icons';
 import { motion } from 'framer-motion';
@@ -223,7 +224,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Cliente</label>
-                            <select
+                            <Select
                                 required
                                 value={editFormData.clientId || ''}
                                 onChange={e => setEditFormData({...editFormData, clientId: e.target.value})}
@@ -233,11 +234,11 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                                 {clientsList.map(c => (
                                     <option key={c.id} value={c.id}>{c.name}</option>
                                 ))}
-                            </select>
+                            </Select>
                         </div>
                         <div>
                             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Responsable</label>
-                            <select
+                            <Select
                                 value={editFormData.assigneeId || ''}
                                 onChange={e => setEditFormData({...editFormData, assigneeId: e.target.value})}
                                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
@@ -246,14 +247,14 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                                 {teamMembers.map(member => (
                                     <option key={member.id} value={member.id}>{member.name}</option>
                                 ))}
-                            </select>
+                            </Select>
                         </div>
                     </div>
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
                             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Estado</label>
-                            <select
+                            <Select
                                 value={editFormData.status || 'PENDIENTE'}
                                 onChange={e => setEditFormData({...editFormData, status: e.target.value})}
                                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
@@ -262,7 +263,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                                 <option value="EN_CURSO">En proceso</option>
                                 <option value="REALIZADA">Realizado</option>
                                 <option value="DEVUELTA">Devuelto</option>
-                            </select>
+                            </Select>
                         </div>
                         <div>
                             <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Fecha límite</label>

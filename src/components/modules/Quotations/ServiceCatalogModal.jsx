@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -111,9 +112,9 @@ const ServiceCatalogModal = ({ open, onOpenChange, service = null, initialName =
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-xs font-bold uppercase text-zinc-500">Categoría</label>
-                            <select className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none" value={formData.category} onChange={(e) => updateField('category', e.target.value)}>
+                            <Select className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none" value={formData.category} onChange={(e) => updateField('category', e.target.value)}>
                                 {SERVICE_CATEGORIES.map((category) => <option key={category.id} value={category.id}>{category.label}</option>)}
-                            </select>
+                            </Select>
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-xs font-bold uppercase text-zinc-500">Costo real estimado</label>

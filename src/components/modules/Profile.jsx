@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
@@ -644,14 +645,14 @@ const Profile = () => {
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                                 <div className="space-y-2">
                                                     <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">Tipo de Sesión</label>
-                                                    <select
+                                                    <Select
                                                         value={newFeedback.type}
                                                         onChange={e => setNewFeedback({...newFeedback, type: e.target.value})}
                                                         className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
                                                     >
                                                         <option value="ESCRITO">📝 Feedback Escrito</option>
                                                         <option value="UNO_A_UNO">🤝 Sesión 1-on-1</option>
-                                                    </select>
+                                                    </Select>
                                                 </div>
                                                 <div className="space-y-2">
                                                     <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">Fecha de la Sesión</label>

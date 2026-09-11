@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -94,7 +95,7 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
           <div className="space-y-4">
             <div className="space-y-2">
               <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Cliente</label>
-              <select
+              <Select
                 value={formData.clientId}
                 onChange={(e) => setFormData({ ...formData, clientId: e.target.value })}
                 className="w-full h-12 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all font-medium"
@@ -104,13 +105,13 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
                 {clients?.map((client) => (
                   <option key={client.id} value={client.id}>{client.name}</option>
                 ))}
-              </select>
+              </Select>
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <label className="text-xs font-bold uppercase tracking-widest text-zinc-500">Mes</label>
-                <select
+                <Select
                   value={formData.month}
                   onChange={(e) => setFormData({ ...formData, month: parseInt(e.target.value) })}
                   className="w-full h-12 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all font-medium"
@@ -118,7 +119,7 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
                   {months.map((m) => (
                     <option key={m.value} value={m.value}>{m.label}</option>
                   ))}
-                </select>
+                </Select>
               </div>
 
               <div className="space-y-2">

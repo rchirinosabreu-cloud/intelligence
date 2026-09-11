@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Plus, Search, MoreVertical, Loader2, Edit,
@@ -266,7 +267,7 @@ const Clients = () => {
           {/* PM Selector */}
           <div className="flex items-center gap-2 bg-zinc-100 dark:bg-white/5 p-1 rounded-xl border border-transparent focus-within:border-indigo-500/30 transition-all">
             <UserIcon className="w-4 h-4 ml-2 text-zinc-400" />
-            <select
+            <Select
               value={selectedPmId}
               onChange={(e) => setSelectedPmId(e.target.value)}
               className="bg-transparent border-none focus:ring-0 text-sm py-1.5 pr-8 text-zinc-700 dark:text-zinc-300"
@@ -275,13 +276,13 @@ const Clients = () => {
               {pms.map(pm => (
                 <option key={pm.id} value={pm.id}>{pm.name}</option>
               ))}
-            </select>
+            </Select>
           </div>
 
           {/* Temperature Filter */}
           <div className="flex items-center gap-2 bg-zinc-100 dark:bg-white/5 p-1 rounded-xl border border-transparent focus-within:border-indigo-500/30 transition-all">
             <Thermometer className="w-4 h-4 ml-2 text-zinc-400" />
-            <select
+            <Select
               value={selectedTemperature}
               onChange={(e) => setSelectedTemperature(e.target.value)}
               className="bg-transparent border-none focus:ring-0 text-sm py-1.5 pr-8 text-zinc-700 dark:text-zinc-300"
@@ -290,7 +291,7 @@ const Clients = () => {
               <option value="sano">Verde (Sano)</option>
               <option value="alerta">Amarillo (Alerta)</option>
               <option value="critico">Rojo (Crítico)</option>
-            </select>
+            </Select>
           </div>
         </div>
       </div>
@@ -384,7 +385,7 @@ const Clients = () => {
                                   <MoreVertical className="w-4 h-4" />
                                 </button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 shadow-xl">
+                              <DropdownMenuContent align="end" className="w-48">
                                 <DropdownMenuItem className="gap-2 py-2.5" onClick={() => toggleExpand(client.id)}>
                                   <Activity className="w-4 h-4" />
                                   <span>{isExpanded ? 'Cerrar Detalle' : 'Configurar Salud'}</span>
@@ -501,7 +502,7 @@ const Clients = () => {
                                   <MoreVertical className="w-4 h-4" />
                                 </button>
                               </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 shadow-xl">
+                              <DropdownMenuContent align="end" className="w-48">
                                 <DropdownMenuItem
                                   onClick={() => handleArchiveToggle(client)}
                                   className="gap-2 py-2.5 text-indigo-600 dark:text-indigo-400"

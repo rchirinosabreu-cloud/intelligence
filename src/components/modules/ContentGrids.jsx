@@ -269,7 +269,7 @@ const ContentGrids = () => {
                                       <MoreHorizontal className="w-3.5 h-3.5" />
                                     </button>
                                   </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-48 bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 shadow-xl">
+                                  <DropdownMenuContent align="end" className="w-48">
                                     <DropdownMenuItem onClick={() => navigateToPlan(plan)} className="flex items-center gap-2 cursor-pointer py-2 text-zinc-600 dark:text-zinc-300">
                                       <Eye className="w-4 h-4" />
                                       <span>Ver Plan</span>

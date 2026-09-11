@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useEffect, useMemo, useState } from 'react';
 import { Plus, RotateCcw, Sparkles, Trash2 } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
@@ -165,7 +166,7 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
             <div className="grid gap-3 border-t border-zinc-100 pt-4 dark:border-zinc-800 sm:grid-cols-2">
                 <label className="space-y-1.5">
                     <span className="text-[10px] font-bold uppercase text-zinc-400">Añadir desde la biblioteca</span>
-                    <select
+                    <Select
                         defaultValue=""
                         onChange={(event) => {
                             addLibraryTerm(event.target.value);
@@ -175,7 +176,7 @@ const QuotationTermsEditor = ({ services, currency, isTaxExempt, existingText, i
                     >
                         <option value="">Selecciona una cláusula...</option>
                         {availableLibrary.map((entry) => <option key={entry.id} value={entry.id}>{entry.group} · {entry.title}</option>)}
-                    </select>
+                    </Select>
                 </label>
                 <div className="space-y-1.5">
                     <span className="text-[10px] font-bold uppercase text-zinc-400">Cláusula personalizada</span>

@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState, useEffect, useCallback } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -570,14 +571,14 @@ const QuotationForm = () => {
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
                                     <label className="text-xs font-bold text-zinc-500 uppercase">Tipo de Propuesta</label>
-                                    <select
+                                    <Select
                                         value={clientType}
                                         onChange={(e) => setClientType(e.target.value)}
                                         className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none"
                                     >
                                         <option value="EMPRESA">Para Empresa (Aplica IVA 19%)</option>
                                         <option value="PERSONA_NATURAL">Para Persona Natural (Exento)</option>
-                                    </select>
+                                    </Select>
                                 </div>
 
                                 <div className="space-y-2">
@@ -662,11 +663,11 @@ const QuotationForm = () => {
                                                 <input type="number" min="0" value={scenario.externalBudget} onChange={(e) => updateScenario(scenario.id, 'externalBudget', e.target.value)} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Presupuesto externo (opcional)" />
                                                 <textarea value={scenario.description} onChange={(e) => updateScenario(scenario.id, 'description', e.target.value)} className="min-h-[70px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Descripción de esta alternativa" />
                                                 <textarea value={scenario.externalBudgetNote} onChange={(e) => updateScenario(scenario.id, 'externalBudgetNote', e.target.value)} className="min-h-[70px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Ej: pagado directamente por el cliente a Meta" />
-                                                <select value={scenario.discountType} onChange={(e) => updateScenario(scenario.id, 'discountType', e.target.value)} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900">
+                                                <Select value={scenario.discountType} onChange={(e) => updateScenario(scenario.id, 'discountType', e.target.value)} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900">
                                                     <option value="">Sin descuento</option>
                                                     <option value="PERCENTAGE">Descuento porcentual</option>
                                                     <option value="FIXED">Descuento fijo</option>
-                                                </select>
+                                                </Select>
                                                 <input type="number" min="0" max={scenario.discountType === 'PERCENTAGE' ? 100 : undefined} value={scenario.discountValue} onChange={(e) => updateScenario(scenario.id, 'discountValue', e.target.value)} disabled={!scenario.discountType} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900" placeholder={scenario.discountType === 'PERCENTAGE' ? 'Porcentaje (ej. 10)' : 'Valor del descuento'} />
                                                 <input value={scenario.discountLabel} onChange={(e) => updateScenario(scenario.id, 'discountLabel', e.target.value)} disabled={!scenario.discountType} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 md:col-span-2" placeholder="Etiqueta visible (ej. Descuento de lanzamiento)" />
                                                 <div className="md:col-span-2 flex justify-between text-xs">
@@ -696,7 +697,7 @@ const QuotationForm = () => {
                                     />
                                 </div>
                                 {searchTerm && (
-                                    <div className="absolute z-50 left-0 right-0 top-full mt-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl max-h-60 overflow-y-auto overflow-x-hidden">
+                                    <div className="brain-popover-surface absolute z-50 left-0 right-0 top-full mt-2 max-h-60 overflow-y-auto overflow-x-hidden">
                                         {filteredCatalog.map(service => (
                                             <button
                                                 key={service.id}
@@ -776,14 +777,14 @@ const QuotationForm = () => {
                                                 <div className="flex flex-wrap items-center gap-4 pt-2 border-t border-zinc-100 dark:border-zinc-800/50">
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[10px] font-bold text-zinc-400 uppercase">Cobro</span>
-                                                        <select
+                                                        <Select
                                                             value={item.billingType || 'MONTHLY'}
                                                             onChange={(e) => updateItem(idx, 'billingType', e.target.value)}
                                                             className="rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs dark:border-zinc-800 dark:bg-zinc-950"
                                                         >
                                                             <option value="MONTHLY">Pago mensual</option>
                                                             <option value="ONE_TIME">Pago único</option>
-                                                        </select>
+                                                        </Select>
                                                     </div>
                                                     <div className="flex items-center gap-2">
                                                         <span className="text-[10px] font-bold text-zinc-400 uppercase">Cant.</span>
@@ -876,11 +877,11 @@ const QuotationForm = () => {
                             <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/60 p-4 dark:border-violet-900/50 dark:bg-violet-950/20">
                                 <p className="text-[10px] font-bold uppercase text-violet-700 dark:text-violet-300">Descuento comercial</p>
                                 <div className="grid gap-2 sm:grid-cols-2">
-                                    <select value={discountType} onChange={(e) => { setDiscountType(e.target.value); if (!e.target.value) setDiscountValue(''); }} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs outline-none dark:border-violet-800 dark:bg-zinc-950">
+                                    <Select value={discountType} onChange={(e) => { setDiscountType(e.target.value); if (!e.target.value) setDiscountValue(''); }} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs outline-none dark:border-violet-800 dark:bg-zinc-950">
                                         <option value="">Sin descuento</option>
                                         <option value="PERCENTAGE">Porcentaje</option>
                                         <option value="FIXED">Valor fijo</option>
-                                    </select>
+                                    </Select>
                                     <input type="number" min="0" max={discountType === 'PERCENTAGE' ? 100 : undefined} value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} disabled={!discountType} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-right text-xs outline-none disabled:opacity-50 dark:border-violet-800 dark:bg-zinc-950" placeholder={discountType === 'PERCENTAGE' ? 'Porcentaje' : 'Valor'} />
                                 </div>
                                 <input value={discountLabel} onChange={(e) => setDiscountLabel(e.target.value)} disabled={!discountType} className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs outline-none disabled:opacity-50 dark:border-violet-800 dark:bg-zinc-950" placeholder="Etiqueta visible en la propuesta" />

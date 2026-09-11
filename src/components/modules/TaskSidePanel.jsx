@@ -1,3 +1,4 @@
+import Select from '@/components/ui/Select';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
@@ -1644,7 +1645,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 align="end"
                                                 side="bottom"
                                                 collisionPadding={16}
-                                                className="z-[120] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-2.5 w-56 flex flex-col gap-2 focus:outline-none outline-none animate-in zoom-in-95 duration-100"
+                                                className="p-2.5 w-56 flex flex-col gap-2 focus:outline-none outline-none"
                                             >
                                                 {commentPopover.view === 'all-emojis' ? (
                                                     <div className="flex flex-col gap-1.5 p-1 animate-in zoom-in-95 duration-100">
@@ -2066,7 +2067,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             {/* Cliente Selector */}
                             <div className="col-span-2 space-y-1.5 sm:col-span-3 sm:space-y-1">
                                 <label className={taskComposerLabelClass}>Cliente</label>
-                                <select
+                                <Select
                                     required
                                     value={formData.clientId}
                                     onChange={e => setFormData({...formData, clientId: e.target.value})}
@@ -2075,20 +2076,20 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 >
                                     <option value="">Seleccionar cliente...</option>
                                     {clientsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                                </select>
+                                </Select>
                             </div>
 
                             {/* Responsable */}
                             <div className="col-span-2 space-y-1.5 sm:col-span-3 sm:space-y-1">
                                 <label className={taskComposerLabelClass}>Responsable</label>
-                                <select
+                                <Select
                                     value={formData.assigneeId || ''}
                                     onChange={e => setFormData({...formData, assigneeId: e.target.value})}
                                     className={`${taskComposerFieldClass} h-12 sm:h-[38px] cursor-pointer`}
                                 >
                                     <option value="">Sin asignar</option>
                                     {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                </select>
+                                </Select>
                             </div>
 
                             {/* Deadline / Fecha Entrega */}
@@ -2115,7 +2116,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             {/* Estado Actual */}
                             <div className="col-span-1 space-y-1.5 sm:col-span-2 sm:space-y-1">
                                 <label className={taskComposerLabelClass}>Estado actual</label>
-                                <select
+                                <Select
                                     value={formData.status}
                                     onChange={(event) => {
                                         const nextStatus = event.target.value;
@@ -2131,7 +2132,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     <option value="EN_CURSO">EN PROCESO</option>
                                     <option value="REALIZADA">REALIZADO</option>
                                     <option value="DEVUELTA">DEVUELTO</option>
-                                </select>
+                                </Select>
                             </div>
 
                             {/* Prioridad */}
@@ -2171,7 +2172,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                                                 transition={{ duration: 0.14 }}
-                                                className="absolute left-0 right-0 top-[calc(100%+6px)] z-[125] grid grid-cols-2 gap-2 rounded-xl border border-zinc-200/80 bg-white/95 p-2 shadow-xl shadow-zinc-950/10 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95 sm:grid-cols-4 sm:gap-1.5 sm:p-1.5"
+                                                className="brain-popover-surface absolute left-0 right-0 top-[calc(100%+6px)] z-[125] grid grid-cols-2 gap-2 p-2 sm:grid-cols-4 sm:gap-1.5 sm:p-1.5"
                                                 role="radiogroup"
                                                 aria-label="Nivel de prioridad"
                                             >
@@ -2753,7 +2754,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         }
                                     />
                                     {showInputEmojiPicker && (
-                                        <div className="absolute bottom-[105%] right-4 z-[90] w-[298px] bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-2xl p-2 animate-in slide-in-from-bottom-2 duration-150">
+                                        <div className="brain-popover-surface absolute bottom-[105%] right-4 z-[90] w-[298px] p-2 motion-safe:animate-in motion-safe:fade-in-0 duration-150">
                                             <div className="text-[10px] font-black uppercase tracking-wider text-zinc-400 mb-2 px-1">
                                                 Emojis aprobados
                                             </div>
