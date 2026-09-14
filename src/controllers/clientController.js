@@ -170,9 +170,7 @@ export const addLink = async (req, res) => {
         const link = await addClientLink(req.params.clientId, title, url);
         res.json(link);
     } catch (error) {
-        if (error.message === "MAX_LINKS_REACHED") {
-            return res.status(400).json({ error: "Límite de 5 enlaces alcanzado." });
-        }
+        console.error("[ClientController] Failed to create link:", error.response?.data || error.message || error);
         res.status(500).json({ error: "Failed to create link" });
     }
 };

@@ -281,7 +281,7 @@ model ClientFile {
   deletedAt   DateTime?
 }
 
-// Enlaces Clave del Cliente (Max 5 por cliente)
+// Enlaces Clave del Cliente
 model ClientLink {
   id        String   @id @default(uuid())
   clientId  String

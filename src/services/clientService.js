@@ -214,16 +214,6 @@ export async function getClientLinks(clientId) {
 export async function addClientLink(clientId, title, url) {
     if (!clientId || !title || !url) throw new Error("Missing required fields");
 
-    // 1. Check limit (Max 5)
-    const count = await prisma.clientLink.count({
-        where: { clientId }
-    });
-
-    if (count >= 5) {
-        throw new Error("MAX_LINKS_REACHED");
-    }
-
-    // 2. Create Link
     try {
         const link = await prisma.clientLink.create({
             data: {

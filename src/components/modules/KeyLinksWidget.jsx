@@ -90,8 +90,6 @@ const KeyLinksWidget = ({ clientId }) => {
         }
     };
 
-    const isLimitReached = links.length >= 5;
-
     const ensureAbsoluteUrl = (url) => {
         if (!url) return '#';
         if (url.startsWith('http://') || url.startsWith('https://')) {
@@ -108,62 +106,60 @@ const KeyLinksWidget = ({ clientId }) => {
                     Enlaces Clave
                 </h3>
 
-                {!isLimitReached && (
-                    <Dialog.Root open={isModalOpen} onOpenChange={setIsModalOpen}>
-                        <Dialog.Trigger asChild>
-                            <button
-                                className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md text-zinc-500 hover:text-indigo-600 transition-colors"
-                                title="Añadir enlace"
-                            >
-                                <Plus className="w-4 h-4" />
-                            </button>
-                        </Dialog.Trigger>
+                <Dialog.Root open={isModalOpen} onOpenChange={setIsModalOpen}>
+                    <Dialog.Trigger asChild>
+                        <button
+                            className="p-1.5 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-md text-zinc-500 hover:text-indigo-600 transition-colors"
+                            title="Añadir enlace"
+                        >
+                            <Plus className="w-4 h-4" />
+                        </button>
+                    </Dialog.Trigger>
 
-                        <Dialog.Portal>
-                            <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
-                            <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 p-6 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95 duration-200">
-                                <Dialog.Title className="text-lg font-semibold text-zinc-900 dark:text-white mb-4">
-                                    Nuevo Enlace
-                                </Dialog.Title>
+                    <Dialog.Portal>
+                        <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
+                        <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-sm bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 p-6 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95 duration-200">
+                            <Dialog.Title className="text-lg font-semibold text-zinc-900 dark:text-white mb-4">
+                                Nuevo Enlace
+                            </Dialog.Title>
 
-                                <form onSubmit={handleAddLink} className="space-y-4">
-                                    <div>
-                                        <label className="block text-xs font-medium text-zinc-500 mb-1">Nombre</label>
-                                        <input
-                                            value={newTitle}
-                                            onChange={(e) => setNewTitle(e.target.value)}
-                                            placeholder="Ej. Sitio Web"
-                                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                            autoFocus
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-xs font-medium text-zinc-500 mb-1">URL</label>
-                                        <input
-                                            value={newUrl}
-                                            onChange={(e) => setNewUrl(e.target.value)}
-                                            placeholder="https://..."
-                                            className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                                        />
-                                    </div>
+                            <form onSubmit={handleAddLink} className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-medium text-zinc-500 mb-1">Nombre</label>
+                                    <input
+                                        value={newTitle}
+                                        onChange={(e) => setNewTitle(e.target.value)}
+                                        placeholder="Ej. Sitio Web"
+                                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                        autoFocus
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-zinc-500 mb-1">URL</label>
+                                    <input
+                                        value={newUrl}
+                                        onChange={(e) => setNewUrl(e.target.value)}
+                                        placeholder="https://..."
+                                        className="w-full px-3 py-2 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                                    />
+                                </div>
 
-                                    <div className="flex justify-end gap-2 pt-2">
-                                        <Dialog.Close asChild>
-                                            <button type="button" className="px-3 py-2 text-zinc-500 hover:text-zinc-900 text-sm">Cancelar</button>
-                                        </Dialog.Close>
-                                        <button
-                                            type="submit"
-                                            disabled={isSubmitting || !newTitle || !newUrl}
-                                            className="px-3 py-2 bg-[#009EB9] hover:bg-[#008CA4] text-white rounded-xl text-sm font-medium flex items-center gap-2"
-                                        >
-                                            {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Guardar'}
-                                        </button>
-                                    </div>
-                                </form>
-                            </Dialog.Content>
-                        </Dialog.Portal>
-                    </Dialog.Root>
-                )}
+                                <div className="flex justify-end gap-2 pt-2">
+                                    <Dialog.Close asChild>
+                                        <button type="button" className="px-3 py-2 text-zinc-500 hover:text-zinc-900 text-sm">Cancelar</button>
+                                    </Dialog.Close>
+                                    <button
+                                        type="submit"
+                                        disabled={isSubmitting || !newTitle || !newUrl}
+                                        className="px-3 py-2 bg-[#009EB9] hover:bg-[#008CA4] text-white rounded-xl text-sm font-medium flex items-center gap-2"
+                                    >
+                                        {isSubmitting ? <Loader2 className="w-3 h-3 animate-spin" /> : 'Guardar'}
+                                    </button>
+                                </div>
+                            </form>
+                        </Dialog.Content>
+                    </Dialog.Portal>
+                </Dialog.Root>
             </div>
 
             <div className="space-y-2">
@@ -211,14 +207,6 @@ const KeyLinksWidget = ({ clientId }) => {
                     ))
                 )}
             </div>
-
-            {isLimitReached && (
-                <div className="mt-4 pt-3 border-t border-zinc-100 dark:border-white/5 text-center">
-                    <p className="text-xs text-amber-600 dark:text-amber-500 font-medium">
-                        Límite de enlaces alcanzado (5/5)
-                    </p>
-                </div>
-            )}
         </Card>
     );
 };
