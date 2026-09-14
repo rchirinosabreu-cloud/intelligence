@@ -1,10 +1,44 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
 import { createWelcomePreview } from '../../scripts/preview-welcome.js';
 let browser, preview;
 test.before(async () => { preview = await createWelcomePreview({ port: 0 }); browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true }); });
 test.after(async () => { await browser?.close(); await preview?.close(); });
+test('existing users without progress receive no automatic popup, including after reloading or entering quotations', async () => {
+  const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
+  page.setDefaultTimeout(10000); page.setDefaultNavigationTimeout(30000);
+  let acknowledgements = 0;
+  page.on('request', request => { if (request.method() === 'POST') acknowledgements++; });
+  await page.goto(`${preview.origin}/tests/fixtures/onboarding-runtime.html?existing`);
+  // A page link is actionable only after any Radix modal overlay is gone.
+  assert.equal(await page.getByRole('dialog').count(), 0);
+  await page.getByRole('link', { name: 'Cotizaciones' }).click();
+  const guideButton = page.getByRole('button', { name: 'Ver guía', exact: true });
+  await guideButton.waitFor();
+  assert.equal(await page.getByRole('dialog').count(), 0);
+  await mkdir('output/welcome', { recursive: true });
+  await page.screenshot({ path: 'output/welcome/existing-account-no-popup.png', fullPage: true });
+  await guideButton.click();
+  await page.getByRole('dialog', { name: 'Cotizaciones, paso a paso' }).waitFor();
+  await page.getByRole('button', { name: 'Omitir guía' }).click();
+  await page.getByRole('dialog').waitFor({ state: 'hidden' });
+  await page.reload();
+  await page.getByRole('link', { name: 'Cotizaciones' }).click();
+  await guideButton.waitFor();
+  assert.equal(await page.getByRole('dialog').count(), 0);
+  assert.equal(acknowledgements, 0); // Fixture fetch is in-memory, no real writes.
+  await page.close();
+});
+test('an older API response without enrollment never triggers a welcome', async () => {
+  const page = await browser.newPage(); page.setDefaultTimeout(10000); page.setDefaultNavigationTimeout(30000);
+  await page.goto(`${preview.origin}/tests/fixtures/onboarding-runtime.html?legacy`);
+  await page.getByRole('link', { name: 'Cotizaciones' }).click();
+  await page.getByRole('button', { name: 'Ver guía', exact: true }).waitFor();
+  assert.equal(await page.getByRole('dialog').count(), 0);
+  await page.close();
+});
 test('runtime acknowledges on the server, offers the allowed guide and stops when permission is revoked', async () => {
   const page = await browser.newPage(); page.setDefaultTimeout(10000);
   await page.goto(`${preview.origin}/tests/fixtures/onboarding-runtime.html`);

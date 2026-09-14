@@ -35,6 +35,7 @@ test('new accounts receive distinct temporary credentials only after transaction
   assert.equal(first.body.initialAccess.email, 'new@example.test');
   assert.equal(await bcrypt.compare(first.body.initialAccess.temporaryPassword, writes[0].password), true);
   assert.equal(writes[0].mustChangePassword, true);
+  assert.equal(writes[0].onboardingEligible, true);
   assert.equal(writes[0].modulePermissions.cotizaciones, true);
   assert.equal(first.headers['Cache-Control'], 'no-store, private');
   assert.equal(first.body.password, undefined);
@@ -91,6 +92,7 @@ test('initial access regeneration is an explicit admin action for pending active
   assert.equal(calls[0].where.mustChangePassword, true);
   assert.equal(calls[0].where.passwordChangedAt, null);
   assert.equal(calls[0].data.sessionVersion.increment, 1);
+  assert.equal(calls[0].data.onboardingEligible, true);
   assert.equal(calls[0].data.modulePermissions, undefined);
   assert.equal(JSON.stringify(calls).includes(res.body.initialAccess.temporaryPassword), false);
   for (const change of [{ mustChangePassword: false }, { passwordChangedAt: new Date() }, { isActive: false }, { sessionVersion: 1 }]) {

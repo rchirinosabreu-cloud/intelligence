@@ -120,7 +120,8 @@ router.post('/', async (req, res) => {
                         modulePermissions: sanitizedPerms,
                         hasFinancialAccess,
                         financialRole: resolvedFinancialRole,
-                        mustChangePassword: true
+                        mustChangePassword: true,
+                        onboardingEligible: true
                     }
                 });
             } else {

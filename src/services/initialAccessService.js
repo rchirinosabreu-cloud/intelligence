@@ -27,7 +27,7 @@ export async function prepareInitialAccess({ requester, memberId, confirmation, 
     }
     const changed = await tx.user.updateMany({
       where: { id: user.id, isActive: true, mustChangePassword: true, passwordChangedAt: null, sessionVersion: expectedSessionVersion, teamMember: { is: { id: memberId, isActive: true } } },
-      data: { password: credential.hash, sessionVersion: { increment: 1 } },
+      data: { password: credential.hash, sessionVersion: { increment: 1 }, onboardingEligible: true },
     });
     if (changed.count !== 1) fail('El acceso cambió durante la solicitud. Actualiza Equipo y vuelve a intentarlo.');
     const now = new Date();

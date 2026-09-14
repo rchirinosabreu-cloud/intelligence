@@ -7,6 +7,9 @@ export async function ensureOnboardingSchema(client) {
     await client.query("SET LOCAL lock_timeout = '5s'");
     await client.query("SET LOCAL statement_timeout = '60s'");
     await client.query('SELECT pg_advisory_xact_lock(20260914, 2)');
+    // Existing accounts stay excluded. Only explicit new-account provisioning opts in.
+    // Constant default: additive, no destructive reset of users or their guide history.
+    await client.query('ALTER TABLE "User" ADD COLUMN IF NOT EXISTS "onboardingEligible" BOOLEAN NOT NULL DEFAULT false');
     await client.query(`CREATE TABLE IF NOT EXISTS "UserGuideProgress" (
       "userId" TEXT NOT NULL REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE,
       "guideId" TEXT NOT NULL, "version" INTEGER NOT NULL CHECK ("version" > 0),

@@ -33,10 +33,11 @@ export function OnboardingProvider({ userId, pathname, blocked = false, onBlocki
     staleTime: 0, refetchInterval: 60000, refetchIntervalInBackground: false, retry: 1,
   });
   const user = !isError && data?.user?.id === userId ? data.user : null;
-  const needsWelcome = Boolean(user && !data.progress.welcome);
+  const autoOnboarding = data?.autoOnboarding === true;
+  const needsWelcome = Boolean(user && autoOnboarding && !data.progress.welcome);
   const canGuide = Boolean(user && (user.role === 'ADMIN' || user.modulePermissions?.cotizaciones === true));
   const atQuotations = pathname === '/cotizaciones';
-  const autoGuide = canGuide && atQuotations && !needsWelcome && !data.progress.cotizaciones && welcomeDismissedPath !== pathname;
+  const autoGuide = autoOnboarding && canGuide && atQuotations && !needsWelcome && !data.progress.cotizaciones && welcomeDismissedPath !== pathname;
   const welcomeOpen = needsWelcome && !blocked && !otherDialog;
   const guideOpen = canGuide && atQuotations && !needsWelcome && (manualGuide || autoGuide) && !blocked && !otherDialog;
   const isBlocking = Boolean(userId && isPending) || needsWelcome || guideOpen;

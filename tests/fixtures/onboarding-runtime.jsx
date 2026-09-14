@@ -17,10 +17,10 @@ window.fetch = async (input, options = {}) => {
     const body = JSON.parse(options.body); progress[body.guideId] = body.status;
     return Response.json({ userId: person.id, ...body });
   }
-  return Response.json({ user: person, progress });
+  return Response.json({ user: person, progress, autoOnboarding: params.has('legacy') ? undefined : !params.has('existing') });
 };
 function Demo() {
   const { pathname } = useLocation();
-  return <OnboardingProvider userId={person.id} pathname={pathname}><main className="p-8"><h1>Integración real · datos simulados</h1><nav className="my-8 flex gap-8"><Link to="/">Dashboard</Link><Link to="/cotizaciones">Cotizaciones</Link></nav><p>{pathname}</p><QuotationGuideButton /><button onClick={() => { person.modulePermissions.cotizaciones = false; query.invalidateQueries({ queryKey: ['onboarding', person.id] }); }}>Revocar permiso (prueba)</button></main></OnboardingProvider>;
+  return <OnboardingProvider userId={person.id} pathname={pathname}><main className="p-8"><h1>Integración real · datos simulados</h1><p>{params.has('existing') || params.has('legacy') ? 'Cuenta existente · sin bienvenida automática' : 'Cuenta nueva · primer acceso'}</p><nav className="my-8 flex gap-8"><Link to="/">Dashboard</Link><Link to="/cotizaciones">Cotizaciones</Link></nav><p>{pathname}</p><QuotationGuideButton /><button onClick={() => { person.modulePermissions.cotizaciones = false; query.invalidateQueries({ queryKey: ['onboarding', person.id] }); }}>Revocar permiso (prueba)</button></main></OnboardingProvider>;
 }
 createRoot(document.getElementById('root')).render(<QueryClientProvider client={query}><MemoryRouter><Demo /></MemoryRouter></QueryClientProvider>);

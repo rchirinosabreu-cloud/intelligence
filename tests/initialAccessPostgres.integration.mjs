@@ -56,6 +56,12 @@ test('real creation returns a unique temporary credential and preserves selected
   const stored = await db.user.findUnique({ where: { id: response.body.userId } });
   assert.equal(await bcrypt.compare(response.body.initialAccess.temporaryPassword, stored.password), true);
   assert.equal(stored.mustChangePassword, true); assert.equal(stored.modulePermissions.cotizaciones, true);
+  assert.equal(stored.onboardingEligible, true);
+  await assert.rejects(getOnboarding(stored.id, db), /Primero debes cambiar/);
+  await updateUserPassword(stored.id, response.body.initialAccess.temporaryPassword, 'New-user-personal-password!');
+  assert.equal((await getOnboarding(stored.id, db)).autoOnboarding, true);
+  await acknowledgeOnboarding(stored.id, { guideId: 'welcome', version: 1, status: 'COMPLETED' }, db);
+  assert.equal((await getOnboarding(stored.id, db)).progress.welcome, 'COMPLETED');
   assert.equal(response.body.password, undefined);
 });
 test('regeneration revokes prior credentials, reset codes and devices; personal password change closes the admin path', async () => {
@@ -66,6 +72,7 @@ test('regeneration revokes prior credentials, reset codes and devices; personal 
   assert.equal(await bcrypt.compare('Old-test-credential!', stored.password), false);
   assert.equal(await bcrypt.compare(access.initialAccess.temporaryPassword, stored.password), true);
   assert.equal(stored.sessionVersion, 1); assert.equal(stored.mustChangePassword, true);
+  assert.equal(stored.onboardingEligible, true);
   assert.deepEqual(stored.modulePermissions, pending.modulePermissions);
   assert.equal(await db.passwordResetCode.count({ where: { userId: pending.id, usedAt: null } }), 0);
   assert.equal(await db.pushSubscription.count({ where: { userId: pending.id, isActive: true } }), 0);
@@ -73,6 +80,7 @@ test('regeneration revokes prior credentials, reset codes and devices; personal 
   await updateUserPassword(pending.id, access.initialAccess.temporaryPassword, 'Private-only-user-password!');
   const changed = await db.user.findUnique({ where: { id: pending.id } });
   assert.equal(changed.mustChangePassword, false); assert.ok(changed.passwordChangedAt); assert.equal(changed.sessionVersion, 2);
+  assert.equal((await getOnboarding(pending.id, db)).autoOnboarding, true);
   await assert.rejects(prepareInitialAccess(request(2), db), /acceso inicial ya cambió/);
   const traces = await db.operationalTraceEvent.findMany({ where: { subjectUserId: pending.id } });
   assert.equal(traces.length, 1); assert.ok(!JSON.stringify(traces).includes(access.initialAccess.temporaryPassword));
@@ -96,12 +104,22 @@ test('two concurrent initial-access requests can return only one usable credenti
   assert.equal(await bcrypt.compare(key, stored.password), true); assert.equal(stored.sessionVersion, 3);
 });
 test('guide acknowledgements persist per user/version, serialize safely and respect permission revocation', async () => {
-  assert.deepEqual((await getOnboarding(personal.id, db)).progress, {});
+  assert.equal((await getOnboarding(personal.id, db)).autoOnboarding, false);
   await Promise.all(['COMPLETED', 'SKIPPED', 'COMPLETED'].map(status => acknowledgeOnboarding(personal.id, { guideId: 'cotizaciones', version: 1, status }, db)));
   assert.equal((await getOnboarding(personal.id, db)).progress.cotizaciones, 'COMPLETED');
   assert.equal(await db.userGuideProgress.count({ where: { userId: personal.id } }), 1);
-  assert.deepEqual((await getOnboarding(admin.id, db)).progress, {});
+  assert.equal((await getOnboarding(admin.id, db)).autoOnboarding, false);
   await db.user.update({ where: { id: personal.id }, data: { modulePermissions: {} } });
   await assert.rejects(acknowledgeOnboarding(personal.id, { guideId: 'cotizaciones', version: 1, status: 'COMPLETED' }, db), /No tienes acceso/);
   await assert.rejects(getOnboarding(pending.id, db), /Primero debes cambiar/);
+});
+test('schema reruns and password changes do not enroll existing users or fabricate guide history', async () => {
+  await ensureOnboardingSchema(sql);
+  assert.equal((await db.user.findUnique({ where: { id: admin.id } })).onboardingEligible, false);
+  await updateUserPassword(admin.id, 'Old-test-credential!', 'Existing-admin-changed-password!');
+  const onboarding = await getOnboarding(admin.id, db);
+  assert.equal(onboarding.autoOnboarding, false);
+  assert.deepEqual(onboarding.progress, { welcome: 'NOT_APPLICABLE', cotizaciones: 'NOT_APPLICABLE' });
+  assert.equal(await db.userGuideProgress.count({ where: { userId: admin.id } }), 0);
+  assert.equal((await db.user.findUnique({ where: { id: pending.id } })).onboardingEligible, true);
 });

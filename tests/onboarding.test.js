@@ -15,14 +15,37 @@ function setup(user = {}) {
   db.$transaction = async callback => callback(db);
   return { db, rows, person };
 }
-test('onboarding reflects current module grants and starts unacknowledged', async () => {
-  const { db } = setup(); const result = await getOnboarding('u1', db);
+test('new-account enrollment is distinct from empty guide progress', async () => {
+  const { db } = setup({ onboardingEligible: true }); const result = await getOnboarding('u1', db);
   assert.equal(result?.user?.id, 'u1');
   assert.equal(result.user.modulePermissions.cotizaciones, true);
   assert.deepEqual(result.progress, {});
+  assert.equal(result.autoOnboarding, true);
+});
+
+test('existing users, including admins, are not enrolled just because welcome history is missing', async () => {
+  for (const role of ['ADMIN', 'EDITOR']) {
+    const { db, rows } = setup({ role, onboardingEligible: false });
+    const result = await getOnboarding('u1', db);
+    assert.equal(result.autoOnboarding, false);
+    assert.deepEqual(result.progress, { welcome: 'NOT_APPLICABLE', cotizaciones: 'NOT_APPLICABLE' });
+    assert.equal(rows.size, 0); // Do not invent completion or write during reads.
+  }
+});
+test('legacy records with no enrollment field fail closed without guessing from names, role or password dates', async () => {
+  const { db } = setup({ name: 'Rodny', role: 'ADMIN', passwordChangedAt: new Date(), createdAt: new Date() });
+  assert.equal((await getOnboarding('u1', db)).autoOnboarding, false);
+});
+test('existing users cannot acknowledge a welcome they were not enrolled to receive', async () => {
+  const { db, rows } = setup({ onboardingEligible: false });
+  await assert.rejects(acknowledgeOnboarding('u1', { guideId: 'welcome', version: 1, status: 'COMPLETED' }, db), error => error.statusCode === 403);
+  assert.equal(rows.size, 0);
+  // An optional, manually opened module guide is still available.
+  await acknowledgeOnboarding('u1', { guideId: 'cotizaciones', version: 1, status: 'COMPLETED' }, db);
+  assert.equal(rows.size, 1);
 });
 test('completion persists by user and version and cannot be downgraded by skipping', async () => {
-  const { db } = setup();
+  const { db } = setup({ onboardingEligible: true });
   await acknowledgeOnboarding('u1', { guideId: 'cotizaciones', version: 1, status: 'COMPLETED' }, db);
   await acknowledgeOnboarding('u1', { guideId: 'cotizaciones', version: 1, status: 'SKIPPED' }, db);
   assert.equal((await getOnboarding('u1', db)).progress.cotizaciones, 'COMPLETED');

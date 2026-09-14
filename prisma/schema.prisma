@@ -73,6 +73,7 @@ model User {
   recognitionAwards           RecognitionAward[]
   recognitionDebt             RecognitionDebtState?
   guideProgress               UserGuideProgress[]
+  onboardingEligible          Boolean                 @default(false)
 }
 
 model UserGuideProgress {
