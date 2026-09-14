@@ -179,6 +179,7 @@ router.post('/tasks', taskController.createNewTask);
 router.post('/tasks/upload-temp', upload.single('file'), taskController.uploadTempFile);
 router.post('/tasks/reorder', taskController.reorderTasks);
 router.post('/tasks/:taskId/work-confirmation', taskController.confirmExcessiveTaskWork);
+router.post('/tasks/:taskId/alert-interaction', taskController.taskAlertInteractionHandler);
 router.post('/tasks/:taskId/returned-reminder/snooze', taskController.snoozeReturnedTaskReminder);
 router.patch('/tasks/:taskId', taskController.updateExistingTask);
 router.delete('/tasks/:taskId', taskController.deleteExistingTask);

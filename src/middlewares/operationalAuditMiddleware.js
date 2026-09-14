@@ -1,5 +1,5 @@
 import { recordOperationalTrace } from '../services/operationalTraceService.js';
-import { describePlatformMutation } from '../lib/operationalMutationLabels.js';
+import { describePlatformMutation, isInternalTraceRequest } from '../lib/operationalMutationLabels.js';
 export { describePlatformMutation } from '../lib/operationalMutationLabels.js';
 
 const mutationMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
@@ -16,7 +16,7 @@ export const operationalAuditMiddleware = (req, res, next) => {
   res.on('finish', () => {
     if (res.statusCode < 200 || res.statusCode >= 400) return;
     const pathname = String(req.originalUrl || req.url || '').split('?')[0];
-    if (pathname === '/api/login') return;
+    if (pathname === '/api/login' || isInternalTraceRequest(pathname)) return;
     if (alreadyCoveredByTaskTrace(method, pathname)) return;
     const details = describePlatformMutation({ method, pathname });
     const taskMatch = pathname.match(/^\/api\/tasks\/([^/]+)/);

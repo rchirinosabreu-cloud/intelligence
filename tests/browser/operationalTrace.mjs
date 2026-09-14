@@ -25,6 +25,9 @@ async function setup({ mobile = false, dark = false, fail = false } = {}) {
     { id: 'client', actor: users[0], metadata: { path: '/api/clients/:id', method: 'PATCH', module: 'Clientes', action: 'actualizó', resource: 'un registro de cliente' } },
     { id: 'manual', actor: users[0], eventType: 'TASK_LIST_SYNCED', metadata: { source: 'MANUAL', taskCount: 8 } },
     { id: 'automatic', actor: users[0], eventType: 'TASK_LIST_SYNCED', metadata: { source: 'AUTOMATIC', taskCount: 8 } },
+    { id: 'award', actor: users[1], eventType: 'RECOGNITION_GRANTED', metadata: { kind: 'FIRST_TASK' } },
+    { id: 'shown', actor: users[0], eventType: 'TASK_ALERT_SHOWN', metadata: { kind: 'EXCESSIVE', taskTitle: 'Diseñar parrilla' } },
+    { id: 'review', actor: users[0], eventType: 'TASK_ALERT_REVIEWED', metadata: { kind: 'EXCESSIVE', taskTitle: 'Diseñar parrilla' } },
   ].map(row => ({ eventType: 'PLATFORM_MUTATION', taskId: null, occurredAt: new Date('2026-09-14T12:17:00Z'), ...row, actorId: row.actor.id, subjectUserId: row.actor.id, subjectUser: row.actor }));
   await page.route('**/api/**', async route => {
     const url = new URL(route.request().url());
@@ -45,18 +48,18 @@ async function setup({ mobile = false, dark = false, fail = false } = {}) {
 test('trace removes search while preserving member, period and refresh controls', async () => {
   const { page, requests, errors } = await setup();
   try {
-    await page.getByText('Rodny Chirinos actualizó un registro de cliente en Clientes.', { exact: true }).waitFor();
+    await page.getByText('Rodny Chirinos actualizó los datos de un cliente.', { exact: true }).waitFor();
+    await page.getByRole('heading', { name: 'Historial de actividad' }).waitFor();
     assert.equal(await page.getByRole('textbox').count(), 0);
     assert.equal(await page.getByRole('button', { name: 'Buscar', exact: true }).count(), 0);
-    await page.getByText('Comprobación de reconocimientos', { exact: true }).waitFor();
-    await page.getByText('Francisco Villa realizó una solicitud en Minutas.', { exact: true }).waitFor();
-    await page.getByText('Actualización manual', { exact: true }).waitFor();
-    await page.getByText('Actualización automática', { exact: true }).waitFor();
-    assert.doesNotMatch(await page.locator('section').innerText(), /fireflies|recognitions|creó o ejecutó/);
+    await page.getByText('Francisco Villa recibió el reconocimiento “Buen comienzo”.', { exact: true }).waitFor();
+    await page.getByText('Rodny Chirinos actualizó la lista de tareas.', { exact: true }).waitFor();
+    await page.getByText('Rodny Chirinos seleccionó “Revisar tarea” en el aviso de más de 15 horas de “Diseñar parrilla”.', { exact: true }).waitFor();
+    assert.doesNotMatch(await page.locator('section').innerText(), /fireflies|recognitions|creó o ejecutó|Comprobación|Actualización automática|realizó una solicitud/);
     await page.locator('section').screenshot({ path: 'output/operational-trace/desktop-light.png' });
     await page.getByRole('combobox', { name: 'Miembro del equipo' }).click();
     await page.getByRole('option', { name: 'Rodny Chirinos' }).click();
-    await page.waitForFunction(() => !document.querySelector('section').textContent.includes('Francisco Villa realizó'));
+    await page.waitForFunction(() => !document.querySelector('section').textContent.includes('Francisco Villa recibió'));
     await page.getByRole('combobox', { name: 'Período' }).click();
     await Promise.all([
       page.waitForResponse(response => response.url().includes('days=30')),
@@ -78,16 +81,16 @@ test('trace removes search while preserving member, period and refresh controls'
 test('trace fits mobile dark mode and retains the native touch selectors', async () => {
   const { page, errors } = await setup({ mobile: true, dark: true });
   try {
-    await page.getByText('Solicitud de Minutas', { exact: true }).waitFor();
+    await page.getByText('Reconocimiento recibido', { exact: true }).waitFor();
     const member = page.locator('select#trace-user');
     assert.equal(await member.isVisible(), true);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await member.selectOption('rodny');
-    await page.waitForFunction(() => !document.querySelector('section').textContent.includes('Francisco Villa realizó'));
-    const description = page.getByText('El sistema comprobó si había avisos de reconocimiento pendientes para Rodny Chirinos.', { exact: true });
+    await page.waitForFunction(() => !document.querySelector('section').textContent.includes('Francisco Villa recibió'));
+    const description = page.getByText('Se le mostró a Rodny Chirinos un aviso porque “Diseñar parrilla” superó las 15 horas de trabajo.', { exact: true });
     assert.ok((await description.boundingBox()).width >= 240, 'mobile timestamps must not squeeze the description');
     await member.selectOption('');
-    await page.getByText('Francisco Villa realizó una solicitud en Minutas.', { exact: true }).waitFor();
+    await page.getByText('Francisco Villa recibió el reconocimiento “Buen comienzo”.', { exact: true }).waitFor();
     await page.screenshot({ path: 'output/operational-trace/mobile-dark.png' });
     assert.deepEqual(errors, []);
   } finally { await page.close(); }

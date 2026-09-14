@@ -23,6 +23,7 @@ export { getMyExcessiveTaskAlertsHandler as getMyExcessiveTaskAlerts } from './e
 export { confirmExcessiveTaskWorkHandler as confirmExcessiveTaskWork } from './excessiveTaskAlertController.js';
 export { getMyReturnedTaskAlertsHandler as getMyReturnedTaskAlerts } from './returnedTaskAlertController.js';
 export { snoozeReturnedTaskReminderHandler as snoozeReturnedTaskReminder } from './returnedTaskAlertController.js';
+export { taskAlertInteractionHandler } from './operationalTraceController.js';
 
 const COMMENT_MAX_LENGTH = 10_000;
 const taskCommentAuthorSelect = {

@@ -32,19 +32,14 @@ test('legacy recognition checks and acknowledgements are automatic, not user-cre
   ];
   const original = structuredClone(events);
   const result = await timeline(events);
-  assert.equal(result.timeline[0].displayLabel, 'Comprobación de reconocimientos');
-  assert.equal(result.timeline[0].description, 'El sistema comprobó si había avisos de reconocimiento pendientes para Rodny Chirinos.');
-  assert.equal(result.timeline[1].displayLabel, 'Aviso de reconocimiento');
-  assert.equal(result.timeline[1].description, 'El sistema confirmó la preparación de un aviso de reconocimiento para Rodny Chirinos.');
-  assert.equal(result.summary.platformMutations, 0);
-  assert.equal(result.summary.totalEvents, 2, 'keep the administrative evidence');
+  assert.equal(result.timeline.length, 0);
+  assert.equal(result.summary.totalEvents, 0);
   assert.deepEqual(events, original, 'do not rewrite stored history');
 });
 
 test('legacy Minutas proxy requests do not claim that a minute was created or successfully read', async () => {
   const result = await timeline([event('minutes', { module: 'fireflies', path: '/api/fireflies/graphql', method: 'POST', action: 'creó o ejecutó', resource: 'un registro' })]);
-  assert.equal(result.timeline[0].displayLabel, 'Solicitud de Minutas');
-  assert.equal(result.timeline[0].description, 'Rodny Chirinos realizó una solicitud en Minutas.');
+  assert.equal(result.timeline.length, 0);
   assert.equal(result.summary.platformMutations, 0);
 });
 
@@ -55,15 +50,13 @@ test('normal edits retain their action and legacy aliases without route evidence
     event('legacy-minutes', { module: 'fireflies', action: 'creó o ejecutó', resource: 'un registro' }),
     event('unknown', { module: 'unknown-internal-route', action: 'actualizó', resource: 'un registro' }),
   ]);
-  assert.equal(result.timeline[0].description, 'Rodny Chirinos actualizó un registro de cliente en Clientes.');
-  assert.equal(result.timeline[1].description, 'Se registró actividad en Logros recientes asociada a Rodny Chirinos.');
-  assert.equal(result.timeline[2].description, 'Se registró actividad en Minutas asociada a Rodny Chirinos.');
-  assert.equal(result.timeline[3].description, 'Rodny Chirinos actualizó un registro en la plataforma.');
-  assert.equal(result.summary.platformMutations, 2);
+  assert.equal(result.timeline[0].description, 'Rodny Chirinos actualizó los datos de un cliente.');
+  assert.equal(result.timeline.length, 1);
+  assert.equal(result.summary.platformMutations, 1);
 });
 
 test('a similarly named endpoint is not mistaken for an automatic recognition check', async () => {
   const result = await timeline([event('similar', { path: '/api/recognitions/claim-settings', method: 'PATCH', module: 'recognitions', action: 'actualizó', resource: 'un registro' })]);
-  assert.doesNotMatch(result.timeline[0].description, /comprobó si había/);
-  assert.equal(result.summary.platformMutations, 1);
+  assert.equal(result.timeline.length, 0, 'unclassified endpoint is not a known human action');
+  assert.equal(result.summary.platformMutations, 0);
 });

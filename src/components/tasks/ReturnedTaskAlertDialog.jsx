@@ -5,6 +5,7 @@ import { ArrowRight, Clock, TaskReturnIcon } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import useTaskAlertTrace from '@/hooks/useTaskAlertTrace';
 
 const formatElapsed = (elapsedMs) => {
   const totalMinutes = Math.max(0, Math.floor(Number(elapsedMs || 0) / 60_000));
@@ -35,6 +36,7 @@ export default function ReturnedTaskAlertDialog({
   const [snoozeError, setSnoozeError] = useState('');
   const firstName = String(userName || '').trim().split(/\s+/)[0];
   const isPreview = Array.isArray(previewTasks);
+  const alertTrace = useTaskAlertTrace({ userId, kind: 'RETURNED', isOpen, disabled: !enabled || isPreview });
   const { data, error: queryError, isLoading } = useQuery({
     queryKey: ['returned-task-alerts', userId],
     queryFn: async () => {
@@ -84,6 +86,7 @@ export default function ReturnedTaskAlertDialog({
   };
 
   const openTask = (taskId) => {
+    alertTrace.track(taskId, 'REVIEW');
     closeLocally();
     navigate(`/gestion?taskId=${taskId}${isPreview ? '&previewReturnedAlert=0' : ''}`);
   };
@@ -116,8 +119,9 @@ export default function ReturnedTaskAlertDialog({
   if (tasks.length === 0) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && closeLocally()}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { alertTrace.dismiss(); closeLocally(); } }}>
       <DialogContent
+        ref={alertTrace.rootRef}
         overlayClassName="z-[210]"
         className="z-[220] max-h-[calc(100dvh-1.5rem)] w-[calc(100%-1.5rem)] overflow-y-auto border-zinc-200 bg-white p-0 dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-xl"
       >
@@ -138,7 +142,7 @@ export default function ReturnedTaskAlertDialog({
 
         <div className="space-y-3 px-6 py-5">
           {tasks.map((task) => (
-            <div key={task.id} className="rounded-xl border border-destructive/40 bg-white p-3.5 dark:bg-zinc-950">
+            <div key={task.id} data-alert-task-id={task.id} className="rounded-xl border border-destructive/40 bg-white p-3.5 dark:bg-zinc-950">
               <div className="flex items-center gap-3">
                 <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-destructive/20 text-destructive">
                   <TaskReturnIcon className="h-4 w-4" aria-hidden="true" />

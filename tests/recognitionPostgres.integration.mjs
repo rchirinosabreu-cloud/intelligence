@@ -10,9 +10,16 @@ import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, 
 const url = process.env.TEST_DATABASE_URL;
 if (!url) throw new Error('TEST_DATABASE_URL required; never load .env.');
 const target = new URL(url);
+
+
 if (target.hostname !== '127.0.0.1' || target.port !== '55448' || target.pathname !== '/recognition_test' || target.username !== 'recognition_test') throw new Error('Refusing non-isolated recognition database.');
 const sql = new pg.Client({ connectionString: url });
 const db = new PrismaClient({ datasources: { db: { url } } });
+// Services with a shared Prisma client must be imported only AFTER the isolated target is validated.
+globalThis.prisma = db;
+process.env.DATABASE_URL = url;
+const { getOperationalTrace } = await import('../src/services/operationalTraceService.js');
+const { recordTaskAlertInteraction } = await import('../src/services/taskAlertInteractionService.js');
 const tables = ['User', 'TeamMember', 'Client', 'Task', 'TaskWorkCycle', 'ContentPlan', 'ContentItem', 'TaskComment', 'TaskAttachment', 'TaskFollower', 'TaskWorkSession', 'TaskCommentReaction', 'OperationalTraceEvent', 'Notification', 'PushSubscription', 'ContentItemFinalAsset'];
 let member, other, client;
 test.before(async () => {
@@ -58,6 +65,7 @@ test('concurrent completion has one team opener and rolls back an award with its
   const a = await task(), b = await task({ assigneeId: other.id });
   await Promise.all([complete(a.id, '2026-10-01T13:00:00Z'), complete(b.id, '2026-10-01T13:00:00Z')]);
   assert.equal((await awards({ kind: 'FIRST_TASK', dayKey: '2026-10-01' })).length, 1);
+  assert.equal(await db.operationalTraceEvent.count({ where: { eventType: 'RECOGNITION_GRANTED', taskId: { in: [a.id, b.id] } } }), 1);
   const c = await task();
   await assert.rejects(recognitionTransaction(db, async tx => {
     const at = new Date('2026-10-02T13:00:00Z');
@@ -67,6 +75,7 @@ test('concurrent completion has one team opener and rolls back an award with its
     throw new Error('Rollback intentionally');
   }), /Rollback intentionally/);
   assert.equal((await awards({ taskId: c.id })).length, 0);
+  assert.equal(await db.operationalTraceEvent.count({ where: { eventType: 'RECOGNITION_GRANTED', taskId: c.id } }), 0);
   assert.equal((await db.task.findUnique({ where: { id: c.id } })).status, 'PENDIENTE');
 });
 test('eight daily and fifty weekly count distinct first completions, never reopens or reassignments', async () => {
@@ -230,4 +239,31 @@ test('real native task completion reaches authenticated API and production popup
     const unauthenticated = await fetch(`${origin}/api/recognitions/claim`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
     assert.equal(unauthenticated.status, 401);
   } finally { await browser.close(); await vite.close(); }
+});
+
+test('human history filters in PostgreSQL before limit, keeping real actions despite newer polling noise', async () => {
+  const now = new Date('2027-04-01T17:00:00Z');
+  const recent = new Date('2027-04-01T16:00:00Z');
+  const first = await db.operationalTraceEvent.create({ data: { eventType: 'TASK_LIST_SYNCED', actorId: member.userId, subjectUserId: member.userId, occurredAt: recent, metadata: { source: 'MANUAL' } } });
+  await db.operationalTraceEvent.createMany({ data: Array.from({ length: 150 }, () => ({ eventType: 'PLATFORM_MUTATION', actorId: member.userId, subjectUserId: member.userId, occurredAt: now, metadata: { path: '/api/recognitions/claim', method: 'POST' } })) });
+  await db.operationalTraceEvent.create({ data: { eventType: 'PLATFORM_MUTATION', actorId: member.userId, subjectUserId: member.userId, occurredAt: new Date(recent.getTime() + 1000), metadata: { path: '/api/clients/:id', method: 'PATCH' } } });
+  const result = await getOperationalTrace({ db, requester: { role: 'ADMIN' }, filters: { days: 1, limit: 2, userId: member.userId }, now });
+  assert.equal(result.timeline.length, 2);
+  assert.equal(result.timeline[1].id, first.id);
+  assert.match(result.timeline[0].description, /actualizó los datos de un cliente/);
+  assert.equal(await db.operationalTraceEvent.count({ where: { occurredAt: now, eventType: 'PLATFORM_MUTATION' } }), 150, 'technical history is not deleted');
+});
+
+test('concurrent notice reports and actions persist once with their recipient and correlation', async () => {
+  const at = new Date('2027-04-02T17:00:00Z');
+  const t = await task({ status: 'EN_CURSO', startedAt: new Date(at.getTime() - 16 * 3600000) });
+  const noticeId = randomUUID();
+  const args = { db, userId: member.userId, taskId: t.id, kind: 'EXCESSIVE', noticeId, at };
+  await Promise.all(Array.from({ length: 4 }, () => recordTaskAlertInteraction({ ...args, action: 'SHOWN' })));
+  await Promise.all(Array.from({ length: 4 }, () => recordTaskAlertInteraction({ ...args, action: 'REVIEW' })));
+  const rows = await db.operationalTraceEvent.findMany({ where: { taskId: t.id } });
+  assert.equal(rows.length, 2);
+  assert.equal(rows.find(row => row.eventType === 'TASK_ALERT_SHOWN').actorId, null);
+  assert.equal(rows.find(row => row.eventType === 'TASK_ALERT_REVIEWED').metadata.noticeId, noticeId);
+  await assert.rejects(() => recordTaskAlertInteraction({ ...args, userId: other.userId, action: 'REVIEW' }), error => error.statusCode === 403);
 });

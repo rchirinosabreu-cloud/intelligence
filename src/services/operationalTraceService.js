@@ -1,8 +1,24 @@
 import prisma from '../lib/prisma.js';
-import { presentPlatformMutation } from '../lib/operationalMutationLabels.js';
+import { presentPlatformMutation, humanMutationWhere } from '../lib/operationalMutationLabels.js';
+import { recognitionLabels } from '../lib/recognitionPresentation.js';
 
 export const TRACE_RETENTION_DAYS = 365;
-export const TRACE_SYNC_THROTTLE_MS = 5 * 60 * 1000;
+
+const humanEventTypes = ['TASK_CREATED', 'TASK_ASSIGNED', 'TASK_UPDATED', 'TASK_OPENED', 'SESSION_STARTED',
+  'NOTIFICATION_READ', 'RECOGNITION_GRANTED', 'TASK_ALERT_SHOWN', 'TASK_ALERT_REVIEWED', 'TASK_ALERT_DISMISSED',
+  'TASK_EXCESSIVE_WORK_CONFIRMED', 'TASK_RETURNED_REMINDER_SNOOZED'];
+const personalSystemEvents = ['RECOGNITION_GRANTED', 'TASK_ALERT_SHOWN'];
+const humanEventWhere = () => ({ OR: [
+  { eventType: { in: humanEventTypes }, OR: [
+    { actorId: { not: null } }, { eventType: { in: personalSystemEvents }, subjectUserId: { not: null } },
+  ] },
+  { eventType: 'TASK_LIST_SYNCED', actorId: { not: null }, metadata: { path: ['source'], equals: 'MANUAL' } },
+  humanMutationWhere(),
+] });
+const isHumanEvent = event => (humanEventTypes.includes(event.eventType)
+    && (event.actorId || (personalSystemEvents.includes(event.eventType) && event.subjectUserId)))
+  || (event.eventType === 'TASK_LIST_SYNCED' && event.metadata?.source === 'MANUAL')
+  || (event.eventType === 'PLATFORM_MUTATION' && event.actorId && presentPlatformMutation(event.metadata).visible);
 
 const knownEventTypes = new Set([
   'TASK_CREATED',
@@ -91,25 +107,13 @@ export const recordOperationalTrace = async ({
 
 export const recordTaskListSync = async ({ userId, taskCount, source, now = new Date(), db = prisma }) => {
   const normalizedUserId = cleanId(userId);
-  if (!normalizedUserId) return null;
-  const syncSource = ['MANUAL', 'AUTOMATIC'].includes(source) ? source : 'UNKNOWN';
-  const recent = syncSource === 'MANUAL' ? null : await db.operationalTraceEvent.findFirst({
-    where: {
-      actorId: normalizedUserId,
-      eventType: 'TASK_LIST_SYNCED',
-      metadata: { path: ['source'], equals: syncSource },
-      occurredAt: { gte: new Date(now.getTime() - TRACE_SYNC_THROTTLE_MS) }
-    },
-    select: { id: true },
-    orderBy: { occurredAt: 'desc' }
-  });
-  if (recent) return null;
+  if (!normalizedUserId || source !== 'MANUAL') return null;
 
   return recordOperationalTrace({
     eventType: 'TASK_LIST_SYNCED',
     actorId: normalizedUserId,
     subjectUserId: normalizedUserId,
-    metadata: { taskCount: Math.max(0, Number(taskCount) || 0), source: syncSource },
+    metadata: { taskCount: Math.max(0, Number(taskCount) || 0), source: 'MANUAL' },
     occurredAt: now,
     db
   });
@@ -118,22 +122,27 @@ export const recordTaskListSync = async ({ userId, taskCount, source, now = new 
 const eventDescription = (event, task) => {
   const actor = event.actor?.name || 'Sistema';
   const subject = event.subjectUser?.name;
-  const taskName = task?.title ? `“${task.title}”` : 'una tarea';
+  const title = task?.title || event.metadata?.taskTitle;
+  const taskName = title ? `“${title}”` : 'una tarea';
+  const alertName = event.metadata?.kind === 'RETURNED' ? 'tarea devuelta' : 'más de 15 horas';
   switch (event.eventType) {
     case 'TASK_CREATED': return `${actor} creó ${taskName}.`;
     case 'TASK_ASSIGNED': return `${taskName} fue asignada a ${subject || 'un miembro del equipo'}.`;
     case 'TASK_UPDATED': return `${actor} actualizó ${taskName}.`;
     case 'TASK_OPENED': return `${actor} abrió ${taskName}.`;
-    case 'TASK_LIST_SYNCED': {
-      const count = event.metadata?.taskCount ?? 0;
-      if (event.metadata?.source === 'MANUAL') return `${actor} actualizó manualmente la lista de ${count} tareas en Gestión.`;
-      if (event.metadata?.source === 'AUTOMATIC') return `Gestión actualizó automáticamente la lista de ${count} tareas para ${actor}.`;
-      return `${actor} sincronizó ${count} tareas en Gestión.`;
-    }
+    case 'TASK_LIST_SYNCED': return `${actor} actualizó la lista de tareas.`;
+    case 'RECOGNITION_GRANTED': return `${subject || actor} recibió el reconocimiento “${recognitionLabels[event.metadata?.kind] || 'Reconocimiento del equipo'}”.`;
+    case 'TASK_ALERT_SHOWN': return event.metadata?.kind === 'RETURNED'
+      ? `Se le mostró a ${subject || actor} un recordatorio para revisar ${taskName}, que lleva más de una hora devuelta.`
+      : `Se le mostró a ${subject || actor} un aviso porque ${taskName} superó las 15 horas de trabajo.`;
+    case 'TASK_ALERT_REVIEWED': return `${actor} seleccionó “Revisar tarea” en el aviso de ${alertName} de ${taskName}.`;
+    case 'TASK_ALERT_DISMISSED': return `${actor} cerró el aviso de ${alertName} de ${taskName}.`;
+    case 'TASK_EXCESSIVE_WORK_CONFIRMED': return `${actor} seleccionó “Sigo trabajando” en el aviso de más de 15 horas de ${taskName}.`;
+    case 'TASK_RETURNED_REMINDER_SNOOZED': return `${actor} seleccionó “Recordarme más tarde” en el aviso de tarea devuelta de ${taskName}.`;
     case 'SESSION_STARTED': return `${actor} inició sesión en la plataforma.`;
     case 'PLATFORM_MUTATION': return presentPlatformMutation(event.metadata, actor).description;
     case 'NOTIFICATION_CREATED': return `Se generó una notificación para ${subject || 'un miembro del equipo'}.`;
-    case 'NOTIFICATION_READ': return `${subject || actor} leyó una notificación${task ? ` de ${taskName}` : ''}.`;
+    case 'NOTIFICATION_READ': return `${subject || actor} marcó una notificación como leída${task ? ` de ${taskName}` : ''}.`;
     default: return 'Actividad operativa registrada.';
   }
 };
@@ -167,11 +176,11 @@ export const getOperationalTrace = async ({
     matchingTaskIds = matchingTasks.map((task) => task.id);
   }
 
-  const where = { occurredAt: { gte: from, lte: now } };
+  const where = { occurredAt: { gte: from, lte: now }, AND: [humanEventWhere()] };
   if (userId) where.OR = [{ actorId: userId }, { subjectUserId: userId }];
   if (matchingTaskIds) where.taskId = { in: matchingTaskIds };
 
-  const [users, events] = await Promise.all([
+  const [users, candidates] = await Promise.all([
     db.user.findMany({
       where: { isActive: true },
       select: { id: true, name: true, role: true, avatarUrl: true },
@@ -188,6 +197,7 @@ export const getOperationalTrace = async ({
     })
   ]);
 
+  const events = candidates.filter(isHumanEvent);
   const taskIds = [...new Set(events.map((event) => event.taskId).filter(Boolean))];
   const tasks = taskIds.length
     ? await db.task.findMany({
@@ -218,7 +228,10 @@ export const getOperationalTrace = async ({
       return {
         ...event,
         displayLabel: event.eventType === 'PLATFORM_MUTATION' ? presentPlatformMutation(event.metadata).label
-          : event.eventType === 'TASK_LIST_SYNCED' ? ({ MANUAL: 'Actualización manual', AUTOMATIC: 'Actualización automática' }[event.metadata?.source] || null) : null,
+          : ({ TASK_LIST_SYNCED: 'Lista de tareas actualizada', RECOGNITION_GRANTED: 'Reconocimiento recibido',
+            TASK_ALERT_SHOWN: 'Aviso mostrado', TASK_ALERT_REVIEWED: 'Revisar tarea', TASK_ALERT_DISMISSED: 'Aviso cerrado',
+            TASK_EXCESSIVE_WORK_CONFIRMED: 'Sigo trabajando', TASK_RETURNED_REMINDER_SNOOZED: 'Recordarme más tarde',
+          }[event.eventType] || null),
         task: task ? { id: task.id, title: task.title, clientName: task.client?.name || null } : null,
         description: eventDescription(event, task)
       };

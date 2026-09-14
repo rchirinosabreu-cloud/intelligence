@@ -62,7 +62,12 @@ async function finishDebt(tx, userId, changedTask, at, mayAward) {
 async function insertAward(tx, { kind, recipientId, taskId = null, planId = null, at, evidence }) {
   const { day, week } = recognitionCalendar(at);
   const key = kind === 'FIRST_TASK' ? day : kind === 'EARLY_DELIVERY' ? taskId : kind === 'PLAN_APPROVED' ? planId : `${recipientId}:${kind === 'WEEKLY_FIFTY' ? week : day}`;
-  await tx.recognitionAward.createMany({ data: [{ id: randomUUID(), dedupeKey: `v1:${kind}:${key}`, kind, recipientId, taskId, planId, occurredAt: at, dayKey: day, weekKey: week, evidence }], skipDuplicates: true });
+  const id = randomUUID();
+  const inserted = await tx.recognitionAward.createMany({ data: [{ id, dedupeKey: `v1:${kind}:${key}`, kind, recipientId, taskId, planId, occurredAt: at, dayKey: day, weekKey: week, evidence }], skipDuplicates: true });
+  if (inserted.count) await tx.operationalTraceEvent.create({ data: {
+    eventType: 'RECOGNITION_GRANTED', actorId: null, subjectUserId: recipientId, taskId, occurredAt: at,
+    metadata: { recognitionId: id, kind, planId },
+  } });
 }
 
 export async function finishTaskRecognition(tx, before, after, at = new Date()) {

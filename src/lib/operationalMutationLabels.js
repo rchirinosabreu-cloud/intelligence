@@ -1,4 +1,4 @@
-// Public vocabulary for audit records. API route names are not product modules.
+// Only known human actions are presented. A successful POST may just be a background read.
 const moduleLabels = {
   activity: 'Actividad', boards: 'Inspiración', clients: 'Clientes', content: 'Parrillas',
   dashboard: 'Dashboard', feedback: 'Feedback', financials: 'Financiero', integrations: 'Integraciones',
@@ -6,72 +6,90 @@ const moduleLabels = {
   team: 'Equipo', user: 'Perfil', users: 'Usuarios', fireflies: 'Minutas', minutes: 'Minutas',
   'report-pdf': 'Minutas', drive: 'Minutas', recognitions: 'Logros recientes',
 };
-const publicNames = new Map(Object.values(moduleLabels).map(name => [name.toLowerCase(), name]));
-const moduleName = value => moduleLabels[value] || publicNames.get(String(value || '').toLowerCase()) || 'la plataforma';
 const routePath = value => String(value || '').split('?')[0].replace(/\/+$/, '');
-const moduleFromPath = pathname => moduleName(pathname.replace(/^\/api\/?/, '').split('/')[0]);
-const actionByMethod = { POST: 'creó o ejecutó', PUT: 'reemplazó', PATCH: 'actualizó', DELETE: 'eliminó' };
-
-const operationKind = (method, path) => {
-  if (method !== 'POST') return null;
-  if (path === '/api/recognitions/claim') return 'recognition-check';
-  if (/^\/api\/recognitions\/[^/]+\/acknowledge$/.test(path)) return 'recognition-notice';
-  if (path === '/api/fireflies/graphql') return 'minutes-request';
-  return null;
-};
-
-const resourceFromPath = pathname => {
-  if (pathname.includes('/comments')) return 'un comentario';
-  if (pathname.includes('/attachments') || pathname.includes('/files')) return 'un archivo';
-  if (pathname.includes('/tasks')) return 'una tarea';
-  if (pathname.includes('/activity')) return 'un evento';
-  if (pathname.includes('/financials')) return 'un registro financiero';
-  if (pathname.includes('/reports')) return 'un informe';
-  if (pathname.includes('/content')) return 'una parrilla o pieza';
-  if (pathname.includes('/clients')) return 'un registro de cliente';
-  if (pathname.includes('/team') || pathname.includes('/users')) return 'un usuario o miembro del equipo';
-  if (pathname.includes('/minutes')) return 'una minuta';
-  return 'un registro';
-};
+const entry = (method, path, label, phrase) => ({ method, path: path.replace(/:[a-zA-Z]+/g, ':id'), label, phrase,
+  pattern: new RegExp('^' + path.replace(/:[a-zA-Z]+/g, '[^/]+') + '$') });
+const crud = (path, label, noun, updateMethod = 'PATCH') => [
+  entry('POST', path, label, 'creó ' + noun),
+  entry(updateMethod, path + '/:id', label, 'actualizó ' + noun),
+  entry('DELETE', path + '/:id', label, 'eliminó ' + noun),
+];
+export const humanMutationCatalog = [
+  entry('DELETE', '/api/tasks/:id', 'Tarea eliminada', 'eliminó una tarea'),
+  entry('POST', '/api/tasks/reorder', 'Tareas organizadas', 'cambió el orden de las tareas'),
+  entry('POST', '/api/tasks/:id/toggle-follow', 'Seguimiento de tarea', 'cambió el seguimiento de una tarea'),
+  entry('POST', '/api/tasks/:id/comments', 'Comentario enviado', 'envió un comentario'),
+  entry('PATCH', '/api/tasks/:id/comments/:commentId', 'Comentario editado', 'editó un comentario'),
+  entry('DELETE', '/api/tasks/:id/comments/:commentId', 'Comentario eliminado', 'eliminó un comentario'),
+  entry('POST', '/api/tasks/:id/comments/:commentId/reactions', 'Reacción a comentario', 'cambió su reacción a un comentario'),
+  entry('POST', '/api/clients', 'Cliente creado', 'creó un cliente'),
+  entry('PATCH', '/api/clients/:id', 'Cliente actualizado', 'actualizó los datos de un cliente'),
+  entry('PATCH', '/api/clients/:id/archive', 'Cliente actualizado', 'cambió el estado de archivo de un cliente'),
+  entry('POST', '/api/clients/:id/health-comment', 'Comentario enviado', 'añadió un comentario sobre un cliente'),
+  entry('POST', '/api/dashboard/announcements', 'Anuncio publicado', 'publicó un anuncio'),
+  entry('PATCH', '/api/dashboard/announcements/:scope/:id', 'Anuncio editado', 'editó un anuncio'),
+  entry('DELETE', '/api/dashboard/announcements/:scope/:id', 'Anuncio eliminado', 'eliminó un anuncio'),
+  entry('POST', '/api/global-announcements', 'Anuncio publicado', 'publicó un anuncio'),
+  entry('DELETE', '/api/global-announcements/:id', 'Anuncio eliminado', 'eliminó un anuncio'),
+  entry('POST', '/api/clients/:id/announcements', 'Anuncio publicado', 'publicó un anuncio para un cliente'),
+  ...crud('/api/content/plans', 'Parrilla', 'una parrilla'),
+  ...crud('/api/content/items', 'Contenido', 'una pieza de contenido'),
+  entry('POST', '/api/content/plans/:id/share-token', 'Enlace de parrilla', 'creó un enlace para revisar una parrilla'),
+  entry('POST', '/api/content/items/:id/send-to-kanban', 'Contenido a producción', 'envió una pieza a producción'),
+  entry('POST', '/api/content/items/:id/final-asset', 'Archivo añadido', 'adjuntó un archivo a una pieza'),
+  entry('POST', '/api/content/items/:id/final-assets', 'Archivos añadidos', 'adjuntó archivos a una pieza'),
+  ...crud('/api/activity/events', 'Calendario', 'un evento del calendario'),
+  entry('POST', '/api/activity/events/generate-meet', 'Enlace de reunión', 'generó un enlace de reunión'),
+  entry('POST', '/api/quotations', 'Cotización creada', 'creó una cotización'),
+  entry('PUT', '/api/quotations/:id', 'Cotización actualizada', 'actualizó una cotización'),
+  ...crud('/api/services', 'Catálogo de servicios', 'un servicio', 'PUT'),
+  entry('POST', '/api/team', 'Equipo', 'añadió un miembro al equipo'),
+  entry('PUT', '/api/team/:id', 'Equipo', 'actualizó los datos de un miembro del equipo'),
+  entry('DELETE', '/api/team/:id', 'Equipo', 'eliminó un miembro del equipo'),
+  entry('PUT', '/api/user/profile', 'Perfil actualizado', 'actualizó su perfil'),
+  entry('PUT', '/api/user/profile/:id', 'Perfil actualizado', 'actualizó el perfil de un miembro del equipo'),
+  entry('PUT', '/api/user/password', 'Contraseña actualizada', 'cambió su contraseña'),
+  entry('POST', '/api/minutes/sync', 'Minutas actualizadas', 'actualizó la lista de minutas'),
+  entry('PATCH', '/api/minutes/:id/restore', 'Minuta restaurada', 'restauró una minuta'),
+  entry('DELETE', '/api/minutes/:id/permanent', 'Minuta eliminada', 'eliminó definitivamente una minuta'),
+  entry('DELETE', '/api/minutes/:id', 'Minuta archivada', 'envió una minuta a la papelera'),
+  entry('POST', '/api/report-pdf/render', 'Documento preparado', 'preparó un PDF de una minuta'),
+  entry('POST', '/api/reports/generate', 'Informe generado', 'generó un informe'),
+  entry('PATCH', '/api/reports/:id/metrics', 'Informe actualizado', 'actualizó las cifras de un informe'),
+  entry('POST', '/api/reports/:id/generate-narrative', 'Informe actualizado', 'generó el análisis de un informe'),
+  ...crud('/api/financials/records', 'Financiero', 'un movimiento financiero'),
+  entry('POST', '/api/financials/records/:id/void', 'Movimiento anulado', 'anuló un movimiento financiero'),
+  entry('POST', '/api/financials/receivables/:id/payments', 'Pago registrado', 'registró un pago de un cliente'),
+  entry('POST', '/api/financials/payroll/periods', 'Nómina preparada', 'generó un borrador de nómina'),
+  entry('POST', '/api/financials/payroll-transactions/:id/approve', 'Nómina aprobada', 'aprobó un pago de nómina'),
+  entry('POST', '/api/financials/payroll-transactions/:id/pay', 'Pago de nómina', 'registró un pago de nómina'),
+  entry('POST', '/api/financials/periods/close', 'Período cerrado', 'cerró un período financiero'),
+  entry('POST', '/api/financials/periods/reopen', 'Período reabierto', 'reabrió un período financiero'),
+];
+const findAction = (method, path) => humanMutationCatalog.find(action => action.method === method && action.pattern.test(routePath(path)));
 
 export const describePlatformMutation = ({ method, pathname }) => {
   const path = routePath(pathname);
-  const kind = operationKind(method, path);
-  const details = kind === 'recognition-check' ? { action: 'comprobó', resource: 'avisos de reconocimiento pendientes' }
-    : kind === 'recognition-notice' ? { action: 'preparó', resource: 'un aviso de reconocimiento' }
-      : kind === 'minutes-request' ? { action: 'realizó', resource: 'una solicitud' }
-        : { action: actionByMethod[method] || 'modificó', resource: resourceFromPath(path) };
+  const action = findAction(method, path);
   return {
-    ...details,
-    module: moduleFromPath(path),
-    path: path.replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, ':id').replace(/\/\d+(?=\/|$)/g, '/:id').slice(0, 240),
+    module: moduleLabels[path.replace(/^\/api\/?/, '').split('/')[0]] || 'la plataforma',
+    path: action?.path || path.replace(/[0-9a-f]{8}-[0-9a-f-]{27,}/gi, ':id').replace(/\/\d+(?=\/|$)/g, '/:id').slice(0, 240),
   };
 };
 
 export const presentPlatformMutation = (metadata = {}, actor = 'Sistema') => {
-  const path = routePath(metadata?.path);
-  const kind = operationKind(metadata?.method, path);
-  if (kind === 'recognition-check') return {
-    label: 'Comprobación de reconocimientos', isChange: false,
-    description: `El sistema comprobó si había avisos de reconocimiento pendientes para ${actor}.`,
-  };
-  if (kind === 'recognition-notice') return {
-    label: 'Aviso de reconocimiento', isChange: false,
-    // Acknowledgement precedes rendering; it does not prove the person saw the popup.
-    description: `El sistema confirmó la preparación de un aviso de reconocimiento para ${actor}.`,
-  };
-  if (kind === 'minutes-request') return {
-    label: 'Solicitud de Minutas', isChange: false,
-    // Historical records have no GraphQL operation/result. Do not invent creation or reading.
-    description: `${actor} realizó una solicitud en Minutas.`,
-  };
-  const module = path ? moduleFromPath(path) : moduleName(metadata?.module);
-  if (!path && ['fireflies', 'recognitions'].includes(metadata?.module)) return {
-    label: `Actividad de ${module}`, isChange: false,
-    description: `Se registró actividad en ${module} asociada a ${actor}.`,
-  };
-  return {
-    label: 'Acción registrada', isChange: true,
-    description: `${actor} ${metadata?.action || 'modificó'} ${metadata?.resource || 'un registro'} en ${module}.`,
-  };
+  const action = findAction(metadata?.method, metadata?.path);
+  if (!action) return { visible: false, isChange: false, label: null, description: null };
+  return { visible: true, isChange: true, label: action.label, description: actor + ' ' + action.phrase + '.' };
 };
+
+// Filter in PostgreSQL before take/limit; technical traffic must not bury people's actions.
+export const humanMutationWhere = () => ({ eventType: 'PLATFORM_MUTATION', actorId: { not: null }, OR:
+  humanMutationCatalog.map(({ method, path }) => ({ AND: [
+    { metadata: { path: ['path'], equals: path } }, { metadata: { path: ['method'], equals: method } },
+  ] })),
+});
+
+export const isInternalTraceRequest = pathname => /^\/api\/(recognitions(?:\/|$)|fireflies\/graphql$|push\/subscriptions(?:\/|$))/.test(routePath(pathname))
+  || /^\/api\/tasks\/[^/]+\/(trace-open|alert-interaction|work-confirmation|returned-reminder\/snooze)$/.test(routePath(pathname))
+  || /^\/api\/notifications(?:\/|$)/.test(routePath(pathname));

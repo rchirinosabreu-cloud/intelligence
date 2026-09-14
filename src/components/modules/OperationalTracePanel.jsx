@@ -21,9 +21,9 @@ const eventConfig = {
   TASK_ASSIGNED: { label: 'Tarea asignada', icon: User, tone: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-500/10 dark:text-cyan-300' },
   TASK_UPDATED: { label: 'Tarea actualizada', icon: Edit2, tone: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-300' },
   TASK_OPENED: { label: 'Tarea abierta', icon: Eye, tone: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-300' },
-  TASK_LIST_SYNCED: { label: 'Gestión sincronizada', icon: RefreshCw, tone: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-300' },
+  TASK_LIST_SYNCED: { label: 'Lista de tareas actualizada', icon: RefreshCw, tone: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-300' },
   NOTIFICATION_CREATED: { label: 'Notificación emitida', icon: Bell, tone: 'text-fuchsia-600 bg-fuchsia-50 dark:bg-fuchsia-500/10 dark:text-fuchsia-300' },
-  NOTIFICATION_READ: { label: 'Notificación leída', icon: CheckCircle2, tone: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-300' },
+  NOTIFICATION_READ: { label: 'Marcada como leída', icon: CheckCircle2, tone: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-300' },
   SESSION_STARTED: { label: 'Inicio de sesión', icon: User, tone: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-500/10 dark:text-cyan-300' },
   PLATFORM_MUTATION: { label: 'Acción registrada', icon: Activity, tone: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-300' }
 };
@@ -64,11 +64,11 @@ const OperationalTracePanel = () => {
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
             <div className="flex items-center gap-2 text-xs font-bold uppercase text-violet-600 dark:text-violet-400">
-              <Activity className="h-4 w-4" /> Evidencia administrativa
+              <Activity className="h-4 w-4" /> Actividad del equipo
             </div>
-            <h2 className="mt-2 text-xl font-bold text-zinc-950 dark:text-white">Trazabilidad operativa</h2>
+            <h2 className="mt-2 text-xl font-bold text-zinc-950 dark:text-white">Historial de actividad</h2>
             <p className="mt-1 max-w-2xl text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-              Línea de tiempo de inicios de sesión y cambios realizados en todos los módulos de la plataforma.
+              Acciones del equipo y avisos importantes, sin las comprobaciones automáticas del sistema.
             </p>
           </div>
 
@@ -112,7 +112,7 @@ const OperationalTracePanel = () => {
 
       {isLoading ? (
         <div className="flex min-h-64 items-center justify-center text-sm text-zinc-500 dark:text-zinc-400">
-          <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Consultando eventos...
+          <RefreshCw className="mr-2 h-4 w-4 animate-spin" /> Cargando actividad...
         </div>
       ) : error ? (
         <div className="p-6 text-sm text-destructive">{error.message}</div>
@@ -120,11 +120,11 @@ const OperationalTracePanel = () => {
         <>
           <div className="grid grid-cols-2 border-b border-zinc-100 dark:border-zinc-800 lg:grid-cols-5">
             {[
-              ['Eventos registrados', data?.summary.totalEvents || 0],
+              ['Acciones y avisos', data?.summary.totalEvents || 0],
               ['Inicios de sesión', data?.summary.sessionStarts || 0],
               ['Tareas abiertas', data?.summary.taskOpens || 0],
               ['Cambios en plataforma', data?.summary.platformMutations || 0],
-              ['Notificaciones leídas', data?.summary.notificationReads || 0]
+              ['Marcadas como leídas', data?.summary.notificationReads || 0]
             ].map(([label, value], index) => (
               <div key={label} className={cn('min-w-0 p-4 sm:p-5', index > 0 && 'border-l border-zinc-100 dark:border-zinc-800')}>
                 <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{label}</p>
@@ -139,7 +139,7 @@ const OperationalTracePanel = () => {
                 <div className="flex min-h-[360px] flex-col items-center justify-center p-6 text-center">
                   <List className="h-7 w-7 text-zinc-300 dark:text-zinc-600" />
                   <p className="mt-3 text-sm font-semibold text-zinc-700 dark:text-zinc-200">No hay eventos para estos filtros</p>
-                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">La trazabilidad comienza a registrarse desde esta versión.</p>
+                  <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Prueba otro período o miembro del equipo.</p>
                 </div>
               ) : data.timeline.map((event) => {
                 const config = eventConfig[event.eventType] || { label: 'Actividad', icon: Activity, tone: 'text-zinc-600 bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-300' };
@@ -165,6 +165,9 @@ const OperationalTracePanel = () => {
             </div>
 
           </div>
+          <p className="border-t border-zinc-100 px-5 py-3 text-xs text-zinc-500 dark:border-zinc-800 dark:text-zinc-400 sm:px-6">
+            Los contadores corresponden a esta lista: hasta 120 acciones y avisos recientes del período seleccionado.
+          </p>
         </>
       )}
     </section>

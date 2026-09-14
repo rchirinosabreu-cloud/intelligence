@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowRight, Clock } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import useTaskAlertTrace from '@/hooks/useTaskAlertTrace';
 
 const formatElapsed = (elapsedMs) => {
   const totalMinutes = Math.max(0, Math.floor(Number(elapsedMs || 0) / 60_000));
@@ -18,6 +19,7 @@ export default function ExcessiveTaskAlertDialog({ userId, userName, enabled = t
   const queryClient = useQueryClient();
   const [isOpen, setIsOpen] = useState(false);
   const [confirmationError, setConfirmationError] = useState('');
+  const alertTrace = useTaskAlertTrace({ userId, kind: 'EXCESSIVE', isOpen, disabled: !enabled });
   const firstName = String(userName || '').trim().split(/\s+/)[0];
   const { data } = useQuery({
     queryKey: ['excessive-task-alerts', userId],
@@ -54,6 +56,7 @@ export default function ExcessiveTaskAlertDialog({ userId, userName, enabled = t
   };
 
   const openTask = (taskId) => {
+    alertTrace.track(taskId, 'REVIEW');
     dismiss();
     navigate(`/gestion?taskId=${taskId}`);
   };
@@ -81,8 +84,9 @@ export default function ExcessiveTaskAlertDialog({ userId, userName, enabled = t
   if (tasks.length === 0) return null;
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => !open && dismiss()}>
+    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { alertTrace.dismiss(); dismiss(); } }}>
       <DialogContent
+        ref={alertTrace.rootRef}
         overlayClassName="z-[190]"
         className="z-[200] max-h-[calc(100vh-1.5rem)] w-[calc(100%-1.5rem)] overflow-y-auto border-zinc-200 bg-white p-0 dark:border-zinc-800 dark:bg-zinc-950 sm:max-w-xl"
       >
@@ -103,6 +107,7 @@ export default function ExcessiveTaskAlertDialog({ userId, userName, enabled = t
           {tasks.map((task) => (
             <div
               key={task.id}
+              data-alert-task-id={task.id}
               className="rounded-xl border border-zinc-200 p-3.5 dark:border-zinc-800"
             >
               <div className="flex items-center gap-3">

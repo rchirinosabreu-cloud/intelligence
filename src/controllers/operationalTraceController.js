@@ -1,5 +1,24 @@
 import prisma from '../lib/prisma.js';
 import { getOperationalTrace, recordOperationalTrace } from '../services/operationalTraceService.js';
+import { recordTaskAlertInteraction } from '../services/taskAlertInteractionService.js';
+
+export const createTaskAlertInteractionHandler = ({ db = prisma } = {}) => async (req, res) => {
+  try {
+    const userId = req.user?.userId || req.user?.id;
+    if (!userId) return res.status(401).json({ error: 'Debes iniciar sesión.' });
+    const body = req.body || {};
+    if (Array.isArray(body) || Object.keys(body).some(key => !['noticeId', 'kind', 'action'].includes(key))) {
+      return res.status(400).json({ error: 'El aviso no es válido.' });
+    }
+    const result = await recordTaskAlertInteraction({ db, userId, taskId: req.params.taskId,
+      noticeId: body.noticeId, kind: body.kind, action: body.action });
+    return res.json(result);
+  } catch (error) {
+    console.error('[TaskAlertInteraction]', error.response?.data || error.message);
+    return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No pudimos guardar la acción del aviso.' });
+  }
+};
+export const taskAlertInteractionHandler = createTaskAlertInteractionHandler();
 
 export const getOperationalTraceHandler = async (req, res) => {
   try {
