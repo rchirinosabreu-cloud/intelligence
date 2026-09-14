@@ -467,6 +467,7 @@ const NativeTasks = () => {
             setReintegrateNote('');
             await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
             queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+            queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
         } catch (err) {
             console.error('Error reintegrating task:', err);
             toast({ title: 'Error', description: 'No se pudo reintegrar la tarea.', variant: 'destructive' });

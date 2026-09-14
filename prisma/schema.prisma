@@ -1062,6 +1062,8 @@ model SystemStreak {
   highestStreak     Int       @default(0)
   lastResetAt       DateTime?
   lastIncrementedAt DateTime?
+  cleanSinceAt      DateTime? @db.Timestamptz()
+  trackingStartedAt DateTime? @db.Timestamptz()
   updatedAt         DateTime  @updatedAt
 }
 

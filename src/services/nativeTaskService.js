@@ -1,3 +1,4 @@
+import { resetSystemStreak, processSystemStreakDailyIncrement, recordQualityStreakTransition } from './qualityStreakService.js';
 import prisma from '../lib/prisma.js';
 import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, attachTaskRecognitions, recordPlanRecognition } from './recognitionService.js';
 import { createNotification, processMentionsAndNotifications } from './notificationService.js';
@@ -174,150 +175,7 @@ if (process.env.NODE_ENV !== 'test') {
     }
 }
 
-export const getOrCreateSystemStreak = async (tx = prisma) => {
-    let streak = await tx.systemStreak.findUnique({
-        where: { id: 'global' }
-    });
-    if (!streak) {
-        try {
-            streak = await tx.systemStreak.create({
-                data: {
-                    id: 'global',
-                    currentStreak: 0,
-                    highestStreak: 0
-                }
-            });
-        } catch (err) {
-            // Concurrent creation fallback
-            streak = await tx.systemStreak.findUnique({
-                where: { id: 'global' }
-            });
-        }
-    }
-    return streak;
-};
-
-export const resetSystemStreak = async (tx = prisma) => {
-    try {
-        const streak = await getOrCreateSystemStreak(tx);
-        await tx.systemStreak.update({
-            where: { id: streak.id },
-            data: {
-                currentStreak: 0,
-                lastResetAt: new Date()
-            }
-        });
-        console.log(`[SystemStreak] Reset current streak to 0 due to task devolution event at ${new Date().toISOString()}`);
-    } catch (err) {
-        console.error(`[SystemStreak] Error resetting system streak:`, err.message);
-    }
-};
-
-const isSameDayUTC = (d1, d2) => {
-    if (!d1 || !d2) return false;
-    return d1.getUTCFullYear() === d2.getUTCFullYear() &&
-           d1.getUTCMonth() === d2.getUTCMonth() &&
-           d1.getUTCDate() === d2.getUTCDate();
-};
-
-export const processSystemStreakDailyIncrement = async (tx = prisma) => {
-    try {
-        const streak = await getOrCreateSystemStreak(tx);
-        const now = new Date();
-
-        let lastInc = streak.lastIncrementedAt;
-        if (!lastInc) {
-            // Initialize to yesterday so we can start counting
-            lastInc = new Date(Date.now() - 24 * 60 * 60 * 1000);
-        }
-
-        // Find completed UTC dates between lastInc and now
-        let currentCheckDate = new Date(Date.UTC(
-            lastInc.getUTCFullYear(),
-            lastInc.getUTCMonth(),
-            lastInc.getUTCDate()
-        ));
-
-        // Advance by 1 day to get the first day to check
-        currentCheckDate.setUTCDate(currentCheckDate.getUTCDate() + 1);
-
-        let updatedCurrentStreak = streak.currentStreak;
-        let updatedHighestStreak = streak.highestStreak;
-        let didUpdate = false;
-
-        const todayUTC = new Date(Date.UTC(
-            now.getUTCFullYear(),
-            now.getUTCMonth(),
-            now.getUTCDate()
-        ));
-
-        // We check every completed day (any day strictly before today in UTC)
-        while (currentCheckDate < todayUTC) {
-            didUpdate = true;
-
-            // Did we have any resets on currentCheckDate?
-            const hadResetOnThisDay = streak.lastResetAt ? isSameDayUTC(streak.lastResetAt, currentCheckDate) : false;
-
-            if (!hadResetOnThisDay) {
-                updatedCurrentStreak += 1;
-                if (updatedCurrentStreak > updatedHighestStreak) {
-                    updatedHighestStreak = updatedCurrentStreak;
-                }
-            } else {
-                updatedCurrentStreak = 0;
-            }
-
-            // Move to next day
-            currentCheckDate.setUTCDate(currentCheckDate.getUTCDate() + 1);
-        }
-
-        if (didUpdate || !streak.lastIncrementedAt) {
-            await tx.systemStreak.update({
-                where: { id: streak.id },
-                data: {
-                    currentStreak: updatedCurrentStreak,
-                    highestStreak: updatedHighestStreak,
-                    lastIncrementedAt: now
-                }
-            });
-            console.log(`[SystemStreak] Daily closure check executed. Streak updated to ${updatedCurrentStreak} days (highest: ${updatedHighestStreak}).`);
-        }
-    } catch (err) {
-        console.error(`[SystemStreak] Error in processSystemStreakDailyIncrement:`, err.message);
-    }
-};
-
-export const getQualityStreak = async () => {
-    try {
-        // Run catch-up daily increment logic
-        await processSystemStreakDailyIncrement().catch(err => {
-            console.error("[SystemStreak] Failed to run catch-up daily increment:", err.message);
-        });
-
-        const streak = await getOrCreateSystemStreak();
-
-        // Fast count of active returned tasks
-        const currentReturnedTasksCount = await prisma.task.count({
-            where: {
-                status: 'DEVUELTA'
-            }
-        });
-
-        // AC2 & AC3 Check: If there are active returned tasks right now, current streak is forced to 0
-        const currentStreak = currentReturnedTasksCount > 0 ? 0 : streak.currentStreak;
-        const maxStreak = streak.highestStreak;
-
-        return {
-            currentStreak,
-            maxStreak,
-            currentStreakDays: currentStreak, // Backward compatibility
-            currentReturnedTasksCount
-        };
-    } catch (error) {
-        console.error("Error calculating quality streak:", error);
-        throw error;
-    }
-};
+export { getOrCreateSystemStreak, resetSystemStreak, processSystemStreakDailyIncrement, getQualityStreak } from './qualityStreakService.js';
 
 export const getTasks = async (clientId) => {
     try {
@@ -1093,6 +951,9 @@ export const updateTask = async (id, data, updaterId = null) => {
             }
         });
 
+        if (currentTask.status === 'DEVUELTA' && updatedTask.status !== 'DEVUELTA') {
+            await recordQualityStreakTransition(tx, currentTask, updatedTask);
+        }
         const recognitionAt = recognitionBefore?.task.status !== 'REALIZADA' && updatedTask.status === 'REALIZADA' ? updatedTask.completedAt : new Date();
         await finishTaskRecognition(tx, recognitionBefore, updatedTask, recognitionAt);
         if (updatedTask.contentItem) await recordPlanRecognition(tx, updatedTask.contentItem.planId, recognitionAt, { allowAward: false });
@@ -1283,7 +1144,7 @@ export const auditAndDeleteTask = async (id, reason, deletedByUserId = null) => 
             // 1. Get task data for the log
             const task = await tx.task.findUnique({
                 where: { id },
-                select: { title: true, clientId: true }
+                select: { title: true, clientId: true, status: true }
             });
 
             if (!task) {
@@ -1305,6 +1166,7 @@ export const auditAndDeleteTask = async (id, reason, deletedByUserId = null) => 
             await tx.task.delete({
                 where: { id }
             });
+            await recordQualityStreakTransition(tx, task, null);
             await finishTaskRecognition(tx, recognitionBefore, null);
 
             console.log(`[nativeTaskService] Task ${id} ("${task.title}") hard deleted with reason: ${reason}`);
@@ -1320,7 +1182,8 @@ export const deleteTask = async (id) => {
     try {
         await recognitionTransaction(prisma, async tx => {
             const recognitionBefore = await prepareTaskRecognition(tx, id);
-            await tx.task.delete({ where: { id } });
+            const deletedTask = await tx.task.delete({ where: { id } });
+            await recordQualityStreakTransition(tx, deletedTask, null);
             await finishTaskRecognition(tx, recognitionBefore, null);
         });
         return { success: true };

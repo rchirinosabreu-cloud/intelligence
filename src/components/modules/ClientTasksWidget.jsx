@@ -112,6 +112,7 @@ const ClientTasksWidget = ({ clientId }) => {
             if (!response.ok) throw new Error("Failed to update status");
 
             queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+            queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
         } catch (error) {
             console.error("Error toggling task:", error);
             // 3. REVERT
@@ -153,6 +154,7 @@ const ClientTasksWidget = ({ clientId }) => {
                 setDeleteReason('');
                 queryClient.invalidateQueries({ queryKey: ['nativeTasks', clientId] });
                 queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+                queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
             } else {
                 throw new Error("Failed to delete task");
             }
@@ -304,6 +306,7 @@ const ClientTasksWidget = ({ clientId }) => {
                 onSuccess={() => {
                     queryClient.invalidateQueries({ queryKey: ['nativeTasks', clientId] });
                     queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+                    queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
                 }}
                 clientsList={clientsList}
                 defaultClientId={clientId}
@@ -315,6 +318,7 @@ const ClientTasksWidget = ({ clientId }) => {
                 onSuccess={() => {
                     queryClient.invalidateQueries({ queryKey: ['nativeTasks', clientId] });
                     queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
+                    queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
                 }}
                 clientsList={clientsList}
                 taskData={editingTask}

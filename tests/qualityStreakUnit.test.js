@@ -1,209 +1,82 @@
 import test from 'node:test';
-import assert from 'node:assert';
-import prisma from '../src/lib/prisma.js';
-import {
-    getOrCreateSystemStreak,
-    resetSystemStreak,
-    processSystemStreakDailyIncrement,
-    getQualityStreak,
-    createTask,
-    updateTask
-} from '../src/services/nativeTaskService.js';
+import assert from 'node:assert/strict';
+import { getOrCreateSystemStreak, getQualityStreak, recordQualityStreakTransition } from '../src/services/qualityStreakService.js';
 
-test('SystemStreak Decoupled Quality Streak Tests', async (t) => {
-    // Backup and restore Prisma methods
-    const originalFindUniqueSystemStreak = prisma.systemStreak.findUnique;
-    const originalCreateSystemStreak = prisma.systemStreak.create;
-    const originalUpdateSystemStreak = prisma.systemStreak.update;
-    const originalCountTask = prisma.task.count;
-    const originalCreateTask = prisma.task.create;
-    const originalUpdateTask = prisma.task.update;
-    const originalFindUniqueTask = prisma.task.findUnique;
-    const originalCreateTaskComment = prisma.taskComment.create;
-    const originalCreateOperationalTrace = prisma.operationalTraceEvent.create;
-    const originalTransaction = prisma.$transaction;
+function database(row = null) {
+  let returned = 0;
+  const tx = {
+    systemStreak: {
+      findUnique: async () => row,
+      create: async ({ data }) => (row = { ...data }),
+      update: async ({ data }) => (row = { ...row, ...data }),
+    },
+    task: { count: async () => returned },
+    $executeRaw: async () => 1,
+  };
+  const db = { ...tx, $transaction: async work => work(tx) };
+  return { db, tx, row: () => row, returned: count => { returned = count; } };
+}
+const at = value => new Date(value);
 
-    prisma.$transaction = async (callback) => callback(prisma);
+test('first observed empty system starts at zero without retrospective days', async () => {
+  const state = database();
+  assert.equal((await getOrCreateSystemStreak(state.db)).id, 'global');
+  const result = await getQualityStreak(state.db, at('2026-09-14T15:00:00Z'));
+  assert.deepEqual(result, { currentStreak: 0, currentStreakDays: 0, maxStreak: 0, currentReturnedTasksCount: 0 });
+});
 
-    t.after(() => {
-        prisma.systemStreak.findUnique = originalFindUniqueSystemStreak;
-        prisma.systemStreak.create = originalCreateSystemStreak;
-        prisma.systemStreak.update = originalUpdateSystemStreak;
-        prisma.task.count = originalCountTask;
-        prisma.task.create = originalCreateTask;
-        prisma.task.update = originalUpdateTask;
-        prisma.task.findUnique = originalFindUniqueTask;
-        prisma.taskComment.create = originalCreateTaskComment;
-        prisma.operationalTraceEvent.create = originalCreateOperationalTrace;
-        prisma.$transaction = originalTransaction;
-    });
+test('daily reads count each complete clean day once, including consecutive polls', async () => {
+  const state = database();
+  await getQualityStreak(state.db, at('2026-09-14T15:00:00Z'));
+  for (const [time, days] of [['2026-09-15T05:00:00Z', 0], ['2026-09-16T05:00:00Z', 1], ['2026-09-17T05:00:00Z', 2]]) {
+    for (let poll = 0; poll < 2; poll++) {
+      const result = await getQualityStreak(state.db, at(time));
+      assert.equal(result.currentStreak, days);
+      assert.equal(result.maxStreak, days);
+    }
+  }
+});
 
-    await t.test('Test 1: getOrCreateSystemStreak creates record if not exists', async () => {
-        let createdRecord = null;
-        prisma.systemStreak.findUnique = async () => null;
-        prisma.systemStreak.create = async ({ data }) => {
-            createdRecord = data;
-            return { id: 'global', ...data };
-        };
+test('reintegration cannot reuse days accumulated before an open return', async () => {
+  const state = database();
+  await getQualityStreak(state.db, at('2026-09-10T05:00:00Z'));
+  const before = { status: 'PENDIENTE' }, returned = { status: 'DEVUELTA' };
+  state.returned(1);
+  await recordQualityStreakTransition(state.tx, before, returned, at('2026-09-12T18:00:00Z'));
+  assert.equal(state.row().highestStreak, 2);
+  await getQualityStreak(state.db, at('2026-09-14T15:00:00Z'));
+  state.returned(0);
+  await recordQualityStreakTransition(state.tx, returned, { status: 'EN_CURSO' }, at('2026-09-14T18:00:00Z'));
+  assert.equal(state.row().currentStreak, 0);
+  assert.equal(state.row().cleanSinceAt.toISOString(), '2026-09-14T18:00:00.000Z');
+  assert.equal((await getQualityStreak(state.db, at('2026-09-16T05:00:00Z'))).currentStreak, 1);
+});
 
-        const result = await getOrCreateSystemStreak();
-        assert.ok(result);
-        assert.strictEqual(result.id, 'global');
-        assert.strictEqual(result.currentStreak, 0);
-        assert.strictEqual(result.highestStreak, 0);
-        assert.strictEqual(createdRecord.id, 'global');
-    });
+test('removing one return while another remains never starts a clean period', async () => {
+  const state = database();
+  state.returned(1);
+  await recordQualityStreakTransition(state.tx, { status: 'DEVUELTA' }, null, at('2026-09-14T18:00:00Z'));
+  const result = await getQualityStreak(state.db, at('2026-09-20T18:00:00Z'));
+  assert.equal(result.currentReturnedTasksCount, 1);
+  assert.equal(result.currentStreak, 0);
+  assert.equal(result.maxStreak, 0);
+  assert.equal(state.row().cleanSinceAt, null);
+});
 
-    await t.test('Test 2: resetSystemStreak resets currentStreak and sets lastResetAt', async () => {
-        let updatedRecord = null;
-        prisma.systemStreak.findUnique = async () => ({
-            id: 'global',
-            currentStreak: 12,
-            highestStreak: 15,
-            lastResetAt: null,
-            lastIncrementedAt: null
-        });
-        prisma.systemStreak.update = async ({ where, data }) => {
-            updatedRecord = data;
-            return { id: 'global', ...data };
-        };
+test('unrelated edits and ordinary deletions preserve the current clean period', async () => {
+  const state = database();
+  await getQualityStreak(state.db, at('2026-09-10T05:00:00Z'));
+  const original = state.row().cleanSinceAt.toISOString();
+  await recordQualityStreakTransition(state.tx, { status: 'PENDIENTE' }, null, at('2026-09-14T18:00:00Z'));
+  await recordQualityStreakTransition(state.tx, { status: 'DEVUELTA' }, { status: 'DEVUELTA' }, at('2026-09-14T18:00:00Z'));
+  assert.equal(state.row().cleanSinceAt.toISOString(), original);
+});
 
-        await resetSystemStreak();
-        assert.ok(updatedRecord);
-        assert.strictEqual(updatedRecord.currentStreak, 0);
-        assert.ok(updatedRecord.lastResetAt);
-    });
-
-    await t.test('Test 3: Daily increment processes completed days cleanly', async () => {
-        const lastInc = new Date(Date.UTC(2026, 6, 15, 12, 0, 0)); // July 15, 2026
-        const now = new Date(Date.UTC(2026, 6, 18, 12, 0, 0)); // July 18, 2026 (3 completed days: July 15, 16, 17)
-
-        // Mock current time
-        const originalDate = Date;
-        global.Date = class extends originalDate {
-            constructor(...args) {
-                if (args.length === 0) return new originalDate(now.getTime());
-                return new originalDate(...args);
-            }
-            static now() {
-                return now.getTime();
-            }
-        };
-
-        try {
-            let updatedRecord = null;
-            prisma.systemStreak.findUnique = async () => ({
-                id: 'global',
-                currentStreak: 5,
-                highestStreak: 10,
-                lastResetAt: null,
-                lastIncrementedAt: lastInc
-            });
-            prisma.systemStreak.update = async ({ data }) => {
-                updatedRecord = data;
-                return { id: 'global', ...data };
-            };
-
-            await processSystemStreakDailyIncrement();
-
-            assert.ok(updatedRecord);
-            // From July 15 to July 18 is 2 full UTC days completed: July 16, 17.
-            // No resetAt was set, so currentStreak increases by 2 (from 5 to 7).
-            assert.strictEqual(updatedRecord.currentStreak, 7);
-            assert.strictEqual(updatedRecord.highestStreak, 10); // Still 10 since 8 < 10
-        } finally {
-            global.Date = originalDate;
-        }
-    });
-
-    await t.test('Test 4: Daily increment respects reset day', async () => {
-        const lastInc = new Date(Date.UTC(2026, 6, 15, 12, 0, 0)); // July 15
-        const lastReset = new Date(Date.UTC(2026, 6, 16, 10, 0, 0)); // Reset on July 16
-        const now = new Date(Date.UTC(2026, 6, 18, 12, 0, 0)); // July 18 (Completed days: July 15, 16, 17)
-
-        const originalDate = Date;
-        global.Date = class extends originalDate {
-            constructor(...args) {
-                if (args.length === 0) return new originalDate(now.getTime());
-                return new originalDate(...args);
-            }
-            static now() {
-                return now.getTime();
-            }
-        };
-
-        try {
-            let updatedRecord = null;
-            prisma.systemStreak.findUnique = async () => ({
-                id: 'global',
-                currentStreak: 5,
-                highestStreak: 10,
-                lastResetAt: lastReset,
-                lastIncrementedAt: lastInc
-            });
-            prisma.systemStreak.update = async ({ data }) => {
-                updatedRecord = data;
-                return { id: 'global', ...data };
-            };
-
-            await processSystemStreakDailyIncrement();
-
-            assert.ok(updatedRecord);
-            // Day 15: completed, no resets -> Streak = 5 + 1 = 6
-            // Day 16: completed, reset on 16 -> Streak reset to 0
-            // Day 17: completed, no resets -> Streak = 0 + 1 = 1
-            assert.strictEqual(updatedRecord.currentStreak, 1);
-        } finally {
-            global.Date = originalDate;
-        }
-    });
-
-    await t.test('Test 5: updateTask to DEVUELTA triggers streak reset', async () => {
-        prisma.task.findUnique = async () => ({
-            id: 'task-123',
-            status: 'PENDIENTE',
-            isReturned: false,
-            comments: '',
-            contentItemId: null
-        });
-
-        let updatedTaskPayload = null;
-        prisma.task.update = async ({ data }) => {
-            updatedTaskPayload = data;
-            return {
-                id: 'task-123',
-                status: 'DEVUELTA',
-                isReturned: true,
-                title: 'Transition Task'
-            };
-        };
-
-        let streakUpdated = null;
-        prisma.systemStreak.findUnique = async () => ({
-            id: 'global',
-            currentStreak: 10,
-            highestStreak: 12
-        });
-        prisma.systemStreak.update = async ({ data }) => {
-            streakUpdated = data;
-            return { id: 'global', ...data };
-        };
-        prisma.taskComment.create = async ({ data }) => ({ id: 'return-event', ...data });
-        prisma.operationalTraceEvent.create = async ({ data }) => ({ id: 'trace-event', ...data });
-
-        await updateTask('task-123', {
-            status: 'DEVUELTA',
-            returnReason: 'MISSING_INPUTS',
-            returnNote: 'Faltan los archivos necesarios para completar la tarea.'
-        }, 'user-456');
-
-        assert.ok(updatedTaskPayload);
-        assert.strictEqual(updatedTaskPayload.status, 'DEVUELTA');
-        assert.strictEqual(updatedTaskPayload.isReturned, true);
-
-        // Confirm streak was reset to 0 immediately
-        assert.ok(streakUpdated);
-        assert.strictEqual(streakUpdated.currentStreak, 0);
-        assert.ok(streakUpdated.lastResetAt);
-    });
+test('quality endpoint logs and propagates persistence failures instead of returning a stale streak', async t => {
+  const state = database();
+  const errors = t.mock.method(console, 'error', () => {});
+  state.tx.task.count = async () => { throw new Error('unavailable'); };
+  await assert.rejects(getQualityStreak(state.db), /unavailable/);
+  assert.equal(errors.mock.callCount(), 1);
+  assert.equal(errors.mock.calls[0].arguments[1].message, 'unavailable');
 });

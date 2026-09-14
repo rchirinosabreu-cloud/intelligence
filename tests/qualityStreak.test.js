@@ -4,6 +4,7 @@ import { getSafeTestDatabaseUrl } from './helpers/testDatabase.js';
 
 const testDatabaseUrl = getSafeTestDatabaseUrl();
 if (testDatabaseUrl) process.env.DATABASE_URL = testDatabaseUrl;
+process.env.NODE_ENV = 'test';
 const prisma = testDatabaseUrl ? (await import('../src/lib/prisma.js')).default : null;
 const taskService = testDatabaseUrl ? await import('../src/services/nativeTaskService.js') : {};
 const { getQualityStreak } = taskService;
@@ -76,14 +77,14 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
         await prisma.systemStreak.deleteMany().catch(() => {});
     });
 
-    await t.test('Test Case 1: Persisted streak is returned when no task is currently returned', async () => {
+    await t.test('Test Case 1: Legacy current streak starts from observed clean state without losing its record', async () => {
         if (!testDatabaseUrl) return;
 
         const streakResult = await getQualityStreak();
 
-        assert.strictEqual(streakResult.currentStreak, 10);
+        assert.strictEqual(streakResult.currentStreak, 0);
         assert.strictEqual(streakResult.currentReturnedTasksCount, 0);
-        // maxStreak should also be updated to 10
+        // Preserve the legacy record, but do not certify the legacy current streak.
         assert.strictEqual(streakResult.maxStreak, 10);
     });
 
@@ -111,7 +112,7 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
         await prisma.task.delete({ where: { id: testTaskReturned.id } });
     });
 
-    await t.test('Test Case 3: A resolved return does not reset the persisted streak again', async () => {
+    await t.test('Test Case 3: Removing the last returned task cannot resurrect legacy accumulated days', async () => {
         if (!testDatabaseUrl) return;
 
         // Create a task that was returned TODAY, but is now back to EN_CURSO
@@ -126,7 +127,7 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
 
         const streakResult = await getQualityStreak();
 
-        assert.strictEqual(streakResult.currentStreak, 10);
+        assert.strictEqual(streakResult.currentStreak, 0);
         assert.strictEqual(streakResult.currentReturnedTasksCount, 0);
         assert.strictEqual(streakResult.maxStreak, 10);
 
@@ -134,7 +135,7 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
         await prisma.task.delete({ where: { id: testTaskReturnedToday.id } });
     });
 
-    await t.test('Test Case 4: Historical returnedAt metadata does not replace the persisted streak', async () => {
+    await t.test('Test Case 4: Historical returnedAt metadata does not manufacture clean days', async () => {
         if (!testDatabaseUrl) return;
 
         // Create a task that was returned exactly 5 days ago, and is currently EN_CURSO
@@ -149,7 +150,7 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
 
         const streakResult = await getQualityStreak();
 
-        assert.strictEqual(streakResult.currentStreak, 10);
+        assert.strictEqual(streakResult.currentStreak, 0);
         assert.strictEqual(streakResult.currentReturnedTasksCount, 0);
         assert.strictEqual(streakResult.maxStreak, 10); // remains 10
 
@@ -160,11 +161,15 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
     await t.test('Test Case 5: Setting a new historical record', async () => {
         if (!testDatabaseUrl) return;
 
+        const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+        const cleanSince = new Date(new Date(`${today}T00:00:00-05:00`).getTime() - 15 * 24 * 60 * 60 * 1000);
         await prisma.systemStreak.update({
             where: { id: 'global' },
             data: {
-                currentStreak: 15,
-                highestStreak: 15,
+                currentStreak: 0,
+                highestStreak: 10,
+                trackingStartedAt: cleanSince,
+                cleanSinceAt: cleanSince,
                 lastIncrementedAt: new Date()
             }
         });
