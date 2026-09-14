@@ -15,7 +15,7 @@ after(async () => { await browser?.close(); await preview?.close(); });
 test('Gestion filters stay open through background refresh, keep selection and use the shared desktop picker', async () => {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
   let requests = 0;
-  await page.route('**/api/tasks', async route => {
+  await page.route('**/api/tasks?syncSource=*', async route => {
     requests++;
     const response = await route.fetch();
     const rows = await response.json();

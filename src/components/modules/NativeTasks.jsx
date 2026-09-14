@@ -219,6 +219,7 @@ const NativeTasks = () => {
     const [refreshConfirmed, setRefreshConfirmed] = useState(false);
     const defaultResponsibleValidatedRef = useRef(false);
     const refreshConfirmationTimerRef = useRef(null);
+    const manualRefreshRef = useRef(false);
     const tutorialHintTimerRef = useRef(null);
     const tutorialUserId = currentUser?.id || currentUser?.email || 'guest';
 
@@ -262,12 +263,18 @@ const NativeTasks = () => {
     }, []);
 
     const handleManualRefresh = async () => {
+        if (isFetching || manualRefreshRef.current) return;
         setRefreshConfirmed(false);
-        const result = await refetch();
-        if (result.error) return;
-        setRefreshConfirmed(true);
-        window.clearTimeout(refreshConfirmationTimerRef.current);
-        refreshConfirmationTimerRef.current = window.setTimeout(() => setRefreshConfirmed(false), 1400);
+        manualRefreshRef.current = true;
+        try {
+            const result = await refetch();
+            if (result.error) return;
+            setRefreshConfirmed(true);
+            window.clearTimeout(refreshConfirmationTimerRef.current);
+            refreshConfirmationTimerRef.current = window.setTimeout(() => setRefreshConfirmed(false), 1400);
+        } finally {
+            manualRefreshRef.current = false;
+        }
     };
 
     const {
@@ -278,9 +285,10 @@ const NativeTasks = () => {
         refetch,
     } = useQuery({
         queryKey: ['nativeTasks'],
-        queryFn: async () => {
+        queryFn: async ({ signal }) => {
             const baseUrl = getApiBaseUrl();
-            const response = await fetch(`${baseUrl}/api/tasks`);
+            const syncSource = manualRefreshRef.current ? 'MANUAL' : 'AUTOMATIC';
+            const response = await fetch(`${baseUrl}/api/tasks?syncSource=${syncSource}`, { signal });
             if (!response.ok) {
                 throw new Error(`Error ${response.status}: ${response.statusText}`);
             }

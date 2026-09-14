@@ -142,6 +142,19 @@ test('slug can change independently, with a visible warning before saving', asyn
     const slug = dialog.getByRole('textbox', { name: 'URL (slug)', exact: true });
     assert.equal(await slug.inputValue(), 'marca-original');
     const warning = dialog.getByText('Esto podría afectar otros enlaces.', { exact: true });
+    assert.equal(await warning.count(), 0, 'opening the dialog must not show a warning');
+    const name = dialog.getByRole('textbox', { name: 'Nombre del cliente' });
+    await name.fill('Nombre temporal');
+    assert.equal(await warning.count(), 0, 'editing only the name must not show a slug warning');
+    await name.fill('Marca de ejemplo');
+    await slug.focus();
+    assert.equal(await warning.count(), 0, 'focus without a change must not show a warning');
+    await slug.fill('marca-nueva');
+    assert.equal(await warning.isVisible(), true);
+    await slug.fill('marca-original');
+    assert.equal(await warning.count(), 0, 'restoring the original slug clears the warning');
+    assert.equal(await slug.evaluate(element => element.getAttribute('aria-describedby').split(/\s+/).every(id => !!document.getElementById(id))), true);
+    await slug.fill('marca-nueva');
     assert.equal(await warning.isVisible(), true);
     const colors = await warning.evaluate(element => {
       const reference = document.createElement('span');
@@ -152,7 +165,6 @@ test('slug can change independently, with a visible warning before saving', asyn
       return result;
     });
     assert.equal(colors.actual, colors.expected, 'the warning must use the global destructive color in light mode');
-    await slug.fill('marca-nueva');
     assert.equal(await dialog.getByRole('textbox', { name: 'Nombre del cliente' }).inputValue(), 'Marca de ejemplo');
     await dialog.screenshot({ path: 'output/client-edit/edit-slug.png', animations: 'disabled' });
     await dialog.getByRole('button', { name: 'Guardar cambios' }).click();

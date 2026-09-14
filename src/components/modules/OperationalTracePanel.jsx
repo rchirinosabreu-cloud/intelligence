@@ -4,7 +4,6 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
-import TeamAvatar from '@/components/ui/TeamAvatar';
 import {
   Activity,
   Bell,
@@ -14,7 +13,6 @@ import {
   List,
   Plus,
   RefreshCw,
-  Search,
   User
 } from '@/components/ui/icons';
 
@@ -43,15 +41,12 @@ const formatDateTime = (value) => value
 const OperationalTracePanel = () => {
   const [userId, setUserId] = useState('');
   const [days, setDays] = useState('7');
-  const [taskQuery, setTaskQuery] = useState('');
-  const [appliedTaskQuery, setAppliedTaskQuery] = useState('');
 
   const { data, isLoading, isFetching, error, refetch } = useQuery({
-    queryKey: ['operational-trace', userId, days, appliedTaskQuery],
+    queryKey: ['operational-trace', userId, days],
     queryFn: async () => {
       const params = new URLSearchParams({ days, limit: '120' });
       if (userId) params.set('userId', userId);
-      if (appliedTaskQuery) params.set('taskQuery', appliedTaskQuery);
       const response = await fetch(`${getApiBaseUrl()}/api/dashboard/operational-trace?${params}`, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` },
         cache: 'no-store'
@@ -62,11 +57,6 @@ const OperationalTracePanel = () => {
     },
     staleTime: 30_000
   });
-
-  const submitSearch = (event) => {
-    event.preventDefault();
-    setAppliedTaskQuery(taskQuery.trim());
-  };
 
   return (
     <section className="mt-4 rounded-lg border border-zinc-200/80 bg-white shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
@@ -82,7 +72,7 @@ const OperationalTracePanel = () => {
             </p>
           </div>
 
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="flex flex-col gap-2 sm:flex-row xl:shrink-0">
             <label className="sr-only" htmlFor="trace-user">Miembro del equipo</label>
             <Select
               id="trace-user"
@@ -105,23 +95,6 @@ const OperationalTracePanel = () => {
               <option value="7">Últimos 7 días</option>
               <option value="30">Últimos 30 días</option>
             </Select>
-
-            <form onSubmit={submitSearch} className="flex min-w-0 sm:w-72">
-              <label className="sr-only" htmlFor="trace-task-search">Buscar por tarea</label>
-              <div className="relative min-w-0 flex-1">
-                <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-zinc-400" />
-                <input
-                  id="trace-task-search"
-                  value={taskQuery}
-                  onChange={(event) => setTaskQuery(event.target.value)}
-                  placeholder="Buscar por tarea"
-                  className="h-10 w-full rounded-l-lg border border-r-0 border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-700 outline-none focus:border-violet-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
-                />
-              </div>
-              <button type="submit" className="h-10 rounded-r-lg bg-violet-600 px-3 text-sm font-semibold text-white hover:bg-violet-700">
-                Buscar
-              </button>
-            </form>
 
             <button
               type="button"
@@ -172,11 +145,11 @@ const OperationalTracePanel = () => {
                 const config = eventConfig[event.eventType] || { label: 'Actividad', icon: Activity, tone: 'text-zinc-600 bg-zinc-100 dark:bg-zinc-800 dark:text-zinc-300' };
                 const Icon = config.icon;
                 return (
-                  <div key={event.id} className="grid grid-cols-[auto_minmax(0,1fr)_auto] gap-3 border-b border-zinc-100 px-5 py-4 last:border-b-0 dark:border-zinc-800 sm:px-6">
+                  <div key={event.id} className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-2 border-b border-zinc-100 px-5 py-4 last:border-b-0 dark:border-zinc-800 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:px-6">
                     <span className={cn('flex h-9 w-9 items-center justify-center rounded-lg', config.tone)}><Icon className="h-4 w-4" /></span>
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="text-xs font-bold uppercase text-zinc-500 dark:text-zinc-400">{config.label}</span>
+                        <span className="text-xs font-bold uppercase text-zinc-500 dark:text-zinc-400">{event.displayLabel || config.label}</span>
                         {event.task && (
                           <Link to={`/gestion?taskId=${event.task.id}`} className="truncate text-xs font-semibold text-violet-600 hover:underline dark:text-violet-400">
                             {event.task.clientName ? `${event.task.clientName} · ` : ''}{event.task.title}
@@ -185,7 +158,7 @@ const OperationalTracePanel = () => {
                       </div>
                       <p className="mt-1 text-sm leading-5 text-zinc-700 dark:text-zinc-200">{event.description}</p>
                     </div>
-                    <time className="whitespace-nowrap text-xs text-zinc-400">{formatDateTime(event.occurredAt)}</time>
+                    <time className="col-start-2 whitespace-nowrap text-xs text-zinc-400 sm:col-auto">{formatDateTime(event.occurredAt)}</time>
                   </div>
                 );
               })}

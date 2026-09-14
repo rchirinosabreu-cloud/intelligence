@@ -1,5 +1,5 @@
 import Select from '@/components/ui/Select';
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Edit2, History, Loader2, Megaphone, Plus, Send, Trash2, X } from '@/components/ui/icons';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/button';
@@ -11,6 +11,7 @@ import SlideOver from '@/components/ui/SlideOver';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { APPROVED_EMOJIS } from '@/constants/approvedEmojis';
 import { cn } from '@/lib/utils';
+import { announcementsInWeek, getAnnouncementWeek } from '@/lib/announcementWeek';
 
 const formatAnnouncementDate = (value) => {
   if (!value) return '';
@@ -134,10 +135,31 @@ const DashboardAnnouncements = ({
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState(null);
   const [deleteCandidate, setDeleteCandidate] = useState(null);
+  const [announcementWeek, setAnnouncementWeek] = useState(() => getAnnouncementWeek());
+
+  useEffect(() => {
+    let timer;
+    const refreshWeek = () => {
+      const next = getAnnouncementWeek();
+      setAnnouncementWeek(current => current.start === next.start ? current : next);
+      window.clearTimeout(timer);
+      timer = window.setTimeout(refreshWeek, Math.max(1, next.end - Date.now() + 1));
+    };
+    refreshWeek();
+    // A sleeping/background tab also resets as soon as the person returns.
+    window.addEventListener('focus', refreshWeek);
+    document.addEventListener('visibilitychange', refreshWeek);
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('focus', refreshWeek);
+      document.removeEventListener('visibilitychange', refreshWeek);
+    };
+  }, []);
 
   const activeMembers = teamMembers.filter((member) => member.userId && member.isActive !== false);
   const canPublish = plainText.trim() && (editingAnnouncement || scope === 'GLOBAL' || targetUserId);
   const announcementGroups = groupAnnouncementsByDate(announcements);
+  const weeklyAnnouncements = announcementsInWeek(announcements, announcementWeek);
 
   const resetComposer = () => {
     setContent('');
@@ -225,7 +247,7 @@ const DashboardAnnouncements = ({
             </span>
             <div className="min-w-0">
               <h3 className="text-base font-semibold text-zinc-950 dark:text-white">Anuncios</h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">Información importante para ti</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">Información importante de esta semana</p>
             </div>
           </div>
           {canManage && (
@@ -242,15 +264,15 @@ const DashboardAnnouncements = ({
         </div>
 
         <div className="flex-1 overflow-y-auto min-h-0 p-4 space-y-3 custom-scrollbar">
-          {announcements.length > 0 ? (
-            announcements.slice(0, 3).map((announcement) => (
+          {weeklyAnnouncements.length > 0 ? (
+            weeklyAnnouncements.slice(0, 3).map((announcement) => (
               <AnnouncementCard key={`${announcement.scope}-${announcement.id}`} announcement={announcement} compact />
             ))
           ) : (
             <div className="h-full min-h-[190px] flex flex-col items-center justify-center text-center px-6">
               <Megaphone className="w-8 h-8 text-zinc-300 dark:text-zinc-700 mb-3" />
-              <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Sin anuncios por ahora</p>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Los avisos generales y personales aparecerán aquí.</p>
+              <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Sin anuncios esta semana</p>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">Los avisos generales y personales de esta semana aparecerán aquí.</p>
             </div>
           )}
         </div>

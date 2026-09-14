@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { presentPlatformMutation } from '../lib/operationalMutationLabels.js';
 
 export const TRACE_RETENTION_DAYS = 365;
 export const TRACE_SYNC_THROTTLE_MS = 5 * 60 * 1000;
@@ -88,13 +89,15 @@ export const recordOperationalTrace = async ({
   return event;
 };
 
-export const recordTaskListSync = async ({ userId, taskCount, now = new Date(), db = prisma }) => {
+export const recordTaskListSync = async ({ userId, taskCount, source, now = new Date(), db = prisma }) => {
   const normalizedUserId = cleanId(userId);
   if (!normalizedUserId) return null;
-  const recent = await db.operationalTraceEvent.findFirst({
+  const syncSource = ['MANUAL', 'AUTOMATIC'].includes(source) ? source : 'UNKNOWN';
+  const recent = syncSource === 'MANUAL' ? null : await db.operationalTraceEvent.findFirst({
     where: {
       actorId: normalizedUserId,
       eventType: 'TASK_LIST_SYNCED',
+      metadata: { path: ['source'], equals: syncSource },
       occurredAt: { gte: new Date(now.getTime() - TRACE_SYNC_THROTTLE_MS) }
     },
     select: { id: true },
@@ -106,7 +109,7 @@ export const recordTaskListSync = async ({ userId, taskCount, now = new Date(), 
     eventType: 'TASK_LIST_SYNCED',
     actorId: normalizedUserId,
     subjectUserId: normalizedUserId,
-    metadata: { taskCount: Math.max(0, Number(taskCount) || 0) },
+    metadata: { taskCount: Math.max(0, Number(taskCount) || 0), source: syncSource },
     occurredAt: now,
     db
   });
@@ -121,9 +124,14 @@ const eventDescription = (event, task) => {
     case 'TASK_ASSIGNED': return `${taskName} fue asignada a ${subject || 'un miembro del equipo'}.`;
     case 'TASK_UPDATED': return `${actor} actualizó ${taskName}.`;
     case 'TASK_OPENED': return `${actor} abrió ${taskName}.`;
-    case 'TASK_LIST_SYNCED': return `${actor} sincronizó ${event.metadata?.taskCount ?? 0} tareas en Gestión.`;
+    case 'TASK_LIST_SYNCED': {
+      const count = event.metadata?.taskCount ?? 0;
+      if (event.metadata?.source === 'MANUAL') return `${actor} actualizó manualmente la lista de ${count} tareas en Gestión.`;
+      if (event.metadata?.source === 'AUTOMATIC') return `Gestión actualizó automáticamente la lista de ${count} tareas para ${actor}.`;
+      return `${actor} sincronizó ${count} tareas en Gestión.`;
+    }
     case 'SESSION_STARTED': return `${actor} inició sesión en la plataforma.`;
-    case 'PLATFORM_MUTATION': return `${actor} ${event.metadata?.action || 'modificó'} ${event.metadata?.resource || 'un registro'} en ${event.metadata?.module || 'la plataforma'}.`;
+    case 'PLATFORM_MUTATION': return presentPlatformMutation(event.metadata, actor).description;
     case 'NOTIFICATION_CREATED': return `Se generó una notificación para ${subject || 'un miembro del equipo'}.`;
     case 'NOTIFICATION_READ': return `${subject || actor} leyó una notificación${task ? ` de ${taskName}` : ''}.`;
     default: return 'Actividad operativa registrada.';
@@ -200,7 +208,7 @@ export const getOperationalTrace = async ({
       syncs: events.filter((event) => event.eventType === 'TASK_LIST_SYNCED').length,
       taskOpens: events.filter((event) => event.eventType === 'TASK_OPENED').length,
       taskMutations: events.filter((event) => ['TASK_CREATED', 'TASK_ASSIGNED', 'TASK_UPDATED'].includes(event.eventType)).length,
-      platformMutations: events.filter((event) => event.eventType === 'PLATFORM_MUTATION').length,
+      platformMutations: events.filter((event) => event.eventType === 'PLATFORM_MUTATION' && presentPlatformMutation(event.metadata).isChange).length,
       sessionStarts: events.filter((event) => event.eventType === 'SESSION_STARTED').length,
       notificationReads: events.filter((event) => event.eventType === 'NOTIFICATION_READ').length,
       lastSyncAt: lastSync?.occurredAt?.toISOString?.() || lastSync?.occurredAt || null
@@ -209,6 +217,8 @@ export const getOperationalTrace = async ({
       const task = event.taskId ? tasksById.get(event.taskId) : null;
       return {
         ...event,
+        displayLabel: event.eventType === 'PLATFORM_MUTATION' ? presentPlatformMutation(event.metadata).label
+          : event.eventType === 'TASK_LIST_SYNCED' ? ({ MANUAL: 'Actualización manual', AUTOMATIC: 'Actualización automática' }[event.metadata?.source] || null) : null,
         task: task ? { id: task.id, title: task.title, clientName: task.client?.name || null } : null,
         description: eventDescription(event, task)
       };

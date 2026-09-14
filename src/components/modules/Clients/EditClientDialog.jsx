@@ -71,11 +71,11 @@ export default function EditClientDialog({ client, onSaved, onClose }) {
         <div className="space-y-2">
           <label htmlFor={slugId} className="block text-sm font-medium">URL (slug)</label>
           <input id={slugId} type="text" value={slug} disabled={saving} autoCapitalize="none" autoCorrect="off" spellCheck={false}
-            aria-invalid={!slugValid} aria-describedby={`${slugWarningId} ${slugHelpId}`}
+            aria-invalid={!slugValid} aria-describedby={slugChanged ? `${slugWarningId} ${slugHelpId}` : slugHelpId}
             onChange={event => { setSlug(event.target.value); setError(''); }}
             className="min-h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60" />
           <p id={slugHelpId} className="text-sm text-muted-foreground">{clientSlugHelp}</p>
-          <p id={slugWarningId} className="text-sm text-destructive brain-destructive-text">Esto podría afectar otros enlaces.</p>
+          {slugChanged && <p id={slugWarningId} className="text-sm text-destructive brain-destructive-text">Esto podría afectar otros enlaces.</p>}
         </div>
         {error && <p id={errorId} role="alert" className="text-sm text-destructive brain-destructive-text">{error}</p>}
         <div className="flex justify-end gap-2">

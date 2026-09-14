@@ -53,7 +53,7 @@ test('operational trace API and UI remain exclusive to administrators', async ()
   assert.match(routes, /operational-trace', requireRole\('ADMIN'\)/);
   assert.match(health, /<OperationalTracePanel/);
   assert.match(panel, /Trazabilidad operativa/);
-  assert.match(panel, /Buscar por tarea/);
+  assert.doesNotMatch(panel, /Buscar por tarea|submitSearch|appliedTaskQuery/);
   assert.match(panel, /Eventos registrados/);
   assert.match(panel, /queryKey:\s*\['operational-trace'/);
   assert.doesNotMatch(panel, /Lectura del diagnóstico/);

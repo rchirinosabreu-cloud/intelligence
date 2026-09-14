@@ -80,7 +80,7 @@ export const getAllTasks = async (req, res) => {
     try {
         const tasks = await getTasks(req.query.clientId);
         res.json(tasks);
-        recordTaskListSync({ userId: req.user?.userId, taskCount: tasks.length }).catch((error) => {
+        recordTaskListSync({ userId: req.user?.userId, taskCount: tasks.length, source: req.query.syncSource }).catch((error) => {
             console.error('[TaskController] Task sync trace failed:', error?.message || error);
         });
     } catch (error) {
