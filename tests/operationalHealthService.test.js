@@ -18,10 +18,10 @@ test('operational health turns real work into adoption, quality and actionable i
   const snapshot = service.buildOperationalHealthSnapshot({
     now: new Date('2026-08-12T15:00:00.000Z'),
     users: [
-      { id: 'u1', name: 'Ana', role: 'EDITOR', isActive: true, teamMember: { id: 'm1' } },
-      { id: 'u2', name: 'Luis', role: 'EDITOR', isActive: true, teamMember: { id: 'm2' } },
-      { id: 'u3', name: 'Sara', role: 'PROJECT_MANAGER', isActive: true, teamMember: { id: 'm3' } },
-      { id: 'u4', name: 'Meli', role: 'VIEWER', isActive: true, teamMember: { id: 'm4' } }
+      { id: 'u1', name: 'Ana', role: 'EDITOR', isActive: true, teamMember: { id: 'm1', isActive: true } },
+      { id: 'u2', name: 'Luis', role: 'EDITOR', isActive: true, teamMember: { id: 'm2', isActive: true } },
+      { id: 'u3', name: 'Sara', role: 'PROJECT_MANAGER', isActive: true, teamMember: { id: 'm3', isActive: true } },
+      { id: 'u4', name: 'Meli', role: 'VIEWER', isActive: true, teamMember: { id: 'm4', isActive: true } }
     ],
     tasks: [
       {

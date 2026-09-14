@@ -65,6 +65,7 @@ test('push delivery respects preferences and removes expired browser subscriptio
   const deletes = [];
   const updates = [];
   const db = {
+    user: { findFirst: async () => ({ id: 'user-1' }) },
     pushSubscription: {
       findMany: async () => [
         {
@@ -134,6 +135,7 @@ test('internal notification persistence succeeds even if external push delivery 
   };
   let pushAttempts = 0;
   const db = {
+    user: { findFirst: async () => ({ id: 'user-1' }) },
     notification: {
       create: async () => created
     }

@@ -1,4 +1,5 @@
 import { calculateQuotationTotals } from './quotationDomainService.js';
+import { activeTeamUserWhere } from './teamRosterService.js';
 
 export class QuotationAcceptanceError extends Error {
   constructor(message, statusCode) {
@@ -110,7 +111,7 @@ export const acceptQuotationBySlug = async ({ db, slug, scenarioId, expectedUpda
     };
     const recipients = await tx.user.findMany({
       where: {
-        isActive: true,
+        ...activeTeamUserWhere(),
         role: { in: ['ADMIN', 'PROJECT_MANAGER'] }
       },
       select: { id: true }

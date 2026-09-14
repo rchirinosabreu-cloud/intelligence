@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import prisma from '../lib/prisma.js';
+import { isActiveTeamUser } from '../services/teamRosterService.js';
 import { getJwtSecret, hasModulePermission, isManagerRole } from '../config/security.js';
 import { hasFinancialPermission } from '../utils/financialPermissions.js';
 
@@ -57,6 +58,7 @@ export const authenticateToken = async (req, res, next) => {
         id: true,
         role: true,
         isActive: true,
+        teamMember: { select: { isActive: true } },
         sessionVersion: true,
         mustChangePassword: true,
         modulePermissions: true,
@@ -65,7 +67,7 @@ export const authenticateToken = async (req, res, next) => {
       }
     });
 
-    if (!dbUser || dbUser.isActive === false) {
+    if (!isActiveTeamUser(dbUser)) {
       return res.status(401).json({
         error: "Unauthorized",
         message: "User session is no longer active",

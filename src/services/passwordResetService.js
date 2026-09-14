@@ -1,6 +1,7 @@
 import bcrypt from 'bcryptjs';
 import { randomInt } from 'node:crypto';
 import prisma from '../lib/prisma.js';
+import { isActiveTeamUser } from './teamRosterService.js';
 import { sendPasswordResetCode } from './passwordResetEmailService.js';
 
 export const PASSWORD_RESET_PUBLIC_MESSAGE = 'Si el correo existe, enviaremos un codigo de recuperacion.';
@@ -32,7 +33,7 @@ const buildDefaultDependencies = () => ({
   hashValue: (value) => bcrypt.hash(value, 10),
   compareValue: (value, hash) => bcrypt.compare(value, hash),
   userRepository: {
-    findByEmail: (email) => prisma.user.findUnique({ where: { email } })
+    findByEmail: (email) => prisma.user.findUnique({ where: { email }, include: { teamMember: { select: { isActive: true } } } })
   },
   resetCodeRepository: {
     create: (data) => prisma.passwordResetCode.create({ data }),
@@ -77,7 +78,7 @@ export const requestPasswordReset = async ({ email }, dependencies = buildDefaul
   }
 
   const user = await dependencies.userRepository.findByEmail(normalizedEmail);
-  if (!user) {
+  if (!isActiveTeamUser(user)) {
     return { message: PASSWORD_RESET_PUBLIC_MESSAGE };
   }
 
@@ -134,7 +135,7 @@ export const completePasswordReset = async (
   }
 
   const user = await dependencies.userRepository.findByEmail(normalizedEmail);
-  if (!user) {
+  if (!isActiveTeamUser(user)) {
     throw new PasswordResetError('Codigo invalido o expirado');
   }
 

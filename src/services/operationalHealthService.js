@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { readParticipationRoster } from './teamRosterService.js';
 import { getVisibleOperationalEventWhere, isVisibleOperationalEvent } from './operationalEventVisibility.js';
 
 const BOGOTA_OFFSET_MS = 5 * 60 * 60 * 1000;
@@ -145,7 +146,7 @@ export const buildOperationalHealthSnapshot = ({
   clients = []
 }) => {
   const windows = getBogotaWeekWindows(now);
-  const activeUsers = users.filter((user) => user.isActive !== false);
+  const activeUsers = users.filter((user) => user.isActive === true && user.teamMember?.isActive === true);
   const userByTeamMemberId = new Map(
     activeUsers.filter((user) => user.teamMember?.id).map((user) => [user.teamMember.id, user.id])
   );
@@ -345,13 +346,7 @@ export const getOperationalHealth = async ({ requester, now = new Date(), db = p
     flowMessages,
     clients
   ] = await Promise.all([
-    db.user.findMany({
-      where: { isActive: true },
-      select: {
-        id: true, name: true, role: true, avatarUrl: true, isActive: true,
-        teamMember: { select: { id: true } }
-      }
-    }),
+    readParticipationRoster(db),
     db.task.findMany({
       where: {
         OR: [

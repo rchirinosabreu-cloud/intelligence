@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { activeTeamUserWhere } from './teamRosterService.js';
 import { presentPlatformMutation, humanMutationWhere } from '../lib/operationalMutationLabels.js';
 import { recognitionLabels } from '../lib/recognitionPresentation.js';
 
@@ -182,8 +183,8 @@ export const getOperationalTrace = async ({
 
   const [users, candidates] = await Promise.all([
     db.user.findMany({
-      where: { isActive: true },
-      select: { id: true, name: true, role: true, avatarUrl: true },
+      where: activeTeamUserWhere(),
+      select: { id: true, name: true, role: true, avatarUrl: true, teamMember: { select: { name: true, avatarUrl: true } } },
       orderBy: { name: 'asc' }
     }),
     db.operationalTraceEvent.findMany({
@@ -212,7 +213,7 @@ export const getOperationalTrace = async ({
     generatedAt: now.toISOString(),
     retentionDays: TRACE_RETENTION_DAYS,
     period: { from: from.toISOString(), to: now.toISOString(), days },
-    users,
+    users: users.map(user => ({ id: user.id, name: user.teamMember?.name || user.name, role: user.role, avatarUrl: user.teamMember?.avatarUrl || user.avatarUrl })),
     summary: {
       totalEvents: events.length,
       syncs: events.filter((event) => event.eventType === 'TASK_LIST_SYNCED').length,

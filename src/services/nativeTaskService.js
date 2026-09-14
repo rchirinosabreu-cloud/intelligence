@@ -1,5 +1,6 @@
 import { resetSystemStreak, processSystemStreakDailyIncrement, recordQualityStreakTransition } from './qualityStreakService.js';
 import prisma from '../lib/prisma.js';
+import { assertActiveTeamMembers } from './teamRosterService.js';
 import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, attachTaskRecognitions, recordPlanRecognition } from './recognitionService.js';
 import { createNotification, processMentionsAndNotifications } from './notificationService.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
@@ -251,6 +252,7 @@ export const createTask = async ({
 
         // Use a Prisma transaction to ensure atomicity
         const newTask = await recognitionTransaction(prisma, async (tx) => {
+            await assertActiveTeamMembers(tx, [assigneeId]);
             // 1. Create the task
             const task = await tx.task.create({
                 data: {
@@ -567,6 +569,7 @@ export const updateTask = async (id, data, updaterId = null) => {
         }
 
         const updateData = pickAllowedTaskUpdates(data);
+        await assertActiveTeamMembers(tx, [updateData.assigneeId], [currentTask.assigneeId]);
 
         // Extract and isolate returnReason and reintegrateReason
         const { returnReason, returnNote, reintegrateReason, reopenReason, reopenNote } = updateData;

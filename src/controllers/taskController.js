@@ -154,6 +154,8 @@ export const createNewTask = async (req, res) => {
         }
         res.status(201).json(task);
     } catch (error) {
+        console.error('[TaskController] Failed to create task:', error.response?.data || error);
+        if (error.statusCode === 400) return res.status(400).json({ error: error.message });
         res.status(500).json({ error: "Failed to create task", details: error.message });
     }
 };
@@ -182,6 +184,8 @@ export const updateExistingTask = async (req, res) => {
         const updatedTask = await updateTask(req.params.taskId, updateData, req.user?.userId);
         res.json(updatedTask);
     } catch (error) {
+        console.error('[TaskController] Failed to update task:', error.response?.data || error);
+        if (error.statusCode === 400) return res.status(400).json({ error: error.message });
         res.status(500).json({ error: "Failed to update task", details: error.message });
     }
 };

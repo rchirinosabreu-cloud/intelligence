@@ -1,5 +1,6 @@
 
 import prisma from '../lib/prisma.js';
+import { activeTeamUserWhere, findActiveTeamUser } from './teamRosterService.js';
 import { cleanNotificationPreview } from '../utils/notificationUtils.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
 import { sendPushForNotification } from './pushNotificationService.js';
@@ -9,6 +10,7 @@ export const createNotification = async (
     { db = prisma, traceRecorder = recordOperationalTrace, pushSender = sendPushForNotification } = {}
 ) => {
     try {
+        if (!data.userId || !await findActiveTeamUser(db, data.userId)) return null;
         const notification = await db.notification.create({
             data: {
                 userId: data.userId,
@@ -75,7 +77,7 @@ export const processMentionsAndNotifications = async (taskId, commentContent, au
 
         // Get all active users
         const allUsers = await prisma.user.findMany({
-            where: { isActive: true },
+            where: activeTeamUserWhere(),
             select: { id: true, name: true, email: true }
         });
 

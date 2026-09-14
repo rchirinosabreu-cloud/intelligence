@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { assertActiveTeamMembers } from './teamRosterService.js';
 import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, recordPlanRecognition } from './recognitionService.js';
 import { createTask } from './nativeTaskService.js';
 import { uploadToS3, deleteFromS3 } from './s3Service.js';
@@ -330,6 +331,10 @@ export const createContentPlan = async (data) => {
 };
 
 export const updateContentPlan = async (id, data) => {
+  if (data?.ownerId) {
+    const current = await prisma.contentPlan.findUnique({ where: { id }, select: { ownerId: true } });
+    await assertActiveTeamMembers(prisma, [data.ownerId], [current?.ownerId]);
+  }
   const safeData = await filterContentPlanData(data);
   return await prisma.contentPlan.update({
     where: { id },

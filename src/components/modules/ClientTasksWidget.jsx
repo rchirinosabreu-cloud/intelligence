@@ -27,17 +27,6 @@ import { useToast } from '@/components/ui/use-toast';
 import TaskCreateModal from './TaskCreateModal';
 import TaskEditModal from './TaskEditModal';
 
-const TEAM = [
-    { name: 'Claudia', initial: 'CL', color: 'bg-pink-500' },
-    { name: 'Helen', initial: 'HE', color: 'bg-purple-500' },
-    { name: 'Rodny', initial: 'RO', color: 'bg-blue-500' },
-    { name: 'Jarlan', initial: 'JA', color: 'bg-green-500' },
-    { name: 'Francisco', initial: 'FR', color: 'bg-yellow-500' },
-    { name: 'Camila', initial: 'CA', color: 'bg-indigo-600' },
-    { name: 'Elisa', initial: 'EL', color: 'bg-rose-500' },
-    { name: 'Melissa', initial: 'ME', color: 'bg-orange-500' }
-];
-
 const ClientTasksWidget = ({ clientId }) => {
     const queryClient = useQueryClient();
     const { toast } = useToast();

@@ -20,6 +20,8 @@ const createDependencies = () => {
 
   const user = {
     id: 'user-1',
+    isActive: true,
+    teamMember: { id: 'member-1', isActive: true },
     email: 'owner@brainstudio.com',
     password: 'old-hash'
   };

@@ -64,7 +64,7 @@ test('dashboard and operational health queries share a nullable-safe visibility 
   assert.ok(where.OR.some(item => item.googleSyncStatus === null));
   assert.match(dashboardSource, /operationalEvent\.findMany\([\s\S]{0,160}getVisibleOperationalEventWhere\(\)/);
   let eventQuery;
-  const db = Object.fromEntries(['user', 'task', 'taskComment', 'contentPlan', 'contentItem', 'quotation', 'globalAnnouncement', 'notification', 'flowMessage', 'client'].map(name => [name, { findMany: async () => [] }]));
+  const db = Object.fromEntries(['teamMember', 'task', 'taskComment', 'contentPlan', 'contentItem', 'quotation', 'globalAnnouncement', 'notification', 'flowMessage', 'client'].map(name => [name, { findMany: async () => [] }]));
   db.operationalEvent = { findMany: async query => { eventQuery = query; return []; } };
   await getOperationalHealth({ requester: { role: 'ADMIN' }, now: new Date('2026-09-09T14:30Z'), db });
   assert.equal(eventQuery.where.googleCancelled, false);

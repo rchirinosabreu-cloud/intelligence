@@ -347,7 +347,7 @@ const OperationalHealth = () => {
               <span className="text-xs text-zinc-500 dark:text-zinc-400">Acciones esta semana</span>
             </div>
             <div className="mt-4 grid grid-cols-1 gap-x-5 gap-y-3 sm:grid-cols-2">
-              {data.users.slice(0, 8).map((user) => (
+              {data.users.map((user) => (
                 <div key={user.id} className="flex min-w-0 items-center gap-3">
                   <TeamAvatar member={user} className="h-8 w-8" />
                   <div className="min-w-0 flex-1">

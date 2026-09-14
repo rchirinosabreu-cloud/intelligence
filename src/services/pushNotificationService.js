@@ -1,5 +1,6 @@
 import webpush from 'web-push';
 import prisma from '../lib/prisma.js';
+import { findActiveTeamUser } from './teamRosterService.js';
 import { getNotificationDisplayParts } from '../utils/notificationUtils.js';
 
 const DEFAULT_PREFERENCES = Object.freeze({
@@ -196,6 +197,10 @@ export const sendPushForNotification = async (
   } = {}
 ) => {
   if (!configured || !notification?.userId) {
+    return { attempted: 0, delivered: 0, removed: 0 };
+  }
+
+  if (!await findActiveTeamUser(db, notification.userId)) {
     return { attempted: 0, delivered: 0, removed: 0 };
   }
 

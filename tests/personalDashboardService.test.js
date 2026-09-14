@@ -118,6 +118,7 @@ test('dashboard announcement history only queries personal announcements for the
 test('dashboard announcements preserve safe rich text and target only the selected person', async () => {
   const writes = [];
   const db = {
+    user: { findFirst: async ({ where }) => where.id === 'user-helen' ? { id: 'user-helen' } : null },
     globalAnnouncement: {
       create: async (payload) => {
         writes.push({ model: 'global', payload });

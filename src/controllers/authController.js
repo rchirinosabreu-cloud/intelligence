@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { isActiveTeamUser } from '../services/teamRosterService.js';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { randomBytes } from 'node:crypto';
@@ -26,10 +27,11 @@ export const login = async (req, res) => {
       }
 
       const user = await prisma.user.findUnique({
-          where: { email: normalizeEmail(email) }
+          where: { email: normalizeEmail(email) },
+          include: { teamMember: { select: { isActive: true } } }
       });
 
-      if (!user) {
+      if (!user || user.isActive === false || !isActiveTeamUser(user)) {
           return res.status(401).json({ message: 'Credenciales incorrectas' });
       }
 

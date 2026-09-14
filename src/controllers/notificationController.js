@@ -25,6 +25,7 @@ export const addNotification = async (req, res) => {
         const { userId, message, type, relatedId } = req.body;
         if (!userId || !message) return res.status(400).json({ error: "Missing fields" });
         const notification = await createNotification({ userId, message, type, relatedId });
+        if (!notification) return res.status(400).json({ error: 'El destinatario ya no es un miembro activo del equipo.' });
         res.json(notification);
     } catch (error) {
         res.status(500).json({ error: "Failed to create notification" });

@@ -3,6 +3,7 @@ import prisma from '../../lib/prisma.js';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
 import { isManagerRole } from '../../config/security.js';
+import { setLinkedAccountStatus } from '../../services/teamRosterService.js';
 
 const router = express.Router();
 
@@ -128,6 +129,8 @@ router.post('/', async (req, res) => {
                 user = await tx.user.update({
                     where: { id: user.id },
                     data: {
+                        isActive: true,
+                        sessionVersion: { increment: 1 },
                         role: systemRole || undefined,
                         modulePermissions: sanitizedPerms,
                         hasFinancialAccess,
@@ -168,6 +171,10 @@ router.put('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { name, role, email, avatarUrl, isActive, systemRole, modulePermissions, financialRole } = req.body;
+
+    if (isActive !== undefined && typeof isActive !== 'boolean') {
+      return res.status(400).json({ error: 'El estado del miembro debe ser activo o inactivo.' });
+    }
 
     const updatedMember = await prisma.$transaction(async (tx) => {
         const currentMember = await tx.teamMember.findUnique({
@@ -211,6 +218,7 @@ router.put('/:id', async (req, res) => {
                     financialRole: resolvedFinancialRole
                 }
             });
+            if (isActive !== undefined) await setLinkedAccountStatus(tx, member, isActive);
         }
 
         return member;
@@ -245,9 +253,13 @@ router.delete('/:id', async (req, res) => {
     const { id } = req.params;
 
     // Prioriza desactivación lógica
-    const deactivatedMember = await prisma.teamMember.update({
-      where: { id },
-      data: { isActive: false },
+    const deactivatedMember = await prisma.$transaction(async tx => {
+      const member = await tx.teamMember.update({
+        where: { id },
+        data: { isActive: false }
+      });
+      await setLinkedAccountStatus(tx, member, false);
+      return member;
     });
 
     return res.json(deactivatedMember);

@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { activeTeamUserWhere, findActiveTeamUser } from './teamRosterService.js';
 import { attachTaskRecognitions } from './recognitionService.js';
 import DOMPurify from 'isomorphic-dompurify';
 import { createNotification } from './notificationService.js';
@@ -755,7 +756,7 @@ export const createDashboardAnnouncement = async (
     if (typeof db.user?.findMany === 'function') {
       const recipients = await db.user.findMany({
         where: {
-          isActive: true,
+          ...activeTeamUserWhere(),
           id: requester?.userId ? { not: requester.userId } : undefined
         },
         select: { id: true }
@@ -779,7 +780,7 @@ export const createDashboardAnnouncement = async (
   }
 
   if (scope === 'MEMBER') {
-    if (!targetUserId) {
+    if (!targetUserId || !await findActiveTeamUser(db, targetUserId)) {
       const error = new Error('Selecciona una persona para el anuncio.');
       error.statusCode = 400;
       throw error;
@@ -873,10 +874,10 @@ export const assignClientOwner = async ({ requester, clientId, memberId }) => {
 
   const member = await prisma.teamMember.findUnique({
     where: { id: memberId },
-    select: { id: true, name: true, role: true, userId: true }
+    select: { id: true, name: true, role: true, userId: true, isActive: true }
   });
 
-  if (!member) {
+  if (!member || member.isActive !== true) {
     const error = new Error('Community Manager no encontrado.');
     error.statusCode = 404;
     throw error;
