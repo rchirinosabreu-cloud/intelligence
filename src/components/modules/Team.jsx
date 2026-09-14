@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { cn } from '../../lib/utils';
 import { effectiveFinancialRole } from '../../utils/financialPermissions';
+import InitialAccessDialog from '@/components/team/InitialAccessDialog';
 
 export default function Team() {
   const navigate = useNavigate();
@@ -19,6 +20,10 @@ export default function Team() {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingMember, setEditingMember] = useState(null);
+  const [initialAccess, setInitialAccess] = useState(null);
+  const [pendingAccessMember, setPendingAccessMember] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState('');
 
   // Modal Form State
   const [name, setName] = useState('');
@@ -132,6 +137,7 @@ export default function Team() {
   }, []);
 
   const handleOpenModal = (member = null) => {
+    setSaveError('');
     if (member) {
       setEditingMember(member);
       setName(member.name);
@@ -186,7 +192,9 @@ export default function Team() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-    if (!name || !role) return;
+    if (!name || !role || saving) return;
+    setSaving(true);
+    setSaveError('');
 
     const payload = {
       name,
@@ -210,13 +218,33 @@ export default function Team() {
         body: JSON.stringify(payload),
       });
 
-      if (response.ok) {
-        await fetchTeam();
-        setIsModalOpen(false);
-      }
+      const data = await response.json();
+      if (!response.ok) throw Object.assign(new Error(data.error || 'No se pudo guardar el miembro.'), { responseData: data });
+      setIsModalOpen(false);
+      if (!editingMember && data.initialAccess) setInitialAccess(data.initialAccess);
+      await fetchTeam();
     } catch (error) {
-      console.error("Error saving team member:", error);
-    }
+      console.error("Error saving team member:", error.responseData || error.message);
+      setSaveError(error.message);
+    } finally { setSaving(false); }
+  };
+
+  const prepareAccess = async () => {
+    if (saving || !pendingAccessMember) return;
+    setSaving(true); setSaveError('');
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/team/${pendingAccessMember.id}/initial-access`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ confirmation: 'GENERAR', expectedSessionVersion: pendingAccessMember.user.sessionVersion }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw Object.assign(new Error(data.error || 'No se pudo preparar el acceso.'), { responseData: data });
+      setPendingAccessMember(null); setInitialAccess(data.initialAccess);
+      await fetchTeam();
+    } catch (error) {
+      console.error('[Team] Initial access failed:', error.responseData || error.message);
+      setSaveError(error.message);
+    } finally { setSaving(false); }
   };
 
   const handleToggleActive = async (member) => {
@@ -326,6 +354,7 @@ export default function Team() {
                   <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{member.email}</p>
                 </div>
               )}
+              {isAdmin && member.isActive && member.user?.isActive && member.user?.mustChangePassword && member.user?.passwordChangedAt === null && <Button variant="link" size="lg" className="mt-3 px-0" onClick={() => { setSaveError(''); setPendingAccessMember(member); }}>Preparar acceso inicial</Button>}
             </div>
           ))}
           {team.length === 0 && (
@@ -337,8 +366,8 @@ export default function Team() {
       )}
 
       {/* Modal - Shadcn Dialog */}
-      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="bg-white dark:bg-zinc-900 rounded-2xl w-full max-w-md p-6 shadow-xl border border-zinc-200 dark:border-zinc-800 overflow-hidden">
+      <Dialog open={isModalOpen} onOpenChange={value => { if (!saving) setIsModalOpen(value); }}>
+        <DialogContent className="bg-white dark:bg-zinc-900 rounded-2xl max-w-md p-6 border border-zinc-200 dark:border-zinc-800">
           <DialogHeader className="mb-4">
             <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-white">
               {editingMember ? 'Editar miembro' : 'Añadir miembro'}
@@ -349,9 +378,11 @@ export default function Team() {
           </DialogHeader>
 
           <form onSubmit={handleSave} className="space-y-4">
+            {saveError && <p role="alert" className="text-sm leading-6 text-destructive">{saveError}</p>}
             <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Nombre completo</label>
+              <label htmlFor="team-name" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Nombre completo</label>
               <input
+                id="team-name"
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -361,8 +392,9 @@ export default function Team() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Rol</label>
+              <label htmlFor="team-role" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Rol</label>
               <input
+                id="team-role"
                 type="text"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
@@ -373,8 +405,9 @@ export default function Team() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Correo electrónico (opcional)</label>
+              <label htmlFor="team-email" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Correo electrónico (opcional)</label>
               <input
+                id="team-email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -478,6 +511,7 @@ export default function Team() {
             <div className="flex justify-end gap-2 mt-6 pt-2 border-t border-zinc-100 dark:border-zinc-800">
               <button
                 type="button"
+                disabled={saving}
                 onClick={() => setIsModalOpen(false)}
                 className="px-4 py-2 text-sm font-medium text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white transition-colors"
               >
@@ -485,13 +519,22 @@ export default function Team() {
               </button>
               <Button
                 type="submit"
+                disabled={saving}
               >
-                Guardar
+                {saving ? 'Guardando…' : 'Guardar'}
               </Button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
+      <Dialog open={Boolean(pendingAccessMember)} onOpenChange={value => { if (!value && !saving) setPendingAccessMember(null); }}>
+        <DialogContent className="rounded-2xl bg-white text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100">
+          <DialogHeader className="pr-8 text-left"><DialogTitle>Preparar acceso inicial</DialogTitle><DialogDescription className="pt-2 leading-6">Se generará una nueva clave temporal para {pendingAccessMember?.name}. La anterior dejará de servir y se cerrarán sus sesiones. Sus permisos no cambiarán.</DialogDescription></DialogHeader>
+          {saveError && <p role="alert" className="text-sm leading-6 text-destructive">{saveError}</p>}
+          <div className="flex flex-wrap justify-end gap-2"><Button variant="ghost" size="lg" disabled={saving} onClick={() => setPendingAccessMember(null)}>Cancelar</Button><Button size="lg" disabled={saving} onClick={prepareAccess}>{saving ? 'Generando…' : 'Generar clave temporal'}</Button></div>
+        </DialogContent>
+      </Dialog>
+      {isAdmin && initialAccess && <InitialAccessDialog access={initialAccess} onClose={() => setInitialAccess(null)} />}
     </div>
   );
 }

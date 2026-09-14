@@ -198,7 +198,7 @@ test('changing a plan owner rejects an inactive member before persisting',async(
   await assert.rejects(updateContentPlan('p1',{ownerId:'former'}),error=>error.statusCode===400);
 });
 
-test('explicitly adding a former account through Equipo activates it without reusing old sessions',async()=>{
+test('creating a new member with a former account email requires explicit reactivation of the existing account instead',async()=>{
   let update;
   db.user={findUnique:async()=>({...official,isActive:false}),update:async args=>{update=args;return {...official,...args.data};}};
   db.teamMember={create:async({data})=>({id:'new-member',...data})};
@@ -206,7 +206,7 @@ test('explicitly adding a former account through Equipo activates it without reu
   const create=teamRouter.stack.find(layer=>layer.route?.path==='/'&&layer.route.methods.post).route.stack[0].handle;
   const result=response();
   await create({user:{role:'ADMIN'},body:{name:'Reingreso',role:'Editor',email:'return@example.invalid'}},result);
-  assert.equal(result.statusCode,201);
-  assert.equal(update.data.isActive,true);
-  assert.deepEqual(update.data.sessionVersion,{increment:1});
+  assert.equal(result.statusCode,409);
+  assert.equal(update,undefined);
+  assert.equal(result.body.initialAccess,undefined);
 });

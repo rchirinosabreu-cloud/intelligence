@@ -137,8 +137,9 @@ export const updateUserPassword = async (userId, currentPassword, newPassword) =
 
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);
 
-    await prisma.user.update({
-        where: { id: userId },
+    const changed = await prisma.user.updateMany({
+        where: { id: userId, password: user.password, sessionVersion: user.sessionVersion,
+            isActive: true, teamMember: { is: { isActive: true } } },
         data: {
             password: hashedNewPassword,
             mustChangePassword: false,
@@ -146,6 +147,8 @@ export const updateUserPassword = async (userId, currentPassword, newPassword) =
             sessionVersion: { increment: 1 }
         }
     });
+
+    if (changed.count !== 1) throw new Error('Tu acceso cambió durante la solicitud. Inicia sesión nuevamente con tu acceso vigente.');
 
     return { success: true };
 };

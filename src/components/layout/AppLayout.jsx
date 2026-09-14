@@ -3,7 +3,7 @@ import Sidebar from './Sidebar';
 import { Menu, User, LogOut, Settings, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye } from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
@@ -16,15 +16,18 @@ import ExcessiveTaskAlertDialog from '@/components/tasks/ExcessiveTaskAlertDialo
 import ReturnedTaskAlertDialog from '@/components/tasks/ReturnedTaskAlertDialog';
 import { useRecognitionExperience } from '@/components/recognitions/RecognitionContext';
 import RecognitionRuntime from '@/components/recognitions/RecognitionRuntime';
+import { OnboardingProvider } from '@/components/onboarding/OnboardingProvider';
 
 const AppLayout = ({ children }) => {
   const recognitionExperience = useRecognitionExperience();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isReturnedTaskAlertBlocking, setIsReturnedTaskAlertBlocking] = useState(true);
+  const [isOnboardingBlocking, setIsOnboardingBlocking] = useState(true);
   const { currentUser, logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -195,21 +198,23 @@ const AppLayout = ({ children }) => {
   };
 
   return (
+    <OnboardingProvider key={currentUser?.id} userId={currentUser?.id} pathname={pathname}
+      blocked={isSidebarOpen || isNotificationsOpen} onBlockingChange={setIsOnboardingBlocking}>
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-primary/20 relative transition-colors duration-300 font-sans">
       {/* Sidebar - z-[60] (Internal) */}
       <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
-      <RecognitionRuntime userId={currentUser?.id} disabled={Boolean(recognitionExperience)} />
+      <RecognitionRuntime userId={currentUser?.id} disabled={Boolean(recognitionExperience) || isOnboardingBlocking} />
       <ReturnedTaskAlertDialog
         userId={displayUser?.id}
         userName={displayUser?.name}
-        enabled={canUseTaskManagement}
+        enabled={canUseTaskManagement && !isOnboardingBlocking}
         previewTasks={returnedTaskAlertPreview}
         onBlockingChange={setIsReturnedTaskAlertBlocking}
       />
       <ExcessiveTaskAlertDialog
         userId={displayUser?.id}
         userName={displayUser?.name}
-        enabled={canUseTaskManagement && !isReturnedTaskAlertBlocking}
+        enabled={canUseTaskManagement && !isReturnedTaskAlertBlocking && !isOnboardingBlocking}
       />
 
       {/* Header - z-50 */}
@@ -476,6 +481,7 @@ const AppLayout = ({ children }) => {
         </div>
       </main>
     </div>
+    </OnboardingProvider>
   );
 };
 

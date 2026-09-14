@@ -1,8 +1,20 @@
 import express from 'express';
 import { getUserProfile, updateUserProfile, updateUserPassword } from '../../services/userService.js';
 import { getUserNotes, createUserNote, updateUserNote, deleteUserNote } from '../../services/userNoteService.js';
+import { getOnboarding, acknowledgeOnboarding } from '../../services/onboardingService.js';
 
 const router = express.Router();
+
+router.get('/onboarding', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, private');
+    try { return res.json(await getOnboarding(req.user.userId)); }
+    catch (error) { console.error('[Onboarding] Read failed:', error.message); return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No se pudo consultar la bienvenida.' }); }
+});
+router.post('/onboarding', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, private');
+    try { return res.json(await acknowledgeOnboarding(req.user.userId, req.body)); }
+    catch (error) { console.error('[Onboarding] Save failed:', error.message); return res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No se pudo guardar el avance. Inténtalo de nuevo.' }); }
+});
 
 // Profile Endpoints
 router.get('/profile', async (req, res) => {

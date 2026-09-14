@@ -1,0 +1,210 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { chromium } from 'playwright-core';
+import { createWelcomePreview } from '../../scripts/preview-welcome.js';
+
+let preview, browser;
+test.before(async () => {
+  preview = await createWelcomePreview({ port: 0 });
+  browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+  await mkdir('output/welcome', { recursive: true });
+});
+test.after(async () => { await browser?.close(); await preview?.close(); });
+
+test('personal popup only shows allowed modules; close, reopen and focus work without network writes', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  page.setDefaultTimeout(10000);
+  page.setDefaultNavigationTimeout(30000);
+  const unsafe = [];
+  page.on('request', request => { if (/^https?:/.test(request.url()) && (!request.url().startsWith(preview.origin) || request.url().includes('/api/'))) unsafe.push(request.url()); });
+  await page.goto(`${preview.origin}/tests/fixtures/welcome-preview.html`);
+  const dialog = page.getByRole('dialog', { name: '¡Qué bueno tenerte aquí, Francis!' });
+  await dialog.waitFor();
+  assert.equal(await dialog.locator('[data-welcome-module]').count(), 7);
+  assert.equal(await dialog.getByText('Cotizaciones', { exact: true }).count(), 1);
+  assert.equal(await dialog.getByText('Financiero', { exact: true }).count(), 0);
+  assert.equal(await dialog.getByText('Gestión', { exact: true }).count(), 1);
+  await dialog.screenshot({ path: 'output/welcome/desktop-light.png' });
+  await page.keyboard.press('Escape');
+  await dialog.waitFor({ state: 'hidden' });
+  const reopen = page.getByRole('button', { name: 'Volver a ver la bienvenida' });
+  assert.equal(await reopen.evaluate(element => element === document.activeElement), true);
+  await reopen.click();
+  await page.getByRole('button', { name: 'Vamos a empezar' }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: 'Parrillas', exact: true }).click();
+  assert.equal(await page.getByRole('dialog').count(), 0);
+  assert.deepEqual(unsafe, []);
+  await page.close();
+});
+
+test('all-module popup fits mobile dark mode with scrollable content and accessible controls', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+  page.setDefaultTimeout(10000);
+  page.setDefaultNavigationTimeout(30000);
+  await page.goto(`${preview.origin}/tests/fixtures/welcome-preview.html?profile=admin&dark`);
+  const dialog = page.getByRole('dialog');
+  await dialog.waitFor();
+  assert.equal(await dialog.locator('[data-welcome-module]').count(), 15);
+  const rect = await dialog.boundingBox();
+  assert.ok(rect.x >= 0 && rect.y >= 0 && rect.x + rect.width <= 390 && rect.y + rect.height <= 844);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  const close = page.getByRole('button', { name: 'Cerrar bienvenida' });
+  const closeRect = await close.boundingBox();
+  await dialog.screenshot({ path: 'output/welcome/mobile-dark.png' });
+  assert.ok(closeRect.width >= 44 && closeRect.height >= 44, JSON.stringify(closeRect));
+  assert.equal(await dialog.evaluate(element => getComputedStyle(element).animationName), 'none');
+  await dialog.getByText('Salud Operativa', { exact: true }).scrollIntoViewIfNeeded();
+  assert.equal(await dialog.getByText('Salud Operativa', { exact: true }).isVisible(), true);
+  assert.equal(await page.getByRole('button', { name: 'Vamos a empezar' }).isVisible(), true);
+  await close.click();
+  await dialog.waitFor({ state: 'hidden' });
+  await page.close();
+});
+
+test('a profile without permissions has a clear fallback, with no invented modules', async () => {
+  const page = await browser.newPage();
+  page.setDefaultTimeout(10000);
+  await page.goto(`${preview.origin}/tests/fixtures/welcome-preview.html?profile=empty`);
+  const dialog = page.getByRole('dialog');
+  await dialog.waitFor();
+  assert.equal(await dialog.locator('[data-welcome-module]').count(), 0);
+  await dialog.getByText('Aún no tienes módulos habilitados.', { exact: false }).waitFor();
+  await dialog.getByRole('button', { name: 'Entendido' }).click();
+  await dialog.waitFor({ state: 'hidden' });
+  await page.close();
+});
+
+test('welcome waits until the mandatory password change and successful second login', async () => {
+  const page = await browser.newPage();
+  page.setDefaultTimeout(10000);
+  page.setDefaultNavigationTimeout(30000);
+  await page.goto(`${preview.origin}/tests/fixtures/first-access.html?person=david`);
+  await page.locator('input[type=email]').fill('david@example.test');
+  await page.locator('input[type=password]').fill('MuestraBrain2026!');
+  await page.locator('button[type=submit]').click();
+  await page.getByRole('heading', { name: 'Actualiza tu contrasena' }).waitFor();
+  assert.equal(await page.getByRole('dialog').count(), 0);
+  await page.getByLabel('Contrasena actual', { exact: true }).fill('MuestraBrain2026!');
+  await page.getByLabel('Tu nueva contrasena', { exact: true }).fill('ClaveFicticia2026!');
+  await page.getByLabel('Confirmar nueva contrasena', { exact: true }).fill('ClaveFicticia2026!');
+  await page.getByRole('button', { name: 'Guardar nueva contrasena' }).click();
+  await page.getByText('Contrasena actualizada. Ingresa nuevamente con tu nueva clave.').waitFor();
+  await page.locator('input[type=email]').fill('david@example.test');
+  await page.locator('input[type=password]').fill('ClaveFicticia2026!');
+  await page.locator('button[type=submit]').click();
+  await page.getByRole('dialog', { name: '¡Qué bueno tenerte aquí, David!' }).waitFor();
+  await page.close();
+});
+
+test('quotation guide follows module entry, completes four steps and remembers completion locally', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  page.setDefaultTimeout(10000);
+  const unsafe = [];
+  page.on('request', request => { if (/^https?:/.test(request.url()) && (!request.url().startsWith(preview.origin) || request.url().includes('/api/') || !['GET', 'HEAD'].includes(request.method()))) unsafe.push(request.url()); });
+  await page.goto(`${preview.origin}/tests/fixtures/welcome-preview.html`);
+  await page.getByRole('button', { name: 'Vamos a empezar' }).click();
+  await page.getByRole('dialog').waitFor({ state: 'hidden' });
+  assert.equal(await page.getByRole('dialog').count(), 0);
+  await page.getByRole('button', { name: 'Cotizaciones', exact: true }).click();
+  const guide = page.getByRole('dialog', { name: 'Cotizaciones, paso a paso' });
+  await guide.waitFor();
+  await guide.getByRole('heading', { name: 'Empieza con el cliente' }).waitFor();
+  assert.equal(await guide.getByRole('button', { name: 'Atrás', exact: true }).isEnabled(), false);
+  await guide.screenshot({ path: 'output/welcome/guide-desktop.png' });
+  await guide.getByRole('button', { name: 'Siguiente' }).click();
+  await guide.getByRole('heading', { name: 'Define lo que vas a ofrecer' }).waitFor();
+  await guide.getByRole('button', { name: 'Atrás', exact: true }).click();
+  await guide.getByRole('heading', { name: 'Empieza con el cliente' }).waitFor();
+  await guide.getByRole('button', { name: 'Siguiente' }).click();
+  await guide.getByRole('button', { name: 'Siguiente' }).click();
+  await guide.getByRole('heading', { name: 'Organiza los pagos' }).waitFor();
+  await guide.screenshot({ path: 'output/welcome/guide-payments.png' });
+  await guide.getByRole('button', { name: 'Siguiente' }).click();
+  await guide.getByRole('heading', { name: 'Revisa antes de compartir' }).waitFor();
+  await guide.getByRole('button', { name: 'Finalizar guía' }).click();
+  await guide.waitFor({ state: 'hidden' });
+  const reopen = page.getByRole('button', { name: 'Ver guía', exact: true });
+  assert.equal(await reopen.evaluate(element => element === document.activeElement), true);
+  await page.reload();
+  await page.getByRole('button', { name: 'Vamos a empezar' }).click();
+  await page.getByRole('button', { name: 'Cotizaciones', exact: true }).click();
+  assert.equal(await page.getByRole('dialog').count(), 0);
+  await reopen.click();
+  await guide.getByRole('heading', { name: 'Empieza con el cliente' }).waitFor();
+  await page.keyboard.press('Escape');
+  await guide.waitFor({ state: 'hidden' });
+  assert.deepEqual(unsafe, []);
+  await page.close();
+});
+
+test('skipping a guide is remembered per profile and does not grant quotation access', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  page.setDefaultTimeout(10000);
+  await page.goto(`${preview.origin}/tests/fixtures/welcome-preview.html`);
+  await page.getByRole('button', { name: 'Vamos a empezar' }).click();
+  await page.getByRole('button', { name: 'Cotizaciones', exact: true }).click();
+  const guide = page.getByRole('dialog', { name: 'Cotizaciones, paso a paso' });
+  await guide.getByRole('button', { name: 'Omitir guía' }).click();
+  await page.getByRole('button', { name: 'Gestión', exact: true }).click();
+  await page.getByRole('button', { name: 'Cotizaciones', exact: true }).click();
+  assert.equal(await guide.count(), 0);
+  await page.reload();
+  await page.getByRole('button', { name: 'Vamos a empezar' }).click();
+  await page.getByRole('button', { name: 'Cotizaciones', exact: true }).click();
+  assert.equal(await guide.count(), 0);
+  await page.goto(`${preview.origin}/tests/fixtures/welcome-preview.html?profile=admin`);
+  await page.getByRole('button', { name: 'Vamos a empezar' }).click();
+  await page.getByRole('button', { name: 'Cotizaciones', exact: true }).click();
+  await guide.waitFor();
+  await page.goto(`${preview.origin}/tests/fixtures/welcome-preview.html?profile=david`);
+  await page.getByRole('button', { name: 'Vamos a empezar' }).click();
+  assert.equal(await page.getByRole('button', { name: 'Cotizaciones', exact: true }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Ver guía', exact: true }).count(), 0);
+  await page.close();
+});
+
+test('guide is usable on mobile dark mode, with keyboard focus and no motion when reduced', async () => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
+  page.setDefaultTimeout(10000);
+  await page.goto(`${preview.origin}/tests/fixtures/welcome-preview.html?dark`);
+  await page.getByRole('button', { name: 'Vamos a empezar' }).click();
+  await page.getByLabel('Abrir módulo').selectOption('cotizaciones');
+  const guide = page.getByRole('dialog', { name: 'Cotizaciones, paso a paso' });
+  await guide.waitFor();
+  const rect = await guide.boundingBox();
+  assert.ok(rect.x >= 0 && rect.y >= 0 && rect.x + rect.width <= 390 && rect.y + rect.height <= 844);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  assert.equal(await guide.evaluate(element => getComputedStyle(element).animationName), 'none');
+  for (const button of await guide.getByRole('button').all()) {
+    const bounds = await button.boundingBox();
+    assert.ok(bounds.width >= 44 && bounds.height >= 44, JSON.stringify(bounds));
+  }
+  await page.keyboard.press('Tab');
+  assert.equal(await guide.evaluate(element => element.contains(document.activeElement)), true);
+  await guide.getByRole('button', { name: 'Siguiente' }).click();
+  await guide.screenshot({ path: 'output/welcome/guide-mobile-dark.png' });
+  await guide.getByRole('button', { name: 'Cerrar guía' }).click();
+  await guide.waitFor({ state: 'hidden' });
+  await page.getByRole('button', { name: 'Ver guía', exact: true }).click();
+  await guide.getByRole('heading', { name: 'Empieza con el cliente' }).waitFor();
+  await page.close();
+});
+
+test('unavailable local storage does not prevent skipping or reopening the guide', async () => {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  page.setDefaultTimeout(10000);
+  await page.addInitScript(() => { Object.defineProperty(window, 'localStorage', { get() { throw new DOMException('Blocked', 'SecurityError'); } }); });
+  await page.goto(`${preview.origin}/tests/fixtures/welcome-preview.html`);
+  await page.getByRole('button', { name: 'Vamos a empezar' }).click();
+  await page.getByRole('button', { name: 'Cotizaciones', exact: true }).click();
+  const guide = page.getByRole('dialog', { name: 'Cotizaciones, paso a paso' });
+  await guide.getByRole('button', { name: 'Omitir guía' }).click();
+  await page.getByRole('button', { name: 'Gestión', exact: true }).click();
+  await page.getByRole('button', { name: 'Cotizaciones', exact: true }).click();
+  assert.equal(await guide.count(), 0);
+  await page.getByRole('button', { name: 'Ver guía', exact: true }).click();
+  await guide.waitFor();
+  await page.close();
+});

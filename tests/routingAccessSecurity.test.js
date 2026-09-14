@@ -35,9 +35,11 @@ test('sensitive client mutations require a manager role', async () => {
 
 test('team provisioning has no shared default password and status updates are self-scoped', async () => {
   const team = await read('src/routes/api/team.js');
+  const initialAccess = await read('src/services/initialAccessService.js');
 
   assert.doesNotMatch(team, /Brainstudio2026/);
-  assert.match(team, /randomBytes\(/);
+  assert.match(initialAccess, /randomBytes\(18\)/);
+  assert.match(team, /createInitialCredential\(/);
   assert.match(team, /mustChangePassword:\s*true/);
   assert.doesNotMatch(team, /const \{ memberId, statusMessage \} = req\.body/);
   assert.match(team, /where:\s*\{\s*userId:\s*req\.user\.userId\s*\}/);

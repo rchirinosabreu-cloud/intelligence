@@ -37,6 +37,8 @@ test('first access uses the real login and mandatory-change screens without cont
   await page.locator('input[type=email]').fill('francis@example.test');
   await page.locator('input[type=password]').fill('MiClavePersonal2026!');
   await page.locator('button[type=submit]').click();
+  await page.getByRole('dialog', { name: '¡Qué bueno tenerte aquí, Francis!' }).waitFor();
+  await page.getByRole('button', { name: 'Vamos a empezar' }).click();
   await page.getByRole('heading', { name: 'Acceso de prueba completado' }).waitFor();
   assert.deepEqual(remoteRequests, []);
   await page.close();

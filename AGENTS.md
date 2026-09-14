@@ -183,3 +183,10 @@ Todo bloque catch en llamadas a la API debe hacer un console.error del mensaje r
 - Las bajas no borran autores, comentarios, tareas, `completedAt`, notificaciones ni atribuciones históricas. No usar el filtro de equipo vigente para eliminar evidencias del pasado. Validar miembros nuevos al asignar tareas/responsabilidades, conservando referencias históricas que no se estén cambiando.
 - Antes de notificar o entregar un push revalidar al destinatario. Recuperación de contraseña no emite códigos para cuentas sin pertenencia activa. No convertir una omisión de envío en una confirmación de éxito para un envío personal explícito.
 - Mantenimiento productivo: solo IDs y estados verificados, autorización expresa, transacción y comprobación de preservación; nunca una limpieza automática de cuentas. Pruebas y alcance: `docs/OFFICIAL_TEAM_ROSTER.md`.
+
+## 15. Acceso inicial y bienvenida
+
+- Crear una cuenta desde Equipo genera una clave temporal única con criptografía segura; nunca una contraseña compartida. Correo, clave temporal y «Copiar acceso» se muestran al admin solo tras confirmar la transacción. Persistir únicamente el hash, nunca la clave en almacenamiento del navegador o auditoría.
+- `mustChangePassword` obliga a elegir otra clave. El cambio comprueba hash y versión de sesión vigentes antes de escribir para no sobrescribir una regeneración concurrente. El admin no consulta la contraseña personal.
+- «Preparar acceso inicial» es una acción administrativa explícita para miembro/cuenta activos que nunca cambiaron su contraseña. Confirmación y versión requerida; invalidar clave anterior, sesiones, códigos y dispositivos en la misma transacción, sin alterar permisos. No resetear cuentas por nombre ni reactivar un correo existente desde la creación de otro miembro.
+- Bienvenida y guía consumen permisos actuales del servidor. `UserGuideProgress` registra usuario/guía/versión; omitir no degrada una guía completada. No confirmar avance antes de respuesta exitosa, no superponer otros modales ni inventar guías no construidas. Cotizaciones es el primer recorrido disponible. Contrato, muestras y alcance: `docs/ONBOARDING_AND_INITIAL_ACCESS.md`.

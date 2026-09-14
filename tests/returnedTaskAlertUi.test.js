@@ -9,7 +9,8 @@ test('authenticated layout prioritizes returned-task reminders over excessive-ti
 
   assert.match(layout, /ReturnedTaskAlertDialog/);
   assert.match(layout, /isReturnedTaskAlertBlocking/);
-  assert.match(layout, /enabled=\{canUseTaskManagement && !isReturnedTaskAlertBlocking\}/);
+  assert.match(layout, /enabled=\{canUseTaskManagement && !isReturnedTaskAlertBlocking && !isOnboardingBlocking\}/);
+  assert.match(layout, /<ReturnedTaskAlertDialog[\s\S]*?enabled=\{canUseTaskManagement && !isOnboardingBlocking\}/);
   assert.match(layout, /import\.meta\.env\.DEV.*previewReturnedAlert/s);
   assert.match(layout, /previewTasks=\{returnedTaskAlertPreview\}/);
 });

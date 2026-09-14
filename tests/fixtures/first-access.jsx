@@ -4,6 +4,8 @@ import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import Login from '@/components/Login';
 import ForcePasswordChange from '@/components/ForcePasswordChange';
+import WelcomeWorkspace from './welcome/WelcomeWorkspace';
+import { welcomeDemoProfiles } from './welcome/welcomeContent';
 import '@/index.css';
 
 if (!['127.0.0.1', 'localhost'].includes(location.hostname)) throw new Error('Muestra disponible solo en local');
@@ -64,7 +66,7 @@ function Flow() {
       <Route path="/cambiar-password" element={isAuthenticated && currentUser?.mustChangePassword ? <ForcePasswordChange /> : <Login onLogin={login} />} />
       <Route path="*" element={
         isAuthenticated && currentUser?.mustChangePassword ? <Navigate to="/cambiar-password" replace /> :
-        isAuthenticated ? <main className="min-h-screen bg-background p-8 text-foreground"><h1 className="text-2xl font-semibold">Acceso de prueba completado</h1><p className="mt-3">En la plataforma real, ahora entrarías a los módulos que tienes autorizados.</p><a className="mt-6 inline-block underline" href={`?person=${selected}`}>Reiniciar muestra</a></main> :
+        isAuthenticated ? <><h1 className="sr-only">Acceso de prueba completado</h1><WelcomeWorkspace key={currentUser.id} user={{ ...currentUser, modulePermissions: welcomeDemoProfiles[current]?.modulePermissions || {} }} /></> :
         <Login onLogin={login} />
       } />
     </Routes>

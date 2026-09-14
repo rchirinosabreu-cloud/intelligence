@@ -72,6 +72,18 @@ model User {
   teamMember                  TeamMember?
   recognitionAwards           RecognitionAward[]
   recognitionDebt             RecognitionDebtState?
+  guideProgress               UserGuideProgress[]
+}
+
+model UserGuideProgress {
+  userId    String
+  guideId   String
+  version   Int
+  status    String
+  updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz()
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, guideId, version])
 }
 
 model RecognitionAward {

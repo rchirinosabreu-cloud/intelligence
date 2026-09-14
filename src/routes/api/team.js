@@ -1,7 +1,6 @@
 import express from 'express';
 import prisma from '../../lib/prisma.js';
-import bcrypt from 'bcryptjs';
-import { randomBytes } from 'node:crypto';
+import { createInitialCredential, prepareInitialAccess } from '../../services/initialAccessService.js';
 import { isManagerRole } from '../../config/security.js';
 import { setLinkedAccountStatus } from '../../services/teamRosterService.js';
 
@@ -20,7 +19,8 @@ router.get('/', async (req, res) => {
       where: whereClause,
       include: {
         user: {
-          select: { role: true, modulePermissions: true, hasFinancialAccess: true, financialRole: true }
+          select: { role: true, modulePermissions: true, hasFinancialAccess: true, financialRole: true,
+            ...(req.user?.role === 'ADMIN' ? { mustChangePassword: true, passwordChangedAt: true, sessionVersion: true, isActive: true } : {}) }
         }
       },
       orderBy: { name: 'asc' },
@@ -98,6 +98,7 @@ router.post('/', async (req, res) => {
     const sanitizedPerms = sanitizePermissions(modulePermissions);
     const hasFinancialAccess = resolveFinancialAccessFlag(systemRole || 'VIEWER', sanitizedPerms);
     const resolvedFinancialRole = resolveFinancialRole(systemRole || 'VIEWER', financialRole, sanitizedPerms);
+    const credential = email?.trim() ? await createInitialCredential() : null;
 
     // Usamos una transacción para asegurar que ambas tablas se actualizan o ninguna
     const newMember = await prisma.$transaction(async (tx) => {
@@ -110,14 +111,11 @@ router.post('/', async (req, res) => {
             });
 
             if (!user) {
-                const unusablePassword = randomBytes(32).toString('hex');
-                const hashedPassword = await bcrypt.hash(unusablePassword, 10);
-
                 user = await tx.user.create({
                     data: {
                         name,
                         email: normalizedEmail,
-                        password: hashedPassword,
+                        password: credential.hash,
                         role: systemRole || 'VIEWER',
                         modulePermissions: sanitizedPerms,
                         hasFinancialAccess,
@@ -126,17 +124,7 @@ router.post('/', async (req, res) => {
                     }
                 });
             } else {
-                user = await tx.user.update({
-                    where: { id: user.id },
-                    data: {
-                        isActive: true,
-                        sessionVersion: { increment: 1 },
-                        role: systemRole || undefined,
-                        modulePermissions: sanitizedPerms,
-                        hasFinancialAccess,
-                        financialRole: resolvedFinancialRole
-                    }
-                });
+                throw Object.assign(new Error('El correo ya tiene una cuenta. Administra su acceso o reactivación desde Equipo.'), { statusCode: 409 });
             }
             associatedUserId = user.id;
         }
@@ -156,10 +144,26 @@ router.post('/', async (req, res) => {
         return member;
     });
 
-    return res.status(201).json(newMember);
+    res.setHeader('Cache-Control', 'no-store, private');
+    return res.status(201).json({ ...newMember, ...(credential ? { initialAccess: {
+        name: newMember.name, email: email.trim().toLowerCase(), temporaryPassword: credential.temporaryPassword
+    } } : {}) });
   } catch (error) {
-    console.error('Error creating team member and user:', error);
-    return res.status(500).json({ error: 'Failed to create team member and auto-provision user account.', details: error.message });
+    console.error('Error creating team member and user:', { code: error.code, statusCode: error.statusCode });
+    const conflict = error.statusCode === 409 || error.code === 'P2002';
+    return res.status(conflict ? 409 : 500).json({ error: conflict ? 'El correo ya tiene una cuenta. Administra su acceso o reactivación desde Equipo.' : 'No se pudo crear el miembro y su cuenta. Inténtalo de nuevo.' });
+  }
+});
+
+router.post('/:id/initial-access', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, private');
+  try {
+    const result = await prepareInitialAccess({ requester: req.user, memberId: req.params.id,
+      confirmation: req.body.confirmation, expectedSessionVersion: req.body.expectedSessionVersion });
+    return res.json(result);
+  } catch (error) {
+    console.error('[Team] Initial access failed:', { code: error.code, statusCode: error.statusCode });
+    return res.status(error.statusCode || (error.code === 'P2034' ? 409 : 500)).json({ error: error.statusCode ? error.message : 'No se pudo preparar el acceso. Actualiza Equipo antes de volver a intentarlo.' });
   }
 });
 
