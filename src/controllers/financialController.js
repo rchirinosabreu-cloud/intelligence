@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { withFinancialSearch, financialMonthFilter } from '../services/financialQueryFilters.js';
 import {
     buildFinancialImportPersistencePlan,
     parseFinancialImportWorkbook,
@@ -247,12 +248,14 @@ export const getFinancialClientReconciliation = async (req, res, dependencies = 
         const importBatchFilter = financialSourceScope(activeImportBatch?.id);
         const [records, receivables, targets] = await Promise.all([
             prismaClient.financialRecord.findMany({
-                where: {
+                where: withFinancialSearch({
                     year,
                     status: 'POSTED',
-                    scenario: 'ACTUAL',
+                    scenario: ['ACTUAL', 'FORECAST', 'BUDGET'].includes(req.query.scenario) ? req.query.scenario : 'ACTUAL',
+                    ...financialMonthFilter(req.query),
+                    ...(['INCOME', 'EXPENSE'].includes(req.query.type) ? { type: req.query.type } : {}),
                     ...importBatchFilter
-                },
+                }, req.query.q),
                 include: {
                     client: {
                         select: {
@@ -264,10 +267,11 @@ export const getFinancialClientReconciliation = async (req, res, dependencies = 
                 }
             }),
             prismaClient.accountsReceivable.findMany({
-                where: {
+                where: withFinancialSearch({
                     year,
+                    ...financialMonthFilter(req.query),
                     ...importBatchFilter
-                },
+                }, req.query.q, 'receivable'),
                 include: {
                     payments: { select: { amount: true } },
                     client: {
@@ -302,9 +306,9 @@ export const getFinancialClientReconciliation = async (req, res, dependencies = 
         });
     } catch (error) {
         console.error('[Financials API] Client reconciliation failed:', error.response?.data || error);
-        return res.status(500).json({
-            error: 'FINANCIAL_CLIENT_RECONCILIATION_FAILED',
-            message: 'No fue posible cargar la conciliacion de clientes financieros.'
+        return res.status(error.statusCode || 500).json({
+            error: error.code || 'FINANCIAL_CLIENT_RECONCILIATION_FAILED',
+            message: error.statusCode ? error.message : 'No fue posible cargar la conciliacion de clientes financieros.'
         });
     }
 };
@@ -418,7 +422,7 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
             }
         });
 
-        const where = { year, ...financialSourceScope(activeImportBatch?.id) };
+        const where = withFinancialSearch({ year, ...financialMonthFilter(req.query), ...financialSourceScope(activeImportBatch?.id) }, req.query.q, 'receivable');
         const receivables = await prismaClient.accountsReceivable.findMany({
             where,
             include: {
@@ -450,9 +454,9 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
         });
     } catch (error) {
         console.error('[Financials API] Receivables ledger failed:', error.response?.data || error);
-        return res.status(500).json({
-            error: 'FINANCIAL_RECEIVABLES_LEDGER_FAILED',
-            message: 'No fue posible cargar la cartera financiera.'
+        return res.status(error.statusCode || 500).json({
+            error: error.code || 'FINANCIAL_RECEIVABLES_LEDGER_FAILED',
+            message: error.statusCode ? error.message : 'No fue posible cargar la cartera financiera.'
         });
     }
 };
@@ -530,9 +534,9 @@ export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => 
         });
 
         const contracts = await prismaClient.payrollContract.findMany({
-            where: activeImportBatch?.id
+            where: withFinancialSearch(activeImportBatch?.id
                 ? { OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null }] }
-                : { importBatchId: null },
+                : { importBatchId: null }, req.query.q, 'contract'),
             include: {
                 collaborator: {
                     select: {
@@ -566,9 +570,9 @@ export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => 
         });
     } catch (error) {
         console.error('[Financials API] Payroll ledger failed:', error.response?.data || error);
-        return res.status(500).json({
-            error: 'FINANCIAL_PAYROLL_LEDGER_FAILED',
-            message: 'No fue posible cargar la nomina financiera.'
+        return res.status(error.statusCode || 500).json({
+            error: error.code || 'FINANCIAL_PAYROLL_LEDGER_FAILED',
+            message: error.statusCode ? error.message : 'No fue posible cargar la nomina financiera.'
         });
     }
 };
@@ -634,6 +638,11 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
             endMonth = startMonth + 3;
         }
 
+        const selectedMonth = Number(req.query.month);
+        if (Number.isInteger(selectedMonth) && selectedMonth >= 1 && selectedMonth <= 12) {
+            startMonth = selectedMonth - 1;
+            endMonth = selectedMonth;
+        }
         const dateStart = new Date(Date.UTC(year, startMonth, 1));
         const dateEnd = new Date(Date.UTC(year, endMonth, 1));
         const monthStart = startMonth + 1;
@@ -676,7 +685,10 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
         };
 
         const financialRecords = await prismaClient.financialRecord.findMany({
-            where: financialRecordWhere,
+            where: withFinancialSearch({
+                ...financialRecordWhere,
+                ...(['INCOME', 'EXPENSE'].includes(req.query.type) ? { type: req.query.type } : {})
+            }, req.query.q),
             include: {
                 client: { select: { name: true, slug: true } }
             }
@@ -742,11 +754,12 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
         // --- SECTION 2: ACCOUNTS RECEIVABLE (CARTERA MOROSA) ---
         // Promising a payment does not settle the debt.
         const receivables = await prismaClient.accountsReceivable.findMany({
-            where: {
+            where: withFinancialSearch({
                 status: { in: ['DEBE', 'PROMESADO'] },
                 year,
+                ...financialMonthFilter(req.query),
                 ...importedBatchFilter
-            },
+            }, req.query.q, 'receivable'),
             include: {
                 client: {
                     select: {
@@ -834,13 +847,13 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
         // --- SECTION 3: DYNAMIC PAYROLL CONSOLIDATION ---
         // Filter transactions for the requested year & month bounds
         const payrollTransactions = await prismaClient.payrollTransaction.findMany({
-            where: {
+            where: withFinancialSearch({
                 year: year,
                 month: {
                     gte: monthStart,
                     lte: monthEnd
                 }
-            },
+            }, req.query.q, 'payroll'),
             include: {
                 user: {
                     select: {
@@ -936,9 +949,9 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
 
         if (collaborators.length === 0 && activeImportBatch?.id) {
             const importedPayrollContracts = await prismaClient.payrollContract.findMany({
-                where: {
+                where: withFinancialSearch({
                     importBatchId: activeImportBatch.id
-                },
+                }, req.query.q, 'contract'),
                 include: {
                     user: {
                         select: {
@@ -1002,8 +1015,8 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
         });
 
     } catch (error) {
-        console.error("[Financials API] Dashboard analytical aggregation failed:", error);
-        res.status(500).json({ error: "Failed to compile financial intelligence data dashboard" });
+        console.error('[Financials API] Dashboard analytical aggregation failed:', error.response?.data || error);
+        res.status(error.statusCode || 500).json({ error: error.code || 'FINANCIAL_DASHBOARD_FAILED', message: error.statusCode ? error.message : 'No fue posible cargar los indicadores financieros.' });
     }
 };
 

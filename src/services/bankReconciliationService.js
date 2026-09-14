@@ -460,19 +460,30 @@ export const approveBankMatch = async (prismaClient, matchId, actor) => {
   }
 };
 
-export const listBankReconciliation = async (prismaClient, year) => {
+export const listBankReconciliation = async (prismaClient, year, filters = {}) => {
   const imports = await prismaClient.bankStatementImport.findMany({
     where: { periodEnd: { gte: new Date(`${year}-01-01T00:00:00Z`), lt: new Date(`${year + 1}-01-01T00:00:00Z`) } },
     include: { account: { select: { id: true, name: true, lastFour: true } } }, orderBy: { periodStart: 'desc' }
   });
   const transactions = await prismaClient.bankTransaction.findMany({
     where: { postedAt: { gte: new Date(`${year}-01-01T00:00:00Z`), lt: new Date(`${year + 1}-01-01T00:00:00Z`) } },
-    include: { account: { select: { id: true, name: true, lastFour: true } }, matches: { include: { financialRecord: { select: { id: true, description: true, amount: true, type: true, date: true } } } } },
+    include: { account: { select: { id: true, name: true, lastFour: true } }, matches: { include: { financialRecord: { select: { id: true, description: true, amount: true, type: true, date: true, counterparty: true, sourceLabel: true, client: { select: { name: true } }, user: { select: { name: true } } } } } } },
     orderBy: [{ postedAt: 'desc' }, { sourceRow: 'desc' }]
+  });
+  const terms = String(filters.q || '').trim().toLocaleLowerCase('es').split(/\s+/).filter(Boolean);
+  const filteredTransactions = transactions.filter(transaction => {
+    const date = new Date(transaction.postedAt);
+    if (filters.month && date.getUTCMonth() + 1 !== Number(filters.month)) return false;
+    if (filters.type === 'INCOME' && Number(transaction.amount) < 0) return false;
+    if (filters.type === 'EXPENSE' && Number(transaction.amount) >= 0) return false;
+    const text = [transaction.description, transaction.account?.name,
+      ...(transaction.matches || []).flatMap(match => [match.financialRecord?.description, match.financialRecord?.counterparty, match.financialRecord?.sourceLabel, match.financialRecord?.client?.name, match.financialRecord?.user?.name])
+    ].filter(Boolean).join(' ').toLocaleLowerCase('es');
+    return terms.every(term => text.includes(term));
   });
   return {
     imports,
-    transactions,
+    transactions: filteredTransactions,
     internalTransferCandidates: detectInternalTransferCandidates(transactions),
     continuityGaps: detectStatementContinuityGaps(imports)
   };

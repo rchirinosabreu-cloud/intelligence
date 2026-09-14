@@ -100,9 +100,8 @@ const toForm = (record, year) => record ? {
     accountId: record.accountId || ''
 } : emptyForm(year);
 
-const FinancialLedger = ({ selectedYear, formatCurrency }) => {
+const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: '', type: '', q: '' }, searchPending = false, formatCurrency }) => {
     const queryClient = useQueryClient();
-    const [filters, setFilters] = useState({ scenario: 'ACTUAL', month: '', type: '' });
     const [page, setPage] = useState(1);
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState(null);
@@ -128,9 +127,10 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
     useEffect(() => { setPage(1); }, [selectedYear, filters]);
 
     const queryString = useMemo(() => {
-        const params = new URLSearchParams({ year: String(selectedYear), scenario: filters.scenario, page: String(page), pageSize: String(PAGE_SIZE) });
+        const params = new URLSearchParams({ year: String(selectedYear), scenario: filters.scenario, page: String(page), pageSize: String(PAGE_SIZE), scope: 'active', status: 'POSTED' });
         if (filters.month) params.set('month', filters.month);
         if (filters.type) params.set('type', filters.type);
+        if (filters.q) params.set('q', filters.q);
         return params.toString();
     }, [filters, selectedYear, page]);
 
@@ -367,37 +367,11 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
                                 <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300"><Wallet className="h-4 w-4" /></span>
                                 <div className="min-w-0"><p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{account.name}</p><p className="text-xs text-zinc-500">{account.type === 'BANK' ? 'Banco' : account.type === 'CASH' ? 'Caja' : 'Otra cuenta'}</p></div>
                             </div>
-                            <div className="text-right"><p className="text-xs text-zinc-500">Saldo actual</p><p className="text-sm font-semibold text-zinc-900 dark:text-white">{formatCurrency(Number(account.balance))}</p></div>
+                            <div className="text-right"><p className="text-xs text-zinc-500">Saldo total de la cuenta</p><p className="text-sm font-semibold text-zinc-900 dark:text-white">{formatCurrency(Number(account.balance))}</p></div>
                         </div>
                     ))}
                 </div>
             )}
-
-            <div className="grid grid-cols-1 gap-3 border-y border-zinc-200 py-4 dark:border-white/10 sm:grid-cols-3">
-                <label className="space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300">
-                    Escenario
-                    <Select className={inputClass} value={filters.scenario} onChange={(event) => setFilters((current) => ({ ...current, scenario: event.target.value }))}>
-                        {SCENARIOS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </Select>
-                </label>
-                <label className="space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300">
-                    Mes
-                    <Select className={inputClass} value={filters.month} onChange={(event) => setFilters((current) => ({ ...current, month: event.target.value }))}>
-                        <option value="">Todo el año</option>
-                        {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((month, index) => (
-                            <option key={month} value={index + 1}>{month}</option>
-                        ))}
-                    </Select>
-                </label>
-                <label className="space-y-1.5 text-xs text-zinc-600 dark:text-zinc-300">
-                    Tipo
-                    <Select className={inputClass} value={filters.type} onChange={(event) => setFilters((current) => ({ ...current, type: event.target.value }))}>
-                        <option value="">Ingresos y egresos</option>
-                        <option value="INCOME">Ingresos</option>
-                        <option value="EXPENSE">Egresos</option>
-                    </Select>
-                </label>
-            </div>
 
             {filters.month && (
                 <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
@@ -410,25 +384,25 @@ const FinancialLedger = ({ selectedYear, formatCurrency }) => {
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                 <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
                     <TrendingUp className="h-5 w-5 text-emerald-500" />
-                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Ingresos de esta página</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || error ? '—' : formatCurrency(totals.income)}</p></div>
+                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Ingresos de esta página</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : formatCurrency(totals.income)}</p></div>
                 </div>
                 <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
                     <TrendingDown className="h-5 w-5 text-rose-500" />
-                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Egresos de esta página</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || error ? '—' : formatCurrency(totals.expense)}</p></div>
+                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Egresos de esta página</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : formatCurrency(totals.expense)}</p></div>
                 </div>
                 <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
                     <FileSpreadsheet className="h-5 w-5 text-violet-500" />
-                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Registros con estos filtros</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || error ? '—' : totalRecords}</p></div>
+                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Registros con estos filtros</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : totalRecords}</p></div>
                 </div>
             </div>
 
             <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
-                {isLoading ? (
+                {isLoading || searchPending ? (
                     <div className="flex items-center justify-center gap-2 py-16 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" /> Cargando movimientos...</div>
                 ) : error ? (
                     <div role="alert" className="flex flex-col items-center justify-center gap-3 py-16 text-sm text-destructive"><p className="flex items-center gap-2"><AlertCircle className="h-4 w-4 text-destructive" /> No fue posible cargar el libro.</p><button type="button" onClick={() => refetch()} className="min-h-11 rounded-lg border border-zinc-200 px-4 text-zinc-700 dark:border-white/10 dark:text-zinc-200">Reintentar</button></div>
                 ) : records.length === 0 ? (
-                    <div className="py-16 text-center"><Search className="mx-auto h-7 w-7 text-zinc-300" /><p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">No hay movimientos con estos filtros</p></div>
+                    <div className="py-16 text-center"><Search className="mx-auto h-7 w-7 text-zinc-300" /><p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">No hay movimientos con estos filtros.</p></div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="min-w-[980px] w-full text-left text-sm">

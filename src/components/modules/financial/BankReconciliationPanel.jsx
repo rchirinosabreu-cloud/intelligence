@@ -13,7 +13,7 @@ const headers = () => ({ Authorization: `Bearer ${localStorage.getItem('authToke
 const currency = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2 });
 const PAGE_SIZE = 20;
 
-export default function BankReconciliationPanel({ selectedYear, canApprove }) {
+export default function BankReconciliationPanel({ selectedYear, canApprove, filters = {} }) {
   const inputRef = useRef(null);
   const queryClient = useQueryClient();
   const [accountId, setAccountId] = useState('');
@@ -22,6 +22,10 @@ export default function BankReconciliationPanel({ selectedYear, canApprove }) {
   const [page, setPage] = useState(1);
 
   useEffect(() => { setPage(1); setPreview(null); setFile(null); }, [selectedYear]);
+  useEffect(() => { setPage(1); }, [filters.q, filters.month, filters.type]);
+  const searchParams = new URLSearchParams({ year: String(selectedYear) });
+  for (const key of ['q', 'month', 'type']) if (filters[key]) searchParams.set(key, filters[key]);
+  const query = searchParams.toString();
 
   const { data: accountData } = useQuery({
     queryKey: ['financial-accounts'],
@@ -29,10 +33,10 @@ export default function BankReconciliationPanel({ selectedYear, canApprove }) {
   });
   const accounts = Array.isArray(accountData) ? accountData : accountData?.accounts || [];
   const { data, isLoading, error, refetch } = useQuery({
-    queryKey: ['bank-reconciliation', selectedYear],
+    queryKey: ['bank-reconciliation', query],
     queryFn: async () => {
       try {
-        return (await axios.get(`${getApiBaseUrl()}/api/financials/bank-reconciliation?year=${selectedYear}`, { headers: headers() })).data;
+        return (await axios.get(`${getApiBaseUrl()}/api/financials/bank-reconciliation?${query}`, { headers: headers() })).data;
       } catch (requestError) {
         console.error('[Conciliación bancaria] Error de consulta:', requestError.response?.data || requestError.message);
         throw requestError;
@@ -176,7 +180,7 @@ export default function BankReconciliationPanel({ selectedYear, canApprove }) {
               </div>
             </article>;
           })}
-          {transactions.length === 0 && <div className="rounded-2xl border border-dashed border-zinc-300 p-10 text-center dark:border-zinc-700"><FileSpreadsheet className="mx-auto h-7 w-7 text-zinc-400" /><p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">{data?.imports?.length ? 'No hay movimientos bancarios en el año seleccionado' : 'Aún no hay extractos importados'}</p></div>}
+          {transactions.length === 0 && <div className="rounded-2xl border border-dashed border-zinc-300 p-10 text-center dark:border-zinc-700"><FileSpreadsheet className="mx-auto h-7 w-7 text-zinc-400" /><p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">{filters.q || filters.month || filters.type ? 'No hay movimientos bancarios con estos filtros.' : data?.imports?.length ? 'No hay movimientos bancarios en el año seleccionado' : 'Aún no hay extractos importados'}</p></div>}
         </div>
 
         {transactions.length > 0 && <nav aria-label="Paginación de conciliación" className="flex flex-wrap items-center justify-between gap-3 text-sm text-zinc-600 dark:text-zinc-300">

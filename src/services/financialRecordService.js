@@ -1,3 +1,5 @@
+import { withFinancialSearch, activeFinancialSource } from './financialQueryFilters.js';
+
 const TYPES = new Set(['INCOME', 'EXPENSE']);
 const CATEGORIES = new Set([
     'MEMBRESIA',
@@ -184,7 +186,7 @@ export const listFinancialRecords = async (prismaClient, filters = {}) => {
     const month = Number.parseInt(filters.month, 10);
     const page = Math.max(Number.parseInt(filters.page, 10) || 1, 1);
     const pageSize = Math.min(Math.max(Number.parseInt(filters.pageSize, 10) || 50, 1), 100);
-    const where = {};
+    let where = {};
 
     if (Number.isInteger(year)) where.year = year;
     if (Number.isInteger(month) && month >= 1 && month <= 12) where.month = month;
@@ -230,10 +232,18 @@ export const listFinancialRecords = async (prismaClient, filters = {}) => {
         });
     }
 
+    if (filters.scope === 'active') {
+        const batch = await prismaClient.financialImportBatch.findFirst({
+            where: { year, status: 'IMPORTED' }, orderBy: { createdAt: 'desc' }, select: { id: true }
+        });
+        Object.assign(where, activeFinancialSource(batch?.id), { status: 'POSTED' });
+    }
+    where = withFinancialSearch(where, filters.q);
+
     const [items, total] = await Promise.all([
         prismaClient.financialRecord.findMany({
             where,
-            orderBy: [{ date: 'desc' }, { createdAt: 'desc' }],
+            orderBy: [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
             skip: (page - 1) * pageSize,
             take: pageSize,
             include: {

@@ -1,5 +1,5 @@
 import Select from '@/components/ui/Select';
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import FinancialLedger from './financial/FinancialLedger';
+import FinancialFilters, { FINANCIAL_MONTHS } from './financial/FinancialFilters';
 import BankReconciliationPanel from './financial/BankReconciliationPanel';
 import ReceivablePaymentDialog from './financial/ReceivablePaymentDialog';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
@@ -66,8 +67,19 @@ const FinancialDashboard = () => {
 
     // 1. React Hook Declarations (Inconditional - at the absolute top)
     const [selectedYear, setSelectedYear] = useState(2026);
-    const [selectedQuarter, setSelectedQuarter] = useState('ALL');
-    const [selectedScenario, setSelectedScenario] = useState('ACTUAL');
+    const [filters, setFilters] = useState({ scenario: 'ACTUAL', month: '', type: '', q: '' });
+    const [search, setSearch] = useState('');
+    const [isImportSetupOpen, setIsImportSetupOpen] = useState(false);
+    useEffect(() => {
+        const timer = setTimeout(() => setFilters(current => ({ ...current, q: search.trim() })), 250);
+        return () => clearTimeout(timer);
+    }, [search]);
+    const searchPending = search.trim() !== filters.q;
+    const filterQuery = useMemo(() => {
+        const params = new URLSearchParams({ year: String(selectedYear), scenario: filters.scenario });
+        for (const key of ['month', 'type', 'q']) if (filters[key]) params.set(key, filters[key]);
+        return params.toString();
+    }, [selectedYear, filters]);
     const [activeTab, setActiveTab] = useState('flow');
     const [expandedClients, setExpandedClients] = useState({});
     const [importPreview, setImportPreview] = useState(null);
@@ -88,7 +100,7 @@ const FinancialDashboard = () => {
     const [isReceivableEditorOpen, setIsReceivableEditorOpen] = useState(false);
     const [receivableForm, setReceivableForm] = useState({ clientId: '', amount: '', period: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }).slice(0, 7) + '-01', dueDate: '', comments: '' });
     const [isSavingReceivable, setIsSavingReceivable] = useState(false);
-    const [payrollMonth, setPayrollMonth] = useState(new Date().getMonth() + 1);
+    const payrollMonth = Number(filters.month) || new Date().getMonth() + 1;
     const [isGeneratingPayroll, setIsGeneratingPayroll] = useState(false);
     const [isPayrollGenerationConfirmOpen, setIsPayrollGenerationConfirmOpen] = useState(false);
     const [savingPayrollTransactionId, setSavingPayrollTransactionId] = useState('');
@@ -104,12 +116,12 @@ const FinancialDashboard = () => {
     const canApproveFinancials = hasFinancialPermission(currentUser, 'approve');
 
     // Fetch analytical aggregation from protected backend endpoint
-    const { data, isLoading, error } = useQuery({
-        queryKey: ['financials-dashboard-data', selectedYear, selectedQuarter, selectedScenario],
+    const { data, isLoading, isFetching, error, refetch } = useQuery({
+        queryKey: ['financials-dashboard-data', filterQuery],
         queryFn: async () => {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
-            const url = `${baseUrl}/api/financials/dashboard?year=${selectedYear}&scenario=${selectedScenario}${selectedQuarter !== 'ALL' ? `&quarter=${selectedQuarter}` : ''}`;
+            const url = `${baseUrl}/api/financials/dashboard?${filterQuery}`;
             const res = await axios.get(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
@@ -132,11 +144,11 @@ const FinancialDashboard = () => {
     });
 
     const { data: receivablesLedger, isLoading: isReceivablesLedgerLoading, error: receivablesError, refetch: refetchReceivables } = useQuery({
-        queryKey: ['financials-receivables-ledger', selectedYear],
+        queryKey: ['financials-receivables-ledger', filterQuery],
         queryFn: async () => {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
-            const res = await axios.get(`${baseUrl}/api/financials/receivables-ledger?year=${selectedYear}`, {
+            const res = await axios.get(`${baseUrl}/api/financials/receivables-ledger?${filterQuery}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             return res.data;
@@ -158,11 +170,11 @@ const FinancialDashboard = () => {
     });
 
     const { data: payrollLedger, isLoading: isPayrollLedgerLoading } = useQuery({
-        queryKey: ['financials-payroll-ledger', selectedYear],
+        queryKey: ['financials-payroll-ledger', filterQuery],
         queryFn: async () => {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
-            const res = await axios.get(`${baseUrl}/api/financials/payroll-ledger?year=${selectedYear}`, {
+            const res = await axios.get(`${baseUrl}/api/financials/payroll-ledger?${filterQuery}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             return res.data;
@@ -171,11 +183,11 @@ const FinancialDashboard = () => {
     });
 
     const { data: clientReconciliation, isLoading: isClientReconciliationLoading } = useQuery({
-        queryKey: ['financials-client-reconciliation', selectedYear],
+        queryKey: ['financials-client-reconciliation', filterQuery],
         queryFn: async () => {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
-            const res = await axios.get(`${baseUrl}/api/financials/client-reconciliation?year=${selectedYear}`, {
+            const res = await axios.get(`${baseUrl}/api/financials/client-reconciliation?${filterQuery}`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             return res.data;
@@ -228,6 +240,7 @@ const FinancialDashboard = () => {
 
             setImportPreview(res.data);
             setImportFile(file);
+            setIsImportSetupOpen(false);
             setActiveTab('import');
         } catch (error) {
             console.error('Error previewing financial import:', error.response?.data || error);
@@ -596,85 +609,38 @@ await invalidateFinancialQueries(queryClient);
         return <Navigate to="/" replace />;
     }
 
-    if (isLoading) {
-        return <SkeletonLoader />;
-    }
-
-    if (error) {
-        return (
-            <div className="flex flex-col items-center justify-center min-h-[400px] text-center p-6 bg-white dark:bg-zinc-950 rounded-2xl border border-zinc-200 dark:border-white/10">
-                <AlertCircle className="mb-4 h-12 w-12 text-destructive" />
-                <h3 className="text-lg font-bold">Error al cargar datos financieros</h3>
-                <p className="text-sm text-zinc-500 max-w-sm mt-1">
-                    Hubo un problema de conexión con el servidor financiero seguro de la agencia. Intente nuevamente.
-                </p>
-            </div>
-        );
-    }
+    const indicatorsPending = isLoading || isFetching || searchPending;
+    const formatIndicator = value => indicatorsPending || error ? '—' : formatCurrency(value);
 
     return (
         <div className="min-h-screen bg-zinc-50/50 dark:bg-zinc-950/20 space-y-8 animate-in fade-in duration-500">
-            {/* Header section with Year/Quarter selection */}
-            <PageHeader
-                title="Consola de Inteligencia Financiera"
-                subtitle="Flujo de caja, cuentas por cobrar y costos operativos."
-            >
-                <div className="flex min-w-0 flex-wrap items-center gap-2 bg-white dark:bg-zinc-900 p-1 rounded-xl border border-zinc-200 dark:border-white/5 shadow-sm">
-                    <Select
-                        value={selectedScenario}
-                        onChange={(e) => setSelectedScenario(e.target.value)}
-                        aria-label="Escenario financiero"
-                        className="bg-transparent border-none text-xs font-medium px-3 py-1.5 focus:ring-0 cursor-pointer"
-                    >
-                        <option value="ACTUAL">Ejecutado</option>
-                        <option value="FORECAST">Proyección</option>
-                        <option value="BUDGET">Presupuesto</option>
-                    </Select>
-                    <div className="w-px h-4 bg-zinc-200 dark:bg-white/10 mx-1" />
-                    <Select
-                        value={selectedYear}
-                        aria-label="Año financiero"
-                        onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                        className="bg-transparent border-none text-[10px] font-black uppercase tracking-widest px-3 py-1.5 focus:ring-0 cursor-pointer"
-                    >
-                        {[2021, 2022, 2023, 2024, 2025, 2026].map(y => (
-                            <option key={y} value={y}>{y}</option>
-                        ))}
-                    </Select>
-                    <div className="w-px h-4 bg-zinc-200 dark:bg-white/10 mx-1" />
-                    <Select
-                        value={selectedQuarter}
-                        aria-label="Trimestre del análisis"
-                        onChange={(e) => setSelectedQuarter(e.target.value)}
-                        className="min-w-0 max-w-full bg-transparent border-none text-[10px] font-black uppercase tracking-widest px-3 py-1.5 focus:ring-0 cursor-pointer"
-                    >
-                        <option value="ALL">Todo el Año</option>
-                        <option value="1">Trimestre 1 (Ene-Mar)</option>
-                        <option value="2">Trimestre 2 (Abr-Jun)</option>
-                        <option value="3">Trimestre 3 (Jul-Sep)</option>
-                        <option value="4">Trimestre 4 (Oct-Dic)</option>
-                    </Select>
-                </div>
-                {canApproveFinancials && <div className="flex flex-wrap items-center gap-2">
-                    <label className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs text-zinc-600 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-300">
-                        Mes ejecutado hasta
-                        <Select value={actualThroughMonth} onChange={(event) => setActualThroughMonth(Number(event.target.value))} className="bg-transparent font-medium text-zinc-900 outline-none dark:text-white">
-                            {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((month, index) => <option key={month} value={index + 1}>{month}</option>)}
+            <PageHeader title="Consola de Inteligencia Financiera" subtitle="Flujo de caja, cuentas por cobrar y costos operativos.">
+                {canApproveFinancials && <button type="button" onClick={() => setIsImportSetupOpen(true)} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700">
+                    <UploadCloud className="h-4 w-4" />Auditar archivo
+                </button>}
+            </PageHeader>
+            <FinancialFilters year={selectedYear} onYearChange={setSelectedYear} filters={filters}
+                onChange={patch => setFilters(current => ({ ...current, ...patch }))}
+                search={search} onSearchChange={setSearch} busy={indicatorsPending} />
+            {error && <div role="alert" className="brain-alert-surface flex flex-wrap items-center justify-between gap-3 rounded-xl p-4 text-sm">
+                <p>No fue posible cargar los indicadores financieros. Conservamos tus filtros.</p>
+                <button type="button" onClick={() => refetch()} className="min-h-11 px-3 font-semibold underline">Reintentar indicadores</button>
+            </div>}
+            <Dialog open={isImportSetupOpen} onOpenChange={setIsImportSetupOpen}>
+                <DialogContent className="bg-white text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100 sm:max-w-md">
+                    <DialogHeader><DialogTitle>Auditar archivo financiero</DialogTitle><DialogDescription>Configura el corte del archivo que vas a revisar.</DialogDescription></DialogHeader>
+                    <label className="space-y-2 text-sm">Mes ejecutado hasta
+                        <Select value={actualThroughMonth} onChange={event => setActualThroughMonth(Number(event.target.value))}>
+                            {FINANCIAL_MONTHS.map((month, index) => <option key={month} value={index + 1}>{month}</option>)}
                         </Select>
                     </label>
-                    <label className="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-violet-600 hover:bg-violet-700 text-white text-[10px] font-black uppercase tracking-widest shadow-sm cursor-pointer transition-colors">
-                        {isImporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                        Auditar archivo
-                        <input
-                            type="file"
-                            className="hidden"
-                            accept=".csv,.xlsx,.xls"
-                            onChange={handleFinancialImportPreview}
-                            disabled={isImporting}
-                        />
+                    <label className="space-y-2 text-sm">Archivo Excel o CSV
+                        <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFinancialImportPreview} disabled={isImporting} className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-violet-600 file:px-4 file:py-3 file:text-white" />
                     </label>
-                </div>}
-            </PageHeader>
+                    {isImporting && <p role="status" className="text-sm text-zinc-500 dark:text-zinc-400">Revisando archivo…</p>}
+                    {importError && <p role="alert" className="text-sm text-destructive">{importError}</p>}
+                </DialogContent>
+            </Dialog>
 
             {importError && (
                 <div className="brain-alert-surface flex items-start gap-3 rounded-2xl p-4 text-sm">
@@ -701,9 +667,9 @@ await invalidateFinancialQueries(queryClient);
                         </div>
                     </div>
                     <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
-                        {formatCurrency(kpis.totalIncome)}
+                        {formatIndicator(kpis.totalIncome)}
                     </p>
-                    <p className="mt-2 text-[10px] text-zinc-400">Según el escenario y periodo seleccionados</p>
+                    <p className="mt-2 text-[10px] text-zinc-400">Según la búsqueda y los filtros seleccionados</p>
                 </Card>
 
                 {/* KPI Card 2: Egresos del Mes */}
@@ -715,9 +681,9 @@ await invalidateFinancialQueries(queryClient);
                         </div>
                     </div>
                     <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
-                        {formatCurrency(kpis.totalExpense)}
+                        {formatIndicator(kpis.totalExpense)}
                     </p>
-                    <p className="mt-2 text-[10px] text-zinc-400">Según el escenario y periodo seleccionados</p>
+                    <p className="mt-2 text-[10px] text-zinc-400">Según la búsqueda y los filtros seleccionados</p>
                 </Card>
 
                 {/* KPI Card 3: Flujo Neto (Highest Visual Prominence) */}
@@ -729,14 +695,14 @@ await invalidateFinancialQueries(queryClient);
                         </div>
                     </div>
                     <p className="text-2xl font-black tracking-tight text-violet-900 dark:text-violet-200">
-                        {formatCurrency(kpis.netFlow)}
+                        {formatIndicator(kpis.netFlow)}
                     </p>
                     <div className="flex items-center gap-1.5 mt-2">
                         <span className={cn(
                             "text-[10px] font-bold px-1.5 py-0.5 rounded",
                             kpis.netFlow >= 0 ? "text-emerald-600 bg-emerald-500/10" : "text-red-500 bg-red-500/10"
                         )}>
-                            {kpis.netFlow >= 0 ? "EXCEDENTE" : "DÉFICIT"}
+                            {indicatorsPending || error ? '—' : kpis.netFlow >= 0 ? 'EXCEDENTE' : 'DÉFICIT'}
                         </span>
                         <span className="text-[10px] text-violet-600/80 dark:text-violet-400/80">Ingresos menos egresos del periodo</span>
                     </div>
@@ -745,17 +711,17 @@ await invalidateFinancialQueries(queryClient);
                 {/* KPI Card 4: Cartera Pendiente (Alert) */}
                 <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm relative overflow-hidden group">
                     <div className="flex justify-between items-center mb-4">
-                        <span className="text-[10px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Saldo por cobrar · {selectedYear}</span>
+                        <span className="text-[10px] font-black text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">Saldo por cobrar · {filters.month ? `${FINANCIAL_MONTHS[Number(filters.month) - 1]} ` : ''}{selectedYear}</span>
                         <div className="rounded-xl bg-destructive/10 p-2">
                             <AlertCircle className="h-4 w-4 text-destructive" />
                         </div>
                     </div>
                     <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
-                        {formatCurrency(kpis.totalReceivable)}
+                        {formatIndicator(kpis.totalReceivable)}
                     </p>
                     <div className="flex items-center gap-1.5 mt-2">
                         <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1.5 py-0.5 rounded">
-                            {data?.accountsReceivable?.length || 0} deudores
+                            {indicatorsPending || error ? '—' : data?.accountsReceivable?.length || 0} deudores
                         </span>
                         <span className="text-[10px] text-zinc-400">pendiente por cobrar</span>
                     </div>
@@ -832,7 +798,7 @@ await invalidateFinancialQueries(queryClient);
             {/* --- SECTION 3: TAB SCENARIO VIEWS --- */}
             <div className="space-y-6">
                 {activeTab === 'records' && (
-                    <FinancialLedger selectedYear={selectedYear} formatCurrency={formatCurrency} />
+                    <FinancialLedger selectedYear={selectedYear} filters={filters} searchPending={searchPending} formatCurrency={formatCurrency} />
                 )}
                 {/* PESTAÑA 1: ANALISIS DE FLUJO */}
                 {activeTab === 'flow' && (
@@ -847,7 +813,7 @@ await invalidateFinancialQueries(queryClient);
                             </div>
                             <div className="h-[320px] w-full">
                                 <ResponsiveContainer width="100%" height="100%">
-                                    <LineChart data={data?.cashFlow || []} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
+                                    <LineChart data={indicatorsPending || error ? [] : data?.cashFlow || []} margin={{ top: 10, right: 30, left: 10, bottom: 5 }}>
                                         <CartesianGrid strokeDasharray="3 3" strokeOpacity={0.05} />
                                         <XAxis
                                             dataKey="month"
@@ -930,7 +896,7 @@ await invalidateFinancialQueries(queryClient);
                                     <div className="absolute inset-0 flex flex-col justify-center items-center pointer-events-none">
                                         <span className="text-[9px] font-black uppercase text-zinc-400">Total Gastos</span>
                                         <span className="text-sm font-black tracking-tight text-zinc-900 dark:text-white">
-                                            {formatCurrency(kpis.totalExpense)}
+                                            {formatIndicator(kpis.totalExpense)}
                                         </span>
                                     </div>
                                 </div>
@@ -956,7 +922,7 @@ await invalidateFinancialQueries(queryClient);
                             {canWriteFinancials && <button type="button" onClick={() => { setReceivableForm({ clientId: '', amount: '', period: `${selectedYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`, dueDate: '', comments: '' }); setIsReceivableEditorOpen(true); }} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700">Nueva cuenta por cobrar</button>}
                         </div>
 
-                        {data?.sourceSummary?.importBatchId && data?.sourceSummary?.totals && (
+                        {!filters.q && !filters.month && data?.sourceSummary?.importBatchId && data?.sourceSummary?.totals && (
                             <Card className="p-4 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                                     <div>
@@ -977,7 +943,7 @@ await invalidateFinancialQueries(queryClient);
                             </Card>
                         )}
 
-                        <p className="text-sm text-zinc-600 dark:text-zinc-300">Obligaciones registradas en {selectedYear} · saldo actual después de abonos. Una promesa de pago no reduce la deuda.</p>
+                        <p className="text-sm text-zinc-600 dark:text-zinc-300">Obligaciones del periodo seleccionado de {selectedYear}{filters.q ? ` · Búsqueda: ${filters.q}` : ''} · saldo actual después de abonos. Una promesa de pago no reduce la deuda.</p>
                         {!!receivablesLedger?.totals?.reviewCount && <p role="alert" className="text-sm text-destructive">Hay registros históricos marcados como pagados sin abonos suficientes vinculados. Su saldo está por verificar y no se suma como deuda confirmada.</p>}
                         {receivablesError ? <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">No fue posible cargar la cartera.<button type="button" onClick={() => refetchReceivables()} className="ml-3 min-h-11 underline">Reintentar</button></div> : isReceivablesLedgerLoading ? (
                             <div className="p-10 bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl text-center">
@@ -1080,7 +1046,7 @@ await invalidateFinancialQueries(queryClient);
                         ) : (
                             <div className="p-10 bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl text-center flex flex-col items-center justify-center">
                                 <ShieldCheck className="w-12 h-12 text-emerald-500 mb-3 animate-pulse" />
-                                <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">Sin obligaciones registradas en {selectedYear}</h4>
+                                <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">No hay obligaciones con estos filtros</h4>
                                 <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mt-1">Este resultado no confirma que no existan deudas de otros periodos o pendientes por registrar.</p>
                             </div>
                         )}
@@ -1098,9 +1064,7 @@ await invalidateFinancialQueries(queryClient);
                                 </p>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
-                                <Select value={payrollMonth} onChange={(event) => setPayrollMonth(Number(event.target.value))} className="rounded-lg border border-zinc-200 bg-white px-3 py-2 text-xs font-semibold text-zinc-700 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100">
-                                    {['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'].map((month, index) => <option key={month} value={index + 1}>{month}</option>)}
-                                </Select>
+                                <span className="text-xs text-zinc-600 dark:text-zinc-300">Liquidación de {FINANCIAL_MONTHS[payrollMonth - 1]} · elige el mes en los filtros superiores</span>
                                 <span className="rounded-lg bg-violet-600/10 px-3 py-2 text-xs font-semibold text-violet-700 dark:text-violet-300" title={`Total contractual: ${formatCurrency(editablePayrollTotal || 0)}`}>
                                     {formatCurrency(editablePayrollTotal || 0)}
                                 </span>
@@ -1220,7 +1184,7 @@ await invalidateFinancialQueries(queryClient);
 
                 {activeTab === 'editor' && (
                     <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
-                        <BankReconciliationPanel selectedYear={selectedYear} canApprove={canApproveFinancials} />
+                        <BankReconciliationPanel selectedYear={selectedYear} canApprove={canApproveFinancials} filters={filters} />
                         <div className="border-t border-zinc-200 pt-5 dark:border-white/10">
                         <div className="flex items-center justify-between gap-4">
                             <div>
@@ -1720,31 +1684,4 @@ const emptyPayrollContractForm = (year) => ({
 });
 
 // Premium pulsing Skeleton Screen component
-const SkeletonLoader = () => {
-    return (
-        <div className="space-y-8 animate-pulse">
-            <div className="flex justify-between items-center mb-10">
-                <div className="space-y-3">
-                    <div className="h-6 w-64 bg-zinc-200 dark:bg-zinc-800 rounded-xl" />
-                    <div className="h-3 w-96 bg-zinc-200 dark:bg-zinc-800 rounded-lg" />
-                </div>
-                <div className="h-10 w-48 bg-zinc-200 dark:bg-zinc-800 rounded-xl" />
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                {[1, 2, 3, 4].map(i => (
-                    <div key={i} className="h-32 bg-zinc-200 dark:bg-zinc-800 rounded-2xl border border-zinc-300/30" />
-                ))}
-            </div>
-
-            <div className="h-10 w-96 bg-zinc-200 dark:bg-zinc-800 rounded-xl" />
-
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-                <div className="lg:col-span-8 h-80 bg-zinc-200 dark:bg-zinc-800 rounded-2xl" />
-                <div className="lg:col-span-4 h-80 bg-zinc-200 dark:bg-zinc-800 rounded-2xl" />
-            </div>
-        </div>
-    );
-};
-
 export default FinancialDashboard;

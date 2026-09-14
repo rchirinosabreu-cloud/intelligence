@@ -44,7 +44,7 @@ export const importBankStatement = async (req, res) => {
 
 export const getBankReconciliation = async (req, res) => {
   try {
-    return res.json(await listBankReconciliation(prisma, Number(req.query.year) || 2026));
+    return res.json(await listBankReconciliation(prisma, Number(req.query.year) || 2026, req.query));
   } catch (error) {
     console.error('[Bank reconciliation] List failed:', error.response?.data || error.message);
     return res.status(500).json({ error: 'BANK_RECONCILIATION_LIST_FAILED', message: 'No fue posible cargar la conciliación bancaria.' });
