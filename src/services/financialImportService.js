@@ -68,8 +68,17 @@ const parseMoney = (value) => {
     return isNegative ? -inferredValue : inferredValue;
 };
 
+const classifyNamedCategory = (label) => {
+    const clean = normalizeText(label);
+    if (/\bdonaci(?:on|ones)\b/.test(clean)) return 'DONACION';
+    if (/\bsiembras?\b/.test(clean)) return 'SIEMBRA';
+    return null;
+};
+
 const classifyExpenseCategory = (label) => {
     const clean = normalizeText(label);
+    const namedCategory = classifyNamedCategory(label);
+    if (namedCategory) return namedCategory;
 
     if (
         clean.includes('nomina') ||
@@ -98,7 +107,7 @@ const classifyEntry = (label, section) => {
     if (section === 'INCOME') {
         return {
             type: 'INCOME',
-            category: normalizeText(label).includes('interes') ? 'FINANCIAL' : 'MEMBRESIA'
+            category: classifyNamedCategory(label) || (normalizeText(label).includes('interes') ? 'FINANCIAL' : 'MEMBRESIA')
         };
     }
 

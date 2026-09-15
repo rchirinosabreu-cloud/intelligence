@@ -1198,6 +1198,8 @@ enum FinancialCategory {
   TAX
   FINANCIAL
   OPERATIVO
+  DONACION
+  SIEMBRA
 }
 
 enum FinancialType {

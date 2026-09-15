@@ -43,7 +43,9 @@ const CATEGORIES = [
     ['ADMINISTRATIVO', 'Administrativo'],
     ['TAX', 'Impuestos y tasas'],
     ['FINANCIAL', 'Financiero y banco'],
-    ['OPERATIVO', 'Operativo']
+    ['OPERATIVO', 'Operativo'],
+    ['DONACION', 'Donaciones'],
+    ['SIEMBRA', 'Siembra']
 ];
 
 const SCENARIOS = [

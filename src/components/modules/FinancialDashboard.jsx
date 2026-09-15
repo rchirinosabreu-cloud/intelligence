@@ -46,7 +46,9 @@ const CATEGORY_COLORS = {
     'ADMINISTRATIVO': '#00AC8A',
     'TAX': '#ef4444',            // Red
     'FINANCIAL': '#10b981',      // Emerald
-    'OPERATIVO': '#71717a'       // Zinc
+    'OPERATIVO': '#71717a',      // Zinc
+    'DONACION': '#009EB9',
+    'SIEMBRA': '#00AC8A'
 };
 
 const CATEGORY_LABELS = {
@@ -58,7 +60,9 @@ const CATEGORY_LABELS = {
     'ADMINISTRATIVO': 'Administrativo',
     'TAX': 'Impuestos/Tasas',
     'FINANCIAL': 'Financiero/Banco',
-    'OPERATIVO': 'Operativo Varios'
+    'OPERATIVO': 'Operativo Varios',
+    'DONACION': 'Donaciones',
+    'SIEMBRA': 'Siembra'
 };
 
 const FinancialDashboard = () => {

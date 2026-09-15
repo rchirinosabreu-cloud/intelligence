@@ -10,7 +10,9 @@ const CATEGORIES = new Set([
     'ADMINISTRATIVO',
     'TAX',
     'FINANCIAL',
-    'OPERATIVO'
+    'OPERATIVO',
+    'DONACION',
+    'SIEMBRA'
 ]);
 const SCENARIOS = new Set(['ACTUAL', 'FORECAST', 'BUDGET']);
 const STATUSES = new Set(['DRAFT', 'POSTED']);
@@ -329,6 +331,8 @@ export const updateFinancialRecord = async (prismaClient, recordId, patch, actor
             status: patch.status || existing.status
         });
         data.origin = existing.origin;
+        // A category/notes edit must not move the original accounting timestamp.
+        if (!patch.date || patch.date === dateInputFrom(existing.date)) data.date = existing.date;
         data.postedAt = existing.postedAt || data.postedAt;
         await assertOpenFinancialPeriod(tx, data.year, data.month);
 
