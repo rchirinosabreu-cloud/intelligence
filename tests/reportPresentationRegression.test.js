@@ -152,9 +152,10 @@ test('report presentation regressions', async (t) => {
   });
 
   await t.test('report sections expose their source id for chart traceability', async () => {
-    const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
-    assert.match(route, /sourceId:\s*res\.sourceId/);
-    assert.match(route, /buildScopedReportData/);
+    const { buildEvidenceReport } = await import('../src/lib/reportEvidence.js');
+    const report = buildEvidenceReport([{ sourceId: 'original-a', panels: [{ id: 'formats', platform: 'INSTAGRAM', metricKey: 'views', dataset: [{ label: 'Reels', value: 40 }] }] }]);
+    assert.equal(report.panels[0].sourceId, 'original-a');
+    assert.ok(report.panels[0].panelId.startsWith('original-a:'));
   });
 
   await t.test('fallback narratives are visibly marked for human review', async () => {
@@ -165,9 +166,13 @@ test('report presentation regressions', async (t) => {
   });
 
   await t.test('vision prompt does not restrict organic metrics to paid keys', async () => {
-    const service = await fs.readFile('src/services/reportVisionService.js', 'utf8');
-    assert.doesNotMatch(service, /key name \(strictly: "spend"/);
-    assert.match(service, /organic semantic keys listed above/);
+    const { validateAndCleanSourceExtraction } = await import('../src/services/reportVisionService.js');
+    const clean = validateAndCleanSourceExtraction({ metrics: [
+      { key: 'profileVisits', value: 159, platform: 'INSTAGRAM', unit: 'count' },
+      { key: 'follows', value: 19, platform: 'INSTAGRAM', unit: 'count' },
+    ] });
+    assert.equal(clean.observations.find(item => item.key === 'profileVisits').value, 159);
+    assert.equal(clean.observations.find(item => item.key === 'follows').value, 19);
   });
 
   await t.test('Reports.jsx encapsulates publishable value guard locally and never references imported hasPublishableValue', async () => {
@@ -231,16 +236,13 @@ test('report presentation regressions', async (t) => {
     assert.match(implementation, /=>\s*\(\s*<SectionInsight/);
   });
 
-  await t.test('report exposes a print-optimized PDF download path instead of canvas screenshots', async () => {
-    const component = await fs.readFile('src/components/modules/Reports.jsx', 'utf8');
-    assert.match(component, /const downloadPDF\s*=/);
+  await t.test('evidence report downloads a versioned PDF rendered by the server', async () => {
+    const component = await fs.readFile('src/components/reports/ReportEvidenceWorkspace.jsx', 'utf8');
+    const service = await fs.readFile('src/services/metricReportPdf.js', 'utf8');
     assert.match(component, /Descargar PDF/);
-    assert.match(component, /buildReportExportHtml\(\{\s*mode:\s*'pdf'\s*\}\)/);
-    assert.match(component, /window\.print\(\)/);
-    const downloadPdfStart = component.indexOf('const downloadPDF');
-    const getImageUrlStart = component.indexOf('\n  const getImageUrl', downloadPdfStart);
-    const implementation = component.slice(downloadPdfStart, getImageUrlStart);
-    assert.doesNotMatch(implementation, /html2canvas|new jsPDF/);
+    assert.match(component, /responseType:\s*'blob'/);
+    assert.match(service, /renderReportPDF/);
+    assert.doesNotMatch(component, /html2canvas|new jsPDF|window\.print/);
   });
 
   await t.test('PDF export CSS controls page size, margins and section breaks', async () => {

@@ -115,14 +115,15 @@ test('report pipeline regressions', async (t) => {
     assert.equal(organic.topContent.length, 1);
   });
 
-  await t.test('source extraction removes zero-only metrics and chart rows before reporting', () => {
+  await t.test('source extraction keeps observed zero metrics; legacy charts retain their historical adapter', () => {
     const source = validateAndCleanSourceExtraction({
       metrics: { clicks: { value: 0 }, ctr: { value: '0.00%' }, impressions: { value: 1200 } },
       dataset: [{ label: 'Clics', value: 0 }, { label: 'Impresiones', value: 1200 }],
       demographics: { ageGender: [{ label: '25-34', hombres: 0, mujeres: 0 }, { label: '35-44', hombres: 3, mujeres: 7 }], cities: [{ label: 'Sin datos', value: 0 }, { label: 'Cartagena', value: 45.4 }], countries: [] }
     });
-    assert.equal(source.metrics.clicks.value, null);
-    assert.equal(source.metrics.ctr.value, null);
+    // A measured zero is evidence; it cannot be treated as an absent reading.
+    assert.equal(source.metrics.clicks.value, 0);
+    assert.equal(source.metrics.ctr.value, 0);
     assert.equal(source.metrics.impressions.value, 1200);
     assert.deepEqual(source.dataset, [{ label: 'Impresiones', value: 1200 }]);
     assert.deepEqual(source.demographics.ageGender, [{ label: '35-44', hombres: 3, mujeres: 7 }]);
@@ -185,7 +186,7 @@ test('report pipeline regressions', async (t) => {
     assert.equal(source.metrics.ctr.value, null);
   });
 
-  await t.test('infers Instagram platform from uploaded organic screenshot filename', () => {
+  await t.test('an Instagram filename does not certify the platform or entity level', () => {
     const source = validateAndCleanSourceExtraction({
       originalName: 'RESUMEN ING.png',
       sectionCategory: 'ORGANIC',
@@ -199,14 +200,14 @@ test('report pipeline regressions', async (t) => {
       }
     });
 
-    assert.equal(source.platform, 'INSTAGRAM');
+    assert.equal(source.platform, 'UNKNOWN');
     assert.equal(source.sectionCategory, 'ORGANIC');
-    assert.equal(source.entityLevel, 'ORGANIC');
+    assert.equal(source.entityLevel, 'UNKNOWN');
     assert.equal(source.metrics.views.value, 20100);
     assert.equal(source.metrics.follows.value, 102);
   });
 
-  await t.test('infers Facebook platform from uploaded organic screenshot filename', () => {
+  await t.test('a Facebook filename does not certify the platform', () => {
     const source = validateAndCleanSourceExtraction({
       originalName: 'CAP X6 FACE.png',
       sectionCategory: 'ORGANIC',
@@ -219,7 +220,7 @@ test('report pipeline regressions', async (t) => {
       }
     });
 
-    assert.equal(source.platform, 'FACEBOOK');
+    assert.equal(source.platform, 'UNKNOWN');
     assert.equal(source.metrics.views.value, 8600);
     assert.equal(source.metrics.interactions.value, 43);
     assert.equal(source.metrics.follows.value, 3);
@@ -457,10 +458,11 @@ test('AI narrative provider uses OpenAI first when OPENAI_API_KEY is configured'
 });
 
 test('report creation stores the selected reporting period for narrative generation', async () => {
-  const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
-  assert.match(route, /validatedNormalizedMetrics\.reportPeriod\s*=\s*\{/);
-  assert.match(route, /start:\s*parsedStartDate\.toISOString\(\)\.slice\(0,\s*10\)/);
-  assert.match(route, /end:\s*parsedEndDate\.toISOString\(\)\.slice\(0,\s*10\)/);
+  const { buildEvidenceReport } = await import('../src/lib/reportEvidence.js');
+  const reportPeriod = { start: '2026-08-01', end: '2026-08-31' };
+  const result = buildEvidenceReport([{ sourceId: 's1', observations: [{ key: 'views', value: 0, platform: 'INSTAGRAM', unit: 'count', scope: 'TOTAL' }] }], { reportPeriod });
+  assert.deepEqual(result.facts[0].period, reportPeriod);
+  assert.equal(result.facts[0].periodProvenance, 'REPORT_DECLARED');
 });
 
 test('AI narrative provider reports the OpenAI failure without silently falling back to Gemini', async () => {
@@ -575,12 +577,12 @@ test('AI narrative prompts include the official selected report period and rejec
   }
 });
 
-test('vision extraction prompt requires organic headline metrics by platform', async () => {
+test('vision extraction prompt preserves metric meaning and assigns each observation its own platform', async () => {
   const service = await fs.readFile('src/services/reportVisionService.js', 'utf8');
-  assert.match(service, /For organic Facebook\/Instagram screenshots, extract visible headline cards/i);
+  assert.match(service, /platform es independiente para CADA métrica/i);
   assert.match(service, /Visualizaciones\s*->\s*views/);
-  assert.match(service, /Seguidores\s*->\s*follows/);
-  assert.match(service, /Clics en el enlace\s*->\s*linkClicks/);
+  assert.match(service, /follows solo crecimiento\/nuevos seguidores explícitos/);
+  assert.match(service, /Clics en el enlace\s*->\s*linkClicks/i);
 });
 
 test('reports narrative endpoint gives AI providers enough time to finish long reports', async () => {
@@ -601,9 +603,15 @@ test('reports frontend waits at least as long as the backend narrative timeout',
   assert.match(frontend, /setReport\(patchResponse\.data\.report\)/);
 });
 
-test('reports route persists platform-specific organic summaries', async () => {
-  const route = await fs.readFile('src/routes/api/reports.js', 'utf8');
-  assert.match(route, /validatedNormalizedMetrics\.organicSummaryByPlatform\s*=\s*scopedReportData\.organicSummaryByPlatform/);
+test('evidence reports retain platform-specific organic observations without summing networks', async () => {
+  const { buildEvidenceReport } = await import('../src/lib/reportEvidence.js');
+  const result = buildEvidenceReport([{ sourceId: 's1', observations: [
+    { key: 'views', value: 1048, platform: 'FACEBOOK', unit: 'count', scope: 'ORGANIC', contextKey: 'ACCOUNT_TOTAL' },
+    { key: 'views', value: 8411, platform: 'INSTAGRAM', unit: 'count', scope: 'ORGANIC', contextKey: 'ACCOUNT_TOTAL' },
+  ] }], { reportPeriod: { start: '2026-08-01', end: '2026-08-31' } });
+  assert.equal(result.facts.length, 2);
+  assert.equal(result.facts.find(fact => fact.platform === 'FACEBOOK').value, 1048);
+  assert.equal(result.facts.find(fact => fact.platform === 'INSTAGRAM').value, 8411);
 });
 
 test('reports route never writes NARRATIVE_FAILED as Prisma status', async () => {

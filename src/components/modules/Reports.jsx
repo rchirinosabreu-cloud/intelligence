@@ -1,4 +1,6 @@
 import Select from '@/components/ui/Select';
+import ReportEvidenceWorkspace from '@/components/reports/ReportEvidenceWorkspace';
+import ReportHistory from '@/components/reports/ReportHistory';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -1073,7 +1075,8 @@ const Reports = () => {
       const response = await axios.get(`${getApiBaseUrl()}/api/db/clients`);
       setClients(response.data || []);
     } catch (error) {
-      console.error('Fetch clients error');
+      console.error('[Reports] No se pudieron cargar los clientes:', error.response?.data || error);
+      toast.error('No se pudieron cargar los clientes. Actualiza para reintentar.');
     }
   };
 
@@ -1159,7 +1162,6 @@ const Reports = () => {
 
     isGeneratingRef.current = true;
     setIsGenerating(true);
-    setReport(null);
     setEditedTexts({
         title: '',
         organic_analysis: [],
@@ -1171,8 +1173,8 @@ const Reports = () => {
     formData.append('periodKind', 'MONTHLY');
     formData.append('startDate', startDate);
     formData.append('endDate', endDate);
-    adsFiles.forEach(file => formData.append('files', file));
-    organicFiles.forEach(file => formData.append('files', file));
+    adsFiles.forEach(file => formData.append('adsFiles', file));
+    organicFiles.forEach(file => formData.append('organicFiles', file));
     if (logoFile) formData.append('logo', logoFile);
 
     try {
@@ -1507,41 +1509,34 @@ const Reports = () => {
   );
 
   return (
-    <div data-build={BUILD_SHA} className="p-6 max-w-7xl mx-auto space-y-10 min-h-screen bg-[#f8fafc] dark:bg-slate-950 text-slate-900 dark:text-slate-50 font-inter">
+    <div data-build={BUILD_SHA} className="p-4 md:p-6 max-w-7xl mx-auto space-y-6 min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-50 font-inter">
       {/* Control Panel */}
-      <div className="bg-white border border-[#e2e8f0] rounded-[2rem] p-8 shadow-sm space-y-8 no-print">
-         <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 border-b border-slate-100 pb-8">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 md:p-6 shadow-sm space-y-6 no-print">
+         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-6">
             <div className="space-y-1">
-              <h1 className="text-2xl font-bold tracking-tight text-slate-900">Reporte de desempeño digital</h1>
-              <p className="text-sm text-slate-500 font-medium italic">Análisis Multimodal con IA v7.0</p>
+              <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">Reporte de desempeño digital</h1>
+              <p className="text-sm text-slate-600 dark:text-slate-300">Carga las capturas, revisa las cifras y prepara el informe del cliente.</p>
             </div>
-            <div className="flex gap-3">
-               {report && (
-                 <>
-                   <button onClick={downloadPDF} className="px-6 py-2.5 bg-primary hover:opacity-90 text-white border border-primary rounded-xl text-xs font-bold transition-all">
-                    Descargar PDF
-                   </button>
-                   <button onClick={downloadHTML} className="px-6 py-2.5 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold transition-all">
-                    Descargar Reporte HTML
-                   </button>
-                 </>
-               )}
+            <div className="flex flex-wrap gap-3">
                <button
                 onClick={generateReport}
                 disabled={isGenerating || (organicFiles.length === 0 && adsFiles.length === 0)}
-                className="px-8 py-2.5 bg-primary hover:opacity-90 disabled:opacity-50 text-white text-xs font-bold rounded-xl shadow-lg transition-all flex items-center gap-2"
+                className="min-h-11 px-4 py-2.5 bg-primary hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors flex items-center gap-2"
                >
                 {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                {isGenerating ? "Procesando..." : "Generar Auditoría"}
+                {isGenerating ? "Leyendo capturas…" : "Leer capturas"}
                </button>
             </div>
          </div>
 
          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
             <div className="space-y-4">
-              <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Cliente</label>
+              <label htmlFor="report-client" className="text-sm font-medium text-slate-700 dark:text-slate-200">Cliente</label>
               <Select
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 text-sm font-medium"
+                id="report-client"
+                aria-label="Cliente del reporte"
+                disabled={isGenerating}
+                className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 text-sm font-medium"
                 value={selectedClientId}
                 onChange={(e) => setSelectedClientId(e.target.value)}
               >
@@ -1558,31 +1553,33 @@ const Reports = () => {
                   <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-700 dark:text-slate-100" />
                 </label>
               </div>
-              <div className="relative group border border-dashed border-slate-200 rounded-xl p-3 hover:bg-slate-50 transition-all cursor-pointer">
-                 <input type="file" accept="image/*" onChange={(e) => handleFilesChange('logo', e)} className="absolute inset-0 opacity-0 cursor-pointer" />
+              <div className="relative group border border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer focus-within:ring-2 focus-within:ring-primary/40">
+                 <input type="file" aria-label="Logo del cliente, opcional" disabled={isGenerating} accept="image/png,image/jpeg,image/webp" onChange={(e) => handleFilesChange('logo', e)} className="absolute inset-0 opacity-0 cursor-pointer w-full" />
                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-white border border-slate-100 rounded-lg flex items-center justify-center">
+                    <div className="w-8 h-8 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg flex items-center justify-center">
                        {logoFile ? <CheckCircle2 className="w-4 h-4 text-emerald-500" /> : <Upload className="w-4 h-4 text-slate-300" />}
                     </div>
-                    <span className="text-[11px] font-bold text-slate-500 truncate">{logoFile ? logoFile.name : "Logo PNG"}</span>
+                    <span className="text-xs font-medium text-slate-600 dark:text-slate-300 truncate">{logoFile ? logoFile.name : "Logo del cliente (opcional)"}</span>
                  </div>
               </div>
             </div>
 
             <div className="space-y-4">
-               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pantallazos Orgánicos (Máx 8)</label>
-               <div className="relative group border border-dashed border-slate-200 rounded-xl p-6 hover:bg-emerald-50/20 transition-all cursor-pointer text-center">
-                 <input type="file" multiple accept="image/png, image/jpeg, image/jpg" onChange={(e) => handleFilesChange('organic', e)} className="absolute inset-0 opacity-0 cursor-pointer" />
+               <label htmlFor="report-social-files" className="text-sm font-medium text-slate-700 dark:text-slate-200">Facebook e Instagram (máx. 8)</label>
+               <div className="relative group border border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer text-center focus-within:ring-2 focus-within:ring-primary/40">
+                 <input id="report-social-files" aria-label="Capturas de Facebook e Instagram" type="file" multiple disabled={isGenerating} accept="image/png,image/jpeg,image/webp" onChange={(e) => handleFilesChange('organic', e)} className="absolute inset-0 opacity-0 cursor-pointer w-full" />
                  <Plus className="w-6 h-6 text-slate-300 mx-auto mb-2" />
-                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">+ AÑADIR RRSS</span>
+                 <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Añadir capturas de redes</span>
                </div>
                <div className="grid grid-cols-4 gap-2">
                  {organicPreviews.map((src, i) => (
-                   <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
+                   <div key={src} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 group">
                       <img src={src} className="w-full h-full object-cover" alt={`Preview RRSS ${i}`} />
                       <button
                         onClick={() => removeFile('organic', i)}
-                        className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                        aria-label={`Eliminar captura de redes ${i + 1}`}
+                        disabled={isGenerating}
+                        className="absolute top-0 right-0 bg-destructive text-white min-h-11 min-w-11 p-2 rounded-lg flex items-center justify-center focus-visible:ring-2 focus-visible:ring-destructive"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -1592,19 +1589,21 @@ const Reports = () => {
             </div>
 
             <div className="space-y-4">
-               <label className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pantallazos Pauta (Máx 6)</label>
-               <div className="relative group border border-dashed border-slate-200 rounded-xl p-6 hover:bg-cyan-50/20 transition-all cursor-pointer text-center">
-                 <input type="file" multiple accept="image/png, image/jpeg, image/jpg" onChange={(e) => handleFilesChange('ads', e)} className="absolute inset-0 opacity-0 cursor-pointer" />
+               <label htmlFor="report-ads-files" className="text-sm font-medium text-slate-700 dark:text-slate-200">Pauta (máx. 6)</label>
+               <div className="relative group border border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-6 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer text-center focus-within:ring-2 focus-within:ring-primary/40">
+                 <input id="report-ads-files" aria-label="Capturas de pauta" type="file" multiple disabled={isGenerating} accept="image/png,image/jpeg,image/webp" onChange={(e) => handleFilesChange('ads', e)} className="absolute inset-0 opacity-0 cursor-pointer w-full" />
                  <Plus className="w-6 h-6 text-slate-300 mx-auto mb-2" />
-                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">+ AÑADIR ADS</span>
+                 <span className="text-sm font-medium text-slate-600 dark:text-slate-300">Añadir capturas de pauta</span>
                </div>
                <div className="grid grid-cols-4 gap-2">
                  {adsPreviews.map((src, i) => (
-                   <div key={i} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 group">
+                   <div key={src} className="relative aspect-square rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700 group">
                       <img src={src} className="w-full h-full object-cover" alt={`Preview ADS ${i}`} />
                       <button
                         onClick={() => removeFile('ads', i)}
-                        className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full opacity-0 group-hover:opacity-100 transition-opacity shadow-lg"
+                        aria-label={`Eliminar captura de pauta ${i + 1}`}
+                        disabled={isGenerating}
+                        className="absolute top-0 right-0 bg-destructive text-white min-h-11 min-w-11 p-2 rounded-lg flex items-center justify-center focus-visible:ring-2 focus-visible:ring-destructive"
                       >
                         <X className="w-3 h-3" />
                       </button>
@@ -1614,6 +1613,8 @@ const Reports = () => {
             </div>
          </div>
       </div>
+
+      <ReportHistory clientId={selectedClientId} apiBaseUrl={getApiBaseUrl()} onOpen={setReport} disabled={isGenerating} refreshKey={report ? `${report.id}:${report.normalizedMetrics?.version || 0}` : ''} />
 
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
@@ -1652,6 +1653,12 @@ const Reports = () => {
       `}} />
 
       {/* Main Report Canvas */}
+      {report && report.normalizedMetrics?.schemaVersion !== 2 && (
+        <p role="note" className="rounded-xl border border-slate-200 bg-white p-4 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200">
+          Este informe usa el formato anterior y se conserva para consulta. Vuelve a cargar sus capturas para revisar las cifras y generar un PDF con trazabilidad.
+        </p>
+      )}
+      <fieldset disabled={Boolean(report && report.normalizedMetrics?.schemaVersion !== 2)} className="min-w-0 border-0 p-0">
       <AnimatePresence mode="wait">
         {isGeneratingNarrative ? (
           <div className="h-[500px] flex flex-col items-center justify-center space-y-6 bg-white border border-slate-200 rounded-[2.5rem] shadow-sm no-print">
@@ -1664,7 +1671,9 @@ const Reports = () => {
              </div>
           </div>
         ) : report ? (
-          report.status === 'DRAFT' ? (
+          report.normalizedMetrics?.schemaVersion === 2 ? (
+            <ReportEvidenceWorkspace report={report} onReportChange={setReport} apiBaseUrl={getApiBaseUrl()} />
+          ) : report.status === 'DRAFT' ? (
             <ReportMetricsReview
               report={report}
               onApprove={handleApproveReview}
@@ -2027,17 +2036,18 @@ const Reports = () => {
             </div>
           )
         ) : (
-          <div className="h-[500px] flex flex-col items-center justify-center space-y-8 bg-white border border-slate-200 border-dashed rounded-[3rem]">
-             <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center shadow-inner">
-                <Layout className="w-10 h-10 text-slate-200" />
+          <div className="min-h-64 p-6 flex flex-col items-center justify-center space-y-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 border-dashed rounded-2xl">
+             <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center">
+                <Layout className="w-8 h-8 text-slate-500 dark:text-slate-400" />
              </div>
              <div className="text-center space-y-2">
-                <h3 className="text-xl font-bold text-slate-400">Analizador Multimodal v7.0</h3>
-                <p className="text-sm text-slate-400 max-w-xs font-medium">Sube los pantallazos de métricas para generar un informe de alto nivel.</p>
+                <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-200">Prepara el informe del período</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300 max-w-md">Selecciona el cliente y las fechas. Añade las capturas o retoma un reporte guardado para revisar sus cifras.</p>
              </div>
           </div>
         )}
       </AnimatePresence>
+      </fieldset>
     </div>
   );
 };

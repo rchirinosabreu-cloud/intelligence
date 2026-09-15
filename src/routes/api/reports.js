@@ -7,14 +7,13 @@ import {
     generateNarrativeWithAIProvider,
     generatePublishableNarrative,
     validateAndCleanSourceExtraction,
-    mergeSourceMetricsIntoAccumulator,
-    finalizeNormalizedMetrics,
     preserveApprovedReportData,
     reconcileNarrativeSections,
     buildNarrativeFailureUpdate
 } from '../../services/reportVisionService.js';
 import { v4 as uuidv4 } from 'uuid';
-import { buildScopedReportData, normalizeAdsTableRows, orderReportSections } from '../../lib/reportStructure.js';
+import { createEvidenceExtractionHandler, createEvidenceWorkflowHandlers, REPORT_EVIDENCE_PIPELINE_VERSION } from './reportEvidenceRoutes.js';
+import { buildMetricReportHtml, renderMetricReportPdf } from '../../services/metricReportPdf.js';
 import { sanitizeNarrativeForReport } from '../../lib/reportPresentation.js';
 import { isSafeStoragePath } from '../../config/security.js';
 import {
@@ -26,10 +25,10 @@ import {
 const router = express.Router();
 const upload = multer({
     storage: multer.memoryStorage(),
-    limits: { fileSize: 20 * 1024 * 1024, files: 12 }
+    limits: { fileSize: 20 * 1024 * 1024, files: 15 }
 });
-const REPORT_PIPELINE_VERSION = 'openai-vision-2026-08-30.1';
-const REPORT_DEPLOY_COMMIT = process.env.REPORT_DEPLOY_COMMIT || 'development';
+const REPORT_PIPELINE_VERSION = REPORT_EVIDENCE_PIPELINE_VERSION;
+const REPORT_DEPLOY_COMMIT = process.env.REPORT_DEPLOY_COMMIT || process.env.RAILWAY_GIT_COMMIT_SHA || 'development';
 
 export { buildNarrativeFailureUpdate };
 export const narrativeFailureRouteContract = { status: 'REVIEW', narrative: { generationMode: 'NARRATIVE_FAILED' } };
@@ -237,280 +236,22 @@ router.post('/generate', upload.any(), async (req, res) => {
 });
 
 
-router.post('/extract-metrics', upload.any(), async (req, res) => {
-    const requestId = uuidv4();
-    console.log(`[Reports API][ID:${requestId}] Pipeline ${REPORT_PIPELINE_VERSION}`);
-    try {
-        console.log(`[Reports API][ID:${requestId}] Pipeline ${REPORT_PIPELINE_VERSION}`);
-        const { clientId, periodKind, startDate, endDate } = req.body;
-        if (!clientId) {
-            return res.status(400).json({ error: 'Client ID is required' });
-        }
+router.post('/extract-metrics', upload.any(), createEvidenceExtractionHandler({
+    prisma, uploadClientFile, extractMetrics: extractMetricsWithOpenAI,
+    cleanExtraction: validateAndCleanSourceExtraction
+}));
 
-        const client = await prisma.client.findUnique({ where: { id: clientId } });
-        if (!client) {
-            return res.status(404).json({ error: 'Client not found' });
-        }
-
-        const files = req.files || [];
-        if (files.length === 0) {
-            return res.status(400).json({ error: 'At least one screenshot is required' });
-        }
-
-        // Process files in parallel with Promise.allSettled
-        const filePromises = files.map(async (file) => {
-            const sourceId = uuidv4();
-
-            // 1. Upload to GCS
-            const uploadResult = await uploadClientFile(file, client.name);
-
-            // 2. Vision analysis
-            const extracted = await extractMetricsWithOpenAI(file.buffer, file.mimetype);
-
-            // 3. Validation and cleaning by Source
-            const cleaned = validateAndCleanSourceExtraction({
-                ...extracted,
-                originalName: file.originalname
-            });
-
-            return {
-                sourceId,
-                storagePath: uploadResult.gcsPath,
-                ...cleaned,
-                originalName: file.originalname
-            };
-        });
-
-        const settleResults = await Promise.allSettled(filePromises);
-
-        const successful = [];
-        const partial = [];
-        const failed = [];
-        const allWarnings = [];
-
-        settleResults.forEach((res, index) => {
-            const originalName = files[index]?.originalname || `Captura ${index + 1}`;
-            if (res.status === 'fulfilled') {
-                const val = res.value;
-                if (val.usable) {
-                    successful.push(val);
-                    if (val.warnings && val.warnings.length > 0) {
-                        allWarnings.push(...val.warnings);
-                    }
-                } else {
-                    partial.push({
-                        originalName: val.originalName || originalName,
-                        reason: "Información extraída no contiene datos utilizables o métricas reconocibles.",
-                        ...val
-                    });
-                    allWarnings.push(`Archivo parcial (${originalName}): No se detectaron métricas ni audiencias.`);
-                }
-            } else {
-                const err = res.reason || {};
-                console.error(`[Reports API][ID:${requestId}] Source failed (${originalName}):`, err.message || String(err));
-                failed.push({
-                    originalName,
-                    error: err.message || String(err)
-                });
-                allWarnings.push(`Fallo en lectura (${originalName}): ${err.message || String(err)}`);
-            }
-        });
-
-        const processingSummary = {
-            totalFiles: files.length,
-            successfulFiles: successful.length,
-            partialFiles: partial.length,
-            failedFiles: failed.length
-        };
-
-        // Responder con estado HTTP 422 única y exclusivamente si ninguna imagen del lote aportó información utilizable
-        if (successful.length === 0) {
-            return res.status(422).json({
-                error: 'AI response validation failed',
-                details: 'Ninguna de las imágenes del lote proporcionó datos utilizables (métricas, gráficos o audiencias).',
-                processingSummary,
-                warnings: allWarnings,
-                pipelineVersion: REPORT_PIPELINE_VERSION,
-                requestId
-            });
-        }
-
-        let accumulator = null;
-        const processedSources = [];
-        const extractedSections = [];
-        const narrativeDrafts = [];
-
-        successful.forEach((res, index) => {
-            // Merge into semantic accumulator
-            accumulator = mergeSourceMetricsIntoAccumulator(accumulator, res);
-
-            // Register sections
-            const hasDemographics = ['ageGender', 'cities', 'countries']
-                .some(key => Array.isArray(res.demographics?.[key]) && res.demographics[key].length > 0);
-            const hasSectionData = (Array.isArray(res.dataset) && res.dataset.length > 0) || hasDemographics;
-            if (hasSectionData) {
-                extractedSections.push({
-                    sectionId: uuidv4(),
-                    sourceId: res.sourceId,
-                    chartType: res.chartType || 'LINE_CHART',
-                    title: res.title || 'Sección',
-                    sectionCategory: res.sectionCategory || 'ADS',
-                    platform: res.platform || 'META_ADS',
-                    dataset: res.dataset,
-                    screenType: res.screenType,
-                    entityLevel: res.entityLevel,
-                    resultType: res.resultType,
-                    period: res.period,
-                    narrativeComment: ""
-                });
-            }
-
-            if (res.narrativeDraft) {
-                narrativeDrafts.push(`Captura ${index + 1}: ${res.narrativeDraft}`);
-            }
-
-            // Map extracted platform to valid MetricSourcePlatform enum (META_ADS/ORGANIC_RRSS)
-            let dbPlatform = 'META_ADS';
-            if (res.sectionCategory === 'ORGANIC' || res.platform === 'ORGANIC_RRSS' || res.platform === 'FACEBOOK' || res.platform === 'INSTAGRAM') {
-                dbPlatform = 'ORGANIC_RRSS';
-            }
-
-            processedSources.push({
-                sourceId: res.sourceId,
-                storagePath: res.storagePath,
-                platform: dbPlatform,
-                screenType: res.screenType,
-                extractionData: {
-                    metrics: res.metrics,
-                    chartType: res.chartType,
-                    title: res.title,
-                    sectionCategory: res.sectionCategory,
-                    platform: res.platform,
-                    dataset: res.dataset,
-                    demographics: res.demographics,
-                    topContent: res.topContent,
-                    entityLevel: res.entityLevel,
-                    resultType: res.resultType,
-                    period: res.period
-                },
-                confidence: parseFloat(res.confidence) || 1.0,
-                warnings: res.warnings || []
-            });
-        });
-
-        // Finalize consolidated metrics
-        const validatedNormalizedMetrics = finalizeNormalizedMetrics(accumulator);
-
-        const scopedReportData = buildScopedReportData(successful.map((source) => ({
-            sourceId: source.sourceId,
-            platform: source.platform,
-            sectionCategory: source.sectionCategory,
-            screenType: source.screenType,
-            entityLevel: source.entityLevel,
-            resultType: source.resultType,
-            period: source.period,
-            metrics: source.metrics,
-            dataset: source.dataset,
-            demographics: source.demographics,
-            topContent: source.sectionCategory === 'ADS'
-                ? normalizeAdsTableRows(source.topContent)
-                : source.topContent
-        })));
-        validatedNormalizedMetrics.organicSummary = scopedReportData.organicSummary;
-        validatedNormalizedMetrics.organicSummaryByPlatform = scopedReportData.organicSummaryByPlatform;
-        validatedNormalizedMetrics.adsSummary = scopedReportData.adsSummary;
-        validatedNormalizedMetrics.sourceExtractions = scopedReportData.sources;
-
-        // Inject processingSummary and warnings directly into the normalizedMetrics object
-        validatedNormalizedMetrics.processingSummary = processingSummary;
-        validatedNormalizedMetrics.warnings = allWarnings;
-
-        const combinedNarrative = narrativeDrafts.join('\n\n') || "No hay narrativa disponible.";
-
-        const parsedStartDate = startDate ? new Date(startDate) : new Date(new Date().setDate(1));
-        const parsedEndDate = endDate ? new Date(endDate) : new Date();
-        validatedNormalizedMetrics.reportPeriod = {
-            start: parsedStartDate.toISOString().slice(0, 10),
-            end: parsedEndDate.toISOString().slice(0, 10)
-        };
-
-        // Enforce valid enums MONTHLY and DRAFT
-        const validPeriodKinds = ['MONTHLY', 'QUARTERLY'];
-        const finalPeriodKind = validPeriodKinds.includes(periodKind) ? periodKind : 'MONTHLY';
-
-        // Save DRAFT report in database under a secure transaction with no spread fields
-        let report;
-        try {
-            report = await prisma.$transaction(async (tx) => {
-                return await tx.metricReport.create({
-                    data: {
-                        clientId: client.id,
-                        periodKind: finalPeriodKind,
-                        startDate: parsedStartDate,
-                        endDate: parsedEndDate,
-                        status: 'DRAFT',
-                        normalizedMetrics: validatedNormalizedMetrics,
-                        narrative: {
-                            draft: combinedNarrative,
-                            final: combinedNarrative,
-                            headline: "",
-                            summaryPoints: [],
-                            keyAchievements: combinedNarrative,
-                            actionPlan: [],
-                            logrosYAvances: [],
-                            contenidoTopAnalisis: "",
-                            oportunidadesYAprendizajes: [],
-                            recomendacionesEstrategicas: []
-                        },
-                        sections: orderReportSections(extractedSections),
-                        sources: {
-                            create: processedSources
-                        }
-                    },
-                    include: {
-                        sources: true,
-                        client: true
-                    }
-                });
-            });
-            console.log(`[Reports API] MetricReport created successfully with ID ${report.id}.`);
-        } catch (dbError) {
-            console.error(`[Reports API][ID:${requestId}] Prisma insertion failed:`, dbError.message || dbError);
-            return res.status(500).json({
-                error: 'Database validation or insertion error',
-                message: 'Internal Database Error',
-                requestId
-            });
-        }
-
-        res.status(201).json({
-            success: true,
-            pipelineVersion: REPORT_PIPELINE_VERSION,
-            report
-        });
-
-    } catch (error) {
-        console.error(`[Reports API][ID:${requestId}] Error extracting metrics:`, error.message);
-        if (error.isAIUnavailable) {
-            return res.status(502).json({
-                error: 'AI service unavailable or failed',
-                details: error.message,
-                requestId
-            });
-        } else if (error.isAIInvalidResponse || error.message.includes('validation') || error.message.includes('schema') || error.message.includes('Unexpected') || error.message.includes('Metric')) {
-            return res.status(422).json({
-                error: 'AI response validation failed',
-                details: error.message,
-                requestId
-            });
-        }
-        res.status(500).json({
-            error: 'Internal Server Error during metrics extraction',
-            message: error.message,
-            requestId
-        });
-    }
+const evidenceHandlers = createEvidenceWorkflowHandlers({
+    prisma, buildHtml: buildMetricReportHtml, renderPdf: renderMetricReportPdf
 });
+router.get('/', evidenceHandlers.list);
+router.get('/:reportId', evidenceHandlers.get);
+router.patch('/:reportId/observations', evidenceHandlers.review);
+router.post('/:reportId/analyze', evidenceHandlers.analyze);
+router.post('/:reportId/publish', evidenceHandlers.publish);
+router.post('/:reportId/reopen', evidenceHandlers.reopen);
+router.get('/:reportId/preview', evidenceHandlers.preview);
+router.get('/:reportId/pdf', evidenceHandlers.pdf);
 
 router.patch('/:reportId/metrics', async (req, res) => {
     try {
@@ -530,6 +271,7 @@ router.patch('/:reportId/metrics', async (req, res) => {
         }
 
         const dbMetrics = existingReport.normalizedMetrics || {};
+        if (dbMetrics.schemaVersion === 2) return res.status(409).json({ error: 'Usa la revisión por observaciones para actualizar este informe.' });
         const reviewedMetrics = {};
         for (const key of ['spend', 'impressions', 'reach', 'clicks', 'ctr', 'results']) {
             const dbMetric = dbMetrics[key] || {};
@@ -603,6 +345,7 @@ router.post('/:reportId/generate-narrative', async (req, res) => {
         }
 
         const metrics = report.normalizedMetrics || {};
+        if (metrics.schemaVersion === 2) return res.status(409).json({ error: 'Usa el análisis con referencias para este informe.' });
         const sections = report.sections || [];
 
         console.log(`[Reports API] Generating narrative for report ${reportId}...`);

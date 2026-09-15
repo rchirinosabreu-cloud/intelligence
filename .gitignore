@@ -42,3 +42,10 @@ artifacts/
 /skills/
 /.*/skills/
 !/.agents/skills/
+
+# Private report captures, model responses and local verification artifacts.
+/tmp/reports-audit/
+/tmp/reports-implementation/
+/docs/REPORTS_REAL_SCREENSHOTS_AUDIT_2026-09-15.md
+/docs/REPORTS_VISION_EVALUATION_2026-09-15.md
+/docs/audits/reports-2026-09-15/
