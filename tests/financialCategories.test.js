@@ -86,6 +86,13 @@ test('schema, entry selector and charts expose both categories, including an unu
     }
 });
 
+test('the editor allows imported entries without an account while new actual entries still require one', () => {
+    const ledger = read('../src/components/modules/financial/FinancialLedger.jsx');
+    assert.match(ledger, /required=\{form\.scenario === 'ACTUAL' && editingRecord\?\.origin !== 'IMPORT'\}/);
+    assert.throws(() => normalizeFinancialRecordInput({ ...existing, date: '2026-08-01', origin: 'MANUAL', category: 'DONACION' }), { code: 'FINANCIAL_RECORD_ACCOUNT_REQUIRED' });
+    assert.equal(normalizeFinancialRecordInput({ ...existing, date: '2026-08-01', category: 'DONACION' }).accountId, null);
+});
+
 test('startup adds categories idempotently without touching financial records', async () => {
     const { ensureFinancialCategoriesSchema } = await import('../scripts/ensure-financial-categories-schema.js');
     const queries = [];

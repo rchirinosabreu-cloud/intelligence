@@ -17,13 +17,21 @@ const account = { id: 'demo-account', name: 'Cuenta de muestra', type: 'BANK', b
 const records = Array.from({ length: 32 }, (_, i) => ({ id: `rodny-${i}`, year: 2026, month: 9, date: '2026-09-01T12:00:00Z', scenario: 'ACTUAL', status: 'POSTED', type: i===31 ? 'EXPENSE' : 'INCOME', amount: i===31 ? 50750 : 100250, category: 'SERVICIO', origin: 'MANUAL', description: i===31 ? 'Honorarios Rodny' : `Servicio Rodny ${i+1}`, counterparty: 'Rodny Chirinos', accountId: account.id, account }));
 records.push({ ...records[0], id:'brain', description:'Suscripción Brain Studio', counterparty:'Brain Studio', type:'EXPENSE', amount:400000 });
 records.push({ ...records[0], id:'august', description:'Servicio Rodny agosto', month:8, date:'2026-08-01T12:00:00Z', amount:1000000 });
+const categoryExample = new URLSearchParams(location.search).get('categories') === '1';
+if (categoryExample) records.splice(0, records.length, { ...records[0], id:'donation-demo', description:'Donación de muestra', counterparty:'', category:'OPERATIVO', origin:'IMPORT', accountId:null, account:null, type:'EXPENSE', month:8, date:'2026-08-01T05:00:00Z', amount:150000 });
 axios.defaults.adapter = async config => {
     const url = new URL(config.url, location.origin), path = url.pathname, q = (url.searchParams.get('q') || '').trim().toLowerCase();
     if (q === 'fallo') throw Object.assign(new Error('Error simulado'), { response: { data: { message:'Lectura financiera no disponible (simulada)' } } });
     const filtered = records.filter(r => (!q || `${r.description} ${r.counterparty}`.toLowerCase().includes(q)) && (!url.searchParams.get('month') || r.month===Number(url.searchParams.get('month'))) && (!url.searchParams.get('type') || r.type===url.searchParams.get('type')) && (!url.searchParams.get('scenario') || r.scenario===url.searchParams.get('scenario')));
     const income = filtered.filter(r=>r.type==='INCOME').reduce((n,r)=>n+r.amount,0), expense = filtered.filter(r=>r.type==='EXPENSE').reduce((n,r)=>n+r.amount,0);
     let data;
-    if(path.endsWith('/dashboard')) data={cashFlow:[{year:2026,month:9,income,expense,netFlow:income-expense}],categoriesDistribution:{INCOME:{SERVICIO:income},EXPENSE:{SERVICIO:expense}},accountsReceivable:[],payroll:{collaborators:[]},sourceSummary:{totals:{income,expense,netFlow:income-expense,receivable:0}}};
+    if (categoryExample && config.method === 'patch' && path.endsWith('/records/donation-demo')) {
+        const patch = JSON.parse(config.data);
+        if (patch.accountId !== null || patch.amount !== 150000 || patch.date !== '2026-08-01') throw new Error('La muestra debe conservar importe, fecha y cuenta');
+        records[0].category = patch.category;
+        data = records[0];
+    }
+    else if(path.endsWith('/dashboard')) data={cashFlow:[{year:2026,month:9,income,expense,netFlow:income-expense}],categoriesDistribution:{INCOME:{SERVICIO:income},EXPENSE:{SERVICIO:expense}},accountsReceivable:[],payroll:{collaborators:[]},sourceSummary:{totals:{income,expense,netFlow:income-expense,receivable:0}}};
     else if(path.endsWith('/records')) { const page=Number(url.searchParams.get('page')||1),size=Number(url.searchParams.get('pageSize')||25); data={items:filtered.slice((page-1)*size,page*size),total:filtered.length,page,pageSize:size}; }
     else if(path.endsWith('/accounts')) data={accounts:[account]};
     else if(path==='/api/clients') data=[];
