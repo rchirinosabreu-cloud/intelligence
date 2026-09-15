@@ -270,7 +270,7 @@ export default function ReportEvidenceWorkspace({ report, onReportChange, apiBas
 
     {error && <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" role="alert">{error}</div>}
     {notice && <p className="text-sm text-foreground" role="status">{notice}</p>}
-    {(conflict || stale) && <button className={button} disabled={Boolean(busy)} onClick={reload}>{hasDraft ? 'Descartar borrador y recargar versión vigente' : 'Recargar versión vigente'}</button>}
+    {(conflict || stale) && <button className={hasDraft ? 'brain-danger-button-outline brain-destructive-text inline-flex min-h-11 items-center justify-center rounded-xl border bg-background px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50' : button} disabled={Boolean(busy)} onClick={reload}>{hasDraft ? 'Descartar borrador y recargar versión vigente' : 'Recargar versión vigente'}</button>}
 
     {(state.blocking.length > 0 || state.pendingSources.length > 0) && <section className={surface} aria-labelledby="report-pending-title"><h3 id="report-pending-title" className="text-base font-semibold text-destructive">Revisión necesaria</h3>
       {state.blocking.length > 0 && <ul className="mt-3 list-disc space-y-2 pl-5 text-sm">{state.blocking.map(issue => <li key={issue.id}>{issue.message}</li>)}</ul>}

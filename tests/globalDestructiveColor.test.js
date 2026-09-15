@@ -6,6 +6,30 @@ import { join } from 'node:path';
 const DESTRUCTIVE_TOKEN = '346.84 77.17% 49.8%';
 const semanticDangerPattern = /(?:text|bg|border|ring|shadow|fill)-destructive|brain-(?:danger|alert)|variant=["']destructive["']/;
 
+const findUnstyledDestructiveButtons = (source) => {
+  // Resolve only literal class constants referenced by this button. Never use
+  // unrelated declarations or styles from a preceding/following button.
+  const declarations = new Map();
+  for (const [, name] of source.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*=/g)) {
+    declarations.set(name, (declarations.get(name) || 0) + 1);
+  }
+  const classConstants = new Map();
+  for (const match of source.matchAll(/\bconst\s+([\w$]+)\s*=\s*(?:'([^'\\\r\n]*)'|"([^"\\\r\n]*)")\s*;/g)) {
+    // Ambiguous/shadowed names stay unresolved instead of guessing a scope.
+    if (declarations.get(match[1]) === 1) classConstants.set(match[1], match[2] ?? match[3]);
+  }
+
+  const buttons = source.matchAll(/<(button|Button)\b(?:(?!<\/?(?:button|Button)\b)[\s\S])*?<\/\1>/g);
+  return [...buttons]
+    .filter(match => /(?:Eliminar|Borrar|Descartar)/.test(match[0]))
+    .filter(match => {
+      const button = match[0].replace(/\bclassName\s*=\s*\{\s*([\w$]+)\s*\}/g,
+        (attribute, name) => classConstants.has(name) ? `className="${classConstants.get(name)}"` : attribute);
+      return !semanticDangerPattern.test(button);
+    })
+    .map(match => match.index);
+};
+
 const collectJsxFiles = (directory) => readdirSync(directory, { withFileTypes: true }).flatMap(entry => {
   const path = join(directory, entry.name);
   if (entry.isDirectory()) return collectJsxFiles(path);
@@ -38,14 +62,64 @@ test('text-only destructive buttons consume the semantic destructive token', () 
 
   for (const file of collectJsxFiles('src')) {
     const source = readFileSync(file, 'utf8');
-    for (const match of source.matchAll(/<(?:button|Button)\b[^>]*>[\s\S]{0,500}?(?:Eliminar|Borrar|Descartar)[\s\S]{0,80}?<\/(?:button|Button)>/g)) {
-      if (!semanticDangerPattern.test(match[0])) {
-        failures.push(`${file}:${source.slice(0, match.index).split('\n').length}`);
-      }
+    for (const index of findUnstyledDestructiveButtons(source)) {
+      failures.push(`${file}:${source.slice(0, index).split('\n').length}`);
     }
   }
 
   assert.deepEqual(failures, [], `Text-only destructive buttons without the global token:\n${failures.join('\n')}`);
+});
+
+test('destructive button validation resolves its referenced local string class constant', () => {
+  const source = `
+    const action = 'text-primary min-h-11';
+    const destructive = 'brain-destructive-text text-destructive min-h-11';
+    <button className={action} onClick={() => move()}>Subir etapa</button>
+    <button className={destructive} onClick={() => remove()}>Eliminar etapa</button>
+    <Button className={destructive}>Borrar cuota</Button>
+  `;
+  assert.deepEqual(findUnstyledDestructiveButtons(source), []);
+});
+
+test('an unused destructive constant cannot style a neutral destructive button', () => {
+  const source = `
+    const destructive = 'text-destructive';
+    const action = 'text-primary';
+    <button className={action}>Eliminar etapa</button>
+    <button className="text-primary">Descartar borrador y recargar</button>
+  `;
+  assert.deepEqual(findUnstyledDestructiveButtons(source), [source.indexOf('<button'), source.lastIndexOf('<button')]);
+});
+
+test('ambiguous local class names do not borrow a constant from another scope', () => {
+  const source = `
+    function Neutral() {
+      const action = 'text-primary';
+      return <button className={action}>Eliminar etapa</button>;
+    }
+    function Other() {
+      const action = 'text-destructive';
+      return <button className={action}>Continuar</button>;
+    }
+  `;
+  assert.deepEqual(findUnstyledDestructiveButtons(source), [source.indexOf('<button')]);
+});
+
+test('destructive styles on an adjacent button cannot hide an unstyled delete button', () => {
+  const source = `
+    <Button className="text-destructive">Cancelar</Button>
+    <button className="text-primary">Eliminar etapa</button>
+    <button className="text-destructive">Borrar cuota</button>
+  `;
+  assert.deepEqual(findUnstyledDestructiveButtons(source), [source.indexOf('<button')]);
+});
+
+test('direct semantic classes and destructive variants remain valid', () => {
+  const source = `
+    <button className="text-destructive" onClick={() => remove()}>Eliminar etapa</button>
+    <Button variant="destructive">Descartar borrador</Button>
+  `;
+  assert.deepEqual(findUnstyledDestructiveButtons(source), []);
 });
 
 test('lifecycle danger dialog and shared confirmation use semantic destructive styles', () => {

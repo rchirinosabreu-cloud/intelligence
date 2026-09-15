@@ -1109,7 +1109,7 @@ const OperationalCalendar = () => {
                       <span className="mt-1 block text-xs text-zinc-500 dark:text-zinc-400">{format(toBogotaCalendarDate(event.startAt), 'd MMM yyyy', { locale: es }) + ', ' + formatBogotaClock(event.startAt)}{event.attendeeEmails?.length ? ` · ${event.attendeeEmails.length} invitado(s)` : ''}</span>
                     </span>
                   </label>
-                  <button type="button" onClick={() => dismissReconciliationMutation.mutate(event.id)} disabled={dismissReconciliationMutation.isPending} className="inline-flex min-h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-bold text-zinc-500 transition hover:bg-zinc-100 hover:text-zinc-900 disabled:opacity-60 dark:text-zinc-400 dark:hover:bg-white/10 dark:hover:text-white" aria-label={`Descartar ${event.title} de conciliación`} title="Descartar de conciliación">
+                  <button type="button" onClick={() => dismissReconciliationMutation.mutate(event.id)} disabled={dismissReconciliationMutation.isPending} className="brain-danger-button-outline brain-destructive-text inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-bold disabled:opacity-60" aria-label={`Descartar ${event.title} de conciliación`} title="Descartar de conciliación">
                     {dismissReconciliationMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <X className="h-4 w-4" />}
                     <span className="hidden sm:inline">Descartar de conciliación</span>
                   </button>
