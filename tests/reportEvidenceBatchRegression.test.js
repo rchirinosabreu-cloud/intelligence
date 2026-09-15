@@ -20,7 +20,8 @@ test('eight-source regression preserves 88 observations while consolidating repe
   assert.deepEqual(totals.map(item => item.value).sort((a, b) => a - b), [660, 4321, 12340, 13000]);
   assert.equal(totals.find(item => item.platform === 'FACEBOOK' && item.contextKey === 'account_content').value, 4321);
   assert.equal(report.facts.find(item => item.key === 'viewers').value, 2123);
-  assert.equal(report.issues.filter(item => item.code === 'CURRENCY_UNKNOWN').length, 1);
+  assert.equal(report.issues.filter(item => item.code === 'CURRENCY_UNKNOWN').length, 0);
+  assert.ok(report.observations.filter(item => item.key === 'spend').every(item => item.unit === 'COP'));
   assert.equal(report.issues.filter(item => item.code === 'PERIOD_INHERITED').length, 1);
 
   const presentation = buildReportPresentation({ normalizedMetrics: report });

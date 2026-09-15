@@ -31,6 +31,13 @@ test('accepts fenced JSON returned by an LLM without losing metrics', () => {
   assert.throws(() => normalizeReportObservations('```json\nnot json\n```'), /JSON/i);
 });
 
+test('CONTENT_FORMAT is normalized as FORMAT without changing entity or measured value', () => {
+  const result = normalizeReportObservations({ metrics: [observation({ entityLevel: 'CONTENT_FORMAT', entityName: 'Historias', value: 7 })] }, { sourceId: 'format-alias' });
+  assert.equal(result[0].entityLevel, 'FORMAT');
+  assert.equal(result[0].entityName, 'Historias');
+  assert.equal(result[0].value, 7);
+});
+
 test('zero, missing, dashes, unknown scope and confidence zero remain distinct', () => {
   const result = normalizeReportObservations({ metrics: [
     observation({ key: 'linkClicks', value: 0, confidence: 0, scope: 'UNKNOWN' }),
@@ -189,10 +196,23 @@ test('currency, result definition, entity identity and hierarchy stay separate',
   assert.equal(result.facts.filter(item => item.key === 'results').length, 2);
 });
 
-test('visible monetary symbols remain usable without silently inventing COP', () => {
+test('the agency default resolves monetary symbols as COP and preserves their origin', () => {
   const result = buildEvidenceReport([source('a', [observation({ key: 'spend', unit: '$', value: 180000 })])]);
-  assert.equal(result.facts[0].unit, '$');
-  assert.equal(result.issues.find(item => item.code === 'CURRENCY_UNKNOWN').blocking, false);
+  assert.equal(result.facts[0].unit, 'COP');
+  assert.equal(result.observations[0].originalUnit, '$');
+  assert.equal(result.observations[0].currencyProvenance, 'AGENCY_DEFAULT');
+  assert.equal(result.issues.some(item => item.code === 'CURRENCY_UNKNOWN'), false);
+});
+
+test('an explicit currency overrides the default without converting figures or changing count columns', () => {
+  const originals = [observation({ key: 'spend', unit: '$UNKNOWN', value: 123.45 }), observation({ key: 'spend', unit: 'EUR', value: 12.5 }), observation({ key: 'views', unit: 'count', value: 8 })];
+  const result = buildEvidenceReport([source('a', originals, { panels: [{ panelId: 'money', platform: 'META_ADS', metricKey: 'spend', unit: '$', dataset: [{ label: 'Anuncio', value: 0 }] }] })], { currency: 'USD' });
+  assert.equal(result.observations.find(item => item.value === 123.45).unit, 'USD');
+  assert.equal(result.observations.find(item => item.value === 12.5).unit, 'EUR');
+  assert.equal(result.observations.find(item => item.value === 8).unit, 'count');
+  assert.equal(result.panels[0].unit, 'USD');
+  assert.equal(originals[0].unit, '$UNKNOWN');
+  assert.deepEqual(normalizeReportObservations({ observations: result.observations }, { sourceId: 'a', currency: 'USD' }), result.observations);
 });
 
 test('panels retain their own metric identity and exact dataset; no daily curves are invented', () => {

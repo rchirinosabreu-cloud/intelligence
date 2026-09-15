@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { load } from 'cheerio';
 import { buildMetricReportHtml, renderMetricReportPdf } from '../src/services/metricReportPdf.js';
 import { formatEvidenceValue, formatEvidenceChangePct } from '../src/lib/reportEvidenceFormat.js';
@@ -10,6 +11,31 @@ const report = (overrides = {}) => ({
   normalizedMetrics: { schemaVersion: 2, dataVersion: 3, facts: [fact()], panels: [], issues: [] },
   narrative: { generationMode: 'EVIDENCE_AI', dataVersion: 3, headline: 'Lectura del período', summaryPoints: ['La respuesta varía por formato.'], sections: [{ platform: 'INSTAGRAM', title: 'Aprendizajes', paragraphs: ['Revisar el contenido de mayor respuesta.'] }], actionPlan: [{ action: 'Comparar formatos', kpi: 'Interacciones por publicación' }], claims: [] },
   sources: [{ id: 'capture-ig', originalName: 'resumen ing.png' }], ...overrides
+});
+
+test('client PDF omits technical provenance and ends with the bundled BrainStudio logo without modifying evidence', () => {
+  const fixture = report();
+  fixture.normalizedMetrics.issues = [{ code: 'PERIOD_INHERITED', message: 'Aviso interno', blocking: false }];
+  const before = structuredClone(fixture);
+  const $ = load(buildMetricReportHtml(fixture));
+  assert.doesNotMatch($('body').text(), /Fuentes|metodología|Fuente|\[1\]|resumen ing\.png|Versión de datos|Aviso interno/);
+  assert.equal($('.source-ref,.sources,.source-list').length, 0);
+  const logo = $('.agency-signoff img');
+  assert.equal(logo.attr('alt'), 'BrainStudio · Agencia Creativa');
+  assert.equal(logo.attr('src'), `data:image/png;base64,${readFileSync(new URL('../public/assets/brainstudio-logo-white.png', import.meta.url)).toString('base64')}`);
+  assert.equal($('.document').children().last().hasClass('agency-signoff'), true);
+  assert.match($('body').text(), /16\.502/);
+  assert.deepEqual(fixture, before);
+});
+
+test('internal audit output is explicit while final PDF and client preview use the same citation-free content', async () => {
+  const fixture = report();
+  assert.match(load(buildMetricReportHtml(fixture, { includeSources: true }))('body').text(), /Fuentes y metodología/);
+  assert.doesNotMatch(load(buildMetricReportHtml({ ...fixture, status: 'REVIEW' }, { preview: true }))('body').text(), /Fuentes y metodología|Fuente \[/);
+  await renderMetricReportPdf(fixture, { renderPdf: async html => {
+    assert.doesNotMatch(load(html)('body').text(), /Fuentes y metodología|Fuente \[/);
+    return Buffer.from('%PDF-1.7\nfixture');
+  } });
 });
 
 test('professional PDF uses shared entity rows instead of repeating each ad metric as a standalone fact', () => {
@@ -59,7 +85,7 @@ test('KPI rows keep context and period once per section while retaining distinct
     fact({ factId: 'reach', key: 'reach', entityLevel: 'UNKNOWN', contextKey: 'account_content', contextLabel: 'Contenido de Instagram', periodProvenance: 'REPORT_DECLARED' }),
     fact({ factId: 'audience', key: 'followerTotal', entityLevel: 'UNKNOWN', contextKey: 'account_audience', contextLabel: 'Audiencia de la cuenta', periodProvenance: 'REPORT_DECLARED' })
   ];
-  const $ = load(buildMetricReportHtml(fixture));
+  const $ = load(buildMetricReportHtml(fixture, { includeSources: true }));
   assert.doesNotMatch($('.fact-table tbody').text(), /Nivel sin confirmar|1 ago|31 ago|Contenido de Instagram/);
   assert.match($('[data-fact-id="audience"]').text(), /Audiencia de la cuenta/);
   assert.equal($('[data-fact-id="ig-views"] th small').length, 0);
@@ -76,7 +102,8 @@ test('embeds only the uploaded raster logo and keeps the document independent of
   for (const unsafe of ['https://remote.test/logo.png', 'data:image/svg+xml;base64,PHN2Zz4=', 'data:image/png;base64,a" onerror="x']) {
     fixture.normalizedMetrics.branding.logoDataUrl = unsafe;
     $ = load(buildMetricReportHtml(fixture));
-    assert.equal($('img').length, 0);
+    assert.equal($('.client-logo').length, 0);
+    assert.equal($('img:not(.agency-signoff img)').length, 0);
   }
 });
 
@@ -138,7 +165,9 @@ test('escapes every user-controlled string and emits no external resources or ex
   fixture.sources[0].originalName = injected;
   const html = buildMetricReportHtml(fixture);
   const $ = load(html);
-  assert.equal($('script,img,link,iframe,object,embed').length, 0);
+  assert.equal($('script,link,iframe,object,embed').length, 0);
+  assert.equal($('img').length, 1);
+  assert.match($('.agency-signoff img').attr('src'), /^data:image\/png;base64,/);
   assert.match($('body').text(), /<script>alert\(1\)<\/script>/);
   assert.match($('meta[http-equiv="Content-Security-Policy"]').attr('content'), /default-src 'none'/);
   assert.doesNotMatch($('style').text(), /url\(|@import/);
@@ -200,7 +229,7 @@ test('labels incomplete preview visibly and suppresses stale narrative without m
 test('uses responsive, printable pagination with repeating table headers and split-safe rows', () => {
   const html = buildMetricReportHtml(report());
   const $ = load(html);
-  assert.equal($('[data-fact-id="ig-views"] td[data-label]').length, 4);
+  assert.equal($('[data-fact-id="ig-views"] td[data-label]').length, 3);
   assert.match(html, /@page[\s\S]*size:\s*A4 portrait/);
   assert.match(html, /thead[^{]*\{[^}]*display:\s*table-header-group/);
   assert.match(html, /break-inside:\s*avoid/);
@@ -247,7 +276,7 @@ test('preserves multiple ad metric columns and separates entity levels instead o
 test('reuses source identities and names across persisted records and extraction evidence', () => {
   const fixture = report({ sources: [{ id: 'database-row', sourceId: 'capture-ig', extractionData: { originalName: 'Resumen de Instagram.png' } }] });
   fixture.normalizedMetrics.sourceExtractions = [{ sourceId: 'capture-ig', originalName: 'Resumen de Instagram.png' }];
-  const $ = load(buildMetricReportHtml(fixture));
+  const $ = load(buildMetricReportHtml(fixture, { includeSources: true }));
   assert.equal($('.source-list li').length, 1);
   assert.equal($('.source-list li').text(), '[1]Resumen de Instagram.png');
   assert.equal($('[data-fact-id="ig-views"] .source-ref').text(), '[1]');
@@ -257,7 +286,7 @@ test('reuses source identities and names across persisted records and extraction
 test('labels context, selected report periods and missing breakdown without inventing comparison dates', () => {
   const fixture = report();
   fixture.normalizedMetrics.facts = [fact({ factId:'fb-part',platform:'FACEBOOK',value:1017,scope:'UNKNOWN',contextKey:'instagram-crossposting',periodProvenance:'REPORT_DECLARED',comparisonPeriod:{start:null,end:null} }),fact({ factId:'fb-total',platform:'FACEBOOK',value:1049,contextKey:'facebook-overview' })];
-  const $ = load(buildMetricReportHtml(fixture));
+  const $ = load(buildMetricReportHtml(fixture, { includeSources: true }));
   assert.match($('[data-fact-id="fb-part"]').closest('[data-report-section]').text(), /Tarjeta combinada de Instagram/);
   assert.match($('[data-fact-id="fb-total"]').closest('[data-report-section]').text(), /Resumen de Facebook/);
   assert.match($('[data-fact-id="fb-part"]').closest('[data-report-section]').text(), /Período seleccionado/);
@@ -268,7 +297,7 @@ test('labels context, selected report periods and missing breakdown without inve
 test('groups repeated source notices in the methodology annex without repeating per-metric warnings', () => {
   const fixture=report();
   fixture.normalizedMetrics.issues=Array.from({length:67},(_,index)=>({code:'PERIOD_INHERITED',message:`El período de métrica ${index} procede del informe solicitado y no de una fecha visible.`,sourceIds:['capture-ig'],blocking:false}));
-  const $=load(buildMetricReportHtml(fixture));
+  const $=load(buildMetricReportHtml(fixture, { includeSources: true }));
   assert.equal($('[data-issue-code="PERIOD_INHERITED"]').length,1);
   assert.match($('.sources').text(),/67 observaciones/);
   assert.doesNotMatch($('.sources').text(),/métrica 66/);
@@ -277,10 +306,10 @@ test('groups repeated source notices in the methodology annex without repeating 
 test('blocks unresolved failed sources and discloses source and observation exclusions with their reasons', () => {
   const fixture=report();
   fixture.normalizedMetrics.sourceFailures=[{sourceId:'failed',originalName:'Captura incompleta.png',message:'Respuesta incompleta'}];
-  assert.throws(()=>buildMetricReportHtml(fixture),/fuentes/i);
+  assert.throws(()=>buildMetricReportHtml(fixture, { includeSources: true }),/fuentes/i);
   fixture.normalizedMetrics.excludedSources=[{sourceId:'failed',reason:'Es de otro mes'}];
   fixture.normalizedMetrics.observations=[{sourceId:'capture-ig',observationId:'old',label:'Alcance',excluded:true,review:{reason:'El intervalo visible no corresponde'}}];
-  const $=load(buildMetricReportHtml(fixture));
+  const $=load(buildMetricReportHtml(fixture, { includeSources: true }));
   assert.match($('.sources').text(),/Captura incompleta.png/);
   assert.match($('.sources').text(),/Es de otro mes/);
   assert.match($('.sources').text(),/El intervalo visible no corresponde/);
@@ -289,7 +318,7 @@ test('blocks unresolved failed sources and discloses source and observation excl
 test('excludes reviewed panels from results while preserving their exclusion reason', () => {
   const fixture=report();
   fixture.normalizedMetrics.panels=[{panelId:'excluded-panel',platform:'FACEBOOK',title:'Panel de otro período',sourceId:'capture-ig',excluded:true,review:{reason:'Corresponde a julio'},dataset:[{label:'Reels',value:99999}]}];
-  const $=load(buildMetricReportHtml(fixture));
+  const $=load(buildMetricReportHtml(fixture, { includeSources: true }));
   assert.equal($('[data-panel-id="excluded-panel"]').length,0);
   assert.match($('.sources').text(),/Panel de otro período/);
   assert.match($('.sources').text(),/Corresponde a julio/);
@@ -299,7 +328,7 @@ test('excludes reviewed panels from results while preserving their exclusion rea
 test('finds excluded evidence in source extractions after consolidation removes it from active metrics', () => {
   const fixture=report();
   fixture.normalizedMetrics.sourceExtractions=[{sourceId:'capture-ig',originalName:'Resumen.png',panels:[{panelId:'old-panel',title:'Panel antiguo',excluded:true,review:{reason:'De julio'}}],observations:[{observationId:'old-value',label:'Valor antiguo',excluded:true,review:{reason:'Otro filtro'}}]}];
-  const $=load(buildMetricReportHtml(fixture));
+  const $=load(buildMetricReportHtml(fixture, { includeSources: true }));
   assert.match($('.sources').text(),/Panel antiguo.*De julio/);
   assert.match($('.sources').text(),/Valor antiguo.*Otro filtro/);
 });

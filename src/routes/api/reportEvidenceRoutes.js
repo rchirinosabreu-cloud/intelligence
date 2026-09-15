@@ -2,7 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { buildEvidenceReport, normalizeReportObservations } from '../../lib/reportEvidence.js';
 import { applyReportReview, assertReportVersion, assertEvidenceReady, validateReportPeriod, prepareReportPublication, saveReportVersion, generateEvidenceNarrative, reportWorkflowError } from '../../services/reportWorkflowService.js';
 
-export const REPORT_EVIDENCE_PIPELINE_VERSION = 'report-evidence-2026-09-16.1';
+export const REPORT_EVIDENCE_PIPELINE_VERSION = 'report-evidence-2026-09-16.2';
 const jsonSafe = value => JSON.parse(JSON.stringify(value));
 const errorResponse = (res, error) => {
   console.error('[Reports evidence]', error.message);
@@ -13,6 +13,8 @@ export function createEvidenceExtractionHandler({ prisma, uploadClientFile, extr
   return async (req, res) => {
     try {
       const { clientId, periodKind = 'MONTHLY', startDate, endDate } = req.body || {};
+      const currency = req.body?.currency ?? 'COP';
+      if (typeof currency !== 'string' || !/^[A-Z]{3}$/.test(currency)) throw reportWorkflowError('Indica una moneda válida de tres letras, por ejemplo COP o USD.');
       const reportPeriod = validateReportPeriod(startDate, endDate);
       if (!clientId || !['MONTHLY', 'QUARTERLY'].includes(periodKind)) throw reportWorkflowError('Selecciona cliente y tipo de período válidos.');
       const incoming = req.files || [];
@@ -35,15 +37,15 @@ export function createEvidenceExtractionHandler({ prisma, uploadClientFile, extr
           const { file, sourceId, contentHash } = jobs[index];
           let storagePath;
           const declaredCategory = file.fieldname === 'adsFiles' ? 'ADS' : file.fieldname === 'organicFiles' ? 'SOCIAL' : 'UNKNOWN';
-          const context = { sourceId, clientName: client.name, reportPeriod, declaredCategory, declaration: declaredCategory };
+          const context = { sourceId, clientName: client.name, reportPeriod, currency, declaredCategory, declaration: declaredCategory };
           try {
             const upload = await uploadClientFile({ ...file, originalname: `${sourceId}-${file.originalname}` }, client.name);
             storagePath = upload.gcsPath;
             const extracted = await extractMetrics(file.buffer, file.mimetype, context);
             const cleaned = cleanExtraction({ ...extracted, sourceId, originalName: file.originalname }, context);
-            const observations = normalizeReportObservations(cleaned.observations?.length ? cleaned : { ...cleaned, observations: undefined }, { sourceId, reportPeriod });
+            const observations = normalizeReportObservations(cleaned.observations?.length ? cleaned : { ...cleaned, observations: undefined }, { sourceId, reportPeriod, currency });
             const usable = observations.some(item => item.value !== null) || cleaned.panels?.some(panel => panel.dataset?.length);
-            const panels = buildEvidenceReport([{ ...cleaned, sourceId, observations }], { reportPeriod }).panels;
+            const panels = buildEvidenceReport([{ ...cleaned, sourceId, observations }], { reportPeriod, currency }).panels;
             results[index] = { ...cleaned, sourceId, contentHash, storagePath, originalName: file.originalname, declaredCategory, observations, panels, usable,
               outcome: usable ? 'SUCCESS' : 'PARTIAL', error: usable ? null : 'No se encontraron cifras o paneles utilizables.' };
           } catch (error) {
@@ -66,7 +68,7 @@ export function createEvidenceExtractionHandler({ prisma, uploadClientFile, extr
         }
         catch (error) { console.error('[Reports evidence] Logo upload failed:', error.message); warnings.push('El logo no pudo guardarse. Las cifras se conservaron.'); }
       }
-      const evidence = buildEvidenceReport(successful, { reportPeriod });
+      const evidence = buildEvidenceReport(successful, { reportPeriod, currency });
       const normalizedMetrics = jsonSafe({ ...evidence, version: 1, dataVersion: 1, reportPeriod, sourceExtractions: successful,
         processingSummary, sourceFailures, excludedSources: [], warnings, branding, readyForNarrative: evidence.readyForNarrative && !sourceFailures.length });
       const processedSources = results.filter(source => source.storagePath).map(source => ({

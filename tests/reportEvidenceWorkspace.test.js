@@ -16,6 +16,22 @@ const { default: Workspace, TestObservationEditor, getEvidenceWorkspaceState, bu
 const metric = { observationId: 'source:views', key: 'views', label: 'Visualizaciones', value: 8418, rawValue: '8.418', unit: 'count', platform: 'INSTAGRAM', scope: 'TOTAL', precision: 'EXACT', contextKey: 'instagram-overview', period: { start: '2026-08-01', end: '2026-08-31' }, excluded: false };
 const report = { id: 'fixture', status: 'REVIEW', normalizedMetrics: { version: 4, dataVersion: 2, readyForNarrative: true, observations: [metric], facts: [{ ...metric, factId: 'fact', sourceIds: ['source'], observationIds: [metric.observationId], status: 'OBSERVED' }], issues: [], sourceExtractions: [{ sourceId: 'source', originalName: 'Resumen Instagram.png', observations: [metric] }], sourceFailures: [] }, narrative: { generationMode: 'EVIDENCE_AI', dataVersion: 2, needsRegeneration: false, claims: [{ factIds: ['fact'], text: 'Instagram muestra 8.418 visualizaciones.' }] } };
 
+test('current editorial appears beside its result with strategy before audit; stale editorial is hidden', async () => {
+  const { buildReportPresentation } = await import('../src/lib/reportPresentationModel.js');
+  const sectionId = buildReportPresentation(report).sections[0].id;
+  const point = { title: 'Interpretación específica', observation: 'Dato observado', interpretation: 'Lectura del resultado', action: 'Acción propuesta', sourceIds: ['source'] };
+  const data = structuredClone(report);
+  data.narrative.editorial = { version: 1, summary: { title: 'Balance del mes', text: 'Resumen de prueba' }, sectionComments: [{ ...point, sectionId }], opportunities: [point], recommendations: [{ title: 'Prioridad de prueba', rationale: 'Razón', action: 'Acción', kpi: 'Visitas al perfil', priority: 'ALTA' }], closing: { title: 'Siguiente período', text: 'Cierre de prueba' } };
+  const html = renderToStaticMarkup(React.createElement(Workspace, { report: data, onReportChange() {} }));
+  assert.ok(html.indexOf('Resumen ejecutivo') < html.indexOf('data-report-presentation'));
+  assert.match(html, /data-editorial-comment/);
+  assert.ok(html.indexOf('Plan de acción') < html.indexOf('data-report-audit'));
+  data.narrative.dataVersion = 1;
+  const stale = renderToStaticMarkup(React.createElement(Workspace, { report: data, onReportChange() {} }));
+  assert.doesNotMatch(stale, /data-editorial-comment/);
+  assert.match(stale, /versión anterior/);
+});
+
 test('blocks publication for stale narrative, unresolved source failures or local draft', () => {
   assert.equal(getEvidenceWorkspaceState(report).canPublish, true);
   assert.equal(getEvidenceWorkspaceState(report, true).canPublish, false);

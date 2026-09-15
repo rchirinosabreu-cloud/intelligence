@@ -3,7 +3,7 @@ import { createOpenAIClient } from './openAIClient.js';
 import { adaptDatasetForChart } from '../lib/reportChartData.js';
 import { filterTopContentRows, hasPublishableValue } from '../lib/reportPresentation.js';
 import { normalizeReportObservations } from '../lib/reportEvidence.js';
-export const REPORT_VISION_DEFAULT_MODEL = 'gpt-6-astra';
+export const REPORT_VISION_DEFAULT_MODEL = 'gpt-5.6-sol';
 const reportVisionModel = () => process.env.OPENAI_MODEL_REPORT_VISION?.trim() || REPORT_VISION_DEFAULT_MODEL;
 
 export { filterTopContentRows as filterExtractedTopContentRows };
@@ -499,7 +499,7 @@ export const validateAndCleanSourceExtraction = (extracted, context = {}) => {
             rawValue: item.rawValue ?? (typeof item.value === 'string' ? item.value : null),
             changePct: cleanNumericValue(item.changePct, '%'), confidence: validConfidence(item.confidence)
         }))
-    }, { sourceId: context.sourceId || extracted.sourceId, reportPeriod: context.reportPeriod });
+    }, { sourceId: context.sourceId || extracted.sourceId, reportPeriod: context.reportPeriod, currency: context.currency });
     const panels = (Array.isArray(extracted.panels) ? extracted.panels : []).filter(panel => panel && typeof panel === 'object').map(panel => ({
         ...panel, metricKey: canonicalMetricKey(panel.metricKey), dataset: cleanPanelDataset(panel.dataset)
     }));

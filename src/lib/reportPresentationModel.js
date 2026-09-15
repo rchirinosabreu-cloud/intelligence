@@ -65,6 +65,9 @@ function contextNotes(metrics) {
     group.messages = unique([...group.messages, text(issue.message || issue)]);
   };
   for (const issue of array(metrics.issues)) add(issue);
+  const convention = array(metrics.observations).filter(item => ['AGENCY_DEFAULT', 'REPORT_DECLARED'].includes(item.currencyProvenance));
+  if (convention.length) add({ code: 'CURRENCY_CONVENTION', count: convention.length, sourceIds: unique(convention.map(item => item.sourceId)),
+    message: `Moneda del informe: ${metrics.currency || 'COP'}. Se aplica donde la captura no indica una moneda; se respetan otras monedas expresamente identificadas.` });
   const unspecified = array(metrics.facts).filter(item => /^\$(?:\s*UNKNOWN)?$/i.test(text(item.unit)));
   if (unspecified.length && !groups.has('CURRENCY_UNKNOWN')) add({ code: 'CURRENCY_UNKNOWN', count: unspecified.length, sourceIds: unique(unspecified.flatMap(item => array(item.sourceIds))) });
   return [...groups.values()].map(({ messages, ...group }) => ({ ...group, message: noteDescriptions[group.code] || messages.join(' '), text: noteDescriptions[group.code] || messages.join(' ') }));

@@ -1,6 +1,8 @@
 /** Pure evidence reconciliation shared by the API, report UI and PDF renderer.
  * A fact is a compatible observation, never an automatic sum of screenshots.
  */
+import { REPORT_DEFAULT_CURRENCY, resolveReportCurrency } from './reportCurrency.js';
+
 const PLATFORMS = new Set(['FACEBOOK', 'INSTAGRAM', 'CROSS_PLATFORM', 'META_ADS', 'UNKNOWN']);
 const SCOPES = new Set(['TOTAL', 'ORGANIC', 'PAID', 'UNKNOWN']);
 const PRECISIONS = new Set(['EXACT', 'ROUNDED', 'UNKNOWN']);
@@ -107,7 +109,7 @@ function formatIdentity(item, data, origin) {
 }
 
 /** All originals survive, including duplicates, missing values and exclusions. */
-export function normalizeReportObservations(extracted, { sourceId, reportPeriod } = {}) {
+export function normalizeReportObservations(extracted, { sourceId, reportPeriod, currency } = {}) {
   const data = parseExtraction(extracted);
   const items = Array.isArray(data) ? data : Array.isArray(data.observations) ? data.observations
     : Array.isArray(data.metrics) ? data.metrics
@@ -120,7 +122,9 @@ export function normalizeReportObservations(extracted, { sourceId, reportPeriod 
     const key = text(item.key || item.metricKey) || 'unknown';
     const declaredUnit = unitOf(item.unit);
     const visibleSymbols = unique(text(rawValue).match(/[$€£¥₹₩₽]/g) || []);
-    const unit = MONETARY_KEYS.has(key) && declaredUnit === 'UNKNOWN' && visibleSymbols.length === 1 ? visibleSymbols[0] : declaredUnit;
+    const sourceUnit = MONETARY_KEYS.has(key) && declaredUnit === 'UNKNOWN' && visibleSymbols.length === 1 ? visibleSymbols[0] : declaredUnit;
+    const currencyFields = resolveReportCurrency({ ...item, key, unit: sourceUnit }, currency);
+    const { unit } = currencyFields;
     const visiblePeriod = periodOf(item.period || data.period);
     const inherited = !visiblePeriod.start && !visiblePeriod.end && fullPeriod(declaredPeriod);
     const confidence = numericValue(item.confidence ?? data.confidence);
@@ -128,7 +132,7 @@ export function normalizeReportObservations(extracted, { sourceId, reportPeriod 
     const format = formatIdentity(item, data, origin);
     const result = {
       observationId: '', key, label: text(item.label || item.key || item.metricKey) || 'Sin etiqueta',
-      value, rawValue: clone(rawValue), unit,
+      value, rawValue: clone(rawValue), ...currencyFields,
       platform: platformOf(item.platform ?? data.platform), scope: scopeOf(item.scope),
       precision: roundingStep(rawValue) ? 'ROUNDED' : PRECISIONS.has(upper(item.precision)) ? upper(item.precision) : value === null ? 'UNKNOWN' : 'EXACT',
       contextKey: contextOf(item.contextKey || data.contextKey, origin),
@@ -137,7 +141,7 @@ export function normalizeReportObservations(extracted, { sourceId, reportPeriod 
       period: inherited ? declaredPeriod : visiblePeriod,
       periodProvenance: inherited ? 'REPORT_DECLARED' : item.periodProvenance || (fullPeriod(visiblePeriod) ? 'SOURCE_VISIBLE' : 'UNKNOWN'),
       comparisonPeriod: periodOf(item.comparisonPeriod || data.comparisonPeriod), changePct: numericValue(item.changePct, '%'),
-      entityLevel: format?.entityLevel || upper(item.entityLevel || data.entityLevel) || 'UNKNOWN',
+      entityLevel: format?.entityLevel || (upper(item.entityLevel || data.entityLevel) === 'CONTENT_FORMAT' ? 'FORMAT' : upper(item.entityLevel || data.entityLevel)) || 'UNKNOWN',
       entityId: format ? null : text(item.entityId || data.entityId) || null,
       entityName: format?.entityName || text(item.entityName || data.entityName) || null,
       ...(format || item.entityProvenance ? { entityProvenance: format?.entityProvenance || item.entityProvenance } : {}),
@@ -402,7 +406,7 @@ function normalizePanelReferences(panel, sourceObservations, issues) {
   return panel;
 }
 
-export function buildEvidenceReport(sources = [], { reportPeriod } = {}) {
+export function buildEvidenceReport(sources = [], { reportPeriod, currency } = {}) {
   const declaredPeriod = periodOf(reportPeriod);
   const issues = [];
   const observations = [];
@@ -411,7 +415,7 @@ export function buildEvidenceReport(sources = [], { reportPeriod } = {}) {
     const data = parseExtraction(input);
     const fallback = { ...data, observations: sortStable(data.observations || []), metrics: Array.isArray(data.metrics) ? sortStable(data.metrics) : data.metrics };
     const sourceId = text(data.sourceId || data.id) || `source-${hash(fallback)}`;
-    const sourceObservations = normalizeReportObservations(data, { sourceId, reportPeriod: declaredPeriod });
+    const sourceObservations = normalizeReportObservations(data, { sourceId, reportPeriod: declaredPeriod, currency });
     observations.push(...sourceObservations);
     for (const panel of Array.isArray(data.panels) ? data.panels : []) {
       if (panel.excluded === true) continue;
@@ -420,7 +424,8 @@ export function buildEvidenceReport(sources = [], { reportPeriod } = {}) {
       const normalized = {
         ...clone(panel), sourceId,
         metricKey: text(panel.metricKey || panel.key) || 'unknown',
-        unit: unitOf(panel.unit), platform: platformOf(panel.platform ?? data.platform), scope: scopeOf(panel.scope),
+        ...resolveReportCurrency({ ...panel, metricKey: text(panel.metricKey || panel.key), unit: unitOf(panel.unit) }, currency),
+        platform: platformOf(panel.platform ?? data.platform), scope: scopeOf(panel.scope),
         contextKey: contextOf(panel.contextKey || data.contextKey, sourceId),
         period: inherited ? declaredPeriod : visiblePeriod,
         periodProvenance: inherited ? 'REPORT_DECLARED' : panel.periodProvenance || (fullPeriod(visiblePeriod) ? 'SOURCE_VISIBLE' : 'UNKNOWN'),
@@ -452,7 +457,7 @@ export function buildEvidenceReport(sources = [], { reportPeriod } = {}) {
   validateBreakdowns(active, issues);
   const uniqueIssues = sortStable(groupRepeatedIssues([...new Map(issues.map(item => [item.id, item])).values()]));
   return {
-    schemaVersion: 2, observations: ordered, facts, panels: sortStable(panels), issues: uniqueIssues,
+    schemaVersion: 2, currency: currency || REPORT_DEFAULT_CURRENCY, observations: ordered, facts, panels: sortStable(panels), issues: uniqueIssues,
     readyForNarrative: facts.some(item => item.value !== null) && !uniqueIssues.some(item => item.blocking),
   };
 }

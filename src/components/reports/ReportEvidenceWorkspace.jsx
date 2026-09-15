@@ -3,6 +3,7 @@ import axios from 'axios';
 import Select from '@/components/ui/Select';
 import { formatEvidenceValue } from '@/lib/reportEvidenceFormat';
 import { buildReportPresentation } from '@/lib/reportPresentationModel';
+import { EditorialSummary, EditorialComment, EditorialStrategy } from './ReportEditorial';
 
 const platformNames = { INSTAGRAM: 'Instagram', FACEBOOK: 'Facebook', CROSS_PLATFORM: 'Facebook e Instagram', META_ADS: 'Meta Ads', UNKNOWN: 'Plataforma por confirmar' };
 const scopeNames = { TOTAL: 'Total', ORGANIC: 'Orgánico', PAID: 'Anuncios', UNKNOWN: 'Sin desglose' };
@@ -18,7 +19,7 @@ const readableEvidence = value => typeof value === 'string' ? value : value == n
 const contextNames = { ACCOUNT_TOTAL: 'Resumen de la cuenta', account_content: 'Contenido de la cuenta', 'instagram-overview': 'Resumen de Instagram', 'facebook-overview': 'Resumen de Facebook', instagram_content_with_facebook_distribution: 'Contenido de Instagram y su distribución en Facebook', facebook_distribution_of_instagram_content: 'Contenido de Instagram distribuido en Facebook' };
 const contextName = fact => fact.contextLabel || contextNames[fact.contextKey] || 'Contexto propio de la captura';
 
-function ReportSections({ presentation, observations, findSource, onOriginal, onEdit, canEdit, busy }) {
+function ReportSections({ presentation, observations, findSource, onOriginal, onEdit, canEdit, busy, editorial }) {
   const references = (row, compact = false) => {
     const ids = [...new Set([...(row.observationIds || []), ...Object.values(row.cells || {}).flatMap(cell => cell.observationIds || [])])];
     const items = ids.map(id => observations.find(item => item.observationId === id)).filter(Boolean);
@@ -30,6 +31,7 @@ function ReportSections({ presentation, observations, findSource, onOriginal, on
     {section.contextLabel && <p className="mt-1 text-sm text-muted-foreground">{section.contextLabel}</p>}
     {section.kind === 'table' ? <div className="mt-4 max-w-full overflow-x-auto"><table className="w-full text-left text-sm"><thead className="border-b border-border bg-muted/50"><tr><th scope="col" className="min-w-40 px-3 py-3 font-medium">{section.entityLevel === 'AD' ? 'Anuncio' : section.entityLevel === 'CAMPAIGN' ? 'Campaña' : 'Formato'}</th>{section.columns.map(column => <th scope="col" key={column.key} className="whitespace-nowrap px-3 py-3 text-right font-medium">{column.label}</th>)}</tr></thead><tbody>{section.rows.map(row => <tr className="border-b border-border last:border-b-0" key={row.id}><th scope="row" className="min-w-40 max-w-80 px-3 py-3 align-top font-normal"><span className="break-words font-medium">{row.label}</span>{row.resultType && !['SUMMARY', 'METRIC', 'COMPONENT', 'TOTAL'].includes(row.resultType) && <span className="mt-1 block text-xs text-muted-foreground">{row.resultType}</span>}{references(row, true)}</th>{section.columns.map(column => <td key={column.key} className="whitespace-nowrap px-3 py-3 text-right align-top tabular-nums">{row.cells?.[column.key]?.text ?? '—'}</td>)}</tr>)}</tbody></table></div>
       : <div className="mt-4 grid min-w-0 grid-cols-1 gap-x-6 sm:grid-cols-2 xl:grid-cols-3">{section.rows.map(row => <article key={row.id} className="min-w-0 border-b border-border py-4"><h4 className="text-sm font-medium">{row.label}</h4><p className="mt-2 break-words text-2xl font-semibold tabular-nums">{row.valueText}</p>{row.changeText && row.changeText !== 'Sin comparación' && <p className="mt-1 text-xs text-muted-foreground">{row.changeText} frente al período comparado</p>}{row.scope === 'UNKNOWN' && <p className="mt-1 text-xs text-muted-foreground">Sin desglose orgánico / anuncios</p>}{references(row)}</article>)}</div>}
+    <EditorialComment comment={editorial?.sectionComments.find(item => item.sectionId === section.id)} />
   </section>)}</div>;
 }
 
@@ -157,6 +159,7 @@ export default function ReportEvidenceWorkspace({ report, onReportChange, apiBas
   const [failureReasons, setFailureReasons] = useState({});
   const hasDraft = Boolean(editing || panelEditing);
   const state = getEvidenceWorkspaceState(report, hasDraft);
+  const editorial = state.currentNarrative && report.narrative?.editorial?.version === 1 ? report.narrative.editorial : null;
   const stale = (editing || panelEditing) && (editing || panelEditing).version !== metrics.version;
   const endpoint = `${String(apiBaseUrl).replace(/\/$/, '')}/api/reports/${encodeURIComponent(report.id)}`;
   const headers = () => ({ Authorization: `Bearer ${typeof window !== 'undefined' ? window.localStorage.getItem('authToken') || '' : ''}` });
@@ -295,7 +298,9 @@ export default function ReportEvidenceWorkspace({ report, onReportChange, apiBas
 
     {original && <figure className={surface}><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><figcaption className="break-words text-sm font-medium">{original.name}</figcaption><button className={button} onClick={() => setOriginal(null)}>Cerrar captura</button></div><img className="mx-auto max-h-[75vh] max-w-full object-contain" src={original.url} alt={`Captura original: ${original.name}`} /></figure>}
 
-    <ReportSections presentation={presentation} observations={observations} findSource={findSource} onOriginal={showOriginal} onEdit={startEditing} canEdit={report.status !== 'PUBLISHED'} busy={Boolean(busy)} />
+    {editorial && <EditorialSummary editorial={editorial} />}
+    <ReportSections presentation={presentation} observations={observations} findSource={findSource} onOriginal={showOriginal} onEdit={startEditing} canEdit={report.status !== 'PUBLISHED'} busy={Boolean(busy)} editorial={editorial} />
+    {editorial && <EditorialStrategy editorial={editorial} />}
 
     {contextIssues.length > 0 && <details className={surface}><summary className="min-h-11 cursor-pointer text-sm font-medium">Metodología y contexto</summary><ul className="mt-2 list-disc space-y-2 pl-5 text-sm text-muted-foreground">{contextIssues.map(issue => <li key={issue.id || issue.code}>{issue.message}</li>)}</ul></details>}
 
@@ -312,7 +317,7 @@ export default function ReportEvidenceWorkspace({ report, onReportChange, apiBas
 
     </details>
 
-    {report.narrative?.claims?.length > 0 && <section className={surface}><h3 className="text-lg font-semibold">Análisis del informe</h3>{!state.currentNarrative && <p className="mt-2 text-sm text-destructive">Este análisis corresponde a una versión anterior. Vuelve a generarlo con las cifras vigentes.</p>}<div className="mt-4 space-y-4 text-sm leading-relaxed">{report.narrative.headline && <p className="font-semibold">{report.narrative.headline}</p>}{report.narrative.sections?.length ? report.narrative.sections.map(section => <div key={section.platform}><h4 className="font-semibold">{section.title || platformNames[section.platform]}</h4>{section.paragraphs?.map(paragraph => <p className="mt-2" key={paragraph}>{paragraph}</p>)}</div>) : report.narrative.claims.map((claim, index) => <p key={claim.factId || claim.id || `claim:${index}`}>{claim.text || claim.interpretation}</p>)}{report.narrative.actionPlan?.length > 0 && <div className="border-t border-border pt-4"><h4 className="font-semibold">Acciones propuestas</h4><ul className="mt-2 space-y-3">{report.narrative.actionPlan.map(item => <li key={item.factId || item.action}><p>{item.action}</p><p className="text-xs text-muted-foreground">Indicador: {item.kpi}</p></li>)}</ul></div>}</div></section>}
+    {!editorial && report.narrative?.claims?.length > 0 && <section className={surface}><h3 className="text-lg font-semibold">Análisis del informe</h3>{!state.currentNarrative && <p className="mt-2 text-sm text-destructive">Este análisis corresponde a una versión anterior. Vuelve a generarlo con las cifras vigentes.</p>}<div className="mt-4 space-y-4 text-sm leading-relaxed">{report.narrative.headline && <p className="font-semibold">{report.narrative.headline}</p>}{report.narrative.sections?.length ? report.narrative.sections.map(section => <div key={section.platform}><h4 className="font-semibold">{section.title || platformNames[section.platform]}</h4>{section.paragraphs?.map(paragraph => <p className="mt-2" key={paragraph}>{paragraph}</p>)}</div>) : report.narrative.claims.map((claim, index) => <p key={claim.factId || claim.id || `claim:${index}`}>{claim.text || claim.interpretation}</p>)}{report.narrative.actionPlan?.length > 0 && <div className="border-t border-border pt-4"><h4 className="font-semibold">Acciones propuestas</h4><ul className="mt-2 space-y-3">{report.narrative.actionPlan.map(item => <li key={item.factId || item.action}><p>{item.action}</p><p className="text-xs text-muted-foreground">Indicador: {item.kpi}</p></li>)}</ul></div>}</div></section>}
 
     {preview && <section className={surface}><div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h3 className="text-base font-semibold">Vista previa · Versión {preview.version}</h3><button className={button} onClick={() => setPreview(null)}>Cerrar vista previa</button></div><iframe className="h-[75vh] w-full rounded-xl border border-border bg-background" title="Vista previa del informe y su PDF" sandbox="" srcDoc={preview.html} /></section>}
   </section>;

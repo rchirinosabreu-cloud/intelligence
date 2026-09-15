@@ -1,5 +1,6 @@
 import Select from '@/components/ui/Select';
 import ReportEvidenceWorkspace from '@/components/reports/ReportEvidenceWorkspace';
+import ReportCurrencyField from '@/components/reports/ReportCurrencyField';
 import ReportHistory from '@/components/reports/ReportHistory';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -995,6 +996,7 @@ const Reports = () => {
   const [isSubmittingReview, setIsSubmittingReview] = useState(false);
   const [isGeneratingNarrative, setIsGeneratingNarrative] = useState(false);
   const [report, setReport] = useState(null);
+  const [reportCurrency, setReportCurrency] = useState('COP');
   const [startDate, setStartDate] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1).toISOString().slice(0, 10);
@@ -1173,6 +1175,7 @@ const Reports = () => {
     formData.append('periodKind', 'MONTHLY');
     formData.append('startDate', startDate);
     formData.append('endDate', endDate);
+    formData.append('currency', reportCurrency);
     adsFiles.forEach(file => formData.append('adsFiles', file));
     organicFiles.forEach(file => formData.append('organicFiles', file));
     if (logoFile) formData.append('logo', logoFile);
@@ -1553,6 +1556,7 @@ const Reports = () => {
                   <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-700 dark:text-slate-100" />
                 </label>
               </div>
+              <ReportCurrencyField value={reportCurrency} onChange={setReportCurrency} disabled={isGenerating} />
               <div className="relative group border border-dashed border-slate-200 dark:border-slate-700 rounded-xl p-3 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer focus-within:ring-2 focus-within:ring-primary/40">
                  <input type="file" aria-label="Logo del cliente, opcional" disabled={isGenerating} accept="image/png,image/jpeg,image/webp" onChange={(e) => handleFilesChange('logo', e)} className="absolute inset-0 opacity-0 cursor-pointer w-full" />
                  <div className="flex items-center gap-3">

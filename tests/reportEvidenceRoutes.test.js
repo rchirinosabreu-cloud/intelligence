@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { validateAndCleanSourceExtraction } from '../src/services/reportVisionService.js';
 const routes = await import('../src/routes/api/reportEvidenceRoutes.js').catch(() => ({}));
 const response = () => ({ code: 200, payload: null, status(code) { this.code = code; return this; }, json(payload) { this.payload = payload; return this; } });
 const file = (fieldname, name) => ({ fieldname, originalname: name, mimetype: 'image/png', buffer: Buffer.from(name), size: name.length });
@@ -48,6 +49,18 @@ test('extraction validates period before any model or upload call', async () => 
   const { calls, deps } = dependencies(); const res = response(); const request = req(); request.body.startDate = '2026-02-31';
   await routes.createEvidenceExtractionHandler(deps)(request, res);
   assert.equal(res.code, 422); assert.equal(calls.extraction.length, 0); assert.equal(calls.uploads.length, 0);
+});
+
+test('extraction persists COP by default, supports explicit USD and rejects invalid currency before upload', async () => {
+  for (const currency of [undefined, 'USD', 'not-a-currency']) {
+    const { calls, deps } = dependencies(), request = req(), res = response();
+    if (currency !== undefined) request.body.currency = currency;
+    deps.extractMetrics = async () => ({ metrics: [{ key: 'spend', unit: '$', value: 120, rawValue: '$120', platform: 'META_ADS', scope: 'PAID', contextKey: 'advertising' }] });
+    deps.cleanExtraction = validateAndCleanSourceExtraction;
+    await routes.createEvidenceExtractionHandler(deps)(request, res);
+    if (currency === 'not-a-currency') { assert.equal(res.code, 422); assert.equal(calls.uploads.length, 0); }
+    else { assert.equal(res.code, 201); assert.equal(calls.saved.normalizedMetrics.currency, currency || 'COP'); assert.equal(calls.saved.normalizedMetrics.facts[0].unit, currency || 'COP'); }
+  }
 });
 
 test('partial extraction persists failed source identity and never marks a partial report publishable', async () => {

@@ -22,7 +22,7 @@ test('preserves every repeated metric and its network/scope instead of taking th
   assert.equal(reversed.metrics.views.value, null);
 });
 
-test('retains explicit zero and unknown currency/confidence without defaults inventing evidence', () => {
+test('retains zero and unknown confidence while applying the agency currency convention', () => {
   const clean = validateAndCleanSourceExtraction({ platform: 'META_ADS', metrics: [
     { key: 'clicks', value: 0, label: 'Clics', unit: 'count', scope: 'PAID', confidence: 0 },
     { key: 'spend', value: 25, label: 'Importe gastado', unit: '$UNKNOWN', scope: 'PAID' }
@@ -30,7 +30,8 @@ test('retains explicit zero and unknown currency/confidence without defaults inv
   assert.equal(clean.usable, true);
   assert.equal(clean.metrics.clicks.value, 0);
   assert.equal(clean.metrics.clicks.confidence, 0);
-  assert.equal(clean.metrics.spend.unit, '$');
+  assert.equal(clean.metrics.spend.unit, 'COP');
+  assert.equal(clean.observations.find(item => item.key === 'spend').currencyProvenance, 'AGENCY_DEFAULT');
   assert.equal(clean.metrics.spend.confidence, null);
   assert.equal(clean.confidence, null);
 });
@@ -131,7 +132,7 @@ test('vision rejects a truncated response rather than repairing and accepting a 
   }
 });
 
-test('report extraction uses its evaluated Astra default and preserves response usage', async () => {
+test('report extraction uses its evaluated Sol default and preserves response usage', async () => {
   const originalFetch = globalThis.fetch;
   const original = Object.fromEntries(['OPENAI_API_KEY', 'OPENAI_MODEL', 'OPENAI_MODEL_VISION', 'OPENAI_MODEL_REPORT_VISION'].map(key => [key, process.env[key]]));
   process.env.OPENAI_API_KEY = 'test-key';
@@ -145,7 +146,7 @@ test('report extraction uses its evaluated Astra default and preserves response 
   };
   try {
     const result = await extractMetricsWithOpenAI(Buffer.from('test'));
-    assert.equal(body.model, 'gpt-6-astra');
+    assert.equal(body.model, 'gpt-5.6-sol');
     assert.equal(result.extractionMetadata.usage.totalTokens, 300);
     assert.equal(result.extractionMetadata.usage.cachedInputTokens, 10);
     assert.equal(result.extractionMetadata.responseId, 'response-test');
@@ -171,13 +172,13 @@ test('report-only override is respected and reports never inherit global or gene
     assert.equal(selected, 'report-candidate');
     delete process.env.OPENAI_MODEL_REPORT_VISION;
     await extractMetricsWithOpenAI(Buffer.from('test'));
-    assert.equal(selected, 'gpt-6-astra');
+    assert.equal(selected, 'gpt-5.6-sol');
     delete process.env.OPENAI_MODEL_VISION;
     await extractMetricsWithOpenAI(Buffer.from('test'));
-    assert.equal(selected, 'gpt-6-astra');
+    assert.equal(selected, 'gpt-5.6-sol');
     delete process.env.OPENAI_MODEL;
     await extractMetricsWithOpenAI(Buffer.from('test'));
-    assert.equal(selected, 'gpt-6-astra');
+    assert.equal(selected, 'gpt-5.6-sol');
   } finally {
     globalThis.fetch = originalFetch;
     for (const [key, value] of Object.entries(original)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }

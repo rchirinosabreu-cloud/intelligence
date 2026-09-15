@@ -17,7 +17,8 @@ export const formatEvidenceValue = (fact = {}) => {
   const unit = String(fact.unit ?? '').trim();
   if (fact.precision === 'ROUNDED') {
     const raw = typeof fact.rawValue === 'string' && fact.rawValue.trim();
-    return `≈ ${raw || `${displayNumber(fact.value)}${unitSuffix(unit)}`}`;
+    const currency = /^[A-Z]{3}$/.test(unit) && raw && !raw.toUpperCase().includes(unit) ? ` ${unit}` : '';
+    return `≈ ${raw ? `${raw}${currency}` : `${displayNumber(fact.value)}${unitSuffix(unit)}`}`;
   }
   // The screenshot may identify a dollar symbol without identifying its ISO
   // currency. Preserve the symbol; context notes explain the missing currency.

@@ -116,12 +116,12 @@ test('corroboration does not transfer contexts across networks, audiences or ano
   }
 });
 
-test('repeated period, scope and symbolic-currency notices combine every source, observation and panel reference', () => {
+test('repeated period and scope notices retain all references while dollar symbols use COP', () => {
   const sources = ['a', 'b'].map(id => source(id, [observation({ id: 'spend', key: 'spend', unit: '$UNKNOWN', rawValue: '$100', period: null, scope: 'UNKNOWN' })], [
     { id: 'spend', metricKey: 'spend', platform: 'INSTAGRAM', unit: '$UNKNOWN', scope: 'UNKNOWN', dataset: [{ label: 'Importe', value: 100 }] },
   ]));
   const result = buildEvidenceReport(sources, { reportPeriod: period });
-  for (const code of ['PERIOD_INHERITED', 'SCOPE_UNDISCLOSED', 'CURRENCY_UNKNOWN']) {
+  for (const code of ['PERIOD_INHERITED', 'SCOPE_UNDISCLOSED']) {
     const issues = result.issues.filter(item => item.code === code);
     assert.equal(issues.length, 1, code);
     assert.deepEqual(issues[0].sourceIds, ['a', 'b']);
@@ -129,7 +129,8 @@ test('repeated period, scope and symbolic-currency notices combine every source,
     assert.deepEqual(issues[0].panelIds, ['a:panel-spend', 'b:panel-spend']);
     assert.equal(issues[0].blocking, false);
   }
-  assert.ok(result.observations.every(item => item.unit === '$' && item.rawValue === '$100'));
+  assert.ok(result.observations.every(item => item.unit === 'COP' && item.rawValue === '$100'));
+  assert.equal(result.issues.some(item => item.code === 'CURRENCY_UNKNOWN'), false);
   assert.equal(result.readyForNarrative, true);
 });
 
@@ -139,26 +140,29 @@ test('specific period mismatches remain separate blocking issues', () => {
   assert.equal(result.readyForNarrative, false);
 });
 
-test('currency without a symbol stays unidentified and symbolic money never authorizes an arithmetic sum', () => {
+test('default COP enables checking explicit breakdowns without replacing the source total', () => {
   const missing = buildEvidenceReport([source('missing', [observation({ key: 'spend', unit: 'UNKNOWN' })])]);
-  assert.equal(missing.issues.find(item => item.code === 'CURRENCY_UNKNOWN').blocking, true);
+  assert.equal(missing.facts[0].unit, 'COP');
+  assert.equal(missing.issues.some(item => item.code === 'CURRENCY_UNKNOWN'), false);
   const symbolic = buildEvidenceReport([source('money', [
     observation({ id: 'total', key: 'spend', unit: '$UNKNOWN', value: 100, breakdownComplete: true }),
     observation({ key: 'spend', unit: '$UNKNOWN', value: 80, scope: 'ORGANIC', parentObservationId: 'total' }),
     observation({ key: 'spend', unit: '$UNKNOWN', value: 80, scope: 'PAID', parentObservationId: 'total' }),
   ])]);
   assert.equal(symbolic.facts.find(item => item.scope === 'TOTAL').value, 100);
-  assert.equal(symbolic.issues.some(item => ['BREAKDOWN_MISMATCH', 'PARTIAL_BREAKDOWN_EXCEEDS_TOTAL'].includes(item.code)), false);
+  assert.equal(symbolic.issues.some(item => item.code === 'BREAKDOWN_MISMATCH' && item.blocking), true);
 });
 
-test('symbolic currencies never corroborate with ISO amounts or authorize cross-currency sums', () => {
+test('default COP corroborates COP evidence but never merges or sums different currencies', () => {
   const result = buildEvidenceReport([source('currencies', [
     observation({ id: 'total', key: 'spend', unit: 'USD', value: 100, breakdownComplete: true }),
     observation({ id: 'cop', key: 'spend', unit: 'COP', value: 100, parentObservationId: 'total' }),
     observation({ id: 'symbol', key: 'spend', unit: '$UNKNOWN', value: 100, parentObservationId: 'total' }),
   ])]);
-  assert.equal(result.facts.length, 3);
-  assert.deepEqual(result.facts.map(item => item.unit).sort(), ['$', 'COP', 'USD']);
+  assert.equal(result.facts.length, 2);
+  assert.deepEqual(result.facts.map(item => item.unit).sort(), ['COP', 'USD']);
+  assert.equal(result.facts.find(item => item.unit === 'COP').value, 100);
+  assert.equal(result.facts.find(item => item.unit === 'COP').observationIds.length, 2);
   assert.equal(result.issues.some(item => item.code === 'BREAKDOWN_MISMATCH'), false);
   assert.ok(result.issues.some(item => item.code === 'BREAKDOWN_INCOMPLETE'));
 });
@@ -167,8 +171,8 @@ test('an explicitly transcribed currency symbol remains usable when the extracto
   const result = buildEvidenceReport([source('raw-symbol', [
     observation({ key: 'spend', unit: 'UNKNOWN', rawValue: '$100' }),
   ])]);
-  assert.equal(result.facts[0].unit, '$');
+  assert.equal(result.facts[0].unit, 'COP');
   assert.equal(result.observations[0].rawValue, '$100');
-  assert.equal(result.issues.find(item => item.code === 'CURRENCY_UNKNOWN').blocking, false);
+  assert.equal(result.issues.some(item => item.code === 'CURRENCY_UNKNOWN'), false);
   assert.equal(result.readyForNarrative, true);
 });
