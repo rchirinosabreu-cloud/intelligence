@@ -189,10 +189,10 @@ test('currency, result definition, entity identity and hierarchy stay separate',
   assert.equal(result.facts.filter(item => item.key === 'results').length, 2);
 });
 
-test('unknown monetary units block without silently inventing COP', () => {
+test('visible monetary symbols remain usable without silently inventing COP', () => {
   const result = buildEvidenceReport([source('a', [observation({ key: 'spend', unit: '$', value: 180000 })])]);
   assert.equal(result.facts[0].unit, '$');
-  assert.equal(result.issues.find(item => item.code === 'CURRENCY_UNKNOWN').blocking, true);
+  assert.equal(result.issues.find(item => item.code === 'CURRENCY_UNKNOWN').blocking, false);
 });
 
 test('panels retain their own metric identity and exact dataset; no daily curves are invented', () => {

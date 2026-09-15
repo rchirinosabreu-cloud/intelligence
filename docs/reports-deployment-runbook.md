@@ -2,7 +2,7 @@
 
 ## Alcance de esta versión
 
-La versión esperada es `report-evidence-2026-09-15.1`. Incluye ingesta por
+La versión esperada es `report-evidence-2026-09-16.1`. Incluye ingesta por
 observación, revisión persistente, análisis referenciado, publicación explícita
 y PDF generado en servidor. Frontend y backend deben publicarse juntos.
 
@@ -10,8 +10,9 @@ Los datos v2 usan las columnas JSON y los enums existentes de `MetricReport` y
 `MetricReportSource`. Este cambio no requiere una migración, `db push` ni nuevas
 variables obligatorias. Las credenciales existentes de PostgreSQL, autenticación,
 OpenAI y almacenamiento siguen siendo necesarias. `OPENAI_MODEL_REPORT_VISION`
-es una selección opcional de modelo; no modifica por sí sola una configuración
-productiva existente.
+es la única selección de modelo de visión de Reportes. Si falta o está vacía,
+se utiliza `gpt-6-astra`; el módulo ya no hereda `OPENAI_MODEL_VISION` ni
+`OPENAI_MODEL`. Un cambio de este modelo requiere repetir la evaluación de capturas.
 
 El Dockerfile instala Chromium y `fonts-liberation`, y define
 `CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium`, la ruta que usa el renderizador.
@@ -39,7 +40,7 @@ Respuesta esperada:
 
 ```json
 {
-  "pipelineVersion": "report-evidence-2026-09-15.1",
+  "pipelineVersion": "report-evidence-2026-09-16.1",
   "commit": "<SHA completo del commit desplegado>"
 }
 ```

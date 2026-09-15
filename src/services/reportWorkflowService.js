@@ -27,7 +27,7 @@ export function assertEvidenceReady(report) {
   if (!metrics.facts?.some(fact => typeof fact.value === 'number' && Number.isFinite(fact.value))) fail('El informe no contiene cifras utilizables.');
 }
 
-export function applyReportReview(report, payload = {}, { actorId, now = new Date().toISOString() } = {}) {
+export function applyReportReview(report, payload = {}, { actorId, actorType = 'USER', now = new Date().toISOString() } = {}) {
   assertReportVersion(report, payload.expectedVersion);
   if (report.status === 'PUBLISHED') fail('El informe está publicado. Reabre la revisión antes de modificarlo.', 409);
   const existing = report.normalizedMetrics;
@@ -41,7 +41,7 @@ export function applyReportReview(report, payload = {}, { actorId, now = new Dat
   const updates = payload.updates || [];
   if (!Array.isArray(updates) || updates.length > 2000) fail('Lista de observaciones inválida.');
   const seen = new Set();
-  const allowed = new Set(['observationId', 'value', 'changePct', 'platform', 'scope', 'unit', 'precision', 'contextKey', 'period', 'excluded', 'reason']);
+  const allowed = new Set(['observationId', 'value', 'changePct', 'platform', 'scope', 'unit', 'precision', 'contextKey', 'contextLabel', 'key', 'label', 'resultType', 'period', 'excluded', 'reason']);
   for (const update of updates) {
     if (!update || Object.keys(update).some(key => !allowed.has(key))) fail('El cambio contiene un campo no permitido.');
     const observation = byId.get(update.observationId);
@@ -64,18 +64,22 @@ export function applyReportReview(report, payload = {}, { actorId, now = new Dat
     for (const [key, values] of [['platform', platforms], ['scope', scopes], ['precision', precisionTypes]]) {
       if (key in update) { if (!values.includes(update[key])) fail(`El campo ${key} es inválido.`); observation[key] = update[key]; }
     }
-    for (const key of ['unit', 'contextKey']) {
+    for (const key of ['unit', 'contextKey', 'contextLabel', 'key', 'label']) {
       if (key in update) { if (typeof update[key] !== 'string' || !update[key].trim() || update[key].length > 160) fail(`El campo ${key} es inválido.`); observation[key] = update[key].trim(); }
+    }
+    if ('resultType' in update) {
+      if (update.resultType !== null && (typeof update.resultType !== 'string' || !update.resultType.trim() || update.resultType.length > 160)) fail('El campo resultType es inválido.');
+      observation.resultType = update.resultType?.trim() ?? null;
     }
     if ('period' in update) { observation.period = validateReportPeriod(update.period?.start, update.period?.end); observation.periodProvenance = 'HUMAN_REVIEW'; }
     if ('excluded' in update) { if (typeof update.excluded !== 'boolean') fail('La exclusión debe ser explícita.'); observation.excluded = update.excluded; }
-    observation.review = { actorId: actorId || null, at: now, reason: update.reason.trim() };
-    history.push({ observationId: observation.observationId, actorId: actorId || null, at: now, reason: update.reason.trim(), before, after: clone(observation) });
+    observation.review = { actorId: actorId || null, actorType, at: now, reason: update.reason.trim() };
+    history.push({ observationId: observation.observationId, actorId: actorId || null, actorType, at: now, reason: update.reason.trim(), before, after: clone(observation) });
   }
   const panels = new Map(sources.flatMap(source => (source.panels || []).map(panel => [panel.panelId, panel])));
   const panelUpdates = payload.panelUpdates || [];
   if (!Array.isArray(panelUpdates) || panelUpdates.length > 2000) fail('Lista de paneles inválida.');
-  const panelFields = new Set(['panelId', 'rowIndex', 'rowLabel', 'field', 'value', 'excluded', 'platform', 'scope', 'unit', 'period', 'contextKey', 'reason']);
+  const panelFields = new Set(['panelId', 'rowIndex', 'rowLabel', 'field', 'value', 'excluded', 'platform', 'scope', 'unit', 'period', 'contextKey', 'contextLabel', 'metricKey', 'title', 'reason']);
   for (const update of panelUpdates) {
     if (!update || Object.keys(update).some(key => !panelFields.has(key))) fail('El cambio del panel contiene un campo no permitido.');
     const panel = panels.get(update?.panelId);
@@ -89,7 +93,7 @@ export function applyReportReview(report, payload = {}, { actorId, now = new Dat
     for (const [key, values] of [['platform', platforms], ['scope', scopes]]) {
       if (key in update) { if (!values.includes(update[key])) fail(`El campo ${key} es inválido.`); panel[key] = update[key]; }
     }
-    for (const key of ['unit', 'contextKey']) {
+    for (const key of ['unit', 'contextKey', 'contextLabel', 'metricKey', 'title']) {
       if (key in update) { if (typeof update[key] !== 'string' || !update[key].trim() || update[key].length > 160) fail(`El campo ${key} es inválido.`); panel[key] = update[key].trim(); }
     }
     if ('period' in update) { panel.period = validateReportPeriod(update.period?.start, update.period?.end); panel.periodProvenance = 'HUMAN_REVIEW'; }
@@ -101,8 +105,8 @@ export function applyReportReview(report, payload = {}, { actorId, now = new Dat
       row[update.field] = update.value;
       panelValueChanges.push({ panelId: panel.panelId, rowLabel: update.rowLabel, field: update.field, value: update.value, reason: update.reason.trim() });
     }
-    panel.review = { actorId: actorId || null, at: now, reason: update.reason.trim() };
-    history.push({ panelId: panel.panelId, actorId: actorId || null, at: now, reason: update.reason.trim(), before, after: clone(panel) });
+    panel.review = { actorId: actorId || null, actorType, at: now, reason: update.reason.trim() };
+    history.push({ panelId: panel.panelId, actorId: actorId || null, actorType, at: now, reason: update.reason.trim(), before, after: clone(panel) });
   }
   // Use only source-qualified cell links validated before the edits. A repeated
   // number in another row is never a reason to copy a correction there.
@@ -132,15 +136,15 @@ export function applyReportReview(report, payload = {}, { actorId, now = new Dat
       const before = clone(observation);
       observation.originalRawValue ??= observation.rawValue;
       observation.value = value; observation.rawValue = value;
-      observation.review = { actorId: actorId || null, at: now, reason };
-      history.push({ observationId: observation.observationId, linkedFrom: cellChanges[0].panelId, actorId: actorId || null, at: now, reason, before, after: clone(observation) });
+      observation.review = { actorId: actorId || null, actorType, at: now, reason };
+      history.push({ observationId: observation.observationId, linkedFrom: cellChanges[0].panelId, actorId: actorId || null, actorType, at: now, reason, before, after: clone(observation) });
     }
     for (const { panel, row, ref } of cells) {
       if (row[ref.columnKey] === value) continue;
       const before = clone(panel);
       row[ref.columnKey] = value;
-      panel.review = { actorId: actorId || null, at: now, reason };
-      history.push({ panelId: panel.panelId, linkedFrom: ref.observationId, actorId: actorId || null, at: now, reason, before, after: clone(panel) });
+      panel.review = { actorId: actorId || null, actorType, at: now, reason };
+      history.push({ panelId: panel.panelId, linkedFrom: ref.observationId, actorId: actorId || null, actorType, at: now, reason, before, after: clone(panel) });
     }
   }
   const excludedSources = [...(existing.excludedSources || [])];

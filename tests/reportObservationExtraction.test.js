@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { cleanNumericValue, extractMetricsWithOpenAI, validateAndCleanSourceExtraction, visionExtractionSchema } from '../src/services/reportVisionService.js';
 import { sampleAugustExtraction } from './fixtures/reportObservationsAugust.js';
-import { AI_MODELS } from '../src/config/aiConfig.js';
 
 test('reads K/M, signed changes and decimal percentages without changing their magnitude', () => {
   for (const [raw, expected] of [['20.1K', 20100], ['1,2 M', 1200000], ['−42,9%', -42.9], ['0.123%', 0.123], ['1.234.567', 1234567], ['1.234,56 COP', 1234.56], ['0', 0]]) {
@@ -31,7 +30,7 @@ test('retains explicit zero and unknown currency/confidence without defaults inv
   assert.equal(clean.usable, true);
   assert.equal(clean.metrics.clicks.value, 0);
   assert.equal(clean.metrics.clicks.confidence, 0);
-  assert.equal(clean.metrics.spend.unit, '$UNKNOWN');
+  assert.equal(clean.metrics.spend.unit, '$');
   assert.equal(clean.metrics.spend.confidence, null);
   assert.equal(clean.confidence, null);
 });
@@ -50,6 +49,21 @@ test('preserves independent panels, their columns and zero cells', () => {
   assert.equal(clean.panels[0].metricKey, 'contentCount');
   assert.equal(clean.panels[0].dataset[1].value, 0);
   assert.equal(clean.panels[1].metricKey, 'views');
+});
+
+test('normalizes the exact three-second views alias in observations and panels without merging other video metrics', () => {
+  const extracted = { metrics: [
+    { id: 'three', key: 'threeSecondViews', label: 'Reproducciones de 3 segundos', value: 286, rawValue: '286', unit: 'count', changePct: 0.7, evidence: 'Tarjeta: Reproducciones de 3 segundos' },
+    { id: 'all', key: 'videoViews', value: 900 },
+    { id: 'people', key: 'viewers', value: 600 }
+  ], panels: [{ metricKey: 'threeSecondViews', dataset: [{ label: 'Reproducciones de 3 segundos', value: 286 }] }] };
+  const cleaned = validateAndCleanSourceExtraction(extracted, { sourceId: 'alias' });
+  assert.deepEqual(cleaned.observations.map(item => item.key), ['threeSecondVideoViews', 'videoViews', 'viewers']);
+  assert.equal(cleaned.panels[0].metricKey, 'threeSecondVideoViews');
+  assert.equal(cleaned.observations[0].rawValue, '286');
+  assert.equal(cleaned.observations[0].changePct, 0.7);
+  assert.equal(cleaned.observations[0].evidence, extracted.metrics[0].evidence);
+  assert.equal(extracted.metrics[0].key, 'threeSecondViews', 'raw extraction remains immutable');
 });
 
 test('schema can express network per observation and several charts per image', () => {
@@ -92,6 +106,12 @@ test('vision accepts complete fenced JSON and passes declaration separately from
     assert.match(body.instructions, /icono.*Facebook/i);
     assert.match(body.instructions, /unidad.*count/i);
     assert.match(body.instructions, /Según N contenidos.*no.*conteo publicado/i);
+    assert.match(body.instructions, /plataforma principal.*tablero/i);
+    assert.match(body.instructions, /CROSS_PLATFORM.*solo.*tarjeta/i);
+    assert.match(body.instructions, /followers.*Seguidores del período/i);
+    assert.match(body.instructions, /ausencia.*nuevos.*saldo/i);
+    assert.match(body.instructions, /guion.*null.*rawValue/i);
+    assert.match(body.instructions, /encabezados.*no.*observaciones/i);
   } finally {
     globalThis.fetch = originalFetch;
     if (originalKey === undefined) delete process.env.OPENAI_API_KEY; else process.env.OPENAI_API_KEY = originalKey;
@@ -111,20 +131,21 @@ test('vision rejects a truncated response rather than repairing and accepting a 
   }
 });
 
-test('active extraction uses central vision default and preserves response usage for evaluation', async () => {
+test('report extraction uses its evaluated Astra default and preserves response usage', async () => {
   const originalFetch = globalThis.fetch;
-  const original = Object.fromEntries(['OPENAI_API_KEY', 'OPENAI_MODEL', 'OPENAI_MODEL_VISION'].map(key => [key, process.env[key]]));
+  const original = Object.fromEntries(['OPENAI_API_KEY', 'OPENAI_MODEL', 'OPENAI_MODEL_VISION', 'OPENAI_MODEL_REPORT_VISION'].map(key => [key, process.env[key]]));
   process.env.OPENAI_API_KEY = 'test-key';
   delete process.env.OPENAI_MODEL;
   delete process.env.OPENAI_MODEL_VISION;
+  delete process.env.OPENAI_MODEL_REPORT_VISION;
   let body;
   globalThis.fetch = async (_url, options) => {
     body = JSON.parse(options.body);
-    return new Response(JSON.stringify({ id: 'response-test', model: AI_MODELS.vision, output_text: '{"metrics":[]}', usage: { input_tokens: 100, output_tokens: 200, total_tokens: 300, input_tokens_details: { cached_tokens: 10 }, output_tokens_details: { reasoning_tokens: 50 } } }));
+    return new Response(JSON.stringify({ id: 'response-test', model: 'gpt-6-astra', output_text: '{"metrics":[]}', usage: { input_tokens: 100, output_tokens: 200, total_tokens: 300, input_tokens_details: { cached_tokens: 10 }, output_tokens_details: { reasoning_tokens: 50 } } }));
   };
   try {
     const result = await extractMetricsWithOpenAI(Buffer.from('test'));
-    assert.equal(body.model, AI_MODELS.vision);
+    assert.equal(body.model, 'gpt-6-astra');
     assert.equal(result.extractionMetadata.usage.totalTokens, 300);
     assert.equal(result.extractionMetadata.usage.cachedInputTokens, 10);
     assert.equal(result.extractionMetadata.responseId, 'response-test');
@@ -135,7 +156,7 @@ test('active extraction uses central vision default and preserves response usage
   }
 });
 
-test('report-only model override precedes vision and generic overrides without changing the central default', async () => {
+test('report-only override is respected and reports never inherit global or generic vision models', async () => {
   const originalFetch = globalThis.fetch;
   const keys = ['OPENAI_API_KEY', 'OPENAI_MODEL_REPORT_VISION', 'OPENAI_MODEL_VISION', 'OPENAI_MODEL'];
   const original = Object.fromEntries(keys.map(key => [key, process.env[key]]));
@@ -150,15 +171,29 @@ test('report-only model override precedes vision and generic overrides without c
     assert.equal(selected, 'report-candidate');
     delete process.env.OPENAI_MODEL_REPORT_VISION;
     await extractMetricsWithOpenAI(Buffer.from('test'));
-    assert.equal(selected, 'vision-configured');
+    assert.equal(selected, 'gpt-6-astra');
     delete process.env.OPENAI_MODEL_VISION;
     await extractMetricsWithOpenAI(Buffer.from('test'));
-    assert.equal(selected, 'generic-configured');
+    assert.equal(selected, 'gpt-6-astra');
     delete process.env.OPENAI_MODEL;
     await extractMetricsWithOpenAI(Buffer.from('test'));
-    assert.equal(selected, AI_MODELS.vision);
+    assert.equal(selected, 'gpt-6-astra');
   } finally {
     globalThis.fetch = originalFetch;
     for (const [key, value] of Object.entries(original)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; }
   }
+});
+
+test('neutral period followers and explicit null table cells survive cleaning without becoming a stock or zero', () => {
+  const source = validateAndCleanSourceExtraction({ metrics: [
+    { id: 'followers', key: 'followers', label: 'Seguidores del período', value: 12, rawValue: '12', platform: 'INSTAGRAM', scope: 'TOTAL' },
+    { id: 'missing-result', key: 'results', label: 'Resultados', value: null, rawValue: '—', platform: 'META_ADS', scope: 'PAID' },
+    { id: 'missing-cost', key: 'costPerResult', label: 'Costo por resultado', value: null, rawValue: '—', platform: 'META_ADS', scope: 'PAID', unit: '$UNKNOWN' }
+  ], panels: [{ id: 'ads', metricKey: 'results', dataset: [{ label: 'Sample ad', results: null, costPerResult: null }] }] });
+  assert.equal(source.observations[0].key, 'followers');
+  assert.equal(source.observations[1].value, null);
+  assert.equal(source.observations[1].rawValue, '—');
+  assert.equal(source.observations[2].value, null);
+  assert.equal(source.panels[0].dataset[0].costPerResult, null);
+  assert.ok(visionExtractionSchema.properties.panels.items.properties.dataset.items.properties.costPerResult);
 });

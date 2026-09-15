@@ -17,7 +17,7 @@ const statusFor = env => JSON.parse(JSON.stringify(vm.runInNewContext(
 
 test('report metadata identifies the Railway commit when no explicit override is configured', () => {
   assert.deepEqual(statusFor({ RAILWAY_GIT_COMMIT_SHA: 'a'.repeat(40) }), {
-    pipelineVersion: 'report-evidence-2026-09-15.1', commit: 'a'.repeat(40)
+    pipelineVersion: 'report-evidence-2026-09-16.1', commit: 'a'.repeat(40)
   });
 });
 

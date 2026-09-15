@@ -30,6 +30,38 @@ test('review rejects stale versions, unknown observations, missing reasons and a
   assert.throws(() => workflow.applyReportReview(fixture(), { expectedVersion: 1, updates: [{ observationId: 'views', sourceId: 'other', reason: 'x' }] }), /campo/i);
 });
 
+test('semantic corrections preserve original source meaning and are versioned like numeric corrections', () => {
+  const report = fixture();
+  report.normalizedMetrics.sourceExtractions[0].observations[1].resultType = 'SUMMARY';
+  const result = workflow.applyReportReview(report, { expectedVersion: 1, updates: [{
+    observationId: 'views', key: 'followers', label: 'Seguidores del período',
+    contextLabel: 'Actividad de Instagram', resultType: null,
+    reason: 'Encabezado y leyenda comprobados en la captura original.'
+  }] }, { actorId: 'maintenance:reports', actorType: 'MAINTENANCE' });
+  const updated = result.normalizedMetrics.sourceExtractions[0].observations[1];
+  assert.equal(updated.key, 'followers');
+  assert.equal(updated.contextLabel, 'Actividad de Instagram');
+  assert.equal(updated.resultType, null);
+  assert.equal(updated.value, 8418);
+  assert.equal(updated.review.actorType, 'MAINTENANCE');
+  assert.equal(result.normalizedMetrics.reviewHistory[0].before.key, 'views');
+  assert.equal(report.normalizedMetrics.sourceExtractions[0].observations[1].key, 'views');
+  assert.equal(result.narrative.needsRegeneration, true);
+  assert.throws(() => workflow.applyReportReview(report, { expectedVersion: 1, updates: [{ observationId: 'views', key: '', reason: 'Cambio' }] }), /key/i);
+  assert.throws(() => workflow.applyReportReview(report, { expectedVersion: 1, updates: [{ observationId: 'views', resultType: {}, reason: 'Cambio' }] }), /resultType/i);
+});
+
+test('panel context wording can be corrected without discarding linked rows or original evidence', () => {
+  const report = fixture();
+  report.normalizedMetrics.sourceExtractions[0].panels = [{ panelId: 'p', platform: 'INSTAGRAM', contextKey: 'account_content', contextLabel: 'Contexto mal leído', metricKey: 'views', unit: 'count', scope: 'TOTAL', dataset: [{ label: 'Reels', value: 41 }] }];
+  const result = workflow.applyReportReview(report, { expectedVersion: 1, panelUpdates: [{ panelId: 'p', contextLabel: 'Contenido de Instagram', metricKey: 'followers', title: 'Seguidores del período', reason: 'Cabecera verificada' }] });
+  assert.equal(result.normalizedMetrics.sourceExtractions[0].panels[0].contextLabel, 'Contenido de Instagram');
+  assert.equal(result.normalizedMetrics.sourceExtractions[0].panels[0].metricKey, 'followers');
+  assert.equal(result.normalizedMetrics.sourceExtractions[0].panels[0].title, 'Seguidores del período');
+  assert.equal(result.normalizedMetrics.sourceExtractions[0].panels[0].dataset[0].value, 41);
+  assert.equal(result.normalizedMetrics.reviewHistory[0].before.contextLabel, 'Contexto mal leído');
+});
+
 test('an approved report must be explicitly reopened before changing any figures', () => {
   assert.equal(typeof workflow.applyReportReview, 'function');
   const report = fixture(); report.status = 'PUBLISHED';

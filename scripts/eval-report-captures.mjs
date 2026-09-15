@@ -4,7 +4,7 @@ import { pathToFileURL } from 'node:url';
 import { createHash } from 'node:crypto';
 import { parse as parseEnv } from 'dotenv';
 
-const MATCH_FIELDS = ['key', 'label', 'value', 'platform', 'scope', 'unit', 'precision', 'changePct', 'contextKey', 'entityLevel', 'entityName'];
+const MATCH_FIELDS = ['key', 'label', 'value', 'platform', 'scope', 'unit', 'precision', 'changePct', 'contextKey', 'entityLevel', 'entityName', 'resultType'];
 export const evaluateObservationReferences = (observations = [], references = []) => references.map(expected => {
   const candidates = observations.filter(item => item.key === expected.key);
   const matched = candidates.find(item => MATCH_FIELDS.every(key => !Object.hasOwn(expected, key)

@@ -19,6 +19,9 @@ export const formatEvidenceValue = (fact = {}) => {
     const raw = typeof fact.rawValue === 'string' && fact.rawValue.trim();
     return `≈ ${raw || `${displayNumber(fact.value)}${unitSuffix(unit)}`}`;
   }
+  // The screenshot may identify a dollar symbol without identifying its ISO
+  // currency. Preserve the symbol; context notes explain the missing currency.
+  if (/^\$(?:\s*UNKNOWN)?$/i.test(unit)) return `$ ${displayNumber(fact.value)}`;
   if (/^(seconds?|s)$/i.test(unit) && fact.value >= 0) {
     const hours = Math.floor(fact.value / 3600);
     const minutes = Math.floor((fact.value % 3600) / 60);

@@ -87,3 +87,9 @@ test('reference maps reject malformed rows before any extraction', () => {
     assert.throws(() => evaluator.validateReferenceMap(input), /referenc/i);
   }
 });
+
+test('a result checkpoint checks the actual result definition', () => {
+  const checks = evaluateObservationReferences([{ key: 'results', value: 12, resultType: 'PURCHASES' }], [{ key: 'results', value: 12, resultType: 'CONVERSATIONS' }]);
+  assert.equal(checks[0].status, 'MISMATCH');
+  assert.equal(checks[0].valueMatch, true);
+});

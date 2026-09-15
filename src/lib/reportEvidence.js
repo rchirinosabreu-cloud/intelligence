@@ -8,8 +8,11 @@ const MONETARY_KEYS = new Set(['spend', 'costPerResult', 'cpc', 'cpm', 'revenue'
 const NON_ADDITIVE_KEYS = new Set(['reach', 'viewers', 'uniqueViewers', 'ctr', 'cpc', 'cpm', 'costPerResult', 'frequency', 'engagementRate', 'follows', 'followers']);
 const text = (value) => typeof value === 'string' ? value.trim() : value == null ? '' : String(value);
 const upper = (value) => text(value).toUpperCase();
-const COUNT_UNITS = new Set(['count', 'counts', 'number', 'integer', 'views', 'view', 'clicks', 'click', 'visits', 'visit', 'followers', 'follower', 'reach', 'interactions', 'interaction', 'impressions', 'impression']);
-const unitOf = value => COUNT_UNITS.has(text(value).toLowerCase()) ? 'count' : text(value) || 'UNKNOWN';
+const COUNT_UNITS = new Set(['count', 'counts', 'number', 'integer', 'views', 'view', 'viewers', 'viewer', 'clicks', 'click', 'visits', 'visit', 'followers', 'follower', 'followertotal', 'reach', 'interactions', 'interaction', 'impressions', 'impression']);
+const unitOf = value => COUNT_UNITS.has(text(value).toLowerCase()) ? 'count' : upper(value) === '$UNKNOWN' ? '$' : text(value) || 'UNKNOWN';
+const contextOf = (value, sourceId) => !text(value) || upper(value) === 'UNKNOWN' ? `SOURCE_SPECIFIC:${sourceId}` : text(value);
+const isIsoCurrency = unit => /^[A-Z]{3}$/.test(unit);
+const hasCurrencySymbol = unit => /[$€£¥₹₩₽]/.test(unit);
 const clone = (value) => value === undefined ? null : JSON.parse(JSON.stringify(value));
 const unique = (values) => [...new Set(values)].sort();
 const canonical = (value) => {
@@ -114,20 +117,23 @@ export function normalizeReportObservations(extracted, { sourceId, reportPeriod 
   const ids = new Map();
   const normalized = items.filter(item => item && typeof item === 'object').map((item) => {
     const rawValue = item.rawValue ?? item.value ?? null;
-    const unit = unitOf(item.unit);
+    const key = text(item.key || item.metricKey) || 'unknown';
+    const declaredUnit = unitOf(item.unit);
+    const visibleSymbols = unique(text(rawValue).match(/[$€£¥₹₩₽]/g) || []);
+    const unit = MONETARY_KEYS.has(key) && declaredUnit === 'UNKNOWN' && visibleSymbols.length === 1 ? visibleSymbols[0] : declaredUnit;
     const visiblePeriod = periodOf(item.period || data.period);
     const inherited = !visiblePeriod.start && !visiblePeriod.end && fullPeriod(declaredPeriod);
     const confidence = numericValue(item.confidence ?? data.confidence);
     const value = item.value === null ? null : numericValue(item.value ?? rawValue, unit);
     const format = formatIdentity(item, data, origin);
     const result = {
-      observationId: '', key: text(item.key || item.metricKey) || 'unknown', label: text(item.label || item.key || item.metricKey) || 'Sin etiqueta',
+      observationId: '', key, label: text(item.label || item.key || item.metricKey) || 'Sin etiqueta',
       value, rawValue: clone(rawValue), unit,
       platform: platformOf(item.platform ?? data.platform), scope: scopeOf(item.scope),
       precision: roundingStep(rawValue) ? 'ROUNDED' : PRECISIONS.has(upper(item.precision)) ? upper(item.precision) : value === null ? 'UNKNOWN' : 'EXACT',
-      contextKey: text(item.contextKey || data.contextKey) || `SOURCE_SPECIFIC:${origin}`,
+      contextKey: contextOf(item.contextKey || data.contextKey, origin),
       contextLabel: text(item.contextLabel || data.contextLabel) || null,
-      contextProvenance: text(item.contextKey || data.contextKey) ? (item.contextProvenance || 'SOURCE_VISIBLE') : 'SOURCE_SPECIFIC',
+      contextProvenance: contextOf(item.contextKey || data.contextKey, origin).startsWith('SOURCE_SPECIFIC:') ? 'SOURCE_SPECIFIC' : (item.contextProvenance || 'SOURCE_VISIBLE'),
       period: inherited ? declaredPeriod : visiblePeriod,
       periodProvenance: inherited ? 'REPORT_DECLARED' : item.periodProvenance || (fullPeriod(visiblePeriod) ? 'SOURCE_VISIBLE' : 'UNKNOWN'),
       comparisonPeriod: periodOf(item.comparisonPeriod || data.comparisonPeriod), changePct: numericValue(item.changePct, '%'),
@@ -146,6 +152,7 @@ export function normalizeReportObservations(extracted, { sourceId, reportPeriod 
       sourceId: origin, evidence: clone(item.evidence ?? null),
       confidence: confidence !== null && confidence >= 0 && confidence <= 1 ? confidence : null,
       excluded: item.excluded === true,
+      ...(Object.hasOwn(item, 'originalRawValue') ? { originalRawValue: clone(item.originalRawValue) } : {}),
       ...(item.review ? { review: clone(item.review) } : {}),
     };
     const suppliedId = text(item.observationId || item.id);
@@ -163,8 +170,53 @@ const factSignature = (item) => canonical({
   key: item.key, unit: item.unit, platform: item.platform, scope: item.scope, contextKey: item.contextKey,
   period: item.period, comparisonPeriod: item.comparisonPeriod, entityLevel: item.entityLevel,
   entityId: item.entityId, entityName: item.entityId ? null : item.entityName, parentEntityId: item.parentEntityId,
-  resultType: item.resultType || (item.key === 'results' ? item.label : null),
+  resultType: ['results', 'costPerResult'].includes(item.key) ? item.resultType || item.label : null,
 });
+
+// Resolve only the known crossposting context through explicit, compatible
+// relationships. The original observation is retained unchanged in the report.
+function reconcileContexts(observations) {
+  const combined = 'instagram_content_with_facebook_distribution';
+  const byId = new Map(observations.map(item => [item.observationId, item]));
+  const resolved = new Map();
+  const hasCycle = (item) => {
+    const seen = new Set();
+    for (let current = item; current; current = byId.get(current.relation?.parentObservationId)) {
+      if (seen.has(current.observationId)) return true;
+      seen.add(current.observationId);
+    }
+    return false;
+  };
+  const resolve = (item, visiting = new Set()) => {
+    if (resolved.has(item.observationId)) return resolved.get(item.observationId);
+    if (visiting.has(item.observationId) || item.contextKey !== combined || hasCycle(item)) return item.contextKey;
+    const parent = byId.get(item.relation?.parentObservationId);
+    if (!parent || !['COMPONENT_OF', 'CORROBORATES'].includes(item.relation.type)
+      || item.key !== parent.key || item.unit !== parent.unit || canonical(item.period) !== canonical(parent.period)
+      || !['ACCOUNT', 'UNKNOWN'].includes(item.entityLevel) || !['ACCOUNT', 'UNKNOWN'].includes(parent.entityLevel)
+      || (item.entityName && parent.entityName && item.entityName !== parent.entityName)
+      || item.entityId !== parent.entityId || item.parentEntityId !== parent.parentEntityId) return item.contextKey;
+    const parentContext = resolve(parent, new Set([...visiting, item.observationId]));
+    const platformContext = item.platform === 'INSTAGRAM' ? 'account_content'
+      : item.platform === 'FACEBOOK' ? 'facebook_distribution_of_instagram_content' : null;
+    let context = item.contextKey;
+    if (parent.platform === 'CROSS_PLATFORM' && parentContext === combined && item.relation.type === 'COMPONENT_OF') {
+      if (item.platform === 'INSTAGRAM') context = 'account_content';
+      if (item.platform === 'FACEBOOK') context = 'facebook_distribution_of_instagram_content';
+    } else if (parent.platform === item.platform && parentContext === platformContext
+      && (parent.scope === item.scope || (item.relation.type === 'COMPONENT_OF' && parent.scope === 'TOTAL' && ['ORGANIC', 'PAID'].includes(item.scope)))) {
+      context = parentContext;
+    }
+    resolved.set(item.observationId, context);
+    return context;
+  };
+  return observations.map(item => {
+    const contextKey = resolve(item);
+    if (contextKey === item.contextKey) return item;
+    return { ...item, contextKey, sourceContextKey: item.contextKey, contextProvenance: 'EXPLICIT_RELATION',
+      contextLabel: contextKey === 'account_content' ? 'Contenido de Instagram' : 'Contenido de Instagram distribuido en Facebook' };
+  });
+}
 const compatibleValue = (left, right) => {
   if (left.value === right.value) return true;
   const leftStep = left.precision === 'ROUNDED' ? roundingStep(left.rawValue) : 0;
@@ -178,6 +230,31 @@ const makeIssue = (code, message, items, blocking) => {
   const panelIds = unique(items.map(item => item.panelId).filter(Boolean));
   return { id: `issue-${hash({ code, observationIds, sourceIds, panelIds })}`, code, message, observationIds, sourceIds, ...(panelIds.length ? { panelIds } : {}), blocking };
 };
+
+function groupRepeatedIssues(issues) {
+  const messages = {
+    PERIOD_INHERITED: 'Las cifras indicadas usan el período seleccionado para el informe; sus capturas no muestran fechas completas.',
+    SCOPE_UNDISCLOSED: 'Las cifras indicadas no muestran desglose orgánico o de anuncios y se conservan sin desglose.',
+    CURRENCY_UNKNOWN: 'Los importes conservan el símbolo visible sin asignar una moneda ISO; no se convierten ni se suman entre monedas sin identificar.',
+  };
+  const grouped = new Map();
+  const result = [];
+  for (const issue of issues) {
+    if (!messages[issue.code]) { result.push(issue); continue; }
+    if (!grouped.has(issue.code)) grouped.set(issue.code, []);
+    grouped.get(issue.code).push(issue);
+  }
+  for (const [code, entries] of grouped) {
+    const observationIds = unique(entries.flatMap(item => item.observationIds || []));
+    const sourceIds = unique(entries.flatMap(item => item.sourceIds || []));
+    const panelIds = unique(entries.flatMap(item => item.panelIds || []));
+    const blocking = entries.some(item => item.blocking);
+    const message = code === 'CURRENCY_UNKNOWN' && blocking ? 'Hay importes sin moneda ni símbolo identificable; confirma su unidad antes de publicar.' : messages[code];
+    result.push({ id: `issue-${hash({ code, observationIds, sourceIds, panelIds })}`, code, message, observationIds, sourceIds,
+      ...(panelIds.length ? { panelIds } : {}), blocking });
+  }
+  return result;
+}
 
 function consolidate(items, issues) {
   const present = items.filter(item => item.value !== null);
@@ -196,6 +273,8 @@ function consolidate(items, issues) {
     value: conflict ? null : chosen.value, changePct: changes.length === 1 ? Number(changes[0]) : null,
     status: conflict ? 'CONFLICT' : !present.length ? 'MISSING' : sourceIds.length > 1 ? 'CORROBORATED' : 'OBSERVED',
     sourceIds, observationIds,
+    ...(items.some(item => item.sourceContextKey) ? { contextResolution: { method: 'EXPLICIT_RELATION',
+      observationIds: unique(items.filter(item => item.sourceContextKey).map(item => item.observationId)) } } : {}),
     confidence: present.some(item => item.confidence !== null) ? Math.min(...present.filter(item => item.confidence !== null).map(item => item.confidence)) : null,
     evidence: sortStable(items.map(item => ({ sourceId: item.sourceId, observationId: item.observationId, evidence: clone(item.evidence) }))),
   };
@@ -216,7 +295,7 @@ function validateObservation(item, reportPeriod, issues) {
   if (!fullPeriod(item.period)) push('PERIOD_UNKNOWN', `Falta un período completo para ${item.label}.`, true);
   else if (fullPeriod(reportPeriod) && canonical(item.period) !== canonical(reportPeriod)) push('PERIOD_MISMATCH', `El período visible de ${item.label} difiere del período solicitado.`, true);
   if (item.periodProvenance === 'REPORT_DECLARED') push('PERIOD_INHERITED', `El período de ${item.label} procede del informe solicitado y no de una fecha visible en esta captura.`, false);
-  if (MONETARY_KEYS.has(item.key) && !/^[A-Z]{3}$/.test(item.unit)) push('CURRENCY_UNKNOWN', `Confirma la moneda de ${item.label}; el símbolo visible no identifica una moneda ISO.`, true);
+  if (MONETARY_KEYS.has(item.key) && !isIsoCurrency(item.unit)) push('CURRENCY_UNKNOWN', `La moneda de ${item.label} no tiene un código ISO identificado.`, !hasCurrencySymbol(item.unit));
   if (['CAMPAIGN', 'AD_SET', 'AD'].includes(item.entityLevel) && !item.entityId && !item.entityName) push('ENTITY_UNKNOWN', `Falta identificar la entidad de ${item.label}.`, true);
 }
 
@@ -237,6 +316,7 @@ function validateBreakdowns(observations, issues) {
     }
     const complete = parent.breakdownComplete || children.every(item => item.relation.exhaustive);
     if (NON_ADDITIVE_KEYS.has(parent.key) || parent.unit === '%') continue;
+    if (MONETARY_KEYS.has(parent.key) && !isIsoCurrency(parent.unit)) continue;
     const explicitPlatformBreakdown = parent.platform === 'CROSS_PLATFORM' && children.length === 2
       && unique(children.map(item => item.platform)).join(',') === 'FACEBOOK,INSTAGRAM';
     const compatible = children.every(item => item.key === parent.key && item.unit === parent.unit && canonical(item.period) === canonical(parent.period) && (item.contextKey === parent.contextKey || explicitPlatformBreakdown));
@@ -251,6 +331,25 @@ function validateBreakdowns(observations, issues) {
       + components.reduce((total, item) => total + (item.precision === 'ROUNDED' ? roundingStep(item.rawValue) || 0 : 0) / 2, 0);
     if (complete && Math.abs(sum - parent.value) > tolerance + 1e-7) issues.push(makeIssue('BREAKDOWN_MISMATCH', `El desglose explícito de ${parent.label} suma ${sum} y el total fuente muestra ${parent.rawValue ?? parent.value}.`, [parent, ...children], true));
     else if (!complete && sum > parent.value + tolerance + 1e-7) issues.push(makeIssue('PARTIAL_BREAKDOWN_EXCEEDS_TOTAL', `Los componentes explícitos de ${parent.label} suman ${sum}, más que su total fuente ${parent.rawValue ?? parent.value}.`, [parent, ...children], true));
+  }
+}
+
+const SUMMARY_METRIC_LABELS = new Map([
+  ['visualizaciones', 'views'], ['espectadores', 'viewers'], ['alcance', 'reach'], ['impresiones', 'impressions'],
+  ['interacciones', 'interactions'], ['interacciones con el contenido', 'interactions'],
+  ['clics en el enlace', 'linkClicks'], ['visitas al perfil', 'profileVisits'],
+  ['importe gastado', 'spend'], ['costo por resultado', 'costPerResult'], ['resultados', 'results'],
+]);
+const SUMMARY_METRIC_KEYS = new Set(SUMMARY_METRIC_LABELS.values());
+
+function validateSummaryMetric(panel, issues) {
+  if (!['SUMMARY', 'SUMMARY_CARDS'].includes(upper(panel.chartType)) || !SUMMARY_METRIC_KEYS.has(panel.metricKey)) return;
+  for (const row of panel.dataset) {
+    const label = text(row?.label ?? row?.name);
+    const rowMetric = SUMMARY_METRIC_LABELS.get(label.toLowerCase());
+    if (!rowMetric || rowMetric === panel.metricKey) continue;
+    if (![row.value, row[panel.metricKey], row[rowMetric]].some(value => numericValue(value, panel.unit) !== null)) continue;
+    issues.push(makeIssue('PANEL_METRIC_MISMATCH', `La fila ${label} corresponde a un indicador distinto de la métrica ${panel.metricKey} declarada por el panel. Revisa su identidad antes de publicar.`, [panel], true));
   }
 }
 
@@ -322,12 +421,13 @@ export function buildEvidenceReport(sources = [], { reportPeriod } = {}) {
         ...clone(panel), sourceId,
         metricKey: text(panel.metricKey || panel.key) || 'unknown',
         unit: unitOf(panel.unit), platform: platformOf(panel.platform ?? data.platform), scope: scopeOf(panel.scope),
-        contextKey: text(panel.contextKey || data.contextKey) || `SOURCE_SPECIFIC:${sourceId}`,
+        contextKey: contextOf(panel.contextKey || data.contextKey, sourceId),
         period: inherited ? declaredPeriod : visiblePeriod,
         periodProvenance: inherited ? 'REPORT_DECLARED' : panel.periodProvenance || (fullPeriod(visiblePeriod) ? 'SOURCE_VISIBLE' : 'UNKNOWN'),
         dataset: Array.isArray(panel.dataset) ? clone(panel.dataset) : [],
       };
       normalized.panelId = panel.panelId || `${sourceId}:panel-${panel.id || hash(normalized)}`;
+      validateSummaryMetric(normalized, issues);
       normalizePanelReferences(normalized, sourceObservations, issues);
       if (normalized.dataset.length) validateObservation({ ...normalized, key: normalized.metricKey, label: normalized.title || normalized.metricKey, value: 1, rawValue: null }, declaredPeriod, issues);
       panels.push(normalized);
@@ -342,7 +442,7 @@ export function buildEvidenceReport(sources = [], { reportPeriod } = {}) {
     identities.set(item.observationId, item);
   }
   const grouped = new Map();
-  for (const item of active) {
+  for (const item of reconcileContexts(active)) {
     validateObservation(item, declaredPeriod, issues);
     const signature = factSignature(item);
     if (!grouped.has(signature)) grouped.set(signature, []);
@@ -350,7 +450,7 @@ export function buildEvidenceReport(sources = [], { reportPeriod } = {}) {
   }
   const facts = sortStable([...grouped.values()].map(items => consolidate(items, issues)));
   validateBreakdowns(active, issues);
-  const uniqueIssues = sortStable([...new Map(issues.map(item => [item.id, item])).values()]);
+  const uniqueIssues = sortStable(groupRepeatedIssues([...new Map(issues.map(item => [item.id, item])).values()]));
   return {
     schemaVersion: 2, observations: ordered, facts, panels: sortStable(panels), issues: uniqueIssues,
     readyForNarrative: facts.some(item => item.value !== null) && !uniqueIssues.some(item => item.blocking),

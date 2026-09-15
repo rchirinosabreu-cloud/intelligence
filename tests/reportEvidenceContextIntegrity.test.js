@@ -40,3 +40,35 @@ test('an explicit cell link with a different scope cannot authorize a value copy
   assert.throws(() => assertEvidenceReady(before), /distribuci|conflicto|panel|referencia|alcance/i,
     'paid table cells cannot certify total observations solely by matching label and value');
 });
+
+test('a single-metric summary cannot publish viewers as a views row without semantic evidence', () => {
+  const source = fixture().normalizedMetrics.sourceExtractions[0];
+  source.screenType = 'CONTENT_SUMMARY';
+  source.panels = [{ ...source.panels[0], chartType: 'SUMMARY', title: 'Desglose de visualizaciones',
+    observationIds: [], dataset: [{ label: 'Total', views: 1234 }, { label: 'Espectadores', value: 900 }] }];
+  const original = structuredClone(source);
+  const evidence = buildEvidenceReport([source], { reportPeriod: period });
+  const mismatch = evidence.issues.find(issue => issue.code === 'PANEL_METRIC_MISMATCH');
+  assert.equal(mismatch?.blocking, true);
+  assert.deepEqual(mismatch.panelIds, ['mixed-capture:formats']);
+  assert.deepEqual(mismatch.sourceIds, ['mixed-capture']);
+  assert.equal(evidence.readyForNarrative, false);
+  assert.deepEqual(evidence.panels[0].dataset, source.panels[0].dataset, 'original cells remain available for review');
+  assert.deepEqual(source, original);
+  assert.throws(() => assertEvidenceReady({ normalizedMetrics: evidence }), /métrica|indicador|panel|conflicto/i);
+});
+
+test('the summary metric guard does not reinterpret formats, empty cells or explicitly mixed tables', () => {
+  for (const change of [
+    { label: 'Reels' }, { label: 'Enlaces' }, { label: 'Total' }, { label: 'Visualizaciones' },
+    { label: 'Espectadores', value: null }, { label: 'Espectadores', chartType: 'BAR' },
+    { label: 'Espectadores', metricKey: 'summary' },
+  ]) {
+    const source = fixture().normalizedMetrics.sourceExtractions[0];
+    source.panels = [{ ...source.panels[0], chartType: change.chartType || 'SUMMARY_CARDS',
+      metricKey: change.metricKey || 'views', observationIds: [],
+      dataset: [{ label: change.label, value: Object.hasOwn(change, 'value') ? change.value : 900 }] }];
+    const result = buildEvidenceReport([source], { reportPeriod: period });
+    assert.equal(result.issues.some(issue => issue.code === 'PANEL_METRIC_MISMATCH'), false, JSON.stringify(change));
+  }
+});

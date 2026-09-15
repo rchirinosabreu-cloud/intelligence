@@ -12,6 +12,61 @@ const report = (overrides = {}) => ({
   sources: [{ id: 'capture-ig', originalName: 'resumen ing.png' }], ...overrides
 });
 
+test('professional PDF uses shared entity rows instead of repeating each ad metric as a standalone fact', () => {
+  const fixture = report();
+  const entity = { platform: 'META_ADS', entityLevel: 'AD', entityName: 'Anuncio demo', scope: 'PAID', contextKey: 'advertising' };
+  fixture.normalizedMetrics.facts = [
+    fact({ ...entity, factId: 'spend', key: 'spend', label: 'Importe', value: 4666, unit: '$UNKNOWN' }),
+    fact({ ...entity, factId: 'results', key: 'results', label: 'Resultados', value: 3 }),
+    fact({ factId: 'heading', key: 'contentCount', label: 'Contenido publicado', value: null, entityLevel: 'UNKNOWN' })
+  ];
+  const $ = load(buildMetricReportHtml(fixture));
+  assert.equal($('[data-report-section] .panel-table tbody tr').length, 1);
+  assert.match($('.panel-table').text(), /Anuncio demo/);
+  assert.match($('.panel-table').text(), /\$ 4\.666/);
+  assert.doesNotMatch($('body').text(), /\$UNKNOWN/);
+  assert.equal($('[data-fact-id="heading"]').length, 0);
+  assert.equal($('.fact-table').length, 0);
+});
+
+test('PDF names a total by its metric and keeps different format measures in separate columns', () => {
+  const fixture = report();
+  fixture.normalizedMetrics.facts = [fact({ label: 'Total', entityLevel: 'ACCOUNT' }),
+    fact({ factId: 'format-views', platform: 'FACEBOOK', label: 'Enlaces', key: 'views', value: 3032, entityLevel: 'FORMAT', entityName: 'Enlaces' }),
+    fact({ factId: 'format-interactions', platform: 'FACEBOOK', label: 'Enlaces', key: 'interactions', value: 11, entityLevel: 'FORMAT', entityName: 'Enlaces' })];
+  const $ = load(buildMetricReportHtml(fixture));
+  assert.match($('[data-fact-id="ig-views"] th').text(), /Visualizaciones/);
+  assert.equal($('.panel-table tbody tr').length, 1);
+  assert.match($('.panel-table thead').text(), /Visualizaciones/);
+  assert.match($('.panel-table thead').text(), /Interacciones/);
+  assert.match($('.panel-table tbody').text(), /3\.032/);
+  assert.match($('.panel-table tbody').text(), /11/);
+});
+
+test('PDF does not present internal extraction roles as the meaning of account metrics', () => {
+  const fixture = report();
+  fixture.normalizedMetrics.facts = [fact({ resultType: 'SUMMARY' }), fact({ factId: 'reach', key: 'reach', resultType: 'METRIC' })];
+  const $ = load(buildMetricReportHtml(fixture));
+  assert.doesNotMatch($('.fact-table').text(), /SUMMARY|METRIC/);
+  assert.match($('.fact-table').text(), /Visualizaciones/);
+  assert.match($('.fact-table').text(), /Alcance/);
+});
+
+test('KPI rows keep context and period once per section while retaining distinct row context and sources', () => {
+  const fixture = report();
+  fixture.normalizedMetrics.facts = [
+    fact({ entityLevel: 'UNKNOWN', contextKey: 'account_content', contextLabel: 'Contenido de Instagram', periodProvenance: 'REPORT_DECLARED' }),
+    fact({ factId: 'reach', key: 'reach', entityLevel: 'UNKNOWN', contextKey: 'account_content', contextLabel: 'Contenido de Instagram', periodProvenance: 'REPORT_DECLARED' }),
+    fact({ factId: 'audience', key: 'followerTotal', entityLevel: 'UNKNOWN', contextKey: 'account_audience', contextLabel: 'Audiencia de la cuenta', periodProvenance: 'REPORT_DECLARED' })
+  ];
+  const $ = load(buildMetricReportHtml(fixture));
+  assert.doesNotMatch($('.fact-table tbody').text(), /Nivel sin confirmar|1 ago|31 ago|Contenido de Instagram/);
+  assert.match($('[data-fact-id="audience"]').text(), /Audiencia de la cuenta/);
+  assert.equal($('[data-fact-id="ig-views"] th small').length, 0);
+  assert.equal($('[data-fact-id="ig-views"] .source-ref').text(), '[1]');
+  assert.match($('[data-report-section] .caption').text(), /Período seleccionado/);
+});
+
 test('embeds only the uploaded raster logo and keeps the document independent of remote images', () => {
   const fixture = report();
   const logo = 'data:image/png;base64,iVBORw0KGgo=';
@@ -62,12 +117,12 @@ test('shares browser-safe number, abbreviation, currency, time and change format
   assert.equal(formatEvidenceChangePct(null), 'Sin comparación');
 });
 
-test('preserves zero, missing data, fractional percentages and each own change without coercion', () => {
+test('preserves zero, fractional percentages and each own change without rendering empty headings', () => {
   const fixture = report();
   fixture.normalizedMetrics.facts = [fact({ factId: 'zero', value: 0, changePct: 0 }), fact({ factId: 'missing', value: null, status: 'MISSING', changePct: null }), fact({ factId: 'rate', key: 'ctr', label: 'CTR', value: 1.999, unit: '%', changePct: -1.999 })];
   const $ = load(buildMetricReportHtml(fixture));
   assert.equal($('[data-fact-id="zero"] .metric-value').text(), '0');
-  assert.equal($('[data-fact-id="missing"] .metric-value').text(), 'No disponible');
+  assert.equal($('[data-fact-id="missing"]').length, 0);
   assert.equal($('[data-fact-id="rate"] .metric-value').text(), '1,999 %');
   assert.match($('[data-fact-id="rate"]').text(), /-1,999 %/);
   assert.match($('[data-fact-id="zero"]').text(), /0 %/);
@@ -108,9 +163,9 @@ test('does not invent the paid platform, ISO currency, account or comparative pe
   fixture.normalizedMetrics.facts = [fact({ factId: 'spend', platform: 'META_ADS', label: 'Importe gastado', value: 180000, unit: '$', period: null, contextKey: 'campaign:CLIENTE DEMO/AGOSTO', changePct: null })];
   const $ = load(buildMetricReportHtml(fixture));
   assert.match($('[data-platform="META_ADS"]').text(), /Pauta Meta/);
-  assert.match($('[data-fact-id="spend"]').text(), /180\.000 \$/);
+  assert.match($('[data-fact-id="spend"]').text(), /\$ 180\.000/);
   assert.doesNotMatch($('body').text(), /COP|USD|Coordinador/);
-  assert.match($('[data-fact-id="spend"]').text(), /Período sin confirmar/);
+  assert.match($('[data-fact-id="spend"]').closest('[data-report-section]').find('.caption').text(), /Período sin confirmar/);
 });
 
 test('requires published/current/complete evidence and narrative before final export', () => {
@@ -177,7 +232,10 @@ test('preserves multiple ad metric columns and separates entity levels instead o
   fixture.normalizedMetrics.facts = [fact({ factId: 'campaign-spend', platform: 'META_ADS', key: 'spend', label: 'Importe gastado', unit: '$', value: 180000, entityLevel: 'CAMPAIGN', entityName: 'CLIENTE DEMO / AGOSTO' })];
   fixture.normalizedMetrics.panels = [{ panelId: 'ads', platform: 'META_ADS', title: 'Anuncios observados', entityLevel: 'AD', dataset: [{ label: 'POST - Pisos', spend: 146906, impressions: 21724, reach: 10825, results: 125, costPerResult: 1175 }] }];
   const $ = load(buildMetricReportHtml(fixture));
-  assert.match($('[data-fact-id="campaign-spend"]').text(), /Campaña: CLIENTE DEMO \/ AGOSTO/);
+  const campaign = $('[data-report-section]').filter((_, section) => $(section).find('h3').text() === 'Resultados por campaña');
+  assert.equal(campaign.length, 1);
+  assert.match(campaign.text(), /CLIENTE DEMO \/ AGOSTO/);
+  assert.match(campaign.text(), /\$ 180\.000/);
   const panel = $('[data-panel-id="ads"]');
   assert.match(panel.text(), /146\.906/);
   assert.match(panel.text(), /21\.724/);
@@ -200,9 +258,9 @@ test('labels context, selected report periods and missing breakdown without inve
   const fixture = report();
   fixture.normalizedMetrics.facts = [fact({ factId:'fb-part',platform:'FACEBOOK',value:1017,scope:'UNKNOWN',contextKey:'instagram-crossposting',periodProvenance:'REPORT_DECLARED',comparisonPeriod:{start:null,end:null} }),fact({ factId:'fb-total',platform:'FACEBOOK',value:1049,contextKey:'facebook-overview' })];
   const $ = load(buildMetricReportHtml(fixture));
-  assert.match($('[data-fact-id="fb-part"]').text(), /Tarjeta combinada de Instagram/);
-  assert.match($('[data-fact-id="fb-total"]').text(), /Resumen de Facebook/);
-  assert.match($('[data-fact-id="fb-part"]').text(), /Período seleccionado/);
+  assert.match($('[data-fact-id="fb-part"]').closest('[data-report-section]').text(), /Tarjeta combinada de Instagram/);
+  assert.match($('[data-fact-id="fb-total"]').closest('[data-report-section]').text(), /Resumen de Facebook/);
+  assert.match($('[data-fact-id="fb-part"]').closest('[data-report-section]').text(), /Período seleccionado/);
   assert.match($('[data-fact-id="fb-part"]').text(), /Sin desglose/);
   assert.doesNotMatch($('[data-fact-id="fb-part"]').text(), /Comparado con Período sin confirmar/);
 });

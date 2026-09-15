@@ -581,7 +581,9 @@ test('vision extraction prompt preserves metric meaning and assigns each observa
   const service = await fs.readFile('src/services/reportVisionService.js', 'utf8');
   assert.match(service, /platform es independiente para CADA métrica/i);
   assert.match(service, /Visualizaciones\s*->\s*views/);
-  assert.match(service, /follows solo crecimiento\/nuevos seguidores explícitos/);
+  // A period chart labelled only "Seguidores" does not prove a stock or new followers.
+  assert.match(service, /followers.*Seguidores del período/i);
+  assert.match(service, /ausencia.*nuevos.*saldo/i);
   assert.match(service, /Clics en el enlace\s*->\s*linkClicks/i);
 });
 

@@ -3,7 +3,8 @@ import { createOpenAIClient } from './openAIClient.js';
 import { adaptDatasetForChart } from '../lib/reportChartData.js';
 import { filterTopContentRows, hasPublishableValue } from '../lib/reportPresentation.js';
 import { normalizeReportObservations } from '../lib/reportEvidence.js';
-import { AI_MODELS } from '../config/aiConfig.js';
+export const REPORT_VISION_DEFAULT_MODEL = 'gpt-6-astra';
+const reportVisionModel = () => process.env.OPENAI_MODEL_REPORT_VISION?.trim() || REPORT_VISION_DEFAULT_MODEL;
 
 export { filterTopContentRows as filterExtractedTopContentRows };
 
@@ -158,7 +159,7 @@ const rowSchema = {
     type: 'object',
     properties: {
         label: { type: 'string' },
-        ...Object.fromEntries(['value', 'hombres', 'mujeres', 'views', 'interactions', 'clicks', 'results', 'impressions', 'reach', 'spend', 'percentage', 'contentCount']
+        ...Object.fromEntries(['value', 'hombres', 'mujeres', 'views', 'interactions', 'clicks', 'results', 'costPerResult', 'impressions', 'reach', 'spend', 'percentage', 'contentCount']
             .map(key => [key, nullableNumber]))
     },
     required: ['label'],
@@ -197,7 +198,7 @@ const panelSchema = {
         id: { type: 'string' }, title: { type: 'string' }, chartType: { type: 'string' },
         metricKey: { type: 'string' }, platform: platformSchema, scope: scopeSchema,
         unit: { type: 'string' }, contextKey: { type: 'string' }, contextLabel: { type: 'string' }, period: periodSchema,
-        evidence: { type: 'string' },
+        evidence: { type: 'string' }, changePct: nullableNumber, comparisonPeriod: periodSchema,
         observationIds: { type: 'array', items: { type: 'string' } },
         dataset: { type: 'array', items: rowSchema }
     },
@@ -249,19 +250,21 @@ Devuelve un único JSON completo con metrics[] y panels[]. No colapses métricas
 IDENTIDAD Y CONTEXTO
 Cada observación tiene id local único, key semántica, etiqueta visible, value numérico, rawValue exactamente como aparece, unidad, red, distribución, precisión, contexto, período y evidencia con ubicación.
 platform es independiente para CADA métrica: FACEBOOK, INSTAGRAM, CROSS_PLATFORM, META_ADS o UNKNOWN. El nombre del archivo o selector de carga no determina la red de todas las cifras.
-Un icono identificable también es evidencia explícita de plataforma: la f blanca sobre círculo azul identifica Facebook; la cámara de contorno con degradado rosa/naranja identifica Instagram. Revisa los iconos pequeños junto a cada cifra de las leyendas. No exijas además que esté escrita la palabra Facebook o Instagram; si el icono no es legible, conserva UNKNOWN. La plataforma de una tarjeta no se extiende automáticamente a otras tarjetas sin contexto visible que lo justifique.
+Un icono identificable también es evidencia explícita de plataforma: la f blanca sobre círculo azul identifica Facebook; la cámara de contorno con degradado rosa/naranja identifica Instagram. Revisa los iconos pequeños junto a cada cifra de las leyendas. No exijas además que esté escrita la palabra Facebook o Instagram; si el icono no es legible, conserva UNKNOWN.
+Identifica primero la plataforma principal del tablero mediante su encabezado, selector y leyendas concordantes de visitas, clics y seguidores. Ese contexto visible puede identificar otras tarjetas del mismo tablero sin repetir un icono en cada cifra. Cita los elementos que lo demuestran; ante indicios incompatibles conserva UNKNOWN.
+CROSS_PLATFORM corresponde solo a la tarjeta o métrica cuyo valor combina explícitamente redes, no al resto de tarjetas de la pantalla. Un resumen con encabezado Instagram conserva alcance, interacciones y su desglose propio como INSTAGRAM, aunque su tarjeta de visualizaciones también incluya distribución Facebook. Los componentes conservan su plataforma individual y contexto propio; nunca heredan el contexto combinado por estar dentro de esa tarjeta.
 scope describe distribución: TOTAL (total mostrado), ORGANIC, PAID o UNKNOWN. Mezcla Facebook/Instagram y mezcla orgánico/pagado son dimensiones distintas. Una pantalla de estadísticas de Instagram puede mostrar un TOTAL que incluye anuncios; jamás etiquetarlo automáticamente ORGANIC.
 contextKey usa account_content para estadísticas del contenido propio de la cuenta; instagram_content_with_facebook_distribution para el conjunto que incluye distribución de contenido Instagram en Facebook; facebook_distribution_of_instagram_content para SOLO esa distribución Facebook; account_audience para audiencia; advertising para tablas de pauta. Si el contexto difiere y no cabe allí, usa una clave descriptiva estable; si no se identifica, UNKNOWN. No confundir Facebook propio con la distribución de contenido Instagram en Facebook.
 contextLabel da una etiqueta española legible para ese contexto en cada métrica y panel: por ejemplo "Resumen de Facebook", "Contenido de Instagram mostrado en Facebook" o "Instagram y su distribución en Facebook". No incluir claves técnicas ni inventar filtros que no se ven; si no se identifica, "Contexto de la captura".
 period y comparisonPeriod incluyen start/end ISO únicamente si las fechas completas se ven. El mes del reporte declarado es contexto separado, NO evidencia de fechas visibles. No inventar año, fechas por defecto ni período comparativo. Las leyendas parciales como "1 de ago" no prueban el año.
-No inferir que account_audience followers es seguidores nuevos: key followerTotal para saldo total, follows solo crecimiento/nuevos seguidores explícitos. Conserva el texto visible.
+Seguidores: followerTotal exige evidencia de saldo acumulado o tamaño total de audiencia; follows exige evidencia de altas/nuevos seguidores. La ausencia de la palabra «nuevos» no demuestra un saldo total. Si solo se ve «Seguidores» en estadísticas del período y su evolución diaria, usa followers y etiqueta «Seguidores del período», sin afirmar stock, altas brutas ni crecimiento neto. Conserva la etiqueta original y la curva temporal como evidencia; no reconstruyas sus valores diarios. scope TOTAL describe distribución, no tamaño total de audiencia.
 
 MÉTRICAS Y PRECISIÓN
 Visualizaciones -> views; impresiones -> impressions; espectadores -> viewers; alcance -> reach; interacciones con el contenido -> interactions; clics en el enlace -> linkClicks; todos los clics -> clicks; visitas al perfil -> profileVisits; contenido publicado -> contentCount; inversión -> spend; CTR -> ctr.
 No sustituir visualizaciones por impresiones, interacciones por resultados, visitas por clics ni contenido publicado por visualizaciones.
 «Según N contenidos» describe la base consultada, no el conteo publicado durante el período. Nunca convertir N en contentCount ni usarlo como total mensual. Conserva esa frase como evidencia del panel; si el total publicado no está escrito, value:null. Las filas Reels/Historias/Fotos conservan sus propios conteos; no inventes un total a partir de la leyenda ni de un porcentaje de cambio.
 Resultados de Ads -> results con resultType visible (CONVERSATIONS, LEADS, PURCHASES, etc.); una conversación no prueba una venta.
-Conserva cero explícito como 0; ausente/ilegible como null. No añadir métricas ausentes para llenar un formulario.
+Conserva cero explícito como 0; ausente/ilegible como null. Cada celda visible con guion conserva value:null y rawValue con el guion original, incluidos resultados y costo por resultado de anuncios; conserva también null en la columna del dataset. Una celda vacía no equivale a cero. No añadir métricas ausentes para llenar un formulario.
 Conserva signos de changePct, incluida flecha roja o menos Unicode. Si no se ve porcentaje comparativo, null.
 "9,4 mil" -> value 9400, rawValue "9,4 mil", precision ROUNDED; "16.502" -> 16502 EXACT; "20.1K" -> 20100 ROUNDED; "1,2 M" ->1200000 ROUNDED. Un abreviado jamás representa un entero exacto.
 La unidad de spend se transcribe de la imagen. "$" sin código/país inequívoco -> "$UNKNOWN", nunca asumir COP/USD por idioma o cliente.
@@ -279,7 +282,8 @@ En pauta conserva entityLevel CAMPAIGN/AD_SET/AD/ACCOUNT/UNKNOWN, entityName y l
 PANELES Y FILAS
 Extrae cada gráfica/tabla como panel separado con metricKey, unidad, red, scope, contextKey, período y observationIds vinculados.
 Una pantalla de formatos puede mostrar porcentajes de visualizaciones, interacciones y cantidad de contenido: son paneles diferentes. No convertir porcentaje de visualizaciones en cantidad de publicaciones.
-Dataset conserva valores y columnas independientes: views, impressions, interactions, results, reach, clicks, spend, percentage, contentCount. No copiar una celda en varias columnas. Las tablas de pauta también necesitan observaciones por fila y columna con entityName/entityId y nivel; un panel visual no sustituye esas métricas conciliables.
+Dataset conserva valores y columnas independientes: views, impressions, interactions, results, costPerResult, reach, clicks, spend, percentage, contentCount. No copiar una celda en varias columnas. Las tablas de pauta también necesitan observaciones por fila y columna con entityName/entityId y nivel; un panel visual no sustituye esas métricas conciliables.
+Los encabezados de panel, botones, insignias, filtros y nombres de columnas no son observaciones de desempeño. Un título sin cifra total no crea una métrica vacía: conserva título, changePct/comparisonPeriod y evidencia en el panel correspondiente. Los guiones de una celda real identificada por fila y columna sí se conservan como observaciones null. Revisa todas las filas y columnas antes de terminar; no omitas las últimas filas ni celdas con guion.
 Para curvas diarias sin etiquetas numéricas exactas devuelve dataset:[] y conserva las tarjetas legibles como observaciones. NO reconstruyas todos los puntos diarios a ojo.
 Incluye ceros explícitos de filas y porcentajes. En audiencia conserva cada panel con su red y unidad, sin mezclar ciudades de Facebook con edades de Instagram.
 topContent solo publicaciones/creativos identificables, no categorías de formato ni encabezados de métricas. Mantén sus columnas semánticas originales; no cambies views a results.
@@ -341,7 +345,7 @@ export const extractMetricsWithGemini = async (imageBuffer, mimeType = 'image/jp
     }
 
     const genAI = createOpenAIClient({ apiKey });
-    const model = process.env.OPENAI_MODEL_REPORT_VISION || process.env.OPENAI_MODEL_VISION || process.env.OPENAI_MODEL || AI_MODELS.vision;
+    const model = reportVisionModel();
 
     console.log(`[Vision Service] Sending image to OpenAI using model ${model}...`);
 
@@ -397,7 +401,7 @@ export const extractMetricsWithOpenAI = async (imageBuffer, mimeType = 'image/jp
         throw error;
     }
 
-    const model = process.env.OPENAI_MODEL_REPORT_VISION || process.env.OPENAI_MODEL_VISION || process.env.OPENAI_MODEL || AI_MODELS.vision;
+    const model = reportVisionModel();
     console.log(`[Vision Service] Sending image to OpenAI using model ${model}...`);
 
     const response = await fetch('https://api.openai.com/v1/responses', {
@@ -446,6 +450,7 @@ export const extractMetricsWithOpenAI = async (imageBuffer, mimeType = 'image/jp
         ...parseExtractionResponse(content),
         extractionMetadata: {
             provider: 'openai', model: payload.model || model, responseId: payload.id || null,
+            promptVersion: 'report-vision-2026-09-15.2',
             usage: payload.usage ? {
                 inputTokens: usageNumber(payload.usage.input_tokens),
                 outputTokens: usageNumber(payload.usage.output_tokens),
@@ -462,6 +467,8 @@ export const extractMetricsWithOpenAI = async (imageBuffer, mimeType = 'image/jp
  * Evaluates the parsed payload of a single screenshot and cleans it, returning if it is usable.
  */
 const validConfidence = value => typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 1 ? value : null;
+// Both spellings describe the same explicit 3-second threshold; other video metrics stay distinct.
+const canonicalMetricKey = key => key === 'threeSecondViews' ? 'threeSecondVideoViews' : key;
 const LEGACY_METRIC_KEYS = [
     'spend', 'impressions', 'reach', 'clicks', 'ctr', 'results', 'views', 'viewers',
     'interactions', 'linkClicks', 'profileVisits', 'follows', 'followerTotal',
@@ -471,7 +478,7 @@ const LEGACY_METRIC_KEYS = [
 const cleanPanelDataset = (dataset) => Array.isArray(dataset) ? dataset.flatMap(row => {
     if (!row || typeof row !== 'object' || typeof row.label !== 'string' || !row.label.trim()) return [];
     const clean = { label: row.label.trim() };
-    for (const key of ['value', 'hombres', 'mujeres', 'views', 'interactions', 'clicks', 'results', 'impressions', 'reach', 'spend', 'percentage', 'contentCount']) {
+    for (const key of ['value', 'hombres', 'mujeres', 'views', 'interactions', 'clicks', 'results', 'costPerResult', 'impressions', 'reach', 'spend', 'percentage', 'contentCount']) {
         if (!Object.hasOwn(row, key)) continue;
         clean[key] = cleanNumericValue(row[key]);
     }
@@ -488,13 +495,13 @@ export const validateAndCleanSourceExtraction = (extracted, context = {}) => {
     const observations = normalizeReportObservations({
         ...extracted,
         observations: metricItems.filter(item => item && typeof item === 'object').map(item => ({
-            ...item, value: cleanNumericValue(item.value, item.unit),
+            ...item, key: canonicalMetricKey(item.key), value: cleanNumericValue(item.value, item.unit),
             rawValue: item.rawValue ?? (typeof item.value === 'string' ? item.value : null),
             changePct: cleanNumericValue(item.changePct, '%'), confidence: validConfidence(item.confidence)
         }))
     }, { sourceId: context.sourceId || extracted.sourceId, reportPeriod: context.reportPeriod });
     const panels = (Array.isArray(extracted.panels) ? extracted.panels : []).filter(panel => panel && typeof panel === 'object').map(panel => ({
-        ...panel, dataset: cleanPanelDataset(panel.dataset)
+        ...panel, metricKey: canonicalMetricKey(panel.metricKey), dataset: cleanPanelDataset(panel.dataset)
     }));
     const dataset = adaptDatasetForChart(extracted.dataset || [], extracted.chartType);
     const demographics = cleanDemographics(extracted.demographics || {});

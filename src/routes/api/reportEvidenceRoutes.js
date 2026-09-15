@@ -2,7 +2,7 @@ import { randomUUID, createHash } from 'node:crypto';
 import { buildEvidenceReport, normalizeReportObservations } from '../../lib/reportEvidence.js';
 import { applyReportReview, assertReportVersion, assertEvidenceReady, validateReportPeriod, prepareReportPublication, saveReportVersion, generateEvidenceNarrative, reportWorkflowError } from '../../services/reportWorkflowService.js';
 
-export const REPORT_EVIDENCE_PIPELINE_VERSION = 'report-evidence-2026-09-15.1';
+export const REPORT_EVIDENCE_PIPELINE_VERSION = 'report-evidence-2026-09-16.1';
 const jsonSafe = value => JSON.parse(JSON.stringify(value));
 const errorResponse = (res, error) => {
   console.error('[Reports evidence]', error.message);
