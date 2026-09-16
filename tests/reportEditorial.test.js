@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { load } from 'cheerio';
 import { buildMetricReportHtml } from '../src/services/metricReportPdf.js';
 import { generateEvidenceNarrative } from '../src/services/reportWorkflowService.js';
 
@@ -75,6 +76,15 @@ test('PDF pairs results with explanations and finishes with learning and strateg
   assert.ok(html.indexOf('Resumen ejecutivo') < html.indexOf('data-kpi-card'));
   assert.doesNotMatch(html, /Fuentes y metodología/);
   assert.ok(html.indexOf('Plan de acción') < html.indexOf('<footer class="agency-signoff">'));
+});
+
+test('the editorial action plan contains its wide table inside the mobile scroll surface', () => {
+  const report = reportFixture();
+  report.narrative = editorial.composeEditorialNarrative(report, responseFor(editorial.buildEditorialContext(report)));
+  const $ = load(buildMetricReportHtml(report, { preview: true }));
+  const plan = $('section').filter((_, node) => $(node).children('h2').text() === 'Plan de acción');
+  assert.equal(plan.find('table').parent().hasClass('table-wrap'), true);
+  assert.equal(plan.find('tbody tr').length, report.narrative.editorial.recommendations.length);
 });
 
 test('production generation uses the editorial contract, dedicated economical model and records usage', async () => {

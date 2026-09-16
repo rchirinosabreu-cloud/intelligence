@@ -13,6 +13,66 @@ const report = (overrides = {}) => ({
   sources: [{ id: 'capture-ig', originalName: 'resumen ing.png' }], ...overrides
 });
 
+test('cover highlights the client, agency and calendar period with account results separated by network', () => {
+  const fixture = report({ client: { name: 'Cliente <Norte> & Sur' } });
+  fixture.normalizedMetrics.facts.push(
+    fact({ factId: 'ig-interactions', key: 'interactions', value: 348 }),
+    fact({ factId: 'ig-follows', key: 'follows', value: 0 }),
+    fact({ factId: 'fb-views', platform: 'FACEBOOK', value: 4927 }),
+    fact({ factId: 'fb-rounded', platform: 'FACEBOOK', key: 'interactions', value: 1200, precision: 'ROUNDED', rawValue: '1,2 mil' }),
+  );
+  const before = structuredClone(fixture);
+  const $ = load(buildMetricReportHtml(fixture));
+  assert.equal($('.cover h1 .cover-title').text(), fixture.name);
+  assert.equal($('.cover h1 .client').text(), 'Cliente <Norte> & Sur');
+  assert.equal($('.cover-author strong').text(), 'BrainStudio · Agencia Creativa');
+  assert.match($('.cover-period').text(), /1 ago\.? 2026 - 31 ago\.? 2026/);
+  assert.equal($('.cover-overview').attr('aria-label'), 'Resultados del período por red');
+  assert.equal($('.cover-network').length, 2);
+  const ig = $('[data-cover-platform="INSTAGRAM"]');
+  assert.match(ig.text(), /Visualizaciones[\s\S]*16\.502/);
+  assert.match(ig.text(), /Interacciones con el contenido[\s\S]*348/);
+  assert.match(ig.text(), /Nuevos seguidores[\s\S]*0/);
+  assert.match($('[data-cover-platform="FACEBOOK"]').text(), /≈ 1,2 mil/);
+  assert.doesNotMatch($('.cover-overview').text(), /Orgánico|Crecimiento|\+2,6/);
+  assert.deepEqual(fixture, before);
+});
+
+test('cover never sums or substitutes partial, crossposted, conflicting, missing or other-period evidence', () => {
+  const fixture = report();
+  fixture.normalizedMetrics.facts = [
+    fact(),
+    fact({ factId: 'organic', scope: 'ORGANIC', key: 'interactions', value: 444 }),
+    fact({ factId: 'paid', scope: 'PAID', key: 'interactions', value: 555 }),
+    fact({ factId: 'cross', platform: 'CROSS_PLATFORM', value: 17810 }),
+    fact({ factId: 'distribution', platform: 'FACEBOOK', contextKey: 'facebook_distribution_of_instagram_content', value: 1308 }),
+    fact({ factId: 'format', entityLevel: 'FORMAT', entityName: 'Reels', key: 'interactions', value: 19 }),
+    fact({ factId: 'previous', key: 'follows', value: 100, period: { start: '2026-07-01', end: '2026-07-31' } }),
+    fact({ factId: 'missing', platform: 'FACEBOOK', key: 'follows', value: null, status: 'MISSING' }),
+    fact({ factId: 'conflict', platform: 'FACEBOOK', key: 'interactions', value: 777, status: 'CONFLICT' }),
+    fact({ factId: 'unknown-scope', platform: 'FACEBOOK', value: 999, scope: 'UNKNOWN' }),
+    fact({ factId: 'lifetime-followers', key: 'followerTotal', value: 10000 }),
+  ];
+  let $ = load(buildMetricReportHtml(fixture, { preview: true }));
+  assert.equal($('.cover-overview .cover-metric').length, 1);
+  assert.match($('.cover-overview').text(), /16\.502/);
+  // Two account contexts are ambiguous even if both claim TOTAL.
+  fixture.normalizedMetrics.facts.push(fact({ factId: 'another-account-context', contextKey: 'ACCOUNT_TOTAL', value: 30000 }));
+  $ = load(buildMetricReportHtml(fixture, { preview: true }));
+  assert.equal($('.cover-overview').length, 0);
+  assert.match($('.notice').text(), /BORRADOR/);
+});
+
+test('cover accommodates clients without names or logos and ad-only reports without inventing network KPIs', () => {
+  const fixture = report({ client: null, clientName: 'Nombre de respaldo' });
+  fixture.normalizedMetrics.facts = [fact({ platform: 'META_ADS', key: 'spend', unit: 'COP', value: 180000 })];
+  const $ = load(buildMetricReportHtml(fixture));
+  assert.equal($('.cover h1 .client').text(), 'Nombre de respaldo');
+  assert.equal($('.client-logo,.cover-overview').length, 0);
+  assert.equal($('.agency-signoff img').length, 1);
+  assert.doesNotMatch($('.cover').text(), /Instagram|Facebook|undefined/);
+});
+
 test('client PDF omits technical provenance and ends with the bundled BrainStudio logo without modifying evidence', () => {
   const fixture = report();
   fixture.normalizedMetrics.issues = [{ code: 'PERIOD_INHERITED', message: 'Aviso interno', blocking: false }];
