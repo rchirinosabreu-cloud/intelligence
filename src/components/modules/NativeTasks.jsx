@@ -1,7 +1,7 @@
 import Select from '@/components/ui/Select';
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import UserAvatarPopover from "../../components/ui/UserAvatarPopover";
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
@@ -43,6 +43,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { readManagementFilters, writeManagementFilters } from '@/lib/managementFilterSession';
 import ClientAvatar from "../../components/ui/ClientAvatar";
 import TaskSidePanel from './TaskSidePanel';
 import { triggerConfetti } from '@/utils/confetti';
@@ -179,9 +180,18 @@ const NativeTasks = () => {
     const queryClient = useQueryClient();
     const { toast } = useToast();
 
-    const [responsibleFilter, setResponsibleFilter] = useState(currentUser?.name || 'Todos');
-    const [dateFilter, setDateFilter] = useState('Esta Semana');
-    const [clientFilter, setClientFilter] = useState('Todos');
+    const [filters, setFilters] = useState(() => readManagementFilters(window.sessionStorage, currentUser));
+    const { responsibleFilter, dateFilter, clientFilter } = filters;
+    const updateFilters = useCallback((patch) => {
+        setFilters(previous => {
+            const next = { ...previous, ...patch };
+            writeManagementFilters(window.sessionStorage, currentUser, next);
+            return next;
+        });
+    }, [currentUser]);
+    const setResponsibleFilter = value => updateFilters({ responsibleFilter: value, responsibleInitialized: true });
+    const setDateFilter = value => updateFilters({ dateFilter: value });
+    const setClientFilter = value => updateFilters({ clientFilter: value });
     const [searchQuery, setSearchQuery] = useState("");
 
     useEffect(() => {
@@ -217,7 +227,6 @@ const NativeTasks = () => {
     const [timingTutorialPresentation, setTimingTutorialPresentation] = useState('initial');
     const [showTutorialButtonHint, setShowTutorialButtonHint] = useState(false);
     const [refreshConfirmed, setRefreshConfirmed] = useState(false);
-    const defaultResponsibleValidatedRef = useRef(false);
     const refreshConfirmationTimerRef = useRef(null);
     const manualRefreshRef = useRef(false);
     const tutorialHintTimerRef = useRef(null);
@@ -353,11 +362,10 @@ const NativeTasks = () => {
     });
 
     useEffect(() => {
-        if (defaultResponsibleValidatedRef.current || !currentUser?.name || tasks.length === 0) return;
+        if (filters.responsibleInitialized || !currentUser?.name || tasks.length === 0) return;
         const currentUserHasTasks = tasks.some(task => task.assigneeName === currentUser.name);
-        setResponsibleFilter(currentUserHasTasks ? currentUser.name : 'Todos');
-        defaultResponsibleValidatedRef.current = true;
-    }, [currentUser?.name, tasks]);
+        updateFilters({ responsibleFilter: currentUserHasTasks ? currentUser.name : 'Todos', responsibleInitialized: true });
+    }, [currentUser?.name, tasks, filters.responsibleInitialized, updateFilters]);
 
     useEffect(() => {
         const params = new URLSearchParams(location.search);
@@ -521,14 +529,14 @@ const NativeTasks = () => {
     };
 
     const responsibles = useMemo(() => {
-        const unique = [...new Set(tasks.map(t => t.assigneeName || "Desconocido"))].filter(Boolean).sort();
+        const unique = [...new Set([...tasks.map(t => t.assigneeName || "Desconocido"), responsibleFilter])].filter(value => value && value !== 'Todos').sort();
         return ['Todos', ...unique];
-    }, [tasks]);
+    }, [tasks, responsibleFilter]);
 
     const clients = useMemo(() => {
-        const unique = [...new Set(tasks.map(t => t.clientName || "Desconocido"))].filter(Boolean).sort();
+        const unique = [...new Set([...tasks.map(t => t.clientName || "Desconocido"), clientFilter])].filter(value => value && value !== 'Todos').sort();
         return ['Todos', ...unique];
-    }, [tasks]);
+    }, [tasks, clientFilter]);
 
     const filteredTasks = useMemo(() => {
         let filtered = tasks.filter(task => {

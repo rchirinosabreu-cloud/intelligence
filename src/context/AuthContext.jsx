@@ -1,10 +1,12 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { clearManagementFilters } from '@/lib/managementFilterSession';
 
 const AuthContext = createContext(null);
 
 const clearAuthSession = () => {
+    clearManagementFilters(sessionStorage);
     localStorage.removeItem('authToken');
     localStorage.removeItem('currentUser');
     sessionStorage.removeItem('authToken');
@@ -69,7 +71,7 @@ export const AuthProvider = ({ children }) => {
                 console.error('Failed to parse user data');
                 clearAuthSession();
             }
-        } else if (token || userStr) {
+        } else {
             clearAuthSession();
         }
         setIsLoading(false);
@@ -103,6 +105,7 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = (token, user) => {
+        clearManagementFilters(sessionStorage);
         localStorage.setItem('authToken', token);
         localStorage.setItem('currentUser', JSON.stringify(user));
         // Also keep sessionStorage for the interceptor if it's still looking there,
