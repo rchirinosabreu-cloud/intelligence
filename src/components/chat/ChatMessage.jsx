@@ -13,7 +13,6 @@ import {
   Paperclip,
   Download,
   Eye,
-  Mic,
   SmilePlus,
 } from "@/components/ui/icons";
 import ChatFilePreview from "./ChatFilePreview";
@@ -75,25 +74,23 @@ function Attachment({ file, messageId, client }) {
   }, [isImage, isAudio, open]);
   const isMedia = /^(image|video|audio)\//.test(file.mimeType);
   if (isAudio) return (
-    <div ref={container} className="my-2 max-w-full rounded-lg border border-border bg-background p-2">
-      <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
-        <Mic className="h-4 w-4 shrink-0" />
-        <span className="min-w-0 flex-1 truncate" title={file.name}>
-          {file.name.startsWith("nota-de-voz-") ? "Nota de voz" : file.name}
-        </span>
-        <span className="shrink-0">{formatChatFileSize(file.size)}</span>
-      </div>
+    <div ref={container} className="my-2 w-72 max-w-full">
+      {!file.name.startsWith("nota-de-voz-") && (
+        <p className="mb-1 truncate text-xs text-muted-foreground" title={file.name}>{file.name}</p>
+      )}
       <audio ref={media} src={url || undefined} controls preload="metadata"
-        aria-label={`Reproducir ${file.name}`} className="mt-2 h-11 w-full min-w-0"
+        aria-label={`Reproducir ${file.name}`} className="h-11 w-full min-w-0"
         onLoadedMetadata={() => { if (media.current) media.current.playbackRate = speed; }}
         onError={() => setError("No se pudo reproducir el audio. Inténtalo de nuevo.")} />
-      <div className="flex items-center justify-between">
+      <div className="flex items-center gap-1">
         <button type="button" className="min-h-11 min-w-11 rounded-lg px-2 text-xs text-muted-foreground hover:bg-muted"
           aria-label={`Velocidad de reproducción ${speed}x`}
           onClick={() => { const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1; setSpeed(next); if (media.current) media.current.playbackRate = next; }}>
           {speed}×
         </button>
-        {loading && <span role="status" className="text-xs text-muted-foreground">Cargando audio…</span>}
+        <span className="min-w-0 flex-1 text-[11px] text-muted-foreground" role={loading ? "status" : undefined}>
+          {loading ? "Cargando audio…" : formatChatFileSize(file.size)}
+        </span>
         <button type="button" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-50"
           aria-label={`Descargar ${file.name}`} title="Descargar audio" disabled={loading} onClick={() => open(true)}>
           <Download className="h-4 w-4" />
