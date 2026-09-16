@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import TeamChat from '@/components/chat/TeamChat';
 import Sidebar from './Sidebar';
 import { Menu, User, LogOut, Settings, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye } from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
@@ -21,6 +22,7 @@ import { OnboardingProvider } from '@/components/onboarding/OnboardingProvider';
 const AppLayout = ({ children }) => {
   const recognitionExperience = useRecognitionExperience();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [chatDockWidth, setChatDockWidth] = useState(0);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isReturnedTaskAlertBlocking, setIsReturnedTaskAlertBlocking] = useState(true);
   const [isOnboardingBlocking, setIsOnboardingBlocking] = useState(true);
@@ -177,7 +179,8 @@ const AppLayout = ({ children }) => {
     }
 
     if (notif.type === 'GENERAL_CHAT_MENTION') {
-        window.dispatchEvent(new CustomEvent('open-general-chat'));
+        const chatUrl = new URL(notif.url || '/', window.location.origin);
+        window.dispatchEvent(new CustomEvent('open-general-chat', { detail: { channelId: chatUrl.searchParams.get('chatChannel') || 'general', messageId: notif.relatedId } }));
     } else if (notif.type === 'CAMPFIRE_MENTION') {
         navigate(`/cliente/${notif.relatedId}?openChat=true`);
     } else if (notif.type === 'ANNOUNCEMENT_CLIENT') {
@@ -474,12 +477,14 @@ const AppLayout = ({ children }) => {
       )}
 
       {/* Main Content Area - z-0 (above background) */}
-      <main className="relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8 lg:ml-64">
+      <main style={{ marginRight: chatDockWidth }} className="relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8 lg:ml-64">
         <div className="mx-auto min-w-0 max-w-7xl space-y-8 animate-in fade-in duration-700">
           {recognitionExperience?.controls}
           {children}
         </div>
       </main>
+      {currentUser?.id && <TeamChat key={currentUser.id} currentUser={displayUser} onDockWidthChange={setChatDockWidth}
+        blocked={isSidebarOpen || isNotificationsOpen || isOnboardingBlocking || isReturnedTaskAlertBlocking} />}
     </div>
     </OnboardingProvider>
   );

@@ -2,10 +2,12 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { clearManagementFilters } from '@/lib/managementFilterSession';
+import { clearChatDrafts } from '@/lib/teamChatDrafts';
 
 const AuthContext = createContext(null);
 
 const clearAuthSession = () => {
+    clearChatDrafts();
     clearManagementFilters(sessionStorage);
     localStorage.removeItem('authToken');
     localStorage.removeItem('currentUser');
@@ -105,6 +107,7 @@ export const AuthProvider = ({ children }) => {
     }, []);
 
     const login = (token, user) => {
+        clearChatDrafts();
         clearManagementFilters(sessionStorage);
         localStorage.setItem('authToken', token);
         localStorage.setItem('currentUser', JSON.stringify(user));

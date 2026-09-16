@@ -67,9 +67,12 @@ const RichTextEditor = React.forwardRef(({
   value,
   onChange,
   onSend,
+  submitOnEnter = false,
+  compactFormats = false,
   placeholder,
   className,
   showToolbar,
+  toolbarAlwaysVisible = false,
   onToggleToolbar,
   onTextChange,
   teamMembers = [],
@@ -90,15 +93,16 @@ const RichTextEditor = React.forwardRef(({
 
   const [internalShowToolbar, setInternalShowToolbar] = React.useState(false);
   const isControlled = showToolbar !== undefined;
-  const isToolbarOpen = isControlled ? showToolbar : internalShowToolbar;
+  const isToolbarOpen = toolbarAlwaysVisible || (isControlled ? showToolbar : internalShowToolbar);
 
   const handleToggleToolbar = React.useCallback((isOpen) => {
+    if (toolbarAlwaysVisible) return;
     if (onToggleToolbar) {
       onToggleToolbar(isOpen);
     } else {
       setInternalShowToolbar(isOpen);
     }
-  }, [onToggleToolbar]);
+  }, [onToggleToolbar, toolbarAlwaysVisible]);
 
   const [suggestion, setSuggestion] = React.useState({
     isOpen: false,
@@ -117,6 +121,7 @@ const RichTextEditor = React.forwardRef(({
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
+        underline: false,
         heading: {
           levels: [1, 2, 3],
         },
@@ -206,7 +211,19 @@ const RichTextEditor = React.forwardRef(({
     ],
     content: value,
     editorProps: {
+      handleKeyDown: (view, event) => {
+        if (!submitOnEnter || event.key !== 'Enter' || event.shiftKey ||
+            event.isComposing || view.composing || event.keyCode === 229) return false;
+        // Enter selects a visible mention before it can send the draft.
+        if (suggestionRef.current.isOpen && suggestionRef.current.items.length) return false;
+        if (!onSendRef.current) return true;
+        onSendRef.current();
+        return true;
+      },
       attributes: {
+        role: 'textbox',
+        'aria-label': placeholder || 'Escribe un mensaje',
+        'aria-multiline': 'true',
         class: cn(
           'w-full text-base sm:text-sm font-medium outline-none prose dark:prose-invert max-w-none text-zinc-800 dark:text-zinc-200 px-4 py-3 pb-12',
           'focus:outline-none focus-visible:outline-none [&_.ProseMirror]:outline-none',
@@ -372,6 +389,7 @@ const RichTextEditor = React.forwardRef(({
                   <Highlighter className="h-4 w-4" />
                 </button>
                 <div className="mx-1 h-5 w-px shrink-0 bg-zinc-200 dark:bg-zinc-800" />
+                {!compactFormats && <>
                 <button type="button" aria-label="Titulo 1" aria-pressed={formattingState.heading1} onMouseDown={(e) => executeHeadingFormat(e, 1)} className={formatButtonClass(formattingState.heading1)} title="Titulo 1">
                   <Heading1 className="h-4 w-4" />
                 </button>
@@ -382,12 +400,13 @@ const RichTextEditor = React.forwardRef(({
                   <Heading3 className="h-4 w-4" />
                 </button>
                 <div className="mx-1 h-5 w-px shrink-0 bg-zinc-200 dark:bg-zinc-800" />
+                </>}
                 <button type="button" aria-label="Lista con bullets" aria-pressed={formattingState.bulletList} onMouseDown={(e) => executeFormat(e, chain => chain.toggleBulletList())} className={formatButtonClass(formattingState.bulletList)} title="Lista con bullets">
                   <List className="h-4 w-4" />
                 </button>
-                <button type="button" aria-label="Lista numerada" aria-pressed={formattingState.orderedList} onMouseDown={(e) => executeFormat(e, chain => chain.toggleOrderedList())} className={formatButtonClass(formattingState.orderedList)} title="Lista numerada">
+                {!compactFormats && <button type="button" aria-label="Lista numerada" aria-pressed={formattingState.orderedList} onMouseDown={(e) => executeFormat(e, chain => chain.toggleOrderedList())} className={formatButtonClass(formattingState.orderedList)} title="Lista numerada">
                   <ListOrdered className="h-4 w-4" />
-                </button>
+                </button>}
               </TopToolbarSurface>
               </div>
             </div>
@@ -403,7 +422,7 @@ const RichTextEditor = React.forwardRef(({
 
             <ComposerActionLayout
               attachmentAction={attachmentAction}
-              formatAction={(
+              formatAction={!toolbarAlwaysVisible && (
                 <Popover.Trigger asChild>
                   <button
                     type="button"

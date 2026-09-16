@@ -39,6 +39,7 @@ import recognitionRouter from './api/recognitions.js';
 import reportPdfRouter from './api/reportPdf.js';
 import minutesRouter from './api/minutes.js';
 import driveRouter from './api/drive.js';
+import { createTeamChatRouter, createTeamChatMediaRouter } from './api/teamChat.js';
 import { getUpcomingEvents } from '../services/calendarService.js';
 import { handleGoogleCalendarWebhook } from '../services/operationalEventService.js';
 
@@ -81,7 +82,10 @@ router.post('/activity/google-calendar/webhook', async (req, res) => {
 });
 
 // --- Protected Routes ---
+// Scoped media tickets validate user, session and exact message/attachment on every request.
+router.use('/team-chat-media', createTeamChatMediaRouter());
 router.use(authenticateToken);
+router.use('/team-chat', createTeamChatRouter());
 
 router.post('/sync-users', requireManagerRole, authController.syncUsers);
 

@@ -48,6 +48,11 @@ model User {
   authoredFeedback            FeedbackRecord[]        @relation("AuthoredFeedback")
   receivedFeedback            FeedbackRecord[]        @relation("ReceivedFeedback")
   generalChatMessages         GeneralChatMessage[]
+  teamChatChannels            TeamChatChannel[]
+  teamChatMemberships         TeamChatMember[]
+  teamChatUploads             TeamChatUpload[]
+  teamChatReactions           TeamChatReaction[]
+  teamChatRequests            TeamChatRequest[]
   authoredGlobalAnnouncements GlobalAnnouncement[]
   createdOperationalEvents    OperationalEvent[]      @relation("OperationalEventCreator")
   notifications               Notification[]
@@ -241,6 +246,7 @@ model UserNote {
 }
 
 model Notification {
+  teamChatPush TeamChatPushDelivery?
   id         String    @id @default(uuid())
   userId     String
   message    String
@@ -300,6 +306,113 @@ model GeneralChatMessage {
   authorId  String
   createdAt DateTime @default(now())
   author    User     @relation(fields: [authorId], references: [id])
+  channelId String @default("general")
+  contentFormat String @default("TEXT")
+  searchText String @default("")
+  version Int @default(1)
+  sentSeq BigInt @default(0)
+  editedAt DateTime? @db.Timestamptz()
+  deletedAt DateTime? @db.Timestamptz()
+  replyToId String?
+  forwarded Boolean @default(false)
+  channel TeamChatChannel @relation(fields:[channelId],references:[id])
+  replyTo GeneralChatMessage? @relation("TeamChatReply",fields:[replyToId],references:[id])
+  replies GeneralChatMessage[] @relation("TeamChatReply")
+  attachments TeamChatAttachment[]
+  reactions TeamChatReaction[]
+  events TeamChatEvent[]
+
+  @@index([channelId,createdAt,id],map:"GeneralChatMessage_channel_page_idx")
+  @@index([replyToId],map:"GeneralChatMessage_reply_idx")
+}
+
+model TeamChatChannel {
+  id String @id @default(uuid())
+  name String
+  isPrivate Boolean @default(false)
+  isArchived Boolean @default(false)
+  version Int @default(1)
+  createdById String?
+  createdAt DateTime @default(now()) @db.Timestamptz()
+  createdBy User? @relation(fields:[createdById],references:[id])
+  members TeamChatMember[]
+  messages GeneralChatMessage[]
+  uploads TeamChatUpload[]
+  events TeamChatEvent[]
+}
+model TeamChatMember {
+  channelId String
+  userId String
+  readSeq BigInt @default(0)
+  muted Boolean @default(false)
+  channel TeamChatChannel @relation(fields:[channelId],references:[id])
+  user User @relation(fields:[userId],references:[id])
+  @@id([channelId,userId])
+  @@index([userId],map:"TeamChatMember_user_idx")
+}
+model TeamChatUpload {
+  id String @id @default(uuid())
+  ownerId String
+  channelId String
+  requestId String
+  fingerprint String
+  storageKey String @unique
+  name String
+  size Int
+  mimeType String
+  state String @default("READY")
+  createdAt DateTime @default(now()) @db.Timestamptz()
+  owner User @relation(fields:[ownerId],references:[id])
+  channel TeamChatChannel @relation(fields:[channelId],references:[id])
+  attachments TeamChatAttachment[]
+  @@unique([ownerId,requestId])
+  @@index([createdAt,state],map:"TeamChatUpload_staging_idx")
+  @@index([channelId],map:"TeamChatUpload_channel_idx")
+}
+model TeamChatAttachment {
+  messageId String
+  uploadId String
+  position Int
+  message GeneralChatMessage @relation(fields:[messageId],references:[id])
+  upload TeamChatUpload @relation(fields:[uploadId],references:[id])
+  @@id([messageId,uploadId])
+  @@index([uploadId],map:"TeamChatAttachment_upload_idx")
+}
+model TeamChatReaction {
+  messageId String
+  userId String
+  emoji String
+  message GeneralChatMessage @relation(fields:[messageId],references:[id])
+  user User @relation(fields:[userId],references:[id])
+  @@id([messageId,userId,emoji])
+  @@index([userId],map:"TeamChatReaction_user_idx")
+}
+model TeamChatEvent {
+  seq BigInt @id @default(autoincrement())
+  channelId String
+  messageId String?
+  type String
+  createdAt DateTime @default(now()) @db.Timestamptz()
+  channel TeamChatChannel @relation(fields:[channelId],references:[id])
+  message GeneralChatMessage? @relation(fields:[messageId],references:[id])
+  @@index([channelId,seq],map:"TeamChatEvent_channel_idx")
+  @@index([messageId],map:"TeamChatEvent_message_idx")
+}
+model TeamChatRequest {
+  actorId String
+  requestId String
+  fingerprint String
+  result Json
+  createdAt DateTime @default(now()) @db.Timestamptz()
+  actor User @relation(fields:[actorId],references:[id])
+  @@id([actorId,requestId])
+}
+model TeamChatPushDelivery {
+  notificationId String @id
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now()) @db.Timestamptz()
+  deliveredAt DateTime? @db.Timestamptz()
+  notification Notification @relation(fields:[notificationId],references:[id])
 }
 
 enum ClientStatus {

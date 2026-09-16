@@ -1,0 +1,47 @@
+.team-chat .chat-rich-text p {
+  margin: 0 0 0.3em;
+}
+.team-chat .chat-rich-text a {
+  color: hsl(var(--primary));
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+.team-chat .chat-rich-text ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.team-chat .chat-rich-text ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+}
+.team-chat .chat-rich-text blockquote {
+  border-left: 2px solid hsl(var(--border));
+  padding-left: 0.75rem;
+}
+.team-chat .chat-rich-text pre {
+  white-space: pre-wrap;
+  background: hsl(var(--muted));
+  border-radius: 0.5rem;
+  padding: 0.5rem;
+}
+.team-chat .chat-rich-text [data-type="mention"] {
+  color: hsl(var(--primary));
+  background: hsl(var(--primary) / 0.08);
+  border-radius: 0.2rem;
+}
+.team-chat [contenteditable="true"].tiptap {
+  min-height: 104px;
+  padding-bottom: 56px;
+  max-height: min(180px, 25dvh);
+  overflow-y: auto;
+}
+.team-chat .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  height: 0;
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+}
+.team-chat audio {
+  max-width: 100%;
+}

@@ -8,6 +8,19 @@ export const isActiveTeamUser = user => Boolean(
   user?.isActive === true && user.teamMember?.isActive === true
 );
 
+// PostgreSQL chat transactions revalidate the same official roster, including long-lived streams.
+export const readActiveChatActor = async (client, actor) => {
+  const result = await client.query(`SELECT u.id,u.role,u."sessionVersion",u."mustChangePassword",
+    COALESCE(t.name,u.name) AS name,t.id AS "memberId"
+    FROM "User" u JOIN "TeamMember" t ON t."userId"=u.id
+    WHERE u.id=$1 AND u."isActive"=true AND t."isActive"=true`, [actor?.userId || actor?.id || '']);
+  const user = result.rows[0];
+  if (!user || user.mustChangePassword || user.sessionVersion !== (actor.sessionVersion ?? 0) || (actor.exp && actor.exp * 1000 <= Date.now())) {
+    throw Object.assign(new Error('Tu sesión ya no está activa.'), { statusCode: 401 });
+  }
+  return user;
+};
+
 export const findActiveTeamUser = (db, userId) => !userId ? Promise.resolve(null) : db.user.findFirst({
   where: { id: userId, ...activeTeamUserWhere() },
   select: { id: true }
