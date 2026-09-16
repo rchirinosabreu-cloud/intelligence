@@ -487,8 +487,8 @@ export function createTeamChatService({ pool, onCommit = () => {} }) {
         input,
         async (tx, user) => {
           const m = await messageAccess(tx, user, id, true);
-          if (m.authorId !== user.id)
-            throw chatError("Solo puedes eliminar tus mensajes.", 403);
+          if (m.authorId !== user.id && user.role !== "ADMIN")
+            throw chatError("Solo el autor o un administrador puede eliminar este mensaje.", 403);
           return m;
         },
         async (tx, user, m) => {

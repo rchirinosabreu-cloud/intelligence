@@ -1,8 +1,13 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
 import RichTextEditor from "@/components/ui/RichTextEditor";
-import { Paperclip, Mic, Send, X } from "@/components/ui/icons";
+import { Paperclip, Mic, Send, X, Pause, PlayCircle, Trash2 } from "@/components/ui/icons";
+import { formatChatFileSize } from "@/lib/teamChatState";
 const iconButton =
   "inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-40";
+const destructiveIconButton = iconButton.replace(
+  "text-muted-foreground hover:bg-muted",
+  "brain-destructive-text text-destructive hover:bg-destructive/10",
+);
 function DraftFile({ entry, file, onRemove }) {
   const [url, setUrl] = useState("");
   useEffect(() => {
@@ -20,7 +25,7 @@ function DraftFile({ entry, file, onRemove }) {
         </span>
         <button
           type="button"
-          className={iconButton + " text-destructive"}
+          className={destructiveIconButton}
           onClick={onRemove}
           aria-label={`Quitar ${entry.name}`}
         >
@@ -43,7 +48,7 @@ function DraftFile({ entry, file, onRemove }) {
         />
       )}
       <span className="text-[11px] text-muted-foreground">
-        {(entry.size / 1024 / 1024).toFixed(1)} MB
+        {formatChatFileSize(entry.size)}
         {entry.upload ? " · Listo para enviar" : ""}
         {entry.missing ? " · Selecciona el archivo de nuevo" : ""}
       </span>
@@ -65,7 +70,8 @@ export default function ChatComposer({
   onRecord,
   onPause,
   onResume,
-  onStop,
+  onSendVoice,
+  voiceFinishing,
   onDiscard,
   files,
   editing,
@@ -74,7 +80,9 @@ export default function ChatComposer({
 }) {
   const input = useRef(null),
     editor = useRef(null),
-    editorShell = useRef(null);
+    editorShell = useRef(null),
+    wasBusy = useRef(false),
+    restoreSendFocus = useRef(false);
   const canSend =
     !busy &&
     !disabled &&
@@ -86,11 +94,22 @@ export default function ChatComposer({
   useEffect(() => {
     if (replyId) editor.current?.focus();
   }, [replyId]);
-  useEffect(() => {
-    if (editorShell.current)
-      editorShell.current.inert = Boolean(
-        busy || disabled || voice.status !== "inactive",
-      );
+  useLayoutEffect(() => {
+    const shell = editorShell.current;
+    if (!shell) return;
+    if (busy && !wasBusy.current)
+      restoreSendFocus.current = shell.contains(document.activeElement);
+    const locked = Boolean(busy || disabled || voice.status !== "inactive");
+    shell.inert = locked;
+    if (!busy && wasBusy.current) {
+      // Inert blurs the editor during the request. Restore it only if the user
+      // has not moved to another control while waiting for the server.
+      if (restoreSendFocus.current && !locked &&
+          (document.activeElement === document.body || shell.contains(document.activeElement)))
+        editor.current?.focus();
+      restoreSendFocus.current = false;
+    }
+    wasBusy.current = busy;
   }, [busy, disabled, voice.status]);
   const paste = (e) => {
     const added = [...(e.clipboardData?.files || [])];
@@ -159,24 +178,33 @@ export default function ChatComposer({
           </span>
           <button
             type="button"
-            className="min-h-11 px-2"
+            className={iconButton}
             onClick={voice.status === "paused" ? onResume : onPause}
+            aria-label={voice.status === "paused" ? "Continuar grabación" : "Pausar grabación"}
+            title={voice.status === "paused" ? "Continuar grabación" : "Pausar grabación"}
+            disabled={voiceFinishing}
           >
-            {voice.status === "paused" ? "Continuar" : "Pausar"}
+            {voice.status === "paused" ? <PlayCircle className="h-5 w-5" /> : <Pause className="h-5 w-5" />}
           </button>
           <button
             type="button"
-            className="min-h-11 px-2 text-primary"
-            onClick={onStop}
+            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-primary text-primary-foreground disabled:opacity-40"
+            onClick={onSendVoice}
+            aria-label="Enviar nota de voz"
+            title="Enviar nota de voz"
+            disabled={voiceFinishing}
           >
-            Escuchar
+            <Send className="h-5 w-5" />
           </button>
           <button
             type="button"
-            className="min-h-11 px-2 text-destructive"
+            className={destructiveIconButton}
             onClick={onDiscard}
+            aria-label="Descartar grabación"
+            title="Descartar grabación"
+            disabled={voiceFinishing}
           >
-            Descartar
+            <Trash2 className="h-5 w-5" />
           </button>
         </div>
       )}

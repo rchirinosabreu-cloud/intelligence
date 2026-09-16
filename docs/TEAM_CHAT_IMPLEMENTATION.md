@@ -1,6 +1,6 @@
 # Chat de equipo
 
-Implementación local, 16 de septiembre de 2026. No desplegada. La investigación original está en `TEAM_CHAT_PLAN.md`; las muestras HTML de la etapa de diseño no son el componente productivo.
+Estado al 16 de septiembre de 2026: el chat base se subió en `792c7bd`; esta revisión incorpora los ajustes posteriores de medios, gestos y moderación verificados localmente. La verificación local no certifica el despliegue productivo. La investigación original está en `TEAM_CHAT_PLAN.md`; las muestras HTML de la etapa de diseño no son el componente productivo.
 
 ## Comportamiento construido
 
@@ -8,13 +8,15 @@ Implementación local, 16 de septiembre de 2026. No desplegada. La investigació
 - La sugerencia al arrastrar aparece únicamente cuando el puntero entra en los últimos 24 px del borde derecho. Moverse cerca de los otros bordes no fija el chat.
 - La instancia pertenece a AppLayout y se conserva entre módulos. Posición, modo y canal se restauran al recargar durante la sesión. Borradores por usuario/canal en sessionStorage y archivos pendientes en IndexedDB. Cerrar sesión elimina los borradores; cerrar el panel detiene la grabación y conserva el audio como adjunto pendiente.
 - General para el equipo activo; admins pueden crear canales públicos/privados, gestionar miembros y archivar canales conservando historial. Un admin sin pertenencia a un canal privado no tiene acceso implícito a su contenido.
-- Texto enriquecido y pegado de negrita/cursiva/subrayado, enlaces HTTP(S), menciones, respuestas, reacciones, edición y eliminación de mensajes propios, selección y reenvío de hasta 20 mensajes. El contenido privado no se reenvía a un destino con personas sin acceso.
+- Texto enriquecido y pegado de negrita/cursiva/subrayado, enlaces HTTP(S), menciones, respuestas, reacciones, edición y eliminación de mensajes propios, selección y reenvío de hasta 20 mensajes. Los administradores activos también pueden eliminar mensajes ajenos en canales a los que tienen acceso: el servidor comprueba su rol vigente, pertenencia y versión del mensaje. Editar sigue limitado al autor. El contenido privado no se reenvía a un destino con personas sin acceso.
 - Enter envía y Shift+Enter añade salto de línea. Enter conserva la elección de menciones y no envía borradores vacíos ni confirmaciones IME. La barra del chat permanece visible, sin botón A, y ofrece solo negrita, cursiva, subrayado, resaltado y bullets; los editores de otros módulos mantienen su configuración.
+- Después de enviar se recupera el cursor en el editor si el usuario no movió el foco a otro control. Los envíos sin confirmación siguen conservando y bloqueando el borrador.
 - La confirmación de eliminación usa el Button destructivo compartido; no mezcla el hover neutro de acciones secundarias con el rojo global. Capturas de hover claro/oscuro y barra fija móvil en `output/team-chat/`.
-- Doble clic en un mensaje activa Responder, muestra la cita y enfoca el editor. En táctil, un deslizamiento hacia la derecha de al menos 64 px hace lo mismo; desplazamiento vertical, movimiento corto/izquierdo, cancelación, selección de mensajes, enlaces y controles quedan excluidos.
+- Doble clic en un mensaje activa Responder, muestra la cita y enfoca el editor. En táctil, un deslizamiento hacia la derecha de al menos 48 px hace lo mismo. Touch Events con movimiento horizontal no pasivo y Pointer Events como respaldo evitan depender solo del puntero. El scroll vertical, movimiento corto/izquierdo, cancelación, selección de mensajes, enlaces y controles quedan excluidos. Mantener pulsado 500 ms abre las reacciones; mover el dedo cancela la pulsación larga y no responde accidentalmente. El botón de reacción usa el icono compartido en gris.
 - Archivos, imágenes, vídeo y audio; previsualización bajo demanda y descarga. Se conservan identificadores de archivo, incluso cuando tienen el mismo nombre. Máximo 10 archivos por mensaje, 100 MB por archivo y 250 MB por envío. Se rechazan ejecutables/HTML activos conforme al validador compartido; no prometer almacenamiento ilimitado ni reproducción de todos los códecs.
-- Cada adjunto muestra Ver y Descargar. PDF se renderiza localmente con el visor compartido (hasta 25 MB); texto/CSV/JSON/Markdown/XML/YAML como texto literal (hasta 2 MB), sin ejecutar markup ni enviar archivos a servicios externos. Formatos sin visor y documentos mayores conservan descarga con explicación explícita. El visor descarga la misma identidad de adjunto.
-- Notas de voz mediante MediaRecorder: pausar, continuar, escuchar, descartar y enviar; límite de grabación de cinco minutos, negociación de formato y liberación del micrófono. Reproducción 1×/1,5×/2×.
+- Las imágenes muestran una miniatura automáticamente al aproximarse a la vista, con opción de ampliar y descargar. Los audios muestran su reproductor directamente, sin exigir Ver y sin reproducirse automáticamente; incluyen velocidad, descarga opcional y renovación del acceso temporal al reintentar un error. Los demás adjuntos muestran Ver y Descargar. La miniatura usa el archivo original protegido, no una copia pública ni una compresión en servidor. Los tamaños menores de 1 MB se muestran en KB, también en el borrador. PDF se renderiza localmente con el visor compartido (hasta 25 MB); texto/CSV/JSON/Markdown/XML/YAML como texto literal (hasta 2 MB), sin ejecutar markup ni enviar archivos a servicios externos. Formatos sin visor y documentos mayores conservan descarga con explicación explícita. El visor descarga la misma identidad de adjunto.
+- Notas de voz mediante MediaRecorder: iconos de pausa/continuar, enviar y papelera con etiquetas accesibles. Enviar finaliza la grabación, espera todos los fragmentos y la conservación del borrador, sube el audio y confirma el mensaje. Doble pulsación no duplica; error conserva el mismo requestId; cerrar o cambiar de canal durante la finalización no envía a otro destino. Límite de cinco minutos, WebM/Opus cuando está disponible y MP4 como alternativa, liberación del micrófono y rechazo explícito de grabaciones vacías. Reproducción 1×/1,5×/2× y controles compatibles con tema claro/oscuro.
+- Las tarjetas de imagen se ajustan al contenido y al ancho disponible, sin rellenar todo el chat ampliado. El botón para añadir reacción queda al lado del contenido, con opacidad discreta y contraste completo al enfocarlo/pasar el cursor; conserva área táctil de 44 px. Los contadores de reacciones permanecen debajo.
 - Historial por páginas de 50, sin límite total de 50 mensajes. Búsqueda por texto/nombre de archivo y vista Archivos y enlaces. Sin transcripción ni indexación del contenido interno de documentos.
 
 ## Persistencia y entrega
@@ -31,7 +33,7 @@ Con el chat cerrado, la burbuja muestra el total de mensajes sin leer de los can
 
 Los archivos se cargan a claves únicas del almacenamiento ya configurado. El servidor entrega cada adjunto según mensaje + attachmentId + sesión + permiso vigente. Los tickets temporales usan una clave derivada distinta a la de login: no sirven como sesiones de plataforma. Soporte HTTP Range para reproducción. Los objetos preparados sin mensaje durante más de 24 horas se limpian con un estado de exclusión que impide adjuntarlos mientras se eliminan.
 
-## Arranque y despliegue pendiente
+## Arranque y requisitos de despliegue
 
 `npm start` ejecuta `scripts/ensure-team-chat-schema.js` antes de generar Prisma y arrancar el servidor. Es aditivo, idempotente y transaccional; no sustituir por `prisma db push --accept-data-loss`. Mantener backend/esquema preparados antes de servir el frontend nuevo. No se cambió CORS, proveedor PostgreSQL ni Task.completedAt.
 
@@ -39,7 +41,15 @@ Requiere las variables existentes DATABASE_URL, JWT_SECRET y AWS_ENDPOINT_URL/AW
 
 ## Verificación reproducible
 
-Resultado local final: 68 pruebas aprobadas, sin fallos ni omisiones; compilación de producción y lint del alcance sin errores. La prueba de montaje restaura el panel abierto antes de recibir los canales en React/jsdom. Las pruebas de interacción ejecutan los componentes reales y comprueban Enter/Shift+Enter/IME, formatos, gestos de respuesta, foco, citas y la identidad compartida por vista previa/descarga.
+Resultado local final: 100 pruebas aprobadas, sin fallos ni omisiones; compilación de producción y lint del alcance sin errores. La prueba de montaje restaura el panel abierto antes de recibir los canales en React/jsdom. Las pruebas de interacción ejecutan los componentes reales y comprueban Enter/Shift+Enter/IME, formatos, pulsación larga, eventos táctiles nativos, respuesta, foco, citas y la identidad compartida por vista previa/descarga. El envío de audio cubre finalización asíncrona, doble clic, error/reintento, cierre, descarte y cambio de canal. La moderación se prueba contra PostgreSQL aislado, incluyendo rol revocado, rol falsificado en el actor, versión obsoleta y canal privado sin acceso.
+
+Última revisión visual: tarjeta de 274 px para una imagen de 256 px en escritorio; tarjeta de 214 px para imagen de 196 px en móvil, sin desbordamiento a 390 px. Se comprobó Eliminar en el menú de un mensaje ajeno para ADMIN. Capturas en `output/team-chat/compact-image-desktop.png`, `compact-image-mobile.png` y `compact-image-mobile-dark.png`.
+
+La consulta HTTP de producción encontró `microphone=()` y ausencia de `media-src`, lo que impedía solicitar micrófono y reproducir borradores `blob:`. La corrección permite solo micrófono del propio origen y medios `'self' blob:`. No abre cámara, geolocalización, iframes ni scripts. Referencias: [Permissions-Policy microphone](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Permissions-Policy/microphone) y [CSP media-src](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Headers/Content-Security-Policy/media-src).
+
+La muestra `scripts/preview-team-chat-audio.js` compila una entrada exclusiva de tests, aplica las cabeceras reales y utiliza el mismo PostgreSQL aislado. `team-chat-audio.jsx` sustituye únicamente la fuente de micrófono por un tono sintético: MediaRecorder, subida HTTP, mensaje y reproductor son reales. Se verificó una nota WebM enviada hasta `ended: true`, 3,661 segundos y sin error; también reproducción de un borrador local `blob:`. Capturas finales: `output/team-chat/audio-mobile.png`, `audio-mobile-dark.png`, `recording-mobile.png` y `audio-desktop.png`. Un intento de automatizar el control nativo de reproducción MP4 cerró la pestaña del navegador integrado; no se considera MP4 validado en navegador por esta prueba. Se conserva WebM como preferencia y MP4 como fallback de capacidades.
+
+Revisión de los últimos ajustes: después de confirmar un envío con Enter se escribió otro borrador sin clic adicional; se verificaron miniatura automática, peso en KB y eliminación de un mensaje ficticio ajeno por un admin. Capturas móviles a 390×844 en `output/team-chat/miniatura-mobile.png` y `miniatura-mobile-dark.png`. Esta prueba usa datos ficticios y no certifica el teclado de un teléfono físico ni el despliegue productivo.
 
 En la revisión posterior en navegador se confirmó PDF renderizado, descarga independiente, envío con Enter, salto con Shift+Enter, doble clic con cita/foco y la zona de fijación estrecha. Capturas `ajustes-desktop.png` y `ajustes-mobile-respuesta.png` en `output/team-chat/`. El deslizamiento táctil tiene prueba de eventos Pointer en React/jsdom; falta comprobarlo en un teléfono físico.
 
@@ -47,12 +57,14 @@ Las pruebas reales usan exclusivamente `TEST_DATABASE_URL` en el clúster aislad
 
 ```powershell
 $env:TEST_DATABASE_URL='postgresql://recognition_test@127.0.0.1:55448/recognition_test'
-node --test tests/teamChat*.test.js tests/sharedSelectContract.test.js tests/officialTeamRoster.test.js tests/editorFormatting.test.js tests/richTextAndEmojis.test.js
+node --test tests/teamChat*.test.js tests/sharedSelectContract.test.js tests/officialTeamRoster.test.js tests/editorFormatting.test.js tests/richTextAndEmojis.test.js tests/webSecurity.test.js tests/securityWiring.test.js
 node scripts/preview-team-chat.js
+# Alternativa construida con cabeceras productivas y fuente sintética de audio:
+node scripts/preview-team-chat-audio.js
 ```
 
 La muestra aislada se abre en `http://127.0.0.1:4318/tests/fixtures/team-chat.html`; `?actor=luis` abre la segunda cuenta ficticia. Renderiza el componente real y usa las rutas reales/PG real, con autenticación de prueba limitada a dos actores y almacenamiento de prueba en memoria. No confundirlo con prueba de OAuth/login ni con el bucket de producción.
 
 Se verificaron en navegador: envío y recepción automática entre dos sesiones, creación de canal, fijar/desfijar, cierre móvil, edición, reacciones, carga de archivo y reenvío; vistas clara/oscura a 390×844. Capturas locales en `output/team-chat/`. Las pruebas de backend comprueban concurrencia de reintentos, historial superior a 50, revocación, adjuntos por identidad, bytes y rangos HTTP, tickets no válidos como login, recuperación por cursor, menciones únicas y limpieza de cargas abandonadas.
 
-Límites de la evidencia: MediaRecorder se prueba con dispositivos simulados; falta validar permiso, grabación y teclado en teléfonos físicos Safari/Chrome. La muestra local y los dobles de almacenamiento no certifican el proxy, micrófono físico, bucket, push ni entrega en producción. Esa comprobación se hace tras publicar; no se enviaron mensajes de prueba a personas reales.
+Límites de la evidencia: el ciclo de MediaRecorder tiene pruebas con dobles y una grabación/reproducción real en navegador con fuente sintética. Falta validar permiso, micrófono, gestos y teclado en teléfonos físicos Safari/Chrome. La muestra local y los dobles de almacenamiento no certifican el proxy, micrófono físico, bucket, push ni entrega en producción. Esa comprobación se hace tras publicar; no se enviaron mensajes de prueba a personas reales.

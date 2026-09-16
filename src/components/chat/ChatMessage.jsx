@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import * as Popover from "@radix-ui/react-popover";
 import DOMPurify from "isomorphic-dompurify";
 import TeamAvatar from "@/components/ui/TeamAvatar";
@@ -13,8 +13,12 @@ import {
   Paperclip,
   Download,
   Eye,
+  Mic,
+  SmilePlus,
 } from "@/components/ui/icons";
 import ChatFilePreview from "./ChatFilePreview";
+import useMessageGestures from "./useMessageGestures";
+import { formatChatFileSize } from "@/lib/teamChatState";
 const reactions = ["👍", "❤️", "😂", "🎉", "👀", "🙌", "✅", "🙏", "🔥", "💡"];
 
 function Attachment({ file, messageId, client }) {
@@ -23,14 +27,17 @@ function Attachment({ file, messageId, client }) {
     [loading, setLoading] = useState(false),
     [speed, setSpeed] = useState(1);
   const media = useRef(null),
+    container = useRef(null),
     alive = useRef(true);
+  const isImage = file.mimeType.startsWith("image/");
+  const isAudio = file.mimeType.startsWith("audio/");
   useEffect(() => {
     alive.current = true;
     return () => {
       alive.current = false;
     };
   }, []);
-  const open = async (download = false) => {
+  const open = useCallback(async (download = false) => {
     setLoading(true);
     setError("");
     try {
@@ -43,15 +50,80 @@ function Attachment({ file, messageId, client }) {
         a.click();
       } else setUrl(result.url);
     } catch (e) {
-      console.error("[TeamChat attachment]", e.message);
+      console.error("[TeamChat attachment]", e.response?.data || e.message);
       setError(e.message);
     } finally {
       if (alive.current) setLoading(false);
     }
-  };
+  }, [client, messageId, file.id, file.name]);
+  useEffect(() => {
+    if (!isImage && !isAudio) return;
+    // Only resolve protected media tickets as the attachment approaches view.
+    // Reactions and other realtime updates must not request the image again.
+    if (typeof IntersectionObserver === "undefined") {
+      void open();
+      return;
+    }
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) {
+        observer.disconnect();
+        void open();
+      }
+    }, { rootMargin: "200px" });
+    if (container.current) observer.observe(container.current);
+    return () => observer.disconnect();
+  }, [isImage, isAudio, open]);
   const isMedia = /^(image|video|audio)\//.test(file.mimeType);
+  if (isAudio) return (
+    <div ref={container} className="my-2 max-w-full rounded-lg border border-border bg-background p-2">
+      <div className="flex min-w-0 items-center gap-2 text-xs text-muted-foreground">
+        <Mic className="h-4 w-4 shrink-0" />
+        <span className="min-w-0 flex-1 truncate" title={file.name}>
+          {file.name.startsWith("nota-de-voz-") ? "Nota de voz" : file.name}
+        </span>
+        <span className="shrink-0">{formatChatFileSize(file.size)}</span>
+      </div>
+      <audio ref={media} src={url || undefined} controls preload="metadata"
+        aria-label={`Reproducir ${file.name}`} className="mt-2 h-11 w-full min-w-0"
+        onLoadedMetadata={() => { if (media.current) media.current.playbackRate = speed; }}
+        onError={() => setError("No se pudo reproducir el audio. Inténtalo de nuevo.")} />
+      <div className="flex items-center justify-between">
+        <button type="button" className="min-h-11 min-w-11 rounded-lg px-2 text-xs text-muted-foreground hover:bg-muted"
+          aria-label={`Velocidad de reproducción ${speed}x`}
+          onClick={() => { const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1; setSpeed(next); if (media.current) media.current.playbackRate = next; }}>
+          {speed}×
+        </button>
+        {loading && <span role="status" className="text-xs text-muted-foreground">Cargando audio…</span>}
+        <button type="button" className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-50"
+          aria-label={`Descargar ${file.name}`} title="Descargar audio" disabled={loading} onClick={() => open(true)}>
+          <Download className="h-4 w-4" />
+        </button>
+      </div>
+      {error && <div role="alert" className="text-xs text-destructive">
+        {error}
+        <button type="button" className="min-h-11 rounded-lg px-2 text-foreground hover:bg-muted" disabled={loading}
+          aria-label={`Reintentar audio ${file.name}`} onClick={() => open()}>Reintentar</button>
+      </div>}
+    </div>
+  );
   return (
-    <div className="my-2 max-w-full rounded-lg border border-border bg-background p-2">
+    <div ref={container} className={`my-2 min-w-0 rounded-lg border border-border bg-background p-2 ${isImage ? "w-fit max-w-[min(100%,20rem)]" : "max-w-full"}`}>
+      {isImage && url && !error && (
+        <a href={url} target="_blank" rel="noreferrer" aria-label={`Ampliar ${file.name}`}>
+          <img
+            alt={file.name}
+            src={url}
+            loading="lazy"
+            className="mb-2 max-h-64 max-w-full rounded object-contain"
+            onError={() => setError("No se pudo mostrar la imagen. Inténtalo de nuevo o descarga el original.")}
+          />
+        </a>
+      )}
+      {isImage && !url && !error && (
+        <div className="mb-2 flex h-32 items-center justify-center rounded bg-muted text-xs text-muted-foreground" role="status">
+          Cargando imagen…
+        </div>
+      )}
       <div className="flex min-w-0 items-center gap-2">
         <Paperclip className="h-4 w-4 shrink-0" />
         <div className="min-w-0 flex-1 text-left text-xs">
@@ -59,20 +131,20 @@ function Attachment({ file, messageId, client }) {
           <span className="text-muted-foreground">
             {loading
               ? "Abriendo…"
-              : `${(file.size / 1024 / 1024).toFixed(1)} MB`}
+              : formatChatFileSize(file.size)}
           </span>
         </div>
       </div>
       <div className="flex flex-wrap items-center gap-1">
-        <button
+        {(!isImage || error) && <button
           type="button"
           className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs hover:bg-muted disabled:opacity-50"
-          aria-label={`Ver ${file.name}`}
+          aria-label={`${isImage ? "Reintentar imagen" : "Ver"} ${file.name}`}
           onClick={() => open()}
           disabled={loading}
         >
-          <Eye className="h-4 w-4" /> Ver
-        </button>
+          <Eye className="h-4 w-4" /> {isImage ? "Reintentar" : "Ver"}
+        </button>}
         <button
           type="button"
           className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs hover:bg-muted disabled:opacity-50"
@@ -92,20 +164,6 @@ function Attachment({ file, messageId, client }) {
           downloading={loading}
         />
       )}
-      {url && file.mimeType.startsWith("image/") && (
-        <a href={url} target="_blank" rel="noreferrer">
-          <img
-            alt={file.name}
-            src={url}
-            className="max-h-64 max-w-full rounded object-contain"
-            onError={() =>
-              setError(
-                "No se pudo mostrar la imagen. Puedes descargar el original.",
-              )
-            }
-          />
-        </a>
-      )}
       {url && file.mimeType.startsWith("video/") && (
         <video
           src={url}
@@ -119,34 +177,6 @@ function Attachment({ file, messageId, client }) {
           }
         />
       )}
-      {url && file.mimeType.startsWith("audio/") && (
-        <>
-          <audio
-            ref={media}
-            src={url}
-            controls
-            preload="metadata"
-            className="h-11 w-full min-w-0"
-            onError={() =>
-              setError(
-                "No se pudo reproducir. Abre de nuevo el audio o descarga el original.",
-              )
-            }
-          />
-          <button
-            type="button"
-            className="min-h-11 px-2 text-xs"
-            aria-label={`Velocidad de reproducción ${speed}x`}
-            onClick={() => {
-              const next = speed === 1 ? 1.5 : speed === 1.5 ? 2 : 1;
-              setSpeed(next);
-              if (media.current) media.current.playbackRate = next;
-            }}
-          >
-            {speed}×
-          </button>
-        </>
-      )}
       {error && (
         <p role="alert" className="text-xs text-destructive">
           {error}
@@ -158,6 +188,7 @@ function Attachment({ file, messageId, client }) {
 export default function ChatMessage({
   message,
   userId,
+  userRole,
   onEdit,
   onDelete,
   onReply,
@@ -171,20 +202,10 @@ export default function ChatMessage({
   onVisible,
 }) {
   const item = useRef(null);
-  const swipe = useRef(null);
-  const [swipeOffset, setSwipeOffset] = useState(0);
-  const resetSwipe = () => {
-    swipe.current = null;
-    setSwipeOffset(0);
-  };
-  const canReplyFrom = (event) =>
-    !message.deletedAt &&
-    !selectionMode &&
-    event.currentTarget.contains(event.target) &&
-    !event.target.closest(
-      'a,button,input,textarea,select,audio,video,[role="button"],[role="dialog"],[contenteditable="true"]',
-    );
   const [picker, setPicker] = useState(false);
+  const { offset: swipeOffset, props: gestures } = useMessageGestures(item, {
+    message, selectionMode, onReply, onReact: () => setPicker(true),
+  });
   useEffect(() => {
     const node = item.current;
     if (!node || !onVisible) return;
@@ -216,50 +237,7 @@ export default function ChatMessage({
   return (
     <article
       ref={item}
-      onDoubleClick={(event) => {
-        if (canReplyFrom(event)) onReply?.(message);
-      }}
-      onPointerDown={(event) => {
-        if (
-          event.pointerType !== "touch" ||
-          !event.isPrimary ||
-          !canReplyFrom(event)
-        )
-          return;
-        swipe.current = {
-          x: event.clientX,
-          y: event.clientY,
-          id: event.pointerId,
-        };
-        event.currentTarget.setPointerCapture?.(event.pointerId);
-      }}
-      onPointerMove={(event) => {
-        const start = swipe.current;
-        if (!start || start.id !== event.pointerId) return;
-        const dx = event.clientX - start.x,
-          dy = Math.abs(event.clientY - start.y);
-        if (dy > 24 || dx < -12) {
-          resetSwipe();
-          return;
-        }
-        setSwipeOffset(dx > 12 && dx > dy * 2 ? Math.min(dx, 72) : 0);
-      }}
-      onPointerUp={(event) => {
-        const start = swipe.current;
-        resetSwipe();
-        if (
-          !start ||
-          start.id !== event.pointerId ||
-          message.deletedAt ||
-          selectionMode
-        )
-          return;
-        const dx = event.clientX - start.x,
-          dy = Math.abs(event.clientY - start.y);
-        if (dx >= 64 && dy <= 24 && dx > dy * 2) onReply?.(message);
-      }}
-      onPointerCancel={resetSwipe}
-      onLostPointerCapture={resetSwipe}
+      {...gestures}
       style={{
         transform: swipeOffset ? `translateX(${swipeOffset}px)` : undefined,
       }}
@@ -323,43 +301,31 @@ export default function ChatMessage({
                 {message.reply.text}
               </button>
             )}
-            <div
-              className="chat-rich-text mt-1 break-words text-sm"
-              dangerouslySetInnerHTML={{
-                __html: DOMPurify.sanitize(message.content),
-              }}
-            />
-            {message.attachments.map((file) => (
-              <Attachment
-                key={file.id}
-                file={file}
-                messageId={message.id}
-                client={client}
-              />
-            ))}
-            <div className="mt-1 flex flex-wrap items-center gap-1">
-              {message.reactions.map((r) => (
-                <button
-                  type="button"
-                  key={r.emoji}
-                  onClick={() =>
-                    onReact(message, r.emoji, !r.userIds.includes(userId))
-                  }
-                  aria-label={`${r.emoji}, ${r.userIds.length} reacciones`}
-                  aria-pressed={r.userIds.includes(userId)}
-                  className={`min-h-9 rounded-full border px-2 text-xs ${r.userIds.includes(userId) ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-background"}`}
-                >
-                  {r.emoji} {r.userIds.length}
-                </button>
-              ))}
+            <div className="flex min-w-0 items-start gap-1">
+              <div className="min-w-0 max-w-full">
+                <div
+                  className="chat-rich-text mt-1 break-words text-sm"
+                  dangerouslySetInnerHTML={{
+                    __html: DOMPurify.sanitize(message.content),
+                  }}
+                />
+                {message.attachments.map((file) => (
+                  <Attachment
+                    key={file.id}
+                    file={file}
+                    messageId={message.id}
+                    client={client}
+                  />
+                ))}
+              </div>
               <Popover.Root open={picker} onOpenChange={setPicker}>
                 <Popover.Trigger asChild>
                   <button
                     type="button"
-                    className="inline-flex min-h-9 min-w-9 items-center justify-center rounded-full text-muted-foreground hover:bg-muted"
+                    className="-mt-2 inline-flex min-h-11 min-w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground opacity-60 hover:bg-muted hover:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring"
                     aria-label="Añadir reacción"
                   >
-                    ☺
+                    <SmilePlus className="h-4 w-4" />
                   </button>
                 </Popover.Trigger>
                 <Popover.Portal>
@@ -393,6 +359,22 @@ export default function ChatMessage({
                 </Popover.Portal>
               </Popover.Root>
             </div>
+            {message.reactions.length > 0 && (
+              <div className="mt-1 flex flex-wrap items-center gap-1">
+                {message.reactions.map((r) => (
+                  <button
+                    type="button"
+                    key={r.emoji}
+                    onClick={() => onReact(message, r.emoji, !r.userIds.includes(userId))}
+                    aria-label={`${r.emoji}, ${r.userIds.length} reacciones`}
+                    aria-pressed={r.userIds.includes(userId)}
+                    className={`min-h-9 rounded-full border px-2 text-xs ${r.userIds.includes(userId) ? "border-primary/30 bg-primary/10 text-primary" : "border-border bg-background"}`}
+                  >
+                    {r.emoji} {r.userIds.length}
+                  </button>
+                ))}
+              </div>
+            )}
           </>
         )}
       </div>
@@ -418,17 +400,17 @@ export default function ChatMessage({
               Seleccionar
             </DropdownMenuItem>
             {message.author.id === userId && (
-              <>
                 <DropdownMenuItem onSelect={() => onEdit(message)}>
                   Editar
                 </DropdownMenuItem>
+            )}
+            {(message.author.id === userId || userRole === "ADMIN") && (
                 <DropdownMenuItem
                   onSelect={() => onDelete(message)}
                   className="brain-destructive-text text-destructive focus:text-destructive"
                 >
                   Eliminar
                 </DropdownMenuItem>
-              </>
             )}
           </DropdownMenuContent>
         </DropdownMenu>

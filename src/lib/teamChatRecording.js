@@ -14,6 +14,7 @@ export async function startChatRecording({
   try {
     const mimeType = [
       "audio/webm;codecs=opus",
+      "audio/mp4;codecs=mp4a.40.2",
       "audio/mp4",
       "audio/ogg;codecs=opus",
     ].find((t) => MediaRecorderCtor.isTypeSupported(t));
@@ -26,6 +27,8 @@ export async function startChatRecording({
     throw error;
   }
   const chunks = [];
+  let settle;
+  const stopped = new Promise(resolve => { settle = resolve; });
   let canceled = false,
     finished = false,
     elapsed = 0,
@@ -53,22 +56,26 @@ export async function startChatRecording({
     onError(e.error || new Error("No se pudo grabar el audio."));
     session.cancel();
   };
-  recorder.onstop = () => {
+  recorder.onstop = async () => {
     if (finished) return;
     finished = true;
     release();
     onState({ status: "inactive", seconds: 0 });
-    if (!canceled && chunks.length) {
+    if (canceled) { settle(null); return; }
+    if (chunks.length) {
       const type = (recorder.mimeType || chunks[0].type).split(";")[0];
       const ext = type.includes("mp4")
         ? "m4a"
         : type.includes("ogg")
           ? "ogg"
           : "webm";
-      onFile(new File(chunks, `nota-de-voz-${Date.now()}.${ext}`, { type }));
-    }
+      const file = new File(chunks, `nota-de-voz-${Date.now()}.${ext}`, { type });
+      try { await onFile(file); settle(file); }
+      catch (error) { onError(error); settle(null); }
+    } else { onError(new Error("La grabación está vacía. Graba de nuevo antes de enviar.")); settle(null); }
   };
   const session = {
+    get state() { return recorder.state; },
     pause() {
       if (recorder.state === "recording") {
         elapsed += Date.now() - last;
@@ -85,6 +92,7 @@ export async function startChatRecording({
     },
     stop() {
       if (recorder.state !== "inactive") recorder.stop();
+      return stopped;
     },
     cancel() {
       canceled = true;
@@ -92,6 +100,7 @@ export async function startChatRecording({
       else if (!finished) {
         finished = true;
         release();
+        settle(null);
       }
     },
   };

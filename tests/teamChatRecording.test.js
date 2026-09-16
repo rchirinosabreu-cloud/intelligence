@@ -69,3 +69,38 @@ test("cancel releases the microphone and never sends or retains recorded audio",
   assert.equal(stops, 1);
   assert.equal(files.length, 0);
 });
+
+test("finishing waits for all recorded bytes and the draft before returning the audio to send", async () => {
+  const { startChatRecording } = await api();
+  let saved = false;
+  const session = await startChatRecording({
+    mediaDevices: { getUserMedia: async () => ({ getTracks: () => [{ stop() {} }] }) },
+    MediaRecorderCtor: Recorder,
+    onFile: async () => { await new Promise(resolve => setTimeout(resolve,10)); saved=true; },
+  });
+  const result = await session.stop();
+  assert.ok(result instanceof File, "Stop returns the final audio, not an unfinished chunk");
+  assert.equal(saved,true);
+  assert.equal(session.state,"inactive");
+  assert.equal(await result.text(),"voice");
+  assert.equal(await session.stop(),result,"Repeated finish calls reuse the same recording");
+});
+
+test("empty recordings report an error instead of creating an unplayable message", async () => {
+  const { startChatRecording } = await api();
+  class EmptyRecorder extends Recorder { stop(){this.state='inactive';this.onstop?.();} }
+  let error;let files=0;
+  const session=await startChatRecording({mediaDevices:{getUserMedia:async()=>({getTracks:()=>[{stop(){}}]})},MediaRecorderCtor:EmptyRecorder,onFile:()=>files++,onError:e=>error=e});
+  assert.equal(await session.stop(),null);
+  assert.match(error?.message || '',/vacía|audio|grabación/);
+  assert.equal(files,0);
+});
+
+test("keeps Opus recording when supported and uses MP4 only as a fallback", async () => {
+  const { startChatRecording } = await api();
+  class BothRecorder extends Recorder { static isTypeSupported(type){return /audio\/(webm|mp4)/.test(type);} }
+  const session = await startChatRecording({mediaDevices:{getUserMedia:async()=>({getTracks:()=>[{stop(){}}]})},MediaRecorderCtor:BothRecorder});
+  const file=await session.stop();
+  assert.equal(file.type,'audio/webm');
+  assert.match(file.name,/\.webm$/);
+});

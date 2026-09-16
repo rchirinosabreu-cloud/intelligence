@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
+import { createChatSandbox } from './helpers/teamChatSandbox.js';
+
+test('active admins can moderate others; live role, channel access and version remain enforced', {skip:!process.env.TEST_DATABASE_URL}, async t => {
+  const sandbox=await createChatSandbox();t.after(()=>sandbox.close());
+  const service=sandbox.runtime.service,[admin,member]=sandbox.actors;
+  const input=extra=>({requestId:randomUUID(),content:'Mensaje para moderar',...extra});
+  const message=await service.sendMessage(member,'general',input());
+  await assert.rejects(service.editMessage(admin,message.id,input({version:1})),e=>e.statusCode===403);
+  const own=await service.sendMessage(admin,'general',input());
+  await assert.rejects(service.deleteMessage({...member,role:'ADMIN'},own.id,input({version:1})),e=>e.statusCode===403);
+  await assert.rejects(service.deleteMessage(admin,message.id,input({version:99})),e=>e.statusCode===409);
+  const request=input({version:1});
+  const deleted=await service.deleteMessage(admin,message.id,request);
+  assert.ok(deleted.deletedAt);assert.equal(deleted.content,'');assert.equal(deleted.author.id,member.id);
+  assert.equal((await service.deleteMessage(admin,message.id,request)).version,deleted.version);
+  assert.ok((await service.sync(member,'0')).events.some(e=>e.type==='delete'&&e.message?.id===message.id));
+  const next=await service.sendMessage(member,'general',input());
+  await sandbox.pool.query('UPDATE "User" SET role=\'EDITOR\' WHERE id=$1',[admin.id]);
+  await assert.rejects(service.deleteMessage(admin,next.id,input({version:1})),e=>e.statusCode===403);
+  await sandbox.pool.query('UPDATE "User" SET role=\'ADMIN\' WHERE id=$1',[admin.id]);
+  const channel=await service.createChannel(admin,{requestId:randomUUID(),name:'Privado',isPrivate:true,memberIds:[member.id]});
+  const privateMessage=await service.sendMessage(member,channel.id,input());
+  await sandbox.pool.query('DELETE FROM "TeamChatMember" WHERE "channelId"=$1 AND "userId"=$2',[channel.id,admin.id]);
+  await assert.rejects(service.deleteMessage(admin,privateMessage.id,input({version:1})),e=>e.statusCode===403);
+  await sandbox.pool.query('UPDATE "TeamMember" SET "isActive"=false WHERE "userId"=$1',[admin.id]);
+  await assert.rejects(service.deleteMessage(admin,next.id,input({version:1})),e=>e.statusCode===401);
+});

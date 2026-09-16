@@ -63,3 +63,9 @@ export function createChatEventParser(onEvent) {
       throw new Error("Respuesta de chat demasiado grande.");
   };
 }
+export function formatChatFileSize(bytes) {
+  const size = Math.max(0, Number(bytes) || 0);
+  const megabytes = size >= 1024 * 1024;
+  const value = size === 0 ? 0 : Math.max(0.1, size / (megabytes ? 1024 * 1024 : 1024));
+  return `${value.toLocaleString("es-CO", { maximumFractionDigits: 1 })} ${megabytes ? "MB" : "KB"}`;
+}

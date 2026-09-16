@@ -109,7 +109,8 @@ export default function TeamChat({
     [progress, setProgress] = useState(null),
     [error, setError] = useState("");
   const [voice, setVoice] = useState({ status: "inactive", seconds: 0 }),
-    [recordPending, setRecordPending] = useState(false);
+    [recordPending, setRecordPending] = useState(false),
+    [voiceFinishing, setVoiceFinishing] = useState(false);
   const [selection, setSelection] = useState([]),
     [dialog, setDialog] = useState(null),
     [dialogBusy, setDialogBusy] = useState(false),
@@ -124,6 +125,8 @@ export default function TeamChat({
     fileRef = useRef(fileMap),
     alive = useRef(true),
     recorder = useRef(null),
+    voiceSending = useRef(false),
+    sendRef = useRef(null),
     recordingGeneration = useRef(0),
     uploadAbort = useRef(null),
     busyRef = useRef(false),
@@ -388,7 +391,7 @@ export default function TeamChat({
     bottom.current = true;
   };
   const change = (patch) => {
-    if (busyRef.current) return;
+    if (busyRef.current || voiceSending.current) return;
     if (editing) {
       setEditContent(patch.content ?? editContent);
       editRequest.current = null;
@@ -442,9 +445,10 @@ export default function TeamChat({
             " Mantén esta pestaña abierta hasta enviar.",
         );
       }
+    return entries;
   };
   const record = async () => {
-    if (recordPending || draft.pending || busyRef.current) return;
+    if (recordPending || draft.pending || busyRef.current || voiceSending.current) return;
     setRecordPending(true);
     setError("");
     const id = channelId;
@@ -454,8 +458,9 @@ export default function TeamChat({
         onState: (v) => {
           if (alive.current) setVoice(v);
         },
-        onFile: (file) => {
-          if (alive.current) void addFiles([file], id);
+        onFile: async (file) => {
+          if (alive.current && !(await addFiles([file], id)))
+            throw new Error("No se pudo añadir la nota. Revisa los archivos del mensaje antes de grabar otra vez.");
         },
         onError: (e) => setError(failure("voice", e)),
       });
@@ -468,11 +473,13 @@ export default function TeamChat({
       if (alive.current) setRecordPending(false);
     }
   };
-  const send = async () => {
+  const send = async ({ recording = null, recordingChannel = null } = {}) => {
+    const finishedVoice = recording && recording === recorder.current && recording.state === "inactive";
     if (
       busyRef.current ||
-      voice.status !== "inactive" ||
-      recordPending ||
+      (recording && (!finishedVoice || recordingChannel !== channelId || editing)) ||
+      (voiceSending.current && !finishedVoice) ||
+      (!finishedVoice && (voice.status !== "inactive" || recordPending)) ||
       !selected ||
       selected.isArchived
     )
@@ -576,6 +583,25 @@ export default function TeamChat({
         setBusy(false);
         setProgress(null);
       }
+    }
+  };
+  sendRef.current = send;
+  const sendVoice = async () => {
+    const session = recorder.current;
+    if (!session || voiceSending.current || busyRef.current) return;
+    const generation = recordingGeneration.current;
+    const id = channelId;
+    voiceSending.current = true;
+    setVoiceFinishing(true);
+    try {
+      const file = await session.stop();
+      // Closing or switching channels preserves the recording as a draft.
+      // Sending is allowed only after its final chunk and local draft exist.
+      if (file && alive.current && generation === recordingGeneration.current)
+        await sendRef.current({ recording: session, recordingChannel: id });
+    } finally {
+      voiceSending.current = false;
+      if (alive.current) setVoiceFinishing(false);
     }
   };
   const react = async (message, emoji, active) => {
@@ -798,14 +824,14 @@ export default function TeamChat({
       }
     : draft;
   const edit = (m) => {
-    if (busyRef.current || draft.pending) return;
+    if (busyRef.current || voiceSending.current || voice.status !== "inactive" || draft.pending) return;
     setEditing(m);
     setEditContent(m.content);
     editRequest.current = null;
     setError("");
   };
   const reply = (message) => {
-    if (busyRef.current || draft.pending) return;
+    if (busyRef.current || voiceSending.current || draft.pending) return;
     setEditing(null);
     setEditContent("");
     editRequest.current = null;
@@ -1187,6 +1213,7 @@ export default function TeamChat({
                     <ChatMessage
                       message={m}
                       userId={currentUser.id}
+                      userRole={currentUser.role}
                       client={client}
                       onEdit={edit}
                       onDelete={(message) =>
@@ -1263,7 +1290,7 @@ export default function TeamChat({
                   );
                 }}
                 onSend={send}
-                busy={busy}
+                busy={busy || voiceFinishing}
                 progress={progress}
                 error={error}
                 onCancel={() => uploadAbort.current?.abort()}
@@ -1272,7 +1299,8 @@ export default function TeamChat({
                 onRecord={record}
                 onPause={() => recorder.current?.pause()}
                 onResume={() => recorder.current?.resume()}
-                onStop={() => recorder.current?.stop()}
+                onSendVoice={sendVoice}
+                voiceFinishing={voiceFinishing}
                 onDiscard={() => recorder.current?.cancel()}
                 editing={editing}
                 onCancelEdit={() => {
@@ -1428,6 +1456,7 @@ export default function TeamChat({
             <ChatMessage
               message={dialog.message}
               userId={currentUser.id}
+              userRole={currentUser.role}
               client={client}
               onEdit={(m) => {
                 setDialog(null);

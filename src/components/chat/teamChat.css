@@ -44,4 +44,15 @@
 }
 .team-chat audio {
   max-width: 100%;
+  color-scheme: light;
+}
+.dark .team-chat audio {
+  color-scheme: dark;
+}
+@media (pointer: coarse) {
+  .team-chat [data-message-id] {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
 }
