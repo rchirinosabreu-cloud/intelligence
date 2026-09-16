@@ -126,19 +126,24 @@ test('review corrects signed comparison percentages without changing the absolut
   assert.throws(() => workflow.applyReportReview(report, { expectedVersion: 1, updates: [{ observationId: 'views', changePct: Infinity, reason: 'x' }] }), /variación/i);
 });
 
-test('publishing requires current narrative and no unresolved or omitted sources', () => {
+test('publishing permits pending corrections and omitted sources with a current narrative', () => {
   assert.equal(typeof workflow.prepareReportPublication, 'function');
   const report = fixture();
   report.normalizedMetrics.facts = [{ factId: 'f', value: 0, status: 'OBSERVED' }];
   assert.throws(() => workflow.prepareReportPublication(report, 1), /análisis/i);
   report.narrative = { generationMode: 'EVIDENCE_AI', dataVersion: 1, claims: [{ factId: 'f' }], headline: 'Resultado' };
   report.normalizedMetrics.processingSummary.failedFiles = 1;
-  assert.throws(() => workflow.prepareReportPublication(report, 1), /captura/i);
+  assert.equal(workflow.prepareReportPublication(report, 1).status, 'PUBLISHED');
   report.normalizedMetrics.processingSummary.failedFiles = 0;
   report.normalizedMetrics.issues = [{ blocking: true, message: 'Importe en conflicto' }];
-  assert.throws(() => workflow.prepareReportPublication(report, 1), /conflicto/i);
-  report.normalizedMetrics.issues = [];
+  report.normalizedMetrics.sourceFailures = [{ sourceId: 'pending' }];
+  report.normalizedMetrics.readyForNarrative = false;
+  report.normalizedMetrics.facts.push({ factId: 'conflict', value: 888, status: 'CONFLICT' });
+  const before = structuredClone(report);
   assert.equal(workflow.prepareReportPublication(report, 1).status, 'PUBLISHED');
+  assert.deepEqual(report, before);
+  report.normalizedMetrics.facts = [report.normalizedMetrics.facts[1]];
+  assert.throws(() => workflow.prepareReportPublication(report, 1), /cifras utilizables/i);
 });
 
 test('snapshot persistence uses a JSON version compare-and-swap and refuses stale writes', async () => {

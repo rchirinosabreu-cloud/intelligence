@@ -63,7 +63,7 @@ test('extraction persists COP by default, supports explicit USD and rejects inva
   }
 });
 
-test('partial extraction persists failed source identity and never marks a partial report publishable', async () => {
+test('partial extraction preserves failed source identity and the pending reconciliation signal', async () => {
   assert.equal(typeof routes.createEvidenceExtractionHandler, 'function');
   const { calls, deps } = dependencies();
   const original = deps.extractMetrics;
@@ -74,6 +74,30 @@ test('partial extraction persists failed source identity and never marks a parti
   assert.ok(calls.saved.normalizedMetrics.sourceFailures[0].sourceId);
   assert.equal(calls.saved.normalizedMetrics.processingSummary.failedFiles, 1);
   assert.equal(calls.saved.normalizedMetrics.readyForNarrative, false);
+});
+
+test('analyze, issue and download work with pending corrections without resolving or excluding them', async () => {
+  let record = { id: 'pending', status: 'DRAFT', normalizedMetrics: { schemaVersion: 2, version: 1, dataVersion: 1,
+    readyForNarrative: false, facts: [{ factId: 'ok', value: 0, status: 'OBSERVED' }, { factId: 'conflict', value: 55, status: 'CONFLICT' }],
+    issues: [{ id: 'review', blocking: true, message: 'Verificar lectura' }], sourceFailures: [{ sourceId: 'failed' }],
+    processingSummary: { failedFiles: 1, partialFiles: 0 } } };
+  const original = structuredClone(record.normalizedMetrics);
+  const metricReport = { findUnique: async () => structuredClone(record), updateMany: async ({ where, data }) => {
+    assert.equal(where.normalizedMetrics.equals, record.normalizedMetrics.version);
+    record = { ...record, ...structuredClone(data) }; return { count: 1 };
+  } };
+  const handlers = routes.createEvidenceWorkflowHandlers({ prisma: { metricReport, $transaction: fn => fn({ metricReport }) },
+    generateNarrative: async () => ({ generationMode: 'EVIDENCE_AI', dataVersion: 1, claims: [{ factId: 'ok' }] }),
+    renderPdf: async current => { assert.equal(current.status, 'PUBLISHED'); return Buffer.from('%PDF-fixture'); } });
+  const request = () => ({ params: { reportId: 'pending' }, body: { expectedVersion: record.normalizedMetrics.version }, user: { id: 'actor' }, query: { version: String(record.normalizedMetrics.version) } });
+  let res = response(); await handlers.analyze(request(), res); assert.equal(res.code, 200); assert.equal(record.status, 'REVIEW');
+  res = response(); await handlers.publish(request(), res); assert.equal(res.code, 200); assert.equal(record.status, 'PUBLISHED');
+  assert.equal(record.normalizedMetrics.publication.actorId, 'actor');
+  assert.deepEqual(record.normalizedMetrics.publication.pendingReview, { issueCount: 1, sourceCount: 1, conflictFactIds: ['conflict'] });
+  for (const key of ['issues', 'sourceFailures', 'facts', 'readyForNarrative']) assert.deepEqual(record.normalizedMetrics[key], original[key]);
+  assert.equal(record.normalizedMetrics.excludedSources, undefined);
+  res = { ...response(), set() {}, send(body) { this.payload = body; } };
+  await handlers.pdf(request(), res); assert.equal(res.code, 200); assert.equal(res.payload.subarray(0, 5).toString(), '%PDF-');
 });
 
 test('routes require expected version and reject generation for a changed snapshot', async () => {

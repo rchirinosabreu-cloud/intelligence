@@ -19,13 +19,8 @@ export function assertReportVersion(report, expectedVersion) {
 
 export function assertEvidenceReady(report) {
   const metrics = report.normalizedMetrics || {};
-  const unresolved = (metrics.sourceFailures || []).filter(source => !(metrics.excludedSources || []).some(item => item.sourceId === source.sourceId));
-  const originalFailures = Number(metrics.processingSummary?.failedFiles || 0) + Number(metrics.processingSummary?.partialFiles || 0);
-  if (unresolved.length || (originalFailures && !metrics.sourceFailures?.length)) fail('Hay capturas pendientes. Reintenta la ingesta o exclúyelas con un motivo antes de continuar.');
-  const issue = metrics.issues?.find(item => item.blocking);
-  if (issue) fail(`Resuelve el conflicto antes de continuar: ${issue.message}`);
-  if (metrics.facts?.some(fact => fact.status === 'CONFLICT')) fail('Hay cifras en conflicto.');
-  if (!metrics.facts?.some(fact => typeof fact.value === 'number' && Number.isFinite(fact.value))) fail('El informe no contiene cifras utilizables.');
+  // Review findings remain pending; issuing a report does not resolve them.
+  if (!metrics.facts?.some(fact => fact.status !== 'CONFLICT' && typeof fact.value === 'number' && Number.isFinite(fact.value))) fail('El informe no contiene cifras utilizables.');
 }
 
 export function applyReportReview(report, payload = {}, { actorId, actorType = 'USER', now = new Date().toISOString() } = {}) {

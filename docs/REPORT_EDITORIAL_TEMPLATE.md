@@ -26,7 +26,7 @@ Las secciones dependen de la evidencia disponible. No se inventan demografía, p
 - Las cifras del texto usan marcadores como `{{E1.value}}` y `{{E1.change}}`; el servidor inserta el valor y formato guardados. Los nombres observados de anuncios pueden contener números.
 - Rechazo de referencias inexistentes, variaciones ausentes, secciones omitidas, texto incompleto y algunas afirmaciones de causalidad o garantía no sustentadas. Estos controles no certifican toda la semántica de un comentario: sigue siendo necesaria la revisión editorial.
 - La distribución cruzada explícita permite describir ambas redes; una mención aislada no cambia la plataforma de la cifra.
-- Se mantienen los requisitos de revisión, versión de datos, publicación y exportación. Una narrativa obsoleta no se incorpora al PDF vigente.
+- Las correcciones son opcionales para emitir (ver «Emisión con revisión pendiente»). Se mantienen los controles de versión de datos, publicación y exportación. Una narrativa obsoleta no se incorpora al PDF vigente.
 - Las narrativas históricas siguen legibles. Se obtiene la nueva estructura al generar un análisis nuevo; no se reescriben reportes publicados automáticamente.
 - Web y PDF comparten las secciones y el análisis. El PDF utiliza tarjetas, barras por indicador y tablas; la revisión web conserva los controles de fuentes y correcciones.
 
@@ -98,5 +98,17 @@ Solo se incluyen indicadores totales de cuenta, numéricos, inequívocos y del m
 También se contiene la tabla del plan de acción en la superficie de desplazamiento de la vista móvil. Verificación: 315 pruebas, 314 aprobadas y una omitida; lint y build aprobados. Comprobación real en Chromium a 1440, 390 y 320 px, en claro y oscuro, y casos de nombre largo con logo; sin desbordamiento horizontal ni solapamiento. La muestra MultiK conserva once páginas y todo el texto aprobado posterior a la portada. PDF completo renderizado e inspeccionado, sin nuevas llamadas a IA ni escrituras productivas.
 
 El ajuste visual final mantiene el nombre del cliente en violeta y permite que continúe junto a «digital»: en la muestra A4 el título completo ocupa dos líneas. Los títulos, tarjetas, tablas, comentarios y gráficos utilizan la paleta aprobada `#1F3C58`, `#4D6E8C`, `#8FA8BF`, `#CEE1F2` y `#A6D4FF`, con fondos aclarados y variantes para oscuro. La impresión restaura siempre la paleta clara. No se fuerza un número fijo de líneas para nombres largos ni pantallas pequeñas.
+
+## Emisión con revisión pendiente
+
+Por decisión del usuario, las observaciones de revisión y las capturas con lectura fallida o parcial no bloquean generar análisis, emitir ni descargar el PDF. Esto también aplica a informes guardados con `readyForNarrative: false`; ese campo describe la conciliación, no el permiso de emisión. El botón es «Emitir informe» y el estado visible «Informe emitido».
+
+Se necesita al menos una cifra numérica utilizable y, para emitir/descargar, un análisis de la versión vigente. Se conservan el control de concurrencia y el bloqueo por edición local sin guardar. Emitir no corrige, excluye ni aprueba observaciones: la publicación registra actor, fecha, versión y cantidades de incidencias/capturas pendientes e IDs de cifras en conflicto. Reabrir permite corregir después; cambiar datos exige regenerar el análisis.
+
+Las cifras en conflicto se muestran como «Por conciliar», sin valor numérico para gráficas ni variación. Los paneles con referencias, contexto, métrica o valores incompatibles permanecen en revisión interna y no alimentan la presentación del cliente. El análisis usa los datos disponibles sin inventar cifras de las capturas pendientes. El PDF mantiene su estructura editorial, sin anexar advertencias técnicas ni fuentes al cliente.
+
+Prueba reproducible: `node tests/browser/report-pending-review.mjs`. Usa la interfaz, los handlers y el generador PDF reales con datos sintéticos, persistencia en memoria y respuesta editorial fija. Recorre análisis → emisión → descarga con pendientes y captura escritorio/móvil en claro/oscuro. No llama a IA ni certifica base de datos o despliegue productivos.
+
+Verificación local: 317 pruebas de reportes/PDF y controles compartidos, 316 aprobadas y una omitida; lint y build aprobados. Descarga real de PDF desde el navegador con incidencias pendientes, sin modificar las cifras ni resolver las observaciones. Sin cambios en producción.
 
 La regresión de navegador `node tests/browser/report-cover.mjs` usa datos sintéticos, comprueba la posición del nombre junto a la última palabra del título en A4, separación entre palabras, dos líneas, colores y contraste, y ausencia de desbordamiento a 1440, 390 y 320 px. En los elementos de portada medidos, el contraste mínimo fue 5,72:1 en claro y 7,17:1 en oscuro. La suite de reportes conserva 314 pruebas aprobadas y una omitida; se verifica además el PDF completo de once páginas y la conservación del texto aprobado posterior a la portada.

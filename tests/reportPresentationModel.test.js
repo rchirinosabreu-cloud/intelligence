@@ -8,6 +8,17 @@ const fact = (id, extra = {}) => ({ factId: id, key: 'views', label: 'Total', va
 const report = (facts, panels = [], issues = []) => ({ normalizedMetrics: { schemaVersion: 2, facts, panels, issues } });
 const allRows = result => result.sections.flatMap(section => section.rows);
 
+test('unresolved conflicts never supply a numeric chart value or comparison, including linked panels', () => {
+  const disputed = fact('disputed', { status: 'CONFLICT', changePct: 50, entityLevel: 'FORMAT', entityName: 'Reels' });
+  const panel = { panelId: 'p', sourceId: 'source', platform: 'FACEBOOK', metricKey: 'views', unit: 'count', dataset: [{ label: 'Reels', value: 100 }], cellReferences: [{ rowLabel: 'Reels', columnKey: 'value', observationId: 'source:disputed' }] };
+  const result = build(report([disputed], [panel]));
+  const cells = allRows(result).flatMap(row => Object.values(row.cells || {}));
+  assert.equal(cells.length, 2);
+  for (const cell of cells) { assert.equal(cell.value, null); assert.equal(cell.text, 'Por conciliar'); assert.ok(!cell.changeText); }
+  const metrics = build(report([fact('account', { status: 'CONFLICT', changePct: 50 })]));
+  assert.equal(allRows(metrics)[0].changeText, '');
+});
+
 test('metric names use their meaning and null headings remain in detail without ghost KPI rows', () => {
   const zero = fact('zero', { key: 'linkClicks', value: 0, rawValue: '0' });
   const heading = fact('heading', { key: 'contentCount', value: null, rawValue: null, entityLevel: 'UNKNOWN', scope: 'UNKNOWN', status: 'MISSING' });

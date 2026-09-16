@@ -29,10 +29,11 @@ const metadata = items => ({
   facts: items, observationIds: unique(items.flatMap(item => array(item.observationIds))), sourceIds: unique(items.flatMap(item => array(item.sourceIds)))
 });
 const factText = item => item.status === 'CONFLICT' ? 'Por conciliar' : formatEvidenceValue(item);
+const factChangeText = item => item.status === 'CONFLICT' ? '' : formatEvidenceChangePct(item.changePct);
 const resultTypeName = type => ({ CONVERSATIONS: 'Conversaciones', LEADS: 'Clientes potenciales', PURCHASES: 'Compras', LINK_CLICKS: 'Clics en el enlace' })[type] || type || 'Tipo no especificado';
 const makeCell = items => ({
-  text: unique(items.map(item => item.key === 'results' && unique(items.map(candidate => candidate.resultType)).length > 1 ? `${factText(item)} (${resultTypeName(item.resultType)})` : factText(item))).join(' / '), value: items.length && items.every(item => item.value === items[0].value && item.unit === items[0].unit) ? items[0].value : null,
-  ...metadata(items), references: [], changeText: unique(items.map(item => formatEvidenceChangePct(item.changePct))).join(' / ')
+  text: unique(items.map(item => item.key === 'results' && unique(items.map(candidate => candidate.resultType)).length > 1 ? `${factText(item)} (${resultTypeName(item.resultType)})` : factText(item))).join(' / '), value: items.length && items.every(item => item.status !== 'CONFLICT' && item.value === items[0].value && item.unit === items[0].unit) ? items[0].value : null,
+  ...metadata(items), references: [], changeText: unique(items.map(factChangeText)).join(' / ')
 });
 const sectionTitle = (item, level) => {
   const platform = platformNames[item.platform] || text(item.platform);
@@ -79,7 +80,7 @@ export function buildReportPresentation(report = {}) {
   const facts = array(metrics.facts);
   const visible = facts.filter(item => finite(item.value) || item.status === 'CONFLICT');
   const detailFacts = facts.filter(item => !visible.includes(item));
-  const invalidPanelIds = new Set(array(metrics.issues).filter(issue => issue.code === 'PANEL_METRIC_MISMATCH').flatMap(issue => array(issue.panelIds)));
+  const invalidPanelIds = new Set(array(metrics.issues).filter(issue => issue.blocking && ['PANEL_METRIC_MISMATCH', 'PANEL_CONTEXT_MISMATCH', 'PANEL_REFERENCE_INVALID', 'PANEL_OBSERVATION_MISMATCH'].includes(issue.code)).flatMap(issue => array(issue.panelIds)));
   const detailPanels = array(metrics.panels).filter(panel => invalidPanelIds.has(panel.panelId));
   const sections = new Map();
   const byObservation = new Map();
@@ -111,7 +112,7 @@ export function buildReportPresentation(report = {}) {
       Object.assign(row, metadata(row.facts));
       if (section.kind === 'metrics') {
         row.valueText = unique(row.facts.map(factText)).join(' / ');
-        row.changeText = unique(row.facts.map(item => formatEvidenceChangePct(item.changePct))).join(' / ');
+        row.changeText = unique(row.facts.map(factChangeText)).join(' / ');
       } else {
         for (const key of unique(row.facts.map(item => item.key))) row.cells[key] = makeCell(row.facts.filter(item => item.key === key));
       }
@@ -155,7 +156,8 @@ export function buildReportPresentation(report = {}) {
         const identical = linked.length && linked.every(item => item.value === raw[column] && item.status !== 'CONFLICT');
         if (identical && linked.every(item => visible.includes(item))) continue;
         const unit = linked[0]?.unit || (column === 'value' || column === panel.metricKey || columns.length === 1 ? panel.unit : undefined);
-        cells[outputKey] = { text: typeof raw[column] === 'string' ? raw[column] : formatEvidenceValue({ value: raw[column], unit, precision: raw.precision }), value: finite(raw[column]) ? raw[column] : null,
+        const conflicted = linked.some(item => item.status === 'CONFLICT');
+        cells[outputKey] = { text: conflicted ? 'Por conciliar' : typeof raw[column] === 'string' ? raw[column] : formatEvidenceValue({ value: raw[column], unit, precision: raw.precision }), value: !conflicted && finite(raw[column]) ? raw[column] : null,
           ...metadata(linked), sourceIds: unique([panel.sourceId, ...linked.flatMap(item => array(item.sourceIds))]), references: [{ panelId: panel.panelId, rowIndex, rowLabel: label, columnKey: column }] };
       }
       return { id: `row-${id([panel.panelId, rowIndex, label])}`, label, cells, facts: unique(Object.values(cells).flatMap(cell => cell.facts)), observationIds: unique(Object.values(cells).flatMap(cell => cell.observationIds)), sourceIds: unique([panel.sourceId]), _meaningful: Object.values(cells).some(cell => finite(cell.value) || (cell.text && cell.text !== 'No disponible')) };

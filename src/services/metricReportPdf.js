@@ -87,10 +87,7 @@ const validateDocument = (report, preview) => {
   if (metrics?.schemaVersion !== 2 || !Array.isArray(metrics.facts)) fail('REPORT_EVIDENCE_REQUIRED', 'Este reporte requiere una ingesta con evidencia por cifra antes de exportar.');
   if (preview) return;
   if (report.status !== 'PUBLISHED') fail('REPORT_NOT_PUBLISHED', 'El reporte debe estar publicado para descargar el PDF final.');
-  const excludedSources = new Set(list(metrics.excludedSources).filter((source) => text(source.reason).trim()).map((source) => source.sourceId));
-  if (list(metrics.sourceFailures).some((source) => !excludedSources.has(source.sourceId))) fail('REPORT_FAILED_SOURCES', 'Hay fuentes pendientes de lectura o exclusión explícita.');
-  if (list(metrics.issues).some((issue) => issue?.blocking) || metrics.facts.some((fact) => fact?.status === 'CONFLICT')) fail('REPORT_UNRESOLVED_EVIDENCE', 'El reporte tiene cifras o validaciones pendientes.');
-  if (!metrics.facts.some((fact) => typeof fact?.value === 'number' && Number.isFinite(fact.value))) fail('REPORT_EMPTY_EVIDENCE', 'El reporte no contiene cifras con evidencia para publicar.');
+  if (!metrics.facts.some((fact) => fact?.status !== 'CONFLICT' && typeof fact?.value === 'number' && Number.isFinite(fact.value))) fail('REPORT_EMPTY_EVIDENCE', 'El reporte no contiene cifras utilizables para emitir.');
   if (!narrativeFor(report) || !narrativeCurrent(report)) fail('REPORT_NARRATIVE_STALE', 'La narrativa no está vigente: debe generarse con la versión actual de los datos.');
 };
 

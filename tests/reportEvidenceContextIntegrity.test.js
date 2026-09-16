@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildEvidenceReport } from '../src/lib/reportEvidence.js';
 import { applyReportReview, assertEvidenceReady } from '../src/services/reportWorkflowService.js';
+import { buildReportPresentation } from '../src/lib/reportPresentationModel.js';
 
 const period = { start: '2026-08-01', end: '2026-08-31' };
 const fixture = () => {
@@ -18,7 +19,7 @@ const fixture = () => {
   }, narrative: {} };
 };
 
-test('a linked panel cannot remain publishable after its platform differs from its observation', () => {
+test('issuance keeps platform mismatch pending and leaves the ambiguous panel in internal review', () => {
   const before = fixture();
   assert.doesNotThrow(() => assertEvidenceReady(before));
   const after = { ...before, ...applyReportReview(before, { expectedVersion: 1, panelUpdates: [{
@@ -27,8 +28,11 @@ test('a linked panel cannot remain publishable after its platform differs from i
   assert.equal(after.normalizedMetrics.panels[0].platform, 'INSTAGRAM');
   const fact = after.normalizedMetrics.facts[0];
   if (fact.platform !== after.normalizedMetrics.panels[0].platform) {
-    assert.throws(() => assertEvidenceReady(after), /plataforma|conflicto|panel|referencia/i,
-      'one linked figure must not remain publishable under two different platforms');
+    assert.doesNotThrow(() => assertEvidenceReady(after));
+    assert.ok(after.normalizedMetrics.issues.some(issue => issue.code === 'PANEL_CONTEXT_MISMATCH' && issue.blocking));
+    const presentation = buildReportPresentation(after);
+    assert.equal(presentation.sections.some(section => section.panelId === 'mixed-capture:formats'), false);
+    assert.equal(presentation.detailPanels.length, 1);
   }
 });
 
@@ -37,8 +41,9 @@ test('an explicit cell link with a different scope cannot authorize a value copy
   before.normalizedMetrics.sourceExtractions[0].panels[0].scope = 'PAID';
   before.normalizedMetrics = { ...before.normalizedMetrics,
     ...buildEvidenceReport(before.normalizedMetrics.sourceExtractions, { reportPeriod: period }) };
-  assert.throws(() => assertEvidenceReady(before), /distribuci|conflicto|panel|referencia|alcance/i,
-    'paid table cells cannot certify total observations solely by matching label and value');
+  assert.doesNotThrow(() => assertEvidenceReady(before));
+  assert.ok(before.normalizedMetrics.issues.some(issue => issue.code === 'PANEL_CONTEXT_MISMATCH' && issue.blocking));
+  assert.equal(buildReportPresentation(before).sections.some(section => section.panelId === 'mixed-capture:formats'), false);
 });
 
 test('a single-metric summary cannot publish viewers as a views row without semantic evidence', () => {
@@ -55,7 +60,8 @@ test('a single-metric summary cannot publish viewers as a views row without sema
   assert.equal(evidence.readyForNarrative, false);
   assert.deepEqual(evidence.panels[0].dataset, source.panels[0].dataset, 'original cells remain available for review');
   assert.deepEqual(source, original);
-  assert.throws(() => assertEvidenceReady({ normalizedMetrics: evidence }), /métrica|indicador|panel|conflicto/i);
+  assert.doesNotThrow(() => assertEvidenceReady({ normalizedMetrics: evidence }));
+  assert.equal(buildReportPresentation({ normalizedMetrics: evidence }).detailPanels.length, 1);
 });
 
 test('the summary metric guard does not reinterpret formats, empty cells or explicitly mixed tables', () => {

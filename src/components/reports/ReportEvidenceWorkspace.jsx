@@ -43,8 +43,7 @@ export function getEvidenceWorkspaceState(report, hasDraft = false) {
   const narrative = report?.narrative || {};
   const currentNarrative = narrative.generationMode === 'EVIDENCE_AI' && !narrative.needsRegeneration
     && narrative.dataVersion === metrics.dataVersion && Boolean(narrative.claims?.length);
-  const ready = metrics.readyForNarrative !== false && (metrics.facts || []).some(item => typeof item.value === 'number' && Number.isFinite(item.value))
-    && !blocking.length && !pendingSources.length && !hasDraft;
+  const ready = (metrics.facts || []).some(item => item.status !== 'CONFLICT' && typeof item.value === 'number' && Number.isFinite(item.value)) && !hasDraft;
   return { blocking, pendingSources, currentNarrative,
     canAnalyze: ready && report?.status !== 'PUBLISHED',
     canPublish: ready && currentNarrative && report?.status !== 'PUBLISHED',
@@ -267,28 +266,28 @@ export default function ReportEvidenceWorkspace({ report, onReportChange, apiBas
       anchor.href = url; anchor.download = `informe-${report.id}-v${metrics.dataVersion}.pdf`;
       document.body.appendChild(anchor); anchor.click(); anchor.remove();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
-      setNotice('PDF descargado con la versión aprobada.');
+      setNotice('PDF descargado con la versión emitida.');
     } catch (failure) { await fail(failure); }
     finally { setBusy(''); }
   };
 
   return <section className="min-w-0 space-y-5 text-foreground" aria-label="Revisión del informe">
     <header className={surface}>
-      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><h2 className="text-xl font-semibold">Informe de resultados</h2><p className="mt-1 text-sm text-muted-foreground">{report.client?.name || 'Informe del cliente'} · {periodText(metrics.reportPeriod || { start: report.startDate?.slice(0, 10), end: report.endDate?.slice(0, 10) })}</p></div><p className="text-sm font-medium">{report.status === 'PUBLISHED' ? 'Informe aprobado' : report.status === 'REVIEW' ? 'En revisión' : 'Lectura inicial'} · Versión {metrics.version}</p></div>
+      <div className="flex flex-col justify-between gap-3 sm:flex-row sm:items-start"><div><h2 className="text-xl font-semibold">Informe de resultados</h2><p className="mt-1 text-sm text-muted-foreground">{report.client?.name || 'Informe del cliente'} · {periodText(metrics.reportPeriod || { start: report.startDate?.slice(0, 10), end: report.endDate?.slice(0, 10) })}</p></div><p className="text-sm font-medium">{report.status === 'PUBLISHED' ? 'Informe emitido' : report.status === 'REVIEW' ? 'En revisión' : 'Lectura inicial'} · Versión {metrics.version}</p></div>
       <p className="mt-4 text-sm text-muted-foreground">{metrics.processingSummary?.totalFiles ?? metrics.sourceExtractions?.length ?? 0} capturas · Resultados por red y pauta</p>
       <div className="mt-4 flex flex-wrap gap-2">
-        {report.status !== 'PUBLISHED' ? <><button className={primaryButton} disabled={Boolean(busy) || !state.canAnalyze} onClick={() => requestAction('analyze')}>{busy === 'analyze' ? 'Generando análisis…' : 'Generar análisis'}</button><button className={button} disabled={Boolean(busy) || !state.canPublish} onClick={() => requestAction('publish')}>Aprobar informe</button></> : <button className={button} disabled={Boolean(busy)} onClick={() => requestAction('reopen')}>Reabrir revisión</button>}
+        {report.status !== 'PUBLISHED' ? <><button className={primaryButton} disabled={Boolean(busy) || !state.canAnalyze} onClick={() => requestAction('analyze')}>{busy === 'analyze' ? 'Generando análisis…' : 'Generar análisis'}</button><button className={button} disabled={Boolean(busy) || !state.canPublish} onClick={() => requestAction('publish')}>Emitir informe</button></> : <button className={button} disabled={Boolean(busy)} onClick={() => requestAction('reopen')}>Reabrir revisión</button>}
         <button className={button} disabled={Boolean(busy) || hasDraft} onClick={showPreview}>Vista previa</button>
         <button className={button} disabled={Boolean(busy) || !state.canDownload} onClick={download}>{busy === 'pdf' ? 'Preparando PDF…' : 'Descargar PDF'}</button>
       </div>
-      {report.status !== 'PUBLISHED' && <p className="mt-3 text-sm text-muted-foreground">{state.blocking.length || state.pendingSources.length ? 'Revisa los puntos pendientes para continuar con el análisis y el PDF.' : 'Revisa los resultados, genera el análisis y aprueba la versión que descargarás en PDF.'}</p>}
+      {report.status !== 'PUBLISHED' && <p className="mt-3 text-sm text-muted-foreground">{state.blocking.length || state.pendingSources.length ? 'Puedes emitir el informe con los datos disponibles. Las correcciones pendientes se conservan para revisarlas después.' : 'Genera el análisis y emite la versión que descargarás en PDF.'}</p>}
     </header>
 
     {error && <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-destructive" role="alert">{error}</div>}
     {notice && <p className="text-sm text-foreground" role="status">{notice}</p>}
     {(conflict || stale) && <button className={hasDraft ? 'brain-danger-button-outline brain-destructive-text inline-flex min-h-11 items-center justify-center rounded-xl border bg-background px-4 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-50' : button} disabled={Boolean(busy)} onClick={reload}>{hasDraft ? 'Descartar borrador y recargar versión vigente' : 'Recargar versión vigente'}</button>}
 
-    {(state.blocking.length > 0 || state.pendingSources.length > 0) && <section className={surface} aria-labelledby="report-pending-title"><h3 id="report-pending-title" className="text-base font-semibold text-destructive">Revisión necesaria</h3>
+    {(state.blocking.length > 0 || state.pendingSources.length > 0) && <section className={surface} aria-labelledby="report-pending-title"><h3 id="report-pending-title" className="text-base font-semibold text-destructive">Revisión pendiente</h3>
       {state.blocking.length > 0 && <ul className="mt-3 list-disc space-y-2 pl-5 text-sm">{presentation.contextNotes.filter(issue => issue.blocking).map(issue => <li key={issue.id}>{issue.message}</li>)}</ul>}
       {state.pendingSources.map(source => <div key={source.sourceId} className="mt-4 space-y-2 border-t border-border pt-4"><p className="break-words text-sm font-medium">{source.originalName || source.sourceId}</p><p className="text-sm text-muted-foreground">{source.error || 'La captura no pudo leerse.'}</p><label className="block space-y-1 text-sm">Motivo para excluir esta captura<textarea className={field} value={failureReasons[source.sourceId] || ''} onChange={event => setFailureReasons(previous => ({ ...previous, [source.sourceId]: event.target.value }))} maxLength={1000} /></label><button className={button} disabled={Boolean(busy) || hasDraft || !failureReasons[source.sourceId]?.trim() || report.status === 'PUBLISHED'} onClick={async () => { const saved = await requestAction('observations', { sourceDecisions: [{ sourceId: source.sourceId, exclude: true, reason: failureReasons[source.sourceId].trim() }] }, 'patch'); if (saved) setFailureReasons(previous => ({ ...previous, [source.sourceId]: '' })); }}>Excluir captura del informe</button></div>)}
     </section>}

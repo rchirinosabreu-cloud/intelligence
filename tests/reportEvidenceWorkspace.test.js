@@ -32,12 +32,20 @@ test('current editorial appears beside its result with strategy before audit; st
   assert.match(stale, /versión anterior/);
 });
 
-test('blocks publication for stale narrative, unresolved source failures or local draft', () => {
+test('permits pending corrections but requires saved data and a current narrative', () => {
   assert.equal(getEvidenceWorkspaceState(report).canPublish, true);
   assert.equal(getEvidenceWorkspaceState(report, true).canPublish, false);
   assert.equal(getEvidenceWorkspaceState({ ...report, narrative: { ...report.narrative, dataVersion: 1 } }).canPublish, false);
   const failed = { ...report, normalizedMetrics: { ...report.normalizedMetrics, sourceFailures: [{ sourceId: 'missing' }] } };
-  assert.equal(getEvidenceWorkspaceState(failed).canAnalyze, false);
+  failed.normalizedMetrics.readyForNarrative = false;
+  failed.normalizedMetrics.issues = [{ blocking: true, message: 'Lectura por confirmar' }];
+  assert.equal(getEvidenceWorkspaceState(failed).canAnalyze, true);
+  assert.equal(getEvidenceWorkspaceState(failed).canPublish, true);
+  assert.equal(getEvidenceWorkspaceState({ ...failed, status: 'PUBLISHED' }).canDownload, true);
+  const html = renderToStaticMarkup(React.createElement(Workspace, { report: failed, onReportChange() {} }));
+  assert.match(html, /Emitir informe/);
+  assert.match(html, /Puedes emitir el informe con los datos disponibles/);
+  assert.doesNotMatch(html, /Revisa los puntos pendientes para continuar/);
   assert.equal(getEvidenceWorkspaceState({ ...failed, normalizedMetrics: { ...failed.normalizedMetrics, excludedSources: [{ sourceId: 'missing', reason: 'No pertenece al informe' }] } }).canAnalyze, true);
 });
 

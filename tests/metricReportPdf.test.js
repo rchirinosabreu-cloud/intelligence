@@ -257,12 +257,16 @@ test('does not invent the paid platform, ISO currency, account or comparative pe
   assert.match($('[data-fact-id="spend"]').closest('[data-report-section]').find('.caption').text(), /Período sin confirmar/);
 });
 
-test('requires published/current/complete evidence and narrative before final export', () => {
+test('allows pending corrections while requiring published status, usable data and current narrative', () => {
   assert.throws(() => buildMetricReportHtml(report({ status: 'REVIEW' })), /publicado/i);
   const blocked = report(); blocked.normalizedMetrics.issues = [{ blocking: true, message: 'Período incompatible' }];
-  assert.throws(() => buildMetricReportHtml(blocked), /pendientes/i);
+  assert.doesNotThrow(() => buildMetricReportHtml(blocked));
   const conflict = report(); conflict.normalizedMetrics.facts[0].status = 'CONFLICT';
-  assert.throws(() => buildMetricReportHtml(conflict), /pendientes/i);
+  assert.throws(() => buildMetricReportHtml(conflict), /cifras/i);
+  conflict.normalizedMetrics.facts.push(fact({ factId: 'usable', key: 'reach', value: 50 }));
+  const body = load(buildMetricReportHtml(conflict))('body').text();
+  assert.match(body, /Por conciliar/);
+  assert.doesNotMatch(body, /16\.502/);
   const stale = report(); stale.narrative.dataVersion = 2;
   assert.throws(() => buildMetricReportHtml(stale), /vigente/i);
   const failed = report(); failed.narrative.needsRegeneration = true;
@@ -363,10 +367,10 @@ test('groups repeated source notices in the methodology annex without repeating 
   assert.doesNotMatch($('.sources').text(),/métrica 66/);
 });
 
-test('blocks unresolved failed sources and discloses source and observation exclusions with their reasons', () => {
+test('permits unresolved failed sources and preserves explicit exclusion reasons', () => {
   const fixture=report();
   fixture.normalizedMetrics.sourceFailures=[{sourceId:'failed',originalName:'Captura incompleta.png',message:'Respuesta incompleta'}];
-  assert.throws(()=>buildMetricReportHtml(fixture, { includeSources: true }),/fuentes/i);
+  assert.doesNotThrow(()=>buildMetricReportHtml(fixture, { includeSources: true }));
   fixture.normalizedMetrics.excludedSources=[{sourceId:'failed',reason:'Es de otro mes'}];
   fixture.normalizedMetrics.observations=[{sourceId:'capture-ig',observationId:'old',label:'Alcance',excluded:true,review:{reason:'El intervalo visible no corresponde'}}];
   const $=load(buildMetricReportHtml(fixture, { includeSources: true }));

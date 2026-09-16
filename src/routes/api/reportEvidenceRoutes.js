@@ -129,7 +129,14 @@ export function createEvidenceWorkflowHandlers({ prisma, generateNarrative = gen
     publish: wrap(async (req, res) => {
       const report = await read(req.params.reportId);
       const changes = prepareReportPublication(report, req.body?.expectedVersion);
-      changes.normalizedMetrics = { ...report.normalizedMetrics, publication: { actorId: req.user?.id || null, at: new Date().toISOString(), dataVersion: report.normalizedMetrics.dataVersion } };
+      const metrics = report.normalizedMetrics;
+      const pendingSources = (metrics.sourceFailures || []).filter(source => !(metrics.excludedSources || []).some(item => item.sourceId === source.sourceId));
+      const pendingReview = {
+        issueCount: (metrics.issues || []).filter(issue => issue.blocking).length,
+        sourceCount: pendingSources.length || (!metrics.sourceFailures?.length ? Number(metrics.processingSummary?.failedFiles || 0) + Number(metrics.processingSummary?.partialFiles || 0) : 0),
+        conflictFactIds: (metrics.facts || []).filter(fact => fact.status === 'CONFLICT').map(fact => fact.factId),
+      };
+      changes.normalizedMetrics = { ...metrics, publication: { actorId: req.user?.id || null, at: new Date().toISOString(), dataVersion: metrics.dataVersion, pendingReview } };
       return res.json({ success: true, report: await saveReportVersion(prisma, report, changes) });
     }),
     reopen: wrap(async (req, res) => {
