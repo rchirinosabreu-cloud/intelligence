@@ -85,23 +85,35 @@ export const retentionDaysFrom = (env = process.env) => {
   return Number.isFinite(raw) && raw >= 1 ? raw : DEFAULT_RETENTION_DAYS;
 };
 
-const CANDIDATE_SQL = `
-  SELECT a.id, a.url, a.name, a."purgeState", t.status::text AS "taskStatus", t."completedAt"
+const candidateSql = (tracked) => `
+  SELECT a.id, a.url, a.name,
+         ${tracked ? 'a."purgeState"' : `'ACTIVE' AS "purgeState"`},
+         t.status::text AS "taskStatus", t."completedAt"
   FROM "TaskAttachment" a
   JOIN "Task" t ON t.id = a."taskId"
-  WHERE a."purgeState" = 'ACTIVE'
-    AND t.status::text = $1
+  WHERE ${tracked ? `a."purgeState" = 'ACTIVE' AND ` : ""}t.status::text = $1
     AND t."completedAt" IS NOT NULL
     AND t."completedAt" < $2
   ORDER BY t."completedAt" ASC
   LIMIT $3`;
 
+/** The sweep columns arrive with a deploy, but the report has to work before
+ * that: without them nothing has been purged yet, so every row is ACTIVE. */
+export async function purgeColumnsPresent(pool) {
+  const { rows } = await pool.query(
+    `SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'TaskAttachment' AND column_name = 'purgeState' LIMIT 1`,
+  );
+  return rows.length > 0;
+}
+
 /** Read-only. Never writes, never deletes: this is what a dry run reports. */
 export async function collectRetentionCandidates(
   pool,
-  { now = new Date(), retentionDays = DEFAULT_RETENTION_DAYS, limit = 200 } = {},
+  { now = new Date(), retentionDays = DEFAULT_RETENTION_DAYS, limit = 200, tracked } = {},
 ) {
-  const { rows } = await pool.query(CANDIDATE_SQL, [
+  const hasColumns = tracked ?? (await purgeColumnsPresent(pool));
+  const { rows } = await pool.query(candidateSql(hasColumns), [
     COMPLETED_STATUS,
     retentionCutoff(now, retentionDays),
     limit,
@@ -119,7 +131,16 @@ export async function reportRetentionPlan(pool, options = {}) {
 /** Two phases, like the chat sweep: claim under a lock, then delete. A crash
  * between them leaves a DELETING row, never a message pointing at nothing. */
 export async function runRetentionSweep(pool, storage, options = {}) {
-  const { purgeable } = await reportRetentionPlan(pool, options);
+  // Without the tracking columns a purge could not be recorded, and an
+  // unrecorded purge would be retried forever. Report, never delete.
+  const tracked = options.tracked ?? (await purgeColumnsPresent(pool));
+  if (!tracked) {
+    console.error(
+      "[TaskAttachmentRetention] Faltan las columnas de seguimiento; no se borra nada.",
+    );
+    return { claimed: 0, purged: 0, restored: 0 };
+  }
+  const { purgeable } = await reportRetentionPlan(pool, { ...options, tracked });
   if (!purgeable.length) return { claimed: 0, purged: 0, restored: 0 };
 
   const tx = await pool.connect();

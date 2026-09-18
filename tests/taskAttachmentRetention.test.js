@@ -104,6 +104,7 @@ function poolDouble(candidates) {
     writes,
     connect: async () => client,
     query: async (sql, params) => {
+      if (/information_schema/.test(sql)) return { rows: [{ "?column?": 1 }] };
       if (/FROM "TaskAttachment"/.test(sql) && /SELECT/.test(sql))
         return { rows: candidates };
       if (/SET "purgeState"='PURGED'/.test(sql)) {
@@ -227,4 +228,22 @@ test("the scheduler refuses to run without a pool and storage", () => {
     null,
     "With the switch on and both dependencies it does schedule",
   );
+});
+
+
+test("without the tracking columns it reports but never deletes", async () => {
+  const pool = poolDouble([done({ id: "1" })]);
+  const base = pool.query;
+  pool.query = async (sql, params) => {
+    if (/information_schema/.test(sql)) return { rows: [] }; // columnas ausentes
+    return base(sql, params);
+  };
+  let touched = false;
+  const result = await runRetentionSweep(
+    pool,
+    { remove: async () => { touched = true; } },
+    { now, retentionDays: DEFAULT_RETENTION_DAYS, bucket },
+  );
+  assert.deepEqual(result, { claimed: 0, purged: 0, restored: 0 });
+  assert.equal(touched, false, "An unrecordable purge would be retried forever");
 });

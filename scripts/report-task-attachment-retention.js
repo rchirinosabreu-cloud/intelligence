@@ -1,11 +1,15 @@
 // Read-only report of what the retention sweep would delete. It opens no
 // write transaction and never touches storage, so it is safe to point at any
 // database, including production, to size the problem before enabling anything.
+// Reads .env so an operator can run it without exporting anything. That points
+// it at the real database by default, which is the point: it only reads.
+import 'dotenv/config';
 import pg from 'pg';
 import { pathToFileURL } from 'node:url';
 import {
   DEFAULT_RETENTION_DAYS,
-  reportRetentionPlan,
+  collectRetentionCandidates,
+  summarizePurgePlan,
   retentionCutoff,
 } from '../src/services/taskAttachmentRetentionService.js';
 
@@ -40,8 +44,34 @@ export function formatRetentionReport(plan, { retentionDays, cutoff, bucket }) {
     if (plan.purgeable.length > 15)
       lines.push(`  … y ${plan.purgeable.length - 15} más`);
   }
+  if (plan.skippedOrigins?.length) {
+    lines.push(
+      '',
+      'De los descartados por no estar en el bucket, de dónde vienen:',
+      '(si alguno es un bucket nuestro con otro nombre, esos archivos nunca se limpiarían)',
+    );
+    for (const [origin, count] of plan.skippedOrigins)
+      lines.push(`  ${count}  ${origin}`);
+  }
   lines.push('', 'Este informe no borró nada.');
   return lines.join('\n');
+}
+
+/** Where the files we refused to touch actually live. Only the origin and the
+ * first path segment, never the rest of the path. */
+export function skippedOrigins(rows, bucket) {
+  const counts = new Map();
+  for (const row of rows) {
+    let label = 'url ilegible';
+    try {
+      const url = new URL(row.url);
+      const first = url.pathname.split('/').filter(Boolean)[0] || '';
+      label = `${url.host}/${first}`;
+    } catch { /* keep the fallback label */ }
+    if (label.endsWith(`/${bucket}`)) continue;
+    counts.set(label, (counts.get(label) || 0) + 1);
+  }
+  return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 10);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
@@ -55,7 +85,12 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 10000, max: 2 });
   try {
     const now = new Date();
-    const plan = await reportRetentionPlan(pool, { now, retentionDays, limit, bucket });
+    const rows = await collectRetentionCandidates(pool, { now, retentionDays, limit });
+    const plan = summarizePurgePlan(rows, { now, retentionDays, bucket });
+    plan.skippedOrigins = skippedOrigins(rows, bucket);
+    // Say out loud which database was read, so nobody mistakes one for another.
+    const target = new URL(process.env.DATABASE_URL);
+    console.log(`Base consultada: ${target.host}${target.pathname}\n`);
     console.log(formatRetentionReport(plan, { retentionDays, cutoff: retentionCutoff(now, retentionDays), bucket }));
     if (plan.scanned === limit)
       console.log(`\nAviso: se alcanzó el límite de ${limit} filas revisadas; puede haber más.`);
