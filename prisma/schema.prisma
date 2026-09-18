@@ -954,12 +954,17 @@ model TaskAttachment {
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
   commentId String?
+  // Retention sweep: ACTIVE -> DELETING -> PURGED. The row outlives the file
+  // so the comment can say the attachment was removed instead of going blank.
+  purgeState String            @default("ACTIVE")
+  purgedAt   DateTime?
 
   task    Task         @relation(fields: [taskId], references: [id], onDelete: Cascade)
   comment TaskComment? @relation(fields: [commentId], references: [id], onDelete: Cascade)
 
   @@index([taskId])
   @@index([commentId])
+  @@index([purgeState], map: "TaskAttachment_purge_idx")
 }
 
 model TaskFollower {
