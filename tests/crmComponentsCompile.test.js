@@ -28,6 +28,7 @@ test('CRM screens use shared controls and brand tokens instead of local colors',
   for (const file of files) {
     const source = await readFile(file, 'utf8');
     assert.doesNotMatch(source, /<select[\s>]/, `${file} must use the shared Select`);
+    assert.doesNotMatch(source, /<input[^>]*\btype="(date|datetime-local|time)"/s, `${file} must use the shared BrainDatePicker`);
     assert.doesNotMatch(source, /\b(bg|text|border)-(red|rose)-\d{2,3}\b/, `${file} must use the destructive token for red`);
     assert.doesNotMatch(source, /#(E11D48|009EB9|009BBF|31AA8A|A8118C|FF6A68|FCD200)/i, `${file} must not hardcode brand hexadecimals`);
   }

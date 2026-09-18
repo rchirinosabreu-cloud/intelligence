@@ -1,4 +1,5 @@
 import Select from '@/components/ui/Select';
+import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import React, { useMemo, useState, useEffect } from 'react';
 import { X, Search, Filter, Loader2, CalendarDays, TaskReintegrateIcon } from '@/components/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
@@ -231,14 +232,14 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
 
             <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:min-w-[320px]">
                 <div className="relative flex-1">
-                    <CalendarDays className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-                    <input
-                        type="date"
+                    <CalendarDays className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+                    <BrainDatePicker
+                        ariaLabel="Fecha de las tareas realizadas"
                         value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
+                        onChange={value => setSelectedDate(value || todayStr)}
                         disabled={isGlobalSearchActive}
                         max={todayStr}
-                        className="w-full pl-9 pr-4 py-2 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-600 dark:text-white disabled:cursor-not-allowed disabled:opacity-45"
+                        className="pl-9 dark:bg-zinc-900"
                     />
                 </div>
 

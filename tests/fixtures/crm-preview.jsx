@@ -7,6 +7,7 @@ import { AuthProvider } from '@/context/AuthContext';
 import { ConfirmDialogProvider } from '@/components/ui/ConfirmDialog';
 import Sidebar from '@/components/layout/Sidebar';
 import { ThemeProvider } from '@/context/ThemeContext';
+import 'react-datepicker/dist/react-datepicker.css';
 import '@/index.css';
 
 const CrmLayout = lazy(() => import('@/components/modules/Crm/CrmLayout'));

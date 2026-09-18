@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import Select from '@/components/ui/Select';
+import { BrainDatePicker, BrainDateTimePicker } from '@/components/ui/BrainDatePicker';
 import { Button } from '@/components/ui/button';
 import { Loader2, Send } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
@@ -66,12 +67,12 @@ const CrmActivityForm = ({ leadId, defaultNextAction = '', compact = false, onSa
         </div>
         <div>
           <label className={labelClass} htmlFor={`crm-when-${leadId}`}>Fecha y hora</label>
-          <input id={`crm-when-${leadId}`} type="datetime-local" value={form.occurredAt} onChange={set('occurredAt')} className={inputClass} />
+          <BrainDateTimePicker id={`crm-when-${leadId}`} value={form.occurredAt} onChange={value => setForm(current => ({ ...current, occurredAt: value }))} />
         </div>
         {!compact && (
           <div>
             <label className={labelClass} htmlFor={`crm-follow-${leadId}`}>Próximo seguimiento</label>
-            <input id={`crm-follow-${leadId}`} type="date" value={form.nextFollowUpAt} onChange={set('nextFollowUpAt')} className={inputClass} />
+            <BrainDatePicker id={`crm-follow-${leadId}`} value={form.nextFollowUpAt} onChange={value => setForm(current => ({ ...current, nextFollowUpAt: value }))} isClearable />
           </div>
         )}
       </div>
@@ -93,7 +94,7 @@ const CrmActivityForm = ({ leadId, defaultNextAction = '', compact = false, onSa
         {compact ? (
           <div>
             <label className={labelClass} htmlFor={`crm-follow-${leadId}`}>Próximo seguimiento</label>
-            <input id={`crm-follow-${leadId}`} type="date" value={form.nextFollowUpAt} onChange={set('nextFollowUpAt')} className={inputClass} />
+            <BrainDatePicker id={`crm-follow-${leadId}`} value={form.nextFollowUpAt} onChange={value => setForm(current => ({ ...current, nextFollowUpAt: value }))} isClearable />
           </div>
         ) : null}
         <div className={cn('flex items-end', compact && 'sm:col-span-2 justify-end')}>

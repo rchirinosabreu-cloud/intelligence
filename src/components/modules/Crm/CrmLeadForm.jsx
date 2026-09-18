@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { toast } from 'react-hot-toast';
 import SlideOver from '@/components/ui/SlideOver';
 import Select from '@/components/ui/Select';
+import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import { Button } from '@/components/ui/button';
 import { Target, Loader2 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
@@ -109,7 +110,7 @@ const CrmLeadForm = ({ open, onOpenChange, lead = null, team = [], onSaved }) =>
               <input inputMode="numeric" value={form.quotedValue} onChange={set('quotedValue')} className={inputClass} placeholder="0" />
             </Field>
             <Field label="Próximo seguimiento">
-              <input type="date" value={form.nextFollowUpAt} onChange={set('nextFollowUpAt')} className={inputClass} />
+              <BrainDatePicker ariaLabel="Próximo seguimiento" value={form.nextFollowUpAt} onChange={value => setForm(current => ({ ...current, nextFollowUpAt: value }))} isClearable />
             </Field>
             <Field label="Próxima acción" className="sm:col-span-2">
               <input value={form.nextAction} onChange={set('nextAction')} className={inputClass} placeholder="Ej. Validar datos y hacer el primer contacto" />
@@ -135,10 +136,10 @@ const CrmLeadForm = ({ open, onOpenChange, lead = null, team = [], onSaved }) =>
                 <input value={form.allowedContact} onChange={set('allowedContact')} className={inputClass} />
               </Field>
               <Field label="Publicación / emisión de la oportunidad">
-                <input type="date" value={form.publishedAt} onChange={set('publishedAt')} className={inputClass} />
+                <BrainDatePicker ariaLabel="Publicación de la oportunidad" value={form.publishedAt} onChange={value => setForm(current => ({ ...current, publishedAt: value }))} isClearable />
               </Field>
               <Field label="Cierre de convocatoria">
-                <input type="date" value={form.callDeadlineAt} onChange={set('callDeadlineAt')} className={inputClass} />
+                <BrainDatePicker ariaLabel="Cierre de convocatoria" value={form.callDeadlineAt} onChange={value => setForm(current => ({ ...current, callDeadlineAt: value }))} isClearable />
               </Field>
               <Field label="Observaciones" className="sm:col-span-2">
                 <textarea rows={4} value={form.notes} onChange={set('notes')} className={cn(inputClass, 'resize-y')} placeholder="Contexto que no cabe en la bitácora." />
