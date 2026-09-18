@@ -54,6 +54,7 @@ import {
   changeChatDraft,
 } from "@/lib/teamChatDrafts";
 import { startChatRecording } from "@/lib/teamChatRecording";
+import { chatCueForIncoming, playChatCue } from "@/lib/teamChatSound";
 import "./teamChat.css";
 
 const button =
@@ -75,11 +76,30 @@ export default function TeamChat({
     () => providedClient || createTeamChatClient(),
     [providedClient],
   );
-  const chat = useTeamChat(client, currentUser.id);
+  // The stream fires outside render, so the cue reads the latest panel state
+  // from a ref instead of resubscribing whenever any of it changes.
+  const cueState = useRef({
+    panelOpen: false,
+    muted: false,
+    mutedChannels: new Set(),
+  });
+  const announce = useCallback(
+    (incoming) => {
+      const cue = chatCueForIncoming({
+        ...cueState.current,
+        messages: incoming,
+        userId: currentUser.id,
+      });
+      if (cue) playChatCue(cue);
+    },
+    [currentUser.id],
+  );
+  const chat = useTeamChat(client, currentUser.id, announce);
   const [initialUi] = useState(() => readChatUi(currentUser.id));
   const [open, setOpen] = useState(initialUi.open),
     [mode, setMode] = useState(initialUi.mode),
     [channelId, setChannelId] = useState(initialUi.channelId);
+  const [soundMuted, setSoundMuted] = useState(initialUi.muted);
   const [viewport, setViewport] = useState({
     width: window.innerWidth,
     height: window.visualViewport?.height || window.innerHeight,
@@ -117,9 +137,23 @@ export default function TeamChat({
     [dialogError, setDialogError] = useState("");
   const [newMessages, setNewMessages] = useState(false);
   useEffect(
-    () => writeChatUi(currentUser.id, { open, mode, channelId, position }),
-    [currentUser.id, open, mode, channelId, position],
+    () =>
+      writeChatUi(currentUser.id, {
+        open,
+        mode,
+        channelId,
+        position,
+        muted: soundMuted,
+      }),
+    [currentUser.id, open, mode, channelId, position, soundMuted],
   );
+  cueState.current = {
+    panelOpen: open,
+    muted: soundMuted,
+    mutedChannels: new Set(
+      chat.channels.filter((c) => c.muted).map((c) => c.id),
+    ),
+  };
   const [jumpTarget, setJumpTarget] = useState(null);
   const draftsRef = useRef(drafts),
     fileRef = useRef(fileMap),
@@ -1010,6 +1044,11 @@ export default function TeamChat({
                   }}
                 >
                   {selected?.muted ? "Activar avisos" : "Silenciar avisos"}
+                </DropdownMenuItem>
+                <DropdownMenuItem onSelect={() => setSoundMuted(!soundMuted)}>
+                  {soundMuted
+                    ? "Activar sonido del chat"
+                    : "Silenciar sonido del chat"}
                 </DropdownMenuItem>
                 {currentUser.role === "ADMIN" && (
                   <DropdownMenuItem

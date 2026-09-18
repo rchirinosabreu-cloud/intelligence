@@ -103,6 +103,27 @@ const downloads=[];dom.window.HTMLAnchorElement.prototype.click=function(){downl
 await React.act(async()=>document.querySelector('[aria-label="Descargar Foto.png"]').click());
 assert.deepEqual(calls.at(-1),['message','image-1']);assert.match(downloads[0],/download=1/);
 `],
+  ['enlarging an image stays inside the platform and reuses the same ticket', `
+const calls=[];const client={media:async (...args)=>{calls.push(args);return {url:'http://localhost/file?ticket=one'};}};
+const image={id:'image-1',name:'Foto.png',size:51200,mimeType:'image/png'};
+await render(h(Message,{message:{...message,attachments:[image]},userId:'ana',client}));
+await React.act(async()=>{for(const o of observers)o.cb([{isIntersecting:true}]);});await settle();
+assert.equal(document.querySelector('a[target="_blank"]'),null,'Enlarging never leaves the platform');
+const enlarge=document.querySelector('[aria-label="Ampliar Foto.png"]');
+assert.ok(enlarge,'The thumbnail offers an in-app viewer');
+assert.equal(enlarge.tagName,'BUTTON','Enlarging is an action, not a navigation');
+await React.act(async()=>enlarge.click());await settle();
+const dialog=document.querySelector('[role="dialog"]');
+assert.ok(dialog,'The viewer opens in the same window');
+const full=dialog.querySelector('img[alt="Foto.png"]');
+assert.ok(full,'The viewer shows the image itself');
+assert.equal(full.getAttribute('src'),'http://localhost/file?ticket=one');
+assert.equal(calls.length,1,'Opening the viewer reuses the resolved ticket');
+assert.ok(dialog.querySelector('[aria-label="Descargar Foto.png desde el visor"]'),'The viewer can download the original');
+await React.act(async()=>document.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));await settle();
+assert.equal(document.querySelector('[role="dialog"]'),null,'Escape closes the viewer');
+assert.ok(document.querySelector('img[alt="Foto.png"]'),'Closing the viewer keeps the thumbnail');
+`],
   ['small attachments display KB in messages and pending uploads', `
 const client={media:async()=>({url:'http://localhost/file?ticket=one'})};
 const file={id:'doc',name:'Documento.pdf',size:51200,mimeType:'application/pdf'};

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { mergeChatMessages } from "@/lib/teamChatState";
 
 // The subscription belongs to the layout, so changing modules never disconnects it.
-export default function useTeamChat(client, userId) {
+export default function useTeamChat(client, userId, onIncoming) {
   const [channels, setChannels] = useState([]),
     [roster, setRoster] = useState([]),
     [messages, setMessages] = useState({}),
@@ -10,6 +10,9 @@ export default function useTeamChat(client, userId) {
   const [revision, setRevision] = useState(0);
   const allowed = useRef(new Set()),
     alive = useRef(true);
+  // Held in a ref so a new callback identity never tears down the stream.
+  const notify = useRef(onIncoming);
+  notify.current = onIncoming;
   const merge = useCallback(
     (items) =>
       setMessages((previous) => {
@@ -69,10 +72,16 @@ export default function useTeamChat(client, userId) {
               failures = 0;
               receiveChannels(event.channels);
               if (event.type === "ready") setRevision((r) => r + 1);
-              else
-                merge(
-                  (event.events || []).map((e) => e.message).filter(Boolean),
+              else {
+                const incoming = (event.events || [])
+                  .map((e) => e.message)
+                  .filter(Boolean);
+                merge(incoming);
+                // Only channels this person still belongs to may announce.
+                notify.current?.(
+                  incoming.filter((m) => allowed.current.has(m.channelId)),
                 );
+              }
             },
           });
         } catch (error) {

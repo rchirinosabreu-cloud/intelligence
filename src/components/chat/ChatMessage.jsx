@@ -24,6 +24,7 @@ function Attachment({ file, messageId, client }) {
   const [url, setUrl] = useState(""),
     [error, setError] = useState(""),
     [loading, setLoading] = useState(false),
+    [viewer, setViewer] = useState(false),
     [speed, setSpeed] = useState(1);
   const media = useRef(null),
     container = useRef(null),
@@ -106,15 +107,20 @@ function Attachment({ file, messageId, client }) {
   return (
     <div ref={container} className={`my-2 min-w-0 rounded-lg border border-border bg-background p-2 ${isImage ? "w-fit max-w-[min(100%,20rem)]" : "max-w-full"}`}>
       {isImage && url && !error && (
-        <a href={url} target="_blank" rel="noreferrer" aria-label={`Ampliar ${file.name}`}>
+        <button
+          type="button"
+          className="mb-2 block cursor-zoom-in rounded"
+          aria-label={`Ampliar ${file.name}`}
+          onClick={() => setViewer(true)}
+        >
           <img
             alt={file.name}
             src={url}
             loading="lazy"
-            className="mb-2 max-h-64 max-w-full rounded object-contain"
+            className="max-h-64 max-w-full rounded object-contain"
             onError={() => setError("No se pudo mostrar la imagen. Inténtalo de nuevo o descarga el original.")}
           />
-        </a>
+        </button>
       )}
       {isImage && !url && !error && (
         <div className="mb-2 flex h-32 items-center justify-center rounded bg-muted text-xs text-muted-foreground" role="status">
@@ -157,6 +163,16 @@ function Attachment({ file, messageId, client }) {
           file={file}
           url={url}
           onClose={() => setUrl("")}
+          onDownload={() => open(true)}
+          downloading={loading}
+        />
+      )}
+      {/* Closing the enlarged image keeps the thumbnail and its ticket. */}
+      {isImage && url && viewer && (
+        <ChatFilePreview
+          file={file}
+          url={url}
+          onClose={() => setViewer(false)}
           onDownload={() => open(true)}
           downloading={loading}
         />
