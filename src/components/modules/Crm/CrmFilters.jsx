@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Select from '@/components/ui/Select';
+import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import { Search, X, Filter, ChevronDown } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { CRM_STAGES, CRM_ORIGINS, CRM_PRIORITIES, CRM_TRAFFIC_LIGHTS, inputClass } from './crmPresentation';
@@ -93,10 +94,10 @@ const CrmFilters = ({ filters, onChange, team = [], show = ['search', 'stage', '
         {has('dates') && (
           <>
             <Field label="Ingreso desde">
-              <input type="date" value={filters.from || ''} onChange={event => set('from', event.target.value)} className={inputClass} />
+              <BrainDatePicker ariaLabel="Ingreso desde" value={filters.from || ''} max={filters.to || undefined} onChange={value => set('from', value)} isClearable />
             </Field>
             <Field label="Ingreso hasta">
-              <input type="date" value={filters.to || ''} onChange={event => set('to', event.target.value)} className={inputClass} />
+              <BrainDatePicker ariaLabel="Ingreso hasta" value={filters.to || ''} min={filters.from || undefined} onChange={value => set('to', value)} isClearable />
             </Field>
           </>
         )}

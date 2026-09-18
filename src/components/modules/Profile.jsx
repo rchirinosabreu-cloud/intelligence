@@ -1,4 +1,5 @@
 import Select from '@/components/ui/Select';
+import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext';
@@ -656,11 +657,11 @@ const Profile = () => {
                                                 </div>
                                                 <div className="space-y-2">
                                                     <label className="text-xs font-bold uppercase tracking-wider text-zinc-500">Fecha de la Sesión</label>
-                                                    <input
-                                                        type="date"
+                                                    <BrainDatePicker
+                                                        ariaLabel="Fecha de la sesión"
                                                         value={newFeedback.date}
-                                                        onChange={e => setNewFeedback({...newFeedback, date: e.target.value})}
-                                                        className="w-full bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-primary/20 transition-all dark:text-white"
+                                                        onChange={value => setNewFeedback({...newFeedback, date: value})}
+                                                        className="px-4 py-3"
                                                     />
                                                 </div>
                                             </div>

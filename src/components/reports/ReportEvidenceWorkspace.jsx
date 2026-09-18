@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import Select from '@/components/ui/Select';
+import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import { formatEvidenceValue } from '@/lib/reportEvidenceFormat';
 import { buildReportPresentation } from '@/lib/reportPresentationModel';
 import { EditorialSummary, EditorialComment, EditorialStrategy } from './ReportEditorial';
@@ -110,8 +111,8 @@ function PanelEditor({ editing, onChange, onSave, onCancel, busy, stale }) {
       <label className="space-y-1 text-sm">Distribución del panel<Select aria-label="Distribución del panel" disabled={draft.excluded} value={draft.scope} onChange={event => update('scope', event.target.value)}>{Object.entries(scopeNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
       <label className="space-y-1 text-sm">Unidad o moneda del panel<input disabled={draft.excluded} className={field} value={draft.unit} onChange={event => update('unit', event.target.value)} /></label>
       <label className="space-y-1 text-sm">Contexto del panel<input disabled={draft.excluded} className={field} value={draft.contextKey} onChange={event => update('contextKey', event.target.value)} /></label>
-      <label className="space-y-1 text-sm">Inicio del período del panel<input disabled={draft.excluded} className={field} type="date" value={draft.period.start || ''} onChange={event => update('period', { ...draft.period, start: event.target.value })} /></label>
-      <label className="space-y-1 text-sm">Fin del período del panel<input disabled={draft.excluded} className={field} type="date" value={draft.period.end || ''} onChange={event => update('period', { ...draft.period, end: event.target.value })} /></label>
+      <div className="space-y-1 text-sm">Inicio del período del panel<BrainDatePicker ariaLabel="Inicio del período del panel" disabled={draft.excluded} className="min-h-11" value={draft.period.start || ''} onChange={value => update('period', { ...draft.period, start: value })} isClearable /></div>
+      <div className="space-y-1 text-sm">Fin del período del panel<BrainDatePicker ariaLabel="Fin del período del panel" disabled={draft.excluded} className="min-h-11" value={draft.period.end || ''} onChange={value => update('period', { ...draft.period, end: value })} isClearable /></div>
       <label className="space-y-1 text-sm sm:col-span-2">Motivo de la corrección del panel<textarea className={`${field} min-h-20`} value={draft.reason} required maxLength={1000} onChange={event => update('reason', event.target.value)} /></label>
     </fieldset><div className="mt-4 flex flex-wrap gap-2"><button className={primaryButton} type="submit" disabled={busy || stale}>Guardar panel</button><button className={button} type="button" disabled={busy} onClick={onCancel}>Cancelar edición del panel</button></div>
   </form>;
@@ -135,8 +136,8 @@ function ObservationEditor({ editing, onChange, onSave, onCancel, busy, stale })
       <label className="space-y-1 text-sm">Precisión<Select aria-label="Precisión" value={draft.precision} onChange={event => change('precision', event.target.value)}>{Object.entries(precisionNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
       <label className="space-y-1 text-sm">Unidad o moneda<input className={field} value={draft.unit} onChange={event => change('unit', event.target.value)} placeholder="count, %, COP, USD…" /></label>
       <label className="space-y-1 text-sm">Contexto de la cifra<input className={field} value={draft.contextKey} onChange={event => change('contextKey', event.target.value)} /></label>
-      <label className="space-y-1 text-sm">Inicio del período<input className={field} type="date" value={draft.period.start || ''} onChange={event => change('period', { ...draft.period, start: event.target.value })} /></label>
-      <label className="space-y-1 text-sm">Fin del período<input className={field} type="date" value={draft.period.end || ''} onChange={event => change('period', { ...draft.period, end: event.target.value })} /></label>
+      <div className="space-y-1 text-sm">Inicio del período<BrainDatePicker ariaLabel="Inicio del período" className="min-h-11" value={draft.period.start || ''} onChange={value => change('period', { ...draft.period, start: value })} isClearable /></div>
+      <div className="space-y-1 text-sm">Fin del período<BrainDatePicker ariaLabel="Fin del período" className="min-h-11" value={draft.period.end || ''} onChange={value => change('period', { ...draft.period, end: value })} isClearable /></div>
       <label className="flex min-h-11 items-center gap-2 self-end text-sm"><input className="h-4 w-4 accent-primary" type="checkbox" checked={draft.excluded} onChange={event => change('excluded', event.target.checked)} />Excluir esta observación</label>
       <label className="space-y-1 text-sm sm:col-span-2 lg:col-span-3">Motivo de la corrección<textarea className={`${field} min-h-20`} required maxLength={1000} value={draft.reason} onChange={event => change('reason', event.target.value)} placeholder="Explica qué comprobaste en la captura." /></label>
     </fieldset>

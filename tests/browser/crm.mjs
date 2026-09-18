@@ -56,12 +56,20 @@ test('desktop: logging a client answer updates the timeline, the next step and t
   try {
     await page.getByRole('heading', { name: 'Jaraba Ingeniería' }).waitFor();
     assert.match(await page.locator('main').innerText(), /Rojo/);
+    // The one calendar of the platform: react-datepicker with the brain skin and the hour column.
+    await page.getByLabel('Fecha y hora').click();
+    await page.locator('.brain-datepicker [data-brain-time-column]').waitFor();
+    assert.equal(await page.locator('.brain-datepicker .react-datepicker__current-month').innerText(), 'septiembre 2026');
+    await page.screenshot({ path: 'output/crm/desktop-light-calendario.png' });
+    await page.keyboard.press('Escape');
+    assert.equal(await page.locator('input[type="date"], input[type="datetime-local"]').count(), 0, 'no native date fields anywhere on the sheet');
     await page.getByRole('combobox', { name: 'Tipo de gestión' }).click();
     await page.getByRole('option', { name: 'Respuesta del cliente' }).click();
     await page.getByPlaceholder('Ej. Llamé a Catalina, revisamos el alcance del RFP.').fill('Víctor devolvió la llamada.');
     await page.getByPlaceholder('Ej. Enviará el RFP esta semana.').fill('Aprueba el alcance y pide dos cuotas.');
     await page.getByPlaceholder('Qué toca hacer después').fill('Enviar propuesta ajustada.');
-    await page.getByLabel('Próximo seguimiento').fill('2026-09-22');
+    await page.getByLabel('Próximo seguimiento').fill('22/09/2026');
+    await page.keyboard.press('Escape');
     await page.getByRole('button', { name: 'Registrar gestión' }).click();
     await page.getByText('Gestión registrada').waitFor();
     await page.locator('[data-crm-timeline]').getByText('Víctor devolvió la llamada.').waitFor();

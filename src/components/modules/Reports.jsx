@@ -1,4 +1,5 @@
 import Select from '@/components/ui/Select';
+import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import ReportEvidenceWorkspace from '@/components/reports/ReportEvidenceWorkspace';
 import ReportCurrencyField from '@/components/reports/ReportCurrencyField';
 import ReportHistory from '@/components/reports/ReportHistory';
@@ -1549,11 +1550,11 @@ const Reports = () => {
               <div className="grid grid-cols-2 gap-3">
                 <label className="space-y-1.5">
                   <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Desde</span>
-                  <input type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-700 dark:text-slate-100" />
+                  <BrainDatePicker ariaLabel="Desde" value={startDate} max={endDate} onChange={setStartDate} className="py-2.5 text-xs" />
                 </label>
                 <label className="space-y-1.5">
                   <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">Hasta</span>
-                  <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)} className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-3 py-2.5 text-xs text-slate-700 dark:text-slate-100" />
+                  <BrainDatePicker ariaLabel="Hasta" value={endDate} min={startDate} onChange={setEndDate} className="py-2.5 text-xs" />
                 </label>
               </div>
               <ReportCurrencyField value={reportCurrency} onChange={setReportCurrency} disabled={isGenerating} />

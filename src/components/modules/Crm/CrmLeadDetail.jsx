@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import PageHeader from '@/components/ui/PageHeader';
 import Select from '@/components/ui/Select';
+import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import { Button } from '@/components/ui/button';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -197,7 +198,7 @@ const CrmLeadDetail = () => {
                 </div>
                 <div>
                   <label className={labelClass} htmlFor="crm-next-date">Fecha</label>
-                  <input id="crm-next-date" type="date" value={nextStep.nextFollowUpAt} onChange={event => setNextStep({ ...nextStep, nextFollowUpAt: event.target.value })} className={inputClass} />
+                  <BrainDatePicker id="crm-next-date" value={nextStep.nextFollowUpAt} onChange={value => setNextStep({ ...nextStep, nextFollowUpAt: value })} isClearable />
                 </div>
                 <div className="flex gap-2">
                   <Button type="button" variant="ghost" onClick={() => setNextStep(null)}>Cancelar</Button>

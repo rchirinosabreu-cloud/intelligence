@@ -50,9 +50,9 @@ const CrmActivityTimeline = ({ activities = [], emptyMessage = 'Todavía no hay 
                 </p>
               )}
               {activity.author && (
-                <p className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-400">
+                <div className="mt-2 flex items-center gap-1.5 text-[11px] text-zinc-400">
                   <TeamAvatar member={activity.author} className="h-4 w-4" size={16} showTitle={false} /> {activity.author.name}
-                </p>
+                </div>
               )}
             </div>
           </li>
