@@ -6,6 +6,7 @@ import cors from 'cors';
 import fs from 'fs';
 import prisma from './src/lib/prisma.js';
 import { initTaskClassificationCron } from './src/services/taskClassificationService.js';
+import { startTaskAttachmentRetention } from './src/services/taskAttachmentRetentionService.js';
 import { initGoogleCalendarSyncScheduler } from './src/services/googleCalendarSyncScheduler.js';
 import { initAutomatedMinutesScheduler } from './src/services/automatedMinutesScheduler.js';
 import { initBriaMemoryScheduler } from './src/services/briaMemoryScheduler.js';
@@ -191,6 +192,7 @@ async function bootstrap() {
         initBriaMemoryScheduler();
         initBriaObserverScheduler();
         initBriaContentPlanReviewScheduler();
+        startTaskAttachmentRetention();
         console.log("[Service: Cron] Tareas en segundo plano inicializadas.");
     } catch (cronError) {
         console.error("[Service: Cron] Fallo al iniciar tareas programadas:", cronError.message);

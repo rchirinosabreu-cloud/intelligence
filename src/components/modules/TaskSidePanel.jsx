@@ -1455,6 +1455,30 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const renderCommentAttachment = (attachment, commentId) => {
         const visualMeta = getFileVisualMeta({ name: attachment.name, mimeType: attachment.mimeType });
         const FileIcon = visualMeta.icon;
+
+        // The file is gone but the comment keeps its place in the conversation:
+        // say so plainly instead of offering a preview that cannot load.
+        if (attachment.purgeState === 'PURGED') {
+            const purgedOn = attachment.purgedAt
+                ? new Date(attachment.purgedAt).toLocaleDateString('es-CO', { day: 'numeric', month: 'long', year: 'numeric' })
+                : null;
+            return (
+                <div key={attachment.id || attachment.url} className="mt-2 flex items-center gap-3 p-3 bg-zinc-50 dark:bg-zinc-950 border border-dashed border-zinc-300 dark:border-zinc-700 rounded-xl max-w-md">
+                    <div className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0 bg-zinc-200/60 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400">
+                        <FileIcon size={18} />
+                    </div>
+                    <div className="min-w-0">
+                        <p className="text-xs font-bold text-zinc-500 dark:text-zinc-400 line-through truncate" title={attachment.name || 'Adjunto'}>
+                            {attachment.name || 'Adjunto'}
+                        </p>
+                        <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-0.5">
+                            Archivo eliminado por limpieza automática{purgedOn ? ` el ${purgedOn}` : ''}
+                        </p>
+                    </div>
+                </div>
+            );
+        }
+
         const { previewUrl: fileUrl, downloadUrl } = commentFileUrls(getApiBaseUrl(), formData.id, commentId, attachment);
 
         return (
