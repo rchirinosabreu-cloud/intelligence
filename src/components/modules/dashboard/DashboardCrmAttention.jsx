@@ -32,7 +32,7 @@ const DashboardCrmAttention = ({ attention, className }) => {
   const counts = attention.counts || {};
 
   return (
-    <section className={cn('brain-glass flex flex-col p-0', className)} aria-labelledby="dashboard-crm-title">
+    <section className={cn('brain-glass flex min-w-0 flex-col overflow-hidden p-0', className)} aria-labelledby="dashboard-crm-title">
       <div className="flex items-center justify-between gap-4 border-b border-zinc-200/70 px-5 py-4 dark:border-white/10">
         <div className="flex items-center gap-3 min-w-0">
           <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-magenta/10 dark:bg-brand-magenta/15">
@@ -61,7 +61,7 @@ const DashboardCrmAttention = ({ attention, className }) => {
         </Button>
       </div>
 
-      <ul className="divide-y divide-zinc-200/70 dark:divide-white/10">
+      <ul className="min-w-0 divide-y divide-zinc-200/70 dark:divide-white/10">
         {items.map((item) => {
           const bucket = BUCKET_LABEL[item.followUpBucket] || null;
           const isRed = item.trafficLight === 'ROJO';
@@ -69,7 +69,7 @@ const DashboardCrmAttention = ({ attention, className }) => {
             <li key={item.id}>
               <a
                 href={`/crm/oportunidades/${item.id}`}
-                className="flex items-start gap-3 px-5 py-3 transition-colors hover:bg-white/60 dark:hover:bg-white/5"
+                className="flex min-w-0 items-start gap-3 px-5 py-3 transition-colors hover:bg-white/60 dark:hover:bg-white/5"
               >
                 <span
                   className={cn('mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full', LIGHT_DOT[item.trafficLight] || 'bg-zinc-300')}

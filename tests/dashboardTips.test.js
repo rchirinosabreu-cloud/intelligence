@@ -73,9 +73,20 @@ test('the dashboard renders the tip inside the personal reminders column and ali
 
   assert.match(dashboard, /<DashboardTip/);
   assert.ok(dashboard.indexOf('<DashboardTip') < dashboard.indexOf('<DashboardCrmAttention'), 'the tip opens the reminders column');
+  assert.ok(dashboard.indexOf('<DashboardAnnouncements') < dashboard.indexOf('<DashboardTip') && dashboard.indexOf('<DashboardTip') < dashboard.lastIndexOf('<AchievementsPanel'), 'the reminders column sits beside announcements, above the achievements row');
   assert.match(dashboard, /pickDashboardTip|dailyTip/, 'the tip comes from the tested selector');
   assert.match(tipWidget, /pickDashboardTip\(/);
   assert.match(tipWidget, /localStorage/, 'a dismissed tip stays hidden for the day on this device');
+  // Regression: an effect depending on `new Date()` re-rendered forever and froze the whole platform (18 Sep 2026).
+  assert.doesNotMatch(tipWidget, /useEffect/, 'no effects: the widget derives everything from props and a once-per-mount clock');
+  assert.match(tipWidget, /useRef\(now \|\| new Date\(\)\)/, 'the clock is fixed once per mount');
+  assert.match(tipWidget, /useState\(\(\) => readDismissed\(/, 'dismissals are read lazily in the initial state, never in an effect');
+  assert.doesNotMatch(tipWidget, /now = new Date\(\)/, 'no default parameter creating a new Date on every render');
+  for (const file of ['src/components/modules/dashboard/DashboardUpcomingTasks.jsx', 'src/components/modules/dashboard/DashboardMeetings.jsx']) {
+    const widget = readFileSync(file, 'utf8');
+    assert.doesNotMatch(widget, /\(\{[^}]*now = new Date\(\)[^}]*\}\)\s*=>/, `${file}: component props must not default the clock to a new Date per render`);
+    assert.match(widget, /useRef\(now \|\| new Date\(\)\)/, `${file}: the clock is fixed once per mount`);
+  }
   assert.match(tipWidget, /aria-label="Ocultar por hoy"/);
   assert.match(tipWidget, /brain-glass/);
   assert.match(dashboard, /xl:grid-cols-\[minmax\(0,1fr\)_minmax\(0,1fr\)_minmax\(300px,0\.85fr\)\]/, 'one three-column grid for the whole dashboard body');

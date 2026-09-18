@@ -330,88 +330,15 @@ const Dashboard = () => {
               />
             </motion.div>
 
-            <motion.section variants={item} data-achievements-feed className={cn(topDashboardPanelClass, 'flex min-w-0 flex-col p-0')} aria-labelledby="dashboard-achievements-title">
-              <div className="px-5 py-4 border-b border-zinc-200/70 dark:border-white/10 shrink-0">
-                <div className="flex items-center gap-3">
-                  <span className="w-9 h-9 rounded-xl bg-brand-yellow/20 dark:bg-brand-yellow/15 flex items-center justify-center">
-                    <CheckCircle2 className="w-[18px] h-[18px] text-brand-yellow-deep dark:text-brand-yellow" />
-                  </span>
-                  <div>
-                    <h3 id="dashboard-achievements-title" className="text-base font-semibold text-zinc-950 dark:text-white">Logros recientes</h3>
-                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Victorias del equipo hoy</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex-1 overflow-y-auto px-5 py-5 scroll-smooth custom-scrollbar min-h-0">
-                {completedFeed.length === 0 ? (
-                  <EmptyState icon={Trophy} title="Aún no hay logros hoy" description="Las tareas completadas por el equipo aparecerán aquí." />
-                ) : (
-                  completedFeed.map((task, idx) => (
-                    <div key={task.id || idx} data-completed-task-id={task.id} className="relative pl-5 pb-6 last:pb-0">
-                      {idx < completedFeed.length - 1 && (
-                        <div className="absolute left-[3.5px] top-2 w-px h-full bg-zinc-200 dark:bg-white/10" />
-                      )}
-                      <div className="absolute left-0 top-1.5 w-2 h-2 rounded-full bg-brand-green ring-4 ring-brand-green/15 z-10" />
-                      <div className="group">
-                        <div className="flex items-center gap-2 mb-1">
-                          {task.assignee ? (
-                            <TeamAvatar member={task.assignee} className="w-4 h-4" />
-                          ) : (
-                            <div className="w-4 h-4 rounded-full bg-brand-green/10 flex items-center justify-center">
-                              <div className="w-1.5 h-1.5 rounded-full bg-brand-green" />
-                            </div>
-                          )}
-                          <span className="text-[11px] text-brand-green-deep dark:text-brand-green block font-semibold truncate">
-                            {task.assignee ? task.assignee.name : 'Equipo'} completó:
-                          </span>
-                        </div>
-                        <h4 className="text-zinc-800 dark:text-zinc-200 text-sm font-semibold mb-1.5 line-clamp-2">
-                          {task.title}
-                        </h4>
-                        <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
-                          <div className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            {new Date(task.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                          {task.client && (
-                            <>
-                              <span className="mx-0.5 opacity-40">•</span>
-                              <div className="flex items-center gap-1.5">
-                                <ClientAvatar client={task.client} size={14} />
-                                <span className="truncate max-w-[72px] font-semibold text-zinc-500">{task.client.name}</span>
-                              </div>
-                            </>
-                          )}
-                        </div>
-                        <TaskRecognitionLabels task={task} />
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-
-              <div className="shrink-0 px-4 py-3 border-t border-zinc-200/70 dark:border-white/10 flex justify-center">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => setShowHistoryModal(true)}
-                  className="w-full rounded-lg text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors flex items-center gap-2 py-2"
-                >
-                  Ver historial completo
-                  <ArrowUpRight className="w-3 h-3" />
-                </Button>
-              </div>
-            </motion.section>
-
-            {/* Row 2: personal reminders and tips | upcoming work | cited meetings. Same height for the three. */}
-            {hasPersonalReminders && (
-              <motion.div variants={item} className="flex min-w-0 flex-col gap-5">
-                <DashboardTip dashboard={dashboard} user={tipUser} />
-                <DashboardCrmAttention attention={dashboard.crmAttention} className={cn(!selectedMember?.isCommunityManager && 'flex-1')} />
+            {/* Beside the announcements: the personal reminders (tip, crm, my clients) at the same height.
+                Without reminders, recent achievements take that place. */}
+            {hasPersonalReminders ? (
+              <motion.div variants={item} className={cn('flex min-w-0 flex-col gap-4 overflow-y-auto custom-scrollbar', topDashboardPanelClass, 'border-0 bg-transparent p-0 shadow-none backdrop-blur-0 dark:bg-transparent dark:ring-0')} aria-label="Recordatorios personales">
+                <DashboardTip dashboard={dashboard} user={tipUser} className="shrink-0" />
+                <DashboardCrmAttention attention={dashboard.crmAttention} className={cn('shrink-0', !selectedMember?.isCommunityManager && 'flex-1')} />
 
                 {selectedMember?.isCommunityManager && (
-                  <section className={cn(dashboardPanelClass, 'flex-1 p-6')} aria-labelledby="dashboard-clients-title">
+                  <section className={cn(dashboardPanelClass, 'min-w-0 flex-1 shrink-0 p-6')} aria-labelledby="dashboard-clients-title">
                     <div className="flex items-center gap-3 mb-5">
                       <FileText className="w-5 h-5 text-brand-cyan-deep dark:text-brand-cyan" />
                       <h3 id="dashboard-clients-title" className="text-lg font-semibold text-zinc-950 dark:text-white">Mis clientes</h3>
@@ -441,6 +368,13 @@ const Dashboard = () => {
                   </section>
                 )}
               </motion.div>
+            ) : (
+              <AchievementsPanel variants={item} feed={completedFeed} onOpenHistory={() => setShowHistoryModal(true)} className={topDashboardPanelClass} />
+            )}
+
+            {/* Row 2: recent achievements | upcoming work | cited meetings, all stretched to the same height. */}
+            {hasPersonalReminders && (
+              <AchievementsPanel variants={item} feed={completedFeed} onOpenHistory={() => setShowHistoryModal(true)} className={cn(dashboardPanelClass, 'max-h-[560px]')} />
             )}
 
             <motion.div variants={item} className={cn('flex min-w-0', !hasPersonalReminders && 'xl:col-span-2')}>
@@ -505,5 +439,84 @@ const Dashboard = () => {
     </motion.div>
   );
 };
+
+/** «Logros recientes»: the original completed-task feed of the team for today, with the full-history modal. */
+function AchievementsPanel({ feed, onOpenHistory, className, variants }) {
+  return (
+    <motion.section variants={variants} data-achievements-feed className={cn('flex min-w-0 flex-col overflow-hidden p-0', className)} aria-labelledby="dashboard-achievements-title">
+      <div className="px-5 py-4 border-b border-zinc-200/70 dark:border-white/10 shrink-0">
+        <div className="flex items-center gap-3">
+          <span className="w-9 h-9 rounded-xl bg-brand-yellow/20 dark:bg-brand-yellow/15 flex items-center justify-center">
+            <CheckCircle2 className="w-[18px] h-[18px] text-brand-yellow-deep dark:text-brand-yellow" />
+          </span>
+          <div>
+            <h3 id="dashboard-achievements-title" className="text-base font-semibold text-zinc-950 dark:text-white">Logros recientes</h3>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400">Victorias del equipo hoy</p>
+          </div>
+        </div>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-5 py-5 scroll-smooth custom-scrollbar min-h-0">
+        {feed.length === 0 ? (
+          <EmptyState icon={Trophy} title="Aún no hay logros hoy" description="Las tareas completadas por el equipo aparecerán aquí." />
+        ) : (
+          feed.map((task, idx) => (
+            <div key={task.id || idx} data-completed-task-id={task.id} className="relative pl-5 pb-6 last:pb-0">
+              {idx < feed.length - 1 && (
+                <div className="absolute left-[3.5px] top-2 w-px h-full bg-zinc-200 dark:bg-white/10" />
+              )}
+              <div className="absolute left-0 top-1.5 w-2 h-2 rounded-full bg-brand-green ring-4 ring-brand-green/15 z-10" />
+              <div className="group">
+                <div className="flex items-center gap-2 mb-1">
+                  {task.assignee ? (
+                    <TeamAvatar member={task.assignee} className="w-4 h-4" />
+                  ) : (
+                    <div className="w-4 h-4 rounded-full bg-brand-green/10 flex items-center justify-center">
+                      <div className="w-1.5 h-1.5 rounded-full bg-brand-green" />
+                    </div>
+                  )}
+                  <span className="text-[11px] text-brand-green-deep dark:text-brand-green block font-semibold truncate">
+                    {task.assignee ? task.assignee.name : 'Equipo'} completó:
+                  </span>
+                </div>
+                <h4 className="text-zinc-800 dark:text-zinc-200 text-sm font-semibold mb-1.5 line-clamp-2">
+                  {task.title}
+                </h4>
+                <div className="flex items-center gap-2 text-xs text-zinc-400 dark:text-zinc-500">
+                  <div className="flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {new Date(task.completedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </div>
+                  {task.client && (
+                    <>
+                      <span className="mx-0.5 opacity-40">•</span>
+                      <div className="flex items-center gap-1.5">
+                        <ClientAvatar client={task.client} size={14} />
+                        <span className="truncate max-w-[72px] font-semibold text-zinc-500">{task.client.name}</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+                <TaskRecognitionLabels task={task} />
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="shrink-0 px-4 py-3 border-t border-zinc-200/70 dark:border-white/10 flex justify-center">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={onOpenHistory}
+          className="w-full rounded-lg text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white transition-colors flex items-center gap-2 py-2"
+        >
+          Ver historial completo
+          <ArrowUpRight className="w-3 h-3" />
+        </Button>
+      </div>
+    </motion.section>
+  );
+}
 
 export default Dashboard;
