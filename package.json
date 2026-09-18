@@ -26,7 +26,8 @@
     "storage:configure-cors": "node scripts/configure-storage-cors.js",
     "test:activity-build": "node --test tests/activityComponentsCompile.test.js",
     "eval:bria": "node scripts/eval-bria-reviews.js",
-    "storage:retention-report": "node scripts/report-task-attachment-retention.js"
+    "storage:retention-report": "node scripts/report-task-attachment-retention.js",
+    "storage:retention-sweep": "node scripts/run-task-attachment-retention.js"
   },
   "prisma": {
     "seed": "node scripts/sync_service_catalog.js"

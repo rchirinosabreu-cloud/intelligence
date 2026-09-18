@@ -43,7 +43,17 @@ Dos variables de entorno:
 | `TASK_ATTACHMENT_RETENTION_ENABLED` | Solo el valor exacto `true` activa el barrido. Cualquier otra cosa lo deja apagado. |
 | `TASK_ATTACHMENT_RETENTION_DAYS` | Días de plazo. Por defecto 30. Un valor inválido o menor que 1 vuelve al valor por defecto. |
 
-El barrido corre cada 6 horas y procesa como máximo 200 archivos por pasada.
+El barrido corre cada 6 horas y procesa como máximo 200 archivos por pasada. **No se ejecuta al arrancar**: solo programa el temporizador, así que encender la variable no borra nada de inmediato.
+
+### Ejecutar una pasada a mano
+
+Para no esperar al temporizador —recomendable la primera vez, para verlo— existe una pasada supervisada:
+
+```powershell
+npm run storage:retention-sweep -- --confirm BORRAR
+```
+
+Exige **dos** confirmaciones independientes: la misma variable que obedece el temporizador, y la palabra exacta en la línea de comandos. Ninguna de las dos basta por sí sola. Antes de borrar imprime la base, el bucket, el plazo y cuántos archivos va a eliminar, y al terminar informa de borrados y reintentables.
 
 **La primera ejecución no borra «el mes pasado»: borra todo el acumulado anterior al plazo.** En una instalación con meses de historia eso puede ser mucho de una sola vez. Por eso viene apagado y existe el informe.
 
