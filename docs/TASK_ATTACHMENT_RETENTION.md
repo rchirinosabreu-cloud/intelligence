@@ -12,6 +12,7 @@ No toca los archivos del chat de equipo: ese módulo tiene su propio barrido de 
 
 Un adjunto es candidato cuando se cumplen **todas** estas condiciones:
 
+- El archivo se subió **en un comentario** de la tarea, es decir, en la conversación. Los archivos de referencia colgados directamente en la card (`commentId` nulo) no se tocan: pertenecen a la tarea, no al hilo que la discutió.
 - La tarea está en `REALIZADA`.
 - `Task.completedAt` es anterior al corte (por defecto 30 días).
 - El adjunto está en `ACTIVE`, es decir, no se procesó antes.
@@ -67,5 +68,6 @@ El informe no estima espacio liberado: `TaskAttachment` no guarda el tamaño del
 
 ## Límites conocidos
 
-- Alcance actual: adjuntos de tareas, tanto de comentarios como de la tarea misma. Los adjuntos de referencia de una tarea terminada también entran; si conviene conservarlos, hay que separarlos por `category`.
+- Alcance actual: solo adjuntos de comentarios. Los archivos de referencia de la card quedan fuera por diseño; si alguna vez conviene incluirlos, es un cambio consciente, no un descuido.
+- Medición del 18 de septiembre de 2026 contra la base productiva: 65 candidatos, los 65 en conversaciones, ninguno suelto en una card. Los enlaces externos (Drive, Docs, Instagram, Canva, LinkedIn) estaban todos a nivel de card y ya quedaban fuera por partida doble.
 - El informe tiene un tope de 5.000 filas revisadas, configurable con `TASK_ATTACHMENT_RETENTION_REPORT_LIMIT`, y avisa cuando lo alcanza.

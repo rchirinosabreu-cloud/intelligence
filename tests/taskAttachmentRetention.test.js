@@ -18,6 +18,7 @@ const stored = (key) => `https://t3.storageapi.dev/${bucket}/${key}`;
 const done = (over) => ({
   id: "a1",
   url: stored("tasks/foto.png"),
+  commentId: "comentario-1",
   purgeState: "ACTIVE",
   taskStatus: "REALIZADA",
   completedAt: new Date("2026-08-01T12:00:00Z"),
@@ -56,6 +57,13 @@ test("a reopened task is never swept, because completedAt goes back to null", ()
   const decision = decide(done({ taskStatus: "PENDIENTE", completedAt: null }));
   assert.equal(decision.purge, false);
   assert.equal(decision.reason, "task-not-completed");
+});
+
+test("only files posted in the conversation are swept, not references on the card", () => {
+  const decision = decide(done({ commentId: null }));
+  assert.equal(decision.purge, false);
+  assert.equal(decision.reason, "not-a-conversation-file");
+  assert.equal(decide(done({ commentId: "comentario-9" })).purge, true);
 });
 
 test("a completed task with no completion date is left alone instead of guessed", () => {

@@ -44,6 +44,16 @@ export function formatRetentionReport(plan, { retentionDays, cutoff, bucket }) {
     if (plan.purgeable.length > 15)
       lines.push(`  … y ${plan.purgeable.length - 15} más`);
   }
+  if (plan.byPlacement) {
+    lines.push(
+      '',
+      'De los que se borrarían, dónde están colgados:',
+      `  ${plan.byPlacement.conversation}  en la conversación del pendiente (un comentario)`,
+      `  ${plan.byPlacement.card}  sueltos en la card, sin comentario`,
+    );
+    for (const [category, count] of plan.byPlacement.categories)
+      lines.push(`       de esos, ${count} con categoría ${category}`);
+  }
   if (plan.skippedOrigins?.length) {
     lines.push(
       '',
@@ -88,6 +98,20 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     const rows = await collectRetentionCandidates(pool, { now, retentionDays, limit });
     const plan = summarizePurgePlan(rows, { now, retentionDays, bucket });
     plan.skippedOrigins = skippedOrigins(rows, bucket);
+
+    // A comment attachment and a file dropped straight on the card are not the
+    // same thing to the person who uploaded them; count them apart.
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    const doomed = plan.purgeable.map((item) => byId.get(item.id)).filter(Boolean);
+    const onCard = doomed.filter((row) => !row.commentId);
+    const categories = new Map();
+    for (const row of onCard)
+      categories.set(row.category, (categories.get(row.category) || 0) + 1);
+    plan.byPlacement = {
+      conversation: doomed.length - onCard.length,
+      card: onCard.length,
+      categories: [...categories.entries()].sort((a, b) => b[1] - a[1]),
+    };
     // Say out loud which database was read, so nobody mistakes one for another.
     const target = new URL(process.env.DATABASE_URL);
     console.log(`Base consultada: ${target.host}${target.pathname}\n`);

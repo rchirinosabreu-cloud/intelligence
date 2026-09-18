@@ -42,6 +42,9 @@ export function purgeDecision(
     return keep("already-handled");
   if (attachment.taskStatus !== COMPLETED_STATUS)
     return keep("task-not-completed");
+  // Only files posted in the conversation. A reference dropped straight on the
+  // card is part of the task itself, not of the thread that discussed it.
+  if (!attachment.commentId) return keep("not-a-conversation-file");
   if (!attachment.completedAt) return keep("no-completion-date");
 
   const completedAt = new Date(attachment.completedAt);
@@ -86,12 +89,13 @@ export const retentionDaysFrom = (env = process.env) => {
 };
 
 const candidateSql = (tracked) => `
-  SELECT a.id, a.url, a.name,
+  SELECT a.id, a.url, a.name, a."commentId", a.category::text AS category,
          ${tracked ? 'a."purgeState"' : `'ACTIVE' AS "purgeState"`},
          t.status::text AS "taskStatus", t."completedAt"
   FROM "TaskAttachment" a
   JOIN "Task" t ON t.id = a."taskId"
   WHERE ${tracked ? `a."purgeState" = 'ACTIVE' AND ` : ""}t.status::text = $1
+    AND a."commentId" IS NOT NULL
     AND t."completedAt" IS NOT NULL
     AND t."completedAt" < $2
   ORDER BY t."completedAt" ASC
