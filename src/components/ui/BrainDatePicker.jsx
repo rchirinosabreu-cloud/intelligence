@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useRef } from 'react';
 import DatePicker from 'react-datepicker';
-import 'react-datepicker/dist/react-datepicker.css';
+// The picker stylesheet is loaded once by src/main.jsx (and by each local preview fixture).
 import {
   brainDatePickerProps, dateKeyToPickerDate, pickerDateToKey, splitDateTimeKey, joinDateTimeKey,
   formatDateTimeText, parseDateTimeText, QUARTER_HOURS
