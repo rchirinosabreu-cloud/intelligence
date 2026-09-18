@@ -1,6 +1,8 @@
 # Limpieza periódica de adjuntos de tareas
 
-Estado al 18 de septiembre de 2026: implementado y **desactivado**. Ningún archivo se borra hasta que alguien encienda el interruptor de forma explícita. La verificación descrita aquí es local; no certifica el comportamiento en producción.
+Estado al 18 de septiembre de 2026: implementado, **activo en producción** y con la primera pasada ya ejecutada.
+
+`TASK_ATTACHMENT_RETENTION_ENABLED=true` está puesta en Railway. El barrido automático corre cada 6 horas con el plazo por defecto de 30 días. Para detenerlo basta poner esa variable en `false`; no devuelve lo ya borrado.
 
 ## Qué resuelve
 
@@ -74,7 +76,22 @@ El informe no estima espacio liberado: `TaskAttachment` no guarda el tamaño del
 - `tests/taskAttachmentRetention.test.js`: 17 pruebas. Cubren el corte y su frontera, tareas reabiertas, fechas ausentes, archivos ajenos al bucket, el reclamo bajo bloqueo, la recuperación ante fallo de almacenamiento, el objeto ya inexistente y que el interruptor venga apagado.
 - Esquema aplicado dos veces seguidas contra PostgreSQL local para comprobar que es idempotente.
 - Informe ejecutado contra un escenario sembrado con cinco adjuntos: detectó los 2 que correspondían, descartó el enlace externo e ignoró los de la tarea reciente y la pendiente.
-- **No se ha ejecutado ningún barrido real**: el borrado solo se probó con dobles de almacenamiento.
+### Primera ejecución real · 18 de septiembre de 2026
+
+Ejecutada a mano desde la consola de Railway con `npm run storage:retention-sweep -- --confirm BORRAR`, contra `postgres.railway.internal` y el bucket `chat-evidence-cjupwwro9k`:
+
+```
+Se van a borrar 66 archivos de conversaciones de pendientes cerrados.
+Reclamados: 66
+Borrados:   66
+Reintentables: 0
+```
+
+El informe posterior devolvió 0 candidatos: el acumulado quedó limpio. Fueron 66 y no los 65 del informe previo porque una tarea más cruzó el plazo entre una cosa y otra, que es el comportamiento esperado de una regla que cuenta días.
+
+### Aviso en el comentario
+
+Comprobado en la aplicación real, con un adjunto `PURGED` sembrado en local: el comentario conserva su texto y el adjunto aparece con borde discontinuo, icono atenuado, nombre tachado y la frase «Archivo eliminado por limpieza automática el 17 de septiembre de 2026». Sin botones de vista previa ni descarga. Verificado en tema claro y oscuro; contraste legible en ambos.
 
 ## Límites conocidos
 
