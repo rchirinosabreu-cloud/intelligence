@@ -1,7 +1,6 @@
 import Select from '@/components/ui/Select';
 import React, { useEffect, useRef, useState } from 'react';
 import { Edit2, History, Loader2, Megaphone, Plus, Send, Trash2, X } from '@/components/ui/icons';
-import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/button';
 import DateDivider from '@/components/ui/DateDivider';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -38,13 +37,14 @@ const groupAnnouncementsByDate = (announcements) => announcements.reduce((groups
 const AnnouncementCard = ({ announcement, compact = false, showDate = true, canManage = false, onEdit, onDelete, isSubmitting = false }) => {
   const isPersonal = announcement.scope === 'MEMBER';
 
+  // General announcements are for the whole team: soft cyan surface with a full border and larger text. Personal ones stay neutral.
   return (
     <article
       className={cn(
-        'rounded-lg p-4',
+        'rounded-xl border p-4',
         isPersonal
-          ? 'border border-violet-200/80 bg-violet-50/80 dark:border-violet-500/20 dark:bg-violet-500/10 shadow-sm'
-          : 'border border-zinc-200 dark:border-zinc-800 bg-zinc-50/80 dark:bg-zinc-950/45',
+          ? 'border-zinc-200/80 bg-white/70 dark:border-white/10 dark:bg-zinc-950/40'
+          : 'border-brand-cyan/30 bg-brand-cyan/[0.07] dark:border-brand-cyan/30 dark:bg-brand-cyan/10',
         compact && 'p-3.5'
       )}
     >
@@ -56,12 +56,12 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
               size={28}
               className="w-7 h-7 ring-2 ring-white dark:ring-zinc-900"
             />
-            <span className="text-xs font-semibold text-violet-950 dark:text-violet-100 truncate">
+            <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 truncate">
               {announcement.author?.name || 'Equipo Brainstudio'}
             </span>
           </div>
         ) : (
-          <span className="text-[10px] uppercase font-bold text-primary">
+          <span className="text-[10px] uppercase tracking-wider font-bold text-brand-cyan-deep dark:text-brand-cyan">
             Anuncio general
           </span>
         )}
@@ -77,10 +77,7 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
                 type="button"
                 onClick={() => onEdit?.(announcement)}
                 disabled={isSubmitting}
-                className={cn(
-                  'w-8 h-8 rounded-lg flex items-center justify-center transition-colors',
-                  isPersonal ? 'text-violet-400 hover:bg-violet-100 dark:hover:bg-violet-500/15 hover:text-violet-700 dark:hover:text-violet-300' : 'text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary'
-                )}
+                className="w-8 h-8 rounded-lg flex items-center justify-center transition-colors text-zinc-400 hover:bg-zinc-200 dark:hover:bg-zinc-800 hover:text-primary"
                 title="Editar anuncio"
                 aria-label="Editar anuncio"
               >
@@ -104,9 +101,9 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
         </div>
       </div>
       <div className={cn(
-        '[&>div]:!text-sm [&>div]:!leading-6',
-        isPersonal && '[&_*]:!text-zinc-800 dark:[&_*]:!text-zinc-100 [&_mark]:!bg-violet-200/70 dark:[&_mark]:!bg-violet-500/25',
-        compact && 'max-h-[96px] overflow-hidden'
+        !isPersonal ? '[&>div]:!text-base [&>div]:!leading-7 [&_*]:!text-zinc-900 dark:[&_*]:!text-zinc-50' : '[&>div]:!text-sm [&>div]:!leading-6 [&_*]:!text-zinc-800 dark:[&_*]:!text-zinc-100',
+        '[&_mark]:!bg-brand-yellow/50 dark:[&_mark]:!bg-brand-yellow/30',
+        compact && 'max-h-[104px] overflow-hidden'
       )}>
         <RichCommentContent content={announcement.content} />
       </div>
@@ -239,14 +236,14 @@ const DashboardAnnouncements = ({
 
   return (
     <>
-      <Card className={cn(className, 'p-0 flex flex-col min-h-[360px]')}>
-        <div className="flex items-center justify-between gap-4 px-5 py-5 border-b border-zinc-100 dark:border-zinc-800">
+      <section className={cn('brain-glass', className, 'p-0 flex flex-col min-h-[360px]')} aria-labelledby="dashboard-announcements-title">
+        <div className="flex items-center justify-between gap-4 px-5 py-4 border-b border-zinc-200/70 dark:border-white/10">
           <div className="flex items-center gap-3 min-w-0">
-            <span className="w-9 h-9 rounded-lg bg-primary/10 dark:bg-primary/15 flex items-center justify-center shrink-0">
-              <Megaphone className="w-[18px] h-[18px] text-primary" />
+            <span className="w-9 h-9 rounded-xl bg-brand-cyan/10 dark:bg-brand-cyan/15 flex items-center justify-center shrink-0">
+              <Megaphone className="w-[18px] h-[18px] text-brand-cyan-deep dark:text-brand-cyan" />
             </span>
             <div className="min-w-0">
-              <h3 className="text-base font-semibold text-zinc-950 dark:text-white">Anuncios</h3>
+              <h3 id="dashboard-announcements-title" className="text-base font-semibold text-zinc-950 dark:text-white">Anuncios</h3>
               <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate">Información importante de esta semana</p>
             </div>
           </div>
@@ -277,13 +274,13 @@ const DashboardAnnouncements = ({
           )}
         </div>
 
-        <div className="px-4 py-3 border-t border-zinc-100 dark:border-zinc-800">
+        <div className="px-4 py-3 border-t border-zinc-200/70 dark:border-white/10">
           <Button variant="ghost" size="sm" className="w-full gap-2 rounded-lg" onClick={() => openHistory(false)}>
             <History className="w-4 h-4" />
             Ver historial de anuncios
           </Button>
         </div>
-      </Card>
+      </section>
 
       <SlideOver
         open={isOpen}

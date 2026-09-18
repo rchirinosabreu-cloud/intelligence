@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
+const strip = (value) => value.normalize('NFD').replace(/\p{Diacritic}/gu, '');
+
 test('Dashboard loads own personal dashboard and keeps team selection admin-only', () => {
   const source = readFileSync('src/components/modules/Dashboard.jsx', 'utf8');
 
@@ -9,54 +11,39 @@ test('Dashboard loads own personal dashboard and keeps team selection admin-only
   assert.match(source, /\/api\/dashboard\/personal/, 'Dashboard should call the personal dashboard API.');
   assert.match(source, /canViewTeamDashboards/, 'Only admins should be able to view other personal dashboards.');
   assert.match(source, /selectedUserId/, 'Admins should be able to select a team member dashboard.');
-  assert.match(source, /Radar de Foco/, 'The old threat language should be replaced by Radar de Foco.');
 });
 
-test('Dashboard presents adoption-oriented sections', () => {
+test('Dashboard greets the person and shows the task summary as brand gradient tiles', () => {
   const source = readFileSync('src/components/modules/Dashboard.jsx', 'utf8');
 
-  for (const label of ['Reto de la semana', 'Proximos pendientes', 'Logros recientes']) {
-    assert.match(source.normalize('NFD').replace(/\p{Diacritic}/gu, ''), new RegExp(label), `Dashboard should render ${label}.`);
+  assert.match(source, /Hola, \{/, 'The dashboard greets the person by first name.');
+  assert.doesNotMatch(source, /Foco del equipo/, 'The old headline is gone.');
+  for (const label of ['Activas', 'Para hoy', 'Vencidas', 'Devueltas', 'Logros hoy']) {
+    assert.match(source, new RegExp(label), `The task summary keeps the ${label} tile.`);
   }
-  assert.doesNotMatch(source, /Tu foco de hoy/i, 'The redundant focus eyebrow should not appear above the member name.');
-  assert.doesNotMatch(source, /Centro de adopci/i, 'The dashboard should not display the Centro de adopcion eyebrow.');
+  assert.match(source, /brain-gradient-primary/, 'Tiles use the official brand gradients.');
+  assert.match(source, /brain-gradient-energy/, 'Tiles use more than the cyan gradient.');
+  assert.doesNotMatch(source, /(bg|text|border|from|to|via)-(violet|indigo|purple|fuchsia|sky|emerald|amber|rose|orange)-\d/, 'No legacy Tailwind hues: only brand tokens (decision of 18 September 2026).');
+  assert.doesNotMatch(source, /surface: '[^']*(yellow|sunrise|spectrum)/, 'No yellow on the summary tiles (Rodny, 18 September 2026).');
+  assert.doesNotMatch(source, /#[0-9a-fA-F]{6}\b/, 'No local hexadecimal colors.');
+  assert.match(source, /brain-glass/, 'Panels use the approved glass surface.');
+  assert.match(source, /brain-ambient/, 'The page carries the soft brand ambient behind the glass.');
+});
+
+test('Dashboard presents adoption-oriented sections without the retired widgets', () => {
+  const source = readFileSync('src/components/modules/Dashboard.jsx', 'utf8');
+
+  assert.match(strip(source), /Logros recientes/, 'Dashboard should render Logros recientes.');
+  assert.match(source, /<DashboardUpcomingTasks/, 'Dashboard should render the upcoming tasks widget.');
+  assert.match(strip(readFileSync('src/components/modules/dashboard/DashboardUpcomingTasks.jsx', 'utf8')), /Proximos pendientes/, 'The widget should render Proximos pendientes.');
+  assert.doesNotMatch(source, /Tu foco de hoy/i);
+  assert.doesNotMatch(source, /Centro de adopci/i);
   assert.doesNotMatch(source, /Mis tareas de hoy/, 'Dashboard should not duplicate the adopted Gestion task module.');
   assert.match(source, /Ver historial completo/, 'Recent achievements should expose the full history.');
   assert.match(source, /CompletedTasksHistoryModal/, 'Recent achievements should use the original full-history modal.');
   assert.match(source, /setShowHistoryModal/, 'Recent achievements should keep the original modal state.');
-  assert.doesNotMatch(source, /showAchievementsHistory/, 'Recent achievements should not use the rebuilt inline history.');
-  assert.match(source, /const balancedDashboardGridClass/, 'Dashboard should define one shared grid for visual symmetry.');
-  assert.ok(
-    (source.match(/balancedDashboardGridClass/g) || []).length >= 4,
-    'Profile/Radar/Upcoming should align with Challenge/Achievements/Announcements using the same 65/35 grid.'
-  );
-  assert.match(source, /weeklyHabit\?\.isEmpty/, 'The weekly challenge should render a dedicated empty state for roles without a challenge.');
-  assert.match(
-    source.normalize('NFD').replace(/\p{Diacritic}/gu, ''),
-    /Aun no tienes retos para esta semana/i,
-    'The empty weekly challenge should explain that no challenge is assigned.'
-  );
-  assert.match(source, /data-weekly-challenge/, 'The weekly challenge should expose its dedicated visual surface.');
-  assert.match(source, /bg-gradient-to-br/, 'The weekly challenge should use a restrained directional gradient.');
-  assert.match(source, /from-violet-600/, 'The weekly challenge should return to the lighter branded tone.');
-  assert.match(source, /to-violet-700/, 'The weekly challenge gradient should remain subtle and tonal.');
-  assert.match(source, /text-white/, 'The solid weekly challenge should preserve readable contrast.');
-  assert.doesNotMatch(source, /brainstudio-mascot-seated\.png/, 'The weekly challenge should remain visually restrained without an illustration.');
-  assert.match(
-    source,
-    /weeklyHabit\?\.isEmpty[\s\S]*?src="\/chill-cat\.png"/,
-    'The relaxed cat should appear only when no weekly challenge is assigned.'
-  );
-  assert.match(
-    source,
-    /className="[^"]*text-xs[^"]*"[\s\S]*?Aún no tienes retos para esta semana/,
-    'The empty challenge message should sit below the illustration with quieter typography.'
-  );
-  assert.match(
-    source,
-    /weeklyHabit\?\.progress === null/,
-    'A configured challenge with no weekly activity should render a neutral state instead of a false 0% score.'
-  );
+  assert.doesNotMatch(source, /showAchievementsHistory/);
+  assert.doesNotMatch(source, /chill-cat\.png|weeklyHabit|Radar de Foco|expandedFocusCards|getFocusItemUrl/, 'Weekly challenge and focus radar are retired.');
 });
 
 test('Dashboard includes community manager account leadership widgets', () => {
@@ -69,14 +56,10 @@ test('Dashboard includes community manager account leadership widgets', () => {
   assert.match(source, /\/api\/dashboard\/announcements/, 'Dashboard should create dashboard announcements through the dashboard API.');
   assert.match(source, /\/api\/dashboard\/clients\/.*responsible/, 'Dashboard should assign client owners through the dashboard API.');
   assert.match(source, /Community Manager/i, 'Dashboard should filter assignment targets by Community Manager role.');
-  assert.match(
-    source,
-    /selectedMember\?\.isCommunityManager\s*&&/,
-    'Mis clientes should render only for the selected Community Manager.'
-  );
+  assert.match(source, /selectedMember\?\.isCommunityManager\s*&&/, 'Mis clientes should render only for the selected Community Manager.');
   assert.doesNotMatch(source, />Crear anuncio</, 'Announcement creation should live inside the announcement panel, not a separate widget.');
   assert.ok(
-    source.indexOf('<DashboardAnnouncements') < source.indexOf('Próximos pendientes'),
+    source.indexOf('<DashboardAnnouncements') < source.indexOf('<DashboardUpcomingTasks'),
     'Announcements should occupy the wide left column before upcoming work on the right.'
   );
 });
@@ -88,7 +71,11 @@ test('Dashboard announcement panel supports rich, private and historical announc
   assert.match(source, /Anuncio general/, 'Global announcements should use the requested label.');
   assert.doesNotMatch(source, />Directo</, 'Personal announcements should not expose a label.');
   assert.doesNotMatch(source, /isPersonal\s*\?\s*'bg-zinc-900/, 'Personal announcements should not use a black surface.');
-  assert.match(source, /bg-violet-50/, 'Personal announcements should use a softer branded surface.');
+  assert.doesNotMatch(source, /violet-/, 'Personal announcements no longer use the retired violet hue.');
+  assert.match(source, /isPersonal[\s\S]*?brand-cyan|brand-cyan[\s\S]*?isPersonal/, 'General announcements are highlighted in brand cyan.');
+  assert.doesNotMatch(source, /border-l-4|border-l-\[/, 'No left-only bands: full soft borders (decision of Rodny, 18 September 2026).');
+  assert.doesNotMatch(source, /brand-magenta/, 'Announcements no longer use magenta.');
+  assert.match(source, /!isPersonal[^\n]*text-base|text-base[^\n]*!isPersonal|isGeneral[^\n]*text-base|text-base[^\n]*isGeneral/, 'General announcements for the whole team read larger than personal ones.');
   assert.match(source, /TeamAvatar/, 'Personal announcements should identify their author with the shared avatar.');
   assert.match(source, /announcement\.author/, 'The announcement author should drive the displayed avatar and identity.');
   assert.match(source, /Ver historial de anuncios/, 'The widget should open the complete announcement history.');
@@ -96,15 +83,15 @@ test('Dashboard announcement panel supports rich, private and historical announc
   assert.match(source, /RichCommentContent/, 'Announcements should render sanitized rich text.');
   assert.match(source, /insertEmoji/, 'The announcement composer should support emoji insertion.');
   assert.match(source, /canManage/, 'Creation controls should remain restricted to admins and project managers.');
-  assert.match(source, /Editar anuncio/, 'Admins should be able to edit an announcement from its history.');
-  assert.match(source, /Eliminar anuncio/, 'Admins should be able to delete an announcement from its history.');
-  assert.match(source, /onUpdate/, 'Announcement edits should be persisted through the dashboard API.');
-  assert.match(source, /onDelete/, 'Announcement deletion should be persisted through the dashboard API.');
+  assert.match(source, /Editar anuncio/);
+  assert.match(source, /Eliminar anuncio/);
+  assert.match(source, /onUpdate/);
+  assert.match(source, /onDelete/);
   assert.doesNotMatch(source, /window\.confirm|\bconfirm\(/, 'Announcement deletion should never use the browser confirmation dialog.');
-  assert.match(source, /deleteCandidate/, 'The platform should own confirmation state for announcement deletion.');
-  assert.match(source, /DialogContent/, 'Announcement deletion should use a Brainstudio dialog.');
-  assert.match(source, /groupAnnouncementsByDate/, 'Announcement history should group entries by date.');
-  assert.match(source, /DateDivider/, 'Announcement history should reuse the chat date divider.');
+  assert.match(source, /deleteCandidate/);
+  assert.match(source, /DialogContent/);
+  assert.match(source, /groupAnnouncementsByDate/);
+  assert.match(source, /DateDivider/);
 });
 
 test('destructive actions use the Brainstudio rose token consistently', () => {
@@ -129,26 +116,24 @@ test('Dashboard announcements and task conversation share the same date divider'
   assert.match(taskSource, /DateDivider/, 'Task conversation should consume the shared divider component.');
 });
 
-test('Dashboard focus cards can reveal the tasks behind each signal', () => {
-  const source = readFileSync('src/components/modules/Dashboard.jsx', 'utf8');
+test('the personal crm block is personal, permission-gated and never a team-wide list', () => {
+  const dashboard = readFileSync('src/components/modules/Dashboard.jsx', 'utf8');
+  const crm = readFileSync('src/components/modules/dashboard/DashboardCrmAttention.jsx', 'utf8');
 
-  assert.match(source, /expandedFocusCards/, 'Dashboard should track expanded focus cards.');
-  assert.match(source, /focusCard\.items/, 'Dashboard should render related focus-card tasks.');
-  assert.match(source, /Ver mas/, 'Focus cards should expose a generic detail toggle.');
-  assert.match(source, /getFocusItemUrl/, 'Focus-card items should know where to navigate.');
-  assert.match(source, /window\.location\.href = getFocusItemUrl/, 'Focus-card items should navigate to their source.');
-  assert.doesNotMatch(source, /Correcciones y vencidas/, 'Dashboard should not duplicate returned and overdue work outside Radar de Foco.');
-  assert.doesNotMatch(source, /Ver tareas/, 'Focus cards should not call every detail a task.');
+  assert.match(dashboard, /dashboard\.crmAttention/, 'The block reads the payload computed on the server for the dashboard owner.');
+  assert.match(crm, /attention\?\.enabled/, 'Without crm permission the block does not render.');
+  assert.match(crm, /items\.length === 0[\s\S]*?return null|return null[\s\S]*?items\.length === 0/, 'Without opportunities that need attention the block does not render either: no empty cards.');
+  assert.match(crm, /\/crm\/oportunidades\//, 'Each opportunity opens its record in the CRM.');
+  assert.doesNotMatch(crm, /api\/crm/, 'The dashboard never queries the CRM API on its own.');
+  assert.match(crm, /trafficLight === 'ROJO'/, 'Red opportunities are highlighted.');
+  assert.match(crm, /bg-destructive|text-destructive/, 'Red uses the global destructive token, never a local red.');
 });
 
 test('Profile no longer carries the legacy Mi Foco cockpit', () => {
   const profileSource = readFileSync('src/components/modules/Profile.jsx', 'utf8');
-  const dashboardSource = readFileSync('src/components/modules/Dashboard.jsx', 'utf8');
   const personalDashboardService = readFileSync('src/services/personalDashboardService.js', 'utf8');
 
   assert.doesNotMatch(profileSource, /Mi Foco|TAB: MI FOCO|Simulador de Foco Operativo|personal-threats|Motor de Amenazas Individuales/);
   assert.doesNotMatch(profileSource, /isCockpitAllowed|activeSimulationUserId|simulationData|teamMembers|fetchSimulationData|fetchTeam|handleNotify/);
-
-  assert.match(dashboardSource, /Radar de Foco/, 'The new dashboard focus radar must remain in place.');
-  assert.match(personalDashboardService, /focusCards/, 'The new dashboard focus-card service must remain in place.');
+  assert.match(personalDashboardService, /focusCards/, 'The focus-card service stays available for other consumers.');
 });

@@ -5,9 +5,13 @@ import { X } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 
 /**
- * SlideOver Component
+ * SlideOver Component (historical name kept for its callers).
  *
- * Reusable slide-over modal component that implements key UX fixes:
+ * Since 18 September 2026 every modal of the platform opens centred on screen (decision of Rodny):
+ * this panel no longer slides in from the right. It keeps the same API and the same internal
+ * flex structure so the content of each caller still scrolls inside the panel.
+ *
+ * UX fixes preserved:
  * 1. Overscroll Behavior: Prevents scroll chaining to the body.
  * 2. Auto-Focus: Automatically focuses the container on mount to enable immediate keyboard scrolling.
  */
@@ -53,7 +57,7 @@ const SlideOver = ({
                     }}
                     tabIndex={-1}
                     className={cn(
-                        "fixed right-0 top-0 h-full w-full max-w-2xl bg-white dark:bg-zinc-950 border-l border-zinc-200 dark:border-zinc-800 shadow-2xl z-[101] animate-in slide-in-from-right duration-300 flex flex-col focus:outline-none overscroll-contain",
+                        "fixed left-1/2 top-1/2 z-[101] flex h-[min(90dvh,860px)] w-[calc(100vw-2rem)] max-w-2xl -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-2xl focus:outline-none overscroll-contain animate-in fade-in zoom-in-95 duration-200 dark:border-zinc-800 dark:bg-zinc-950",
                         className
                     )}
                 >
@@ -74,7 +78,7 @@ const SlideOver = ({
                             </div>
                         </div>
                         <Dialog.Close asChild>
-                            <button className="p-2 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-full text-zinc-400 hover:text-zinc-900 transition-colors">
+                            <button aria-label="Cerrar" className="flex min-h-11 min-w-11 items-center justify-center rounded-full text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-900 dark:hover:bg-zinc-800">
                                 <X className="w-5 h-5" />
                             </button>
                         </Dialog.Close>

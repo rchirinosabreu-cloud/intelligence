@@ -10,9 +10,17 @@ test('authenticated header icon controls have accessible names and touch targets
   assert.match(source, /aria-label="Buscar en Brainstudio"/);
   assert.match(source, /aria-label="Cambiar tema"/);
   assert.match(source, /aria-label="Abrir notificaciones"/);
-  assert.match(source, /aria-label="Abrir menú de cuenta"/);
+  assert.doesNotMatch(source, /aria-label="Abrir menú de cuenta"/, 'the account menu moved to the sidebar profile block');
   assert.match(source, /group-focus-within\/item:opacity-100/);
   assert.match(source, /min-w-11 min-h-11/);
+});
+
+test('the sidebar profile block owns the account menu with an accessible name', async () => {
+  const source = await read('src/components/layout/SidebarProfile.jsx');
+
+  assert.match(source, /aria-label="Abrir menú de cuenta"/);
+  assert.match(source, /min-h-11/);
+  assert.match(source, /Cerrar sesión/i);
 });
 
 test('task panel icon-only actions expose their purpose to assistive technology', async () => {

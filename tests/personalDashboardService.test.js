@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
   buildPersonalDashboard,
+  buildDashboardMeetings,
+  buildCrmAttention,
   buildContextChallengeTaskWhere,
   assertPersonalDashboardAccess,
   assertDashboardManagerAccess,
@@ -625,4 +627,96 @@ test('buildPersonalDashboard frames community manager work around assigned clien
   assert.equal(dashboard.focusCards.some((card) => card.id === 'cm-client-health'), true);
   assert.equal(dashboard.focusCards.some((card) => card.id === 'cm-content-plan'), true);
   assert.ok(dashboard.focusCards.find((card) => card.id === 'cm-client-health').items.length > 0);
+});
+
+// ---- reuniones donde la persona está citada y atención comercial personal --------------------------
+
+test('dashboard meetings only keep upcoming events where the member is cited', () => {
+  const member = { id: 'member-franci', email: 'Franci@Brainstudio.test' };
+  const meetings = buildDashboardMeetings({
+    now: fixedNow,
+    member,
+    events: [
+      { id: 'cited-by-member', title: 'Comité HDI', type: 'MEETING', startAt: new Date('2026-08-08T16:00:00.000Z'), endAt: new Date('2026-08-08T17:00:00.000Z'), memberIds: ['member-franci'], attendeeEmails: [], meetingLink: 'https://meet.google.com/abc', googleHtmlLink: 'https://calendar.google.com/x' },
+      { id: 'cited-by-email', title: 'Kickoff Alpina', type: 'MEETING', startAt: new Date('2026-08-10T14:00:00.000Z'), endAt: new Date('2026-08-10T15:00:00.000Z'), memberIds: [], attendeeEmails: ['franci@brainstudio.test'], attendeeResponses: { 'franci@brainstudio.test': 'accepted' } },
+      { id: 'not-cited', title: 'Reunión ajena', type: 'MEETING', startAt: new Date('2026-08-08T18:00:00.000Z'), endAt: new Date('2026-08-08T19:00:00.000Z'), memberIds: ['member-other'], attendeeEmails: ['otra@brainstudio.test'] },
+      { id: 'already-finished', title: 'Ya pasó', type: 'MEETING', startAt: new Date('2026-08-08T10:00:00.000Z'), endAt: new Date('2026-08-08T11:00:00.000Z'), memberIds: ['member-franci'], attendeeEmails: [] },
+      { id: 'too-far', title: 'En dos semanas', type: 'MEETING', startAt: new Date('2026-08-25T14:00:00.000Z'), endAt: new Date('2026-08-25T15:00:00.000Z'), memberIds: ['member-franci'], attendeeEmails: [] },
+      { id: 'cancelled', title: 'Cancelada', type: 'MEETING', startAt: new Date('2026-08-09T14:00:00.000Z'), endAt: new Date('2026-08-09T15:00:00.000Z'), memberIds: ['member-franci'], attendeeEmails: [], googleCancelled: true },
+      { id: 'recurring', occurrenceKey: 'recurring:2026-08-11T13:00:00.000Z', title: 'Sincronización semanal', type: 'MEETING', startAt: new Date('2026-08-11T13:00:00.000Z'), endAt: new Date('2026-08-11T13:30:00.000Z'), memberIds: [], attendeeEmails: [], organizerEmail: 'franci@brainstudio.test', isRecurrenceOccurrence: true }
+    ]
+  });
+
+  assert.deepEqual(meetings.map((meeting) => meeting.id), ['cited-by-member', 'cited-by-email', 'recurring']);
+  assert.equal(meetings[0].occurrenceKey, 'cited-by-member');
+  assert.equal(meetings[0].isToday, true, 'an event later today in Bogotá is flagged as today');
+  assert.equal(meetings[0].dayKey, '2026-08-08');
+  assert.equal(meetings[0].meetingLink, 'https://meet.google.com/abc');
+  assert.equal(meetings[0].htmlLink, 'https://calendar.google.com/x');
+  assert.equal(meetings[1].responseStatus, 'accepted');
+  assert.equal(meetings[1].isToday, false);
+  assert.equal(meetings[2].occurrenceKey, 'recurring:2026-08-11T13:00:00.000Z');
+  assert.equal(typeof meetings[0].startAt, 'string', 'dates travel as ISO strings');
+});
+
+test('dashboard meetings return an empty list without a member and never exceed the limit', () => {
+  const events = Array.from({ length: 15 }, (_, index) => ({
+    id: `event-${index}`, title: `Evento ${index}`, type: 'MEETING',
+    startAt: new Date(fixedNow.getTime() + (index + 1) * 60 * 60 * 1000),
+    endAt: new Date(fixedNow.getTime() + (index + 2) * 60 * 60 * 1000),
+    memberIds: ['member-1'], attendeeEmails: []
+  }));
+  assert.deepEqual(buildDashboardMeetings({ now: fixedNow, member: null, events }), []);
+  assert.equal(buildDashboardMeetings({ now: fixedNow, member: { id: 'member-1' }, events }).length, 10);
+});
+
+test('crm attention keeps only actionable red, overdue or due-today opportunities of the member', () => {
+  const lead = (overrides) => ({
+    id: overrides.id, code: overrides.code || 'BRN-001', company: overrides.company || 'Empresa', contactName: overrides.contactName || null,
+    stage: overrides.stage || 'PROPUESTA_ENVIADA', priority: overrides.priority || 'MEDIA',
+    trafficLight: { value: overrides.light || 'AMARILLO', mode: 'AUTO', reason: overrides.reason || 'Seguimiento al día' },
+    followUpBucket: overrides.bucket || 'SEMANA', nextFollowUpAt: overrides.nextFollowUpAt || null, nextAction: overrides.nextAction || null,
+    lastActivityAt: null, enteredAt: null, ownerId: 'member-franci'
+  });
+  const attention = buildCrmAttention({
+    now: fixedNow,
+    leads: [
+      lead({ id: 'green-week', light: 'VERDE', bucket: 'SEMANA' }),
+      lead({ id: 'red-week', light: 'ROJO', bucket: 'SEMANA', reason: 'Sin gestión hace 25 días', company: 'Centro Andino' }),
+      lead({ id: 'yellow-today', light: 'AMARILLO', bucket: 'HOY', nextFollowUpAt: '2026-08-08', nextAction: 'Llamar a Catalina' }),
+      lead({ id: 'yellow-overdue', light: 'AMARILLO', bucket: 'VENCIDO', nextFollowUpAt: '2026-08-01' }),
+      lead({ id: 'closed-red', light: 'ROJO', bucket: null, stage: 'PERDIDO' }),
+      lead({ id: 'won', light: 'VERDE', bucket: 'HOY', stage: 'GANADO' })
+    ]
+  });
+
+  assert.equal(attention.enabled, true);
+  assert.deepEqual(attention.items.map((item) => item.id), ['yellow-overdue', 'yellow-today', 'red-week'], 'overdue first, then today, then red');
+  assert.deepEqual(attention.counts, { overdue: 1, today: 1, red: 1 });
+  assert.equal(attention.items[2].trafficLight, 'ROJO');
+  assert.equal(attention.items[2].trafficLightReason, 'Sin gestión hace 25 días');
+  assert.equal(attention.items[2].stageLabel, 'Propuesta enviada');
+  assert.equal(attention.items[1].nextAction, 'Llamar a Catalina');
+  assert.equal(attention.items.every((item) => item.activities === undefined), true, 'the dashboard never ships the activity log');
+});
+
+test('crm attention is disabled without the crm module permission and caps its list', () => {
+  const disabled = buildCrmAttention({ enabled: false, leads: [{ id: 'x', stage: 'CONTACTADO', trafficLight: { value: 'ROJO' }, followUpBucket: 'VENCIDO' }] });
+  assert.deepEqual(disabled, { enabled: false, counts: { overdue: 0, today: 0, red: 0 }, items: [] });
+
+  const many = Array.from({ length: 12 }, (_, index) => ({ id: `lead-${index}`, stage: 'CONTACTADO', trafficLight: { value: 'ROJO' }, followUpBucket: 'SIN_FECHA', priority: 'MEDIA' }));
+  const capped = buildCrmAttention({ now: fixedNow, leads: many });
+  assert.equal(capped.items.length, 6);
+  assert.equal(capped.counts.red, 12, 'counts reflect the whole set, not the visible slice');
+});
+
+test('personal dashboard payload ships meetings and crm attention resolved by member identity and permission', () => {
+  const source = readFileSync('src/services/personalDashboardService.js', 'utf8');
+  assert.match(source, /memberIds:\s*\{\s*has:\s*member\.id\s*\}/, 'meetings are looked up by the cited TeamMember id');
+  assert.match(source, /attendeeEmails:\s*\{\s*hasSome:/, 'meetings are also matched by the member email');
+  assert.match(source, /expandOperationalEventOccurrences/, 'recurring meetings are expanded like the Activity calendar');
+  assert.match(source, /getVisibleOperationalEventWhere\(\)/, 'cancelled or merged Google events never reach the dashboard');
+  assert.match(source, /hasModulePermission\([^)]*'crm'\)/, 'crm attention respects the crm module permission of the dashboard owner');
+  assert.match(source, /listLeads\([^)]*ownerId:\s*member\.id/, 'crm attention only reads opportunities owned by the member');
+  assert.match(source, /meetings,\s*\n\s*crmAttention/, 'the payload exposes both blocks');
 });

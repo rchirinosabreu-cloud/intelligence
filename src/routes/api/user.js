@@ -1,9 +1,35 @@
 import express from 'express';
+import multer from 'multer';
 import { getUserProfile, updateUserProfile, updateUserPassword } from '../../services/userService.js';
 import { getUserNotes, createUserNote, updateUserNote, deleteUserNote } from '../../services/userNoteService.js';
 import { getOnboarding, acknowledgeOnboarding } from '../../services/onboardingService.js';
+import { replaceProfileAvatar } from '../../services/avatarService.js';
 
 const router = express.Router();
+
+// Own profile photo (any authenticated member): the image arrives already framed by the client.
+const avatarUpload = multer({
+    storage: multer.memoryStorage(),
+    limits: { fileSize: 5 * 1024 * 1024, files: 1 }
+});
+
+router.put('/avatar', avatarUpload.single('avatar'), async (req, res) => {
+    const file = req.file;
+    if (!file) {
+        return res.status(400).json({ error: 'No se proporcionó ninguna imagen.' });
+    }
+    if (!file.mimetype.startsWith('image/') || file.mimetype === 'image/svg+xml') {
+        return res.status(415).json({ error: 'La foto debe ser una imagen segura (JPG, PNG o WEBP).' });
+    }
+    try {
+        const { avatarUrl } = await replaceProfileAvatar({ userId: req.user.userId, file });
+        return res.json({ success: true, avatarUrl });
+    } catch (error) {
+        const status = error.statusCode || 500;
+        if (status >= 500) console.error('[Avatar] Upload failed:', error);
+        return res.status(status).json({ error: status >= 500 ? 'No se pudo guardar la foto. Inténtalo de nuevo.' : error.message });
+    }
+});
 
 router.get('/onboarding', async (req, res) => {
     res.setHeader('Cache-Control', 'no-store, private');

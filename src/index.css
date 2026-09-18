@@ -141,6 +141,45 @@
     height: 3px;
     background-image: linear-gradient(90deg, rgb(var(--brand-cyan)), rgb(var(--brand-green)) 40%, rgb(var(--brand-yellow)) 75%, rgb(var(--brand-coral)));
   }
+  /* Approved glass surface (18 Sep 2026): translucent panel over the brand ambient. Body copy stays on it, never on the ambient. */
+  .brain-glass {
+    @apply rounded-2xl border border-white/70 bg-white/65 text-zinc-900 shadow-sm shadow-zinc-950/5 backdrop-blur-xl backdrop-saturate-150 transition-colors;
+  }
+  .dark .brain-glass {
+    @apply border-white/10 bg-zinc-900/55 text-zinc-100 shadow-black/25 ring-1 ring-white/5;
+  }
+  .brain-glass-strong {
+    @apply border-white/80 bg-white/80;
+  }
+  .dark .brain-glass-strong {
+    @apply border-white/10 bg-zinc-900/75;
+  }
+  /* Soft brand ambient: what the glass blurs. Low alpha, no giant blur radius, painted with the tokens. */
+  .brain-ambient {
+    position: relative;
+    isolation: isolate;
+  }
+  /* The ambient covers the whole viewport (never a box around the content), so no edge can ever show:
+     each blob fades to transparent on its own, well inside the screen, and stays put while scrolling. */
+  .brain-ambient::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    background-image:
+      radial-gradient(64rem 44rem at 12% 8%, rgb(var(--brand-cyan) / 0.15), transparent 62%),
+      radial-gradient(52rem 38rem at 96% 18%, rgb(var(--brand-magenta) / 0.09), transparent 62%),
+      radial-gradient(56rem 36rem at 60% 100%, rgb(var(--brand-yellow) / 0.09), transparent 62%),
+      radial-gradient(48rem 34rem at 18% 96%, rgb(var(--brand-green) / 0.11), transparent 62%);
+  }
+  .dark .brain-ambient::before {
+    background-image:
+      radial-gradient(64rem 44rem at 12% 8%, rgb(var(--brand-cyan) / 0.13), transparent 62%),
+      radial-gradient(52rem 38rem at 96% 18%, rgb(var(--brand-magenta) / 0.11), transparent 62%),
+      radial-gradient(56rem 36rem at 60% 100%, rgb(var(--brand-coral) / 0.07), transparent 62%),
+      radial-gradient(48rem 34rem at 18% 96%, rgb(var(--brand-green) / 0.09), transparent 62%);
+  }
   .brain-popover-surface {
     @apply rounded-xl border border-zinc-200/80 bg-white text-zinc-900 shadow-lg shadow-zinc-950/5 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:shadow-black/20;
     max-width: calc(100vw - 2rem);
