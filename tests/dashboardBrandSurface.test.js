@@ -56,10 +56,10 @@ test('dashboard cards use full soft borders, white numbers and a single row of t
     read('src/components/modules/Dashboard.jsx'),
     read('src/components/modules/dashboard/DashboardUpcomingTasks.jsx'),
     read('src/components/modules/dashboard/DashboardMeetings.jsx'),
-    read('src/components/modules/dashboard/DashboardCrmAttention.jsx')
+    read('src/components/modules/dashboard/DashboardReminders.jsx')
   ]);
 
-  for (const [name, source] of [['upcoming', upcoming], ['meetings', meetings], ['crm', crm], ['dashboard', dashboard]]) {
+  for (const [name, source] of [['upcoming', upcoming], ['meetings', meetings], ['reminders', crm], ['dashboard', dashboard]]) {
     assert.doesNotMatch(source, /border-l-\[|border-l-4|border-l-2/, `${name}: no left-only bands`);
   }
   assert.match(upcoming, /border border-zinc-200\/80/, 'upcoming rows carry a full soft grey border');

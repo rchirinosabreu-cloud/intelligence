@@ -112,6 +112,28 @@ export const PLATFORM_TIPS = Object.freeze([
 ]);
 
 /**
+ * Lista completa de recordatorios sobre la gestión de la persona para hoy: todos los contextuales
+ * (vencidas, devueltas, reunión de hoy, CRM vencido, muchas para hoy, buen ritmo) y, dos de cada
+ * tres días, un consejo de plataforma al final. Puede devolver una lista vacía: el widget se queda
+ * a su altura igualmente.
+ */
+export const listDashboardReminders = ({ dashboard, user, now = new Date(), dismissedIds = [], includePlatformTip = true } = {}) => {
+  const dayKey = bogotaDayKey(now);
+  if (!dayKey) return [];
+  const seed = hashText(`${user?.id || user?.userId || 'anon'}:${dayKey}`);
+  const day = dayNumber(dayKey);
+  const items = contextualTips({ dashboard, user })
+    .filter((tip) => !dismissedIds.includes(tip.id))
+    .map((tip) => ({ ...tip, dayKey }));
+
+  if (includePlatformTip && day % 3 !== 0) {
+    const generic = PLATFORM_TIPS.filter((tip) => canUse(user, tip.moduleKey) && !dismissedIds.includes(tip.id));
+    if (generic.length > 0) items.push({ ...generic[seed % generic.length], dayKey });
+  }
+  return items;
+};
+
+/**
  * Elige el consejo del día para una persona. Devuelve `null` cuando no toca mostrar ninguno.
  * - Con situación real (vencidas, devoluciones, reunión hoy, CRM vencido): siempre uno, rotando por día.
  * - Sin situación: un consejo de plataforma dos de cada tres días, rotando por persona y día.

@@ -11,8 +11,7 @@ for (const file of [
   'src/components/modules/DashboardAnnouncements.jsx',
   'src/components/modules/dashboard/DashboardUpcomingTasks.jsx',
   'src/components/modules/dashboard/DashboardMeetings.jsx',
-  'src/components/modules/dashboard/DashboardCrmAttention.jsx',
-  'src/components/modules/dashboard/DashboardTip.jsx',
+  'src/components/modules/dashboard/DashboardReminders.jsx',
   'src/components/profile/AvatarEditor.jsx',
   'src/components/ui/TeamAvatar.jsx',
   'src/components/ui/SlideOver.jsx'

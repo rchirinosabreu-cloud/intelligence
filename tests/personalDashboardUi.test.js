@@ -116,17 +116,15 @@ test('Dashboard announcements and task conversation share the same date divider'
   assert.match(taskSource, /DateDivider/, 'Task conversation should consume the shared divider component.');
 });
 
-test('the personal crm block is personal, permission-gated and never a team-wide list', () => {
-  const dashboard = readFileSync('src/components/modules/Dashboard.jsx', 'utf8');
-  const crm = readFileSync('src/components/modules/dashboard/DashboardCrmAttention.jsx', 'utf8');
+test('the personal crm attention is personal, permission-gated and lives inside the reminders panel', () => {
+  const reminders = readFileSync('src/components/modules/dashboard/DashboardReminders.jsx', 'utf8');
 
-  assert.match(dashboard, /dashboard\.crmAttention/, 'The block reads the payload computed on the server for the dashboard owner.');
-  assert.match(crm, /attention\?\.enabled/, 'Without crm permission the block does not render.');
-  assert.match(crm, /items\.length === 0[\s\S]*?return null|return null[\s\S]*?items\.length === 0/, 'Without opportunities that need attention the block does not render either: no empty cards.');
-  assert.match(crm, /\/crm\/oportunidades\//, 'Each opportunity opens its record in the CRM.');
-  assert.doesNotMatch(crm, /api\/crm/, 'The dashboard never queries the CRM API on its own.');
-  assert.match(crm, /trafficLight === 'ROJO'/, 'Red opportunities are highlighted.');
-  assert.match(crm, /bg-destructive|text-destructive/, 'Red uses the global destructive token, never a local red.');
+  assert.match(reminders, /dashboard\?\.crmAttention/, 'The panel reads the payload computed on the server for the dashboard owner.');
+  assert.match(reminders, /attention\?\.enabled\) return \[\]/, 'Without crm permission no crm reminders appear.');
+  assert.match(reminders, /\/crm\/oportunidades\//, 'Each opportunity opens its record in the CRM.');
+  assert.doesNotMatch(reminders, /api\/crm/, 'The dashboard never queries the CRM API on its own.');
+  assert.match(reminders, /trafficLight === 'ROJO'/, 'Red opportunities are highlighted.');
+  assert.match(reminders, /bg-destructive|text-destructive/, 'Red uses the global destructive token, never a local red.');
 });
 
 test('Profile no longer carries the legacy Mi Foco cockpit', () => {

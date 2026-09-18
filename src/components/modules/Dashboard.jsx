@@ -22,13 +22,11 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { pickDashboardTip } from '@/lib/dashboardTips';
 import { cn } from '@/lib/utils';
 import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
 import DashboardAnnouncements from './DashboardAnnouncements';
-import DashboardCrmAttention from './dashboard/DashboardCrmAttention';
 import DashboardMeetings from './dashboard/DashboardMeetings';
-import DashboardTip from './dashboard/DashboardTip';
+import DashboardReminders from './dashboard/DashboardReminders';
 import DashboardUpcomingTasks from './dashboard/DashboardUpcomingTasks';
 import TaskRecognitionLabels from '@/components/recognitions/TaskRecognitionLabels';
 
@@ -160,14 +158,8 @@ const Dashboard = () => {
   const isViewingAnotherMember = Boolean(selectedMember?.userId && currentUser?.id && selectedMember.userId !== currentUser.id);
   const firstName = firstNameOf(currentUser?.name);
   const todayLabel = useMemo(() => formatTodayLabel(), []);
-  // The tip is only personal when the person looks at their own dashboard.
+  // Reminders and tips are only personal when the person looks at their own dashboard.
   const tipUser = isViewingAnotherMember ? null : currentUser;
-  const dailyTip = useMemo(() => (dashboard && tipUser ? pickDashboardTip({ dashboard, user: tipUser }) : null), [dashboard, tipUser]);
-  const hasPersonalReminders = Boolean(
-    dailyTip
-    || (dashboard?.crmAttention?.enabled && dashboard.crmAttention.items?.length > 0)
-    || selectedMember?.isCommunityManager
-  );
 
   const completedFeed = useMemo(() => {
     const bogotaFormatter = new Intl.DateTimeFormat('en-CA', {
@@ -330,21 +322,31 @@ const Dashboard = () => {
               />
             </motion.div>
 
-            {/* Beside the announcements: the personal reminders (tip, crm, my clients) at the same height.
-                Without reminders, recent achievements take that place. */}
-            {hasPersonalReminders ? (
-              <motion.div variants={item} className={cn('flex min-w-0 flex-col gap-4 overflow-y-auto custom-scrollbar', topDashboardPanelClass, 'border-0 bg-transparent p-0 shadow-none backdrop-blur-0 dark:bg-transparent dark:ring-0')} aria-label="Recordatorios personales">
-                <DashboardTip dashboard={dashboard} user={tipUser} className="shrink-0" />
-                <DashboardCrmAttention attention={dashboard.crmAttention} className={cn('shrink-0', !selectedMember?.isCommunityManager && 'flex-1')} />
+            {/* Beside the announcements, always at the same height: everything that asks for this person's attention today. */}
+            <motion.div variants={item} className="flex min-w-0">
+              <DashboardReminders dashboard={dashboard} user={tipUser} className={cn(topDashboardPanelClass, 'flex-1')} />
+            </motion.div>
 
-                {selectedMember?.isCommunityManager && (
-                  <section className={cn(dashboardPanelClass, 'min-w-0 flex-1 shrink-0 p-6')} aria-labelledby="dashboard-clients-title">
+            {/* Row 2: recent achievements | upcoming work | cited meetings, all stretched to the same height. */}
+            <AchievementsPanel variants={item} feed={completedFeed} onOpenHistory={() => setShowHistoryModal(true)} className={dashboardPanelClass} />
+
+            <motion.div variants={item} className="flex min-w-0">
+              <DashboardUpcomingTasks tasks={dashboard.upcomingTasks || []} className="flex-1" />
+            </motion.div>
+
+            <motion.div variants={item} className="flex min-w-0">
+              <DashboardMeetings meetings={dashboard.meetings || []} className="flex-1" />
+            </motion.div>
+
+            {/* Row 3: account leadership for community managers, then management tools. */}
+            {selectedMember?.isCommunityManager && (
+                  <motion.section variants={item} className={cn(dashboardPanelClass, 'min-w-0 p-6 xl:col-span-3')} aria-labelledby="dashboard-clients-title">
                     <div className="flex items-center gap-3 mb-5">
                       <FileText className="w-5 h-5 text-brand-cyan-deep dark:text-brand-cyan" />
                       <h3 id="dashboard-clients-title" className="text-lg font-semibold text-zinc-950 dark:text-white">Mis clientes</h3>
                     </div>
                     {dashboard.clients?.length > 0 ? (
-                      <div className="grid grid-cols-1 gap-3">
+                      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                         {dashboard.clients.map((client) => (
                           <div key={client.id} className="rounded-xl border border-zinc-200/70 dark:border-white/10 bg-white/60 dark:bg-zinc-950/30 p-4">
                             <div className="flex items-center gap-3">
@@ -365,27 +367,9 @@ const Dashboard = () => {
                     ) : (
                       <EmptyState icon={UserRound} title="Sin clientes asignados" description="Cuando admin o project manager asignen cuentas, aparecerá aquí tu mapa de liderazgo." />
                     )}
-                  </section>
-                )}
-              </motion.div>
-            ) : (
-              <AchievementsPanel variants={item} feed={completedFeed} onOpenHistory={() => setShowHistoryModal(true)} className={topDashboardPanelClass} />
+                  </motion.section>
             )}
 
-            {/* Row 2: recent achievements | upcoming work | cited meetings, all stretched to the same height. */}
-            {hasPersonalReminders && (
-              <AchievementsPanel variants={item} feed={completedFeed} onOpenHistory={() => setShowHistoryModal(true)} className={cn(dashboardPanelClass, 'max-h-[560px]')} />
-            )}
-
-            <motion.div variants={item} className={cn('flex min-w-0', !hasPersonalReminders && 'xl:col-span-2')}>
-              <DashboardUpcomingTasks tasks={dashboard.upcomingTasks || []} className="flex-1" />
-            </motion.div>
-
-            <motion.div variants={item} className="flex min-w-0">
-              <DashboardMeetings meetings={dashboard.meetings || []} className="flex-1" />
-            </motion.div>
-
-            {/* Row 3: management tools across the full width. */}
             {canManageDashboard && (
               <motion.section variants={item} className={cn(dashboardPanelClass, 'min-w-0 p-6 xl:col-span-3')} aria-labelledby="dashboard-assign-title">
                 <div className="flex items-center gap-3 mb-5">
