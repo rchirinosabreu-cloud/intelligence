@@ -18,6 +18,10 @@ test("chat placement is scoped to the signed-in user and validates restored stat
   });
   assert.equal(readChatUi("a").mode, "docked");
   assert.equal(readChatUi("b").open, false);
+  assert.equal(readChatUi("a").muted, false, "Sound is on until it is muted");
+  writeChatUi("a", { mode: "docked", muted: true });
+  assert.equal(readChatUi("a").muted, true, "Muting survives a reload");
+  assert.equal(readChatUi("b").muted, false, "Muting is scoped to the user");
   writeChatUi("a", { mode: "invalid" });
   assert.equal(readChatUi("a").mode, "floating");
   delete globalThis.sessionStorage;

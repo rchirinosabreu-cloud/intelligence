@@ -11,6 +11,8 @@ export const readChatUi = (userId) => {
     channelId:
       typeof state.channelId === "string" ? state.channelId : "general",
     position: state.position || null,
+    // Sound is opt-out and off only when the person asked for it.
+    muted: state.muted === true,
   };
 };
 export function changeChatDraft(draft, patch) {

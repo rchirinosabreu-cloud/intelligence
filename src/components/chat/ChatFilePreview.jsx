@@ -26,6 +26,12 @@ export default function ChatFilePreview({
       setPreview(null);
       setError("");
       try {
+        // The thumbnail already resolved this attachment's ticket, so the
+        // viewer shows that same image instead of requesting it again.
+        if (file.mimeType.startsWith("image/")) {
+          setPreview({ type: "image" });
+          return;
+        }
         const pdf = file.mimeType === "application/pdf";
         const text = /\.(txt|md|csv|tsv|json|log|xml|yaml|yml)$/i.test(
           file.name,
@@ -94,6 +100,13 @@ export default function ChatFilePreview({
             <p role="status" className="text-sm text-muted-foreground">
               Preparando vista previa…
             </p>
+          )}
+          {preview?.type === "image" && (
+            <img
+              src={url}
+              alt={file.name}
+              className="mx-auto max-h-[calc(100dvh-14rem)] w-auto max-w-full rounded object-contain"
+            />
           )}
           {preview?.type === "pdf" && (
             <Suspense fallback={<p role="status">Preparando PDF…</p>}>
