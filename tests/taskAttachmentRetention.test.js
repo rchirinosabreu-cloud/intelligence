@@ -255,3 +255,12 @@ test("without the tracking columns it reports but never deletes", async () => {
   assert.deepEqual(result, { claimed: 0, purged: 0, restored: 0 });
   assert.equal(touched, false, "An unrecordable purge would be retried forever");
 });
+
+test("the manual run needs the confirmation word, not just the flag", async () => {
+  const { confirmationGiven } = await import("../scripts/run-task-attachment-retention.js");
+  assert.equal(confirmationGiven(["node", "script"]), false);
+  assert.equal(confirmationGiven(["node", "script", "--confirm"]), false);
+  assert.equal(confirmationGiven(["node", "script", "--confirm", "si"]), false);
+  assert.equal(confirmationGiven(["node", "script", "--confirm", "borrar"]), false, "Case matters");
+  assert.equal(confirmationGiven(["node", "script", "--confirm", "BORRAR"]), true);
+});
