@@ -4,29 +4,48 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const DESTRUCTIVE_TOKEN = '346.84 77.17% 49.8%';
-const semanticDangerPattern = /(?:text|bg|border|ring|shadow|fill)-destructive|brain-(?:danger|alert)|variant=["']destructive["']/;
+// A destructive `variant` may be chosen at runtime; the token is still the one
+// in play, so an expression offering "destructive" counts as much as a literal.
+const semanticDangerPattern = /(?:text|bg|border|ring|shadow|fill)-destructive|brain-(?:danger|alert)|variant=(?:["']destructive["']|\{[^{}]*["']destructive["'][^{}]*\})/;
 
-const findUnstyledDestructiveButtons = (source) => {
-  // Resolve only literal class constants referenced by this button. Never use
-  // unrelated declarations or styles from a preceding/following button.
+// Resolve only literal class constants. Ambiguous/shadowed names stay
+// unresolved instead of guessing a scope.
+const resolveClassConstants = (source) => {
   const declarations = new Map();
   for (const [, name] of source.matchAll(/\b(?:const|let|var)\s+([\w$]+)\s*=/g)) {
     declarations.set(name, (declarations.get(name) || 0) + 1);
   }
   const classConstants = new Map();
   for (const match of source.matchAll(/\bconst\s+([\w$]+)\s*=\s*(?:'([^'\\\r\n]*)'|"([^"\\\r\n]*)")\s*;/g)) {
-    // Ambiguous/shadowed names stay unresolved instead of guessing a scope.
     if (declarations.get(match[1]) === 1) classConstants.set(match[1], match[2] ?? match[3]);
   }
+  return classConstants;
+};
+
+// Substitute `className={NAME}` with the literal it resolves to, so a shared
+// class constant declared far from the control is still visible to the checks.
+const expandClassConstants = (text, classConstants) => text.replace(
+  /\bclassName\s*=\s*\{\s*([\w$]+)\s*\}/g,
+  (attribute, name) => classConstants.has(name) ? `className="${classConstants.get(name)}"` : attribute,
+);
+
+const findUnstyledDeleteIcons = (source) => {
+  const classConstants = resolveClassConstants(source);
+  return [...source.matchAll(/<Trash2\b/g)]
+    .filter(match => !semanticDangerPattern.test(
+      expandClassConstants(source.slice(Math.max(0, match.index - 900), match.index + 120), classConstants),
+    ))
+    .map(match => match.index);
+};
+
+const findUnstyledDestructiveButtons = (source) => {
+  // Never use unrelated declarations or styles from a preceding/following button.
+  const classConstants = resolveClassConstants(source);
 
   const buttons = source.matchAll(/<(button|Button)\b(?:(?!<\/?(?:button|Button)\b)[\s\S])*?<\/\1>/g);
   return [...buttons]
     .filter(match => /(?:Eliminar|Borrar|Descartar)/.test(match[0]))
-    .filter(match => {
-      const button = match[0].replace(/\bclassName\s*=\s*\{\s*([\w$]+)\s*\}/g,
-        (attribute, name) => classConstants.has(name) ? `className="${classConstants.get(name)}"` : attribute);
-      return !semanticDangerPattern.test(button);
-    })
+    .filter(match => !semanticDangerPattern.test(expandClassConstants(match[0], classConstants)))
     .map(match => match.index);
 };
 
@@ -48,9 +67,8 @@ test('rendered delete controls consume the semantic destructive token', () => {
 
   for (const file of collectJsxFiles('src')) {
     const source = readFileSync(file, 'utf8');
-    for (const match of source.matchAll(/<Trash2\b/g)) {
-      const context = source.slice(Math.max(0, match.index - 900), match.index + 120);
-      if (!semanticDangerPattern.test(context)) failures.push(`${file}:${source.slice(0, match.index).split('\n').length}`);
+    for (const index of findUnstyledDeleteIcons(source)) {
+      failures.push(`${file}:${source.slice(0, index).split('\n').length}`);
     }
   }
 
@@ -120,6 +138,38 @@ test('direct semantic classes and destructive variants remain valid', () => {
     <Button variant="destructive">Descartar borrador</Button>
   `;
   assert.deepEqual(findUnstyledDestructiveButtons(source), []);
+});
+
+test('a delete icon styled through a distant shared class constant is accepted', () => {
+  const source = `
+    const destructiveIconButton = "rounded-lg brain-destructive-text text-destructive hover:bg-destructive/10";
+    ${' '.repeat(900)}
+    <button className={destructiveIconButton} aria-label="Descartar grabación"><Trash2 className="h-5 w-5" /></button>
+  `;
+  assert.deepEqual(findUnstyledDeleteIcons(source), []);
+});
+
+test('a delete icon styled through a neutral class constant is still flagged', () => {
+  const source = `
+    const iconButton = "rounded-lg text-muted-foreground hover:bg-muted";
+    ${' '.repeat(900)}
+    <button className={iconButton} aria-label="Descartar grabación"><Trash2 className="h-5 w-5" /></button>
+  `;
+  assert.equal(findUnstyledDeleteIcons(source).length, 1);
+});
+
+test('a runtime-selected destructive variant counts as the semantic token', () => {
+  const source = `
+    <Button variant={dialog?.type === "delete" ? "destructive" : "default"} className="min-h-11">Eliminar</Button>
+  `;
+  assert.deepEqual(findUnstyledDestructiveButtons(source), []);
+});
+
+test('a runtime-selected variant without the destructive token is still flagged', () => {
+  const source = `
+    <Button variant={dialog?.type === "delete" ? "outline" : "default"} className="min-h-11">Eliminar</Button>
+  `;
+  assert.equal(findUnstyledDestructiveButtons(source).length, 1);
 });
 
 test('lifecycle danger dialog and shared confirmation use semantic destructive styles', () => {

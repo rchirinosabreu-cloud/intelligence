@@ -4,10 +4,8 @@ import { Paperclip, Mic, Send, X, Pause, PlayCircle, Trash2 } from "@/components
 import { formatChatFileSize } from "@/lib/teamChatState";
 const iconButton =
   "inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg text-muted-foreground hover:bg-muted disabled:opacity-40";
-const destructiveIconButton = iconButton.replace(
-  "text-muted-foreground hover:bg-muted",
-  "brain-destructive-text text-destructive hover:bg-destructive/10",
-);
+const destructiveIconButton =
+  "inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg brain-destructive-text text-destructive hover:bg-destructive/10 disabled:opacity-40";
 function DraftFile({ entry, file, onRemove }) {
   const [url, setUrl] = useState("");
   useEffect(() => {

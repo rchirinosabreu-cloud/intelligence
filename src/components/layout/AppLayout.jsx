@@ -477,7 +477,7 @@ const AppLayout = ({ children }) => {
       )}
 
       {/* Main Content Area - z-0 (above background) */}
-      <main style={{ marginRight: chatDockWidth }} className="relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8 lg:ml-64">
+      <main className="relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8 lg:ml-64" style={{ marginRight: chatDockWidth }}>
         <div className="mx-auto min-w-0 max-w-7xl space-y-8 animate-in fade-in duration-700">
           {recognitionExperience?.controls}
           {children}
