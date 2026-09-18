@@ -152,6 +152,7 @@ export const parseCrmWorkbook = workbook => ({
 // ---- plan ------------------------------------------------------------------------------------------------
 
 const resolveOwner = (label, owners = {}) => {
+  if (owners.all) return owners.all;
   const folded = fold(label);
   if (!folded) return null;
   if (folded.includes('francisco') || folded.includes('franci')) return owners.francisco || null;
@@ -285,6 +286,26 @@ export const buildImportPlan = ({ leads: rows, activities: logRows }, { owners =
   return { leads, report };
 };
 
+/**
+ * Owner options may be a TeamMember id or `name:<nombre>`; names are resolved against the active roster
+ * of the database being written to, and must match exactly one person.
+ */
+export const resolveOwnerOptions = async (db, owners = {}) => {
+  const resolved = {};
+  for (const [key, value] of Object.entries(owners)) {
+    if (!value) continue;
+    if (!value.startsWith('name:')) { resolved[key] = value; continue; }
+    const name = fold(value.slice(5));
+    const members = await db.teamMember.findMany({ where: { isActive: true } });
+    const matches = members.filter(member => fold(member.name) === name || fold(member.name).split(' ').includes(name));
+    if (matches.length !== 1) {
+      throw new Error(`"${value.slice(5)}" coincide con ${matches.length} personas activas en Equipo (${matches.map(member => member.name).join(', ') || 'ninguna'}). Indica el nombre exacto.`);
+    }
+    resolved[key] = matches[0].id;
+  }
+  return resolved;
+};
+
 // ---- write -----------------------------------------------------------------------------------------------
 
 export const runImport = async (db, plan, { dryRun = false, log = () => {} } = {}) => {
@@ -337,24 +358,34 @@ const parseArgs = argv => {
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
   const options = parseArgs(process.argv.slice(2));
-  if (!options.file) { console.error('Uso: node scripts/import-crm-excel.js <archivo.xlsx> [--dry-run] [--confirm-target=<host>] [--owner-comercial=<id>] [--owner-francisco=<id>] [--author=<userId>]'); process.exit(1); }
+  if (!options.file) { console.error('Uso: node scripts/import-crm-excel.js <archivo.xlsx> [--dry-run] [--confirm-target=<host>] [--owner-all=name:<nombre>|<id>] [--owner-comercial=<id>] [--owner-francisco=<id>] [--author=<userId>]'); process.exit(1); }
   const workbook = XLSX.readFile(options.file, { cellDates: true });
-  const plan = buildImportPlan(parseCrmWorkbook(workbook), { owners: options.owners, authorId: options.authorId });
-  if (options.dryRun) {
-    console.log(formatReport(plan, { created: plan.leads.length, skipped: 0, activities: plan.leads.reduce((sum, lead) => sum + lead.activities.length, 0), dryRun: true }));
-    process.exit(0);
+  const parsed = parseCrmWorkbook(workbook);
+  const needsDb = !options.dryRun || Object.values(options.owners).some(value => String(value).startsWith('name:'));
+  let prisma = null;
+  if (needsDb) {
+    if (!process.env.DATABASE_URL) { console.error('DATABASE_URL es obligatoria.'); process.exit(1); }
+    const target = new URL(process.env.DATABASE_URL);
+    if (!options.dryRun && options.confirmTarget !== target.hostname) {
+      console.error(`Destino ${target.hostname}${target.pathname}. Para escribir ahí repite el comando con --confirm-target=${target.hostname}. Usa --dry-run para solo revisar.`);
+      process.exit(1);
+    }
+    console.log(`${options.dryRun ? 'Solo lectura de Equipo en' : 'Escribiendo en'} ${target.hostname}${target.pathname}`);
+    ({ default: prisma } = await import('../src/lib/prisma.js'));
   }
-  if (!process.env.DATABASE_URL) { console.error('DATABASE_URL es obligatoria.'); process.exit(1); }
-  const target = new URL(process.env.DATABASE_URL);
-  if (options.confirmTarget !== target.hostname) {
-    console.error(`Destino ${target.hostname}${target.pathname}. Para escribir ahí repite el comando con --confirm-target=${target.hostname}. Usa --dry-run para solo revisar.`);
-    process.exit(1);
-  }
-  const { default: prisma } = await import('../src/lib/prisma.js');
   try {
-    const summary = await runImport(prisma, plan, { log: line => console.log(line) });
-    console.log(formatReport(plan, summary));
+    const owners = prisma ? await resolveOwnerOptions(prisma, options.owners) : options.owners;
+    const plan = buildImportPlan(parsed, { owners, authorId: options.authorId });
+    if (options.dryRun) {
+      console.log(formatReport(plan, { created: plan.leads.length, skipped: 0, activities: plan.leads.reduce((sum, lead) => sum + lead.activities.length, 0), dryRun: true }));
+    } else {
+      const summary = await runImport(prisma, plan, { log: line => console.log(line) });
+      console.log(formatReport(plan, summary));
+    }
+  } catch (error) {
+    console.error(error.message);
+    process.exitCode = 1;
   } finally {
-    await prisma.$disconnect();
+    await prisma?.$disconnect();
   }
 }

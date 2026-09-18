@@ -10,8 +10,10 @@ Importar el Excel (siempre primero en simulación):
 
 ```powershell
 node scripts/import-crm-excel.js "ruta\CRM_Brain_Studio.xlsx" --dry-run
-node scripts/import-crm-excel.js "ruta\CRM_Brain_Studio.xlsx" --confirm-target=<host de DATABASE_URL> --owner-comercial=<id TeamMember> --owner-francisco=<id TeamMember> --author=<id User>
+node scripts/import-crm-excel.js "ruta\CRM_Brain_Studio.xlsx" --confirm-target=<host de DATABASE_URL> --owner-all=name:Francys
 ```
+
+Decisión de Rodny (18 de septiembre de 2026): todos los leads se asignan a Francys (`--owner-all=name:Francys`, resuelto contra el roster activo de Equipo) y las gestiones importadas quedan sin autor; ambos se pueden cambiar después desde la ficha. `--owner-comercial` y `--owner-francisco` siguen disponibles para un reparto por columna.
 
 Sin `--confirm-target` igual al host de `DATABASE_URL` el script no escribe. Es idempotente por `legacyCode`: repetirlo no duplica. La corrida en simulación del 18 de septiembre de 2026 sobre el archivo real dio 171 leads, 21 filas de bitácora emparejadas, 16 notas con fecha convertidas en gestiones y 0 filas sin emparejar. Las 171 fechas de ingreso quedan marcadas como estimadas (el Excel no las tenía) y no cuentan en los promedios de velocidad.
 

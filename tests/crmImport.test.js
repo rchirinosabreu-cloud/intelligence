@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import XLSX from 'xlsx';
-import { parseCrmWorkbook, buildImportPlan, runImport, parseExcelDate, splitDatedNotes, mapOrigin, mapStage } from '../scripts/import-crm-excel.js';
+import { parseCrmWorkbook, buildImportPlan, runImport, parseExcelDate, splitDatedNotes, mapOrigin, mapStage, resolveOwnerOptions } from '../scripts/import-crm-excel.js';
 import { createCrmMemoryDb } from './fixtures/crmMemoryDb.js';
 
 const HEADERS = ['ID', 'Fuente', 'Origen / canal', 'Fecha ingreso al CRM', 'Contacto', 'Empresa / cliente', 'Cargo / rol', 'Teléfono', 'Email', 'URL / LinkedIn', 'Servicio / oportunidad', 'Idioma', 'Contacto permitido', 'Prioridad', 'Fecha publicación / emisión', 'Cierre convocatoria', 'Fecha primer contacto', 'Fecha propuesta', 'Fecha última gestión', 'Etapa comercial', 'Resultado', 'Semáforo', 'Próxima acción', 'Fecha próximo seguimiento (sugerida)', 'Responsable', 'Valor cotizado', 'Observaciones / historial'];
@@ -129,6 +129,21 @@ test('buildImportPlan maps every lead, estimates entry dates, attaches log rows 
   assert.equal(plan.report.estimatedEntryDates, 5);
   assert.deepEqual(plan.report.unknownStages, [{ legacyCode: 'BRN-120', label: 'Estado raro', resolved: 'APROBADA' }]);
   assert.equal(plan.report.byStage.POR_GESTIONAR, 1);
+});
+
+test('--owner-all assigns every lead to one person and names resolve against the active roster', async () => {
+  const plan = buildImportPlan(parseCrmWorkbook(workbook()), { owners: { all: 'tm-francys', comercial: 'tm-other' } });
+  assert.ok(plan.leads.every(lead => lead.ownerId === 'tm-francys'));
+  assert.equal(plan.report.withoutOwner, 0);
+  const db = createCrmMemoryDb({ members: [
+    { id: 'tm-francys', name: 'Francys Villa', isActive: true },
+    { id: 'tm-old', name: 'Francys Antigua', isActive: false },
+    { id: 'tm-rodny', name: 'Rodny Chirinos', isActive: true }
+  ] });
+  assert.deepEqual(await resolveOwnerOptions(db, { all: 'name:Francys' }), { all: 'tm-francys' });
+  assert.deepEqual(await resolveOwnerOptions(db, { all: 'name:francys villa', comercial: 'tm-x' }), { all: 'tm-francys', comercial: 'tm-x' });
+  await assert.rejects(resolveOwnerOptions(db, { all: 'name:Nadie' }), /0 personas/);
+  await assert.rejects(resolveOwnerOptions({ teamMember: { findMany: async () => [{ id: 'a', name: 'Ana Ruiz' }, { id: 'b', name: 'Ana Pérez' }] } }, { all: 'name:Ana' }), /2 personas/);
 });
 
 test('runImport is idempotent by legacyCode and writes nothing in dry-run mode', async () => {
