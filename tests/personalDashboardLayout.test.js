@@ -23,6 +23,9 @@ test('the dashboard places reminders beside announcements and achievements besid
   assert.doesNotMatch(source, /hasPersonalReminders|DashboardTip|DashboardCrmAttention/, 'reminders are always rendered: one panel, never conditional pieces');
   assert.match(source, /xl:col-span-3/, 'community-manager clients and management tools span the full width below');
   assert.doesNotMatch(source, /max-h-\[560px\]/, 'no widget in row 2 caps its height: the three stretch to the same bottom edge');
+  assert.match(source, /const RECENT_ACHIEVEMENTS_LIMIT = 5;/, 'recent achievements show the latest five so the row stays short (Rodny, 18 September 2026)');
+  assert.match(source, /\.slice\(0, RECENT_ACHIEVEMENTS_LIMIT\)/, 'the feed is capped with the shared limit');
+  assert.doesNotMatch(source, /\.slice\(0, 15\)/, 'the old fifteen-item feed is gone');
   assert.doesNotMatch(source, /Radar de Foco/, 'the focus radar was removed from the dashboard by decision of 18 September 2026');
   assert.doesNotMatch(source, /Reto de la semana|weeklyHabit/, 'the weekly challenge was removed from the dashboard');
   assert.doesNotMatch(source, /focusCards/, 'focus cards are no longer rendered');

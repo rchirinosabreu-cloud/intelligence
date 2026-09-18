@@ -58,6 +58,8 @@ const topDashboardPanelClass = cn(dashboardPanelClass, 'h-[470px] max-h-[470px]'
 const dashboardColumnsClass = 'grid grid-cols-1 gap-5 items-stretch xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_minmax(300px,0.85fr)]';
 
 const BOGOTA = 'America/Bogota';
+// Only the latest achievements of the day: the widget must not stretch its row (Rodny, 18 September 2026). The rest lives in the history modal.
+const RECENT_ACHIEVEMENTS_LIMIT = 5;
 
 const formatTodayLabel = (now = new Date()) => {
   const label = new Intl.DateTimeFormat('es-CO', { timeZone: BOGOTA, weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(now);
@@ -177,7 +179,7 @@ const Dashboard = () => {
       } catch {
         return false;
       }
-    }).slice(0, 15);
+    }).slice(0, RECENT_ACHIEVEMENTS_LIMIT);
   }, [dashboard?.achievements]);
 
   const createAnnouncementMutation = useMutation({
