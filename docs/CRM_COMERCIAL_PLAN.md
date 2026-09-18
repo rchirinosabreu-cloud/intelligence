@@ -4,7 +4,18 @@ Fecha: 18 de septiembre de 2026. Fuente: `CRM_Brain_Studio.xlsx` (6 hojas, 171 l
 
 ## 0. Estado de implementación (18 de septiembre de 2026)
 
-Fase 1 construida en la rama `feat/crm-comercial-base`: paleta de marca como tokens compartidos, modelos `CrmLead` y `CrmActivity`, inicializador aditivo `scripts/ensure-crm-schema.js`, permiso `crm`, reglas puras en `src/lib/crmRules.js`, API `/api/crm/*`, y pantallas Dashboard, Oportunidades, Ficha (con bitácora) y Seguimientos en `src/components/modules/Crm/`. Pendiente de esta fase: la importación del Excel (sección 6). Reportes y lo demás siguen siendo fase 2.
+Fase 1 construida: paleta de marca como tokens compartidos, modelos `CrmLead` y `CrmActivity`, inicializador aditivo `scripts/ensure-crm-schema.js`, permiso `crm`, reglas puras en `src/lib/crmRules.js`, API `/api/crm/*`, pantallas Dashboard, Oportunidades, Ficha (con bitácora) y Seguimientos en `src/components/modules/Crm/`, e importador `scripts/import-crm-excel.js` (sección 6). Reportes y lo demás siguen siendo fase 2.
+
+Importar el Excel (siempre primero en simulación):
+
+```powershell
+node scripts/import-crm-excel.js "ruta\CRM_Brain_Studio.xlsx" --dry-run
+node scripts/import-crm-excel.js "ruta\CRM_Brain_Studio.xlsx" --confirm-target=<host de DATABASE_URL> --owner-all=name:Francys
+```
+
+Decisión de Rodny (18 de septiembre de 2026): todos los leads se asignan a Francys (`--owner-all=name:Francys`, resuelto contra el roster activo de Equipo) y las gestiones importadas quedan sin autor; ambos se pueden cambiar después desde la ficha. `--owner-comercial` y `--owner-francisco` siguen disponibles para un reparto por columna.
+
+Sin `--confirm-target` igual al host de `DATABASE_URL` el script no escribe. Es idempotente por `legacyCode`: repetirlo no duplica. La corrida en simulación del 18 de septiembre de 2026 sobre el archivo real dio 171 leads, 21 filas de bitácora emparejadas, 16 notas con fecha convertidas en gestiones y 0 filas sin emparejar. Las 171 fechas de ingreso quedan marcadas como estimadas (el Excel no las tenía) y no cuentan en los promedios de velocidad.
 
 Laboratorio local sin base de datos: `npm run preview:crm` levanta las pantallas reales sobre el servicio real con datos de ejemplo en memoria (`tests/fixtures/crmData.js`). La prueba de navegador `tests/browser/crm.mjs` deja capturas en `output/crm/`.
 
@@ -153,7 +164,8 @@ Script `scripts/import-crm-excel.js`, ejecución manual y revisable, nunca desde
 - `enteredAt` = fecha publicación, si no fecha propuesta, si no última gestión, si no fecha de importación; marca `enteredAtEstimated = true` para que no contamine el promedio de velocidad de respuesta.
 - Parte las observaciones con patrón `DD-MMM-YYYY:` en gestiones tipo `NOTA` con su fecha; el resto queda en `notes`.
 - Carga la hoja Bitácora como gestiones, emparejando por nombre de empresa; lo que no empareje queda en un informe de salida para revisión.
-- Responsable: «Francisco» y «Comercial» se mapean a miembros del roster con una tabla que Rodny confirma antes de correrlo.
+- Responsable: «Francisco» y «Comercial» se mapean a miembros del roster con `--owner-francisco` y `--owner-comercial`; sin esos parámetros el lead queda sin responsable en lugar de adivinar.
+- Filas de la bitácora cuyo canal no es explícito («Seguimiento», «Contacto», «Recordatorio») entran como nota interna con la etiqueta original entre corchetes; «Propuesta enviada», «Respuesta cliente» y «Aprobación» sí entran con su tipo real.
 - Es idempotente por `legacyCode`: se puede correr dos veces sin duplicar.
 - Se ejecuta primero contra la base local; contra producción solo con confirmación explícita de Rodny.
 
