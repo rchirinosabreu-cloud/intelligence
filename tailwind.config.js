@@ -83,8 +83,26 @@ export default {
           gray: {
              bg: '#F3F3F3',
              text: '#1F2937'
-          }
+          },
+          // Official Brain palette (2026). DEFAULT reads the CSS token so opacity utilities work
+          // (bg-brand-cyan/10); `deep` is the AA text tone on light surfaces; `soft` is a tint.
+          cyan: { DEFAULT: 'rgb(var(--brand-cyan) / <alpha-value>)', deep: '#007A96', soft: '#E6F5F9' },
+          green: { DEFAULT: 'rgb(var(--brand-green) / <alpha-value>)', deep: '#1F7F66', soft: '#EAF6F2' },
+          magenta: { DEFAULT: 'rgb(var(--brand-magenta) / <alpha-value>)', deep: '#8A0E73', soft: '#F8E7F4' },
+          coral: { DEFAULT: 'rgb(var(--brand-coral) / <alpha-value>)', deep: '#D9433F', soft: '#FFEDEC' },
+          yellow: { DEFAULT: 'rgb(var(--brand-yellow) / <alpha-value>)', deep: '#8A6D00', soft: '#FFF8D6' }
+        },
+        // Semantic status tones for traffic lights and health signals. Red stays on `destructive`.
+        status: {
+          positive: { DEFAULT: 'rgb(var(--status-positive) / <alpha-value>)', fg: 'rgb(var(--status-positive-fg) / <alpha-value>)' },
+          attention: { DEFAULT: 'rgb(var(--status-attention) / <alpha-value>)', fg: 'rgb(var(--status-attention-fg) / <alpha-value>)' }
         }
+      },
+      backgroundImage: {
+        'brand-primary': 'linear-gradient(135deg, rgb(var(--brand-cyan)), rgb(var(--brand-green)))',
+        'brand-energy': 'linear-gradient(135deg, rgb(var(--brand-magenta)), rgb(var(--brand-coral)))',
+        'brand-sunrise': 'linear-gradient(135deg, rgb(var(--brand-coral)), rgb(var(--brand-yellow)))',
+        'brand-spectrum': 'linear-gradient(120deg, rgb(var(--brand-cyan)) 0%, rgb(var(--brand-green)) 45%, rgb(var(--brand-yellow)) 100%)'
       },
       borderRadius: {
         lg: "var(--radius)",

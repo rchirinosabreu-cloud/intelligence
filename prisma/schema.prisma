@@ -34,7 +34,7 @@ model User {
   email                       String                  @unique
   password                    String
   role                        SystemRole              @default(VIEWER)
-  modulePermissions           Json?                   @default("{\"dashboard\": true, \"manager\": false, \"gestion\": false, \"actividad\": false, \"reportes\": false, \"inspiracion\": false, \"parrillas\": false, \"minutas\": false, \"cotizaciones\": false, \"financiero\": false, \"radar\": false, \"clientes\": false, \"equipo\": false}")
+  modulePermissions           Json?                   @default("{\"dashboard\": true, \"manager\": false, \"gestion\": false, \"actividad\": false, \"reportes\": false, \"inspiracion\": false, \"parrillas\": false, \"minutas\": false, \"cotizaciones\": false, \"financiero\": false, \"radar\": false, \"clientes\": false, \"equipo\": false, \"crm\": false}")
   createdAt                   DateTime                @default(now())
   updatedAt                   DateTime                @updatedAt
   avatarUrl                   String?
@@ -79,6 +79,8 @@ model User {
   recognitionDebt             RecognitionDebtState?
   guideProgress               UserGuideProgress[]
   onboardingEligible          Boolean                 @default(false)
+  crmLeadsCreated             CrmLead[]               @relation("CrmLeadCreator")
+  crmActivities               CrmActivity[]
 }
 
 model UserGuideProgress {
@@ -458,6 +460,7 @@ model Client {
   financialRecords    FinancialRecord[]
   accountsReceivables AccountsReceivable[]
   metricReports       MetricReport[]
+  crmLeads            CrmLead[]
 
   @@index([isArchived, responsibleId])
 }
@@ -732,6 +735,7 @@ model TeamMember {
   flowMessages       FlowMessage[]
   nativeTasks        Task[]
   responsibleClients Client[]      @relation("ClientResponsible")
+  crmLeads           CrmLead[]     @relation("CrmLeadOwner")
 }
 
 model OperationalEvent {
@@ -1860,6 +1864,87 @@ model Quotation {
   accepted_at          DateTime?
   expires_at           DateTime
   updated_at           DateTime               @default(now()) @updatedAt
+  crmLeads             CrmLead[]
+}
+
+// ---- CRM comercial / bitácora SDR ----------------------------------------------------------------
+// One lead is one opportunity. Stage, origin, priority and traffic light are TEXT validated by
+// src/lib/crmRules.js and by CHECK constraints in scripts/ensure-crm-schema.js.
+model CrmLead {
+  id                   String        @id @default(uuid())
+  consecutive          Int           @default(autoincrement())
+  legacyCode           String?       @unique
+  origin               String        @default("OTRO")
+  originDetail         String?
+  enteredAt            DateTime      @default(now()) @db.Timestamptz()
+  enteredAtEstimated   Boolean       @default(false)
+  contactName          String?
+  company              String?
+  companyKey           String?
+  jobTitle             String?
+  phone                String?
+  email                String?
+  linkedinUrl          String?
+  serviceInterest      String?
+  language             String?
+  allowedContact       String?
+  priority             String        @default("MEDIA")
+  publishedAt          DateTime?     @db.Date
+  callDeadlineAt       DateTime?     @db.Date
+  firstContactAt       DateTime?     @db.Timestamptz()
+  proposalSentAt       DateTime?     @db.Timestamptz()
+  lastActivityAt       DateTime?     @db.Timestamptz()
+  closedAt             DateTime?     @db.Timestamptz()
+  stage                String        @default("POR_GESTIONAR")
+  trafficLightOverride String?
+  trafficLightReason   String?
+  nextAction           String?
+  nextFollowUpAt       DateTime?     @db.Date
+  ownerId              String?
+  owner                TeamMember?   @relation("CrmLeadOwner", fields: [ownerId], references: [id])
+  quotedValue          Decimal?      @db.Decimal(14, 2)
+  currency             String        @default("COP")
+  lostReason           String?
+  clientId             String?
+  client               Client?       @relation(fields: [clientId], references: [id])
+  quotationId          String?
+  quotation            Quotation?    @relation(fields: [quotationId], references: [id])
+  notes                String?
+  createdById          String?
+  createdBy            User?         @relation("CrmLeadCreator", fields: [createdById], references: [id])
+  createdAt            DateTime      @default(now()) @db.Timestamptz()
+  updatedAt            DateTime      @default(now()) @updatedAt @db.Timestamptz()
+  archivedAt           DateTime?     @db.Timestamptz()
+  activities           CrmActivity[]
+
+  @@index([stage, archivedAt], map: "CrmLead_stage_idx")
+  @@index([ownerId, nextFollowUpAt], map: "CrmLead_followup_idx")
+  @@index([origin], map: "CrmLead_origin_idx")
+  @@index([companyKey], map: "CrmLead_company_idx")
+  @@index([enteredAt], map: "CrmLead_entered_idx")
+}
+
+model CrmActivity {
+  id             String    @id @default(uuid())
+  leadId         String
+  lead           CrmLead   @relation(fields: [leadId], references: [id])
+  type           String
+  occurredAt     DateTime  @default(now()) @db.Timestamptz()
+  note           String?
+  result         String?
+  nextAction     String?
+  nextFollowUpAt DateTime? @db.Date
+  fromStage      String?
+  toStage        String?
+  authorId       String?
+  author         User?     @relation(fields: [authorId], references: [id])
+  requestId      String?
+  createdAt      DateTime  @default(now()) @db.Timestamptz()
+  editedAt       DateTime? @db.Timestamptz()
+
+  @@unique([authorId, requestId])
+  @@index([leadId, occurredAt], map: "CrmActivity_lead_idx")
+  @@index([authorId], map: "CrmActivity_author_idx")
 }
 
 enum MetricPeriodKind {

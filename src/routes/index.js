@@ -39,6 +39,7 @@ import recognitionRouter from './api/recognitions.js';
 import reportPdfRouter from './api/reportPdf.js';
 import minutesRouter from './api/minutes.js';
 import driveRouter from './api/drive.js';
+import crmRouter from './api/crm.js';
 import { createTeamChatRouter, createTeamChatMediaRouter } from './api/teamChat.js';
 import { getUpcomingEvents } from '../services/calendarService.js';
 import { handleGoogleCalendarWebhook } from '../services/operationalEventService.js';
@@ -284,5 +285,6 @@ router.use('/brain-core', brainCoreRouter);
 router.use('/boards', requireModulePermission('inspiracion'), boardsRouter);
 router.use('/operative-intelligence', operativeIntelligenceRouter);
 router.use('/financials', financialsRouter);
+router.use('/crm', requireModulePermission('crm'), crmRouter);
 
 export default router;
