@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { ArrowUpRight, CalendarClock } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import ClientAvatar from '@/components/ui/ClientAvatar';
@@ -59,11 +59,13 @@ export const groupTasksByDay = (tasks = [], now = new Date()) => {
     }));
 };
 
-const DashboardUpcomingTasks = ({ tasks = [], className, limit = 8, now = new Date() }) => {
-  const groups = useMemo(() => groupTasksByDay(tasks.slice(0, limit), now), [tasks, limit, now]);
+const DashboardUpcomingTasks = ({ tasks = [], className, limit = 8, now }) => {
+  // Fixed once per mount: a `new Date()` default would change every render and defeat the memo.
+  const nowRef = useRef(now || new Date());
+  const groups = useMemo(() => groupTasksByDay(tasks.slice(0, limit), nowRef.current), [tasks, limit]);
 
   return (
-    <section className={cn('brain-glass flex flex-col p-0', className)} aria-labelledby="dashboard-upcoming-title">
+    <section className={cn('brain-glass flex min-w-0 flex-col overflow-hidden p-0', className)} aria-labelledby="dashboard-upcoming-title">
       <div className="flex items-center justify-between gap-4 border-b border-zinc-200/70 px-5 py-4 dark:border-white/10">
         <div className="flex items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-cyan/10 dark:bg-brand-cyan/15">
@@ -86,7 +88,7 @@ const DashboardUpcomingTasks = ({ tasks = [], className, limit = 8, now = new Da
         </Button>
       </div>
 
-      <div className="space-y-4 px-5 py-4">
+      <div className="min-w-0 space-y-4 px-5 py-4">
         {groups.length === 0 ? (
           <div className="flex min-h-[120px] flex-col items-center justify-center rounded-xl border border-dashed border-zinc-200/80 px-4 py-6 text-center dark:border-white/10">
             <CalendarClock className="mb-2 h-7 w-7 text-zinc-300 dark:text-zinc-600" />
@@ -96,12 +98,13 @@ const DashboardUpcomingTasks = ({ tasks = [], className, limit = 8, now = new Da
         ) : groups.map((group) => (
           <div key={group.dayKey}>
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">{group.label}</p>
-            <ul className="space-y-2">
+            <ul className="min-w-0 space-y-2">
               {group.items.map((task) => (
-                <li key={task.id}>
+                <li key={task.id} className="min-w-0">
                   <a
                     href={`/gestion?taskId=${task.id}`}
-                    className="flex items-start gap-3 rounded-xl border border-zinc-200/80 bg-white/60 px-3 py-2.5 transition-colors hover:border-zinc-300 hover:bg-white dark:border-white/10 dark:bg-zinc-950/30 dark:hover:border-white/20 dark:hover:bg-zinc-950/60"
+                    className="flex min-w-0 items-start gap-3 rounded-xl border border-zinc-200/80 bg-white/60 px-3 py-2.5 transition-colors hover:border-zinc-300 hover:bg-white dark:border-white/10 dark:bg-zinc-950/30 dark:hover:border-white/20 dark:hover:bg-zinc-950/60"
+                    title={task.title}
                   >
                     {task.client && <ClientAvatar client={task.client} size={20} />}
                     <span className="min-w-0 flex-1">

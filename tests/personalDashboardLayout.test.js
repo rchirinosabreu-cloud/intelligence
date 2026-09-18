@@ -4,31 +4,31 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-test('the dashboard keeps announcements, achievements, upcoming work and meetings in the agreed order', async () => {
+test('the dashboard places reminders beside announcements and achievements beside upcoming work and meetings', async () => {
   const source = await read('src/components/modules/Dashboard.jsx');
 
   const announcements = source.indexOf('<DashboardAnnouncements');
-  const achievements = source.indexOf('Logros recientes');
+  const tip = source.indexOf('<DashboardTip');
   const crm = source.indexOf('<DashboardCrmAttention');
+  const achievementsRow2 = source.lastIndexOf('<AchievementsPanel');
   const upcoming = source.indexOf('<DashboardUpcomingTasks');
   const meetings = source.indexOf('<DashboardMeetings');
 
   assert.ok(announcements >= 0, 'the dashboard must render announcements');
-  assert.ok(achievements >= 0, 'the dashboard must render recent achievements');
-  assert.ok(crm >= 0, 'the dashboard must render the personal crm attention block');
-  assert.ok(upcoming >= 0 && meetings >= 0, 'the right column must render upcoming tasks and cited meetings');
+  assert.ok(tip >= 0 && crm >= 0, 'the dashboard must render the daily tip and the personal crm attention block');
+  assert.equal((source.match(/<AchievementsPanel/g) || []).length, 2, 'achievements render beside announcements only when there are no reminders, otherwise on the second row');
   assert.ok(
-    announcements < achievements && achievements < crm && crm < upcoming && upcoming < meetings,
-    'row 1: announcements (two columns) beside achievements; row 2: personal reminders, upcoming work, meetings'
+    announcements < tip && tip < crm && crm < achievementsRow2 && achievementsRow2 < upcoming && upcoming < meetings,
+    'row 1: announcements (two columns) beside the reminders column; row 2: achievements, upcoming work, meetings'
   );
-  assert.match(source, /!hasPersonalReminders && 'xl:col-span-2'/, 'upcoming work takes two columns when there are no personal reminders to sit beside');
+  assert.match(source, /!hasPersonalReminders && 'xl:col-span-2'/, 'upcoming work takes two columns when achievements sit beside announcements instead');
   assert.match(source, /xl:col-span-3/, 'management tools span the full width below');
   assert.doesNotMatch(source, /Radar de Foco/, 'the focus radar was removed from the dashboard by decision of 18 September 2026');
   assert.doesNotMatch(source, /Reto de la semana|weeklyHabit/, 'the weekly challenge was removed from the dashboard');
   assert.doesNotMatch(source, /focusCards/, 'focus cards are no longer rendered');
 });
 
-test('announcements and recent achievements share the same fixed-height dashboard surface', async () => {
+test('announcements and the column beside them share the same fixed-height dashboard surface', async () => {
   const [dashboardSource, announcementsSource] = await Promise.all([
     read('src/components/modules/Dashboard.jsx'),
     read('src/components/modules/DashboardAnnouncements.jsx')
@@ -41,8 +41,8 @@ test('announcements and recent achievements share the same fixed-height dashboar
   );
   assert.equal(
     (dashboardSource.match(/topDashboardPanelClass/g) || []).length,
-    3,
-    'the shared height contract must be declared once and applied to announcements and the original achievements widget'
+    4,
+    'declared once and applied to announcements, to the reminders column and to the achievements fallback beside announcements'
   );
   assert.doesNotMatch(dashboardSource, /RecognitionFeed/, 'recognitions must not replace the original completed-task feed');
   assert.match(dashboardSource, /<TaskRecognitionLabels task=\{task\}/, 'recognition titles complement each task');
@@ -53,7 +53,23 @@ test('announcements and recent achievements share the same fixed-height dashboar
   );
 });
 
-test('upcoming tasks are grouped by Bogotá day and meetings sit below them with the person cited', async () => {
+test('widgets never grow wider than their column: long titles truncate instead of overflowing', async () => {
+  const files = [
+    'src/components/modules/dashboard/DashboardUpcomingTasks.jsx',
+    'src/components/modules/dashboard/DashboardMeetings.jsx',
+    'src/components/modules/dashboard/DashboardCrmAttention.jsx',
+    'src/components/modules/dashboard/DashboardTip.jsx'
+  ];
+  for (const file of files) {
+    const source = await read(file);
+    assert.match(source, /<section className=\{cn\('brain-glass flex min-w-0[^']*overflow-hidden/, `${file}: the panel can shrink and clips its content`);
+  }
+  const upcoming = await read(files[0]);
+  assert.match(upcoming, /<a[\s\S]*?className="flex min-w-0 items-start/, 'rows can shrink so their titles truncate');
+  assert.match(upcoming, /title=\{task\.title\}/, 'the full title stays available on hover');
+});
+
+test('upcoming tasks are grouped by Bogotá day and meetings sit beside them with the person cited', async () => {
   const [upcoming, meetings] = await Promise.all([
     read('src/components/modules/dashboard/DashboardUpcomingTasks.jsx'),
     read('src/components/modules/dashboard/DashboardMeetings.jsx')

@@ -53,7 +53,7 @@ export function dashboardDemoDashboard(now = new Date()) {
     focusCards: [],
     todayTasks: [], overdueTasks: [], returnedTasks: [],
     upcomingTasks: [
-      upcoming('alpina', 'Copy campaña de temporada', 'Alpina', 1, true),
+      upcoming('alpina', 'PÁGINA WEB MUSEO DE MAMPUJÁN – AVANCES DE LA SEGUNDA ENTREGA CON EL CLIENTE', 'Alpina', 1, true),
       upcoming('colanta', 'Revisar propuesta comercial', 'Colanta', 1),
       upcoming('nutresa', 'Parrilla de octubre', 'Nutresa', 2),
       upcoming('postobon', 'Informe mensual de resultados', 'Postobón', 4),
@@ -72,7 +72,7 @@ export function dashboardDemoDashboard(now = new Date()) {
       { id: 'global-2', scope: 'GLOBAL', createdAt: hoursFromNow(-30, now).toISOString(), author: dashboardDemoUser, content: '<p>Bienvenida a <strong>Franci</strong> al equipo comercial.</p>' }
     ],
     meetings: [
-      meeting('comite', 'Comité Nutresa', 3, { link: true }),
+      meeting('comite', 'Reunión tráfico Brain Studio – Equipo Base con todos los líderes de cuenta', 3, { link: true }),
       meeting('kickoff', 'Kickoff Alpina', 7, { response: 'tentative' }),
       meeting('sync', 'Sincronización semanal', 28, { link: true, response: 'needsAction' }),
       meeting('cliente', 'Presentación Colanta', 52, { link: true })
