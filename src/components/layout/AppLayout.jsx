@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import TeamChat from '@/components/chat/TeamChat';
 import Sidebar from './Sidebar';
-import { Menu, User, LogOut, Settings, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye } from '@/components/ui/icons';
+import { Menu, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye } from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
-import TeamAvatar from '../ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { getNotificationDisplayParts } from '@/utils/notificationUtils';
@@ -22,11 +21,20 @@ import { OnboardingProvider } from '@/components/onboarding/OnboardingProvider';
 const AppLayout = ({ children }) => {
   const recognitionExperience = useRecognitionExperience();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  // Desktop only: the person can hide the sidebar; the choice is remembered on this device.
+  const [isSidebarHidden, setIsSidebarHidden] = useState(() => {
+    try { return localStorage.getItem('brain:sidebar-hidden') === '1'; } catch { return false; }
+  });
+  const toggleSidebarHidden = () => setIsSidebarHidden((current) => {
+    const next = !current;
+    try { localStorage.setItem('brain:sidebar-hidden', next ? '1' : '0'); } catch { /* per-device convenience only */ }
+    return next;
+  });
   const [chatDockWidth, setChatDockWidth] = useState(0);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isReturnedTaskAlertBlocking, setIsReturnedTaskAlertBlocking] = useState(true);
   const [isOnboardingBlocking, setIsOnboardingBlocking] = useState(true);
-  const { currentUser, logout } = useAuth();
+  const { currentUser } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const { pathname } = useLocation();
@@ -194,18 +202,12 @@ const AppLayout = ({ children }) => {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-    window.location.reload();
-  };
-
   return (
     <OnboardingProvider key={currentUser?.id} userId={currentUser?.id} pathname={pathname}
       blocked={isSidebarOpen || isNotificationsOpen} onBlockingChange={setIsOnboardingBlocking}>
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-primary/20 relative transition-colors duration-300 font-sans">
       {/* Sidebar - z-[60] (Internal) */}
-      <Sidebar isOpen={isSidebarOpen} onClose={() => setIsSidebarOpen(false)} />
+      <Sidebar isOpen={isSidebarOpen} hidden={isSidebarHidden} onClose={() => setIsSidebarOpen(false)} />
       <RecognitionRuntime userId={currentUser?.id} disabled={Boolean(recognitionExperience) || isOnboardingBlocking} />
       <ReturnedTaskAlertDialog
         userId={displayUser?.id}
@@ -221,7 +223,7 @@ const AppLayout = ({ children }) => {
       />
 
       {/* Header - z-50 */}
-      <header className="h-16 lg:pl-64 fixed top-0 left-0 right-0 z-50 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 transition-all">
+      <header className={cn("h-16 fixed top-0 left-0 right-0 z-50 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 transition-all", isSidebarHidden ? 'lg:pl-0' : 'lg:pl-64')}>
         <div className="h-full px-4 lg:px-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button
@@ -230,6 +232,17 @@ const AppLayout = ({ children }) => {
               className="lg:hidden"
               aria-label="Abrir menú"
               onClick={() => setIsSidebarOpen(true)}
+            >
+              <Menu className="w-5 h-5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden lg:inline-flex"
+              aria-label={isSidebarHidden ? 'Mostrar menú' : 'Ocultar menú'}
+              title={isSidebarHidden ? 'Mostrar menú' : 'Ocultar menú'}
+              aria-pressed={isSidebarHidden}
+              onClick={toggleSidebarHidden}
             >
               <Menu className="w-5 h-5" />
             </Button>
@@ -430,40 +443,7 @@ const AppLayout = ({ children }) => {
               </DropdownMenuContent>
             </DropdownMenu>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  className="flex min-h-11 items-center gap-3 p-1 rounded-full hover:bg-zinc-100 dark:hover:bg-white/5 transition-all outline-none"
-                  aria-label="Abrir menú de cuenta"
-                >
-                  <TeamAvatar
-                    member={{ name: displayUser?.name, avatarUrl: displayUser?.avatarUrl }}
-                    className="w-8 h-8"
-                  />
-                  <div className="hidden sm:flex flex-col text-left mr-2">
-                    <span className="text-xs font-bold leading-none">{displayUser?.name}</span>
-                    <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{displayUser?.role}</span>
-                  </div>
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-56">
-                <DropdownMenuLabel>Mi Cuenta</DropdownMenuLabel>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={() => navigate('/perfil')}>
-                  <User className="mr-2 h-4 w-4" />
-                  <span>Perfil</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate('/perfil')}>
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Ajustes</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleLogout} className="text-destructive brain-destructive-text focus:text-destructive">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Cerrar Sesión</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            {/* The account menu (Perfil, Ajustes, Cerrar sesión) lives in the sidebar profile block. */}
           </div>
         </div>
       </header>
@@ -477,7 +457,7 @@ const AppLayout = ({ children }) => {
       )}
 
       {/* Main Content Area - z-0 (above background) */}
-      <main className="relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8 lg:ml-64" style={{ marginRight: chatDockWidth }}>
+      <main className={cn("relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8", isSidebarHidden ? 'lg:ml-0' : 'lg:ml-64')} style={{ marginRight: chatDockWidth }}>
         <div className="mx-auto min-w-0 max-w-7xl space-y-8 animate-in fade-in duration-700">
           {recognitionExperience?.controls}
           {children}

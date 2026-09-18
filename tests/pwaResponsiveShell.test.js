@@ -56,7 +56,8 @@ test('task management controls and columns adapt to their actual available width
   assert.match(styles, /\.task-board-grid\s*\{[^}]*repeat\(auto-fit,\s*minmax\(min\(100%,\s*20rem\),\s*1fr\)\)/s);
   assert.match(styles, /\.task-toolbar-grid/);
   assert.match(styles, /@media \(min-width: 1536px\)[\s\S]*\.task-toolbar-grid/);
-  assert.match(shell, /<main className="[^"]*min-w-0[^"]*overflow-x-clip/);
+  // The class list may be composed with cn() now that the sidebar can be hidden on desktop.
+  assert.match(shell, /<main className=\{?(?:cn\()?"[^"]*min-w-0[^"]*overflow-x-clip/);
 });
 
 test('mobile sidebar stays above its overlay and scrolls inside the viewport', async () => {

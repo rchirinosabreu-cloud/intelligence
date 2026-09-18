@@ -4,8 +4,13 @@ import { attachTaskRecognitions } from './recognitionService.js';
 import DOMPurify from 'isomorphic-dompurify';
 import { createNotification } from './notificationService.js';
 import { getVisibleOperationalEventWhere, isVisibleOperationalEvent } from './operationalEventVisibility.js';
+import { hasModulePermission } from '../config/security.js';
+import { isActionableStage, stageLabel } from '../lib/crmRules.js';
 
 const ACTIVE_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
+const DASHBOARD_MEETING_HORIZON_DAYS = 7;
+const DASHBOARD_MEETING_LIMIT = 10;
+const DASHBOARD_CRM_LIMIT = 6;
 const MANAGER_ROLES = ['ADMIN', 'PROJECT_MANAGER'];
 const ANNOUNCEMENT_ALLOWED_TAGS = ['p', 'strong', 'em', 'u', 'h1', 'h2', 'h3', 'ul', 'ol', 'li', 'br', 'span', 'mark', 'a'];
 const ANNOUNCEMENT_ALLOWED_ATTR = ['href', 'target', 'rel', 'class', 'data-type', 'data-id', 'data-label', 'data-mention-id'];
@@ -216,6 +221,111 @@ const buildClientSummaries = (tasks, now) => {
     byClient.set(task.client.id, current);
   }
   return Array.from(byClient.values()).sort((a, b) => b.activeTasks - a.activeTasks).slice(0, 6);
+};
+
+const normalizeEmail = (value) => (typeof value === 'string' ? value.trim().toLowerCase() : '');
+
+const toIso = (value) => {
+  const date = toDate(value);
+  return date && !Number.isNaN(date.getTime()) ? date.toISOString() : null;
+};
+
+const isMemberCitedInEvent = (event, member) => {
+  if (!member) return false;
+  if (member.id && Array.isArray(event.memberIds) && event.memberIds.includes(member.id)) return true;
+  const email = normalizeEmail(member.email);
+  if (!email) return false;
+  if (normalizeEmail(event.organizerEmail) === email) return true;
+  return (event.attendeeEmails || []).some((attendee) => normalizeEmail(attendee) === email);
+};
+
+/**
+ * Reuniones donde la persona está citada: eventos de Actividad (propios o sincronizados desde Google)
+ * en los que el miembro aparece en `memberIds`, en `attendeeEmails` o como organizador.
+ * Solo los próximos días, en orden cronológico y sin eventos cancelados.
+ */
+export const buildDashboardMeetings = ({ events = [], member, now = new Date(), horizonDays = DASHBOARD_MEETING_HORIZON_DAYS, limit = DASHBOARD_MEETING_LIMIT }) => {
+  if (!member) return [];
+  const horizonEnd = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000);
+  const email = normalizeEmail(member.email);
+
+  return (events || [])
+    .filter((event) => isVisibleOperationalEvent(event) && isMemberCitedInEvent(event, member))
+    .filter((event) => {
+      const start = toDate(event.startAt);
+      const end = toDate(event.endAt) || start;
+      return start && end && end >= now && start <= horizonEnd;
+    })
+    .sort((a, b) => new Date(a.startAt) - new Date(b.startAt))
+    .slice(0, limit)
+    .map((event) => {
+      const responses = event.attendeeResponses && typeof event.attendeeResponses === 'object' ? event.attendeeResponses : {};
+      const responseEntry = Object.entries(responses).find(([attendee]) => normalizeEmail(attendee) === email);
+      return {
+        id: event.id,
+        occurrenceKey: event.occurrenceKey || event.id,
+        title: event.title || 'Reunión',
+        type: event.type || 'MEETING',
+        startAt: toIso(event.startAt),
+        endAt: toIso(event.endAt),
+        isAllDay: Boolean(event.isAllDay),
+        meetingLink: event.meetingLink || null,
+        htmlLink: event.googleHtmlLink || null,
+        organizerEmail: event.organizerEmail || null,
+        responseStatus: responseEntry ? responseEntry[1] : null,
+        isRecurrenceOccurrence: Boolean(event.isRecurrenceOccurrence),
+        dayKey: getBogotaWeekContext(event.startAt)?.dateKey || null,
+        isToday: isSameBogotaDay(toDate(event.startAt), now)
+      };
+    });
+};
+
+const CRM_ATTENTION_RANK = { VENCIDO: 0, HOY: 1 };
+const CRM_PRIORITY_RANK = { ALTA: 0, MEDIA: 1, BAJA: 2 };
+
+/**
+ * Oportunidades del CRM que piden atención hoy, solo las del miembro: seguimiento vencido, seguimiento
+ * para hoy o semáforo en rojo, en etapas donde todavía se puede actuar. Nunca es una lista del equipo.
+ */
+export const buildCrmAttention = ({ leads = [], enabled = true, limit = DASHBOARD_CRM_LIMIT } = {}) => {
+  if (!enabled) return { enabled: false, counts: { overdue: 0, today: 0, red: 0 }, items: [] };
+
+  const needsAttention = (leads || []).filter((lead) => (
+    isActionableStage(lead?.stage)
+    && (lead?.trafficLight?.value === 'ROJO' || ['VENCIDO', 'HOY'].includes(lead?.followUpBucket))
+  ));
+  const counts = {
+    overdue: needsAttention.filter((lead) => lead.followUpBucket === 'VENCIDO').length,
+    today: needsAttention.filter((lead) => lead.followUpBucket === 'HOY').length,
+    red: needsAttention.filter((lead) => lead.trafficLight?.value === 'ROJO').length
+  };
+  const items = needsAttention
+    .sort((a, b) => {
+      const bucket = (CRM_ATTENTION_RANK[a.followUpBucket] ?? 2) - (CRM_ATTENTION_RANK[b.followUpBucket] ?? 2);
+      if (bucket) return bucket;
+      const red = Number(b.trafficLight?.value === 'ROJO') - Number(a.trafficLight?.value === 'ROJO');
+      if (red) return red;
+      const priority = (CRM_PRIORITY_RANK[a.priority] ?? 3) - (CRM_PRIORITY_RANK[b.priority] ?? 3);
+      if (priority) return priority;
+      return String(a.nextFollowUpAt || '9999') < String(b.nextFollowUpAt || '9999') ? -1 : 1;
+    })
+    .slice(0, limit)
+    .map((lead) => ({
+      id: lead.id,
+      code: lead.code || null,
+      company: lead.company || null,
+      contactName: lead.contactName || null,
+      stage: lead.stage,
+      stageLabel: stageLabel(lead.stage),
+      priority: lead.priority || null,
+      trafficLight: lead.trafficLight?.value || null,
+      trafficLightReason: lead.trafficLight?.reason || null,
+      followUpBucket: lead.followUpBucket || null,
+      nextFollowUpAt: lead.nextFollowUpAt || null,
+      nextAction: lead.nextAction || null
+    }));
+
+  return { enabled: true, counts, items };
 };
 
 export const buildPersonalDashboard = ({ member, now = new Date(), globalAchievements = null }) => {
@@ -438,8 +548,50 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
     achievements: achievements.map(formatTask),
     clients: isCommunityManager ? assignedClients : [],
     weeklyHabit,
-    announcements: member.announcements || []
+    announcements: member.announcements || [],
+    meetings: Array.isArray(member.meetings) ? member.meetings : [],
+    crmAttention: member.crmAttention || buildCrmAttention({ enabled: false })
   };
+};
+
+const loadDashboardMeetings = async ({ member, now }) => {
+  const horizonEnd = new Date(now.getTime() + DASHBOARD_MEETING_HORIZON_DAYS * 24 * 60 * 60 * 1000);
+  const email = normalizeEmail(member.email || member.user?.email);
+  const emailVariants = [...new Set([email, member.email, member.user?.email].filter(Boolean))];
+  const citedWhere = [
+    { memberIds: { has: member.id } },
+    ...(emailVariants.length ? [{ attendeeEmails: { hasSome: emailVariants } }, { organizerEmail: { in: emailVariants } }] : [])
+  ];
+  const events = await prisma.operationalEvent.findMany({
+    where: {
+      AND: [
+        getVisibleOperationalEventWhere(),
+        { OR: citedWhere },
+        { startAt: { lte: horizonEnd } },
+        {
+          OR: [
+            { endAt: { gte: now } },
+            { AND: [{ recurrence: { in: ['WEEKLY', 'GOOGLE'] } }, { OR: [{ recurrenceEnd: null }, { recurrenceEnd: { gte: now } }] }] }
+          ]
+        }
+      ]
+    },
+    orderBy: { startAt: 'asc' }
+  });
+  const { expandOperationalEventOccurrences } = await import('./operationalEventService.js');
+  return buildDashboardMeetings({
+    events: expandOperationalEventOccurrences(events, now, horizonEnd),
+    member: { id: member.id, email },
+    now
+  });
+};
+
+const loadCrmAttention = async ({ member, now }) => {
+  const enabled = hasModulePermission(member.user, 'crm');
+  if (!enabled) return buildCrmAttention({ enabled: false });
+  const { listLeads } = await import('./crmService.js');
+  const { items } = await listLeads(prisma, { ownerId: member.id, pageSize: 500 }, now);
+  return buildCrmAttention({ leads: items, enabled: true });
 };
 
 export const getPersonalDashboard = async ({ requester, targetUserId }) => {
@@ -479,6 +631,9 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
   const member = await prisma.teamMember.findUnique({
     where: { userId },
     include: {
+      user: {
+        select: { id: true, email: true, role: true, modulePermissions: true }
+      },
       responsibleClients: {
         where: { isArchived: false },
         select: {
@@ -547,7 +702,12 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
 
   const announcementLookback = new Date(dashboardNow.getTime() - (8 * 24 * 60 * 60 * 1000));
   const challengeWeekWindow = getBogotaWeekWindow(dashboardNow);
-  const [announcements, globalAchievements, createdTasks, authoredAnnouncements, authoredOperationalEvents, returnedTasks] = await Promise.all([
+  const safe = (label, promise, fallback) => promise.catch((error) => {
+    // Un fallo en un bloque secundario no puede tumbar el dashboard completo.
+    console.error(`[PersonalDashboard] ${label} no disponible:`, error?.message || error);
+    return fallback;
+  });
+  const [announcements, globalAchievements, createdTasks, authoredAnnouncements, authoredOperationalEvents, returnedTasks, meetings, crmAttention] = await Promise.all([
     getDashboardAnnouncements(userId),
     prisma.task.findMany({
       where: {
@@ -675,11 +835,22 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
         { returnedAt: 'desc' },
         { updatedAt: 'desc' }
       ]
-    })
+    }),
+    safe('reuniones', loadDashboardMeetings({ member, now: dashboardNow }), []),
+    safe('atención comercial', loadCrmAttention({ member, now: dashboardNow }), buildCrmAttention({ enabled: false }))
   ]);
 
   return buildPersonalDashboard({
-    member: { ...member, announcements, createdTasks, authoredAnnouncements, authoredOperationalEvents, returnedTasks },
+    member: {
+      ...member,
+      announcements,
+      createdTasks,
+      authoredAnnouncements,
+      authoredOperationalEvents,
+      returnedTasks,
+      meetings,
+      crmAttention
+    },
     globalAchievements: await attachTaskRecognitions(prisma, globalAchievements),
     now: dashboardNow
   });

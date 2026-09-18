@@ -3,16 +3,12 @@ import React from 'react';
 import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, FolderOpen, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign, Target } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
-import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
-import { NavLink, Link } from 'react-router-dom';
-import { useState, useEffect } from 'react';
-import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { NavLink } from 'react-router-dom';
 import ChaosMeter from './ChaosMeter';
-import TeamAvatar from '../ui/TeamAvatar';
+import SidebarProfile from './SidebarProfile';
 
-const Sidebar = ({ isOpen, onClose }) => {
-  const { theme, toggleTheme } = useTheme();
+const Sidebar = ({ isOpen, onClose, hidden = false }) => {
   const { currentUser } = useAuth();
 
   const menuItems = [
@@ -52,14 +48,16 @@ const Sidebar = ({ isOpen, onClose }) => {
   });
 
   return (
-    <aside className={cn(
-      "fixed left-0 top-0 z-[60] flex h-[100dvh] w-[min(86vw,20rem)] flex-col overflow-hidden transition-transform duration-300 lg:w-64 lg:translate-x-0",
+    <aside aria-hidden={hidden} className={cn(
+      "fixed left-0 top-0 z-[60] flex h-[100dvh] w-[min(86vw,20rem)] flex-col overflow-hidden transition-transform duration-300 lg:w-64",
       isOpen ? "translate-x-0" : "-translate-x-full",
+      // Desktop: hidden by the person from the header toggle; the choice is remembered on the device.
+      hidden ? "lg:-translate-x-full" : "lg:translate-x-0",
       "border-r border-zinc-200/70 bg-white shadow-xl lg:bg-white/70 lg:shadow-sm lg:backdrop-blur-xl",
       "dark:border-white/10 dark:bg-zinc-950 dark:shadow-[4px_0_24px_-12px_rgba(0,0,0,0.5)] lg:dark:bg-zinc-900/60 lg:dark:backdrop-blur-xl"
     )}>
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between px-5 py-4 sm:p-6">
+      <div className="flex shrink-0 items-center justify-between px-5 py-4 sm:px-6 sm:py-5">
         <div className="flex items-center gap-3">
           <img src="/brainstudio-logo.png" alt="Brainstudio" className="w-8 h-8 object-contain" />
           <span className="text-xl font-bold tracking-tighter text-zinc-900 dark:text-zinc-100 drop-shadow-sm transition-colors">
@@ -75,8 +73,11 @@ const Sidebar = ({ isOpen, onClose }) => {
         </button>
       </div>
 
+      {/* Person: photo, name and account menu, always visible above the navigation */}
+      <SidebarProfile />
+
       {/* Navigation */}
-      <nav className="relative flex-1 space-y-2 overflow-y-auto overscroll-contain px-4 py-3">
+      <nav className="relative flex-1 space-y-1.5 overflow-y-auto overscroll-contain px-4 py-3">
         {filteredMenuItems.map((item) => {
           const Icon = item.icon;
 

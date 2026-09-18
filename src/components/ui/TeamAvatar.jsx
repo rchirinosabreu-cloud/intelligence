@@ -1,15 +1,23 @@
 import React from 'react';
 import Avatar from 'boring-avatars';
 import { cn } from '../../lib/utils';
+import { avatarRingClass } from '../../lib/avatarRing';
 
 // Vibrant, high-contrast palette for easy identification
 const brainstudioColors = ["#ef4444", "#eab308", "#22c55e", "#06b6d4", "#d946ef", "#f97316"];
 
+// Per-person colour ring (opt-in): a brand tone derived from the identity, with an offset so it reads on any surface.
+const ringClasses = (member) => cn(
+  'ring-[3px] ring-offset-2 ring-offset-white dark:ring-offset-zinc-950',
+  avatarRingClass(member)
+);
+
 /**
  * TeamAvatar - RESTORED: A globally consistent avatar component for team members.
  * Supports real profile photos (avatarUrl or photo) with fallback to initials/beam.
+ * `ring` draws the per-person brand ring (used on large photos: sidebar, profile, team cards).
  */
-export default function TeamAvatar({ member, className, size = 32, showTitle = true }) {
+export default function TeamAvatar({ member, className, size = 32, showTitle = true, ring = false }) {
   if (!member) {
     return (
       <div
@@ -34,6 +42,7 @@ export default function TeamAvatar({ member, className, size = 32, showTitle = t
   const name = typeof member === 'string' ? member : member.name || 'Desconocido';
   // Check for avatarUrl or photo (aliased in some responses)
   const avatarUrl = typeof member === 'string' ? null : (member.avatarUrl || member.photo);
+  const ringClassName = ring ? ringClasses(member) : null;
 
   // Use the image if provided AND not empty string
   if (avatarUrl && avatarUrl.trim() !== '' && !avatarUrl.includes('null')) {
@@ -45,6 +54,7 @@ export default function TeamAvatar({ member, className, size = 32, showTitle = t
         className={cn(
           "rounded-full object-cover shrink-0 shadow-sm border border-slate-200 dark:border-slate-800 transition-opacity duration-300",
           "w-8 h-8", // Default sizing
+          ringClassName,
           className
         )}
         onError={(e) => {
@@ -69,8 +79,9 @@ export default function TeamAvatar({ member, className, size = 32, showTitle = t
     return (
       <div
         className={cn(
-          "rounded-full shrink-0 shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center bg-indigo-600",
+          "rounded-full shrink-0 shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center bg-brand-cyan-deep",
           "w-8 h-8", // Default sizing
+          ringClassName,
           className
         )}
         title={showTitle ? name : undefined}
@@ -88,6 +99,7 @@ export default function TeamAvatar({ member, className, size = 32, showTitle = t
       className={cn(
         "rounded-full shrink-0 shadow-sm border border-slate-200 dark:border-slate-800 overflow-hidden flex items-center justify-center bg-white",
         "w-8 h-8", // Default sizing
+        ringClassName,
         className
       )}
       title={showTitle ? name : undefined}

@@ -13,8 +13,6 @@ import { format, differenceInMinutes, parseISO } from 'date-fns';
 import { es } from 'date-fns/locale';
 import toast from 'react-hot-toast';
 import SlideOver from '@/components/ui/SlideOver';
-import { useAuth } from '@/context/AuthContext';
-import AvatarUploader from './Radar/AvatarUploader';
 import ClientLogo from '@/components/ui/ClientLogo';
 
 const CATEGORY_COLORS = {
@@ -384,17 +382,14 @@ const TalentRadar = () => {
     );
 };
 
+// Radar de Mérito shows performance only: photos are changed by each person from their own profile.
 const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
-    const { currentUser } = useAuth();
-    const isAdmin = currentUser?.role === 'ADMIN';
-    const [activeTab, setActiveTab] = useState('profile');
     const [isGenerating, setIsGenerating] = useState(false);
     const [aiInsights, setAiInsights] = useState({}); // Isolate insights by member ID
 
     // Reset state on close/change
     useEffect(() => {
         setIsGenerating(false);
-        setActiveTab('profile');
     }, [memberId]);
 
     const aiInsight = memberId ? aiInsights[memberId] : null;
@@ -475,38 +470,10 @@ const MemberRadarDetail = ({ memberId, month, year, onClose }) => {
             iconBgColor="bg-indigo-600/10"
         >
             <div className="flex flex-col h-full overflow-hidden">
-                {/* Tabs Header */}
-                {isAdmin && (
-                    <div className="flex items-center px-6 border-b border-zinc-100 dark:border-white/5">
-                        <button
-                            onClick={() => setActiveTab('profile')}
-                            className={cn(
-                                "py-3 px-4 text-[10px] font-bold uppercase tracking-widest transition-all border-b-2",
-                                activeTab === 'profile' ? "text-indigo-600 border-indigo-600" : "text-zinc-400 border-transparent hover:text-zinc-600"
-                            )}
-                        >
-                            Info Pública
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('performance')}
-                            className={cn(
-                                "py-3 px-4 text-[10px] font-bold uppercase tracking-widest transition-all border-b-2",
-                                activeTab === 'performance' ? "text-indigo-600 border-indigo-600" : "text-zinc-400 border-transparent hover:text-zinc-600"
-                            )}
-                        >
-                            Desempeño
-                        </button>
-                    </div>
-                )}
-
                 <div className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
                     {isLoading ? (
                         <div className="flex items-center justify-center py-20">
                             <Loader2 className="w-6 h-6 animate-spin text-zinc-400" />
-                        </div>
-                    ) : activeTab === 'profile' ? (
-                        <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
-                            <AvatarUploader member={member} memberId={memberId} />
                         </div>
                     ) : (
                         <div className="space-y-8 animate-in slide-in-from-left-4 duration-300">

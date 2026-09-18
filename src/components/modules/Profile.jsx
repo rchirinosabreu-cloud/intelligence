@@ -7,7 +7,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
-import AvatarUploader from './Radar/AvatarUploader';
+import AvatarEditor from '@/components/profile/AvatarEditor';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
 import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, Trash2, Edit2, X, Check, Calendar, Target, Award, Info, Camera } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
@@ -309,9 +309,10 @@ const Profile = () => {
                 <div className="flex items-center gap-6">
                     <div className="relative group">
                         <TeamAvatar
-                            member={{ name: profileData.name || 'Usuario', avatarUrl: profileData.avatarUrl }}
-                            className="w-24 h-24 text-3xl shadow-xl ring-4 ring-white dark:ring-zinc-900"
+                            member={{ id: profileData.id, userId: profileData.id, name: profileData.name || 'Usuario', avatarUrl: profileData.avatarUrl }}
+                            className="w-24 h-24 text-3xl shadow-xl border-0 [&>span]:text-3xl"
                             size={96}
+                            ring
                         />
                         {isOwnProfile && (
                             <button
@@ -848,11 +849,11 @@ const Profile = () => {
                                     <X className="w-5 h-5" />
                                 </button>
                             </div>
-                            <div className="p-8">
-                                <AvatarUploader
-                                    member={{ ...profileData, avatarUrl: profileData.avatarUrl }}
-                                    memberId={profileData.id}
-                                    onUploadSuccess={() => {
+                            <div className="p-6 sm:p-8">
+                                <AvatarEditor
+                                    user={{ id: profileData.id, userId: profileData.id, name: profileData.name, avatarUrl: profileData.avatarUrl }}
+                                    onCancel={() => setIsAvatarModalOpen(false)}
+                                    onSaved={() => {
                                         setIsAvatarModalOpen(false);
                                         fetchProfile();
                                     }}

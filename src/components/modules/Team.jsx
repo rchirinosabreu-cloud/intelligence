@@ -337,7 +337,7 @@ export default function Team() {
                   className={cn("cursor-pointer transition-transform hover:scale-105", !member.userId && "cursor-default hover:scale-100")}
                   onClick={() => member.userId && navigate(`/perfil/${member.userId}`)}
                 >
-                  <TeamAvatar member={member} className="w-16 h-16 text-xl" />
+                  <TeamAvatar member={member} className="w-16 h-16 text-xl [&>span]:text-lg" ring />
                 </div>
                 <div>
                   <h3

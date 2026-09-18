@@ -22,6 +22,11 @@ export const getUserProfile = async (userId) => {
             user.modulePermissions = JSON.parse(user.modulePermissions);
         } catch (e) {}
     }
+    if (user) {
+        // The human role shown in the sidebar (e.g. «Director») comes from the team roster, not from the account role.
+        const member = await prisma.teamMember.findFirst({ where: { userId }, select: { role: true } });
+        user.teamRole = member?.role || null;
+    }
     return user;
 };
 
