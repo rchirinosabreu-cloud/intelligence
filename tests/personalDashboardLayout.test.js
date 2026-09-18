@@ -8,27 +8,27 @@ test('the dashboard places reminders beside announcements and achievements besid
   const source = await read('src/components/modules/Dashboard.jsx');
 
   const announcements = source.indexOf('<DashboardAnnouncements');
-  const tip = source.indexOf('<DashboardTip');
-  const crm = source.indexOf('<DashboardCrmAttention');
-  const achievementsRow2 = source.lastIndexOf('<AchievementsPanel');
+  const reminders = source.indexOf('<DashboardReminders');
+  const achievements = source.indexOf('<AchievementsPanel');
   const upcoming = source.indexOf('<DashboardUpcomingTasks');
   const meetings = source.indexOf('<DashboardMeetings');
 
   assert.ok(announcements >= 0, 'the dashboard must render announcements');
-  assert.ok(tip >= 0 && crm >= 0, 'the dashboard must render the daily tip and the personal crm attention block');
-  assert.equal((source.match(/<AchievementsPanel/g) || []).length, 2, 'achievements render beside announcements only when there are no reminders, otherwise on the second row');
+  assert.ok(reminders >= 0, 'the dashboard must render the reminders panel');
+  assert.equal((source.match(/<AchievementsPanel/g) || []).length, 1, 'achievements render once, on the second row');
   assert.ok(
-    announcements < tip && tip < crm && crm < achievementsRow2 && achievementsRow2 < upcoming && upcoming < meetings,
-    'row 1: announcements (two columns) beside the reminders column; row 2: achievements, upcoming work, meetings'
+    announcements < reminders && reminders < achievements && achievements < upcoming && upcoming < meetings,
+    'row 1: announcements (two columns) beside reminders; row 2: achievements, upcoming work, meetings'
   );
-  assert.match(source, /!hasPersonalReminders && 'xl:col-span-2'/, 'upcoming work takes two columns when achievements sit beside announcements instead');
-  assert.match(source, /xl:col-span-3/, 'management tools span the full width below');
+  assert.doesNotMatch(source, /hasPersonalReminders|DashboardTip|DashboardCrmAttention/, 'reminders are always rendered: one panel, never conditional pieces');
+  assert.match(source, /xl:col-span-3/, 'community-manager clients and management tools span the full width below');
+  assert.doesNotMatch(source, /max-h-\[560px\]/, 'no widget in row 2 caps its height: the three stretch to the same bottom edge');
   assert.doesNotMatch(source, /Radar de Foco/, 'the focus radar was removed from the dashboard by decision of 18 September 2026');
   assert.doesNotMatch(source, /Reto de la semana|weeklyHabit/, 'the weekly challenge was removed from the dashboard');
   assert.doesNotMatch(source, /focusCards/, 'focus cards are no longer rendered');
 });
 
-test('announcements and the column beside them share the same fixed-height dashboard surface', async () => {
+test('announcements and reminders share the same fixed-height dashboard surface', async () => {
   const [dashboardSource, announcementsSource] = await Promise.all([
     read('src/components/modules/Dashboard.jsx'),
     read('src/components/modules/DashboardAnnouncements.jsx')
@@ -41,9 +41,10 @@ test('announcements and the column beside them share the same fixed-height dashb
   );
   assert.equal(
     (dashboardSource.match(/topDashboardPanelClass/g) || []).length,
-    4,
-    'declared once and applied to announcements, to the reminders column and to the achievements fallback beside announcements'
+    3,
+    'declared once and applied to announcements and to the reminders panel beside them'
   );
+  assert.match(dashboardSource, /<DashboardReminders[^>]*className=\{cn\(topDashboardPanelClass/, 'the reminders panel always keeps the announcements height, even when it has little to say');
   assert.doesNotMatch(dashboardSource, /RecognitionFeed/, 'recognitions must not replace the original completed-task feed');
   assert.match(dashboardSource, /<TaskRecognitionLabels task=\{task\}/, 'recognition titles complement each task');
   assert.match(
@@ -57,8 +58,7 @@ test('widgets never grow wider than their column: long titles truncate instead o
   const files = [
     'src/components/modules/dashboard/DashboardUpcomingTasks.jsx',
     'src/components/modules/dashboard/DashboardMeetings.jsx',
-    'src/components/modules/dashboard/DashboardCrmAttention.jsx',
-    'src/components/modules/dashboard/DashboardTip.jsx'
+    'src/components/modules/dashboard/DashboardReminders.jsx'
   ];
   for (const file of files) {
     const source = await read(file);
