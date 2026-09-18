@@ -2,6 +2,12 @@
 
 Fecha: 18 de septiembre de 2026. Fuente: `CRM_Brain_Studio.xlsx` (6 hojas, 171 leads) y el protocolo «Ruta de gestión del cliente Brain Studio». Este documento es una propuesta de trabajo; no autoriza cambios de esquema ni despliegues por sí mismo.
 
+## 0. Estado de implementación (18 de septiembre de 2026)
+
+Fase 1 construida en la rama `feat/crm-comercial-base`: paleta de marca como tokens compartidos, modelos `CrmLead` y `CrmActivity`, inicializador aditivo `scripts/ensure-crm-schema.js`, permiso `crm`, reglas puras en `src/lib/crmRules.js`, API `/api/crm/*`, y pantallas Dashboard, Oportunidades, Ficha (con bitácora) y Seguimientos en `src/components/modules/Crm/`. Pendiente de esta fase: la importación del Excel (sección 6). Reportes y lo demás siguen siendo fase 2.
+
+Laboratorio local sin base de datos: `npm run preview:crm` levanta las pantallas reales sobre el servicio real con datos de ejemplo en memoria (`tests/fixtures/crmData.js`). La prueba de navegador `tests/browser/crm.mjs` deja capturas en `output/crm/`.
+
 ## 1. Qué hay hoy en el Excel
 
 | Hoja | Contenido | Qué se conserva |
