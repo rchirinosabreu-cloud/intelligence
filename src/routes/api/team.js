@@ -46,7 +46,8 @@ const defaultPermissions = {
     financiero: false,
     radar: false,
     clientes: false,
-    equipo: false
+    equipo: false,
+    crm: false
 };
 
 const sanitizePermissions = (perms) => {

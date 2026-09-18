@@ -45,7 +45,8 @@ export default function Team() {
     financiero: false,
     radar: false,
     clientes: false,
-    equipo: false
+    equipo: false,
+    crm: false
   });
 
   const handleRolePresetChange = (selectedRole) => {
@@ -63,7 +64,8 @@ export default function Team() {
       financiero: false,
       radar: false,
       clientes: false,
-      equipo: false
+      equipo: false,
+      crm: false
     };
 
     if (selectedRole === 'ADMIN' || selectedRole === 'PROJECT_MANAGER') {
@@ -79,7 +81,8 @@ export default function Team() {
         financiero: true,
         radar: true,
         clientes: true,
-        equipo: true
+        equipo: true,
+        crm: true
       };
     } else if (selectedRole === 'EDITOR') {
       presets = {
@@ -94,7 +97,8 @@ export default function Team() {
         financiero: false,
         radar: false,
         clientes: true,
-        equipo: false
+        equipo: false,
+        crm: false
       };
     } else if (selectedRole === 'VIEWER') {
       presets = {
@@ -109,7 +113,8 @@ export default function Team() {
         financiero: false,
         radar: false,
         clientes: true,
-        equipo: false
+        equipo: false,
+        crm: false
       };
     }
 
@@ -159,7 +164,8 @@ export default function Team() {
         financiero: !!rawPerms.financiero,
         radar: !!(rawPerms.radar || rawPerms.Radar),
         clientes: !!(rawPerms.clientes || rawPerms.Clientes),
-        equipo: !!(rawPerms.equipo || rawPerms.Equipo)
+        equipo: !!(rawPerms.equipo || rawPerms.Equipo),
+        crm: !!rawPerms.crm
       };
       setSystemRole(userRole);
       setFinancialRole(effectiveFinancialRole({ ...member.user, role: userRole, modulePermissions: userPerms }));
@@ -184,7 +190,8 @@ export default function Team() {
         financiero: false,
         radar: false,
         clientes: true,
-        equipo: false
+        equipo: false,
+        crm: false
       });
     }
     setIsModalOpen(true);
@@ -459,7 +466,8 @@ export default function Team() {
                         financiero: "Financiero",
                         radar: "Radar de Mérito",
                         clientes: "Clientes",
-                        equipo: "Equipo"
+                        equipo: "Equipo",
+                        crm: "CRM"
                       };
                       return (
                         <label key={module} className="flex items-center gap-2 p-2 bg-white dark:bg-zinc-900 border border-zinc-150 dark:border-zinc-800/60 rounded-xl cursor-pointer hover:bg-zinc-100/50 transition-colors select-none">

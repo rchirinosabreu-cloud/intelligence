@@ -14,9 +14,22 @@
     --popover: 0 0% 100%;
     --popover-foreground: 240 10% 3.9%;
 
-    /* Brainstudio positive action: #009EB9 */
-    --primary: 189 100% 36.3%;
+    /* Brainstudio positive action: official cyan #009BBF */
+    --primary: 191.3 100% 37.5%;
     --primary-foreground: 0 0% 100%;
+
+    /* Official Brain palette as RGB triplets (rgb(var(--brand-x) / alpha)). */
+    --brand-cyan: 0 155 191;      /* #009BBF */
+    --brand-green: 49 170 138;    /* #31AA8A */
+    --brand-magenta: 168 17 140;  /* #A8118C */
+    --brand-coral: 255 106 104;   /* #FF6A68 */
+    --brand-yellow: 252 210 0;    /* #FCD200 */
+
+    /* Status semantics (traffic lights, health). `-fg` is the AA text tone on this theme's surfaces. */
+    --status-positive: 49 170 138;
+    --status-positive-fg: 31 127 102;
+    --status-attention: 252 210 0;
+    --status-attention-fg: 138 109 0;
 
     /* Approved Bria green/cyan hues, deepened for AA white text in compact dialogs. */
     --bria-header-start: 0 123 99;
@@ -52,9 +65,13 @@
     --popover: 240 10% 3.9%;
     --popover-foreground: 0 0% 98%;
 
-    /* Brainstudio positive action: #009EB9 */
-    --primary: 189 100% 36.3%;
+    /* Brainstudio positive action: official cyan #009BBF */
+    --primary: 191.3 100% 37.5%;
     --primary-foreground: 0 0% 100%;
+
+    /* Same brand hues; only the readable text tones lift on dark surfaces. */
+    --status-positive-fg: 92 201 171;
+    --status-attention-fg: 242 210 74;
 
     --secondary: 240 3.7% 15.9%;
     --secondary-foreground: 0 0% 98%;
@@ -95,6 +112,34 @@
   .brain-ai-header {
     background-image: linear-gradient(135deg, rgb(var(--bria-header-start)), rgb(var(--bria-header-end)));
     color: white;
+  }
+
+  /* Brand gradients. Use them on accents, hero tiles and progress marks, never on body copy surfaces. */
+  .brain-gradient-primary {
+    background-image: linear-gradient(135deg, rgb(var(--brand-cyan)), rgb(var(--brand-green)));
+    color: white;
+  }
+  .brain-gradient-energy {
+    background-image: linear-gradient(135deg, rgb(var(--brand-magenta)), rgb(var(--brand-coral)));
+    color: white;
+  }
+  .brain-gradient-sunrise {
+    background-image: linear-gradient(135deg, rgb(var(--brand-coral)), rgb(var(--brand-yellow)));
+    color: rgb(24 24 27);
+  }
+  .brain-gradient-spectrum {
+    background-image: linear-gradient(120deg, rgb(var(--brand-cyan)) 0%, rgb(var(--brand-green)) 45%, rgb(var(--brand-yellow)) 100%);
+    color: white;
+  }
+  .brain-gradient-text {
+    background-image: linear-gradient(120deg, rgb(var(--brand-cyan)), rgb(var(--brand-green)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .brain-gradient-line {
+    height: 3px;
+    background-image: linear-gradient(90deg, rgb(var(--brand-cyan)), rgb(var(--brand-green)) 40%, rgb(var(--brand-yellow)) 75%, rgb(var(--brand-coral)));
   }
   .brain-popover-surface {
     @apply rounded-xl border border-zinc-200/80 bg-white text-zinc-900 shadow-lg shadow-zinc-950/5 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-100 dark:shadow-black/20;

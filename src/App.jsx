@@ -34,6 +34,8 @@ const PublicQuotation = lazy(() => import('./components/public/Quotations/Public
 const MinutesLayout = lazy(() => import('./components/modules/Minutes/MinutesLayout'));
 const DriveLayout = lazy(() => import('./components/modules/Drive/DriveLayout'));
 const OperationalHealth = lazy(() => import('./components/modules/OperationalHealth'));
+const CrmLayout = lazy(() => import('./components/modules/Crm/CrmLayout'));
+const CrmLeadDetail = lazy(() => import('./components/modules/Crm/CrmLeadDetail'));
 
 const AppLoader = () => (
   <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-300 flex items-center justify-center text-sm font-medium">
@@ -231,6 +233,22 @@ function AppContent() {
                       element={
                         <ModuleGuard module="minutas">
                           <DriveLayout />
+                        </ModuleGuard>
+                      }
+                    />
+                    <Route
+                      path="/crm"
+                      element={
+                        <ModuleGuard module="crm">
+                          <CrmLayout />
+                        </ModuleGuard>
+                      }
+                    />
+                    <Route
+                      path="/crm/oportunidades/:leadId"
+                      element={
+                        <ModuleGuard module="crm">
+                          <CrmLeadDetail />
                         </ModuleGuard>
                       }
                     />
