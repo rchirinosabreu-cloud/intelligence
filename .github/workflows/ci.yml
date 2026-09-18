@@ -12,20 +12,28 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
+      # One cluster serves every suite. The chat suites refuse anything that is
+      # not 127.0.0.1:55448/recognition_test with user recognition_test, and the
+      # generic suites accept any local database, so this shape satisfies both.
       postgres:
         image: pgvector/pgvector:pg15
         env:
-          POSTGRES_USER: user
-          POSTGRES_PASSWORD: password
-          POSTGRES_DB: brainstudio
+          POSTGRES_USER: recognition_test
+          POSTGRES_DB: recognition_test
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
-          - 5432:5432
+          - 55448:5432
         # Wait for postgres to be ready
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
+
+    env:
+      # Always 127.0.0.1, never localhost: the chat sandbox compares the
+      # hostname literally, and localhost can resolve to ::1 first.
+      DATABASE_URL: postgresql://recognition_test@127.0.0.1:55448/recognition_test
 
     steps:
       - name: Checkout Repository
@@ -41,19 +49,18 @@ jobs:
         run: npm ci
 
       - name: Prisma Generate
-        env:
-          DATABASE_URL: postgresql://user:password@localhost:5432/brainstudio
         run: npx prisma generate
 
       - name: Enable pgvector
-        env:
-          PGPASSWORD: password
-        run: psql -h localhost -U user -d brainstudio -c 'CREATE EXTENSION IF NOT EXISTS vector;'
+        run: psql -h 127.0.0.1 -p 55448 -U recognition_test -d recognition_test -c 'CREATE EXTENSION IF NOT EXISTS vector;'
 
       - name: Provision Test Schema
-        env:
-          DATABASE_URL: postgresql://user:password@localhost:5432/brainstudio
         run: npx prisma db push
+
+      # The component suites build their bundles under output/, which is
+      # gitignored and therefore absent from a clean checkout.
+      - name: Prepare scratch directories
+        run: mkdir -p output
 
       - name: Lint Code
         run: npm run lint
@@ -63,8 +70,7 @@ jobs:
 
       - name: Run Tests
         env:
-          DATABASE_URL: postgresql://user:password@localhost:5432/brainstudio
-          TEST_DATABASE_URL: postgresql://user:password@localhost:5432/brainstudio
+          TEST_DATABASE_URL: postgresql://recognition_test@127.0.0.1:55448/recognition_test
           JWT_SECRET: test-secret-with-at-least-32-characters
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: npm run test:ci
