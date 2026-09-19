@@ -13,6 +13,10 @@ import { proposalRichTextBlocks, sanitizeProposalHtml } from './quotationProposa
 
 const BULLET = /^\s*(?:[-•*·]|\d+[.)])\s+/;
 const LABEL = /^\s*([^:\n]{1,40}?)\s*:\s*(.*)$/;
+// Hand-written descriptions often run "…comunicación. Incluye revisión, paleta
+// y tipografías. No incluye impresión" with no colon: these labels are
+// recognized at the start of a line or of a sentence.
+const KNOWN_LABEL = /(?:^|(?<=[.;]\s))(no incluye|incluye|concepto|entregables|requisitos|condiciones|nota)\b\s*:?\s*/gi;
 const INLINE_LABELS = new Set(['concepto', 'tiempo de servicio', 'nota', 'duración', 'duracion', 'frecuencia', 'entrega']);
 const LEADING_CONNECTOR = /^(?:y|e|ni|o|u)\s+/i;
 const CUMULATIVE = /\s(?:y|e|ni)\s/i;
@@ -28,6 +32,30 @@ const capitalize = value => value.charAt(0).toUpperCase() + value.slice(1);
 const clean = value => String(value ?? '').replace(/\r\n?/g, '\n').replace(/[ \t]+/g, ' ').trim();
 const stripTrailingPeriod = value => value.replace(/\s*[.;,]+$/u, '').trim();
 const isHead = unit => PREPOSITION.test(unit) && !CUMULATIVE.test(unit);
+
+// "Texto libre. Incluye a y b. No incluye c" ->
+// [{ label: '', rest: 'Texto libre.' }, { label: 'Incluye', rest: 'a y b.' }, { label: 'No incluye', rest: 'c' }]
+const segmentLine = line => {
+  const segments = [];
+  let label = '', start = 0;
+  for (const match of line.matchAll(KNOWN_LABEL)) {
+    const rest = line.slice(start, match.index).trim();
+    if (label || rest) segments.push({ label, rest });
+    label = capitalize(match[1].toLowerCase());
+    start = match.index + match[0].length;
+  }
+  segments.push({ label, rest: line.slice(start).trim() });
+  return segments;
+};
+
+// The closing connector of "a, b y c" is the first one; when that would leave
+// a one-word head ("seguimiento y optimización … e informe"), the last one is
+// the real closer.
+const closingConnector = value => {
+  const matches = [...value.matchAll(new RegExp(CUMULATIVE.source, 'gi'))];
+  const head = value.slice(0, matches[0].index).trim();
+  return matches.length > 1 && !/\s/.test(head) ? matches[matches.length - 1] : matches[0];
+};
 const mergeFrom = (units, index, part) => units.splice(index, units.length - index, [...units.slice(index), part].join(', '));
 
 // "a, b, c y d; e, f ni g." -> ["a", "b", "c", "d", "e", "f", "g"].
@@ -48,13 +76,18 @@ export const splitEnumeration = value => {
     if (!parts.length) continue;
     // "puede incluir clientes, tareas, inventario o reportes" is one item.
     if (INTRODUCER.test(parts[0]) && !parts.some(part => CUMULATIVE.test(part))) { items.push(parts.join(', ')); continue; }
-    let tail = null;
-    if (parts.length > 1 && CUMULATIVE.test(parts[parts.length - 1])) {
+    // Units after the closing connector are final: never merged into a sub-list.
+    let tail = [];
+    // A lone "diagnóstico con hallazgos y recomendaciones" stays whole, but
+    // "impresión ni pauta" is always two excluded items.
+    if (CUMULATIVE.test(parts[parts.length - 1]) && (parts.length > 1 || /\sni\s/i.test(parts[0]))) {
       const last = parts.pop();
-      const match = last.match(CUMULATIVE);
+      const match = closingConnector(last);
       const head = last.slice(0, match.index).trim();
-      tail = last.slice(match.index + match[0].length).trim();
-      if (head) parts.push(head); else tail = last;
+      const rest = last.slice(match.index + match[0].length).trim();
+      if (!head || !rest) tail = [last];
+      else if (CUMULATIVE.test(head)) tail = [head, rest];
+      else { parts.push(head); tail = [rest]; }
     }
     const units = [];
     for (const part of parts) {
@@ -75,8 +108,7 @@ export const splitEnumeration = value => {
         mergeFrom(units, units.length - 1, part);
       } else units.push(part);
     }
-    if (tail) units.push(tail);
-    items.push(...units);
+    items.push(...units, ...tail);
   }
   return items.map(item => capitalize(stripTrailingPeriod(item))).filter(Boolean);
 };
@@ -98,14 +130,19 @@ export const parseCatalogDescription = value => {
       current.items.push(capitalize(line.replace(BULLET, '').trim()));
       continue;
     }
-    finishSection(sections, current);
-    const match = line.match(LABEL);
-    if (!match) { current = { label: '', text: line, items: [], notes: [] }; continue; }
-    const label = capitalize(match[1].trim());
-    const rest = match[2].trim();
-    if (!rest || INLINE_LABELS.has(label.toLowerCase())) { current = { label, text: rest, items: [], notes: [] }; continue; }
-    const [enumeration, ...notes] = rest.split(SENTENCE_BREAK);
-    current = { label, text: '', items: splitEnumeration(enumeration), notes: notes.map(note => note.trim()).filter(Boolean) };
+    for (const segment of segmentLine(line)) {
+      finishSection(sections, current);
+      let { label, rest } = segment;
+      if (!label) {
+        const match = rest.match(LABEL);
+        if (!match) { current = { label: '', text: rest, items: [], notes: [] }; continue; }
+        label = capitalize(match[1].trim());
+        rest = match[2].trim();
+      }
+      if (!rest || INLINE_LABELS.has(label.toLowerCase())) { current = { label, text: rest, items: [], notes: [] }; continue; }
+      const [enumeration, ...notes] = rest.split(SENTENCE_BREAK);
+      current = { label, text: '', items: splitEnumeration(enumeration), notes: notes.map(note => note.trim()).filter(Boolean) };
+    }
   }
   finishSection(sections, current);
   return sections;
