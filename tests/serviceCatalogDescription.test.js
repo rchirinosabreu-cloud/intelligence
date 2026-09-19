@@ -32,6 +32,18 @@ test('sub-lists stay with the phrase that opened them', () => {
   assert.deepEqual(splitEnumeration('ajustes menores, revisión de enlaces y visualización general, hasta 3 horas de soporte'), ['Ajustes menores', 'Revisión de enlaces', 'Visualización general, hasta 3 horas de soporte']);
   assert.deepEqual(splitEnumeration('diagnóstico con hallazgos y recomendaciones prácticas'), ['Diagnóstico con hallazgos y recomendaciones prácticas']);
 });
+test('hand-written paragraphs with "Incluye" and "No incluye" but no colon are still organized', () => {
+  const text = 'Servicio de evolución gráfica para marcas existentes que necesitan actualizar su identidad. Incluye revisión del sistema visual actual, definición de paleta cromática y tipografías, diseño de foto de perfil, portada y destacados para redes sociales y diseño de brochure comercial. No incluye impresión ni pauta.';
+  const expected = [
+    'Servicio de evolución gráfica para marcas existentes que necesitan actualizar su identidad.',
+    'Incluye:', '- Revisión del sistema visual actual', '- Definición de paleta cromática y tipografías', '- Diseño de foto de perfil', '- Portada y destacados para redes sociales', '- Diseño de brochure comercial',
+    'No incluye:', '- Impresión', '- Pauta'
+  ].join('\n');
+  assert.equal(formatCatalogDescription(text), expected);
+  assert.equal(formatCatalogDescription(expected), expected);
+  assert.equal(formatCatalogDescription('Concepto: paquete que incluye dos revisiones.'), 'Concepto: paquete que incluye dos revisiones.');
+  assert.deepEqual(splitEnumeration('montaje de anuncios, seguimiento y optimización básica durante el mes e informe mensual básico'), ['Montaje de anuncios', 'Seguimiento y optimización básica durante el mes', 'Informe mensual básico']);
+});
 test('explanatory sentences after an enumeration become notes, not bullets', () => {
   const text = 'Incluye: impulsos, tráfico o conversiones según el objetivo. Este valor lo paga el cliente a la plataforma. Brain Studio no factura este valor, salvo acuerdo explícito.';
   assert.equal(formatCatalogDescription(text), 'Incluye:\n- Impulsos\n- Tráfico o conversiones según el objetivo\nEste valor lo paga el cliente a la plataforma.\nBrain Studio no factura este valor, salvo acuerdo explícito.');

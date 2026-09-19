@@ -143,7 +143,7 @@ const ServiceCatalogModal = ({ open, onOpenChange, service = null, initialName =
                                 compactFormats
                                 toolbarAlwaysVisible
                                 placeholder="Concepto, qué incluye y qué no incluye…"
-                                className="px-4 py-3 text-sm"
+                                className="px-4 py-3 text-sm !break-words"
                             />
                             <p className="text-[10px] text-zinc-400">Negrilla, viñetas y saltos de línea llegan tal cual a la cotización.</p>
                         </div>
