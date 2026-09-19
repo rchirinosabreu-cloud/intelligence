@@ -14,6 +14,7 @@ const PdfDocumentPreview = lazy(
 export default function ChatFilePreview({
   file,
   url,
+  data: providedData,
   onClose,
   onDownload,
   downloading,
@@ -44,6 +45,18 @@ export default function ChatFilePreview({
           setPreview({ type: "large" });
           return;
         }
+        // A caller that already holds the bytes (an authenticated download kept
+        // in memory) hands them over: no second request, and no blob: fetch,
+        // which the production Content-Security-Policy does not allow.
+        if (providedData) {
+          if (pdf) setPreview({ type: "pdf", data: providedData });
+          else
+            setPreview({
+              type: "text",
+              text: new TextDecoder("utf-8").decode(providedData),
+            });
+          return;
+        }
         const response = await fetch(url, { signal: abort.signal });
         if (!response.ok) {
           const result = await response.json();
@@ -67,7 +80,7 @@ export default function ChatFilePreview({
     };
     load();
     return () => abort.abort();
-  }, [url, file.id, file.name, file.mimeType, file.size]);
+  }, [url, providedData, file.id, file.name, file.mimeType, file.size]);
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent

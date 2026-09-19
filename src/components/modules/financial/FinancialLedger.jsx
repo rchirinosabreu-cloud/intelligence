@@ -261,11 +261,10 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
     };
 
     // The bytes come through the authenticated API as a blob; the viewer and the download reuse that same local copy.
-    const fetchDocumentBlobUrl = async (recordId, item) => {
+    const fetchDocumentBlob = async (recordId, item) => {
         const url = `${getApiBaseUrl()}/api/financials/records/${recordId}/documents/${item.id}/file`;
         const response = await axios.get(url, { headers: authHeaders(), responseType: 'blob' });
-        const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: item.mimeType });
-        return URL.createObjectURL(blob);
+        return response.data instanceof Blob ? response.data : new Blob([response.data], { type: item.mimeType });
     };
 
     const downloadBlobUrl = (objectUrl, name) => {
@@ -286,14 +285,17 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
 
     const openDocument = async (recordId, item, download = false) => {
         try {
-            const objectUrl = await fetchDocumentBlobUrl(recordId, item);
+            const blob = await fetchDocumentBlob(recordId, item);
+            const objectUrl = URL.createObjectURL(blob);
             if (download) {
                 downloadBlobUrl(objectUrl, item.name);
                 window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
                 return;
             }
+            // PDFs go to the viewer as bytes: the page's Content-Security-Policy does not let it fetch a blob: URL.
+            const data = item.mimeType === 'application/pdf' ? await blob.arrayBuffer() : undefined;
             closeDocumentPreview();
-            setDocumentPreview({ file: { id: item.id, name: item.name, mimeType: item.mimeType, size: Number(item.size) }, url: objectUrl });
+            setDocumentPreview({ file: { id: item.id, name: item.name, mimeType: item.mimeType, size: Number(item.size) }, url: objectUrl, data });
         } catch (requestError) {
             console.error('Error opening financial document:', requestError.response?.data || requestError);
             toast.error(requestError.response?.data?.message || 'No fue posible abrir el documento.');
@@ -817,6 +819,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                 <ChatFilePreview
                     file={documentPreview.file}
                     url={documentPreview.url}
+                    data={documentPreview.data}
                     onClose={closeDocumentPreview}
                     onDownload={() => downloadBlobUrl(documentPreview.url, documentPreview.file.name)}
                 />
