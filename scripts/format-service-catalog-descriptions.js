@@ -12,6 +12,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { formatCatalogDescription } from '../src/services/serviceCatalogDescription.js';
+import { resolveCatalogIdentity } from '../src/services/serviceCatalogImport.js';
+import { normalizeQuotationItemTitle } from '../src/services/quotationDomainService.js';
+
+// Stored names are title-cased by normalize-quotation-titles ("Auditoría De
+// Marca") while the JSON keeps sentence case, so both sides are normalized.
+const identity = (name) => normalizeQuotationItemTitle(resolveCatalogIdentity(String(name || '').trim()));
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const catalogPath = path.join(__dirname, '../data/service_catalog_2026.json');
@@ -30,10 +36,10 @@ export const formatCatalogFile = (filePath = catalogPath) => {
 };
 
 export const formatStoredCatalogDescriptions = async (database, { dryRun = false, catalog = [] } = {}) => {
-  const curated = new Map(catalog.map((service) => [service.name, service.description]));
+  const curated = new Map(catalog.map((service) => [identity(service.name), service.description]));
   const services = await database.serviceCatalog.findMany({ select: { id: true, name: true, description: true }, orderBy: { name: 'asc' } });
   const changes = services
-    .map((service) => ({ ...service, next: formatCatalogDescription(curated.get(service.name) ?? service.description) }))
+    .map((service) => ({ ...service, next: formatCatalogDescription(curated.get(identity(service.name)) ?? service.description) }))
     .filter((service) => service.next !== service.description)
     .map(({ id, name, description, next }) => ({ id, name, before: description, after: next }));
 
