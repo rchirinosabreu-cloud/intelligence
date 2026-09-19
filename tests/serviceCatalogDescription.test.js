@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { catalogDescriptionToHtml, formatCatalogDescription, parseCatalogDescription, splitEnumeration } from '../src/services/serviceCatalogDescription.js';
+import { catalogDescriptionToHtml, catalogServiceHtml, formatCatalogDescription, parseCatalogDescription, proposalHtmlToCatalogText, resolveCatalogDescriptionInput, splitEnumeration } from '../src/services/serviceCatalogDescription.js';
 import { proposalRichTextBlocks, sanitizeProposalHtml } from '../src/services/quotationProposalDetails.js';
 import { formatCatalogFile, formatStoredCatalogDescriptions } from '../scripts/format-service-catalog-descriptions.js';
 
@@ -52,6 +52,24 @@ test('the HTML form survives the proposal sanitizer and renders bold labels with
   assert.equal(blocks[0].runs[0].bold, true);
   assert.equal(blocks.filter(block => block.bullet).length, 9);
   assert.match(catalogDescriptionToHtml('Incluye: <script>, 2 & 3 y fin'), /&lt;script&gt;/);
+});
+test('editor HTML round-trips to the stored plain form and back without losing bullets or labels', () => {
+  const html = catalogDescriptionToHtml(formatted);
+  assert.equal(proposalHtmlToCatalogText(html), formatted);
+  assert.equal(proposalHtmlToCatalogText('<p><strong>Incluye:</strong></p><ul><li><p>Diseño  de <em>logo</em></p></li><li><p>Entrega</p></li></ul><p>Nota final.</p>'), 'Incluye:\n- Diseño de logo\n- Entrega\nNota final.');
+});
+test('the catalog modal input keeps the rich version and derives the plain text from it', () => {
+  const rich = resolveCatalogDescriptionInput({ descriptionHtml: '<p><strong>Incluye:</strong></p><ul><li>Logo <u>final</u></li></ul><script>alert(1)</script>' });
+  assert.equal(rich.description, 'Incluye:\n- Logo final');
+  assert.equal(rich.description_html, '<p><strong>Incluye:</strong></p><ul><li>Logo <u>final</u></li></ul>');
+  assert.deepEqual(resolveCatalogDescriptionInput({ descriptionHtml: '<p></p>' }), { description: '', description_html: null });
+  assert.deepEqual(resolveCatalogDescriptionInput({ description: 'Incluye: a, b y c.' }), { description: 'Incluye:\n- A\n- B\n- C', description_html: null });
+  assert.deepEqual(resolveCatalogDescriptionInput({}), {});
+  assert.throws(() => resolveCatalogDescriptionInput({ descriptionHtml: 'x'.repeat(20001) }), error => error.statusCode === 400);
+});
+test('a quotation item starts from the rich version when the service has one, otherwise from the rendered text', () => {
+  assert.equal(catalogServiceHtml({ description: 'Incluye:\n- A', descriptionHtml: '<p><em>Propio</em></p>' }), '<p><em>Propio</em></p>');
+  assert.equal(catalogServiceHtml({ description: 'Incluye:\n- A', descriptionHtml: null }), '<p><strong>Incluye:</strong></p><ul><li>A</li></ul>');
 });
 test('the script rewrites the catalog JSON in place and reports how many changed', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'catalog-format-'));

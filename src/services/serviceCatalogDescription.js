@@ -6,8 +6,10 @@
 //   - Primer elemento
 //   - Segundo elemento
 //
-// The plain form is what the catalog editor shows and what the seed keeps; the
-// HTML form is what a quotation item receives when the service is added.
+// The plain form is what the seed keeps and what search and cards show; the
+// HTML form is what the catalog modal edits and what a quotation item receives
+// when the service is added.
+import { proposalRichTextBlocks, sanitizeProposalHtml } from './quotationProposalDetails.js';
 
 const BULLET = /^\s*(?:[-•*·]|\d+[.)])\s+/;
 const LABEL = /^\s*([^:\n]{1,40}?)\s*:\s*(.*)$/;
@@ -125,3 +127,27 @@ export const catalogDescriptionToHtml = value => parseCatalogDescription(value).
   }
   return `<p>${label}${label && section.text ? ' ' : ''}${escapeHtml(section.text)}</p>${notes}`;
 }).join('');
+
+// Editor HTML back to the stored plain form: bullets keep their "- " marker,
+// everything else is one line per block.
+export const proposalHtmlToCatalogText = html => proposalRichTextBlocks(html).map(block => {
+  const text = block.runs.map(run => run.text).join('').replace(/\s+/g, ' ').trim();
+  return block.bullet ? `- ${text}` : text;
+}).filter(Boolean).join('\n');
+
+// What a quotation item (or the modal) starts from: the rich version when the
+// service was edited in the modal, otherwise the plain text rendered.
+export const catalogServiceHtml = service => service?.descriptionHtml || catalogDescriptionToHtml(service?.description);
+
+// Request body -> ServiceCatalog columns. The rich version wins when sent;
+// the plain description is always derived from it so search, cards and seeds
+// keep working on text.
+export const resolveCatalogDescriptionInput = ({ description, descriptionHtml } = {}) => {
+  if (descriptionHtml !== undefined && descriptionHtml !== null) {
+    const html = sanitizeProposalHtml(descriptionHtml);
+    const text = formatCatalogDescription(proposalHtmlToCatalogText(html));
+    return { description: text, description_html: text ? html : null };
+  }
+  if (description !== undefined) return { description: formatCatalogDescription(description), description_html: null };
+  return {};
+};

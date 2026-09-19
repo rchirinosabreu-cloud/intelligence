@@ -1865,6 +1865,8 @@ model ServiceCatalog {
   category                  ServiceCategory
   name                      String          @unique
   description               String
+  // Rich version of `description` as edited in the catalog modal; null means "derive from the text".
+  description_html          String?
   costo_real_estimado       Decimal?
   valor_neto                Decimal
   valor_neto_actual         Decimal
