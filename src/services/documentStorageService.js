@@ -7,9 +7,20 @@ const getStorageConfig = () => ({
   bucketName: process.env.BRIA_STORAGE_BUCKET || process.env.AWS_S3_BUCKET_NAME
 });
 
+// Minutes and Drive are the agency memory. They belong in their own bucket (BRIA_STORAGE_BUCKET,
+// Railway "agency-memory"); the chat/task bucket has an automatic purge, so falling back to it is
+// tolerated for local work but reported loudly.
+let sharedBucketWarned = false;
+const warnIfSharedBucket = (config) => {
+  if (sharedBucketWarned || process.env.BRIA_STORAGE_BUCKET || !config.bucketName) return;
+  sharedBucketWarned = true;
+  console.warn(`[DocumentStorage] AGENCY_MEMORY_SHARED_BUCKET: BRIA_STORAGE_BUCKET no está definido; minutas y Drive se guardan en el bucket compartido "${config.bucketName}".`);
+};
+
 export const createDocumentStorage = ({ client, bucketName } = {}) => {
   const config = getStorageConfig();
   const resolvedBucket = bucketName || config.bucketName;
+  if (!bucketName) warnIfSharedBucket(config);
   const resolvedClient = client || (
     config.endpoint && config.accessKeyId && config.secretAccessKey
       ? new S3Client({
