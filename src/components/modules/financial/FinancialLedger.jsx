@@ -5,6 +5,7 @@ import axios from 'axios';
 import toast from 'react-hot-toast';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
+import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import {
     Dialog,
     DialogContent,
@@ -146,6 +147,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
     const [documentToVoid, setDocumentToVoid] = useState(null);
     const [documentVoidReason, setDocumentVoidReason] = useState('');
     const [isVoidingDocument, setIsVoidingDocument] = useState(false);
+    const [documentPreview, setDocumentPreview] = useState(null);
     const documentInputRef = useRef(null);
     const [isAccountEditorOpen, setIsAccountEditorOpen] = useState(false);
     const [accountForm, setAccountForm] = useState(() => emptyAccountForm(selectedYear));
@@ -258,23 +260,40 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
         return response.data.document;
     };
 
+    // The bytes come through the authenticated API as a blob; the viewer and the download reuse that same local copy.
+    const fetchDocumentBlobUrl = async (recordId, item) => {
+        const url = `${getApiBaseUrl()}/api/financials/records/${recordId}/documents/${item.id}/file`;
+        const response = await axios.get(url, { headers: authHeaders(), responseType: 'blob' });
+        const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: item.mimeType });
+        return URL.createObjectURL(blob);
+    };
+
+    const downloadBlobUrl = (objectUrl, name) => {
+        const anchor = window.document.createElement('a');
+        anchor.href = objectUrl;
+        anchor.download = name;
+        window.document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+    };
+
+    const closeDocumentPreview = () => {
+        setDocumentPreview((current) => {
+            if (current) URL.revokeObjectURL(current.url);
+            return null;
+        });
+    };
+
     const openDocument = async (recordId, item, download = false) => {
         try {
-            const url = `${getApiBaseUrl()}/api/financials/records/${recordId}/documents/${item.id}/file${download ? '?download=1' : ''}`;
-            const response = await axios.get(url, { headers: authHeaders(), responseType: 'blob' });
-            const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: item.mimeType });
-            const objectUrl = URL.createObjectURL(blob);
+            const objectUrl = await fetchDocumentBlobUrl(recordId, item);
             if (download) {
-                const anchor = window.document.createElement('a');
-                anchor.href = objectUrl;
-                anchor.download = item.name;
-                window.document.body.appendChild(anchor);
-                anchor.click();
-                anchor.remove();
-            } else if (!window.open(objectUrl, '_blank', 'noopener')) {
-                toast.error('El navegador bloqueó la ventana del documento. Usa Descargar.');
+                downloadBlobUrl(objectUrl, item.name);
+                window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+                return;
             }
-            window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+            closeDocumentPreview();
+            setDocumentPreview({ file: { id: item.id, name: item.name, mimeType: item.mimeType, size: Number(item.size) }, url: objectUrl });
         } catch (requestError) {
             console.error('Error opening financial document:', requestError.response?.data || requestError);
             toast.error(requestError.response?.data?.message || 'No fue posible abrir el documento.');
@@ -793,6 +812,15 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                     )}
                 </DialogContent>
             </Dialog>
+
+            {documentPreview && (
+                <ChatFilePreview
+                    file={documentPreview.file}
+                    url={documentPreview.url}
+                    onClose={closeDocumentPreview}
+                    onDownload={() => downloadBlobUrl(documentPreview.url, documentPreview.file.name)}
+                />
+            )}
 
             <Dialog open={!!documentToVoid} onOpenChange={(open) => !open && !isVoidingDocument && setDocumentToVoid(null)}>
                 <DialogContent overlayClassName="z-[80]" className="z-[81] sm:max-w-md dark:bg-zinc-900">

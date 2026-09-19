@@ -12,13 +12,31 @@ import 'react-datepicker/dist/react-datepicker.css';
 const user = { id: 'demo-admin', role: 'ADMIN', name: 'Demo', modulePermissions: { financiero: true } };
 localStorage.setItem('authToken', `demo.${btoa(JSON.stringify({ exp: 4102444800 }))}.demo`);
 localStorage.setItem('currentUser', JSON.stringify(user));
-window.fetch = async () => new Response(JSON.stringify(user), { headers: { 'Content-Type': 'application/json' } });
+// Auth probes get the demo user; blob: URLs stay real so the document viewer can read what it just fetched.
+const realFetch = window.fetch.bind(window);
+window.fetch = async (input, init) => (String(input?.url || input).startsWith('blob:') ? realFetch(input, init) : new Response(JSON.stringify(user), { headers: { 'Content-Type': 'application/json' } }));
 const account = { id: 'demo-account', name: 'Cuenta de muestra', type: 'BANK', balance: 250000 };
 const records = Array.from({ length: 32 }, (_, i) => ({ id: `rodny-${i}`, year: 2026, month: 9, date: '2026-09-01T12:00:00Z', scenario: 'ACTUAL', status: 'POSTED', type: i===31 ? 'EXPENSE' : 'INCOME', amount: i===31 ? 50750 : 100250, category: 'SERVICIO', origin: 'MANUAL', description: i===31 ? 'Honorarios Rodny' : `Servicio Rodny ${i+1}`, counterparty: 'Rodny Chirinos', accountId: account.id, account }));
 records.push({ ...records[0], id:'brain', description:'Suscripción Brain Studio', counterparty:'Brain Studio', type:'EXPENSE', amount:400000 });
 records.push({ ...records[0], id:'august', description:'Servicio Rodny agosto', month:8, date:'2026-08-01T12:00:00Z', amount:1000000 });
 records.push({ ...records[0], id:'ia-platform', description:'Inversión en IA de la plataforma, Claude Code, Eleven Labs.', counterparty:'Rodny', category:'OPERATIVO', type:'EXPENSE', amount:600000, date:'2026-09-18T12:00:00Z', allocations: [], documents: [] });
-const demoPdf = () => new Blob(['%PDF-1.4\n% Documento de muestra, sin datos reales.\n%%EOF'], { type: 'application/pdf' });
+// Minimal but valid files (correct xref offsets, ASCII only) so the platform viewer really renders them.
+const demoPdf = () => {
+    const text = 'BT /F1 18 Tf 40 130 Td (Factura de muestra - sin datos reales) Tj ET';
+    const objects = [
+        '<< /Type /Catalog /Pages 2 0 R >>',
+        '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+        '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 240] /Contents 4 0 R /Resources << /Font << /F1 5 0 R >> >> >>',
+        `<< /Length ${text.length} >>\nstream\n${text}\nendstream`,
+        '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'
+    ];
+    let body = '%PDF-1.4\n';
+    const offsets = objects.map((object, index) => { const offset = body.length; body += `${index + 1} 0 obj\n${object}\nendobj\n`; return offset; });
+    const xref = body.length;
+    body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+    return new Blob([body], { type: 'application/pdf' });
+};
+const demoPng = () => new Blob([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='), c => c.charCodeAt(0))], { type: 'image/png' });
 const categoryExample = new URLSearchParams(location.search).get('categories') === '1';
 if (categoryExample) records.splice(0, records.length, { ...records[0], id:'donation-demo', description:'Donación de muestra', counterparty:'', category:'OPERATIVO', origin:'IMPORT', accountId:null, account:null, type:'EXPENSE', month:8, date:'2026-08-01T05:00:00Z', amount:150000 });
 axios.defaults.adapter = async config => {
@@ -47,7 +65,10 @@ axios.defaults.adapter = async config => {
         Object.assign(doc, { voidedAt: new Date().toISOString(), voidReason: JSON.parse(config.data).reason });
         data = { document: doc };
     }
-    else if (config.method === 'get' && /\/documents\/[^/]+\/file$/.test(path)) data = demoPdf();
+    else if (config.method === 'get' && /\/documents\/[^/]+\/file$/.test(path)) {
+        const doc = records.flatMap(r => r.documents || []).find(d => path.endsWith(`/documents/${d.id}/file`));
+        data = doc?.mimeType?.startsWith('image/') ? demoPng() : demoPdf();
+    }
     else if (config.method === 'post' && path.endsWith('/records')) {
         const body = JSON.parse(config.data);
         const created = { ...records[0], ...body, id: `new-${records.length}`, month: Number(body.date.slice(5, 7)), account: body.accountId ? account : null, client: null, allocations: [], documents: [] };
