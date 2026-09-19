@@ -32,6 +32,17 @@ axios.defaults.adapter = async config => {
         records[0].category = patch.category;
         data = records[0];
     }
+    else if (config.method === 'post' && path.endsWith('/records')) {
+        const body = JSON.parse(config.data);
+        const created = { ...records[0], ...body, id: `new-${records.length}`, month: Number(body.date.slice(5, 7)), account: body.accountId ? account : null, client: null, allocations: [] };
+        records.unshift(created);
+        data = { record: created };
+    }
+    else if (config.method === 'patch' && /\/records\/[^/]+$/.test(path)) {
+        const target = records.find(r => path.endsWith(`/records/${r.id}`));
+        Object.assign(target, JSON.parse(config.data));
+        data = { record: target };
+    }
     else if (config.method === 'put' && /\/records\/[^/]+\/allocations$/.test(path)) {
         const target = records.find(r => path.endsWith(`/records/${r.id}/allocations`));
         const lines = JSON.parse(config.data).allocations;

@@ -52,7 +52,9 @@ test('financial ledger uses canonical record endpoints and server-confirmed muta
     assert.match(ledgerSource, /hasFinancialPermission\(currentUser, 'admin'\)/);
     assert.match(ledgerSource, /FINANCIAL_PERIOD_UNRECONCILED|movimientos sin conciliar/);
     assert.match(ledgerSource, /\['SERVICIO', 'Servicio'\]/);
-    assert.match(ledgerSource, /<DatePicker \{\.\.\.brainDatePickerProps\} selected=\{form\.date/);
+    // The one calendar of the platform: the shared component, never a raw picker or native date field.
+    assert.match(ledgerSource, /<BrainDatePicker ariaLabel="Fecha del movimiento" value=\{form\.date\}/);
+    assert.doesNotMatch(ledgerSource, /from 'react-datepicker'|type="date"/);
 });
 
 test('financial operational payment dates use the shared calendar', () => {

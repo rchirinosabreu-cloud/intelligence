@@ -140,6 +140,9 @@ test('startup creates the breakdown table additively and the API, schema, ledger
     assert.match(schema, /model FinancialRecordAllocation \{/);
     assert.match(schema.match(/model FinancialRecord \{([^}]+)\}/)[1], /allocations\s+FinancialRecordAllocation\[\]/);
     assert.match(read('../src/routes/api/financials.js'), /router\.put\('\/records\/:id\/allocations', requireFinancialWrite, replaceFinancialRecordAllocationsHandler\)/);
-    assert.match(read('../src/components/modules/financial/FinancialLedger.jsx'), /Desglosar movimiento/);
+    const ledger = read('../src/components/modules/financial/FinancialLedger.jsx');
+    assert.match(ledger, /Desglosar movimiento/);
+    assert.doesNotMatch(ledger, /Desglosado en/, 'the row shows the lines themselves, not a label about them');
+    assert.match(ledger, /\/allocations`, \{\s*allocations: allocationPayload\(formAllocations\)/, 'the breakdown is persisted together with the movement form');
     assert.match(read('../src/services/financialRecordService.js'), /allocations:/);
 });

@@ -3,10 +3,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
-import DatePicker from 'react-datepicker';
-import { format } from 'date-fns';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { brainDatePickerProps } from '@/lib/brainDatePicker';
+import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import {
     Dialog,
     DialogContent,
@@ -57,9 +55,8 @@ const categoryLabel = (value) => CATEGORIES.find(([category]) => category === va
 const toCents = (value) => Math.round((Number(value) || 0) * 100);
 const MAX_ALLOCATION_LINES = 20;
 const emptyAllocationLine = (category = 'OPERATIVO') => ({ amount: '', category, description: '' });
-const allocationLinesFrom = (record) => (record?.allocations?.length
-    ? record.allocations.map((line) => ({ amount: String(line.amount), category: line.category, description: line.description || '' }))
-    : [emptyAllocationLine(record?.category), emptyAllocationLine(record?.category)]);
+const allocationLinesFrom = (record) => (record?.allocations || []).map((line) => ({ amount: String(line.amount), category: line.category, description: line.description || '' }));
+const allocationPayload = (lines) => lines.map((line) => ({ amount: Number(line.amount), category: line.category, description: line.description.trim() }));
 
 const SCENARIOS = [
     ['ACTUAL', 'Ejecutado'],
@@ -125,9 +122,10 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
     const [recordToVoid, setRecordToVoid] = useState(null);
     const [voidReason, setVoidReason] = useState('');
     const [isVoiding, setIsVoiding] = useState(false);
-    const [allocationRecord, setAllocationRecord] = useState(null);
+    // The breakdown lives inside the movement form: lines are applied here and persisted with the record.
+    const [formAllocations, setFormAllocations] = useState([]);
+    const [isAllocationOpen, setIsAllocationOpen] = useState(false);
     const [allocationLines, setAllocationLines] = useState([]);
-    const [isSavingAllocation, setIsSavingAllocation] = useState(false);
     const [isAccountEditorOpen, setIsAccountEditorOpen] = useState(false);
     const [accountForm, setAccountForm] = useState(() => emptyAccountForm(selectedYear));
     const [isSavingAccount, setIsSavingAccount] = useState(false);
@@ -215,20 +213,31 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
     const openCreate = () => {
         setEditingRecord(null);
         setForm(emptyForm(selectedYear));
+        setFormAllocations([]);
         setIsEditorOpen(true);
     };
 
     const openEdit = (record) => {
         setEditingRecord(record);
         setForm(toForm(record, selectedYear));
+        setFormAllocations(allocationLinesFrom(record));
         setIsEditorOpen(true);
     };
 
     const refreshFinancialData = () => invalidateFinancialQueries(queryClient);
 
+    const formAllocationCents = formAllocations.reduce((sum, line) => sum + toCents(line.amount), 0);
+    const formAllocationMismatch = formAllocations.length > 0 && formAllocationCents !== toCents(form.amount);
+    const allocationsChanged = JSON.stringify(allocationPayload(formAllocations)) !== JSON.stringify(allocationPayload(allocationLinesFrom(editingRecord)));
+
     const saveRecord = async (event) => {
         event.preventDefault();
+        if (formAllocationMismatch) {
+            toast.error('Los ítems del desglose no suman el valor del movimiento. Ajusta el desglose antes de guardar.');
+            return;
+        }
         setIsSaving(true);
+        let savedRecord = editingRecord;
         try {
             const baseUrl = getApiBaseUrl();
             const payload = {
@@ -237,21 +246,29 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                 clientId: form.clientId || null,
                 accountId: form.accountId || null
             };
-            if (editingRecord) {
-                await axios.patch(`${baseUrl}/api/financials/records/${editingRecord.id}`, payload, {
-                    headers: authHeaders()
-                });
-            } else {
-                await axios.post(`${baseUrl}/api/financials/records`, payload, {
-                    headers: authHeaders()
-                });
+            const response = editingRecord
+                ? await axios.patch(`${baseUrl}/api/financials/records/${editingRecord.id}`, payload, { headers: authHeaders() })
+                : await axios.post(`${baseUrl}/api/financials/records`, payload, { headers: authHeaders() });
+            savedRecord = response.data?.record || editingRecord;
+            if (allocationsChanged && savedRecord?.id) {
+                await axios.put(`${baseUrl}/api/financials/records/${savedRecord.id}/allocations`, {
+                    allocations: allocationPayload(formAllocations)
+                }, { headers: authHeaders() });
             }
             await refreshFinancialData();
             setIsEditorOpen(false);
             toast.success(editingRecord ? 'Movimiento actualizado' : 'Movimiento registrado');
         } catch (requestError) {
             console.error('Error saving financial record:', requestError.response?.data || requestError);
-            toast.error(requestError.response?.data?.message || 'No fue posible guardar el movimiento.');
+            const message = requestError.response?.data?.message;
+            if (savedRecord && savedRecord !== editingRecord) {
+                // The movement exists; only its breakdown failed. Keep editing that record instead of creating a duplicate.
+                await refreshFinancialData();
+                setEditingRecord(savedRecord);
+                toast.error(`El movimiento se guardó, pero el desglose no: ${message || 'inténtalo de nuevo.'}`);
+            } else {
+                toast.error(message || 'No fue posible guardar el movimiento.');
+            }
         } finally {
             setIsSaving(false);
         }
@@ -328,44 +345,33 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
         }
     };
 
-    const openAllocation = (record) => {
-        setAllocationRecord(record);
-        setAllocationLines(allocationLinesFrom(record));
+    const openAllocation = () => {
+        setAllocationLines(formAllocations.length ? formAllocations : [emptyAllocationLine(form.category), emptyAllocationLine(form.category)]);
+        setIsAllocationOpen(true);
     };
 
     const setAllocationLine = (index, field, value) => setAllocationLines((current) => current.map((line, position) => (position === index ? { ...line, [field]: value } : line)));
     const removeAllocationLine = (index) => setAllocationLines((current) => current.filter((_, position) => position !== index));
-    const addAllocationLine = () => setAllocationLines((current) => (current.length >= MAX_ALLOCATION_LINES ? current : [...current, emptyAllocationLine(allocationRecord?.category)]));
+    const addAllocationLine = () => setAllocationLines((current) => (current.length >= MAX_ALLOCATION_LINES ? current : [...current, emptyAllocationLine(form.category)]));
 
     const allocationTotalCents = allocationLines.reduce((sum, line) => sum + toCents(line.amount), 0);
-    const allocationTargetCents = toCents(allocationRecord?.amount);
+    const allocationTargetCents = toCents(form.amount);
     const allocationRemainingCents = allocationTargetCents - allocationTotalCents;
     const allocationComplete = allocationLines.length >= 2
         && allocationRemainingCents === 0
         && allocationLines.every((line) => toCents(line.amount) > 0 && line.description.trim());
 
-    const saveAllocations = async (lines) => {
-        if (!allocationRecord) return;
-        setIsSavingAllocation(true);
-        try {
-            const baseUrl = getApiBaseUrl();
-            await axios.put(`${baseUrl}/api/financials/records/${allocationRecord.id}/allocations`, {
-                allocations: lines.map((line) => ({ amount: Number(line.amount), category: line.category, description: line.description.trim() }))
-            }, { headers: authHeaders() });
-            await refreshFinancialData();
-            setAllocationRecord(null);
-            toast.success(lines.length ? 'Desglose guardado' : 'Desglose retirado');
-        } catch (requestError) {
-            console.error('Error saving financial record allocations:', requestError.response?.data || requestError);
-            toast.error(requestError.response?.data?.message || 'No fue posible guardar el desglose.');
-        } finally {
-            setIsSavingAllocation(false);
-        }
+    const applyAllocations = (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!allocationComplete) return;
+        setFormAllocations(allocationLines.map((line) => ({ ...line, description: line.description.trim() })));
+        setIsAllocationOpen(false);
     };
 
-    const submitAllocations = (event) => {
-        event.preventDefault();
-        if (allocationComplete) saveAllocations(allocationLines);
+    const clearAllocations = () => {
+        setFormAllocations([]);
+        setIsAllocationOpen(false);
     };
 
     const confirmVoid = async () => {
@@ -486,15 +492,12 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                                                 </ul>
                                             )}
                                         </td>
-                                        <td className="p-3 text-zinc-600 dark:text-zinc-300">
-                                            {categoryLabel(record.category)}
-                                            {record.allocations?.length > 0 && <span className="mt-1 block text-xs text-brand-cyan-deep dark:text-brand-cyan">Desglosado en {record.allocations.length} partidas</span>}
-                                        </td>
+                                        <td className="p-3 text-zinc-600 dark:text-zinc-300">{categoryLabel(record.category)}</td>
                                         <td className="p-3 text-zinc-600 dark:text-zinc-300">{record.account?.name || 'Sin conciliar'}</td>
                                         <td className="p-3"><span className={cn('inline-flex rounded-md px-2 py-1 text-xs font-medium', scenarioTone[record.scenario])}>{SCENARIOS.find(([value]) => value === record.scenario)?.[1] || record.scenario}</span></td>
                                         <td className="p-3 text-xs text-zinc-500">{record.origin === 'IMPORT' ? 'Importado' : 'Manual'}</td>
                                         <td className={cn('p-3 text-right font-semibold', record.type === 'INCOME' ? 'text-emerald-600' : 'text-rose-600')}>{record.type === 'INCOME' ? '+' : '-'} {formatCurrency(Number(record.amount))}</td>
-                                        <td className="p-3">{canWrite && <div className="flex justify-end gap-1"><button type="button" title="Editar movimiento" onClick={() => openEdit(record)} className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-violet-600 dark:hover:bg-white/10"><Edit className="h-4 w-4" /></button>{record.origin !== 'SYSTEM' && <button type="button" title="Desglosar movimiento" aria-label={`Desglosar movimiento ${record.description || record.sourceLabel || ''}`.trim()} onClick={() => openAllocation(record)} className={cn('grid h-8 w-8 place-items-center rounded-md hover:bg-zinc-100 hover:text-brand-cyan-deep dark:hover:bg-white/10', record.allocations?.length ? 'text-brand-cyan-deep dark:text-brand-cyan' : 'text-zinc-500')}><Layers className="h-4 w-4" /></button>}<button type="button" title="Anular movimiento" onClick={() => { setRecordToVoid(record); setVoidReason(''); }} className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"><StopCircle className="h-4 w-4" /></button></div>}</td>
+                                        <td className="p-3">{canWrite && <div className="flex justify-end gap-1"><button type="button" title="Editar movimiento" onClick={() => openEdit(record)} className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-violet-600 dark:hover:bg-white/10"><Edit className="h-4 w-4" /></button><button type="button" title="Anular movimiento" onClick={() => { setRecordToVoid(record); setVoidReason(''); }} className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"><StopCircle className="h-4 w-4" /></button></div>}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -521,18 +524,37 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2">
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Valor<input required min="0.01" step="0.01" type="number" className={inputClass} value={form.amount} onChange={(event) => setField('amount', event.target.value)} /></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Fecha<div className="relative"><Calendar className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-zinc-400" /><DatePicker {...brainDatePickerProps} selected={form.date ? new Date(`${form.date}T12:00:00`) : null} onChange={(date) => setField('date', date ? format(date, 'yyyy-MM-dd') : '')} className={`${inputClass} pl-9`} dateFormat="dd/MM/yyyy" /></div></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Fecha<div className="relative"><Calendar className="pointer-events-none absolute left-3 top-3 z-10 h-4 w-4 text-zinc-400" /><BrainDatePicker ariaLabel="Fecha del movimiento" value={form.date} onChange={(value) => setField('date', value)} className={`${inputClass} pl-9`} /></div></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Categoría<Select className={inputClass} value={form.category} onChange={(event) => setField('category', event.target.value)}>{CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Escenario<Select className={inputClass} value={form.scenario} onChange={(event) => setField('scenario', event.target.value)}>{SCENARIOS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cuenta de caja o banco<Select required={form.scenario === 'ACTUAL' && editingRecord?.origin !== 'IMPORT'} className={inputClass} value={form.accountId} onChange={(event) => setField('accountId', event.target.value)}><option value="">{form.scenario === 'ACTUAL' ? 'Seleccionar cuenta...' : 'Sin cuenta definida'}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</Select></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Descripción<input required className={inputClass} value={form.description} onChange={(event) => setField('description', event.target.value)} placeholder="Ej. Mensualidad de agosto" /></label>
                         </div>
-                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Descripción<input required className={inputClass} value={form.description} onChange={(event) => setField('description', event.target.value)} placeholder="Ej. Mensualidad de agosto" /></label>
-                        <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-4 sm:grid-cols-3">
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<Select className={inputClass} value={form.clientId} onChange={(event) => setField('clientId', event.target.value)}><option value="">Sin cliente relacionado</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</Select></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Contraparte<input className={inputClass} value={form.counterparty} onChange={(event) => setField('counterparty', event.target.value)} placeholder="Proveedor o persona" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Referencia<input className={inputClass} value={form.reference} onChange={(event) => setField('reference', event.target.value)} placeholder="Factura, transferencia..." /></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Notas<input className={inputClass} value={form.notes} onChange={(event) => setField('notes', event.target.value)} /></label>
                         </div>
+                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Notas<textarea rows={3} className={`${inputClass} resize-y`} value={form.notes} onChange={(event) => setField('notes', event.target.value)} /></label>
+                        {editingRecord?.origin !== 'SYSTEM' && (
+                            <div className="rounded-lg border border-zinc-200 p-3 dark:border-white/10">
+                                <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <div className="text-sm">
+                                        <p className="font-medium text-zinc-900 dark:text-white">Desglose interno</p>
+                                        <p className="text-xs text-zinc-500 dark:text-zinc-400">{formAllocations.length ? `${formAllocations.length} ítems que explican qué pagó este movimiento.` : 'Opcional: reparte el valor entre varios conceptos. El movimiento sigue siendo uno solo.'}</p>
+                                    </div>
+                                    <button type="button" onClick={openAllocation} disabled={toCents(form.amount) <= 0} title={toCents(form.amount) <= 0 ? 'Indica primero el valor del movimiento' : undefined} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5"><Layers className="h-4 w-4" />{formAllocations.length ? 'Editar desglose' : 'Desglosar movimiento'}</button>
+                                </div>
+                                {formAllocations.length > 0 && (
+                                    <ul className="mt-2 space-y-1 border-l border-zinc-200 pl-3 text-xs text-zinc-500 dark:border-white/10 dark:text-zinc-400">
+                                        {formAllocations.map((line, index) => (
+                                            <li key={index} className="flex flex-wrap items-baseline gap-x-2"><span className="font-medium text-zinc-700 dark:text-zinc-200">{formatCurrency(Number(line.amount))}</span><span>{line.description}</span><span className="text-zinc-400 dark:text-zinc-500">· {categoryLabel(line.category)}</span></li>
+                                        ))}
+                                    </ul>
+                                )}
+                                {formAllocationMismatch && <p role="alert" className="mt-2 text-xs font-medium text-destructive">Los ítems suman {formatCurrency(formAllocationCents / 100)} y el valor es {formatCurrency(toCents(form.amount) / 100)}. Ajusta el desglose antes de guardar.</p>}
+                            </div>
+                        )}
                         <DialogFooter><button type="button" onClick={() => setIsEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Cancelar</button><button type="submit" disabled={isSaving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-60">{isSaving && <Loader2 className="h-4 w-4 animate-spin" />}{editingRecord ? 'Guardar cambios' : 'Registrar movimiento'}</button></DialogFooter>
                     </form>
                 </DialogContent>
@@ -547,7 +569,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Tipo<Select className={inputClass} value={accountForm.type} onChange={(event) => setAccountForm((current) => ({ ...current, type: event.target.value }))}><option value="BANK">Banco</option><option value="CASH">Caja</option><option value="OTHER">Otra</option></Select></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Saldo inicial<input required type="number" step="0.01" className={inputClass} value={accountForm.openingBalance} onChange={(event) => setAccountForm((current) => ({ ...current, openingBalance: event.target.value }))} /></label>
                         </div>
-                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Fecha del saldo inicial<DatePicker {...brainDatePickerProps} selected={accountForm.openingBalanceDate ? new Date(`${accountForm.openingBalanceDate}T12:00:00`) : null} onChange={(date) => setAccountForm((current) => ({ ...current, openingBalanceDate: date ? format(date, 'yyyy-MM-dd') : '' }))} className={inputClass} dateFormat="dd/MM/yyyy" /></label>
+                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Fecha del saldo inicial<BrainDatePicker ariaLabel="Fecha del saldo inicial" value={accountForm.openingBalanceDate} onChange={(value) => setAccountForm((current) => ({ ...current, openingBalanceDate: value }))} className={inputClass} /></label>
                         <DialogFooter><button type="button" onClick={() => setIsAccountEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingAccount} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingAccount && <Loader2 className="h-4 w-4 animate-spin" />}Crear cuenta</button></DialogFooter>
                     </form>
                 </DialogContent>
@@ -569,30 +591,30 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={!!allocationRecord} onOpenChange={(open) => !open && !isSavingAllocation && setAllocationRecord(null)}>
-                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl dark:bg-zinc-900">
+            <Dialog open={isAllocationOpen} onOpenChange={setIsAllocationOpen}>
+                <DialogContent overlayClassName="z-[80]" className="z-[81] max-h-[90vh] overflow-y-auto sm:max-w-2xl dark:bg-zinc-900">
                     <DialogHeader>
                         <DialogTitle>Desglosar movimiento</DialogTitle>
                         <DialogDescription>El movimiento sigue siendo uno solo. Reparte su valor entre los conceptos que pagó; la suma debe coincidir exactamente. Solo los indicadores por categoría leen este desglose.</DialogDescription>
                     </DialogHeader>
-                    {allocationRecord && (
-                        <form onSubmit={submitAllocations} className="space-y-4">
+                    {isAllocationOpen && (
+                        <form onSubmit={applyAllocations} className="space-y-4">
                             <div className="flex flex-wrap items-baseline justify-between gap-2 rounded-lg border border-zinc-200 px-3 py-2 text-sm dark:border-white/10">
-                                <p className="min-w-0 flex-1 break-words font-medium text-zinc-900 dark:text-white">{allocationRecord.description || allocationRecord.sourceLabel || 'Sin descripción'}</p>
-                                <p className={cn('font-semibold', allocationRecord.type === 'INCOME' ? 'text-emerald-600' : 'text-rose-600')}>{allocationRecord.type === 'INCOME' ? '+' : '-'} {formatCurrency(Number(allocationRecord.amount))}</p>
+                                <p className="min-w-0 flex-1 break-words font-medium text-zinc-900 dark:text-white">{form.description || 'Movimiento sin descripción'}</p>
+                                <p className={cn('font-semibold', form.type === 'INCOME' ? 'text-emerald-600' : 'text-rose-600')}>{form.type === 'INCOME' ? '+' : '-'} {formatCurrency(allocationTargetCents / 100)}</p>
                             </div>
                             <div className="space-y-3">
                                 {allocationLines.map((line, index) => (
                                     <div key={index} className="grid gap-2 sm:grid-cols-[minmax(0,1.1fr)_minmax(0,1.2fr)_minmax(0,2fr)_auto] sm:items-end">
-                                        <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className={index ? 'sr-only' : ''}>Valor</span><input required min="0.01" step="0.01" type="number" aria-label={`Valor de la partida ${index + 1}`} className={inputClass} value={line.amount} onChange={(event) => setAllocationLine(index, 'amount', event.target.value)} /></label>
-                                        <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className={index ? 'sr-only' : ''}>Categoría</span><Select aria-label={`Categoría de la partida ${index + 1}`} className={inputClass} value={line.category} onChange={(event) => setAllocationLine(index, 'category', event.target.value)}>{CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
-                                        <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className={index ? 'sr-only' : ''}>Concepto</span><input required aria-label={`Concepto de la partida ${index + 1}`} className={inputClass} value={line.description} onChange={(event) => setAllocationLine(index, 'description', event.target.value)} placeholder="Ej. Claude Code" /></label>
-                                        <button type="button" aria-label={`Quitar partida ${index + 1}`} disabled={allocationLines.length <= 2} onClick={() => removeAllocationLine(index)} className="grid h-10 w-10 place-items-center rounded-lg border border-zinc-200 text-destructive hover:bg-destructive/10 disabled:opacity-40 dark:border-white/10"><Trash2 className="h-4 w-4" /></button>
+                                        <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className={index ? 'sr-only' : ''}>Valor</span><input required min="0.01" step="0.01" type="number" aria-label={`Valor del ítem ${index + 1}`} className={inputClass} value={line.amount} onChange={(event) => setAllocationLine(index, 'amount', event.target.value)} /></label>
+                                        <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className={index ? 'sr-only' : ''}>Categoría</span><Select aria-label={`Categoría del ítem ${index + 1}`} className={inputClass} value={line.category} onChange={(event) => setAllocationLine(index, 'category', event.target.value)}>{CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
+                                        <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className={index ? 'sr-only' : ''}>Concepto</span><input required aria-label={`Concepto del ítem ${index + 1}`} className={inputClass} value={line.description} onChange={(event) => setAllocationLine(index, 'description', event.target.value)} placeholder="Ej. Claude Code" /></label>
+                                        <button type="button" aria-label={`Quitar ítem ${index + 1}`} disabled={allocationLines.length <= 2} onClick={() => removeAllocationLine(index)} className="grid h-10 w-10 place-items-center rounded-lg border border-zinc-200 text-destructive hover:bg-destructive/10 disabled:opacity-40 dark:border-white/10"><Trash2 className="h-4 w-4" /></button>
                                     </div>
                                 ))}
                             </div>
                             <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-                                <button type="button" onClick={addAllocationLine} disabled={allocationLines.length >= MAX_ALLOCATION_LINES} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5"><Plus className="h-4 w-4" />Añadir partida</button>
+                                <button type="button" onClick={addAllocationLine} disabled={allocationLines.length >= MAX_ALLOCATION_LINES} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5"><Plus className="h-4 w-4" />Añadir ítem</button>
                                 <p aria-live="polite" className={cn('font-medium', allocationRemainingCents === 0 && allocationLines.length >= 2 ? 'text-emerald-600' : 'text-amber-600 dark:text-amber-400')}>
                                     {allocationRemainingCents === 0
                                         ? `Repartido ${formatCurrency(allocationTotalCents / 100)} de ${formatCurrency(allocationTargetCents / 100)}`
@@ -602,12 +624,12 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                                 </p>
                             </div>
                             <DialogFooter className="gap-2 sm:justify-between">
-                                {allocationRecord.allocations?.length > 0
-                                    ? <button type="button" disabled={isSavingAllocation} onClick={() => saveAllocations([])} className="rounded-lg px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10 disabled:opacity-50">Quitar desglose</button>
+                                {formAllocations.length > 0
+                                    ? <button type="button" onClick={clearAllocations} className="rounded-lg px-3 py-2 text-sm font-medium text-destructive hover:bg-destructive/10">Quitar desglose</button>
                                     : <span />}
                                 <div className="flex gap-2">
-                                    <button type="button" onClick={() => setAllocationRecord(null)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Cancelar</button>
-                                    <button type="submit" disabled={!allocationComplete || isSavingAllocation} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingAllocation && <Loader2 className="h-4 w-4 animate-spin" />}Guardar desglose</button>
+                                    <button type="button" onClick={() => setIsAllocationOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Cancelar</button>
+                                    <button type="submit" disabled={!allocationComplete} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">Aplicar desglose</button>
                                 </div>
                             </DialogFooter>
                         </form>
