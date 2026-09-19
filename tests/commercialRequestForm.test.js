@@ -1,9 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  SERVICE_CATEGORIES, SERVICE_BLOCKS, visibleSteps, visibleQuestions, validateStep, progressFor, encouragement,
+  SERVICE_CATEGORIES, SERVICE_BLOCKS, AMC_PLANS, visibleSteps, visibleQuestions, validateStep, progressFor, encouragement,
   suggestQuotationItems, buildLeadDraft, answerLabel
 } from '../src/lib/commercialRequestForm.js';
+
+test('the AMC alternatives are the four published plans, explained inside the form', () => {
+  assert.deepEqual(AMC_PLANS.map(plan => plan.label).slice(0, 4), ['AMC Start', 'AMC Boost', 'AMC Growth', 'AMC Impact']);
+  assert.ok(AMC_PLANS.every(plan => plan.description.length > 20));
+  const amc = visibleSteps({}).find(step => step.id === 'amc');
+  assert.equal(amc.link.href, 'https://amc.brainstudioagencia.com/');
+  assert.equal(amc.summary.moments.length, 3);
+});
 import { CRM_ORIGINS, isValidOrigin, isValidPriority } from '../src/lib/crmRules.js';
 import { readFile } from 'node:fs/promises';
 
@@ -100,7 +108,7 @@ test('buildLeadDraft produces a valid CRM lead assigned by the API, with the who
     contactName: 'Catalina Rojas', company: 'HDI Seguros', jobTitle: 'Gerente de mercadeo', email: 'Catalina@HDI.test', phone: '+57 310 000 0001', location: 'Bogotá, Colombia', website: 'hdi.test',
     need: 'Campaña de marca y contenido para el segundo semestre.', hasKeyDate: 'SI', keyDate: '2026-11-15', keyDateNote: 'Lanzamiento', startWhen: 'ASAP',
     services: ['MARKETING', 'PRODUCCION_AUDIOVISUAL'], 'mkt.needs': ['REDES'], 'mkt.mode': 'MENSUAL', 'av.needs': ['REELS'],
-    'event.related': 'NO', 'amc.interest': 'CONOCER', 'amc.plan': 'GROW', 'budget.has': 'SI', 'budget.amount': { amount: '8.000.000' }, 'budget.currency': 'COP', 'budget.scope': 'MENSUAL', 'budget.adsIncluded': 'NO', 'budget.adsExtra': { amount: '2000000' },
+    'event.related': 'NO', 'amc.interest': 'CONOCER', 'amc.plan': 'GROWTH', 'budget.has': 'SI', 'budget.amount': { amount: '8.000.000' }, 'budget.currency': 'COP', 'budget.scope': 'MENSUAL', 'budget.adsIncluded': 'NO', 'budget.adsExtra': { amount: '2000000' },
     stage: 'APROBADO', 'decision.others': 'SI', 'decision.who': 'Gerencia', 'proposal.when': 'TRES_DIAS', source: 'LINKEDIN', workedBefore: 'NO', extra: 'Nos gusta el tono de Bonsai.'
   };
   const { lead, request } = buildLeadDraft(answers, { receivedAt: new Date('2026-09-18T20:00:00Z') });
@@ -117,7 +125,7 @@ test('buildLeadDraft produces a valid CRM lead assigned by the API, with the who
   assert.equal(lead.nextFollowUpAt, '2026-09-21', 'next business day after a Friday is Monday');
   assert.match(lead.nextAction, /primer contacto/);
   assert.match(lead.notes, /Presupuesto: 8.000.000 COP \(Presupuesto mensual\)/);
-  assert.match(lead.notes, /AMC: Quiero conocer primero las opciones · Grow/);
+  assert.match(lead.notes, /AMC: Quiero conocer primero las opciones · AMC Growth/);
   assert.deepEqual(request.services, ['MARKETING', 'PRODUCCION_AUDIOVISUAL']);
   assert.equal(request.suggestedItems.length, 2);
   assert.equal(request.answers.extra, 'Nos gusta el tono de Bonsai.');

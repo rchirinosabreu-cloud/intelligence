@@ -26,13 +26,13 @@ Lógica completa: **Formulario → CRM → calificación → seguimiento → cot
 | Paso 3 · ¿En qué podemos ayudarte? | Diez categorías + «No estoy seguro» + «Otro», como tarjetas con descripción. Multiselección; «No estoy seguro» es excluyente |
 | Un paso por servicio elegido | Solo las preguntas de ese servicio, en el orden en que los eligió. El contador de pasos crece al elegir (3 de 8 → 3 de 11) |
 | Evento | Sí/No; si sí, qué necesita para el evento |
-| Estrategia AMC | Texto, enlace a la landing **en pestaña nueva**, interés, alternativa y qué le interesó |
+| Estrategia AMC | Explicación de la tríada (Arranque · Conversión · Maduración) dentro del paso, las cuatro alternativas como tarjetas con una línea cada una (AMC Start, Boost, Growth, Impact, tal como están en `amc.brainstudioagencia.com`), enlace «Ver la estrategia AMC completa» **en pestaña nueva** solo para quien quiera profundizar, interés y qué le interesó |
 | Presupuesto | Tiene/no tiene; monto, moneda, a qué corresponde (único, mensual, anual…), pauta incluida o adicional |
 | Momento de contratación | Etapa, quién decide, cuándo espera la propuesta |
 | Último paso · Origen | Cómo nos conoció, si trabajó antes, algo más |
 | Gracias | Mensaje final, chips con los servicios elegidos y referencia de la solicitud |
 
-Gamificación sin ruido: barra de progreso con degradado de marca y porcentaje, frase de ánimo que cambia («Empecemos», «Buen ritmo», «Vas por la mitad», «Último tramo», «¡Listo!»), riel de pasos completados en escritorio, transiciones suaves entre pasos, borrador guardado (si cierra y vuelve, sigue donde iba), validación amable con el primer error enfocado, y cierre con referencia visible.
+Gamificación sin ruido: una sola barra de progreso continua con degradado de marca y porcentaje (Rodny descartó el riel de pasos duplicado), frase de ánimo que cambia («Empecemos», «Buen ritmo», «Vas por la mitad», «Último tramo», «¡Listo!»), transiciones suaves entre pasos, borrador guardado (si cierra y vuelve, sigue donde iba), validación amable con el primer error enfocado, y cierre con referencia visible.
 
 ## 4. Mapeo al CRM
 
@@ -59,7 +59,7 @@ En la ficha del lead habrá un botón **«Crear cotización»** que abre `/cotiz
 
 ## 7. Pendientes de Rodny para cerrar el diseño
 
-- Nombres exactos de los planes AMC 3 y 4 (hoy «[Plan AMC 3]» y «[Plan AMC 4]») y la URL de la landing AMC (hoy `https://brainstudioagencia.com/amc`).
+- Resuelto: planes AMC Start, Boost, Growth e Impact y landing `https://amc.brainstudioagencia.com/`, tomados de la landing el 19 de septiembre de 2026. Si cambian los planes, se actualizan en `AMC_PLANS`.
 - URL del sitio en la bienvenida (hoy `https://brainstudioagencia.com`).
 - Si el correo de confirmación al prospecto sale desde `social.brainstudio@gmail.com` o desde otra cuenta.
 - Si quiere un texto legal corto al pie (hoy: «Usaremos estos datos únicamente para preparar tu propuesta y contactarte»).

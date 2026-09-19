@@ -166,17 +166,6 @@ const ProgressBar = ({ ratio, stepLabel }) => {
   );
 };
 
-const StepRail = ({ steps, current }) => (
-  <ol className="hidden gap-1.5 lg:flex" aria-label="Pasos">
-    {steps.map((step, index) => {
-      const state = index < current ? 'done' : index === current ? 'current' : 'todo';
-      return (
-        <li key={step.id} title={step.title} className={cn('flex h-2 flex-1 rounded-full transition-colors', state === 'done' && 'bg-brand-green', state === 'current' && 'bg-primary', state === 'todo' && 'bg-zinc-200 dark:bg-zinc-800')} />
-      );
-    })}
-  </ol>
-);
-
 const Welcome = ({ onStart, stepCount }) => (
   <div className="space-y-6">
     <span className="inline-flex items-center gap-2 rounded-full border border-brand-cyan/30 bg-brand-cyan/10 px-3 py-1 text-xs font-semibold text-brand-cyan-deep dark:text-brand-cyan">
@@ -295,9 +284,8 @@ export default function CommercialRequestForm({ onSubmit, initialAnswers = null 
   return (
     <div ref={cardRef} className="brain-glass brain-glass-strong mx-auto w-full max-w-3xl scroll-mt-6 p-6 sm:p-10" data-commercial-request>
       {screen !== 'welcome' && (
-        <div className="mb-8 space-y-3">
+        <div className="mb-8">
           <ProgressBar ratio={ratio} stepLabel={screen === 'thanks' ? 'Solicitud enviada' : `Paso ${safeIndex + 1} de ${steps.length}`} />
-          <StepRail steps={steps} current={screen === 'thanks' ? steps.length : safeIndex} />
         </div>
       )}
 
@@ -329,6 +317,20 @@ export default function CommercialRequestForm({ onSubmit, initialAnswers = null 
               <p className="text-xs font-semibold uppercase tracking-widest text-primary">{step.eyebrow}</p>
               <h2 className="text-2xl font-bold leading-tight tracking-tight text-zinc-950 dark:text-white sm:text-3xl">{step.title}</h2>
               {step.intro && <p className="text-sm leading-6 text-zinc-600 dark:text-zinc-300">{step.intro}</p>}
+              {step.summary && (
+                <div className="rounded-2xl border border-brand-cyan/25 bg-brand-cyan/[0.06] p-4 dark:bg-brand-cyan/10" data-amc-summary>
+                  <p className="text-sm leading-6 text-zinc-700 dark:text-zinc-200">{step.summary.what}</p>
+                  <ol className="mt-3 grid gap-2 sm:grid-cols-3">
+                    {step.summary.moments.map((moment, index) => (
+                      <li key={moment.name} className="rounded-xl border border-zinc-200/80 bg-white/80 p-3 dark:border-zinc-700 dark:bg-zinc-950/60">
+                        <p className="text-[11px] font-semibold uppercase tracking-widest text-primary">{index + 1} · {moment.name}</p>
+                        <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-300">{moment.text}</p>
+                      </li>
+                    ))}
+                  </ol>
+                  <p className="mt-3 text-xs leading-5 text-zinc-600 dark:text-zinc-300">{step.summary.closing}</p>
+                </div>
+              )}
               {step.link && (
                 <a href={step.link.href} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-10 items-center gap-1.5 text-sm font-semibold text-primary hover:underline">
                   {step.link.label} <ExternalLink className="h-3.5 w-3.5" />

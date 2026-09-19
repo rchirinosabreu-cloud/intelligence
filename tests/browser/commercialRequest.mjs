@@ -94,8 +94,9 @@ test('desktop: a marketing + audiovisual + web request walks every step, validat
     await page.getByRole('heading', { name: /solución más integral/ }).waitFor();
     const amcLink = page.getByRole('link', { name: /estrategia AMC/ });
     assert.equal(await amcLink.getAttribute('target'), '_blank', 'the AMC landing opens in a new tab so the form stays open');
+    await page.locator('[data-amc-summary]').waitFor();
     await pick(page, 'Quiero conocer primero las opciones');
-    await pick(page, 'Grow');
+    await pick(page, 'AMC Growth');
     await page.getByLabel(/Qué fue lo que más te interesó/).fill('La integración de contenido y pauta.');
     await shot(page, '07-amc');
     await next(page);
@@ -137,7 +138,7 @@ test('desktop: a marketing + audiovisual + web request walks every step, validat
     assert.deepEqual(request.suggestedItems.map(item => item.name), [
       'Marketing Básico – 8 contenidos', 'Edición de reel', 'Sesión fotográfica de 2 horas', 'Drone', 'Landing page', 'Integración de WhatsApp en sitio web'
     ]);
-    assert.equal(request.answers['amc.plan'], 'GROW');
+    assert.equal(request.answers['amc.plan'], 'GROWTH');
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

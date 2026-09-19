@@ -211,14 +211,30 @@ const EVENT = {
   ]
 };
 
+// Names and one-line descriptions as published on amc.brainstudioagencia.com (September 2026). Prices stay out on purpose.
 export const AMC_PLANS = Object.freeze([
-  opt('BOOST', 'Boost'), opt('GROW', 'Grow'), opt('AMC_3', '[Plan AMC 3]'), opt('AMC_4', '[Plan AMC 4]'), opt('RECOMENDACION', 'No estoy seguro / quiero recomendación')
+  { value: 'START', label: 'AMC Start', description: 'Para emprendimientos que necesitan construir una presencia profesional desde el comienzo: marca emprendedor, marketing básico, landing page y Meta Ads.' },
+  { value: 'BOOST', label: 'AMC Boost', description: 'Para negocios que no necesitan tanto desarrollo de marca pero sí contenidos más sólidos: marca emprendedor, marketing estándar, landing page y Meta Ads.' },
+  { value: 'GROWTH', label: 'AMC Growth', description: 'Para negocios que quieren una identidad más completa, contenido constante y web corporativa: marca estándar, marketing estándar, web corporativa y Meta Ads.' },
+  { value: 'IMPACT', label: 'AMC Impact', description: 'Para empresas que necesitan presencia robusta, más contenidos, comercio electrónico y pauta en varias plataformas: marca pro, marketing pro, e-commerce, Meta + Google Ads.' },
+  { value: 'RECOMENDACION', label: 'No estoy seguro / quiero recomendación', description: 'Cuéntanos lo que buscas y te proponemos la alternativa que mejor encaje.' }
 ]);
+
+export const AMC_SUMMARY = Object.freeze({
+  what: 'La tríada AMC conecta estrategia, marca, contenido, desarrollo web y pauta digital en un ecosistema coherente y preparado para crecer. Durante 3 meses avanzamos contigo por tres momentos:',
+  moments: [
+    { name: 'Arranque', text: 'Construimos o fortalecemos las bases de tu marca.' },
+    { name: 'Conversión', text: 'Activamos tu presencia digital y desarrollamos tu ecosistema.' },
+    { name: 'Maduración', text: 'Activamos la pauta digital para atraer público, generar resultados y crecer.' }
+  ],
+  closing: 'No importa si empiezas desde cero o si ya tienes marca: partimos de lo que tienes y potenciamos lo que necesitas.'
+});
 
 const AMC = {
   id: 'amc', title: '¿Buscas una solución más integral?', eyebrow: 'Estrategia AMC',
   intro: 'Además de nuestros servicios específicos, en Brain Studio contamos con la estrategia AMC, diseñada para marcas que quieren integrar comunicación, marketing, contenido y crecimiento en una misma estrategia.',
-  link: { label: 'Conoce nuestra estrategia AMC', href: 'https://brainstudioagencia.com/amc' },
+  summary: AMC_SUMMARY,
+  link: { label: 'Ver la estrategia AMC completa', href: 'https://amc.brainstudioagencia.com/' },
   questions: [
     single('amc.interest', '¿Te interesa que tu propuesta considere nuestra estrategia AMC?', [
       opt('SI', 'Sí, quiero que mi propuesta considere AMC'), opt('CONOCER', 'Quiero conocer primero las opciones'), opt('NO', 'No por ahora'), opt('RECOMENDACION', 'No estoy seguro, quiero una recomendación')
