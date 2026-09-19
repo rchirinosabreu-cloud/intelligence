@@ -11,6 +11,12 @@ import {
     reopenFinancialPeriod
 } from '../services/financialPeriodService.js';
 import { replaceFinancialRecordAllocations } from '../services/financialRecordAllocationService.js';
+import {
+    attachFinancialRecordDocument,
+    financialEvidenceStorage,
+    openFinancialRecordDocument,
+    voidFinancialRecordDocument
+} from '../services/financialRecordDocumentService.js';
 import { createReceivablePayment } from '../services/receivablePaymentService.js';
 import { createReceivable } from '../services/financialReceivableService.js';
 import { auditFinancialIntegrity } from '../services/financialIntegrityAuditService.js';
@@ -121,6 +127,68 @@ export const replaceFinancialRecordAllocationsHandler = async (req, res, depende
     } catch (error) {
         console.error('[Financial records API] Allocation failed:', error.response?.data || error);
         return respondWithError(res, error, 'FINANCIAL_ALLOCATION_FAILED', 'No fue posible guardar el desglose del movimiento.');
+    }
+};
+
+export const uploadFinancialRecordDocumentHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const storage = dependencies.storage || financialEvidenceStorage();
+    const attachDocument = dependencies.attachDocument || attachFinancialRecordDocument;
+    try {
+        if (!req.file) {
+            return res.status(400).json({ error: 'FINANCIAL_DOCUMENT_REQUIRED', message: 'Selecciona un documento PDF, JPG o PNG.' });
+        }
+        const document = await attachDocument(prismaClient, storage, req.params.id, req.file, req.user);
+        return res.status(201).json({ message: 'Documento guardado correctamente.', document });
+    } catch (error) {
+        console.error('[Financial documents API] Upload failed:', error.response?.data || error);
+        return respondWithError(res, error, 'FINANCIAL_DOCUMENT_UPLOAD_FAILED', 'No fue posible guardar el documento.');
+    }
+};
+
+const safeDocumentName = (name = 'documento') => String(name).replace(/[\r\n"\\/]/g, '_').slice(0, 180) || 'documento';
+
+export const streamFinancialRecordDocumentHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const storage = dependencies.storage || financialEvidenceStorage();
+    const openDocument = dependencies.openDocument || openFinancialRecordDocument;
+    try {
+        const { document, object } = await openDocument(prismaClient, storage, req.params.id, req.params.documentId);
+        const disposition = req.query?.download === '1' ? 'attachment' : 'inline';
+        const filename = safeDocumentName(document.name);
+        const asciiName = filename.replace(/[^\x20-\x7E]/g, '_');
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+        // The stored type was detected from the bytes at upload; never trust the bucket's echo of a client header.
+        res.setHeader('Content-Type', document.mimeType);
+        res.setHeader('Content-Disposition', `${disposition}; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(filename).replace(/['()*]/g, char => '%' + char.charCodeAt(0).toString(16))}`);
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        if (object.ContentLength) res.setHeader('Content-Length', String(object.ContentLength));
+        object.Body.on('error', (error) => {
+            console.error('[Financial documents API] Stream failed:', error);
+            if (!res.headersSent) res.status(500).json({ error: 'FINANCIAL_DOCUMENT_STREAM_FAILED', message: 'No se pudo cargar el documento.' });
+            else res.destroy(error);
+        });
+        return object.Body.pipe(res);
+    } catch (error) {
+        console.error('[Financial documents API] Open failed:', error?.message || error);
+        if (res.headersSent) return undefined;
+        if (error?.name === 'NoSuchKey') {
+            return res.status(404).json({ error: 'FINANCIAL_DOCUMENT_MISSING', message: 'El archivo no está disponible en el almacenamiento.' });
+        }
+        return respondWithError(res, error, 'FINANCIAL_DOCUMENT_OPEN_FAILED', 'No fue posible abrir el documento.');
+    }
+};
+
+export const voidFinancialRecordDocumentHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const voidDocument = dependencies.voidDocument || voidFinancialRecordDocument;
+    try {
+        const document = await voidDocument(prismaClient, req.params.id, req.params.documentId, req.body?.reason, req.user);
+        return res.json({ message: 'Documento anulado. El archivo se conserva en la bitácora.', document });
+    } catch (error) {
+        console.error('[Financial documents API] Void failed:', error.response?.data || error);
+        return respondWithError(res, error, 'FINANCIAL_DOCUMENT_VOID_FAILED', 'No fue posible anular el documento.');
     }
 };
 

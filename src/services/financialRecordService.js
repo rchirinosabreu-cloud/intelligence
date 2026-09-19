@@ -254,7 +254,8 @@ export const listFinancialRecords = async (prismaClient, filters = {}) => {
                 client: { select: { id: true, name: true, slug: true } },
                 account: { select: { id: true, name: true, type: true } },
                 createdBy: { select: { id: true, name: true } },
-                allocations: { orderBy: { sortOrder: 'asc' } }
+                allocations: { orderBy: { sortOrder: 'asc' } },
+                documents: { orderBy: { uploadedAt: 'asc' } }
             }
         }),
         prismaClient.financialRecord.count({ where })

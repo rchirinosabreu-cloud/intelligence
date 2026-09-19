@@ -36,9 +36,13 @@ import {
     payPayrollTransactionHandler,
     reopenFinancialPeriodHandler,
     replaceFinancialRecordAllocationsHandler,
+    streamFinancialRecordDocumentHandler,
     updateFinancialRecordHandler,
+    uploadFinancialRecordDocumentHandler,
+    voidFinancialRecordDocumentHandler,
     voidFinancialRecordHandler
 } from '../../controllers/financialRecordController.js';
+import { FINANCIAL_DOCUMENT_MAX_BYTES } from '../../services/financialRecordDocumentService.js';
 import {
     approveBankReconciliationMatch,
     getBankReconciliation,
@@ -55,6 +59,17 @@ const upload = multer({
     }
 });
 
+// Supporting documents: one PDF/JPG/PNG per request, kept in memory only until it reaches the evidence bucket.
+const documentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: FINANCIAL_DOCUMENT_MAX_BYTES, files: 1 } });
+const receiveFinancialDocument = (req, res, next) => documentUpload.single('file')(req, res, (error) => {
+    if (!error) return next();
+    if (error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(413).json({ error: 'FINANCIAL_DOCUMENT_TOO_LARGE', message: 'El documento supera el máximo de 25 MB.' });
+    }
+    console.error('[Financial documents API] Upload rejected:', error.message);
+    return res.status(400).json({ error: 'FINANCIAL_DOCUMENT_INVALID', message: 'No fue posible leer el documento enviado.' });
+});
+
 router.get('/dashboard', requireFinancialAccess, getFinancialDashboard);
 router.get('/accounts', requireFinancialAccess, listFinancialAccountsHandler);
 router.post('/accounts', requireFinancialApproval, createFinancialAccountHandler);
@@ -64,6 +79,9 @@ router.post('/records', requireFinancialWrite, createFinancialRecordHandler);
 router.patch('/records/:id', requireFinancialWrite, updateFinancialRecordHandler);
 router.post('/records/:id/void', requireFinancialWrite, voidFinancialRecordHandler);
 router.put('/records/:id/allocations', requireFinancialWrite, replaceFinancialRecordAllocationsHandler);
+router.post('/records/:id/documents', requireFinancialWrite, receiveFinancialDocument, uploadFinancialRecordDocumentHandler);
+router.get('/records/:id/documents/:documentId/file', requireFinancialAccess, streamFinancialRecordDocumentHandler);
+router.post('/records/:id/documents/:documentId/void', requireFinancialWrite, voidFinancialRecordDocumentHandler);
 router.get('/periods', requireFinancialAccess, listFinancialPeriodsHandler);
 router.post('/periods/close', requireFinancialApproval, closeFinancialPeriodHandler);
 router.post('/periods/reopen', requireFinancialAdmin, reopenFinancialPeriodHandler);

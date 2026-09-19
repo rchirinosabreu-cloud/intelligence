@@ -1,5 +1,5 @@
 import Select from '@/components/ui/Select';
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -16,16 +16,22 @@ import {
 import {
     AlertCircle,
     Calendar,
+    Download,
     Edit,
+    Eye,
     FileSpreadsheet,
+    FileText,
+    Image,
     Layers,
     Loader2,
+    Paperclip,
     Plus,
     Search,
     StopCircle,
     Trash2,
     TrendingDown,
     TrendingUp,
+    Upload,
     Wallet
 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
@@ -57,6 +63,14 @@ const MAX_ALLOCATION_LINES = 20;
 const emptyAllocationLine = (category = 'OPERATIVO') => ({ amount: '', category, description: '' });
 const allocationLinesFrom = (record) => (record?.allocations || []).map((line) => ({ amount: String(line.amount), category: line.category, description: line.description || '' }));
 const allocationPayload = (lines) => lines.map((line) => ({ amount: Number(line.amount), category: line.category, description: line.description.trim() }));
+
+// Supporting documents: PDF, JPG or PNG, fetched only through the authenticated API. They are never deleted.
+const DOCUMENT_ACCEPT = '.pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png';
+const DOCUMENT_MAX_BYTES = 25 * 1024 * 1024;
+const documentExtensionOk = (name) => /\.(pdf|jpe?g|png)$/i.test(String(name || ''));
+const formatBytes = (bytes) => (bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.max(1, Math.round(bytes / 1024))} KB`);
+const documentIcon = (mimeType) => (String(mimeType).startsWith('image/') ? Image : FileText);
+const activeDocuments = (record) => (record?.documents || []).filter((item) => !item.voidedAt);
 
 const SCENARIOS = [
     ['ACTUAL', 'Ejecutado'],
@@ -126,6 +140,13 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
     const [formAllocations, setFormAllocations] = useState([]);
     const [isAllocationOpen, setIsAllocationOpen] = useState(false);
     const [allocationLines, setAllocationLines] = useState([]);
+    const [formDocuments, setFormDocuments] = useState([]);
+    const [pendingFiles, setPendingFiles] = useState([]);
+    const [isUploadingDocument, setIsUploadingDocument] = useState(false);
+    const [documentToVoid, setDocumentToVoid] = useState(null);
+    const [documentVoidReason, setDocumentVoidReason] = useState('');
+    const [isVoidingDocument, setIsVoidingDocument] = useState(false);
+    const documentInputRef = useRef(null);
     const [isAccountEditorOpen, setIsAccountEditorOpen] = useState(false);
     const [accountForm, setAccountForm] = useState(() => emptyAccountForm(selectedYear));
     const [isSavingAccount, setIsSavingAccount] = useState(false);
@@ -214,6 +235,8 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
         setEditingRecord(null);
         setForm(emptyForm(selectedYear));
         setFormAllocations([]);
+        setFormDocuments([]);
+        setPendingFiles([]);
         setIsEditorOpen(true);
     };
 
@@ -221,10 +244,92 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
         setEditingRecord(record);
         setForm(toForm(record, selectedYear));
         setFormAllocations(allocationLinesFrom(record));
+        setFormDocuments([...(record.documents || [])]);
+        setPendingFiles([]);
         setIsEditorOpen(true);
     };
 
     const refreshFinancialData = () => invalidateFinancialQueries(queryClient);
+
+    const uploadDocument = async (recordId, file) => {
+        const body = new FormData();
+        body.append('file', file, file.name);
+        const response = await axios.post(`${getApiBaseUrl()}/api/financials/records/${recordId}/documents`, body, { headers: authHeaders() });
+        return response.data.document;
+    };
+
+    const openDocument = async (recordId, item, download = false) => {
+        try {
+            const url = `${getApiBaseUrl()}/api/financials/records/${recordId}/documents/${item.id}/file${download ? '?download=1' : ''}`;
+            const response = await axios.get(url, { headers: authHeaders(), responseType: 'blob' });
+            const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: item.mimeType });
+            const objectUrl = URL.createObjectURL(blob);
+            if (download) {
+                const anchor = window.document.createElement('a');
+                anchor.href = objectUrl;
+                anchor.download = item.name;
+                window.document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+            } else if (!window.open(objectUrl, '_blank', 'noopener')) {
+                toast.error('El navegador bloqueó la ventana del documento. Usa Descargar.');
+            }
+            window.setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+        } catch (requestError) {
+            console.error('Error opening financial document:', requestError.response?.data || requestError);
+            toast.error(requestError.response?.data?.message || 'No fue posible abrir el documento.');
+        }
+    };
+
+    const handleDocumentsSelected = async (files) => {
+        const accepted = [];
+        for (const file of files) {
+            if (!documentExtensionOk(file.name)) toast.error(`${file.name}: solo se admiten PDF, JPG o PNG.`);
+            else if (file.size > DOCUMENT_MAX_BYTES) toast.error(`${file.name}: supera el máximo de 25 MB.`);
+            else if (file.size === 0) toast.error(`${file.name}: el archivo está vacío.`);
+            else accepted.push(file);
+        }
+        if (!accepted.length) return;
+        if (!editingRecord) {
+            setPendingFiles((current) => [...current, ...accepted]);
+            return;
+        }
+        setIsUploadingDocument(true);
+        try {
+            for (const file of accepted) {
+                const uploaded = await uploadDocument(editingRecord.id, file);
+                setFormDocuments((current) => (current.some((item) => item.id === uploaded.id) ? current : [...current, uploaded]));
+            }
+            await refreshFinancialData();
+            toast.success(accepted.length === 1 ? 'Documento guardado' : `${accepted.length} documentos guardados`);
+        } catch (requestError) {
+            console.error('Error uploading financial document:', requestError.response?.data || requestError);
+            toast.error(requestError.response?.data?.message || 'No fue posible guardar el documento.');
+        } finally {
+            setIsUploadingDocument(false);
+        }
+    };
+
+    const confirmVoidDocument = async () => {
+        if (!documentToVoid || !editingRecord || !documentVoidReason.trim()) return;
+        setIsVoidingDocument(true);
+        try {
+            const response = await axios.post(`${getApiBaseUrl()}/api/financials/records/${editingRecord.id}/documents/${documentToVoid.id}/void`, {
+                reason: documentVoidReason.trim()
+            }, { headers: authHeaders() });
+            const voided = response.data.document;
+            setFormDocuments((current) => current.map((item) => (item.id === voided.id ? voided : item)));
+            await refreshFinancialData();
+            setDocumentToVoid(null);
+            setDocumentVoidReason('');
+            toast.success('Documento anulado. El archivo se conserva en la bitácora.');
+        } catch (requestError) {
+            console.error('Error voiding financial document:', requestError.response?.data || requestError);
+            toast.error(requestError.response?.data?.message || 'No fue posible anular el documento.');
+        } finally {
+            setIsVoidingDocument(false);
+        }
+    };
 
     const formAllocationCents = formAllocations.reduce((sum, line) => sum + toCents(line.amount), 0);
     const formAllocationMismatch = formAllocations.length > 0 && formAllocationCents !== toCents(form.amount);
@@ -255,6 +360,11 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                     allocations: allocationPayload(formAllocations)
                 }, { headers: authHeaders() });
             }
+            for (const file of pendingFiles) {
+                const uploaded = await uploadDocument(savedRecord.id, file);
+                setFormDocuments((current) => [...current, uploaded]);
+                setPendingFiles((current) => current.filter((candidate) => candidate !== file));
+            }
             await refreshFinancialData();
             setIsEditorOpen(false);
             toast.success(editingRecord ? 'Movimiento actualizado' : 'Movimiento registrado');
@@ -262,10 +372,10 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
             console.error('Error saving financial record:', requestError.response?.data || requestError);
             const message = requestError.response?.data?.message;
             if (savedRecord && savedRecord !== editingRecord) {
-                // The movement exists; only its breakdown failed. Keep editing that record instead of creating a duplicate.
+                // The movement exists; only its breakdown or a document failed. Keep editing that record instead of creating a duplicate.
                 await refreshFinancialData();
                 setEditingRecord(savedRecord);
-                toast.error(`El movimiento se guardó, pero el desglose no: ${message || 'inténtalo de nuevo.'}`);
+                toast.error(`El movimiento se guardó, pero no todo lo demás: ${message || 'inténtalo de nuevo.'}`);
             } else {
                 toast.error(message || 'No fue posible guardar el movimiento.');
             }
@@ -491,6 +601,14 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                                                     ))}
                                                 </ul>
                                             )}
+                                            {activeDocuments(record).length > 0 && (
+                                                <div aria-label="Documentos de respaldo" className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                                                    <Paperclip className="h-3.5 w-3.5 text-zinc-400" />
+                                                    {activeDocuments(record).map((item) => (
+                                                        <button key={item.id} type="button" title={`Abrir ${item.name}`} onClick={() => openDocument(record.id, item)} className="max-w-[220px] truncate text-brand-cyan-deep hover:underline dark:text-brand-cyan">{item.name}</button>
+                                                    ))}
+                                                </div>
+                                            )}
                                         </td>
                                         <td className="p-3 text-zinc-600 dark:text-zinc-300">{categoryLabel(record.category)}</td>
                                         <td className="p-3 text-zinc-600 dark:text-zinc-300">{record.account?.name || 'Sin conciliar'}</td>
@@ -532,6 +650,47 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<Select className={inputClass} value={form.clientId} onChange={(event) => setField('clientId', event.target.value)}><option value="">Sin cliente relacionado</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</Select></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Contraparte<input className={inputClass} value={form.counterparty} onChange={(event) => setField('counterparty', event.target.value)} placeholder="Proveedor o persona" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Referencia<input className={inputClass} value={form.reference} onChange={(event) => setField('reference', event.target.value)} placeholder="Factura, transferencia..." /></label>
+                        </div>
+                        <div className="rounded-lg border border-zinc-200 p-3 dark:border-white/10">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="text-sm">
+                                    <p className="font-medium text-zinc-900 dark:text-white">Documentos de respaldo</p>
+                                    <p className="text-xs text-zinc-500 dark:text-zinc-400">Facturas o soportes en PDF, JPG o PNG, hasta 25 MB cada uno. Se conservan siempre: un documento subido por error se anula, no se borra.</p>
+                                </div>
+                                <input ref={documentInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple className="sr-only" aria-label="Seleccionar documentos de respaldo" onChange={(event) => { handleDocumentsSelected([...event.target.files]); event.target.value = ''; }} />
+                                <button type="button" onClick={() => documentInputRef.current?.click()} disabled={isUploadingDocument} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">{isUploadingDocument ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}{isUploadingDocument ? 'Subiendo…' : 'Añadir documento'}</button>
+                            </div>
+                            {(formDocuments.length > 0 || pendingFiles.length > 0) && (
+                                <ul className="mt-2 divide-y divide-zinc-100 text-sm dark:divide-white/5">
+                                    {formDocuments.map((item) => {
+                                        const Icon = documentIcon(item.mimeType);
+                                        return (
+                                            <li key={item.id} className="flex items-center gap-2 py-1.5">
+                                                <Icon className="h-4 w-4 shrink-0 text-zinc-400" />
+                                                <span className={cn('min-w-0 flex-1 truncate', item.voidedAt ? 'text-zinc-400 line-through' : 'text-zinc-800 dark:text-zinc-100')} title={item.voidedAt ? `Anulado: ${item.voidReason}` : item.name}>{item.name}</span>
+                                                <span className="shrink-0 text-xs text-zinc-400">{formatBytes(Number(item.size))}</span>
+                                                {item.voidedAt
+                                                    ? <span className="shrink-0 text-xs text-zinc-400">Anulado</span>
+                                                    : (
+                                                        <span className="flex shrink-0 gap-1">
+                                                            <button type="button" title="Ver documento" aria-label={`Ver ${item.name}`} onClick={() => openDocument(editingRecord.id, item)} className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/10"><Eye className="h-4 w-4" /></button>
+                                                            <button type="button" title="Descargar documento" aria-label={`Descargar ${item.name}`} onClick={() => openDocument(editingRecord.id, item, true)} className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/10"><Download className="h-4 w-4" /></button>
+                                                            <button type="button" title="Anular documento" aria-label={`Anular ${item.name}`} onClick={() => { setDocumentToVoid(item); setDocumentVoidReason(''); }} className="grid h-8 w-8 place-items-center rounded-md text-destructive hover:bg-destructive/10"><StopCircle className="h-4 w-4" /></button>
+                                                        </span>
+                                                    )}
+                                            </li>
+                                        );
+                                    })}
+                                    {pendingFiles.map((file, index) => (
+                                        <li key={`${file.name}-${file.size}-${index}`} className="flex items-center gap-2 py-1.5">
+                                            <Paperclip className="h-4 w-4 shrink-0 text-zinc-400" />
+                                            <span className="min-w-0 flex-1 truncate text-zinc-800 dark:text-zinc-100">{file.name}</span>
+                                            <span className="shrink-0 text-xs text-zinc-400">{formatBytes(file.size)} · se sube al guardar</span>
+                                            <button type="button" title="Quitar de la lista" aria-label={`Quitar ${file.name} de la lista`} onClick={() => setPendingFiles((current) => current.filter((candidate) => candidate !== file))} className="grid h-8 w-8 place-items-center rounded-md text-destructive hover:bg-destructive/10"><Trash2 className="h-4 w-4" /></button>
+                                        </li>
+                                    ))}
+                                </ul>
+                            )}
                         </div>
                         <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Notas<textarea rows={3} className={`${inputClass} resize-y`} value={form.notes} onChange={(event) => setField('notes', event.target.value)} /></label>
                         {editingRecord?.origin !== 'SYSTEM' && (
@@ -632,6 +791,15 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                             </DialogFooter>
                         </form>
                     )}
+                </DialogContent>
+            </Dialog>
+
+            <Dialog open={!!documentToVoid} onOpenChange={(open) => !open && !isVoidingDocument && setDocumentToVoid(null)}>
+                <DialogContent overlayClassName="z-[80]" className="z-[81] sm:max-w-md dark:bg-zinc-900">
+                    <DialogHeader><DialogTitle>Anular documento</DialogTitle><DialogDescription>El documento dejará de mostrarse como respaldo, pero el archivo se conserva y el motivo queda en la auditoría.</DialogDescription></DialogHeader>
+                    {documentToVoid && <p className="truncate text-sm font-medium text-zinc-900 dark:text-white" title={documentToVoid.name}>{documentToVoid.name}</p>}
+                    <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Motivo<textarea autoFocus rows={3} className={inputClass} value={documentVoidReason} onChange={(event) => setDocumentVoidReason(event.target.value)} placeholder="Ej. Se subió la factura de otro movimiento" /></label>
+                    <DialogFooter><button type="button" onClick={() => setDocumentToVoid(null)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium dark:border-white/10">Cancelar</button><button type="button" disabled={!documentVoidReason.trim() || isVoidingDocument} onClick={confirmVoidDocument} className="inline-flex items-center justify-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-white hover:bg-destructive/90 disabled:opacity-50">{isVoidingDocument && <Loader2 className="h-4 w-4 animate-spin" />}Anular documento</button></DialogFooter>
                 </DialogContent>
             </Dialog>
 
