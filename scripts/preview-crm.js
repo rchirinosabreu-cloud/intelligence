@@ -4,12 +4,12 @@ import express from 'express';
 import { createServer } from 'vite';
 import { createCrmRouter } from '../src/routes/api/crm.js';
 import { createCrmMemoryDb } from '../tests/fixtures/crmMemoryDb.js';
-import { crmDemoLeads, crmDemoActivities, crmDemoMembers, crmDemoUsers, crmDemoUser } from '../tests/fixtures/crmData.js';
+import { crmDemoLeads, crmDemoActivities, crmDemoMembers, crmDemoUsers, crmDemoUser, crmDemoRequests } from '../tests/fixtures/crmData.js';
 
 // Local laboratory for the CRM screens: the real router and service run over an in-memory store.
 // No dotenv, no database, no production server, no external calls.
 export async function createCrmPreview({ port = 3100 } = {}) {
-  const db = createCrmMemoryDb({ leads: crmDemoLeads, activities: crmDemoActivities, members: crmDemoMembers, users: crmDemoUsers });
+  const db = createCrmMemoryDb({ leads: crmDemoLeads, activities: crmDemoActivities, members: crmDemoMembers, users: crmDemoUsers, requests: crmDemoRequests });
   const api = express();
   api.use(express.json());
   api.use((req, _res, next) => { req.user = { userId: crmDemoUser.id, role: crmDemoUser.role }; next(); });

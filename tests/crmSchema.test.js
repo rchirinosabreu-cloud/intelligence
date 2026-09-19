@@ -31,6 +31,9 @@ test('CRM schema bootstrap is additive, transactional and fails closed', async (
   assert.match(sql, /UNIQUE\("authorId","requestId"\)/);
   assert.match(sql, /CREATE INDEX IF NOT EXISTS "CrmLead_followup_idx"/);
   assert.match(sql, /CREATE INDEX IF NOT EXISTS "CrmActivity_lead_idx"/);
+  assert.match(sql, /CREATE TABLE IF NOT EXISTS "CrmRequest"/);
+  assert.match(sql, /"leadId" TEXT NOT NULL UNIQUE REFERENCES "CrmLead"\(id\)/);
+  assert.match(sql, /ALTER TABLE "Quotation" ADD COLUMN IF NOT EXISTS "lead_id" TEXT REFERENCES "CrmLead"\(id\)/);
   assert.doesNotMatch(sql, /\b(DROP|DELETE|UPDATE|TRUNCATE)\b/);
 
   const failure = new Error('DDL lock timeout');

@@ -138,6 +138,13 @@ export const OriginBadge = ({ origin, className }) => (
   </span>
 );
 
+/** Marks leads that arrived through the public request form. */
+export const RequestBadge = ({ lead, className }) => (lead?.hasRequest ? (
+  <span className={cn('inline-flex items-center rounded-md border border-brand-magenta/30 bg-brand-magenta/10 px-1.5 py-0.5 text-[11px] font-semibold text-brand-magenta-deep dark:text-brand-magenta', className)} title="Llegó por el formulario de solicitud">
+    Formulario
+  </span>
+) : null);
+
 export const leadTitle = lead => lead?.company || lead?.contactName || 'Sin nombre';
 export const leadSubtitle = lead => {
   if (!lead) return '';

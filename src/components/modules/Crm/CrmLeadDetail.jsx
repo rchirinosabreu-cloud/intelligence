@@ -15,6 +15,7 @@ import { useCrmLead, useCrmTeam, useChangeStage, useSetTrafficLight, useArchiveL
 import CrmLeadForm from './CrmLeadForm';
 import CrmActivityForm from './CrmActivityForm';
 import CrmActivityTimeline from './CrmActivityTimeline';
+import CrmRequestPanel from './CrmRequestPanel';
 import {
   CRM_STAGES, CRM_TRAFFIC_LIGHTS, TrafficLightBadge, TrafficLightDot, PriorityBadge, OriginBadge, FollowUpLabel,
   formatDate, formatDateTime, formatCurrency, originLabel, trafficLightLabel, leadTitle, leadSubtitle, inputClass, labelClass
@@ -213,6 +214,8 @@ const CrmLeadDetail = () => {
             )}
           </Panel>
 
+          <CrmRequestPanel request={lead.request} />
+
           <Panel title="Registrar gestión">
             <CrmActivityForm leadId={lead.id} />
           </Panel>
@@ -247,8 +250,23 @@ const CrmLeadDetail = () => {
               <Row label="Última gestión">{lead.lastActivityAt ? formatDateTime(lead.lastActivityAt) : null}</Row>
               <Row label="Cierre">{lead.closedAt ? formatDate(lead.closedAt) : null}</Row>
               {lead.lostReason && <Row label="Motivo de pérdida">{lead.lostReason}</Row>}
-              <Row label="Cotización">{lead.quotationId ? <Link to={`/cotizaciones/editar/${lead.quotationId}`} className="text-primary hover:underline">Ver cotización</Link> : null}</Row>
             </dl>
+          </Panel>
+
+          <Panel title={`Cotizaciones · ${lead.quotations?.length || 0}`}>
+            {lead.quotations?.length ? (
+              <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
+                {lead.quotations.map(quotation => (
+                  <li key={quotation.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                    <Link to={`/cotizaciones/editar/${quotation.id}`} className="font-semibold text-primary hover:underline">{quotation.code}</Link>
+                    <span className="text-xs text-zinc-500">{quotation.status}</span>
+                    <span className="font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{formatCurrency(quotation.total, quotation.currency)}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm leading-6 text-zinc-500 dark:text-zinc-400">Aún no hay cotizaciones para esta oportunidad.{lead.request?.suggestedItems?.length ? ' La solicitud ya trae líneas sugeridas para la primera.' : ''}</p>
+            )}
           </Panel>
 
           {lead.notes && (

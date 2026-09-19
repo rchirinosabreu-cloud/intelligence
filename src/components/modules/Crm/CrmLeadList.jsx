@@ -4,7 +4,7 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Plus, AlertCircle, ChevronRight } from '@/components/ui/icons';
 import CrmFilters from './CrmFilters';
 import { useCrmLeads } from './crmApi';
-import { StageBadge, TrafficLightBadge, PriorityBadge, FollowUpLabel, OriginBadge, leadTitle, leadSubtitle } from './crmPresentation';
+import { StageBadge, TrafficLightBadge, PriorityBadge, FollowUpLabel, OriginBadge, RequestBadge, leadTitle, leadSubtitle } from './crmPresentation';
 
 const Empty = ({ onCreate, filtered }) => (
   <div className="px-6 py-14 text-center">
@@ -65,6 +65,7 @@ const CrmLeadList = ({ filters, onFiltersChange, team, onOpenLead, onCreate }) =
                     <div className="flex items-center gap-2">
                       <p className="font-semibold text-zinc-900 dark:text-zinc-50">{leadTitle(lead)}</p>
                       <OriginBadge origin={lead.origin} />
+                      <RequestBadge lead={lead} />
                     </div>
                     <p className="text-xs text-zinc-500">{leadSubtitle(lead) || lead.serviceInterest || lead.code}</p>
                   </td>
@@ -105,6 +106,7 @@ const CrmLeadList = ({ filters, onFiltersChange, team, onOpenLead, onCreate }) =
                   <StageBadge stage={lead.stage} />
                   <PriorityBadge priority={lead.priority} />
                   <OriginBadge origin={lead.origin} />
+                  <RequestBadge lead={lead} />
                 </div>
                 <div className="flex items-end justify-between gap-3">
                   <p className="line-clamp-2 text-xs leading-5 text-zinc-600 dark:text-zinc-300">{lead.nextAction || 'Sin próxima acción'}</p>

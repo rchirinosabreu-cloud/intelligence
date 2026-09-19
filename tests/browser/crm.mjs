@@ -33,12 +33,12 @@ for (const variant of [
     try {
       await page.getByText('Total de leads').waitFor();
       await page.getByText('Prioridades inmediatas').waitFor();
-      assert.match(await page.locator('main').innerText(), /15/);
+      assert.match(await page.locator('main').innerText(), /16/);
       await page.screenshot({ path: `output/crm/${variant.name}-dashboard.png`, fullPage: true });
 
       await page.goto(`${preview.origin}/crm?tab=oportunidades${variant.dark ? '&dark' : ''}`);
       await page.getByText('Calzado Andino').locator('visible=true').first().waitFor();
-      assert.match(await page.locator('main').innerText(), /15 oportunidades/);
+      assert.match(await page.locator('main').innerText(), /16 oportunidades/);
       await page.screenshot({ path: `output/crm/${variant.name}-oportunidades.png`, fullPage: true });
 
       await page.goto(`${preview.origin}/crm?tab=seguimientos${variant.dark ? '&dark' : ''}`);
@@ -78,6 +78,27 @@ test('desktop: logging a client answer updates the timeline, the next step and t
     assert.match(text, /Bitácora · 3 registros/);
     assert.match(text, /Verde/);
     await page.screenshot({ path: 'output/crm/desktop-light-ficha.png', fullPage: true });
+    assert.deepEqual(errors, []);
+  } finally { await page.close(); }
+});
+
+test('desktop: the form link is one click away and a form-born lead shows the client request', async () => {
+  const { page, errors } = await open({ width: 1440, height: 1100 }, '/crm?tab=oportunidades');
+  try {
+    const copy = page.getByRole('button', { name: 'Copiar enlace del formulario' });
+    await copy.waitFor();
+    assert.equal(await copy.getAttribute('title'), `${preview.origin}/solicitud`);
+    await page.getByText('Formulario', { exact: true }).first().waitFor();
+    await page.goto(`${preview.origin}/crm/oportunidades/lead-solicitud`);
+    await page.locator('[data-crm-request]').waitFor();
+    const text = await page.locator('[data-crm-request]').innerText();
+    assert.match(text, /Solicitud del cliente/);
+    assert.match(text, /Abrir la segunda sede/);
+    assert.match(text, /Landing page/);
+    assert.match(text, /Integración de WhatsApp en sitio web/);
+    await page.getByRole('button', { name: /Ver todas las respuestas/ }).click();
+    assert.match(await page.locator('[data-crm-request]').innerText(), /AMC Start/);
+    await page.screenshot({ path: 'output/crm/desktop-light-solicitud.png', fullPage: true });
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
 });

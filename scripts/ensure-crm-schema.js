@@ -74,7 +74,20 @@ export async function ensureCrmSchema(client) {
       UNIQUE("authorId","requestId")
     );
     CREATE INDEX IF NOT EXISTS "CrmActivity_lead_idx" ON "CrmActivity"("leadId", "occurredAt");
-    CREATE INDEX IF NOT EXISTS "CrmActivity_author_idx" ON "CrmActivity"("authorId");`);
+    CREATE INDEX IF NOT EXISTS "CrmActivity_author_idx" ON "CrmActivity"("authorId");
+    CREATE TABLE IF NOT EXISTS "CrmRequest" (
+      id TEXT PRIMARY KEY,
+      "leadId" TEXT NOT NULL UNIQUE REFERENCES "CrmLead"(id),
+      version INTEGER NOT NULL DEFAULT 1,
+      answers JSONB NOT NULL,
+      services JSONB NOT NULL DEFAULT '[]'::jsonb,
+      "suggestedItems" JSONB NOT NULL DEFAULT '[]'::jsonb,
+      meta JSONB,
+      "receivedAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    ALTER TABLE "Quotation" ADD COLUMN IF NOT EXISTS "lead_id" TEXT REFERENCES "CrmLead"(id);
+    CREATE INDEX IF NOT EXISTS "Quotation_lead_idx" ON "Quotation"("lead_id");`);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK').catch(rollbackError => console.error('[CRM schema] Rollback failed:', rollbackError.message));

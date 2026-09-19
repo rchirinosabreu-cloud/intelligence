@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import PageHeader from '@/components/ui/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, ListTodo, CalendarClock, BarChart3, Plus } from '@/components/ui/icons';
+import { toast } from 'react-hot-toast';
+import { LayoutDashboard, ListTodo, CalendarClock, BarChart3, Plus, Link2 } from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
 import { readCrmFilters, writeCrmFilters } from '@/lib/crmFilterSession';
 import { useCrmTeam } from './crmApi';
@@ -25,6 +26,16 @@ const CrmLayout = () => {
 
   useEffect(() => { writeCrmFilters(window.sessionStorage, currentUser, filters); }, [filters, currentUser]);
 
+  const requestLink = `${window.location.origin}/solicitud`;
+  const copyRequestLink = async () => {
+    try {
+      await navigator.clipboard.writeText(requestLink);
+      toast.success('Enlace del formulario copiado. Envíalo a tu prospecto.');
+    } catch {
+      window.prompt('Copia el enlace del formulario:', requestLink);
+    }
+  };
+
   const selectTab = value => {
     const next = new URLSearchParams(searchParams);
     if (value === 'dashboard') next.delete('tab'); else next.set('tab', value);
@@ -34,6 +45,9 @@ const CrmLayout = () => {
   return (
     <div className="space-y-6">
       <PageHeader title="CRM comercial" subtitle="Bitácora SDR de Brain Studio: cada oportunidad con su siguiente paso.">
+        <Button variant="outline" onClick={copyRequestLink} className="flex items-center gap-2 rounded-xl" title={requestLink} data-crm-copy-link>
+          <Link2 className="h-4 w-4" /> Copiar enlace del formulario
+        </Button>
         <Button onClick={() => setCreating(true)} className="flex items-center gap-2 rounded-xl">
           <Plus className="h-4 w-4" /> Nueva oportunidad
         </Button>

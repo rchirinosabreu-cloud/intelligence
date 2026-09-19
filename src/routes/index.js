@@ -12,6 +12,7 @@ import * as publicController from '../controllers/publicController.js';
 import * as managerTaskAnalyticsController from '../controllers/managerTaskAnalyticsController.js';
 import * as briaMemoryController from '../controllers/briaMemoryController.js';
 import * as briaObserverController from '../controllers/briaObserverController.js';
+import * as commercialRequestController from '../controllers/commercialRequestController.js';
 import { authenticateToken, requireManagerRole, requireModulePermission } from '../middlewares/authMiddleware.js';
 import prisma from '../lib/prisma.js';
 import multer from 'multer';
@@ -60,6 +61,8 @@ router.get('/public/parrilla/:token/items/:id/final-asset', publicController.get
 router.get('/public/parrilla/:token/items/:id/final-assets/:assetId', publicController.getPublicFinalAssetById);
 router.post('/public/parrilla/:token/items/:id/approve', publicController.approvePublicItem);
 router.post('/public/parrilla/:token/items/:id/comment', publicController.commentPublicItem);
+// Public commercial request form → CRM opportunity. Rate limited by the /api/public limiter in server.js.
+router.post('/public/commercial-request', express.json({ limit: '200kb' }), commercialRequestController.receive);
 router.use('/quotations', quotationsRouter);
 router.use('/services', servicesRouter);
 // Aliases for services catalog (ensuring compatibility with various frontend versions)
