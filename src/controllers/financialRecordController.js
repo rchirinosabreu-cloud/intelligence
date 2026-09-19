@@ -10,6 +10,7 @@ import {
     listFinancialPeriods,
     reopenFinancialPeriod
 } from '../services/financialPeriodService.js';
+import { replaceFinancialRecordAllocations } from '../services/financialRecordAllocationService.js';
 import { createReceivablePayment } from '../services/receivablePaymentService.js';
 import { createReceivable } from '../services/financialReceivableService.js';
 import { auditFinancialIntegrity } from '../services/financialIntegrityAuditService.js';
@@ -105,6 +106,21 @@ export const voidFinancialRecordHandler = async (req, res, dependencies = {}) =>
     } catch (error) {
         console.error('[Financial records API] Void failed:', error.response?.data || error);
         return respondWithError(res, error, 'FINANCIAL_RECORD_VOID_FAILED', 'No fue posible anular el movimiento financiero.');
+    }
+};
+
+export const replaceFinancialRecordAllocationsHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const replaceAllocations = dependencies.replaceAllocations || replaceFinancialRecordAllocations;
+    try {
+        const record = await replaceAllocations(prismaClient, req.params.id, req.body?.allocations, req.user);
+        return res.json({
+            message: record.allocations.length > 0 ? 'Desglose guardado correctamente.' : 'Desglose retirado correctamente.',
+            record
+        });
+    } catch (error) {
+        console.error('[Financial records API] Allocation failed:', error.response?.data || error);
+        return respondWithError(res, error, 'FINANCIAL_ALLOCATION_FAILED', 'No fue posible guardar el desglose del movimiento.');
     }
 };
 

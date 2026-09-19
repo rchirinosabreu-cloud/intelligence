@@ -1,7 +1,7 @@
 import { withFinancialSearch, activeFinancialSource } from './financialQueryFilters.js';
 
 const TYPES = new Set(['INCOME', 'EXPENSE']);
-const CATEGORIES = new Set([
+export const FINANCIAL_CATEGORIES = new Set([
     'MEMBRESIA',
     'SERVICIO',
     'PAUTA',
@@ -12,8 +12,10 @@ const CATEGORIES = new Set([
     'FINANCIAL',
     'OPERATIVO',
     'DONACION',
-    'SIEMBRA'
+    'SIEMBRA',
+    'PRESTAMO'
 ]);
+const CATEGORIES = FINANCIAL_CATEGORIES;
 const SCENARIOS = new Set(['ACTUAL', 'FORECAST', 'BUDGET']);
 const STATUSES = new Set(['DRAFT', 'POSTED']);
 
@@ -251,7 +253,8 @@ export const listFinancialRecords = async (prismaClient, filters = {}) => {
             include: {
                 client: { select: { id: true, name: true, slug: true } },
                 account: { select: { id: true, name: true, type: true } },
-                createdBy: { select: { id: true, name: true } }
+                createdBy: { select: { id: true, name: true } },
+                allocations: { orderBy: { sortOrder: 'asc' } }
             }
         }),
         prismaClient.financialRecord.count({ where })

@@ -10,6 +10,7 @@ export async function ensureFinancialCategoriesSchema(client) {
         await client.query('SELECT pg_advisory_xact_lock(20260914, 2)');
         await client.query(`ALTER TYPE "FinancialCategory" ADD VALUE IF NOT EXISTS 'DONACION'`);
         await client.query(`ALTER TYPE "FinancialCategory" ADD VALUE IF NOT EXISTS 'SIEMBRA'`);
+        await client.query(`ALTER TYPE "FinancialCategory" ADD VALUE IF NOT EXISTS 'PRESTAMO'`);
         // Commit enum values before the application can use them.
         await client.query('COMMIT');
     } catch (error) {

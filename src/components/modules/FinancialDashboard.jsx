@@ -48,7 +48,8 @@ const CATEGORY_COLORS = {
     'FINANCIAL': '#10b981',      // Emerald
     'OPERATIVO': '#71717a',      // Zinc
     'DONACION': '#009EB9',
-    'SIEMBRA': '#00AC8A'
+    'SIEMBRA': '#00AC8A',
+    'PRESTAMO': '#A8118C'
 };
 
 const CATEGORY_LABELS = {
@@ -62,7 +63,8 @@ const CATEGORY_LABELS = {
     'FINANCIAL': 'Financiero/Banco',
     'OPERATIVO': 'Operativo Varios',
     'DONACION': 'Donaciones',
-    'SIEMBRA': 'Siembra'
+    'SIEMBRA': 'Siembra',
+    'PRESTAMO': 'Préstamo'
 };
 
 const FinancialDashboard = () => {

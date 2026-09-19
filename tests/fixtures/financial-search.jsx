@@ -17,6 +17,7 @@ const account = { id: 'demo-account', name: 'Cuenta de muestra', type: 'BANK', b
 const records = Array.from({ length: 32 }, (_, i) => ({ id: `rodny-${i}`, year: 2026, month: 9, date: '2026-09-01T12:00:00Z', scenario: 'ACTUAL', status: 'POSTED', type: i===31 ? 'EXPENSE' : 'INCOME', amount: i===31 ? 50750 : 100250, category: 'SERVICIO', origin: 'MANUAL', description: i===31 ? 'Honorarios Rodny' : `Servicio Rodny ${i+1}`, counterparty: 'Rodny Chirinos', accountId: account.id, account }));
 records.push({ ...records[0], id:'brain', description:'Suscripción Brain Studio', counterparty:'Brain Studio', type:'EXPENSE', amount:400000 });
 records.push({ ...records[0], id:'august', description:'Servicio Rodny agosto', month:8, date:'2026-08-01T12:00:00Z', amount:1000000 });
+records.push({ ...records[0], id:'ia-platform', description:'Inversión en IA de la plataforma, Claude Code, Eleven Labs.', counterparty:'Rodny', category:'OPERATIVO', type:'EXPENSE', amount:600000, date:'2026-09-18T12:00:00Z', allocations: [] });
 const categoryExample = new URLSearchParams(location.search).get('categories') === '1';
 if (categoryExample) records.splice(0, records.length, { ...records[0], id:'donation-demo', description:'Donación de muestra', counterparty:'', category:'OPERATIVO', origin:'IMPORT', accountId:null, account:null, type:'EXPENSE', month:8, date:'2026-08-01T05:00:00Z', amount:150000 });
 axios.defaults.adapter = async config => {
@@ -30,6 +31,14 @@ axios.defaults.adapter = async config => {
         if (patch.accountId !== null || patch.amount !== 150000 || patch.date !== '2026-08-01') throw new Error('La muestra debe conservar importe, fecha y cuenta');
         records[0].category = patch.category;
         data = records[0];
+    }
+    else if (config.method === 'put' && /\/records\/[^/]+\/allocations$/.test(path)) {
+        const target = records.find(r => path.endsWith(`/records/${r.id}/allocations`));
+        const lines = JSON.parse(config.data).allocations;
+        const sum = lines.reduce((n, line) => n + Math.round(Number(line.amount) * 100), 0);
+        if (lines.length === 1 || (lines.length && sum !== Math.round(target.amount * 100))) throw Object.assign(new Error('Desglose inválido'), { response: { data: { message: 'Las partidas no suman el valor del movimiento (simulado)' } } });
+        target.allocations = lines.map((line, i) => ({ id: `${target.id}-line-${i}`, sortOrder: i, ...line }));
+        data = { record: target };
     }
     else if(path.endsWith('/dashboard')) data={cashFlow:[{year:2026,month:9,income,expense,netFlow:income-expense}],categoriesDistribution:{INCOME:{SERVICIO:income},EXPENSE:{SERVICIO:expense}},accountsReceivable:[],payroll:{collaborators:[]},sourceSummary:{totals:{income,expense,netFlow:income-expense,receivable:0}}};
     else if(path.endsWith('/records')) { const page=Number(url.searchParams.get('page')||1),size=Number(url.searchParams.get('pageSize')||25); data={items:filtered.slice((page-1)*size,page*size),total:filtered.length,page,pageSize:size}; }
