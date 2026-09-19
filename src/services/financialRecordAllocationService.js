@@ -25,17 +25,17 @@ const optionalText = (value) => {
 
 export const normalizeFinancialAllocationsInput = (record, input) => {
     if (!Array.isArray(input)) {
-        throw new FinancialDomainError('FINANCIAL_ALLOCATION_INVALID', 'El desglose debe ser una lista de partidas.');
+        throw new FinancialDomainError('FINANCIAL_ALLOCATION_INVALID', 'El desglose debe ser una lista de ítems.');
     }
     if (input.length === 0) return [];
     if (input.length === 1) {
         throw new FinancialDomainError(
             'FINANCIAL_ALLOCATION_MIN_LINES',
-            'Un desglose necesita al menos dos partidas. Si el movimiento es de un solo concepto, edita su categoría directamente.'
+            'Un desglose necesita al menos dos ítems. Si el movimiento es de un solo concepto, edita su categoría directamente.'
         );
     }
     if (input.length > MAX_LINES) {
-        throw new FinancialDomainError('FINANCIAL_ALLOCATION_TOO_MANY_LINES', `Un desglose admite hasta ${MAX_LINES} partidas.`);
+        throw new FinancialDomainError('FINANCIAL_ALLOCATION_TOO_MANY_LINES', `Un desglose admite hasta ${MAX_LINES} ítems.`);
     }
 
     const lines = input.map((line, index) => {
@@ -45,16 +45,16 @@ export const normalizeFinancialAllocationsInput = (record, input) => {
         if (!Number.isFinite(amount) || amount <= 0 || Math.abs(amount * 100 - cents) > 1e-6) {
             throw new FinancialDomainError(
                 'FINANCIAL_ALLOCATION_AMOUNT_INVALID',
-                `El valor de la partida ${index + 1} debe ser mayor que cero y tener como máximo dos decimales.`
+                `El valor del ítem ${index + 1} debe ser mayor que cero y tener como máximo dos decimales.`
             );
         }
         const category = String(source.category || '').trim().toUpperCase();
         if (!FINANCIAL_CATEGORIES.has(category)) {
-            throw new FinancialDomainError('FINANCIAL_ALLOCATION_CATEGORY_INVALID', `La categoría de la partida ${index + 1} no es válida.`);
+            throw new FinancialDomainError('FINANCIAL_ALLOCATION_CATEGORY_INVALID', `La categoría del ítem ${index + 1} no es válida.`);
         }
         const description = optionalText(source.description);
         if (!description) {
-            throw new FinancialDomainError('FINANCIAL_ALLOCATION_DESCRIPTION_REQUIRED', `Indica el concepto de la partida ${index + 1}.`);
+            throw new FinancialDomainError('FINANCIAL_ALLOCATION_DESCRIPTION_REQUIRED', `Indica el concepto del ítem ${index + 1}.`);
         }
         return { amount: cents / 100, category, description, counterparty: optionalText(source.counterparty), sortOrder: index };
     });
@@ -66,8 +66,8 @@ export const normalizeFinancialAllocationsInput = (record, input) => {
         throw new FinancialDomainError(
             'FINANCIAL_ALLOCATION_SUM_MISMATCH',
             difference > 0
-                ? `Las partidas suman ${formatMoney(totalCents)} y el movimiento es de ${formatMoney(recordCents)}: faltan ${formatMoney(difference)} por repartir.`
-                : `Las partidas suman ${formatMoney(totalCents)} y el movimiento es de ${formatMoney(recordCents)}: sobran ${formatMoney(-difference)}.`
+                ? `Los ítems suman ${formatMoney(totalCents)} y el movimiento es de ${formatMoney(recordCents)}: faltan ${formatMoney(difference)} por repartir.`
+                : `Los ítems suman ${formatMoney(totalCents)} y el movimiento es de ${formatMoney(recordCents)}: sobran ${formatMoney(-difference)}.`
         );
     }
     return lines;
