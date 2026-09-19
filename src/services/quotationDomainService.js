@@ -125,6 +125,7 @@ export const serializeCatalogService = (service) => {
 
   return {
     ...service,
+    descriptionHtml: service.description_html ?? null,
     costo_real_estimado: estimatedCost,
     valor_neto_actual: currentPrice,
     valor_neto: finalPrice,

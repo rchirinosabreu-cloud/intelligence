@@ -13,7 +13,7 @@ import QuotationTermsEditor from './QuotationTermsEditor';
 import ServiceCatalogModal from './ServiceCatalogModal';
 import ProposalDetailsEditor, { ExecutionEditor, ProposalRichField, proposalInput } from './ProposalDetailsEditor';
 import { normalizeProposalDetails, plainTextToProposalHtml } from '@/services/quotationProposalDetails';
-import { catalogDescriptionToHtml } from '@/services/serviceCatalogDescription';
+import { catalogServiceHtml } from '@/services/serviceCatalogDescription';
 import { calculateQuotationEconomics, calculateQuotationTotals, normalizeQuotationItemTitle } from '@/services/quotationDomainService';
 import { matchesServiceSearch } from '@/utils/serviceCatalogSearch';
 
@@ -254,9 +254,9 @@ const QuotationForm = () => {
             serviceId: service.id,
             name: service.name,
             description: service.description,
-            // The catalog text arrives already structured (labels + bullets), so the
-            // item starts formatted instead of as one running paragraph.
-            descriptionHtml: catalogDescriptionToHtml(service.description),
+            // The catalog arrives already formatted (labels + bullets, or the rich text
+            // edited in the catalog modal), so the item never starts as one running paragraph.
+            descriptionHtml: catalogServiceHtml(service),
             category: service.category,
             price: roundQuoteAmount(quotePrice),
             quantity: 1,

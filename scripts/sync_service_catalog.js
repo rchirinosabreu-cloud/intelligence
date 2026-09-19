@@ -22,6 +22,7 @@ export const syncServiceCatalog = async (database, services) => database.$transa
             category: source.category,
             name: source.name,
             description: formatCatalogDescription(source.description),
+            description_html: null,
             costo_real_estimado: source.estimatedCost,
             valor_neto_actual: source.currentPrice,
             valor_neto: source.finalPrice,

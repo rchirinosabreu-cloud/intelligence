@@ -1,6 +1,6 @@
 import prisma from '../lib/prisma.js';
 import { serializeCatalogService } from '../services/quotationDomainService.js';
-import { formatCatalogDescription } from '../services/serviceCatalogDescription.js';
+import { resolveCatalogDescriptionInput } from '../services/serviceCatalogDescription.js';
 
 const parseMoneyField = (value, label, { required = true } = {}) => {
     if (!required && (value === undefined || value === null || value === '')) return undefined;
@@ -40,7 +40,7 @@ const VALID_CATEGORIES = ['BRANDING', 'DISENO', 'COMUNICACION_CORPORATIVA', 'PRO
 
 export const createService = async (req, res) => {
     try {
-        const { category, name, description, costo_real_estimado, valor_neto, valor_neto_actual, precio_comercial_sugerido, precio_variable } = req.body;
+        const { category, name, description, descriptionHtml, costo_real_estimado, valor_neto, valor_neto_actual, precio_comercial_sugerido, precio_variable } = req.body;
 
         if (!category || !String(name).trim()) {
             return res.status(400).json({ error: "Faltan campos obligatorios" });
@@ -58,7 +58,7 @@ export const createService = async (req, res) => {
             data: {
                 category: category.toUpperCase(),
                 name: String(name).trim(),
-                description: formatCatalogDescription(description),
+                ...resolveCatalogDescriptionInput({ description: description ?? '', descriptionHtml }),
                 costo_real_estimado: estimatedCost,
                 valor_neto: finalPrice,
                 valor_neto_actual: currentPrice,
@@ -90,7 +90,7 @@ export const createService = async (req, res) => {
 export const updateService = async (req, res) => {
     try {
         const { id } = req.params;
-        const { category, name, description, costo_real_estimado, valor_neto, valor_neto_actual, precio_comercial_sugerido, precio_variable } = req.body;
+        const { category, name, description, descriptionHtml, costo_real_estimado, valor_neto, valor_neto_actual, precio_comercial_sugerido, precio_variable } = req.body;
 
         if (category && !VALID_CATEGORIES.includes(category.toUpperCase())) {
             return res.status(400).json({ error: "Categoría inválida" });
@@ -101,7 +101,7 @@ export const updateService = async (req, res) => {
             data: {
                 category: category ? category.toUpperCase() : undefined,
                 name: name === undefined ? undefined : String(name).trim(),
-                description: description === undefined ? undefined : formatCatalogDescription(description),
+                ...resolveCatalogDescriptionInput({ description, descriptionHtml }),
                 costo_real_estimado: parseMoneyField(costo_real_estimado, 'El costo real estimado', { required: false }),
                 valor_neto: parseMoneyField(valor_neto, 'El precio final', { required: false }),
                 valor_neto_actual: parseMoneyField(valor_neto_actual, 'El precio actual', { required: false }),

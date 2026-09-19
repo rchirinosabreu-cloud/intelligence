@@ -7,6 +7,8 @@ import { Loader2, Tag } from '@/components/ui/icons';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { toast } from 'react-hot-toast';
+import RichTextEditor from '@/components/ui/RichTextEditor';
+import { catalogServiceHtml } from '@/services/serviceCatalogDescription';
 
 export const SERVICE_CATEGORIES = [
     { id: 'BRANDING', label: 'Branding' },
@@ -24,7 +26,7 @@ export const SERVICE_CATEGORIES = [
 const emptyForm = (initialName = '') => ({
     name: initialName.trim(),
     category: SERVICE_CATEGORIES[0].id,
-    description: '',
+    descriptionHtml: '',
     costo_real_estimado: '',
     valor_neto: '',
     valor_neto_actual: ''
@@ -41,7 +43,7 @@ const ServiceCatalogModal = ({ open, onOpenChange, service = null, initialName =
         setFormData(service ? {
             name: service.name,
             category: service.category,
-            description: service.description || '',
+            descriptionHtml: catalogServiceHtml(service),
             costo_real_estimado: service.costo_real_estimado ?? '',
             valor_neto: service.valor_neto ?? '',
             valor_neto_actual: service.valor_neto_actual ?? ''
@@ -134,7 +136,16 @@ const ServiceCatalogModal = ({ open, onOpenChange, service = null, initialName =
                         </div>
                         <div className="col-span-2 space-y-1.5">
                             <label className="text-xs font-bold uppercase text-zinc-500">Descripción Comercial</label>
-                            <textarea className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20 min-h-[100px]" value={formData.description} onChange={(e) => updateField('description', e.target.value)} placeholder="Describe el alcance del servicio..." />
+                            {/* Same simplified format bar as the team chat: bold, italic, underline, highlight and bullets. */}
+                            <RichTextEditor
+                                value={formData.descriptionHtml}
+                                onChange={(html) => updateField('descriptionHtml', html)}
+                                compactFormats
+                                toolbarAlwaysVisible
+                                placeholder="Concepto, qué incluye y qué no incluye…"
+                                className="px-4 py-3 text-sm"
+                            />
+                            <p className="text-[10px] text-zinc-400">Negrilla, viñetas y saltos de línea llegan tal cual a la cotización.</p>
                         </div>
                     </div>
                     <DialogFooter className="pt-6">
