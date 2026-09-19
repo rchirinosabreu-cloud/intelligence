@@ -17,7 +17,8 @@ const account = { id: 'demo-account', name: 'Cuenta de muestra', type: 'BANK', b
 const records = Array.from({ length: 32 }, (_, i) => ({ id: `rodny-${i}`, year: 2026, month: 9, date: '2026-09-01T12:00:00Z', scenario: 'ACTUAL', status: 'POSTED', type: i===31 ? 'EXPENSE' : 'INCOME', amount: i===31 ? 50750 : 100250, category: 'SERVICIO', origin: 'MANUAL', description: i===31 ? 'Honorarios Rodny' : `Servicio Rodny ${i+1}`, counterparty: 'Rodny Chirinos', accountId: account.id, account }));
 records.push({ ...records[0], id:'brain', description:'Suscripción Brain Studio', counterparty:'Brain Studio', type:'EXPENSE', amount:400000 });
 records.push({ ...records[0], id:'august', description:'Servicio Rodny agosto', month:8, date:'2026-08-01T12:00:00Z', amount:1000000 });
-records.push({ ...records[0], id:'ia-platform', description:'Inversión en IA de la plataforma, Claude Code, Eleven Labs.', counterparty:'Rodny', category:'OPERATIVO', type:'EXPENSE', amount:600000, date:'2026-09-18T12:00:00Z', allocations: [] });
+records.push({ ...records[0], id:'ia-platform', description:'Inversión en IA de la plataforma, Claude Code, Eleven Labs.', counterparty:'Rodny', category:'OPERATIVO', type:'EXPENSE', amount:600000, date:'2026-09-18T12:00:00Z', allocations: [], documents: [] });
+const demoPdf = () => new Blob(['%PDF-1.4\n% Documento de muestra, sin datos reales.\n%%EOF'], { type: 'application/pdf' });
 const categoryExample = new URLSearchParams(location.search).get('categories') === '1';
 if (categoryExample) records.splice(0, records.length, { ...records[0], id:'donation-demo', description:'Donación de muestra', counterparty:'', category:'OPERATIVO', origin:'IMPORT', accountId:null, account:null, type:'EXPENSE', month:8, date:'2026-08-01T05:00:00Z', amount:150000 });
 axios.defaults.adapter = async config => {
@@ -32,9 +33,24 @@ axios.defaults.adapter = async config => {
         records[0].category = patch.category;
         data = records[0];
     }
+    else if (config.method === 'post' && /\/records\/[^/]+\/documents$/.test(path)) {
+        const target = records.find(r => path.endsWith(`/records/${r.id}/documents`));
+        const file = config.data.get('file');
+        if (!/\.(pdf|jpe?g|png)$/i.test(file.name)) throw Object.assign(new Error('Tipo inválido'), { response: { status: 415, data: { message: 'Solo se admiten documentos PDF, JPG o PNG.' } } });
+        const doc = { id: `${target.id}-doc-${(target.documents ||= []).length + 1}`, recordId: target.id, name: file.name, mimeType: file.type || 'application/pdf', size: file.size, uploadedAt: new Date().toISOString(), voidedAt: null, voidReason: null };
+        target.documents.push(doc);
+        data = { document: doc };
+    }
+    else if (config.method === 'post' && /\/documents\/[^/]+\/void$/.test(path)) {
+        const target = records.find(r => path.includes(`/records/${r.id}/documents/`));
+        const doc = target.documents.find(d => path.endsWith(`/documents/${d.id}/void`));
+        Object.assign(doc, { voidedAt: new Date().toISOString(), voidReason: JSON.parse(config.data).reason });
+        data = { document: doc };
+    }
+    else if (config.method === 'get' && /\/documents\/[^/]+\/file$/.test(path)) data = demoPdf();
     else if (config.method === 'post' && path.endsWith('/records')) {
         const body = JSON.parse(config.data);
-        const created = { ...records[0], ...body, id: `new-${records.length}`, month: Number(body.date.slice(5, 7)), account: body.accountId ? account : null, client: null, allocations: [] };
+        const created = { ...records[0], ...body, id: `new-${records.length}`, month: Number(body.date.slice(5, 7)), account: body.accountId ? account : null, client: null, allocations: [], documents: [] };
         records.unshift(created);
         data = { record: created };
     }
@@ -52,7 +68,7 @@ axios.defaults.adapter = async config => {
         data = { record: target };
     }
     else if(path.endsWith('/dashboard')) data={cashFlow:[{year:2026,month:9,income,expense,netFlow:income-expense}],categoriesDistribution:{INCOME:{SERVICIO:income},EXPENSE:{SERVICIO:expense}},accountsReceivable:[],payroll:{collaborators:[]},sourceSummary:{totals:{income,expense,netFlow:income-expense,receivable:0}}};
-    else if(path.endsWith('/records')) { const page=Number(url.searchParams.get('page')||1),size=Number(url.searchParams.get('pageSize')||25); data={items:filtered.slice((page-1)*size,page*size),total:filtered.length,page,pageSize:size}; }
+    else if(path.endsWith('/records')) { const page=Number(url.searchParams.get('page')||1),size=Number(url.searchParams.get('pageSize')||25); data={items:filtered.slice((page-1)*size,page*size).map(r => ({ ...r, allocations: [...(r.allocations || [])], documents: [...(r.documents || [])] })),total:filtered.length,page,pageSize:size}; }
     else if(path.endsWith('/accounts')) data={accounts:[account]};
     else if(path==='/api/clients') data=[];
     else if(path.endsWith('/periods')) data={periods:[]};

@@ -1455,6 +1455,7 @@ model FinancialRecord {
   payrollTransaction PayrollTransaction?
   bankMatches        BankReconciliationMatch[]
   allocations        FinancialRecordAllocation[]
+  documents          FinancialRecordDocument[]
 
   @@index([date])
   @@index([year, month])
@@ -1486,6 +1487,27 @@ model FinancialRecordAllocation {
 
   @@index([recordId, sortOrder])
   @@index([category])
+}
+
+// Supporting documents (invoices, receipts) of a movement. Evidence: stored in the dedicated
+// financial-evidence bucket, served only through the authenticated API, never deleted; a wrong
+// upload is voided with a reason. Created additively by scripts/ensure-financial-documents-schema.js.
+model FinancialRecordDocument {
+  id           String          @id @default(uuid())
+  recordId     String
+  record       FinancialRecord @relation(fields: [recordId], references: [id])
+  storageKey   String          @unique
+  name         String
+  mimeType     String
+  size         Int
+  sha256       String
+  uploadedById String?
+  uploadedAt   DateTime        @default(now()) @db.Timestamptz()
+  voidedAt     DateTime?       @db.Timestamptz()
+  voidReason   String?
+  voidedById   String?
+
+  @@index([recordId, uploadedAt])
 }
 
 model FinancialAccount {
