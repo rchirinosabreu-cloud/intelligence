@@ -12,9 +12,12 @@ import 'react-datepicker/dist/react-datepicker.css';
 const user = { id: 'demo-admin', role: 'ADMIN', name: 'Demo', modulePermissions: { financiero: true } };
 localStorage.setItem('authToken', `demo.${btoa(JSON.stringify({ exp: 4102444800 }))}.demo`);
 localStorage.setItem('currentUser', JSON.stringify(user));
-// Auth probes get the demo user; blob: URLs stay real so the document viewer can read what it just fetched.
-const realFetch = window.fetch.bind(window);
-window.fetch = async (input, init) => (String(input?.url || input).startsWith('blob:') ? realFetch(input, init) : new Response(JSON.stringify(user), { headers: { 'Content-Type': 'application/json' } }));
+// Auth probes get the demo user. A blob: fetch fails on purpose, exactly like the production
+// Content-Security-Policy (connect-src 'self' https: wss:), so the viewer must work without it.
+window.fetch = async (input) => {
+    if (String(input?.url || input).startsWith('blob:')) throw new TypeError('Failed to fetch');
+    return new Response(JSON.stringify(user), { headers: { 'Content-Type': 'application/json' } });
+};
 const account = { id: 'demo-account', name: 'Cuenta de muestra', type: 'BANK', balance: 250000 };
 const records = Array.from({ length: 32 }, (_, i) => ({ id: `rodny-${i}`, year: 2026, month: 9, date: '2026-09-01T12:00:00Z', scenario: 'ACTUAL', status: 'POSTED', type: i===31 ? 'EXPENSE' : 'INCOME', amount: i===31 ? 50750 : 100250, category: 'SERVICIO', origin: 'MANUAL', description: i===31 ? 'Honorarios Rodny' : `Servicio Rodny ${i+1}`, counterparty: 'Rodny Chirinos', accountId: account.id, account }));
 records.push({ ...records[0], id:'brain', description:'Suscripción Brain Studio', counterparty:'Brain Studio', type:'EXPENSE', amount:400000 });
