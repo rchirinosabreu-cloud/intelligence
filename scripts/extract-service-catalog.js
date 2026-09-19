@@ -7,6 +7,7 @@ import {
   isVariablePriceService,
   mapCatalogCategory
 } from '../src/services/serviceCatalogImport.js';
+import { formatCatalogDescription } from '../src/services/serviceCatalogDescription.js';
 
 const [, , inputPath, outputPath = 'data/service_catalog_2026.json'] = process.argv;
 if (!inputPath) {
@@ -35,7 +36,7 @@ for (const [index, row] of rows.slice(1).entries()) {
     sourceRow: index + 2,
     category: mapCatalogCategory(currentCategory),
     name,
-    description: String(row[2] || '').trim(),
+    description: formatCatalogDescription(row[2]),
     estimatedCost: cost,
     currentPrice,
     finalPrice: calculateCatalogFinalPrice(cost, { variablePrice }),

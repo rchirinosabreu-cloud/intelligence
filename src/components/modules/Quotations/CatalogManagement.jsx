@@ -180,7 +180,7 @@ const CatalogManagement = () => {
                                                     </button>
                                                 </div>
                                             </div>
-                                            <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-3 mb-4 leading-relaxed h-12">
+                                            <p className="text-xs text-zinc-500 dark:text-zinc-400 line-clamp-3 mb-4 leading-relaxed h-12 whitespace-pre-line">
                                                 {item.description}
                                             </p>
                                         </div>
