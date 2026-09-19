@@ -35,8 +35,8 @@ const has = (id, value) => answers => Array.isArray(answers[id]) && answers[id].
 const CONTACT = {
   id: 'contacto', title: 'Tus datos', eyebrow: 'Paso 1', intro: 'Para saber quién eres y por dónde escribirte.',
   questions: [
-    text('contactName', 'Nombre y apellido', { required: true, autoComplete: 'name', placeholder: 'Ej. Catalina Rojas' }),
-    text('company', 'Empresa / organización / marca', { required: true, autoComplete: 'organization', placeholder: 'Ej. HDI Seguros' }),
+    text('contactName', 'Nombre y apellido', { required: true, autoComplete: 'name', placeholder: 'Ej. Francisco Villa' }),
+    text('company', 'Empresa / organización / marca', { required: true, autoComplete: 'organization', placeholder: 'Ej. Brainstudio Agencia' }),
     text('jobTitle', 'Cargo', { placeholder: 'Ej. Gerente de mercadeo' }),
     q('email', 'Correo electrónico', 'email', { required: true, autoComplete: 'email', placeholder: 'nombre@empresa.com' }),
     q('phone', 'WhatsApp / teléfono', 'phone', { required: true, autoComplete: 'tel', placeholder: '+57 300 000 0000' }),
