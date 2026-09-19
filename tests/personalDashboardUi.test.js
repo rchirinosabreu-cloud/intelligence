@@ -68,6 +68,7 @@ test('Dashboard announcement panel supports rich, private and historical announc
   const source = readFileSync('src/components/modules/DashboardAnnouncements.jsx', 'utf8');
 
   assert.match(source, /weeklyAnnouncements\.slice\(0, 3\)/, 'The dashboard widget should show at most three current-week announcements.');
+  assert.doesNotMatch(source, /max-h-\[\d+px\] overflow-hidden/, 'An announcement is never clipped mid-sentence: the whole text shows and the panel scrolls (Rodny, 19 September 2026).');
   assert.match(source, /Anuncio general/, 'Global announcements should use the requested label.');
   assert.doesNotMatch(source, />Directo</, 'Personal announcements should not expose a label.');
   assert.doesNotMatch(source, /isPersonal\s*\?\s*'bg-zinc-900/, 'Personal announcements should not use a black surface.');
