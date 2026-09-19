@@ -67,7 +67,7 @@ export function dashboardDemoDashboard(now = new Date()) {
     clients: [],
     weeklyHabit: { isEmpty: true },
     announcements: [
-      { id: 'global-1', scope: 'GLOBAL', createdAt: hoursFromNow(-3, now).toISOString(), author: dashboardDemoUser, content: '<p>El lunes cerramos a las 3 pm por la reunión general de equipo. Lleven sus pendientes al día.</p>' },
+      { id: 'global-1', scope: 'GLOBAL', createdAt: hoursFromNow(-3, now).toISOString(), author: dashboardDemoUser, content: '<p>Buenas tardes chicos. Cómo están.?</p><p>Les comunico por acá que a las 2:00 pm tenemos una reunión para que se vayan programando. Lleven sus pendientes al día y las novedades de cada cliente, porque vamos a repasar el cierre de la semana completo.</p>' },
       { id: 'personal-1', scope: 'MEMBER', createdAt: hoursFromNow(-6, now).toISOString(), author: people.helen, content: '<p>Rodny, revisa la cartera de Nutresa antes del comité de hoy.</p>' },
       { id: 'global-2', scope: 'GLOBAL', createdAt: hoursFromNow(-30, now).toISOString(), author: dashboardDemoUser, content: '<p>Bienvenida a <strong>Franci</strong> al equipo comercial.</p>' }
     ],

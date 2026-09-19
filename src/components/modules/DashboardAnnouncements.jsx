@@ -100,10 +100,10 @@ const AnnouncementCard = ({ announcement, compact = false, showDate = true, canM
           )}
         </div>
       </div>
+      {/* Never clip an announcement: the whole text shows and the panel scrolls when there are several (Rodny, 19 September 2026). */}
       <div className={cn(
         !isPersonal ? '[&>div]:!text-base [&>div]:!leading-7 [&_*]:!text-zinc-900 dark:[&_*]:!text-zinc-50' : '[&>div]:!text-sm [&>div]:!leading-6 [&_*]:!text-zinc-800 dark:[&_*]:!text-zinc-100',
-        '[&_mark]:!bg-brand-yellow/50 dark:[&_mark]:!bg-brand-yellow/30',
-        compact && 'max-h-[104px] overflow-hidden'
+        '[&_mark]:!bg-brand-yellow/50 dark:[&_mark]:!bg-brand-yellow/30 break-words [&_*]:!whitespace-pre-wrap'
       )}>
         <RichCommentContent content={announcement.content} />
       </div>
