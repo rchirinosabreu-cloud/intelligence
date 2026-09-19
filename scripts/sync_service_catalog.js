@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { resolveCatalogIdentity } from '../src/services/serviceCatalogImport.js';
+import { formatCatalogDescription } from '../src/services/serviceCatalogDescription.js';
 
 if (process.env.DATABASE_PUBLIC_URL) process.env.DATABASE_URL = process.env.DATABASE_PUBLIC_URL;
 const { default: prisma } = await import('../src/lib/prisma.js');
@@ -20,7 +21,7 @@ export const syncServiceCatalog = async (database, services) => database.$transa
         const data = {
             category: source.category,
             name: source.name,
-            description: source.description,
+            description: formatCatalogDescription(source.description),
             costo_real_estimado: source.estimatedCost,
             valor_neto_actual: source.currentPrice,
             valor_neto: source.finalPrice,

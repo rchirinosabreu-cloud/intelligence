@@ -1,5 +1,6 @@
 import prisma from '../lib/prisma.js';
 import { serializeCatalogService } from '../services/quotationDomainService.js';
+import { formatCatalogDescription } from '../services/serviceCatalogDescription.js';
 
 const parseMoneyField = (value, label, { required = true } = {}) => {
     if (!required && (value === undefined || value === null || value === '')) return undefined;
@@ -57,7 +58,7 @@ export const createService = async (req, res) => {
             data: {
                 category: category.toUpperCase(),
                 name: String(name).trim(),
-                description: description || "",
+                description: formatCatalogDescription(description),
                 costo_real_estimado: estimatedCost,
                 valor_neto: finalPrice,
                 valor_neto_actual: currentPrice,
@@ -100,7 +101,7 @@ export const updateService = async (req, res) => {
             data: {
                 category: category ? category.toUpperCase() : undefined,
                 name: name === undefined ? undefined : String(name).trim(),
-                description,
+                description: description === undefined ? undefined : formatCatalogDescription(description),
                 costo_real_estimado: parseMoneyField(costo_real_estimado, 'El costo real estimado', { required: false }),
                 valor_neto: parseMoneyField(valor_neto, 'El precio final', { required: false }),
                 valor_neto_actual: parseMoneyField(valor_neto_actual, 'El precio actual', { required: false }),
