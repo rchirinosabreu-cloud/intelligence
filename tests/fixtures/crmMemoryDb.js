@@ -5,18 +5,22 @@ const nextId = prefix => `${prefix}-${String(++counter).padStart(4, '0')}`;
 
 const byOccurredDesc = (a, b) => new Date(b.occurredAt) - new Date(a.occurredAt);
 
-export function createCrmMemoryDb({ leads = [], activities = [], members = [], users = [] } = {}) {
+export function createCrmMemoryDb({ leads = [], activities = [], members = [], users = [], requests = [], quotations = [] } = {}) {
   const state = {
     leads: leads.map((lead, index) => ({ consecutive: index + 1, createdAt: lead.enteredAt || new Date(), updatedAt: new Date(), ...lead })),
     activities: activities.map(activity => ({ createdAt: activity.occurredAt || new Date(), ...activity })),
     members,
-    users
+    users,
+    requests: [...requests],
+    quotations: [...quotations]
   };
   const author = id => state.users.find(user => user.id === id) || null;
   const relations = lead => lead && ({
     ...lead,
     owner: lead.ownerId ? state.members.find(member => member.id === lead.ownerId) || null : null,
-    activities: state.activities.filter(item => item.leadId === lead.id).sort(byOccurredDesc).map(item => ({ ...item, author: author(item.authorId) }))
+    activities: state.activities.filter(item => item.leadId === lead.id).sort(byOccurredDesc).map(item => ({ ...item, author: author(item.authorId) })),
+    request: state.requests.find(item => item.leadId === lead.id) || null,
+    quotations: state.quotations.filter(item => item.lead_id === lead.id)
   });
   const matchWhere = (lead, where = {}) => Object.entries(where).every(([key, value]) => (value === undefined ? true : (lead[key] ?? null) === value));
 
@@ -54,6 +58,14 @@ export function createCrmMemoryDb({ leads = [], activities = [], members = [], u
         return activity;
       },
       findMany: async () => state.activities
+    },
+    crmRequest: {
+      create: async ({ data }) => {
+        const request = { id: nextId('req'), createdAt: new Date(), version: 1, ...data };
+        state.requests.push(request);
+        return request;
+      },
+      findUnique: async ({ where }) => state.requests.find(item => item.leadId === where.leadId || item.id === where.id) || null
     },
     teamMember: {
       findMany: async ({ where = {} } = {}) => state.members.filter(member => (!where.id?.in || where.id.in.includes(member.id)) && (where.isActive === undefined || member.isActive === where.isActive))

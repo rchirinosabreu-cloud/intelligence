@@ -151,7 +151,10 @@ export const serializeLead = (lead, now = new Date()) => {
     updatedAt: normalized.updatedAt,
     archivedAt: normalized.archivedAt ?? null,
     activityCount: activities.length,
-    activities: activities.map(serializeActivity)
+    activities: activities.map(serializeActivity),
+    hasRequest: Boolean(normalized.request),
+    request: serializeRequest(normalized.request),
+    quotations: Array.isArray(normalized.quotations) ? normalized.quotations.map(serializeQuotation) : []
   };
 };
 
@@ -170,8 +173,31 @@ export const catalogs = () => ({
 
 const leadInclude = {
   activities: { orderBy: { occurredAt: 'desc' }, include: { author: { select: { id: true, name: true, avatarUrl: true } } } },
-  owner: { select: { id: true, name: true, avatarUrl: true } }
+  owner: { select: { id: true, name: true, avatarUrl: true } },
+  request: true,
+  quotations: { orderBy: { created_at: 'desc' }, select: { id: true, consecutive: true, status: true, total_amount: true, currency: true, created_at: true, accepted_at: true, uuid_slug: true } }
 };
+
+const serializeRequest = request => (request ? {
+  id: request.id,
+  version: request.version,
+  receivedAt: request.receivedAt,
+  answers: request.answers || {},
+  services: Array.isArray(request.services) ? request.services : [],
+  suggestedItems: Array.isArray(request.suggestedItems) ? request.suggestedItems : [],
+  meta: request.meta || null
+} : null);
+
+const serializeQuotation = quotation => ({
+  id: quotation.id,
+  code: `COT-${String(quotation.consecutive ?? 0).padStart(4, '0')}`,
+  status: quotation.status,
+  total: toNumber(quotation.total_amount),
+  currency: quotation.currency || 'COP',
+  createdAt: quotation.created_at,
+  acceptedAt: quotation.accepted_at ?? null,
+  slug: quotation.uuid_slug ?? null
+});
 
 const loadLead = async (db, id) => {
   const lead = await db.crmLead.findUnique({ where: { id }, include: leadInclude });
@@ -464,7 +490,7 @@ export const listLeads = async (db, query = {}, now = new Date()) => {
   const page = Math.max(Number(query.page) || 1, 1);
   const start = (page - 1) * pageSize;
   return {
-    items: items.slice(start, start + pageSize).map(lead => ({ ...lead, activities: undefined })),
+    items: items.slice(start, start + pageSize).map(lead => ({ ...lead, activities: undefined, request: undefined })),
     total: items.length,
     page,
     pageSize

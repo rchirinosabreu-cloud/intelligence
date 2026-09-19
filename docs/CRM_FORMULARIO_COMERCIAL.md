@@ -1,6 +1,8 @@
 # Formulario de solicitud comercial → CRM → Cotizaciones
 
-Fecha: 19 de septiembre de 2026. Complementa `docs/CRM_COMERCIAL_PLAN.md`. Estado: **formulario construido para aprobación** (laboratorio local, sin backend); la integración con el CRM y con Cotizaciones se hace después de aprobado.
+Fecha: 19 de septiembre de 2026. Complementa `docs/CRM_COMERCIAL_PLAN.md`.
+
+Estado: formulario aprobado por Rodny y **conectado al CRM** (rama `feat/commercial-request-intake`): ruta pública `/solicitud`, `POST /api/public/commercial-request`, tabla `CrmRequest`, columna `Quotation.lead_id`, botón «Copiar enlace del formulario» en el CRM, panel «Solicitud del cliente» y lista «Cotizaciones» en la ficha, marca «Formulario» en las listas, notificación a la responsable y correo de confirmación al prospecto (solo si hay SMTP configurado; remitente `CRM_REQUEST_FROM` o `SMTP_FROM`). La responsable de recepción se resuelve por nombre en el roster activo: `CRM_INTAKE_OWNER`, por defecto «Francys». Pendiente: botón «Crear cotización» con precarga (`?leadId=`) y cambio de etapa al aceptar (sección 6, pasos 5).
 
 ## 1. Qué es
 

@@ -1865,6 +1865,10 @@ model Quotation {
   expires_at           DateTime
   updated_at           DateTime               @default(now()) @updatedAt
   crmLeads             CrmLead[]
+  lead_id              String?
+  lead                 CrmLead?               @relation("QuotationLead", fields: [lead_id], references: [id])
+
+  @@index([lead_id], map: "Quotation_lead_idx")
 }
 
 // ---- CRM comercial / bitácora SDR ----------------------------------------------------------------
@@ -1916,6 +1920,8 @@ model CrmLead {
   updatedAt            DateTime      @default(now()) @updatedAt @db.Timestamptz()
   archivedAt           DateTime?     @db.Timestamptz()
   activities           CrmActivity[]
+  request              CrmRequest?
+  quotations           Quotation[]   @relation("QuotationLead")
 
   @@index([stage, archivedAt], map: "CrmLead_stage_idx")
   @@index([ownerId, nextFollowUpAt], map: "CrmLead_followup_idx")
@@ -1945,6 +1951,20 @@ model CrmActivity {
   @@unique([authorId, requestId])
   @@index([leadId, occurredAt], map: "CrmActivity_lead_idx")
   @@index([authorId], map: "CrmActivity_author_idx")
+}
+
+// The public commercial request that created a lead: every answer as the prospect wrote it.
+model CrmRequest {
+  id             String   @id @default(uuid())
+  leadId         String   @unique
+  lead           CrmLead  @relation(fields: [leadId], references: [id])
+  version        Int      @default(1)
+  answers        Json
+  services       Json     @default("[]")
+  suggestedItems Json     @default("[]")
+  meta           Json?
+  receivedAt     DateTime @default(now()) @db.Timestamptz()
+  createdAt      DateTime @default(now()) @db.Timestamptz()
 }
 
 enum MetricPeriodKind {

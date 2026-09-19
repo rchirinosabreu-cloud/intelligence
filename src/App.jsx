@@ -36,6 +36,7 @@ const DriveLayout = lazy(() => import('./components/modules/Drive/DriveLayout'))
 const OperationalHealth = lazy(() => import('./components/modules/OperationalHealth'));
 const CrmLayout = lazy(() => import('./components/modules/Crm/CrmLayout'));
 const CrmLeadDetail = lazy(() => import('./components/modules/Crm/CrmLeadDetail'));
+const CommercialRequestPage = lazy(() => import('./components/public/CommercialRequest/CommercialRequestPage'));
 
 const AppLoader = () => (
   <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-300 flex items-center justify-center text-sm font-medium">
@@ -134,6 +135,7 @@ function AppContent() {
           <Route path="/terminos" element={<TermsOfService />} />
           <Route path="/compartir/:token" element={<SharedContentPlan />} />
           <Route path="/cotizaciones/ver/:slug" element={<PublicQuotation />} />
+          <Route path="/solicitud" element={<CommercialRequestPage />} />
 
           {/* Protected App Routes */}
           {!isAuthenticated ? (
