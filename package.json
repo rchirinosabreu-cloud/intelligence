@@ -9,6 +9,7 @@
     "dev": "vite --host :: --port 3000",
     "dev:recognitions": "node scripts/preview-recognitions.js",
     "preview:crm": "node scripts/preview-crm.js",
+    "preview:solicitud": "node scripts/preview-commercial-request.js",
     "build": "npm run test:activity-build && prisma generate && vite build",
     "postinstall": "prisma generate",
     "preview": "vite preview --host :: --port 3000",
