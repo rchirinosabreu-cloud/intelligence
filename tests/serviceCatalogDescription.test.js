@@ -63,7 +63,7 @@ test('the script rewrites the catalog JSON in place and reports how many changed
 });
 test('the script prefers the curated JSON text, formats the rest, and writes nothing on a dry run', async () => {
   const rows = [
-    { id: '1', name: 'Auditoría', description: running },
+    { id: '1', name: 'Auditoría De Marca', description: running },
     { id: '2', name: 'Propio', description: 'Incluye: a, b y c.' },
     { id: '3', name: 'Listo', description: formatted }
   ];
@@ -72,11 +72,12 @@ test('the script prefers the curated JSON text, formats the rest, and writes not
     serviceCatalog: { findMany: async () => rows, update: async (args) => { writes.push(args); } },
     $transaction: async (run) => run(database)
   };
-  const catalog = [{ name: 'Auditoría', description: 'Concepto: versión curada.\nIncluye:\n- Solo esto' }];
+  // Stored names are title-cased; the JSON keeps sentence case and legacy names still match.
+  const catalog = [{ name: 'Auditoría de marca', description: 'Concepto: versión curada.\nIncluye:\n- Solo esto' }];
   const dry = await formatStoredCatalogDescriptions(database, { dryRun: true, catalog });
   assert.equal(writes.length, 0);
   assert.deepEqual(dry.changes.map(change => [change.name, change.after]), [
-    ['Auditoría', 'Concepto: versión curada.\nIncluye:\n- Solo esto'],
+    ['Auditoría De Marca', 'Concepto: versión curada.\nIncluye:\n- Solo esto'],
     ['Propio', 'Incluye:\n- A\n- B\n- C']
   ]);
   const applied = await formatStoredCatalogDescriptions(database, { catalog });
