@@ -72,6 +72,7 @@ const classifyNamedCategory = (label) => {
     const clean = normalizeText(label);
     if (/\bdonaci(?:on|ones)\b/.test(clean)) return 'DONACION';
     if (/\bsiembras?\b/.test(clean)) return 'SIEMBRA';
+    if (/\bprestamos?\b/.test(clean)) return 'PRESTAMO';
     return null;
 };
 

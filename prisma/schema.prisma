@@ -1322,6 +1322,7 @@ enum FinancialCategory {
   OPERATIVO
   DONACION
   SIEMBRA
+  PRESTAMO
 }
 
 enum FinancialType {
@@ -1453,6 +1454,7 @@ model FinancialRecord {
   receivablePayment  ReceivablePayment?
   payrollTransaction PayrollTransaction?
   bankMatches        BankReconciliationMatch[]
+  allocations        FinancialRecordAllocation[]
 
   @@index([date])
   @@index([year, month])
@@ -1465,6 +1467,25 @@ model FinancialRecord {
   @@index([section])
   @@index([clientId, year, month])
   @@index([importBatchId])
+}
+
+// Internal breakdown of one movement. The money is the parent FinancialRecord; these lines
+// only explain what it paid for (concept + category) and must add up exactly to its amount.
+// Created additively at startup by scripts/ensure-financial-allocations-schema.js.
+model FinancialRecordAllocation {
+  id           String            @id @default(uuid())
+  recordId     String
+  record       FinancialRecord   @relation(fields: [recordId], references: [id], onDelete: Cascade)
+  amount       Decimal           @db.Decimal(14, 2)
+  category     FinancialCategory
+  description  String
+  counterparty String?
+  sortOrder    Int               @default(0)
+  createdAt    DateTime          @default(now()) @db.Timestamptz()
+  updatedAt    DateTime          @default(now()) @updatedAt @db.Timestamptz()
+
+  @@index([recordId, sortOrder])
+  @@index([category])
 }
 
 model FinancialAccount {

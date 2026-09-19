@@ -35,6 +35,7 @@ import {
     listFinancialRecordsHandler,
     payPayrollTransactionHandler,
     reopenFinancialPeriodHandler,
+    replaceFinancialRecordAllocationsHandler,
     updateFinancialRecordHandler,
     voidFinancialRecordHandler
 } from '../../controllers/financialRecordController.js';
@@ -62,6 +63,7 @@ router.get('/integrity', requireFinancialAccess, getFinancialIntegrityAuditHandl
 router.post('/records', requireFinancialWrite, createFinancialRecordHandler);
 router.patch('/records/:id', requireFinancialWrite, updateFinancialRecordHandler);
 router.post('/records/:id/void', requireFinancialWrite, voidFinancialRecordHandler);
+router.put('/records/:id/allocations', requireFinancialWrite, replaceFinancialRecordAllocationsHandler);
 router.get('/periods', requireFinancialAccess, listFinancialPeriodsHandler);
 router.post('/periods/close', requireFinancialApproval, closeFinancialPeriodHandler);
 router.post('/periods/reopen', requireFinancialAdmin, reopenFinancialPeriodHandler);

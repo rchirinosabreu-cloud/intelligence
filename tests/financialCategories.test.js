@@ -16,8 +16,8 @@ const existing = {
     receivablePayment: null, payrollTransaction: null, bankMatches: []
 };
 
-test('donations and sowing are valid explicit categories without changing amounts', () => {
-    for (const category of ['DONACION', 'SIEMBRA']) {
+test('donations, sowing and loans are valid explicit categories without changing amounts', () => {
+    for (const category of ['DONACION', 'SIEMBRA', 'PRESTAMO']) {
         const result = normalizeFinancialRecordInput({ ...existing, date: '2026-08-01', category });
         assert.equal(result.category, category);
         assert.equal(result.amount, 650000);
@@ -26,14 +26,15 @@ test('donations and sowing are valid explicit categories without changing amount
 });
 
 test('import preserves explicit donation and sowing categories ahead of person-name heuristics', () => {
-    const csv = 'Clientes,Enero,Febrero\nCliente,100,0\nEgresos,,\nDonaciones,650000,0\nDonación de Rodny,200000,0\nSiembra,50000,0\nSiembras,25000,0\nSiembra sin importe,,\nUniformes,10000,0\n';
+    const csv = 'Clientes,Enero,Febrero\nCliente,100,0\nEgresos,,\nDonaciones,650000,0\nDonación de Rodny,200000,0\nSiembra,50000,0\nSiembras,25000,0\nSiembra sin importe,,\nPréstamo a Rodny,300000,0\nCuota préstamo banco,80000,0\nUniformes,10000,0\n';
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(csv.trim().split('\n').map(row => row.split(','))), 'FINANZAS BRAIN STUDIO 2026');
     const preview = parseFinancialImportWorkbook(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }), { filename: 'categories.xlsx', year: 2026 });
     const expenses = preview.entries.filter(entry => entry.type === 'EXPENSE');
     assert.deepEqual(expenses.map(({ sourceLabel, category, amount }) => [sourceLabel, category, amount]), [
         ['Donaciones', 'DONACION', 650000], ['Donación de Rodny', 'DONACION', 200000],
-        ['Siembra', 'SIEMBRA', 50000], ['Siembras', 'SIEMBRA', 25000], ['Uniformes', 'OPERATIVO', 10000]
+        ['Siembra', 'SIEMBRA', 50000], ['Siembras', 'SIEMBRA', 25000],
+        ['Préstamo a Rodny', 'PRESTAMO', 300000], ['Cuota préstamo banco', 'PRESTAMO', 80000], ['Uniformes', 'OPERATIVO', 10000]
     ]);
 });
 
@@ -77,12 +78,14 @@ test('editing a category preserves the imported timestamp when the form sends th
     assert.equal(changedDate.month, 9);
 });
 
-test('schema, entry selector and charts expose both categories, including an unused Siembra', () => {
+test('schema, entry selector, charts and aggregations expose every category, including unused ones', () => {
     const schema = read('../prisma/schema.prisma').match(/enum FinancialCategory \{([^}]+)\}/)[1];
-    for (const category of ['DONACION', 'SIEMBRA']) {
+    for (const category of ['DONACION', 'SIEMBRA', 'PRESTAMO']) {
         assert.match(schema, new RegExp(`\\b${category}\\b`));
         assert.ok(read('../src/components/modules/financial/FinancialLedger.jsx').includes(`['${category}',`));
         assert.ok(read('../src/components/modules/FinancialDashboard.jsx').includes(`'${category}':`));
+        assert.ok(read('../src/controllers/financialController.js').includes(`'${category}'`), `${category} seeds the distribution chart`);
+        assert.ok(read('../scripts/pre-push-enum.js').includes(`'${category}'`), `${category} exists on a fresh bootstrap too`);
     }
 });
 
@@ -100,8 +103,8 @@ test('startup adds categories idempotently without touching financial records', 
     await ensureFinancialCategoriesSchema(client);
     assert.equal(queries[0], 'BEGIN');
     assert.equal(queries.at(-1), 'COMMIT');
-    assert.equal(queries.filter(sql => /ALTER TYPE/.test(sql)).length, 2);
-    for (const category of ['DONACION', 'SIEMBRA']) assert.ok(queries.some(sql => sql.includes(`ADD VALUE IF NOT EXISTS '${category}'`)));
+    assert.equal(queries.filter(sql => /ALTER TYPE/.test(sql)).length, 3);
+    for (const category of ['DONACION', 'SIEMBRA', 'PRESTAMO']) assert.ok(queries.some(sql => sql.includes(`ADD VALUE IF NOT EXISTS '${category}'`)));
     assert.doesNotMatch(queries.join('\n'), /DROP|DELETE|UPDATE|TRUNCATE|ALTER TABLE/);
     const pkg = JSON.parse(read('../package.json'));
     assert.ok(pkg.scripts.start.indexOf('ensure-financial-categories-schema.js') < pkg.scripts.start.indexOf('node server.js'));

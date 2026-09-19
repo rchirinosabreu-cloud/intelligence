@@ -86,7 +86,7 @@ async function prePushEnum() {
         await client.query(`
             DO $$ BEGIN
                 CREATE TYPE "FinancialCategory" AS ENUM (
-                    'MEMBRESIA', 'PAUTA', 'NOMINA', 'LOGISTICA', 'ADMINISTRATIVO', 'TAX', 'FINANCIAL', 'OPERATIVO'
+                    'MEMBRESIA', 'SERVICIO', 'PAUTA', 'NOMINA', 'LOGISTICA', 'ADMINISTRATIVO', 'TAX', 'FINANCIAL', 'OPERATIVO', 'DONACION', 'SIEMBRA', 'PRESTAMO'
                 );
             EXCEPTION
                 WHEN duplicate_object THEN null;

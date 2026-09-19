@@ -7,6 +7,7 @@ import {
 } from '../services/financialImportService.js';
 import { updateReceivable } from '../services/financialReceivableService.js';
 import { createPayrollContract, updatePayrollContract } from '../services/financialPayrollContractService.js';
+import { accumulateCategoryDistribution } from '../services/financialRecordAllocationService.js';
 
 // Helper to convert Decimal fields safely
 const toNum = (val) => {
@@ -690,38 +691,25 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                 ...(['INCOME', 'EXPENSE'].includes(req.query.type) ? { type: req.query.type } : {})
             }, req.query.q),
             include: {
-                client: { select: { name: true, slug: true } }
+                client: { select: { name: true, slug: true } },
+                allocations: { select: { amount: true, category: true } }
             }
         });
 
         // Group cash flow by month
         const monthlyGroups = {};
-        const categoriesDistribution = {
-            INCOME: {},
-            EXPENSE: {}
-        };
 
-        // Initialize categories with 0 values
-        const allCategories = ['MEMBRESIA', 'SERVICIO', 'PAUTA', 'NOMINA', 'LOGISTICA', 'ADMINISTRATIVO', 'TAX', 'FINANCIAL', 'OPERATIVO', 'DONACION', 'SIEMBRA'];
-        allCategories.forEach(cat => {
-            categoriesDistribution.INCOME[cat] = 0;
-            categoriesDistribution.EXPENSE[cat] = 0;
-        });
+        // Categories start at 0 so unused ones still appear. A movement with an internal breakdown
+        // contributes its lines to the distribution; the cash flow below still uses the movement itself.
+        const allCategories = ['MEMBRESIA', 'SERVICIO', 'PAUTA', 'NOMINA', 'LOGISTICA', 'ADMINISTRATIVO', 'TAX', 'FINANCIAL', 'OPERATIVO', 'DONACION', 'SIEMBRA', 'PRESTAMO'];
+        const categoriesDistribution = accumulateCategoryDistribution(financialRecords, allCategories);
 
         for (const record of financialRecords) {
             const amount = toNum(record.amount);
             const type = record.type; // INCOME or EXPENSE
-            const category = record.category;
             const rDate = new Date(record.date);
             const rMonth = rDate.getUTCMonth() + 1; // 1-12
             const rYear = rDate.getUTCFullYear();
-
-            // Accumulate in global categories distribution
-            if (categoriesDistribution[type][category] !== undefined) {
-                categoriesDistribution[type][category] = roundFloat(categoriesDistribution[type][category] + amount);
-            } else {
-                categoriesDistribution[type][category] = amount;
-            }
 
             // Accumulate in monthly cash flow
             const key = `${rYear}-${String(rMonth).padStart(2, '0')}`;
