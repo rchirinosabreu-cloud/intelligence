@@ -11,16 +11,25 @@ import 'dotenv/config';
 import pg from 'pg';
 import { pathToFileURL } from 'node:url';
 
+// Prisma stores DateTime as `timestamp(3)` without time zone (UTC). To read a
+// naive column in Bogotá time it must be declared UTC first; a bare
+// `AT TIME ZONE 'America/Bogota'` on a naive timestamp shifts it the wrong way.
+const BOGOTA = (column) => `((${column} AT TIME ZONE 'UTC') AT TIME ZONE 'America/Bogota')`;
+// Automatic minutes went live in production on 2026-09-01 (Observer baseline
+// date). Lag figures before that reflect the historical backfill, not the loop.
+export const MINUTES_AUTOMATION_LIVE_SINCE = '2026-09-01';
+
 export const DIAGNOSTIC_QUERIES = {
   minutes_by_status: `SELECT status, COUNT(*)::int AS n FROM "MeetingMinute" WHERE "deletedAt" IS NULL GROUP BY status ORDER BY status`,
   minutes_trashed: `SELECT COUNT(*)::int AS n FROM "MeetingMinute" WHERE "deletedAt" IS NOT NULL`,
   minutes_failed_detail: `SELECT id, title, "meetingAt", "retryCount", LEFT("errorMessage", 120) AS error FROM "MeetingMinute" WHERE status = 'FAILED' AND "deletedAt" IS NULL ORDER BY "meetingAt" DESC LIMIT 10`,
   minutes_span: `SELECT MIN("meetingAt") AS first_meeting, MAX("meetingAt") AS last_meeting, COUNT(*)::int AS n FROM "MeetingMinute" WHERE "deletedAt" IS NULL`,
   minutes_organizers: `SELECT "organizerEmail", COUNT(*)::int AS n FROM "MeetingMinute" WHERE "deletedAt" IS NULL GROUP BY 1 ORDER BY 2 DESC`,
-  meetings_per_week_last_12: `SELECT date_trunc('week', "meetingAt")::date AS week, COUNT(*)::int AS minutes FROM "MeetingMinute" WHERE "deletedAt" IS NULL AND "meetingAt" >= now() - interval '12 weeks' GROUP BY 1 ORDER BY 1`,
-  calendar_fireflies_events_per_week_last_12: `SELECT date_trunc('week', "startAt")::date AS week, COUNT(*)::int AS events_with_fireflies FROM "OperationalEvent" WHERE "captureWithFireflies" = true AND "googleCancelled" = false AND "startAt" >= now() - interval '12 weeks' AND "startAt" <= now() GROUP BY 1 ORDER BY 1`,
-  meetings_by_weekday_hour_bogota: `SELECT EXTRACT(ISODOW FROM ("meetingAt" AT TIME ZONE 'America/Bogota'))::int AS isodow, EXTRACT(HOUR FROM ("meetingAt" AT TIME ZONE 'America/Bogota'))::int AS hour, COUNT(*)::int AS n FROM "MeetingMinute" WHERE "deletedAt" IS NULL GROUP BY 1, 2 ORDER BY 1, 2`,
-  processing_lag_minutes: `SELECT ROUND((percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM ("processedAt" - "meetingAt"))/60))::numeric, 1) AS p50_min, ROUND((percentile_cont(0.9) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM ("processedAt" - "meetingAt"))/60))::numeric, 1) AS p90_min, ROUND((MAX(EXTRACT(EPOCH FROM ("processedAt" - "meetingAt"))/60))::numeric, 1) AS max_min FROM "MeetingMinute" WHERE status = 'READY' AND "processedAt" IS NOT NULL AND "deletedAt" IS NULL`,
+  meetings_per_week_last_12: `SELECT date_trunc('week', "meetingAt")::date::text AS week, COUNT(*)::int AS minutes FROM "MeetingMinute" WHERE "deletedAt" IS NULL AND "meetingAt" >= now() - interval '12 weeks' GROUP BY 1 ORDER BY 1`,
+  calendar_meetings_per_week_last_12: `SELECT date_trunc('week', "startAt")::date::text AS week, COUNT(*)::int AS events, COUNT(*) FILTER (WHERE "meetingLink" IS NOT NULL)::int AS with_meeting_link, COUNT(*) FILTER (WHERE "captureWithFireflies" = true)::int AS with_fireflies_invited FROM "OperationalEvent" WHERE "googleCancelled" = false AND "isAllDay" = false AND "startAt" >= now() - interval '12 weeks' AND "startAt" <= now() GROUP BY 1 ORDER BY 1`,
+  meetings_by_weekday_hour_bogota: `SELECT EXTRACT(ISODOW FROM ${BOGOTA('"meetingAt"')})::int AS isodow, EXTRACT(HOUR FROM ${BOGOTA('"meetingAt"')})::int AS hour, COUNT(*)::int AS n FROM "MeetingMinute" WHERE "deletedAt" IS NULL GROUP BY 1, 2 ORDER BY 1, 2`,
+  processing_lag_minutes_since_live: `SELECT COUNT(*)::int AS n, ROUND((percentile_cont(0.5) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM ("processedAt" - "meetingAt"))/60))::numeric, 1) AS p50_min, ROUND((percentile_cont(0.9) WITHIN GROUP (ORDER BY EXTRACT(EPOCH FROM ("processedAt" - "meetingAt"))/60))::numeric, 1) AS p90_min, ROUND((MAX(EXTRACT(EPOCH FROM ("processedAt" - "meetingAt"))/60))::numeric, 1) AS max_min FROM "MeetingMinute" WHERE status = 'READY' AND "processedAt" IS NOT NULL AND "deletedAt" IS NULL AND "meetingAt" >= '${MINUTES_AUTOMATION_LIVE_SINCE}'`,
+  minutes_last_ready: `SELECT MAX("meetingAt") AS last_meeting, MAX("processedAt") AS last_processed FROM "MeetingMinute" WHERE status = 'READY' AND "deletedAt" IS NULL`,
   action_items_total: `SELECT COALESCE(SUM(jsonb_array_length("actionItems")), 0)::int AS n FROM "MeetingMinute" WHERE status = 'READY' AND "deletedAt" IS NULL AND jsonb_typeof("actionItems") = 'array'`,
   action_items_per_minute: `SELECT percentile_cont(0.5) WITHIN GROUP (ORDER BY jsonb_array_length("actionItems")) AS p50, MAX(jsonb_array_length("actionItems"))::int AS max FROM "MeetingMinute" WHERE status = 'READY' AND "deletedAt" IS NULL AND jsonb_typeof("actionItems") = 'array'`,
   action_items_with_owner_or_date: `SELECT COUNT(*) FILTER (WHERE COALESCE(item->>'owner','') <> '')::int AS with_owner, COUNT(*) FILTER (WHERE COALESCE(item->>'dueDate','') <> '')::int AS with_due, COUNT(*)::int AS total FROM "MeetingMinute" m, jsonb_array_elements(m."actionItems") AS item WHERE m.status = 'READY' AND m."deletedAt" IS NULL AND jsonb_typeof(m."actionItems") = 'array'`,
@@ -34,6 +43,8 @@ export const DIAGNOSTIC_QUERIES = {
   reviews_by_trigger: `SELECT trigger, status, COUNT(*)::int AS n FROM "ContentPlanReview" GROUP BY 1, 2 ORDER BY 1, 2`,
   reviews_last_30d: `SELECT COUNT(*)::int AS n, MIN("startedAt") AS first, MAX("startedAt") AS last FROM "ContentPlanReview" WHERE "startedAt" >= now() - interval '30 days'`,
   findings_by_status: `SELECT status, COUNT(*)::int AS n FROM "ContentPlanReviewFinding" GROUP BY 1 ORDER BY 1`,
+  findings_open_by_plan_status: `SELECT p.status::text AS plan_status, (p."deletedAt" IS NOT NULL) AS plan_deleted, COUNT(*)::int AS open_findings, COUNT(DISTINCT f."planId")::int AS plans FROM "ContentPlanReviewFinding" f JOIN "ContentPlan" p ON p.id = f."planId" WHERE f.status = 'OPEN' GROUP BY 1, 2 ORDER BY 3 DESC`,
+  findings_per_review_last_30d: `SELECT ROUND(AVG(jsonb_array_length("findingsSnapshot"))::numeric, 1) AS avg_findings, MAX(jsonb_array_length("findingsSnapshot"))::int AS max_findings, COUNT(*)::int AS reviews FROM "ContentPlanReview" WHERE "startedAt" >= now() - interval '30 days' AND jsonb_typeof("findingsSnapshot") = 'array'`,
   findings_resolved_with_verification: `SELECT COUNT(*)::int AS n FROM "ContentPlanReviewFinding" WHERE status = 'RESOLVED' AND verification IS NOT NULL`,
   criteria: `SELECT status, scope, COUNT(*)::int AS n FROM "ClientEditorialCriterion" GROUP BY 1, 2 ORDER BY 1, 2`,
   criterion_discovery: `SELECT state, COUNT(*)::int AS n FROM "ClientCriterionDiscovery" GROUP BY 1`,

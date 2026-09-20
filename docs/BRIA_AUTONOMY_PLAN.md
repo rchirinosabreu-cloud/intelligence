@@ -53,7 +53,7 @@ Hoy el servidor pregunta a Fireflies 144 veces al día por las 50 transcripcione
 ### Diseño en tres capas
 
 1. **Evento primero: webhook de Fireflies.** `POST /api/minutes/fireflies/webhook`, firma HMAC verificada con `FIREFLIES_WEBHOOK_SECRET`, responde 202 y encola el procesamiento de ese `meetingId`. Activo solo si el secreto está configurado. Cubre las reuniones cuyo dueño es la cuenta de la clave; la salida `minutes_organizers` del diagnóstico dirá si eso es todo el equipo o no.
-2. **El calendario como reloj.** Al terminar un `OperationalEvent` con `captureWithFireflies`, programar una comprobación a `endAt + 20 min` con reintentos a 45 min, 90 min, 3 h, 6 h y 24 h. Cada comprobación consulta `transcripts(fromDate, toDate)` acotado a la ventana de la reunión y empareja por `calendar_id` contra `googleEventId` o `googleICalUID`, después por `meeting_link`, y por último por título y hora. Si a las 24 horas no hay transcripción, señal de Observer «Reunión sin transcripción» con el evento, sus asistentes y el enlace: el bot no entró, la grabación no se compartió o la reunión no ocurrió.
+2. **El calendario como reloj.** Al terminar un `OperationalEvent` con enlace de reunión (no solo los que tienen `captureWithFireflies`: el diagnóstico del 20 de septiembre muestra 4 eventos con el bot invitado frente a unas 20 minutas en 12 semanas, así que Fireflies entra por su propia integración de calendario), programar una comprobación a `endAt + 20 min` con reintentos a 45 min, 90 min, 3 h, 6 h y 24 h. Cada comprobación consulta `transcripts(fromDate, toDate)` acotado a la ventana de la reunión y empareja por `calendar_id` contra `googleEventId` o `googleICalUID`, después por `meeting_link`, y por último por título y hora. Si a las 24 horas no hay transcripción, señal de Observer «Reunión sin transcripción» con el evento, sus asistentes y el enlace: el bot no entró, la grabación no se compartió o la reunión no ocurrió.
 3. **Barrido de seguridad.** Dos veces al día, a las 07:00 y 19:00 de Bogotá, `transcripts` con `fromDate` igual al último barrido correcto menos 48 horas, paginando con `skip` hasta agotar. Cubre reuniones fuera del calendario, subidas manuales y webhooks perdidos. El botón «Sincronizar ahora» se conserva.
 
 Cadencias resultantes:
@@ -98,6 +98,9 @@ Tamaños en días de trabajo enfocado, estimados. Los ítems de un mismo bloque 
 | A0-7 ∥ | Candado compartido: `withAdvisoryLock(key, fn)` reutilizando el patrón de calendario, aplicado a Fireflies, memoria, Observer y clasificación | `calendarSyncLock.js:33` como plantilla; los cuatro schedulers | dos procesos, una sola ejecución | 0,5 |
 | A0-8 | Cadencias: sondeo de Fireflies a 2 barridos diarios con cursor persistido; memoria y Observer de minutas a 6 h; analítica de tareas a 1 h; cadena minuta READY → indexar → detectar esa minuta | los tres schedulers, `minuteAutomationService.js:325` | una minuta nueva queda indexada y con señales sin esperar al barrido | 1 |
 | A0-9 | Webhook de Fireflies con HMAC y `FIREFLIES_WEBHOOK_SECRET`; 202 y encolado; rechazo de firma inválida; idempotente por `meetingId` | nueva ruta en `routes/api/minutes.js`, patrón de `operationalEventService.js:980` | firma mala → 401 sin efecto; misma llamada dos veces → un solo procesamiento | 1 |
+| A0-10 ∥ | Parrillas: reintento dirigido de las tres revisiones `FAILED` con causa técnica guardada por intento (`errorCode`, no solo el mensaje humano); las finalizadas con `PENDING` pasan a un estado honesto | `briaContentPlanReviewState.js:42`, `briaContentPlanReviewScheduler.js:54` | una revisión agotada muestra causa y se puede relanzar desde la interfaz | 1 |
+
+Orden dentro de A0 tras la línea base del 20 de septiembre: primero A0-6 (parrillas es el ciclo que más gasta: unas 19 revisiones al día y 1.258 hallazgos abiertos, sin una sola cifra de coste), después A0-1 y A0-2, luego el resto.
 
 Puerta A0: ninguna señal atendida reaparece por relectura; un fallo de minuta aparece con causa; el coste por minuta y por revisión existe en la base; Fireflies recibe menos de 10 llamadas al día.
 
@@ -136,7 +139,7 @@ Puerta A2: una reunión de personas nunca entra en contexto editorial; ninguna f
 |---|---|---|---|---|
 | B-1 | `MeetingCommitment` según la sección 7 de la auditoría, más `ownerKind` (`TEAM / CLIENT / EXTERNAL`) para distinguir insumos que debe el cliente; extracción v2 con cita literal, responsable y cliente sugeridos con confianza; sin cita → `CANDIDATE UNVERIFIED` | nuevo modelo y `ensure-*`; `minuteAutomationService.js` | compromiso con cita inventada nunca se propone; JSON con fences se parsea | 3 |
 | B-2 | Búsqueda de tarea existente (mismo cliente, no `REALIZADA`, ±30 días, similitud de título con FTS en español); tarjetas en Minutas con «Vincular», «Crear tarea», «No es compromiso» con motivo; idempotencia por `fingerprint`; fila en el libro por cada decisión | `AutomaticMinutesPanel.jsx:217`, nuevas rutas, `nativeTaskService.js` | doble clic no duplica; vincular no crea; la tarea creada lleva el `creatorId` del humano | 4 |
-| B-3 | Seguimiento diario sobre el runtime: `TASK_DONE` con `REALIZADA` y `completedAt`; `OVERDUE` con señal `COMMITMENT:<id>:OVERDUE` y `evidenceVersion` por tramo; escalado a PM solo con vencimiento y sin sesión de trabajo en N días; `ownerKind = CLIENT` avisa al PM como insumo pendiente | nuevo servicio | señal atendida no reaparece hasta el siguiente tramo | 2 |
+| B-3 | Seguimiento diario sobre el runtime: `TASK_DONE` con `REALIZADA` y `completedAt`; `OVERDUE` con señal `COMMITMENT:<id>:OVERDUE` y `evidenceVersion` por tramo; escalado a PM solo con vencimiento y sin sesión de trabajo en N días; `ownerKind = CLIENT` avisa al PM como insumo pendiente. Los avisos llegan por notificación al responsable y al PM, no solo a la bandeja de Observer, que nadie ha tocado desde que existe | nuevo servicio | señal atendida no reaparece hasta el siguiente tramo | 2 |
 | B-4 | Medición del piloto: precisión, omisiones, duplicados evitados, tiempos y coste por compromiso aceptado, por cliente; procedimiento de revisión semanal | Salud operativa o Minutas | cifras reproducibles con el diagnóstico | 2 |
 
 Piloto: reuniones nuevas desde la fecha de corte, dos o tres clientes, 20 a 30 compromisos, nivel 1. Los `actionItems` históricos no se convierten en tareas.
@@ -168,14 +171,35 @@ Todas reutilizan runtime, contexto, política y libro. Ninguna se monta antes de
 
 | Bloque | Ítems | Hechos | En curso | Puerta |
 |---|---|---|---|---|
-| A0 | 9 | 0 | — | pendiente |
+| A0 | 10 | 0 | — | pendiente |
 | A1 | 5 | 0 | — | pendiente |
 | A2 | 4 | 0 | — | pendiente |
 | A3 | 1 | 0 | — | pendiente |
 | B | 4 | 0 | — | pendiente |
 | C | 3 | 0 | — | pendiente |
 
-Línea base productiva: pendiente de correr `scripts/bria-readonly-diagnostics.mjs`. Referencia del 14 de septiembre: 49 minutas READY, 1.176 fragmentos, 530 `actionItems`, 8 señales OPEN, 717 hallazgos abiertos, 0 criterios.
+### Línea base productiva del 20 de septiembre de 2026
+
+Salida de `scripts/bria-readonly-diagnostics.mjs` corrida por Rodny a las 20:56 UTC contra `hopper.proxy.rlwy.net`. Entre paréntesis, el valor del 14 de septiembre cuando existe.
+
+| Área | Cifra | Lectura |
+|---|---|---|
+| Reuniones | 20 minutas en las últimas 12 semanas; entre 1 y 5 por semana, mediana 2 | Unas 1,7 reuniones por semana. Con 144 sondeos diarios salen cerca de 590 llamadas a Fireflies por reunión encontrada. La cadencia de 10 minutos queda descartada con datos |
+| Horario | Lunes a viernes, 08:00 a 17:00 Bogotá (corregida la zona horaria del script) | Barridos a las 07:00 y 19:00 Bogotá cubren el día completo |
+| Organizador | 48 de 50 minutas con `coordinadorbrainstudio@gmail.com`; 2 con otra cuenta | El webhook de Fireflies cubriría el 96 % si la clave es de esa cuenta; el barrido cubre el resto |
+| Calendario | 4 eventos con el bot invitado en 12 semanas frente a 20 minutas | Fireflies entra por su propia integración de calendario. La comprobación por reunión debe emparejar con todos los eventos con enlace, no solo con `captureWithFireflies` |
+| Minutas | 49 READY (49), 1 FAILED por `FIREFLIES_TRANSCRIPT_EMPTY` desde marzo, 3 en papelera; última minuta del 11-sep; 3 de 49 con los dos PDF | Sin cambios en seis días; el fallo no tiene salida ni aviso |
+| Compromisos | 530 `actionItems` (530); mediana 10 por minuta, máximo 25; 506 con responsable (95 %), 87 con fecha (16 %) | El responsable casi siempre viene; la fecha casi nunca. B-1 debe tratar la fecha como propuesta |
+| Observer | 8 OPEN (8), 284 archivadas, 2 resueltas automáticas; **cero acciones humanas en todas** | La bandeja no se usa. Ninguna señal nueva debe depender de ella sola |
+| Memoria | 49 fuentes READY, las 49 sin cliente (49); 1.176 fragmentos (1.176), 0 sin embedding; 981 fragmentos son transcripción cruda (83 %); ~654.000 tokens estimados | La política de indexación por propósito (A2-3) afecta a cinco de cada seis fragmentos |
+| Parrillas | 309 revisiones completadas en 30 días: 286 automáticas (181) y 23 manuales (11); unas 19 al día desde el 14-sep | Es el ciclo con más actividad y más gasto, y no hay una sola cifra de coste. A0-6 pasa a ser lo primero |
+| Hallazgos | 1.258 OPEN (717), 1.012 RESOLVED con 629 verificados (321), 26 DISMISSED en total | Los abiertos crecen unos 90 al día y casi nadie descarta. Falta saber cuántos pertenecen a parrillas finalizadas o borradas; la consulta nueva `findings_open_by_plan_status` lo responde |
+| Estados de parrilla | 23 CURRENT, 45 IDLE, 10 PENDING, 3 FAILED (3), 1 STALE | Las tres FAILED son las mismas del 14-sep, sin reintento en seis días |
+| Criterios | 0 criterios (0); 1 descubrimiento FAILED | La memoria editorial sigue sin uso |
+| Contexto heredado | 1 `AgencyContext` APPROVED sin vector | Retirar con A2-4 |
+| Equipo y trabajo | 69 clientes; 126 tareas pendientes, 4.469 realizadas; 270 notificaciones en 7 días para 14 personas | Unas 3 notificaciones por persona y día; el foco diario (C) no debe sumar ruido encima |
+
+Pendiente de la siguiente corrida: `processing_lag_minutes_since_live` (el retraso reunión → minuta solo desde el 1 de septiembre; el histórico mezcla el backfill de marzo), `findings_open_by_plan_status` y `findings_per_review_last_30d`.
 
 ## 7. Decisiones pendientes de Rodny
 
