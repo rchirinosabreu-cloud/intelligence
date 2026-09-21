@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { summarizeAiCalls } from '../lib/aiUsage.js';
 
 const dimensions = ['ESTRATEGIA', 'MARCA', 'GRAMATICA', 'CONSISTENCIA'];
 const severityWeight = { INFO: 0, WARNING: 1, CRITICAL: 2 };
@@ -65,15 +66,22 @@ export const reviewContentPlanBatches = async ({ snapshot, analysisHash, reviewB
   const checkpoint = await loadCheckpoint?.();
   const stored = checkpoint?.analysisHash === analysisHash && Array.isArray(checkpoint.completed) ? checkpoint.completed : [];
   const completed = [];
+  let resumedBatches = 0;
   for (const batch of batches) {
     signal?.throwIfAborted();
     const previous = stored.find(part => part.key === batch.key);
+    if (previous) resumedBatches += 1;
     const result = previous || { ...await reviewBatch(batch), key: batch.key, itemIds: batch.itemIds };
     completed.push(result);
     if (!previous) await saveCheckpoint?.({ analysisHash, totalBatches: batches.length, totalItems: batches.reduce((n, part) => n + part.itemIds.length, 0), completed: [...completed] });
   }
   signal?.throwIfAborted();
-  return { review: aggregateContentPlanReviewBatches(completed), model: completed.at(-1)?.model, requestId: completed.at(-1)?.requestId };
+  // Each completed part is one model call, paid in this attempt or in the one
+  // that wrote the checkpoint; both belong to the cost of the published result.
+  return {
+    review: aggregateContentPlanReviewBatches(completed), model: completed.at(-1)?.model, requestId: completed.at(-1)?.requestId,
+    usage: { ...summarizeAiCalls(completed), batches: completed.length, resumedBatches }
+  };
 };
 
 // Expose counters only: partial AI responses remain internal until atomic publication.

@@ -599,6 +599,7 @@ model ContentPlanReview {
   requestId        String?
   requestedById    String?
   errorMessage     String?
+  usage            Json?
   startedAt        DateTime                   @default(now())
   completedAt      DateTime?
   createdAt        DateTime                   @default(now())

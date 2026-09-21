@@ -64,6 +64,28 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewCheckpoint, null);
       assert.equal((await getContentPlanReview(plan.id, { db })).review.scope.reviewedItems, 13);
     });
+    await t.test('the published review keeps its real cost, including batches resumed from a checkpoint', async () => {
+      const plan = await fixture();
+      await db.contentItem.createMany({ data: Array.from({ length: 13 }, (_, i) => ({ planId: plan.id, objective: `Pieza ${i}`, format: 'Reel', copyText: 'Texto', captionText: '', publishDate: start })) });
+      const config = { ...options(plan.id), logger: { error() {} } };
+      let calls = 0;
+      config.reviewOptions.ai.generate = async request => {
+        if (++calls === 2) throw Object.assign(new Error('upstream fixture'), { status: 503 });
+        return { text: JSON.stringify(reviewPayload(request)), model: 'gpt-fixture', raw: { usage: { input_tokens: 1000, output_tokens: 100, total_tokens: 1100 } } };
+      };
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'FAILED');
+      config.reviewOptions.ai.generate = async request => ({ text: JSON.stringify(reviewPayload(request)), model: 'gpt-fixture', raw: { usage: { input_tokens: 3000, output_tokens: 100, total_tokens: 3100 } } });
+      config.now = () => new Date(start.getTime() + 120000);
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
+      const run = await db.contentPlanReview.findFirst({ where: { planId: plan.id } });
+      assert.equal(run.usage.review.calls, 2);
+      assert.equal(run.usage.review.resumedBatches, 1);
+      assert.equal(run.usage.review.inputTokens, 4000);
+      assert.equal(run.usage.verification.calls, 0);
+      assert.equal(run.usage.totals.inputTokens, 4000);
+      assert.deepEqual(run.usage.totals.models, ['gpt-fixture']);
+      assert.equal((await getContentPlanReview(plan.id, { db })).meta.usage.totals.calls, 2);
+    });
     await t.test('edits clear partial progress and old workers cannot write another checkpoint', async () => {
       const plan = await fixture();
       const lease = await state.claimContentPlanReview(plan.id, { db, now: start, trigger: 'MANUAL' });

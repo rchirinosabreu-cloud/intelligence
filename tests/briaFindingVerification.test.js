@@ -44,6 +44,22 @@ test('verification includes full text and pieces beyond the general review windo
   assert.equal(results[0].outcome, 'INCONCLUSIVE');
 });
 
+test('verification reports each model call with its cost when a collector is provided', async () => {
+  const findings = Array.from({ length: 5 }, (_, i) => ({ ...finding, id: `finding-${i}` }));
+  const calls = [];
+  const results = await verification.verifyContentPlanFindings({ snapshot, findings, evidence: [], calls, ai: {
+    generate: async () => ({ text: JSON.stringify({ verifications: [] }), model: 'gpt-test', requestId: 'req', raw: { usage: { input_tokens: 40, output_tokens: 8 } } })
+  } });
+  assert.equal(results.length, 5);
+  assert.equal(calls.length, 2);
+  assert.deepEqual(calls[0].findingIds, ['finding-0', 'finding-1', 'finding-2', 'finding-3']);
+  assert.deepEqual(calls[1].findingIds, ['finding-4']);
+  assert.equal(calls[0].model, 'gpt-test');
+  assert.equal(calls[0].requestId, 'req');
+  assert.deepEqual(calls[0].usage, { inputTokens: 40, outputTokens: 8, totalTokens: 48, cachedTokens: 0, reasoningTokens: 0 });
+  assert.ok(Number.isFinite(calls[0].latencyMs));
+});
+
 test('oversized context returns an explicit inconclusive decision without silently truncating', async () => {
   const results = await verification.verifyContentPlanFindings({ snapshot: { ...snapshot, items: [{ ...snapshot.items[0], copyText: 'x'.repeat(250000) }] }, findings: [finding], evidence: [], ai: {
     generate: async () => assert.fail('Do not verify truncated evidence')

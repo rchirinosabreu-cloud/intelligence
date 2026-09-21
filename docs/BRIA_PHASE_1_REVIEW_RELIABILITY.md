@@ -48,12 +48,24 @@ Se utilizaron PostgreSQL/pgvector locales en un contenedor aislado y respuestas 
 
 No se llamó al modelo real ni se modificó la base productiva. Estas pruebas verifican coordinación y persistencia, no calidad editorial, latencia real, despliegue productivo ni ahorro de tiempo del equipo. No hay cambios visuales en este bloque.
 
+## Coste por revisión (20 de septiembre de 2026)
+
+Cada revisión publicada guarda ahora en `ContentPlanReview.usage` lo que costó producirla, con la forma `{ version: 1, review, verification, totals }`:
+
+- `review`: llamadas de los lotes (`calls`, `callsWithUsage`, tokens de entrada, salida, total, en caché y de razonamiento, `latencyMs`, modelos, `batches`, `resumedBatches`, hallazgos y evidencias rechazados). Un lote reanudado desde un checkpoint cuenta con el coste que pagó el intento anterior; un lote sin `usage` del proveedor cuenta como llamada de coste desconocido, nunca como cero.
+- `verification`: las llamadas de verificación de ese intento y cuántos hallazgos verificaron.
+- `totals`: la suma de ambas partes.
+
+`src/lib/aiUsage.js` normaliza el `usage` de OpenAI (`input_tokens`, `output_tokens`, detalles de caché y razonamiento) y suma llamadas; el cliente de OpenAI expone `usage` junto a `raw`. La API de revisión devuelve `meta.usage`, también para la revisión en caché. Cambio aditivo: una columna JSONB nullable creada por `ensure-content-plan-reviews-schema.js` con `ADD COLUMN IF NOT EXISTS`; las revisiones anteriores quedan con `usage` vacío y no se recalculan. Sin cambios visuales: la lectura agregada por flujo corresponde a la pestaña de automatizaciones de Salud operativa (A1-5 del plan de autonomía).
+
+Pruebas: `tests/aiUsage.test.js`, `tests/briaReviewBatches.test.js` (lotes reanudados y checkpoints antiguos sin coste), `tests/briaFindingVerification.test.js` (colector de llamadas), `tests/briaContentPlanReviewPersistence.test.js` (coste persistido y proveedor sin `usage`) y `tests/briaReviewJobsDatabase.test.js` (coste publicado tras reanudar, contra PostgreSQL real).
+
 ## Siguiente entrega recomendada: cobertura y criterio verificables
 
 1. Revisar todas las piezas por lotes y exponer cobertura real. Continuación implementada en [cobertura y recuperación por lotes](BRIA_REVIEW_BATCH_COVERAGE.md), con sus pruebas y límites documentados. Impedir que una revisión parcial resuelva hallazgos fuera de su cobertura.
 2. Versionar la rúbrica y crear casos de evaluación con parrillas anonimizadas aprobados por el equipo: errores reales, falsos positivos, correcciones resueltas, contenido sin memoria de cliente y coherencia entre piezas. Base local implementada en [rúbrica y evaluación editorial](BRIA_EDITORIAL_EVALUATION.md): candidata separada, 36 controles sintéticos y primera medición real limitada. La aprobación humana y los casos reales siguen pendientes; no confundirlos con pruebas técnicas correctas.
 3. Unificar contexto vigente por cliente con procedencia, permisos, evidencia y reglas aprobadas. Invalidar revisiones al cambiar conocimiento relevante, no solo al editar contenido. La comprobación de instrucciones durante la publicación no sustituye este flujo.
-4. Pilotear con pocas parrillas y medir: tiempo hasta aprobación, correcciones verificadas, descartes por falso positivo, coste y latencia. Ampliar autonomía cuando las mediciones lo justifiquen.
+4. Pilotear con pocas parrillas y medir: tiempo hasta aprobación, correcciones verificadas, descartes por falso positivo, coste y latencia. El coste y la latencia por revisión ya se guardan (sección anterior); falta agregarlos por flujo y periodo. Ampliar autonomía cuando las mediciones lo justifiquen.
 
 Persistencia global no significa determinismo absoluto del modelo: dos revisiones explícitas realizadas en momentos distintos todavía pueden producir variaciones. El coordinador evita resultados rivales simultáneos; la calibración y evaluación de criterio son otro trabajo pendiente.
 

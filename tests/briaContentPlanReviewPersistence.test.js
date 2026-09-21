@@ -199,6 +199,44 @@ test('the same plan and memory snapshot reuse one persisted global review', asyn
   assert.equal(second.review.score, 90);
 });
 
+test('the persisted review carries the real cost of its batches and verifications', async () => {
+  let saved;
+  const verifying = { id: 'finding-1', itemId: 'piece-1', field: 'copyText', status: 'VERIFYING', title: 'Error', detail: 'Detalle', recommendation: 'Corregir' };
+  const result = await reviewContentPlanWithBria({
+    planId: plan.id, getPlan: async () => plan, searchMemory: async () => [],
+    repository: {
+      findByAnalysisHash: async () => null,
+      findActiveFindings: async () => [verifying],
+      saveCompletedReview: async ({ result }) => { saved = result; return result; }
+    },
+    ai: { generate: async request => request.responseSchema?.properties?.verifications
+      ? { text: JSON.stringify({ verifications: [] }), model: 'gpt-test', raw: { usage: { input_tokens: 300, output_tokens: 30 } } }
+      : { text: JSON.stringify(reviewPayload(request)), model: 'gpt-test', raw: { usage: { input_tokens: 1000, output_tokens: 100, total_tokens: 1100 } } } }
+  });
+  assert.equal(saved.meta.usage.version, 1);
+  assert.equal(saved.meta.usage.review.calls, 1);
+  assert.equal(saved.meta.usage.review.inputTokens, 1000);
+  assert.equal(saved.meta.usage.review.resumedBatches, 0);
+  assert.equal(saved.meta.usage.verification.calls, 1);
+  assert.equal(saved.meta.usage.verification.findings, 1);
+  assert.equal(saved.meta.usage.verification.inputTokens, 300);
+  assert.deepEqual(saved.meta.usage.totals, { calls: 2, callsWithUsage: 2, inputTokens: 1300, outputTokens: 130, totalTokens: 1430, latencyMs: saved.meta.usage.totals.latencyMs, models: ['gpt-test'] });
+  assert.ok(Number.isFinite(saved.meta.usage.totals.latencyMs));
+  assert.equal(result.meta.usage.totals.calls, 2);
+});
+
+test('providers that report no usage still publish, with the cost marked unknown', async () => {
+  const result = await reviewContentPlanWithBria({
+    planId: plan.id, getPlan: async () => plan, searchMemory: async () => [],
+    repository: { findByAnalysisHash: async () => null, saveCompletedReview: async ({ result }) => result },
+    ai: { generate: async request => ({ text: JSON.stringify(reviewPayload(request)) }) }
+  });
+  assert.equal(result.meta.usage.review.calls, 1);
+  assert.equal(result.meta.usage.review.callsWithUsage, 0);
+  assert.equal(result.meta.usage.verification.calls, 0);
+  assert.equal(result.meta.usage.totals.inputTokens, 0);
+});
+
 test('marking corrected triggers verification even when the content hash is unchanged', async () => {
   let calls = 0;
   const result = await reviewContentPlanWithBria({
