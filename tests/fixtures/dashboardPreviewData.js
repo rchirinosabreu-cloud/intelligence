@@ -105,6 +105,7 @@ export function dashboardDemoKanbanTasks(now = new Date()) {
     assigneeId: assignee.id,
     creator: { id: dashboardDemoUser.id, name: dashboardDemoUser.name }, creatorId: dashboardDemoUser.id,
     dueDate: daysFromNow(extra.dueInDays ?? 2, 12, now).toISOString(),
+    focusDeadlineAt: extra.focusHour ? new Date(`${bogotaDayKey(now)}T${extra.focusHour}:00-05:00`).toISOString() : null,
     comments: extra.comments || '',
     isPriority: Boolean(extra.priority), priority: extra.priority || null, isSpecial: Boolean(extra.isSpecial),
     aiCategory: extra.aiCategory || null, aiComplexity: extra.aiComplexity || null,
@@ -114,7 +115,8 @@ export function dashboardDemoKanbanTasks(now = new Date()) {
     startedAt: status === 'EN_CURSO' ? hoursFromNow(-1, now).toISOString() : null, accumulatedWorkMs: 0, returnCount: 0, isReturned: false
   });
   return [
-    task('mampujan', 'PÁGINA WEB MUSEO DE MAMPUJÁN – AVANCES DE LA SEGUNDA ENTREGA', 'PENDIENTE', 'client-brain', dashboardDemoMember, { priority: 'ALTA', dueInDays: 1, comments: '<p>Revisar con el cliente los avances de la segunda entrega y ajustar la sección de colecciones.</p>', aiCategory: 'Creativo & Diseño', aiComplexity: 'ALTA', files: 12, commentCount: 3, sortOrder: 0 }),
+    task('mampujan', 'PÁGINA WEB MUSEO DE MAMPUJÁN – AVANCES DE LA SEGUNDA ENTREGA', 'PENDIENTE', 'client-brain', dashboardDemoMember, { priority: 'ALTA', dueInDays: 0, focusHour: '16:00', comments: '<p>Revisar con el cliente los avances de la segunda entrega y ajustar la sección de colecciones.</p>', aiCategory: 'Creativo & Diseño', aiComplexity: 'ALTA', files: 12, commentCount: 3, sortOrder: 0 }),
+    task('brief', 'Brief de campaña navideña', 'PENDIENTE', 'client-alpina', dashboardDemoMember, { priority: 'NORMAL', dueInDays: 3, comments: '<p>Objetivos, presupuesto y público.</p>', aiCategory: 'Estratégico', aiComplexity: 'MEDIA', files: 1, sortOrder: 3 }),
     task('reel-post', '[Producción] Reel: PROCESO DE POST OPERATORIO', 'PENDIENTE', 'client-haad', people.melissa, { priority: 'NORMAL', dueInDays: 3, comments: '<p>Guion aprobado. Grabar tomas de apoyo en clínica el jueves.</p>', aiCategory: 'Producción Audiovisual', aiComplexity: 'MEDIA', files: 4, sortOrder: 1 }),
     task('caption', 'Caption Expo Mujer Bolívar 2026', 'PENDIENTE', 'client-alpina', people.helen, { dueInDays: -2, comments: '<p>Texto corto para el carrusel del evento.</p>', aiCategory: 'Creación de Contenido', aiComplexity: 'BAJA', sortOrder: 2 }),
     task('parrilla', 'Redactar parrilla septiembre – octubre', 'EN_CURSO', 'client-nutresa', people.helen, { priority: 'URGENTE', dueInDays: 0, comments: '<p>Incluir campaña de temporada y los tres lanzamientos.</p>', aiCategory: 'Marketing & Social Media', aiComplexity: 'ALTA', files: 2, commentCount: 5, sortOrder: 0 }),

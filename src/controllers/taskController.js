@@ -14,6 +14,7 @@ import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskS
 import { uploadToS3, getFromS3Stream, deleteFromS3 } from '../services/s3Service.js';
 import { resolveTaskCommentFile } from '../services/taskCommentFileService.js';
 import { createNotification, processMentionsAndNotifications } from '../services/notificationService.js';
+import { assertTaskNotLocked } from '../services/taskFocusService.js';
 import { recordTaskListSync } from '../services/operationalTraceService.js';
 import { traceTaskOpenHandler } from './operationalTraceController.js';
 import { canDeleteTask, canUpdateTask, isManagerRole, pickAllowedTaskUpdates, validateUploadFile } from '../config/security.js';
@@ -119,6 +120,9 @@ export const createNewTask = async (req, res) => {
         if (!taskData.title || !taskData.clientId) {
             return res.status(400).json({ error: "Missing required fields (title, clientId)" });
         }
+        if (taskData.focusDeadlineAt && !isManagerRole(req.user?.role)) {
+            return res.status(403).json({ error: 'Solo administradores y project managers pueden fijar o quitar un compromiso con hora.' });
+        }
         const task = await createTask(taskData);
 
         if (task.assigneeId && (task.isPriority || task.isSpecial)) {
@@ -167,6 +171,16 @@ export const updateExistingTask = async (req, res) => {
             if (role !== 'ADMIN' && role !== 'PROJECT_MANAGER' && role !== 'PM') {
                 return res.status(403).json({ error: "No tienes permisos de Project Manager o Administrador para reordenar tareas" });
             }
+        }
+        if ('focusDeadlineAt' in req.body && !isManagerRole(req.user?.role)) {
+            return res.status(403).json({ error: 'Solo administradores y project managers pueden fijar o quitar un compromiso con hora.' });
+        }
+        // Compromiso con hora: while the person has a task with an hour, their other tasks stay locked.
+        try {
+            await assertTaskNotLocked(prisma, { user: req.user, taskId: req.params.taskId });
+        } catch (lockError) {
+            if (lockError.statusCode === 423) return res.status(423).json({ error: lockError.message, focusTask: lockError.focusTask });
+            throw lockError;
         }
         const task = await prisma.task.findUnique({
             where: { id: req.params.taskId },

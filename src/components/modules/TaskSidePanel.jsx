@@ -5,7 +5,7 @@ import * as DialogPrimitive from '@radix-ui/react-dialog';
 import {
     Loader2, Zap, Star, Link as LinkIcon, ExternalLink,
     X, Send, MessageSquare, TaskReintegrateIcon, TaskReturnIcon, CheckCircle2, Bell,
-    LayoutGrid, Calendar, User, Trash2, Plus, ClipboardList,
+    LayoutGrid, Calendar, Clock, User, Trash2, Plus, ClipboardList,
     FileText, Database, Paperclip, ImageIcon, Eye, Download, Check,
     MoreHorizontal, ChevronDown
 } from '@/components/ui/icons';
@@ -15,8 +15,9 @@ import { commentFileUrls, commentFilesValidationMessage, commentDownloadFilename
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { triggerConfetti } from '@/utils/confetti';
-import DatePicker from 'react-datepicker';
-import { brainDatePickerProps } from '@/lib/brainDatePicker';
+import BrainDatePicker from '@/components/ui/BrainDatePicker';
+import { QUARTER_HOURS } from '@/lib/brainDatePicker';
+import { focusDeadlineIso, focusTimeFromIso } from '@/lib/taskFocus';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { useAuth } from '@/context/AuthContext';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
@@ -49,11 +50,15 @@ import TaskLifecycleDialog from './TaskLifecycleDialog';
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
 
+// Hours a manager can commit a task to (Bogotá wall clock, quarter hours of the working day).
+const FOCUS_HOURS = QUARTER_HOURS.filter((hour) => hour >= '06:00' && hour <= '21:45');
+
 const EMPTY_TASK_FORM = {
     title: '',
     clientId: '',
     assigneeId: '',
     dueDate: '',
+    focusTime: '',
     comments: '',
     status: 'PENDIENTE',
     isPriority: false,
@@ -246,6 +251,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         clientId: defaultClientId || '',
         assigneeId: '',
         dueDate: '',
+        focusTime: '',
         comments: '',
         status: 'PENDIENTE',
         isPriority: false,
@@ -618,6 +624,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     status: taskData.status || 'PENDIENTE',
                     originalStatus: taskData.status,
                     dueDate: formattedDate,
+                    focusTime: focusTimeFromIso(taskData.focusDeadlineAt),
                     comments: taskData.comments || '',
                     creatorName: taskData.creator?.name || taskData.creatorName || 'Sistema',
                     isPriority: taskData.isPriority || false,
@@ -799,6 +806,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         }
     };
 
+    const canSetFocusDeadline = ['ADMIN', 'PROJECT_MANAGER'].includes(currentUser?.role);
+
     const handleSave = async (e) => {
         if (e) e.preventDefault();
 
@@ -823,6 +832,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 clientId: formData.clientId,
                 assigneeId: formData.assigneeId || null,
                 dueDate: isoDate,
+                // Compromiso con hora: only managers may send it; a normal deadline sends null to clear any previous hour.
+                focusDeadlineAt: canSetFocusDeadline ? focusDeadlineIso(formData.dueDate, formData.focusTime) : undefined,
                 comments: '', // Removed general comments description completely
                 status: formData.status,
                 isPriority: formData.isPriority,
@@ -2118,23 +2129,49 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                             {/* Deadline / Fecha Entrega */}
                             <div className="col-span-1 space-y-1.5 sm:col-span-2 sm:space-y-1">
-                                <label className={taskComposerLabelClass}>Deadline</label>
+                                <label className={taskComposerLabelClass} htmlFor="task-due-date">Deadline</label>
                                 <div className="relative w-full">
                                     <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none z-10" />
-                                    <DatePicker
-                                        selected={formData.dueDate ? new Date(`${formData.dueDate.split('T')[0]}T12:00:00.000Z`) : null}
-                                        onChange={(date) => {
-                                            const dateStr = date ? date.toISOString().split('T')[0] : '';
-                                            setFormData({...formData, dueDate: dateStr});
-                                        }}
-                                        dateFormat="dd/MM/yyyy"
+                                    <BrainDatePicker
+                                        id="task-due-date"
+                                        value={(formData.dueDate || '').split('T')[0]}
+                                        onChange={(value) => setFormData({ ...formData, dueDate: value, focusTime: value ? formData.focusTime : '' })}
                                         className={`${taskComposerFieldClass} h-12 sm:h-[38px] pl-9 sm:pl-10 cursor-pointer`}
-                                        wrapperClassName="w-full"
-                                        {...brainDatePickerProps}
-                                        placeholderText="Elegir fecha..."
+                                        placeholder="Elegir fecha..."
+                                        ariaLabel="Deadline"
                                         isClearable
                                     />
                                 </div>
+                                {/* Compromiso con hora: only admins and project managers set it; the person only sees it. */}
+                                {canSetFocusDeadline ? (
+                                    <div className="space-y-1 pt-1">
+                                        <div className="flex items-center gap-2">
+                                            <Clock className="h-3.5 w-3.5 shrink-0 text-brand-cyan-deep dark:text-brand-cyan" />
+                                            <label htmlFor="task-focus-time" className="sr-only">Compromiso con hora</label>
+                                            <Select
+                                                id="task-focus-time"
+                                                value={formData.focusTime || ''}
+                                                disabled={!formData.dueDate}
+                                                onChange={(event) => setFormData({ ...formData, focusTime: event.target.value })}
+                                                className={`${taskComposerFieldClass} h-11 sm:h-[34px] cursor-pointer text-sm`}
+                                                aria-label="Compromiso con hora"
+                                            >
+                                                <option value="">Sin hora: deadline normal</option>
+                                                {FOCUS_HOURS.map((hour) => (
+                                                    <option key={hour} value={hour}>Compromiso hasta las {hour}</option>
+                                                ))}
+                                            </Select>
+                                        </div>
+                                        <p className="text-[11px] leading-5 text-zinc-500 dark:text-zinc-400">
+                                            Con hora, la persona solo trabaja en esta tarea: sus demás pendientes quedan bloqueados hasta que la marque como realizada.
+                                        </p>
+                                    </div>
+                                ) : formData.focusTime ? (
+                                    <p className="flex items-center gap-1.5 pt-1 text-[11px] font-semibold text-brand-cyan-deep dark:text-brand-cyan">
+                                        <Clock className="h-3.5 w-3.5 shrink-0" />
+                                        Compromiso hasta las {formData.focusTime}. Tus demás pendientes esperan a que la termines.
+                                    </p>
+                                ) : null}
                             </div>
 
                             {/* Estado Actual */}
