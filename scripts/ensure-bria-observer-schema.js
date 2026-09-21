@@ -38,6 +38,10 @@ try {
     );
     ALTER TABLE "BriaObserverSignal" ADD COLUMN IF NOT EXISTS "archivedAt" TIMESTAMPTZ;
     ALTER TABLE "BriaObserverSignal" ADD COLUMN IF NOT EXISTS "archiveReason" TEXT;
+    -- Existing rows keep NULL: their grounding was never evaluated, so they are
+    -- shown as before instead of being hidden as unverified.
+    ALTER TABLE "BriaObserverSignal" ADD COLUMN IF NOT EXISTS "grounding" TEXT;
+    ALTER TABLE "BriaObserverSignal" ADD COLUMN IF NOT EXISTS "evidenceVersion" TEXT;
 
     CREATE TABLE IF NOT EXISTS "BriaObserverDetectorState" (
       "detectorKey" TEXT PRIMARY KEY,

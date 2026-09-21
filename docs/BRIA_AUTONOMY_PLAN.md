@@ -93,8 +93,8 @@ Tamaños en días de trabajo enfocado, estimados. Los ítems de un mismo bloque 
 
 | ID | Qué | Dónde | Prueba clave | Tamaño |
 |---|---|---|---|---|
-| A0-1 ∥ | Observer: `RESOLVED` no vuelve a `OPEN` sin `evidenceVersion` distinta; `resolveMissing` solo sobre el alcance leído completo; `ARCHIVED` en `VALID_STATUSES` | `briaObserverService.js:9`, `:138`, `:149` | una señal resuelta releída sigue resuelta; cambia solo con evidencia nueva | 0,5 |
-| A0-2 ∥ | Observer: cita literal obligatoria; sin cita → `UNGROUNDED`, no accionable; sin relleno con el resumen | `briaObserverService.js:51` | señal cuya evidencia no está en la transcripción no llega como accionable | 0,5 |
+| A0-1 ∥ | Observer: `RESOLVED` no vuelve a `OPEN` sin `evidenceVersion` distinta; `resolveMissing` solo sobre el alcance leído completo; `ARCHIVED` en `VALID_STATUSES`. **Hecho el 21-sep**, ver `docs/BRIA_OBSERVER_SIGNALS.md`; también se protegen los descartes | `briaObserverService.js` | una señal resuelta releída sigue resuelta; cambia solo con evidencia nueva | 0,5 |
+| A0-2 ∥ | Observer: cita literal obligatoria; sin cita → `UNVERIFIED`, fuera de la lista activa y contada aparte; sin relleno con el resumen. **Hecho el 21-sep** | `briaObserverService.js`, `BriaObserverInbox.jsx` | señal cuya evidencia no está en la transcripción no llega como accionable | 0,5 |
 | A0-3 ∥ | Fireflies: timeout de 30 s con `AbortController`; `fromDate`/`toDate`; paginación con `skip`; campos `calendar_id`, `meeting_link`, `participants` | `firefliesService.js` | petición colgada se corta; ventana de 3 días trae más de 50 sin perder ninguna | 0,5 |
 | A0-4 ∥ | Minutas: barredor de `PROCESSING` con más de 15 min; `usage` (tokens, latencia, modelo) y `errorCode` guardados; `READY` sin títulos editoriales no se reanaliza entero | `minuteAutomationService.js:237`, `:257`, `:298`; `openAIClient.js:229`; script `ensure-meeting-minutes-schema.js` | caída a medias se recupera en el siguiente ciclo sin doble análisis | 1 |
 | A0-5 ∥ | Memoria: búsqueda del panel con `clientId` obligatorio o `scope=ALL` solo ADMIN y registrada; quitar las dos lecturas muertas de `minute.clientId`; «Fuentes pendientes» sin Drive | `briaMemoryController.js:20`, `briaMemoryService.js:94`, `:256`; `briaObserverService.js:59` | responsable sin ADMIN no puede buscar sin cliente | 0,5 |
@@ -178,7 +178,7 @@ Todas reutilizan runtime, contexto, política y libro. Ninguna se monta antes de
 
 | Bloque | Ítems | Hechos | En curso | Puerta |
 |---|---|---|---|---|
-| A0 | 11 | 2 (A0-6 en PR #919 y A0-10 en PR #920, 21-sep) | A0-11 | pendiente |
+| A0 | 11 | 4 (A0-6 en PR #919, A0-10 en PR #920 y A0-11 en PR #921, 21-sep) | A0-1 y A0-2 | pendiente |
 | A1 | 5 | 0 | — | pendiente |
 | A2 | 4 | 0 | — | pendiente |
 | A3 | 1 | 0 | — | pendiente |

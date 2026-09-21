@@ -6,10 +6,27 @@ export const BRIA_OBSERVER_INTERVAL_MS = 10 * 60 * 1000;
 export const BRIA_OBSERVER_START_DELAY_MS = 90 * 1000;
 
 const ACTIVE_STATUSES = ['OPEN', 'REVIEWED', 'SNOOZED'];
-const VALID_STATUSES = ['OPEN', 'REVIEWED', 'SNOOZED', 'DISMISSED', 'RESOLVED'];
+// Statuses a person may filter by. ARCHIVED is baseline history, readable but
+// never produced by a human action.
+const VALID_STATUSES = ['OPEN', 'REVIEWED', 'SNOOZED', 'DISMISSED', 'RESOLVED', 'ARCHIVED'];
+// A closed signal stays closed; only genuinely new evidence reopens it.
+const CLOSED_STATUSES = ['DISMISSED', 'RESOLVED'];
+// Legacy rows have no grounding recorded; they are shown, not hidden.
+const GROUNDED_FILTER = { OR: [{ grounding: null }, { grounding: { not: 'UNVERIFIED' } }] };
+// Shorter than this, a "quote" matches almost any transcript by accident.
+const MIN_QUOTE_LENGTH = 12;
 
 const clean = (value) => String(value || '').replace(/\s+/g, ' ').trim();
 const hash = (value) => crypto.createHash('sha256').update(clean(value)).digest('hex').slice(0, 20);
+const comparable = (value) => clean(value).toLowerCase();
+
+// The model's evidence is trusted only when it appears literally in the
+// transcript. Whitespace and casing are normalized; wording is not.
+export const isQuotedInTranscript = (quote, transcriptText) => {
+  const needle = comparable(quote);
+  if (needle.length < MIN_QUOTE_LENGTH) return false;
+  return comparable(transcriptText).includes(needle);
+};
 
 const normalizeSeverity = (value) => {
   const severity = clean(value).toLowerCase();
@@ -32,6 +49,9 @@ export const buildTaskAnalyticsObserverDetections = (analytics = {}) =>
       severity: normalizeSeverity(signal.severity),
       title: clean(signal.title) || 'Señal operativa',
       evidence: clean(signal.evidence) || 'Sin evidencia descriptiva.',
+      // Threshold rules over real task data: computed, not authored by a model.
+      grounding: 'DETERMINISTIC',
+      evidenceVersion: hash([signal.code, clean(signal.title), clean(signal.evidence), normalizeSeverity(signal.severity)].join('|')),
       confidence: 1,
       suggestedAction: signal.code === 'UNCLASSIFIED_TASKS'
         ? 'Completar categoría y complejidad de las tareas señaladas.'
@@ -48,7 +68,14 @@ export const buildMinuteObserverDetections = (minute = {}, { activatedAt } = {})
     .filter((signal) => signal?.actionable === true && clean(signal?.suggestedAction) && clean(signal?.description || signal?.title || signal?.evidence))
     .map((signal) => {
       const title = clean(signal.description || signal.title) || 'Hallazgo en reunión';
-      const evidence = clean(signal.evidence) || clean(minute.executiveSummary) || 'Detectado en el análisis de la minuta.';
+      // Never fill a missing quote with the summary or with invented wording:
+      // an unsupported alert must look unsupported.
+      const quote = clean(signal.evidence);
+      const grounding = isQuotedInTranscript(quote, minute.transcriptText) ? 'QUOTED' : 'UNVERIFIED';
+      // A claimed quote is shown even when it is not confirmed, so a person can
+      // judge it. Something too short to be a quote carries nothing: use the
+      // model's own description instead of dressing it up as evidence.
+      const evidence = quote.length >= MIN_QUOTE_LENGTH ? quote : title;
       const fingerprint = hash([signal.type, title, evidence].join('|'));
       return {
         detectorKey: 'MINUTE_SIGNAL',
@@ -61,6 +88,8 @@ export const buildMinuteObserverDetections = (minute = {}, { activatedAt } = {})
         severity: normalizeSeverity(signal.severity || signal.type),
         title,
         evidence,
+        grounding,
+        evidenceVersion: hash([signal.type, title, evidence, normalizeSeverity(signal.severity || signal.type), clean(signal.suggestedAction)].join('|')),
         confidence: Number.isFinite(Number(signal.confidence)) ? Number(signal.confidence) : null,
         suggestedAction: clean(signal.suggestedAction),
         metadata: {
@@ -135,32 +164,50 @@ export const createPrismaObserverRepository = (db = prisma) => ({
   upsertDetection: async (detection, now = new Date()) => {
     const existing = await db.briaObserverSignal.findUnique({ where: { dedupeKey: detection.dedupeKey } });
     if (!existing) return db.briaObserverSignal.create({ data: { ...detection, firstDetectedAt: now, lastDetectedAt: now } });
-    const status = existing.status === 'RESOLVED' ? 'OPEN' : existing.status;
+    // Reading the same document again is not new evidence. A decision a person
+    // took stands until the evidence behind the signal actually changes, and
+    // the archived baseline never returns to the inbox.
+    const evidenceChanged = Boolean(detection.evidenceVersion) && detection.evidenceVersion !== existing.evidenceVersion;
+    const reopens = CLOSED_STATUSES.includes(existing.status) && evidenceChanged;
+    if (existing.status === 'ARCHIVED' || (CLOSED_STATUSES.includes(existing.status) && !reopens)) {
+      return db.briaObserverSignal.update({
+        where: { id: existing.id },
+        data: { ...detection, status: existing.status, lastDetectedAt: now }
+      });
+    }
     return db.briaObserverSignal.update({
       where: { id: existing.id },
       data: {
         ...detection,
-        status,
+        status: reopens ? 'OPEN' : existing.status,
         lastDetectedAt: now,
-        ...(status === 'OPEN' ? { resolvedAt: null } : {})
+        ...(reopens ? { resolvedAt: null, dismissedAt: null, snoozedUntil: null } : {})
       }
     });
   },
-  resolveMissing: (detectorKey, activeKeys, now = new Date()) => db.briaObserverSignal.updateMany({
+  // Only sources examined in this scan may be resolved by absence: a source
+  // left outside the read window is unknown, not solved.
+  resolveMissing: (detectorKey, activeKeys, now = new Date(), { scopeRecordIds = null } = {}) => db.briaObserverSignal.updateMany({
     where: {
       detectorKey,
       status: { in: ACTIVE_STATUSES },
-      ...(activeKeys.length ? { dedupeKey: { notIn: activeKeys } } : {})
+      ...(activeKeys.length ? { dedupeKey: { notIn: activeKeys } } : {}),
+      ...(scopeRecordIds ? { sourceRecordId: { in: scopeRecordIds } } : {})
     },
     data: { status: 'RESOLVED', resolvedAt: now, snoozedUntil: null }
   })
 });
 
-export const reconcileObserverDetections = async ({ detectorKey, detections = [], repository = createPrismaObserverRepository(), now = new Date() }) => {
+export const reconcileObserverDetections = async ({ detectorKey, detections = [], repository = createPrismaObserverRepository(), now = new Date(), scopeRecordIds = null }) => {
   const normalized = detections.filter((item) => item?.detectorKey === detectorKey && item?.dedupeKey && item?.title && item?.evidence);
   for (const detection of normalized) await repository.upsertDetection(detection, now);
-  const resolvedResult = await repository.resolveMissing(detectorKey, normalized.map((item) => item.dedupeKey), now);
-  return { detectorKey, detected: normalized.length, resolved: Number(resolvedResult?.count || 0) };
+  const resolvedResult = await repository.resolveMissing(detectorKey, normalized.map((item) => item.dedupeKey), now, { scopeRecordIds });
+  return {
+    detectorKey,
+    detected: normalized.length,
+    unverified: normalized.filter((item) => item.grounding === 'UNVERIFIED').length,
+    resolved: Number(resolvedResult?.count || 0)
+  };
 };
 
 export const reconcileBriaObserver = async ({ db = prisma, now = new Date(), logger = console } = {}) => {
@@ -188,6 +235,8 @@ export const reconcileBriaObserver = async ({ db = prisma, now = new Date(), log
   const minuteResult = await reconcileObserverDetections({
     detectorKey: 'MINUTE_SIGNAL',
     detections: minutes.flatMap((minute) => buildMinuteObserverDetections(minute, { activatedAt: minuteBaseline.activatedAt })),
+    // The read window is capped: only the minutes actually examined are in scope.
+    scopeRecordIds: minutes.map((minute) => minute.id),
     repository,
     now
   });
@@ -204,14 +253,19 @@ export const reconcileBriaObserver = async ({ db = prisma, now = new Date(), log
 
 export const getObserverInbox = async ({ db = prisma, status = 'ACTIVE', limit = 60, now = new Date() } = {}) => {
   const normalizedStatus = clean(status).toUpperCase();
+  // An alert without a verifiable quote is never presented as actionable work;
+  // it stays available under its own filter so the misses can be counted.
   const where = normalizedStatus === 'ACTIVE'
-    ? { OR: [{ status: { in: ['OPEN', 'REVIEWED'] } }, { status: 'SNOOZED', snoozedUntil: { lte: now } }] }
-    : normalizedStatus === 'ALL' ? {} : { status: VALID_STATUSES.includes(normalizedStatus) ? normalizedStatus : 'OPEN' };
-  const [signals, grouped, latest, latestScan] = await Promise.all([
+    ? { AND: [GROUNDED_FILTER, { OR: [{ status: { in: ['OPEN', 'REVIEWED'] } }, { status: 'SNOOZED', snoozedUntil: { lte: now } }] }] }
+    : normalizedStatus === 'ALL' ? {}
+      : normalizedStatus === 'UNVERIFIED' ? { grounding: 'UNVERIFIED', status: { in: ACTIVE_STATUSES } }
+        : { status: VALID_STATUSES.includes(normalizedStatus) ? normalizedStatus : 'OPEN' };
+  const [signals, grouped, latest, latestScan, unverified] = await Promise.all([
     db.briaObserverSignal.findMany({ where, orderBy: [{ lastDetectedAt: 'desc' }], take: Math.min(Math.max(Number(limit) || 60, 1), 200) }),
     db.briaObserverSignal.groupBy({ by: ['status'], _count: { _all: true } }),
     db.briaObserverSignal.findFirst({ orderBy: { lastDetectedAt: 'desc' }, select: { lastDetectedAt: true } }),
-    db.briaObserverDetectorState.findFirst({ where: { lastScannedAt: { not: null } }, orderBy: { lastScannedAt: 'desc' }, select: { lastScannedAt: true } })
+    db.briaObserverDetectorState.findFirst({ where: { lastScannedAt: { not: null } }, orderBy: { lastScannedAt: 'desc' }, select: { lastScannedAt: true } }),
+    db.briaObserverSignal.count({ where: { grounding: 'UNVERIFIED', status: { in: ACTIVE_STATUSES } } })
   ]);
   const counts = Object.fromEntries(grouped.map((item) => [item.status, item._count._all]));
   return {
@@ -223,6 +277,7 @@ export const getObserverInbox = async ({ db = prisma, status = 'ACTIVE', limit =
       dismissed: counts.DISMISSED || 0,
       resolved: counts.RESOLVED || 0,
       historical: counts.ARCHIVED || 0,
+      unverified: Number(unverified || 0),
       lastScannedAt: latestScan?.lastScannedAt || latest?.lastDetectedAt || null
     },
     signals
