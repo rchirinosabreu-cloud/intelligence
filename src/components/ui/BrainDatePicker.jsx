@@ -65,6 +65,20 @@ export function BrainTimeColumn({ hours = QUARTER_HOURS, time, canSelectTime = t
     if (selected) element.scrollTop = selected.offsetTop - element.offsetTop - element.clientHeight / 2 + selected.clientHeight / 2;
   }, [time]);
 
+  // The hour list scrolls itself with the wheel. A modal dialog's scroll lock cancels the wheel for anything
+  // drawn outside it, and this list is portaled, so without this it simply would not scroll (measured
+  // 21 September 2026). React attaches `onWheel` as passive, so the listener has to be a native one.
+  useEffect(() => {
+    const element = listRef.current;
+    if (!element) return undefined;
+    const onWheel = (event) => {
+      event.preventDefault();
+      element.scrollTop += event.deltaY;
+    };
+    element.addEventListener('wheel', onWheel, { passive: false });
+    return () => element.removeEventListener('wheel', onWheel);
+  }, []);
+
   return (
     <div data-brain-time-column className={cn('flex w-20 shrink-0 flex-col border-l border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900', className)}>
       <div className="border-b border-zinc-100 px-2 py-3 text-center text-sm font-semibold text-zinc-900 dark:border-zinc-800 dark:text-zinc-100">Hora</div>

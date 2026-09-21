@@ -62,6 +62,15 @@ test('date keys round-trip through the picker without timezone drift', () => {
   assert.equal(parseDateTimeText('31/02/2026'), null, 'impossible days are rejected');
 });
 
+test('the hour column scrolls with the wheel even inside a modal dialog', async () => {
+  // Rodny, 21 September 2026: "cuando abro el selector de hora, la rueda del mouse no me deja subir y bajar".
+  // A modal dialog's scroll lock cancels the wheel for anything drawn outside it, and this list is portaled.
+  const picker = await readFile('src/components/ui/BrainDatePicker.jsx', 'utf8');
+  assert.match(picker, /element\.addEventListener\('wheel', onWheel, \{ passive: false \}\)/, 'a native non-passive listener: React attaches onWheel as passive, so preventDefault there is a no-op');
+  assert.match(picker, /event\.preventDefault\(\);\s*element\.scrollTop \+= event\.deltaY;/, 'the list scrolls itself exactly once per wheel event');
+  assert.match(picker, /return \(\) => element\.removeEventListener\('wheel', onWheel\);/, 'and cleans up');
+});
+
 test('the shared picker compiles as JSX', async () => {
   const file = 'src/components/ui/BrainDatePicker.jsx';
   await transformWithEsbuild(await readFile(file, 'utf8'), file, { loader: 'jsx', jsx: 'automatic' });
