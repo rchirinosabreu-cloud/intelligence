@@ -292,7 +292,10 @@ test('schema, cron, route, notifications and screens carry the overdue notice an
   assert.match(panel, /creatorName: formData\.creator\?\.name \|\| formData\.creatorName,/, 'the task panel passes the creator name to the dialog');
   assert.match(card, /data-focus-overdue=\{focusOverdue \? 'true' : undefined\}/, 'the card chip knows when the hour passed');
   assert.match(card, /focusOverdue \? `Venció a las \$\{focusTime\}` : `Hasta las \$\{focusTime\}`/, 'and says so in red');
-  assert.match(board, /data-focus-extension-open[\s\S]*?Pedir más tiempo/, 'the lock popup offers to ask for more time');
+  // Rodny, 21 September 2026: three short actions in one row — Entendido / Más tiempo / Ver.
+  assert.match(board, /data-focus-extension-open[\s\S]*?Más tiempo\s*<\/button>/, 'the lock popup offers to ask for more time');
+  assert.match(board, /title="Abrir mi compromiso"[\s\S]{0,200}>\s*Ver\s*<\/button>/, 'and to open the commitment');
+  assert.doesNotMatch(board, />\s*Pedir más tiempo\s*<\/button>|>\s*Abrir mi compromiso\s*<\/button>/, 'no long labels in the dialog');
   assert.match(board, /<FocusExtensionDialog[\s\S]*?task=\{extensionTask\}/);
   assert.match(panel, /data-focus-extension-open[\s\S]*?title="Pedir más tiempo"/, 'the task panel offers it beside the read-only hour');
   assert.match(panel, /<FocusExtensionDialog[\s\S]*?open=\{askingMoreTime\}/);
