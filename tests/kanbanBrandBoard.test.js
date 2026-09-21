@@ -49,6 +49,8 @@ test('the card shows priority as a tag, then title, assignee and date, a snippet
   assert.match(source, /NORMAL: 'text-blue-600/, 'normal priority keeps the historical blue (Rodny, 21 September 2026)');
   assert.match(source, /ALTA: 'text-amber-600/, 'high priority keeps the historical orange');
   assert.match(card, /taskPriorityBadgeConfig\[task\.priority\]/, 'the tab reads the shared priority config');
+  assert.match(source, /const taskPriorityLabels = \{\s*URGENTE: 'Urgente',[^}]*ALTA: 'Alta',\s*NORMAL: 'Normal'\s*\}/, 'one word per priority so the three tabs share the same size (Rodny, 21 September 2026)');
+  assert.doesNotMatch(source, /'Prioridad (alta|normal)'/, 'no "Prioridad …" prefix on the tab');
   assert.doesNotMatch(card, /data-task-category-tab/, 'the AI category never takes the tab: it lives in the footer only');
   assert.match(card, /data-task-assignee/, 'assignee name and avatar are a row of their own');
   assert.match(card, /formatTaskCardDate\(task\.dueDateFormatted\)/, 'the compact date stays');
