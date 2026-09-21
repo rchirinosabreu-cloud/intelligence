@@ -320,6 +320,28 @@ test('Fireflies synchronization never reimports trashed or permanently excluded 
   }
 });
 
+test('the analysis demands a verbatim quote so Observer can confirm every alert', async () => {
+  const source = await read('src/services/minuteAutomationService.js');
+  assert.match(source, /copia literal|fragmento literal|textualmente/i);
+  assert.match(source, /transcripci[óo]n/i);
+  // The rule must reach the model, not only the code comments.
+  const instructions = source.slice(source.indexOf('const minuteInstructions'), source.indexOf('export const MAX_AUTOMATIC_MINUTE_RETRIES'));
+  assert.match(instructions, /literal/i);
+  assert.match(instructions, /no parafrasees|sin parafrasear/i);
+});
+
+test('a stalled minute is told apart from one that genuinely failed, so only the first is recovered', () => {
+  assert.equal(automated.isProviderStalledMinute({ status: 'FAILED', retryCount: 3, errorMessage: 'You have no credits remaining. Add credits to continue.' }), true);
+  assert.equal(automated.isProviderStalledMinute({ status: 'PENDING_PROVIDER', retryCount: 0, errorCode: 'credit_balance_exhausted' }), true);
+  assert.equal(automated.isProviderStalledMinute({ status: 'FAILED', retryCount: 3, errorCode: 'HTTP_503' }), true);
+  // A real failure of the meeting itself is never resurrected by the rescue.
+  assert.equal(automated.isProviderStalledMinute({ status: 'FAILED', retryCount: 3, errorMessage: 'FIREFLIES_TRANSCRIPT_EMPTY' }), false);
+  assert.equal(automated.isProviderStalledMinute({ status: 'READY', retryCount: 0, errorMessage: 'no credits remaining' }), false);
+  assert.equal(automated.isProviderStalledMinute({ status: 'EXCLUDED', retryCount: 3, errorMessage: 'no credits remaining' }), false);
+  assert.equal(automated.isProviderStalledMinute({ status: 'FAILED', retryCount: 3, errorMessage: 'no credits remaining', deletedAt: new Date() }), false);
+  assert.equal(automated.isProviderStalledMinute(null), false);
+});
+
 test('an outage of the provider never spends one of the three attempts of a minute', async () => {
   const updates = [];
   const db = {
@@ -339,6 +361,7 @@ test('an outage of the provider never spends one of the three attempts of a minu
   assert.equal(failure.status, 'PENDING_PROVIDER');
   assert.equal('retryCount' in failure, false, 'the retry budget is kept for a real attempt');
   assert.match(failure.errorMessage, /credits/i);
+  assert.equal(failure.errorCode, 'credit_balance_exhausted');
 });
 
 test('a genuine failure of a minute still spends its attempt', async () => {
@@ -358,6 +381,7 @@ test('a genuine failure of a minute still spends its attempt', async () => {
   const failure = updates.at(-1);
   assert.equal(failure.status, 'FAILED');
   assert.deepEqual(failure.retryCount, { increment: 1 });
+  assert.equal(failure.errorCode, 'FIREFLIES_TRANSCRIPT_EMPTY');
 });
 
 test('a minute waiting for the provider is picked up again, and an exhausted one is not', async () => {

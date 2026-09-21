@@ -54,6 +54,10 @@ try {
       ADD COLUMN IF NOT EXISTS "summaryPdfStorageKey" TEXT;
     ALTER TABLE "MeetingMinute"
       ADD COLUMN IF NOT EXISTS "analysisPdfStorageKey" TEXT;
+    -- Why a minute stalled, not only the human message: lets the rescue tell an
+    -- outage of the provider apart from a meeting that genuinely failed.
+    ALTER TABLE "MeetingMinute"
+      ADD COLUMN IF NOT EXISTS "errorCode" TEXT;
     CREATE INDEX IF NOT EXISTS "MeetingMinute_deletedAt_meetingAt_idx"
       ON "MeetingMinute"("deletedAt", "meetingAt");
   `);

@@ -19,13 +19,19 @@ const MIN_QUOTE_LENGTH = 12;
 const clean = (value) => String(value || '').replace(/\s+/g, ' ').trim();
 const hash = (value) => crypto.createHash('sha256').update(clean(value)).digest('hex').slice(0, 20);
 const comparable = (value) => clean(value).toLowerCase();
+// Same words, different typography: the model often wraps a real quote in
+// guillemets or adds a final period. Dropping punctuation on BOTH sides keeps
+// this a literal word-for-word match, never a fuzzy one.
+const wordsOnly = (value) => comparable(value).replace(/[^\p{L}\p{N}\s]+/gu, ' ').replace(/\s+/g, ' ').trim();
 
 // The model's evidence is trusted only when it appears literally in the
-// transcript. Whitespace and casing are normalized; wording is not.
+// transcript. Whitespace, casing and punctuation are normalized; wording is not.
 export const isQuotedInTranscript = (quote, transcriptText) => {
   const needle = comparable(quote);
   if (needle.length < MIN_QUOTE_LENGTH) return false;
-  return comparable(transcriptText).includes(needle);
+  if (comparable(transcriptText).includes(needle)) return true;
+  const stripped = wordsOnly(quote);
+  return stripped.length >= MIN_QUOTE_LENGTH && wordsOnly(transcriptText).includes(stripped);
 };
 
 const normalizeSeverity = (value) => {

@@ -33,7 +33,7 @@ const MINUTE_RESPONSE_SCHEMA = {
         properties: {
           type: { type: 'string', enum: ['DECISION', 'CLIENT_PREFERENCE', 'BRAND_RULE', 'PROCESS', 'COMMITMENT', 'FACT'] },
           content: { type: 'string' },
-          evidence: { type: 'string' },
+          evidence: { type: 'string', description: 'Copia literal de un fragmento continuo de la transcripción que sustenta el conocimiento.' },
           confidence: { type: 'number' }
         },
         required: ['type', 'content', 'evidence', 'confidence']
@@ -46,7 +46,7 @@ const MINUTE_RESPONSE_SCHEMA = {
         properties: {
           type: { type: 'string' },
           description: { type: 'string' },
-          evidence: { type: 'string' },
+          evidence: { type: 'string', description: 'Copia literal de un fragmento continuo de la transcripción que sustenta la señal.' },
           severity: { type: 'string' },
           actionable: { type: 'boolean' },
           suggestedAction: { type: ['string', 'null'] },
@@ -65,7 +65,8 @@ No inventes participantes, fechas, responsables ni decisiones. Separa claramente
 Genera un título y un subtítulo breve para el resumen, y otro título y subtítulo breve para el análisis; deben estar basados en el contenido real, no limitarse a repetir el nombre de la reunión.
 Los actionItems son propuestas para revisión humana: no declares que fueron creados como tareas.
 Extrae en knowledgeItems el conocimiento histórico duradero: decisiones, preferencias del cliente, reglas de marca, procesos, compromisos y hechos. Todo debe conservar evidencia textual y no implica una alerta.
-Cada señal del Observer debe incluir evidencia textual concreta de la reunión. Solo marca actionable como true si describe una condición vigente, verificable y con una acción humana concreta; una observación, posibilidad o conversación pasada pertenece a la memoria y no a la bandeja.
+El campo evidence de knowledgeItems y de observerSignals debe ser una COPIA LITERAL de la transcripción: copia y pega el fragmento exacto que lo sustenta, de al menos una frase completa. No parafrasees, no resumas, no corrijas la redacción ni juntes frases separadas; usa un solo fragmento continuo tal como aparece. Si no encuentras un fragmento que lo sustente, no inventes la cita: descarta esa señal o ese conocimiento.
+Cada señal del Observer debe incluir esa cita literal. Solo marca actionable como true si describe una condición vigente, verificable y con una acción humana concreta; una observación, posibilidad o conversación pasada pertenece a la memoria y no a la bandeja.
 No conviertas el conocimiento histórico ni los actionItems generales en alertas. Si actionable es false, suggestedAction, owner y dueDate deben ser null.`;
 
 export const MAX_AUTOMATIC_MINUTE_RETRIES = 3;
@@ -241,6 +242,20 @@ export const shouldSkipMinute = (record) => Boolean(
   || (record?.status === 'FAILED' && record.retryCount >= MAX_AUTOMATIC_MINUTE_RETRIES)
 );
 
+// Failures recorded before the provider guard existed only left a message.
+const PROVIDER_ERROR_TEXT = /no credits remaining|credit_balance_exhausted|insufficient[_ ]quota|rate[_ ]limit|too many requests|service unavailable|bad gateway|gateway timeout|tiempo máximo de respuesta/i;
+
+// A minute stalled by an outage deserves another chance; one that failed on its
+// own merits (an empty transcript, for instance) must stay as it is.
+export const isProviderStalledMinute = (record) => Boolean(
+  record
+  && !record.deletedAt
+  && ['FAILED', 'PENDING_PROVIDER'].includes(record.status)
+  && (record.errorCode
+    ? isProviderUnavailable({ code: record.errorCode, status: Number(String(record.errorCode).replace('HTTP_', '')) || undefined })
+    : PROVIDER_ERROR_TEXT.test(String(record.errorMessage || '')))
+);
+
 export const processTranscript = async ({ summary, db, fireflies, ai, storage, memory }) => {
   let record = await db.meetingMinute.findUnique({ where: { externalId: summary.id } });
   if (isExcludedFromBria(record) || (record?.status === 'READY' && hasEditorialMinuteMetadata(record.analysis))) return { skipped: true };
@@ -266,7 +281,9 @@ export const processTranscript = async ({ summary, db, fireflies, ai, storage, m
     await db.meetingMinute.update({ where: { id: record.id }, data: { status: 'PROCESSING', errorMessage: null, lastSeenAt: new Date() } });
     const transcript = await fireflies.getTranscript(summary.id);
     const transcriptText = buildTranscriptText(transcript);
-    if (!transcriptText.trim()) throw new Error('FIREFLIES_TRANSCRIPT_EMPTY');
+    // Same message as before; the code is what lets the rescue tell this apart
+    // from an outage of the provider.
+    if (!transcriptText.trim()) throw createMinuteError('FIREFLIES_TRANSCRIPT_EMPTY', 'FIREFLIES_TRANSCRIPT_EMPTY');
     const durationSeconds = firefliesMinutesToSeconds(transcript.duration ?? summary.duration);
 
     const aiResult = await ai.generate({
@@ -320,6 +337,7 @@ export const processTranscript = async ({ summary, db, fireflies, ai, storage, m
         observerSignals: analysis.observerSignals || [],
         status: 'READY',
         errorMessage: null,
+        errorCode: null,
         aiModel: aiResult.model || AI_MODELS.fast,
         aiRequestId: aiResult.requestId || null,
         storageProvider: 'RAILWAY',
@@ -346,6 +364,7 @@ export const processTranscript = async ({ summary, db, fireflies, ai, storage, m
       data: {
         status: parked ? 'PENDING_PROVIDER' : 'FAILED',
         errorMessage: String(error.message || error).slice(0, 1000),
+        errorCode: error?.code || (error?.status ? `HTTP_${error.status}` : null),
         ...(parked ? {} : { retryCount: { increment: 1 } }),
         lastSeenAt: new Date()
       }

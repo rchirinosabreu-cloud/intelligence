@@ -163,6 +163,21 @@ test('a minute alert is only grounded when its evidence is a literal quote from 
   assert.equal(fabricated[0].evidence, 'El cliente canceló la campaña completa.');
 });
 
+test('punctuation and quotation marks around a real quote do not turn it into a fabrication', () => {
+  const quoted = evidence => buildMinuteObserverDetections({
+    ...groundedMinute,
+    observerSignals: [{ ...groundedMinute.observerSignals[0], evidence }]
+  })[0].grounding;
+
+  // The same words, dressed differently by the model.
+  assert.equal(quoted('«La fecha de publicación no fue aprobada.»'), 'QUOTED');
+  assert.equal(quoted('"La fecha de publicación, no fue aprobada"'), 'QUOTED');
+  assert.equal(quoted('La fecha de publicación no fue aprobada...'), 'QUOTED');
+  // Different words are still a fabrication, however tidy the punctuation.
+  assert.equal(quoted('La fecha de publicación fue aprobada.'), 'UNVERIFIED');
+  assert.equal(quoted('El cliente aprobó la fecha de publicación'), 'UNVERIFIED');
+});
+
 test('a missing or trivial quote is never replaced by the summary or by invented wording', () => {
   for (const evidence of ['', '   ', 'ok', 'Rodny:']) {
     const [detection] = buildMinuteObserverDetections({

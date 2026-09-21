@@ -160,6 +160,7 @@ model MeetingMinute {
   observerSignals       Json?
   status                String    @default("DISCOVERED")
   errorMessage          String?
+  errorCode             String?
   retryCount            Int       @default(0)
   aiModel               String?
   aiRequestId           String?
