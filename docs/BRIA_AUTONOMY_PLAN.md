@@ -50,10 +50,12 @@ Hoy el servidor pregunta a Fireflies 144 veces al día por las 50 transcripcione
 - Sin relación con la agenda: la plataforma sabe cuándo termina cada reunión con Fireflies y no usa ese dato.
 - Nadie se entera cuando una reunión que debía grabarse no produjo transcripción. Ese es el aviso que sí vale.
 
+Lo que el rediseño no cambia: la velocidad. En las dos minutas producidas desde que la automatización está viva, la minuta llegó 57 minutos después de la reunión (máximo 76), y casi todo ese tiempo es Fireflies transcribiendo. Con webhook seguirá siendo cerca de una hora. Lo que se gana es silencio, cobertura sin puntos ciegos y el aviso de reunión no grabada.
+
 ### Diseño en tres capas
 
 1. **Evento primero: webhook de Fireflies.** `POST /api/minutes/fireflies/webhook`, firma HMAC verificada con `FIREFLIES_WEBHOOK_SECRET`, responde 202 y encola el procesamiento de ese `meetingId`. Activo solo si el secreto está configurado. Cubre las reuniones cuyo dueño es la cuenta de la clave; la salida `minutes_organizers` del diagnóstico dirá si eso es todo el equipo o no.
-2. **El calendario como reloj.** Al terminar un `OperationalEvent` con enlace de reunión (no solo los que tienen `captureWithFireflies`: el diagnóstico del 20 de septiembre muestra 4 eventos con el bot invitado frente a unas 20 minutas en 12 semanas, así que Fireflies entra por su propia integración de calendario), programar una comprobación a `endAt + 20 min` con reintentos a 45 min, 90 min, 3 h, 6 h y 24 h. Cada comprobación consulta `transcripts(fromDate, toDate)` acotado a la ventana de la reunión y empareja por `calendar_id` contra `googleEventId` o `googleICalUID`, después por `meeting_link`, y por último por título y hora. Si a las 24 horas no hay transcripción, señal de Observer «Reunión sin transcripción» con el evento, sus asistentes y el enlace: el bot no entró, la grabación no se compartió o la reunión no ocurrió.
+2. **El calendario como reloj.** El equipo decide qué reuniones se graban invitando al bot, desde la plataforma o a mano en Google Calendar. Al terminar un `OperationalEvent` con el bot invitado, programar una comprobación a `endAt + 20 min` con reintentos a 45 min, 90 min, 3 h, 6 h y 24 h. Si a las 24 horas no hay transcripción, aviso «Reunión grabada sin minuta» a quien la organizó. Detalle técnico: la plataforma solo tiene registrada la invitación al bot en 3 de las 20 reuniones grabadas en 12 semanas, así que la sincronización de calendario no está viendo esa invitación en la mayoría de los casos; A1-3 debe corregir eso y, además, marcar el evento cuando el `calendar_id` de la transcripción coincida. Cada comprobación consulta `transcripts(fromDate, toDate)` acotado a la ventana de la reunión y empareja por `calendar_id` contra `googleEventId` o `googleICalUID`, después por `meeting_link`, y por último por título y hora. Si a las 24 horas no hay transcripción, señal de Observer «Reunión sin transcripción» con el evento, sus asistentes y el enlace: el bot no entró, la grabación no se compartió o la reunión no ocurrió.
 3. **Barrido de seguridad.** Dos veces al día, a las 07:00 y 19:00 de Bogotá, `transcripts` con `fromDate` igual al último barrido correcto menos 48 horas, paginando con `skip` hasta agotar. Cubre reuniones fuera del calendario, subidas manuales y webhooks perdidos. El botón «Sincronizar ahora» se conserva.
 
 Cadencias resultantes:
@@ -78,7 +80,7 @@ La capa 1 y el barrido caben en A0. La capa 2 necesita programar trabajos diferi
 - **Todo comportamiento nuevo nace apagado** detrás de una variable de entorno, como hizo la retención de adjuntos. Se enciende en Railway cuando el diagnóstico confirma que la versión anterior sigue sana.
 - **Definición de hecho:** pruebas verdes, CI verde, documento del módulo actualizado, regla nueva en `AGENTS.md` si introduce un invariante, captura de pantalla si toca interfaz, fila de la sección 6 actualizada.
 - **Puertas entre bloques:** no se empieza B sin la puerta de A1 y A2. Las puertas están en la sección 6 de la auditoría.
-- **Revisión semanal:** Rodny corre el diagnóstico, se comparan cifras con la semana anterior y se decide qué sigue. Las metas se fijan tras dos semanas de línea base, no antes.
+- **Revisión semanal:** Rodny corre el diagnóstico, se comparan cifras con la semana anterior y se decide qué sigue. Las metas se fijan tras dos semanas de línea base, no antes. Tres cifras se miran siempre: reuniones grabadas sin minuta, utilidad de hallazgos (corregidos y verificados frente a abiertos más de 14 días frente a descartados) y coste por flujo.
 - **Reparto:** Claude construye, prueba, documenta y abre PR. Rodny decide, configura secretos en Railway y Fireflies, fusiona, corre el diagnóstico y valida con el equipo.
 
 ## 4. Backlog
@@ -144,6 +146,8 @@ Puerta A2: una reunión de personas nunca entra en contexto editorial; ninguna f
 
 Piloto: reuniones nuevas desde la fecha de corte, dos o tres clientes, 20 a 30 compromisos, nivel 1. Los `actionItems` históricos no se convierten en tareas.
 
+La cobertura no es un problema: el equipo elige qué grabar. Lo que sí hace falta antes de B es el aviso de A1-3, para que una reunión grabada que no produjo minuta no pase en silencio.
+
 ### C. Foco diario
 
 | ID | Qué | Tamaño |
@@ -187,19 +191,21 @@ Salida de `scripts/bria-readonly-diagnostics.mjs` corrida por Rodny a las 20:56 
 | Reuniones | 20 minutas en las últimas 12 semanas; entre 1 y 5 por semana, mediana 2 | Unas 1,7 reuniones por semana. Con 144 sondeos diarios salen cerca de 590 llamadas a Fireflies por reunión encontrada. La cadencia de 10 minutos queda descartada con datos |
 | Horario | Lunes a viernes, 08:00 a 17:00 Bogotá (corregida la zona horaria del script) | Barridos a las 07:00 y 19:00 Bogotá cubren el día completo |
 | Organizador | 48 de 50 minutas con `coordinadorbrainstudio@gmail.com`; 2 con otra cuenta | El webhook de Fireflies cubriría el 96 % si la clave es de esa cuenta; el barrido cubre el resto |
-| Calendario | 4 eventos con el bot invitado en 12 semanas frente a 20 minutas | Fireflies entra por su propia integración de calendario. La comprobación por reunión debe emparejar con todos los eventos con enlace, no solo con `captureWithFireflies` |
+| Calendario | 146 eventos con enlace en 12 semanas; 20 grabadas con Fireflies; ninguna grabada desde el 11-sep | Normal: el equipo decide qué reuniones se graban invitando al bot. No es un hueco de cobertura. Lo que sí falla es que la plataforma solo registra la invitación al bot en 3 de esas 20; A1-3 lo corrige |
+| Retraso reunión → minuta | 57 min de mediana, 76 máximo, en las 2 minutas desde el 1-sep | Casi todo es Fireflies transcribiendo. El sondeo cada 10 minutos no es lo que retrasa |
 | Minutas | 49 READY (49), 1 FAILED por `FIREFLIES_TRANSCRIPT_EMPTY` desde marzo, 3 en papelera; última minuta del 11-sep; 3 de 49 con los dos PDF | Sin cambios en seis días; el fallo no tiene salida ni aviso |
 | Compromisos | 530 `actionItems` (530); mediana 10 por minuta, máximo 25; 506 con responsable (95 %), 87 con fecha (16 %) | El responsable casi siempre viene; la fecha casi nunca. B-1 debe tratar la fecha como propuesta |
 | Observer | 8 OPEN (8), 284 archivadas, 2 resueltas automáticas; **cero acciones humanas en todas** | La bandeja no se usa. Ninguna señal nueva debe depender de ella sola |
 | Memoria | 49 fuentes READY, las 49 sin cliente (49); 1.176 fragmentos (1.176), 0 sin embedding; 981 fragmentos son transcripción cruda (83 %); ~654.000 tokens estimados | La política de indexación por propósito (A2-3) afecta a cinco de cada seis fragmentos |
 | Parrillas | 309 revisiones completadas en 30 días: 286 automáticas (181) y 23 manuales (11); unas 19 al día desde el 14-sep | Es el ciclo con más actividad y más gasto, y no hay una sola cifra de coste. A0-6 pasa a ser lo primero |
-| Hallazgos | 1.258 OPEN (717), 1.012 RESOLVED con 629 verificados (321), 26 DISMISSED en total | Los abiertos crecen unos 90 al día y casi nadie descarta. Falta saber cuántos pertenecen a parrillas finalizadas o borradas; la consulta nueva `findings_open_by_plan_status` lo responde |
+| Hallazgos | 1.258 OPEN (717), 1.012 RESOLVED con 629 verificados (321), 26 DISMISSED en total; 7,9 hallazgos por revisión, máximo 24 | Los abiertos crecen unos 90 al día y casi nadie descarta. Bria produce más de lo que el equipo procesa y no sabemos si lo que produce sirve |
+| Dónde están los abiertos | 989 en 25 parrillas en planificación (unas 40 por parrilla), 177 en 6 parrillas finalizadas, 92 en 1 activa | Los 177 de parrillas finalizadas son peso muerto: A0-10 los pasa a `STALE`. Los 40 por parrilla activa piden medir utilidad antes de dar más autonomía en parrillas |
 | Estados de parrilla | 23 CURRENT, 45 IDLE, 10 PENDING, 3 FAILED (3), 1 STALE | Las tres FAILED son las mismas del 14-sep, sin reintento en seis días |
 | Criterios | 0 criterios (0); 1 descubrimiento FAILED | La memoria editorial sigue sin uso |
 | Contexto heredado | 1 `AgencyContext` APPROVED sin vector | Retirar con A2-4 |
 | Equipo y trabajo | 69 clientes; 126 tareas pendientes, 4.469 realizadas; 270 notificaciones en 7 días para 14 personas | Unas 3 notificaciones por persona y día; el foco diario (C) no debe sumar ruido encima |
 
-Pendiente de la siguiente corrida: `processing_lag_minutes_since_live` (el retraso reunión → minuta solo desde el 1 de septiembre; el histórico mezcla el backfill de marzo), `findings_open_by_plan_status` y `findings_per_review_last_30d`.
+Pendiente de la siguiente corrida: `findings_open_by_age` (cuántos abiertos llevan más de 30 días sin que nadie los toque). Las consultas de calendario por tipo y organizador sirven para entender por qué la invitación al bot no queda registrada en la plataforma.
 
 ## 7. Decisiones pendientes de Rodny
 
@@ -210,5 +216,7 @@ Pendiente de la siguiente corrida: `processing_lag_minutes_since_live` (el retra
 5. **Cumplimiento:** qué compromisos se cierran con la tarea y cuáles exigen evidencia.
 6. **Fireflies:** configurar el webhook y su secreto en Developer Settings cuando A0-9 esté desplegado, y confirmar con `minutes_organizers` si todas las reuniones pertenecen a esa cuenta.
 7. **Railway:** definir healthcheck y drenado del servicio.
+
+Aclarado el 20 de septiembre: Fireflies entra solo a las reuniones a las que el equipo lo invita, desde la plataforma o a mano en el calendario; las demás reuniones del calendario no se graban a propósito. La expectativa de Rodny es que cada reunión grabada tenga resumen, análisis y transcripción en cuanto Fireflies termine.
 
 Resueltas el 20 de septiembre: réplicas (una) y cadencia de minutas (sección 2).
