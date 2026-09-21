@@ -117,7 +117,8 @@ export default function FocusExtensionDialog({ task, open, onOpenChange, onSent,
             )}
             <button type="submit" disabled={!cleanReason || sending} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 sm:ml-auto">
               {sending && <Loader2 className="h-4 w-4 animate-spin" />}
-              {required ? 'Añadir tiempo y avisar' : 'Enviar petición'}
+              {/* Nada que aprobar: el tiempo se aplica al confirmar (Rodny, 21 de septiembre de 2026). */}
+              Confirmar
             </button>
           </DialogFooter>
         </form>
