@@ -1312,7 +1312,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                     ref={provided.innerRef}
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
-                    className="relative mb-3 cursor-pointer group/card"
+                    className={cn("relative mb-3 cursor-pointer group/card", priorityBadgeClass && "pt-6")}
                     onClick={() => onClick(task)}
                     style={provided.draggableProps.style}
                 >
@@ -1332,7 +1332,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                     {/* Brand board card (21 September 2026): full soft border, priority tab, assignee row, date, snippet, footer. */}
                     <div className={cn(
                         "relative overflow-hidden rounded-2xl border bg-white text-card-foreground shadow-sm dark:bg-zinc-900",
-                        priorityBadgeClass && "mt-6 rounded-tl-none",
+                        priorityBadgeClass && "rounded-tl-none",
                         "transition-all duration-300 ease-out",
                         snapshot.isDragging ? "ring-2 ring-brand-cyan shadow-xl z-50 opacity-95 rotate-1 scale-[1.03]" : "",
                         !snapshot.isDragging && isHighlighted ? "z-10 scale-[1.02] ring-2 ring-destructive" : "ring-1 ring-transparent",
