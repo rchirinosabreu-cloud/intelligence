@@ -179,8 +179,9 @@ const TASK_TAB_STROKE_PATH = 'M0.5,28 V10 A9.5,9.5 0 0 1 10,0.5 H68 C77,0.5 81,6
 
 const taskPriorityLabels = {
     URGENTE: 'Urgente',
-    ALTA: 'Prioridad alta',
-    NORMAL: 'Prioridad normal'
+    // One word each, so the tab is the same size for the three priorities (Rodny, 21 September 2026).
+    ALTA: 'Alta',
+    NORMAL: 'Normal'
 };
 
 const plainTextSnippet = (value) => String(value || '')
@@ -1410,7 +1411,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                         <span
                             data-task-priority-tag={task.priority}
                             className={cn(
-                                "absolute left-0 top-0 z-10 inline-flex h-7 items-center pl-3.5 pr-9 text-[10px] font-bold uppercase tracking-wider",
+                                "absolute left-0 top-0 z-10 inline-flex h-7 min-w-[7.5rem] items-center pl-3.5 pr-9 text-[10px] font-bold uppercase tracking-wider",
                                 priorityBadgeClass
                             )}
                         >
