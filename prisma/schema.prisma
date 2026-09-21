@@ -866,6 +866,9 @@ model Task {
   dueDate           DateTime?
   // Compromiso con hora: mientras esté activa, la persona solo trabaja en esta tarea (solo admin/PM la fijan).
   focusDeadlineAt   DateTime?
+  // Quién fijó la hora (recibe el aviso al vencer y las peticiones de más tiempo) y si ya se avisó del vencimiento.
+  focusSetById          String?
+  focusOverdueNotifiedAt DateTime?
   assigneeId        String?
   comments          String?
   clientId          String

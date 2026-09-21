@@ -6,6 +6,7 @@ import cors from 'cors';
 import fs from 'fs';
 import prisma from './src/lib/prisma.js';
 import { initTaskClassificationCron } from './src/services/taskClassificationService.js';
+import { initFocusOverdueCron } from './src/services/taskFocusService.js';
 import { startTaskAttachmentRetention } from './src/services/taskAttachmentRetentionService.js';
 import { initGoogleCalendarSyncScheduler } from './src/services/googleCalendarSyncScheduler.js';
 import { initAutomatedMinutesScheduler } from './src/services/automatedMinutesScheduler.js';
@@ -187,6 +188,7 @@ async function bootstrap() {
     // 4. Background Tasks & Cron
     try {
         initTaskClassificationCron();
+        initFocusOverdueCron();
         initGoogleCalendarSyncScheduler();
         initAutomatedMinutesScheduler();
         initBriaMemoryScheduler();

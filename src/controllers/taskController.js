@@ -14,7 +14,7 @@ import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskS
 import { uploadToS3, getFromS3Stream, deleteFromS3 } from '../services/s3Service.js';
 import { resolveTaskCommentFile } from '../services/taskCommentFileService.js';
 import { createNotification, processMentionsAndNotifications } from '../services/notificationService.js';
-import { assertTaskNotLocked } from '../services/taskFocusService.js';
+import { assertTaskNotLocked, requestFocusExtension } from '../services/taskFocusService.js';
 import { recordTaskListSync } from '../services/operationalTraceService.js';
 import { traceTaskOpenHandler } from './operationalTraceController.js';
 import { canDeleteTask, canUpdateTask, isManagerRole, pickAllowedTaskUpdates, validateUploadFile } from '../config/security.js';
@@ -201,6 +201,23 @@ export const updateExistingTask = async (req, res) => {
         console.error('[TaskController] Failed to update task:', error.response?.data || error);
         if (error.statusCode === 400) return res.status(400).json({ error: error.message });
         res.status(500).json({ error: "Failed to update task", details: error.message });
+    }
+};
+
+// Compromiso con hora: the person asks for more time (how much and why); the manager who set the hour is notified.
+export const requestTaskFocusExtension = async (req, res) => {
+    try {
+        const result = await requestFocusExtension(prisma, {
+            user: req.user,
+            taskId: req.params.taskId,
+            minutes: req.body?.minutes,
+            reason: req.body?.reason
+        });
+        res.json(result);
+    } catch (error) {
+        if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+        console.error('[TaskController] Focus extension request failed:', error?.message || error);
+        res.status(500).json({ error: 'No se pudo enviar la petición de más tiempo.' });
     }
 };
 

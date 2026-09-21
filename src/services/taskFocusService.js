@@ -1,4 +1,8 @@
-import { FOCUS_ACTIVE_STATUSES, focusLockMessage, isManagerUser } from '../lib/taskFocus.js';
+import prisma from '../lib/prisma.js';
+import {
+  FOCUS_ACTIVE_STATUSES, focusExtensionRequestMessage, focusLockMessage, focusOverdueMessages, isManagerUser, parseFocusExtensionRequest
+} from '../lib/taskFocus.js';
+import { createNotification } from './notificationService.js';
 
 /** La tarea con hora comprometida, activa, asignada a la persona (por su usuario). */
 export const findActiveFocusTaskForUser = async (db, userId) => {
@@ -10,7 +14,7 @@ export const findActiveFocusTaskForUser = async (db, userId) => {
       assignee: { userId }
     },
     orderBy: { focusDeadlineAt: 'asc' },
-    select: { id: true, title: true, focusDeadlineAt: true, status: true }
+    select: { id: true, title: true, focusDeadlineAt: true, status: true, focusSetById: true, creatorId: true }
   });
 };
 
@@ -36,4 +40,108 @@ export const assertTaskNotLocked = async (db, { user, taskId }) => {
   error.focusTask = focusTask;
   error.inProgressTask = inProgressTask;
   throw error;
+};
+
+/** Quien puso la hora; si no consta (compromisos antiguos), quien creó la tarea. */
+const focusManagerIdOf = (task) => task?.focusSetById || task?.creatorId || null;
+
+/**
+ * Vencimientos (Rodny, 21 de septiembre de 2026): pasada la hora sin realizar la tarea, un aviso a quien puso
+ * el compromiso (decide: más tiempo, quitar la hora o reasignar) y otro a la persona. Una sola vez por hora
+ * fijada: `focusOverdueNotifiedAt` se limpia cuando el manager cambia la hora.
+ */
+export const notifyFocusOverdue = async ({ db = prisma, now = new Date(), notify = createNotification } = {}) => {
+  const overdue = await db.task.findMany({
+    where: {
+      focusDeadlineAt: { not: null, lt: now },
+      focusOverdueNotifiedAt: null,
+      status: { in: [...FOCUS_ACTIVE_STATUSES] }
+    },
+    select: {
+      id: true, title: true, focusDeadlineAt: true, focusSetById: true, creatorId: true,
+      assignee: { select: { userId: true, name: true } }
+    },
+    take: 100
+  });
+  let notified = 0;
+  for (const task of overdue) {
+    const messages = focusOverdueMessages(task, task.assignee?.name || 'La persona');
+    const managerId = focusManagerIdOf(task);
+    const personId = task.assignee?.userId || null;
+    try {
+      if (managerId) {
+        await notify({ userId: managerId, message: messages.manager, type: 'TASK_FOCUS_OVERDUE', relatedId: task.id, taskId: task.id });
+      }
+      if (personId && personId !== managerId) {
+        await notify({ userId: personId, message: messages.person, type: 'TASK_FOCUS_OVERDUE', relatedId: task.id, taskId: task.id });
+      }
+      await db.task.update({ where: { id: task.id }, data: { focusOverdueNotifiedAt: now } });
+      notified += 1;
+    } catch (error) {
+      console.error('[TaskFocus] Overdue notice failed:', task.id, error?.message || error);
+    }
+  }
+  return notified;
+};
+
+const FOCUS_OVERDUE_CHECK_MS = 60 * 1000;
+
+export const initFocusOverdueCron = () => {
+  const run = () => notifyFocusOverdue().catch((error) => {
+    console.error('[TaskFocus] Overdue check failed:', error?.message || error);
+  });
+  const startup = setTimeout(run, 5000);
+  startup.unref?.();
+  const interval = setInterval(run, FOCUS_OVERDUE_CHECK_MS);
+  interval.unref?.();
+  console.log('[TaskFocus] Overdue commitment check initialized (every minute).');
+  return interval;
+};
+
+/**
+ * La persona pide más tiempo para su compromiso: elige cuánto y por qué. Queda en la conversación de la tarea
+ * (comentario del sistema) y le llega como notificación a quien puso la hora, que la ajusta con el reloj.
+ */
+export const requestFocusExtension = async (db, { user, taskId, minutes, reason, notify = createNotification }) => {
+  const userId = user?.userId || user?.id || null;
+  const request = parseFocusExtensionRequest({ minutes, reason });
+  const task = await db.task.findUnique({
+    where: { id: taskId },
+    select: {
+      id: true, title: true, status: true, focusDeadlineAt: true, focusSetById: true, creatorId: true,
+      assignee: { select: { userId: true, name: true } }
+    }
+  });
+  if (!task || !task.focusDeadlineAt || !FOCUS_ACTIVE_STATUSES.includes(String(task.status || '').toUpperCase())) {
+    const error = new Error('Esta tarea no tiene un compromiso con hora activo.');
+    error.statusCode = 404;
+    throw error;
+  }
+  if (!userId || task.assignee?.userId !== userId) {
+    const error = new Error('Solo la persona responsable puede pedir más tiempo para su compromiso.');
+    error.statusCode = 403;
+    throw error;
+  }
+  const managerId = focusManagerIdOf(task);
+  await db.taskComment.create({
+    data: {
+      taskId: task.id,
+      authorId: userId,
+      type: 'system_focus_extension',
+      content: `Pide ${request.label} más: ${request.reason}`
+    }
+  });
+  let notifiedUserId = null;
+  if (managerId && managerId !== userId) {
+    await notify({
+      userId: managerId,
+      message: focusExtensionRequestMessage({ task, assigneeName: task.assignee?.name || 'La persona', label: request.label, reason: request.reason }),
+      type: 'TASK_FOCUS_EXTENSION',
+      relatedId: task.id,
+      taskId: task.id,
+      actorId: userId
+    });
+    notifiedUserId = managerId;
+  }
+  return { ok: true, minutes: request.minutes, label: request.label, notifiedUserId };
 };

@@ -2,14 +2,16 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  FOCUS_ACTIVE_STATUSES, LOCK_RETRY_WINDOW_MS, bogotaTimeOf, findFocusTaskFor, focusDeadlineIso, focusLockMessage, focusTimeFromIso, getTaskLock, isActiveFocusTask, isManagerUser, nextLockReaction
+  FOCUS_ACTIVE_STATUSES, FOCUS_EXTENSION_OPTIONS, LOCK_RETRY_WINDOW_MS, bogotaTimeOf, findFocusTaskFor, focusDeadlineIso, focusExtensionRequestMessage,
+  focusLockMessage, focusOverdueMessages, focusTimeFromIso, getTaskLock, isActiveFocusTask, isFocusOverdue, isManagerUser, nextLockReaction, parseFocusExtensionRequest
 } from '../src/lib/taskFocus.js';
-import { assertTaskNotLocked, findActiveFocusTaskForUser } from '../src/services/taskFocusService.js';
+import { assertTaskNotLocked, findActiveFocusTaskForUser, notifyFocusOverdue, requestFocusExtension } from '../src/services/taskFocusService.js';
 
 // Rodny, 21 September 2026: a deadline with an hour means the person works only on that task; the rest of
 // their pending work is locked until it is done. Only admins and project managers set it.
 
-const focus = { id: 'focus', title: 'Redactar parrilla', status: 'EN_CURSO', assigneeId: 'member-helen', assigneeUserId: 'user-helen', focusDeadlineAt: '2026-09-21T19:00:00.000Z' };
+// The calm fixture lives far in the future so the suite never turns "overdue" with the wall clock.
+const focus = { id: 'focus', title: 'Redactar parrilla', status: 'EN_CURSO', assigneeId: 'member-helen', assigneeUserId: 'user-helen', focusDeadlineAt: '2036-09-21T19:00:00.000Z' };
 const other = { id: 'other', title: 'Caption', status: 'PENDIENTE', assigneeId: 'member-helen', assigneeUserId: 'user-helen', focusDeadlineAt: null };
 const foreign = { id: 'foreign', title: 'Reel', status: 'PENDIENTE', assigneeId: 'member-melissa', assigneeUserId: 'user-melissa', focusDeadlineAt: null };
 const done = { ...focus, id: 'done', status: 'REALIZADA' };
@@ -23,7 +25,7 @@ test('a focus task is active while it has an hour and is not done, whatever the 
   assert.equal(findFocusTaskFor([other, focus, done], { assigneeUserId: 'user-helen' })?.id, 'focus');
   assert.equal(findFocusTaskFor([other, focus], { assigneeId: 'member-helen' })?.id, 'focus');
   assert.equal(findFocusTaskFor([other, focus], { assigneeUserId: 'user-melissa' }), null);
-  const later = { ...focus, id: 'later', focusDeadlineAt: '2026-09-21T22:00:00.000Z' };
+  const later = { ...focus, id: 'later', focusDeadlineAt: '2036-09-21T22:00:00.000Z' };
   assert.equal(findFocusTaskFor([later, focus], { assigneeUserId: 'user-helen' })?.id, 'focus', 'the earliest commitment wins');
 });
 
@@ -76,7 +78,7 @@ test('the server refuses changes to the locked tasks of the person with a 423 an
       findFirst: async (args) => {
         calls.push(['findFirst', args]);
         if (args.where.status === 'EN_CURSO') return { id: 'working', title: 'Caption Expo' };
-        return { id: 'focus', title: 'Redactar parrilla', focusDeadlineAt: new Date('2026-09-21T19:00:00.000Z'), status: 'EN_CURSO' };
+        return { id: 'focus', title: 'Redactar parrilla', focusDeadlineAt: new Date('2036-09-21T19:00:00.000Z'), status: 'EN_CURSO' };
       },
       findUnique: async ({ where }) => ({
         status: where.id === 'working' ? 'EN_CURSO' : 'PENDIENTE',
@@ -169,4 +171,110 @@ test('the panel edits the hour with the shared calendar and only for managers; t
   assert.match(board, /const deepLinkLock = taskToOpen \? getTaskLock\(\{[\s\S]*?task: taskToOpen[\s\S]*?\}\) : null;[\s\S]*?if \(deepLinkLock\) \{\s*setFocusLockNotice\(deepLinkLock\);\s*\} else \{\s*setEditingTask\(taskToOpen\);/, 'a locked task does not open from ?taskId= (notifications, alerts, deep links) either: the popup explains instead (Rodny, 21 September 2026)');
   assert.match(board, /focusLockMessage\(focusLockNotice\.focusTask, focusLockNotice\.inProgressTask\)/, 'the popup names what is already in progress');
   assert.match(board, /if \(!isPMOrAdmin\)[\s\S]*?getTaskLock|const lock = getTaskLock\(\{ tasks, task: targetTask/, 'drag and drop respects the lock too');
+});
+
+// Rodny, 21 September 2026: past the hour the lock stays, the manager who set it is told, the person can ask
+// for more time choosing how much and why, and the tone of card and popup changes.
+
+const before = new Date('2036-09-21T18:00:00.000Z').getTime(); // 13:00 Bogotá
+const after = new Date('2036-09-21T20:00:00.000Z').getTime();  // 15:00 Bogotá
+const overdueFocus = { ...focus, focusDeadlineAt: '2026-09-21T19:00:00.000Z' }; // already past, whatever the clock says now
+const overdueDone = { ...overdueFocus, status: 'REALIZADA' };
+
+test('an overdue commitment keeps the lock and changes the wording; the extension request is validated', () => {
+  assert.equal(isFocusOverdue(focus, before), false);
+  assert.equal(isFocusOverdue(focus, after), true);
+  assert.equal(isFocusOverdue(overdueFocus), true, 'with the real clock too');
+  assert.equal(isFocusOverdue(overdueDone), false, 'a finished task is never overdue');
+  assert.deepEqual(getTaskLock({ tasks: [overdueFocus, other], task: other, viewerUserId: 'user-helen' }), { focusTask: overdueFocus, inProgressTask: null }, 'the lock does not release itself when the hour passes');
+  assert.equal(focusLockMessage(overdueFocus, null), 'Tu compromiso «Redactar parrilla» venció a las 14:00 y sigue sin realizarse. Termínalo o pide más tiempo. Mientras tanto, tus demás pendientes siguen bloqueados.');
+  assert.match(focusLockMessage(overdueFocus, { title: 'Caption Expo' }), /Termina «Caption Expo» y sigue con tu compromiso, o pide más tiempo/);
+  assert.match(focusLockMessage(focus, null, before), /^Estás enfocado en «Redactar parrilla» hasta las 14:00/, 'before the hour the wording is the calm one');
+
+  assert.deepEqual(FOCUS_EXTENSION_OPTIONS.map((option) => option.minutes), [15, 30, 60, 120, 240]);
+  assert.deepEqual(parseFocusExtensionRequest({ minutes: '60', reason: '  Espero  la aprobación del cliente. ' }), { minutes: 60, label: '1 hora', reason: 'Espero la aprobación del cliente.' });
+  assert.throws(() => parseFocusExtensionRequest({ minutes: 45, reason: 'x' }), (error) => error.statusCode === 400 && /cuánto tiempo/.test(error.message), 'only the listed amounts');
+  assert.throws(() => parseFocusExtensionRequest({ minutes: 30, reason: '   ' }), (error) => error.statusCode === 400 && /por qué/.test(error.message), 'the reason is mandatory');
+  assert.equal(parseFocusExtensionRequest({ minutes: 15, reason: 'a'.repeat(400) }).reason.length, 300, 'the reason is capped');
+
+  const messages = focusOverdueMessages(focus, 'Helen');
+  assert.equal(messages.manager, 'Helen no cumplió el compromiso «Redactar parrilla» a las 14:00. Ábrela para darle más tiempo, quitar la hora o reasignarla.');
+  assert.equal(messages.person, 'Tu compromiso «Redactar parrilla» venció a las 14:00. Termínalo o pide más tiempo.');
+  assert.equal(
+    focusExtensionRequestMessage({ task: focus, assigneeName: 'Helen', label: '30 minutos', reason: 'espero al cliente' }),
+    'Helen pide 30 minutos más para «Redactar parrilla» (compromiso a las 14:00): espero al cliente. Ábrela y ajusta la hora con el reloj.'
+  );
+});
+
+test('the server tells the manager who set the hour (and the person) once per hour set, and receives extension requests', async () => {
+  const notices = [];
+  const updates = [];
+  const overdueTask = { id: 'focus', title: 'Redactar parrilla', focusDeadlineAt: new Date('2026-09-21T19:00:00.000Z'), focusSetById: 'user-rodny', creatorId: 'user-franci', assignee: { userId: 'user-helen', name: 'Helen' } };
+  const db = {
+    task: {
+      findMany: async (args) => { updates.push(['findMany', args.where]); return [overdueTask]; },
+      update: async (args) => { updates.push(['update', args]); return {}; },
+      findUnique: async () => ({ ...overdueTask, status: 'EN_CURSO' })
+    },
+    taskComment: { create: async (args) => { updates.push(['comment', args.data]); return { id: 'c1' }; } }
+  };
+  const notify = async (data) => { notices.push(data); return data; };
+  const now = new Date('2026-09-21T20:00:00.000Z');
+
+  assert.equal(await notifyFocusOverdue({ db, now, notify }), 1);
+  assert.deepEqual(updates[0][1], { focusDeadlineAt: { not: null, lt: now }, focusOverdueNotifiedAt: null, status: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] } }, 'only active commitments past the hour that were not notified yet');
+  assert.deepEqual(notices.map((n) => [n.userId, n.type]), [['user-rodny', 'TASK_FOCUS_OVERDUE'], ['user-helen', 'TASK_FOCUS_OVERDUE']], 'the manager who set the hour, then the person');
+  assert.match(notices[0].message, /^Helen no cumplió el compromiso «Redactar parrilla» a las 14:00/);
+  assert.deepEqual(updates[1][1], { where: { id: 'focus' }, data: { focusOverdueNotifiedAt: now } }, 'marked so it is not repeated');
+
+  notices.length = 0;
+  const result = await requestFocusExtension(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'focus', minutes: 30, reason: 'espero al cliente', notify });
+  assert.deepEqual(result, { ok: true, minutes: 30, label: '30 minutos', notifiedUserId: 'user-rodny' });
+  assert.deepEqual(updates.at(-1)[1], { taskId: 'focus', authorId: 'user-helen', type: 'system_focus_extension', content: 'Pide 30 minutos más: espero al cliente' }, 'the request stays in the task conversation');
+  assert.deepEqual([notices[0].userId, notices[0].type, notices[0].actorId], ['user-rodny', 'TASK_FOCUS_EXTENSION', 'user-helen']);
+  assert.match(notices[0].message, /Helen pide 30 minutos más para «Redactar parrilla»/);
+  await assert.rejects(requestFocusExtension(db, { user: { userId: 'user-melissa', role: 'EDITOR' }, taskId: 'focus', minutes: 30, reason: 'x', notify }), (error) => error.statusCode === 403, 'only the responsible person asks');
+  await assert.rejects(requestFocusExtension(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'focus', minutes: 30, reason: '', notify }), (error) => error.statusCode === 400);
+  const noFocus = { ...db, task: { ...db.task, findUnique: async () => ({ ...overdueTask, focusDeadlineAt: null, status: 'PENDIENTE' }) } };
+  await assert.rejects(requestFocusExtension(noFocus, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'focus', minutes: 30, reason: 'x', notify }), (error) => error.statusCode === 404);
+});
+
+test('schema, cron, route, notifications and screens carry the overdue notice and the extension request', () => {
+  const schema = readFileSync('prisma/schema.prisma', 'utf8');
+  const script = readFileSync('scripts/ensure-task-focus-schema.js', 'utf8');
+  const service = readFileSync('src/services/nativeTaskService.js', 'utf8');
+  const focusService = readFileSync('src/services/taskFocusService.js', 'utf8');
+  const controller = readFileSync('src/controllers/taskController.js', 'utf8');
+  const routes = readFileSync('src/routes/index.js', 'utf8');
+  const server = readFileSync('server.js', 'utf8');
+  const layout = readFileSync('src/components/layout/AppLayout.jsx', 'utf8');
+  const dialog = readFileSync('src/components/tasks/FocusExtensionDialog.jsx', 'utf8');
+  const board = readFileSync('src/components/modules/NativeTasks.jsx', 'utf8');
+  const card = board.slice(board.indexOf('const TaskCard ='), board.indexOf('export default NativeTasks'));
+  const panel = readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');
+
+  assert.match(schema, /focusSetById\s+String\?/);
+  assert.match(schema, /focusOverdueNotifiedAt\s+DateTime\?/);
+  assert.match(script, /ADD COLUMN IF NOT EXISTS "focusSetById" TEXT;/, 'additive and idempotent');
+  assert.match(script, /ADD COLUMN IF NOT EXISTS "focusOverdueNotifiedAt" TIMESTAMP\(3\);/);
+  assert.match(service, /updateData\.focusSetById = updateData\.focusDeadlineAt \? \(updaterId \|\| null\) : null;\s*updateData\.focusOverdueNotifiedAt = null;/, 'setting or moving the hour records who did it and re-arms the overdue notice');
+  assert.match(service, /focusSetById: focusDeadlineAt \? \(creatorId \|\| null\) : null/, 'creation records the setter too');
+  assert.match(service, /type: 'TASK_FOCUS_SET'/, 'the person is told when a manager sets, moves or clears the hour');
+  assert.match(focusService, /export const initFocusOverdueCron/, 'the overdue check runs on a schedule');
+  assert.match(server, /initFocusOverdueCron\(\);/, 'the server starts it');
+  assert.match(routes, /router\.post\('\/tasks\/:taskId\/focus-extension', taskController\.requestTaskFocusExtension\);/);
+  assert.match(controller, /export const requestTaskFocusExtension = async \(req, res\)/);
+  assert.match(layout, /notif\.type === 'TASK_FOCUS_SET' \|\| notif\.type === 'TASK_FOCUS_OVERDUE' \|\| notif\.type === 'TASK_FOCUS_EXTENSION'/, 'the notices open the task');
+  assert.match(dialog, /fetch\(`\$\{getApiBaseUrl\(\)\}\/api\/tasks\/\$\{task\.id\}\/focus-extension`/, 'the dialog posts the request');
+  assert.match(dialog, /FOCUS_EXTENSION_OPTIONS\.map/, 'the person picks how much time from the shared list');
+  assert.match(dialog, /id="focus-extension-reason"[\s\S]*?required/, 'and must say why');
+  assert.match(dialog, /cuéntale por qué a \$\{recipient\}\./, 'the text names the task creator (Rodny, 21 September 2026)');
+  assert.match(dialog, /const creatorName = task\?\.creatorName \|\| task\?\.creator\?\.name \|\| '';/);
+  assert.match(panel, /creatorName: formData\.creator\?\.name \|\| formData\.creatorName,/, 'the task panel passes the creator name to the dialog');
+  assert.match(card, /data-focus-overdue=\{focusOverdue \? 'true' : undefined\}/, 'the card chip knows when the hour passed');
+  assert.match(card, /focusOverdue \? `Venció a las \$\{focusTime\}` : `Hasta las \$\{focusTime\}`/, 'and says so in red');
+  assert.match(board, /data-focus-extension-open[\s\S]*?Pedir más tiempo/, 'the lock popup offers to ask for more time');
+  assert.match(board, /<FocusExtensionDialog[\s\S]*?task=\{extensionTask\}/);
+  assert.match(panel, /data-focus-extension-open[\s\S]*?Pedir más tiempo/, 'the task panel offers it beside the read-only hour');
+  assert.match(panel, /<FocusExtensionDialog[\s\S]*?open=\{askingMoreTime\}/);
 });
