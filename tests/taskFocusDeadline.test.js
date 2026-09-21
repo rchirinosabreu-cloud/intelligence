@@ -353,4 +353,6 @@ test('once the commitment expires the dialog is inescapable, and it sits above t
   assert.match(dialog, /explica el motivo\./, 'the text no longer names anybody: "y explica el motivo"');
   assert.doesNotMatch(dialog, /cuéntale por qué a/);
   assert.match(dialog, /Se añadieron \$\{data\.label[\s\S]*?Tu compromiso ahora es hasta las \$\{data\.newTime\}/, 'the toast says the time is already added');
+  assert.match(dialog, /\{sending && <Loader2 className="h-4 w-4 animate-spin" \/>\}[\s\S]{0,140}Confirmar/, 'the action is "Confirmar": nothing is sent for approval (Rodny, 21 September 2026)');
+  assert.doesNotMatch(dialog, /Enviar petición|Añadir tiempo y avisar/);
 });
