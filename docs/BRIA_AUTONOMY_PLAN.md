@@ -4,6 +4,8 @@ Documento vivo. Arranca el 20 de septiembre de 2026 sobre la [auditoría del 19 
 
 Ruta aprobada por Rodny el 20 de septiembre: A0 → A1 → A2 → A3 → B → C → D, con una corrección suya: el sondeo de minutas cada 10 minutos no tiene sentido para una agencia con una reunión al día o menos. La sección 2 lo rediseña.
 
+**Regla fija, decidida por Rodny el 21 de septiembre: la decisión final siempre es humana.** Bria puede preparar borradores completos (una tarea con toda su información, un mensaje, un cambio) y una persona los acepta o los rechaza. Eso vale para cualquier decisión. Nada se ejecuta solo, ni siquiera acciones internas reversibles: el techo de autonomía de todos los flujos es «preparar», y el nivel «ejecutar» queda fuera del plan hasta que él lo pida.
+
 ## 1. Lo consultado el 20 de septiembre
 
 ### Railway (leído con la CLI autenticada, `railway status --json`)
@@ -101,6 +103,7 @@ Tamaños en días de trabajo enfocado, estimados. Los ítems de un mismo bloque 
 | A0-8 | Cadencias: sondeo de Fireflies a 2 barridos diarios con cursor persistido; memoria y Observer de minutas a 6 h; analítica de tareas a 1 h; cadena minuta READY → indexar → detectar esa minuta | los tres schedulers, `minuteAutomationService.js:325` | una minuta nueva queda indexada y con señales sin esperar al barrido | 1 |
 | A0-9 | Webhook de Fireflies con HMAC y `FIREFLIES_WEBHOOK_SECRET`; 202 y encolado; rechazo de firma inválida; idempotente por `meetingId` | nueva ruta en `routes/api/minutes.js`, patrón de `operationalEventService.js:980` | firma mala → 401 sin efecto; misma llamada dos veces → un solo procesamiento | 1 |
 | A0-10 ∥ | Parrillas: reintento dirigido de las tres revisiones `FAILED` con causa técnica guardada por intento (`errorCode`, no solo el mensaje humano); las finalizadas con `PENDING` pasan a un estado honesto | `briaContentPlanReviewState.js:42`, `briaContentPlanReviewScheduler.js:54` | una revisión agotada muestra causa y se puede relanzar desde la interfaz | 1 |
+| A0-11 ∥ | Parrillas: un lote que el modelo no confirma se parte en dos mitades y se revisa completo en vez de fallar toda la revisión; el intento descartado sigue contando en el coste; el intento manual responde con un mensaje legible y el panel nunca muestra códigos crudos | `briaReviewBatches.js`, `briaContentPlanReviewGenerator.js`, `routes/api/content.js`, panel | una parrilla grande con un lote rebelde se revisa entera sin puntaje parcial; «Revisar nuevamente» explica el resultado | 1 |
 
 Orden dentro de A0 tras la línea base del 20 de septiembre: primero A0-6 (parrillas es el ciclo que más gasta: unas 19 revisiones al día y 1.258 hallazgos abiertos, sin una sola cifra de coste), después A0-1 y A0-2, luego el resto.
 
@@ -133,7 +136,7 @@ Puerta A2: una reunión de personas nunca entra en contexto editorial; ninguna f
 
 | ID | Qué | Dónde | Prueba clave | Tamaño |
 |---|---|---|---|---|
-| A3-1 | `AutomationAction` (flujo, tipo, sujeto, nivel, `authorizedBy`, resultado, reversible, carga) y `AutomationPolicy` (flujo, nivel 0/1/2, ámbito opcional por cliente, historial); nivel 3 como constante en código; lista de solo lectura en Salud operativa | nuevo | activar nivel 3 por configuración es imposible; toda acción automática tiene fila con autorizador | 2 |
+| A3-1 | `AutomationAction` (flujo, tipo, sujeto, nivel, `authorizedBy`, resultado, reversible, carga) y `AutomationPolicy` (flujo, nivel 0 observar o 1 preparar, ámbito opcional por cliente, historial); los niveles 2 y 3 no existen como opción configurable, por la regla de decisión humana; lista de solo lectura en Salud operativa | nuevo | ninguna acción se ejecuta sin la aceptación de una persona; toda propuesta y toda aceptación tienen fila con autorizador | 2 |
 
 ### B. Coordinación de compromisos
 
@@ -175,7 +178,7 @@ Todas reutilizan runtime, contexto, política y libro. Ninguna se monta antes de
 
 | Bloque | Ítems | Hechos | En curso | Puerta |
 |---|---|---|---|---|
-| A0 | 10 | 2 (A0-6 en PR #919, 21-sep; A0-10) | — | pendiente |
+| A0 | 11 | 2 (A0-6 en PR #919 y A0-10 en PR #920, 21-sep) | A0-11 | pendiente |
 | A1 | 5 | 0 | — | pendiente |
 | A2 | 4 | 0 | — | pendiente |
 | A3 | 1 | 0 | — | pendiente |

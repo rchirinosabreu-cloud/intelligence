@@ -1,5 +1,5 @@
 import { AI_MODELS } from '../config/aiConfig.js';
-import { normalizeAiUsage } from '../lib/aiUsage.js';
+import { normalizeAiUsage, summarizeAiCalls } from '../lib/aiUsage.js';
 import { BRIA_REVIEW_RUBRIC, rubricHash, rubricInstructions } from '../lib/briaReviewRubric.js';
 import { reviewContentPlanBatches } from './briaReviewBatches.js';
 import { CONTENT_PLAN_REVIEW_SCHEMA, parseBriaContentPlanReview, calculateContentPlanReviewScore } from './briaContentPlanReviewContract.js';
@@ -52,23 +52,33 @@ export const generateContentPlanReview = async ({
       const started = performance.now();
       const response = await ai.generate(buildBriaReviewRequest(batch, evidence, { variant, signal }));
       signal?.throwIfAborted();
-      const review = variant === 'traceable' ? parseTraceableReview(response.text, batch.snapshot, evidence) : parseBriaContentPlanReview(response.text, batch.itemIds);
+      const latencyMs = Math.round(performance.now() - started);
+      const rawUsage = response.raw?.usage || response.usage || null;
+      const call = { batchIndex: batch.index, itemIds: batch.itemIds, model: response.model || AI_MODELS.fast,
+        requestId: response.requestId || null, latencyMs, usage: rawUsage, rejectedFindingCount: 0, rejectedEvidenceCount: 0 };
+      let review;
+      try {
+        review = variant === 'traceable' ? parseTraceableReview(response.text, batch.snapshot, evidence) : parseBriaContentPlanReview(response.text, batch.itemIds);
+      } catch (error) {
+        // The answer was paid for even though it cannot be used: it stays in the cost.
+        calls.push({ ...call, discarded: true, errorCode: error?.code || 'BRIA_REVIEW_UNPARSEABLE' });
+        throw error;
+      }
       const rejectedFindingCount = review.findings.filter(finding => finding.itemId && !batch.itemIds.includes(finding.itemId)).length;
       const rejectedEvidenceCount = review.findings.reduce((count, finding) => count + finding.evidenceIds.filter(id => !allowedEvidenceIds.has(id)).length, 0);
       review.findings = review.findings.filter(finding => !finding.itemId || batch.itemIds.includes(finding.itemId)).map(finding => ({
         ...finding, evidenceIds: finding.evidenceIds.filter(id => allowedEvidenceIds.has(id))
       }));
-      const latencyMs = Math.round(performance.now() - started);
-      const rawUsage = response.raw?.usage || response.usage || null;
-      calls.push({ batchIndex: batch.index, itemIds: batch.itemIds, model: response.model || AI_MODELS.fast,
-        requestId: response.requestId || null, latencyMs, usage: rawUsage, rejectedFindingCount, rejectedEvidenceCount });
-      return { review, model: response.model || AI_MODELS.fast, requestId: response.requestId || null, latencyMs, usage: normalizeAiUsage(rawUsage) };
+      calls.push({ ...call, rejectedFindingCount, rejectedEvidenceCount });
+      return { review, model: call.model, requestId: call.requestId, latencyMs, usage: normalizeAiUsage(rawUsage) };
     }
   });
+  const discarded = calls.filter(call => call.discarded).map(call => ({ model: call.model, latencyMs: call.latencyMs, usage: normalizeAiUsage(call.usage) }));
   const usage = result.usage ? {
     ...result.usage,
     rejectedFindingCount: calls.reduce((n, call) => n + call.rejectedFindingCount, 0),
-    rejectedEvidenceCount: calls.reduce((n, call) => n + call.rejectedEvidenceCount, 0)
+    rejectedEvidenceCount: calls.reduce((n, call) => n + call.rejectedEvidenceCount, 0),
+    discarded: summarizeAiCalls(discarded)
   } : null;
   return { ...result, usage, calls, review: { ...result.review, ...(variant === 'traceable' ? calculateTraceableScore(result.review.scoreChecks) : calculateContentPlanReviewScore(result.review.dimensions)),
     ...(identity ? { scope: { ...result.review.scope, rubric: identity } } : {}) } };

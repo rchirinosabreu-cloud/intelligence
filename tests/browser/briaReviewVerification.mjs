@@ -31,11 +31,17 @@ try {
     let result = structuredClone(base);
     let rejectAction = false;
     let actionCount = 0;
+    let rerunCount = 0;
     page.on('pageerror', error => errors.push(error.message));
     // Every network mutation is intercepted: never hit the real backend or model.
     await page.route('**/api/**', route => {
       const request = route.request();
       if (request.method() === 'GET') return route.fulfill({ json: result });
+      if (request.method() === 'POST') {
+        // Production sanitizes 5xx bodies down to a code: the panel must not echo it.
+        rerunCount++;
+        return route.fulfill({ status: 500, json: { error: 'INTERNAL_SERVER_ERROR', code: 'BRIA_REVIEW_INCOMPLETE_BATCH' } });
+      }
       assert.equal(request.method(), 'PATCH');
       actionCount++;
       if (rejectAction) return route.fulfill({ status: 500, json: { error: 'Fallo de prueba: no se guardó la acción.' } });
@@ -55,6 +61,11 @@ try {
     assert.match(await diagnostic.textContent(), /Intento 3 de 3/);
     assert.match(await diagnostic.textContent(), /OPENAI_TIMEOUT/);
     assert.equal(await diagnostic.count(), 1);
+    await page.getByRole('button', { name: 'Revisar nuevamente', exact: true }).click();
+    await page.getByText('Bria no pudo completar la revisión en este intento', { exact: false }).waitFor({ timeout: 5000 });
+    assert.equal(await page.getByText('INTERNAL_SERVER_ERROR', { exact: false }).count(), 0);
+    assert.equal(rerunCount, 1);
+    await diagnostic.waitFor({ timeout: 5000 });
     await page.getByText('61/61 piezas revisadas', { exact: true }).waitFor({ timeout: 5000 });
     await page.getByText('4/4 dimensiones evaluadas', { exact: true }).waitFor();
     await page.evaluate(() => document.fonts.ready);

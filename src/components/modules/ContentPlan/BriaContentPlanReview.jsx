@@ -4,7 +4,7 @@ import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { getFindingVerificationUi } from '@/lib/briaVerificationUi';
 import { getBriaReviewCoverageUi } from '@/lib/briaReviewCoverageUi';
-import { formatReviewDiagnostic } from '@/lib/briaReviewDiagnostics';
+import { formatReviewDiagnostic, humanizeReviewRequestError } from '@/lib/briaReviewDiagnostics';
 import {
   AlertCircle,
   CheckCircle2,
@@ -80,7 +80,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
       setResult(response.data);
     } catch (requestError) {
       console.error('Bria shared content-plan review failed:', requestError.response?.data || requestError);
-      if (!silent) setError(requestError.response?.data?.error || 'Bria no pudo cargar la revisión compartida.');
+      if (!silent) setError(humanizeReviewRequestError(requestError.response?.data, 'Bria no pudo cargar la revisión compartida.'));
     }
   }, [planId]);
 
@@ -177,8 +177,10 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
       setIsExpanded(true);
     } catch (requestError) {
       console.error('Bria content-plan review failed:', requestError.response?.data || requestError);
-      setError(requestError.response?.data?.error || 'Bria no pudo revisar esta parrilla en este momento.');
+      setError(humanizeReviewRequestError(requestError.response?.data, 'Bria no pudo completar la revisión en este intento. El motivo queda registrado abajo y lo volverá a intentar automáticamente.'));
       setIsExpanded(true);
+      // The attempt was recorded server-side: show its state and cause instead of a bare error.
+      await loadReview({ silent: true });
     } finally {
       setIsReviewing(false);
     }
@@ -198,7 +200,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
       await loadReview();
     } catch (requestError) {
       console.error('Bria finding action failed:', requestError.response?.data || requestError);
-      setError(requestError.response?.data?.error || 'No fue posible actualizar esta recomendación.');
+      setError(humanizeReviewRequestError(requestError.response?.data, 'No fue posible actualizar esta recomendación.'));
     } finally {
       setActingId(null);
     }

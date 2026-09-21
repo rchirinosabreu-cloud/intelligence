@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { reviewPayload } from './helpers/briaReview.js';
+import { reviewPayload, reviewSnapshot } from './helpers/briaReview.js';
 
 import {
   buildContentPlanAnalysisHash,
@@ -223,6 +223,31 @@ test('the persisted review carries the real cost of its batches and verification
   assert.deepEqual(saved.meta.usage.totals, { calls: 2, callsWithUsage: 2, inputTokens: 1300, outputTokens: 130, totalTokens: 1430, latencyMs: saved.meta.usage.totals.latencyMs, models: ['gpt-test'] });
   assert.ok(Number.isFinite(saved.meta.usage.totals.latencyMs));
   assert.equal(result.meta.usage.totals.calls, 2);
+});
+
+test('a lot the model does not confirm is split, and the discarded attempt still counts in the cost', async () => {
+  let saved;
+  const sizes = [];
+  await reviewContentPlanWithBria({
+    planId: plan.id, getPlan: async () => plan, searchMemory: async () => [],
+    repository: { findByAnalysisHash: async () => null, saveCompletedReview: async ({ result }) => { saved = result; return result; } },
+    ai: { generate: async request => {
+      const items = reviewSnapshot(request).items;
+      sizes.push(items.length);
+      const payload = reviewPayload(request);
+      if (items.length > 1) payload.reviewedItemIds = payload.reviewedItemIds.slice(1);
+      return { text: JSON.stringify(payload), model: 'gpt-test', raw: { usage: { input_tokens: 100, output_tokens: 10 } } };
+    } }
+  });
+  assert.deepEqual(sizes, [2, 1, 1]);
+  assert.equal(saved.review.scope.reviewedItems, 2);
+  assert.equal(saved.review.scope.complete, true);
+  assert.equal(saved.meta.usage.review.calls, 2);
+  assert.equal(saved.meta.usage.review.splitBatches, 1);
+  assert.equal(saved.meta.usage.review.discarded.calls, 1);
+  assert.equal(saved.meta.usage.review.discarded.inputTokens, 100);
+  assert.equal(saved.meta.usage.totals.calls, 3);
+  assert.equal(saved.meta.usage.totals.inputTokens, 300);
 });
 
 test('providers that report no usage still publish, with the cost marked unknown', async () => {

@@ -113,7 +113,8 @@ const subjectForFinding = (finding, plan) => {
 // What one published review cost: the batch calls (paid now or by the attempt
 // that wrote the checkpoint) plus the verification calls made in this run.
 export const buildContentPlanReviewUsage = ({ review = null, verification = null } = {}) => {
-  const parts = [review, verification].filter(Boolean);
+  // Discarded answers (lots the model did not confirm) were paid for: they count in the totals.
+  const parts = [review, review?.discarded, verification].filter(Boolean);
   const total = field => parts.reduce((sum, part) => sum + (Number(part[field]) || 0), 0);
   return {
     version: 1, review, verification,

@@ -92,6 +92,67 @@ test('batches from older checkpoints without usage count as calls of unknown cos
   assert.equal(result.usage.inputTokens, 1);
 });
 
+const incomplete = () => Object.assign(new Error('incomplete fixture'), { code: 'BRIA_REVIEW_INCOMPLETE_BATCH' });
+const part = batch => ({ review: { ...review(80), findings: [{ itemId: batch.itemIds[0], ruleKey: `rule-${batch.itemIds[0]}`, field: 'copyText', severity: 'INFO' }] },
+  model: 'gpt-test', latencyMs: 10, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, cachedTokens: 0, reasoningTokens: 0 } });
+
+test('a lot the model does not confirm is split in halves and reviewed completely, never partially published', async () => {
+  const small = { ...snapshot, items: snapshot.items.slice(0, 13) };
+  const calls = [];
+  const result = await batches.reviewContentPlanBatches({ snapshot: small, analysisHash: 'split', reviewBatch: async batch => {
+    calls.push(batch.itemIds.length);
+    if (batch.itemIds.length > 6) throw incomplete();
+    return part(batch);
+  } });
+  assert.deepEqual(calls, [12, 6, 6, 1]);
+  assert.equal(result.review.scope.reviewedItems, 13);
+  assert.equal(result.review.scope.complete, true);
+  assert.deepEqual([...result.review.scope.reviewedItemIds].sort(), small.items.map(item => item.id).sort());
+  assert.equal(result.review.scope.batchCount, 3);
+  assert.equal(result.review.findings.length, 3);
+  assert.equal(result.usage.batches, 3);
+  assert.equal(result.usage.calls, 3);
+  assert.equal(result.usage.splitBatches, 1);
+});
+
+test('split parts are checkpointed one by one and resumed without repeating their AI calls', async () => {
+  const small = { ...snapshot, items: snapshot.items.slice(0, 13) };
+  let checkpoint;
+  const calls = [];
+  const config = { snapshot: small, analysisHash: 'split', loadCheckpoint: async () => checkpoint,
+    saveCheckpoint: async value => { checkpoint = structuredClone(value); },
+    reviewBatch: async batch => {
+      calls.push(batch.itemIds.length);
+      if (batch.itemIds.length > 6) throw incomplete();
+      if (calls.length === 3) throw new Error('temporary fixture');
+      return part(batch);
+    } };
+  await assert.rejects(batches.reviewContentPlanBatches(config), /temporary fixture/);
+  assert.equal(checkpoint.completed.length, 1);
+  assert.equal(checkpoint.completed[0].itemIds.length, 6);
+  assert.equal(checkpoint.totalBatches, 3);
+  assert.deepEqual(batches.getReviewBatchProgress(checkpoint), { completedBatches: 1, totalBatches: 3, reviewedItems: 6, totalItems: 13 });
+  const resumed = await batches.reviewContentPlanBatches({ ...config, reviewBatch: async batch => { calls.push(batch.itemIds.length); return part(batch); } });
+  assert.deepEqual(calls, [12, 6, 6, 6, 1]);
+  assert.equal(resumed.review.scope.reviewedItems, 13);
+  assert.equal(resumed.usage.resumedBatches, 1);
+  assert.equal(resumed.usage.batches, 3);
+});
+
+test('a single piece that is never confirmed fails honestly instead of looping', async () => {
+  let calls = 0;
+  await assert.rejects(batches.reviewContentPlanBatches({ snapshot: { ...snapshot, items: snapshot.items.slice(0, 2) }, analysisHash: 'x',
+    reviewBatch: async () => { calls++; throw incomplete(); } }), { code: 'BRIA_REVIEW_INCOMPLETE_BATCH' });
+  assert.equal(calls, 2);
+});
+
+test('other failures are never split: they keep the bounded retry of the whole job', async () => {
+  let calls = 0;
+  await assert.rejects(batches.reviewContentPlanBatches({ snapshot: { ...snapshot, items: snapshot.items.slice(0, 12) }, analysisHash: 'x',
+    reviewBatch: async () => { calls++; throw Object.assign(new Error('upstream'), { status: 503 }); } }), /upstream/);
+  assert.equal(calls, 1);
+});
+
 test('checkpoints from other revisions are never reused and cancellation prevents publication', async () => {
   const controller = new AbortController();
   let calls = 0;
