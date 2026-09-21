@@ -36,6 +36,17 @@ Las señales existentes no se tocan ni se reclasifican: su `grounding` queda vac
 
 No se llamó al modelo real ni se tocó la base productiva. Estas pruebas verifican la lógica de resolución y de cita, no la calidad editorial de las señales.
 
+## Primera medición: 12 de 12 sin confirmar (21 de septiembre de 2026)
+
+El primer diagnóstico tras desplegar el filtro dio un resultado tajante: las **doce** señales activas quedaron `UNVERIFIED`, ninguna `QUOTED`. La causa no es que el filtro sea demasiado estricto, sino que al modelo nunca se le pidió citar: las instrucciones decían «evidencia textual concreta», que admite una paráfrasis.
+
+Dos correcciones:
+
+1. **El análisis exige copia literal.** Las instrucciones y el esquema de `MINUTE_RESPONSE_SCHEMA` piden ahora un fragmento continuo copiado de la transcripción para `observerSignals.evidence` y `knowledgeItems.evidence`, prohíben parafrasear, resumir, corregir la redacción o unir frases separadas, y ordenan descartar la señal si no existe un fragmento que la sustente. Afecta solo a minutas nuevas: las ya procesadas conservan su texto y siguen `UNVERIFIED`, y no se reanalizan porque costaría dinero sin aportar nada.
+2. **La comprobación tolera la tipografía, no las palabras.** `isQuotedInTranscript` intenta primero la coincidencia literal normalizando espacios y mayúsculas, y si falla repite comparando sin signos de puntuación **en ambos lados**. Así una cita real entre comillas angulares o con un punto final sigue contando como cita, mientras que cambiar una palabra sigue siendo una fabricación.
+
+Medida para la revisión semanal: `observer_by_grounding` en el script de diagnóstico. Si tras unas cuantas minutas nuevas la proporción de `QUOTED` no sube, el problema es del modelo y no de las instrucciones.
+
 ## Lo que sigue pendiente
 
 Observer sigue siendo un detector que muestra, no un coordinador: resolver una señal no comprueba que el problema se haya arreglado, solo registra la decisión de la persona. La comprobación real de cumplimiento llega con la coordinación de compromisos (bloque B del plan). Y como la bandeja no se usa, los avisos que importen deben llegar por notificación a su responsable, no solo aquí.

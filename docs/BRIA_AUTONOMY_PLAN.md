@@ -107,6 +107,8 @@ Tamaños en días de trabajo enfocado, estimados. Los ítems de un mismo bloque 
 
 | A0-12 ∥ | Verificación acotada por ejecución (`VERIFICATION_BUDGET`, rotación por `lastVerifiedAt`) y caídas del proveedor que no gastan reintentos en revisiones ni en minutas (`isProviderUnavailable`, estado `PENDING_PROVIDER`). **Hecho el 21-sep**, ver `docs/BRIA_PHASE_1_REVIEW_RELIABILITY.md` | `briaContentPlanReviewService.js`, `briaContentPlanReviewState.js`, `minuteAutomationService.js`, `lib/aiAvailability.js` | una parrilla con 157 abiertos publica dentro del plazo; una reunión grabada durante una caída no se pierde | 1 |
 
+| A0-13 ∥ | Rescate de minutas detenidas por una caída del proveedor (`errorCode`, `isProviderStalledMinute`, `scripts/recover-provider-stalled-minutes.js`) y **cita literal exigida** en el análisis de minutas, para que las señales de Observer vuelvan a ser comprobables. **Hecho el 21-sep**, ver `docs/BRIA_OBSERVER_SIGNALS.md` | `minuteAutomationService.js`, `briaObserverService.js`, script nuevo | la grabación perdida vuelve a la cola; una minuta con transcripción vacía no resucita | 1 |
+
 Orden dentro de A0 tras la línea base del 20 de septiembre: primero A0-6 (parrillas es el ciclo que más gasta: unas 19 revisiones al día y 1.258 hallazgos abiertos, sin una sola cifra de coste), después A0-1 y A0-2, luego el resto.
 
 Puerta A0: ninguna señal atendida reaparece por relectura; un fallo de minuta aparece con causa; el coste por minuta y por revisión existe en la base; Fireflies recibe menos de 10 llamadas al día.
@@ -119,7 +121,7 @@ Puerta A0: ninguna señal atendida reaparece por relectura; un fallo de minuta a
 | A1-2 | Minutas sobre el runtime: un run por transcripción, el barrido como run, el webhook encola | `minuteAutomationService.js` | reinicio a medias no duplica análisis ni objetos en el bucket | 1,5 |
 | A1-3 | Comprobación por reunión del calendario (`runAfter = endAt + 20 min`, reintentos 45m/90m/3h/6h/24h, emparejamiento por `calendar_id`, `meeting_link`, título y hora) y señal «Reunión sin transcripción» | nuevo servicio + `operationalEventService.js` | reunión terminada sin transcripción a las 24 h produce una señal con evidencia | 1,5 |
 | A1-4 | Memoria y Observer sobre el runtime, con la cadena por minuta | los dos servicios | fallo de embedding queda como run FAILED visible, no como éxito silencioso | 1 |
-| A1-5 | Salud operativa, pestaña «Automatizaciones»: última ejecución, fallos con causa, atascados, coste por flujo, tendencia de 7 días | `operationalHealthService.js`, componente de `/salud-operativa` | pantalla con datos reales y captura | 1,5 |
+| A1-5 | Salud operativa, pestaña «Automatizaciones»: última ejecución, fallos con causa, atascados, coste por flujo, tendencia de 7 días. **Pedido explícito de Rodny el 21 de septiembre**: «quiero que haya un lugar en la plataforma donde pueda ver esos informes y esas cosas, de todo lo que haga». Los datos ya se están guardando (recibo por revisión, causa por intento, estado de los trabajos); esto es la vista, no la recolección | `operationalHealthService.js`, componente de `/salud-operativa` | pantalla con datos reales y captura | 1,5 |
 
 Puerta A1: dos procesos no ejecutan el mismo trabajo; una caída a medias se recupera sin duplicar efectos; los fallos se ven en Salud operativa.
 
@@ -191,7 +193,7 @@ Todas reutilizan runtime, contexto, política y libro. Ninguna se monta antes de
 
 | Bloque | Ítems | Hechos | En curso | Puerta |
 |---|---|---|---|---|
-| A0 | 12 | 6 (A0-6 #919, A0-10 #920, A0-11 #921, A0-1 y A0-2 #929, 21-sep) | A0-12 | pendiente |
+| A0 | 13 | 7 (A0-6 #919, A0-10 #920, A0-11 #921, A0-1 y A0-2 #929, A0-12 #935, 21-sep) | A0-13 | pendiente |
 | A1 | 5 | 0 | — | pendiente |
 | A2 | 4 | 0 | — | pendiente |
 | A3 | 1 | 0 | — | pendiente |
