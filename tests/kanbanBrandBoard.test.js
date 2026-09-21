@@ -21,12 +21,14 @@ test('the board sits on the brand ambient and its columns are glass panels with 
 });
 
 test('the card shows priority as a tag, then title, assignee and date, a snippet and a footer with client, files and comments', () => {
-  assert.match(card, /data-task-priority-tag/, 'priority is a tab at the top of the card');
-  assert.match(card, /absolute left-0 top-0[^"]*rounded-tl-2xl rounded-br-2xl/, 'the tab hugs the top-left corner like a folder tab (Rodny, 21 September 2026)');
+  assert.match(card, /data-task-priority-tag/, 'priority is a tab standing above the card');
+  assert.match(card, /absolute left-0 top-0 z-10[^"]*rounded-t-2xl border border-b-0/, 'the tab protrudes above the top-left corner like a folder tab, outline continuous with the card (Rodny, 21 September 2026)');
+  assert.match(card, /priorityBadgeClass && "mt-6 rounded-tl-none"/, 'the card body drops below the tab and squares its top-left corner to meet it');
   assert.match(source, /URGENTE: 'bg-gradient-to-r from-destructive/, 'each priority tab has its own soft gradient');
+  assert.match(source, /NORMAL: 'bg-gradient-to-r from-blue-500/, 'normal priority keeps the historical blue (Rodny, 21 September 2026)');
+  assert.match(source, /ALTA: 'bg-gradient-to-r from-amber-500/, 'high priority keeps the historical orange');
   assert.match(card, /taskPriorityBadgeConfig\[task\.priority\]/, 'the tab reads the shared priority config');
-  assert.match(card, /data-task-category-tab/, 'without priority the tab shows the AI category');
-  assert.match(card, /p-4 pt-9/, 'the content leaves room for the tab');
+  assert.doesNotMatch(card, /data-task-category-tab/, 'the AI category never takes the tab: it lives in the footer only');
   assert.match(card, /data-task-assignee/, 'assignee name and avatar are a row of their own');
   assert.match(card, /formatTaskCardDate\(task\.dueDateFormatted\)/, 'the compact date stays');
   assert.match(card, /line-clamp-2/, 'the description snippet is clamped');
@@ -36,7 +38,7 @@ test('the card shows priority as a tag, then title, assignee and date, a snippet
   assert.match(card, /aiCategory/, 'the AI category stays on the card');
   assert.match(card, /Creado por/, 'the creator stays on the card');
   assert.match(card, /border-brand-magenta/, 'special tasks use the brand magenta border');
-  assert.doesNotMatch(card, /indigo|violet|purple-|emerald|amber-|blue-|#009EB9/, 'no legacy hues or local hex on the card');
+  assert.doesNotMatch(card, /indigo|violet|purple-|emerald|#009EB9/, 'no legacy hues or local hex on the card (priority colours are the historical red/orange/blue by decision of Rodny)');
   assert.match(card, /rounded-2xl border/, 'full soft border, rounded like the dashboard cards');
   assert.match(card, /sm:opacity-0 sm:group-hover\/card:opacity-100/, 'card actions appear on hover on desktop and stay visible on touch');
 });

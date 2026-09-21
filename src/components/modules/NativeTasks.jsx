@@ -162,12 +162,12 @@ const CATEGORY_COLORS = {
 
 // Priority tabs on the Kanban cards (brand palette, 21 September 2026): a folder-like tab at the top-left corner
 // with a soft gradient per priority, like the reference board.
+// Colours stay the historical ones (red urgent, orange high, blue normal); only the shape changed.
 const taskPriorityBadgeConfig = {
-    URGENTE: 'bg-gradient-to-r from-destructive/25 via-brand-coral/15 to-transparent border-destructive/25 text-destructive',
-    ALTA: 'bg-gradient-to-r from-brand-yellow/45 via-brand-yellow/20 to-transparent border-brand-yellow/40 text-brand-yellow-deep dark:text-brand-yellow',
-    NORMAL: 'bg-gradient-to-r from-brand-green/35 via-brand-green/15 to-transparent border-brand-green/35 text-brand-green-deep dark:text-brand-green'
+    URGENTE: 'bg-gradient-to-r from-destructive/25 to-white border-destructive/40 text-destructive dark:to-zinc-900',
+    ALTA: 'bg-gradient-to-r from-amber-500/35 to-white border-amber-500/50 text-amber-700 dark:to-zinc-900 dark:text-amber-300',
+    NORMAL: 'bg-gradient-to-r from-blue-500/30 to-white border-blue-500/40 text-blue-700 dark:to-zinc-900 dark:text-blue-300'
 };
-const taskCategoryTabClass = 'bg-gradient-to-r from-zinc-200/80 via-zinc-100/60 to-transparent border-zinc-200/80 text-zinc-500 dark:from-white/15 dark:via-white/5 dark:border-white/10 dark:text-zinc-400';
 
 const taskPriorityLabels = {
     URGENTE: 'Urgente',
@@ -1312,13 +1312,27 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                     ref={provided.innerRef}
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
-                    className="mb-3 cursor-pointer group/card"
+                    className="relative mb-3 cursor-pointer group/card"
                     onClick={() => onClick(task)}
                     style={provided.draggableProps.style}
                 >
-                    {/* Brand board card (21 September 2026): full soft border, priority tag, assignee row, date, snippet, footer. */}
+                    {/* Priority tab: a folder tab standing above the top-left corner of the card, outline continuous with the card. */}
+                    {priorityBadgeClass && (
+                        <span
+                            data-task-priority-tag={task.priority}
+                            className={cn(
+                                "absolute left-0 top-0 z-10 inline-flex h-7 items-center gap-1.5 rounded-t-2xl border border-b-0 pl-3.5 pr-4 text-[10px] font-bold uppercase tracking-wider",
+                                priorityBadgeClass
+                            )}
+                        >
+                            <Tag className="h-3 w-3" />
+                            {priorityLabel}
+                        </span>
+                    )}
+                    {/* Brand board card (21 September 2026): full soft border, priority tab, assignee row, date, snippet, footer. */}
                     <div className={cn(
                         "relative overflow-hidden rounded-2xl border bg-white text-card-foreground shadow-sm dark:bg-zinc-900",
+                        priorityBadgeClass && "mt-6 rounded-tl-none",
                         "transition-all duration-300 ease-out",
                         snapshot.isDragging ? "ring-2 ring-brand-cyan shadow-xl z-50 opacity-95 rotate-1 scale-[1.03]" : "",
                         !snapshot.isDragging && isHighlighted ? "z-10 scale-[1.02] ring-2 ring-destructive" : "ring-1 ring-transparent",
@@ -1327,33 +1341,9 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                         !snapshot.isDragging && !isHighlighted && !overdue && !task.isSpecial ? "border-zinc-200/80 hover:border-zinc-300 dark:border-white/10 dark:hover:border-white/20" : "",
                         isReturned && !isHighlighted && "border-destructive/50"
                     )}>
-                        {/* Priority tab: a folder-like tab on the top-left corner, gradient per priority (category when there is none). */}
-                        {priorityBadgeClass ? (
-                            <span
-                                data-task-priority-tag={task.priority}
-                                className={cn(
-                                    "absolute left-0 top-0 inline-flex h-7 items-center gap-1.5 rounded-tl-2xl rounded-br-2xl border-b border-r pl-3.5 pr-4 text-[10px] font-bold uppercase tracking-wider",
-                                    priorityBadgeClass
-                                )}
-                            >
-                                <Tag className="h-3 w-3" />
-                                {priorityLabel}
-                            </span>
-                        ) : (
-                            <span
-                                data-task-category-tab
-                                className={cn(
-                                    "absolute left-0 top-0 inline-flex h-7 max-w-[70%] items-center gap-1.5 rounded-tl-2xl rounded-br-2xl border-b border-r pl-3.5 pr-4 text-[10px] font-semibold uppercase tracking-wider",
-                                    taskCategoryTabClass
-                                )}
-                            >
-                                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }} />
-                                <span className="truncate">{task.aiCategory || 'Sin clasificar'}</span>
-                            </span>
-                        )}
-                        <div className="flex flex-col gap-3 p-4 pt-9">
-                            {/* Row 1: status chips + quick actions */}
-                            <div className="flex items-start justify-between gap-2 min-h-[16px] -mt-2">
+                        <div className="flex flex-col gap-3 p-4">
+                            {/* Row 1: status chips (returned, timer) + quick actions on the top-right corner */}
+                            <div className="flex items-start justify-between gap-2 pr-16">
                                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                                     {isReturned && (
                                         <span className="flex items-center gap-1 rounded-lg bg-destructive/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-tight text-destructive">
@@ -1362,7 +1352,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                                     )}
                                     {String(task.status || '').toUpperCase() === 'EN_CURSO' && <TaskTimerBadge task={task} />}
                                 </div>
-                                <div className="absolute right-2 top-1.5 flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:group-hover/card:opacity-100 sm:focus-within:opacity-100 transition-opacity">
+                                <div className="absolute right-2 top-2 flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:group-hover/card:opacity-100 sm:focus-within:opacity-100 transition-opacity">
                                     {lifecycleAction === 'reintegrate' ? (
                                         <button
                                             onClick={(e) => { e.stopPropagation(); onReopen(task); }}
@@ -1442,12 +1432,10 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                                     <span className="truncate text-[11px] font-semibold text-zinc-600 dark:text-zinc-300" title={`${task.clientName} · Creado por ${task.creatorName}`}>
                                         {task.clientName}
                                     </span>
-                                    {priorityBadgeClass && task.aiCategory && (
-                                        <span className="hidden items-center gap-1 text-[10px] font-semibold uppercase tracking-tight text-zinc-400 sm:inline-flex">
-                                            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }} />
-                                            <span className="truncate max-w-[110px]">{task.aiCategory}</span>
-                                        </span>
-                                    )}
+                                    <span className="hidden items-center gap-1 text-[10px] font-semibold uppercase tracking-tight text-zinc-400 sm:inline-flex">
+                                        <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }} />
+                                        <span className="truncate max-w-[110px]">{task.aiCategory || 'Sin clasificar'}</span>
+                                    </span>
                                     {task.aiComplexity && (
                                         <span className={cn(
                                             "text-[10px] font-bold uppercase tracking-tight",
