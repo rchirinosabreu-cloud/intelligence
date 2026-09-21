@@ -58,6 +58,40 @@ test('a failed second batch resumes from the first checkpoint without repeating 
   assert.equal(result.review.scope.reviewedItems, 61);
 });
 
+test('review usage counts every batch, including the ones resumed from a checkpoint', async () => {
+  let checkpoint;
+  const usage = index => ({ inputTokens: 1000 + index, outputTokens: 100, totalTokens: 1100 + index, cachedTokens: 0, reasoningTokens: 0 });
+  const config = { snapshot, analysisHash: 'revision-1', loadCheckpoint: async () => checkpoint,
+    saveCheckpoint: async value => { checkpoint = structuredClone(value); },
+    reviewBatch: async batch => { if (batch.index === 1) throw new Error('temporary fixture'); return { review: review(80), model: 'gpt-test', latencyMs: 500, usage: usage(batch.index) }; }
+  };
+  await assert.rejects(batches.reviewContentPlanBatches(config), /temporary fixture/);
+  const result = await batches.reviewContentPlanBatches({ ...config, reviewBatch: async batch => ({ review: review(80), model: 'gpt-test', latencyMs: 700, usage: usage(batch.index) }) });
+  const total = batches.buildContentPlanReviewBatches(snapshot).length;
+  assert.ok(total > 2);
+  assert.equal(result.usage.calls, total);
+  assert.equal(result.usage.callsWithUsage, total);
+  assert.equal(result.usage.batches, total);
+  assert.equal(result.usage.resumedBatches, 1);
+  assert.equal(result.usage.inputTokens, Array.from({ length: total }, (_, i) => 1000 + i).reduce((a, b) => a + b, 0));
+  assert.equal(result.usage.outputTokens, 100 * total);
+  assert.equal(result.usage.latencyMs, 500 + 700 * (total - 1));
+  assert.deepEqual(result.usage.models, ['gpt-test']);
+});
+
+test('batches from older checkpoints without usage count as calls of unknown cost', async () => {
+  const small = { ...snapshot, items: snapshot.items.slice(0, 13) };
+  const [first] = batches.buildContentPlanReviewBatches(small);
+  const result = await batches.reviewContentPlanBatches({ snapshot: small, analysisHash: 'r',
+    loadCheckpoint: async () => ({ analysisHash: 'r', totalBatches: 2, totalItems: 13, completed: [{ key: first.key, itemIds: first.itemIds, review: review(80) }] }),
+    reviewBatch: async () => ({ review: review(80), model: 'gpt-test', latencyMs: 10, usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2, cachedTokens: 0, reasoningTokens: 0 } })
+  });
+  assert.equal(result.usage.calls, 2);
+  assert.equal(result.usage.callsWithUsage, 1);
+  assert.equal(result.usage.resumedBatches, 1);
+  assert.equal(result.usage.inputTokens, 1);
+});
+
 test('checkpoints from other revisions are never reused and cancellation prevents publication', async () => {
   const controller = new AbortController();
   let calls = 0;

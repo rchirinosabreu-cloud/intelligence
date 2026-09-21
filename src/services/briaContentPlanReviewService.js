@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { AI_MODELS } from '../config/aiConfig.js';
+import { summarizeAiCalls } from '../lib/aiUsage.js';
 import prisma from '../lib/prisma.js';
 import { createOpenAIClient } from './openAIClient.js';
 import { getAIInstance } from './aiService.js';
@@ -109,6 +110,21 @@ const subjectForFinding = (finding, plan) => {
     : item?.[finding.field] ?? `${finding.detail}|${finding.recommendation}`;
 };
 
+// What one published review cost: the batch calls (paid now or by the attempt
+// that wrote the checkpoint) plus the verification calls made in this run.
+export const buildContentPlanReviewUsage = ({ review = null, verification = null } = {}) => {
+  const parts = [review, verification].filter(Boolean);
+  const total = field => parts.reduce((sum, part) => sum + (Number(part[field]) || 0), 0);
+  return {
+    version: 1, review, verification,
+    totals: {
+      calls: total('calls'), callsWithUsage: total('callsWithUsage'), inputTokens: total('inputTokens'),
+      outputTokens: total('outputTokens'), totalTokens: total('totalTokens'), latencyMs: total('latencyMs'),
+      models: [...new Set(parts.flatMap(part => part.models || []))].sort()
+    }
+  };
+};
+
 const toApiResult = (run, findings = [], planState = 'CURRENT') => ({
   review: {
     summary: run.summary, verdict: run.verdict, score: run.score, coverage: run.coverage,
@@ -120,6 +136,7 @@ const toApiResult = (run, findings = [], planState = 'CURRENT') => ({
     reviewedAt: run.completedAt?.toISOString?.() || run.meta?.reviewedAt || null,
     memorySourcesUsed: Array.isArray(run.evidenceSnapshot) ? run.evidenceSnapshot.length : 0,
     revisionHash: run.revisionHash, analysisHash: run.analysisHash, promptVersion: run.promptVersion,
+    usage: run.usage || run.meta?.usage || null,
     cached: false, state: planState
   }
 });
@@ -176,6 +193,7 @@ export const createContentPlanReviewRepository = (db = prisma) => ({
           coverage: result.review.coverage, dimensions: result.review.dimensions, scope: result.review.scope,
           findingsSnapshot: result.review.findings, evidenceSnapshot: result.evidence,
           model: result.meta.model, requestId: result.meta.requestId, requestedById,
+          ...(result.meta.usage ? { usage: result.meta.usage } : {}),
           startedAt, completedAt: new Date(result.meta.reviewedAt)
         },
         update: {
@@ -183,6 +201,7 @@ export const createContentPlanReviewRepository = (db = prisma) => ({
           score: result.review.score, coverage: result.review.coverage, dimensions: result.review.dimensions, scope: result.review.scope,
           findingsSnapshot: result.review.findings, evidenceSnapshot: result.evidence,
           model: result.meta.model, requestId: result.meta.requestId, requestedById,
+          usage: result.meta.usage ?? Prisma.DbNull,
           startedAt, completedAt: new Date(result.meta.reviewedAt), errorMessage: null
         }
       });
@@ -323,15 +342,20 @@ export const reviewContentPlanWithBria = async ({
     saveCheckpoint: checkpoint => persistence?.saveCheckpoint?.(plan.id, checkpoint, { execution, now, signal })
   });
   const review = aiResult.review;
+  const verificationCalls = [];
   const verifications = await verifyContentPlanFindings({
-    snapshot, findings: activeFindings, evidence, ai, signal
+    snapshot, findings: activeFindings, evidence, ai, signal, calls: verificationCalls
+  });
+  const usage = buildContentPlanReviewUsage({
+    review: aiResult.usage || null,
+    verification: { ...summarizeAiCalls(verificationCalls), findings: activeFindings.length }
   });
   const result = {
     review, evidence,
     meta: {
       clientId: client.id, planId: plan.id, model: aiResult.model || AI_MODELS.fast,
       requestId: aiResult.requestId || null, reviewedAt: now().toISOString(), memorySourcesUsed: evidence.length,
-      revisionHash, analysisHash, promptVersion: CONTENT_PLAN_REVIEW_PROMPT_VERSION, cached: false, state: 'CURRENT'
+      revisionHash, analysisHash, promptVersion: CONTENT_PLAN_REVIEW_PROMPT_VERSION, usage, cached: false, state: 'CURRENT'
     }
   };
   return persistence?.saveCompletedReview

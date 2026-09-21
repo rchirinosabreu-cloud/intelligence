@@ -126,6 +126,7 @@ try {
     CREATE INDEX IF NOT EXISTS "ContentPlanReviewFinding_itemId_idx" ON "ContentPlanReviewFinding"("itemId");
     CREATE INDEX IF NOT EXISTS "ContentPlanReviewFinding_lastReviewId_idx" ON "ContentPlanReviewFinding"("lastReviewId");
     ALTER TABLE "ContentPlanReview" ADD COLUMN IF NOT EXISTS "scope" JSONB;
+    ALTER TABLE "ContentPlanReview" ADD COLUMN IF NOT EXISTS "usage" JSONB;
     CREATE INDEX IF NOT EXISTS "ContentPlan_briaReviewState_briaReviewRequestedAt_idx" ON "ContentPlan"("briaReviewState", "briaReviewRequestedAt");
     CREATE INDEX IF NOT EXISTS "ContentPlan_briaReviewState_briaReviewStartedAt_idx" ON "ContentPlan"("briaReviewState", "briaReviewStartedAt");
   `);

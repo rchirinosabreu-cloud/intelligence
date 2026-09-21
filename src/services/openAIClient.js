@@ -233,6 +233,7 @@ export const createOpenAIClient = ({
       functionCalls: extractFunctionCalls(payload),
       output: payload.output || [],
       requestId,
+      usage: payload.usage ?? null,
       raw: payload
     };
   };

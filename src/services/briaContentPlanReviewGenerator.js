@@ -1,4 +1,5 @@
 import { AI_MODELS } from '../config/aiConfig.js';
+import { normalizeAiUsage } from '../lib/aiUsage.js';
 import { BRIA_REVIEW_RUBRIC, rubricHash, rubricInstructions } from '../lib/briaReviewRubric.js';
 import { reviewContentPlanBatches } from './briaReviewBatches.js';
 import { CONTENT_PLAN_REVIEW_SCHEMA, parseBriaContentPlanReview, calculateContentPlanReviewScore } from './briaContentPlanReviewContract.js';
@@ -57,12 +58,18 @@ export const generateContentPlanReview = async ({
       review.findings = review.findings.filter(finding => !finding.itemId || batch.itemIds.includes(finding.itemId)).map(finding => ({
         ...finding, evidenceIds: finding.evidenceIds.filter(id => allowedEvidenceIds.has(id))
       }));
+      const latencyMs = Math.round(performance.now() - started);
+      const rawUsage = response.raw?.usage || response.usage || null;
       calls.push({ batchIndex: batch.index, itemIds: batch.itemIds, model: response.model || AI_MODELS.fast,
-        requestId: response.requestId || null, latencyMs: Math.round(performance.now() - started),
-        usage: response.raw?.usage || null, rejectedFindingCount, rejectedEvidenceCount });
-      return { review, model: response.model || AI_MODELS.fast, requestId: response.requestId || null };
+        requestId: response.requestId || null, latencyMs, usage: rawUsage, rejectedFindingCount, rejectedEvidenceCount });
+      return { review, model: response.model || AI_MODELS.fast, requestId: response.requestId || null, latencyMs, usage: normalizeAiUsage(rawUsage) };
     }
   });
-  return { ...result, calls, review: { ...result.review, ...(variant === 'traceable' ? calculateTraceableScore(result.review.scoreChecks) : calculateContentPlanReviewScore(result.review.dimensions)),
+  const usage = result.usage ? {
+    ...result.usage,
+    rejectedFindingCount: calls.reduce((n, call) => n + call.rejectedFindingCount, 0),
+    rejectedEvidenceCount: calls.reduce((n, call) => n + call.rejectedEvidenceCount, 0)
+  } : null;
+  return { ...result, usage, calls, review: { ...result.review, ...(variant === 'traceable' ? calculateTraceableScore(result.review.scoreChecks) : calculateContentPlanReviewScore(result.review.dimensions)),
     ...(identity ? { scope: { ...result.review.scope, rubric: identity } } : {}) } };
 };
