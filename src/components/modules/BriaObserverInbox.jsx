@@ -14,7 +14,8 @@ const FILTERS = [
   { value: 'REVIEWED', label: 'Revisadas' },
   { value: 'SNOOZED', label: 'Aplazadas' },
   { value: 'DISMISSED', label: 'Descartadas' },
-  { value: 'RESOLVED', label: 'Resueltas' }
+  { value: 'RESOLVED', label: 'Resueltas' },
+  { value: 'UNVERIFIED', label: 'Sin confirmar' }
 ];
 
 const SEVERITY = {
@@ -125,6 +126,11 @@ export default function BriaObserverInbox() {
                 {summary.historical} antecedentes integrados en la memoria, sin generar tareas pendientes.
               </p>
             )}
+            {(summary.unverified || 0) > 0 && (
+              <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                {summary.unverified} señales quedaron fuera por llegar sin una cita confirmada en la transcripción.
+              </p>
+            )}
           </div>
           <button type="button" onClick={scanNow} disabled={isScanning} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-[#009EB9] px-4 text-xs font-semibold text-white transition-transform active:scale-95 disabled:opacity-60 sm:w-auto">
             <RefreshCw className={cn('h-4 w-4', isScanning && 'animate-spin')} />
@@ -167,6 +173,11 @@ export default function BriaObserverInbox() {
                       </div>
                       <h3 className="mt-3 text-sm font-semibold text-zinc-950 dark:text-zinc-50">{signal.title}</h3>
                       <p className="mt-1.5 text-xs leading-5 text-zinc-600 dark:text-zinc-300">{signal.evidence}</p>
+                      {signal.grounding === 'UNVERIFIED' && (
+                        <p data-observer-unverified className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-xs leading-5 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200">
+                          Esta cita no se encontró en la transcripción. Abre la reunión y confírmalo antes de actuar.
+                        </p>
+                      )}
                       {signal.suggestedAction && <p className="mt-3 rounded-lg bg-zinc-50 px-3 py-2 text-xs leading-5 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300"><strong className="font-semibold text-zinc-800 dark:text-zinc-100">Siguiente paso:</strong> {signal.suggestedAction}</p>}
                       <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px] text-zinc-400">
                         <span className="inline-flex items-center gap-1.5"><Clock className="h-3.5 w-3.5" /> {formatDate(signal.lastDetectedAt)}</span>

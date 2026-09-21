@@ -1163,6 +1163,8 @@ model BriaObserverSignal {
   severity        String
   title           String
   evidence        String
+  grounding       String?
+  evidenceVersion String?
   suggestedAction String?
   confidence      Float?
   status          String    @default("OPEN")

@@ -6,6 +6,7 @@ import {
   BRIA_OBSERVER_INTERVAL_MS,
   buildMinuteObserverDetections,
   buildTaskAnalyticsObserverDetections,
+  createPrismaObserverRepository,
   getObserverInbox,
   initializeObserverDetectorBaseline,
   reconcileObserverDetections,
@@ -86,7 +87,8 @@ test('Observer inbox reports the real scan time and counts archived baseline as 
       briaObserverSignal: {
         findMany: async () => [],
         groupBy: async () => [{ status: 'ARCHIVED', _count: { _all: 284 } }],
-        findFirst: async () => ({ lastDetectedAt: new Date('2026-08-20T12:00:00.000Z') })
+        findFirst: async () => ({ lastDetectedAt: new Date('2026-08-20T12:00:00.000Z') }),
+        count: async () => 0
       },
       briaObserverDetectorState: {
         findFirst: async () => ({ lastScannedAt: scannedAt })
@@ -109,7 +111,7 @@ test('reconciliation is idempotent and resolves findings that disappeared', asyn
 
   const result = await reconcileObserverDetections({ detectorKey: 'TASK_ANALYTICS', detections, repository });
 
-  assert.deepEqual(result, { detectorKey: 'TASK_ANALYTICS', detected: 1, resolved: 0 });
+  assert.deepEqual(result, { detectorKey: 'TASK_ANALYTICS', detected: 1, unverified: 0, resolved: 0 });
   assert.deepEqual(writes, [
     ['upsert', 'TASK_ANALYTICS:ONE'],
     ['resolve', 'TASK_ANALYTICS', ['TASK_ANALYTICS:ONE']]
@@ -130,6 +132,170 @@ test('signal lifecycle supports review, snooze, dismiss, resolve and reopen', ()
   assert.throws(() => transitionObserverSignal('DELETE', { now }), /INVALID_OBSERVER_ACTION/);
 });
 
+const transcript = 'Rodny: La fecha de publicación no fue aprobada por el cliente.\nHelen: Lo confirmo mañana.';
+const groundedMinute = {
+  id: 'minute-1',
+  title: 'Seguimiento Aristea',
+  meetingAt: new Date('2026-09-01T13:00:00.000Z'),
+  status: 'READY',
+  deletedAt: null,
+  executiveSummary: 'Resumen de la reunión.',
+  transcriptText: transcript,
+  observerSignals: [
+    { type: 'RISK', severity: 'warning', description: 'Falta aprobación', evidence: 'La fecha de publicación no fue aprobada', actionable: true, suggestedAction: 'Solicitar aprobación hoy.' }
+  ]
+};
+
+test('a minute alert is only grounded when its evidence is a literal quote from the transcript', () => {
+  const [grounded] = buildMinuteObserverDetections(groundedMinute);
+  assert.equal(grounded.grounding, 'QUOTED');
+  assert.match(grounded.evidence, /no fue aprobada/);
+
+  // Odd spacing and casing in the transcript must not turn a real quote into a fabricated one.
+  const spaced = buildMinuteObserverDetections({ ...groundedMinute, transcriptText: 'Rodny:  la   FECHA de publicación\n no fue aprobada por el cliente.' });
+  assert.equal(spaced[0].grounding, 'QUOTED');
+
+  const fabricated = buildMinuteObserverDetections({
+    ...groundedMinute,
+    observerSignals: [{ ...groundedMinute.observerSignals[0], evidence: 'El cliente canceló la campaña completa.' }]
+  });
+  assert.equal(fabricated[0].grounding, 'UNVERIFIED');
+  assert.equal(fabricated[0].evidence, 'El cliente canceló la campaña completa.');
+});
+
+test('a missing or trivial quote is never replaced by the summary or by invented wording', () => {
+  for (const evidence of ['', '   ', 'ok', 'Rodny:']) {
+    const [detection] = buildMinuteObserverDetections({
+      ...groundedMinute,
+      observerSignals: [{ ...groundedMinute.observerSignals[0], evidence }]
+    });
+    assert.equal(detection.grounding, 'UNVERIFIED');
+    assert.doesNotMatch(detection.evidence, /Resumen de la reunión/);
+    assert.doesNotMatch(detection.evidence, /Detectado en el análisis/);
+    assert.equal(detection.evidence, 'Falta aprobación');
+  }
+  // Without a transcript nothing can be confirmed, and nothing is invented either.
+  const [noTranscript] = buildMinuteObserverDetections({ ...groundedMinute, transcriptText: '' });
+  assert.equal(noTranscript.grounding, 'UNVERIFIED');
+});
+
+test('every detection carries the version of the evidence that produced it', () => {
+  const [detection] = buildMinuteObserverDetections(groundedMinute);
+  const [same] = buildMinuteObserverDetections({ ...groundedMinute });
+  assert.ok(detection.evidenceVersion);
+  assert.equal(detection.evidenceVersion, same.evidenceVersion);
+
+  const [analytics] = buildTaskAnalyticsObserverDetections({ observer: { signals: [{ code: 'HIGH_REWORK', severity: 'attention', title: 'Retrabajo alto', evidence: '3 de 10 tareas devueltas.' }] } });
+  assert.equal(analytics.grounding, 'DETERMINISTIC');
+  const [changed] = buildTaskAnalyticsObserverDetections({ observer: { signals: [{ code: 'HIGH_REWORK', severity: 'attention', title: 'Retrabajo alto', evidence: '7 de 10 tareas devueltas.' }] } });
+  assert.equal(changed.dedupeKey, analytics.dedupeKey);
+  assert.notEqual(changed.evidenceVersion, analytics.evidenceVersion);
+});
+
+test('a signal a person already closed does not reopen just because the same source is read again', async () => {
+  const now = new Date('2026-09-21T12:00:00.000Z');
+  const updates = [];
+  const stored = { id: 'signal-1', status: 'RESOLVED', evidenceVersion: 'v1', resolvedAt: new Date('2026-09-20T12:00:00.000Z') };
+  const db = {
+    briaObserverSignal: {
+      findUnique: async () => stored,
+      update: async args => { updates.push(args.data); return args.data; },
+      create: async args => { updates.push(args.data); return args.data; }
+    }
+  };
+  const repository = createPrismaObserverRepository(db);
+
+  await repository.upsertDetection({ dedupeKey: 'k', title: 'T', evidence: 'E', evidenceVersion: 'v1' }, now);
+  assert.equal(updates[0].status, 'RESOLVED');
+  assert.equal(updates[0].lastDetectedAt, now);
+  assert.equal('resolvedAt' in updates[0], false);
+
+  // Dismissals are the team's decision too: only genuinely new evidence reopens them.
+  stored.status = 'DISMISSED';
+  await repository.upsertDetection({ dedupeKey: 'k', title: 'T', evidence: 'E', evidenceVersion: 'v1' }, now);
+  assert.equal(updates[1].status, 'DISMISSED');
+
+  // The baseline history never comes back to the inbox.
+  stored.status = 'ARCHIVED';
+  await repository.upsertDetection({ dedupeKey: 'k', title: 'T', evidence: 'E', evidenceVersion: 'v2' }, now);
+  assert.equal(updates[2].status, 'ARCHIVED');
+});
+
+test('new evidence does reopen a closed signal, and clears its closing marks', async () => {
+  const now = new Date('2026-09-21T12:00:00.000Z');
+  let written;
+  const repository = createPrismaObserverRepository({
+    briaObserverSignal: {
+      findUnique: async () => ({ id: 'signal-1', status: 'RESOLVED', evidenceVersion: 'v1', resolvedAt: new Date('2026-09-20T12:00:00.000Z') }),
+      update: async args => { written = args.data; return args.data; },
+      create: async args => args.data
+    }
+  });
+
+  await repository.upsertDetection({ dedupeKey: 'k', title: 'T', evidence: 'E nueva', evidenceVersion: 'v2' }, now);
+  assert.equal(written.status, 'OPEN');
+  assert.equal(written.resolvedAt, null);
+  assert.equal(written.dismissedAt, null);
+  assert.equal(written.evidenceVersion, 'v2');
+});
+
+test('signals whose source was not examined in this scan are never resolved by absence', async () => {
+  const queries = [];
+  const repository = createPrismaObserverRepository({
+    briaObserverSignal: { updateMany: async args => { queries.push(args.where); return { count: 0 }; } }
+  });
+
+  await repository.resolveMissing('MINUTE_SIGNAL', ['a'], new Date(), { scopeRecordIds: ['minute-1', 'minute-2'] });
+  assert.deepEqual(queries[0].sourceRecordId, { in: ['minute-1', 'minute-2'] });
+
+  // A detector with a single global source keeps resolving across the whole detector.
+  await repository.resolveMissing('TASK_ANALYTICS', ['b'], new Date());
+  assert.equal('sourceRecordId' in queries[1], false);
+
+  // An empty scope must never resolve everything.
+  await repository.resolveMissing('MINUTE_SIGNAL', [], new Date(), { scopeRecordIds: [] });
+  assert.deepEqual(queries[2].sourceRecordId, { in: [] });
+});
+
+test('reconciliation passes the examined scope and keeps unverified alerts out of the active inbox', async () => {
+  const writes = [];
+  const repository = {
+    upsertDetection: async item => writes.push(['upsert', item.dedupeKey]),
+    resolveMissing: async (detectorKey, activeKeys, now, options) => writes.push(['resolve', detectorKey, options?.scopeRecordIds])
+  };
+  await reconcileObserverDetections({
+    detectorKey: 'MINUTE_SIGNAL',
+    detections: [{ detectorKey: 'MINUTE_SIGNAL', dedupeKey: 'MINUTE_SIGNAL:one', title: 'One', evidence: 'E' }],
+    scopeRecordIds: ['minute-1'],
+    repository
+  });
+  assert.deepEqual(writes, [['upsert', 'MINUTE_SIGNAL:one'], ['resolve', 'MINUTE_SIGNAL', ['minute-1']]]);
+});
+
+test('the inbox hides unverified alerts, counts them apart and can list archived history', async () => {
+  const queries = [];
+  const db = {
+    briaObserverSignal: {
+      findMany: async args => { queries.push(args.where); return []; },
+      groupBy: async () => [{ status: 'OPEN', _count: { _all: 8 } }],
+      findFirst: async () => null,
+      count: async args => { queries.push(args.where); return 3; }
+    },
+    briaObserverDetectorState: { findFirst: async () => null }
+  };
+
+  const active = await getObserverInbox({ db });
+  assert.deepEqual(active.summary.unverified, 3);
+  assert.ok(JSON.stringify(queries[0]).includes('UNVERIFIED'), 'the active query must exclude unverified alerts');
+
+  const archived = await getObserverInbox({ db, status: 'ARCHIVED' });
+  assert.deepEqual(archived.signals, []);
+  assert.deepEqual(queries.at(-2), { status: 'ARCHIVED' });
+
+  const unverified = await getObserverInbox({ db, status: 'UNVERIFIED' });
+  assert.deepEqual(unverified.signals, []);
+});
+
 test('Observer schema, protected API and non-overlapping scheduler are wired', () => {
   const schema = readFileSync('prisma/schema.prisma', 'utf8');
   const routes = readFileSync('src/routes/index.js', 'utf8');
@@ -148,5 +314,9 @@ test('Observer schema, protected API and non-overlapping scheduler are wired', (
   assert.match(schemaBootstrap, /CREATE TABLE IF NOT EXISTS "BriaObserverSignal"/);
   assert.match(schemaBootstrap, /CREATE TABLE IF NOT EXISTS "BriaObserverDetectorState"/);
   assert.match(schemaBootstrap, /ADD COLUMN IF NOT EXISTS "archivedAt"/);
+  assert.match(schema, /evidenceVersion\s+String\?/);
+  assert.match(schema, /grounding\s+String\?/);
+  assert.match(schemaBootstrap, /ADD COLUMN IF NOT EXISTS "evidenceVersion"/);
+  assert.match(schemaBootstrap, /ADD COLUMN IF NOT EXISTS "grounding"/);
   assert.equal(BRIA_OBSERVER_INTERVAL_MS, 10 * 60 * 1000);
 });
