@@ -37,7 +37,18 @@ export const getTaskLock = ({ tasks, task, viewerUserId, viewerIsManager = false
   if (taskAssigneeUserId !== viewerUserId) return null;
   const focusTask = findFocusTaskFor(tasks, { assigneeUserId: viewerUserId });
   if (!focusTask || String(focusTask.id) === String(task.id)) return null;
-  return { focusTask };
+  // Rodny, 21 September 2026: what was already in progress when the commitment arrived can still be finished
+  // (moved on, or back to pending); after that, only the commitment moves.
+  if (statusOf(task) === 'EN_CURSO') return null;
+  return { focusTask, inProgressTask: findInProgressTaskFor(tasks, { assigneeUserId: viewerUserId, exceptId: focusTask.id }) };
+};
+
+/** La tarea que la persona ya tenía en proceso (distinta del compromiso), si la hay. */
+export const findInProgressTaskFor = (tasks, { assigneeUserId, exceptId } = {}) => {
+  if (!assigneeUserId) return null;
+  return (tasks || []).find((task) => statusOf(task) === 'EN_CURSO'
+    && String(task.id) !== String(exceptId)
+    && (task.assigneeUserId === assigneeUserId || task.assignee?.userId === assigneeUserId)) || null;
 };
 
 export const bogotaTimeOf = (value) => {
@@ -80,8 +91,12 @@ export const nextLockReaction = (previous, now = Date.now()) => {
   return { reaction: 'shake', record: { at: now } };
 };
 
-export const focusLockMessage = (focusTask) => {
+export const focusLockMessage = (focusTask, inProgressTask = null) => {
   const title = focusTask?.title || 'tu compromiso';
   const time = bogotaTimeOf(focusTask?.focusDeadlineAt);
-  return `Estás enfocado en «${title}»${time ? ` hasta las ${time}` : ''}. Podrás abrir y mover tus demás pendientes cuando la marques como realizada.`;
+  const head = `Estás enfocado en «${title}»${time ? ` hasta las ${time}` : ''}.`;
+  if (inProgressTask?.title) {
+    return `${head} Termina «${inProgressTask.title}», que ya tienes en proceso; después solo puedes trabajar en tu compromiso. Los demás pendientes se abren cuando lo marques como realizado.`;
+  }
+  return `${head} Podrás abrir y mover tus demás pendientes cuando la marques como realizada.`;
 };

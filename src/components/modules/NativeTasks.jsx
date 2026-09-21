@@ -1089,7 +1089,7 @@ const NativeTasks = () => {
                             <Clock className="h-5 w-5 text-brand-cyan-deep dark:text-brand-cyan" /> Primero tu compromiso
                         </DialogTitle>
                         <DialogDescription>
-                            {focusLockNotice ? focusLockMessage(focusLockNotice.focusTask) : ''}
+                            {focusLockNotice ? focusLockMessage(focusLockNotice.focusTask, focusLockNotice.inProgressTask) : ''}
                         </DialogDescription>
                     </DialogHeader>
                     <DialogFooter className="gap-3 sm:justify-between">
