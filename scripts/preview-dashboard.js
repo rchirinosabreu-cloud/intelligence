@@ -31,9 +31,12 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
             res.end(JSON.stringify({ error: 'Laboratorio de solo lectura: no se guardan cambios ni se contacta producción.' }));
             return;
           }
+          // `?role=EDITOR` on the page lets the lab show the board as a non-manager (focus lock, no hour selector).
+          const asEditor = /[?&]role=EDITOR/.test(req.headers.referer || '');
+          const demoUser = asEditor ? { ...dashboardDemoUser, role: 'EDITOR' } : dashboardDemoUser;
           const routes = {
-            '/api/auth/me': dashboardDemoUser,
-            '/api/user/profile': dashboardDemoUser,
+            '/api/auth/me': demoUser,
+            '/api/user/profile': demoUser,
             '/api/team': dashboardDemoTeam,
             '/api/clients': dashboardDemoClients, '/api/db/clients': dashboardDemoClients,
             '/api/notifications': [],

@@ -14,7 +14,9 @@ if (previousToken && !previousToken.endsWith('.dashboard-local')) {
   throw new Error('Este origen ya tiene una sesión. Usa un puerto distinto para no sustituirla.');
 }
 localStorage.setItem('authToken', `e30.${btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 86400 }))}.dashboard-local`);
-localStorage.setItem('currentUser', JSON.stringify(dashboardDemoUser));
+// `?role=EDITOR` shows the platform as a non-manager (the mock API answers with the same role).
+const previewRole = new URLSearchParams(location.search).get('role') === 'EDITOR' ? 'EDITOR' : dashboardDemoUser.role;
+localStorage.setItem('currentUser', JSON.stringify({ ...dashboardDemoUser, role: previewRole }));
 markTaskTimingTutorialSeen(localStorage, dashboardDemoUser.id);
 markTaskTimingTutorialAfternoonSeen(localStorage, dashboardDemoUser.id);
 if (new URLSearchParams(location.search).has('dark')) {

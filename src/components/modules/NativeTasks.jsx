@@ -28,8 +28,10 @@ import {
     Plus,
     Paperclip,
     RefreshCw,
-    Tag
+    Tag,
+    Lock
 } from '@/components/ui/icons';
+import { bogotaTimeOf, focusLockMessage, getTaskLock, isActiveFocusTask } from '@/lib/taskFocus';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -240,6 +242,8 @@ const NativeTasks = () => {
     const [isCreating, setIsCreating] = useState(false);
     const [editingTask, setEditingTask] = useState(null);
     const [conflictingMove, setConflictingMove] = useState(null);
+    // Compromiso con hora: the explanation shown when the person touches a locked task.
+    const [focusLockNotice, setFocusLockNotice] = useState(null);
     const [reopeningTask, setReopeningTask] = useState(null);
     const [reopenReason, setReopenReason] = useState('CLIENT_CORRECTION');
     const [reopenNote, setReopenNote] = useState('');
@@ -336,6 +340,7 @@ const NativeTasks = () => {
                 clientName: task.client?.name || 'Sin Cliente',
                 assigneeName: task.assignee?.name || 'Sin Asignar',
                 assigneeId: task.assigneeId,
+                assigneeUserId: task.assignee?.userId || null,
                 assigneeAvatar: task.assignee?.avatarUrl || null,
                 assigneeRole: task.assignee?.role || 'Colaborador',
                 assigneeStatus: task.assignee?.statusMessage || '',
@@ -345,6 +350,7 @@ const NativeTasks = () => {
                 status: task.status,
                 isReturned: task.isReturned || false,
                 dueDate: task.dueDate,
+                focusDeadlineAt: task.focusDeadlineAt || null,
                 dueDateFormatted: task.dueDate ? task.dueDate.split('T')[0].split('-').reverse().join('-') : null,
                 completedAt: task.completedAt,
                 startedAt: task.startedAt,
@@ -611,6 +617,11 @@ const NativeTasks = () => {
         return tasks.filter(t => getColumnId(t.status) === 'devuelto');
     }, [tasks]);
 
+    // Compromiso con hora: managers are never locked; a person with an active commitment cannot open or move
+    // their other tasks until it is done.
+    const viewerIsManager = ['ADMIN', 'PROJECT_MANAGER', 'PM'].includes(currentUser?.role);
+    const focusLockFor = (task) => getTaskLock({ tasks, task, viewerUserId: currentUser?.id, viewerIsManager });
+
     const onDragEnd = async (result) => {
         const { destination, source, draggableId } = result;
         if (!destination) return;
@@ -620,6 +631,12 @@ const NativeTasks = () => {
         const destinationColumnId = destination.droppableId;
         const sourceColumnId = source.droppableId;
         const targetTask = tasks.find(task => String(task.id) === String(taskId));
+
+        const lock = getTaskLock({ tasks, task: targetTask, viewerUserId: currentUser?.id, viewerIsManager });
+        if (lock) {
+            setFocusLockNotice(lock);
+            return;
+        }
 
         if (!result.timingConflictConfirmed && destinationColumnId === 'en-proceso') {
             const conflict = findConflictingActiveTask(tasks, targetTask);
@@ -1050,6 +1067,34 @@ const NativeTasks = () => {
                 </DialogContent>
             </Dialog>
 
+            <Dialog open={!!focusLockNotice} onOpenChange={(open) => !open && setFocusLockNotice(null)}>
+                <DialogContent className="sm:max-w-md border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
+                            <Clock className="h-5 w-5 text-brand-cyan-deep dark:text-brand-cyan" /> Primero tu compromiso
+                        </DialogTitle>
+                        <DialogDescription>
+                            {focusLockNotice ? focusLockMessage(focusLockNotice.focusTask) : ''}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter className="gap-3 sm:justify-between">
+                        <button onClick={() => setFocusLockNotice(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                            Entendido
+                        </button>
+                        <button
+                            onClick={() => {
+                                const focusTask = tasks.find(task => String(task.id) === String(focusLockNotice?.focusTask?.id)) || focusLockNotice?.focusTask;
+                                setFocusLockNotice(null);
+                                if (focusTask) setEditingTask(focusTask);
+                            }}
+                            className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                        >
+                            Abrir mi compromiso
+                        </button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <TaskLifecycleDialog
                 open={!!reopeningTask}
                 onOpenChange={(open) => {
@@ -1199,6 +1244,8 @@ const NativeTasks = () => {
                                                     index={index}
                                                     highlightedTaskId={highlightedTaskId}
                                                     onClick={(t) => setEditingTask(t)}
+                                                    lock={focusLockFor(task)}
+                                                    onLocked={setFocusLockNotice}
                                                     onReturn={(t) => setReturningTask(t)}
                                                     onReopen={(t) => setReopeningTask(t)}
                                                     onDelete={(t) => setDeletingTask(t)}
@@ -1287,6 +1334,8 @@ const NativeTasks = () => {
                                                         index={index}
                                                         highlightedTaskId={highlightedTaskId}
                                                         onClick={(t) => setEditingTask(t)}
+                                                        lock={focusLockFor(task)}
+                                                        onLocked={setFocusLockNotice}
                                                         onReturn={(t) => setReturningTask(t)}
                                                         onReopen={(t) => setReopeningTask(t)}
                                                         onDelete={(t) => setDeletingTask(t)}
@@ -1311,10 +1360,10 @@ const NativeTasks = () => {
     );
 };
 
-const TaskCard = ({ task, index, ...surfaceProps }) => (
-    <Draggable draggableId={String(task.id)} index={index}>
+const TaskCard = ({ task, index, lock = null, ...surfaceProps }) => (
+    <Draggable draggableId={String(task.id)} index={index} isDragDisabled={Boolean(lock)}>
         {(provided, snapshot) => (
-            <TaskCardSurface task={task} provided={provided} snapshot={snapshot} {...surfaceProps} />
+            <TaskCardSurface task={task} provided={provided} snapshot={snapshot} lock={lock} {...surfaceProps} />
         )}
     </Draggable>
 );
@@ -1323,8 +1372,10 @@ const TaskCard = ({ task, index, ...surfaceProps }) => (
 // `renderClone` draws through a portal on <body>. The glass columns (backdrop-blur) each create a
 // stacking context, so a card dragged from inside its column would paint behind the neighbouring
 // column no matter its z-index; the portal takes the moving card out of the columns altogether.
-const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick, onReturn, onReopen, onDelete }) => {
+const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick, onReturn, onReopen, onDelete, lock = null, onLocked }) => {
     const isHighlighted = highlightedTaskId === String(task.id);
+    const isFocusTask = isActiveFocusTask(task);
+    const focusTime = isFocusTask ? bogotaTimeOf(task.focusDeadlineAt) : '';
     const columnId = getColumnId(task.status);
     const isDone = columnId === 'realizado';
     const isReturned = columnId === 'devuelto';
@@ -1350,8 +1401,9 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                     ref={provided.innerRef}
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
-                    className={cn("relative mb-3 cursor-pointer group/card", priorityBadgeClass && "pt-6")}
-                    onClick={() => onClick(task)}
+                    data-task-locked={lock ? 'true' : undefined}
+                    className={cn("relative mb-3 group/card", priorityBadgeClass && "pt-6", lock ? "cursor-not-allowed opacity-60" : "cursor-pointer")}
+                    onClick={() => (lock ? onLocked(lock) : onClick(task))}
                     style={provided.draggableProps.style}
                 >
                     {/* Priority tab: a folder tab standing above the top-left corner of the card, outline continuous with the card. */}
@@ -1408,6 +1460,24 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                             {/* Row 1: status chips (returned, timer) + quick actions on the top-right corner */}
                             <div className="flex items-start justify-between gap-2 pr-16">
                                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                                    {isFocusTask && (
+                                        <span
+                                            data-task-focus-chip
+                                            title={`Compromiso con hora: solo esta tarea hasta las ${focusTime}`}
+                                            className="inline-flex items-center gap-1 rounded-lg border border-brand-cyan/30 bg-brand-cyan/10 px-1.5 py-0.5 text-[10px] font-bold text-brand-cyan-deep dark:text-brand-cyan"
+                                        >
+                                            <Clock className="h-3 w-3" /> Hasta las {focusTime}
+                                        </span>
+                                    )}
+                                    {lock && (
+                                        <span
+                                            data-task-lock-chip
+                                            title={focusLockMessage(lock.focusTask)}
+                                            className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-tight text-zinc-500 dark:border-white/10 dark:bg-white/10 dark:text-zinc-300"
+                                        >
+                                            <Lock className="h-3 w-3" /> Bloqueada
+                                        </span>
+                                    )}
                                     {isReturned && (
                                         <span className="flex items-center gap-1 rounded-lg bg-destructive/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-tight text-destructive">
                                             <TaskReturnIcon className="w-2.5 h-2.5" /> Devuelto

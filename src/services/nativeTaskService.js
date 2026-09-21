@@ -231,7 +231,7 @@ const statusMapper = {
 };
 
 export const createTask = async ({
-    title, dueDate, assigneeId, creatorId, comments, status, clientId,
+    title, dueDate, focusDeadlineAt = null, assigneeId, creatorId, comments, status, clientId,
     isPriority = false, priority = null, isSpecial = false, referenceUrl = null,
     contentItemId = null, followOnCreate = false,
     initial_references = [], initial_inputs = [], initial_insumos = [], initial_comments = [],
@@ -258,6 +258,7 @@ export const createTask = async ({
                 data: {
                     title,
                     dueDate: dueDate ? new Date(dueDate) : null,
+                    focusDeadlineAt: focusDeadlineAt ? new Date(focusDeadlineAt) : null,
                     assigneeId,
                     creatorId,
                     comments,
@@ -634,6 +635,10 @@ export const updateTask = async (id, data, updaterId = null) => {
         // Handle explicit incoming date parsing
         if (updateData.dueDate) {
             updateData.dueDate = new Date(updateData.dueDate);
+        }
+        // Compromiso con hora: an explicit null clears it; a value is stored as an instant.
+        if ('focusDeadlineAt' in updateData) {
+            updateData.focusDeadlineAt = updateData.focusDeadlineAt ? new Date(updateData.focusDeadlineAt) : null;
         }
 
         const reciprocalContentUpdate = buildContentItemUpdateFromTask({

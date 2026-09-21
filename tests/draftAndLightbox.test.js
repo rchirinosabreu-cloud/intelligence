@@ -251,7 +251,7 @@ test('Task Deadline DatePicker - uses Brainstudio themed calendar chrome', async
     const helper = readFileSync('src/lib/brainDatePicker.js', 'utf8');
     const css = readFileSync('src/index.css', 'utf8');
 
-    assert.ok(code.includes('brainDatePickerProps'), 'Task deadline picker should opt into the shared Brainstudio calendar props.');
+    assert.ok(code.includes("from '@/components/ui/BrainDatePicker'"), 'Task deadline picker should be the shared BrainDatePicker, which applies the Brainstudio calendar props.');
     assert.ok(helper.includes("calendarClassName: 'brain-datepicker'"), 'Shared calendar props should opt into the Brainstudio calendar theme.');
     assert.ok(helper.includes("popperClassName: 'brain-datepicker-popper'"), 'Shared calendar props should use a scoped popper class.');
     assert.ok(helper.includes("registerLocale('es', es)"), 'Shared calendar helper should register the Spanish datepicker locale.');

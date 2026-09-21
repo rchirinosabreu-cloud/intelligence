@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import DatePicker from 'react-datepicker';
+import * as Popover from '@radix-ui/react-popover';
+import { Clock, X } from '@/components/ui/icons';
 // The picker stylesheet is loaded once by src/main.jsx (and by each local preview fixture).
 import {
   brainDatePickerProps, dateKeyToPickerDate, pickerDateToKey, splitDateTimeKey, joinDateTimeKey,
@@ -49,16 +51,41 @@ export function BrainDatePicker({ id, value, onChange, className, placeholder = 
 
 const ClockContext = createContext(null);
 
-function CalendarWithClock({ className, children }) {
-  const { time, canSelectTime, onTimeChange, onClose } = useContext(ClockContext);
+/**
+ * The one hour list of the platform: the "Hora" column of the calendar, also used on its own by BrainTimePicker.
+ * `hours` are 'HH:mm' strings (quarter hours by default); a stored hour outside the list is shown anyway.
+ */
+export function BrainTimeColumn({ hours = QUARTER_HOURS, time, canSelectTime = true, onTimeChange, className }) {
   const listRef = useRef(null);
-  const hours = !time || QUARTER_HOURS.includes(time) ? QUARTER_HOURS : [...QUARTER_HOURS, time].sort();
+  const list = !time || hours.includes(time) ? hours : [...hours, time].sort();
 
   useEffect(() => {
-    const list = listRef.current;
-    const selected = list?.querySelector('[aria-pressed="true"]');
-    if (selected) list.scrollTop = selected.offsetTop - list.offsetTop - list.clientHeight / 2 + selected.clientHeight / 2;
+    const element = listRef.current;
+    const selected = element?.querySelector('[aria-pressed="true"]');
+    if (selected) element.scrollTop = selected.offsetTop - element.offsetTop - element.clientHeight / 2 + selected.clientHeight / 2;
   }, [time]);
+
+  return (
+    <div data-brain-time-column className={cn('flex w-20 shrink-0 flex-col border-l border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900', className)}>
+      <div className="border-b border-zinc-100 px-2 py-3 text-center text-sm font-semibold text-zinc-900 dark:border-zinc-800 dark:text-zinc-100">Hora</div>
+      <div ref={listRef} className="relative max-h-64 overflow-y-auto overscroll-contain py-1">
+        {list.map(hour => (
+          <button key={hour} type="button" aria-pressed={hour === time} disabled={!canSelectTime} onClick={() => onTimeChange(hour)}
+            // Keep focus where it is: inside a modal dialog, moving focus to a portaled list makes the dialog pull it
+            // back and the list dismiss itself before the click lands (keyboard users still tab into the list).
+            onMouseDown={event => event.preventDefault()}
+            className={cn('block min-h-11 w-full px-2 py-2 text-center text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:opacity-50',
+              hour === time ? 'bg-primary font-semibold text-primary-foreground' : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800')}>
+            {hour}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CalendarWithClock({ className, children }) {
+  const { time, canSelectTime, onTimeChange, onClose } = useContext(ClockContext);
 
   return (
     <div data-brain-date-time-popup className={className} role="dialog" aria-label="Elegir fecha y hora" onKeyDown={event => {
@@ -69,19 +96,72 @@ function CalendarWithClock({ className, children }) {
     }}>
       <div className="flex max-w-[calc(100vw-2rem)]">
         <div className="relative min-w-0 bg-white dark:bg-zinc-900">{children}</div>
-        <div data-brain-time-column className="flex w-20 shrink-0 flex-col border-l border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="border-b border-zinc-100 px-2 py-3 text-center text-sm font-semibold text-zinc-900 dark:border-zinc-800 dark:text-zinc-100">Hora</div>
-          <div ref={listRef} className="relative max-h-64 overflow-y-auto overscroll-contain py-1">
-            {hours.map(hour => (
-              <button key={hour} type="button" aria-pressed={hour === time} disabled={!canSelectTime} onClick={() => onTimeChange(hour)}
-                className={cn('block min-h-11 w-full px-2 py-2 text-center text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary disabled:opacity-50',
-                  hour === time ? 'bg-primary font-semibold text-primary-foreground' : 'text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800')}>
-                {hour}
-              </button>
-            ))}
-          </div>
-        </div>
+        <BrainTimeColumn time={time} canSelectTime={canSelectTime} onTimeChange={onTimeChange} />
       </div>
+    </div>
+  );
+}
+
+// ---- hour only ---------------------------------------------------------------------------------------------
+
+/**
+ * A clock button that opens the platform's hour list (Rodny, 21 September 2026: "solo un icono de reloj").
+ *   value 'HH:mm' | ''   onChange('HH:mm' | '')
+ * With an hour set, the button shows it and a small X clears it. `hours` narrows the list (e.g. the working day).
+ */
+export function BrainTimePicker({ id, value, onChange, hours = QUARTER_HOURS, disabled, ariaLabel = 'Hora', clearLabel = 'Quitar hora', title, className }) {
+  const [open, setOpen] = useState(false);
+  const active = Boolean(value);
+
+  return (
+    <div data-brain-time-picker className={cn('relative inline-flex shrink-0 items-stretch', className)}>
+      <Popover.Root open={open && !disabled} onOpenChange={setOpen}>
+        <Popover.Trigger asChild>
+          <button
+            type="button"
+            id={id}
+            disabled={disabled}
+            aria-label={active ? `${ariaLabel}: ${value}` : ariaLabel}
+            aria-pressed={active}
+            title={title || ariaLabel}
+            className={cn(
+              'inline-flex h-full min-w-11 items-center justify-center gap-1.5 rounded-lg border px-2.5 text-sm font-semibold transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50',
+              active
+                ? 'border-brand-cyan/50 bg-brand-cyan/10 pr-8 text-brand-cyan-deep dark:text-brand-cyan'
+                : 'border-zinc-200/70 text-zinc-400 hover:border-primary/50 hover:text-brand-cyan-deep dark:border-zinc-800/70 dark:hover:text-brand-cyan'
+            )}
+          >
+            <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
+            {active && <span className="tabular-nums">{value}</span>}
+          </button>
+        </Popover.Trigger>
+        <Popover.Portal>
+          <Popover.Content
+            align="end"
+            sideOffset={6}
+            collisionPadding={8}
+            onOpenAutoFocus={event => event.preventDefault()}
+            // Inside a modal dialog the dialog keeps focus for itself; that must not close the list.
+            onFocusOutside={event => event.preventDefault()}
+            // A modal dialog switches pointer events off for the whole body; the portaled list must switch them back on.
+            style={{ pointerEvents: 'auto' }}
+            className="brain-popover-surface z-[130] w-24 overflow-hidden p-0"
+          >
+            <BrainTimeColumn hours={hours} time={value} onTimeChange={hour => { onChange(hour); setOpen(false); }} className="w-full border-l-0" />
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
+      {active && !disabled && (
+        <button
+          type="button"
+          aria-label={clearLabel}
+          title={clearLabel}
+          onClick={() => onChange('')}
+          className="absolute right-1 top-1/2 inline-flex h-6 w-6 -translate-y-1/2 items-center justify-center rounded-md text-zinc-400 transition-colors hover:bg-destructive/10 hover:text-destructive focus:outline-none focus-visible:ring-2 focus-visible:ring-destructive/30"
+        >
+          <X className="h-3.5 w-3.5" aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
 }

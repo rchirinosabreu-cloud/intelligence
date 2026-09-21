@@ -115,7 +115,8 @@ test('DatePicker instances use the global Brainstudio calendar chrome', async ()
 
   for (const file of files) {
     const source = await read(file);
-    assert.match(source, /brainDatePickerProps/, `${file} should opt into the shared calendar props`);
+    // Either the shared props on a direct picker, or the shared BrainDatePicker component that applies them.
+    assert.match(source, /brainDatePickerProps|from '@\/components\/ui\/BrainDatePicker'/, `${file} should opt into the shared calendar props`);
   }
 });
 

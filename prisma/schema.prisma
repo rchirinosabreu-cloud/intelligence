@@ -864,6 +864,8 @@ model Task {
   id                String            @id @default(uuid())
   title             String
   dueDate           DateTime?
+  // Compromiso con hora: mientras esté activa, la persona solo trabaja en esta tarea (solo admin/PM la fijan).
+  focusDeadlineAt   DateTime?
   assigneeId        String?
   comments          String?
   clientId          String
@@ -897,6 +899,7 @@ model Task {
   workSessions      TaskWorkSession[]
 
   @@index([assigneeId, status, dueDate])
+  @@index([assigneeId, focusDeadlineAt])
   @@index([creatorId, status, createdAt])
   @@index([creatorId, status, returnedAt])
   @@index([clientId, status, createdAt])

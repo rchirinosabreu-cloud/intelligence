@@ -117,6 +117,7 @@ export const canDeleteTask = (user, task) => {
 const TASK_UPDATE_FIELDS = new Set([
   'title',
   'dueDate',
+  'focusDeadlineAt',
   'assigneeId',
   'comments',
   'clientId',
