@@ -1331,15 +1331,25 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                                 priorityBadgeClass
                             )}
                         >
+                            {/* The tab is part of the card: same surface, same thin outline; the priority only tints it faintly. */}
                             <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
                                 <defs>
                                     <linearGradient id={`task-tab-${task.id}`} x1="0" y1="0" x2="1" y2="0">
-                                        <stop offset="0" stopColor="currentColor" stopOpacity="0.32" />
-                                        <stop offset="1" style={{ stopColor: 'hsl(var(--card))' }} stopOpacity="1" />
+                                        <stop offset="0" stopColor="currentColor" stopOpacity="0.14" />
+                                        <stop offset="1" stopColor="currentColor" stopOpacity="0" />
                                     </linearGradient>
                                 </defs>
+                                <path d={TASK_TAB_FILL_PATH} style={{ fill: 'hsl(var(--card))' }} />
                                 <path d={TASK_TAB_FILL_PATH} fill={`url(#task-tab-${task.id})`} />
-                                <path d={TASK_TAB_STROKE_PATH} fill="none" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                                <path
+                                    d={TASK_TAB_STROKE_PATH}
+                                    fill="none"
+                                    strokeWidth="1"
+                                    vectorEffect="non-scaling-stroke"
+                                    className={cn(
+                                        isReturned || overdue ? 'stroke-destructive/50' : task.isSpecial ? 'stroke-brand-magenta/70' : 'stroke-zinc-200 dark:stroke-white/10'
+                                    )}
+                                />
                             </svg>
                             <span className="relative flex items-center gap-1.5">
                                 <Tag className="h-3 w-3" />

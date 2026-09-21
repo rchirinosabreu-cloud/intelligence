@@ -25,8 +25,11 @@ test('the card shows priority as a tag, then title, assignee and date, a snippet
   assert.match(card, /<svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 28" preserveAspectRatio="none"/, 'the tab is a drawn folder shape: rounded top-left and a curve that slopes into the card edge (Rodny, 21 September 2026)');
   assert.match(source, /const TASK_TAB_FILL_PATH = 'M0,28 V10 A10,10 0 0 1 10,0 H68 C[^']*100,24 V28 Z'/, 'the fill closes below the card edge so the card border disappears under the tab');
   assert.match(source, /const TASK_TAB_STROKE_PATH = 'M0\.5,28[^']*100,24'/, 'the outline is open at the bottom and ends tangent to the card top edge');
-  assert.match(card, /stopColor="currentColor"/, 'the gradient starts from the priority colour');
-  assert.match(card, /stopColor: 'hsl\(var\(--card\)\)'/, 'the gradient fades into the card surface in both themes');
+  assert.match(card, /style=\{\{ fill: 'hsl\(var\(--card\)\)' \}\}/, 'the tab is filled with the card surface: it is part of the card, not a badge on top');
+  assert.match(card, /stopOpacity="0\.14"[\s\S]*?stopOpacity="0"/, 'the priority only tints the tab faintly, fading to nothing (Rodny, 21 September 2026)');
+  assert.match(card, /stroke-zinc-200 dark:stroke-white\/10/, 'the tab outline is the same thin grey as the card border, so the outline reads as one shape');
+  assert.match(card, /stroke-destructive\/50/, 'overdue and returned cards keep their red outline on the tab too');
+  assert.doesNotMatch(card, /stroke="currentColor"/, 'the outline never takes the priority colour');
   assert.match(card, /priorityBadgeClass && "pt-6"/, 'the wrapper reserves room above the body with padding (a margin would collapse and drag the tab down with the body)');
   assert.match(card, /priorityBadgeClass && "rounded-tl-none"/, 'the card body squares its top-left corner so the tab arc becomes its corner');
   assert.match(source, /URGENTE: 'text-destructive'/, 'urgent keeps the historical red');
