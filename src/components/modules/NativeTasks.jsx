@@ -30,7 +30,8 @@ import {
     RefreshCw,
     Tag
 } from '@/components/ui/icons';
-import { bogotaTimeOf, focusLockMessage, getTaskLock, isActiveFocusTask, nextLockReaction } from '@/lib/taskFocus';
+import { bogotaTimeOf, focusLockMessage, getTaskLock, isActiveFocusTask, isFocusOverdue, nextLockReaction } from '@/lib/taskFocus';
+import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -245,6 +246,8 @@ const NativeTasks = () => {
     const [focusLockNotice, setFocusLockNotice] = useState(null);
     const [shakingTaskId, setShakingTaskId] = useState(null);
     const lockAttemptsRef = useRef({});
+    // "Pedir más tiempo": the focus task the person is asking about (Rodny, 21 September 2026).
+    const [extensionTask, setExtensionTask] = useState(null);
     const [reopeningTask, setReopeningTask] = useState(null);
     const [reopenReason, setReopenReason] = useState('CLIENT_CORRECTION');
     const [reopenNote, setReopenNote] = useState('');
@@ -1105,19 +1108,40 @@ const NativeTasks = () => {
                         <button onClick={() => setFocusLockNotice(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
                             Entendido
                         </button>
-                        <button
-                            onClick={() => {
-                                const focusTask = tasks.find(task => String(task.id) === String(focusLockNotice?.focusTask?.id)) || focusLockNotice?.focusTask;
-                                setFocusLockNotice(null);
-                                if (focusTask) setEditingTask(focusTask);
-                            }}
-                            className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
-                        >
-                            Abrir mi compromiso
-                        </button>
+                        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
+                            {/* The person asks the manager for more time: how much and why (Rodny, 21 September 2026). */}
+                            <button
+                                type="button"
+                                data-focus-extension-open
+                                onClick={() => {
+                                    const focusTask = tasks.find(task => String(task.id) === String(focusLockNotice?.focusTask?.id)) || focusLockNotice?.focusTask;
+                                    setFocusLockNotice(null);
+                                    if (focusTask) setExtensionTask(focusTask);
+                                }}
+                                className="rounded-xl border border-brand-cyan/40 px-4 py-2 text-sm font-medium text-brand-cyan-deep hover:bg-brand-cyan/10 dark:text-brand-cyan"
+                            >
+                                Pedir más tiempo
+                            </button>
+                            <button
+                                onClick={() => {
+                                    const focusTask = tasks.find(task => String(task.id) === String(focusLockNotice?.focusTask?.id)) || focusLockNotice?.focusTask;
+                                    setFocusLockNotice(null);
+                                    if (focusTask) setEditingTask(focusTask);
+                                }}
+                                className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                            >
+                                Abrir mi compromiso
+                            </button>
+                        </div>
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <FocusExtensionDialog
+                task={extensionTask}
+                open={!!extensionTask}
+                onOpenChange={(open) => { if (!open) setExtensionTask(null); }}
+            />
 
             <TaskLifecycleDialog
                 open={!!reopeningTask}
@@ -1404,6 +1428,8 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
     const isHighlighted = highlightedTaskId === String(task.id);
     const isFocusTask = isActiveFocusTask(task);
     const focusTime = isFocusTask ? bogotaTimeOf(task.focusDeadlineAt) : '';
+    // Past the hour the chip turns red; the lock stays until the task is done or the manager changes the hour.
+    const focusOverdue = isFocusTask && isFocusOverdue(task);
     const columnId = getColumnId(task.status);
     const isDone = columnId === 'realizado';
     const isReturned = columnId === 'devuelto';
@@ -1495,10 +1521,18 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                                     {isFocusTask && (
                                         <span
                                             data-task-focus-chip
-                                            title={`Compromiso con hora: solo esta tarea hasta las ${focusTime}`}
-                                            className="inline-flex items-center gap-1 rounded-lg border border-brand-cyan/30 bg-brand-cyan/10 px-1.5 py-0.5 text-[10px] font-bold text-brand-cyan-deep dark:text-brand-cyan"
+                                            data-focus-overdue={focusOverdue ? 'true' : undefined}
+                                            title={focusOverdue
+                                                ? `El compromiso venció a las ${focusTime}. Termínalo o pide más tiempo.`
+                                                : `Compromiso con hora: solo esta tarea hasta las ${focusTime}`}
+                                            className={cn(
+                                                "inline-flex items-center gap-1 rounded-lg border px-1.5 py-0.5 text-[10px] font-bold",
+                                                focusOverdue
+                                                    ? "border-destructive/30 bg-destructive/10 text-destructive"
+                                                    : "border-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan"
+                                            )}
                                         >
-                                            <Clock className="h-3 w-3" /> Hasta las {focusTime}
+                                            <Clock className="h-3 w-3" /> {focusOverdue ? `Venció a las ${focusTime}` : `Hasta las ${focusTime}`}
                                         </span>
                                     )}
                                     {isReturned && (

@@ -46,6 +46,7 @@ import { useNavigate } from 'react-router-dom';
 import { getTaskSystemEventPresentation } from '@/lib/taskTiming';
 import TaskWorkHistory from './TaskWorkHistory';
 import TaskLifecycleDialog from './TaskLifecycleDialog';
+import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
@@ -217,6 +218,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const { toast } = useToast();
     const confirm = useConfirmDialog();
     const { currentUser } = useAuth();
+    // "Pedir más tiempo" for the commitment of this task (Rodny, 21 September 2026).
+    const [askingMoreTime, setAskingMoreTime] = useState(false);
     const navigate = useNavigate();
     const isEdition = !!taskData?.id;
 
@@ -2158,15 +2161,28 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                             className="h-12 sm:h-[38px]"
                                         />
                                     ) : formData.focusTime ? (
-                                        <span
-                                            data-task-focus-readonly
-                                            className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-lg border border-brand-cyan/50 bg-brand-cyan/10 px-2.5 text-sm font-semibold tabular-nums text-brand-cyan-deep dark:text-brand-cyan sm:h-[38px]"
-                                            title={`Compromiso hasta las ${formData.focusTime}. Tus demás pendientes esperan a que la termines.`}
-                                        >
-                                            <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
-                                            {formData.focusTime}
-                                            <span className="sr-only">Compromiso hasta las {formData.focusTime}. Tus demás pendientes esperan a que la termines.</span>
-                                        </span>
+                                        <>
+                                            <span
+                                                data-task-focus-readonly
+                                                className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-lg border border-brand-cyan/50 bg-brand-cyan/10 px-2.5 text-sm font-semibold tabular-nums text-brand-cyan-deep dark:text-brand-cyan sm:h-[38px]"
+                                                title={`Compromiso hasta las ${formData.focusTime}. Tus demás pendientes esperan a que la termines.`}
+                                            >
+                                                <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                                {formData.focusTime}
+                                                <span className="sr-only">Compromiso hasta las {formData.focusTime}. Tus demás pendientes esperan a que la termines.</span>
+                                            </span>
+                                            {/* The person can ask the manager for more time from the task itself (Rodny, 21 September 2026). */}
+                                            {isEdition && (
+                                                <button
+                                                    type="button"
+                                                    data-focus-extension-open
+                                                    onClick={() => setAskingMoreTime(true)}
+                                                    className="inline-flex h-12 shrink-0 items-center rounded-lg border border-zinc-200/70 px-2.5 text-xs font-medium text-zinc-600 transition-colors hover:border-brand-cyan/50 hover:text-brand-cyan-deep dark:border-zinc-800/70 dark:text-zinc-300 dark:hover:text-brand-cyan sm:h-[38px]"
+                                                >
+                                                    Pedir más tiempo
+                                                </button>
+                                            )}
+                                        </>
                                     ) : null}
                                 </div>
                             </div>
@@ -2842,6 +2858,17 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 </div>
 
             </DialogContent>
+
+            <FocusExtensionDialog
+                task={{
+                    id: formData.id,
+                    title: formData.title,
+                    status: formData.status,
+                    focusDeadlineAt: focusDeadlineIso((formData.dueDate || '').split('T')[0], formData.focusTime)
+                }}
+                open={askingMoreTime}
+                onOpenChange={setAskingMoreTime}
+            />
 
             <TaskLifecycleDialog
                 open={showReintegratePrompt}

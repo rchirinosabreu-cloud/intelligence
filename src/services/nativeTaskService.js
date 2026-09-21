@@ -7,6 +7,7 @@ import { recordOperationalTrace } from './operationalTraceService.js';
 import { classifyTaskDeterministically } from './deterministicTaskClassifier.js';
 import { pickAllowedTaskUpdates } from '../config/security.js';
 import { closeTaskWorkSession, formatTaskReturnEventContent } from '../lib/taskTiming.js';
+import { bogotaTimeOf } from '../lib/taskFocus.js';
 import {
     buildContentTaskTitle,
     buildContentItemUpdateFromTask,
@@ -259,6 +260,7 @@ export const createTask = async ({
                     title,
                     dueDate: dueDate ? new Date(dueDate) : null,
                     focusDeadlineAt: focusDeadlineAt ? new Date(focusDeadlineAt) : null,
+                    focusSetById: focusDeadlineAt ? (creatorId || null) : null,
                     assigneeId,
                     creatorId,
                     comments,
@@ -639,6 +641,9 @@ export const updateTask = async (id, data, updaterId = null) => {
         // Compromiso con hora: an explicit null clears it; a value is stored as an instant.
         if ('focusDeadlineAt' in updateData) {
             updateData.focusDeadlineAt = updateData.focusDeadlineAt ? new Date(updateData.focusDeadlineAt) : null;
+            // Who set the hour gets the overdue notice and the extension requests; a new hour can be notified again.
+            updateData.focusSetById = updateData.focusDeadlineAt ? (updaterId || null) : null;
+            updateData.focusOverdueNotifiedAt = null;
         }
 
         const reciprocalContentUpdate = buildContentItemUpdateFromTask({
@@ -1046,6 +1051,31 @@ export const updateTask = async (id, data, updaterId = null) => {
                 } catch (err) {
                     console.error("Error sending update notification:", err);
                 }
+            }
+        }
+
+        // --- Compromiso con hora: la persona se entera cuando un manager fija, mueve o quita la hora ---
+        if ('focusDeadlineAt' in data && updatedTask.assigneeId) {
+            try {
+                const assigneeMember = await prisma.teamMember.findUnique({
+                    where: { id: updatedTask.assigneeId },
+                    select: { userId: true }
+                });
+                const assigneeUser = assigneeMember?.userId ? { id: assigneeMember.userId } : null;
+                if (assigneeUser && assigneeUser.id !== updaterId) {
+                    const time = bogotaTimeOf(updatedTask.focusDeadlineAt);
+                    await createNotification({
+                        userId: assigneeUser.id,
+                        message: updatedTask.focusDeadlineAt
+                            ? `Tienes un compromiso: «${updatedTask.title}» hasta las ${time}. Hasta que la termines, tus demás pendientes quedan bloqueados.`
+                            : `Se quitó la hora de compromiso de «${updatedTask.title}». Tus pendientes vuelven a estar disponibles.`,
+                        type: 'TASK_FOCUS_SET',
+                        relatedId: id,
+                        actorId: updaterId
+                    });
+                }
+            } catch (focusNotifyError) {
+                console.error('[nativeTaskService] Focus notification failed:', focusNotifyError?.message || focusNotifyError);
             }
         }
 

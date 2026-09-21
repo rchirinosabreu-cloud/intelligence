@@ -91,13 +91,71 @@ export const nextLockReaction = (previous, now = Date.now()) => {
   return { reaction: 'shake', record: { at: now } };
 };
 
-export const focusLockMessage = (focusTask, inProgressTask = null) => {
+/** Pasó la hora y la tarea sigue sin realizarse. El bloqueo no se suelta solo: lo suelta el manager o se termina la tarea. */
+export const isFocusOverdue = (task, now = Date.now()) => (
+  isActiveFocusTask(task) && new Date(task.focusDeadlineAt).getTime() < Number(now)
+);
+
+// Rodny, 21 September 2026: the person asks for more time choosing how much and why; the manager who set the hour decides.
+export const FOCUS_EXTENSION_OPTIONS = Object.freeze([
+  Object.freeze({ minutes: 15, label: '15 minutos' }),
+  Object.freeze({ minutes: 30, label: '30 minutos' }),
+  Object.freeze({ minutes: 60, label: '1 hora' }),
+  Object.freeze({ minutes: 120, label: '2 horas' }),
+  Object.freeze({ minutes: 240, label: '4 horas' })
+]);
+export const FOCUS_EXTENSION_REASON_MAX = 300;
+
+export const focusExtensionLabel = (minutes) => FOCUS_EXTENSION_OPTIONS.find((option) => option.minutes === Number(minutes))?.label || null;
+
+/** Valida una petición de prórroga: devuelve `{ minutes, reason }` limpio o lanza un error con `statusCode` 400. */
+export const parseFocusExtensionRequest = ({ minutes, reason } = {}) => {
+  const label = focusExtensionLabel(minutes);
+  if (!label) {
+    const error = new Error('Elige cuánto tiempo más necesitas.');
+    error.statusCode = 400;
+    throw error;
+  }
+  const cleanReason = String(reason || '').replace(/\s+/g, ' ').trim();
+  if (!cleanReason) {
+    const error = new Error('Cuéntale al manager por qué necesitas más tiempo.');
+    error.statusCode = 400;
+    throw error;
+  }
+  return { minutes: Number(minutes), label, reason: cleanReason.slice(0, FOCUS_EXTENSION_REASON_MAX) };
+};
+
+export const focusLockMessage = (focusTask, inProgressTask = null, now = Date.now()) => {
   const title = focusTask?.title || 'tu compromiso';
   const time = bogotaTimeOf(focusTask?.focusDeadlineAt);
   const when = time ? ` hasta las ${time}` : '';
+  if (isFocusOverdue(focusTask, now)) {
+    // Past the hour the tone changes: finish it or ask for more time; the lock stays until the manager decides.
+    const tail = inProgressTask?.title
+      ? ` Termina «${inProgressTask.title}» y sigue con tu compromiso, o pide más tiempo. Mientras tanto, tus demás pendientes siguen bloqueados.`
+      : ' Termínalo o pide más tiempo. Mientras tanto, tus demás pendientes siguen bloqueados.';
+    return `Tu compromiso «${title}» venció${time ? ` a las ${time}` : ''} y sigue sin realizarse.${tail}`;
+  }
   if (inProgressTask?.title) {
     // Rodny, 21 September 2026: "en cuanto termines tal, deberás continuar con tal".
     return `Tienes un compromiso${when}. En cuanto termines «${inProgressTask.title}», deberás continuar con «${title}». Mientras tanto, tus demás pendientes quedan bloqueados.`;
   }
   return `Estás enfocado en «${title}»${when}. Podrás abrir y mover tus demás pendientes cuando la marques como realizada.`;
+};
+
+/** Textos de los avisos al vencer: para quien puso la hora y para la persona. */
+export const focusOverdueMessages = (task, assigneeName = 'La persona') => {
+  const time = bogotaTimeOf(task?.focusDeadlineAt);
+  const title = task?.title || 'la tarea';
+  return {
+    manager: `${assigneeName} no cumplió el compromiso «${title}»${time ? ` a las ${time}` : ''}. Ábrela para darle más tiempo, quitar la hora o reasignarla.`,
+    person: `Tu compromiso «${title}» venció${time ? ` a las ${time}` : ''}. Termínalo o pide más tiempo.`
+  };
+};
+
+/** Texto del aviso al manager cuando la persona pide más tiempo. */
+export const focusExtensionRequestMessage = ({ task, assigneeName = 'La persona', label, reason }) => {
+  const time = bogotaTimeOf(task?.focusDeadlineAt);
+  const title = task?.title || 'la tarea';
+  return `${assigneeName} pide ${label} más para «${title}»${time ? ` (compromiso a las ${time})` : ''}: ${reason}. Ábrela y ajusta la hora con el reloj.`;
 };
