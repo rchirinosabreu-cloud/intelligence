@@ -160,9 +160,13 @@ test('the panel edits the hour with the shared calendar and only for managers; t
   assert.match(css, /@keyframes brain-shake \{/, 'the shake is a shared keyframe');
   assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.brain-shake \{\s*animation: brain-shake-still/, 'reduced motion gets a still blink that still ends the animation');
   assert.match(card, /isActiveFocusTask\(task\)[\s\S]*?<Clock/, 'the focus task shows a clock with its hour');
-  assert.match(card, /<Lock/, 'locked cards show a lock');
+  // Rodny, 21 September 2026: a locked card is only dimmed. No badge, no border, no lock icon.
+  assert.match(card, /lock \? "cursor-not-allowed opacity-60" : "cursor-pointer"/, 'locked cards are dimmed and nothing else');
+  assert.doesNotMatch(card, /data-task-lock-chip|Bloqueada|<Lock/, 'no "Bloqueada" badge and no lock icon on the card');
+  assert.doesNotMatch(card, /lock && ["'`]/, 'the lock never adds a class of its own to the card body');
+  assert.match(board, /if \(!deepLinkLock\) setHighlightedTaskId\(taskId\);/, 'a locked task is not highlighted (red ring) when reached by deep link');
   assert.match(board, /focusLockNotice/, 'the explanation is a platform dialog');
-  assert.match(board, /const deepLinkLock = getTaskLock\(\{[\s\S]*?task: taskToOpen[\s\S]*?\}\);\s*if \(deepLinkLock\) \{\s*setFocusLockNotice\(deepLinkLock\);\s*\} else \{\s*setEditingTask\(taskToOpen\);/, 'a locked task does not open from ?taskId= (notifications, alerts, deep links) either: the popup explains instead (Rodny, 21 September 2026)');
+  assert.match(board, /const deepLinkLock = taskToOpen \? getTaskLock\(\{[\s\S]*?task: taskToOpen[\s\S]*?\}\) : null;[\s\S]*?if \(deepLinkLock\) \{\s*setFocusLockNotice\(deepLinkLock\);\s*\} else \{\s*setEditingTask\(taskToOpen\);/, 'a locked task does not open from ?taskId= (notifications, alerts, deep links) either: the popup explains instead (Rodny, 21 September 2026)');
   assert.match(board, /focusLockMessage\(focusLockNotice\.focusTask, focusLockNotice\.inProgressTask\)/, 'the popup names what is already in progress');
   assert.match(board, /if \(!isPMOrAdmin\)[\s\S]*?getTaskLock|const lock = getTaskLock\(\{ tasks, task: targetTask/, 'drag and drop respects the lock too');
 });
