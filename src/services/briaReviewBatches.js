@@ -61,26 +61,71 @@ export const aggregateContentPlanReviewBatches = completed => {
   };
 };
 
+const subBatch = (batch, items) => {
+  const { items: _all, ...base } = batch.snapshot;
+  return { index: batch.index, key: hash({ ...base, items }), itemIds: items.map(item => item.id), snapshot: { ...base, items } };
+};
+
 export const reviewContentPlanBatches = async ({ snapshot, analysisHash, reviewBatch, loadCheckpoint, saveCheckpoint, signal }) => {
   const batches = buildContentPlanReviewBatches(snapshot);
   const checkpoint = await loadCheckpoint?.();
   const stored = checkpoint?.analysisHash === analysisHash && Array.isArray(checkpoint.completed) ? checkpoint.completed : [];
+  const totalItems = batches.reduce((n, part) => n + part.itemIds.length, 0);
   const completed = [];
+  let plannedBatches = batches.length;
   let resumedBatches = 0;
-  for (const batch of batches) {
+  let splitBatches = 0;
+  const persist = () => saveCheckpoint?.({ analysisHash, totalBatches: plannedBatches, totalItems, completed: [...completed] });
+
+  // Review one lot. When the model does not confirm every piece of it, split the
+  // lot in halves and review each half: the plan is still covered completely and
+  // no partial score is ever published. A single piece that is never confirmed
+  // fails like before, so the bounded retry of the whole job still applies.
+  const reviewOrSplit = async batch => {
     signal?.throwIfAborted();
-    const previous = stored.find(part => part.key === batch.key);
-    if (previous) resumedBatches += 1;
-    const result = previous || { ...await reviewBatch(batch), key: batch.key, itemIds: batch.itemIds };
-    completed.push(result);
-    if (!previous) await saveCheckpoint?.({ analysisHash, totalBatches: batches.length, totalItems: batches.reduce((n, part) => n + part.itemIds.length, 0), completed: [...completed] });
-  }
+    try {
+      completed.push({ ...await reviewBatch(batch), key: batch.key, itemIds: batch.itemIds });
+      await persist();
+      return;
+    } catch (error) {
+      if (error?.code !== 'BRIA_REVIEW_INCOMPLETE_BATCH' || batch.itemIds.length < 2) throw error;
+    }
+    splitBatches += 1;
+    plannedBatches += 1;
+    const middle = Math.ceil(batch.snapshot.items.length / 2);
+    for (const items of [batch.snapshot.items.slice(0, middle), batch.snapshot.items.slice(middle)]) await resolveBatch(subBatch(batch, items));
+  };
+
+  // Reuse stored parts that cover this lot, exactly or as pieces of an earlier
+  // split, and review only what is left.
+  const resolveBatch = async batch => {
+    signal?.throwIfAborted();
+    const exact = stored.find(part => part.key === batch.key);
+    if (exact) {
+      resumedBatches += 1;
+      completed.push(exact);
+      return;
+    }
+    const covering = stored.filter(part => part.itemIds?.length && !completed.includes(part) && part.itemIds.every(id => batch.itemIds.includes(id)));
+    if (!covering.length) return reviewOrSplit(batch);
+    const coveredIds = new Set(covering.flatMap(part => part.itemIds));
+    for (const part of covering) {
+      resumedBatches += 1;
+      completed.push(part);
+    }
+    const remaining = batch.snapshot.items.filter(item => !coveredIds.has(item.id));
+    splitBatches += 1;
+    plannedBatches += covering.length + (remaining.length ? 1 : 0) - 1;
+    if (remaining.length) await reviewOrSplit(subBatch(batch, remaining));
+  };
+
+  for (const batch of batches) await resolveBatch(batch);
   signal?.throwIfAborted();
   // Each completed part is one model call, paid in this attempt or in the one
   // that wrote the checkpoint; both belong to the cost of the published result.
   return {
     review: aggregateContentPlanReviewBatches(completed), model: completed.at(-1)?.model, requestId: completed.at(-1)?.requestId,
-    usage: { ...summarizeAiCalls(completed), batches: completed.length, resumedBatches }
+    usage: { ...summarizeAiCalls(completed), batches: completed.length, resumedBatches, splitBatches }
   };
 };
 

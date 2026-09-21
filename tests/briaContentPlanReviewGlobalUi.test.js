@@ -83,6 +83,17 @@ test('a failed review shows the technical cause of the last attempt under the hu
   assert.match(bootstrap, /"briaReviewDiagnostics" JSONB/);
 });
 
+test('a failed manual rerun answers with a readable message and the panel never shows a raw error code', async () => {
+  const routes = await read('src/routes/api/content.js');
+  const panel = await read('src/components/modules/ContentPlan/BriaContentPlanReview.jsx');
+  assert.match(routes, /status\(422\)/);
+  assert.match(routes, /BRIA_REVIEW_INCOMPLETE_BATCH/);
+  assert.match(routes, /BRIA_UPSTREAM_UNAVAILABLE/);
+  assert.match(panel, /humanizeReviewRequestError/);
+  assert.doesNotMatch(panel, /setError\(requestError\.response\?\.data\?\.error \|\|/);
+  assert.match(panel, /loadReview\(\{ silent: true \}\)/);
+});
+
 test('the project design contract forbids black AI banners globally', async () => {
   const agents = await read('AGENTS.md');
   assert.match(agents, /nunca usar banners negros/i);

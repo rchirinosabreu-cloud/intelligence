@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Prisma } from '@prisma/client';
 import * as state from '../src/services/briaContentPlanReviewState.js';
-import { formatReviewDiagnostic } from '../src/lib/briaReviewDiagnostics.js';
+import { formatReviewDiagnostic, humanizeReviewRequestError } from '../src/lib/briaReviewDiagnostics.js';
 
 const now = new Date('2026-09-21T14:00:00.000Z');
 const lease = { planId: 'plan', token: 'token', requestedAt: new Date('2026-09-21T13:58:00.000Z'), startedAt: now, attempts: 2 };
@@ -78,6 +78,15 @@ test('finalized or deleted plans archive their open findings and stop pretending
   assert.deepEqual(plans.where, { status: 'FINALIZADO', deletedAt: null, briaReviewState: 'PENDING', briaReviewFindings: { none: { status: 'VERIFYING' } } });
   assert.deepEqual(plans.data, { briaReviewState: 'STALE', briaReviewLeaseToken: null, briaReviewNextAttemptAt: null, briaReviewStartedAt: null });
   assert.deepEqual(result, { findings: 3, plans: 1 });
+});
+
+test('a raw error code from the server is never shown to the team as the explanation', () => {
+  const fallback = 'Bria no pudo completar la revisión en este intento.';
+  assert.equal(humanizeReviewRequestError({ error: 'INTERNAL_SERVER_ERROR', code: 'BRIA_REVIEW_INCOMPLETE_BATCH' }, fallback), fallback);
+  assert.equal(humanizeReviewRequestError({ error: 'BRIA_UPSTREAM_UNAVAILABLE' }, fallback), fallback);
+  assert.equal(humanizeReviewRequestError({ error: 'La parrilla no existe o ya no está disponible.' }, fallback), 'La parrilla no existe o ya no está disponible.');
+  assert.equal(humanizeReviewRequestError(undefined, fallback), fallback);
+  assert.equal(humanizeReviewRequestError({ error: '' }, fallback), fallback);
 });
 
 test('the technical cause is shown in one short line the team can read', () => {

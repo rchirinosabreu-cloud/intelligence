@@ -86,6 +86,13 @@ router.get('/plans/:id/bria-review', async (req, res) => {
   }
 });
 
+// The review ran but could not be completed. That is an outcome the team can
+// read, not an internal error: 5xx bodies are reduced to a code in production.
+const REVIEW_OUTCOME_CODES = new Set(['BRIA_REVIEW_INCOMPLETE_BATCH', 'BRIA_REVIEW_CONTEXT_TOO_LARGE', 'BRIA_REVIEW_TIMEOUT']);
+const reviewOutcomeMessage = error => error.code === 'BRIA_REVIEW_CONTEXT_TOO_LARGE'
+  ? error.message
+  : 'Bria no pudo completar la revisión en este intento. El motivo queda registrado y lo volverá a intentar automáticamente.';
+
 router.post('/plans/:id/bria-review', async (req, res) => {
   try {
     const outcome = await runContentPlanReviewJob({
@@ -103,11 +110,12 @@ router.post('/plans/:id/bria-review', async (req, res) => {
     if (error.code === 'CONTENT_PLAN_NOT_FOUND') {
       return res.status(404).json({ error: error.message, code: error.code });
     }
+    if (REVIEW_OUTCOME_CODES.has(error.code)) {
+      return res.status(422).json({ error: reviewOutcomeMessage(error), code: error.code });
+    }
     const upstreamUnavailable = error.code === 'OPENAI_NOT_CONFIGURED' || Number(error.status) >= 400;
     return res.status(upstreamUnavailable ? 502 : 500).json({
-      error: upstreamUnavailable
-        ? 'Bria no pudo completar la revisión en este momento.'
-        : 'No fue posible revisar esta parrilla.',
+      error: upstreamUnavailable ? 'BRIA_UPSTREAM_UNAVAILABLE' : 'BRIA_CONTENT_PLAN_REVIEW_FAILED',
       code: error.code || 'BRIA_CONTENT_PLAN_REVIEW_FAILED'
     });
   }

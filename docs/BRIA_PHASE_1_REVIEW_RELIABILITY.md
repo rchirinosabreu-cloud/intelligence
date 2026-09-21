@@ -69,6 +69,16 @@ Hasta hoy una revisión agotada guardaba solo el mensaje humano («No se pudo co
 
 Pruebas: `tests/briaReviewDiagnostics.test.js` (dobles), dos casos nuevos contra PostgreSQL real en `tests/briaReviewJobsDatabase.test.js` (la causa se guarda por intento y se limpia al completar; finalizar archiva los abiertos y respeta los `VERIFYING`), la cadena del panel en `tests/briaContentPlanReviewGlobalUi.test.js` y la línea renderizada con capturas en `tests/browser/briaReviewVerification.mjs`.
 
+## Lotes que se parten solos (21 de septiembre de 2026)
+
+La primera causa registrada por los diagnósticos, el mismo día de su despliegue, fue `BRIA_REVIEW_INCOMPLETE_BATCH` en una parrilla de 157 hallazgos: en un lote de 12 piezas el modelo respondió sin confirmar todas las piezas y, por la regla de no publicar puntaje parcial, la revisión entera fallaba tres veces y se rendía.
+
+Ahora `reviewContentPlanBatches` parte ese lote en dos mitades y revisa cada una; si una mitad tampoco se confirma, se vuelve a partir, hasta llegar a una pieza sola, que sigue fallando como antes. Cada mitad revisada se guarda en el checkpoint por separado y, al reanudar tras un fallo temporal, se reutilizan las partes hechas y solo se revisa lo que falta. `totalBatches` del checkpoint crece con cada partición para que el avance mostrado siga siendo honesto. La cobertura publicada sigue siendo completa (`scope.complete`, todos los IDs) y `usage.review` añade `splitBatches` y `discarded` (las respuestas pagadas que no sirvieron), que entran en los totales.
+
+El intento manual que no se completa responde `422` con un mensaje legible y el código; antes respondía `500` y producción lo reducía a `INTERNAL_SERVER_ERROR`, que el panel mostraba tal cual. El panel pasa ahora todo error por `humanizeReviewRequestError` y vuelve a cargar la revisión tras un intento fallido.
+
+Pruebas: partición, reanudación de mitades, pieza única que nunca se confirma y errores que no se parten en `tests/briaReviewBatches.test.js`; coste con intento descartado en `tests/briaContentPlanReviewPersistence.test.js`; mensajes en `tests/briaReviewDiagnostics.test.js` y `tests/briaContentPlanReviewGlobalUi.test.js`; intento manual fallido con cuerpo saneado en `tests/browser/briaReviewVerification.mjs`.
+
 ## Siguiente entrega recomendada: cobertura y criterio verificables
 
 1. Revisar todas las piezas por lotes y exponer cobertura real. Continuación implementada en [cobertura y recuperación por lotes](BRIA_REVIEW_BATCH_COVERAGE.md), con sus pruebas y límites documentados. Impedir que una revisión parcial resuelva hallazgos fuera de su cobertura.
