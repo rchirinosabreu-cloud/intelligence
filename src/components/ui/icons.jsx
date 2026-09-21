@@ -43,6 +43,7 @@ import CircleDotIconData from '@hugeicons/core-free-icons/CircleDotIcon';
 import CircleIconData from '@hugeicons/core-free-icons/CircleIcon';
 import ClipboardListIconData from '@hugeicons/core-free-icons/ClipboardListIcon';
 import Clock01IconData from '@hugeicons/core-free-icons/Clock01Icon';
+import ClockPlusIconData from '@hugeicons/core-free-icons/ClockPlusIcon';
 import CloudUploadIconData from '@hugeicons/core-free-icons/CloudUploadIcon';
 import Coffee01IconData from '@hugeicons/core-free-icons/Coffee01Icon';
 import ColorPickerIconData from '@hugeicons/core-free-icons/ColorPickerIcon';
@@ -213,6 +214,8 @@ export const Circle = createIcon(CircleIconData, 'Circle');
 export const CircleDot = createIcon(CircleDotIconData, 'CircleDot');
 export const ClipboardList = createIcon(ClipboardListIconData, 'ClipboardList');
 export const Clock = createIcon(Clock01IconData, 'Clock');
+// Reloj con un «+»: pedir más tiempo para un compromiso (Rodny, 21 de septiembre de 2026).
+export const ClockPlus = createIcon(ClockPlusIconData, 'ClockPlus');
 export const CloudUpload = createIcon(CloudUploadIconData, 'CloudUpload');
 export const Coffee = createIcon(Coffee01IconData, 'Coffee');
 export const Compass = createIcon(CompassIconData, 'Compass');

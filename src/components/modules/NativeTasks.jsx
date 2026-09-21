@@ -13,6 +13,7 @@ import {
     MoreHorizontal,
     CheckCircle2,
     Clock,
+    ClockPlus,
     AlertCircle,
     User,
     Loader2,
@@ -1142,8 +1143,9 @@ const NativeTasks = () => {
                                     setFocusLockNotice(null);
                                     if (focusTask) { setExtensionRequired(false); setExtensionTask(focusTask); }
                                 }}
-                                className="rounded-xl border border-brand-cyan/40 px-4 py-2 text-sm font-medium text-brand-cyan-deep hover:bg-brand-cyan/10 dark:text-brand-cyan"
+                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-brand-cyan/40 px-4 py-2 text-sm font-medium text-brand-cyan-deep hover:bg-brand-cyan/10 dark:text-brand-cyan"
                             >
+                                <ClockPlus className="h-4 w-4" aria-hidden="true" />
                                 Pedir más tiempo
                             </button>
                             <button
