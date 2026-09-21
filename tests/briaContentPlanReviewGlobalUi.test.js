@@ -70,6 +70,19 @@ test('Bria header keeps compact controls aligned and the disclosure action at th
   assert.doesNotMatch(panel, />\s*\{isExpanded \? 'Cerrar' : 'Ver más'\}\s*</);
 });
 
+test('a failed review shows the technical cause of the last attempt under the human message', async () => {
+  const panel = await read('src/components/modules/ContentPlan/BriaContentPlanReview.jsx');
+  const service = await read('src/services/briaContentPlanReviewService.js');
+  const schema = await read('prisma/schema.prisma');
+  const bootstrap = await read('scripts/ensure-content-plan-reviews-schema.js');
+  assert.match(panel, /formatReviewDiagnostic/);
+  assert.match(panel, /meta\.diagnostics/);
+  assert.match(panel, /data-bria-review-diagnostic/);
+  assert.match(service, /diagnostics: /);
+  assert.match(schema, /briaReviewDiagnostics\s+Json\?/);
+  assert.match(bootstrap, /"briaReviewDiagnostics" JSONB/);
+});
+
 test('the project design contract forbids black AI banners globally', async () => {
   const agents = await read('AGENTS.md');
   assert.match(agents, /nunca usar banners negros/i);

@@ -24,6 +24,7 @@ try {
       ALTER TABLE "ContentPlan" ADD COLUMN IF NOT EXISTS "briaReviewAttempts" INTEGER NOT NULL DEFAULT 0;
       ALTER TABLE "ContentPlan" ADD COLUMN IF NOT EXISTS "briaReviewNextAttemptAt" TIMESTAMPTZ;
       ALTER TABLE "ContentPlan" ADD COLUMN IF NOT EXISTS "briaReviewCheckpoint" JSONB;
+      ALTER TABLE "ContentPlan" ADD COLUMN IF NOT EXISTS "briaReviewDiagnostics" JSONB;
 
       IF NOT review_column_existed THEN
         UPDATE "ContentPlan"

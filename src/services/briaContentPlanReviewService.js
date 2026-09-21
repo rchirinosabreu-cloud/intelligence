@@ -257,7 +257,7 @@ export const getContentPlanReview = async (planId, { db = prisma } = {}) => {
   const [plan, run, findings] = await Promise.all([
     db.contentPlan.findUnique({
       where: { id: planId },
-      select: { id: true, clientId: true, briaReviewState: true, briaReviewError: true, briaReviewRequestedAt: true, briaReviewStartedAt: true, briaReviewCheckpoint: true }
+      select: { id: true, clientId: true, briaReviewState: true, briaReviewError: true, briaReviewRequestedAt: true, briaReviewStartedAt: true, briaReviewCheckpoint: true, briaReviewDiagnostics: true }
     }),
     db.contentPlanReview.findFirst({ where: { planId, status: 'COMPLETED' }, orderBy: { completedAt: 'desc' } }),
     db.contentPlanReviewFinding.findMany({
@@ -270,12 +270,14 @@ export const getContentPlanReview = async (planId, { db = prisma } = {}) => {
     review: null, evidence: [],
     meta: {
       clientId: plan.clientId, planId, state: plan.briaReviewState, error: plan.briaReviewError,
+      diagnostics: Array.isArray(plan.briaReviewDiagnostics) ? plan.briaReviewDiagnostics : null,
       requestedAt: plan.briaReviewRequestedAt, startedAt: plan.briaReviewStartedAt, cached: true, progress: getReviewBatchProgress(plan.briaReviewCheckpoint)
     }
   };
   const result = toApiResult({ ...run, clientId: plan.clientId }, findings, plan.briaReviewState);
   result.meta.cached = true;
   result.meta.error = plan.briaReviewError;
+  result.meta.diagnostics = Array.isArray(plan.briaReviewDiagnostics) ? plan.briaReviewDiagnostics : null;
   result.meta.requestedAt = plan.briaReviewRequestedAt;
   result.meta.startedAt = plan.briaReviewStartedAt;
   result.meta.progress = getReviewBatchProgress(plan.briaReviewCheckpoint);

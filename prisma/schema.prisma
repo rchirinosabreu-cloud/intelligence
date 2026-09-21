@@ -538,6 +538,7 @@ model ContentPlan {
   briaReviewAttempts    Int                        @default(0)
   briaReviewNextAttemptAt DateTime?                @db.Timestamptz()
   briaReviewCheckpoint  Json?
+  briaReviewDiagnostics Json?
   contentItems          ContentItem[]
   briaReviews           ContentPlanReview[]
   briaReviewFindings    ContentPlanReviewFinding[]
