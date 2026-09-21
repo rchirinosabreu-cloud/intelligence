@@ -412,9 +412,18 @@ const NativeTasks = () => {
             setHighlightedTaskId(taskId);
             const taskToOpen = tasks.find(t => String(t.id) === taskId);
             if (taskToOpen) {
-                setEditingTask(taskToOpen);
-                if (getColumnId(taskToOpen.status) === 'devuelto') {
-                    setIsReturnedDialogOpen(true);
+                // A locked task never opens, not even from a notification or a deep link (Rodny, 21 September 2026).
+                const deepLinkLock = getTaskLock({
+                    tasks, task: taskToOpen, viewerUserId: currentUser?.id,
+                    viewerIsManager: ['ADMIN', 'PROJECT_MANAGER', 'PM'].includes(currentUser?.role)
+                });
+                if (deepLinkLock) {
+                    setFocusLockNotice(deepLinkLock);
+                } else {
+                    setEditingTask(taskToOpen);
+                    if (getColumnId(taskToOpen.status) === 'devuelto') {
+                        setIsReturnedDialogOpen(true);
+                    }
                 }
             }
             const paramsToClean = new URLSearchParams(location.search);

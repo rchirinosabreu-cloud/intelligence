@@ -48,7 +48,7 @@ test('the lock applies to the person\'s other tasks only, never to managers and 
   const working = { id: 'working', title: 'Caption Expo', status: 'EN_CURSO', assigneeId: 'member-helen', assigneeUserId: 'user-helen', focusDeadlineAt: null };
   assert.equal(getTaskLock({ tasks: [focus, other, working], task: working, viewerUserId: 'user-helen' }), null, 'the task already in progress is not locked');
   assert.deepEqual(getTaskLock({ tasks: [focus, other, working], task: other, viewerUserId: 'user-helen' }), { focusTask: focus, inProgressTask: working }, 'the other pending tasks stay locked and the notice knows what is in progress');
-  assert.match(focusLockMessage(focus, working), /Termina «Caption Expo», que ya tienes en proceso; después solo puedes trabajar en tu compromiso/);
+  assert.equal(focusLockMessage(focus, working), 'Tienes un compromiso hasta las 14:00. En cuanto termines «Caption Expo», deberás continuar con «Redactar parrilla». Mientras tanto, tus demás pendientes quedan bloqueados.', 'Rodny\'s wording: "en cuanto termines tal, deberás continuar con tal"');
   assert.equal(getTaskLock({ tasks, task: foreign, viewerUserId: 'user-helen' }), null, 'somebody else\'s task is not hers to be locked');
   assert.equal(getTaskLock({ tasks, task: other, viewerUserId: 'user-helen', viewerIsManager: true }), null, 'managers are never locked');
   assert.equal(getTaskLock({ tasks, task: other, viewerUserId: 'user-melissa' }), null, 'a colleague looking at her board is not locked by her commitment');
@@ -84,7 +84,7 @@ test('the server refuses changes to the locked tasks of the person with a 423 an
       })
     }
   };
-  await assert.rejects(assertTaskNotLocked(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'other' }), (error) => error.statusCode === 423 && /«Redactar parrilla» hasta las 14:00/.test(error.message) && /Termina «Caption Expo»/.test(error.message) && error.focusTask.id === 'focus' && error.inProgressTask.id === 'working');
+  await assert.rejects(assertTaskNotLocked(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'other' }), (error) => error.statusCode === 423 && /En cuanto termines «Caption Expo», deberás continuar con «Redactar parrilla»/.test(error.message) && error.focusTask.id === 'focus' && error.inProgressTask.id === 'working');
   assert.deepEqual(calls[0][1].where, { focusDeadlineAt: { not: null }, status: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] }, assignee: { userId: 'user-helen' } });
   assert.deepEqual(calls[1][1].where, { status: 'EN_CURSO', assignee: { userId: 'user-helen' }, id: { not: 'focus' } }, 'the notice names what is already in progress');
   assert.equal(await assertTaskNotLocked(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'working' }), null, 'what was already in progress can be finished (Rodny, 21 September 2026)');
@@ -162,6 +162,7 @@ test('the panel edits the hour with the shared calendar and only for managers; t
   assert.match(card, /isActiveFocusTask\(task\)[\s\S]*?<Clock/, 'the focus task shows a clock with its hour');
   assert.match(card, /<Lock/, 'locked cards show a lock');
   assert.match(board, /focusLockNotice/, 'the explanation is a platform dialog');
+  assert.match(board, /const deepLinkLock = getTaskLock\(\{[\s\S]*?task: taskToOpen[\s\S]*?\}\);\s*if \(deepLinkLock\) \{\s*setFocusLockNotice\(deepLinkLock\);\s*\} else \{\s*setEditingTask\(taskToOpen\);/, 'a locked task does not open from ?taskId= (notifications, alerts, deep links) either: the popup explains instead (Rodny, 21 September 2026)');
   assert.match(board, /focusLockMessage\(focusLockNotice\.focusTask, focusLockNotice\.inProgressTask\)/, 'the popup names what is already in progress');
   assert.match(board, /if \(!isPMOrAdmin\)[\s\S]*?getTaskLock|const lock = getTaskLock\(\{ tasks, task: targetTask/, 'drag and drop respects the lock too');
 });
