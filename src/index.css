@@ -283,6 +283,25 @@
   animation: pulse-subtle 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
 
+/* A locked task card refuses the touch with a quick sideways shake (Rodny, 21 September 2026). */
+@keyframes brain-shake {
+  10%, 90% { transform: translateX(-2px); }
+  20%, 80% { transform: translateX(4px); }
+  30%, 50%, 70% { transform: translateX(-6px); }
+  40%, 60% { transform: translateX(6px); }
+}
+@keyframes brain-shake-still {
+  50% { opacity: 0.4; }
+}
+.brain-shake {
+  animation: brain-shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .brain-shake {
+    animation: brain-shake-still 0.35s ease both;
+  }
+}
+
 .brain-tip-highlight {
   position: relative;
   isolation: isolate;
