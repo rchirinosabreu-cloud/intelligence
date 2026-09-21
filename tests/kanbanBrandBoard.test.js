@@ -20,13 +20,24 @@ test('the board sits on the brand ambient and its columns are glass panels with 
   assert.match(source, /const columns = \[/, 'the columns definition keeps its name (other contracts depend on it)');
 });
 
+test('the dragged card is drawn through a portal, so it never paints behind the neighbouring glass column', () => {
+  // Rodny, 21 September 2026: "cuando arrastro una card a En proceso, queda detrás". Each brain-glass column
+  // (backdrop-blur) is a stacking context; a z-index inside the source column cannot beat a later sibling.
+  assert.match(board, /<Droppable\s+droppableId=\{col\.id\}\s+renderClone=\{\(provided, snapshot, rubric\) =>/, 'column droppables render the moving card with renderClone');
+  assert.match(board, /columnTasks\[rubric\.source\.index\]/, 'the clone shows the task being dragged from that column');
+  assert.match(board, /<TaskCardSurface[\s\S]*?provided=\{provided\}[\s\S]*?snapshot=\{snapshot\}/, 'the clone is the same card surface as the in-column card');
+  assert.match(card, /const TaskCardSurface = \(\{ task, provided, snapshot,/, 'the card surface takes the dnd props from outside so both the list and the clone can render it');
+  assert.match(card, /id=\{snapshot\.isClone \? undefined : `task-\$\{task\.id\}`\}/, 'the clone never duplicates the card DOM id (deep links scroll to the real card)');
+  assert.doesNotMatch(source, /getContainerForClone/, 'the default container (document.body) is enough: nothing there clips or restacks the card');
+});
+
 test('the card shows priority as a tag, then title, assignee and date, a snippet and a footer with client, files and comments', () => {
   assert.match(card, /data-task-priority-tag/, 'priority is a tab standing above the card');
   assert.match(card, /<svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 28" preserveAspectRatio="none"/, 'the tab is a drawn folder shape: rounded top-left and a curve that slopes into the card edge (Rodny, 21 September 2026)');
   assert.match(source, /const TASK_TAB_FILL_PATH = 'M0,28 V10 A10,10 0 0 1 10,0 H68 C[^']*100,24 V28 Z'/, 'the fill closes below the card edge so the card border disappears under the tab');
   assert.match(source, /const TASK_TAB_STROKE_PATH = 'M0\.5,28[^']*100,24'/, 'the outline is open at the bottom and ends tangent to the card top edge');
-  assert.match(card, /<path d=\{TASK_TAB_FILL_PATH\} className="fill-white dark:fill-zinc-900" \/>/, 'the tab is filled with the exact card surface of each theme (the near-black card token showed as a black block in dark mode)');
-  assert.doesNotMatch(card, /fill: 'hsl\(var\(--card\)\)'/, 'never the theme card token for the tab base');
+  assert.match(card, /<path d=\{TASK_TAB_FILL_PATH\} className="fill-white dark:fill-zinc-900" \/>/, 'the tab is filled with the very same surface as the card body (white, zinc-900 in dark mode): part of the card, never a black badge (Rodny, 21 September 2026)');
+  assert.doesNotMatch(card, /hsl\(var\(--card\)\)/, 'the card token is near black in dark mode, so the tab never uses it');
   assert.match(card, /<linearGradient id=\{`task-tab-\$\{task\.id\}`\} x1="0" y1="0" x2="0" y2="1">/, 'the tint runs top to bottom (Rodny, 21 September 2026)');
   assert.match(card, /stopOpacity="0\.18"[\s\S]*?offset="0\.85" stopColor="currentColor" stopOpacity="0"/, 'the priority tints the tab faintly and fades out completely before the card edge');
   assert.match(card, /stroke-zinc-200 dark:stroke-white\/10/, 'the tab outline is the same thin grey as the card border, so the outline reads as one shape');
