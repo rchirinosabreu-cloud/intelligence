@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils';
 import { triggerConfetti } from '@/utils/confetti';
 import BrainDatePicker, { BrainTimePicker } from '@/components/ui/BrainDatePicker';
 import { QUARTER_HOURS } from '@/lib/brainDatePicker';
-import { focusDeadlineIso, focusTimeFromIso } from '@/lib/taskFocus';
+import { FOCUS_EXTENSION_EVENT_TYPE, FOCUS_OVERDUE_EVENT_TYPE, focusDeadlineIso, focusTimeFromIso } from '@/lib/taskFocus';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { useAuth } from '@/context/AuthContext';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
@@ -111,6 +111,42 @@ const getFileVisualMeta = (file = {}) => {
         icon: isPdf ? FileText : isImage ? ImageIcon : FileText,
         label: isPdf ? 'PDF - Documento' : isImage ? `${ext} - Imagen` : `${ext} - Archivo`
     };
+};
+
+/**
+ * Novedades del sistema en la conversación de la tarea: devolución, reintegración, reapertura y, desde el
+ * 21 de septiembre de 2026, el vencimiento del compromiso y la petición de más tiempo (decisión de Rodny:
+ * "debería registrarse con el sistema de novedad que ya he manejado con reintegro, devolución y reapertura").
+ * Los tres primeros conservan sus colores heredados; los nuevos usan los tokens de marca.
+ */
+const TASK_EVENT_STYLES = {
+    system_return: {
+        label: 'Evento: Devolución', Icon: TaskReturnIcon,
+        card: 'border-destructive/20 bg-destructive/5', icon: 'bg-destructive/10 text-destructive',
+        title: 'text-destructive', badge: 'border-destructive/20 bg-destructive/10 text-destructive'
+    },
+    system_reopen: {
+        label: 'Evento: Reapertura', Icon: TaskReintegrateIcon,
+        card: 'bg-cyan-50/50 border-cyan-100 dark:bg-cyan-950/20 dark:border-cyan-900/30',
+        icon: 'bg-cyan-100 text-[#009EB9] dark:bg-cyan-950 dark:text-cyan-300',
+        title: 'text-[#009EB9]', badge: 'border-cyan-200 bg-cyan-100/70 text-cyan-800 dark:border-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-200'
+    },
+    system_reintegrate: {
+        label: 'Evento: Reintegración', Icon: CheckCircle2,
+        card: 'bg-emerald-50/40 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900/20',
+        icon: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400',
+        title: 'text-emerald-600', badge: 'border-emerald-200 bg-emerald-100/70 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200'
+    },
+    [FOCUS_OVERDUE_EVENT_TYPE]: {
+        label: 'Evento: Compromiso vencido', Icon: Clock,
+        card: 'border-destructive/20 bg-destructive/5', icon: 'bg-destructive/10 text-destructive',
+        title: 'text-destructive', badge: 'border-destructive/20 bg-destructive/10 text-destructive'
+    },
+    [FOCUS_EXTENSION_EVENT_TYPE]: {
+        label: 'Evento: Solicitud de tiempo', Icon: Clock,
+        card: 'border-brand-cyan/20 bg-brand-cyan/[0.06]', icon: 'bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan',
+        title: 'text-brand-cyan-deep dark:text-brand-cyan', badge: 'border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan'
+    }
 };
 
 const taskComposerLabelClass = "text-xs sm:text-[11px] font-medium text-zinc-500 dark:text-zinc-400";
@@ -1537,53 +1573,34 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     };
 
     const renderComment = (comment) => {
-        const isSystem = comment.type === 'system_return' || comment.type === 'system_reintegrate' || comment.type === 'system_reopen';
+        const eventStyle = TASK_EVENT_STYLES[comment.type];
         const contextData = { taskId: formData.id, commentId: comment.id };
 
-        if (isSystem) {
-            const isReturn = comment.type === 'system_return';
-            const isReopen = comment.type === 'system_reopen';
+        if (eventStyle) {
+            const EventIcon = eventStyle.Icon;
             const cleanContent = cleanSystemMessage(comment.content);
             const eventPresentation = getTaskSystemEventPresentation(comment.type, cleanContent);
 
             return (
-                <div key={comment.id} className={cn(
-                    "p-3.5 rounded-2xl mb-3 border flex gap-3.5 items-start shadow-sm",
-                    isReturn
-                        ? "border-destructive/20 bg-destructive/5"
-                        : isReopen
-                            ? "bg-cyan-50/50 border-cyan-100 dark:bg-cyan-950/20 dark:border-cyan-900/30"
-                            : "bg-emerald-50/40 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900/20"
-                )}>
-                    <div className={cn(
-                        "w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-sm",
-                        isReturn
-                            ? "bg-destructive/10 text-destructive"
-                            : isReopen
-                                ? "bg-cyan-100 text-[#009EB9] dark:bg-cyan-950 dark:text-cyan-300"
-                                : "bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400"
-                    )}>
-                        {isReturn ? <TaskReturnIcon size={13} /> : isReopen ? <TaskReintegrateIcon size={13} /> : <CheckCircle2 size={13} />}
+                <div key={comment.id} className={cn("p-3.5 rounded-2xl mb-3 border flex gap-3.5 items-start shadow-sm", eventStyle.card)}>
+                    <div className={cn("w-7 h-7 rounded-full flex items-center justify-center shrink-0 shadow-sm", eventStyle.icon)}>
+                        <EventIcon size={13} />
                     </div>
                     <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
-                            <span className={cn("text-[10px] font-black uppercase tracking-wider", isReturn ? "text-destructive" : isReopen ? "text-[#009EB9]" : "text-emerald-600")}>
-                                {isReturn ? "Evento: Devolución" : isReopen ? "Evento: Reapertura" : "Evento: Reintegración"}
+                            <span className={cn("text-[10px] font-black uppercase tracking-wider", eventStyle.title)}>
+                                {eventStyle.label}
                             </span>
                             <span className="text-[10px] text-zinc-400">•</span>
                             <span className="text-[10px] text-zinc-400 font-medium">{new Date(comment.createdAt).toLocaleString([], { dateStyle: 'short', timeStyle: 'short'})}</span>
                         </div>
                         <div className="space-y-2">
-                            <span className={cn(
-                                "inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold",
-                                isReturn
-                                    ? "border-destructive/20 bg-destructive/10 text-destructive"
-                                    : isReopen
-                                        ? "border-cyan-200 bg-cyan-100/70 text-cyan-800 dark:border-cyan-800 dark:bg-cyan-950/60 dark:text-cyan-200"
-                                        : "border-emerald-200 bg-emerald-100/70 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200"
-                            )}>
-                                {eventPresentation.badgeLabel}
-                            </span>
+                            {/* Sin etiqueta cuando repetiría el título del evento (Rodny, 21 de septiembre de 2026). */}
+                            {eventPresentation.badgeLabel && (
+                                <span className={cn("inline-flex rounded-full border px-2.5 py-1 text-[10px] font-bold", eventStyle.badge)}>
+                                    {eventPresentation.badgeLabel}
+                                </span>
+                            )}
                             <div className="text-sm font-medium leading-relaxed text-zinc-700 dark:text-zinc-300">
                                 <RichCommentContent content={eventPresentation.note} contextData={contextData} onImageClick={handleImagePreview} />
                             </div>

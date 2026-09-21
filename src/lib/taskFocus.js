@@ -108,6 +108,17 @@ export const FOCUS_EXTENSION_REASON_MAX = 300;
 
 export const focusExtensionLabel = (minutes) => FOCUS_EXTENSION_OPTIONS.find((option) => option.minutes === Number(minutes))?.label || null;
 
+/**
+ * La hora nueva al pedir más tiempo: se aplica sola, sin que nadie apruebe (Rodny, 21 de septiembre de 2026).
+ * Se cuenta desde el compromiso, o desde ahora si ya venció, para que la hora nueva nunca quede en el pasado.
+ */
+export const extendedFocusDeadline = (focusDeadlineAt, minutes, now = Date.now()) => {
+  if (!focusDeadlineAt) return null;
+  const current = new Date(focusDeadlineAt).getTime();
+  if (Number.isNaN(current)) return null;
+  return new Date(Math.max(current, Number(now)) + Number(minutes) * 60_000);
+};
+
 /** Valida una petición de prórroga: devuelve `{ minutes, reason }` limpio o lanza un error con `statusCode` 400. */
 export const parseFocusExtensionRequest = ({ minutes, reason } = {}) => {
   const label = focusExtensionLabel(minutes);
@@ -143,6 +154,33 @@ export const focusLockMessage = (focusTask, inProgressTask = null, now = Date.no
   return `Estás enfocado en «${title}»${when}. Podrás abrir y mover tus demás pendientes cuando la marques como realizada.`;
 };
 
+// Novedades del compromiso en la conversación de la tarea, con el mismo formato `[MOTIVO]\nnota` que
+// devolución, reintegración y reapertura (Rodny, 21 de septiembre de 2026).
+export const FOCUS_OVERDUE_EVENT_TYPE = 'system_focus_overdue';
+export const FOCUS_EXTENSION_EVENT_TYPE = 'system_focus_extension';
+
+export const formatFocusOverdueEventContent = (task) => {
+  const time = bogotaTimeOf(task?.focusDeadlineAt);
+  return `[FOCUS_OVERDUE]\nEl compromiso venció${time ? ` a las ${time}` : ''}.`;
+};
+
+export const formatFocusExtensionEventContent = ({ minutes, reason, newTime }) => (
+  `[FOCUS_EXTENSION:${minutes}]\n${reason}${newTime ? `\nEl compromiso pasó a las ${newTime}.` : ''}`
+);
+
+/** Presentación de esas novedades: etiqueta del evento y nota, como `getTaskSystemEventPresentation`. */
+export const focusEventPresentation = (type, content = '') => {
+  const text = String(content || '').trim();
+  const match = text.match(/^\[([^\]]+)\]\s*\n?([\s\S]*)$/);
+  const note = (match?.[2] ?? text).trim();
+  if (type === FOCUS_EXTENSION_EVENT_TYPE) {
+    const label = focusExtensionLabel(match?.[1]?.split(':')[1]);
+    return { badgeLabel: label ? `Se añadieron ${label}` : 'Más tiempo añadido', note };
+  }
+  // Sin etiqueta: repetiría el título del evento (Rodny, 21 de septiembre de 2026: «solo redunda»).
+  return { badgeLabel: null, note };
+};
+
 /** Textos de los avisos al vencer: para quien puso la hora y para la persona. */
 export const focusOverdueMessages = (task, assigneeName = 'La persona') => {
   const time = bogotaTimeOf(task?.focusDeadlineAt);
@@ -153,9 +191,10 @@ export const focusOverdueMessages = (task, assigneeName = 'La persona') => {
   };
 };
 
-/** Texto del aviso al manager cuando la persona pide más tiempo. */
-export const focusExtensionRequestMessage = ({ task, assigneeName = 'La persona', label, reason }) => {
-  const time = bogotaTimeOf(task?.focusDeadlineAt);
+/**
+ * Aviso a quien puso la hora cuando la persona se toma más tiempo. No hay nada que aprobar: la hora ya cambió.
+ */
+export const focusExtensionRequestMessage = ({ task, assigneeName = 'La persona', label, reason, newTime }) => {
   const title = task?.title || 'la tarea';
-  return `${assigneeName} pide ${label} más para «${title}»${time ? ` (compromiso a las ${time})` : ''}: ${reason}. Ábrela y ajusta la hora con el reloj.`;
+  return `${assigneeName} necesitaba ${label} más para «${title}»: ${reason}. Su compromiso pasó${newTime ? ` a las ${newTime}` : ''}.`;
 };

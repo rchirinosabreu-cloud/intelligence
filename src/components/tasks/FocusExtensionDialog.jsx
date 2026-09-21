@@ -7,10 +7,16 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { FOCUS_EXTENSION_OPTIONS, FOCUS_EXTENSION_REASON_MAX, bogotaTimeOf, isFocusOverdue } from '@/lib/taskFocus';
 
 /**
- * "Pedir más tiempo" (Rodny, 21 September 2026): the person chooses how much time and writes why.
- * The request lands as a notification on the manager who set the hour, who adjusts it with the clock.
+ * "Pedir más tiempo" (Rodny, 21 September 2026): the person chooses how much time and explains why, and the
+ * time is added to the commitment on the spot. Nobody approves it; whoever set the hour is just told.
+ * It lands as a novedad on the task.
+ *
+ * With `required` (the commitment expired) the dialog is inescapable: no X, no Escape, no click outside, no
+ * cancel. The person cannot do anything else on the board until they explain and send.
+ *
+ * It sits above the task panel (z-[100]/[111]) and its emoji popover (z-[125]), so it also works from inside it.
  */
-export default function FocusExtensionDialog({ task, open, onOpenChange, onSent }) {
+export default function FocusExtensionDialog({ task, open, onOpenChange, onSent, required = false }) {
   const { toast } = useToast();
   const [minutes, setMinutes] = useState(String(FOCUS_EXTENSION_OPTIONS[1].minutes));
   const [reason, setReason] = useState('');
@@ -20,7 +26,7 @@ export default function FocusExtensionDialog({ task, open, onOpenChange, onSent 
   const cleanReason = reason.trim();
   // Rodny, 21 September 2026: name the person who will read the reason (the task creator).
   const creatorName = task?.creatorName || task?.creator?.name || '';
-  const recipient = creatorName && creatorName !== 'Sistema' ? creatorName : 'quien lo puso';
+  const recipient = creatorName && creatorName !== 'Sistema' ? creatorName : 'quien puso el compromiso';
 
   const submit = async (event) => {
     event.preventDefault();
@@ -34,7 +40,10 @@ export default function FocusExtensionDialog({ task, open, onOpenChange, onSent 
       });
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.error || 'No se pudo enviar la petición.');
-      toast({ title: 'Petición enviada', description: `Pediste ${data.label || ''} más. Quien puso el compromiso decidirá y te avisamos.`.replace('  ', ' ') });
+      toast({
+        title: `Se añadieron ${data.label || 'más minutos'}`,
+        description: `Tu compromiso ahora es hasta las ${data.newTime}. Avisamos a ${recipient}.`
+      });
       setReason('');
       onOpenChange(false);
       onSent?.(data);
@@ -45,18 +54,29 @@ export default function FocusExtensionDialog({ task, open, onOpenChange, onSent 
     }
   };
 
+  const blockDismiss = (event) => { if (required) event.preventDefault(); };
+
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!sending) onOpenChange(next); }}>
-      <DialogContent className="sm:max-w-md border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <Dialog open={open} onOpenChange={(next) => { if (!sending && !(required && !next)) onOpenChange(next); }}>
+      <DialogContent
+        data-focus-extension-required={required ? 'true' : undefined}
+        showCloseButton={!required}
+        overlayClassName="z-[130]"
+        className="z-[131] sm:max-w-md border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+        onEscapeKeyDown={blockDismiss}
+        onPointerDownOutside={blockDismiss}
+        onInteractOutside={blockDismiss}
+      >
         <form onSubmit={submit} data-focus-extension-form>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
-              <Clock className="h-5 w-5 text-brand-cyan-deep dark:text-brand-cyan" /> Pedir más tiempo
+              <Clock className={`h-5 w-5 ${overdue ? 'text-destructive' : 'text-brand-cyan-deep dark:text-brand-cyan'}`} />
+              {required ? 'Tu compromiso venció' : 'Pedir más tiempo'}
             </DialogTitle>
             <DialogDescription>
               {overdue
-                ? `Tu compromiso «${task?.title}» venció${time ? ` a las ${time}` : ''}. Elige cuánto tiempo más necesitas y cuéntale por qué a ${recipient}.`
-                : `Tu compromiso «${task?.title}»${time ? ` es hasta las ${time}` : ''}. Elige cuánto tiempo más necesitas y cuéntale por qué a ${recipient}.`}
+                ? `Tu compromiso «${task?.title}» venció${time ? ` a las ${time}` : ''}. Elige cuánto tiempo más necesitas y explica el motivo.`
+                : `Tu compromiso «${task?.title}»${time ? ` es hasta las ${time}` : ''}. Elige cuánto tiempo más necesitas y explica el motivo.`}
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 space-y-4">
@@ -89,12 +109,15 @@ export default function FocusExtensionDialog({ task, open, onOpenChange, onSent 
             </div>
           </div>
           <DialogFooter className="mt-4 gap-3 sm:justify-between">
-            <button type="button" onClick={() => onOpenChange(false)} disabled={sending} className="rounded-xl px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800">
-              Cancelar
-            </button>
-            <button type="submit" disabled={!cleanReason || sending} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">
+            {/* Vencido: no hay salida. La persona no puede hacer otra cosa sin explicar (Rodny, 21 de septiembre de 2026). */}
+            {!required && (
+              <button type="button" onClick={() => onOpenChange(false)} disabled={sending} className="rounded-xl px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                Cancelar
+              </button>
+            )}
+            <button type="submit" disabled={!cleanReason || sending} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50 sm:ml-auto">
               {sending && <Loader2 className="h-4 w-4 animate-spin" />}
-              Enviar petición
+              {required ? 'Añadir tiempo y avisar' : 'Enviar petición'}
             </button>
           </DialogFooter>
         </form>

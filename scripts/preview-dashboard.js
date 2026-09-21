@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
-import { dashboardDemoClients, dashboardDemoCompletedTasks, dashboardDemoDashboard, dashboardDemoKanbanTasks, dashboardDemoTeam, dashboardDemoUser } from '../tests/fixtures/dashboardPreviewData.js';
+import { dashboardDemoClients, dashboardDemoCompletedTasks, dashboardDemoDashboard, dashboardDemoKanbanTasks, dashboardDemoTaskComments, dashboardDemoTeam, dashboardDemoUser } from '../tests/fixtures/dashboardPreviewData.js';
 
 // Local laboratory for the personal dashboard and the sidebar: the real App over a read-only mock API.
 // No dotenv, production server, database, storage, scheduler or proxy.
@@ -33,7 +33,11 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
           }
           // `?role=EDITOR` on the page lets the lab show the board as a non-manager (focus lock, no hour selector).
           const asEditor = /[?&]role=EDITOR/.test(req.headers.referer || '');
+          // `?future` keeps the commitment from having expired, so the mandatory dialog stays closed.
+          const focusFuture = /[?&]future/.test(req.headers.referer || '');
           const demoUser = asEditor ? { ...dashboardDemoUser, role: 'EDITOR' } : dashboardDemoUser;
+          const taskCommentsMatch = pathname.match(/^\/api\/tasks\/([^/]+)\/comments$/);
+          if (taskCommentsMatch) { res.end(JSON.stringify(dashboardDemoTaskComments(taskCommentsMatch[1]))); return; }
           const routes = {
             '/api/auth/me': demoUser,
             '/api/user/profile': demoUser,
@@ -43,7 +47,7 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
             '/api/tasks/returned-alerts': { tasks: [] }, '/api/tasks/work-alerts': { tasks: [] },
             '/api/push/status': { enabled: false, configured: false },
             '/api/metrics/quality-streak': { currentStreak: 12, maxStreak: 21, currentStreakDays: 12, currentReturnedTasksCount: Number(requestUrl.searchParams.get('returned') || 0) },
-            '/api/tasks': dashboardDemoKanbanTasks(),
+            '/api/tasks': dashboardDemoKanbanTasks(new Date(), { focusFuture }),
             '/api/tasks/completed': dashboardDemoCompletedTasks(),
             [`/api/dashboard/personal/${dashboardDemoUser.id}`]: dashboardDemoDashboard(),
           };

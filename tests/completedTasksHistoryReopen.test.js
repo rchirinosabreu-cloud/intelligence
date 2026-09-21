@@ -50,7 +50,11 @@ test('task lifecycle actions use semantic return and reintegration icons consist
 
   assert.match(kanban, /TaskReintegrateIcon[\s\S]{0,180}Reabrir tarea/);
   assert.match(kanban, /TaskReturnIcon[\s\S]{0,180}Devolver tarea/);
-  assert.match(sidePanel, /isReturn\s*\?\s*<TaskReturnIcon[\s\S]*:\s*isReopen\s*\?\s*<TaskReintegrateIcon[\s\S]*:\s*<CheckCircle2/);
+  // Desde el 21 de septiembre de 2026 los eventos del panel salen de un catálogo (`TASK_EVENT_STYLES`) en vez
+  // de una cadena de ternarios, para poder añadir los del compromiso con hora. Cada uno conserva su icono.
+  assert.match(sidePanel, /system_return: \{[\s\S]{0,120}Icon: TaskReturnIcon/);
+  assert.match(sidePanel, /system_reopen: \{[\s\S]{0,120}Icon: TaskReintegrateIcon/);
+  assert.match(sidePanel, /system_reintegrate: \{[\s\S]{0,120}Icon: CheckCircle2/);
   assert.match(sidePanel, /<TaskReintegrateIcon[^>]*\/>\s*Reintegrar Tarea/);
 });
 
