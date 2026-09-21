@@ -22,12 +22,16 @@ test('the board sits on the brand ambient and its columns are glass panels with 
 
 test('the card shows priority as a tag, then title, assignee and date, a snippet and a footer with client, files and comments', () => {
   assert.match(card, /data-task-priority-tag/, 'priority is a tab standing above the card');
-  assert.match(card, /absolute left-0 top-0 z-10[^"]*rounded-t-2xl border border-b-0/, 'the tab protrudes above the top-left corner like a folder tab, outline continuous with the card (Rodny, 21 September 2026)');
+  assert.match(card, /<svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 28" preserveAspectRatio="none"/, 'the tab is a drawn folder shape: rounded top-left and a curve that slopes into the card edge (Rodny, 21 September 2026)');
+  assert.match(source, /const TASK_TAB_FILL_PATH = 'M0,28 V10 A10,10 0 0 1 10,0 H68 C[^']*100,24 V28 Z'/, 'the fill closes below the card edge so the card border disappears under the tab');
+  assert.match(source, /const TASK_TAB_STROKE_PATH = 'M0\.5,28[^']*100,24'/, 'the outline is open at the bottom and ends tangent to the card top edge');
+  assert.match(card, /stopColor="currentColor"/, 'the gradient starts from the priority colour');
+  assert.match(card, /stopColor: 'hsl\(var\(--card\)\)'/, 'the gradient fades into the card surface in both themes');
   assert.match(card, /priorityBadgeClass && "pt-6"/, 'the wrapper reserves room above the body with padding (a margin would collapse and drag the tab down with the body)');
-  assert.match(card, /priorityBadgeClass && "rounded-tl-none"/, 'the card body squares its top-left corner to meet the tab');
-  assert.match(source, /URGENTE: 'bg-gradient-to-r from-destructive/, 'each priority tab has its own soft gradient');
-  assert.match(source, /NORMAL: 'bg-gradient-to-r from-blue-500/, 'normal priority keeps the historical blue (Rodny, 21 September 2026)');
-  assert.match(source, /ALTA: 'bg-gradient-to-r from-amber-500/, 'high priority keeps the historical orange');
+  assert.match(card, /priorityBadgeClass && "rounded-tl-none"/, 'the card body squares its top-left corner so the tab arc becomes its corner');
+  assert.match(source, /URGENTE: 'text-destructive'/, 'urgent keeps the historical red');
+  assert.match(source, /NORMAL: 'text-blue-600/, 'normal priority keeps the historical blue (Rodny, 21 September 2026)');
+  assert.match(source, /ALTA: 'text-amber-600/, 'high priority keeps the historical orange');
   assert.match(card, /taskPriorityBadgeConfig\[task\.priority\]/, 'the tab reads the shared priority config');
   assert.doesNotMatch(card, /data-task-category-tab/, 'the AI category never takes the tab: it lives in the footer only');
   assert.match(card, /data-task-assignee/, 'assignee name and avatar are a row of their own');

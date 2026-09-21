@@ -162,12 +162,18 @@ const CATEGORY_COLORS = {
 
 // Priority tabs on the Kanban cards (brand palette, 21 September 2026): a folder-like tab at the top-left corner
 // with a soft gradient per priority, like the reference board.
-// Colours stay the historical ones (red urgent, orange high, blue normal); only the shape changed.
+// Colours stay the historical ones (red urgent, orange high, blue normal); the colour drives the drawn tab
+// (fill gradient and outline use currentColor), so only the text colour is configured here.
 const taskPriorityBadgeConfig = {
-    URGENTE: 'bg-gradient-to-r from-destructive/25 to-white border-destructive/40 text-destructive dark:to-zinc-900',
-    ALTA: 'bg-gradient-to-r from-amber-500/35 to-white border-amber-500/50 text-amber-700 dark:to-zinc-900 dark:text-amber-300',
-    NORMAL: 'bg-gradient-to-r from-blue-500/30 to-white border-blue-500/40 text-blue-700 dark:to-zinc-900 dark:text-blue-300'
+    URGENTE: 'text-destructive',
+    ALTA: 'text-amber-600 dark:text-amber-400',
+    NORMAL: 'text-blue-600 dark:text-blue-400'
 };
+
+// Folder-tab outline: rounded top-left, then a curve that slopes down and meets the top edge of the card
+// (y=24 in a 28-high box; the fill continues to y=28 to cover the card border under the tab).
+const TASK_TAB_FILL_PATH = 'M0,28 V10 A10,10 0 0 1 10,0 H68 C77,0 81,6 85,13 C89,20 93,24 100,24 V28 Z';
+const TASK_TAB_STROKE_PATH = 'M0.5,28 V10 A9.5,9.5 0 0 1 10,0.5 H68 C77,0.5 81,6 85,13 C89,20 93,24 100,24';
 
 const taskPriorityLabels = {
     URGENTE: 'Urgente',
@@ -1321,12 +1327,24 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                         <span
                             data-task-priority-tag={task.priority}
                             className={cn(
-                                "absolute left-0 top-0 z-10 inline-flex h-7 items-center gap-1.5 rounded-t-2xl border border-b-0 pl-3.5 pr-4 text-[10px] font-bold uppercase tracking-wider",
+                                "absolute left-0 top-0 z-10 inline-flex h-7 items-center pl-3.5 pr-9 text-[10px] font-bold uppercase tracking-wider",
                                 priorityBadgeClass
                             )}
                         >
-                            <Tag className="h-3 w-3" />
-                            {priorityLabel}
+                            <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
+                                <defs>
+                                    <linearGradient id={`task-tab-${task.id}`} x1="0" y1="0" x2="1" y2="0">
+                                        <stop offset="0" stopColor="currentColor" stopOpacity="0.32" />
+                                        <stop offset="1" style={{ stopColor: 'hsl(var(--card))' }} stopOpacity="1" />
+                                    </linearGradient>
+                                </defs>
+                                <path d={TASK_TAB_FILL_PATH} fill={`url(#task-tab-${task.id})`} />
+                                <path d={TASK_TAB_STROKE_PATH} fill="none" stroke="currentColor" strokeOpacity="0.5" strokeWidth="1" vectorEffect="non-scaling-stroke" />
+                            </svg>
+                            <span className="relative flex items-center gap-1.5">
+                                <Tag className="h-3 w-3" />
+                                {priorityLabel}
+                            </span>
                         </span>
                     )}
                     {/* Brand board card (21 September 2026): full soft border, priority tab, assignee row, date, snippet, footer. */}
