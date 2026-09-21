@@ -1393,7 +1393,8 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                                         <stop offset="0.85" stopColor="currentColor" stopOpacity="0" />
                                     </linearGradient>
                                 </defs>
-                                <path d={TASK_TAB_FILL_PATH} style={{ fill: 'hsl(var(--card))' }} />
+                                {/* Same surface as the card body in both themes (bg-white / dark:bg-zinc-900), never the theme's near-black card token. */}
+                                <path d={TASK_TAB_FILL_PATH} className="fill-white dark:fill-zinc-900" />
                                 <path d={TASK_TAB_FILL_PATH} fill={`url(#task-tab-${task.id})`} />
                                 <path
                                     d={TASK_TAB_STROKE_PATH}

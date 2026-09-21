@@ -25,7 +25,8 @@ test('the card shows priority as a tag, then title, assignee and date, a snippet
   assert.match(card, /<svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 28" preserveAspectRatio="none"/, 'the tab is a drawn folder shape: rounded top-left and a curve that slopes into the card edge (Rodny, 21 September 2026)');
   assert.match(source, /const TASK_TAB_FILL_PATH = 'M0,28 V10 A10,10 0 0 1 10,0 H68 C[^']*100,24 V28 Z'/, 'the fill closes below the card edge so the card border disappears under the tab');
   assert.match(source, /const TASK_TAB_STROKE_PATH = 'M0\.5,28[^']*100,24'/, 'the outline is open at the bottom and ends tangent to the card top edge');
-  assert.match(card, /style=\{\{ fill: 'hsl\(var\(--card\)\)' \}\}/, 'the tab is filled with the card surface: it is part of the card, not a badge on top');
+  assert.match(card, /<path d=\{TASK_TAB_FILL_PATH\} className="fill-white dark:fill-zinc-900" \/>/, 'the tab is filled with the exact card surface of each theme (the near-black card token showed as a black block in dark mode)');
+  assert.doesNotMatch(card, /fill: 'hsl\(var\(--card\)\)'/, 'never the theme card token for the tab base');
   assert.match(card, /<linearGradient id=\{`task-tab-\$\{task\.id\}`\} x1="0" y1="0" x2="0" y2="1">/, 'the tint runs top to bottom (Rodny, 21 September 2026)');
   assert.match(card, /stopOpacity="0\.18"[\s\S]*?offset="0\.85" stopColor="currentColor" stopOpacity="0"/, 'the priority tints the tab faintly and fades out completely before the card edge');
   assert.match(card, /stroke-zinc-200 dark:stroke-white\/10/, 'the tab outline is the same thin grey as the card border, so the outline reads as one shape');
