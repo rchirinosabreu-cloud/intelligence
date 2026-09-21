@@ -268,6 +268,9 @@ test('schema, cron, route, notifications and screens carry the overdue notice an
   assert.match(dialog, /fetch\(`\$\{getApiBaseUrl\(\)\}\/api\/tasks\/\$\{task\.id\}\/focus-extension`/, 'the dialog posts the request');
   assert.match(dialog, /FOCUS_EXTENSION_OPTIONS\.map/, 'the person picks how much time from the shared list');
   assert.match(dialog, /id="focus-extension-reason"[\s\S]*?required/, 'and must say why');
+  assert.match(dialog, /cuéntale por qué a \$\{recipient\}\./, 'the text names the task creator (Rodny, 21 September 2026)');
+  assert.match(dialog, /const creatorName = task\?\.creatorName \|\| task\?\.creator\?\.name \|\| '';/);
+  assert.match(panel, /creatorName: formData\.creator\?\.name \|\| formData\.creatorName,/, 'the task panel passes the creator name to the dialog');
   assert.match(card, /data-focus-overdue=\{focusOverdue \? 'true' : undefined\}/, 'the card chip knows when the hour passed');
   assert.match(card, /focusOverdue \? `Venció a las \$\{focusTime\}` : `Hasta las \$\{focusTime\}`/, 'and says so in red');
   assert.match(board, /data-focus-extension-open[\s\S]*?Pedir más tiempo/, 'the lock popup offers to ask for more time');

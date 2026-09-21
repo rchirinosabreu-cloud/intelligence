@@ -2864,6 +2864,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     id: formData.id,
                     title: formData.title,
                     status: formData.status,
+                    creatorName: formData.creator?.name || formData.creatorName,
                     focusDeadlineAt: focusDeadlineIso((formData.dueDate || '').split('T')[0], formData.focusTime)
                 }}
                 open={askingMoreTime}

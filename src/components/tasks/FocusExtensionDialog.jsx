@@ -18,6 +18,9 @@ export default function FocusExtensionDialog({ task, open, onOpenChange, onSent 
   const time = bogotaTimeOf(task?.focusDeadlineAt);
   const overdue = isFocusOverdue(task);
   const cleanReason = reason.trim();
+  // Rodny, 21 September 2026: name the person who will read the reason (the task creator).
+  const creatorName = task?.creatorName || task?.creator?.name || '';
+  const recipient = creatorName && creatorName !== 'Sistema' ? creatorName : 'quien lo puso';
 
   const submit = async (event) => {
     event.preventDefault();
@@ -52,8 +55,8 @@ export default function FocusExtensionDialog({ task, open, onOpenChange, onSent 
             </DialogTitle>
             <DialogDescription>
               {overdue
-                ? `Tu compromiso «${task?.title}» venció${time ? ` a las ${time}` : ''}. Elige cuánto tiempo más necesitas y cuéntale por qué a quien lo puso.`
-                : `Tu compromiso «${task?.title}»${time ? ` es hasta las ${time}` : ''}. Elige cuánto tiempo más necesitas y cuéntale por qué a quien lo puso.`}
+                ? `Tu compromiso «${task?.title}» venció${time ? ` a las ${time}` : ''}. Elige cuánto tiempo más necesitas y cuéntale por qué a ${recipient}.`
+                : `Tu compromiso «${task?.title}»${time ? ` es hasta las ${time}` : ''}. Elige cuánto tiempo más necesitas y cuéntale por qué a ${recipient}.`}
             </DialogDescription>
           </DialogHeader>
           <div className="mt-4 space-y-4">
