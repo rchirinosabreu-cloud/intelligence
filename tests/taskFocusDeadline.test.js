@@ -100,8 +100,21 @@ test('the panel edits the hour with the shared calendar and only for managers; t
   assert.doesNotMatch(panel, /import DatePicker from 'react-datepicker'/, 'the raw picker is gone: the deadline uses BrainDatePicker');
   assert.match(panel, /<BrainDatePicker[\s\S]*?id="task-due-date"/);
   assert.match(panel, /const canSetFocusDeadline = \['ADMIN', 'PROJECT_MANAGER'\]\.includes\(currentUser\?\.role\)/);
-  assert.match(panel, /id="task-focus-time"/, 'the hour is a shared Select of quarter hours');
-  assert.match(panel, /Sin hora/, 'the default keeps a normal deadline');
+  // Rodny, 21 September 2026: a clock icon beside the deadline, the platform's hour list on click, an X to clear.
+  assert.match(panel, /import BrainDatePicker, \{ BrainTimePicker \} from '@\/components\/ui\/BrainDatePicker'/, 'the hour control is the shared clock button');
+  assert.match(panel, /<BrainTimePicker\s+id="task-focus-time"[\s\S]*?hours=\{FOCUS_HOURS\}[\s\S]*?clearLabel="Quitar compromiso con hora"/, 'the clock sits beside the date, limited to the working day, with an X to remove the commitment');
+  assert.match(panel, /<div className="flex w-full items-stretch gap-2">\s*<div className="relative min-w-0 flex-1">\s*<Calendar/, 'date and clock share one row');
+  assert.match(panel, /data-task-focus-readonly/, 'the person sees the hour beside the date but cannot change it');
+  assert.doesNotMatch(panel, /Sin hora: deadline normal/, 'no dropdown of "Compromiso hasta las…" options any more');
+
+  const picker = readFileSync('src/components/ui/BrainDatePicker.jsx', 'utf8');
+  assert.match(picker, /export function BrainTimeColumn\(\{ hours = QUARTER_HOURS, time, canSelectTime = true, onTimeChange, className \}\)/, 'the hour list is one shared column');
+  assert.match(picker, /<BrainTimeColumn time=\{time\} canSelectTime=\{canSelectTime\} onTimeChange=\{onTimeChange\} \/>/, 'the calendar with clock uses that same column');
+  assert.match(picker, /export function BrainTimePicker\(\{ id, value, onChange, hours = QUARTER_HOURS/, 'the clock button reuses it');
+  assert.match(picker, /<Popover\.Content[\s\S]*?<BrainTimeColumn hours=\{hours\} time=\{value\}/, 'clicking the clock opens the platform hour list');
+  assert.match(picker, /aria-label=\{clearLabel\}[\s\S]*?onClick=\{\(\) => onChange\(''\)\}/, 'the X clears the hour');
+  assert.match(picker, /<Popover\.Content[\s\S]*?onFocusOutside=\{event => event\.preventDefault\(\)\}[\s\S]*?style=\{\{ pointerEvents: 'auto' \}\}/, 'inside the modal task dialog the list must keep pointer events and survive the dialog reclaiming focus (measured 21 September 2026: the body is pointer-events none)');
+  assert.match(picker, /onMouseDown=\{event => event\.preventDefault\(\)\}/, 'hour buttons never move focus, so the dialog never dismisses the list mid-click');
   assert.match(panel, /focusDeadlineAt: canSetFocusDeadline \? focusDeadlineIso\(formData\.dueDate, formData\.focusTime\) : undefined/, 'non-managers never send the field');
   assert.match(panel, /focusTime: focusTimeFromIso\(taskData\.focusDeadlineAt\)/, 'editing shows the stored hour');
   assert.match(panel, /Compromiso hasta las/, 'the person sees the commitment on the task');

@@ -15,7 +15,7 @@ import { commentFileUrls, commentFilesValidationMessage, commentDownloadFilename
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { triggerConfetti } from '@/utils/confetti';
-import BrainDatePicker from '@/components/ui/BrainDatePicker';
+import BrainDatePicker, { BrainTimePicker } from '@/components/ui/BrainDatePicker';
 import { QUARTER_HOURS } from '@/lib/brainDatePicker';
 import { focusDeadlineIso, focusTimeFromIso } from '@/lib/taskFocus';
 import TeamAvatar from '@/components/ui/TeamAvatar';
@@ -2130,48 +2130,45 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             {/* Deadline / Fecha Entrega */}
                             <div className="col-span-1 space-y-1.5 sm:col-span-2 sm:space-y-1">
                                 <label className={taskComposerLabelClass} htmlFor="task-due-date">Deadline</label>
-                                <div className="relative w-full">
-                                    <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none z-10" />
-                                    <BrainDatePicker
-                                        id="task-due-date"
-                                        value={(formData.dueDate || '').split('T')[0]}
-                                        onChange={(value) => setFormData({ ...formData, dueDate: value, focusTime: value ? formData.focusTime : '' })}
-                                        className={`${taskComposerFieldClass} h-12 sm:h-[38px] pl-9 sm:pl-10 cursor-pointer`}
-                                        placeholder="Elegir fecha..."
-                                        ariaLabel="Deadline"
-                                        isClearable
-                                    />
-                                </div>
-                                {/* Compromiso con hora: only admins and project managers set it; the person only sees it. */}
-                                {canSetFocusDeadline ? (
-                                    <div className="space-y-1 pt-1">
-                                        <div className="flex items-center gap-2">
-                                            <Clock className="h-3.5 w-3.5 shrink-0 text-brand-cyan-deep dark:text-brand-cyan" />
-                                            <label htmlFor="task-focus-time" className="sr-only">Compromiso con hora</label>
-                                            <Select
-                                                id="task-focus-time"
-                                                value={formData.focusTime || ''}
-                                                disabled={!formData.dueDate}
-                                                onChange={(event) => setFormData({ ...formData, focusTime: event.target.value })}
-                                                className={`${taskComposerFieldClass} h-11 sm:h-[34px] cursor-pointer text-sm`}
-                                                aria-label="Compromiso con hora"
-                                            >
-                                                <option value="">Sin hora: deadline normal</option>
-                                                {FOCUS_HOURS.map((hour) => (
-                                                    <option key={hour} value={hour}>Compromiso hasta las {hour}</option>
-                                                ))}
-                                            </Select>
-                                        </div>
-                                        <p className="text-[11px] leading-5 text-zinc-500 dark:text-zinc-400">
-                                            Con hora, la persona solo trabaja en esta tarea: sus demás pendientes quedan bloqueados hasta que la marque como realizada.
-                                        </p>
+                                <div className="flex w-full items-stretch gap-2">
+                                    <div className="relative min-w-0 flex-1">
+                                        <Calendar className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-400 pointer-events-none z-10" />
+                                        <BrainDatePicker
+                                            id="task-due-date"
+                                            value={(formData.dueDate || '').split('T')[0]}
+                                            onChange={(value) => setFormData({ ...formData, dueDate: value, focusTime: value ? formData.focusTime : '' })}
+                                            className={`${taskComposerFieldClass} h-12 sm:h-[38px] pl-9 sm:pl-10 cursor-pointer`}
+                                            placeholder="Elegir fecha..."
+                                            ariaLabel="Deadline"
+                                            isClearable
+                                        />
                                     </div>
-                                ) : formData.focusTime ? (
-                                    <p className="flex items-center gap-1.5 pt-1 text-[11px] font-semibold text-brand-cyan-deep dark:text-brand-cyan">
-                                        <Clock className="h-3.5 w-3.5 shrink-0" />
-                                        Compromiso hasta las {formData.focusTime}. Tus demás pendientes esperan a que la termines.
-                                    </p>
-                                ) : null}
+                                    {/* Compromiso con hora: a clock beside the date (Rodny, 21 September 2026). Only admins and
+                                        project managers set it, with the platform's hour list; the X clears it. Others only see it. */}
+                                    {canSetFocusDeadline ? (
+                                        <BrainTimePicker
+                                            id="task-focus-time"
+                                            value={formData.focusTime || ''}
+                                            hours={FOCUS_HOURS}
+                                            disabled={!formData.dueDate}
+                                            onChange={(hour) => setFormData({ ...formData, focusTime: hour })}
+                                            ariaLabel="Compromiso con hora"
+                                            clearLabel="Quitar compromiso con hora"
+                                            title="Compromiso con hora: hasta que termine esta tarea, sus demás pendientes quedan bloqueados"
+                                            className="h-12 sm:h-[38px]"
+                                        />
+                                    ) : formData.focusTime ? (
+                                        <span
+                                            data-task-focus-readonly
+                                            className="inline-flex h-12 shrink-0 items-center gap-1.5 rounded-lg border border-brand-cyan/50 bg-brand-cyan/10 px-2.5 text-sm font-semibold tabular-nums text-brand-cyan-deep dark:text-brand-cyan sm:h-[38px]"
+                                            title={`Compromiso hasta las ${formData.focusTime}. Tus demás pendientes esperan a que la termines.`}
+                                        >
+                                            <Clock className="h-4 w-4 shrink-0" aria-hidden="true" />
+                                            {formData.focusTime}
+                                            <span className="sr-only">Compromiso hasta las {formData.focusTime}. Tus demás pendientes esperan a que la termines.</span>
+                                        </span>
+                                    ) : null}
+                                </div>
                             </div>
 
                             {/* Estado Actual */}
