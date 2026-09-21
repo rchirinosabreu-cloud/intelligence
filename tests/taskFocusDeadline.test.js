@@ -162,6 +162,7 @@ test('the panel edits the hour with the shared calendar and only for managers; t
   assert.match(card, /isActiveFocusTask\(task\)[\s\S]*?<Clock/, 'the focus task shows a clock with its hour');
   assert.match(card, /<Lock/, 'locked cards show a lock');
   assert.match(board, /focusLockNotice/, 'the explanation is a platform dialog');
+  assert.match(board, /const deepLinkLock = getTaskLock\(\{[\s\S]*?task: taskToOpen[\s\S]*?\}\);\s*if \(deepLinkLock\) \{\s*setFocusLockNotice\(deepLinkLock\);\s*\} else \{\s*setEditingTask\(taskToOpen\);/, 'a locked task does not open from ?taskId= (notifications, alerts, deep links) either: the popup explains instead (Rodny, 21 September 2026)');
   assert.match(board, /focusLockMessage\(focusLockNotice\.focusTask, focusLockNotice\.inProgressTask\)/, 'the popup names what is already in progress');
   assert.match(board, /if \(!isPMOrAdmin\)[\s\S]*?getTaskLock|const lock = getTaskLock\(\{ tasks, task: targetTask/, 'drag and drop respects the lock too');
 });
