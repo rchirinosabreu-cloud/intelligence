@@ -1,14 +1,17 @@
 import prisma from '../lib/prisma.js';
 import { randomUUID } from 'node:crypto';
 import { Prisma } from '@prisma/client';
+import { isProviderUnavailable } from '../lib/aiAvailability.js';
 
 export const BRIA_REVIEW_LEASE_MS = 5 * 60 * 1000;
 export const BRIA_REVIEW_MAX_ATTEMPTS = 3;
 export const BRIA_CONTENT_PLAN_REVIEW_DEBOUNCE_MS = 45 * 1000;
 // Technical causes kept per plan: enough to see a pattern, bounded so the row never grows unchecked.
 export const BRIA_REVIEW_DIAGNOSTICS_LIMIT = 5;
+// While the provider is down, wait before trying again instead of spending attempts.
+export const BRIA_REVIEW_PROVIDER_RETRY_MS = 5 * 60 * 1000;
 
-export const buildReviewDiagnostic = (error, lease, now = new Date(), { retry = false } = {}) => {
+export const buildReviewDiagnostic = (error, lease, now = new Date(), { retry = false, providerUnavailable = false } = {}) => {
   const status = Number(error?.status || error?.response?.status) || null;
   return {
     attempt: Number.isFinite(Number(lease?.attempts)) ? Number(lease.attempts) : null,
@@ -17,7 +20,8 @@ export const buildReviewDiagnostic = (error, lease, now = new Date(), { retry = 
     status,
     message: String(error?.message || '').trim().slice(0, 300),
     requestId: error?.requestId || null,
-    retry
+    retry,
+    ...(providerUnavailable ? { providerUnavailable: true } : {})
   };
 };
 
@@ -103,17 +107,23 @@ export const failContentPlanReview = async (lease, error, { db = prisma, now = n
     return db.contentPlan.updateMany({ where: leaseWhere(lease), data: buildContentPlanReviewPendingData(now) });
   }
   const status = Number(error.status || error.response?.status);
-  const permanent = error.code === 'OPENAI_NOT_CONFIGURED' || (status >= 400 && status < 500 && ![408, 429].includes(status));
-  const retry = !permanent && lease.attempts < BRIA_REVIEW_MAX_ATTEMPTS;
+  // An outage of the provider is not a failure of this plan: give the attempt
+  // back and wait, instead of burning the budget against a wall.
+  const providerUnavailable = isProviderUnavailable(error);
+  const permanent = !providerUnavailable && status >= 400 && status < 500 && ![408, 429].includes(status);
+  const retry = providerUnavailable || (!permanent && lease.attempts < BRIA_REVIEW_MAX_ATTEMPTS);
   // The human message stays short; the technical cause of every attempt is kept beside it.
   const current = await db.contentPlan.findUnique({ where: { id: lease.planId }, select: { briaReviewDiagnostics: true } });
   const previous = Array.isArray(current?.briaReviewDiagnostics) ? current.briaReviewDiagnostics : [];
-  const briaReviewDiagnostics = [...previous, buildReviewDiagnostic(error, lease, now, { retry })].slice(-BRIA_REVIEW_DIAGNOSTICS_LIMIT);
+  const briaReviewDiagnostics = [...previous, buildReviewDiagnostic(error, lease, now, { retry, providerUnavailable })].slice(-BRIA_REVIEW_DIAGNOSTICS_LIMIT);
   return db.contentPlan.updateMany({ where: leaseWhere(lease), data: {
     briaReviewState: retry ? 'PENDING' : 'FAILED', briaReviewStartedAt: null, briaReviewLeaseToken: null,
-    briaReviewNextAttemptAt: retry ? new Date(now.getTime() + 60000 * (2 ** (lease.attempts - 1))) : null,
-    briaReviewError: error.code === 'BRIA_REVIEW_CONTEXT_TOO_LARGE' ? error.message
-      : retry ? 'Bria reintentará la revisión automáticamente.' : 'No se pudo completar la revisión. Puedes revisar nuevamente.',
+    ...(providerUnavailable ? { briaReviewAttempts: Math.max(0, Number(lease.attempts || 1) - 1) } : {}),
+    briaReviewNextAttemptAt: !retry ? null
+      : new Date(now.getTime() + (providerUnavailable ? BRIA_REVIEW_PROVIDER_RETRY_MS : 60000 * (2 ** (lease.attempts - 1)))),
+    briaReviewError: providerUnavailable ? 'El servicio de IA no está disponible en este momento. Bria lo reintentará sin gastar intentos.'
+      : error.code === 'BRIA_REVIEW_CONTEXT_TOO_LARGE' ? error.message
+        : retry ? 'Bria reintentará la revisión automáticamente.' : 'No se pudo completar la revisión. Puedes revisar nuevamente.',
     briaReviewDiagnostics
   } });
 };

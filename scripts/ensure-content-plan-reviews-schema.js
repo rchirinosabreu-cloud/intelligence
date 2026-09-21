@@ -90,6 +90,8 @@ try {
     );
 
     ALTER TABLE "ContentPlanReviewFinding" ADD COLUMN IF NOT EXISTS "verification" JSONB;
+    -- Rotation of the bounded verification budget: never-checked findings first.
+    ALTER TABLE "ContentPlanReviewFinding" ADD COLUMN IF NOT EXISTS "lastVerifiedAt" TIMESTAMP(3);
 
     CREATE TABLE IF NOT EXISTS "ClientEditorialCriterion" (
       "id" TEXT PRIMARY KEY,

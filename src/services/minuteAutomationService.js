@@ -4,6 +4,7 @@ import { createOpenAIClient } from './openAIClient.js';
 import { documentStorage } from './documentStorageService.js';
 import { firefliesClient } from './firefliesService.js';
 import { parseJsonFromAiResponse } from '../utils/jsonParser.js';
+import { isProviderUnavailable } from '../lib/aiAvailability.js';
 import {
   permanentlyForgetMeetingMinute,
   syncMeetingMinuteMemoryById
@@ -232,7 +233,15 @@ export const permanentlyDeleteMeetingMinute = async ({ db = prisma, storage = do
 
 const getDefaultAi = () => createOpenAIClient({ models: AI_MODELS });
 
-const processTranscript = async ({ summary, db, fireflies, ai, storage, memory }) => {
+// A minute that exhausts its attempts is skipped forever, so an outage of the
+// provider must never spend them: it parks the minute until the service is back.
+export const shouldSkipMinute = (record) => Boolean(
+  isExcludedFromBria(record)
+  || (record?.status === 'READY' && hasEditorialMinuteMetadata(record.analysis))
+  || (record?.status === 'FAILED' && record.retryCount >= MAX_AUTOMATIC_MINUTE_RETRIES)
+);
+
+export const processTranscript = async ({ summary, db, fireflies, ai, storage, memory }) => {
   let record = await db.meetingMinute.findUnique({ where: { externalId: summary.id } });
   if (isExcludedFromBria(record) || (record?.status === 'READY' && hasEditorialMinuteMetadata(record.analysis))) return { skipped: true };
 
@@ -329,9 +338,17 @@ const processTranscript = async ({ summary, db, fireflies, ai, storage, memory }
     }
     return { processed: true };
   } catch (error) {
+    // The provider being down is not this meeting's fault: park it without
+    // spending an attempt, so it is still processed once the service is back.
+    const parked = isProviderUnavailable(error);
     await db.meetingMinute.update({
       where: { id: record.id },
-      data: { status: 'FAILED', errorMessage: String(error.message || error).slice(0, 1000), retryCount: { increment: 1 }, lastSeenAt: new Date() }
+      data: {
+        status: parked ? 'PENDING_PROVIDER' : 'FAILED',
+        errorMessage: String(error.message || error).slice(0, 1000),
+        ...(parked ? {} : { retryCount: { increment: 1 } }),
+        lastSeenAt: new Date()
+      }
     }).catch(updateError => console.error('[AutomatedMinutes] No se pudo guardar el error:', updateError.message));
     throw error;
   }
@@ -353,7 +370,7 @@ const runFirefliesMinutesSync = async ({
   for (const summary of transcripts) {
     const existing = await db.meetingMinute.findUnique({ where: { externalId: summary.id } });
     if (!existing) result.discovered += 1;
-    if (isExcludedFromBria(existing) || (existing?.status === 'READY' && hasEditorialMinuteMetadata(existing.analysis)) || (existing?.status === 'FAILED' && existing.retryCount >= MAX_AUTOMATIC_MINUTE_RETRIES)) {
+    if (shouldSkipMinute(existing)) {
       result.skipped += 1;
       continue;
     }

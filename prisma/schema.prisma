@@ -632,6 +632,7 @@ model ContentPlanReviewFinding {
   status          String            @default("OPEN")
   actionReason    String?
   verification    Json?
+  lastVerifiedAt  DateTime?
   lastActionById  String?
   lastActionAt    DateTime?
   firstDetectedAt DateTime          @default(now())

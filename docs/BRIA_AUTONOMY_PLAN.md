@@ -105,6 +105,8 @@ Tamaños en días de trabajo enfocado, estimados. Los ítems de un mismo bloque 
 | A0-10 ∥ | Parrillas: reintento dirigido de las tres revisiones `FAILED` con causa técnica guardada por intento (`errorCode`, no solo el mensaje humano); las finalizadas con `PENDING` pasan a un estado honesto | `briaContentPlanReviewState.js:42`, `briaContentPlanReviewScheduler.js:54` | una revisión agotada muestra causa y se puede relanzar desde la interfaz | 1 |
 | A0-11 ∥ | Parrillas: un lote que el modelo no confirma se parte en dos mitades y se revisa completo en vez de fallar toda la revisión; el intento descartado sigue contando en el coste; el intento manual responde con un mensaje legible y el panel nunca muestra códigos crudos | `briaReviewBatches.js`, `briaContentPlanReviewGenerator.js`, `routes/api/content.js`, panel | una parrilla grande con un lote rebelde se revisa entera sin puntaje parcial; «Revisar nuevamente» explica el resultado | 1 |
 
+| A0-12 ∥ | Verificación acotada por ejecución (`VERIFICATION_BUDGET`, rotación por `lastVerifiedAt`) y caídas del proveedor que no gastan reintentos en revisiones ni en minutas (`isProviderUnavailable`, estado `PENDING_PROVIDER`). **Hecho el 21-sep**, ver `docs/BRIA_PHASE_1_REVIEW_RELIABILITY.md` | `briaContentPlanReviewService.js`, `briaContentPlanReviewState.js`, `minuteAutomationService.js`, `lib/aiAvailability.js` | una parrilla con 157 abiertos publica dentro del plazo; una reunión grabada durante una caída no se pierde | 1 |
+
 Orden dentro de A0 tras la línea base del 20 de septiembre: primero A0-6 (parrillas es el ciclo que más gasta: unas 19 revisiones al día y 1.258 hallazgos abiertos, sin una sola cifra de coste), después A0-1 y A0-2, luego el resto.
 
 Puerta A0: ninguna señal atendida reaparece por relectura; un fallo de minuta aparece con causa; el coste por minuta y por revisión existe en la base; Fireflies recibe menos de 10 llamadas al día.
@@ -159,6 +161,17 @@ La cobertura no es un problema: el equipo elige qué grabar. Lo que sí hace fal
 | C-2 | Panel «Foco de hoy» en el dashboard: compromisos que vencen o vencieron, insumos del cliente pendientes, tareas devueltas, señales de mis clientes, agrupados por causa | 3 |
 | C-3 | Escalado a PM con evidencia y acción preparada, respetando aplazamientos | 1,5 |
 
+### Pendiente inmediato: hallazgos duplicados entre dimensiones
+
+Observado el 21 de septiembre en una parrilla de 18 piezas con 157 hallazgos abiertos: el mismo problema (usar fragmentos de una película comercial sin derechos) aparece cuatro veces, una por cada dimensión evaluada, con títulos distintos. Nueve hallazgos por pieza no son nueve problemas, y el equipo no los lee: en toda la historia de la plataforma solo se han descartado 26.
+
+Dos cambios posibles, ambos en la generación y no en la verificación:
+
+1. Instruir en el prompt que cada problema se reporte **una sola vez**, bajo la dimensión más pertinente, y que no se repita como hallazgo de otra dimensión.
+2. Un techo por pieza en cada revisión, además del techo por lote que ya existe.
+
+Los dos alteran el juicio editorial, así que según `AGENTS.md` §7 exigen **evaluación comparativa antes de promoverlos**, con el arnés `scripts/eval-bria-reviews.js` y casos aprobados por el equipo. No hacerlo a ciegas: primero medir cuántos hallazgos se pierden y si alguno era real. Requiere presupuesto de IA disponible.
+
 ## 5. Ideas para llevarlo a otro nivel
 
 Todas reutilizan runtime, contexto, política y libro. Ninguna se monta antes de que B demuestre utilidad medida.
@@ -178,7 +191,7 @@ Todas reutilizan runtime, contexto, política y libro. Ninguna se monta antes de
 
 | Bloque | Ítems | Hechos | En curso | Puerta |
 |---|---|---|---|---|
-| A0 | 11 | 4 (A0-6 en PR #919, A0-10 en PR #920 y A0-11 en PR #921, 21-sep) | A0-1 y A0-2 | pendiente |
+| A0 | 12 | 6 (A0-6 #919, A0-10 #920, A0-11 #921, A0-1 y A0-2 #929, 21-sep) | A0-12 | pendiente |
 | A1 | 5 | 0 | — | pendiente |
 | A2 | 4 | 0 | — | pendiente |
 | A3 | 1 | 0 | — | pendiente |

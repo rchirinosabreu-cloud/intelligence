@@ -112,6 +112,30 @@ const subjectForFinding = (finding, plan) => {
 
 // What one published review cost: the batch calls (paid now or by the attempt
 // that wrote the checkpoint) plus the verification calls made in this run.
+// Verification costs one model call per four findings, each carrying the whole
+// plan. A plan with 157 open findings would need ~40 sequential calls, which
+// never fits the job deadline: it spends money and publishes nothing. So each
+// run verifies a bounded slice — everything a person marked as corrected first,
+// then the open findings checked longest ago, rotating over the runs.
+export const VERIFICATION_BUDGET = 12;
+
+const verifiedAt = (finding) => {
+  const value = finding?.lastVerifiedAt ?? finding?.verification?.checkedAt ?? null;
+  const time = value ? new Date(value).getTime() : NaN;
+  return Number.isFinite(time) ? time : -Infinity;
+};
+const claimedAt = (finding) => {
+  const time = finding?.lastActionAt ? new Date(finding.lastActionAt).getTime() : NaN;
+  return Number.isFinite(time) ? time : -Infinity;
+};
+
+export const selectFindingsToVerify = (findings, { budget = VERIFICATION_BUDGET } = {}) => {
+  const list = Array.isArray(findings) ? findings : [];
+  const claimed = list.filter((finding) => finding?.status === 'VERIFYING').sort((a, b) => claimedAt(a) - claimedAt(b));
+  const open = list.filter((finding) => finding?.status !== 'VERIFYING').sort((a, b) => verifiedAt(a) - verifiedAt(b));
+  return [...claimed, ...open].slice(0, budget);
+};
+
 export const buildContentPlanReviewUsage = ({ review = null, verification = null } = {}) => {
   // Discarded answers (lots the model did not confirm) were paid for: they count in the totals.
   const parts = [review, review?.discarded, verification].filter(Boolean);
@@ -241,7 +265,9 @@ export const createContentPlanReviewRepository = (db = prisma) => ({
         const resolved = conclusion.outcome === 'RESOLVED';
         await tx.contentPlanReviewFinding.update({ where: { id: previous.id }, data: {
           status: resolved ? 'RESOLVED' : 'OPEN', resolvedAt: resolved ? new Date(result.meta.reviewedAt) : null,
-          verification: { ...conclusion, checkedAt: result.meta.reviewedAt, revisionHash }, lastReviewId: run.id
+          verification: { ...conclusion, checkedAt: result.meta.reviewedAt, revisionHash },
+          // Feeds the rotation: the ones checked longest ago go first next time.
+          lastVerifiedAt: new Date(result.meta.reviewedAt), lastReviewId: run.id
         } });
       }
       const findings = await tx.contentPlanReviewFinding.findMany({
@@ -331,7 +357,7 @@ export const reviewContentPlanWithBria = async ({
   ];
   const revisionHash = buildContentPlanRevisionHash(plan);
   const analysisHash = buildContentPlanAnalysisHash({ revisionHash, evidence, promptVersion: CONTENT_PLAN_REVIEW_PROMPT_VERSION });
-  const activeFindings = await persistence?.findActiveFindings?.(plan.id) || [];
+  const activeFindings = selectFindingsToVerify(await persistence?.findActiveFindings?.(plan.id) || []);
   const cached = force ? null : await persistence?.findByAnalysisHash?.(analysisHash, { planId: plan.id });
   if (cached && !activeFindings.some(finding => finding.status === 'VERIFYING') && !cached.review?.findings?.some(finding => finding.status === 'VERIFYING')) {
     await persistence?.markCurrent?.(plan.id, startedAt, { execution, revisionHash, now, signal });
