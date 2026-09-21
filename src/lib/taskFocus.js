@@ -94,9 +94,10 @@ export const nextLockReaction = (previous, now = Date.now()) => {
 export const focusLockMessage = (focusTask, inProgressTask = null) => {
   const title = focusTask?.title || 'tu compromiso';
   const time = bogotaTimeOf(focusTask?.focusDeadlineAt);
-  const head = `Estás enfocado en «${title}»${time ? ` hasta las ${time}` : ''}.`;
+  const when = time ? ` hasta las ${time}` : '';
   if (inProgressTask?.title) {
-    return `${head} Termina «${inProgressTask.title}», que ya tienes en proceso; después solo puedes trabajar en tu compromiso. Los demás pendientes se abren cuando lo marques como realizado.`;
+    // Rodny, 21 September 2026: "en cuanto termines tal, deberás continuar con tal".
+    return `Tienes un compromiso${when}. En cuanto termines «${inProgressTask.title}», deberás continuar con «${title}». Mientras tanto, tus demás pendientes quedan bloqueados.`;
   }
-  return `${head} Podrás abrir y mover tus demás pendientes cuando la marques como realizada.`;
+  return `Estás enfocado en «${title}»${when}. Podrás abrir y mover tus demás pendientes cuando la marques como realizada.`;
 };
