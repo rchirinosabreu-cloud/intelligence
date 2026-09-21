@@ -1248,7 +1248,28 @@ const NativeTasks = () => {
                                             )}
                                         </div>
                                     </div>
-                                    <Droppable droppableId={col.id}>
+                                    <Droppable
+                                        droppableId={col.id}
+                                        renderClone={(provided, snapshot, rubric) => {
+                                            // The dragged card is drawn on <body>, above every glass column (see TaskCardSurface).
+                                            const draggedTask = columnTasks[rubric.source.index];
+                                            if (!draggedTask) {
+                                                return <div ref={provided.innerRef} {...provided.draggableProps} {...provided.dragHandleProps} />;
+                                            }
+                                            return (
+                                                <TaskCardSurface
+                                                    task={draggedTask}
+                                                    provided={provided}
+                                                    snapshot={snapshot}
+                                                    highlightedTaskId={highlightedTaskId}
+                                                    onClick={() => {}}
+                                                    onReturn={() => {}}
+                                                    onReopen={() => {}}
+                                                    onDelete={() => {}}
+                                                />
+                                            );
+                                        }}
+                                    >
                                         {(provided, snapshot) => (
                                             <div
                                                 {...provided.droppableProps}
@@ -1289,7 +1310,19 @@ const NativeTasks = () => {
     );
 };
 
-const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen, onDelete }) => {
+const TaskCard = ({ task, index, ...surfaceProps }) => (
+    <Draggable draggableId={String(task.id)} index={index}>
+        {(provided, snapshot) => (
+            <TaskCardSurface task={task} provided={provided} snapshot={snapshot} {...surfaceProps} />
+        )}
+    </Draggable>
+);
+
+// The card surface is shared by the in-column card and by the dragged copy that the column's
+// `renderClone` draws through a portal on <body>. The glass columns (backdrop-blur) each create a
+// stacking context, so a card dragged from inside its column would paint behind the neighbouring
+// column no matter its z-index; the portal takes the moving card out of the columns altogether.
+const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick, onReturn, onReopen, onDelete }) => {
     const isHighlighted = highlightedTaskId === String(task.id);
     const columnId = getColumnId(task.status);
     const isDone = columnId === 'realizado';
@@ -1311,10 +1344,8 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
     ].filter(Boolean);
 
     return (
-        <Draggable draggableId={String(task.id)} index={index}>
-            {(provided, snapshot) => (
                 <div
-                    id={`task-${task.id}`}
+                    id={snapshot.isClone ? undefined : `task-${task.id}`}
                     ref={provided.innerRef}
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
@@ -1341,7 +1372,8 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                                         <stop offset="0.85" stopColor="currentColor" stopOpacity="0" />
                                     </linearGradient>
                                 </defs>
-                                <path d={TASK_TAB_FILL_PATH} style={{ fill: 'hsl(var(--card))' }} />
+                                {/* Same surface as the card body (bg-white / dark:bg-zinc-900): the card token is near black in dark mode. */}
+                                <path d={TASK_TAB_FILL_PATH} className="fill-white dark:fill-zinc-900" />
                                 <path d={TASK_TAB_FILL_PATH} fill={`url(#task-tab-${task.id})`} />
                                 <path
                                     d={TASK_TAB_STROKE_PATH}
@@ -1503,8 +1535,6 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                         </div>
                     </div>
                 </div>
-            )}
-        </Draggable>
     );
 };
 
