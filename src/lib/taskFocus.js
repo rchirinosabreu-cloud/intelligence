@@ -164,18 +164,29 @@ export const formatFocusOverdueEventContent = (task) => {
   return `[FOCUS_OVERDUE]\nEl compromiso venció${time ? ` a las ${time}` : ''}.`;
 };
 
+// La hora nueva viaja en la etiqueta, no en el texto: la nota es solo lo que escribió la persona.
 export const formatFocusExtensionEventContent = ({ minutes, reason, newTime }) => (
-  `[FOCUS_EXTENSION:${minutes}]\n${reason}${newTime ? `\nEl compromiso pasó a las ${newTime}.` : ''}`
+  `[FOCUS_EXTENSION:${minutes}${newTime ? `@${newTime}` : ''}]\n${reason}`
 );
+
+const LEGACY_EXTENSION_LINE = /\n?El compromiso pasó a las (\d{1,2}:\d{2})\.\s*$/;
 
 /** Presentación de esas novedades: etiqueta del evento y nota, como `getTaskSystemEventPresentation`. */
 export const focusEventPresentation = (type, content = '') => {
   const text = String(content || '').trim();
   const match = text.match(/^\[([^\]]+)\]\s*\n?([\s\S]*)$/);
-  const note = (match?.[2] ?? text).trim();
+  let note = (match?.[2] ?? text).trim();
   if (type === FOCUS_EXTENSION_EVENT_TYPE) {
-    const label = focusExtensionLabel(match?.[1]?.split(':')[1]);
-    return { badgeLabel: label ? `Se añadieron ${label}` : 'Más tiempo añadido', note };
+    const tag = (match?.[1] || '').match(/^FOCUS_EXTENSION:(\d+)(?:@(\d{1,2}:\d{2}))?$/);
+    const minutes = tag?.[1];
+    const taggedTime = tag?.[2];
+    // Las novedades anteriores al 21 de septiembre de 2026 llevaban la hora nueva como una línea más.
+    const legacyTime = note.match(LEGACY_EXTENSION_LINE)?.[1];
+    if (legacyTime) note = note.replace(LEGACY_EXTENSION_LINE, '').trim();
+    const newTime = taggedTime || legacyTime;
+    const label = focusExtensionLabel(minutes);
+    const added = label ? `Se añadieron ${label}` : 'Más tiempo añadido';
+    return { badgeLabel: newTime ? `${added} · hasta las ${newTime}` : added, note };
   }
   // Sin etiqueta: repetiría el título del evento (Rodny, 21 de septiembre de 2026: «solo redunda»).
   return { badgeLabel: null, note };

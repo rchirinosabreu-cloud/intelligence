@@ -13,6 +13,7 @@ import {
     MoreHorizontal,
     CheckCircle2,
     Clock,
+    ClockPlus,
     AlertCircle,
     User,
     Loader2,
@@ -1132,19 +1133,21 @@ const NativeTasks = () => {
                         <button onClick={() => setFocusLockNotice(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
                             Entendido
                         </button>
-                        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center">
-                            {/* The person asks the manager for more time: how much and why (Rodny, 21 September 2026). */}
+                        <div className="flex items-center gap-2">
+                            {/* Short labels so the three actions fit in one row (Rodny, 21 September 2026). */}
                             <button
                                 type="button"
                                 data-focus-extension-open
+                                title="Pedir más tiempo"
                                 onClick={() => {
                                     const focusTask = tasks.find(task => String(task.id) === String(focusLockNotice?.focusTask?.id)) || focusLockNotice?.focusTask;
                                     setFocusLockNotice(null);
                                     if (focusTask) { setExtensionRequired(false); setExtensionTask(focusTask); }
                                 }}
-                                className="rounded-xl border border-brand-cyan/40 px-4 py-2 text-sm font-medium text-brand-cyan-deep hover:bg-brand-cyan/10 dark:text-brand-cyan"
+                                className="inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-xl border border-brand-cyan/40 px-3 py-2 text-sm font-medium text-brand-cyan-deep hover:bg-brand-cyan/10 dark:text-brand-cyan"
                             >
-                                Pedir más tiempo
+                                <ClockPlus className="h-4 w-4" aria-hidden="true" />
+                                Más tiempo
                             </button>
                             <button
                                 onClick={() => {
@@ -1152,9 +1155,10 @@ const NativeTasks = () => {
                                     setFocusLockNotice(null);
                                     if (focusTask) setEditingTask(focusTask);
                                 }}
-                                className="rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
+                                title="Abrir mi compromiso"
+                                className="shrink-0 whitespace-nowrap rounded-xl bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
                             >
-                                Abrir mi compromiso
+                                Ver
                             </button>
                         </div>
                     </DialogFooter>

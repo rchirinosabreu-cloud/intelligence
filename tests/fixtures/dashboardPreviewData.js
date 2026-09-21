@@ -139,7 +139,7 @@ export function dashboardDemoTaskComments(taskId, now = new Date()) {
     { id: 'c-human', taskId, type: 'human', authorId: author.id, author, content: 'Ya cargué las fotos de la segunda entrega.', createdAt: hoursFromNow(-6, now).toISOString(), isEdited: false, attachments: [], reactions: [] },
     { id: 'c-reopen', taskId, type: 'system_reopen', authorId: author.id, author, content: '[CLIENT_CORRECTION]\nEl cliente pidió ajuste en el tono del color.', createdAt: hoursFromNow(-5, now).toISOString(), isEdited: false, attachments: [], reactions: [] },
     { id: 'c-overdue', taskId, type: 'system_focus_overdue', authorId: null, author: null, content: '[FOCUS_OVERDUE]\nEl compromiso venció a las 09:00.', createdAt: hoursFromNow(-2, now).toISOString(), isEdited: false, attachments: [], reactions: [] },
-    { id: 'c-extension', taskId, type: 'system_focus_extension', authorId: author.id, author, content: '[FOCUS_EXTENSION:30]\nEspero la aprobación del cliente para cerrar la sección de colecciones.\nEl compromiso pasó a las 15:30.', createdAt: hoursFromNow(-1, now).toISOString(), isEdited: false, attachments: [], reactions: [] }
+    { id: 'c-extension', taskId, type: 'system_focus_extension', authorId: author.id, author, content: '[FOCUS_EXTENSION:30@15:30]\nEspero la aprobación del cliente para cerrar la sección de colecciones.', createdAt: hoursFromNow(-1, now).toISOString(), isEdited: false, attachments: [], reactions: [] }
   ];
 }
 
