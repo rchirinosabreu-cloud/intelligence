@@ -18,7 +18,8 @@ test('NativeTasks card badges render in footer with compact equal-width pills', 
 
   assert.match(source, /const taskPriorityBadgeConfig/, 'Priority badge config should centralize color and label handling.');
   assert.match(source, /min-w-\[74px\]/, 'Priority badges should keep the same visual width across labels.');
-  assert.match(source, /text-white/, 'Priority badge text should be white for every priority variant.');
+  assert.match(source, /const taskPriorityLabels/, 'Priority tabs should read their Spanish labels from one catalogue.');
+  assert.match(source, /bg-gradient-to-r from-/, 'Priority tabs carry the soft gradient of the reference board.');
   assert.doesNotMatch(source, /AlertOctagon className="w-3 h-3" \/> Vencido/, 'Overdue badge should not include the alert icon in the crowded card footer.');
   assert.match(source, /taskCardFooterBadges/, 'Status badges should be collected for the footer instead of stacked in the top-right area.');
   assert.match(source, /task\.isSpecial[\s\S]*border-brand-magenta/, 'Special tasks should be distinguished with a brand magenta card border instead of a noisy badge.');

@@ -27,7 +27,8 @@ import {
     HelpCircle,
     Plus,
     Paperclip,
-    RefreshCw
+    RefreshCw,
+    Tag
 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
@@ -159,12 +160,14 @@ const CATEGORY_COLORS = {
     'Educación': '#f59e0b'
 };
 
-// Priority tags on the Kanban cards (brand palette, 21 September 2026): urgent reads solid, the rest as soft tints.
+// Priority tabs on the Kanban cards (brand palette, 21 September 2026): a folder-like tab at the top-left corner
+// with a soft gradient per priority, like the reference board.
 const taskPriorityBadgeConfig = {
-    URGENTE: 'border-destructive bg-destructive text-white',
-    ALTA: 'border-brand-yellow/40 bg-brand-yellow/25 text-brand-yellow-deep dark:text-brand-yellow',
-    NORMAL: 'border-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan'
+    URGENTE: 'bg-gradient-to-r from-destructive/25 via-brand-coral/15 to-transparent border-destructive/25 text-destructive',
+    ALTA: 'bg-gradient-to-r from-brand-yellow/45 via-brand-yellow/20 to-transparent border-brand-yellow/40 text-brand-yellow-deep dark:text-brand-yellow',
+    NORMAL: 'bg-gradient-to-r from-brand-green/35 via-brand-green/15 to-transparent border-brand-green/35 text-brand-green-deep dark:text-brand-green'
 };
+const taskCategoryTabClass = 'bg-gradient-to-r from-zinc-200/80 via-zinc-100/60 to-transparent border-zinc-200/80 text-zinc-500 dark:from-white/15 dark:via-white/5 dark:border-white/10 dark:text-zinc-400';
 
 const taskPriorityLabels = {
     URGENTE: 'Urgente',
@@ -1324,27 +1327,34 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                         !snapshot.isDragging && !isHighlighted && !overdue && !task.isSpecial ? "border-zinc-200/80 hover:border-zinc-300 dark:border-white/10 dark:hover:border-white/20" : "",
                         isReturned && !isHighlighted && "border-destructive/50"
                     )}>
-                        <div className="flex flex-col gap-3 p-4">
-                            {/* Row 1: priority tag (or category when there is none) + quick actions */}
-                            <div className="flex items-start justify-between gap-2">
+                        {/* Priority tab: a folder-like tab on the top-left corner, gradient per priority (category when there is none). */}
+                        {priorityBadgeClass ? (
+                            <span
+                                data-task-priority-tag={task.priority}
+                                className={cn(
+                                    "absolute left-0 top-0 inline-flex h-7 items-center gap-1.5 rounded-tl-2xl rounded-br-2xl border-b border-r pl-3.5 pr-4 text-[10px] font-bold uppercase tracking-wider",
+                                    priorityBadgeClass
+                                )}
+                            >
+                                <Tag className="h-3 w-3" />
+                                {priorityLabel}
+                            </span>
+                        ) : (
+                            <span
+                                data-task-category-tab
+                                className={cn(
+                                    "absolute left-0 top-0 inline-flex h-7 max-w-[70%] items-center gap-1.5 rounded-tl-2xl rounded-br-2xl border-b border-r pl-3.5 pr-4 text-[10px] font-semibold uppercase tracking-wider",
+                                    taskCategoryTabClass
+                                )}
+                            >
+                                <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }} />
+                                <span className="truncate">{task.aiCategory || 'Sin clasificar'}</span>
+                            </span>
+                        )}
+                        <div className="flex flex-col gap-3 p-4 pt-9">
+                            {/* Row 1: status chips + quick actions */}
+                            <div className="flex items-start justify-between gap-2 min-h-[16px] -mt-2">
                                 <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                                    {priorityBadgeClass ? (
-                                        <span
-                                            data-task-priority-tag={task.priority}
-                                            className={cn(
-                                                "inline-flex h-6 items-center gap-1 rounded-lg rounded-tl-none border px-2 text-[10px] font-bold uppercase tracking-wider",
-                                                priorityBadgeClass
-                                            )}
-                                        >
-                                            <Zap className="h-3 w-3 fill-current" />
-                                            {priorityLabel}
-                                        </span>
-                                    ) : (
-                                        <span className="inline-flex h-6 items-center gap-1.5 rounded-lg rounded-tl-none border border-zinc-200/80 bg-zinc-50 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400">
-                                            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }} />
-                                            {task.aiCategory || 'Sin clasificar'}
-                                        </span>
-                                    )}
                                     {isReturned && (
                                         <span className="flex items-center gap-1 rounded-lg bg-destructive/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-tight text-destructive">
                                             <TaskReturnIcon className="w-2.5 h-2.5" /> Devuelto
@@ -1352,7 +1362,7 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                                     )}
                                     {String(task.status || '').toUpperCase() === 'EN_CURSO' && <TaskTimerBadge task={task} />}
                                 </div>
-                                <div className="flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:group-hover/card:opacity-100 sm:focus-within:opacity-100 transition-opacity">
+                                <div className="absolute right-2 top-1.5 flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:group-hover/card:opacity-100 sm:focus-within:opacity-100 transition-opacity">
                                     {lifecycleAction === 'reintegrate' ? (
                                         <button
                                             onClick={(e) => { e.stopPropagation(); onReopen(task); }}

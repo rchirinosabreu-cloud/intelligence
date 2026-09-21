@@ -21,8 +21,12 @@ test('the board sits on the brand ambient and its columns are glass panels with 
 });
 
 test('the card shows priority as a tag, then title, assignee and date, a snippet and a footer with client, files and comments', () => {
-  assert.match(card, /data-task-priority-tag/, 'priority is a tag at the top of the card');
-  assert.match(card, /taskPriorityBadgeConfig\[task\.priority\]/, 'the tag reads the shared priority config');
+  assert.match(card, /data-task-priority-tag/, 'priority is a tab at the top of the card');
+  assert.match(card, /absolute left-0 top-0[^"]*rounded-tl-2xl rounded-br-2xl/, 'the tab hugs the top-left corner like a folder tab (Rodny, 21 September 2026)');
+  assert.match(source, /URGENTE: 'bg-gradient-to-r from-destructive/, 'each priority tab has its own soft gradient');
+  assert.match(card, /taskPriorityBadgeConfig\[task\.priority\]/, 'the tab reads the shared priority config');
+  assert.match(card, /data-task-category-tab/, 'without priority the tab shows the AI category');
+  assert.match(card, /p-4 pt-9/, 'the content leaves room for the tab');
   assert.match(card, /data-task-assignee/, 'assignee name and avatar are a row of their own');
   assert.match(card, /formatTaskCardDate\(task\.dueDateFormatted\)/, 'the compact date stays');
   assert.match(card, /line-clamp-2/, 'the description snippet is clamped');
