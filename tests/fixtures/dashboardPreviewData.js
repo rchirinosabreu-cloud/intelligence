@@ -97,7 +97,7 @@ export const dashboardDemoClients = [
 ];
 
 /** Kanban de Gestión con datos de ejemplo: prioridades, vencidas, descripción, adjuntos y comentarios. */
-export function dashboardDemoKanbanTasks(now = new Date()) {
+export function dashboardDemoKanbanTasks(now = new Date(), { focusFuture = false } = {}) {
   const client = (id) => dashboardDemoClients.find((entry) => entry.id === id);
   const task = (key, title, status, clientId, assignee, extra = {}) => ({
     id: `kanban-${key}`, title, status, clientId, client: client(clientId),
@@ -105,7 +105,8 @@ export function dashboardDemoKanbanTasks(now = new Date()) {
     assigneeId: assignee.id,
     creator: { id: dashboardDemoUser.id, name: dashboardDemoUser.name }, creatorId: dashboardDemoUser.id,
     dueDate: daysFromNow(extra.dueInDays ?? 2, 12, now).toISOString(),
-    focusDeadlineAt: extra.focusHour ? new Date(`${bogotaDayKey(now)}T${extra.focusHour}:00-05:00`).toISOString() : null,
+    // `?future` on the lab URL moves the commitment to the end of the day, to review it before it expires.
+    focusDeadlineAt: extra.focusHour ? new Date(`${bogotaDayKey(now)}T${focusFuture ? '23:45' : extra.focusHour}:00-05:00`).toISOString() : null,
     comments: extra.comments || '',
     isPriority: Boolean(extra.priority), priority: extra.priority || null, isSpecial: Boolean(extra.isSpecial),
     aiCategory: extra.aiCategory || null, aiComplexity: extra.aiComplexity || null,
@@ -124,6 +125,21 @@ export function dashboardDemoKanbanTasks(now = new Date()) {
     task('canva', 'Incluir en Canva editables de cliente', 'EN_CURSO', 'client-brain', dashboardDemoMember, { dueInDays: 4, aiCategory: 'Operaciones & Reuniones', aiComplexity: 'BAJA', isSpecial: true, sortOrder: 1 }),
     task('conciliacion', 'Conciliación manual financiero ingresos y egresos', 'REALIZADA', 'client-brain', people.helen, { dueInDays: -1, completedAt: hoursFromNow(-3, now).toISOString(), aiCategory: 'Administrativo & Finanzas', aiComplexity: 'MEDIA', files: 1, sortOrder: 0 }),
     task('historias', 'Activar historias', 'REALIZADA', 'client-alpina', people.melissa, { priority: 'NORMAL', dueInDays: 0, completedAt: hoursFromNow(-5, now).toISOString(), aiCategory: 'Marketing & Social Media', aiComplexity: 'BAJA', sortOrder: 1 })
+  ];
+}
+
+/**
+ * Conversación de ejemplo de una tarea: un comentario humano y las novedades del sistema, incluidas las del
+ * compromiso con hora (vencimiento y petición de más tiempo), para revisar su tarjeta en la muestra local.
+ */
+export function dashboardDemoTaskComments(taskId, now = new Date()) {
+  if (taskId !== 'kanban-mampujan') return [];
+  const author = { id: dashboardDemoUser.id, name: dashboardDemoUser.name, avatarUrl: dashboardDemoUser.avatarUrl || null, role: dashboardDemoUser.role };
+  return [
+    { id: 'c-human', taskId, type: 'human', authorId: author.id, author, content: 'Ya cargué las fotos de la segunda entrega.', createdAt: hoursFromNow(-6, now).toISOString(), isEdited: false, attachments: [], reactions: [] },
+    { id: 'c-reopen', taskId, type: 'system_reopen', authorId: author.id, author, content: '[CLIENT_CORRECTION]\nEl cliente pidió ajuste en el tono del color.', createdAt: hoursFromNow(-5, now).toISOString(), isEdited: false, attachments: [], reactions: [] },
+    { id: 'c-overdue', taskId, type: 'system_focus_overdue', authorId: null, author: null, content: '[FOCUS_OVERDUE]\nEl compromiso venció a las 09:00.', createdAt: hoursFromNow(-2, now).toISOString(), isEdited: false, attachments: [], reactions: [] },
+    { id: 'c-extension', taskId, type: 'system_focus_extension', authorId: author.id, author, content: '[FOCUS_EXTENSION:30]\nEspero la aprobación del cliente para cerrar la sección de colecciones.\nEl compromiso pasó a las 15:30.', createdAt: hoursFromNow(-1, now).toISOString(), isEdited: false, attachments: [], reactions: [] }
   ];
 }
 

@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma.js';
 import {
-  FOCUS_ACTIVE_STATUSES, focusExtensionRequestMessage, focusLockMessage, focusOverdueMessages, isManagerUser, parseFocusExtensionRequest
+  FOCUS_ACTIVE_STATUSES, FOCUS_EXTENSION_EVENT_TYPE, FOCUS_OVERDUE_EVENT_TYPE, bogotaTimeOf, extendedFocusDeadline, focusExtensionRequestMessage,
+  focusLockMessage, focusOverdueMessages, formatFocusExtensionEventContent, formatFocusOverdueEventContent, isManagerUser, parseFocusExtensionRequest
 } from '../lib/taskFocus.js';
 import { createNotification } from './notificationService.js';
 
@@ -69,6 +70,10 @@ export const notifyFocusOverdue = async ({ db = prisma, now = new Date(), notify
     const managerId = focusManagerIdOf(task);
     const personId = task.assignee?.userId || null;
     try {
+      // The overdue itself is a novedad in the task conversation, like a return or a reopen.
+      await db.taskComment.create({
+        data: { taskId: task.id, authorId: null, type: FOCUS_OVERDUE_EVENT_TYPE, content: formatFocusOverdueEventContent(task) }
+      });
       if (managerId) {
         await notify({ userId: managerId, message: messages.manager, type: 'TASK_FOCUS_OVERDUE', relatedId: task.id, taskId: task.id });
       }
@@ -123,19 +128,25 @@ export const requestFocusExtension = async (db, { user, taskId, minutes, reason,
     throw error;
   }
   const managerId = focusManagerIdOf(task);
+  // The time is granted on the spot: nobody approves it (Rodny, 21 September 2026). Counted from now when the
+  // commitment already expired, so the new hour is never in the past.
+  const newDeadline = extendedFocusDeadline(task.focusDeadlineAt, request.minutes);
+  const newTime = bogotaTimeOf(newDeadline);
   await db.taskComment.create({
     data: {
       taskId: task.id,
       authorId: userId,
-      type: 'system_focus_extension',
-      content: `Pide ${request.label} más: ${request.reason}`
+      type: FOCUS_EXTENSION_EVENT_TYPE,
+      content: formatFocusExtensionEventContent({ ...request, newTime })
     }
   });
+  // A new hour: the overdue notice re-arms, so if this one passes too everybody is told again.
+  await db.task.update({ where: { id: task.id }, data: { focusDeadlineAt: newDeadline, focusOverdueNotifiedAt: null } });
   let notifiedUserId = null;
   if (managerId && managerId !== userId) {
     await notify({
       userId: managerId,
-      message: focusExtensionRequestMessage({ task, assigneeName: task.assignee?.name || 'La persona', label: request.label, reason: request.reason }),
+      message: focusExtensionRequestMessage({ task, assigneeName: task.assignee?.name || 'La persona', label: request.label, reason: request.reason, newTime }),
       type: 'TASK_FOCUS_EXTENSION',
       relatedId: task.id,
       taskId: task.id,
@@ -143,5 +154,5 @@ export const requestFocusExtension = async (db, { user, taskId, minutes, reason,
     });
     notifiedUserId = managerId;
   }
-  return { ok: true, minutes: request.minutes, label: request.label, notifiedUserId };
+  return { ok: true, minutes: request.minutes, label: request.label, newTime, notifiedUserId };
 };

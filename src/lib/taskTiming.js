@@ -1,3 +1,5 @@
+import { FOCUS_EXTENSION_EVENT_TYPE, FOCUS_OVERDUE_EVENT_TYPE, focusEventPresentation } from './taskFocus.js';
+
 export const REOPEN_REASONS = [
   { value: 'CLIENT_CORRECTION', label: 'Corrección normal del cliente' },
   { value: 'INTERNAL_ERROR', label: 'Error interno' },
@@ -107,6 +109,10 @@ export function getTaskSystemEventPresentation(type, content = '') {
   }
   if (type === 'system_reintegrate') {
     return { badgeLabel: 'Nota de reintegración', note };
+  }
+  // Compromiso con hora: el vencimiento y la petición de más tiempo son novedades como las demás.
+  if (type === FOCUS_OVERDUE_EVENT_TYPE || type === FOCUS_EXTENSION_EVENT_TYPE) {
+    return focusEventPresentation(type, note);
   }
   return { badgeLabel: 'Actualización', note };
 }

@@ -30,7 +30,7 @@ import {
     RefreshCw,
     Tag
 } from '@/components/ui/icons';
-import { bogotaTimeOf, focusLockMessage, getTaskLock, isActiveFocusTask, isFocusOverdue, nextLockReaction } from '@/lib/taskFocus';
+import { bogotaTimeOf, findFocusTaskFor, focusLockMessage, getTaskLock, isActiveFocusTask, isFocusOverdue, nextLockReaction } from '@/lib/taskFocus';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
@@ -248,6 +248,9 @@ const NativeTasks = () => {
     const lockAttemptsRef = useRef({});
     // "Pedir más tiempo": the focus task the person is asking about (Rodny, 21 September 2026).
     const [extensionTask, setExtensionTask] = useState(null);
+    const [extensionRequired, setExtensionRequired] = useState(false);
+    // Sent requests, so the mandatory dialog does not reopen while the board refetches the task.
+    const extensionSentRef = useRef({});
     const [reopeningTask, setReopeningTask] = useState(null);
     const [reopenReason, setReopenReason] = useState('CLIENT_CORRECTION');
     const [reopenNote, setReopenNote] = useState('');
@@ -648,6 +651,27 @@ const NativeTasks = () => {
         setShakingTaskId(key);
     };
     const onShakeEnd = (task) => setShakingTaskId((current) => (current === String(task.id) ? null : current));
+
+    // Rodny, 21 September 2026: once the commitment expires, asking for more time is mandatory. The dialog opens
+    // by itself until the person sends the request or goes to finish the task. The clock is a counter, never a
+    // `new Date()` in a dependency array (that caused the render loop of September).
+    const [overdueTick, setOverdueTick] = useState(0);
+    useEffect(() => {
+        const interval = window.setInterval(() => setOverdueTick((value) => value + 1), 60_000);
+        return () => window.clearInterval(interval);
+    }, []);
+    const myOverdueFocusTask = useMemo(() => {
+        if (viewerIsManager || !currentUser?.id) return null;
+        const focusTask = findFocusTaskFor(tasks, { assigneeUserId: currentUser.id });
+        return focusTask && isFocusOverdue(focusTask) ? focusTask : null;
+    }, [tasks, currentUser?.id, viewerIsManager, overdueTick]);
+    useEffect(() => {
+        if (!myOverdueFocusTask || extensionTask) return;
+        // The hour just granted travels in the ref until the board refetches, so the dialog does not flash back.
+        if (extensionSentRef.current[String(myOverdueFocusTask.id)] >= new Date(myOverdueFocusTask.focusDeadlineAt).getTime()) return;
+        setExtensionTask(myOverdueFocusTask);
+        setExtensionRequired(true);
+    }, [myOverdueFocusTask, extensionTask]);
 
     const onDragEnd = async (result) => {
         const { destination, source, draggableId } = result;
@@ -1116,7 +1140,7 @@ const NativeTasks = () => {
                                 onClick={() => {
                                     const focusTask = tasks.find(task => String(task.id) === String(focusLockNotice?.focusTask?.id)) || focusLockNotice?.focusTask;
                                     setFocusLockNotice(null);
-                                    if (focusTask) setExtensionTask(focusTask);
+                                    if (focusTask) { setExtensionRequired(false); setExtensionTask(focusTask); }
                                 }}
                                 className="rounded-xl border border-brand-cyan/40 px-4 py-2 text-sm font-medium text-brand-cyan-deep hover:bg-brand-cyan/10 dark:text-brand-cyan"
                             >
@@ -1140,7 +1164,12 @@ const NativeTasks = () => {
             <FocusExtensionDialog
                 task={extensionTask}
                 open={!!extensionTask}
-                onOpenChange={(open) => { if (!open) setExtensionTask(null); }}
+                required={extensionRequired}
+                onOpenChange={(open) => { if (!open) { setExtensionTask(null); setExtensionRequired(false); } }}
+                onSent={() => {
+                    if (extensionTask) extensionSentRef.current[String(extensionTask.id)] = new Date(extensionTask.focusDeadlineAt).getTime();
+                    refetch();
+                }}
             />
 
             <TaskLifecycleDialog

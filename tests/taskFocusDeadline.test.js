@@ -2,9 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  FOCUS_ACTIVE_STATUSES, FOCUS_EXTENSION_OPTIONS, LOCK_RETRY_WINDOW_MS, bogotaTimeOf, findFocusTaskFor, focusDeadlineIso, focusExtensionRequestMessage,
-  focusLockMessage, focusOverdueMessages, focusTimeFromIso, getTaskLock, isActiveFocusTask, isFocusOverdue, isManagerUser, nextLockReaction, parseFocusExtensionRequest
+  FOCUS_ACTIVE_STATUSES, FOCUS_EXTENSION_EVENT_TYPE, FOCUS_EXTENSION_OPTIONS, FOCUS_OVERDUE_EVENT_TYPE, LOCK_RETRY_WINDOW_MS, bogotaTimeOf,
+  extendedFocusDeadline, findFocusTaskFor, focusDeadlineIso, focusEventPresentation, focusExtensionRequestMessage, focusLockMessage, focusOverdueMessages,
+  focusTimeFromIso, formatFocusExtensionEventContent, formatFocusOverdueEventContent, getTaskLock, isActiveFocusTask, isFocusOverdue,
+  isManagerUser, nextLockReaction, parseFocusExtensionRequest
 } from '../src/lib/taskFocus.js';
+import { getTaskSystemEventPresentation } from '../src/lib/taskTiming.js';
 import { assertTaskNotLocked, findActiveFocusTaskForUser, notifyFocusOverdue, requestFocusExtension } from '../src/services/taskFocusService.js';
 
 // Rodny, 21 September 2026: a deadline with an hour means the person works only on that task; the rest of
@@ -179,6 +182,7 @@ test('the panel edits the hour with the shared calendar and only for managers; t
 const before = new Date('2036-09-21T18:00:00.000Z').getTime(); // 13:00 Bogotá
 const after = new Date('2036-09-21T20:00:00.000Z').getTime();  // 15:00 Bogotá
 const overdueFocus = { ...focus, focusDeadlineAt: '2026-09-21T19:00:00.000Z' }; // already past, whatever the clock says now
+const panelSource = () => readFileSync('src/components/modules/TaskSidePanel.jsx', 'utf8');
 const overdueDone = { ...overdueFocus, status: 'REALIZADA' };
 
 test('an overdue commitment keeps the lock and changes the wording; the extension request is validated', () => {
@@ -201,15 +205,25 @@ test('an overdue commitment keeps the lock and changes the wording; the extensio
   assert.equal(messages.manager, 'Helen no cumplió el compromiso «Redactar parrilla» a las 14:00. Ábrela para darle más tiempo, quitar la hora o reasignarla.');
   assert.equal(messages.person, 'Tu compromiso «Redactar parrilla» venció a las 14:00. Termínalo o pide más tiempo.');
   assert.equal(
-    focusExtensionRequestMessage({ task: focus, assigneeName: 'Helen', label: '30 minutos', reason: 'espero al cliente' }),
-    'Helen pide 30 minutos más para «Redactar parrilla» (compromiso a las 14:00): espero al cliente. Ábrela y ajusta la hora con el reloj.'
+    focusExtensionRequestMessage({ task: focus, assigneeName: 'Helen', label: '30 minutos', reason: 'espero al cliente', newTime: '14:30' }),
+    'Helen necesitaba 30 minutos más para «Redactar parrilla»: espero al cliente. Su compromiso pasó a las 14:30.',
+    'nothing to approve: the hour already changed (Rodny, 21 September 2026)'
   );
+});
+
+test('more time is granted on the spot, counted from now when the commitment already expired', () => {
+  // Rodny, 21 September 2026: "si la persona dice que necesita una hora, pues se le añade una hora".
+  const soon = new Date('2036-09-21T19:00:00.000Z');
+  assert.equal(extendedFocusDeadline(soon, 60, new Date('2036-09-21T18:00:00.000Z').getTime()).toISOString(), '2036-09-21T20:00:00.000Z', 'before the hour it is added to the commitment');
+  assert.equal(extendedFocusDeadline(soon, 15, new Date('2036-09-21T21:00:00.000Z').getTime()).toISOString(), '2036-09-21T21:15:00.000Z', 'once expired it is counted from now, never landing in the past');
+  assert.equal(extendedFocusDeadline(null, 30), null);
 });
 
 test('the server tells the manager who set the hour (and the person) once per hour set, and receives extension requests', async () => {
   const notices = [];
   const updates = [];
-  const overdueTask = { id: 'focus', title: 'Redactar parrilla', focusDeadlineAt: new Date('2026-09-21T19:00:00.000Z'), focusSetById: 'user-rodny', creatorId: 'user-franci', assignee: { userId: 'user-helen', name: 'Helen' } };
+  // A fixed hour in the future keeps the arithmetic of the extension deterministic whatever the wall clock says.
+  const overdueTask = { id: 'focus', title: 'Redactar parrilla', focusDeadlineAt: new Date('2036-09-21T19:00:00.000Z'), focusSetById: 'user-rodny', creatorId: 'user-franci', assignee: { userId: 'user-helen', name: 'Helen' } };
   const db = {
     task: {
       findMany: async (args) => { updates.push(['findMany', args.where]); return [overdueTask]; },
@@ -224,15 +238,21 @@ test('the server tells the manager who set the hour (and the person) once per ho
   assert.equal(await notifyFocusOverdue({ db, now, notify }), 1);
   assert.deepEqual(updates[0][1], { focusDeadlineAt: { not: null, lt: now }, focusOverdueNotifiedAt: null, status: { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] } }, 'only active commitments past the hour that were not notified yet');
   assert.deepEqual(notices.map((n) => [n.userId, n.type]), [['user-rodny', 'TASK_FOCUS_OVERDUE'], ['user-helen', 'TASK_FOCUS_OVERDUE']], 'the manager who set the hour, then the person');
+  // Rodny, 21 September 2026: the overdue is a novedad on the task, like a return or a reopen.
+  assert.deepEqual(updates.find(([kind]) => kind === 'comment')[1], { taskId: 'focus', authorId: null, type: 'system_focus_overdue', content: '[FOCUS_OVERDUE]\nEl compromiso venció a las 14:00.' });
   assert.match(notices[0].message, /^Helen no cumplió el compromiso «Redactar parrilla» a las 14:00/);
-  assert.deepEqual(updates[1][1], { where: { id: 'focus' }, data: { focusOverdueNotifiedAt: now } }, 'marked so it is not repeated');
+  assert.deepEqual(updates.find(([kind]) => kind === 'update')[1], { where: { id: 'focus' }, data: { focusOverdueNotifiedAt: now } }, 'marked so it is not repeated');
 
   notices.length = 0;
   const result = await requestFocusExtension(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'focus', minutes: 30, reason: 'espero al cliente', notify });
-  assert.deepEqual(result, { ok: true, minutes: 30, label: '30 minutos', notifiedUserId: 'user-rodny' });
-  assert.deepEqual(updates.at(-1)[1], { taskId: 'focus', authorId: 'user-helen', type: 'system_focus_extension', content: 'Pide 30 minutos más: espero al cliente' }, 'the request stays in the task conversation');
+  assert.deepEqual(result, { ok: true, minutes: 30, label: '30 minutos', newTime: '14:30', notifiedUserId: 'user-rodny' }, 'the hour moved by itself');
+  assert.deepEqual(updates.filter(([kind]) => kind === 'comment').at(-1)[1], { taskId: 'focus', authorId: 'user-helen', type: 'system_focus_extension', content: '[FOCUS_EXTENSION:30]\nespero al cliente\nEl compromiso pasó a las 14:30.' }, 'the request stays in the task conversation as a novedad');
+  const applied = updates.at(-1)[1];
+  assert.equal(applied.where.id, 'focus');
+  assert.equal(applied.data.focusDeadlineAt.toISOString(), '2036-09-21T19:30:00.000Z', 'the extension is applied on the task, nobody approves it');
+  assert.equal(applied.data.focusOverdueNotifiedAt, null, 'and the overdue notice re-arms for the new hour');
   assert.deepEqual([notices[0].userId, notices[0].type, notices[0].actorId], ['user-rodny', 'TASK_FOCUS_EXTENSION', 'user-helen']);
-  assert.match(notices[0].message, /Helen pide 30 minutos más para «Redactar parrilla»/);
+  assert.match(notices[0].message, /Helen necesitaba 30 minutos más para «Redactar parrilla»[\s\S]*Su compromiso pasó a las 14:30\./);
   await assert.rejects(requestFocusExtension(db, { user: { userId: 'user-melissa', role: 'EDITOR' }, taskId: 'focus', minutes: 30, reason: 'x', notify }), (error) => error.statusCode === 403, 'only the responsible person asks');
   await assert.rejects(requestFocusExtension(db, { user: { userId: 'user-helen', role: 'EDITOR' }, taskId: 'focus', minutes: 30, reason: '', notify }), (error) => error.statusCode === 400);
   const noFocus = { ...db, task: { ...db.task, findUnique: async () => ({ ...overdueTask, focusDeadlineAt: null, status: 'PENDIENTE' }) } };
@@ -268,8 +288,7 @@ test('schema, cron, route, notifications and screens carry the overdue notice an
   assert.match(dialog, /fetch\(`\$\{getApiBaseUrl\(\)\}\/api\/tasks\/\$\{task\.id\}\/focus-extension`/, 'the dialog posts the request');
   assert.match(dialog, /FOCUS_EXTENSION_OPTIONS\.map/, 'the person picks how much time from the shared list');
   assert.match(dialog, /id="focus-extension-reason"[\s\S]*?required/, 'and must say why');
-  assert.match(dialog, /cuéntale por qué a \$\{recipient\}\./, 'the text names the task creator (Rodny, 21 September 2026)');
-  assert.match(dialog, /const creatorName = task\?\.creatorName \|\| task\?\.creator\?\.name \|\| '';/);
+  assert.match(dialog, /const creatorName = task\?\.creatorName \|\| task\?\.creator\?\.name \|\| '';/, 'the toast names who was told');
   assert.match(panel, /creatorName: formData\.creator\?\.name \|\| formData\.creatorName,/, 'the task panel passes the creator name to the dialog');
   assert.match(card, /data-focus-overdue=\{focusOverdue \? 'true' : undefined\}/, 'the card chip knows when the hour passed');
   assert.match(card, /focusOverdue \? `Venció a las \$\{focusTime\}` : `Hasta las \$\{focusTime\}`/, 'and says so in red');
@@ -277,4 +296,49 @@ test('schema, cron, route, notifications and screens carry the overdue notice an
   assert.match(board, /<FocusExtensionDialog[\s\S]*?task=\{extensionTask\}/);
   assert.match(panel, /data-focus-extension-open[\s\S]*?Pedir más tiempo/, 'the task panel offers it beside the read-only hour');
   assert.match(panel, /<FocusExtensionDialog[\s\S]*?open=\{askingMoreTime\}/);
+});
+
+test('the overdue and the extension request are novedades of the task, like a return or a reopen', () => {
+  assert.equal(FOCUS_OVERDUE_EVENT_TYPE, 'system_focus_overdue');
+  assert.equal(FOCUS_EXTENSION_EVENT_TYPE, 'system_focus_extension');
+  assert.equal(formatFocusOverdueEventContent(overdueFocus), '[FOCUS_OVERDUE]\nEl compromiso venció a las 14:00.', 'Rodny, 21 September 2026: nothing after the hour');
+  assert.equal(formatFocusExtensionEventContent({ minutes: 30, reason: 'espero al cliente', newTime: '14:30' }), '[FOCUS_EXTENSION:30]\nespero al cliente\nEl compromiso pasó a las 14:30.');
+  // Rodny, 21 September 2026: no badge on the overdue card, it only repeats the event title.
+  assert.deepEqual(focusEventPresentation(FOCUS_OVERDUE_EVENT_TYPE, '[FOCUS_OVERDUE]\nVenció.'), { badgeLabel: null, note: 'Venció.' });
+  assert.deepEqual(focusEventPresentation(FOCUS_EXTENSION_EVENT_TYPE, '[FOCUS_EXTENSION:120]\nFalta la aprobación.'), { badgeLabel: 'Se añadieron 2 horas', note: 'Falta la aprobación.' });
+  assert.deepEqual(focusEventPresentation(FOCUS_EXTENSION_EVENT_TYPE, 'texto suelto'), { badgeLabel: 'Más tiempo añadido', note: 'texto suelto' }, 'an old or malformed note still reads');
+  // The shared presentation of task events knows them, so the panel renders the same card as the other novedades.
+  assert.deepEqual(getTaskSystemEventPresentation(FOCUS_EXTENSION_EVENT_TYPE, '[FOCUS_EXTENSION:15]\nCasi lista.'), { badgeLabel: 'Se añadieron 15 minutos', note: 'Casi lista.' });
+  assert.deepEqual(getTaskSystemEventPresentation(FOCUS_OVERDUE_EVENT_TYPE, '[FOCUS_OVERDUE]\nVenció.'), { badgeLabel: null, note: 'Venció.' });
+  assert.match(panelSource(), /\{eventPresentation\.badgeLabel && \(/, 'the card hides the badge when there is nothing new to say');
+
+  const panel = panelSource();
+  assert.match(panel, /const TASK_EVENT_STYLES = \{/, 'one catalogue of system events drives the card');
+  assert.match(panel, /\[FOCUS_OVERDUE_EVENT_TYPE\]: \{\s*label: 'Evento: Compromiso vencido'/);
+  assert.match(panel, /\[FOCUS_EXTENSION_EVENT_TYPE\]: \{\s*label: 'Evento: Solicitud de tiempo'/);
+  assert.match(panel, /const eventStyle = TASK_EVENT_STYLES\[comment\.type\];/, 'the conversation renders them as event cards, never as a plain chat bubble');
+  assert.match(panel, /label: 'Evento: Devolución'[\s\S]*?label: 'Evento: Reapertura'[\s\S]*?label: 'Evento: Reintegración'/, 'the three historical events keep their labels and colours');
+});
+
+test('once the commitment expires the dialog is inescapable, and it sits above the task panel', () => {
+  const board = readFileSync('src/components/modules/NativeTasks.jsx', 'utf8');
+  const dialog = readFileSync('src/components/tasks/FocusExtensionDialog.jsx', 'utf8');
+
+  assert.match(board, /return focusTask && isFocusOverdue\(focusTask\) \? focusTask : null;/, 'an expired commitment always asks');
+  assert.match(board, /setExtensionTask\(myOverdueFocusTask\);\s*setExtensionRequired\(true\);/, 'the dialog opens by itself (Rodny, 21 September 2026)');
+  assert.match(board, /setOverdueTick\(\(value\) => value \+ 1\)/, 'the clock is a counter, never a Date in a dependency array');
+  assert.doesNotMatch(board, /\[[^\]]*new Date\(\)[^\]]*\]\s*\)/, 'no Date inside a dependency array (the September render loop)');
+  assert.match(board, /extensionSentRef\.current\[String\(myOverdueFocusTask\.id\)\] >= new Date\(myOverdueFocusTask\.focusDeadlineAt\)\.getTime\(\)/, 'the granted hour stops it from flashing back before the refetch');
+
+  // The task panel is z-[100]/[111] and its emoji popover z-[125]; the dialog must sit above all of them.
+  assert.match(dialog, /overlayClassName="z-\[130\]"/, 'so it never opens behind the task panel (Rodny saw it behind, 21 September 2026)');
+  assert.match(dialog, /className="z-\[131\] sm:max-w-md/);
+  assert.match(dialog, /showCloseButton=\{!required\}/, 'a mandatory request has no X');
+  assert.match(dialog, /const blockDismiss = \(event\) => \{ if \(required\) event\.preventDefault\(\); \};/);
+  assert.match(dialog, /onEscapeKeyDown=\{blockDismiss\}[\s\S]*?onPointerDownOutside=\{blockDismiss\}[\s\S]*?onInteractOutside=\{blockDismiss\}/, 'Escape and clicking outside do not dismiss it');
+  assert.match(dialog, /\{!required && \(\s*<button type="button" onClick=\{\(\) => onOpenChange\(false\)\}/, 'once expired there is no way out: no cancel either (Rodny, 21 September 2026)');
+  assert.doesNotMatch(dialog, /Abrir mi compromiso/, 'and no escape hatch to the task');
+  assert.match(dialog, /explica el motivo\./, 'the text no longer names anybody: "y explica el motivo"');
+  assert.doesNotMatch(dialog, /cuéntale por qué a/);
+  assert.match(dialog, /Se añadieron \$\{data\.label[\s\S]*?Tu compromiso ahora es hasta las \$\{data\.newTime\}/, 'the toast says the time is already added');
 });
