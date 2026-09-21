@@ -1334,9 +1334,11 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                             {/* The tab is part of the card: same surface, same thin outline; the priority only tints it faintly. */}
                             <svg className="absolute inset-0 h-full w-full" viewBox="0 0 100 28" preserveAspectRatio="none" aria-hidden="true">
                                 <defs>
-                                    <linearGradient id={`task-tab-${task.id}`} x1="0" y1="0" x2="1" y2="0">
-                                        <stop offset="0" stopColor="currentColor" stopOpacity="0.14" />
-                                        <stop offset="1" stopColor="currentColor" stopOpacity="0" />
+                                    {/* Top-to-bottom tint that fades out completely before the card edge (Rodny, 21 September 2026). */}
+                                    <linearGradient id={`task-tab-${task.id}`} x1="0" y1="0" x2="0" y2="1">
+                                        <stop offset="0" stopColor="currentColor" stopOpacity="0.18" />
+                                        <stop offset="0.55" stopColor="currentColor" stopOpacity="0.06" />
+                                        <stop offset="0.85" stopColor="currentColor" stopOpacity="0" />
                                     </linearGradient>
                                 </defs>
                                 <path d={TASK_TAB_FILL_PATH} style={{ fill: 'hsl(var(--card))' }} />
