@@ -285,7 +285,9 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       const plan = await fixture();
       let tick = start;
       const config = { ...options(plan.id), trigger: 'AUTOMATIC', now: () => tick, logger: { error() {} } };
-      config.reviewOptions.ai.generate = async request => { throw Object.assign(new Error('temporary upstream failure'), { status: 503 }); };
+      // A genuine failure of the work, not an outage of the provider: those keep
+      // their budget and are covered by their own test below.
+      config.reviewOptions.ai.generate = async () => { throw new Error('temporary fixture failure'); };
       for (let attempt = 1; attempt <= 3; attempt++) {
         const result = await scheduler.runContentPlanReviewJob(config);
         assert.equal(result.status, 'FAILED');
@@ -384,6 +386,8 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
         ruleKey: `RULE_${i}`, field: 'copyText', category: 'GRAMATICA', severity: 'INFO',
         title: `Hallazgo ${i}`, detail: 'Detalle', recommendation: 'Corregir', status: 'OPEN'
       })) });
+      // Change the content so this is a real review and not the cached one.
+      await db.contentItem.update({ where: { id: item.id }, data: { copyText: 'Texto revisado para forzar un análisis nuevo' } });
       let verificationCalls = 0;
       config.reviewOptions.ai.generate = async request => {
         if (request.responseSchema?.properties?.verifications) {
