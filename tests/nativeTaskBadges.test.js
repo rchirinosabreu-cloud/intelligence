@@ -21,7 +21,7 @@ test('NativeTasks card badges render in footer with compact equal-width pills', 
   assert.match(source, /text-white/, 'Priority badge text should be white for every priority variant.');
   assert.doesNotMatch(source, /AlertOctagon className="w-3 h-3" \/> Vencido/, 'Overdue badge should not include the alert icon in the crowded card footer.');
   assert.match(source, /taskCardFooterBadges/, 'Status badges should be collected for the footer instead of stacked in the top-right area.');
-  assert.match(source, /task\.isSpecial[\s\S]*border-purple-500/, 'Special tasks should be distinguished with a purple card border instead of a noisy badge.');
+  assert.match(source, /task\.isSpecial[\s\S]*border-brand-magenta/, 'Special tasks should be distinguished with a brand magenta card border instead of a noisy badge.');
   assert.doesNotMatch(source, /task\.isSpecial\s*&&[\s\S]*taskCardFooterBadges/, 'Special status should not participate in the compact task card badge footer.');
   assert.doesNotMatch(source, /label:\s*task\.specialType\s*\|\|\s*'Especial'/, 'Task cards should not render the special label anymore.');
 });

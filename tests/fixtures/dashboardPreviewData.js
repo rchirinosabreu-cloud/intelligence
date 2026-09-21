@@ -89,6 +89,41 @@ export function dashboardDemoDashboard(now = new Date()) {
   };
 }
 
+export const dashboardDemoClients = [
+  { id: 'client-alpina', name: 'Alpina', slug: 'alpina', logoUrl: null },
+  { id: 'client-nutresa', name: 'Nutresa', slug: 'nutresa', logoUrl: null },
+  { id: 'client-haad', name: 'Haad Aesthetic Center', slug: 'haad', logoUrl: null },
+  { id: 'client-brain', name: 'Brainstudio', slug: 'brainstudio', logoUrl: null }
+];
+
+/** Kanban de Gestión con datos de ejemplo: prioridades, vencidas, descripción, adjuntos y comentarios. */
+export function dashboardDemoKanbanTasks(now = new Date()) {
+  const client = (id) => dashboardDemoClients.find((entry) => entry.id === id);
+  const task = (key, title, status, clientId, assignee, extra = {}) => ({
+    id: `kanban-${key}`, title, status, clientId, client: client(clientId),
+    assignee: { id: assignee.id, userId: assignee.userId, name: assignee.name, role: assignee.role, avatarUrl: assignee.avatarUrl || null },
+    assigneeId: assignee.id,
+    creator: { id: dashboardDemoUser.id, name: dashboardDemoUser.name }, creatorId: dashboardDemoUser.id,
+    dueDate: daysFromNow(extra.dueInDays ?? 2, 12, now).toISOString(),
+    comments: extra.comments || '',
+    isPriority: Boolean(extra.priority), priority: extra.priority || null, isSpecial: Boolean(extra.isSpecial),
+    aiCategory: extra.aiCategory || null, aiComplexity: extra.aiComplexity || null,
+    taskAttachments: Array.from({ length: extra.files || 0 }, (_, index) => ({ id: `${key}-file-${index}`, fileName: `archivo-${index + 1}.pdf` })),
+    taskComments: Array.from({ length: extra.commentCount || 0 }, (_, index) => ({ id: `${key}-comment-${index}`, content: 'Comentario de ejemplo' })),
+    sortOrder: extra.sortOrder ?? 0, createdAt: hoursFromNow(-48, now).toISOString(), completedAt: extra.completedAt || null,
+    startedAt: status === 'EN_CURSO' ? hoursFromNow(-1, now).toISOString() : null, accumulatedWorkMs: 0, returnCount: 0, isReturned: false
+  });
+  return [
+    task('mampujan', 'PÁGINA WEB MUSEO DE MAMPUJÁN – AVANCES DE LA SEGUNDA ENTREGA', 'PENDIENTE', 'client-brain', dashboardDemoMember, { priority: 'ALTA', dueInDays: 1, comments: '<p>Revisar con el cliente los avances de la segunda entrega y ajustar la sección de colecciones.</p>', aiCategory: 'Creativo & Diseño', aiComplexity: 'ALTA', files: 12, commentCount: 3, sortOrder: 0 }),
+    task('reel-post', '[Producción] Reel: PROCESO DE POST OPERATORIO', 'PENDIENTE', 'client-haad', people.melissa, { priority: 'NORMAL', dueInDays: 3, comments: '<p>Guion aprobado. Grabar tomas de apoyo en clínica el jueves.</p>', aiCategory: 'Producción Audiovisual', aiComplexity: 'MEDIA', files: 4, sortOrder: 1 }),
+    task('caption', 'Caption Expo Mujer Bolívar 2026', 'PENDIENTE', 'client-alpina', people.helen, { dueInDays: -2, comments: '<p>Texto corto para el carrusel del evento.</p>', aiCategory: 'Creación de Contenido', aiComplexity: 'BAJA', sortOrder: 2 }),
+    task('parrilla', 'Redactar parrilla septiembre – octubre', 'EN_CURSO', 'client-nutresa', people.helen, { priority: 'URGENTE', dueInDays: 0, comments: '<p>Incluir campaña de temporada y los tres lanzamientos.</p>', aiCategory: 'Marketing & Social Media', aiComplexity: 'ALTA', files: 2, commentCount: 5, sortOrder: 0 }),
+    task('canva', 'Incluir en Canva editables de cliente', 'EN_CURSO', 'client-brain', people.franci, { dueInDays: 4, aiCategory: 'Operaciones & Reuniones', aiComplexity: 'BAJA', isSpecial: true, sortOrder: 1 }),
+    task('conciliacion', 'Conciliación manual financiero ingresos y egresos', 'REALIZADA', 'client-brain', people.helen, { dueInDays: -1, completedAt: hoursFromNow(-3, now).toISOString(), aiCategory: 'Administrativo & Finanzas', aiComplexity: 'MEDIA', files: 1, sortOrder: 0 }),
+    task('historias', 'Activar historias', 'REALIZADA', 'client-alpina', people.melissa, { priority: 'NORMAL', dueInDays: 0, completedAt: hoursFromNow(-5, now).toISOString(), aiCategory: 'Marketing & Social Media', aiComplexity: 'BAJA', sortOrder: 1 })
+  ];
+}
+
 export function dashboardDemoCompletedTasks(now = new Date()) {
   return dashboardDemoDashboard(now).achievements.map((task) => ({ ...task, status: 'Realizado' }));
 }

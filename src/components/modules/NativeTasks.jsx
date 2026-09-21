@@ -26,6 +26,7 @@ import {
     ClipboardList,
     HelpCircle,
     Plus,
+    Paperclip,
     RefreshCw
 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
@@ -158,11 +159,24 @@ const CATEGORY_COLORS = {
     'Educación': '#f59e0b'
 };
 
+// Priority tags on the Kanban cards (brand palette, 21 September 2026): urgent reads solid, the rest as soft tints.
 const taskPriorityBadgeConfig = {
-    URGENTE: 'border-destructive bg-destructive text-destructive-foreground',
-    ALTA: 'bg-amber-500 border-amber-500 text-white',
-    NORMAL: 'bg-blue-600 border-blue-500 text-white'
+    URGENTE: 'border-destructive bg-destructive text-white',
+    ALTA: 'border-brand-yellow/40 bg-brand-yellow/25 text-brand-yellow-deep dark:text-brand-yellow',
+    NORMAL: 'border-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan'
 };
+
+const taskPriorityLabels = {
+    URGENTE: 'Urgente',
+    ALTA: 'Prioridad alta',
+    NORMAL: 'Prioridad normal'
+};
+
+const plainTextSnippet = (value) => String(value || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
 const getColumnId = (status) => {
     if (!status) return 'pendiente';
@@ -576,10 +590,11 @@ const NativeTasks = () => {
         return filtered;
     }, [tasks, responsibleFilter, clientFilter, dateFilter, searchQuery]);
 
+    // Brand board columns (21 September 2026): glass panels; the accent only marks the column, cards stay neutral.
     const columns = [
-        { id: 'pendiente', title: 'Pendiente', color: 'bg-zinc-100 dark:bg-zinc-800/50' },
-        { id: 'en-proceso', title: 'En proceso', color: 'bg-blue-50/50 dark:bg-blue-900/10' },
-        { id: 'realizado', title: 'Realizado', color: 'bg-emerald-50/50 dark:bg-emerald-900/10' }
+        { id: 'pendiente', title: 'Pendiente', accent: 'bg-brand-cyan', canCreate: true },
+        { id: 'en-proceso', title: 'En proceso', accent: 'bg-brand-yellow', canCreate: false },
+        { id: 'realizado', title: 'Realizado', accent: 'bg-brand-green', canCreate: false }
     ];
 
     const returnedTasks = useMemo(() => {
@@ -816,7 +831,7 @@ const NativeTasks = () => {
     }
 
     return (
-        <div className="space-y-6 h-full flex flex-col">
+        <div className="brain-ambient space-y-6 h-full flex flex-col">
             <PageHeader
                 title="Gestión de Tareas"
                 subtitle="Gestiona y prioriza el flujo operativo de la agencia."
@@ -833,8 +848,8 @@ const NativeTasks = () => {
                             className={cn(
                                 "flex h-9 w-9 items-center justify-center rounded-lg border bg-white shadow-sm transition-all duration-150 active:scale-90 disabled:cursor-wait dark:bg-zinc-900",
                                 refreshConfirmed
-                                    ? "border-emerald-300 bg-emerald-50 text-emerald-600 ring-2 ring-emerald-500/15 dark:border-emerald-800 dark:bg-emerald-950/30 dark:text-emerald-400"
-                                    : "border-zinc-200 text-zinc-400 hover:border-violet-200 hover:text-violet-600 dark:border-zinc-800 dark:text-zinc-500 dark:hover:border-violet-800 dark:hover:text-violet-400"
+                                    ? "border-brand-green/40 bg-brand-green/10 text-brand-green-deep ring-2 ring-brand-green/15 dark:text-brand-green"
+                                    : "border-zinc-200 text-zinc-400 hover:border-brand-cyan/40 hover:text-brand-cyan-deep dark:border-zinc-800 dark:text-zinc-500 dark:hover:text-brand-cyan"
                             )}
                         >
                             {refreshConfirmed
@@ -1190,25 +1205,39 @@ const NativeTasks = () => {
                         {columns.map((col) => {
                             const columnTasks = filteredTasks.filter(t => getColumnId(t.status) === col.id);
                             return (
-                                <div key={col.id} className="flex flex-col gap-4">
-                                    <div className="flex items-center justify-between px-1 h-8">
-                                        <div className="flex items-center gap-2">
-                                            <h3 className="font-semibold text-zinc-700 dark:text-zinc-200 text-sm">{col.title}</h3>
-                                            <span className="bg-zinc-100 dark:bg-zinc-800 text-zinc-500 dark:text-zinc-400 text-xs px-2 py-0.5 rounded-full font-medium">
+                                <div key={col.id} className="brain-glass flex min-w-0 flex-col p-3">
+                                    <div className="flex items-center justify-between gap-2 px-1 pb-3">
+                                        <div className="flex min-w-0 items-center gap-2">
+                                            <span className={cn('h-2.5 w-2.5 shrink-0 rounded-full', col.accent)} aria-hidden="true" />
+                                            <h3 className="truncate text-base font-semibold text-zinc-900 dark:text-zinc-50">{col.title}</h3>
+                                            <span data-column-count className="rounded-full bg-zinc-200/70 px-2 py-0.5 text-xs font-semibold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
                                                 {columnTasks.length}
                                             </span>
                                         </div>
-                                        {col.id === 'pendiente' && returnedTasks.length > 0 && (
-                                            <button
-                                                onClick={() => setIsReturnedDialogOpen(true)}
-                                                className="group/returned relative flex items-center gap-1.5 rounded-xl border border-destructive/20 bg-destructive/10 px-2 py-1 text-destructive shadow-sm transition-all hover:bg-destructive/15"
-                                            >
-                                                <TaskReturnIcon className="w-3.5 h-3.5 animate-pulse" />
-                                                <span className="text-[10px] font-black uppercase tracking-tighter">
-                                                    {returnedTasks.length} Devueltas
-                                                </span>
-                                            </button>
-                                        )}
+                                        <div className="flex shrink-0 items-center gap-1.5">
+                                            {col.id === 'pendiente' && returnedTasks.length > 0 && (
+                                                <button
+                                                    onClick={() => setIsReturnedDialogOpen(true)}
+                                                    className="group/returned relative flex items-center gap-1.5 rounded-xl border border-destructive/20 bg-destructive/10 px-2 py-1 text-destructive shadow-sm transition-all hover:bg-destructive/15"
+                                                >
+                                                    <TaskReturnIcon className="w-3.5 h-3.5 animate-pulse" />
+                                                    <span className="text-[10px] font-black uppercase tracking-tighter">
+                                                        {returnedTasks.length} Devueltas
+                                                    </span>
+                                                </button>
+                                            )}
+                                            {col.canCreate && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setIsCreating(true)}
+                                                    aria-label={`Nueva tarea en ${col.title}`}
+                                                    title="Nueva tarea"
+                                                    className="flex h-9 w-9 items-center justify-center rounded-xl border border-dashed border-zinc-300 text-zinc-400 transition-colors hover:border-brand-cyan hover:text-brand-cyan-deep dark:border-white/20 dark:text-zinc-500 dark:hover:text-brand-cyan"
+                                                >
+                                                    <Plus className="h-4 w-4" />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                     <Droppable droppableId={col.id}>
                                         {(provided, snapshot) => (
@@ -1216,10 +1245,8 @@ const NativeTasks = () => {
                                                 {...provided.droppableProps}
                                                 ref={provided.innerRef}
                                                 className={cn(
-                                                    "flex-1 rounded-xl p-2 transition-colors space-y-3 min-h-[100px]",
-                                                    col.color,
-                                                    "bg-opacity-50 dark:bg-opacity-20 border border-transparent hover:border-zinc-200/50 dark:hover:border-zinc-700/50",
-                                                    snapshot.isDraggingOver && "ring-2 ring-indigo-600/20"
+                                                    "flex-1 rounded-xl p-1 transition-colors space-y-3 min-h-[100px]",
+                                                    snapshot.isDraggingOver && "ring-2 ring-brand-cyan/30 bg-brand-cyan/5"
                                                 )}
                                             >
                                                 {columnTasks.map((task, index) => (
@@ -1236,7 +1263,7 @@ const NativeTasks = () => {
                                                 ))}
                                                 {provided.placeholder}
                                                 {columnTasks.length === 0 && !snapshot.isDraggingOver && (
-                                                    <div className="h-24 flex items-center justify-center text-zinc-400 dark:text-zinc-600 text-sm border-2 border-dashed border-zinc-200 dark:border-zinc-800 rounded-xl">
+                                                    <div className="h-24 flex items-center justify-center text-zinc-400 dark:text-zinc-500 text-sm border-2 border-dashed border-zinc-200/80 dark:border-white/10 rounded-xl">
                                                         Sin tareas
                                                     </div>
                                                 )}
@@ -1262,19 +1289,17 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
     const overdue = !isDone && isOverdue(task.dueDateFormatted);
     const daysOverdue = overdue ? getDaysOverdue(task.dueDateFormatted) : 0;
     const priorityBadgeClass = task.priority ? taskPriorityBadgeConfig[task.priority] : null;
+    const priorityLabel = task.priority ? (taskPriorityLabels[task.priority] || task.priority) : null;
+    const snippet = plainTextSnippet(task.comments);
+    const attachmentCount = Array.isArray(task.taskAttachments) ? task.taskAttachments.length : 0;
+    const commentCount = Array.isArray(task.taskComments) ? task.taskComments.length : 0;
     const taskCardFooterBadges = [
         overdue && {
             key: 'overdue',
             className: 'min-w-[74px] justify-center border-destructive/20 bg-destructive/10 text-destructive',
             label: `Vencido (+${daysOverdue}d)`
-        },
-        !isReturned && task.priority && priorityBadgeClass && {
-            key: 'priority',
-            className: `min-w-[74px] justify-center ${priorityBadgeClass} shadow-sm`,
-            label: task.priority
         }
     ].filter(Boolean);
-    // Client Color Logic handled by ClientAvatar component now
 
     return (
         <Draggable draggableId={String(task.id)} index={index}>
@@ -1284,150 +1309,88 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                     ref={provided.innerRef}
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
-                    className="mb-3 cursor-pointer group"
+                    className="mb-3 cursor-pointer group/card"
                     onClick={() => onClick(task)}
                     style={provided.draggableProps.style}
                 >
+                    {/* Brand board card (21 September 2026): full soft border, priority tag, assignee row, date, snippet, footer. */}
                     <div className={cn(
-                        "rounded-xl border bg-card text-card-foreground shadow-sm",
-                        "group cursor-pointer relative overflow-hidden bg-white/80 dark:bg-zinc-900/80 backdrop-blur-sm transition-shadow",
-                        "transition-all duration-700 ease-in-out",
-                        snapshot.isDragging ? "ring-2 ring-indigo-600 shadow-xl z-50 opacity-90 rotate-2 scale-105" : "",
-                        !snapshot.isDragging && isHighlighted ? "z-10 scale-[1.02] ring-2 ring-destructive" : "ring-2 ring-transparent",
-                        !snapshot.isDragging && !isHighlighted && task.isSpecial ? "border-purple-500/70 ring-1 ring-purple-500/15" : "",
+                        "relative overflow-hidden rounded-2xl border bg-white text-card-foreground shadow-sm dark:bg-zinc-900",
+                        "transition-all duration-300 ease-out",
+                        snapshot.isDragging ? "ring-2 ring-brand-cyan shadow-xl z-50 opacity-95 rotate-1 scale-[1.03]" : "",
+                        !snapshot.isDragging && isHighlighted ? "z-10 scale-[1.02] ring-2 ring-destructive" : "ring-1 ring-transparent",
+                        !snapshot.isDragging && !isHighlighted && task.isSpecial ? "border-brand-magenta/70 ring-1 ring-brand-magenta/15" : "",
                         !snapshot.isDragging && !isHighlighted && overdue && !task.isSpecial ? "border-destructive/50 ring-1 ring-destructive/20" : "",
-                        !snapshot.isDragging && !isHighlighted && !overdue && !task.isSpecial ? (
-                            task.priority === 'URGENTE' ? "border-destructive/40" :
-                            task.priority === 'ALTA' ? "border-amber-500/40 dark:border-amber-500/30" :
-                            task.priority === 'NORMAL' ? "border-blue-500/40 dark:border-blue-500/30" :
-                            "border-zinc-200 dark:border-zinc-800"
-                        ) : "",
+                        !snapshot.isDragging && !isHighlighted && !overdue && !task.isSpecial ? "border-zinc-200/80 hover:border-zinc-300 dark:border-white/10 dark:hover:border-white/20" : "",
                         isReturned && !isHighlighted && "border-destructive/50"
                     )}>
                         <div className="flex flex-col gap-3 p-4">
-                            <div className="flex justify-between items-start">
-                                <div className="flex flex-col gap-1.5">
-                                    <div className="flex items-center gap-2">
-                                        <ClientAvatar
-                                            client={{
-                                                id: task.clientId,
-                                                name: task.clientName,
-                                                logoUrl: task.client?.logoUrl
-                                            }}
-                                            size={20}
-                                        />
-                                        <span className="text-[10px] uppercase tracking-wider font-black text-zinc-600 dark:text-zinc-400 truncate max-w-[120px]">
-                                            {task.clientName}
-                                        </span>
-                                        {isReturned && (
-                                            <span className="flex items-center gap-1 rounded bg-destructive/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-tight text-destructive">
-                                                <TaskReturnIcon className="w-2.5 h-2.5" /> Devuelto
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="flex items-center gap-2">
-                                        <div className="flex items-center gap-1.5">
-                                            <div
-                                                className="w-1.5 h-1.5 rounded-full"
-                                                style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }}
-                                            />
-                                            <span className="text-[9px] font-bold text-zinc-500 uppercase tracking-tighter">
-                                                {task.aiCategory || "Sin Clasificar"}
-                                            </span>
-                                        </div>
-                                        {task.aiComplexity && (
-                                            <>
-                                                <span className="w-1 h-1 rounded-full bg-zinc-200" />
-                                                <span className={cn(
-                                                    "text-[9px] font-bold uppercase tracking-tighter",
-                                                    task.aiComplexity === 'ALTA' ? 'text-destructive' : task.aiComplexity === 'MEDIA' ? 'text-indigo-500' : 'text-emerald-500'
-                                                )}>
-                                                    {task.aiComplexity}
-                                                </span>
-                                            </>
-                                        )}
-                                        {String(task.status || '').toUpperCase() === 'EN_CURSO' && (
-                                            <>
-                                                <span className="w-1 h-1 rounded-full bg-zinc-200" />
-                                                <TaskTimerBadge task={task} />
-                                            </>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="flex flex-col items-end gap-1">
-                                    <div className="flex items-center gap-1">
-                                        {lifecycleAction === 'reintegrate' ? (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); onReopen(task); }}
-                                                className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 text-zinc-400 transition-colors hover:bg-[#009EB9]/10 hover:text-[#009EB9] sm:min-h-8 sm:min-w-8"
-                                                title="Reintegrar tarea"
-                                                aria-label="Reintegrar tarea"
-                                            >
-                                                <TaskReintegrateIcon className="w-3.5 h-3.5" />
-                                            </button>
-                                        ) : lifecycleAction === 'return' ? (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); onReturn(task); }}
-                                                className="brain-danger-button-icon group/btn inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 sm:min-h-8 sm:min-w-8"
-                                                title="Devolver tarea"
-                                                aria-label="Devolver tarea"
-                                            >
-                                                <TaskReturnIcon className="w-3.5 h-3.5" />
-                                            </button>
-                                        ) : null}
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onDelete(task); }}
-                                            className="brain-danger-button-icon group/btn inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 sm:min-h-8 sm:min-w-8"
-                                            aria-label="Eliminar tarea"
-                                            title="Eliminar tarea"
+                            {/* Row 1: priority tag (or category when there is none) + quick actions */}
+                            <div className="flex items-start justify-between gap-2">
+                                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                                    {priorityBadgeClass ? (
+                                        <span
+                                            data-task-priority-tag={task.priority}
+                                            className={cn(
+                                                "inline-flex h-6 items-center gap-1 rounded-lg rounded-tl-none border px-2 text-[10px] font-bold uppercase tracking-wider",
+                                                priorityBadgeClass
+                                            )}
                                         >
-                                            <Trash2 className="w-3.5 h-3.5" />
+                                            <Zap className="h-3 w-3 fill-current" />
+                                            {priorityLabel}
+                                        </span>
+                                    ) : (
+                                        <span className="inline-flex h-6 items-center gap-1.5 rounded-lg rounded-tl-none border border-zinc-200/80 bg-zinc-50 px-2 text-[10px] font-semibold uppercase tracking-wider text-zinc-500 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400">
+                                            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }} />
+                                            {task.aiCategory || 'Sin clasificar'}
+                                        </span>
+                                    )}
+                                    {isReturned && (
+                                        <span className="flex items-center gap-1 rounded-lg bg-destructive/10 px-1.5 py-0.5 text-[9px] font-black uppercase tracking-tight text-destructive">
+                                            <TaskReturnIcon className="w-2.5 h-2.5" /> Devuelto
+                                        </span>
+                                    )}
+                                    {String(task.status || '').toUpperCase() === 'EN_CURSO' && <TaskTimerBadge task={task} />}
+                                </div>
+                                <div className="flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:group-hover/card:opacity-100 sm:focus-within:opacity-100 transition-opacity">
+                                    {lifecycleAction === 'reintegrate' ? (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); onReopen(task); }}
+                                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 text-zinc-400 transition-colors hover:bg-brand-cyan/10 hover:text-brand-cyan-deep dark:hover:text-brand-cyan sm:min-h-8 sm:min-w-8"
+                                            title="Reintegrar tarea"
+                                            aria-label="Reintegrar tarea"
+                                        >
+                                            <TaskReintegrateIcon className="w-3.5 h-3.5" />
                                         </button>
-                                    </div>
+                                    ) : lifecycleAction === 'return' ? (
+                                        <button
+                                            onClick={(e) => { e.stopPropagation(); onReturn(task); }}
+                                            className="brain-danger-button-icon group/btn inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 sm:min-h-8 sm:min-w-8"
+                                            title="Devolver tarea"
+                                            aria-label="Devolver tarea"
+                                        >
+                                            <TaskReturnIcon className="w-3.5 h-3.5" />
+                                        </button>
+                                    ) : null}
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); onDelete(task); }}
+                                        className="brain-danger-button-icon group/btn inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 sm:min-h-8 sm:min-w-8"
+                                        aria-label="Eliminar tarea"
+                                        title="Eliminar tarea"
+                                    >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
                                 </div>
                             </div>
-                            <div>
-                                <h4 className="font-bold text-sm text-zinc-800 dark:text-zinc-100 leading-snug mb-1">
-                                    {task.title}
-                                </h4>
-                                <div className="flex items-center gap-1.5 opacity-60">
-                                    <span className="text-[9px] text-zinc-500 uppercase tracking-tighter font-semibold">Creado por</span>
-                                    <span className="text-[9px] text-primary font-bold uppercase tracking-tighter">{task.creatorName}</span>
-                                </div>
-                            </div>
-                            <div className="flex items-center justify-between gap-2 mt-1 pt-3 border-t border-zinc-100 dark:border-zinc-800/50">
-                                <div
-                                    title={task.dueDateFormatted || "Sin fecha"}
-                                    className={cn(
-                                    "flex items-center gap-1.5 text-xs font-medium transition-colors shrink-0",
-                                    overdue ? "animate-pulse font-bold text-destructive" : "text-zinc-400 dark:text-zinc-500"
-                                    )}
-                                >
-                                    <Calendar className={cn("w-3.5 h-3.5", overdue && "text-destructive")} />
-                                    {formatTaskCardDate(task.dueDateFormatted)}
-                                </div>
-                                <div className="flex min-w-0 flex-1 items-center justify-end gap-1.5">
-                                    {taskCardFooterBadges.map((badge) => {
-                                        const BadgeIcon = badge.icon;
-                                        return (
-                                            <span
-                                                key={badge.key}
-                                                className={cn(
-                                                    "inline-flex h-[22px] items-center gap-1 rounded border px-1.5 text-[10px] font-bold leading-none",
-                                                    badge.className
-                                                )}
-                                                title={badge.label}
-                                            >
-                                                {BadgeIcon && <BadgeIcon className="h-3 w-3 fill-current shrink-0" />}
-                                                <span className="truncate">{badge.label}</span>
-                                            </span>
-                                        );
-                                    })}
-                                    {task.comments && task.comments.trim() !== '' && (
-                                        <div className="text-zinc-400 dark:text-zinc-500 mr-1">
-                                            <MessageSquare className="w-3.5 h-3.5" />
-                                        </div>
-                                    )}
+
+                            {/* Title */}
+                            <h4 className="text-sm font-bold leading-snug text-zinc-900 dark:text-zinc-50" title={task.title}>
+                                {task.title}
+                            </h4>
+
+                            {/* Row 3: assignee + date */}
+                            <div className="flex items-center justify-between gap-3 text-xs">
+                                <div data-task-assignee className="flex min-w-0 items-center gap-2" title={`Asignada a ${task.assigneeName} · Creado por ${task.creatorName}`}>
                                     <UserAvatarPopover user={{
                                         name: task.assigneeName,
                                         avatarUrl: task.assigneeAvatar,
@@ -1437,11 +1400,78 @@ const TaskCard = ({ task, index, highlightedTaskId, onClick, onReturn, onReopen,
                                         <TeamAvatar
                                             member={{ name: task.assigneeName, avatarUrl: task.assigneeAvatar }}
                                             showTitle={false}
-                                            className="w-6 h-6 ring-2 ring-white dark:ring-zinc-900"
+                                            className="h-5 w-5 shrink-0"
                                         />
                                     </UserAvatarPopover>
+                                    <span className="truncate font-medium text-zinc-700 dark:text-zinc-200">{task.assigneeName}</span>
+                                </div>
+                                <div
+                                    title={task.dueDateFormatted || "Sin fecha"}
+                                    className={cn(
+                                        "flex shrink-0 items-center gap-1.5 font-medium transition-colors",
+                                        overdue ? "font-bold text-destructive" : "text-zinc-500 dark:text-zinc-400"
+                                    )}
+                                >
+                                    <Calendar className={cn("h-3.5 w-3.5", overdue && "text-destructive")} />
+                                    {formatTaskCardDate(task.dueDateFormatted)}
                                 </div>
                             </div>
+
+                            {/* Snippet of the description */}
+                            {snippet && (
+                                <p className="line-clamp-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{snippet}</p>
+                            )}
+
+                            {/* Footer: client, category/complexity, files, comments, badges */}
+                            <div className="flex items-center justify-between gap-2 border-t border-zinc-100 pt-3 dark:border-white/10">
+                                <div className="flex min-w-0 items-center gap-2">
+                                    <ClientAvatar
+                                        client={{ id: task.clientId, name: task.clientName, logoUrl: task.client?.logoUrl }}
+                                        size={18}
+                                    />
+                                    <span className="truncate text-[11px] font-semibold text-zinc-600 dark:text-zinc-300" title={`${task.clientName} · Creado por ${task.creatorName}`}>
+                                        {task.clientName}
+                                    </span>
+                                    {priorityBadgeClass && task.aiCategory && (
+                                        <span className="hidden items-center gap-1 text-[10px] font-semibold uppercase tracking-tight text-zinc-400 sm:inline-flex">
+                                            <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }} />
+                                            <span className="truncate max-w-[110px]">{task.aiCategory}</span>
+                                        </span>
+                                    )}
+                                    {task.aiComplexity && (
+                                        <span className={cn(
+                                            "text-[10px] font-bold uppercase tracking-tight",
+                                            task.aiComplexity === 'ALTA' ? 'text-destructive' : task.aiComplexity === 'MEDIA' ? 'text-brand-cyan-deep dark:text-brand-cyan' : 'text-brand-green-deep dark:text-brand-green'
+                                        )}>
+                                            {task.aiComplexity}
+                                        </span>
+                                    )}
+                                </div>
+                                <div className="flex shrink-0 items-center gap-2 text-[11px] font-medium text-zinc-400 dark:text-zinc-500">
+                                    {taskCardFooterBadges.map((badge) => (
+                                        <span
+                                            key={badge.key}
+                                            className={cn("inline-flex h-[22px] items-center gap-1 rounded-md border px-1.5 text-[10px] font-bold leading-none", badge.className)}
+                                            title={badge.label}
+                                        >
+                                            <span className="truncate">{badge.label}</span>
+                                        </span>
+                                    ))}
+                                    {attachmentCount > 0 && (
+                                        <span className="inline-flex items-center gap-1" title={`${attachmentCount} archivos`}>
+                                            <Paperclip className="h-3.5 w-3.5" />
+                                            {attachmentCount}
+                                        </span>
+                                    )}
+                                    {(commentCount > 0 || (task.comments && task.comments.trim() !== '')) && (
+                                        <span className="inline-flex items-center gap-1" title={commentCount > 0 ? `${commentCount} comentarios` : 'Con descripción'}>
+                                            <MessageSquare className="h-3.5 w-3.5" />
+                                            {commentCount > 0 ? commentCount : null}
+                                        </span>
+                                    )}
+                                </div>
+                            </div>
+                            <span className="sr-only">Creado por {task.creatorName}</span>
                         </div>
                     </div>
                 </div>

@@ -1,7 +1,7 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
-import { dashboardDemoCompletedTasks, dashboardDemoDashboard, dashboardDemoTeam, dashboardDemoUser } from '../tests/fixtures/dashboardPreviewData.js';
+import { dashboardDemoClients, dashboardDemoCompletedTasks, dashboardDemoDashboard, dashboardDemoKanbanTasks, dashboardDemoTeam, dashboardDemoUser } from '../tests/fixtures/dashboardPreviewData.js';
 
 // Local laboratory for the personal dashboard and the sidebar: the real App over a read-only mock API.
 // No dotenv, production server, database, storage, scheduler or proxy.
@@ -35,12 +35,12 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
             '/api/auth/me': dashboardDemoUser,
             '/api/user/profile': dashboardDemoUser,
             '/api/team': dashboardDemoTeam,
-            '/api/clients': [], '/api/db/clients': [],
+            '/api/clients': dashboardDemoClients, '/api/db/clients': dashboardDemoClients,
             '/api/notifications': [],
             '/api/tasks/returned-alerts': { tasks: [] }, '/api/tasks/work-alerts': { tasks: [] },
             '/api/push/status': { enabled: false, configured: false },
             '/api/metrics/quality-streak': { currentStreak: 12, maxStreak: 21, currentStreakDays: 12, currentReturnedTasksCount: Number(requestUrl.searchParams.get('returned') || 0) },
-            '/api/tasks': [],
+            '/api/tasks': dashboardDemoKanbanTasks(),
             '/api/tasks/completed': dashboardDemoCompletedTasks(),
             [`/api/dashboard/personal/${dashboardDemoUser.id}`]: dashboardDemoDashboard(),
           };
@@ -59,7 +59,9 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
-  const preview = await createDashboardPreview({ port: Number(process.env.DASHBOARD_PREVIEW_PORT || 3200) });
+  // `--port=3201` lets a worktree run its own copy beside the main checkout's preview.
+  const portArg = process.argv.find((arg) => arg.startsWith('--port='))?.split('=')[1];
+  const preview = await createDashboardPreview({ port: Number(portArg || process.env.DASHBOARD_PREVIEW_PORT || 3200) });
   console.log(`Dashboard local: ${preview.origin}\nDatos de ejemplo en memoria. No hay conexión a producción.`);
   for (const signal of ['SIGINT', 'SIGTERM']) process.once(signal, async () => { await preview.close(); process.exit(0); });
 }
