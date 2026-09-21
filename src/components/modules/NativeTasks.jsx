@@ -28,8 +28,7 @@ import {
     Plus,
     Paperclip,
     RefreshCw,
-    Tag,
-    Lock
+    Tag
 } from '@/components/ui/icons';
 import { bogotaTimeOf, focusLockMessage, getTaskLock, isActiveFocusTask, nextLockReaction } from '@/lib/taskFocus';
 import { cn } from '@/lib/utils';
@@ -409,14 +408,15 @@ const NativeTasks = () => {
         }
 
         if (taskId && tasks.length > 0) {
-            setHighlightedTaskId(taskId);
             const taskToOpen = tasks.find(t => String(t.id) === taskId);
+            // A locked task never opens, not even from a notification or a deep link (Rodny, 21 September 2026),
+            // and it is not highlighted either: a locked card is only dimmed, no border, no badge.
+            const deepLinkLock = taskToOpen ? getTaskLock({
+                tasks, task: taskToOpen, viewerUserId: currentUser?.id,
+                viewerIsManager: ['ADMIN', 'PROJECT_MANAGER', 'PM'].includes(currentUser?.role)
+            }) : null;
+            if (!deepLinkLock) setHighlightedTaskId(taskId);
             if (taskToOpen) {
-                // A locked task never opens, not even from a notification or a deep link (Rodny, 21 September 2026).
-                const deepLinkLock = getTaskLock({
-                    tasks, task: taskToOpen, viewerUserId: currentUser?.id,
-                    viewerIsManager: ['ADMIN', 'PROJECT_MANAGER', 'PM'].includes(currentUser?.role)
-                });
                 if (deepLinkLock) {
                     setFocusLockNotice(deepLinkLock);
                 } else {
@@ -1499,15 +1499,6 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                                             className="inline-flex items-center gap-1 rounded-lg border border-brand-cyan/30 bg-brand-cyan/10 px-1.5 py-0.5 text-[10px] font-bold text-brand-cyan-deep dark:text-brand-cyan"
                                         >
                                             <Clock className="h-3 w-3" /> Hasta las {focusTime}
-                                        </span>
-                                    )}
-                                    {lock && (
-                                        <span
-                                            data-task-lock-chip
-                                            title={focusLockMessage(lock.focusTask)}
-                                            className="inline-flex items-center gap-1 rounded-lg border border-zinc-200 bg-zinc-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-tight text-zinc-500 dark:border-white/10 dark:bg-white/10 dark:text-zinc-300"
-                                        >
-                                            <Lock className="h-3 w-3" /> Bloqueada
                                         </span>
                                     )}
                                     {isReturned && (
