@@ -175,7 +175,7 @@ Todas reutilizan runtime, contexto, política y libro. Ninguna se monta antes de
 
 | Bloque | Ítems | Hechos | En curso | Puerta |
 |---|---|---|---|---|
-| A0 | 10 | 0 | — | pendiente |
+| A0 | 10 | 2 (A0-6 en PR #919, 21-sep; A0-10) | — | pendiente |
 | A1 | 5 | 0 | — | pendiente |
 | A2 | 4 | 0 | — | pendiente |
 | A3 | 1 | 0 | — | pendiente |

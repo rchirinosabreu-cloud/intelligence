@@ -8,7 +8,12 @@ const base = {
     scope: { complete: true, reviewedItems: 61, totalItems: 61, batchCount: 6, crossBatchTextComparison: false },
     dimensions: Object.fromEntries(['ESTRATEGIA', 'MARCA', 'GRAMATICA', 'CONSISTENCIA'].map(key => [key, { assessable: true }])),
     findings: [{ id: 'finding', status: 'VERIFYING', category: 'CONSISTENCIA', severity: 'INFO', title: 'Confirmar el estado de publicación', detail: 'La pieza tiene ajustes pendientes y figura como publicada.', recommendation: 'Revisar el estado y confirmar que la versión publicada incluye los ajustes.', itemId: 'piece', evidenceIds: [] }] },
-  evidence: [], meta: { planId: 'verification-fixture', state: 'FAILED', cached: true, memorySourcesUsed: 0, reviewedAt: '2026-09-05T15:00:00Z' }
+  evidence: [], meta: { planId: 'verification-fixture', state: 'FAILED', cached: true, memorySourcesUsed: 0, reviewedAt: '2026-09-05T15:00:00Z',
+    error: 'No se pudo completar la revisión. Puedes revisar nuevamente.',
+    diagnostics: [
+      { attempt: 2, at: '2026-09-05T14:55:00Z', code: 'HTTP_503', status: 503, message: 'OpenAI respondió HTTP 503', requestId: 'req-2', retry: true },
+      { attempt: 3, at: '2026-09-05T15:00:00Z', code: 'OPENAI_TIMEOUT', status: 504, message: 'OpenAI superó el tiempo máximo de respuesta.', requestId: null, retry: false }
+    ] }
 };
 const server = await createServer({ logLevel: 'error', server: { host: '127.0.0.1', port: 0, open: false } });
 let browser;
@@ -44,6 +49,12 @@ try {
     await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), dark);
     const retry = page.getByRole('button', { name: 'Reintentar verificación', exact: true });
     await retry.waitFor();
+    // The failed state explains the last technical cause, not only the human message.
+    const diagnostic = page.locator('[data-bria-review-diagnostic]');
+    await diagnostic.waitFor({ timeout: 5000 });
+    assert.match(await diagnostic.textContent(), /Intento 3 de 3/);
+    assert.match(await diagnostic.textContent(), /OPENAI_TIMEOUT/);
+    assert.equal(await diagnostic.count(), 1);
     await page.getByText('61/61 piezas revisadas', { exact: true }).waitFor({ timeout: 5000 });
     await page.getByText('4/4 dimensiones evaluadas', { exact: true }).waitFor();
     await page.evaluate(() => document.fonts.ready);

@@ -332,6 +332,49 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
       assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewAttempts, 1);
     });
+    await t.test('a failed review keeps the technical cause of each attempt until a review succeeds', async () => {
+      const plan = await fixture();
+      const config = { ...options(plan.id), logger: { error() {} } };
+      config.reviewOptions.ai.generate = async () => { throw Object.assign(new Error('bad credentials fixture'), { status: 401, requestId: 'req-401' }); };
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'FAILED');
+      const failed = await db.contentPlan.findUnique({ where: { id: plan.id } });
+      assert.equal(failed.briaReviewState, 'FAILED');
+      assert.equal(failed.briaReviewDiagnostics.length, 1);
+      assert.equal(failed.briaReviewDiagnostics[0].status, 401);
+      assert.equal(failed.briaReviewDiagnostics[0].code, 'HTTP_401');
+      assert.equal(failed.briaReviewDiagnostics[0].attempt, 1);
+      const api = await getContentPlanReview(plan.id, { db });
+      assert.equal(api.meta.state, 'FAILED');
+      assert.equal(api.meta.diagnostics.length, 1);
+      assert.equal(api.meta.diagnostics[0].requestId, 'req-401');
+      config.reviewOptions.ai.generate = async request => ({ text: JSON.stringify(reviewPayload(request, rawReview)) });
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewDiagnostics, null);
+      assert.equal((await getContentPlanReview(plan.id, { db })).meta.diagnostics, null);
+    });
+    await t.test('finalizing a plan archives its open findings but keeps corrections the team asked to verify', async () => {
+      const { plan, finding, config } = await findingFixture();
+      const other = await findingFixture();
+      await db.contentPlan.update({ where: { id: plan.id }, data: { status: 'FINALIZADO' } });
+      await state.markContentPlanReviewPending(plan.id, { db, requestedAt: start });
+      await updateContentPlanReviewFinding({ planId: other.plan.id, findingId: other.finding.id, action: 'MARK_CORRECTED', actorUserId: null, db, now: start });
+      await db.contentPlan.update({ where: { id: other.plan.id }, data: { status: 'FINALIZADO' } });
+      const archived = await state.archiveStaleContentPlanReviews({ db, now: start });
+      assert.equal(archived.findings, 1);
+      assert.equal(archived.plans, 1);
+      const stale = await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } });
+      assert.equal(stale.status, 'STALE');
+      assert.equal(stale.actionReason, 'Parrilla finalizada');
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewState, 'STALE');
+      assert.equal((await getContentPlanReview(plan.id, { db })).review.findings.length, 0);
+      assert.equal((await db.contentPlanReviewFinding.findUnique({ where: { id: other.finding.id } })).status, 'VERIFYING');
+      assert.notEqual((await db.contentPlan.findUnique({ where: { id: other.plan.id } })).briaReviewState, 'STALE');
+      const later = new Date(start.getTime() + 120000);
+      const outcomes = await scheduler.reconcilePendingContentPlanReviews({ db, now: () => later, limit: 100, reviewOptions: config.reviewOptions, logger: { error() {} } });
+      assert.equal(outcomes.some(outcome => outcome.planId === plan.id), false);
+      assert.equal(outcomes.some(outcome => outcome.planId === other.plan.id), true);
+      await assert.rejects(updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', actorUserId: null, db, now: later }), /ya no admite/);
+    });
     await t.test('repeated worker crashes end in a visible failure instead of infinite recovery', async () => {
       const plan = await fixture();
       for (let attempt = 0; attempt < 3; attempt++) {

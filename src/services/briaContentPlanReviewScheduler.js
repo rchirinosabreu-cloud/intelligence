@@ -1,7 +1,7 @@
 import prisma from '../lib/prisma.js';
 import { reviewContentPlanWithBria, createContentPlanReviewRepository } from './briaContentPlanReviewService.js';
 import {
-  claimContentPlanReview, failContentPlanReview,
+  claimContentPlanReview, failContentPlanReview, archiveStaleContentPlanReviews,
   BRIA_REVIEW_LEASE_MS, BRIA_CONTENT_PLAN_REVIEW_DEBOUNCE_MS
 } from './briaContentPlanReviewState.js';
 
@@ -49,8 +49,15 @@ export const reconcilePendingContentPlanReviews = async ({
   now = () => new Date(),
   limit = 2,
   reviewOptions = {},
-  logger = console
+  logger = console,
+  archiveStale = archiveStaleContentPlanReviews
 } = {}) => {
+  // Cheap and idempotent: keeps finalized plans honest before serving queued work.
+  try {
+    await archiveStale({ db, now: now() });
+  } catch (error) {
+    logger.error('[BriaContentReview] No se pudieron archivar los hallazgos de parrillas finalizadas:', error.response?.data || error.message || error);
+  }
   const cutoff = new Date(now().getTime() - BRIA_CONTENT_PLAN_REVIEW_DEBOUNCE_MS);
   const plans = await db.contentPlan.findMany({
     where: {

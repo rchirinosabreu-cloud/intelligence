@@ -60,6 +60,15 @@ Cada revisión publicada guarda ahora en `ContentPlanReview.usage` lo que costó
 
 Pruebas: `tests/aiUsage.test.js`, `tests/briaReviewBatches.test.js` (lotes reanudados y checkpoints antiguos sin coste), `tests/briaFindingVerification.test.js` (colector de llamadas), `tests/briaContentPlanReviewPersistence.test.js` (coste persistido y proveedor sin `usage`) y `tests/briaReviewJobsDatabase.test.js` (coste publicado tras reanudar, contra PostgreSQL real).
 
+## Causa técnica de los fallos y parrillas finalizadas (21 de septiembre de 2026)
+
+Hasta hoy una revisión agotada guardaba solo el mensaje humano («No se pudo completar la revisión. Puedes revisar nuevamente.») y la causa se perdía: las tres parrillas `FAILED` de la auditoría del 14 de septiembre llevaban una semana sin que nadie pudiera saber por qué. Dos cambios aditivos:
+
+- **`ContentPlan.briaReviewDiagnostics`** (JSONB nullable): por cada intento fallido se añade `{ attempt, at, code, status, message, requestId, retry }`, con el mensaje recortado a 300 caracteres y como máximo los cinco últimos intentos. Una revisión reemplazada por una edición (`BRIA_REVIEW_SUPERSEDED`) no es un fallo y no escribe nada. Al completarse una revisión, los diagnósticos se borran. La API los expone en `meta.diagnostics` y el panel muestra el último bajo el mensaje humano («Intento 3 de 3 (05 sept, 10:00): OPENAI_TIMEOUT · HTTP 504. …»). El botón «Revisar nuevamente» sigue siendo la recuperación dirigida: un intento manual arranca con presupuesto nuevo.
+- **Estado honesto para parrillas finalizadas.** En cada ciclo del programador, antes de servir la cola, `archiveStaleContentPlanReviews` pasa a `STALE` los hallazgos `OPEN` cuya parrilla está `FINALIZADO` o borrada (`actionReason: 'Parrilla finalizada'`, sin actor) y pasa a `STALE` la revisión `PENDING` de una parrilla finalizada sin verificaciones solicitadas. Los hallazgos `VERIFYING` se conservan y esas parrillas se siguen atendiendo; un hallazgo `STALE` no admite acciones y solo vuelve a `OPEN` si una revisión posterior lo detecta de nuevo. El barrido es idempotente y barato; en producción archiva de una vez los 177 hallazgos abiertos de parrillas cerradas medidos el 20 de septiembre.
+
+Pruebas: `tests/briaReviewDiagnostics.test.js` (dobles), dos casos nuevos contra PostgreSQL real en `tests/briaReviewJobsDatabase.test.js` (la causa se guarda por intento y se limpia al completar; finalizar archiva los abiertos y respeta los `VERIFYING`), la cadena del panel en `tests/briaContentPlanReviewGlobalUi.test.js` y la línea renderizada con capturas en `tests/browser/briaReviewVerification.mjs`.
+
 ## Siguiente entrega recomendada: cobertura y criterio verificables
 
 1. Revisar todas las piezas por lotes y exponer cobertura real. Continuación implementada en [cobertura y recuperación por lotes](BRIA_REVIEW_BATCH_COVERAGE.md), con sus pruebas y límites documentados. Impedir que una revisión parcial resuelva hallazgos fuera de su cobertura.

@@ -4,6 +4,7 @@ import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { getFindingVerificationUi } from '@/lib/briaVerificationUi';
 import { getBriaReviewCoverageUi } from '@/lib/briaReviewCoverageUi';
+import { formatReviewDiagnostic } from '@/lib/briaReviewDiagnostics';
 import {
   AlertCircle,
   CheckCircle2,
@@ -298,6 +299,11 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
               <span>
                 {result.meta.error || 'No se pudo completar el último análisis automático. Puedes intentarlo de nuevo.'}
                 {coverageUi.progress && <span className="mt-1 block">{coverageUi.progress}</span>}
+                {Array.isArray(result.meta.diagnostics) && result.meta.diagnostics.length > 0 && (
+                  <span data-bria-review-diagnostic className="mt-1 block text-xs opacity-80">
+                    {formatReviewDiagnostic(result.meta.diagnostics[result.meta.diagnostics.length - 1])}
+                  </span>
+                )}
               </span>
             </div>
           )}
