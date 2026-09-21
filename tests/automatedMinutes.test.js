@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
+import * as automated from '../src/services/minuteAutomationService.js';
 import {
   buildMinuteStorageKey,
   getMeetingMinutes,
@@ -317,6 +318,52 @@ test('Fireflies synchronization never reimports trashed or permanently excluded 
     assert.equal(result.skipped, 1);
     assert.equal(detailCalls, 0);
   }
+});
+
+test('an outage of the provider never spends one of the three attempts of a minute', async () => {
+  const updates = [];
+  const db = {
+    meetingMinute: {
+      findUnique: async () => ({ id: 'minute-1', externalId: 'ff-1', status: 'DISCOVERED', retryCount: 2, analysis: null }),
+      update: async args => { updates.push(args.data); return args.data; },
+      create: async args => args.data
+    }
+  };
+  const fireflies = { getTranscript: async () => ({ id: 'ff-1', title: 'Reunión', date: Date.now(), sentences: [{ speaker_name: 'R', text: 'Hola' }] }) };
+  const outage = Object.assign(new Error('You have no credits remaining.'), { status: 429, code: 'credit_balance_exhausted' });
+  const ai = { generate: async () => { throw outage; } };
+
+  await assert.rejects(automated.processTranscript({ summary: { id: 'ff-1' }, db, fireflies, ai, storage: { upload: async () => ({}) } }));
+
+  const failure = updates.at(-1);
+  assert.equal(failure.status, 'PENDING_PROVIDER');
+  assert.equal('retryCount' in failure, false, 'the retry budget is kept for a real attempt');
+  assert.match(failure.errorMessage, /credits/i);
+});
+
+test('a genuine failure of a minute still spends its attempt', async () => {
+  const updates = [];
+  const db = {
+    meetingMinute: {
+      findUnique: async () => ({ id: 'minute-1', externalId: 'ff-1', status: 'DISCOVERED', retryCount: 0, analysis: null }),
+      update: async args => { updates.push(args.data); return args.data; },
+      create: async args => args.data
+    }
+  };
+  const fireflies = { getTranscript: async () => ({ id: 'ff-1', title: 'Reunión', date: Date.now(), sentences: [] }) };
+  const ai = { generate: async () => ({ text: '{}' }) };
+
+  await assert.rejects(automated.processTranscript({ summary: { id: 'ff-1' }, db, fireflies, ai, storage: { upload: async () => ({}) } }));
+
+  const failure = updates.at(-1);
+  assert.equal(failure.status, 'FAILED');
+  assert.deepEqual(failure.retryCount, { increment: 1 });
+});
+
+test('a minute waiting for the provider is picked up again, and an exhausted one is not', async () => {
+  assert.equal(automated.shouldSkipMinute({ status: 'PENDING_PROVIDER', retryCount: 2 }), false);
+  assert.equal(automated.shouldSkipMinute({ status: 'FAILED', retryCount: 3 }), true);
+  assert.equal(automated.shouldSkipMinute({ status: 'FAILED', retryCount: 1 }), false);
 });
 
 test('automatic minutes poll Fireflies every ten minutes without overlapping runs', async () => {

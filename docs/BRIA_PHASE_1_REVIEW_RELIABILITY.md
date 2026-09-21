@@ -79,6 +79,18 @@ El intento manual que no se completa responde `422` con un mensaje legible y el 
 
 Pruebas: partición, reanudación de mitades, pieza única que nunca se confirma y errores que no se parten en `tests/briaReviewBatches.test.js`; coste con intento descartado en `tests/briaContentPlanReviewPersistence.test.js`; mensajes en `tests/briaReviewDiagnostics.test.js` y `tests/briaContentPlanReviewGlobalUi.test.js`; intento manual fallido con cuerpo saneado en `tests/browser/briaReviewVerification.mjs`.
 
+## Coste acotado de la verificación y caídas del proveedor (21 de septiembre de 2026)
+
+El 21 de septiembre la cuenta de OpenAI agotó su saldo y, al restablecerse, una parrilla con 157 hallazgos abiertos dejó el panel girando. Las dos causas estaban en el mismo sitio.
+
+**La verificación no tenía techo.** Antes de publicar, la revisión volvía a comprobar *todos* los hallazgos `OPEN` y `VERIFYING` de la parrilla, de cuatro en cuatro, y cada llamada lleva la parrilla completa dentro. Con 157 abiertos son unas 40 llamadas secuenciales que no caben en los cuatro minutos del trabajo: la ejecución vencía, se reintentaba y **pagaba sin publicar nada**. Era el riesgo P2-02 de la auditoría del 14 de septiembre. Ahora `selectFindingsToVerify` reparte un presupuesto de `VERIFICATION_BUDGET` (12 hallazgos, 3 llamadas): primero todo lo que una persona marcó como corregido, por antigüedad de la petición, y después los abiertos comprobados hace más tiempo, usando la columna nueva `ContentPlanReviewFinding.lastVerifiedAt` (nulos primero). Los hallazgos siguen comprobándose todos, repartidos entre ejecuciones; lo que una persona pide se atiende siempre en la siguiente. Marcar corregido vuelve a encolar la revisión, así que una tanda de correcciones se sirve en tandas seguidas.
+
+**Una caída del proveedor gastaba intentos.** Un 429 por falta de crédito consumía uno de los tres intentos de la parrilla, y en minutas incrementaba `retryCount`; una minuta que llega a tres queda omitida para siempre, así que una reunión grabada durante la caída se habría perdido. `src/lib/aiAvailability.js` distingue ahora indisponibilidad (429, 5xx, sin crédito, cuota, tiempo de espera, errores de red) de fallo real del trabajo. En revisiones se devuelve el intento, la parrilla queda `PENDING` con espera de cinco minutos, el mensaje humano dice que el servicio no está disponible y el diagnóstico marca `providerUnavailable`. En minutas el estado es `PENDING_PROVIDER` sin gastar intento, y el barrido las vuelve a tomar cuando el servicio regresa. Un fallo real conserva el comportamiento anterior.
+
+Cambios aditivos: una columna `TIMESTAMP(3)` nullable creada por `ensure-content-plan-reviews-schema.js` y un estado nuevo de minuta. Nada se recalcula ni se reclasifica.
+
+Pruebas: `tests/aiAvailability.test.js` (clasificación de errores), `tests/briaVerificationBudget.test.js` (prioridad, techo y rotación), `tests/briaReviewDiagnostics.test.js` (el intento se devuelve, incluso en el último), `tests/automatedMinutes.test.js` (la minuta se aparca sin gastar intento y se vuelve a tomar) y dos casos contra PostgreSQL real en `tests/briaReviewJobsDatabase.test.js` (una parrilla con 41 hallazgos abiertos publica con tres llamadas de verificación; cuatro caídas seguidas dejan la parrilla recuperable con su presupuesto intacto).
+
 ## Siguiente entrega recomendada: cobertura y criterio verificables
 
 1. Revisar todas las piezas por lotes y exponer cobertura real. Continuación implementada en [cobertura y recuperación por lotes](BRIA_REVIEW_BATCH_COVERAGE.md), con sus pruebas y límites documentados. Impedir que una revisión parcial resuelva hallazgos fuera de su cobertura.

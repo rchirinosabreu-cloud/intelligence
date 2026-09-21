@@ -21,7 +21,8 @@ const fakeDb = ({ diagnostics = null } = {}) => {
 
 test('a failed attempt records its technical cause next to the human message', async () => {
   const db = fakeDb();
-  const error = Object.assign(new Error('OpenAI respondió HTTP 503 ' + 'x'.repeat(400)), { status: 503, requestId: 'req-9' });
+  // A real failure of the work, not an outage: the model answered but the lot was incomplete.
+  const error = Object.assign(new Error('Bria no confirmó la revisión completa del lote ' + 'x'.repeat(400)), { code: 'BRIA_REVIEW_INCOMPLETE_BATCH', requestId: 'req-9' });
   await state.failContentPlanReview(lease, error, { db, now });
   const { data } = db.calls.updateMany[0];
   assert.equal(data.briaReviewState, 'PENDING');
@@ -30,12 +31,13 @@ test('a failed attempt records its technical cause next to the human message', a
   const [entry] = data.briaReviewDiagnostics;
   assert.equal(entry.attempt, 2);
   assert.equal(entry.at, now.toISOString());
-  assert.equal(entry.code, 'HTTP_503');
-  assert.equal(entry.status, 503);
+  assert.equal(entry.code, 'BRIA_REVIEW_INCOMPLETE_BATCH');
+  assert.equal(entry.status, null);
   assert.equal(entry.requestId, 'req-9');
   assert.equal(entry.retry, true);
+  assert.equal('providerUnavailable' in entry, false);
   assert.ok(entry.message.length <= 300);
-  assert.ok(entry.message.startsWith('OpenAI respondió HTTP 503'));
+  assert.ok(entry.message.startsWith('Bria no confirmó'));
 });
 
 test('diagnostics keep the last five attempts, newest last, and a permanent failure is marked as final', async () => {
@@ -51,6 +53,39 @@ test('diagnostics keep the last five attempts, newest last, and a permanent fail
   assert.equal(latest.code, 'invalid_api_key');
   assert.equal(latest.status, 401);
   assert.equal(latest.retry, false);
+});
+
+test('an outage of the provider does not spend one of the three attempts', async () => {
+  const db = fakeDb();
+  const error = Object.assign(new Error('You have no credits remaining.'), { status: 429, code: 'credit_balance_exhausted' });
+  await state.failContentPlanReview({ ...lease, attempts: 2 }, error, { db, now });
+  const { data } = db.calls.updateMany[0];
+  assert.equal(data.briaReviewState, 'PENDING');
+  assert.equal(data.briaReviewAttempts, 1, 'the attempt is given back: the work never got a real chance');
+  assert.equal(data.briaReviewNextAttemptAt.getTime(), now.getTime() + state.BRIA_REVIEW_PROVIDER_RETRY_MS);
+  assert.match(data.briaReviewError, /no está disponible/i);
+  const [entry] = data.briaReviewDiagnostics;
+  assert.equal(entry.code, 'credit_balance_exhausted');
+  assert.equal(entry.providerUnavailable, true);
+  assert.equal(entry.retry, true);
+});
+
+test('an outage on the last attempt still leaves the plan recoverable instead of permanently failed', async () => {
+  const db = fakeDb();
+  const error = Object.assign(new Error('Service unavailable'), { status: 503 });
+  await state.failContentPlanReview({ ...lease, attempts: 3 }, error, { db, now });
+  const { data } = db.calls.updateMany[0];
+  assert.equal(data.briaReviewState, 'PENDING');
+  assert.equal(data.briaReviewAttempts, 2);
+});
+
+test('a real failure still spends its attempt and ends in a visible failure', async () => {
+  const db = fakeDb();
+  const error = Object.assign(new Error('bad request'), { status: 400 });
+  await state.failContentPlanReview({ ...lease, attempts: 3 }, error, { db, now });
+  const { data } = db.calls.updateMany[0];
+  assert.equal(data.briaReviewState, 'FAILED');
+  assert.equal('briaReviewAttempts' in data, false, 'attempts are consumed at claim time and stay consumed');
 });
 
 test('a superseded review is not a failure: no diagnostic is written and the plan returns to pending', async () => {

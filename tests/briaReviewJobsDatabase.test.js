@@ -285,7 +285,9 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       const plan = await fixture();
       let tick = start;
       const config = { ...options(plan.id), trigger: 'AUTOMATIC', now: () => tick, logger: { error() {} } };
-      config.reviewOptions.ai.generate = async request => { throw Object.assign(new Error('temporary upstream failure'), { status: 503 }); };
+      // A genuine failure of the work, not an outage of the provider: those keep
+      // their budget and are covered by their own test below.
+      config.reviewOptions.ai.generate = async () => { throw new Error('temporary fixture failure'); };
       for (let attempt = 1; attempt <= 3; attempt++) {
         const result = await scheduler.runContentPlanReviewJob(config);
         assert.equal(result.status, 'FAILED');
@@ -374,6 +376,50 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       assert.equal(outcomes.some(outcome => outcome.planId === plan.id), false);
       assert.equal(outcomes.some(outcome => outcome.planId === other.plan.id), true);
       await assert.rejects(updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', actorUserId: null, db, now: later }), /ya no admite/);
+    });
+    await t.test('a plan with many open findings verifies a bounded slice and still publishes', async () => {
+      const { plan, config } = await findingFixture();
+      const item = await db.contentItem.findFirst({ where: { planId: plan.id } });
+      const review = await db.contentPlanReview.findFirst({ where: { planId: plan.id } });
+      await db.contentPlanReviewFinding.createMany({ data: Array.from({ length: 40 }, (_, i) => ({
+        planId: plan.id, itemId: item.id, lastReviewId: review.id, fingerprint: `extra-${i}`, subjectHash: `subject-${i}`,
+        ruleKey: `RULE_${i}`, field: 'copyText', category: 'GRAMATICA', severity: 'INFO',
+        title: `Hallazgo ${i}`, detail: 'Detalle', recommendation: 'Corregir', status: 'OPEN'
+      })) });
+      // Change the content so this is a real review and not the cached one.
+      await db.contentItem.update({ where: { id: item.id }, data: { copyText: 'Texto revisado para forzar un análisis nuevo' } });
+      let verificationCalls = 0;
+      config.reviewOptions.ai.generate = async request => {
+        if (request.responseSchema?.properties?.verifications) {
+          verificationCalls += 1;
+          return { text: JSON.stringify({ verifications: [] }), requestId: 'fixture' };
+        }
+        return { text: JSON.stringify(reviewPayload(request, rawReview)), requestId: 'fixture' };
+      };
+      config.now = () => new Date(start.getTime() + 60000);
+      const outcome = await scheduler.runContentPlanReviewJob(config);
+      assert.equal(outcome.status, 'COMPLETED');
+      assert.ok(verificationCalls <= 3, `expected a bounded number of verification calls, got ${verificationCalls}`);
+      assert.equal(outcome.result.meta.usage.verification.findings, 12);
+      assert.equal(await db.contentPlanReviewFinding.count({ where: { planId: plan.id, status: 'OPEN' } }), 41);
+    });
+    await t.test('an outage of the provider parks the review without spending an attempt', async () => {
+      const plan = await fixture();
+      const config = { ...options(plan.id), logger: { error() {} } };
+      config.reviewOptions.ai.generate = async () => { throw Object.assign(new Error('You have no credits remaining.'), { status: 429, code: 'credit_balance_exhausted' }); };
+      for (let attempt = 0; attempt < 4; attempt++) {
+        config.now = () => new Date(start.getTime() + attempt * 6 * 60000);
+        assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'FAILED');
+      }
+      const parked = await db.contentPlan.findUnique({ where: { id: plan.id } });
+      assert.equal(parked.briaReviewState, 'PENDING', 'an outage never leaves the plan permanently failed');
+      assert.equal(parked.briaReviewAttempts, 0);
+      assert.equal(parked.briaReviewDiagnostics.at(-1).providerUnavailable, true);
+      // Once the provider is back, the plan still has its full budget.
+      config.reviewOptions.ai.generate = async request => ({ text: JSON.stringify(reviewPayload(request, rawReview)) });
+      config.now = () => new Date(start.getTime() + 60 * 60000);
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
+      assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewDiagnostics, null);
     });
     await t.test('repeated worker crashes end in a visible failure instead of infinite recovery', async () => {
       const plan = await fixture();
