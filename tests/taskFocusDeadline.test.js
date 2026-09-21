@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  FOCUS_ACTIVE_STATUSES, bogotaTimeOf, findFocusTaskFor, focusDeadlineIso, focusLockMessage, focusTimeFromIso, getTaskLock, isActiveFocusTask, isManagerUser
+  FOCUS_ACTIVE_STATUSES, LOCK_RETRY_WINDOW_MS, bogotaTimeOf, findFocusTaskFor, focusDeadlineIso, focusLockMessage, focusTimeFromIso, getTaskLock, isActiveFocusTask, isManagerUser, nextLockReaction
 } from '../src/lib/taskFocus.js';
 import { assertTaskNotLocked, findActiveFocusTaskForUser } from '../src/services/taskFocusService.js';
 
@@ -25,6 +25,19 @@ test('a focus task is active while it has an hour and is not done, whatever the 
   assert.equal(findFocusTaskFor([other, focus], { assigneeUserId: 'user-melissa' }), null);
   const later = { ...focus, id: 'later', focusDeadlineAt: '2026-09-21T22:00:00.000Z' };
   assert.equal(findFocusTaskFor([later, focus], { assigneeUserId: 'user-helen' })?.id, 'focus', 'the earliest commitment wins');
+});
+
+test('a locked card shakes on the first touch and explains itself on a retry (Rodny, 21 September 2026)', () => {
+  const t0 = 1_000_000;
+  const first = nextLockReaction(null, t0);
+  assert.equal(first.reaction, 'shake', 'first attempt: the card shakes');
+  assert.deepEqual(first.record, { at: t0 });
+  const retry = nextLockReaction(first.record, t0 + 2000);
+  assert.equal(retry.reaction, 'explain', 'a retry shortly after: the popup');
+  assert.equal(retry.record, null, 'after the popup the count starts over');
+  assert.equal(nextLockReaction(retry.record, t0 + 3000).reaction, 'shake', 'after the popup, the next touch shakes again');
+  assert.equal(nextLockReaction(first.record, t0 + LOCK_RETRY_WINDOW_MS + 1).reaction, 'shake', 'a touch long after the first one is a fresh attempt');
+  assert.equal(LOCK_RETRY_WINDOW_MS, 8000);
 });
 
 test('the lock applies to the person\'s other tasks only, never to managers and never to the focus task itself', () => {
@@ -123,7 +136,15 @@ test('the panel edits the hour with the shared calendar and only for managers; t
   assert.match(board, /assigneeUserId: task\.assignee\?\.userId/, 'the board knows whose task it is');
   assert.match(board, /getTaskLock\(\{ tasks, task, viewerUserId: currentUser\?\.id, viewerIsManager \}\)/);
   assert.match(card, /isDragDisabled=\{Boolean\(lock\)\}/, 'locked cards cannot be moved');
-  assert.match(card, /lock \? onLocked\(lock\) : onClick\(task\)/, 'clicking a locked card explains instead of opening');
+  assert.match(card, /onPointerDown=\{lock \? \(\) => onLocked\(task, lock\) : undefined\}/, 'the very first touch on a locked card (click or drag start) is the attempt');
+  assert.match(card, /onClick=\{\(\) => \{ if \(!lock\) onClick\(task\); \}\}/, 'a locked card never opens');
+  assert.match(card, /shaking && "brain-shake"/, 'the first attempt shakes the card (Rodny, 21 September 2026)');
+  assert.match(card, /onAnimationEnd=\{shaking \? \(\) => onShakeEnd\(task\) : undefined\}/, 'the shake class is removed when the animation ends, so it can shake again later');
+  assert.match(board, /const \{ reaction, record \} = nextLockReaction\(lockAttemptsRef\.current\[key\]\)/, 'the board decides shake vs popup with the shared pure rule');
+  assert.match(board, /if \(reaction === 'explain'\) \{\s*setShakingTaskId\(null\);\s*setFocusLockNotice\(lock\);/, 'a retry opens the "Primero tu compromiso" popup');
+  const css = readFileSync('src/index.css', 'utf8');
+  assert.match(css, /@keyframes brain-shake \{/, 'the shake is a shared keyframe');
+  assert.match(css, /@media \(prefers-reduced-motion: reduce\) \{\s*\.brain-shake \{\s*animation: brain-shake-still/, 'reduced motion gets a still blink that still ends the animation');
   assert.match(card, /isActiveFocusTask\(task\)[\s\S]*?<Clock/, 'the focus task shows a clock with its hour');
   assert.match(card, /<Lock/, 'locked cards show a lock');
   assert.match(board, /focusLockNotice/, 'the explanation is a platform dialog');

@@ -31,7 +31,7 @@ import {
     Tag,
     Lock
 } from '@/components/ui/icons';
-import { bogotaTimeOf, focusLockMessage, getTaskLock, isActiveFocusTask } from '@/lib/taskFocus';
+import { bogotaTimeOf, focusLockMessage, getTaskLock, isActiveFocusTask, nextLockReaction } from '@/lib/taskFocus';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -244,6 +244,8 @@ const NativeTasks = () => {
     const [conflictingMove, setConflictingMove] = useState(null);
     // Compromiso con hora: the explanation shown when the person touches a locked task.
     const [focusLockNotice, setFocusLockNotice] = useState(null);
+    const [shakingTaskId, setShakingTaskId] = useState(null);
+    const lockAttemptsRef = useRef({});
     const [reopeningTask, setReopeningTask] = useState(null);
     const [reopenReason, setReopenReason] = useState('CLIENT_CORRECTION');
     const [reopenNote, setReopenNote] = useState('');
@@ -621,6 +623,19 @@ const NativeTasks = () => {
     // their other tasks until it is done.
     const viewerIsManager = ['ADMIN', 'PROJECT_MANAGER', 'PM'].includes(currentUser?.role);
     const focusLockFor = (task) => getTaskLock({ tasks, task, viewerUserId: currentUser?.id, viewerIsManager });
+    // First touch on a locked card: shake. A retry within LOCK_RETRY_WINDOW_MS: the "Primero tu compromiso" popup.
+    const onLockedAttempt = (task, lock) => {
+        const key = String(task.id);
+        const { reaction, record } = nextLockReaction(lockAttemptsRef.current[key]);
+        lockAttemptsRef.current[key] = record;
+        if (reaction === 'explain') {
+            setShakingTaskId(null);
+            setFocusLockNotice(lock);
+            return;
+        }
+        setShakingTaskId(key);
+    };
+    const onShakeEnd = (task) => setShakingTaskId((current) => (current === String(task.id) ? null : current));
 
     const onDragEnd = async (result) => {
         const { destination, source, draggableId } = result;
@@ -1245,7 +1260,9 @@ const NativeTasks = () => {
                                                     highlightedTaskId={highlightedTaskId}
                                                     onClick={(t) => setEditingTask(t)}
                                                     lock={focusLockFor(task)}
-                                                    onLocked={setFocusLockNotice}
+                                                    onLocked={onLockedAttempt}
+                                                    shaking={shakingTaskId === String(task.id)}
+                                                    onShakeEnd={onShakeEnd}
                                                     onReturn={(t) => setReturningTask(t)}
                                                     onReopen={(t) => setReopeningTask(t)}
                                                     onDelete={(t) => setDeletingTask(t)}
@@ -1335,7 +1352,9 @@ const NativeTasks = () => {
                                                         highlightedTaskId={highlightedTaskId}
                                                         onClick={(t) => setEditingTask(t)}
                                                         lock={focusLockFor(task)}
-                                                        onLocked={setFocusLockNotice}
+                                                        onLocked={onLockedAttempt}
+                                                        shaking={shakingTaskId === String(task.id)}
+                                                        onShakeEnd={onShakeEnd}
                                                         onReturn={(t) => setReturningTask(t)}
                                                         onReopen={(t) => setReopeningTask(t)}
                                                         onDelete={(t) => setDeletingTask(t)}
@@ -1372,7 +1391,7 @@ const TaskCard = ({ task, index, lock = null, ...surfaceProps }) => (
 // `renderClone` draws through a portal on <body>. The glass columns (backdrop-blur) each create a
 // stacking context, so a card dragged from inside its column would paint behind the neighbouring
 // column no matter its z-index; the portal takes the moving card out of the columns altogether.
-const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick, onReturn, onReopen, onDelete, lock = null, onLocked }) => {
+const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick, onReturn, onReopen, onDelete, lock = null, onLocked, shaking = false, onShakeEnd }) => {
     const isHighlighted = highlightedTaskId === String(task.id);
     const isFocusTask = isActiveFocusTask(task);
     const focusTime = isFocusTask ? bogotaTimeOf(task.focusDeadlineAt) : '';
@@ -1402,8 +1421,12 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                     {...provided.draggableProps}
                     {...provided.dragHandleProps}
                     data-task-locked={lock ? 'true' : undefined}
-                    className={cn("relative mb-3 group/card", priorityBadgeClass && "pt-6", lock ? "cursor-not-allowed opacity-60" : "cursor-pointer")}
-                    onClick={() => (lock ? onLocked(lock) : onClick(task))}
+                    data-task-shaking={shaking ? 'true' : undefined}
+                    className={cn("relative mb-3 group/card", priorityBadgeClass && "pt-6", lock ? "cursor-not-allowed opacity-60" : "cursor-pointer", shaking && "brain-shake")}
+                    // A locked card reacts to the very first touch (click or drag start): first a shake, on a retry the popup.
+                    onPointerDown={lock ? () => onLocked(task, lock) : undefined}
+                    onClick={() => { if (!lock) onClick(task); }}
+                    onAnimationEnd={shaking ? () => onShakeEnd(task) : undefined}
                     style={provided.draggableProps.style}
                 >
                     {/* Priority tab: a folder tab standing above the top-left corner of the card, outline continuous with the card. */}

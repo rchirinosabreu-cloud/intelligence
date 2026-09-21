@@ -67,6 +67,19 @@ export const focusDeadlineIso = (dateKey, time) => {
 
 export const focusTimeFromIso = (value) => bogotaTimeOf(value);
 
+// Rodny, 21 September 2026: touching a locked card shakes it; trying again shortly after explains it in a popup.
+export const LOCK_RETRY_WINDOW_MS = 8000;
+
+/**
+ * Decides how the board reacts to an attempt on a locked card.
+ * `previous` is the record returned by the last call for that card (or null). Returns the reaction and the record to keep.
+ */
+export const nextLockReaction = (previous, now = Date.now()) => {
+  const retry = Boolean(previous) && now - previous.at < LOCK_RETRY_WINDOW_MS;
+  if (retry) return { reaction: 'explain', record: null };
+  return { reaction: 'shake', record: { at: now } };
+};
+
 export const focusLockMessage = (focusTask) => {
   const title = focusTask?.title || 'tu compromiso';
   const time = bogotaTimeOf(focusTask?.focusDeadlineAt);
