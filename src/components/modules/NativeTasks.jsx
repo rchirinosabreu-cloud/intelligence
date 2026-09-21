@@ -1359,7 +1359,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                         <span
                             data-task-priority-tag={task.priority}
                             className={cn(
-                                "absolute left-0 top-0 z-10 inline-flex h-7 items-center pl-3.5 pr-9 text-[10px] font-bold uppercase tracking-wider",
+                                "absolute left-0 top-0 z-10 inline-flex h-7 min-w-[7.5rem] items-center pl-3.5 pr-9 text-[10px] font-bold uppercase tracking-wider",
                                 priorityBadgeClass
                             )}
                         >
