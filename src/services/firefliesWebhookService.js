@@ -21,11 +21,25 @@ export const verifyFirefliesSignature = ({ rawBody, signature, secret }) => {
   return expectedBytes.length === providedBytes.length && crypto.timingSafeEqual(expectedBytes, providedBytes);
 };
 
+// Version 2 renamed the fields (`meeting_id`, `event`); version 1 used
+// `meetingId` and `eventType`. Both are read so the configuration in Fireflies
+// can change without breaking the door.
 export const parseFirefliesWebhookPayload = (body) => {
   if (!body || typeof body !== 'object') return null;
-  const meetingId = typeof body.meetingId === 'string' ? body.meetingId.trim() : '';
+  const raw = body.meeting_id ?? body.meetingId;
+  const meetingId = typeof raw === 'string' ? raw.trim() : '';
   if (!meetingId || meetingId.length > 200) return null;
-  return { meetingId, eventType: typeof body.eventType === 'string' ? body.eventType.trim() : '' };
+  const event = body.event ?? body.eventType;
+  return { meetingId, event: typeof event === 'string' ? event.trim() : '' };
+};
+
+// Version 2 also sends "bot joined" and "summary ready". Analysing on those
+// would run against a transcript that does not exist yet and burn an attempt.
+const TRANSCRIPT_READY_EVENTS = new Set(['meeting.transcribed', 'transcription completed']);
+export const isTranscriptionReadyEvent = (event) => {
+  const normalized = String(event || '').trim().toLowerCase();
+  // Version 1 only ever sent this one event, so an empty value means the same.
+  return normalized === '' || TRANSCRIPT_READY_EVENTS.has(normalized);
 };
 
 export const handleFirefliesWebhook = async ({
@@ -47,6 +61,9 @@ export const handleFirefliesWebhook = async ({
   }
   const payload = parseFirefliesWebhookPayload(body);
   if (!payload) return { status: 400, body: { error: 'FIREFLIES_WEBHOOK_PAYLOAD_INVALID', message: 'El aviso no identifica una reunión.' } };
+  // Acknowledged so Fireflies does not record a failed delivery, but no work:
+  // only the transcript being ready starts an analysis.
+  if (!isTranscriptionReadyEvent(payload.event)) return { status: 202, body: { accepted: true, ignored: true } };
 
   // Answer before analysing: a webhook that waits for the model times out and
   // Fireflies resends it. A failure here is ours to log, not theirs to retry.
