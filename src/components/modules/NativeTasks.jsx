@@ -380,6 +380,9 @@ const NativeTasks = () => {
             }));
         },
         enabled: !!localStorage.getItem('authToken'),
+        // Volver al tablero no vuelve a pedir las tareas si son recientes: el refresco periódico ya las mantiene
+        // al día y así navegar entre módulos no parece una recarga (Rodny, 21 de septiembre de 2026).
+        staleTime: 30_000,
         refetchInterval: localStorage.getItem('authToken')
             ? () => (document.hidden ? false : 30_000)
             : false,

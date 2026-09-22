@@ -28,7 +28,7 @@ export const displayRoleFor = (user) => {
  * Foto, nombre y rol de la persona, siempre visibles arriba del menú lateral, sin caja detrás.
  * También es el único menú de cuenta de la plataforma (Perfil, Ajustes, Cerrar sesión).
  */
-const SidebarProfile = ({ className }) => {
+const SidebarProfile = ({ className, collapsed = false }) => {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
 
@@ -57,7 +57,7 @@ const SidebarProfile = ({ className }) => {
   };
 
   return (
-    <div className={cn('flex flex-col items-center px-4 pb-3 pt-1 text-center', className)}>
+    <div className={cn('flex flex-col items-center px-4 pb-3 pt-1 text-center', collapsed && 'lg:px-2', className)}>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -66,16 +66,17 @@ const SidebarProfile = ({ className }) => {
             className="group flex min-h-11 w-full flex-col items-center gap-2 rounded-xl px-2 py-2 outline-none transition-colors hover:bg-white/50 focus-visible:ring-2 focus-visible:ring-primary/40 dark:hover:bg-white/5"
           >
             <span className="rounded-full p-1 transition-transform duration-300 group-hover:scale-[1.03]">
+              {/* Collapsed the photo stays, just smaller: the rail keeps the person visible (Rodny, 21 September 2026). */}
               <TeamAvatar
                 member={{ id: user.id, userId: user.id, name: user.name, avatarUrl: user.avatarUrl }}
                 size={72}
                 ring
                 showTitle={false}
-                className="h-[72px] w-[72px] border-0 [&>span]:text-2xl"
+                className={cn('h-[72px] w-[72px] border-0 [&>span]:text-2xl', collapsed && 'lg:h-11 lg:w-11 lg:[&>span]:text-base')}
               />
             </span>
-            <span className="mt-1 max-w-full truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{user.name}</span>
-            <span className="flex max-w-full items-center gap-1 text-[11px] font-medium text-zinc-500 dark:text-zinc-400">
+            <span className={cn('mt-1 max-w-full truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50', collapsed && 'lg:sr-only')}>{user.name}</span>
+            <span className={cn('flex max-w-full items-center gap-1 text-[11px] font-medium text-zinc-500 dark:text-zinc-400', collapsed && 'lg:hidden')}>
               <span className="truncate">{role}</span>
               <ChevronDown className="h-3 w-3 shrink-0 transition-transform group-data-[state=open]:rotate-180" aria-hidden="true" />
             </span>
