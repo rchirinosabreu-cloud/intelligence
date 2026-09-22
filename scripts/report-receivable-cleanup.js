@@ -208,6 +208,11 @@ export function formatReceivableCleanupReport(findings, { database, year, client
   lines.push(`Umbral de abono pequeño: ${money(smallPayment ?? SMALL_PAYMENT_DEFAULT)}`);
   if (scanned) lines.push(`Revisado: ${scanned.receivables} obligaciones, ${scanned.payments} abonos, ${scanned.income} ingresos sin aplicar.`);
   if (clientQuery) lines.push('Con filtro por cliente se muestran también los ingresos sin deuda abierta a la que aplicarse.');
+  // En un barrido general esos ingresos no se listan (serían ruido: la mayoría no
+  // vienen de cartera), pero su número no puede desaparecer del informe.
+  else if (scanned?.incomeWithoutOpenDebt) {
+    lines.push(`Hay ${scanned.incomeWithoutOpenDebt} ingreso(s) sin aplicar cuyo cliente no tiene deuda abierta. No se listan aquí porque suelen ser cobros normales; para verlos, vuelve a correrlo con --client "<nombre>".`);
+  }
   lines.push('');
 
   if (!findings.length) {
@@ -334,7 +339,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
     console.log(formatReceivableCleanupReport(findings, {
       database: `${target.host}${target.pathname}`,
       year, clientQuery, smallPayment,
-      scanned: { receivables: receivables.rowCount, payments: payments.rowCount, income: unappliedIncome.rowCount }
+      scanned: {
+        receivables: receivables.rowCount,
+        payments: payments.rowCount,
+        income: unappliedIncome.rowCount,
+        // Lo mismo que se listaría con --client: se cuenta aunque no se muestre.
+        incomeWithoutOpenDebt: analyzeReceivableCleanup(
+          { receivables: receivables.rows, unappliedIncome: unappliedIncome.rows },
+          { smallPayment, investigatingClient: true }
+        ).filter((finding) => finding.kind === 'INGRESO_SIN_DEUDA_ABIERTA').length
+      }
     }));
     if (!hasReversal) {
       console.log('\nAviso: esta base todavía no tiene las columnas de reversión (se crean al desplegar).');

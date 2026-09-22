@@ -32,6 +32,7 @@
     "storage:retention-report": "node scripts/report-task-attachment-retention.js",
     "financial:cartera-report": "node scripts/report-receivable-cleanup.js",
     "clients:footprint": "node scripts/report-client-footprint.js",
+    "financial:export": "node scripts/export-financial-snapshot.js",
     "storage:retention-sweep": "node scripts/run-task-attachment-retention.js"
   },
   "prisma": {
