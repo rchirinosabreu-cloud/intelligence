@@ -27,10 +27,12 @@ const ledgerFixture = (record, { closedMonth } = {}) => {
   return { writes, reads, client: { $transaction: async (callback) => callback(tx) } };
 };
 
-for (const [label, relations] of [
-  ['receivable payment', { receivablePayment: { id: 'payment-1' } }],
-  ['payroll payment', { payrollTransaction: { id: 'payroll-1' } }],
-  ['approved bank match', { bankMatches: [{ id: 'match-1', status: 'APPROVED' }] }]
+// Negarse no basta: el motivo tiene que nombrar dónde sí se puede corregir,
+// o quien lo lee se queda sin salida (Rodny, 22 de septiembre de 2026).
+for (const [label, relations, wayOut] of [
+  ['receivable payment', { receivablePayment: { id: 'payment-1' } }, /Cartera[\s\S]*«Revertir»/],
+  ['payroll payment', { payrollTransaction: { id: 'payroll-1' } }, /Se corrige desde Nómina/],
+  ['approved bank match', { bankMatches: [{ id: 'match-1', status: 'APPROVED' }] }, /deshacer esa conciliación/]
 ]) {
   for (const operation of ['update', 'void']) {
     test(`${operation} cannot disconnect a ${label} through generic ledger CRUD`, async () => {
@@ -39,7 +41,7 @@ for (const [label, relations] of [
         ? updateFinancialRecord(fixture.client, 'record-1', { amount: 2000 }, { id: 'admin-1' })
         : voidFinancialRecord(fixture.client, 'record-1', 'Duplicado', { id: 'admin-1' });
       await assert.rejects(action, (error) =>
-        error.code === 'FINANCIAL_RECORD_LINKED' && error.statusCode === 409 && /origen|conciliaci[oó]n/i.test(error.message));
+        error.code === 'FINANCIAL_RECORD_LINKED' && error.statusCode === 409 && wayOut.test(error.message));
       assert.equal(fixture.writes.length, 0);
       assert.ok(fixture.reads[0].include.receivablePayment);
       assert.ok(fixture.reads[0].include.payrollTransaction);

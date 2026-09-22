@@ -194,6 +194,13 @@ export const createFinancialRecord = async (prismaClient, input, actor) => {
     });
 };
 
+// De dónde viene un movimiento que no se puede editar ni anular desde Movimientos.
+const recordSourceRelations = {
+    receivablePayment: { select: { id: true } },
+    payrollTransaction: { select: { id: true } },
+    bankMatches: { where: { status: 'APPROVED' }, select: { id: true, status: true } }
+};
+
 export const listFinancialRecords = async (prismaClient, filters = {}) => {
     const year = Number.parseInt(filters.year, 10);
     const month = Number.parseInt(filters.month, 10);
@@ -264,7 +271,10 @@ export const listFinancialRecords = async (prismaClient, filters = {}) => {
                 account: { select: { id: true, name: true, type: true } },
                 createdBy: { select: { id: true, name: true } },
                 allocations: { orderBy: { sortOrder: 'asc' } },
-                documents: { orderBy: { uploadedAt: 'asc' } }
+                documents: { orderBy: { uploadedAt: 'asc' } },
+                // Para que la pantalla sepa cuáles no se pueden tocar aquí y lo explique
+                // antes, en vez de ofrecer un botón que el servidor va a rechazar.
+                ...recordSourceRelations
             }
         }),
         prismaClient.financialRecord.count({ where }),
@@ -295,26 +305,30 @@ const dateInputFrom = (date) => {
     ].join('-');
 };
 
-const recordSourceRelations = {
-    receivablePayment: { select: { id: true } },
-    payrollTransaction: { select: { id: true } },
-    bankMatches: { where: { status: 'APPROVED' }, select: { id: true, status: true } }
+// Decir «requiere una corrección controlada de la operación de origen» sin decir
+// cuál ni dónde deja a quien lo lee sin salida. Cada caso nombra su camino.
+export const financialRecordLockReason = (record) => {
+    if (record?.receivablePayment) {
+        return 'Este movimiento es el ingreso de un abono de cartera. Para deshacerlo ve a Cartera, abre la obligación del cliente y usa «Revertir» en ese abono: este movimiento se anulará solo.';
+    }
+    if (record?.payrollTransaction) {
+        return 'Este movimiento es el pago de una liquidación de nómina. Se corrige desde Nómina, sobre la liquidación que lo generó.';
+    }
+    if (record?.bankMatches?.some((match) => match.status === 'APPROVED')) {
+        return 'Este movimiento tiene una conciliación bancaria aprobada. Primero hay que deshacer esa conciliación; mientras siga aprobada no se puede editar ni anular aquí.';
+    }
+    if (record?.origin === 'SYSTEM') {
+        return 'Este movimiento lo generó otro proceso de la plataforma, no se registró a mano. Se corrige desde donde se originó, no desde Movimientos.';
+    }
+    return null;
 };
 
 const assertIndependentFinancialRecord = (record) => {
     if (record.receivablePayment || record.payrollTransaction || record.bankMatches?.some((match) => match.status === 'APPROVED')) {
-        throw new FinancialDomainError(
-            'FINANCIAL_RECORD_LINKED',
-            'Este movimiento está vinculado a un pago o a una conciliación aprobada. No se puede editar ni anular desde Movimientos; requiere una corrección controlada de la operación de origen.',
-            409
-        );
+        throw new FinancialDomainError('FINANCIAL_RECORD_LINKED', financialRecordLockReason(record), 409);
     }
     if (record.origin === 'SYSTEM') {
-        throw new FinancialDomainError(
-            'FINANCIAL_RECORD_SYSTEM_MANAGED',
-            'Este movimiento fue generado por otro proceso. No se puede editar ni anular desde Movimientos; requiere una corrección controlada de la operación de origen.',
-            409
-        );
+        throw new FinancialDomainError('FINANCIAL_RECORD_SYSTEM_MANAGED', financialRecordLockReason(record), 409);
     }
 };
 
