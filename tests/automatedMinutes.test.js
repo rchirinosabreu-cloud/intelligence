@@ -320,6 +320,45 @@ test('Fireflies synchronization never reimports trashed or permanently excluded 
   }
 });
 
+test('one meeting can be processed on its own, reusing the transcript already fetched', async () => {
+  const fetched = [];
+  const transcript = { id: 'ff-9', title: 'Reunión avisada', date: Date.parse('2026-09-22T15:00:00Z'), duration: 30, organizer_email: 'r@brainstudio.test', sentences: [{ speaker_name: 'R', text: 'Acordamos publicar el jueves.' }] };
+  const created = [];
+  const db = {
+    meetingMinute: {
+      findUnique: async () => null,
+      create: async args => { created.push(args.data); return { id: 'minute-9', ...args.data }; },
+      update: async args => args.data
+    }
+  };
+  const result = await automated.syncFirefliesMinuteById({
+    meetingId: 'ff-9', db,
+    fireflies: { getTranscript: async id => { fetched.push(id); return transcript; } },
+    ai: { generate: async () => ({ text: JSON.stringify({ executiveSummary: 'Resumen', summaryTitle: 'A', summarySubtitle: 'B', analysisTitle: 'C', analysisSubtitle: 'D', actionItems: [], observerSignals: [] }) }) },
+    storage: { uploadJson: async ({ key }) => ({ key }), uploadBuffer: async ({ key }) => ({ key }) },
+    createPdfs: async () => ({ summary: { key: 's.pdf' }, analysis: { key: 'a.pdf' } })
+  });
+  assert.equal(result.processed, true);
+  assert.deepEqual(fetched, ['ff-9'], 'the transcript is downloaded once, not twice');
+  assert.equal(created[0].externalId, 'ff-9');
+  assert.equal(created[0].title, 'Reunión avisada');
+});
+
+test('two notifications for the same meeting analyse it once, not twice', async () => {
+  let analyses = 0;
+  const transcript = { id: 'ff-10', title: 'Reunión', date: Date.now(), duration: 10, sentences: [{ speaker_name: 'R', text: 'Hola equipo, confirmamos la fecha.' }] };
+  const options = () => ({
+    meetingId: 'ff-10',
+    db: { meetingMinute: { findUnique: async () => null, create: async args => ({ id: 'minute-10', ...args.data }), update: async args => args.data } },
+    fireflies: { getTranscript: async () => transcript },
+    ai: { generate: async () => { analyses += 1; await new Promise(resolve => setTimeout(resolve, 20)); return { text: JSON.stringify({ executiveSummary: 'R', summaryTitle: 'A', summarySubtitle: 'B', analysisTitle: 'C', analysisSubtitle: 'D', actionItems: [], observerSignals: [] }) }; } },
+    storage: { uploadJson: async ({ key }) => ({ key }), uploadBuffer: async ({ key }) => ({ key }) },
+    createPdfs: async () => ({ summary: { key: 's.pdf' }, analysis: { key: 'a.pdf' } })
+  });
+  await Promise.all([automated.syncFirefliesMinuteById(options()), automated.syncFirefliesMinuteById(options())]);
+  assert.equal(analyses, 1, 'the second notification joins the work already running');
+});
+
 test('the analysis demands a verbatim quote so Observer can confirm every alert', async () => {
   const source = await read('src/services/minuteAutomationService.js');
   assert.match(source, /copia literal|fragmento literal|textualmente/i);

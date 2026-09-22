@@ -256,7 +256,7 @@ export const isProviderStalledMinute = (record) => Boolean(
     : PROVIDER_ERROR_TEXT.test(String(record.errorMessage || '')))
 );
 
-export const processTranscript = async ({ summary, db, fireflies, ai, storage, memory }) => {
+export const processTranscript = async ({ summary, db, fireflies, ai, storage, memory, transcript: prefetched = null, createPdfs = createMinutePdfArtifacts }) => {
   let record = await db.meetingMinute.findUnique({ where: { externalId: summary.id } });
   if (isExcludedFromBria(record) || (record?.status === 'READY' && hasEditorialMinuteMetadata(record.analysis))) return { skipped: true };
 
@@ -279,7 +279,8 @@ export const processTranscript = async ({ summary, db, fireflies, ai, storage, m
 
   try {
     await db.meetingMinute.update({ where: { id: record.id }, data: { status: 'PROCESSING', errorMessage: null, lastSeenAt: new Date() } });
-    const transcript = await fireflies.getTranscript(summary.id);
+    // The webhook already downloaded it; do not pay for the same transcript twice.
+    const transcript = prefetched || await fireflies.getTranscript(summary.id);
     const transcriptText = buildTranscriptText(transcript);
     // Same message as before; the code is what lets the rescue tell this apart
     // from an outage of the provider.
@@ -305,7 +306,7 @@ export const processTranscript = async ({ summary, db, fireflies, ai, storage, m
     });
     const meetingAt = normalizeDate(transcript.date || summary.date);
     const participants = transcript.participants || analysis.participants || [];
-    const pdfArtifacts = await createMinutePdfArtifacts({
+    const pdfArtifacts = await createPdfs({
       minute: {
         id: record.id,
         externalId: summary.id,
@@ -370,6 +371,45 @@ export const processTranscript = async ({ summary, db, fireflies, ai, storage, m
       }
     }).catch(updateError => console.error('[AutomatedMinutes] No se pudo guardar el error:', updateError.message));
     throw error;
+  }
+};
+
+// Two notifications for the same meeting must not analyse it twice: the second
+// joins the work already running instead of starting its own.
+const activeMinuteWork = new Map();
+
+export const syncFirefliesMinuteById = async ({
+  meetingId,
+  db = prisma,
+  fireflies = firefliesClient,
+  ai = getDefaultAi(),
+  storage = documentStorage,
+  memory = db === prisma ? defaultMemoryLifecycle : null,
+  createPdfs = createMinutePdfArtifacts
+} = {}) => {
+  const id = String(meetingId || '').trim();
+  if (!id) throw createMinuteError('FIREFLIES_MEETING_ID_REQUIRED', 'Falta el identificador de la reunión.');
+  const running = activeMinuteWork.get(id);
+  if (running) return running;
+
+  const work = (async () => {
+    const transcript = await fireflies.getTranscript(id);
+    return processTranscript({
+      summary: {
+        id,
+        title: transcript.title,
+        date: transcript.date,
+        duration: transcript.duration,
+        organizer_email: transcript.organizer_email
+      },
+      transcript, db, fireflies, ai, storage, memory, createPdfs
+    });
+  })();
+  activeMinuteWork.set(id, work);
+  try {
+    return await work;
+  } finally {
+    activeMinuteWork.delete(id);
   }
 };
 
