@@ -20,7 +20,6 @@ import {
     Download,
     Edit,
     Eye,
-    FileSpreadsheet,
     FileText,
     Image,
     Layers,
@@ -235,6 +234,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
             setSelectedAccountId('');
         }
     }, [accounts, selectedAccountId]);
+    const selectedAccount = accounts.find((account) => account.id === selectedAccountId) || null;
 
     const setField = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
@@ -602,24 +602,26 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                 </div>
             )}
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-                <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
-                    <TrendingUp className="h-5 w-5 text-emerald-500" />
-                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Ingresos de la selección</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : formatCurrency(totals.income)}</p></div>
+            {/* Sin cuenta elegida estas cifras serían las mismas que los indicadores de
+                arriba, que ya obedecen los mismos filtros; el número de movimientos ya
+                lo dice el pie de la tabla. Solo se pintan cuando dicen algo que no está
+                en ningún otro sitio: lo que entró y salió por una cuenta concreta. */}
+            {selectedAccount && (
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
+                        <TrendingUp className="h-5 w-5 text-emerald-500" />
+                        <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Entró por {selectedAccount.name}</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : formatCurrency(totals.income)}</p></div>
+                    </div>
+                    <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
+                        <TrendingDown className="h-5 w-5 text-rose-500" />
+                        <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Salió por {selectedAccount.name}</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : formatCurrency(totals.expense)}</p></div>
+                    </div>
+                    <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
+                        <Wallet className="h-5 w-5 text-[#009EB9]" />
+                        <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Diferencia en el periodo</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : formatCurrency(Number(totals.net ?? (totals.income - totals.expense)))}</p></div>
+                    </div>
                 </div>
-                <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
-                    <TrendingDown className="h-5 w-5 text-rose-500" />
-                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Egresos de la selección</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : formatCurrency(totals.expense)}</p></div>
-                </div>
-                <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
-                    <Wallet className="h-5 w-5 text-[#009EB9]" />
-                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Saldo de la selección</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : formatCurrency(Number(totals.net ?? (totals.income - totals.expense)))}</p></div>
-                </div>
-                <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
-                    <FileSpreadsheet className="h-5 w-5 text-violet-500" />
-                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Movimientos de la selección</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : totalRecords}</p></div>
-                </div>
-            </div>
+            )}
 
             <div className="overflow-hidden rounded-lg border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
                 {isLoading || searchPending ? (
