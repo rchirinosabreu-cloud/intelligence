@@ -12,9 +12,6 @@ try {
   await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "issuedAt" TIMESTAMP(3);`);
   await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "issuedById" TEXT;`);
   await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "concept" TEXT;`);
-  await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "subtotal" DECIMAL(14,2);`);
-  await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "taxRate" DECIMAL(5,2);`);
-  await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "taxAmount" DECIMAL(14,2);`);
   await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "pdfStorageKey" TEXT;`);
   // Dos cuentas de cobro no pueden llevar el mismo número. El índice es parcial
   // porque las obligaciones sin emitir comparten `number` nulo y eso es correcto.

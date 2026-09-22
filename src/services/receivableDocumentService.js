@@ -7,11 +7,15 @@ import {
 } from './financialRecordService.js';
 
 export const RECEIVABLE_ITEM_MAX = 40;
-export const RECEIVABLE_CONCEPT_MAX = 300;
+// El concepto real es un párrafo más una lista de lo que incluye el servicio: la de
+// Corporación Titanes pasa de 700 caracteres. 300 dejaba fuera media cuenta de cobro.
+export const RECEIVABLE_CONCEPT_MAX = 4000;
 export const RECEIVABLE_ITEM_DESCRIPTION_MAX = 300;
-// Elisa decide por documento si lleva IVA: «si se le está cobrando IVA o no a esa
-// persona». No es una propiedad del cliente, así que se pregunta cada vez.
-export const RECEIVABLE_TAX_RATES = Object.freeze([0, 19]);
+// Aquí no se calcula IVA. El único sitio donde aparece en la reunión del 21 de
+// septiembre de 2026 es la pantalla de Siigo, el programa contable de Elisa, y
+// colgando del caso «factura electrónica»; la cuenta de cobro es el otro camino.
+// Si alguna vez hiciera falta, lo pide una persona, no se deduce de un campo visto
+// de reojo en otro software.
 
 const cloneForAudit = (value) => JSON.parse(JSON.stringify(value));
 const text = (value, max, code, message) => {
@@ -22,29 +26,18 @@ const text = (value, max, code, message) => {
 };
 
 /**
- * Las líneas suman exactamente el subtotal, el IVA se calcula sobre ese subtotal y el
- * total es la suma de ambos. Todo en centavos: una cuenta de cobro que no cuadra al
- * céntimo con lo que se le manda al cliente no sirve para cobrar.
+ * Las líneas suman exactamente el total. Todo en centavos: una cuenta de cobro que no
+ * cuadra al céntimo con lo que se le manda al cliente no sirve para cobrar.
  */
-export const calculateReceivableDocument = (items, taxRate) => {
+export const calculateReceivableDocument = (items) => {
     if (!Array.isArray(items) || items.length === 0) {
         throw new FinancialDomainError('RECEIVABLE_ITEMS_REQUIRED', 'La cuenta de cobro necesita al menos un concepto.');
     }
     if (items.length > RECEIVABLE_ITEM_MAX) {
         throw new FinancialDomainError('RECEIVABLE_ITEMS_TOO_MANY', `Una cuenta de cobro admite como máximo ${RECEIVABLE_ITEM_MAX} conceptos.`);
     }
-    // No elegir no puede convertirse en «sin IVA»: `Number(null)` es 0 y 0 es una
-    // tarifa válida, así que una cuenta de cobro saldría sin IVA sin que nadie lo
-    // decidiera. Elisa tiene que decirlo cada vez.
-    if (taxRate === null || taxRate === undefined || taxRate === '') {
-        throw new FinancialDomainError('RECEIVABLE_TAX_RATE_INVALID', 'Indica si la cuenta de cobro lleva IVA o no.');
-    }
-    const rate = Number(taxRate);
-    if (!RECEIVABLE_TAX_RATES.includes(rate)) {
-        throw new FinancialDomainError('RECEIVABLE_TAX_RATE_INVALID', 'Indica si la cuenta de cobro lleva IVA o no.');
-    }
 
-    let subtotalCents = 0;
+    let totalCents = 0;
     const lines = items.map((item, index) => {
         const description = text(
             item?.description,
@@ -56,37 +49,25 @@ export const calculateReceivableDocument = (items, taxRate) => {
         if (cents === null || cents <= 0) {
             throw new FinancialDomainError('RECEIVABLE_ITEM_AMOUNT_INVALID', `El valor del concepto «${description}» debe ser positivo y tener como máximo dos decimales.`);
         }
-        if (!Number.isSafeInteger(subtotalCents + cents)) {
+        if (!Number.isSafeInteger(totalCents + cents)) {
             throw new FinancialDomainError('RECEIVABLE_ITEMS_OUT_OF_RANGE', 'La suma de los conceptos supera el rango de precisión financiera.');
         }
-        subtotalCents += cents;
+        totalCents += cents;
         return { description, amount: financialAmountFromCents(cents), sortOrder: index };
     });
 
-    // El IVA se redondea al céntimo más cercano, una sola vez y sobre el subtotal
-    // completo: repartirlo por línea haría que el total no cuadre con la suma.
-    const taxCents = Math.round((subtotalCents * rate) / 100);
-    const totalCents = subtotalCents + taxCents;
-    if (!Number.isSafeInteger(totalCents)) {
-        throw new FinancialDomainError('RECEIVABLE_ITEMS_OUT_OF_RANGE', 'El total con IVA supera el rango de precisión financiera.');
-    }
-
-    return {
-        lines,
-        subtotalCents,
-        taxCents,
-        totalCents,
-        subtotal: financialAmountFromCents(subtotalCents),
-        taxRate: rate,
-        taxAmount: financialAmountFromCents(taxCents),
-        total: financialAmountFromCents(totalCents)
-    };
+    return { lines, totalCents, total: financialAmountFromCents(totalCents) };
 };
+
+// La última cuenta de cobro que Elisa hizo en Word es la 392 (Rodny, 22 de septiembre
+// de 2026), así que la primera que emita la plataforma es la 393. Se configura con
+// RECEIVABLE_NUMBER_START y solo manda mientras no haya ninguna emitida aquí.
+export const RECEIVABLE_NUMBER_START_DEFAULT = 393;
 
 /**
  * El siguiente número libre. La numeración es de Elisa y viene de fuera de la
  * plataforma, así que no se usa una secuencia de la base: se parte del número más
- * alto ya emitido, y si todavía no hay ninguno, del piso que ella configure.
+ * alto ya emitido, y si todavía no hay ninguno, del piso configurado.
  * Nunca retrocede ni reutiliza un hueco: un número repetido rompe su consecutivo.
  */
 export const nextReceivableNumber = (highestIssued, configuredStart) => {
@@ -96,12 +77,14 @@ export const nextReceivableNumber = (highestIssued, configuredStart) => {
     return Number.isInteger(highest) && highest >= floor ? highest + 1 : floor;
 };
 
+// Como lo escribe el documento real: «Cuenta de cobro No. 0389», cuatro dígitos y
+// sin prefijo de letras. No es un formato nuestro, es el que ya reciben los clientes.
 export const formatReceivableNumber = (number) => {
     // `Number(null)` es 0 y `Number.isInteger(0)` es true: sin este guardia una
-    // obligación sin emitir se presentaría como «CC-null».
+    // obligación sin emitir se presentaría como «No. null».
     if (number === null || number === undefined || number === '') return null;
     const value = Number(number);
-    return Number.isInteger(value) && value > 0 ? `CC-${String(value).padStart(4, '0')}` : null;
+    return Number.isInteger(value) && value > 0 ? `No. ${String(value).padStart(4, '0')}` : null;
 };
 
 /**
@@ -114,10 +97,10 @@ export const formatReceivableNumber = (number) => {
  */
 export const issueReceivableDocument = async (prismaClient, receivableId, input = {}, actor, options = {}) => {
     const concept = text(input.concept, RECEIVABLE_CONCEPT_MAX, 'RECEIVABLE_CONCEPT_REQUIRED', 'La cuenta de cobro necesita un concepto.');
-    const document = calculateReceivableDocument(input.items, input.taxRate);
+    const document = calculateReceivableDocument(input.items);
     const { date: issuedAt } = parseFinancialDateInput(input.issuedAt);
     const actorId = actor?.id || actor?.userId || null;
-    const configuredStart = options.startNumber ?? process.env.RECEIVABLE_NUMBER_START;
+    const configuredStart = options.startNumber ?? process.env.RECEIVABLE_NUMBER_START ?? RECEIVABLE_NUMBER_START_DEFAULT;
     const requestedNumber = input.number === undefined || input.number === null || input.number === ''
         ? null
         : Number(input.number);
@@ -174,9 +157,6 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
                     issuedAt,
                     issuedById: actorId,
                     concept,
-                    subtotal: document.subtotal,
-                    taxRate: document.taxRate,
-                    taxAmount: document.taxAmount,
                     amount: document.total,
                     status: paidCents === document.totalCents ? 'PAGADO' : receivable.status
                 },

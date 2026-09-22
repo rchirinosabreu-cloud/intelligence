@@ -1830,9 +1830,6 @@ model AccountsReceivable {
   issuedAt      DateTime?
   issuedById    String?
   concept       String?
-  subtotal      Decimal?              @db.Decimal(14, 2)
-  taxRate       Decimal?              @db.Decimal(5, 2)
-  taxAmount     Decimal?              @db.Decimal(14, 2)
   pdfStorageKey String?
   items         ReceivableItem[]
   importBatchId String?
