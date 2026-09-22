@@ -38,6 +38,7 @@ import {
 import { cn } from '@/lib/utils';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
+import { clientOptions } from '@/utils/financialClients';
 
 const PAGE_SIZE = 25;
 
@@ -194,14 +195,17 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
         }
     });
 
+    // Con `isArchived=all` para que un cliente archivado pueda seguir recibiendo
+    // movimientos: sin él, quien registra no encuentra la ficha y crea otra.
     const { data: clients = [] } = useQuery({
         queryKey: ['financial-record-clients'],
         queryFn: async () => {
             const baseUrl = getApiBaseUrl();
-            const response = await axios.get(`${baseUrl}/api/clients`, { headers: authHeaders() });
+            const response = await axios.get(`${baseUrl}/api/clients?isArchived=all`, { headers: authHeaders() });
             return Array.isArray(response.data) ? response.data : [];
         }
     });
+    const clientChoices = useMemo(() => clientOptions(clients), [clients]);
 
     const { data: accountData } = useQuery({
         queryKey: ['financial-accounts'],
@@ -707,7 +711,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Categoría<Select className={inputClass} value={form.category} onChange={(event) => setField('category', event.target.value)}>{CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Escenario<Select className={inputClass} value={form.scenario} onChange={(event) => setField('scenario', event.target.value)}>{SCENARIOS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cuenta de caja o banco<Select required={form.scenario === 'ACTUAL' && editingRecord?.origin !== 'IMPORT'} className={inputClass} value={form.accountId} onChange={(event) => setField('accountId', event.target.value)}><option value="">{form.scenario === 'ACTUAL' ? 'Seleccionar cuenta...' : 'Sin cuenta definida'}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</Select></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<Select className={inputClass} value={form.clientId} onChange={(event) => setField('clientId', event.target.value)}><option value="">Sin cliente relacionado</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</Select></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<Select className={inputClass} value={form.clientId} onChange={(event) => setField('clientId', event.target.value)}><option value="">Sin cliente relacionado</option>{clientChoices.map((client) => <option key={client.id} value={client.id}>{client.label}</option>)}</Select></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Contraparte<input className={inputClass} value={form.counterparty} onChange={(event) => setField('counterparty', event.target.value)} placeholder="Proveedor o persona" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Referencia<input className={inputClass} value={form.reference} onChange={(event) => setField('reference', event.target.value)} placeholder="Factura, transferencia..." /></label>
                         </div>

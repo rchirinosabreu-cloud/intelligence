@@ -179,7 +179,8 @@ const buildReceivableTotals = (items) => items.reduce((totals, item) => {
 const serializeClientTarget = (client) => ({
     id: client.id,
     name: client.name,
-    slug: client.slug
+    slug: client.slug,
+    isArchived: Boolean(client.isArchived)
 });
 
 const SOURCE_LABEL_PREFIX = 'source-label:';
@@ -289,13 +290,13 @@ export const getFinancialClientReconciliation = async (req, res, dependencies = 
                 }
             }),
             prismaClient.client.findMany({
-                where: {
-                    isArchived: false
-                },
+                // Incluye archivados: una cuenta por cobrar o un vínculo pueden
+                // apuntar a un cliente que ya no está activo y sigue debiendo.
                 select: {
                     id: true,
                     name: true,
-                    slug: true
+                    slug: true,
+                    isArchived: true
                 },
                 orderBy: {
                     name: 'asc'

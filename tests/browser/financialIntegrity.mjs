@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
-import { chooseOption } from './selectHelpers.mjs';
+import { chooseOption, nativeSelect } from './selectHelpers.mjs';
 const base = process.env.FINANCIAL_DEMO_URL || 'http://127.0.0.1:3006/tests/fixtures/financial-integrity.html';
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
 try {
@@ -108,6 +108,16 @@ try {
   await page.screenshot({ path: 'output/financial-ledger-category.png', fullPage: true, animations: 'disabled' });
   await page.getByRole('button', { name: 'Quitar filtros', exact: true }).click();
   assert.equal(await bag('Movimientos de la selección'), '62');
+
+  // Un cliente archivado sigue debiendo: tiene que poder elegirse, marcado y después de los activos.
+  await page.getByRole('button', { name: 'Registrar movimiento', exact: true }).click();
+  const clientSelect = page.getByRole('dialog').getByRole('combobox', { name: 'Cliente' });
+  const clientNames = await nativeSelect(clientSelect).locator('option').allInnerTexts();
+  assert.deepEqual(clientNames, ['Sin cliente relacionado', 'Cliente de muestra', 'Cliente archivado · archivado']);
+  await chooseOption(clientSelect, 'demo-archived');
+  await page.screenshot({ path: 'output/financial-archived-client.png', animations: 'disabled' });
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await page.getByRole('dialog').waitFor({ state: 'hidden' });
 
   // Reversión de un abono: exige motivo, devuelve el saldo y conserva el abono como evidencia.
   await page.getByRole('button', { name: /Cartera/ }).click();

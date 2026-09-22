@@ -36,6 +36,7 @@ import ClientFinancialStatementDialog from './financial/ClientFinancialStatement
 import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import { groupFinancialReceivables, financialDebtStatus, formatFinancialPeriod } from '@/utils/financialReceivables';
+import { clientOptions } from '@/utils/financialClients';
 
 const CATEGORY_COLORS = {
     'MEMBRESIA': '#009EB9',
@@ -205,6 +206,9 @@ const FinancialDashboard = () => {
         },
         enabled: !!(currentUser && canAccessFinancials && ['clients', 'receivables'].includes(activeTab))
     });
+    // Los archivados vienen incluidos y se marcan: una cuenta por cobrar puede
+    // apuntar a un cliente que ya no está activo y sigue debiendo.
+    const clientTargetChoices = useMemo(() => clientOptions(clientReconciliation?.targets), [clientReconciliation?.targets]);
 
     const { data: integrityAudit, isLoading: isIntegrityAuditLoading } = useQuery({
         queryKey: ['financial-integrity', selectedYear],
@@ -1424,10 +1428,10 @@ await invalidateFinancialQueries(queryClient);
                                                                 className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
                                                             >
                                                                 <option value="">Seleccionar cliente...</option>
-                                                                {clientReconciliation.targets
-                                                                    ?.filter((target) => target.id !== row.clientId)
+                                                                {clientTargetChoices
+                                                                    .filter((target) => target.id !== row.clientId)
                                                                     .map((target) => (
-                                                                        <option key={target.id} value={target.id}>{target.name}</option>
+                                                                        <option key={target.id} value={target.id}>{target.label}</option>
                                                                     ))}
                                                             </Select>
                                                         </td>
@@ -1700,7 +1704,7 @@ await invalidateFinancialQueries(queryClient);
                         <DialogDescription>Registra el valor causado; los abonos posteriores actualizarán automáticamente el saldo.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleCreateReceivable} className="space-y-4">
-                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<Select required value={receivableForm.clientId} onChange={(event) => setReceivableForm((current) => ({ ...current, clientId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{(clientReconciliation?.targets || []).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</Select></label>
+                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<Select required value={receivableForm.clientId} onChange={(event) => setReceivableForm((current) => ({ ...current, clientId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{clientTargetChoices.map((client) => <option key={client.id} value={client.id}>{client.label}</option>)}</Select></label>
                         <div className="grid gap-4 sm:grid-cols-2">
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Valor<input required min="0.01" step="0.01" type="number" value={receivableForm.amount} onChange={(event) => setReceivableForm((current) => ({ ...current, amount: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Periodo<DatePicker {...brainDatePickerProps} selected={receivableForm.period ? new Date(`${receivableForm.period}T12:00:00`) : null} onChange={(date) => setReceivableForm((current) => ({ ...current, period: date ? format(date, 'yyyy-MM-01') : '' }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" dateFormat="MMMM yyyy" showMonthYearPicker /></label>

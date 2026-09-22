@@ -15,6 +15,8 @@ localStorage.setItem('authToken', `demo.${btoa(JSON.stringify({ exp: 4102444800 
 localStorage.setItem('currentUser', JSON.stringify(user));
 window.fetch = async () => new Response(JSON.stringify(user), { headers: { 'Content-Type': 'application/json' } });
 const client = { id: 'demo-client', name: 'Cliente de muestra', slug: 'cliente-muestra' };
+// Un cliente archivado que sigue debiendo: tiene que poder elegirse, marcado.
+const archivedClient = { id: 'demo-archived', name: 'Cliente archivado', slug: 'cliente-archivado', isArchived: true };
 const account = { id: 'demo-account', name: 'Banco de muestra', type: 'BANK', currency: 'COP', balance: 4000000 };
 let debt = { id: 'demo-debt', clientId: client.id, clientName: client.name, clientSlug: client.slug, sourceLabel: client.name, amount: 1200000, outstanding: 800000, paidAmount: 400000, status: 'PROMESADO', year: 2026, month: 9, period: '2026-09-01T00:00:00Z', dueDate: null, payments: [], comments: 'Promesa de pago acordada. Datos ficticios.' };
 if (new URLSearchParams(location.search).has('legacyPaid')) debt = { ...debt, outstanding: null, paidAmount: 0, status: 'PAGADO', balanceReviewRequired: true };
@@ -32,11 +34,11 @@ axios.defaults.adapter = async config => {
   let data;
   if (path.endsWith('/dashboard')) data = { cashFlow: [{ year: 2026, month: 9, income: income(), expense: 250000, netFlow: income() - 250000 }], categoriesDistribution: { INCOME: { SERVICIO: income() }, EXPENSE: { OPERATIVO: 250000 } }, accountsReceivable: debt.outstanding > 0 ? [{ client, clientId: client.id, totalOutstanding: debt.outstanding }] : [], payroll: { collaborators: [] }, sourceSummary: { totals: { income: income(), expense: 250000, netFlow: income() - 250000, receivable: debt.outstanding } } };
   else if (path.endsWith('/accounts')) data = { accounts: [account] };
-  else if (path === '/api/clients') data = [client];
+  else if (path === '/api/clients') data = url.searchParams.get('isArchived') === 'all' ? [client, archivedClient] : [client];
   else if (path.endsWith('/receivables-ledger')) {
     if (new URLSearchParams(location.search).has('carteraError')) throw Object.assign(new Error('Error simulado de lectura'), { response: { data: { message: 'Error simulado de lectura' } } });
     data = { year: 2026, items: [{ ...debt }], totals: { outstandingTotal: debt.outstanding, total: debt.outstanding, reviewCount: debt.balanceReviewRequired ? 1 : 0 } };
-  } else if (path.endsWith('/client-reconciliation')) data = { year: 2026, clients: [{ client, clientId: client.id, sourceId: client.id, income: income(), receivable: debt.outstanding, recordCount: records.length, receivableCount: 1 }], targets: [client] };
+  } else if (path.endsWith('/client-reconciliation')) data = { year: 2026, clients: [{ client, clientId: client.id, sourceId: client.id, income: income(), receivable: debt.outstanding, recordCount: records.length, receivableCount: 1 }], targets: [client, archivedClient] };
   else if (path.endsWith('/statement')) {
     if (new URLSearchParams(location.search).has('statementError')) throw Object.assign(new Error('Estado de cuenta no disponible (simulado)'), { response: { status: 500, data: { message: 'Estado de cuenta no disponible (simulado)' } } });
     const section = url.searchParams.get('section'), offset = Number(url.searchParams.get('cursor') || 0);

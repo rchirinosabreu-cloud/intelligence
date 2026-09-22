@@ -63,9 +63,12 @@ export async function getClients(filters = {}) {
     const currentMonth = now.getMonth() + 1;
     const currentYear = now.getFullYear();
 
-    const where = {
-        isArchived: isArchived === 'true' || isArchived === true
-    };
+    // «all» devuelve activos y archivados. Un cliente archivado sigue debiendo
+    // plata, así que financiero necesita poder nombrarlo; el resto de módulos
+    // conservan el comportamiento por defecto, que es solo los activos.
+    const where = isArchived === 'all'
+        ? {}
+        : { isArchived: isArchived === 'true' || isArchived === true };
 
     if (responsibleId) {
         where.responsibleId = responsibleId;
