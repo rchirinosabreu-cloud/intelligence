@@ -336,7 +336,7 @@ test('once the commitment expires the dialog is inescapable, and it sits above t
   const board = readFileSync('src/components/modules/NativeTasks.jsx', 'utf8');
   const dialog = readFileSync('src/components/tasks/FocusExtensionDialog.jsx', 'utf8');
 
-  assert.match(board, /return focusTask && isFocusOverdue\(focusTask\) \? focusTask : null;/, 'an expired commitment always asks');
+  assert.match(board, /\(myFocusTask && isFocusOverdue\(myFocusTask\) \? myFocusTask : null\)/, 'an expired commitment always asks');
   assert.match(board, /setExtensionTask\(myOverdueFocusTask\);\s*setExtensionRequired\(true\);/, 'the dialog opens by itself (Rodny, 21 September 2026)');
   assert.match(board, /setOverdueTick\(\(value\) => value \+ 1\)/, 'the clock is a counter, never a Date in a dependency array');
   assert.doesNotMatch(board, /\[[^\]]*new Date\(\)[^\]]*\]\s*\)/, 'no Date inside a dependency array (the September render loop)');

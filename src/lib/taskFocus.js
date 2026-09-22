@@ -154,6 +154,33 @@ export const focusLockMessage = (focusTask, inProgressTask = null, now = Date.no
   return `Estás enfocado en «${title}»${when}. Podrás abrir y mover tus demás pendientes cuando la marques como realizada.`;
 };
 
+// Aviso explicativo la primera vez que la persona ve cada compromiso (Rodny, 22 de septiembre de 2026).
+// Se recuerda por tarea, no por persona: cada compromiso nuevo es un acuerdo nuevo y conviene recordar la regla.
+export const FOCUS_NOTICE_VERSION = 'v1';
+const FOCUS_NOTICE_MEMORY = 30;
+
+export const focusNoticeStorageKey = (userId = 'guest') => `brainstudio:focus-commitment-notice:${FOCUS_NOTICE_VERSION}:${userId}`;
+
+const readFocusNotices = (storage, userId) => {
+  try {
+    const stored = JSON.parse(storage?.getItem?.(focusNoticeStorageKey(userId)) || '[]');
+    return Array.isArray(stored) ? stored.map(String) : [];
+  } catch {
+    return [];
+  }
+};
+
+export const hasSeenFocusNotice = (storage, userId, taskId) => readFocusNotices(storage, userId).includes(String(taskId));
+
+export const markFocusNoticeSeen = (storage, userId, taskId) => {
+  const seen = readFocusNotices(storage, userId);
+  if (seen.includes(String(taskId))) return;
+  seen.push(String(taskId));
+  try {
+    storage?.setItem?.(focusNoticeStorageKey(userId), JSON.stringify(seen.slice(-FOCUS_NOTICE_MEMORY)));
+  } catch { /* per-device convenience only */ }
+};
+
 // Novedades del compromiso en la conversación de la tarea, con el mismo formato `[MOTIVO]\nnota` que
 // devolución, reintegración y reapertura (Rodny, 21 de septiembre de 2026).
 export const FOCUS_OVERDUE_EVENT_TYPE = 'system_focus_overdue';
