@@ -1,0 +1,110 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import {
+  handleFirefliesWebhook,
+  parseFirefliesWebhookPayload,
+  verifyFirefliesSignature
+} from '../src/services/firefliesWebhookService.js';
+
+const SECRET = 'un-secreto-de-al-menos-16';
+const body = { meetingId: 'ASxwZxCstx', eventType: 'Transcription completed', clientReferenceId: null };
+const rawBody = Buffer.from(JSON.stringify(body));
+const sign = (buffer, secret = SECRET) => crypto.createHmac('sha256', secret).update(buffer).digest('hex');
+
+test('only a body signed with our secret is accepted', () => {
+  const signature = sign(rawBody);
+  assert.equal(verifyFirefliesSignature({ rawBody, signature, secret: SECRET }), true);
+  assert.equal(verifyFirefliesSignature({ rawBody, signature: `sha256=${signature}`, secret: SECRET }), true, 'the sha256= prefix is accepted');
+  assert.equal(verifyFirefliesSignature({ rawBody, signature: signature.toUpperCase(), secret: SECRET }), true);
+
+  // Anything else is rejected, including a valid signature of a different body.
+  assert.equal(verifyFirefliesSignature({ rawBody, signature: sign(rawBody, 'otro-secreto'), secret: SECRET }), false);
+  assert.equal(verifyFirefliesSignature({ rawBody: Buffer.from('{"meetingId":"otra"}'), signature, secret: SECRET }), false);
+  assert.equal(verifyFirefliesSignature({ rawBody, signature: 'no-es-una-firma', secret: SECRET }), false);
+  assert.equal(verifyFirefliesSignature({ rawBody, signature: '', secret: SECRET }), false);
+  assert.equal(verifyFirefliesSignature({ rawBody, signature, secret: '' }), false);
+  assert.equal(verifyFirefliesSignature({ rawBody: null, signature, secret: SECRET }), false);
+});
+
+test('the payload is read as data: only a usable meeting id gets through', () => {
+  assert.deepEqual(parseFirefliesWebhookPayload(body), { meetingId: 'ASxwZxCstx', eventType: 'Transcription completed' });
+  for (const invalid of [null, undefined, {}, { meetingId: '' }, { meetingId: '   ' }, { meetingId: 'x'.repeat(300) }, { meetingId: 42 }]) {
+    assert.equal(parseFirefliesWebhookPayload(invalid), null, JSON.stringify(invalid));
+  }
+});
+
+const run = async (overrides = {}) => {
+  const processed = [];
+  const pending = [];
+  const result = await handleFirefliesWebhook({
+    rawBody, body, signature: sign(rawBody), secret: SECRET,
+    processMeeting: async (id) => { processed.push(id); },
+    scheduleWork: (work) => pending.push(work),
+    logger: { error() {}, info() {} },
+    ...overrides
+  });
+  return { result, processed, pending };
+};
+
+test('a signed notification is acknowledged at once and the analysis runs afterwards', async () => {
+  const { result, processed, pending } = await run();
+  assert.equal(result.status, 202);
+  assert.deepEqual(result.body, { accepted: true });
+  assert.deepEqual(processed, [], 'the answer must not wait for the analysis');
+  assert.equal(pending.length, 1);
+  await pending[0]();
+  assert.deepEqual(processed, ['ASxwZxCstx']);
+});
+
+test('an unsigned or wrongly signed notification changes nothing', async () => {
+  for (const signature of ['', 'sha256=deadbeef', sign(rawBody, 'otro-secreto')]) {
+    const { result, pending } = await run({ signature });
+    assert.equal(result.status, 401);
+    assert.equal(pending.length, 0, 'nothing is scheduled for an unverified sender');
+  }
+});
+
+test('without a configured secret the door stays closed instead of trusting anyone', async () => {
+  const { result, pending } = await run({ secret: '', signature: sign(rawBody) });
+  assert.equal(result.status, 503);
+  assert.equal(pending.length, 0);
+});
+
+test('a secret too short to protect anything keeps the door closed and says why', async () => {
+  const weak = 'corto';
+  const { result, pending } = await run({ secret: weak, signature: sign(rawBody, weak) });
+  assert.equal(result.status, 503);
+  assert.equal(result.body.error, 'FIREFLIES_WEBHOOK_SECRET_TOO_SHORT');
+  assert.equal(pending.length, 0, 'a correctly signed body is still refused under a weak secret');
+});
+
+test('a signed notification without a usable meeting id is refused', async () => {
+  const invalidBody = { eventType: 'Transcription completed' };
+  const invalidRaw = Buffer.from(JSON.stringify(invalidBody));
+  const { result, pending } = await run({ body: invalidBody, rawBody: invalidRaw, signature: sign(invalidRaw) });
+  assert.equal(result.status, 400);
+  assert.equal(pending.length, 0);
+});
+
+test('a failing analysis never turns into a 500 that makes Fireflies retry forever', async () => {
+  const errors = [];
+  const { result, pending } = await run({
+    processMeeting: async () => { throw new Error('fixture failure'); },
+    logger: { error: (...args) => errors.push(args), info() {} }
+  });
+  assert.equal(result.status, 202);
+  await pending[0]();
+  assert.equal(errors.length, 1);
+});
+
+test('the webhook is wired as a public route with its raw body preserved', async () => {
+  const { readFile } = await import('node:fs/promises');
+  const routes = await readFile(new URL('../src/routes/index.js', import.meta.url), 'utf8');
+  const server = await readFile(new URL('../server.js', import.meta.url), 'utf8');
+  assert.match(routes, /minutes\/fireflies\/webhook/);
+  assert.match(routes, /handleFirefliesWebhook/);
+  // The signature covers the bytes Fireflies sent, not a re-serialized object.
+  assert.match(server, /rawBody/);
+  assert.match(server, /verify:/);
+});

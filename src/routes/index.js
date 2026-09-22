@@ -44,6 +44,7 @@ import crmRouter from './api/crm.js';
 import { createTeamChatRouter, createTeamChatMediaRouter } from './api/teamChat.js';
 import { getUpcomingEvents } from '../services/calendarService.js';
 import { handleGoogleCalendarWebhook } from '../services/operationalEventService.js';
+import { handleFirefliesWebhook } from '../services/firefliesWebhookService.js';
 
 const router = express.Router();
 const upload = multer({
@@ -73,6 +74,22 @@ router.post('/login', authController.login);
 router.post('/password-reset/request', authController.sendPasswordReset);
 router.post('/password-reset/confirm', authController.resetPasswordWithCode);
 router.post('/users', authenticateToken, authController.createUser);
+
+// Public by design: Fireflies cannot authenticate, so the HMAC signature is the
+// door. Answers 202 immediately and analyses afterwards.
+router.post('/minutes/fireflies/webhook', async (req, res) => {
+    try {
+        const outcome = await handleFirefliesWebhook({
+            rawBody: req.rawBody,
+            signature: req.headers['x-hub-signature'] || req.headers['x-hub-signature-256'],
+            body: req.body
+        });
+        return res.status(outcome.status).json(outcome.body);
+    } catch (error) {
+        console.error('[FirefliesWebhook] Error procesando el aviso:', error.response?.data || error.message || error);
+        return res.status(500).json({ error: 'FIREFLIES_WEBHOOK_FAILED' });
+    }
+});
 
 router.post('/activity/google-calendar/webhook', async (req, res) => {
     try {
