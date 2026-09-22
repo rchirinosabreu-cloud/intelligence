@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {
   handleFirefliesWebhook,
+  isTranscriptionReadyEvent,
   parseFirefliesWebhookPayload,
   verifyFirefliesSignature
 } from '../src/services/firefliesWebhookService.js';
@@ -27,11 +28,23 @@ test('only a body signed with our secret is accepted', () => {
   assert.equal(verifyFirefliesSignature({ rawBody: null, signature, secret: SECRET }), false);
 });
 
-test('the payload is read as data: only a usable meeting id gets through', () => {
-  assert.deepEqual(parseFirefliesWebhookPayload(body), { meetingId: 'ASxwZxCstx', eventType: 'Transcription completed' });
-  for (const invalid of [null, undefined, {}, { meetingId: '' }, { meetingId: '   ' }, { meetingId: 'x'.repeat(300) }, { meetingId: 42 }]) {
+test('the payload is read as data: only a usable meeting id gets through, in either version', () => {
+  // Version 2 of the Fireflies webhook renamed the fields.
+  assert.deepEqual(parseFirefliesWebhookPayload({ event: 'meeting.transcribed', meeting_id: 'ASxwZxCstx', timestamp: 1758500000000 }),
+    { meetingId: 'ASxwZxCstx', event: 'meeting.transcribed' });
+  assert.deepEqual(parseFirefliesWebhookPayload(body), { meetingId: 'ASxwZxCstx', event: 'Transcription completed' });
+  for (const invalid of [null, undefined, {}, { meeting_id: '' }, { meetingId: '   ' }, { meeting_id: 'x'.repeat(300) }, { meetingId: 42 }]) {
     assert.equal(parseFirefliesWebhookPayload(invalid), null, JSON.stringify(invalid));
   }
+});
+
+test('only the event that means "the transcript is ready" starts an analysis', () => {
+  assert.equal(isTranscriptionReadyEvent('meeting.transcribed'), true);
+  assert.equal(isTranscriptionReadyEvent('Transcription completed'), true);
+  assert.equal(isTranscriptionReadyEvent(''), true, 'version 1 only ever sent that event');
+  // Subscribing to every event must not make Bria analyse a meeting that has no transcript yet.
+  assert.equal(isTranscriptionReadyEvent('meeting.bot_joined'), false);
+  assert.equal(isTranscriptionReadyEvent('meeting.summarized'), false);
 });
 
 const run = async (overrides = {}) => {
@@ -85,6 +98,27 @@ test('a signed notification without a usable meeting id is refused', async () =>
   const { result, pending } = await run({ body: invalidBody, rawBody: invalidRaw, signature: sign(invalidRaw) });
   assert.equal(result.status, 400);
   assert.equal(pending.length, 0);
+});
+
+test('a version 2 notification is understood and analysed', async () => {
+  const v2 = { event: 'meeting.transcribed', timestamp: 1758500000000, meeting_id: 'V2meeting', client_reference_id: null };
+  const v2Raw = Buffer.from(JSON.stringify(v2));
+  const { result, processed, pending } = await run({ body: v2, rawBody: v2Raw, signature: sign(v2Raw) });
+  assert.equal(result.status, 202);
+  await pending[0]();
+  assert.deepEqual(processed, ['V2meeting']);
+});
+
+test('an event that is not the transcript being ready is acknowledged and ignored', async () => {
+  for (const event of ['meeting.bot_joined', 'meeting.summarized']) {
+    const other = { event, timestamp: 1758500000000, meeting_id: 'V2meeting' };
+    const otherRaw = Buffer.from(JSON.stringify(other));
+    const { result, pending } = await run({ body: other, rawBody: otherRaw, signature: sign(otherRaw) });
+    // 2xx so Fireflies does not mark the delivery as failed, but no work at all.
+    assert.equal(result.status, 202);
+    assert.equal(result.body.ignored, true);
+    assert.equal(pending.length, 0, `${event} must not start an analysis`);
+  }
 });
 
 test('a failing analysis never turns into a 500 that makes Fireflies retry forever', async () => {
