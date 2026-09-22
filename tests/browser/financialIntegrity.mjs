@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
-import { chooseOption } from './selectHelpers.mjs';
+import { chooseOption, nativeSelect } from './selectHelpers.mjs';
 const base = process.env.FINANCIAL_DEMO_URL || 'http://127.0.0.1:3006/tests/fixtures/financial-integrity.html';
 const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
 try {
@@ -89,5 +89,61 @@ try {
   assert.equal(await page.getByLabel('Estado de seguimiento').isDisabled(), true);
   await page.getByRole('alert').filter({ hasText: /históricos marcados como pagados/ }).waitFor();
   await page.screenshot({ path: 'output/financial-legacy-review.png', fullPage: true, animations: 'disabled' });
-  console.log('Financial browser: balances, existing income application, cache, read-only, dates, errors, light/dark/mobile verified.');
+
+  // Filtro por categoría: la bolsa que se muestra es la de toda la selección, no la de la página.
+  await page.goto(base);
+  await page.getByRole('button', { name: 'Movimientos', exact: true }).click();
+  const bag = async label => (await page.getByText(label, { exact: true }).locator('xpath=following-sibling::p').innerText()).replace(/\s/g, '');
+  await page.getByText('Movimientos de la selección', { exact: true }).waitFor();
+  assert.equal(await bag('Movimientos de la selección'), '62');
+  assert.match(await bag('Ingresos de la selección'), /1\.100\.000/);
+  await chooseOption(page.getByRole('combobox', { name: 'Categoría del movimiento' }), 'ADMINISTRATIVO');
+  await page.getByText('10', { exact: true }).waitFor();
+  // 10 de 62: el total es el de la selección completa, no el de los 25 de la página.
+  assert.equal(await bag('Movimientos de la selección'), '10');
+  assert.match(await bag('Egresos de la selección'), /100\.000/);
+  assert.match(await bag('Ingresos de la selección'), /\$0/);
+  assert.match(await page.locator('tbody').innerText(), /Gasto administrativo/);
+  assert.doesNotMatch(await page.locator('tbody').innerText(), /Ingreso de muestra/);
+  await page.screenshot({ path: 'output/financial-ledger-category.png', fullPage: true, animations: 'disabled' });
+  await page.getByRole('button', { name: 'Quitar filtros', exact: true }).click();
+  assert.equal(await bag('Movimientos de la selección'), '62');
+
+  // Un cliente archivado sigue debiendo: tiene que poder elegirse, marcado y después de los activos.
+  await page.getByRole('button', { name: 'Registrar movimiento', exact: true }).click();
+  const clientSelect = page.getByRole('dialog').getByRole('combobox', { name: 'Cliente' });
+  const clientNames = await nativeSelect(clientSelect).locator('option').allInnerTexts();
+  assert.deepEqual(clientNames, ['Sin cliente relacionado', 'Cliente de muestra', 'Cliente archivado · archivado']);
+  await chooseOption(clientSelect, 'demo-archived');
+  await page.screenshot({ path: 'output/financial-archived-client.png', animations: 'disabled' });
+  await page.getByRole('dialog').getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await page.getByRole('dialog').waitFor({ state: 'hidden' });
+
+  // Reversión de un abono: exige motivo, devuelve el saldo y conserva el abono como evidencia.
+  await page.getByRole('button', { name: /Cartera/ }).click();
+  const reversalRow = page.getByRole('button', { name: /Cliente de muestra/ });
+  await reversalRow.click();
+  await page.getByText('ABONOS DE ESTA OBLIGACIÓN', { exact: false }).waitFor();
+  await page.getByRole('button', { name: 'Revertir', exact: true }).click();
+  const reversalDialog = page.getByRole('dialog');
+  assert.match(await reversalDialog.innerText(), /deja de descontar saldo/);
+  assert.equal(await reversalDialog.getByRole('button', { name: 'Revertir abono', exact: true }).isDisabled(), true, 'reversal must require a reason');
+  await reversalDialog.getByRole('textbox').fill('Se digitaron 500 en vez de 500.000');
+  await page.screenshot({ path: 'output/financial-payment-reversal.png', animations: 'disabled' });
+  await reversalDialog.getByRole('button', { name: 'Revertir abono', exact: true }).click();
+  await reversalDialog.waitFor({ state: 'hidden' });
+  // El abono ya no descuenta: el saldo vuelve a los 1.200.000 originales.
+  await page.getByText('Sin abonos vigentes.', { exact: true }).waitFor();
+  assert.match(await reversalRow.innerText(), /1[.,]200[.,]000/);
+  // La vista diaria queda limpia, pero la evidencia sigue a un clic.
+  assert.equal(await page.getByText('Revertido: Se digitaron 500 en vez de 500.000', { exact: false }).count(), 0, 'a reversed payment is hidden by default');
+  await page.getByRole('button', { name: 'Ver 1 abono revertido', exact: true }).click();
+  await page.getByText('Revertido: Se digitaron 500 en vez de 500.000', { exact: false }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Revertir', exact: true }).count(), 0, 'a reversed payment cannot be reversed again');
+  await page.getByRole('button', { name: 'Ocultar 1 abono revertido', exact: true }).click();
+  assert.equal(await page.getByText('Revertido: Se digitaron 500 en vez de 500.000', { exact: false }).count(), 0);
+  await page.getByRole('button', { name: 'Ver 1 abono revertido', exact: true }).click();
+  await page.screenshot({ path: 'output/financial-payment-reversed.png', fullPage: true, animations: 'disabled' });
+
+  console.log('Financial browser: balances, existing income application, cache, read-only, dates, errors, light/dark/mobile, category filter and payment reversal verified.');
 } finally { await browser.close(); }

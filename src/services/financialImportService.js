@@ -749,6 +749,8 @@ export const persistFinancialImportPlan = async (prismaClient, plan, options = {
                         { bankMatches: { some: {} } }
                     ]
                 } }),
+                // Sin filtrar `reversedAt`: un abono revertido sigue siendo evidencia de una
+                // operación real sobre esa fila, y borrarla en una reimportación la perdería.
                 tx.accountsReceivable.count({ where: {
                     year, importBatchId: { not: null }, payments: { some: {} }
                 } })

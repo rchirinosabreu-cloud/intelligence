@@ -36,6 +36,7 @@ import ClientFinancialStatementDialog from './financial/ClientFinancialStatement
 import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import { groupFinancialReceivables, financialDebtStatus, formatFinancialPeriod } from '@/utils/financialReceivables';
+import { clientOptions } from '@/utils/financialClients';
 
 const CATEGORY_COLORS = {
     'MEMBRESIA': '#009EB9',
@@ -103,6 +104,11 @@ const FinancialDashboard = () => {
     const [statementClient, setStatementClient] = useState(null);
     const [paymentForm, setPaymentForm] = useState({ amount: '', paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }), accountId: '', reference: '', notes: '' });
     const [isSavingPayment, setIsSavingPayment] = useState(false);
+    // Revertir un abono mal registrado: siempre con motivo, nunca en un clic suelto.
+    const [paymentToReverse, setPaymentToReverse] = useState(null);
+    const [expandedReversals, setExpandedReversals] = useState({});
+    const [reversalReason, setReversalReason] = useState('');
+    const [isReversingPayment, setIsReversingPayment] = useState(false);
     const [isReceivableEditorOpen, setIsReceivableEditorOpen] = useState(false);
     const [receivableForm, setReceivableForm] = useState({ clientId: '', amount: '', period: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }).slice(0, 7) + '-01', dueDate: '', comments: '' });
     const [isSavingReceivable, setIsSavingReceivable] = useState(false);
@@ -200,6 +206,9 @@ const FinancialDashboard = () => {
         },
         enabled: !!(currentUser && canAccessFinancials && ['clients', 'receivables'].includes(activeTab))
     });
+    // Los archivados vienen incluidos y se marcan: una cuenta por cobrar puede
+    // apuntar a un cliente que ya no está activo y sigue debiendo.
+    const clientTargetChoices = useMemo(() => clientOptions(clientReconciliation?.targets), [clientReconciliation?.targets]);
 
     const { data: integrityAudit, isLoading: isIntegrityAuditLoading } = useQuery({
         queryKey: ['financial-integrity', selectedYear],
@@ -352,6 +361,38 @@ await invalidateFinancialQueries(queryClient);
             setImportError(error.response?.data?.message || 'No fue posible registrar el pago de cartera.');
         } finally {
             setIsSavingPayment(false);
+        }
+    };
+
+    const openPaymentReversal = (debt, payment) => {
+        setImportError('');
+        setReversalReason('');
+        setPaymentToReverse({ debt, payment });
+    };
+
+    const handleReversePayment = async (event) => {
+        event.preventDefault();
+        const payment = paymentToReverse?.payment;
+        if (!payment?.id || isReversingPayment || !canWriteFinancials || !reversalReason.trim()) return;
+
+        setIsReversingPayment(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const { data: result } = await axios.post(`${baseUrl}/api/financials/receivable-payments/${payment.id}/reverse`, {
+                reason: reversalReason.trim()
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            await invalidateFinancialQueries(queryClient);
+            setPaymentToReverse(null);
+            setReversalReason('');
+            setImportSuccess(result?.message || 'Abono revertido.');
+        } catch (error) {
+            console.error('Error reversing receivable payment:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible revertir el abono.');
+        } finally {
+            setIsReversingPayment(false);
         }
     };
 
@@ -1028,6 +1069,52 @@ await invalidateFinancialQueries(queryClient);
                                                                     {canWriteFinancials && debt.status !== 'PAGADO' && debt.outstanding > 0.005 && <button type="button" onClick={() => openReceivablePayment(debt)} className="min-h-11 self-end rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Registrar pago</button>}
                                                                 </div>
                                                                 <p className="text-xs text-zinc-600 dark:text-zinc-300">{financialDebtStatus(debt)}{debt.dueDate ? ` · Vence: ${new Date(debt.dueDate).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : ''}</p>
+                                                                {debt.payments?.length > 0 && (() => {
+                                                                    // La vista diaria muestra lo vigente. Lo revertido es historia: sigue
+                                                                    // disponible, pero no ensucia la cartera de un cliente real.
+                                                                    const reversedCount = debt.payments.filter((payment) => payment.reversedAt).length;
+                                                                    const showReversed = !!expandedReversals[debt.id];
+                                                                    const visible = showReversed ? debt.payments : debt.payments.filter((payment) => !payment.reversedAt);
+                                                                    if (!visible.length && !reversedCount) return null;
+                                                                    return (
+                                                                    <div className="space-y-2">
+                                                                        <p className="text-[9px] font-medium uppercase tracking-widest text-zinc-400">Abonos de esta obligación</p>
+                                                                        {!visible.length && <p className="text-xs text-zinc-500">Sin abonos vigentes.</p>}
+                                                                        <ul className="divide-y divide-zinc-200 dark:divide-white/10">
+                                                                            {visible.map((payment) => (
+                                                                                <li key={payment.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                                                                                    <div className="min-w-0">
+                                                                                        <p className={cn('text-xs font-semibold', payment.reversedAt ? 'text-zinc-400 line-through' : 'text-zinc-900 dark:text-white')}>
+                                                                                            {formatCurrency(payment.amount || 0)}
+                                                                                        </p>
+                                                                                        <p className="text-[10px] text-zinc-500">
+                                                                                            {new Date(payment.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
+                                                                                            {payment.account?.name ? ` · ${payment.account.name}` : ''}
+                                                                                            {payment.reference ? ` · ${payment.reference}` : ''}
+                                                                                        </p>
+                                                                                        {payment.reversedAt && <p className="text-[10px] text-destructive">Revertido: {payment.reversalReason || 'sin motivo registrado'}</p>}
+                                                                                    </div>
+                                                                                    {canWriteFinancials && !payment.reversedAt && (
+                                                                                        <button type="button" onClick={() => openPaymentReversal(debt, payment)}
+                                                                                            className="min-h-11 rounded-lg border border-destructive/30 px-3 text-xs font-semibold text-destructive transition hover:bg-destructive/5">
+                                                                                            Revertir
+                                                                                        </button>
+                                                                                    )}
+                                                                                </li>
+                                                                            ))}
+                                                                        </ul>
+                                                                        {reversedCount > 0 && (
+                                                                            <button type="button"
+                                                                                onClick={() => setExpandedReversals((current) => ({ ...current, [debt.id]: !current[debt.id] }))}
+                                                                                className="min-h-11 text-xs font-medium text-zinc-500 underline underline-offset-2 hover:text-zinc-700 dark:hover:text-zinc-300">
+                                                                                {showReversed
+                                                                                    ? `Ocultar ${reversedCount} abono${reversedCount > 1 ? 's' : ''} revertido${reversedCount > 1 ? 's' : ''}`
+                                                                                    : `Ver ${reversedCount} abono${reversedCount > 1 ? 's' : ''} revertido${reversedCount > 1 ? 's' : ''}`}
+                                                                            </button>
+                                                                        )}
+                                                                    </div>
+                                                                    );
+                                                                })()}
                                                                 <textarea
                                                                     defaultValue={debt.comments || debt.notes || ''}
                                                                     disabled={!canWriteFinancials || debt.balanceReviewRequired || savingReceivableId === debt.id}
@@ -1341,10 +1428,10 @@ await invalidateFinancialQueries(queryClient);
                                                                 className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
                                                             >
                                                                 <option value="">Seleccionar cliente...</option>
-                                                                {clientReconciliation.targets
-                                                                    ?.filter((target) => target.id !== row.clientId)
+                                                                {clientTargetChoices
+                                                                    .filter((target) => target.id !== row.clientId)
                                                                     .map((target) => (
-                                                                        <option key={target.id} value={target.id}>{target.name}</option>
+                                                                        <option key={target.id} value={target.id}>{target.label}</option>
                                                                     ))}
                                                             </Select>
                                                         </td>
@@ -1617,7 +1704,7 @@ await invalidateFinancialQueries(queryClient);
                         <DialogDescription>Registra el valor causado; los abonos posteriores actualizarán automáticamente el saldo.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleCreateReceivable} className="space-y-4">
-                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<Select required value={receivableForm.clientId} onChange={(event) => setReceivableForm((current) => ({ ...current, clientId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{(clientReconciliation?.targets || []).map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</Select></label>
+                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<Select required value={receivableForm.clientId} onChange={(event) => setReceivableForm((current) => ({ ...current, clientId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{clientTargetChoices.map((client) => <option key={client.id} value={client.id}>{client.label}</option>)}</Select></label>
                         <div className="grid gap-4 sm:grid-cols-2">
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Valor<input required min="0.01" step="0.01" type="number" value={receivableForm.amount} onChange={(event) => setReceivableForm((current) => ({ ...current, amount: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Periodo<DatePicker {...brainDatePickerProps} selected={receivableForm.period ? new Date(`${receivableForm.period}T12:00:00`) : null} onChange={(date) => setReceivableForm((current) => ({ ...current, period: date ? format(date, 'yyyy-MM-01') : '' }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" dateFormat="MMMM yyyy" showMonthYearPicker /></label>
@@ -1631,6 +1718,41 @@ await invalidateFinancialQueries(queryClient);
 
             <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={importError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
             {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} />}
+
+            <Dialog open={!!paymentToReverse} onOpenChange={(open) => !open && setPaymentToReverse(null)}>
+                <DialogContent className="sm:max-w-md dark:bg-zinc-900">
+                    <DialogHeader>
+                        <DialogTitle>Revertir abono</DialogTitle>
+                        <DialogDescription>
+                            El abono se conserva en la bitácora marcado como revertido y deja de descontar saldo. El ingreso que generó queda anulado; si el abono se aplicó sobre un ingreso que ya estaba registrado, ese ingreso se conserva y vuelve a quedar disponible.
+                        </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleReversePayment} className="space-y-4">
+                        <div className="rounded-lg bg-zinc-50 px-3 py-2.5 text-sm dark:bg-white/5">
+                            <span className="text-zinc-500">Abono</span>
+                            <strong className="float-right text-zinc-900 dark:text-white">{formatCurrency(paymentToReverse?.payment?.amount || 0)}</strong>
+                            <p className="mt-1 text-xs text-zinc-500">
+                                {paymentToReverse?.debt?.clientName || ''}
+                                {paymentToReverse?.debt?.period ? ` · Periodo ${formatFinancialPeriod(paymentToReverse.debt.period)}` : ''}
+                            </p>
+                        </div>
+                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
+                            Motivo
+                            <textarea required rows={3} maxLength={300} value={reversalReason}
+                                onChange={(event) => setReversalReason(event.target.value)}
+                                placeholder="Ej.: el valor se digitó mal, eran 500.000 y quedó en 500."
+                                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                        </label>
+                        {importError && <p role="alert" className="text-sm text-destructive">{importError}</p>}
+                        <DialogFooter>
+                            <button type="button" onClick={() => setPaymentToReverse(null)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button>
+                            <button type="submit" disabled={isReversingPayment || !reversalReason.trim()} className="inline-flex items-center justify-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-white hover:bg-destructive/90 disabled:opacity-50">
+                                {isReversingPayment && <Loader2 className="h-4 w-4 animate-spin" />}Revertir abono
+                            </button>
+                        </DialogFooter>
+                    </form>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={!!payrollPayment} onOpenChange={(open) => !open && setPayrollPayment(null)}>
                 <DialogContent className="sm:max-w-md dark:bg-zinc-900">

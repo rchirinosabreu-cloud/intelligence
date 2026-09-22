@@ -1,4 +1,5 @@
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
+import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
 import {
     assertOpenFinancialPeriod,
     FinancialDomainError,
@@ -69,7 +70,7 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
         return await prismaClient.$transaction(async (tx) => {
             const existing = await tx.accountsReceivable.findUnique({
                 where: { id: receivableId },
-                include: { payments: { select: { amount: true } } }
+                include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, reversedAt: true } } }
             });
             if (!existing) {
                 throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
@@ -87,6 +88,7 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
             const amount = financialAmountFromCents(amountCents);
             let paidCents = 0;
             for (const payment of existing.payments || []) {
+                if (payment.reversedAt) continue;
                 const cents = financialCents(payment.amount);
                 if (cents === null || !Number.isSafeInteger(paidCents + cents)) {
                     throw new FinancialDomainError('RECEIVABLE_BALANCE_INVALID', 'Los pagos históricos requieren revisión de precisión antes de editar la cuenta por cobrar.', 409);

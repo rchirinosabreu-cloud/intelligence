@@ -1864,6 +1864,11 @@ model ReceivablePayment {
   notes             String?
   createdById       String?
   createdBy         User?              @relation("ReceivablePaymentCreator", fields: [createdById], references: [id], onDelete: SetNull)
+  // Reversión de abono (21 de septiembre de 2026): el abono se conserva como evidencia y deja de sumar.
+  // Quien revierte queda en el evento de auditoría; aquí solo el rastro visible en la cartera.
+  reversedAt        DateTime?
+  reversalReason    String?
+  reversedById      String?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 

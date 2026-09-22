@@ -38,6 +38,7 @@ import {
 import { cn } from '@/lib/utils';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
+import { clientOptions } from '@/utils/financialClients';
 
 const PAGE_SIZE = 25;
 
@@ -130,6 +131,9 @@ const toForm = (record, year) => record ? {
 const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: '', type: '', q: '' }, searchPending = false, formatCurrency }) => {
     const queryClient = useQueryClient();
     const [page, setPage] = useState(1);
+    // Categoría y cuenta solo recortan el libro: los indicadores y las gráficas de arriba
+    // siguen describiendo el periodo completo, así que este filtro vive aquí y no en la barra global.
+    const [ledgerFilters, setLedgerFilters] = useState({ category: '', accountId: '' });
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState(null);
     const [form, setForm] = useState(() => emptyForm(selectedYear));
@@ -163,18 +167,20 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
     const canAdmin = hasFinancialPermission(currentUser, 'admin');
     const canWrite = hasFinancialPermission(currentUser, 'write');
 
-    useEffect(() => { setPage(1); }, [selectedYear, filters]);
+    useEffect(() => { setPage(1); }, [selectedYear, filters, ledgerFilters]);
 
     const queryString = useMemo(() => {
         const params = new URLSearchParams({ year: String(selectedYear), scenario: filters.scenario, page: String(page), pageSize: String(PAGE_SIZE), scope: 'active', status: 'POSTED' });
         if (filters.month) params.set('month', filters.month);
         if (filters.type) params.set('type', filters.type);
         if (filters.q) params.set('q', filters.q);
+        if (ledgerFilters.category) params.set('category', ledgerFilters.category);
+        if (ledgerFilters.accountId) params.set('accountId', ledgerFilters.accountId);
         return params.toString();
-    }, [filters, selectedYear, page]);
+    }, [filters, ledgerFilters, selectedYear, page]);
 
     const { data, isLoading, isFetching, error, refetch } = useQuery({
-        queryKey: ['financial-records', selectedYear, filters, page],
+        queryKey: ['financial-records', selectedYear, filters, ledgerFilters, page],
         queryFn: async () => {
             try {
                 const baseUrl = getApiBaseUrl();
@@ -189,14 +195,17 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
         }
     });
 
+    // Con `isArchived=all` para que un cliente archivado pueda seguir recibiendo
+    // movimientos: sin él, quien registra no encuentra la ficha y crea otra.
     const { data: clients = [] } = useQuery({
         queryKey: ['financial-record-clients'],
         queryFn: async () => {
             const baseUrl = getApiBaseUrl();
-            const response = await axios.get(`${baseUrl}/api/clients`, { headers: authHeaders() });
+            const response = await axios.get(`${baseUrl}/api/clients?isArchived=all`, { headers: authHeaders() });
             return Array.isArray(response.data) ? response.data : [];
         }
     });
+    const clientChoices = useMemo(() => clientOptions(clients), [clients]);
 
     const { data: accountData } = useQuery({
         queryKey: ['financial-accounts'],
@@ -224,12 +233,15 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
     useEffect(() => {
         if (data && !isFetching && !error) setPage((current) => Math.min(current, pageCount));
     }, [data, isFetching, error, pageCount]);
-    const totals = useMemo(() => records.reduce((acc, record) => {
+    // El servidor suma toda la selección. Si una respuesta antigua no la trae, se cae
+    // a la página visible en vez de mostrar cero, que se leería como «no hay dinero».
+    const totals = useMemo(() => data?.totals || records.reduce((acc, record) => {
         const amount = Number(record.amount) || 0;
         if (record.type === 'INCOME') acc.income += amount;
         if (record.type === 'EXPENSE') acc.expense += amount;
         return acc;
-    }, { income: 0, expense: 0 }), [records]);
+    }, { income: 0, expense: 0 }), [data?.totals, records]);
+    const hasLedgerFilters = Boolean(ledgerFilters.category || ledgerFilters.accountId);
 
     const setField = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
@@ -576,18 +588,45 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                 </div>
             )}
 
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+                <label className="space-y-1 text-xs text-zinc-600 dark:text-zinc-300">Categoría
+                    <Select aria-label="Categoría del movimiento" value={ledgerFilters.category}
+                        onChange={(event) => setLedgerFilters((current) => ({ ...current, category: event.target.value }))}
+                        className="min-h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100">
+                        <option value="">Todas las categorías</option>
+                        {CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                    </Select>
+                </label>
+                <label className="space-y-1 text-xs text-zinc-600 dark:text-zinc-300">Cuenta
+                    <Select aria-label="Cuenta de caja o banco" value={ledgerFilters.accountId}
+                        onChange={(event) => setLedgerFilters((current) => ({ ...current, accountId: event.target.value }))}
+                        className="min-h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100">
+                        <option value="">Todas las cuentas</option>
+                        {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
+                    </Select>
+                </label>
+                {hasLedgerFilters && <button type="button" onClick={() => setLedgerFilters({ category: '', accountId: '' })}
+                    className="min-h-11 rounded-lg border border-zinc-200 px-4 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">
+                    Quitar filtros
+                </button>}
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                 <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
                     <TrendingUp className="h-5 w-5 text-emerald-500" />
-                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Ingresos de esta página</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : formatCurrency(totals.income)}</p></div>
+                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Ingresos de la selección</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : formatCurrency(totals.income)}</p></div>
                 </div>
                 <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
                     <TrendingDown className="h-5 w-5 text-rose-500" />
-                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Egresos de esta página</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : formatCurrency(totals.expense)}</p></div>
+                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Egresos de la selección</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : formatCurrency(totals.expense)}</p></div>
+                </div>
+                <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
+                    <Wallet className="h-5 w-5 text-[#009EB9]" />
+                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Saldo de la selección</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : formatCurrency(Number(totals.net ?? (totals.income - totals.expense)))}</p></div>
                 </div>
                 <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
                     <FileSpreadsheet className="h-5 w-5 text-violet-500" />
-                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Registros con estos filtros</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : totalRecords}</p></div>
+                    <div><p className="text-xs text-zinc-500 dark:text-zinc-400">Movimientos de la selección</p><p className="font-semibold text-zinc-900 dark:text-white">{isLoading || searchPending || error ? '—' : totalRecords}</p></div>
                 </div>
             </div>
 
@@ -597,7 +636,11 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                 ) : error ? (
                     <div role="alert" className="flex flex-col items-center justify-center gap-3 py-16 text-sm text-destructive"><p className="flex items-center gap-2"><AlertCircle className="h-4 w-4 text-destructive" /> No fue posible cargar el libro.</p><button type="button" onClick={() => refetch()} className="min-h-11 rounded-lg border border-zinc-200 px-4 text-zinc-700 dark:border-white/10 dark:text-zinc-200">Reintentar</button></div>
                 ) : records.length === 0 ? (
-                    <div className="py-16 text-center"><Search className="mx-auto h-7 w-7 text-zinc-300" /><p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">No hay movimientos con estos filtros.</p></div>
+                    <div className="py-16 text-center">
+                        <Search className="mx-auto h-7 w-7 text-zinc-300" />
+                        <p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">No hay movimientos con estos filtros.</p>
+                        {hasLedgerFilters && <button type="button" onClick={() => setLedgerFilters({ category: '', accountId: '' })} className="mt-3 min-h-11 text-sm font-medium text-[#009EB9] underline">Ver todas las categorías y cuentas</button>}
+                    </div>
                 ) : (
                     <div className="overflow-x-auto">
                         <table className="min-w-[980px] w-full text-left text-sm">
@@ -668,7 +711,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Categoría<Select className={inputClass} value={form.category} onChange={(event) => setField('category', event.target.value)}>{CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Escenario<Select className={inputClass} value={form.scenario} onChange={(event) => setField('scenario', event.target.value)}>{SCENARIOS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cuenta de caja o banco<Select required={form.scenario === 'ACTUAL' && editingRecord?.origin !== 'IMPORT'} className={inputClass} value={form.accountId} onChange={(event) => setField('accountId', event.target.value)}><option value="">{form.scenario === 'ACTUAL' ? 'Seleccionar cuenta...' : 'Sin cuenta definida'}</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</Select></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<Select className={inputClass} value={form.clientId} onChange={(event) => setField('clientId', event.target.value)}><option value="">Sin cliente relacionado</option>{clients.map((client) => <option key={client.id} value={client.id}>{client.name}</option>)}</Select></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<Select className={inputClass} value={form.clientId} onChange={(event) => setField('clientId', event.target.value)}><option value="">Sin cliente relacionado</option>{clientChoices.map((client) => <option key={client.id} value={client.id}>{client.label}</option>)}</Select></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Contraparte<input className={inputClass} value={form.counterparty} onChange={(event) => setField('counterparty', event.target.value)} placeholder="Proveedor o persona" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Referencia<input className={inputClass} value={form.reference} onChange={(event) => setField('reference', event.target.value)} placeholder="Factura, transferencia..." /></label>
                         </div>
