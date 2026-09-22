@@ -39,25 +39,12 @@ import { cn } from '@/lib/utils';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import { clientOptions } from '@/utils/financialClients';
+import { FINANCIAL_CATEGORY_OPTIONS, financialCategoryLabel } from '@/lib/financialCategories';
 
 const PAGE_SIZE = 25;
 
-const CATEGORIES = [
-    ['MEMBRESIA', 'Membresía'],
-    ['SERVICIO', 'Servicio'],
-    ['PAUTA', 'Pauta'],
-    ['NOMINA', 'Nómina'],
-    ['LOGISTICA', 'Logística'],
-    ['ADMINISTRATIVO', 'Administrativo'],
-    ['TAX', 'Impuestos y tasas'],
-    ['FINANCIAL', 'Financiero y banco'],
-    ['OPERATIVO', 'Operativo'],
-    ['DONACION', 'Donaciones'],
-    ['SIEMBRA', 'Siembra'],
-    ['PRESTAMO', 'Préstamo']
-];
-
-const categoryLabel = (value) => CATEGORIES.find(([category]) => category === value)?.[1] || value;
+const CATEGORIES = FINANCIAL_CATEGORY_OPTIONS;
+const categoryLabel = financialCategoryLabel;
 
 // Breakdown lines are compared in cents, like the backend, so 0.1 + 0.2 still matches 0.3.
 const toCents = (value) => Math.round((Number(value) || 0) * 100);
@@ -128,12 +115,12 @@ const toForm = (record, year) => record ? {
     accountId: record.accountId || ''
 } : emptyForm(year);
 
-const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: '', type: '', q: '' }, searchPending = false, formatCurrency }) => {
+const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: '', type: '', category: '', q: '' }, searchPending = false, formatCurrency }) => {
     const queryClient = useQueryClient();
     const [page, setPage] = useState(1);
-    // Categoría y cuenta solo recortan el libro: los indicadores y las gráficas de arriba
-    // siguen describiendo el periodo completo, así que este filtro vive aquí y no en la barra global.
-    const [ledgerFilters, setLedgerFilters] = useState({ category: '', accountId: '' });
+    // La categoría viene de la barra de filtros de arriba, con el resto. La cuenta
+    // se elige tocando su tarjeta, que es donde ya se está mirando el saldo.
+    const [selectedAccountId, setSelectedAccountId] = useState('');
     const [isEditorOpen, setIsEditorOpen] = useState(false);
     const [editingRecord, setEditingRecord] = useState(null);
     const [form, setForm] = useState(() => emptyForm(selectedYear));
@@ -167,20 +154,20 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
     const canAdmin = hasFinancialPermission(currentUser, 'admin');
     const canWrite = hasFinancialPermission(currentUser, 'write');
 
-    useEffect(() => { setPage(1); }, [selectedYear, filters, ledgerFilters]);
+    useEffect(() => { setPage(1); }, [selectedYear, filters, selectedAccountId]);
 
     const queryString = useMemo(() => {
         const params = new URLSearchParams({ year: String(selectedYear), scenario: filters.scenario, page: String(page), pageSize: String(PAGE_SIZE), scope: 'active', status: 'POSTED' });
         if (filters.month) params.set('month', filters.month);
         if (filters.type) params.set('type', filters.type);
         if (filters.q) params.set('q', filters.q);
-        if (ledgerFilters.category) params.set('category', ledgerFilters.category);
-        if (ledgerFilters.accountId) params.set('accountId', ledgerFilters.accountId);
+        if (filters.category) params.set('category', filters.category);
+        if (selectedAccountId) params.set('accountId', selectedAccountId);
         return params.toString();
-    }, [filters, ledgerFilters, selectedYear, page]);
+    }, [filters, selectedAccountId, selectedYear, page]);
 
     const { data, isLoading, isFetching, error, refetch } = useQuery({
-        queryKey: ['financial-records', selectedYear, filters, ledgerFilters, page],
+        queryKey: ['financial-records', selectedYear, filters, selectedAccountId, page],
         queryFn: async () => {
             try {
                 const baseUrl = getApiBaseUrl();
@@ -241,7 +228,13 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
         if (record.type === 'EXPENSE') acc.expense += amount;
         return acc;
     }, { income: 0, expense: 0 }), [data?.totals, records]);
-    const hasLedgerFilters = Boolean(ledgerFilters.category || ledgerFilters.accountId);
+    // Una cuenta que deja de estar disponible no puede dejar el libro filtrado por
+    // algo que ya no se ve en pantalla y, por tanto, no se puede soltar.
+    useEffect(() => {
+        if (selectedAccountId && accounts.length && !accounts.some((account) => account.id === selectedAccountId)) {
+            setSelectedAccountId('');
+        }
+    }, [accounts, selectedAccountId]);
 
     const setField = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
@@ -568,15 +561,36 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
 
             {accounts.length > 0 && (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                    {accounts.map((account) => (
-                        <div key={account.id} className="flex items-center justify-between border-b border-zinc-200 py-3 dark:border-white/10">
-                            <div className="flex min-w-0 items-center gap-3">
-                                <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300"><Wallet className="h-4 w-4" /></span>
-                                <div className="min-w-0"><p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{account.name}</p><p className="text-xs text-zinc-500">{account.type === 'BANK' ? 'Banco' : account.type === 'CASH' ? 'Caja' : 'Otra cuenta'}</p></div>
+                    {accounts.map((account) => {
+                        const isActive = selectedAccountId === account.id;
+                        return (
+                            <div key={account.id} className="flex items-center justify-between border-b border-zinc-200 py-3 dark:border-white/10">
+                                <div className="flex min-w-0 items-center gap-3">
+                                    {/* Tocar la cuenta filtra el libro por ella; tocarla de nuevo lo suelta. */}
+                                    <button
+                                        type="button"
+                                        aria-pressed={isActive}
+                                        aria-label={isActive ? `Dejar de filtrar por ${account.name}` : `Filtrar los movimientos por ${account.name}`}
+                                        title={isActive ? 'Toca de nuevo para ver todas las cuentas' : 'Filtrar los movimientos por esta cuenta'}
+                                        onClick={() => setSelectedAccountId((current) => (current === account.id ? '' : account.id))}
+                                        className={cn(
+                                            'grid h-9 w-9 shrink-0 place-items-center rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#009EB9]/40',
+                                            isActive
+                                                ? 'bg-[#009EB9] text-white'
+                                                : 'bg-violet-50 text-violet-600 hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20'
+                                        )}
+                                    >
+                                        <Wallet className="h-4 w-4" />
+                                    </button>
+                                    <div className="min-w-0">
+                                        <p className={cn('truncate text-sm font-medium', isActive ? 'text-[#009EB9]' : 'text-zinc-900 dark:text-white')}>{account.name}</p>
+                                        <p className="text-xs text-zinc-500">{isActive ? 'Filtrando por esta cuenta' : account.type === 'BANK' ? 'Banco' : account.type === 'CASH' ? 'Caja' : 'Otra cuenta'}</p>
+                                    </div>
+                                </div>
+                                <div className="text-right"><p className="text-xs text-zinc-500">Saldo total de la cuenta</p><p className="text-sm font-semibold text-zinc-900 dark:text-white">{formatCurrency(Number(account.balance))}</p></div>
                             </div>
-                            <div className="text-right"><p className="text-xs text-zinc-500">Saldo total de la cuenta</p><p className="text-sm font-semibold text-zinc-900 dark:text-white">{formatCurrency(Number(account.balance))}</p></div>
-                        </div>
-                    ))}
+                        );
+                    })}
                 </div>
             )}
 
@@ -587,29 +601,6 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                     {canAdmin && selectedPeriod?.status === 'CLOSED' && <button type="button" onClick={() => { setReopenPeriodReason(''); setIsReopenPeriodOpen(true); }} className="rounded-lg border border-amber-200 px-3 py-2 text-sm font-medium text-amber-700 hover:bg-amber-50 dark:border-amber-400/20 dark:text-amber-300 dark:hover:bg-amber-400/10">Reabrir mes</button>}
                 </div>
             )}
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
-                <label className="space-y-1 text-xs text-zinc-600 dark:text-zinc-300">Categoría
-                    <Select aria-label="Categoría del movimiento" value={ledgerFilters.category}
-                        onChange={(event) => setLedgerFilters((current) => ({ ...current, category: event.target.value }))}
-                        className="min-h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100">
-                        <option value="">Todas las categorías</option>
-                        {CATEGORIES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-                    </Select>
-                </label>
-                <label className="space-y-1 text-xs text-zinc-600 dark:text-zinc-300">Cuenta
-                    <Select aria-label="Cuenta de caja o banco" value={ledgerFilters.accountId}
-                        onChange={(event) => setLedgerFilters((current) => ({ ...current, accountId: event.target.value }))}
-                        className="min-h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100">
-                        <option value="">Todas las cuentas</option>
-                        {accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}
-                    </Select>
-                </label>
-                {hasLedgerFilters && <button type="button" onClick={() => setLedgerFilters({ category: '', accountId: '' })}
-                    className="min-h-11 rounded-lg border border-zinc-200 px-4 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">
-                    Quitar filtros
-                </button>}
-            </div>
 
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                 <div className="flex items-center gap-3 border-b border-zinc-200 py-3 dark:border-white/10">
@@ -639,7 +630,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                     <div className="py-16 text-center">
                         <Search className="mx-auto h-7 w-7 text-zinc-300" />
                         <p className="mt-3 text-sm font-medium text-zinc-700 dark:text-zinc-200">No hay movimientos con estos filtros.</p>
-                        {hasLedgerFilters && <button type="button" onClick={() => setLedgerFilters({ category: '', accountId: '' })} className="mt-3 min-h-11 text-sm font-medium text-[#009EB9] underline">Ver todas las categorías y cuentas</button>}
+                        {selectedAccountId && <button type="button" onClick={() => setSelectedAccountId('')} className="mt-3 min-h-11 text-sm font-medium text-[#009EB9] underline">Ver todas las cuentas</button>}
                     </div>
                 ) : (
                     <div className="overflow-x-auto">

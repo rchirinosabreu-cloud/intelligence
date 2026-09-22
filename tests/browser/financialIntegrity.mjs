@@ -90,14 +90,17 @@ try {
   await page.getByRole('alert').filter({ hasText: /históricos marcados como pagados/ }).waitFor();
   await page.screenshot({ path: 'output/financial-legacy-review.png', fullPage: true, animations: 'disabled' });
 
-  // Filtro por categoría: la bolsa que se muestra es la de toda la selección, no la de la página.
+  // La categoría vive en la barra de filtros de arriba, con el resto, y acota
+  // tanto los indicadores como el libro. La bolsa es la de toda la selección.
   await page.goto(base);
   await page.getByRole('button', { name: 'Movimientos', exact: true }).click();
   const bag = async label => (await page.getByText(label, { exact: true }).locator('xpath=following-sibling::p').innerText()).replace(/\s/g, '');
   await page.getByText('Movimientos de la selección', { exact: true }).waitFor();
   assert.equal(await bag('Movimientos de la selección'), '62');
   assert.match(await bag('Ingresos de la selección'), /1\.100\.000/);
-  await chooseOption(page.getByRole('combobox', { name: 'Categoría del movimiento' }), 'ADMINISTRATIVO');
+  const categoryFilter = page.getByRole('combobox', { name: 'Categoría del movimiento' });
+  assert.equal(await categoryFilter.count(), 1, 'la categoría se elige en un solo sitio');
+  await chooseOption(categoryFilter, 'ADMINISTRATIVO');
   await page.getByText('10', { exact: true }).waitFor();
   // 10 de 62: el total es el de la selección completa, no el de los 25 de la página.
   assert.equal(await bag('Movimientos de la selección'), '10');
@@ -105,9 +108,23 @@ try {
   assert.match(await bag('Ingresos de la selección'), /\$0/);
   assert.match(await page.locator('tbody').innerText(), /Gasto administrativo/);
   assert.doesNotMatch(await page.locator('tbody').innerText(), /Ingreso de muestra/);
+  await page.getByText('Cartera y nómina no se clasifican por categoría', { exact: false }).waitFor();
   await page.screenshot({ path: 'output/financial-ledger-category.png', fullPage: true, animations: 'disabled' });
-  await page.getByRole('button', { name: 'Quitar filtros', exact: true }).click();
+  await chooseOption(categoryFilter, '');
   assert.equal(await bag('Movimientos de la selección'), '62');
+
+  // La cuenta se elige tocando su tarjeta; tocarla de nuevo la suelta.
+  const accountToggle = page.getByRole('button', { name: 'Filtrar los movimientos por Banco de muestra' });
+  await accountToggle.click();
+  await page.getByText('Filtrando por esta cuenta', { exact: true }).waitFor();
+  assert.equal(await accountToggle.count(), 0, 'la tarjeta activa cambia de etiqueta');
+  const releaseToggle = page.getByRole('button', { name: 'Dejar de filtrar por Banco de muestra' });
+  assert.equal(await releaseToggle.getAttribute('aria-pressed'), 'true');
+  assert.equal(await bag('Movimientos de la selección'), '62');
+  await page.screenshot({ path: 'output/financial-account-toggle.png', fullPage: true, animations: 'disabled' });
+  await releaseToggle.click();
+  assert.equal(await page.getByText('Filtrando por esta cuenta', { exact: true }).count(), 0, 'volver a tocarla la suelta');
+  assert.equal(await page.getByRole('button', { name: 'Filtrar los movimientos por Banco de muestra' }).getAttribute('aria-pressed'), 'false');
 
   // Un cliente archivado sigue debiendo: tiene que poder elegirse, marcado y después de los activos.
   await page.getByRole('button', { name: 'Registrar movimiento', exact: true }).click();

@@ -32,7 +32,15 @@ axios.defaults.adapter = async config => {
   for (const [key, value] of Object.entries(config.params || {})) url.searchParams.set(key, value);
   const body = typeof config.data === 'string' ? JSON.parse(config.data) : config.data;
   let data;
-  if (path.endsWith('/dashboard')) data = { cashFlow: [{ year: 2026, month: 9, income: income(), expense: 250000, netFlow: income() - 250000 }], categoriesDistribution: { INCOME: { SERVICIO: income() }, EXPENSE: { OPERATIVO: 250000 } }, accountsReceivable: debt.outstanding > 0 ? [{ client, clientId: client.id, totalOutstanding: debt.outstanding }] : [], payroll: { collaborators: [] }, sourceSummary: { totals: { income: income(), expense: 250000, netFlow: income() - 250000, receivable: debt.outstanding } } };
+  if (path.endsWith('/dashboard')) {
+    // Como el servidor: la categoría de la barra de filtros acota los indicadores
+    // y las gráficas, pero no la cartera, que no se clasifica por categoría.
+    const category = url.searchParams.get('category');
+    const scoped = records.filter(record => !category || record.category === category);
+    const scopedIncome = scoped.filter(record => record.type === 'INCOME').reduce((sum, record) => sum + Number(record.amount), 0);
+    const scopedExpense = category ? scoped.filter(record => record.type === 'EXPENSE').reduce((sum, record) => sum + Number(record.amount), 0) : 250000;
+    data = { cashFlow: [{ year: 2026, month: 9, income: scopedIncome, expense: scopedExpense, netFlow: scopedIncome - scopedExpense }], categoriesDistribution: { INCOME: { SERVICIO: scopedIncome }, EXPENSE: { OPERATIVO: scopedExpense } }, accountsReceivable: debt.outstanding > 0 ? [{ client, clientId: client.id, totalOutstanding: debt.outstanding }] : [], payroll: { collaborators: [] }, sourceSummary: { totals: { income: scopedIncome, expense: scopedExpense, netFlow: scopedIncome - scopedExpense, receivable: debt.outstanding } } };
+  }
   else if (path.endsWith('/accounts')) data = { accounts: [account] };
   else if (path === '/api/clients') data = url.searchParams.get('isArchived') === 'all' ? [client, archivedClient] : [client];
   else if (path.endsWith('/receivables-ledger')) {
