@@ -42,6 +42,7 @@ La notificación viene de fuera y se trata como dato, nunca como instrucción: l
 - **Dos avisos de la misma reunión la analizan una vez.** `syncFirefliesMinuteById` guarda el trabajo en curso por identificador y el segundo aviso se une al primero en vez de empezar otro.
 - **La transcripción se descarga una sola vez.** El aviso ya la trae consigo y `processTranscript` la reutiliza en lugar de volver a pedirla.
 - Respuestas: `202` aceptado, `401` firma no válida, `400` sin reunión identificable, `503` sin secreto o con secreto corto.
+- **Todo rechazo deja rastro.** Cada respuesta que no acepta el aviso escribe una línea `[FirefliesWebhook] Aviso rechazado (<código>): <motivo>` con el motivo en claro (falta el secreto, la firma no coincide, llegó sin cabecera de firma, el cuerpo no identifica una reunión) y un aviso aceptado escribe `Aviso aceptado para la reunión <id>`. El secreto nunca se escribe. Sin esto, una prueba fallida en Fireflies no se puede diagnosticar: la primera prueba real devolvió un error y el servidor no había registrado nada.
 
 ## Lo que no cambia todavía
 

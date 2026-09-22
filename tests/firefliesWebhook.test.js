@@ -121,6 +121,30 @@ test('an event that is not the transcript being ready is acknowledged and ignore
   }
 });
 
+test('every refusal leaves a trace, so a failed test can be diagnosed without guessing', async () => {
+  const warnings = [];
+  const logger = { warn: (...args) => warnings.push(args.join(' ')), error() {}, info() {} };
+
+  await run({ signature: sign(rawBody, 'otro-secreto'), logger });
+  assert.match(warnings.at(-1), /firma/i, 'a signature mismatch says so');
+
+  await run({ secret: '', logger });
+  assert.match(warnings.at(-1), /secreto/i);
+
+  const bad = { event: 'meeting.transcribed' };
+  const badRaw = Buffer.from(JSON.stringify(bad));
+  await run({ body: bad, rawBody: badRaw, signature: sign(badRaw), logger });
+  assert.match(warnings.at(-1), /reuni[óo]n/i);
+
+  const ignored = { event: 'meeting.bot_joined', meeting_id: 'abc123' };
+  const ignoredRaw = Buffer.from(JSON.stringify(ignored));
+  await run({ body: ignored, rawBody: ignoredRaw, signature: sign(ignoredRaw), logger });
+  assert.match(warnings.at(-1), /meeting\.bot_joined/);
+
+  // The secret itself never reaches the log.
+  assert.equal(warnings.some(line => line.includes(SECRET)), false);
+});
+
 test('a failing analysis never turns into a 500 that makes Fireflies retry forever', async () => {
   const errors = [];
   const { result, pending } = await run({
