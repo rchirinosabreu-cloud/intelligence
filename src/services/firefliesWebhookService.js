@@ -51,19 +51,40 @@ export const handleFirefliesWebhook = async ({
   scheduleWork = (work) => queueMicrotask(work),
   logger = console
 } = {}) => {
-  if (!secret) return { status: 503, body: { error: 'FIREFLIES_WEBHOOK_DISABLED', message: 'El aviso de Fireflies no está configurado.' } };
+  // Every refusal is logged: a door that rejects in silence cannot be operated,
+  // and the first real test failed with no trace of why. The secret is never
+  // written to the log, only what went wrong.
+  const refuse = (status, error, message, reason) => {
+    logger.warn?.(`[FirefliesWebhook] Aviso rechazado (${error}): ${reason}`);
+    return { status, body: { error, message } };
+  };
+
+  if (!secret) {
+    return refuse(503, 'FIREFLIES_WEBHOOK_DISABLED', 'El aviso de Fireflies no está configurado.',
+      'falta el secreto FIREFLIES_WEBHOOK_SECRET en el servidor.');
+  }
   if (String(secret).length < FIREFLIES_WEBHOOK_MIN_SECRET_LENGTH) {
-    logger.error(`[FirefliesWebhook] El secreto configurado tiene menos de ${FIREFLIES_WEBHOOK_MIN_SECRET_LENGTH} caracteres; el aviso queda desactivado.`);
-    return { status: 503, body: { error: 'FIREFLIES_WEBHOOK_SECRET_TOO_SHORT', message: 'El secreto configurado es demasiado corto.' } };
+    return refuse(503, 'FIREFLIES_WEBHOOK_SECRET_TOO_SHORT', 'El secreto configurado es demasiado corto.',
+      `el secreto del servidor tiene menos de ${FIREFLIES_WEBHOOK_MIN_SECRET_LENGTH} caracteres.`);
   }
   if (!verifyFirefliesSignature({ rawBody, signature, secret })) {
-    return { status: 401, body: { error: 'FIREFLIES_WEBHOOK_SIGNATURE_INVALID', message: 'Firma no válida.' } };
+    return refuse(401, 'FIREFLIES_WEBHOOK_SIGNATURE_INVALID', 'Firma no válida.',
+      signature
+        ? 'la firma no coincide; revisa que el secreto de Fireflies sea el mismo que el del servidor.'
+        : 'el aviso llegó sin la cabecera de firma x-hub-signature.');
   }
   const payload = parseFirefliesWebhookPayload(body);
-  if (!payload) return { status: 400, body: { error: 'FIREFLIES_WEBHOOK_PAYLOAD_INVALID', message: 'El aviso no identifica una reunión.' } };
+  if (!payload) {
+    return refuse(400, 'FIREFLIES_WEBHOOK_PAYLOAD_INVALID', 'El aviso no identifica una reunión.',
+      'el cuerpo no trae un identificador de reunión utilizable.');
+  }
   // Acknowledged so Fireflies does not record a failed delivery, but no work:
   // only the transcript being ready starts an analysis.
-  if (!isTranscriptionReadyEvent(payload.event)) return { status: 202, body: { accepted: true, ignored: true } };
+  if (!isTranscriptionReadyEvent(payload.event)) {
+    logger.warn?.(`[FirefliesWebhook] Aviso ignorado: el evento ${payload.event} no es una transcripción lista.`);
+    return { status: 202, body: { accepted: true, ignored: true } };
+  }
+  logger.info?.(`[FirefliesWebhook] Aviso aceptado para la reunión ${payload.meetingId}.`);
 
   // Answer before analysing: a webhook that waits for the model times out and
   // Fireflies resends it. A failure here is ours to log, not theirs to retry.
