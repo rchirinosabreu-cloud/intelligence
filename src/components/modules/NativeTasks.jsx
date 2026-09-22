@@ -31,8 +31,9 @@ import {
     RefreshCw,
     Tag
 } from '@/components/ui/icons';
-import { bogotaTimeOf, findFocusTaskFor, focusLockMessage, getTaskLock, isActiveFocusTask, isFocusOverdue, nextLockReaction } from '@/lib/taskFocus';
+import { bogotaTimeOf, findFocusTaskFor, focusLockMessage, getTaskLock, hasSeenFocusNotice, isActiveFocusTask, isFocusOverdue, markFocusNoticeSeen, nextLockReaction } from '@/lib/taskFocus';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
+import FocusCommitmentNotice from '@/components/tasks/FocusCommitmentNotice';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -664,11 +665,29 @@ const NativeTasks = () => {
         const interval = window.setInterval(() => setOverdueTick((value) => value + 1), 60_000);
         return () => window.clearInterval(interval);
     }, []);
-    const myOverdueFocusTask = useMemo(() => {
+    const myFocusTask = useMemo(() => {
         if (viewerIsManager || !currentUser?.id) return null;
-        const focusTask = findFocusTaskFor(tasks, { assigneeUserId: currentUser.id });
-        return focusTask && isFocusOverdue(focusTask) ? focusTask : null;
-    }, [tasks, currentUser?.id, viewerIsManager, overdueTick]);
+        return findFocusTaskFor(tasks, { assigneeUserId: currentUser.id });
+    }, [tasks, currentUser?.id, viewerIsManager]);
+    const myOverdueFocusTask = useMemo(
+        () => (myFocusTask && isFocusOverdue(myFocusTask) ? myFocusTask : null),
+        [myFocusTask, overdueTick]
+    );
+
+    // The first time the person meets each commitment, a short notice explains what it means (Rodny, 22 September
+    // 2026). Not while the timing tutorial or the overdue dialog are on screen: one explanation at a time.
+    const [focusNoticeTask, setFocusNoticeTask] = useState(null);
+    useEffect(() => {
+        // If the hour passes while the notice is open, the mandatory dialog takes over.
+        if (myOverdueFocusTask && focusNoticeTask) { setFocusNoticeTask(null); return; }
+        if (!myFocusTask || myOverdueFocusTask || focusNoticeTask || isTimingTutorialOpen) return;
+        if (hasSeenFocusNotice(window.localStorage, tutorialUserId, myFocusTask.id)) return;
+        setFocusNoticeTask(myFocusTask);
+    }, [myFocusTask, myOverdueFocusTask, focusNoticeTask, isTimingTutorialOpen, tutorialUserId]);
+    const closeFocusNotice = () => {
+        if (focusNoticeTask) markFocusNoticeSeen(window.localStorage, tutorialUserId, focusNoticeTask.id);
+        setFocusNoticeTask(null);
+    };
     useEffect(() => {
         if (!myOverdueFocusTask || extensionTask) return;
         // The hour just granted travels in the ref until the board refetches, so the dialog does not flash back.
@@ -1167,6 +1186,8 @@ const NativeTasks = () => {
                     </DialogFooter>
                 </DialogContent>
             </Dialog>
+
+            <FocusCommitmentNotice task={focusNoticeTask} open={!!focusNoticeTask} onClose={closeFocusNotice} />
 
             <FocusExtensionDialog
                 task={extensionTask}
