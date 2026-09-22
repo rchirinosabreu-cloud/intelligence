@@ -2,6 +2,7 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
+import { Toaster } from 'react-hot-toast';
 import axios from 'axios';
 import { AuthProvider } from '../../src/context/AuthContext';
 import FinancialDashboard from '../../src/components/modules/FinancialDashboard';
@@ -24,7 +25,8 @@ if (new URLSearchParams(location.search).has('legacyPaid')) debt = { ...debt, ou
 const isAdminExpense = (i) => i >= 40 && i < 50;
 let records = Array.from({ length: 62 }, (_, i) => ({ id: `demo-record-${i}`, clientId: client.id, client, date: '2026-09-07T05:00:00Z', year: 2026, month: 9, amount: i ? 10000 : 200000, type: isAdminExpense(i) ? 'EXPENSE' : 'INCOME', category: isAdminExpense(i) ? 'ADMINISTRATIVO' : 'SERVICIO', status: 'POSTED', scenario: 'ACTUAL', origin: 'MANUAL', description: isAdminExpense(i) ? `Gasto administrativo ${i + 1}` : (i ? `Ingreso de muestra ${i + 1}` : 'Adicional ya registrado'), accountId: account.id, account, reference: `DEMO-${i}` }));
 const income = () => records.filter(record => record.type === 'INCOME').reduce((sum, record) => sum + Number(record.amount), 0);
-records[1] = { ...records[1], amount: 400000, attachmentUrl: 'https://example.invalid/soporte.pdf', receivablePayment: { id: 'historical-payment', receivableId: debt.id } };
+// El ingreso que generó un abono: no se edita ni se anula desde Movimientos.
+records[1] = { ...records[1], amount: 400000, origin: 'SYSTEM', description: 'Pago de cartera: Cliente de muestra', attachmentUrl: 'https://example.invalid/soporte.pdf', receivablePayment: { id: 'historical-payment', receivableId: debt.id } };
 records[2] = { ...records[2], attachmentUrl: 'javascript:alert(1)' };
 if (!debt.balanceReviewRequired) debt.payments = [{ id: 'historical-payment', amount: 400000, paidAt: '2026-09-01T05:00:00Z', reference: 'ABONO-01', account, financialRecord: records[1] }];
 axios.defaults.adapter = async config => {
@@ -88,4 +90,4 @@ axios.defaults.adapter = async config => {
   return { data, status: 200, statusText: 'OK', headers: {}, config };
 };
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-createRoot(document.getElementById('root')).render(<QueryClientProvider client={queryClient}><AuthProvider><MemoryRouter><div className="bg-zinc-50 p-4 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 sm:p-8"><div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 pb-4 text-sm dark:border-zinc-700"><p>Muestra local · datos ficticios en memoria · nada se guarda en producción</p><button className="min-h-11 rounded-lg border border-zinc-300 px-4 dark:border-zinc-700" onClick={() => document.documentElement.classList.toggle('dark')}>Cambiar tema</button></div><FinancialDashboard /></div></MemoryRouter></AuthProvider></QueryClientProvider>);
+createRoot(document.getElementById('root')).render(<QueryClientProvider client={queryClient}><AuthProvider><MemoryRouter><div className="bg-zinc-50 p-4 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100 sm:p-8"><div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-zinc-200 pb-4 text-sm dark:border-zinc-700"><p>Muestra local · datos ficticios en memoria · nada se guarda en producción</p><button className="min-h-11 rounded-lg border border-zinc-300 px-4 dark:border-zinc-700" onClick={() => document.documentElement.classList.toggle('dark')}>Cambiar tema</button></div><FinancialDashboard /><Toaster position="top-right" /></div></MemoryRouter></AuthProvider></QueryClientProvider>);

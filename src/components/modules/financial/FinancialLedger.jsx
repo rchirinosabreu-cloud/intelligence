@@ -45,6 +45,17 @@ const PAGE_SIZE = 25;
 const CATEGORIES = FINANCIAL_CATEGORY_OPTIONS;
 const categoryLabel = financialCategoryLabel;
 
+// Un movimiento nacido de otra operación no se edita ni se anula aquí. La pantalla
+// lo sabe por el propio registro y lo dice al tocarlo, en vez de dejar que el
+// servidor lo rechace con un error después de escribir el motivo.
+const lockReason = (record) => {
+    if (record?.receivablePayment) return 'Es el ingreso de un abono de cartera. Para deshacerlo ve a Cartera, abre la obligación del cliente y usa «Revertir» en ese abono: este movimiento se anulará solo.';
+    if (record?.payrollTransaction) return 'Es el pago de una liquidación de nómina. Se corrige desde Nómina, sobre la liquidación que lo generó.';
+    if (record?.bankMatches?.length) return 'Tiene una conciliación bancaria aprobada. Primero hay que deshacer esa conciliación.';
+    if (record?.origin === 'SYSTEM') return 'Lo generó otro proceso de la plataforma, no se registró a mano. Se corrige desde donde se originó.';
+    return null;
+};
+
 // Breakdown lines are compared in cents, like the backend, so 0.1 + 0.2 still matches 0.3.
 const toCents = (value) => Math.round((Number(value) || 0) * 100);
 const MAX_ALLOCATION_LINES = 20;
@@ -672,7 +683,29 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                                         <td className="p-3"><span className={cn('inline-flex rounded-md px-2 py-1 text-xs font-medium', scenarioTone[record.scenario])}>{SCENARIOS.find(([value]) => value === record.scenario)?.[1] || record.scenario}</span></td>
                                         <td className="p-3 text-xs text-zinc-500">{record.origin === 'IMPORT' ? 'Importado' : 'Manual'}</td>
                                         <td className={cn('p-3 text-right font-semibold', record.type === 'INCOME' ? 'text-emerald-600' : 'text-rose-600')}>{record.type === 'INCOME' ? '+' : '-'} {formatCurrency(Number(record.amount))}</td>
-                                        <td className="p-3">{canWrite && <div className="flex justify-end gap-1"><button type="button" title="Editar movimiento" onClick={() => openEdit(record)} className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-violet-600 dark:hover:bg-white/10"><Edit className="h-4 w-4" /></button><button type="button" title="Anular movimiento" onClick={() => { setRecordToVoid(record); setVoidReason(''); }} className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10"><StopCircle className="h-4 w-4" /></button></div>}</td>
+                                        <td className="p-3">{canWrite && (() => {
+                                            const locked = lockReason(record);
+                                            const explain = () => toast(locked, { duration: 9000, icon: '🔒' });
+                                            return (
+                                                // Sin `disabled` ni `aria-disabled`: el botón sí hace algo, explica por qué
+                                                // no se puede aquí y a dónde ir. Marcarlo como deshabilitado lo escondería
+                                                // del teclado y de un lector de pantalla justo cuando más hace falta.
+                                                <div className="flex justify-end gap-1">
+                                                    <button type="button" title={locked || 'Editar movimiento'}
+                                                        aria-label={locked ? `No se puede editar aquí. ${locked}` : 'Editar movimiento'}
+                                                        onClick={() => (locked ? explain() : openEdit(record))}
+                                                        className={cn('grid h-8 w-8 place-items-center rounded-md', locked ? 'text-zinc-300 hover:bg-zinc-100 dark:text-zinc-600 dark:hover:bg-white/10' : 'text-zinc-500 hover:bg-zinc-100 hover:text-violet-600 dark:hover:bg-white/10')}>
+                                                        <Edit className="h-4 w-4" />
+                                                    </button>
+                                                    <button type="button" title={locked || 'Anular movimiento'}
+                                                        aria-label={locked ? `No se puede anular aquí. ${locked}` : 'Anular movimiento'}
+                                                        onClick={() => { if (locked) { explain(); return; } setRecordToVoid(record); setVoidReason(''); }}
+                                                        className={cn('grid h-8 w-8 place-items-center rounded-md', locked ? 'text-zinc-300 hover:bg-zinc-100 dark:text-zinc-600 dark:hover:bg-white/10' : 'text-zinc-500 hover:bg-rose-50 hover:text-rose-600 dark:hover:bg-rose-500/10')}>
+                                                        <StopCircle className="h-4 w-4" />
+                                                    </button>
+                                                </div>
+                                            );
+                                        })()}</td>
                                     </tr>
                                 ))}
                             </tbody>

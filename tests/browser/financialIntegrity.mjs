@@ -6,7 +6,7 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH 
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
   await page.goto(base);
-  await page.getByRole('button', { name: /Cartera/ }).click();
+  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
   const row = page.getByRole('button', { name: /Cliente de muestra/ });
   await row.waitFor();
   assert.match(await row.innerText(), /800[.,]000/);
@@ -31,7 +31,7 @@ try {
   assert.match(await row.innerText(), /600[.,]000/);
   await page.getByRole('button', { name: 'Clientes', exact: true }).click();
   assert.match(await page.locator('tbody').innerText(), /600[.,]000/);
-  await page.getByRole('button', { name: /Cartera/ }).click();
+  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
   await page.screenshot({ path: 'output/financial-cartera-preview.png', fullPage: true, animations: 'disabled' });
   await page.getByRole('button', { name: 'Cambiar tema' }).click();
   await page.screenshot({ path: 'output/financial-cartera-dark.png', fullPage: true, animations: 'disabled' });
@@ -62,7 +62,7 @@ try {
   await page.getByText('Movimiento bancario 90', { exact: true }).waitFor();
   await page.screenshot({ path: 'output/financial-bank-preview.png', fullPage: true, animations: 'disabled' });
   await page.goto(`${base}?paymentError=1`);
-  await page.getByRole('button', { name: /Cartera/ }).click();
+  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
   await page.getByRole('button', { name: /Cliente de muestra/ }).click();
   await page.getByRole('button', { name: 'Registrar pago', exact: true }).click();
   await chooseOption(page.getByLabel('Concepto del ingreso'), 'SERVICIO');
@@ -71,16 +71,16 @@ try {
   await page.getByRole('dialog').getByText('Pago no guardado (simulado)').waitFor();
   assert.equal(await page.getByText('Pago de cartera registrado.').count(), 0);
   await page.goto(`${base}?carteraError=1`);
-  await page.getByRole('button', { name: /Cartera/ }).click();
+  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
   await page.getByText('No fue posible cargar la cartera.').waitFor();
   assert.equal(await page.getByText('¡Cartera 100% al día!').count(), 0);
   await page.goto(`${base}?viewer=reader`);
-  await page.getByRole('button', { name: /Cartera/ }).click();
+  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
   await page.getByRole('button', { name: /Cliente de muestra/ }).click();
   assert.equal(await page.getByRole('button', { name: 'Registrar pago', exact: true }).count(), 0);
   assert.equal(await page.getByLabel('Estado de seguimiento').isDisabled(), true);
   await page.goto(`${base}?legacyPaid=1`);
-  await page.getByRole('button', { name: /Cartera/ }).click();
+  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
   const legacyRow = page.getByRole('button', { name: /Cliente de muestra/ });
   assert.match(await legacyRow.innerText(), /Saldo por verificar/);
   assert.doesNotMatch(await legacyRow.innerText(), /Sin saldo pendiente/);
@@ -119,6 +119,18 @@ try {
   await chooseOption(categoryFilter, '');
   assert.equal(await rowCount(), '62');
 
+  // El ingreso de un abono no se anula desde Movimientos: la pantalla lo dice al
+  // tocarlo y nombra dónde sí se puede, en vez de dejar escribir un motivo para nada.
+  const lockedVoid = page.getByRole('button', { name: /No se puede anular aquí/ });
+  await lockedVoid.first().waitFor();
+  assert.match(await lockedVoid.first().getAttribute('aria-label'), /Cartera[\s\S]*Revertir/);
+  await lockedVoid.first().click();
+  await page.getByText(/ve a Cartera, abre la obligación del cliente y usa «Revertir»/).waitFor();
+  assert.equal(await page.getByRole('dialog').count(), 0, 'no se abre el diálogo de anular');
+  await page.screenshot({ path: 'output/financial-locked-movement.png', animations: 'disabled' });
+  // Un movimiento normal sí conserva sus acciones.
+  assert.ok(await page.getByRole('button', { name: 'Anular movimiento' }).count() > 0);
+
   // La cuenta se elige tocando su tarjeta; tocarla de nuevo la suelta.
   const accountToggle = page.getByRole('button', { name: 'Filtrar los movimientos por Banco de muestra' });
   await accountToggle.click();
@@ -149,7 +161,7 @@ try {
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
 
   // Reversión de un abono: exige motivo, devuelve el saldo y conserva el abono como evidencia.
-  await page.getByRole('button', { name: /Cartera/ }).click();
+  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
   const reversalRow = page.getByRole('button', { name: /Cliente de muestra/ });
   await reversalRow.click();
   await page.getByText('ABONOS DE ESTA OBLIGACIÓN', { exact: false }).waitFor();
