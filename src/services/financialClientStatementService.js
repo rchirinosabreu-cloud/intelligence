@@ -8,6 +8,7 @@ const debtFields = {
   id: true, clientId: true, period: true, dueDate: true, amount: true, status: true, notes: true, comments: true, metadata: true,
   payments: { orderBy: [{ paidAt: 'asc' }, { id: 'asc' }], select: {
     id: true, amount: true, paidAt: true, reference: true, account: accountSelect,
+    reversedAt: true, reversalReason: true,
     financialRecord: { select: { ...incomeFields, clientId: true, type: true, status: true, scenario: true, isProjection: true } }
   } }
 };
@@ -17,6 +18,9 @@ function presentDebt(row) {
   const amount = financialCents(row.amount);
   let paid = 0, invalidPaid = false, review = amount === null || amount <= 0;
   for (const payment of row.payments) {
+    // Un abono revertido se muestra como evidencia, pero no suma ni se revisa su vínculo:
+    // el ingreso quedó anulado o desvinculado a propósito.
+    if (payment.reversedAt) continue;
     const cents = financialCents(payment.amount), record = payment.financialRecord;
     if (cents === null || cents <= 0 || !Number.isSafeInteger(paid + cents)) { review = true; invalidPaid = true; }
     else paid += cents;

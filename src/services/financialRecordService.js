@@ -152,6 +152,15 @@ export const assertOpenFinancialPeriod = async (tx, year, month) => {
 
 const actorIdFrom = (actor) => actor?.id || actor?.userId || null;
 
+// Prisma devuelve Decimal en las agregaciones; la presentación trabaja en números redondeados a dos decimales.
+const toAmount = (value) => {
+    if (value === undefined || value === null) return 0;
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    if (typeof value.toNumber === 'function') return value.toNumber();
+    return Number.parseFloat(value) || 0;
+};
+const roundAmount = (value) => Math.round((value + Number.EPSILON) * 100) / 100;
+
 const auditSnapshot = (value) => JSON.parse(JSON.stringify(value));
 
 export const createFinancialRecord = async (prismaClient, input, actor) => {
@@ -244,7 +253,7 @@ export const listFinancialRecords = async (prismaClient, filters = {}) => {
     }
     where = withFinancialSearch(where, filters.q);
 
-    const [items, total] = await Promise.all([
+    const [items, total, sums] = await Promise.all([
         prismaClient.financialRecord.findMany({
             where,
             orderBy: [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }],
@@ -258,10 +267,23 @@ export const listFinancialRecords = async (prismaClient, filters = {}) => {
                 documents: { orderBy: { uploadedAt: 'asc' } }
             }
         }),
-        prismaClient.financialRecord.count({ where })
+        prismaClient.financialRecord.count({ where }),
+        // La bolsa de la selección completa, no la de la página: filtrar por una categoría
+        // sirve para saber cuánto suma, y ese total no puede depender de dónde esté el cursor.
+        typeof prismaClient.financialRecord.groupBy === 'function'
+            ? prismaClient.financialRecord.groupBy({ by: ['type'], where, _sum: { amount: true } })
+            : []
     ]);
 
-    return { items, total, page, pageSize };
+    const totals = (Array.isArray(sums) ? sums : []).reduce((acc, row) => {
+        const amount = toAmount(row?._sum?.amount);
+        if (row?.type === 'INCOME') acc.income = roundAmount(acc.income + amount);
+        if (row?.type === 'EXPENSE') acc.expense = roundAmount(acc.expense + amount);
+        return acc;
+    }, { income: 0, expense: 0 });
+    totals.net = roundAmount(totals.income - totals.expense);
+
+    return { items, total, page, pageSize, totals };
 };
 
 const dateInputFrom = (date) => {

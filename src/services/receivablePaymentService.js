@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
+import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
 import {
     assertOpenFinancialPeriod,
     FinancialDomainError,
@@ -7,11 +8,15 @@ import {
 } from './financialRecordService.js';
 
 const PAYMENT_CATEGORIES = new Set(['MEMBRESIA', 'SERVICIO', 'PAUTA']);
+export const REVERSAL_REASON_MAX = 300;
+// Los abonos se leen ya filtrados, pero el saldo vuelve a comprobar `reversedAt`:
+// una consulta futura que olvide el filtro no puede inventar dinero aplicado.
+const activePaymentsOf = (receivable) => (receivable.payments || []).filter((payment) => !payment.reversedAt);
 const normalizeText = (value) => String(value || '').trim() || null;
 const outstandingCentsOf = (receivable) => {
     const amountCents = financialCents(receivable.amount);
     let paidCents = 0;
-    for (const payment of receivable.payments || []) {
+    for (const payment of activePaymentsOf(receivable)) {
         const cents = financialCents(payment.amount);
         if (cents === null || !Number.isSafeInteger(paidCents + cents)) {
             throw new FinancialDomainError('RECEIVABLE_BALANCE_INVALID', 'Los pagos históricos requieren revisión de precisión antes de registrar otro abono.', 409);
@@ -70,12 +75,17 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
             if (paymentId) {
                 const previousPayment = await tx.receivablePayment.findUnique({
                     where: { id: paymentId },
-                    include: { financialRecord: true, receivable: { include: { payments: { select: { amount: true } } } } }
+                    include: { financialRecord: true, receivable: { include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, reversedAt: true } } } } }
                 });
                 if (previousPayment) {
                     const previousAudit = await tx.financialAuditEvent.findUnique({ where: { id: auditId } });
                     if (previousAudit?.after?.requestFingerprint !== requestFingerprint || previousPayment.receivableId !== receivableId) {
                         throw new FinancialDomainError('RECEIVABLE_PAYMENT_IDEMPOTENCY_CONFLICT', 'Este intento ya se utilizó para otro pago o con otros datos. Consulta el pago registrado antes de iniciar una operación nueva.', 409);
+                    }
+                    // Un reintento no puede resucitar un abono revertido ni volver a aplicarlo en silencio:
+                    // para cobrarlo otra vez hay que registrarlo de nuevo, con su propio identificador.
+                    if (previousPayment.reversedAt) {
+                        throw new FinancialDomainError('RECEIVABLE_PAYMENT_REVERSED', 'Este intento corresponde a un abono que ya fue revertido. Registra un abono nuevo si el pago sigue vigente.', 409);
                     }
                     if (!previousPayment.financialRecord || !previousPayment.receivable) {
                         throw new FinancialDomainError('RECEIVABLE_PAYMENT_REPLAY_UNAVAILABLE', 'El pago ya existe, pero su vínculo requiere revisión. No se generó otro ingreso.', 409);
@@ -87,7 +97,7 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
 
             const receivable = await tx.accountsReceivable.findUnique({
                 where: { id: receivableId },
-                include: { payments: { select: { amount: true } } }
+                include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, reversedAt: true } } }
             });
             if (!receivable) {
                 throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
@@ -202,6 +212,149 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
     } catch (error) {
         if (error?.code === 'P2034' || error?.code === 'P2002') {
             throw new FinancialDomainError('RECEIVABLE_PAYMENT_CONFLICT', 'Otro proceso modificó el pago o la cuenta por cobrar. Actualiza los datos y reintenta conservando el mismo identificador para no duplicar el ingreso.', 409);
+        }
+        throw error;
+    }
+};
+
+const cloneForAudit = (value) => JSON.parse(JSON.stringify(value));
+
+/**
+ * Revierte un abono mal registrado y corrige todos sus efectos en una sola transacción.
+ *
+ * El abono nunca se borra: queda marcado con su motivo y deja de sumar, de modo que la
+ * cartera vuelve al saldo que tenía antes sin perder la evidencia de lo ocurrido.
+ *
+ * El ingreso asociado se trata según su origen:
+ *  - SYSTEM: lo creó este mismo flujo, así que se anula. Ese dinero no existía por su cuenta.
+ *  - MANUAL/IMPORT: es un ingreso que ya estaba registrado y solo se había aplicado a la
+ *    cartera. Se desvincula y se conserva intacto, para poder aplicarlo donde corresponda.
+ */
+export const reverseReceivablePayment = async (prismaClient, paymentId, input = {}, actor) => {
+    const reason = String(input.reason || '').trim();
+    if (!reason) {
+        throw new FinancialDomainError('RECEIVABLE_PAYMENT_REVERSAL_REASON_REQUIRED', 'Explica por qué se revierte el abono.');
+    }
+    if (reason.length > REVERSAL_REASON_MAX) {
+        throw new FinancialDomainError('RECEIVABLE_PAYMENT_REVERSAL_REASON_TOO_LONG', `El motivo admite como máximo ${REVERSAL_REASON_MAX} caracteres.`);
+    }
+    const actorId = actor?.id || actor?.userId || null;
+
+    try {
+        return await prismaClient.$transaction(async (tx) => {
+            const payment = await tx.receivablePayment.findUnique({
+                where: { id: paymentId },
+                include: {
+                    financialRecord: true,
+                    receivable: { include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { id: true, amount: true, reversedAt: true } } } }
+                }
+            });
+            if (!payment) {
+                throw new FinancialDomainError('RECEIVABLE_PAYMENT_NOT_FOUND', 'El abono no existe.', 404);
+            }
+            if (payment.reversedAt) {
+                throw new FinancialDomainError('RECEIVABLE_PAYMENT_ALREADY_REVERSED', 'Este abono ya fue revertido.', 409);
+            }
+            const receivable = payment.receivable;
+            if (!receivable) {
+                throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar del abono no existe.', 409);
+            }
+
+            // El mes del abono y el del ingreso son el mismo por contrato, pero un cierre
+            // parcial no puede dejar media reversión aplicada: se comprueban los dos.
+            const paidAt = new Date(payment.paidAt);
+            if (Number.isNaN(paidAt.getTime())) {
+                throw new FinancialDomainError('RECEIVABLE_BALANCE_INVALID', 'La fecha del abono requiere revisión antes de revertirlo.', 409);
+            }
+            const { year, month } = parseFinancialDateInput(paidAt.toISOString().slice(0, 10));
+            await assertOpenFinancialPeriod(tx, year, month);
+            const record = payment.financialRecord;
+            if (record && (record.year !== year || record.month !== month)) {
+                await assertOpenFinancialPeriod(tx, record.year, record.month);
+            }
+
+            const amountCents = financialCents(payment.amount);
+            if (amountCents === null || amountCents <= 0) {
+                throw new FinancialDomainError('RECEIVABLE_BALANCE_INVALID', 'El importe del abono requiere revisión antes de revertirlo.', 409);
+            }
+
+            let voidedRecord = null;
+            if (record && record.status !== 'VOIDED') {
+                if (record.origin === 'SYSTEM') {
+                    voidedRecord = await tx.financialRecord.update({
+                        where: { id: record.id },
+                        data: { status: 'VOIDED', voidedAt: new Date(), voidReason: `Reversión del abono: ${reason}` }
+                    });
+                    await tx.financialAuditEvent.create({
+                        data: {
+                            entityType: 'FinancialRecord',
+                            entityId: record.id,
+                            action: 'VOID',
+                            before: cloneForAudit(record),
+                            after: cloneForAudit(voidedRecord),
+                            actorId
+                        }
+                    });
+                }
+            }
+
+            const reversedPayment = await tx.receivablePayment.update({
+                where: { id: paymentId },
+                data: {
+                    reversedAt: new Date(),
+                    reversalReason: reason,
+                    reversedById: actorId,
+                    // Se suelta el vínculo para que un ingreso preexistente vuelva a estar
+                    // disponible; el enlace original queda en `before` de la auditoría.
+                    financialRecordId: null
+                }
+            });
+
+            let paidCents = 0;
+            for (const other of receivable.payments) {
+                if (other.id === paymentId || other.reversedAt) continue;
+                const cents = financialCents(other.amount);
+                if (cents === null || !Number.isSafeInteger(paidCents + cents)) {
+                    throw new FinancialDomainError('RECEIVABLE_BALANCE_INVALID', 'Los abonos restantes requieren revisión de precisión antes de revertir este.', 409);
+                }
+                paidCents += cents;
+            }
+            const totalCents = financialCents(receivable.amount);
+            if (totalCents === null || totalCents <= 0 || paidCents > totalCents) {
+                throw new FinancialDomainError('RECEIVABLE_BALANCE_INVALID', 'El saldo de la cuenta por cobrar requiere revisión antes de revertir un abono.', 409);
+            }
+            const outstandingCents = totalCents - paidCents;
+            const outstanding = financialAmountFromCents(outstandingCents);
+            const updatedReceivable = await tx.accountsReceivable.update({
+                where: { id: receivable.id },
+                data: { status: outstandingCents === 0 ? 'PAGADO' : (receivable.status === 'PROMESADO' ? 'PROMESADO' : 'DEBE') }
+            });
+
+            await tx.financialAuditEvent.create({
+                data: {
+                    entityType: 'ReceivablePayment',
+                    entityId: paymentId,
+                    action: 'VOID',
+                    // El abono tal como estaba, con su vínculo al ingreso: es la evidencia de lo revertido.
+                    before: cloneForAudit({ ...payment, financialRecord: undefined, receivable: undefined }),
+                    after: {
+                        reversalReason: reason,
+                        reversedAt: reversedPayment.reversedAt,
+                        receivableId: receivable.id,
+                        receivableStatus: updatedReceivable.status,
+                        outstanding,
+                        unlinkedFinancialRecordId: record?.id || null,
+                        voidedFinancialRecordId: voidedRecord?.id || null
+                    },
+                    actorId
+                }
+            });
+
+            return { payment: reversedPayment, receivable: updatedReceivable, outstanding, voidedRecord, unlinkedRecordId: voidedRecord ? null : (record?.id || null) };
+        }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+        if (error?.code === 'P2034' || error?.code === 'P2002') {
+            throw new FinancialDomainError('RECEIVABLE_PAYMENT_CONFLICT', 'Otro proceso modificó el abono o la cuenta por cobrar. Actualiza los datos y vuelve a intentarlo.', 409);
         }
         throw error;
     }

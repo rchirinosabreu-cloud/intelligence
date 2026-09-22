@@ -17,7 +17,7 @@ import {
     openFinancialRecordDocument,
     voidFinancialRecordDocument
 } from '../services/financialRecordDocumentService.js';
-import { createReceivablePayment } from '../services/receivablePaymentService.js';
+import { createReceivablePayment, reverseReceivablePayment } from '../services/receivablePaymentService.js';
 import { createReceivable } from '../services/financialReceivableService.js';
 import { auditFinancialIntegrity } from '../services/financialIntegrityAuditService.js';
 import { createFinancialAccount, listFinancialAccounts } from '../services/financialAccountService.js';
@@ -239,6 +239,23 @@ export const createReceivablePaymentHandler = async (req, res, dependencies = {}
     } catch (error) {
         console.error('[Receivable payments API] Create failed:', error.response?.data || error);
         return respondWithError(res, error, 'RECEIVABLE_PAYMENT_CREATE_FAILED', 'No fue posible registrar el pago de cartera.');
+    }
+};
+
+export const reverseReceivablePaymentHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const reversePayment = dependencies.reversePayment || reverseReceivablePayment;
+    try {
+        const result = await reversePayment(prismaClient, req.params.paymentId, req.body || {}, req.user);
+        return res.json({
+            message: result.voidedRecord
+                ? 'Abono revertido. El ingreso que había generado quedó anulado.'
+                : 'Abono revertido. El ingreso vinculado se conservó y vuelve a estar disponible.',
+            ...result
+        });
+    } catch (error) {
+        console.error('[Receivable payments API] Reversal failed:', error.response?.data || error);
+        return respondWithError(res, error, 'RECEIVABLE_PAYMENT_REVERSAL_FAILED', 'No fue posible revertir el abono.');
     }
 };
 

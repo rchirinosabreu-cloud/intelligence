@@ -8,12 +8,35 @@ const bank = fs.readFileSync(new URL('../src/components/modules/financial/BankRe
 test('ledger requests explicit pages and exposes navigation instead of silently limiting records', () => {
   assert.match(ledger, /page: String\(page\)/);
   assert.match(ledger, /pageSize: String\(PAGE_SIZE\)/);
-  assert.match(ledger, /queryKey: \['financial-records', selectedYear, filters, page\]/);
+  assert.match(ledger, /queryKey: \['financial-records', selectedYear, filters, ledgerFilters, page\]/);
   assert.match(ledger, /aria-label="Paginación de movimientos"/);
   assert.match(ledger, /setPage\(\(current\) => Math\.max\(1, current - 1\)\)/);
   assert.match(ledger, /setPage\(\(current\) => Math\.min\(pageCount, current \+ 1\)\)/);
-  assert.match(ledger, /Ingresos de esta página/);
-  assert.match(ledger, /Egresos de esta página/);
+});
+
+test('the ledger totals describe the whole selection, not the page being shown', () => {
+  // Filtrar por categoría sirve para saber cuánto suma esa bolsa: el encabezado no puede
+  // decir un número que dependa de en qué página esté el cursor.
+  assert.match(ledger, /Ingresos de la selección/);
+  assert.match(ledger, /Egresos de la selección/);
+  assert.match(ledger, /Saldo de la selección/);
+  assert.match(ledger, /Movimientos de la selección/);
+  assert.doesNotMatch(ledger, /de esta página/);
+  // Los indicadores de arriba describen el periodo completo y ya dicen «filtros seleccionados»:
+  // estas cifras no pueden repetir esa frase o se leen como el mismo número.
+  assert.doesNotMatch(ledger, /(Ingresos|Egresos|Registros) con estos filtros/);
+  // El total lo suma el servidor; la página solo es respaldo si la respuesta no lo trae.
+  assert.match(ledger, /data\?\.totals \|\| records\.reduce/);
+});
+
+test('category and account narrow the ledger and reset the page', () => {
+  assert.match(ledger, /params\.set\('category', ledgerFilters\.category\)/);
+  assert.match(ledger, /params\.set\('accountId', ledgerFilters\.accountId\)/);
+  assert.match(ledger, /setPage\(1\); \}, \[selectedYear, filters, ledgerFilters\]/);
+  // Regla de la plataforma: toda selección simple usa el Select compartido.
+  assert.match(ledger, /aria-label="Categoría del movimiento"/);
+  assert.match(ledger, /aria-label="Cuenta de caja o banco"/);
+  assert.doesNotMatch(ledger, /<select\s/);
 });
 
 test('ledger uses the shared permission policy and invalidates all related financial views', () => {

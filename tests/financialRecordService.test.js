@@ -218,6 +218,54 @@ test('listFinancialRecords filters the canonical ledger without depending on an 
     assert.equal(result.total, 1);
 });
 
+// Elisa filtra por categoría para saber cuánto suma esa bolsa: el total tiene que ser el de
+// toda la selección, no el de la página que está viendo.
+test('listFinancialRecords narrows the ledger by category and totals the whole selection', async () => {
+    const queries = [];
+    const prismaClient = {
+        financialRecord: {
+            findMany: async (args) => { queries.push(['findMany', args]); return [{ id: 'record-1', amount: 400 }]; },
+            count: async (args) => { queries.push(['count', args]); return 9; },
+            groupBy: async (args) => {
+                queries.push(['groupBy', args]);
+                return [
+                    // Prisma entrega Decimal en las agregaciones, no números sueltos.
+                    { type: 'INCOME', _sum: { amount: { toNumber: () => 1250000.129 } } },
+                    { type: 'EXPENSE', _sum: { amount: { toNumber: () => 300000 } } }
+                ];
+            }
+        }
+    };
+
+    const result = await listFinancialRecords(prismaClient, {
+        year: '2026', scenario: 'ACTUAL', category: 'ADMINISTRATIVO', accountId: 'account-1', pageSize: '1'
+    });
+
+    const groupBy = queries.find(([name]) => name === 'groupBy')[1];
+    assert.equal(groupBy.where.category, 'ADMINISTRATIVO');
+    assert.equal(groupBy.where.accountId, 'account-1');
+    // La misma selección que la lista y el conteo: un total que describa otro conjunto engaña.
+    assert.deepEqual(groupBy.where, queries.find(([name]) => name === 'count')[1].where);
+    assert.deepEqual(result.totals, { income: 1250000.13, expense: 300000, net: 950000.13 });
+    assert.equal(result.total, 9);
+});
+
+test('listFinancialRecords rejects a category that is not part of the catalogue', async () => {
+    await assert.rejects(
+        listFinancialRecords({ financialRecord: { findMany: async () => [], count: async () => 0 } }, { category: 'INVENTADA' }),
+        (error) => error.code === 'FINANCIAL_RECORD_CATEGORY_INVALID'
+    );
+});
+
+test('listFinancialRecords still answers when the client cannot aggregate', async () => {
+    const result = await listFinancialRecords({
+        financialRecord: { findMany: async () => [{ id: 'record-1', amount: 400, type: 'INCOME' }], count: async () => 1 }
+    }, { year: '2026' });
+
+    assert.deepEqual(result.totals, { income: 0, expense: 0, net: 0 });
+    assert.equal(result.items.length, 1);
+});
+
 test('updateFinancialRecord recalculates the period and writes an audit event', async () => {
     const calls = [];
     const existing = {

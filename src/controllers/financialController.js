@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma.js';
-import { withFinancialSearch, financialMonthFilter } from '../services/financialQueryFilters.js';
+import { withFinancialSearch, financialMonthFilter, ACTIVE_RECEIVABLE_PAYMENT } from '../services/financialQueryFilters.js';
 import {
     buildFinancialImportPersistencePlan,
     parseFinancialImportWorkbook,
@@ -120,15 +120,19 @@ export const updateFinancialMonthlySummary = async (req, res, dependencies = {})
 
 const serializeReceivable = (receivable) => {
     const amount = toNum(receivable.amount);
+    // Los abonos revertidos viajan al cliente para que la cartera explique qué pasó,
+    // pero solo los vigentes cuentan como dinero aplicado.
     const payments = (receivable.payments || []).map((payment) => ({
         id: payment.id,
         amount: toNum(payment.amount),
         paidAt: payment.paidAt instanceof Date ? payment.paidAt.toISOString() : payment.paidAt,
         reference: payment.reference,
         notes: payment.notes,
-        account: payment.account || null
+        account: payment.account || null,
+        reversedAt: payment.reversedAt instanceof Date ? payment.reversedAt.toISOString() : (payment.reversedAt || null),
+        reversalReason: payment.reversalReason || null
     }));
-    const paidAmount = roundFloat(payments.reduce((sum, payment) => sum + payment.amount, 0));
+    const paidAmount = roundFloat(payments.reduce((sum, payment) => sum + (payment.reversedAt ? 0 : payment.amount), 0));
     const balanceReviewRequired = receivable.status === 'PAGADO' && roundFloat(amount - paidAmount) > 0;
 
     return {
@@ -274,7 +278,7 @@ export const getFinancialClientReconciliation = async (req, res, dependencies = 
                     ...importBatchFilter
                 }, req.query.q, 'receivable'),
                 include: {
-                    payments: { select: { amount: true } },
+                    payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true } },
                     client: {
                         select: {
                             id: true,
@@ -755,7 +759,7 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                         slug: true
                     }
                 },
-                payments: { select: { amount: true } }
+                payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true } }
             },
             orderBy: {
                 period: 'desc'

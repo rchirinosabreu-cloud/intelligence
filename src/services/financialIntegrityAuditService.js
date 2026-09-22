@@ -1,3 +1,5 @@
+import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
+
 const toNumber = (value) => {
     if (value && typeof value.toNumber === 'function') return value.toNumber();
     return Number(value) || 0;
@@ -25,7 +27,7 @@ export const auditFinancialIntegrity = async (prismaClient, { year: rawYear } = 
         prismaClient.financialRecord.count({ where: { year, scenario: 'ACTUAL', status: 'POSTED', accountId: null, AND: [activeRecordScope] } }),
         prismaClient.financialRecord.count({ where: { year, status: 'DRAFT', AND: [activeRecordScope] } }),
         prismaClient.financialRecord.count({ where: { year, type: 'INCOME', status: 'POSTED', clientId: null, AND: [activeRecordScope] } }),
-        prismaClient.accountsReceivable.findMany({ where: { year, ...activeRecordScope }, select: { id: true, amount: true, status: true, payments: { select: { amount: true } } } }),
+        prismaClient.accountsReceivable.findMany({ where: { year, ...activeRecordScope }, select: { id: true, amount: true, status: true, payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true } } } }),
         prismaClient.payrollContract.findMany({
             where: {
                 AND: [

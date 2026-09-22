@@ -101,13 +101,52 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
             paidAt: '2026-07-10T00:00:00.000Z',
             reference: 'TRX-01',
             notes: null,
-            account: { id: 'account-1', name: 'Bancolombia' }
+            account: { id: 'account-1', name: 'Bancolombia' },
+            reversedAt: null,
+            reversalReason: null
         }]
     }]);
     assert.equal(res.payload.totals.DEBE, 4000000);
     assert.equal(res.payload.totals.originalTotal, 4680000);
     assert.equal(res.payload.totals.paidTotal, 680000);
     assert.equal(res.payload.totals.outstandingTotal, 4000000);
+});
+
+// Un abono revertido sigue visible en la cartera como evidencia, pero no descuenta saldo.
+test('getFinancialReceivablesLedger shows a reversed payment without letting it reduce the debt', async () => {
+    const prismaClient = {
+        financialImportBatch: { findFirst: async () => null },
+        accountsReceivable: {
+            findMany: async () => [{
+                id: 'debt-1',
+                amount: 1000000,
+                period: new Date(Date.UTC(2026, 8, 1)),
+                year: 2026,
+                month: 9,
+                dueDate: null,
+                status: 'DEBE',
+                notes: null,
+                comments: null,
+                sourceLabel: 'Elvira Utria',
+                payments: [
+                    { id: 'payment-1', amount: 400000, paidAt: new Date(Date.UTC(2026, 8, 10)), reference: null, notes: null, account: null, reversedAt: null, reversalReason: null },
+                    { id: 'payment-2', amount: 500, paidAt: new Date(Date.UTC(2026, 8, 12)), reference: null, notes: null, account: null, reversedAt: new Date(Date.UTC(2026, 8, 13)), reversalReason: 'Se digitaron 500 en vez de 500.000' }
+                ],
+                client: { name: 'Elvira Utria', slug: 'elvira-utria' }
+            }]
+        }
+    };
+    const res = makeResponse();
+
+    await getFinancialReceivablesLedger({ query: { year: 2026 } }, res, { prismaClient });
+
+    const [item] = res.payload.items;
+    assert.equal(item.paidAmount, 400000);
+    assert.equal(item.outstanding, 600000);
+    assert.equal(item.payments.length, 2);
+    assert.equal(item.payments.find((payment) => payment.id === 'payment-2').reversalReason, 'Se digitaron 500 en vez de 500.000');
+    assert.equal(res.payload.totals.paidTotal, 400000);
+    assert.equal(res.payload.totals.outstandingTotal, 600000);
 });
 
 test('updateFinancialReceivable delegates traceable edits to the receivable service', async () => {

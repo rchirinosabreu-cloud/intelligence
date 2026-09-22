@@ -31,3 +31,7 @@ export const financialMonthFilter = ({ month, quarter } = {}) => {
 };
 
 export const activeFinancialSource = batchId => batchId ? { OR: [{ importBatchId: batchId }, { importBatchId: null }] } : {};
+
+// Un abono revertido se conserva como evidencia pero ya no representa dinero aplicado:
+// cualquier consulta que sume abonos o calcule saldo debe filtrarlo con esto.
+export const ACTIVE_RECEIVABLE_PAYMENT = Object.freeze({ reversedAt: null });
