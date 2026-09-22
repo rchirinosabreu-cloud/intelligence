@@ -23,6 +23,7 @@ import ClientAvatar from '@/components/ui/ClientAvatar';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
+import { useFirstVisit } from '@/lib/firstVisit';
 import CompletedTasksHistoryModal from './CompletedTasksHistoryModal';
 import DashboardAnnouncements from './DashboardAnnouncements';
 import DashboardMeetings from './dashboard/DashboardMeetings';
@@ -113,6 +114,8 @@ const EmptyState = ({ icon: Icon, title, description }) => (
 
 const Dashboard = () => {
   const { currentUser } = useAuth();
+  // La entrada escalonada solo en la primera visita de la sesión: al volver, el tablero ya aparece puesto.
+  const firstVisit = useFirstVisit('dashboard');
   const [selectedUserId, setSelectedUserId] = useState(currentUser?.id || '');
   const [assignClientId, setAssignClientId] = useState('');
   const [assignMemberId, setAssignMemberId] = useState('');
@@ -227,7 +230,7 @@ const Dashboard = () => {
   });
 
   return (
-    <motion.div variants={container} initial="hidden" animate="show" className="brain-ambient space-y-6 pb-4">
+    <motion.div variants={container} initial={firstVisit ? 'hidden' : false} animate="show" className="brain-ambient space-y-6 pb-4">
       <motion.header variants={item} className="pt-2 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
         <div className="min-w-0">
           <h1 className="text-3xl font-semibold tracking-tight text-zinc-950 dark:text-white">

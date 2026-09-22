@@ -8,7 +8,13 @@ import { NavLink } from 'react-router-dom';
 import ChaosMeter from './ChaosMeter';
 import SidebarProfile from './SidebarProfile';
 
-const Sidebar = ({ isOpen, onClose, hidden = false }) => {
+/**
+ * Menú lateral. En escritorio se puede **recoger a una franja estrecha** (`collapsed`): la barra no desaparece,
+ * quedan los iconos de navegación y la foto de la persona, con el nombre del módulo en el tooltip
+ * (decisión de Rodny, 21 de septiembre de 2026). En móvil sigue siendo off-canvas y siempre completo:
+ * todo lo que cambia al recoger va en variantes `lg:`.
+ */
+const Sidebar = ({ isOpen, onClose, collapsed = false }) => {
   const { currentUser } = useAuth();
 
   const menuItems = [
@@ -48,19 +54,23 @@ const Sidebar = ({ isOpen, onClose, hidden = false }) => {
   });
 
   return (
-    <aside aria-hidden={hidden} className={cn(
-      "fixed left-0 top-0 z-[60] flex h-[100dvh] w-[min(86vw,20rem)] flex-col overflow-hidden transition-transform duration-300 lg:w-64",
+    <aside data-sidebar-collapsed={collapsed ? 'true' : undefined} className={cn(
+      "fixed left-0 top-0 z-[60] flex h-[100dvh] w-[min(86vw,20rem)] flex-col overflow-hidden transition-[transform,width] duration-300",
       isOpen ? "translate-x-0" : "-translate-x-full",
-      // Desktop: hidden by the person from the header toggle; the choice is remembered on the device.
-      hidden ? "lg:-translate-x-full" : "lg:translate-x-0",
+      // Desktop: the sidebar never slides away; collapsed it becomes a rail of icons.
+      "lg:translate-x-0",
+      collapsed ? "lg:w-20" : "lg:w-64",
       "border-r border-zinc-200/70 bg-white shadow-xl lg:bg-white/70 lg:shadow-sm lg:backdrop-blur-xl",
       "dark:border-white/10 dark:bg-zinc-950 dark:shadow-[4px_0_24px_-12px_rgba(0,0,0,0.5)] lg:dark:bg-zinc-900/60 lg:dark:backdrop-blur-xl"
     )}>
       {/* Header */}
-      <div className="flex shrink-0 items-center justify-between px-5 py-4 sm:px-6 sm:py-5">
+      <div className={cn("flex shrink-0 items-center justify-between px-5 py-4 sm:px-6 sm:py-5", collapsed && "lg:justify-center lg:px-0")}>
         <div className="flex items-center gap-3">
           <img src="/brainstudio-logo.png" alt="Brainstudio" className="w-8 h-8 object-contain" />
-          <span className="text-xl font-bold tracking-tighter text-zinc-900 dark:text-zinc-100 drop-shadow-sm transition-colors">
+          <span className={cn(
+            "text-xl font-bold tracking-tighter text-zinc-900 dark:text-zinc-100 drop-shadow-sm transition-colors",
+            collapsed && "lg:hidden"
+          )}>
             Brainstudio
           </span>
         </div>
@@ -74,10 +84,10 @@ const Sidebar = ({ isOpen, onClose, hidden = false }) => {
       </div>
 
       {/* Person: photo, name and account menu, always visible above the navigation */}
-      <SidebarProfile />
+      <SidebarProfile collapsed={collapsed} />
 
       {/* Navigation */}
-      <nav className="relative flex-1 space-y-1.5 overflow-y-auto overscroll-contain px-4 py-3">
+      <nav className={cn("relative flex-1 space-y-1.5 overflow-y-auto overscroll-contain px-4 py-3", collapsed && "lg:px-2")}>
         {filteredMenuItems.map((item) => {
           const Icon = item.icon;
 
@@ -85,6 +95,8 @@ const Sidebar = ({ isOpen, onClose, hidden = false }) => {
             <NavLink
               key={item.id}
               to={item.path}
+              // Collapsed: the module name is the tooltip, because the label is only for screen readers.
+              title={collapsed ? item.label : undefined}
               onClick={() => {
                 if (window.innerWidth < 1024) {
                   onClose();
@@ -92,6 +104,7 @@ const Sidebar = ({ isOpen, onClose, hidden = false }) => {
               }}
               className={({ isActive }) => cn(
                 "w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 group relative overflow-hidden border",
+                collapsed && "lg:justify-center lg:gap-0 lg:px-0",
                 isActive
                   ? "bg-primary/10 text-primary border-primary/20 shadow-sm dark:text-white dark:bg-white/10 dark:border-white/10 dark:shadow-sm backdrop-blur-md"
                   : "text-zinc-500 hover:text-zinc-900 hover:bg-white/40 border-transparent dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-white/5 dark:hover:border-white/5"
@@ -108,18 +121,21 @@ const Sidebar = ({ isOpen, onClose, hidden = false }) => {
                     />
                   )}
 
-                  <span className="relative z-10 flex items-center gap-3 w-full">
+                  <span className={cn("relative z-10 flex items-center gap-3 w-full", collapsed && "lg:w-auto lg:gap-0")}>
                     <Icon className={cn(
-                      "w-5 h-5 transition-colors duration-300",
+                      "w-5 h-5 shrink-0 transition-colors duration-300",
                       isActive
                         ? "text-primary dark:text-primary-foreground drop-shadow-sm"
                         : "text-zinc-400 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-300"
                     )} />
-                    {item.label}
+                    <span className={cn(collapsed && "lg:sr-only")}>{item.label}</span>
                   </span>
 
                   {isActive && (
-                    <div className="absolute right-3 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)] animate-pulse" />
+                    <div className={cn(
+                      "absolute right-3 w-1.5 h-1.5 rounded-full bg-primary shadow-[0_0_8px_rgba(var(--primary),0.5)] animate-pulse",
+                      collapsed && "lg:hidden"
+                    )} />
                   )}
                 </>
               )}
@@ -128,8 +144,11 @@ const Sidebar = ({ isOpen, onClose, hidden = false }) => {
         })}
       </nav>
 
-      {/* Footer */}
-      <div className="shrink-0 space-y-4 border-t border-zinc-200/50 bg-white/30 p-4 backdrop-blur-md transition-colors dark:border-white/5 dark:bg-zinc-900/30">
+      {/* Footer: the streak widget needs its words, so the rail leaves it out (it returns when you expand). */}
+      <div className={cn(
+        "shrink-0 space-y-4 border-t border-zinc-200/50 bg-white/30 p-4 backdrop-blur-md transition-colors dark:border-white/5 dark:bg-zinc-900/30",
+        collapsed && "lg:hidden"
+      )}>
         <ChaosMeter />
       </div>
     </aside>

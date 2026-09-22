@@ -21,13 +21,14 @@ import { OnboardingProvider } from '@/components/onboarding/OnboardingProvider';
 const AppLayout = ({ children }) => {
   const recognitionExperience = useRecognitionExperience();
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  // Desktop only: the person can hide the sidebar; the choice is remembered on this device.
-  const [isSidebarHidden, setIsSidebarHidden] = useState(() => {
-    try { return localStorage.getItem('brain:sidebar-hidden') === '1'; } catch { return false; }
+  // Desktop only: the person can collapse the sidebar to a narrow rail (icons and photo stay visible,
+  // Rodny, 21 September 2026); the choice is remembered on this device.
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try { return localStorage.getItem('brain:sidebar-collapsed') === '1'; } catch { return false; }
   });
-  const toggleSidebarHidden = () => setIsSidebarHidden((current) => {
+  const toggleSidebarCollapsed = () => setIsSidebarCollapsed((current) => {
     const next = !current;
-    try { localStorage.setItem('brain:sidebar-hidden', next ? '1' : '0'); } catch { /* per-device convenience only */ }
+    try { localStorage.setItem('brain:sidebar-collapsed', next ? '1' : '0'); } catch { /* per-device convenience only */ }
     return next;
   });
   const [chatDockWidth, setChatDockWidth] = useState(0);
@@ -209,7 +210,7 @@ const AppLayout = ({ children }) => {
       blocked={isSidebarOpen || isNotificationsOpen} onBlockingChange={setIsOnboardingBlocking}>
     <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 selection:bg-primary/20 relative transition-colors duration-300 font-sans">
       {/* Sidebar - z-[60] (Internal) */}
-      <Sidebar isOpen={isSidebarOpen} hidden={isSidebarHidden} onClose={() => setIsSidebarOpen(false)} />
+      <Sidebar isOpen={isSidebarOpen} collapsed={isSidebarCollapsed} onClose={() => setIsSidebarOpen(false)} />
       <RecognitionRuntime userId={currentUser?.id} disabled={Boolean(recognitionExperience) || isOnboardingBlocking} />
       <ReturnedTaskAlertDialog
         userId={displayUser?.id}
@@ -225,7 +226,7 @@ const AppLayout = ({ children }) => {
       />
 
       {/* Header - z-50 */}
-      <header className={cn("h-16 fixed top-0 left-0 right-0 z-50 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 transition-all", isSidebarHidden ? 'lg:pl-0' : 'lg:pl-64')}>
+      <header className={cn("h-16 fixed top-0 left-0 right-0 z-50 bg-white/50 dark:bg-zinc-950/50 backdrop-blur-md border-b border-zinc-200 dark:border-white/5 transition-all", isSidebarCollapsed ? 'lg:pl-20' : 'lg:pl-64')}>
         <div className="h-full px-4 lg:px-8 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Button
@@ -241,10 +242,10 @@ const AppLayout = ({ children }) => {
               variant="ghost"
               size="icon"
               className="hidden lg:inline-flex"
-              aria-label={isSidebarHidden ? 'Mostrar menú' : 'Ocultar menú'}
-              title={isSidebarHidden ? 'Mostrar menú' : 'Ocultar menú'}
-              aria-pressed={isSidebarHidden}
-              onClick={toggleSidebarHidden}
+              aria-label={isSidebarCollapsed ? 'Expandir menú' : 'Recoger menú'}
+              title={isSidebarCollapsed ? 'Expandir menú' : 'Recoger menú'}
+              aria-pressed={isSidebarCollapsed}
+              onClick={toggleSidebarCollapsed}
             >
               <Menu className="w-5 h-5" />
             </Button>
@@ -467,8 +468,9 @@ const AppLayout = ({ children }) => {
       )}
 
       {/* Main Content Area - z-0 (above background) */}
-      <main className={cn("relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8", isSidebarHidden ? 'lg:ml-0' : 'lg:ml-64')} style={{ marginRight: chatDockWidth }}>
-        <div className="mx-auto min-w-0 max-w-7xl space-y-8 animate-in fade-in duration-700">
+      <main className={cn("relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8", isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64')} style={{ marginRight: chatDockWidth }}>
+        {/* A short entrance, not a 700ms wash: the page should look loaded, not fading in (Rodny, 21 September 2026). */}
+        <div className="mx-auto min-w-0 max-w-7xl space-y-8 animate-in fade-in duration-200">
           {recognitionExperience?.controls}
           {children}
         </div>

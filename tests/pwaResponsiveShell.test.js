@@ -67,7 +67,8 @@ test('mobile sidebar stays above its overlay and scrolls inside the viewport', a
   assert.match(sidebar, /z-\[60\]/);
   assert.match(sidebar, /h-\[100dvh\]/);
   assert.match(sidebar, /w-\[min\(86vw,20rem\)\]/);
-  assert.match(sidebar, /<nav className="[^"]*overflow-y-auto/);
+  // El menú recogido añade clases con `cn`, así que la navegación ya no lleva una cadena literal.
+  assert.match(sidebar, /<nav className=[^>]*overflow-y-auto/);
   assert.match(sidebar, /aria-label="Cerrar menú"/);
   assert.match(shell, /z-\[55\]/);
   assert.match(shell, /document\.body\.style\.overflow = isSidebarOpen \? 'hidden' : ''/);
