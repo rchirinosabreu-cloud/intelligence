@@ -29,6 +29,7 @@ import {
     createReceivablePaymentHandler,
     generatePayrollPeriodHandler,
     getFinancialIntegrityAuditHandler,
+    issueReceivableDocumentHandler,
     createFinancialRecordHandler,
     listFinancialAccountsHandler,
     listFinancialPeriodsHandler,
@@ -94,6 +95,9 @@ router.patch('/client-links/:sourceClientId', requireFinancialWrite, linkFinanci
 router.get('/receivables-ledger', requireFinancialAccess, getFinancialReceivablesLedger);
 router.patch('/receivables/:id', requireFinancialWrite, updateFinancialReceivable);
 router.post('/receivables', requireFinancialWrite, createReceivableHandler);
+// Emitir la cuenta de cobro: le pone número, congela sus conceptos y deja la
+// obligación con el mismo total que se le manda al cliente.
+router.post('/receivables/:id/issue', requireFinancialWrite, issueReceivableDocumentHandler);
 router.post('/receivables/:id/payments', requireFinancialWrite, createReceivablePaymentHandler);
 // Corregir un abono mal registrado es parte del trabajo diario de quien lo registra:
 // mismo permiso que crearlo, con motivo obligatorio y auditoría.
