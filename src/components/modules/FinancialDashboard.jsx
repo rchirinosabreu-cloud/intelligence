@@ -74,7 +74,7 @@ const FinancialDashboard = () => {
 
     // 1. React Hook Declarations (Inconditional - at the absolute top)
     const [selectedYear, setSelectedYear] = useState(2026);
-    const [filters, setFilters] = useState({ scenario: 'ACTUAL', month: '', type: '', q: '' });
+    const [filters, setFilters] = useState({ scenario: 'ACTUAL', month: '', type: '', category: '', q: '' });
     const [search, setSearch] = useState('');
     const [isImportSetupOpen, setIsImportSetupOpen] = useState(false);
     useEffect(() => {
@@ -82,11 +82,17 @@ const FinancialDashboard = () => {
         return () => clearTimeout(timer);
     }, [search]);
     const searchPending = search.trim() !== filters.q;
+    // Cartera y nómina no se clasifican por categoría: pasarles el filtro no los
+    // cambiaría y haría creer que sí. Solo lo reciben los indicadores, las gráficas
+    // y el libro de movimientos, que son los que leen la categoría del movimiento.
     const filterQuery = useMemo(() => {
         const params = new URLSearchParams({ year: String(selectedYear), scenario: filters.scenario });
         for (const key of ['month', 'type', 'q']) if (filters[key]) params.set(key, filters[key]);
         return params.toString();
     }, [selectedYear, filters]);
+    const dashboardQuery = useMemo(() => (
+        filters.category ? `${filterQuery}&category=${encodeURIComponent(filters.category)}` : filterQuery
+    ), [filterQuery, filters.category]);
     const [activeTab, setActiveTab] = useState('flow');
     const [expandedClients, setExpandedClients] = useState({});
     const [importPreview, setImportPreview] = useState(null);
@@ -129,11 +135,11 @@ const FinancialDashboard = () => {
 
     // Fetch analytical aggregation from protected backend endpoint
     const { data, isLoading, isFetching, error, refetch } = useQuery({
-        queryKey: ['financials-dashboard-data', filterQuery],
+        queryKey: ['financials-dashboard-data', dashboardQuery],
         queryFn: async () => {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
-            const url = `${baseUrl}/api/financials/dashboard?${filterQuery}`;
+            const url = `${baseUrl}/api/financials/dashboard?${dashboardQuery}`;
             const res = await axios.get(url, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });

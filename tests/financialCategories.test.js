@@ -82,7 +82,9 @@ test('schema, entry selector, charts and aggregations expose every category, inc
     const schema = read('../prisma/schema.prisma').match(/enum FinancialCategory \{([^}]+)\}/)[1];
     for (const category of ['DONACION', 'SIEMBRA', 'PRESTAMO']) {
         assert.match(schema, new RegExp(`\\b${category}\\b`));
-        assert.ok(read('../src/components/modules/financial/FinancialLedger.jsx').includes(`['${category}',`));
+        // El catálogo vive en un solo sitio y lo leen el formulario de movimientos
+        // y la barra de filtros: si falta ahí, falta en los dos.
+        assert.ok(read('../src/lib/financialCategories.js').includes(`['${category}',`));
         assert.ok(read('../src/components/modules/FinancialDashboard.jsx').includes(`'${category}':`));
         assert.ok(read('../src/controllers/financialController.js').includes(`'${category}'`), `${category} seeds the distribution chart`);
         assert.ok(read('../scripts/pre-push-enum.js').includes(`'${category}'`), `${category} exists on a fresh bootstrap too`);

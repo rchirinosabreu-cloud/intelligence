@@ -4,11 +4,13 @@ import fs from 'node:fs';
 
 const ledger = fs.readFileSync(new URL('../src/components/modules/financial/FinancialLedger.jsx', import.meta.url), 'utf8');
 const bank = fs.readFileSync(new URL('../src/components/modules/financial/BankReconciliationPanel.jsx', import.meta.url), 'utf8');
+const filterBar = fs.readFileSync(new URL('../src/components/modules/financial/FinancialFilters.jsx', import.meta.url), 'utf8');
+const dashboard = fs.readFileSync(new URL('../src/components/modules/FinancialDashboard.jsx', import.meta.url), 'utf8');
 
 test('ledger requests explicit pages and exposes navigation instead of silently limiting records', () => {
   assert.match(ledger, /page: String\(page\)/);
   assert.match(ledger, /pageSize: String\(PAGE_SIZE\)/);
-  assert.match(ledger, /queryKey: \['financial-records', selectedYear, filters, ledgerFilters, page\]/);
+  assert.match(ledger, /queryKey: \['financial-records', selectedYear, filters, selectedAccountId, page\]/);
   assert.match(ledger, /aria-label="Paginación de movimientos"/);
   assert.match(ledger, /setPage\(\(current\) => Math\.max\(1, current - 1\)\)/);
   assert.match(ledger, /setPage\(\(current\) => Math\.min\(pageCount, current \+ 1\)\)/);
@@ -30,13 +32,31 @@ test('the ledger totals describe the whole selection, not the page being shown',
 });
 
 test('category and account narrow the ledger and reset the page', () => {
-  assert.match(ledger, /params\.set\('category', ledgerFilters\.category\)/);
-  assert.match(ledger, /params\.set\('accountId', ledgerFilters\.accountId\)/);
-  assert.match(ledger, /setPage\(1\); \}, \[selectedYear, filters, ledgerFilters\]/);
-  // Regla de la plataforma: toda selección simple usa el Select compartido.
-  assert.match(ledger, /aria-label="Categoría del movimiento"/);
-  assert.match(ledger, /aria-label="Cuenta de caja o banco"/);
+  // La categoría llega de la barra de filtros de arriba, con el resto.
+  assert.match(ledger, /params\.set\('category', filters\.category\)/);
+  assert.match(ledger, /params\.set\('accountId', selectedAccountId\)/);
+  assert.match(ledger, /setPage\(1\); \}, \[selectedYear, filters, selectedAccountId\]/);
   assert.doesNotMatch(ledger, /<select\s/);
+});
+
+test('the account is chosen by pressing its card, and pressing it again releases it', () => {
+  assert.match(ledger, /aria-pressed=\{isActive\}/);
+  assert.match(ledger, /setSelectedAccountId\(\(current\) => \(current === account\.id \? '' : account\.id\)\)/);
+  // El libro no puede quedar filtrado por una cuenta que ya no está en pantalla.
+  assert.match(ledger, /!accounts\.some\(\(account\) => account\.id === selectedAccountId\)/);
+  // El libro ya no tiene su propio desplegable de categoría ni de cuenta.
+  assert.doesNotMatch(ledger, /aria-label="Cuenta de caja o banco"/);
+  assert.doesNotMatch(ledger, /Todas las categorías/);
+});
+
+test('the category filter sits with the rest of the filters and reaches the indicators', () => {
+  assert.match(filterBar, /aria-label="Categoría del movimiento"/);
+  assert.match(filterBar, /FINANCIAL_CATEGORY_OPTIONS/);
+  // Cartera y nómina no se clasifican por categoría: no se les pasa el filtro.
+  assert.match(dashboard, /const dashboardQuery = useMemo/);
+  assert.match(dashboard, /\/api\/financials\/dashboard\?\$\{dashboardQuery\}/);
+  assert.match(dashboard, /receivables-ledger\?\$\{filterQuery\}/);
+  assert.match(filterBar, /Cartera y nómina no se clasifican por categoría/);
 });
 
 test('ledger uses the shared permission policy and invalidates all related financial views', () => {

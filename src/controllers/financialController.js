@@ -7,6 +7,7 @@ import {
 } from '../services/financialImportService.js';
 import { updateReceivable } from '../services/financialReceivableService.js';
 import { createPayrollContract, updatePayrollContract } from '../services/financialPayrollContractService.js';
+import { FINANCIAL_CATEGORIES } from '../services/financialRecordService.js';
 import { accumulateCategoryDistribution } from '../services/financialRecordAllocationService.js';
 
 // Helper to convert Decimal fields safely
@@ -690,9 +691,14 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                 })
         };
 
+        // La categoría llega de la barra de filtros. Se comprueba contra el catálogo:
+        // un valor inventado no puede vaciar el tablero como si no hubiera movimientos.
+        const requestedCategory = String(req.query.category || '').trim().toUpperCase();
+        const categoryFilter = FINANCIAL_CATEGORIES.has(requestedCategory) ? { category: requestedCategory } : {};
         const financialRecords = await prismaClient.financialRecord.findMany({
             where: withFinancialSearch({
                 ...financialRecordWhere,
+                ...categoryFilter,
                 ...(['INCOME', 'EXPENSE'].includes(req.query.type) ? { type: req.query.type } : {})
             }, req.query.q),
             include: {

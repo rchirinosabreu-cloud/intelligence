@@ -13,7 +13,10 @@ test('financial dashboard exposes the operational ledger as a primary tab', () =
     assert.match(dashboardSource, /<FinancialLedger/);
     assert.match(dashboardSource, /<FinancialFilters/);
     assert.match(dashboardSource, /filters=\{filters\}/);
-    assert.match(dashboardSource, /dashboard\?\$\{filterQuery\}/);
+    // El tablero recibe además la categoría; cartera y nómina siguen con filterQuery,
+    // porque no se clasifican por categoría.
+    assert.match(dashboardSource, /dashboard\?\$\{dashboardQuery\}/);
+    assert.match(dashboardSource, /const dashboardQuery = useMemo\(\(\) => \(\s*\r?\n?\s*filters\.category \?/);
     const filtersSource = fs.readFileSync(new URL('../src/components/modules/financial/FinancialFilters.jsx', import.meta.url), 'utf8');
     assert.match(filtersSource, />Ejecutado</);
     assert.match(filtersSource, />Proyección</);
@@ -51,7 +54,9 @@ test('financial ledger uses canonical record endpoints and server-confirmed muta
     assert.match(ledgerSource, /Reabrir mes/);
     assert.match(ledgerSource, /hasFinancialPermission\(currentUser, 'admin'\)/);
     assert.match(ledgerSource, /FINANCIAL_PERIOD_UNRECONCILED|movimientos sin conciliar/);
-    assert.match(ledgerSource, /\['SERVICIO', 'Servicio'\]/);
+    // El catálogo de categorías es compartido: el libro lo lee, no lo copia.
+    assert.match(ledgerSource, /FINANCIAL_CATEGORY_OPTIONS, financialCategoryLabel \} from '@\/lib\/financialCategories'/);
+    assert.doesNotMatch(ledgerSource, /\['SERVICIO', 'Servicio'\]/);
     // The one calendar of the platform: the shared component, never a raw picker or native date field.
     assert.match(ledgerSource, /<BrainDatePicker ariaLabel="Fecha del movimiento" value=\{form\.date\}/);
     assert.doesNotMatch(ledgerSource, /from 'react-datepicker'|type="date"/);
