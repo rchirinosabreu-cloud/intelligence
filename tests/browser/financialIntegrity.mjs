@@ -94,24 +94,30 @@ try {
   // tanto los indicadores como el libro. La bolsa es la de toda la selección.
   await page.goto(base);
   await page.getByRole('button', { name: 'Movimientos', exact: true }).click();
-  const bag = async label => (await page.getByText(label, { exact: true }).locator('xpath=following-sibling::p').innerText()).replace(/\s/g, '');
-  await page.getByText('Movimientos de la selección', { exact: true }).waitFor();
-  assert.equal(await bag('Movimientos de la selección'), '62');
-  assert.match(await bag('Ingresos de la selección'), /1\.100\.000/);
+  // El valor vive en la tarjeta, no junto a la etiqueta: se lee la tarjeta entera.
+  const indicator = async label => (await page.getByText(label, { exact: true })
+    .locator('xpath=ancestor::*[contains(@class,"rounded-2xl")][1]').innerText()).replace(/\s/g, '');
+  const rowCount = async () => (await page.getByText(/^Mostrando \d+–\d+ de \d+ movimientos$/).innerText()).match(/de (\d+)/)[1];
+  await page.getByText('Ingresos registrados', { exact: true }).waitFor();
+  assert.equal(await rowCount(), '62');
+  assert.match(await indicator('Ingresos registrados'), /1\.100\.000/);
   const categoryFilter = page.getByRole('combobox', { name: 'Categoría del movimiento' });
   assert.equal(await categoryFilter.count(), 1, 'la categoría se elige en un solo sitio');
   await chooseOption(categoryFilter, 'ADMINISTRATIVO');
-  await page.getByText('10', { exact: true }).waitFor();
-  // 10 de 62: el total es el de la selección completa, no el de los 25 de la página.
-  assert.equal(await bag('Movimientos de la selección'), '10');
-  assert.match(await bag('Egresos de la selección'), /100\.000/);
-  assert.match(await bag('Ingresos de la selección'), /\$0/);
+  await page.getByText('Mostrando 1–10 de 10 movimientos').waitFor();
+  // La categoría acota los indicadores de arriba además del libro.
+  assert.match(await indicator('Egresos registrados'), /100\.000/);
+  assert.match(await indicator('Ingresos registrados'), /\$0/);
   assert.match(await page.locator('tbody').innerText(), /Gasto administrativo/);
   assert.doesNotMatch(await page.locator('tbody').innerText(), /Ingreso de muestra/);
   await page.getByText('Cartera y nómina no se clasifican por categoría', { exact: false }).waitFor();
+  // El libro no repite lo que ya dicen los indicadores ni el pie de la tabla.
+  for (const repeated of ['Ingresos de la selección', 'Egresos de la selección', 'Movimientos de la selección']) {
+    assert.equal(await page.getByText(repeated, { exact: true }).count(), 0, `${repeated} duplica el encabezado`);
+  }
   await page.screenshot({ path: 'output/financial-ledger-category.png', fullPage: true, animations: 'disabled' });
   await chooseOption(categoryFilter, '');
-  assert.equal(await bag('Movimientos de la selección'), '62');
+  assert.equal(await rowCount(), '62');
 
   // La cuenta se elige tocando su tarjeta; tocarla de nuevo la suelta.
   const accountToggle = page.getByRole('button', { name: 'Filtrar los movimientos por Banco de muestra' });
@@ -120,10 +126,16 @@ try {
   assert.equal(await accountToggle.count(), 0, 'la tarjeta activa cambia de etiqueta');
   const releaseToggle = page.getByRole('button', { name: 'Dejar de filtrar por Banco de muestra' });
   assert.equal(await releaseToggle.getAttribute('aria-pressed'), 'true');
-  assert.equal(await bag('Movimientos de la selección'), '62');
+  // Con una cuenta elegida sí aparecen cifras propias: los indicadores no reciben ese filtro.
+  const accountFigure = page.getByText('Entró por Banco de muestra', { exact: true });
+  await accountFigure.waitFor();
+  assert.match((await accountFigure.locator('xpath=following-sibling::p[1]').innerText()).replace(/\s/g, ''), /1\.100\.000/);
+  await page.getByText('Salió por Banco de muestra', { exact: true }).waitFor();
+  assert.equal(await rowCount(), '62');
   await page.screenshot({ path: 'output/financial-account-toggle.png', fullPage: true, animations: 'disabled' });
   await releaseToggle.click();
   assert.equal(await page.getByText('Filtrando por esta cuenta', { exact: true }).count(), 0, 'volver a tocarla la suelta');
+  assert.equal(await page.getByText('Entró por Banco de muestra', { exact: true }).count(), 0, 'sin cuenta elegida no hay cifras propias');
   assert.equal(await page.getByRole('button', { name: 'Filtrar los movimientos por Banco de muestra' }).getAttribute('aria-pressed'), 'false');
 
   // Un cliente archivado sigue debiendo: tiene que poder elegirse, marcado y después de los activos.

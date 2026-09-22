@@ -16,17 +16,23 @@ test('ledger requests explicit pages and exposes navigation instead of silently 
   assert.match(ledger, /setPage\(\(current\) => Math\.min\(pageCount, current \+ 1\)\)/);
 });
 
-test('the ledger totals describe the whole selection, not the page being shown', () => {
-  // Filtrar por categoría sirve para saber cuánto suma esa bolsa: el encabezado no puede
-  // decir un número que dependa de en qué página esté el cursor.
-  assert.match(ledger, /Ingresos de la selección/);
-  assert.match(ledger, /Egresos de la selección/);
-  assert.match(ledger, /Saldo de la selección/);
-  assert.match(ledger, /Movimientos de la selección/);
+test('the ledger never repeats a figure the header already shows', () => {
+  // Los indicadores de arriba obedecen los mismos filtros, y el pie de la tabla ya
+  // dice cuántos movimientos hay: el libro no puede pintar esas cifras otra vez.
+  assert.doesNotMatch(ledger, /Ingresos de la selección/);
+  assert.doesNotMatch(ledger, /Egresos de la selección/);
+  assert.doesNotMatch(ledger, /Movimientos de la selección/);
   assert.doesNotMatch(ledger, /de esta página/);
-  // Los indicadores de arriba describen el periodo completo y ya dicen «filtros seleccionados»:
-  // estas cifras no pueden repetir esa frase o se leen como el mismo número.
   assert.doesNotMatch(ledger, /(Ingresos|Egresos|Registros) con estos filtros/);
+  assert.match(ledger, /Mostrando/);
+});
+
+test('with an account chosen, the ledger shows what only it knows', () => {
+  // Lo que entró y salió por una cuenta concreta no está en ningún otro sitio:
+  // los indicadores de arriba no reciben el filtro de cuenta.
+  assert.match(ledger, /\{selectedAccount && \(/);
+  assert.match(ledger, /Entró por \{selectedAccount\.name\}/);
+  assert.match(ledger, /Salió por \{selectedAccount\.name\}/);
   // El total lo suma el servidor; la página solo es respaldo si la respuesta no lo trae.
   assert.match(ledger, /data\?\.totals \|\| records\.reduce/);
 });
