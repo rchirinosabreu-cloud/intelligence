@@ -131,6 +131,25 @@ test('the hour column scrolls with the wheel even inside a modal dialog', async 
   assert.match(picker, /return \(\) => element\.removeEventListener\('wheel', onWheel\);/, 'and cleans up');
 });
 
+test('the calendar opens outside the panel, so a modal never clips it', async () => {
+  // Rodny, 23 de septiembre de 2026: «cuando abro una tarea, no me deja colocar fecha». El cuerpo de los
+  // paneles tiene scroll propio, así que el calendario en línea quedaba recortado y los días no se podían pulsar.
+  const props = await readFile('src/lib/brainDatePicker.js', 'utf8');
+  assert.match(props, /export const BRAIN_DATEPICKER_PORTAL_ID = 'brain-datepicker-portal';/);
+  assert.match(props, /portalId: BRAIN_DATEPICKER_PORTAL_ID/, 'todo calendario de la plataforma se dibuja en el portal');
+  assert.doesNotMatch(props, /popperProps/, 'nada de posicionamiento fijo: los modales llevan transform y lo fijo vuelve a quedar atrapado');
+
+  const css = await readFile('src/index.css', 'utf8');
+  assert.match(css, /#brain-datepicker-portal \{[\s\S]*?z-index: 220;/, 'por encima de cualquier diálogo (los existentes llegan a 210)');
+  assert.match(css, /#brain-datepicker-portal,\s*\.brain-datepicker-popper \{\s*pointer-events: auto;/, 'un modal apaga los clics del resto del documento');
+
+  const dialog = await readFile('src/components/ui/dialog.jsx', 'utf8');
+  assert.match(dialog, /target\.closest\('#brain-datepicker-portal'\)/, 'elegir un día es interactuar «fuera» del diálogo');
+  assert.match(dialog, /onPointerDownOutside=\{keepOpenForCalendar\(onPointerDownOutside\)\}/, 'y no puede cerrarlo');
+  assert.match(dialog, /onFocusOutside=\{keepOpenForCalendar\(onFocusOutside\)\}/);
+  assert.match(dialog, /onInteractOutside=\{keepOpenForCalendar\(onInteractOutside\)\}/);
+});
+
 test('the shared picker compiles as JSX', async () => {
   const file = 'src/components/ui/BrainDatePicker.jsx';
   await transformWithEsbuild(await readFile(file, 'utf8'), file, { loader: 'jsx', jsx: 'automatic' });
