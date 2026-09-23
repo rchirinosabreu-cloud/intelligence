@@ -104,42 +104,55 @@ export const deleteReceivable = async (prismaClient, receivableId, reason, actor
     const actorId = actor?.id || actor?.userId || null;
     const voidReason = String(reason || '').trim() || null;
 
-    return prismaClient.$transaction(async (tx) => {
-        const existing = await tx.accountsReceivable.findUnique({
-            where: { id: receivableId },
-            include: {
-                items: { orderBy: { sortOrder: 'asc' } },
-                payments: { orderBy: { paidAt: 'desc' } },
-                client: { select: { id: true, name: true } }
-            }
-        });
-        if (!existing) throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
+    try {
+        return await prismaClient.$transaction(async (tx) => {
+            const existing = await tx.accountsReceivable.findUnique({
+                where: { id: receivableId },
+                include: {
+                    items: { orderBy: { sortOrder: 'asc' } },
+                    payments: { orderBy: { paidAt: 'desc' } },
+                    client: { select: { id: true, name: true } }
+                }
+            });
+            if (!existing) throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
 
-        const activePayments = (existing.payments || []).filter((payment) => !payment.reversedAt);
-        if (activePayments.length) {
-            throw new FinancialDomainError(
-                'RECEIVABLE_HAS_PAYMENTS',
-                `Esta obligación tiene ${activePayments.length} abono(s) vigente(s) y borrarla dejaría ese dinero sin a qué apuntar. Reviértelos primero con «Revertir», aquí mismo en la cartera, y vuelve a eliminarla.`,
-                409
-            );
+            const activePayments = (existing.payments || []).filter((payment) => !payment.reversedAt);
+            if (activePayments.length) {
+                throw new FinancialDomainError(
+                    'RECEIVABLE_HAS_PAYMENTS',
+                    `Esta obligación tiene ${activePayments.length} abono(s) vigente(s) y borrarla dejaría ese dinero sin a qué apuntar. Reviértelos primero con «Revertir», aquí mismo en la cartera, y vuelve a eliminarla.`,
+                    409
+                );
+            }
+
+            const periodDate = new Date(existing.period);
+            await assertOpenFinancialPeriod(tx, existing.year || periodDate.getUTCFullYear(), existing.month || periodDate.getUTCMonth() + 1);
+
+            await tx.financialAuditEvent.create({
+                data: {
+                    entityType: 'AccountsReceivable',
+                    entityId: receivableId,
+                    action: 'DELETE',
+                    before: cloneForAudit(existing),
+                    after: cloneForAudit({ deleted: true, reason: voidReason }),
+                    actorId
+                }
+            });
+            // Los abonos revertidos que queden se borran aquí, a mano: su relación con
+            // la obligación es `onDelete: Restrict`, así que la base de datos no los
+            // arrastra y sin esto el borrado falla. Sus datos ya quedaron en el `before`.
+            if (existing.payments?.length) {
+                await tx.receivablePayment.deleteMany({ where: { receivableId } });
+            }
+            await tx.accountsReceivable.delete({ where: { id: receivableId } });
+            return { id: receivableId, number: existing.number ?? null, clientName: existing.client?.name || existing.sourceLabel || null };
+        }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+        if (error?.code === 'P2034') {
+            throw new FinancialDomainError('RECEIVABLE_CONFLICT', 'La cuenta por cobrar cambió durante la operación. Actualiza sus datos y vuelve a intentarlo.', 409);
         }
-
-        const periodDate = new Date(existing.period);
-        await assertOpenFinancialPeriod(tx, existing.year || periodDate.getUTCFullYear(), existing.month || periodDate.getUTCMonth() + 1);
-
-        await tx.financialAuditEvent.create({
-            data: {
-                entityType: 'AccountsReceivable',
-                entityId: receivableId,
-                action: 'DELETE',
-                before: cloneForAudit(existing),
-                after: cloneForAudit({ deleted: true, reason: voidReason }),
-                actorId
-            }
-        });
-        await tx.accountsReceivable.delete({ where: { id: receivableId } });
-        return { id: receivableId, number: existing.number ?? null, clientName: existing.client?.name || existing.sourceLabel || null };
-    }, { isolationLevel: 'Serializable' });
+        throw error;
+    }
 };
 
 export const updateReceivable = async (prismaClient, receivableId, input = {}, actor) => {

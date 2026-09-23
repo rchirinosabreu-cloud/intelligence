@@ -1386,6 +1386,10 @@ enum FinancialAuditAction {
   REOPEN
   IMPORT
   PAYMENT
+  // Eliminar una cuenta por cobrar (23 de septiembre de 2026). No es lo mismo que
+  // VOID: ahí la fila se conserva anulada, aquí desaparece y lo único que queda de
+  // ella es el `before` de este evento.
+  DELETE
 }
 
 enum FinancialSection {
