@@ -1,5 +1,5 @@
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
-import { hasPartyIdentity } from '../lib/partyIdentity.js';
+import { hasPartyIdentity, normalizePartyIdentity } from '../lib/partyIdentity.js';
 import {
     RECEIVABLE_ITEM_MAX, RECEIVABLE_CONCEPT_MAX, RECEIVABLE_ITEM_DESCRIPTION_MAX,
     RECEIVABLE_SERVICE_PERIOD_MAX, formatReceivableNumber
@@ -126,14 +126,39 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
                 throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
             }
             // El documento lleva el nombre legal y la cédula o NIT del cliente. Si su
-            // ficha no los tiene, se dice dónde completarlos en vez de emitir una
-            // cuenta de cobro sin el dato o con el nombre corto del equipo.
+            // ficha todavía no los tiene se pueden escribir al emitir, y **quedan
+            // guardados en la ficha**: el dato se sigue escribiendo una sola vez, pero
+            // no obliga a abandonar el documento a medio hacer para ir a buscarlo.
+            // Si la ficha ya los tiene, no se tocan: una cuenta de cobro no reescribe
+            // la identidad de un tercero por el camino.
             if (!hasPartyIdentity(receivable.client)) {
-                throw new FinancialDomainError(
-                    'RECEIVABLE_CLIENT_IDENTITY_MISSING',
-                    `La cuenta de cobro lleva el nombre completo y el documento del cliente, y la ficha de «${receivable.client?.name || 'este cliente'}» todavía no los tiene. Complétalos en Clientes → editar cliente y vuelve a emitirla.`,
-                    409
-                );
+                if (!input.client) {
+                    throw new FinancialDomainError(
+                        'RECEIVABLE_CLIENT_IDENTITY_MISSING',
+                        `La cuenta de cobro lleva el nombre completo y el documento del cliente, y la ficha de «${receivable.client?.name || 'este cliente'}» todavía no los tiene. Escríbelos en este mismo formulario, o complétalos en Clientes → «⋯» → Editar Cliente.`,
+                        409
+                    );
+                }
+                const identity = normalizePartyIdentity(input.client);
+                if (!identity.valid) {
+                    throw new FinancialDomainError('RECEIVABLE_CLIENT_IDENTITY_INVALID', Object.values(identity.errors)[0], 422);
+                }
+                await tx.client.update({ where: { id: receivable.clientId }, data: identity.identity });
+                await tx.financialAuditEvent.create({
+                    data: {
+                        entityType: 'Client',
+                        entityId: receivable.clientId,
+                        action: 'UPDATE',
+                        before: cloneForAudit({
+                            legalName: receivable.client?.legalName ?? null,
+                            documentType: receivable.client?.documentType ?? null,
+                            documentNumber: receivable.client?.documentNumber ?? null
+                        }),
+                        after: cloneForAudit(identity.identity),
+                        actorId
+                    }
+                });
+                receivable.client = { ...receivable.client, ...identity.identity };
             }
             if (receivable.number) {
                 throw new FinancialDomainError(

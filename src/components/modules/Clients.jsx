@@ -378,14 +378,18 @@ const Clients = () => {
                         <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-end gap-2">
                              <button
+                               aria-label={`Abrir la ficha de ${client.name}`}
                                onClick={() => navigate(`/cliente/${client.slug}`)}
-                               className="p-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-xl text-indigo-600 opacity-0 group-hover:opacity-100 transition-all"
+                               className="p-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-xl text-zinc-400 hover:text-indigo-600 transition-colors"
                              >
                                <ExternalLink className="w-4 h-4" />
                              </button>
+                             {/* Editar el cliente —y con ello su nombre legal y su documento—
+                                 vive aquí dentro. Estaba escondido tras el hover de la fila:
+                                 con el ratón había que adivinarlo y en táctil no aparecía nunca. */}
                              <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <button aria-label={`Opciones de ${client.name}`} className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-xl transition-colors text-zinc-500 opacity-0 group-hover:opacity-100 focus-visible:opacity-100">
+                                <button aria-label={`Opciones de ${client.name}`} className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-xl transition-colors text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
                                   <MoreVertical className="w-4 h-4" />
                                 </button>
                               </DropdownMenuTrigger>

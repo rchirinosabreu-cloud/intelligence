@@ -6,6 +6,11 @@ function slugify(text) {
     .toString()
     .toLowerCase()
     .trim()
+    // Las tildes y la eñe se convierten a su letra base antes de limpiar: sin esto
+    // «Javid Trámite y Asesorías» quedaba como «javid-trmite-y-asesoras», porque el
+    // paso siguiente borra la vocal acentuada entera en vez de reemplazarla.
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
     .replace(/\s+/g, '-')     // Replace spaces with -
     .replace(/[^\w\-]+/g, '') // Remove all non-word chars
     .replace(/\-\-+/g, '-')   // Replace multiple - with single -
@@ -161,7 +166,12 @@ export async function getClients(filters = {}) {
   }
 }
 
-export async function createClient(data) {
+/**
+ * Crea la ficha con `db`, que puede ser una transacción. Una cuenta por cobrar puede
+ * crear a su cliente en el mismo acto (Rodny, 23 de septiembre de 2026), y eso tiene
+ * que ocurrir dentro de su transacción: o quedan las dos cosas, o no queda ninguna.
+ */
+export async function createClientWith(db, data) {
   const { name } = data;
   if (!name) {
     throw new Error("Client name is required");
@@ -174,7 +184,7 @@ export async function createClient(data) {
   let uniqueSlug = slug;
   let counter = 1;
   while (true) {
-      const existing = await prisma.client.findUnique({
+      const existing = await db.client.findUnique({
           where: { slug: uniqueSlug }
       });
       if (!existing) break;
@@ -182,17 +192,21 @@ export async function createClient(data) {
       counter++;
   }
 
+  return db.client.create({
+    data: {
+      name,
+      slug: uniqueSlug,
+      status: 'ACTIVO',
+      logoUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff&size=128`
+    }
+  });
+}
+
+export async function createClient(data) {
   try {
-    const client = await prisma.client.create({
-      data: {
-        name,
-        slug: uniqueSlug,
-        status: 'ACTIVO',
-        logoUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff&size=128`
-      }
-    });
-    return client;
+    return await createClientWith(prisma, data);
   } catch (error) {
+    if (error?.message === 'Client name is required') throw error;
     console.error("[ClientService] Error creating client:", error);
     throw new Error("Failed to create client");
   }

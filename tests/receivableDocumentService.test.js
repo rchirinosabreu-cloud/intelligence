@@ -99,6 +99,7 @@ const buildTx = ({ receivable, highest = null }) => {
     return {
         calls,
         tx: {
+            client: { update: async (args) => { calls.push(['client.update', args]); return args.data; } },
             accountsReceivable: {
                 findUnique: async () => receivable,
                 aggregate: async () => ({ _max: { number: highest } }),
@@ -231,6 +232,65 @@ test('un número que otro proceso tomó primero se explica, no se duplica', asyn
         issueReceivableDocument(prismaClient, 'debt-1', { concept: 'X', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30' }, { id: 'user-1' }),
         (error) => error.code === 'RECEIVABLE_NUMBER_TAKEN' && error.statusCode === 409
     );
+});
+
+// La identidad del tercero se escribe una sola vez, pero no obliga a abandonar el
+// documento a medio hacer para ir a buscarla a otra pantalla (Rodny, 23 de septiembre
+// de 2026: «realmente en clientes yo no tengo esa posibilidad de edición»).
+const unidentifiedClient = { id: 'client-1', name: 'Prueba tdd', legalName: null, documentType: null, documentNumber: null };
+const identity = { legalName: 'Corporación Deportiva Los Titanes', documentType: 'NIT', documentNumber: '901378858' };
+const issueInput = (extra = {}) => ({ concept: 'Servicios', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30', ...extra });
+
+test('sin identidad en la ficha y sin escribirla, no se emite: se dice dónde ponerla', async () => {
+    const { tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }) });
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+
+    await assert.rejects(
+        issueReceivableDocument(prismaClient, 'debt-1', issueInput(), { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_CLIENT_IDENTITY_MISSING'
+            && error.statusCode === 409
+            && /Prueba tdd/.test(error.message)
+            && /en este mismo formulario/.test(error.message)
+    );
+});
+
+test('la identidad escrita al emitir queda guardada en la ficha del cliente', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }), highest: 392 });
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+
+    await issueReceivableDocument(prismaClient, 'debt-1', issueInput({ client: identity }), { id: 'user-1' });
+
+    const update = calls.find(([name]) => name === 'client.update')[1];
+    assert.equal(update.where.id, 'client-1');
+    assert.deepEqual(update.data, identity);
+    // Queda registrado quién la escribió y qué había antes.
+    const audit = calls.filter(([name]) => name === 'audit.create').map(([, args]) => args.data).find((event) => event.entityType === 'Client');
+    assert.equal(audit.action, 'UPDATE');
+    assert.equal(audit.actorId, 'user-1');
+    assert.deepEqual(audit.before, { legalName: null, documentType: null, documentNumber: null });
+    assert.deepEqual(audit.after, identity);
+});
+
+test('una identidad incompleta o mal escrita no se guarda a medias', async () => {
+    for (const wrong of [{ ...identity, documentNumber: '' }, { ...identity, documentType: 'XX' }, { ...identity, documentNumber: 'abc' }]) {
+        const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }) });
+        const prismaClient = { $transaction: async (callback) => callback(tx) };
+        await assert.rejects(
+            issueReceivableDocument(prismaClient, 'debt-1', issueInput({ client: wrong }), { id: 'user-1' }),
+            (error) => error.code === 'RECEIVABLE_CLIENT_IDENTITY_INVALID' && error.statusCode === 422
+        );
+        assert.equal(calls.some(([name]) => name === 'client.update'), false, 'nada se escribe en la ficha');
+    }
+});
+
+// Emitir un cobro no es el sitio para cambiarle el nombre legal a un tercero.
+test('una ficha ya identificada no se reescribe desde la cuenta de cobro', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable(), highest: 392 });
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+
+    await issueReceivableDocument(prismaClient, 'debt-1', issueInput({ client: { legalName: 'OTRO NOMBRE S.A.S.', documentType: 'CC', documentNumber: '123456' } }), { id: 'user-1' });
+
+    assert.equal(calls.some(([name]) => name === 'client.update'), false);
 });
 
 test('la obligación tiene que existir', async () => {
