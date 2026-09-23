@@ -119,6 +119,35 @@ try {
   await chooseOption(categoryFilter, '');
   assert.equal(await rowCount(), '62');
 
+  // Emitir la cuenta de cobro: le pone número y el total del documento pasa a ser el
+  // de la obligación (Elisa, reunión del 21 de septiembre de 2026).
+  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  const issueRow = page.getByRole('button', { name: /Cliente de muestra/ });
+  await issueRow.click();
+  await page.getByRole('button', { name: 'Emitir cuenta de cobro', exact: true }).click();
+  const issueDialog = page.getByRole('dialog').filter({ hasText: 'Emitir cuenta de cobro' });
+  await issueDialog.waitFor();
+  // El párrafo viene escrito para no teclearlo cada mes.
+  assert.match(await issueDialog.getByRole('textbox', { name: /Concepto/ }).inputValue(), /Prestación de servicios para el diseño/);
+  await issueDialog.getByRole('textbox', { name: 'Periodo del servicio' }).fill('20 de agosto al 19 de septiembre');
+  await issueDialog.getByRole('textbox', { name: 'Descripción del concepto 1' }).fill('Fee mensual');
+  await issueDialog.getByRole('spinbutton', { name: 'Valor del concepto 1' }).fill('800000');
+  // Un segundo concepto: «el fee mensual más lo que hayan pedido adicional».
+  await issueDialog.getByRole('button', { name: 'Añadir concepto', exact: true }).click();
+  await issueDialog.getByRole('textbox', { name: 'Descripción del concepto 2' }).fill('Inversión de pauta en Meta Ads');
+  await issueDialog.getByRole('spinbutton', { name: 'Valor del concepto 2' }).fill('400000');
+  assert.match(await issueDialog.innerText(), /Total del documento\s*\$\s*1[.,]200[.,]000/);
+  await page.screenshot({ path: 'output/financial-issue-dialog.png', animations: 'disabled' });
+  await issueDialog.getByRole('button', { name: 'Emitir cuenta de cobro', exact: true }).click();
+  await issueDialog.waitFor({ state: 'hidden' });
+  // Ya emitida: lo confirma el aviso, la obligación queda con su número, y el botón desaparece.
+  await page.getByText('Cuenta de cobro No. 0393 emitida.', { exact: true }).waitFor();
+  await page.getByText(/^Cuenta de cobro No\. 0393·/).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Emitir cuenta de cobro', exact: true }).count(), 0, 'una cuenta emitida no se reedita');
+  await page.screenshot({ path: 'output/financial-issued.png', fullPage: true, animations: 'disabled' });
+  await page.goto(base);
+  await page.getByRole('button', { name: 'Movimientos', exact: true }).click();
+
   // El ingreso de un abono no se anula desde Movimientos: la pantalla lo dice al
   // tocarlo y nombra dónde sí se puede, en vez de dejar escribir un motivo para nada.
   const lockedVoid = page.getByRole('button', { name: /No se puede anular aquí/ });

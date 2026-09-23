@@ -126,7 +126,7 @@ test('emitir pone número, congela los conceptos y ajusta el importe de la oblig
     const prismaClient = { $transaction: async (callback) => callback(tx) };
 
     const result = await issueReceivableDocument(prismaClient, 'debt-1', {
-        concept: 'Servicios de septiembre', items, issuedAt: '2026-09-30'
+        concept: 'Servicios de septiembre', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30'
     }, { id: 'user-1' }, { startNumber: 100 });
 
     assert.equal(result.document.number, 145);
@@ -147,15 +147,38 @@ test('se puede forzar un número concreto cuando Elisa necesita cuadrar el suyo'
     const prismaClient = { $transaction: async (callback) => callback(tx) };
 
     await issueReceivableDocument(prismaClient, 'debt-1', {
-        concept: 'Servicios', items, issuedAt: '2026-09-30', number: 200
+        concept: 'Servicios', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30', number: 200
     }, { id: 'user-1' });
 
     assert.equal(calls.find(([name]) => name === 'receivable.update')[1].data.number, 200);
 });
 
+// «Periodo: 20 de agosto al 19 de septiembre». Es un rango del servicio escrito a
+// mano: no coincide con el mes contable y no siempre empieza el día 1.
+test('el periodo del servicio es obligatorio y se dice con un ejemplo', async () => {
+    await assert.rejects(
+        issueReceivableDocument({}, 'debt-1', { concept: 'X', items, issuedAt: '2026-09-30' }, { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_SERVICE_PERIOD_REQUIRED' && /20 de agosto al 19 de septiembre/.test(error.message)
+    );
+});
+
+test('el periodo del servicio se guarda con el documento', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable(), highest: 392 });
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+
+    await issueReceivableDocument(prismaClient, 'debt-1', {
+        concept: 'Servicios', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30'
+    }, { id: 'user-1' });
+
+    const update = calls.find(([name]) => name === 'receivable.update')[1].data;
+    assert.equal(update.servicePeriod, '20 de agosto al 19 de septiembre');
+    // La última de Elisa es la 392, así que la primera de la plataforma es la 393.
+    assert.equal(update.number, 393);
+});
+
 test('un número forzado que no es un entero positivo se rechaza', async () => {
     await assert.rejects(
-        issueReceivableDocument({}, 'debt-1', { concept: 'X', items, issuedAt: '2026-09-30', number: 0 }, { id: 'user-1' }),
+        issueReceivableDocument({}, 'debt-1', { concept: 'X', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30', number: 0 }, { id: 'user-1' }),
         (error) => error.code === 'RECEIVABLE_NUMBER_INVALID'
     );
 });
@@ -165,7 +188,7 @@ test('una cuenta ya emitida no se reedita: se manda otra aparte', async () => {
     const prismaClient = { $transaction: async (callback) => callback(tx) };
 
     await assert.rejects(
-        issueReceivableDocument(prismaClient, 'debt-1', { concept: 'X', items, issuedAt: '2026-09-30' }, { id: 'user-1' }),
+        issueReceivableDocument(prismaClient, 'debt-1', { concept: 'X', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30' }, { id: 'user-1' }),
         (error) => error.code === 'RECEIVABLE_ALREADY_ISSUED' && /No\. 0144/.test(error.message) && /aparte/.test(error.message)
     );
 });
@@ -175,7 +198,7 @@ test('no se cambia el importe de una obligación que ya recibió plata distinta'
     const prismaClient = { $transaction: async (callback) => callback(tx) };
 
     await assert.rejects(
-        issueReceivableDocument(prismaClient, 'debt-1', { concept: 'X', items, issuedAt: '2026-09-30' }, { id: 'user-1' }),
+        issueReceivableDocument(prismaClient, 'debt-1', { concept: 'X', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30' }, { id: 'user-1' }),
         (error) => error.code === 'RECEIVABLE_ALREADY_PAID_PARTIALLY' && error.statusCode === 409
     );
 });
@@ -185,7 +208,7 @@ test('si los abonos ya cubren el total exacto, la obligación queda pagada', asy
     const prismaClient = { $transaction: async (callback) => callback(tx) };
 
     await issueReceivableDocument(prismaClient, 'debt-1', {
-        concept: 'Servicios', items, issuedAt: '2026-09-30'
+        concept: 'Servicios', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30'
     }, { id: 'user-1' });
 
     assert.equal(calls.find(([name]) => name === 'receivable.update')[1].data.status, 'PAGADO');
@@ -197,7 +220,7 @@ test('un periodo cerrado impide emitir', async () => {
     const prismaClient = { $transaction: async (callback) => callback(tx) };
 
     await assert.rejects(
-        issueReceivableDocument(prismaClient, 'debt-1', { concept: 'X', items, issuedAt: '2026-09-30' }, { id: 'user-1' }),
+        issueReceivableDocument(prismaClient, 'debt-1', { concept: 'X', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30' }, { id: 'user-1' }),
         (error) => error.code === 'FINANCIAL_PERIOD_CLOSED'
     );
 });
@@ -205,7 +228,7 @@ test('un periodo cerrado impide emitir', async () => {
 test('un número que otro proceso tomó primero se explica, no se duplica', async () => {
     const prismaClient = { $transaction: async () => { throw Object.assign(new Error('unique'), { code: 'P2002' }); } };
     await assert.rejects(
-        issueReceivableDocument(prismaClient, 'debt-1', { concept: 'X', items, issuedAt: '2026-09-30' }, { id: 'user-1' }),
+        issueReceivableDocument(prismaClient, 'debt-1', { concept: 'X', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30' }, { id: 'user-1' }),
         (error) => error.code === 'RECEIVABLE_NUMBER_TAKEN' && error.statusCode === 409
     );
 });
@@ -214,7 +237,7 @@ test('la obligación tiene que existir', async () => {
     const { tx } = buildTx({ receivable: null });
     const prismaClient = { $transaction: async (callback) => callback(tx) };
     await assert.rejects(
-        issueReceivableDocument(prismaClient, 'debt-404', { concept: 'X', items, issuedAt: '2026-09-30' }, { id: 'user-1' }),
+        issueReceivableDocument(prismaClient, 'debt-404', { concept: 'X', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30' }, { id: 'user-1' }),
         (error) => error.code === 'RECEIVABLE_NOT_FOUND' && error.statusCode === 404
     );
 });

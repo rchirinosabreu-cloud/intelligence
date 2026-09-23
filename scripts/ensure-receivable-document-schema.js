@@ -12,6 +12,7 @@ try {
   await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "issuedAt" TIMESTAMP(3);`);
   await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "issuedById" TEXT;`);
   await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "concept" TEXT;`);
+  await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "servicePeriod" TEXT;`);
   await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "pdfStorageKey" TEXT;`);
   // Dos cuentas de cobro no pueden llevar el mismo número. Índice completo y con el
   // nombre que genera Prisma para `@unique`: en PostgreSQL los nulos no chocan entre

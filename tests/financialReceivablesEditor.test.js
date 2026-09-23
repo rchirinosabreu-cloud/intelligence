@@ -95,6 +95,13 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
         notes: 'Jazmin',
         comments: 'Pago pendiente',
         sourceLabel: 'Jazmin',
+        // Documento: esta obligación vino del Excel y todavía no se ha emitido.
+        number: null,
+        formattedNumber: null,
+        issuedAt: null,
+        concept: null,
+        servicePeriod: null,
+        items: [],
         payments: [{
             id: 'payment-1',
             amount: 680000,
@@ -110,6 +117,40 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
     assert.equal(res.payload.totals.originalTotal, 4680000);
     assert.equal(res.payload.totals.paidTotal, 680000);
     assert.equal(res.payload.totals.outstandingTotal, 4000000);
+});
+
+// La cartera trae el documento para que la pantalla sepa si ofrece «Emitir cuenta de
+// cobro» o muestra su número (Elisa, reunión del 21 de septiembre de 2026).
+test('una obligación ya emitida llega con su número, su periodo y sus conceptos', async () => {
+    const prismaClient = {
+        financialImportBatch: { findFirst: async () => null },
+        accountsReceivable: {
+            findMany: async (args) => {
+                assert.ok(args.include.items, 'sin los conceptos la pantalla no puede mostrar el documento');
+                return [{
+                    id: 'debt-1', amount: 1200000, period: new Date(Date.UTC(2026, 8, 1)), year: 2026, month: 9,
+                    dueDate: null, status: 'DEBE', notes: null, comments: null, sourceLabel: 'Titanes', payments: [],
+                    number: 393, issuedAt: new Date(Date.UTC(2026, 8, 22)),
+                    concept: 'Prestación de servicios…', servicePeriod: '20 de agosto al 19 de septiembre',
+                    items: [
+                        { id: 'item-1', description: 'Fee mensual', amount: 800000 },
+                        { id: 'item-2', description: 'Inversión de pauta en Meta Ads', amount: 400000 }
+                    ],
+                    client: { name: 'Titanes', slug: 'titanes' }
+                }];
+            }
+        }
+    };
+    const res = makeResponse();
+
+    await getFinancialReceivablesLedger({ query: { year: 2026 } }, res, { prismaClient });
+
+    const [item] = res.payload.items;
+    assert.equal(item.number, 393);
+    assert.equal(item.formattedNumber, 'No. 0393');
+    assert.equal(item.servicePeriod, '20 de agosto al 19 de septiembre');
+    assert.deepEqual(item.items.map((line) => line.description), ['Fee mensual', 'Inversión de pauta en Meta Ads']);
+    assert.equal(item.items.reduce((sum, line) => sum + line.amount, 0), item.amount, 'los conceptos suman el total de la obligación');
 });
 
 // Un abono revertido sigue visible en la cartera como evidencia, pero no descuenta saldo.

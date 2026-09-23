@@ -1,5 +1,9 @@
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
 import { hasPartyIdentity } from '../lib/partyIdentity.js';
+import {
+    RECEIVABLE_ITEM_MAX, RECEIVABLE_CONCEPT_MAX, RECEIVABLE_ITEM_DESCRIPTION_MAX,
+    RECEIVABLE_SERVICE_PERIOD_MAX, formatReceivableNumber
+} from '../lib/receivableDocument.js';
 import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
 import {
     assertOpenFinancialPeriod,
@@ -7,11 +11,17 @@ import {
     parseFinancialDateInput
 } from './financialRecordService.js';
 
-export const RECEIVABLE_ITEM_MAX = 40;
-// El concepto real es un párrafo más una lista de lo que incluye el servicio: la de
-// Corporación Titanes pasa de 700 caracteres. 300 dejaba fuera media cuenta de cobro.
-export const RECEIVABLE_CONCEPT_MAX = 4000;
-export const RECEIVABLE_ITEM_DESCRIPTION_MAX = 300;
+// Los límites, el concepto por defecto y el formato del número viven en `src/lib` para
+// que el formulario pueda leerlos sin arrastrar código de servidor. Se reexportan aquí
+// porque el servicio sigue siendo el punto de entrada del dominio.
+export {
+    RECEIVABLE_ITEM_MAX,
+    RECEIVABLE_CONCEPT_MAX,
+    RECEIVABLE_ITEM_DESCRIPTION_MAX,
+    RECEIVABLE_SERVICE_PERIOD_MAX,
+    RECEIVABLE_CONCEPT_DEFAULT,
+    formatReceivableNumber
+} from '../lib/receivableDocument.js';
 // Aquí no se calcula IVA. El único sitio donde aparece en la reunión del 21 de
 // septiembre de 2026 es la pantalla de Siigo, el programa contable de Elisa, y
 // colgando del caso «factura electrónica»; la cuenta de cobro es el otro camino.
@@ -78,15 +88,6 @@ export const nextReceivableNumber = (highestIssued, configuredStart) => {
     return Number.isInteger(highest) && highest >= floor ? highest + 1 : floor;
 };
 
-// Como lo escribe el documento real: «Cuenta de cobro No. 0389», cuatro dígitos y
-// sin prefijo de letras. No es un formato nuestro, es el que ya reciben los clientes.
-export const formatReceivableNumber = (number) => {
-    // `Number(null)` es 0 y `Number.isInteger(0)` es true: sin este guardia una
-    // obligación sin emitir se presentaría como «No. null».
-    if (number === null || number === undefined || number === '') return null;
-    const value = Number(number);
-    return Number.isInteger(value) && value > 0 ? `No. ${String(value).padStart(4, '0')}` : null;
-};
 
 /**
  * Emite la cuenta de cobro de una obligación: le pone número, fecha, conceptos e IVA,
@@ -98,6 +99,7 @@ export const formatReceivableNumber = (number) => {
  */
 export const issueReceivableDocument = async (prismaClient, receivableId, input = {}, actor, options = {}) => {
     const concept = text(input.concept, RECEIVABLE_CONCEPT_MAX, 'RECEIVABLE_CONCEPT_REQUIRED', 'La cuenta de cobro necesita un concepto.');
+    const servicePeriod = text(input.servicePeriod, RECEIVABLE_SERVICE_PERIOD_MAX, 'RECEIVABLE_SERVICE_PERIOD_REQUIRED', 'Escribe el periodo del servicio, como «20 de agosto al 19 de septiembre».');
     const document = calculateReceivableDocument(input.items);
     const { date: issuedAt } = parseFinancialDateInput(input.issuedAt);
     const actorId = actor?.id || actor?.userId || null;
@@ -171,6 +173,7 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
                     issuedAt,
                     issuedById: actorId,
                     concept,
+                    servicePeriod,
                     amount: document.total,
                     status: paidCents === document.totalCents ? 'PAGADO' : receivable.status
                 },
