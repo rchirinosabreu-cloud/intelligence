@@ -461,7 +461,9 @@ const matchesFilters = (lead, query) => {
   const groups = list(query.group);
   if (groups.length && !groups.includes(lead.stageGroup)) return false;
   const origins = list(query.origin);
-  if (origins.length && !origins.includes(lead.origin)) return false;
+  // «Formulario web» as origin also means "arrived through the public form", whatever the person answered
+  // in "¿Cómo nos conociste?" (a referred prospect who filled the form has origin REFERIDO and hasRequest).
+  if (origins.length && !origins.includes(lead.origin) && !(origins.includes('FORMULARIO') && lead.hasRequest)) return false;
   const priorities = list(query.priority);
   if (priorities.length && !priorities.includes(lead.priority)) return false;
   const owners = list(query.ownerId);

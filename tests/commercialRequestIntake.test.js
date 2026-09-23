@@ -87,6 +87,12 @@ test('a fresh request never sinks in the list, can be filtered, and the dashboar
   assert.equal(metrics.recentRequests[0].company, 'HDI Seguros');
   assert.deepEqual(metrics.recentRequests[0].request.services, ['WEB']);
   assert.equal(metrics.recentRequests[0].activities, undefined);
+
+  // A referred prospect who used the form: origin REFERIDO, yet the "Formulario web" origin filter still finds it.
+  await receiveCommercialRequest(db, { answers: { ...complete(), company: 'Prueba', source: 'REFERIDO' } }, { now: NOW });
+  const byOrigin = (await listLeads(db, { origin: 'FORMULARIO' }, NOW)).items;
+  assert.deepEqual(byOrigin.map(lead => [lead.company, lead.origin]).sort(), [['HDI Seguros', 'FORMULARIO'], ['Prueba', 'REFERIDO']]);
+  assert.equal((await listLeads(db, { origin: 'LINKEDIN' }, NOW)).items.length, 1, 'other origin filters are untouched');
 });
 
 test('invalid submissions are rejected with field details and nothing is written; honeypot is swallowed', async () => {
