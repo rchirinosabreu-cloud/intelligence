@@ -29,6 +29,31 @@ const income = () => records.filter(record => record.type === 'INCOME').reduce((
 records[1] = { ...records[1], amount: 400000, origin: 'SYSTEM', description: 'Pago de cartera: Cliente de muestra', attachmentUrl: 'https://example.invalid/soporte.pdf', receivablePayment: { id: 'historical-payment', receivableId: debt.id } };
 records[2] = { ...records[2], attachmentUrl: 'javascript:alert(1)' };
 if (!debt.balanceReviewRequired) debt.payments = [{ id: 'historical-payment', amount: 400000, paidAt: '2026-09-01T05:00:00Z', reference: 'ABONO-01', account, financialRecord: records[1] }];
+// Un PDF de una página, válido de verdad: el visor de la plataforma lo renderiza con
+// pdf.js, así que unos bytes inventados no probarían nada.
+const samplePdf = (text) => {
+  const objects = [
+    '<</Type/Catalog/Pages 2 0 R>>',
+    '<</Type/Pages/Kids[3 0 R]/Count 1>>',
+    '<</Type/Page/Parent 2 0 R/MediaBox[0 0 300 120]/Resources<</Font<</F1 4 0 R>>>>/Contents 5 0 R>>',
+    '<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>',
+    null
+  ];
+  const stream = `BT /F1 14 Tf 20 60 Td (${text}) Tj ET`;
+  objects[4] = `<</Length ${stream.length}>>\nstream\n${stream}\nendstream`;
+  let pdf = '%PDF-1.4\n';
+  const offsets = [];
+  objects.forEach((body, index) => {
+    offsets.push(pdf.length);
+    pdf += `${index + 1} 0 obj\n${body}\nendobj\n`;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (const offset of offsets) pdf += `${String(offset).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<</Size ${objects.length + 1}/Root 1 0 R>>\nstartxref\n${xref}\n%%EOF`;
+  return pdf;
+};
+
 const createdReceivables = window.__createdReceivables = [];
 const deletedReceivables = window.__deletedReceivables = [];
 axios.defaults.adapter = async config => {
@@ -95,7 +120,7 @@ axios.defaults.adapter = async config => {
     // Como el servidor: el PDF llega por la API autenticada, como bytes.
     if (!debt.number) throw Object.assign(new Error('Sin emitir'), { response: { data: { message: 'Esta obligación todavía no tiene cuenta de cobro.' } } });
     (window.__documentRequests ||= []).push(path);
-    data = new Blob([`%PDF-1.4 muestra de la cuenta de cobro ${debt.formattedNumber}`], { type: 'application/pdf' });
+    data = new Blob([samplePdf(`Cuenta de cobro ${debt.formattedNumber}`)], { type: 'application/pdf' });
   } else if (path.includes('/receivable-payments/') && path.endsWith('/reverse')) {
     const paymentId = path.split('/').at(-2);
     const target = debt.payments.find(payment => payment.id === paymentId);

@@ -31,6 +31,7 @@ import FinancialFilters, { FINANCIAL_MONTHS } from './financial/FinancialFilters
 import BankReconciliationPanel from './financial/BankReconciliationPanel';
 import ReceivablePaymentDialog from './financial/ReceivablePaymentDialog';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
+import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import { groupFinancialReceivables, financialDebtStatus, formatFinancialPeriod } from '@/utils/financialReceivables';
@@ -121,6 +122,7 @@ const FinancialDashboard = () => {
     const [issueForm, setIssueForm] = useState(null);
     const [isIssuing, setIsIssuing] = useState(false);
     const [downloadingDocumentId, setDownloadingDocumentId] = useState(null);
+    const [documentPreview, setDocumentPreview] = useState(null);
     // Eliminar una obligación tecleada por error o de prueba: siempre con confirmación
     // que dice qué se pierde, nunca en un clic suelto.
     const [debtToDelete, setDebtToDelete] = useState(null);
@@ -451,8 +453,23 @@ await invalidateFinancialQueries(queryClient);
         }
     };
 
-    // El PDF llega por la API autenticada, nunca por una URL del bucket. Se abre en otra
-    // pestaña para revisarlo, o se baja con el nombre que ya trae el propio documento.
+    const downloadBlobUrl = (objectUrl, name) => {
+        const anchor = window.document.createElement('a');
+        anchor.href = objectUrl;
+        anchor.download = name;
+        window.document.body.appendChild(anchor);
+        anchor.click();
+        anchor.remove();
+    };
+
+    const closeDocumentPreview = () => setDocumentPreview((current) => {
+        if (current) URL.revokeObjectURL(current.url);
+        return null;
+    });
+
+    // El PDF llega por la API autenticada, nunca por una URL del bucket, y se ve **en la
+    // misma ventana** con el visor de la plataforma (Rodny, 23 de septiembre de 2026),
+    // el mismo que usan los soportes de un movimiento.
     const openReceivableDocument = async (debt, { download = false } = {}) => {
         if (!debt?.id || downloadingDocumentId) return;
         setDownloadingDocumentId(debt.id);
@@ -466,19 +483,19 @@ await invalidateFinancialQueries(queryClient);
             });
             const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: 'application/pdf' });
             const objectUrl = URL.createObjectURL(blob);
+            const name = `Cuenta de cobro ${debt.formattedNumber}.pdf`;
             if (download) {
-                const anchor = window.document.createElement('a');
-                anchor.href = objectUrl;
-                anchor.download = `Cuenta de cobro ${debt.formattedNumber}.pdf`;
-                window.document.body.appendChild(anchor);
-                anchor.click();
-                anchor.remove();
-            } else {
-                window.open(objectUrl, '_blank', 'noopener');
+                downloadBlobUrl(objectUrl, name);
+                // El navegador ya tiene los bytes; soltar la referencia evita retener el
+                // PDF en memoria durante toda la sesión.
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+                return;
             }
-            // El navegador ya tiene los bytes; soltar la referencia evita retener el PDF
-            // en memoria durante toda la sesión.
-            setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+            // El visor recibe los bytes, no la URL: la Content-Security-Policy de la
+            // página no le deja buscar un `blob:`.
+            const data = await blob.arrayBuffer();
+            closeDocumentPreview();
+            setDocumentPreview({ file: { id: debt.id, name, mimeType: 'application/pdf', size: blob.size }, url: objectUrl, data });
         } catch (error) {
             console.error('Error opening receivable document:', error.response?.data || error);
             setImportError('No fue posible abrir la cuenta de cobro.');
@@ -1941,6 +1958,16 @@ await invalidateFinancialQueries(queryClient);
 
             <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={importError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
             {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} />}
+
+            {documentPreview && (
+                <ChatFilePreview
+                    file={documentPreview.file}
+                    url={documentPreview.url}
+                    data={documentPreview.data}
+                    onClose={closeDocumentPreview}
+                    onDownload={() => downloadBlobUrl(documentPreview.url, documentPreview.file.name)}
+                />
+            )}
 
             {/* Eliminar dice qué se pierde antes de hacerlo: el importe, el periodo y,
                 si ya se emitió, su número —que vuelve a quedar libre para la siguiente—.
