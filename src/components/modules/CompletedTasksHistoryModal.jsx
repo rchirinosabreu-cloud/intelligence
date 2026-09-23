@@ -1,7 +1,7 @@
 import Select from '@/components/ui/Select';
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import React, { useMemo, useState, useEffect } from 'react';
-import { X, Search, Filter, Loader2, CalendarDays, TaskReintegrateIcon } from '@/components/ui/icons';
+import { X, Search, Filter, Loader2, CalendarDays, ChevronDown, TaskReintegrateIcon } from '@/components/ui/icons';
 import { useQueryClient } from '@tanstack/react-query';
 import { Card } from '@/components/ui/Card';
 import TeamAvatar from '@/components/ui/TeamAvatar';
@@ -20,8 +20,34 @@ import {
 import {
   buildCompletedTaskReopenPayload,
   canReturnCompletedTaskToBoard,
+  formatElapsedTime,
   REOPEN_REASONS,
 } from '@/lib/taskTiming';
+import TaskWorkHistory from './TaskWorkHistory';
+import { cn } from '@/lib/utils';
+
+const formatDateTime = (value) => (value
+  ? new Intl.DateTimeFormat('es-CO', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'America/Bogota' }).format(new Date(value))
+  : null);
+
+// «URGENTE» → «Urgente»: las etiquetas de prioridad son la misma palabra del tablero.
+const priorityLabel = (priority) => (priority
+  ? String(priority).charAt(0) + String(priority).slice(1).toLowerCase()
+  : null);
+
+const plainTextSnippet = (value) => String(value || '')
+  .replace(/<[^>]+>/g, ' ')
+  .replace(/&nbsp;/gi, ' ')
+  .replace(/\s+/g, ' ')
+  .trim();
+
+/** Un dato de la tarea cerrada. Se omite solo si no hay nada que mostrar. */
+const CompletedTaskFact = ({ label, value }) => (value ? (
+  <div className="min-w-0">
+    <dt className="text-[9px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">{label}</dt>
+    <dd className="truncate text-zinc-700 dark:text-zinc-200" title={value}>{value}</dd>
+  </div>
+) : null);
 
 const matchesTaskSearch = (task, searchTerm) => {
   const query = searchTerm.trim().toLowerCase();
@@ -50,6 +76,10 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
   const [reopenNote, setReopenNote] = useState('');
   const [isSubmittingReopen, setIsSubmittingReopen] = useState(false);
   const canReopenTasks = canReturnCompletedTaskToBoard(currentUser);
+  // Detalle de una tarea cerrada: horas y datos, abriéndola aquí mismo (Rodny, 23 de septiembre de 2026).
+  const [expandedTaskId, setExpandedTaskId] = useState(null);
+  // El desglose por sesiones lo sirve el servidor solo a dirección (`isManagerRole`); el resto ve el total.
+  const canSeeWorkSessions = ['ADMIN', 'PROJECT_MANAGER'].includes(currentUser?.role);
 
   // Default to today's date in YYYY-MM-DD format based on America/Bogota timezone
   const todayStr = useMemo(() => {
@@ -292,8 +322,18 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
 
                         {/* Task Cards Grid */}
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pl-2 sm:pl-11">
-                            {userGroup.items.map(task => (
-                                <Card key={task.id} data-completed-task-id={task.id} className="relative p-3 pr-11 border-zinc-200 dark:border-zinc-800 hover:border-emerald-200 dark:hover:border-emerald-900/50 transition-colors group">
+                            {userGroup.items.map(task => {
+                              const isExpanded = expandedTaskId === task.id;
+                              return (
+                                <Card
+                                  key={task.id}
+                                  data-completed-task-id={task.id}
+                                  className={cn(
+                                    "relative p-3 pr-11 border-zinc-200 dark:border-zinc-800 hover:border-emerald-200 dark:hover:border-emerald-900/50 transition-colors group",
+                                    // Abierta ocupa la fila entera: el detalle no cabe en media columna.
+                                    isExpanded && "sm:col-span-2 border-emerald-200 dark:border-emerald-900/50"
+                                  )}
+                                >
                                     {canReopenTasks && (
                                       <button
                                           type="button"
@@ -305,14 +345,22 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                                           <TaskReintegrateIcon className="h-3.5 w-3.5" />
                                       </button>
                                     )}
-                                    <div className="flex items-start gap-3">
+                                    {/* Toda la tarjeta abre el detalle: horas y datos de la tarea ya cerrada. */}
+                                    <button
+                                        type="button"
+                                        data-completed-task-toggle
+                                        onClick={() => setExpandedTaskId(current => (current === task.id ? null : task.id))}
+                                        aria-expanded={isExpanded}
+                                        aria-controls={`completed-task-details-${task.id}`}
+                                        className="flex w-full items-start gap-3 text-left focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 rounded-lg"
+                                    >
                                         <div className="mt-0.5">
                                             <div className="w-4 h-4 rounded-full bg-emerald-100 dark:bg-emerald-500/20 border border-emerald-500 flex items-center justify-center">
                                                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
                                             </div>
                                         </div>
                                         <div className="flex-1 min-w-0">
-                                            <h4 className="text-sm font-medium text-zinc-900 dark:text-white truncate" title={task.title}>
+                                            <h4 className={cn("text-sm font-medium text-zinc-900 dark:text-white", !isExpanded && "truncate")} title={task.title}>
                                                 {task.title}
                                             </h4>
                                             <div className="flex items-center gap-2 mt-1.5 text-xs text-zinc-500 dark:text-zinc-400">
@@ -325,12 +373,62 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                                                         </span>
                                                     </>
                                                 )}
+                                                {Number(task.accumulatedWorkMs) > 0 && (
+                                                    <>
+                                                        <span>•</span>
+                                                        <span className="font-mono tabular-nums">{formatElapsedTime(task.accumulatedWorkMs)}</span>
+                                                    </>
+                                                )}
                                             </div>
                                             <TaskRecognitionLabels task={task} />
                                         </div>
-                                    </div>
+                                        <ChevronDown className={cn("mt-0.5 h-4 w-4 shrink-0 text-zinc-400 transition-transform", isExpanded && "rotate-180")} aria-hidden="true" />
+                                    </button>
+
+                                    {isExpanded && (
+                                        <div id={`completed-task-details-${task.id}`} data-completed-task-details className="mt-3 space-y-3 border-t border-zinc-100 pt-3 dark:border-zinc-800/70">
+                                            {/* El desglose por sesiones es del mismo componente del panel de la tarea; el servidor
+                                                solo lo entrega a dirección, así que el resto ve el total registrado. */}
+                                            {canSeeWorkSessions ? (
+                                                <TaskWorkHistory
+                                                    taskId={task.id}
+                                                    status={task.status}
+                                                    startedAt={task.startedAt}
+                                                    accumulatedWorkMs={task.accumulatedWorkMs}
+                                                />
+                                            ) : (
+                                                <div className="border-y border-zinc-200/70 py-3 dark:border-zinc-800/70">
+                                                    <p className="text-[9px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Tiempo de trabajo</p>
+                                                    <p className="mt-0.5 font-mono text-base font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{formatElapsedTime(task.accumulatedWorkMs)}</p>
+                                                </div>
+                                            )}
+
+                                            <dl className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs sm:grid-cols-3">
+                                                <CompletedTaskFact label="Responsable" value={task.assignee?.name} />
+                                                <CompletedTaskFact label="Cliente" value={task.client?.name} />
+                                                <CompletedTaskFact label="Creada por" value={task.creator?.name} />
+                                                <CompletedTaskFact label="Creada" value={formatDateTime(task.createdAt)} />
+                                                <CompletedTaskFact label="Vencía" value={formatDateTime(task.dueDate)} />
+                                                <CompletedTaskFact label="Cerrada" value={formatDateTime(task.completedAt)} />
+                                                <CompletedTaskFact label="Categoría" value={task.aiCategory} />
+                                                <CompletedTaskFact label="Complejidad" value={task.aiComplexity} />
+                                                <CompletedTaskFact label="Prioridad" value={priorityLabel(task.priority)} />
+                                                {Number(task.returnCount) > 0 && (
+                                                    <CompletedTaskFact label="Devoluciones" value={`${task.returnCount}`} />
+                                                )}
+                                            </dl>
+
+                                            {plainTextSnippet(task.comments) && (
+                                                <div>
+                                                    <p className="text-[9px] font-semibold uppercase tracking-widest text-zinc-400 dark:text-zinc-500">Descripción</p>
+                                                    <p className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-300">{plainTextSnippet(task.comments)}</p>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </Card>
-                            ))}
+                              );
+                            })}
                         </div>
                     </div>
                 ))
