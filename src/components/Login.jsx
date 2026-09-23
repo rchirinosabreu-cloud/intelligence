@@ -309,6 +309,12 @@ const Login = ({ onLogin }) => {
 
             <div className="mt-8 flex gap-6">
               <Link
+                to="/seguridad"
+                className="text-xs font-medium text-zinc-400 transition-colors hover:text-brand-cyan-deep dark:hover:text-brand-cyan"
+              >
+                Seguridad e IA
+              </Link>
+              <Link
                 to="/privacidad"
                 className="text-xs font-medium text-zinc-400 transition-colors hover:text-indigo-600 dark:hover:text-indigo-300"
               >

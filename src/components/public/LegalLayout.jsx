@@ -1,7 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 
-const LegalLayout = ({ children, title }) => {
+const LegalLayout = ({ children, title, sectionLabel = 'Legal' }) => {
   return (
     <div className="min-h-screen bg-white dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 font-sans">
       {/* Minimalist Header */}
@@ -12,7 +12,7 @@ const LegalLayout = ({ children, title }) => {
             <span className="font-bold tracking-tighter text-lg">BrainStudio OS</span>
           </Link>
           <div className="text-xs text-zinc-400 uppercase tracking-widest font-medium">
-            Legal
+            {sectionLabel}
           </div>
         </div>
       </header>
