@@ -481,3 +481,58 @@
   background: rgb(39 39 42) !important;
   color: rgb(250 250 250) !important;
 }
+
+/* Selector de mes (BrainMonthPicker): la misma caja y el mismo lenguaje que el
+   calendario de días. Sin esto la rejilla sale con el estilo de fábrica de
+   react-datepicker, que no se parece a nada de la plataforma. */
+.brain-datepicker-months .react-datepicker__month-container {
+  padding-bottom: 8px;
+}
+
+.brain-datepicker-months .react-datepicker__month-wrapper {
+  display: flex;
+  gap: 0.25rem;
+  margin: 0.25rem 0.5rem;
+}
+
+.brain-datepicker-months .react-datepicker__month-text {
+  flex: 1 1 0;
+  padding: 0.55rem 0 !important;
+  margin: 0 !important;
+  border-radius: 10px !important;
+  color: rgb(39 39 42) !important;
+  font-size: 0.78rem !important;
+  font-weight: 600 !important;
+  text-transform: capitalize;
+  transition: background-color 120ms ease, color 120ms ease, transform 120ms ease;
+}
+
+.brain-datepicker-months .react-datepicker__month-text:hover {
+  background: rgb(244 244 245) !important;
+  color: rgb(24 24 27) !important;
+}
+
+.brain-datepicker-months .react-datepicker__month-text--selected,
+.brain-datepicker-months .react-datepicker__month-text--keyboard-selected {
+  background: hsl(var(--primary)) !important;
+  color: hsl(var(--primary-foreground)) !important;
+  font-weight: 800 !important;
+  transform: translateY(-1px);
+}
+
+.brain-datepicker-months .react-datepicker__month-text--disabled {
+  color: rgb(161 161 170) !important;
+}
+
+.dark .brain-datepicker-months .react-datepicker__month-text {
+  color: rgb(244 244 245) !important;
+}
+
+.dark .brain-datepicker-months .react-datepicker__month-text:hover {
+  background: rgb(39 39 42) !important;
+  color: rgb(250 250 250) !important;
+}
+
+.dark .brain-datepicker-months .react-datepicker__month-text--disabled {
+  color: rgb(113 113 122) !important;
+}

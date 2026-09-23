@@ -68,7 +68,23 @@ test('financial operational payment dates use the shared calendar', () => {
     const paymentSource = fs.readFileSync(new URL('../src/components/modules/financial/ReceivablePaymentDialog.jsx', import.meta.url), 'utf8');
     assert.match(paymentSource, /DatePicker \{\.\.\.brainDatePickerProps\}/);
     assert.match(paymentSource, /selected=\{form\.paidAt/);
-    assert.match(dashboardSource, /selected=\{payrollPaymentForm\.paidAt/);
+    // El tablero pasó del DatePicker crudo al componente compartido, que trae el
+    // ancho, la posición del panel y el portal que lo saca del modal.
+    assert.match(dashboardSource, /<BrainDatePicker ariaLabel="Fecha del pago de nómina" required value=\{payrollPaymentForm\.paidAt\}/);
+    assert.doesNotMatch(dashboardSource, /selected=\{payrollPaymentForm\.paidAt/);
+});
+
+// Rodny, 22 de septiembre de 2026: el calendario se abría volteado sobre el
+// formulario y la etiqueta quedaba pegada al campo, porque el diálogo dibujaba sus
+// propios DatePicker en vez de usar el compartido.
+test('the receivable dialog uses the shared pickers, with the label above the field', () => {
+    assert.doesNotMatch(dashboardSource, /from 'react-datepicker'/);
+    assert.match(dashboardSource, /import \{ BrainDatePicker, BrainMonthPicker \} from '@\/components\/ui\/BrainDatePicker'/);
+    assert.match(dashboardSource, /<span className="block">Periodo<\/span><BrainMonthPicker/);
+    assert.match(dashboardSource, /<span className="block">Fecha de vencimiento<\/span><BrainDatePicker/);
+    // Un nodo de texto suelto no es hijo de elemento, así que `space-y` no lo separa
+    // y el campo se le pega al lado: la etiqueta va envuelta.
+    assert.doesNotMatch(dashboardSource, />(Periodo|Fecha de vencimiento|Inicio|Terminación)<Brain/);
 });
 
 test('page headers preserve title width until wide desktop layouts', () => {
