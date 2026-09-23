@@ -35,6 +35,7 @@ import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import { groupFinancialReceivables, financialDebtStatus, formatFinancialPeriod } from '@/utils/financialReceivables';
 import { clientOptions } from '@/utils/financialClients';
+import { RECEIVABLE_CONCEPT_DEFAULT, RECEIVABLE_ITEM_MAX, formatReceivableNumber } from '@/lib/receivableDocument';
 
 const CATEGORY_COLORS = {
     'MEMBRESIA': '#009EB9',
@@ -108,6 +109,11 @@ const FinancialDashboard = () => {
     const [statementClient, setStatementClient] = useState(null);
     const [paymentForm, setPaymentForm] = useState({ amount: '', paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }), accountId: '', reference: '', notes: '' });
     const [isSavingPayment, setIsSavingPayment] = useState(false);
+    // Emitir la cuenta de cobro: los conceptos son «el fee mensual más lo que hayan
+    // pedido adicional», y el total del documento pasa a ser el de la obligación.
+    const [debtToIssue, setDebtToIssue] = useState(null);
+    const [issueForm, setIssueForm] = useState(null);
+    const [isIssuing, setIsIssuing] = useState(false);
     // Revertir un abono mal registrado: siempre con motivo, nunca en un clic suelto.
     const [paymentToReverse, setPaymentToReverse] = useState(null);
     const [expandedReversals, setExpandedReversals] = useState({});
@@ -365,6 +371,51 @@ await invalidateFinancialQueries(queryClient);
             setImportError(error.response?.data?.message || 'No fue posible registrar el pago de cartera.');
         } finally {
             setIsSavingPayment(false);
+        }
+    };
+
+    const openIssueDialog = (debt) => {
+        setImportError('');
+        setDebtToIssue(debt);
+        setIssueForm({
+            concept: RECEIVABLE_CONCEPT_DEFAULT,
+            servicePeriod: '',
+            issuedAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }),
+            // Arranca con el valor causado como un único concepto: lo normal es el fee,
+            // y añadir líneas es la excepción de un mes con adicionales.
+            items: [{ description: '', amount: String(debt.outstanding || debt.amount || '') }]
+        });
+    };
+
+    const setIssueItem = (index, patch) => setIssueForm((current) => ({
+        ...current,
+        items: current.items.map((item, position) => (position === index ? { ...item, ...patch } : item))
+    }));
+
+    const issueTotal = (issueForm?.items || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
+    const handleIssueReceivable = async (event) => {
+        event.preventDefault();
+        if (!debtToIssue?.id || isIssuing || !canWriteFinancials) return;
+        setIsIssuing(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const { data: result } = await axios.post(`${baseUrl}/api/financials/receivables/${debtToIssue.id}/issue`, {
+                ...issueForm,
+                items: issueForm.items.map((item) => ({ description: item.description, amount: Number(item.amount) }))
+            }, { headers: { Authorization: `Bearer ${token}` } });
+            await invalidateFinancialQueries(queryClient);
+            setDebtToIssue(null);
+            setIssueForm(null);
+            setImportSuccess(result?.message || 'Cuenta de cobro emitida.');
+        } catch (error) {
+            console.error('Error issuing receivable document:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible emitir la cuenta de cobro.');
+        } finally {
+            setIsIssuing(false);
         }
     };
 
@@ -1073,6 +1124,20 @@ await invalidateFinancialQueries(queryClient);
                                                                     {canWriteFinancials && debt.status !== 'PAGADO' && debt.outstanding > 0.005 && <button type="button" onClick={() => openReceivablePayment(debt)} className="min-h-11 self-end rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Registrar pago</button>}
                                                                 </div>
                                                                 <p className="text-xs text-zinc-600 dark:text-zinc-300">{financialDebtStatus(debt)}{debt.dueDate ? ` · Vence: ${new Date(debt.dueDate).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : ''}</p>
+                                                                {/* Una obligación importada del Excel no tiene documento; emitirla se lo pone. */}
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    {debt.formattedNumber ? (
+                                                                        <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                                                                            Cuenta de cobro {debt.formattedNumber}
+                                                                            {debt.issuedAt ? <span className="font-normal text-zinc-500">· {new Date(debt.issuedAt).toLocaleDateString('es-CO', { timeZone: 'UTC' })}</span> : null}
+                                                                        </span>
+                                                                    ) : canWriteFinancials && (
+                                                                        <button type="button" onClick={() => openIssueDialog(debt)}
+                                                                            className="min-h-11 rounded-lg border border-primary/40 px-3 text-xs font-semibold text-primary transition hover:bg-primary/5">
+                                                                            Emitir cuenta de cobro
+                                                                        </button>
+                                                                    )}
+                                                                </div>
                                                                 {debt.payments?.length > 0 && (() => {
                                                                     // La vista diaria muestra lo vigente. Lo revertido es historia: sigue
                                                                     // disponible, pero no ensucia la cartera de un cliente real.
@@ -1722,6 +1787,82 @@ await invalidateFinancialQueries(queryClient);
 
             <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={importError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
             {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} />}
+
+            <Dialog open={!!debtToIssue} onOpenChange={(open) => { if (!open && !isIssuing) { setDebtToIssue(null); setIssueForm(null); } }}>
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl dark:bg-zinc-900">
+                    <DialogHeader>
+                        <DialogTitle>Emitir cuenta de cobro</DialogTitle>
+                        <DialogDescription>
+                            Le pone número y congela sus conceptos. El total del documento pasa a ser el de la obligación, para que lo que se manda al cliente y lo que queda en cartera sean la misma cifra.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {issueForm && <form onSubmit={handleIssueReceivable} className="space-y-4">
+                        <div className="rounded-lg bg-zinc-50 px-3 py-2.5 text-sm dark:bg-white/5">
+                            <p className="font-semibold text-zinc-900 dark:text-white">{debtToIssue?.clientName}</p>
+                            <p className="text-xs text-zinc-500">Periodo contable {formatFinancialPeriod(debtToIssue?.period)} · valor causado {formatCurrency(debtToIssue?.amount || 0)}</p>
+                        </div>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
+                                <span className="block">Fecha del documento</span>
+                                <BrainDatePicker ariaLabel="Fecha de la cuenta de cobro" value={issueForm.issuedAt}
+                                    onChange={(value) => setIssueForm((current) => ({ ...current, issuedAt: value }))} className="rounded-lg py-2.5" />
+                            </label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
+                                <span className="block">Periodo del servicio</span>
+                                <input required maxLength={120} value={issueForm.servicePeriod}
+                                    onChange={(event) => setIssueForm((current) => ({ ...current, servicePeriod: event.target.value }))}
+                                    placeholder="20 de agosto al 19 de septiembre"
+                                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                            </label>
+                        </div>
+                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
+                            <span className="block">Concepto</span>
+                            <textarea required rows={6} maxLength={4000} value={issueForm.concept}
+                                onChange={(event) => setIssueForm((current) => ({ ...current, concept: event.target.value }))}
+                                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                            <span className="block text-xs text-zinc-500">El párrafo viene escrito; añade debajo lo que incluye el servicio, una línea por cada punto.</span>
+                        </label>
+                        <div className="space-y-2">
+                            <p className="text-sm text-zinc-700 dark:text-zinc-200">Conceptos y valores</p>
+                            <p className="text-xs text-zinc-500">El fee mensual y, si lo pidieron, lo adicional. Con un solo concepto el documento no lleva tabla.</p>
+                            <ul className="space-y-2">
+                                {issueForm.items.map((item, index) => (
+                                    <li key={index} className="grid grid-cols-1 gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,10rem)_auto]">
+                                        <input required maxLength={300} value={item.description} aria-label={`Descripción del concepto ${index + 1}`}
+                                            onChange={(event) => setIssueItem(index, { description: event.target.value })}
+                                            placeholder="Fee mensual"
+                                            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                                        <input required min="0.01" step="0.01" type="number" value={item.amount} aria-label={`Valor del concepto ${index + 1}`}
+                                            onChange={(event) => setIssueItem(index, { amount: event.target.value })}
+                                            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                                        {issueForm.items.length > 1 && <button type="button" aria-label={`Quitar el concepto ${index + 1}`}
+                                            onClick={() => setIssueForm((current) => ({ ...current, items: current.items.filter((_, position) => position !== index) }))}
+                                            className="min-h-11 rounded-lg border border-zinc-200 px-3 text-sm text-zinc-600 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5">Quitar</button>}
+                                    </li>
+                                ))}
+                            </ul>
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                {issueForm.items.length < RECEIVABLE_ITEM_MAX && <button type="button"
+                                    onClick={() => setIssueForm((current) => ({ ...current, items: [...current.items, { description: '', amount: '' }] }))}
+                                    className="min-h-11 text-sm font-medium text-primary underline underline-offset-2">Añadir concepto</button>}
+                                <p className="text-sm text-zinc-700 dark:text-zinc-200">Total del documento <strong className="text-zinc-900 dark:text-white">{formatCurrency(issueTotal)}</strong></p>
+                            </div>
+                            {Math.abs(issueTotal - Number(debtToIssue?.amount || 0)) > 0.005 && (
+                                <p className="text-xs text-amber-600 dark:text-amber-400">
+                                    El valor causado de la obligación es {formatCurrency(debtToIssue?.amount || 0)}. Al emitir, la obligación pasará a {formatCurrency(issueTotal)}.
+                                </p>
+                            )}
+                        </div>
+                        {importError && <p role="alert" className="text-sm text-destructive">{importError}</p>}
+                        <DialogFooter>
+                            <button type="button" onClick={() => { setDebtToIssue(null); setIssueForm(null); }} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button>
+                            <button type="submit" disabled={isIssuing || issueTotal <= 0} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">
+                                {isIssuing && <Loader2 className="h-4 w-4 animate-spin" />}Emitir cuenta de cobro
+                            </button>
+                        </DialogFooter>
+                    </form>}
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={!!paymentToReverse} onOpenChange={(open) => !open && setPaymentToReverse(null)}>
                 <DialogContent className="sm:max-w-md dark:bg-zinc-900">

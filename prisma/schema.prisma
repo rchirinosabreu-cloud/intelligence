@@ -1836,6 +1836,9 @@ model AccountsReceivable {
   issuedAt      DateTime?
   issuedById    String?
   concept       String?
+  // El rango del servicio tal como se escribe en el documento («20 de agosto al 19 de
+  // septiembre»): no coincide con el mes contable y no siempre empieza el día 1.
+  servicePeriod String?
   pdfStorageKey String?
   items         ReceivableItem[]
   importBatchId String?

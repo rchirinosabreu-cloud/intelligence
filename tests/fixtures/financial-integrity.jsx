@@ -65,6 +65,12 @@ axios.defaults.adapter = async config => {
       return acc;
     }, { income: 0, expense: 0 });
     data = { items: selection.slice((page - 1) * pageSize, page * pageSize), total: selection.length, page, pageSize, totals: { ...totals, net: totals.income - totals.expense } };
+  } else if (path.includes('/receivables/') && path.endsWith('/issue')) {
+    // Como el servidor: le pone número, congela conceptos y el total del documento
+    // pasa a ser el de la obligación.
+    const total = body.items.reduce((sum, item) => sum + Number(item.amount), 0);
+    debt = { ...debt, number: 393, formattedNumber: 'No. 0393', issuedAt: `${body.issuedAt}T00:00:00Z`, concept: body.concept, servicePeriod: body.servicePeriod, items: body.items, amount: total, outstanding: total - debt.paidAmount };
+    data = { message: 'Cuenta de cobro No. 0393 emitida.', receivable: debt, document: { number: 393, formattedNumber: 'No. 0393', total } };
   } else if (path.includes('/receivable-payments/') && path.endsWith('/reverse')) {
     const paymentId = path.split('/').at(-2);
     const target = debt.payments.find(payment => payment.id === paymentId);

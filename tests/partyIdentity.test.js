@@ -111,7 +111,7 @@ test('no se emite una cuenta de cobro si la ficha del cliente no tiene identidad
 
     await assert.rejects(
         issueReceivableDocument(prismaClient, 'debt-1', {
-            concept: 'Servicios', items: [{ description: 'Fee', amount: 1000 }], issuedAt: '2026-09-30'
+            concept: 'Servicios', items: [{ description: 'Fee', amount: 1000 }], servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30'
         }, { id: 'user-1' }),
         (error) => error.code === 'RECEIVABLE_CLIENT_IDENTITY_MISSING'
             && error.statusCode === 409

@@ -8,6 +8,7 @@ import {
 import { updateReceivable } from '../services/financialReceivableService.js';
 import { createPayrollContract, updatePayrollContract } from '../services/financialPayrollContractService.js';
 import { FINANCIAL_CATEGORIES } from '../services/financialRecordService.js';
+import { formatReceivableNumber } from '../services/receivableDocumentService.js';
 import { accumulateCategoryDistribution } from '../services/financialRecordAllocationService.js';
 
 // Helper to convert Decimal fields safely
@@ -148,6 +149,14 @@ const serializeReceivable = (receivable) => {
         period: receivable.period instanceof Date ? receivable.period.toISOString() : receivable.period,
         month: receivable.month,
         year: receivable.year,
+        // Documento: una obligación sin emitir no lo tiene, y la pantalla lo usa para
+        // saber si ofrece «Emitir cuenta de cobro» o muestra su número.
+        number: receivable.number ?? null,
+        formattedNumber: formatReceivableNumber(receivable.number),
+        issuedAt: receivable.issuedAt instanceof Date ? receivable.issuedAt.toISOString() : (receivable.issuedAt || null),
+        concept: receivable.concept || null,
+        servicePeriod: receivable.servicePeriod || null,
+        items: (receivable.items || []).map((item) => ({ id: item.id, description: item.description, amount: toNum(item.amount) })),
         dueDate: receivable.dueDate instanceof Date ? receivable.dueDate.toISOString() : receivable.dueDate,
         status: receivable.status,
         notes: receivable.notes,
@@ -444,7 +453,8 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
                         account: { select: { id: true, name: true } }
                     },
                     orderBy: { paidAt: 'desc' }
-                }
+                },
+                items: { orderBy: { sortOrder: 'asc' } }
             },
             orderBy: [
                 { status: 'asc' },
