@@ -22,6 +22,18 @@ export { dateKeyToPickerDate, pickerDateToKey, splitDateTimeKey, joinDateTimeKey
 
 export const brainDateInputClass = 'w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none transition-colors placeholder:text-zinc-400 focus:border-primary/60 focus:ring-2 focus:ring-primary/20 disabled:cursor-not-allowed disabled:opacity-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 dark:placeholder:text-zinc-500';
 
+/**
+ * Dentro de un modal el diálogo recorta al panel del calendario: no le cabe bajo el
+ * campo, react-datepicker lo voltea hacia arriba y acaba tapando el formulario entero
+ * (Rodny, 22 de septiembre de 2026). Sacándolo a un portal del `body` deja de estar
+ * recortado y vuelve a abrirse debajo, que es donde sí cabe. La posición fija lo
+ * mantiene pegado al campo aunque la página se desplace.
+ */
+const brainPopperProps = {
+  portalId: 'brain-datepicker-portal',
+  popperProps: { strategy: 'fixed' }
+};
+
 export function BrainDatePicker({ id, value, onChange, className, placeholder = 'DD/MM/AAAA', min, max, disabled, isClearable = false, ariaLabel, required, name }) {
   return (
     <DatePicker
@@ -42,6 +54,51 @@ export function BrainDatePicker({ id, value, onChange, className, placeholder = 
       className={cn(brainDateInputClass, className)}
       wrapperClassName="w-full"
       popperPlacement="bottom-start"
+      {...brainPopperProps}
+      autoComplete="off"
+    />
+  );
+}
+
+// ---- month -------------------------------------------------------------------------------------------------
+
+/**
+ * The one month picker of the platform. Financiero needed "mes y año" (the accounting
+ * period of a cuenta por cobrar) and, with no shared answer, the module reached for a
+ * raw DatePicker with `showMonthYearPicker`: a grid nobody had styled, that looked
+ * nothing like the platform's calendar (Rodny, 22 September 2026).
+ *
+ *   BrainMonthPicker  value 'YYYY-MM-01'  onChange('YYYY-MM-01' | '')
+ *
+ * The value stays the first day of the month so it keeps travelling as a plain date
+ * string, like every other field, and nothing downstream has to learn a new shape.
+ */
+export function BrainMonthPicker({ id, value, onChange, className, placeholder = 'Mes y año', min, max, disabled, isClearable = false, ariaLabel, required, name }) {
+  const monthKey = date => (date ? `${pickerDateToKey(date).slice(0, 7)}-01` : '');
+  return (
+    <DatePicker
+      id={id}
+      name={name}
+      {...brainDatePickerProps}
+      selected={dateKeyToPickerDate(value)}
+      onChange={date => onChange(monthKey(date))}
+      minDate={dateKeyToPickerDate(min) || undefined}
+      maxDate={dateKeyToPickerDate(max) || undefined}
+      showMonthYearPicker
+      dateFormat="MMMM 'de' yyyy"
+      placeholderText={placeholder}
+      disabled={disabled}
+      required={required}
+      isClearable={isClearable && !disabled}
+      ariaLabelledBy={undefined}
+      ariaLabel={ariaLabel}
+      className={cn(brainDateInputClass, className)}
+      // Las dos: la base da borde, sombra y cabecera; la de meses, la rejilla.
+      // Poner solo la segunda pisaría `brainDatePickerProps` y dejaría el panel sin estilo.
+      calendarClassName="brain-datepicker brain-datepicker-months"
+      wrapperClassName="w-full"
+      popperPlacement="bottom-start"
+      {...brainPopperProps}
       autoComplete="off"
     />
   );

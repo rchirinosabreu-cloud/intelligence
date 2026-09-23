@@ -35,6 +35,66 @@ test('every direct react-datepicker usage carries the shared brain props', async
   assert.deepEqual(offenders, []);
 });
 
+// El campo «Periodo» de una cuenta por cobrar pasaba `brainDatePickerProps` y aun así
+// abría una rejilla de meses sin estilo, con el calendario flotando sobre el
+// formulario (Rodny, 22 de septiembre de 2026). Pasar los props compartidos no basta:
+// estos cambian **qué calendario es**, y quien los necesite tiene que añadir la
+// variante al componente compartido, no inventarla en su módulo.
+const CALENDAR_VARIANT_PROPS = ['showMonthYearPicker', 'showYearPicker', 'showQuarterYearPicker', 'showTimeSelect', 'showTimeSelectOnly', 'selectsRange', 'selectsMultiple'];
+
+test('only the shared calendar decides what kind of calendar opens', async () => {
+  const shared = path.join(SRC, 'components', 'ui', 'BrainDatePicker.jsx');
+  const offenders = [];
+  for (const file of await walk(SRC)) {
+    if (file === shared) continue;
+    const source = await readFile(file, 'utf8');
+    for (const prop of CALENDAR_VARIANT_PROPS) {
+      if (new RegExp(`\\b${prop}\\b`).test(source)) offenders.push(`${path.relative(process.cwd(), file)} → ${prop}`);
+    }
+  }
+  assert.deepEqual(offenders, [], 'Añade la variante a BrainDatePicker.jsx y úsala desde el módulo');
+});
+
+// Trinquete: la lista de módulos que todavía dibujan su propio DatePicker está
+// congelada. Migrarlos es trabajo aparte, pero **no se añade ninguno nuevo**: quien
+// necesite una fecha usa BrainDatePicker, BrainMonthPicker o BrainDateTimePicker.
+const MODULES_WITH_RAW_PICKER = [
+  'src/components/modules/Activity/CalendarDateTimePicker.jsx',
+  'src/components/modules/Activity/OperationalCalendar.jsx',
+  'src/components/modules/ContentPlanDetail.jsx',
+  'src/components/modules/TaskCreateModal.jsx',
+  'src/components/modules/TaskEditModal.jsx',
+  'src/components/modules/financial/ReceivablePaymentDialog.jsx'
+];
+
+test('no module starts drawing its own calendar', async () => {
+  // El componente compartido y el módulo de props/locale que lo acompaña.
+  const shared = [
+    path.join(SRC, 'components', 'ui', 'BrainDatePicker.jsx'),
+    path.join(SRC, 'lib', 'brainDatePicker.js')
+  ];
+  const found = [];
+  for (const file of await walk(SRC)) {
+    if (shared.includes(file)) continue;
+    const source = await readFile(file, 'utf8');
+    if (/from ['"]react-datepicker['"]/.test(source)) found.push(path.relative(process.cwd(), file).replace(/\\/g, '/'));
+  }
+  assert.deepEqual(found.sort(), [...MODULES_WITH_RAW_PICKER].sort(),
+    'Si añadiste uno, usa el componente compartido; si migraste uno, quítalo de MODULES_WITH_RAW_PICKER.');
+});
+
+test('the month picker keeps the shared look and a plain date value', async () => {
+  const picker = await readFile('src/components/ui/BrainDatePicker.jsx', 'utf8');
+  assert.match(picker, /export function BrainMonthPicker/);
+  // Las dos clases: sin la base, el panel pierde borde, sombra y cabecera.
+  assert.match(picker, /calendarClassName="brain-datepicker brain-datepicker-months"/);
+  // El valor sigue siendo una fecha normal, para que nada aguas abajo cambie.
+  assert.match(picker, /-01`/);
+  const css = await readFile('src/index.css', 'utf8');
+  assert.match(css, /\.brain-datepicker-months \.react-datepicker__month-text\b/);
+  assert.match(css, /\.dark \.brain-datepicker-months \.react-datepicker__month-text\b/, 'la rejilla también existe en modo oscuro');
+});
+
 test('the rule is written down for future work', async () => {
   const agents = await readFile(new URL('../AGENTS.md', import.meta.url), 'utf8');
   assert.match(agents, /BrainDatePicker/);
