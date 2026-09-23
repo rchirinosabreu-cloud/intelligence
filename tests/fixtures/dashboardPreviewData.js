@@ -35,9 +35,21 @@ export const dashboardDemoTeam = [dashboardDemoMember, ...Object.values(people).
 const client = (key, name) => ({ id: `client-${key}`, name, slug: key, logoUrl: null, healthScore: 82 });
 
 export function dashboardDemoDashboard(now = new Date()) {
-  const completed = (key, title, assignee, clientName, hoursAgo) => ({
+  // Los campos extra (tiempo, fechas, categoría, descripción) alimentan el detalle que abre el historial de logros.
+  const completed = (key, title, assignee, clientName, hoursAgo, extra = {}) => ({
     id: `done-${key}`, title, status: 'REALIZADA', assignee, assigneeId: assignee.id, client: client(key, clientName),
-    completedAt: hoursFromNow(-hoursAgo, now).toISOString(), recognitions: key === 'reel' ? [{ kind: 'DAILY_EIGHT', title: 'On fire' }] : []
+    creator: { id: dashboardDemoUser.id, name: dashboardDemoUser.name },
+    completedAt: hoursFromNow(-hoursAgo, now).toISOString(),
+    createdAt: hoursFromNow(-hoursAgo - 26, now).toISOString(),
+    dueDate: daysFromNow(0, 7, now).toISOString(),
+    startedAt: null,
+    accumulatedWorkMs: extra.workMs ?? 0,
+    aiCategory: extra.category || 'Operaciones & Reuniones',
+    aiComplexity: extra.complexity || 'MEDIA',
+    priority: extra.priority || null,
+    returnCount: extra.returnCount || 0,
+    comments: extra.comments || '',
+    recognitions: key === 'reel' ? [{ kind: 'DAILY_EIGHT', title: 'On fire' }] : []
   });
   const upcoming = (key, title, clientName, days, isPriority = false) => ({
     id: `task-${key}`, title, status: 'PENDIENTE', dueDate: daysFromNow(days, 20, now).toISOString(), client: client(key, clientName), assignee: dashboardDemoMember, isPriority
@@ -60,9 +72,9 @@ export function dashboardDemoDashboard(now = new Date()) {
       upcoming('bonsai', 'Onboarding del cliente', 'Bonsai Café', 6)
     ],
     achievements: [
-      completed('parrilla', 'Parrilla de octubre aprobada', people.franci, 'Alpina', 1),
-      completed('reel', 'Reel de lanzamiento', people.melissa, 'Nutresa', 2),
-      completed('conciliacion', 'Conciliación de agosto', people.helen, 'Brainstudio', 3)
+      completed('parrilla', 'Parrilla de octubre aprobada', people.franci, 'Alpina', 1, { workMs: 4 * 3600000 + 9 * 60000, category: 'Marketing & Social Media', complexity: 'ALTA', priority: 'ALTA', comments: '<p>Incluye la campaña de temporada y los tres lanzamientos.</p>' }),
+      completed('reel', 'Reel de lanzamiento', people.melissa, 'Nutresa', 2, { workMs: 89 * 60000, category: 'Producción Audiovisual', returnCount: 1 }),
+      completed('conciliacion', 'Conciliación de agosto', people.helen, 'Brainstudio', 3, { category: 'Administrativo & Finanzas', complexity: 'BAJA' })
     ],
     clients: [],
     weeklyHabit: { isEmpty: true },
