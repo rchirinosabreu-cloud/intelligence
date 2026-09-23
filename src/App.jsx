@@ -28,6 +28,7 @@ const MoodboardCanvas = lazy(() => import('./components/modules/Moodboard/Moodbo
 const PrivacyPolicy = lazy(() => import('./components/public/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('./components/public/TermsOfService'));
 const AiGovernancePolicy = lazy(() => import('./components/public/AiGovernancePolicy'));
+const HelpCenter = lazy(() => import('./components/public/HelpCenter'));
 const SharedContentPlan = lazy(() => import('./components/public/SharedContentPlan'));
 const QuotationForm = lazy(() => import('./components/modules/Quotations/QuotationForm'));
 const QuotationsLayout = lazy(() => import('./components/modules/Quotations/QuotationsLayout'));
@@ -135,6 +136,7 @@ function AppContent() {
           <Route path="/privacidad" element={<PrivacyPolicy />} />
           <Route path="/terminos" element={<TermsOfService />} />
           <Route path="/seguridad" element={<AiGovernancePolicy />} />
+          <Route path="/ayuda" element={<HelpCenter />} />
           <Route path="/compartir/:token" element={<SharedContentPlan />} />
           <Route path="/cotizaciones/ver/:slug" element={<PublicQuotation />} />
           <Route path="/solicitud" element={<CommercialRequestPage />} />
