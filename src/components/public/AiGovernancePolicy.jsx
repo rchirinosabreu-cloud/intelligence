@@ -40,6 +40,26 @@ const AiGovernancePolicy = () => (
         </div>
       </section>
 
+      <section id="gobernanza" aria-labelledby="governance-title" className="scroll-mt-24">
+        <h2 id="governance-title" className="border-b border-zinc-200 pb-3 text-xl font-bold dark:border-white/10">Gobernanza de la inteligencia artificial</h2>
+        <p>La seguridad técnica se complementa con la gestión de quién puede usar IA, para qué finalidad, con qué información y bajo qué responsabilidad.</p>
+        <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5 dark:border-white/10 dark:bg-zinc-900">
+          <p className="m-0 font-semibold text-zinc-900 dark:text-zinc-50">En validación local</p>
+          <p className="mb-0 mt-2 text-sm text-zinc-700 dark:text-zinc-200">Hemos desarrollado y probado en un entorno local un módulo privado de gobierno de IA. Este módulo no está activado en producción. Las pruebas técnicas no acreditan autorizaciones de clientes ni cumplimiento contractual integral.</p>
+        </div>
+        <p>El módulo reúne seis componentes, sujetos a validación y activación antes de su uso operativo:</p>
+        <ul>
+          <li><strong>Inventario de sistemas:</strong> registro de herramientas, proveedores, modelos, finalidades y condiciones de tratamiento.</li>
+          <li><strong>Autorizaciones por cliente:</strong> registro de alcance, vigencia y referencias a la evidencia de aprobación escrita.</li>
+          <li><strong>Evaluación de riesgos:</strong> identificación de escenarios, controles de mitigación y valoración del riesgo residual.</li>
+          <li><strong>Control previo al envío:</strong> validación de permisos antes de las solicitudes de IA en los flujos integrados. La cobertura se verifica por flujo; no se presenta como un bloqueo universal.</li>
+          <li><strong>Registro de incidentes:</strong> seguimiento de detección, contención, comunicación, recuperación y aprendizaje. Registrar un aviso no envía automáticamente un correo.</li>
+          <li><strong>Trazabilidad de cambios:</strong> historial de responsables, motivos y versiones de los registros.</li>
+        </ul>
+        <p><strong>Responsable general:</strong> Rodny Chirinos. <strong>Suplente:</strong> Francisco Villa.</p>
+        <p className="mb-0 text-sm text-zinc-600 dark:text-zinc-300">Esta página presenta el marco general. Los expedientes de clientes, autorizaciones, evaluaciones y evidencias permanecen privados. La documentación operativa está en revisión; publicar este resumen no activa los controles ni sustituye la aprobación de las políticas.</p>
+      </section>
+
       <section aria-labelledby="controls-title">
         <h2 id="controls-title" className="border-b border-zinc-200 pb-3 text-xl font-bold dark:border-white/10">Controles implementados</h2>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
@@ -108,7 +128,7 @@ const AiGovernancePolicy = () => (
         <p className="mb-0 text-sm">Canal de contacto: <a href="mailto:labs@brainstudioagencia.com" className="font-semibold text-brand-cyan-deep underline underline-offset-4 dark:text-brand-cyan">labs@brainstudioagencia.com</a>.</p>
       </section>
 
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">Última actualización: 22 de septiembre de 2026.</p>
+      <p className="text-sm text-zinc-500 dark:text-zinc-400">Última actualización: 23 de septiembre de 2026.</p>
     </div>
   </LegalLayout>
 );

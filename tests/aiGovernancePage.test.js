@@ -5,6 +5,22 @@ import { transformWithEsbuild } from 'vite';
 
 const read = (file) => readFile(file, 'utf8');
 
+test('el resumen público de gobernanza distingue validación local de operación productiva', async () => {
+  const page = await read('src/components/public/AiGovernancePolicy.jsx');
+  for (const text of ['Gobernanza de la inteligencia artificial', 'En validación local', 'no está activado en producción', 'Inventario de sistemas', 'Autorizaciones por cliente', 'Evaluación de riesgos', 'Registro de incidentes', 'Trazabilidad de cambios', 'Control previo al envío']) {
+    assert.ok(page.includes(text), `Falta el alcance público: ${text}`);
+  }
+  assert.match(page, /id="gobernanza"/);
+  assert.match(page, /Rodny Chirinos/);
+  assert.match(page, /Francisco Villa/);
+});
+
+test('el resumen no expone expedientes, clientes piloto ni enlaces administrativos', async () => {
+  const page = await read('src/components/public/AiGovernancePolicy.jsx');
+  assert.doesNotMatch(page, /PromoGroup|HDI|localhost|127\.0\.0\.1|href="\/gobierno-ia|docs\/seguridad-ia/);
+  assert.match(page, /expedientes.*privados/);
+});
+
 test('la plataforma publica la pagina de seguridad y uso responsable de IA', async () => {
   const [app, login, page] = await Promise.all([
     read('src/App.jsx'),
