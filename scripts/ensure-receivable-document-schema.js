@@ -13,11 +13,13 @@ try {
   await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "issuedById" TEXT;`);
   await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "concept" TEXT;`);
   await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "pdfStorageKey" TEXT;`);
-  // Dos cuentas de cobro no pueden llevar el mismo número. El índice es parcial
-  // porque las obligaciones sin emitir comparten `number` nulo y eso es correcto.
+  // Dos cuentas de cobro no pueden llevar el mismo número. Índice completo y con el
+  // nombre que genera Prisma para `@unique`: en PostgreSQL los nulos no chocan entre
+  // sí, así que las obligaciones sin emitir conviven, y un `prisma db push` futuro no
+  // encuentra un índice distinto del que declara el esquema.
   await client.query(`
     CREATE UNIQUE INDEX IF NOT EXISTS "AccountsReceivable_number_key"
-    ON "AccountsReceivable"("number") WHERE "number" IS NOT NULL;
+    ON "AccountsReceivable"("number");
   `);
   await client.query(`
     CREATE TABLE IF NOT EXISTS "ReceivableItem" (
