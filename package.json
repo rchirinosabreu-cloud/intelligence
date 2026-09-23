@@ -10,6 +10,7 @@
     "dev:recognitions": "node scripts/preview-recognitions.js",
     "preview:crm": "node scripts/preview-crm.js",
     "preview:solicitud": "node scripts/preview-commercial-request.js",
+    "preview:cuenta-de-cobro": "node scripts/preview-cuenta-de-cobro.js",
     "build": "npm run test:activity-build && prisma generate && vite build",
     "postinstall": "prisma generate",
     "preview": "vite preview --host :: --port 3000",

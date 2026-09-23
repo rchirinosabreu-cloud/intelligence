@@ -10,6 +10,8 @@ import {
     FinancialDomainError,
     parseFinancialDateInput
 } from './financialRecordService.js';
+import { financialEvidenceStorage } from './financialRecordDocumentService.js';
+import { storeReceivablePdf } from './receivablePdfService.js';
 
 // Los límites, el concepto por defecto y el formato del número viven en `src/lib` para
 // que el formulario pueda leerlos sin arrastrar código de servidor. Se reexportan aquí
@@ -112,7 +114,7 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
     }
 
     try {
-        return await prismaClient.$transaction(async (tx) => {
+        const result = await prismaClient.$transaction(async (tx) => {
             const receivable = await tx.accountsReceivable.findUnique({
                 where: { id: receivableId },
                 include: {
@@ -196,6 +198,17 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
 
             return { receivable: issued, document: { ...document, number, formattedNumber: formatReceivableNumber(number) } };
         }, { isolationLevel: 'Serializable' });
+
+        // El PDF se genera al emitir y se guarda: así el documento queda congelado tal
+        // como se mandó, aunque después cambie la plantilla o la ficha del cliente.
+        // Va fuera de la transacción a propósito —subir al bucket es una llamada de red
+        // y no se tiene un candado abierto esperándola— y nunca tumba la emisión: si
+        // falla, la cuenta de cobro ya tiene su número y la descarga lo reintenta.
+        const storePdf = options.storePdf || storeReceivablePdf;
+        const storage = options.storage || financialEvidenceStorage();
+        result.receivable.pdfStorageKey = await storePdf(prismaClient, storage, result.receivable, options.env || process.env);
+
+        return result;
     } catch (error) {
         if (error?.code === 'P2002') {
             throw new FinancialDomainError(

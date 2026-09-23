@@ -145,6 +145,23 @@ try {
   await page.getByText(/^Cuenta de cobro No\. 0393·/).waitFor();
   assert.equal(await page.getByRole('button', { name: 'Emitir cuenta de cobro', exact: true }).count(), 0, 'una cuenta emitida no se reedita');
   await page.screenshot({ path: 'output/financial-issued.png', fullPage: true, animations: 'disabled' });
+
+  // El PDF se pide por la API autenticada y el navegador lo recibe como bytes: ni la
+  // vista previa ni la descarga pueden llevar a una URL del bucket.
+  const opened = page.waitForEvent('popup');
+  await page.getByRole('button', { name: 'Ver PDF', exact: true }).click();
+  const viewer = await opened;
+  assert.match(viewer.url(), /^blob:/, 'el PDF se abre desde los bytes que ya tiene el navegador');
+  await viewer.close();
+  const saved = page.waitForEvent('download');
+  await page.getByRole('button', { name: 'Descargar', exact: true }).click();
+  assert.equal((await saved).suggestedFilename(), 'Cuenta de cobro No. 0393.pdf');
+  const documentRequests = await page.evaluate(() => window.__documentRequests || []);
+  assert.equal(documentRequests.length, 2, 'cada acción pide el documento a la API');
+  assert.ok(documentRequests.every(path => path.endsWith('/api/financials/receivables/demo-debt/document')), documentRequests.join(' '));
+  await page.getByRole('button', { name: 'Cambiar tema' }).click();
+  await page.screenshot({ path: 'output/financial-issued-dark.png', fullPage: true, animations: 'disabled' });
+
   await page.goto(base);
   await page.getByRole('button', { name: 'Movimientos', exact: true }).click();
 

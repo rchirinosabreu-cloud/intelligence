@@ -20,6 +20,7 @@ import {
 import { createReceivablePayment, reverseReceivablePayment } from '../services/receivablePaymentService.js';
 import { createReceivable } from '../services/financialReceivableService.js';
 import { issueReceivableDocument } from '../services/receivableDocumentService.js';
+import { openReceivablePdf, RECEIVABLE_PDF_MIME } from '../services/receivablePdfService.js';
 import { auditFinancialIntegrity } from '../services/financialIntegrityAuditService.js';
 import { createFinancialAccount, listFinancialAccounts } from '../services/financialAccountService.js';
 import {
@@ -149,6 +150,15 @@ export const uploadFinancialRecordDocumentHandler = async (req, res, dependencie
 
 const safeDocumentName = (name = 'documento') => String(name).replace(/[\r\n"\\/]/g, '_').slice(0, 180) || 'documento';
 
+// Un nombre con tildes o eñes —«Cuenta de cobro No. 0393 - Corporación…»— necesita las
+// dos formas: la ASCII para clientes viejos y la codificada para el resto.
+const contentDisposition = (disposition, name) => {
+    const filename = safeDocumentName(name);
+    const asciiName = filename.replace(/[^\x20-\x7E]/g, '_');
+    const encoded = encodeURIComponent(filename).replace(/['()*]/g, (char) => '%' + char.charCodeAt(0).toString(16));
+    return `${disposition}; filename="${asciiName}"; filename*=UTF-8''${encoded}`;
+};
+
 export const streamFinancialRecordDocumentHandler = async (req, res, dependencies = {}) => {
     const prismaClient = dependencies.prismaClient || prisma;
     const storage = dependencies.storage || financialEvidenceStorage();
@@ -156,12 +166,10 @@ export const streamFinancialRecordDocumentHandler = async (req, res, dependencie
     try {
         const { document, object } = await openDocument(prismaClient, storage, req.params.id, req.params.documentId);
         const disposition = req.query?.download === '1' ? 'attachment' : 'inline';
-        const filename = safeDocumentName(document.name);
-        const asciiName = filename.replace(/[^\x20-\x7E]/g, '_');
         res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
         // The stored type was detected from the bytes at upload; never trust the bucket's echo of a client header.
         res.setHeader('Content-Type', document.mimeType);
-        res.setHeader('Content-Disposition', `${disposition}; filename="${asciiName}"; filename*=UTF-8''${encodeURIComponent(filename).replace(/['()*]/g, char => '%' + char.charCodeAt(0).toString(16))}`);
+        res.setHeader('Content-Disposition', contentDisposition(disposition, document.name));
         res.setHeader('Cache-Control', 'private, no-store');
         res.setHeader('X-Content-Type-Options', 'nosniff');
         if (object.ContentLength) res.setHeader('Content-Length', String(object.ContentLength));
@@ -284,6 +292,37 @@ export const issueReceivableDocumentHandler = async (req, res, dependencies = {}
     } catch (error) {
         console.error('[Receivables API] Issue failed:', error.response?.data || error);
         return respondWithError(res, error, 'RECEIVABLE_ISSUE_FAILED', 'No fue posible emitir la cuenta de cobro.');
+    }
+};
+
+export const streamReceivablePdfHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const storage = dependencies.storage || financialEvidenceStorage();
+    const openPdf = dependencies.openPdf || openReceivablePdf;
+    try {
+        const { filename, buffer, object } = await openPdf(prismaClient, storage, req.params.id);
+        const disposition = req.query?.download === '1' ? 'attachment' : 'inline';
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+        res.setHeader('Content-Type', RECEIVABLE_PDF_MIME);
+        res.setHeader('Content-Disposition', contentDisposition(disposition, filename));
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        // Recién generado se manda tal cual; el guardado en el bucket llega como flujo.
+        if (buffer) {
+            res.setHeader('Content-Length', String(buffer.length));
+            return res.end(buffer);
+        }
+        if (object.ContentLength) res.setHeader('Content-Length', String(object.ContentLength));
+        object.Body.on('error', (error) => {
+            console.error('[Receivables API] PDF stream failed:', error);
+            if (!res.headersSent) res.status(500).json({ error: 'RECEIVABLE_PDF_STREAM_FAILED', message: 'No se pudo cargar la cuenta de cobro.' });
+            else res.destroy(error);
+        });
+        return object.Body.pipe(res);
+    } catch (error) {
+        console.error('[Receivables API] PDF open failed:', error?.message || error);
+        if (res.headersSent) return undefined;
+        return respondWithError(res, error, 'RECEIVABLE_PDF_FAILED', 'No fue posible abrir la cuenta de cobro.');
     }
 };
 
