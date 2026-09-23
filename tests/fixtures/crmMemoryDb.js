@@ -67,6 +67,9 @@ export function createCrmMemoryDb({ leads = [], activities = [], members = [], u
       },
       findUnique: async ({ where }) => state.requests.find(item => item.leadId === where.leadId || item.id === where.id) || null
     },
+    user: {
+      findMany: async ({ where = {} } = {}) => state.users.filter(user => (where.role === undefined || user.role === where.role) && (where.isActive === undefined || (user.isActive ?? true) === where.isActive) && (!where.teamMember || (user.teamMemberActive ?? true))).map(user => ({ id: user.id }))
+    },
     teamMember: {
       findMany: async ({ where = {} } = {}) => state.members.filter(member => (!where.id?.in || where.id.in.includes(member.id)) && (where.isActive === undefined || member.isActive === where.isActive))
     }

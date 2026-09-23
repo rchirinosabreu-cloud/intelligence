@@ -438,7 +438,13 @@ export const archiveLead = async (db, id, actor = {}, now = new Date()) => {
 const BUCKET_RANK = { VENCIDO: 0, HOY: 1, SEMANA: 2, FUTURO: 3, SIN_FECHA: 4 };
 const PRIORITY_RANK = { ALTA: 0, MEDIA: 1, BAJA: 2 };
 
+/** A request from the public form that nobody has touched yet: it must never sink in the list. */
+export const isNewRequest = lead => Boolean(lead?.hasRequest) && lead.stage === 'POR_GESTIONAR' && !lead.firstContactAt;
+
 const urgencySort = (a, b) => {
+  const fresh = Number(isNewRequest(b)) - Number(isNewRequest(a));
+  if (fresh) return fresh;
+  if (isNewRequest(a) && isNewRequest(b)) return new Date(b.enteredAt || 0) - new Date(a.enteredAt || 0);
   const bucket = (BUCKET_RANK[a.followUpBucket] ?? 5) - (BUCKET_RANK[b.followUpBucket] ?? 5);
   if (bucket) return bucket;
   const priority = (PRIORITY_RANK[a.priority] ?? 3) - (PRIORITY_RANK[b.priority] ?? 3);
@@ -464,6 +470,9 @@ const matchesFilters = (lead, query) => {
   if (lights.length && !lights.includes(lead.trafficLight.value)) return false;
   const buckets = list(query.bucket);
   if (buckets.length && !buckets.includes(lead.followUpBucket)) return false;
+  const request = text(query.request);
+  if (request === 'FORMULARIO' && !lead.hasRequest) return false;
+  if (request === 'NUEVAS' && !isNewRequest(lead)) return false;
   const from = dateOnly(query.from);
   if (from && (bogotaDateKey(lead.enteredAt) || '') < from) return false;
   const to = dateOnly(query.to);
@@ -511,10 +520,18 @@ export const metricsFor = async (db, query = {}, now = new Date()) => {
   const raw = await fetchLeads(db);
   const leads = raw.map(lead => serializeLead(lead, now)).filter(lead => matchesFilters(lead, query));
   const metrics = computeMetrics(leads, now);
+  const newRequests = leads.filter(isNewRequest).sort((a, b) => new Date(b.enteredAt || 0) - new Date(a.enteredAt || 0));
   const priorities = leads
     .filter(lead => isActionableStage(lead.stage) && (lead.trafficLight.value === 'ROJO' || ['VENCIDO', 'HOY'].includes(lead.followUpBucket)))
     .sort(urgencySort)
     .slice(0, Math.min(Math.max(Number(query.priorityLimit) || 10, 1), 50))
     .map(lead => ({ ...lead, activities: undefined }));
-  return { ...metrics, priorities, generatedAt: now, filters: query };
+  return {
+    ...metrics,
+    priorities,
+    newRequests: newRequests.length,
+    recentRequests: newRequests.slice(0, 8).map(lead => ({ ...lead, activities: undefined, request: lead.request ? { services: lead.request.services, receivedAt: lead.request.receivedAt } : null })),
+    generatedAt: now,
+    filters: query
+  };
 };

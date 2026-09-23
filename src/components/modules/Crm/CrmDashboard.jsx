@@ -1,5 +1,6 @@
 import React from 'react';
-import { Users, Target, CheckCircle2, Trophy, AlertTriangle, CalendarClock, Clock, TrendingUp, DollarSign, AlertCircle, ArrowRight } from '@/components/ui/icons';
+import { Users, Target, CheckCircle2, Trophy, AlertTriangle, CalendarClock, Clock, TrendingUp, DollarSign, AlertCircle, ArrowRight, FileText } from '@/components/ui/icons';
+import { SERVICE_CATEGORIES } from '@/lib/commercialRequestForm';
 import { cn } from '@/lib/utils';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import CrmStatCard from './CrmStatCard';
@@ -65,6 +66,31 @@ const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab })
 
       {isLoading && !metrics ? <Skeleton /> : metrics && (
         <>
+          {metrics.newRequests > 0 && (
+            <section className="rounded-2xl border border-brand-magenta/30 bg-brand-magenta/[0.06] p-5 dark:bg-brand-magenta/10" aria-label="Solicitudes nuevas" data-crm-new-requests>
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                  <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-magenta text-white"><FileText className="h-4 w-4" /></span>
+                  {metrics.newRequests === 1 ? '1 solicitud nueva del formulario sin contactar' : `${metrics.newRequests} solicitudes nuevas del formulario sin contactar`}
+                </h2>
+                <button type="button" onClick={() => { onFiltersChange({ ...filters, request: 'NUEVAS' }); onShowTab?.('oportunidades'); }} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-brand-magenta-deep transition-colors hover:bg-brand-magenta/10 dark:text-brand-magenta">Ver todas <ArrowRight className="h-3.5 w-3.5" /></button>
+              </div>
+              <ul className="grid gap-2 md:grid-cols-2">
+                {metrics.recentRequests.map(lead => (
+                  <li key={lead.id}>
+                    <button type="button" onClick={() => onOpenLead?.(lead.id)} className="flex w-full items-start justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left transition-colors hover:border-brand-magenta/40 dark:border-zinc-800 dark:bg-zinc-950">
+                      <span className="min-w-0">
+                        <span className="block truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{leadTitle(lead)}</span>
+                        <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">{leadSubtitle(lead) || lead.email || lead.code} · {(lead.request?.services || []).map(value => SERVICE_CATEGORIES.find(item => item.value === value)?.label || value).join(', ') || lead.serviceInterest}</span>
+                      </span>
+                      <span className="shrink-0 text-right text-[11px] text-zinc-500 dark:text-zinc-400">{lead.code}<br />{formatDate(lead.enteredAt)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Números principales">
             <CrmStatCard tone="hero" icon={Users} label="Total de leads" value={total} detail={`LinkedIn ${metrics.linkedin} · Brain Studio ${metrics.brainStudio}`} />
             <CrmStatCard icon={Target} label="Oportunidades abiertas" value={metrics.open} detail={`${formatCurrency(metrics.quotedOpenValue)} cotizado en pipeline`} onClick={() => onShowTab?.('oportunidades')} />

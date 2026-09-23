@@ -1,6 +1,6 @@
 export const CRM_FILTERS_KEY = 'brainstudio:crm-filters:v1';
 
-const KEYS = ['search', 'stage', 'group', 'origin', 'priority', 'ownerId', 'trafficLight', 'bucket', 'from', 'to'];
+const KEYS = ['search', 'stage', 'group', 'origin', 'priority', 'ownerId', 'trafficLight', 'bucket', 'request', 'from', 'to'];
 
 export const defaultCrmFilters = () => Object.fromEntries(KEYS.map(key => [key, '']));
 
