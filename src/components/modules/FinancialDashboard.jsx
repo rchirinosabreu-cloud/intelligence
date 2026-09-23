@@ -21,7 +21,7 @@ import {
 import {
     TrendingUp, TrendingDown, DollarSign, Wallet, ShieldCheck, AlertCircle,
     Users, ChevronDown, ChevronUp, Loader2, Sparkles, Calendar, PieChart as PieIcon, ListCollapse, ListCollapse as ExpandIcon,
-    UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2, Link2, FileText, Download
+    UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2, Link2, FileText, Download, Trash2
 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -121,6 +121,11 @@ const FinancialDashboard = () => {
     const [issueForm, setIssueForm] = useState(null);
     const [isIssuing, setIsIssuing] = useState(false);
     const [downloadingDocumentId, setDownloadingDocumentId] = useState(null);
+    // Eliminar una obligación tecleada por error o de prueba: siempre con confirmación
+    // que dice qué se pierde, nunca en un clic suelto.
+    const [debtToDelete, setDebtToDelete] = useState(null);
+    const [deleteReason, setDeleteReason] = useState('');
+    const [isDeletingReceivable, setIsDeletingReceivable] = useState(false);
     // Revertir un abono mal registrado: siempre con motivo, nunca en un clic suelto.
     const [paymentToReverse, setPaymentToReverse] = useState(null);
     const [expandedReversals, setExpandedReversals] = useState({});
@@ -479,6 +484,30 @@ await invalidateFinancialQueries(queryClient);
             setImportError('No fue posible abrir la cuenta de cobro.');
         } finally {
             setDownloadingDocumentId(null);
+        }
+    };
+
+    const handleDeleteReceivable = async () => {
+        if (!debtToDelete?.id || isDeletingReceivable || !canWriteFinancials) return;
+        setIsDeletingReceivable(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const { data: result } = await axios.delete(`${baseUrl}/api/financials/receivables/${debtToDelete.id}`, {
+                headers: { Authorization: `Bearer ${token}` },
+                data: { reason: deleteReason.trim() || undefined }
+            });
+            await invalidateFinancialQueries(queryClient);
+            setDebtToDelete(null);
+            setDeleteReason('');
+            setImportSuccess(result?.message || 'Cuenta por cobrar eliminada.');
+        } catch (error) {
+            console.error('Error deleting receivable:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible eliminar la cuenta por cobrar.');
+        } finally {
+            setIsDeletingReceivable(false);
         }
     };
 
@@ -1216,6 +1245,11 @@ await invalidateFinancialQueries(queryClient);
                                                                             Emitir cuenta de cobro
                                                                         </button>
                                                                     )}
+                                                                    {canWriteFinancials && <button type="button"
+                                                                        onClick={() => { setDeleteReason(''); setImportError(''); setDebtToDelete(debt); }}
+                                                                        className="ml-auto inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-zinc-500 transition hover:bg-destructive/10 hover:text-destructive">
+                                                                        <Trash2 className="h-3.5 w-3.5" />Eliminar
+                                                                    </button>}
                                                                 </div>
                                                                 {debt.payments?.length > 0 && (() => {
                                                                     // La vista diaria muestra lo vigente. Lo revertido es historia: sigue
@@ -1907,6 +1941,44 @@ await invalidateFinancialQueries(queryClient);
 
             <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={importError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
             {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} />}
+
+            {/* Eliminar dice qué se pierde antes de hacerlo: el importe, el periodo y,
+                si ya se emitió, su número —que vuelve a quedar libre para la siguiente—.
+                Lo que se mandó al cliente no se borra del almacenamiento. */}
+            <Dialog open={!!debtToDelete} onOpenChange={(open) => { if (!open && !isDeletingReceivable) { setDebtToDelete(null); setDeleteReason(''); } }}>
+                <DialogContent className="sm:max-w-md dark:bg-zinc-900">
+                    <DialogHeader>
+                        <DialogTitle>Eliminar la cuenta por cobrar</DialogTitle>
+                        <DialogDescription>
+                            Se borra {formatCurrency(debtToDelete?.amount || 0)} de {debtToDelete?.clientName} del periodo {formatFinancialPeriod(debtToDelete?.period)}. Queda registrado en la bitácora quién la borró y qué decía.
+                        </DialogDescription>
+                    </DialogHeader>
+                    {debtToDelete?.formattedNumber && (
+                        <p className="rounded-lg bg-destructive/10 px-3 py-2.5 text-sm text-destructive">
+                            Ya tiene emitida la cuenta de cobro <strong>{debtToDelete.formattedNumber}</strong>. Si se la mandaste al cliente, el documento que recibió deja de existir aquí; su PDF se conserva en el almacenamiento. Ese número volverá a quedar libre para la siguiente cuenta que emitas.
+                        </p>
+                    )}
+                    {debtToDelete?.payments?.some((payment) => payment.reversedAt) && (
+                        <p className="text-sm text-zinc-600 dark:text-zinc-300">
+                            Se borran también sus abonos revertidos. Su rastro queda en la bitácora.
+                        </p>
+                    )}
+                    <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
+                        <span className="block">Motivo <span className="text-zinc-500">(opcional)</span></span>
+                        <input maxLength={300} value={deleteReason} onChange={(event) => setDeleteReason(event.target.value)}
+                            placeholder="Fue una prueba"
+                            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                    </label>
+                    {importError && <p role="alert" className="text-sm text-destructive">{importError}</p>}
+                    <DialogFooter>
+                        <button type="button" onClick={() => { setDebtToDelete(null); setDeleteReason(''); }} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button>
+                        <button type="button" onClick={handleDeleteReceivable} disabled={isDeletingReceivable}
+                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-destructive-foreground transition hover:bg-destructive/90 disabled:opacity-50">
+                            {isDeletingReceivable && <Loader2 className="h-4 w-4 animate-spin" />}Eliminar
+                        </button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
 
             <Dialog open={!!debtToIssue} onOpenChange={(open) => { if (!open && !isIssuing) { setDebtToIssue(null); setIssueForm(null); } }}>
                 {/* El foco de apertura se queda en el diálogo y no cae en el primer campo:

@@ -27,6 +27,7 @@ import {
     createFinancialAccountHandler,
     createReceivableHandler,
     createReceivablePaymentHandler,
+    deleteReceivableHandler,
     generatePayrollPeriodHandler,
     getFinancialIntegrityAuditHandler,
     issueReceivableDocumentHandler,
@@ -96,6 +97,9 @@ router.patch('/client-links/:sourceClientId', requireFinancialWrite, linkFinanci
 router.get('/receivables-ledger', requireFinancialAccess, getFinancialReceivablesLedger);
 router.patch('/receivables/:id', requireFinancialWrite, updateFinancialReceivable);
 router.post('/receivables', requireFinancialWrite, createReceivableHandler);
+// Eliminar una obligación tecleada por error o de prueba es trabajo de quien lleva el
+// financiero: mismo permiso que crearla. La auditoría conserva la fila entera.
+router.delete('/receivables/:id', requireFinancialWrite, deleteReceivableHandler);
 // Emitir la cuenta de cobro: le pone número, congela sus conceptos y deja la
 // obligación con el mismo total que se le manda al cliente.
 router.post('/receivables/:id/issue', requireFinancialWrite, issueReceivableDocumentHandler);

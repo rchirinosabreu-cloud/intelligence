@@ -18,7 +18,7 @@ import {
     voidFinancialRecordDocument
 } from '../services/financialRecordDocumentService.js';
 import { createReceivablePayment, reverseReceivablePayment } from '../services/receivablePaymentService.js';
-import { createReceivable } from '../services/financialReceivableService.js';
+import { createReceivable, deleteReceivable } from '../services/financialReceivableService.js';
 import { issueReceivableDocument } from '../services/receivableDocumentService.js';
 import { openReceivablePdf, RECEIVABLE_PDF_MIME } from '../services/receivablePdfService.js';
 import { auditFinancialIntegrity } from '../services/financialIntegrityAuditService.js';
@@ -277,6 +277,18 @@ export const createReceivableHandler = async (req, res, dependencies = {}) => {
     } catch (error) {
         console.error('[Receivables API] Create failed:', error.response?.data || error);
         return respondWithError(res, error, 'RECEIVABLE_CREATE_FAILED', 'No fue posible registrar la cuenta por cobrar.');
+    }
+};
+
+export const deleteReceivableHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const removeReceivable = dependencies.removeReceivable || deleteReceivable;
+    try {
+        const result = await removeReceivable(prismaClient, req.params.id, req.body?.reason, req.user);
+        return res.json({ message: 'Cuenta por cobrar eliminada.', ...result });
+    } catch (error) {
+        console.error('[Receivables API] Delete failed:', error.response?.data || error);
+        return respondWithError(res, error, 'RECEIVABLE_DELETE_FAILED', 'No fue posible eliminar la cuenta por cobrar.');
     }
 };
 

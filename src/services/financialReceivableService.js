@@ -86,6 +86,62 @@ export const createReceivable = async (prismaClient, input = {}, actor) => {
     });
 };
 
+/**
+ * Elimina una cuenta por cobrar. A discreción de quien lleva el financiero (Rodny, 23
+ * de septiembre de 2026): una obligación tecleada por error, o de prueba, no es
+ * evidencia de nada y no tiene por qué quedarse para siempre.
+ *
+ * Se borra de verdad —la fila y sus conceptos—, pero **el evento de auditoría conserva
+ * la obligación entera**, con su número, sus abonos revertidos y sus conceptos, así que
+ * queda registrado qué se borró y quién. El PDF que se hubiera emitido **no se borra**
+ * del bucket de evidencia, que no tiene ruta de borrado.
+ *
+ * La única puerta cerrada es tener **abonos vigentes**: ahí sigue habiendo dinero
+ * apuntando a esta obligación, y borrarla dejaría ese ingreso colgando. Se revierten
+ * primero, desde «Revertir» en la propia cartera, y entonces sí se puede borrar.
+ */
+export const deleteReceivable = async (prismaClient, receivableId, reason, actor) => {
+    const actorId = actor?.id || actor?.userId || null;
+    const voidReason = String(reason || '').trim() || null;
+
+    return prismaClient.$transaction(async (tx) => {
+        const existing = await tx.accountsReceivable.findUnique({
+            where: { id: receivableId },
+            include: {
+                items: { orderBy: { sortOrder: 'asc' } },
+                payments: { orderBy: { paidAt: 'desc' } },
+                client: { select: { id: true, name: true } }
+            }
+        });
+        if (!existing) throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
+
+        const activePayments = (existing.payments || []).filter((payment) => !payment.reversedAt);
+        if (activePayments.length) {
+            throw new FinancialDomainError(
+                'RECEIVABLE_HAS_PAYMENTS',
+                `Esta obligación tiene ${activePayments.length} abono(s) vigente(s) y borrarla dejaría ese dinero sin a qué apuntar. Reviértelos primero con «Revertir», aquí mismo en la cartera, y vuelve a eliminarla.`,
+                409
+            );
+        }
+
+        const periodDate = new Date(existing.period);
+        await assertOpenFinancialPeriod(tx, existing.year || periodDate.getUTCFullYear(), existing.month || periodDate.getUTCMonth() + 1);
+
+        await tx.financialAuditEvent.create({
+            data: {
+                entityType: 'AccountsReceivable',
+                entityId: receivableId,
+                action: 'DELETE',
+                before: cloneForAudit(existing),
+                after: cloneForAudit({ deleted: true, reason: voidReason }),
+                actorId
+            }
+        });
+        await tx.accountsReceivable.delete({ where: { id: receivableId } });
+        return { id: receivableId, number: existing.number ?? null, clientName: existing.client?.name || existing.sourceLabel || null };
+    }, { isolationLevel: 'Serializable' });
+};
+
 export const updateReceivable = async (prismaClient, receivableId, input = {}, actor) => {
     const actorId = actor?.id || actor?.userId || null;
     if (input.status !== undefined && !['DEBE', 'PROMESADO', 'PAGADO'].includes(input.status)) {
