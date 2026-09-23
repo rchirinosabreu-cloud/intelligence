@@ -36,6 +36,7 @@ import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import { groupFinancialReceivables, financialDebtStatus, formatFinancialPeriod } from '@/utils/financialReceivables';
 import { clientOptions } from '@/utils/financialClients';
 import { RECEIVABLE_CONCEPT_DEFAULT, RECEIVABLE_ITEM_MAX, formatReceivableNumber } from '@/lib/receivableDocument';
+import { PARTY_DOCUMENT_TYPES, hasPartyIdentity } from '@/lib/partyIdentity';
 
 const CATEGORY_COLORS = {
     'MEMBRESIA': '#009EB9',
@@ -92,8 +93,13 @@ const FinancialDashboard = () => {
     const dashboardQuery = useMemo(() => (
         filters.category ? `${filterQuery}&category=${encodeURIComponent(filters.category)}` : filterQuery
     ), [filterQuery, filters.category]);
-    const [activeTab, setActiveTab] = useState('flow');
+    // Financiero abre en Movimientos (Rodny, 23 de septiembre de 2026): el trabajo
+    // diario es el libro, no las gráficas.
+    const [activeTab, setActiveTab] = useState('records');
     const [expandedClients, setExpandedClients] = useState({});
+    // La conexión con el cliente real vive dentro del panel de cada uno (Rodny, 23 de
+    // septiembre de 2026): una lista con un desplegable por fila era ilegible.
+    const [expandedReconciliation, setExpandedReconciliation] = useState(null);
     const [importPreview, setImportPreview] = useState(null);
     const [importFile, setImportFile] = useState(null);
     const [importError, setImportError] = useState('');
@@ -121,7 +127,7 @@ const FinancialDashboard = () => {
     const [reversalReason, setReversalReason] = useState('');
     const [isReversingPayment, setIsReversingPayment] = useState(false);
     const [isReceivableEditorOpen, setIsReceivableEditorOpen] = useState(false);
-    const [receivableForm, setReceivableForm] = useState({ clientId: '', amount: '', period: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }).slice(0, 7) + '-01', dueDate: '', comments: '' });
+    const [receivableForm, setReceivableForm] = useState({ clientId: '', isNewClient: false, newClientName: '', amount: '', period: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }).slice(0, 7) + '-01', dueDate: '', comments: '' });
     const [isSavingReceivable, setIsSavingReceivable] = useState(false);
     const payrollMonth = Number(filters.month) || new Date().getMonth() + 1;
     const [isGeneratingPayroll, setIsGeneratingPayroll] = useState(false);
@@ -384,7 +390,14 @@ await invalidateFinancialQueries(queryClient);
             issuedAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }),
             // Arranca con el valor causado como un único concepto: lo normal es el fee,
             // y añadir líneas es la excepción de un mes con adicionales.
-            items: [{ description: '', amount: String(debt.outstanding || debt.amount || '') }]
+            items: [{ description: '', amount: String(debt.outstanding || debt.amount || '') }],
+            // Quién es el deudor en el documento. Solo se pide cuando su ficha todavía
+            // no lo tiene, y al emitir queda guardado ahí: se escribe una sola vez.
+            client: {
+                legalName: debt.clientLegalName || '',
+                documentType: debt.clientDocumentType || '',
+                documentNumber: debt.clientDocumentNumber || ''
+            }
         });
     };
 
@@ -393,7 +406,17 @@ await invalidateFinancialQueries(queryClient);
         items: current.items.map((item, position) => (position === index ? { ...item, ...patch } : item))
     }));
 
+    const setIssueClient = (patch) => setIssueForm((current) => ({ ...current, client: { ...current.client, ...patch } }));
+
     const issueTotal = (issueForm?.items || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    // La ficha ya identificada no se vuelve a preguntar ni se puede reescribir desde
+    // aquí: una cuenta de cobro no cambia la identidad de un tercero por el camino.
+    const issueNeedsIdentity = !!debtToIssue && !hasPartyIdentity({
+        legalName: debtToIssue.clientLegalName,
+        documentType: debtToIssue.clientDocumentType,
+        documentNumber: debtToIssue.clientDocumentNumber
+    });
+    const issueIdentityReady = !issueNeedsIdentity || hasPartyIdentity(issueForm?.client);
 
     const handleIssueReceivable = async (event) => {
         event.preventDefault();
@@ -406,7 +429,10 @@ await invalidateFinancialQueries(queryClient);
             const token = localStorage.getItem('authToken');
             const { data: result } = await axios.post(`${baseUrl}/api/financials/receivables/${debtToIssue.id}/issue`, {
                 ...issueForm,
-                items: issueForm.items.map((item) => ({ description: item.description, amount: Number(item.amount) }))
+                items: issueForm.items.map((item) => ({ description: item.description, amount: Number(item.amount) })),
+                // Solo se manda si la ficha no lo tenía; el servidor tampoco la
+                // reescribe cuando ya está identificada.
+                client: issueNeedsIdentity ? issueForm.client : undefined
             }, { headers: { Authorization: `Bearer ${token}` } });
             await invalidateFinancialQueries(queryClient);
             setDebtToIssue(null);
@@ -496,14 +522,22 @@ await invalidateFinancialQueries(queryClient);
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
+            const { isNewClient, newClientName, ...payload } = receivableForm;
             await axios.post(`${baseUrl}/api/financials/receivables`, {
-                ...receivableForm,
+                ...payload,
                 amount: Number(receivableForm.amount),
-                dueDate: receivableForm.dueDate || null
+                dueDate: receivableForm.dueDate || null,
+                // El servidor crea la ficha en la misma transacción que el cobro.
+                client: isNewClient ? { name: newClientName } : undefined
             }, { headers: { Authorization: `Bearer ${token}` } });
-await invalidateFinancialQueries(queryClient);
+            await invalidateFinancialQueries(queryClient);
+            // La ficha nueva también existe fuera de financiero.
+            if (receivableForm.isNewClient) {
+                await Promise.all(['clients-list', 'clientsDropdown', 'clientsHealth', 'dashboard-assignment-clients', 'financial-record-clients']
+                    .map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
+            }
             setIsReceivableEditorOpen(false);
-            setImportSuccess('Cuenta por cobrar registrada.');
+            setImportSuccess(receivableForm.isNewClient ? 'Cliente y cuenta por cobrar creados.' : 'Cuenta por cobrar registrada.');
         } catch (error) {
             console.error('Error creating receivable:', error.response?.data || error);
             setImportError(error.response?.data?.message || 'No fue posible registrar la cuenta por cobrar.');
@@ -1476,101 +1510,111 @@ await invalidateFinancialQueries(queryClient);
                     <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
                         <div className="flex items-center justify-between gap-4">
                             <div>
-                                <h2 className="text-sm font-bold text-zinc-900 dark:text-white">Conciliación de clientes</h2>
-                                <p className="text-[11px] text-zinc-500 mt-1">
-                                    Vincula clientes importados desde el Excel con el cliente real de la plataforma para unificar ingresos, cartera y decisiones.
+                                <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Conciliación de clientes</h2>
+                                <p className="mt-1 text-xs text-zinc-500">
+                                    Cada cliente del financiero con lo que suma. Abre uno para conectarlo con el cliente real de la plataforma y unificar sus ingresos y su cartera.
                                 </p>
                             </div>
                             {clientReconciliation?.importBatchId && (
-                                <span className="rounded-full bg-violet-600/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-violet-600">
+                                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
                                     Importación activa
                                 </span>
                             )}
                         </div>
 
-                        <Card className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
+                        <Card className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
                             {isClientReconciliationLoading ? (
                                 <div className="flex items-center justify-center py-16 text-sm text-zinc-500">
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin text-violet-600" />
+                                    <Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />
                                     Cargando conciliación de clientes...
                                 </div>
                             ) : clientReconciliation?.clients?.length > 0 ? (
-                                <div className="overflow-x-auto">
-                                    <table className="min-w-[1040px] w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="border-b border-zinc-100 dark:border-white/5 bg-zinc-50/80 dark:bg-zinc-900/60 text-[10px] font-black uppercase text-zinc-400 tracking-wider">
-                                                <th className="p-4 min-w-[240px]">Cliente financiero</th>
-                                                <th className="p-4 text-right">Ingresos</th>
-                                                <th className="p-4 text-right">Cartera</th>
-                                                <th className="p-4 text-right">Registros</th>
-                                                <th className="p-4 min-w-[280px]">Cliente real</th>
-                                                <th className="p-4 text-right">Acción</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                            {clientReconciliation.clients.map((row) => {
-                                                const sourceId = row.sourceId || row.clientId;
-                                                const targetId = clientLinkTargets[sourceId] || '';
-                                                const isSaving = savingClientLinkId === sourceId;
-                                                return (
-                                                    <tr key={sourceId} className="text-xs hover:bg-zinc-50/60 dark:hover:bg-white/5">
-                                                        <td className="p-4">
-                                                            <div className="flex items-center gap-3">
-                                                                <div className="h-9 w-9 rounded-xl bg-violet-600/10 text-violet-600 flex items-center justify-center text-[11px] font-black">
-                                                                    {(row.client?.name || 'CL').substring(0, 2).toUpperCase()}
-                                                                </div>
-                                                                <div>
-                                                                    <p className="font-black text-zinc-900 dark:text-white">{row.client?.name}</p>
-                                                                    <p className="text-[10px] text-zinc-400">{row.client?.slug || 'sin-slug'}</p>
-                                                                    {row.clientId && <button type="button" className="min-h-11 text-sm font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" onClick={() => setStatementClient({ id: row.clientId, name: row.client?.name })}>Ver estado de cuenta</button>}
-                                                                </div>
+                                <ul className="divide-y divide-zinc-200 dark:divide-white/10">
+                                    {clientReconciliation.clients.map((row) => {
+                                        const sourceId = row.sourceId || row.clientId;
+                                        const targetId = clientLinkTargets[sourceId] || '';
+                                        const isSaving = savingClientLinkId === sourceId;
+                                        const isOpen = expandedReconciliation === sourceId;
+                                        // Una fila sin `clientId` solo existe en el Excel: es la que de
+                                        // verdad pide conexión. Una con ficha ya es un cliente de la
+                                        // plataforma, y conectarla significa fundirla con otra.
+                                        const hasFicha = !!row.clientId;
+                                        return (
+                                            <li key={sourceId} className="min-w-0">
+                                                <button type="button" aria-expanded={isOpen}
+                                                    onClick={() => setExpandedReconciliation(isOpen ? null : sourceId)}
+                                                    className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-white/5">
+                                                    {isOpen ? <ChevronUp className="h-4 w-4 shrink-0 text-zinc-400" /> : <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" />}
+                                                    <div className="min-w-0 flex-1">
+                                                        <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{row.client?.name}</p>
+                                                        <p className="truncate font-mono text-xs text-zinc-500">
+                                                            {hasFicha ? (row.client?.slug || 'sin-slug') : 'solo en el Excel · sin ficha'}
+                                                            {' · '}{(row.recordCount || 0) + (row.receivableCount || 0)} registros
+                                                        </p>
+                                                    </div>
+                                                    <div className="hidden shrink-0 text-right sm:block">
+                                                        <p className="text-sm tabular-nums text-zinc-900 dark:text-white">{formatCurrency(row.income || 0)}</p>
+                                                        <p className="text-xs text-zinc-500">ingresos</p>
+                                                    </div>
+                                                    <div className="w-32 shrink-0 text-right">
+                                                        <p className={cn("text-sm tabular-nums", row.receivable > 0 ? "font-semibold text-zinc-900 dark:text-white" : "text-zinc-500")}>{formatCurrency(row.receivable || 0)}</p>
+                                                        <p className="text-xs text-zinc-500">cartera</p>
+                                                    </div>
+                                                </button>
+                                                {isOpen && (
+                                                    <div className="space-y-3 border-t border-zinc-200 bg-zinc-50/60 px-4 py-4 dark:border-white/10 dark:bg-white/5">
+                                                        <div className="grid gap-3 text-xs sm:grid-cols-3">
+                                                            <p className="text-zinc-500">Ingresos <span className="block text-sm tabular-nums text-zinc-900 dark:text-white">{formatCurrency(row.income || 0)}</span></p>
+                                                            <p className="text-zinc-500">Cartera <span className="block text-sm tabular-nums text-zinc-900 dark:text-white">{formatCurrency(row.receivable || 0)}</span></p>
+                                                            <p className="text-zinc-500">Registros <span className="block text-sm tabular-nums text-zinc-900 dark:text-white">{(row.recordCount || 0) + (row.receivableCount || 0)}</span></p>
+                                                        </div>
+                                                        <div className="space-y-2 rounded-lg border border-zinc-200 bg-white p-3 dark:border-white/10 dark:bg-zinc-900">
+                                                            <div>
+                                                                <p className="text-sm font-medium text-zinc-900 dark:text-white">Conexión con el cliente real</p>
+                                                                <p className="text-xs text-zinc-500">Sus movimientos y su cartera pasan a la ficha que elijas. Los archivados también aparecen, marcados.</p>
                                                             </div>
-                                                        </td>
-                                                        <td className="p-4 text-right font-black text-emerald-600">{formatCurrency(row.income || 0)}</td>
-                                                        <td className="p-4 text-right font-black text-amber-600">{formatCurrency(row.receivable || 0)}</td>
-                                                        <td className="p-4 text-right text-zinc-500">
-                                                            {(row.recordCount || 0) + (row.receivableCount || 0)}
-                                                        </td>
-                                                        <td className="p-4">
-                                                            <Select
-                                                                value={targetId}
-                                                                disabled={isSaving || !canWriteFinancials}
-                                                                onChange={(event) => setClientLinkTargets(prev => ({
-                                                                    ...prev,
-                                                                    [sourceId]: event.target.value
-                                                                }))}
-                                                                className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-xs font-bold text-zinc-900 outline-none transition focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
-                                                            >
-                                                                <option value="">Seleccionar cliente...</option>
-                                                                {clientTargetChoices
-                                                                    .filter((target) => target.id !== row.clientId)
-                                                                    .map((target) => (
-                                                                        <option key={target.id} value={target.id}>{target.label}</option>
-                                                                    ))}
-                                                            </Select>
-                                                        </td>
-                                                        <td className="p-4 text-right">
-                                                            {canWriteFinancials && <button
-                                                                type="button"
-                                                                disabled={!targetId || isSaving}
-                                                                onClick={() => handleClientLink(sourceId)}
-                                                                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-50"
-                                                            >
-                                                                {isSaving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Link2 className="w-3.5 h-3.5" />}
-                                                                Vincular
-                                                            </button>}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
+                                                            <div className="flex flex-col gap-2 sm:flex-row">
+                                                                <Select
+                                                                    value={targetId}
+                                                                    disabled={isSaving || !canWriteFinancials}
+                                                                    aria-label={`Cliente real para ${row.client?.name}`}
+                                                                    onChange={(event) => setClientLinkTargets(prev => ({ ...prev, [sourceId]: event.target.value }))}
+                                                                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
+                                                                >
+                                                                    <option value="">Seleccionar cliente...</option>
+                                                                    {clientTargetChoices
+                                                                        .filter((target) => target.id !== row.clientId)
+                                                                        .map((target) => (
+                                                                            <option key={target.id} value={target.id}>{target.label}</option>
+                                                                        ))}
+                                                                </Select>
+                                                                {canWriteFinancials && <button
+                                                                    type="button"
+                                                                    disabled={!targetId || isSaving}
+                                                                    onClick={() => handleClientLink(sourceId)}
+                                                                    className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
+                                                                >
+                                                                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+                                                                    Vincular
+                                                                </button>}
+                                                            </div>
+                                                        </div>
+                                                        {hasFicha && <button type="button"
+                                                            className="min-h-11 text-sm font-medium text-primary underline underline-offset-2"
+                                                            onClick={() => setStatementClient({ id: row.clientId, name: row.client?.name })}>
+                                                            Ver estado de cuenta
+                                                        </button>}
+                                                    </div>
+                                                )}
+                                            </li>
+                                        );
+                                    })}
+                                </ul>
                             ) : (
                                 <div className="py-16 text-center">
-                                    <Users className="w-10 h-10 mx-auto text-zinc-300 mb-3" />
-                                    <p className="text-sm font-bold text-zinc-900 dark:text-white">No hay clientes financieros por conciliar</p>
-                                    <p className="text-xs text-zinc-500 mt-1">Importa primero el financiero del año seleccionado.</p>
+                                    <Users className="mx-auto mb-3 h-10 w-10 text-zinc-300" />
+                                    <p className="text-sm font-semibold text-zinc-900 dark:text-white">No hay clientes financieros por conciliar</p>
+                                    <p className="mt-1 text-xs text-zinc-500">Importa primero el financiero del año seleccionado.</p>
                                 </div>
                             )}
                         </Card>
@@ -1811,14 +1855,45 @@ await invalidateFinancialQueries(queryClient);
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={isReceivableEditorOpen} onOpenChange={setIsReceivableEditorOpen}>
+            <Dialog open={isReceivableEditorOpen} onOpenChange={(open) => {
+                setIsReceivableEditorOpen(open);
+                // Al cerrarlo vuelve a elegir de la lista: el formulario no se reabre a
+                // medio camino de crear una ficha.
+                if (!open) setReceivableForm((current) => ({ ...current, isNewClient: false, newClientName: '' }));
+            }}>
                 <DialogContent className="sm:max-w-lg dark:bg-zinc-900">
                     <DialogHeader>
                         <DialogTitle>Nueva cuenta por cobrar</DialogTitle>
                         <DialogDescription>Registra el valor causado; los abonos posteriores actualizarán automáticamente el saldo.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleCreateReceivable} className="space-y-4">
-                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cliente<Select required value={receivableForm.clientId} onChange={(event) => setReceivableForm((current) => ({ ...current, clientId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{clientTargetChoices.map((client) => <option key={client.id} value={client.id}>{client.label}</option>)}</Select></label>
+                        {/* Se puede crear la ficha aquí mismo: registrar el cobro de alguien
+                            nuevo no debería obligar a salir a Clientes a crearlo primero. */}
+                        <div className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <span>Cliente</span>
+                                <button type="button" className="min-h-11 text-sm font-medium text-primary underline underline-offset-2"
+                                    onClick={() => setReceivableForm((current) => ({ ...current, isNewClient: !current.isNewClient, clientId: '', newClientName: '' }))}>
+                                    {receivableForm.isNewClient ? 'Elegir uno que ya existe' : 'Crear uno nuevo'}
+                                </button>
+                            </div>
+                            {receivableForm.isNewClient ? (
+                                <>
+                                    <input required autoFocus maxLength={120} value={receivableForm.newClientName} aria-label="Nombre del cliente nuevo"
+                                        onChange={(event) => setReceivableForm((current) => ({ ...current, newClientName: event.target.value }))}
+                                        placeholder="Javid Trámite y Asesorías"
+                                        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                                    <p className="text-xs text-zinc-500">Se crea su ficha al guardar la cuenta por cobrar. Su nombre legal y su documento se piden al emitir la cuenta de cobro.</p>
+                                </>
+                            ) : (
+                                <Select required value={receivableForm.clientId} aria-label="Cliente de la cuenta por cobrar"
+                                    onChange={(event) => setReceivableForm((current) => ({ ...current, clientId: event.target.value }))}
+                                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white">
+                                    <option value="">Seleccionar...</option>
+                                    {clientTargetChoices.map((client) => <option key={client.id} value={client.id}>{client.label}</option>)}
+                                </Select>
+                            )}
+                        </div>
                         <div className="grid gap-4 sm:grid-cols-2">
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Valor<input required min="0.01" step="0.01" type="number" value={receivableForm.amount} onChange={(event) => setReceivableForm((current) => ({ ...current, amount: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Periodo</span><BrainMonthPicker ariaLabel="Periodo de la cuenta por cobrar" value={receivableForm.period} onChange={(value) => setReceivableForm((current) => ({ ...current, period: value }))} className="rounded-lg py-2.5" /></label>
@@ -1834,7 +1909,12 @@ await invalidateFinancialQueries(queryClient);
             {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} />}
 
             <Dialog open={!!debtToIssue} onOpenChange={(open) => { if (!open && !isIssuing) { setDebtToIssue(null); setIssueForm(null); } }}>
-                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl dark:bg-zinc-900">
+                {/* El foco de apertura se queda en el diálogo y no cae en el primer campo:
+                    si cae en la fecha, el calendario se abre solo encima del formulario
+                    (Rodny, 23 de septiembre de 2026). El diálogo sigue siendo enfocable,
+                    así que el lector de pantalla lo anuncia y el tabulador entra al form. */}
+                <DialogContent onOpenAutoFocus={(event) => { event.preventDefault(); event.currentTarget.focus(); }}
+                    className="max-h-[90vh] overflow-y-auto sm:max-w-2xl dark:bg-zinc-900">
                     <DialogHeader>
                         <DialogTitle>Emitir cuenta de cobro</DialogTitle>
                         <DialogDescription>
@@ -1846,6 +1926,42 @@ await invalidateFinancialQueries(queryClient);
                             <p className="font-semibold text-zinc-900 dark:text-white">{debtToIssue?.clientName}</p>
                             <p className="text-xs text-zinc-500">Periodo contable {formatFinancialPeriod(debtToIssue?.period)} · valor causado {formatCurrency(debtToIssue?.amount || 0)}</p>
                         </div>
+                        {/* El deudor va impreso con su nombre legal y su documento. Si la
+                            ficha no los tiene, se escriben aquí y quedan guardados en ella:
+                            el dato se escribe una vez, pero sin salir del documento. */}
+                        {issueNeedsIdentity && (
+                            <div className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-white/10">
+                                <div>
+                                    <p className="text-sm font-medium text-zinc-900 dark:text-white">Datos del cliente para el documento</p>
+                                    <p className="text-xs text-zinc-500">La ficha de «{debtToIssue?.clientName}» todavía no los tiene. Se guardan en ella al emitir, así que solo se escriben esta vez.</p>
+                                </div>
+                                <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
+                                    <span className="block">Nombre completo o razón social</span>
+                                    <input required maxLength={200} value={issueForm.client.legalName}
+                                        onChange={(event) => setIssueClient({ legalName: event.target.value })}
+                                        placeholder="Corporación Deportiva Los Titanes"
+                                        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                                </label>
+                                <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
+                                    <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
+                                        <span className="block">Documento</span>
+                                        <Select required value={issueForm.client.documentType} aria-label="Tipo de documento del cliente"
+                                            onChange={(event) => setIssueClient({ documentType: event.target.value })}
+                                            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white">
+                                            <option value="">Sin definir</option>
+                                            {PARTY_DOCUMENT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.name}</option>)}
+                                        </Select>
+                                    </label>
+                                    <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
+                                        <span className="block">Número</span>
+                                        <input required maxLength={30} value={issueForm.client.documentNumber}
+                                            autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="901378858"
+                                            onChange={(event) => setIssueClient({ documentNumber: event.target.value })}
+                                            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                                    </label>
+                                </div>
+                            </div>
+                        )}
                         <div className="grid gap-4 sm:grid-cols-2">
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
                                 <span className="block">Fecha del documento</span>
@@ -1901,7 +2017,7 @@ await invalidateFinancialQueries(queryClient);
                         {importError && <p role="alert" className="text-sm text-destructive">{importError}</p>}
                         <DialogFooter>
                             <button type="button" onClick={() => { setDebtToIssue(null); setIssueForm(null); }} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button>
-                            <button type="submit" disabled={isIssuing || issueTotal <= 0} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">
+                            <button type="submit" disabled={isIssuing || issueTotal <= 0 || !issueIdentityReady} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">
                                 {isIssuing && <Loader2 className="h-4 w-4 animate-spin" />}Emitir cuenta de cobro
                             </button>
                         </DialogFooter>

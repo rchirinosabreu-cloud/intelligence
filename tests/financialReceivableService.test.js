@@ -92,6 +92,66 @@ test('createReceivable creates an open client balance with an audit event', asyn
     assert.equal(calls[1][1].data.action, 'CREATE');
 });
 
+// Registrar el cobro de alguien nuevo no obliga a salir a crearlo primero (Rodny, 23
+// de septiembre de 2026). La ficha y el cobro quedan en la misma transacción.
+const buildCreateTx = () => {
+    const calls = [];
+    return {
+        calls,
+        tx: {
+            financialPeriod: { findUnique: async () => null },
+            client: {
+                findUnique: async (args) => (args.where.slug !== undefined ? null : { id: 'client-1', name: 'Pablo Hoff' }),
+                create: async (args) => { calls.push(['client.create', args]); return { id: 'client-nuevo', ...args.data }; }
+            },
+            accountsReceivable: { create: async (args) => { calls.push(['receivable.create', args]); return { id: 'debt-1', ...args.data }; } },
+            financialAuditEvent: { create: async (args) => { calls.push(['audit.create', args]); return { id: 'audit-1' }; } }
+        }
+    };
+};
+
+test('createReceivable puede crear la ficha del cliente en el mismo acto', async () => {
+    const { calls, tx } = buildCreateTx();
+
+    await createReceivable({ $transaction: async (callback) => callback(tx) }, {
+        client: { name: 'Javid Trámite y Asesorías' }, amount: 4710000, period: '2026-01-01'
+    }, { id: 'user-1' });
+
+    const created = calls.find(([name]) => name === 'client.create')[1].data;
+    assert.equal(created.name, 'Javid Trámite y Asesorías');
+    assert.equal(created.slug, 'javid-tramite-y-asesorias');
+    assert.equal(created.status, 'ACTIVO');
+    // El cobro apunta a la ficha recién creada, no a un id vacío.
+    const receivable = calls.find(([name]) => name === 'receivable.create')[1].data;
+    assert.equal(receivable.clientId, 'client-nuevo');
+    assert.equal(receivable.sourceLabel, 'Javid Trámite y Asesorías');
+    // Queda registrado que se creó la ficha, y quién.
+    const audit = calls.filter(([name]) => name === 'audit.create').map(([, args]) => args.data);
+    assert.deepEqual(audit.map((event) => `${event.entityType}:${event.action}`), ['Client:CREATE', 'AccountsReceivable:CREATE']);
+    assert.equal(audit[0].actorId, 'user-1');
+});
+
+test('sin cliente elegido ni nombre nuevo no se registra nada', async () => {
+    const { calls, tx } = buildCreateTx();
+    await assert.rejects(
+        createReceivable({ $transaction: async (callback) => callback(tx) }, { amount: 1000, period: '2026-01-01' }, { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_CLIENT_REQUIRED' && /escribe el nombre de uno nuevo/.test(error.message)
+    );
+    assert.equal(calls.length, 0);
+});
+
+// Elegir uno que ya existe sigue mandando: no se crea un duplicado por el camino.
+test('con un cliente elegido no se crea ninguna ficha', async () => {
+    const { calls, tx } = buildCreateTx();
+
+    await createReceivable({ $transaction: async (callback) => callback(tx) }, {
+        clientId: 'client-1', client: { name: 'Se ignora' }, amount: 1000, period: '2026-01-01'
+    }, { id: 'user-1' });
+
+    assert.equal(calls.some(([name]) => name === 'client.create'), false);
+    assert.equal(calls.find(([name]) => name === 'receivable.create')[1].data.clientId, 'client-1');
+});
+
 test('editing only notes preserves a remaining payment promise', async () => {
     const existing = { id: 'debt-1', amount: 1000, period: new Date('2026-09-01T12:00:00Z'), status: 'PROMESADO', payments: [{ amount: 200 }] };
     const result = await updateReceivable(makeClient(existing, []), 'debt-1', { notes: 'Llamar el viernes' }, { id: 'user-1' });

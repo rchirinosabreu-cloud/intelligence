@@ -22,9 +22,27 @@ contable de Elisa, colgando del caso «factura electrónica»: ese es el otro ca
 | Concepto, viñetas, periodo del servicio | Lo que se escribe al emitir; queda congelado en la obligación. |
 | Conceptos y valores | `ReceivableItem`, que suman exactamente el total. |
 
-Si la ficha del cliente no tiene nombre legal y documento, **no se emite**: el servicio
-responde `RECEIVABLE_CLIENT_IDENTITY_MISSING` diciendo dónde completarlos. Una cuenta de
-cobro con el nombre corto del equipo no sirve para cobrar.
+Una cuenta de cobro con el nombre corto del equipo no sirve para cobrar, así que sin
+nombre legal y documento **no se emite**. Ese dato se escribe **una sola vez**, pero
+desde cualquiera de los dos lados (Rodny, 23 de septiembre de 2026):
+
+- En **Clientes → «⋯» → Editar Cliente**, por adelantado.
+- En el propio **diálogo de emitir**, cuando la ficha todavía no lo tiene: los tres
+  campos aparecen arriba y **quedan guardados en la ficha** al emitir, en la misma
+  transacción y con su evento de auditoría. No hay que abandonar el documento a medio
+  hacer para ir a buscarlo a otra pantalla.
+
+Si la ficha **ya está identificada**, el diálogo no la pregunta y el servidor **no la
+reescribe** aunque se le mande: emitir un cobro no es el sitio para cambiarle el nombre
+legal a un tercero. Sin identidad y sin escribirla, el servicio responde
+`RECEIVABLE_CLIENT_IDENTITY_MISSING` nombrando al cliente y los dos sitios; una
+identidad a medias o mal escrita responde `RECEIVABLE_CLIENT_IDENTITY_INVALID` y no
+guarda nada.
+
+La reciprocidad va también en el otro sentido: **una cuenta por cobrar puede crear la
+ficha del cliente** en el mismo acto («Crear uno nuevo» en «Nueva cuenta por cobrar»).
+La ficha se crea dentro de la transacción del cobro —o quedan las dos cosas, o
+ninguna— con su evento de auditoría.
 
 ## El consecutivo
 

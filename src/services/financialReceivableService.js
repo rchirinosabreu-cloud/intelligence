@@ -1,4 +1,5 @@
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
+import { createClientWith } from './clientService.js';
 import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
 import {
     assertOpenFinancialPeriod,
@@ -17,9 +18,19 @@ const parseReceivableDueDate = (value) => {
     }
 };
 
+export const CLIENT_NAME_MAX = 120;
+
 export const createReceivable = async (prismaClient, input = {}, actor) => {
     const clientId = String(input.clientId || '').trim();
-    if (!clientId) throw new FinancialDomainError('RECEIVABLE_CLIENT_REQUIRED', 'Selecciona el cliente de la cuenta por cobrar.');
+    // Se puede crear la ficha del cliente aquí mismo (Rodny, 23 de septiembre de 2026):
+    // registrar un cobro de alguien nuevo no debería obligar a salir a crearlo primero.
+    const newClientName = String(input.client?.name || '').trim();
+    if (!clientId && !newClientName) {
+        throw new FinancialDomainError('RECEIVABLE_CLIENT_REQUIRED', 'Elige el cliente de la cuenta por cobrar, o escribe el nombre de uno nuevo.');
+    }
+    if (newClientName.length > CLIENT_NAME_MAX) {
+        throw new FinancialDomainError('RECEIVABLE_CLIENT_NAME_TOO_LONG', `El nombre del cliente admite como máximo ${CLIENT_NAME_MAX} caracteres.`);
+    }
     const amountCents = financialCents(input.amount);
     if (amountCents === null || amountCents <= 0) throw new FinancialDomainError('RECEIVABLE_AMOUNT_INVALID', 'El monto debe ser positivo, tener como máximo dos decimales y estar dentro del rango de precisión financiera.');
     const amount = financialAmountFromCents(amountCents);
@@ -29,11 +40,26 @@ export const createReceivable = async (prismaClient, input = {}, actor) => {
 
     return prismaClient.$transaction(async (tx) => {
         await assertOpenFinancialPeriod(tx, year, month);
-        const client = await tx.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
-        if (!client) throw new FinancialDomainError('RECEIVABLE_CLIENT_NOT_FOUND', 'El cliente seleccionado no existe.', 404);
+        let client;
+        if (clientId) {
+            client = await tx.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
+            if (!client) throw new FinancialDomainError('RECEIVABLE_CLIENT_NOT_FOUND', 'El cliente seleccionado no existe.', 404);
+        } else {
+            // Dentro de la misma transacción: o quedan la ficha y el cobro, o ninguno.
+            client = await createClientWith(tx, { name: newClientName });
+            await tx.financialAuditEvent.create({
+                data: {
+                    entityType: 'Client',
+                    entityId: client.id,
+                    action: 'CREATE',
+                    after: cloneForAudit({ id: client.id, name: client.name, slug: client.slug }),
+                    actorId
+                }
+            });
+        }
         const receivable = await tx.accountsReceivable.create({
             data: {
-                clientId,
+                clientId: client.id,
                 amount,
                 period,
                 year,

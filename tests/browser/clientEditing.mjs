@@ -13,7 +13,7 @@ before(async () => {
 });
 after(async () => { await browser?.close(); await preview?.close(); });
 
-async function setup({ save, mobile = false } = {}) {
+async function setup({ save, mobile = false, screenshot = false } = {}) {
   const page = await browser.newPage({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 }, hasTouch: mobile, isMobile: mobile, reducedMotion: 'reduce' });
   page.setDefaultTimeout(5000);
   let client = { id: 'sample-client', name: 'Marca de ejemplo', slug: 'marca-original', isArchived: false, responsible: { id: 'sample-pm', name: 'PM de ejemplo' }, healthRecords: [{ score: 85 }], agencyContexts: [] };
@@ -34,13 +34,24 @@ async function setup({ save, mobile = false } = {}) {
   await page.goto(`${preview.origin}/tests/fixtures/client-edit-preview.html`, { timeout: 30000 });
   const row = page.getByRole('row').filter({ hasText: 'Marca de ejemplo' });
   await row.waitFor();
-  await row.locator('button[aria-haspopup="menu"]').click();
+  // El menú de la fila se ve sin pasar el ratón por encima (Rodny, 23 de septiembre de
+  // 2026): escondido tras el hover había que adivinarlo, y en táctil no aparecía nunca.
+  const menu = row.locator('button[aria-haspopup="menu"]');
+  assert.equal(await menu.evaluate(button => getComputedStyle(button).opacity), '1', 'el menú de la fila tiene que verse sin hover');
+  if (screenshot) {
+    await page.evaluate(async () => {
+      await Promise.all(document.getAnimations().filter(animation => animation.effect?.getTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => {})));
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+    await page.screenshot({ path: 'output/client-edit/clients-list.png', animations: 'disabled' });
+  }
+  await menu.click();
   await page.getByRole('menuitem', { name: 'Editar Cliente', exact: true }).click();
   return { page, requests };
 }
 
 test('Editar Cliente opens the form, renames only the selected client and preserves its links and list metadata', async () => {
-  const { page, requests } = await setup();
+  const { page, requests } = await setup({ screenshot: true });
   try {
     const dialog = page.getByRole('dialog', { name: 'Editar cliente', exact: true });
     await dialog.waitFor();

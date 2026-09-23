@@ -113,9 +113,12 @@ test('no se emite una cuenta de cobro si la ficha del cliente no tiene identidad
         issueReceivableDocument(prismaClient, 'debt-1', {
             concept: 'Servicios', items: [{ description: 'Fee', amount: 1000 }], servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30'
         }, { id: 'user-1' }),
+        // Se dice a quién le falta y los dos sitios donde se puede escribir: aquí
+        // mismo, o en su ficha.
         (error) => error.code === 'RECEIVABLE_CLIENT_IDENTITY_MISSING'
             && error.statusCode === 409
             && /«Titanes»/.test(error.message)
-            && /Clientes → editar cliente/.test(error.message)
+            && /en este mismo formulario/.test(error.message)
+            && /Clientes → «⋯» → Editar Cliente/.test(error.message)
     );
 });

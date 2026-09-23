@@ -29,6 +29,7 @@ const income = () => records.filter(record => record.type === 'INCOME').reduce((
 records[1] = { ...records[1], amount: 400000, origin: 'SYSTEM', description: 'Pago de cartera: Cliente de muestra', attachmentUrl: 'https://example.invalid/soporte.pdf', receivablePayment: { id: 'historical-payment', receivableId: debt.id } };
 records[2] = { ...records[2], attachmentUrl: 'javascript:alert(1)' };
 if (!debt.balanceReviewRequired) debt.payments = [{ id: 'historical-payment', amount: 400000, paidAt: '2026-09-01T05:00:00Z', reference: 'ABONO-01', account, financialRecord: records[1] }];
+const createdReceivables = window.__createdReceivables = [];
 axios.defaults.adapter = async config => {
   const url = new URL(config.url, location.origin), path = url.pathname;
   for (const [key, value] of Object.entries(config.params || {})) url.searchParams.set(key, value);
@@ -48,7 +49,17 @@ axios.defaults.adapter = async config => {
   else if (path.endsWith('/receivables-ledger')) {
     if (new URLSearchParams(location.search).has('carteraError')) throw Object.assign(new Error('Error simulado de lectura'), { response: { data: { message: 'Error simulado de lectura' } } });
     data = { year: 2026, items: [{ ...debt }], totals: { outstandingTotal: debt.outstanding, total: debt.outstanding, reviewCount: debt.balanceReviewRequired ? 1 : 0 } };
-  } else if (path.endsWith('/client-reconciliation')) data = { year: 2026, clients: [{ client, clientId: client.id, sourceId: client.id, income: income(), receivable: debt.outstanding, recordCount: records.length, receivableCount: 1 }], targets: [client, archivedClient] };
+  } else if (path.endsWith('/client-reconciliation')) {
+    data = {
+      year: 2026,
+      clients: [
+        { client, clientId: client.id, sourceId: client.id, income: income(), receivable: debt.outstanding, recordCount: records.length, receivableCount: 1 },
+        // Una fila que solo existe en el Excel: sin ficha, y es la que pide conexión.
+        { client: { id: null, name: 'PAGO ELVIRA U.', slug: null }, clientId: null, sourceId: 'label:PAGO ELVIRA U.', income: 500000, receivable: 0, recordCount: 1, receivableCount: 0 }
+      ],
+      targets: [client, archivedClient]
+    };
+  }
   else if (path.endsWith('/statement')) {
     if (new URLSearchParams(location.search).has('statementError')) throw Object.assign(new Error('Estado de cuenta no disponible (simulado)'), { response: { status: 500, data: { message: 'Estado de cuenta no disponible (simulado)' } } });
     const section = url.searchParams.get('section'), offset = Number(url.searchParams.get('cursor') || 0);
@@ -69,6 +80,14 @@ axios.defaults.adapter = async config => {
     // Como el servidor: le pone número, congela conceptos y el total del documento
     // pasa a ser el de la obligación.
     const total = body.items.reduce((sum, item) => sum + Number(item.amount), 0);
+    // Como el servidor: sin identidad en la ficha no se emite, y la que se escribe
+    // aquí queda guardada en ella.
+    if (!debt.clientLegalName && !body.client?.legalName) {
+      throw Object.assign(new Error('Sin identidad'), { response: { data: { message: 'La cuenta de cobro lleva el nombre completo y el documento del cliente.' } } });
+    }
+    if (body.client?.legalName) {
+      debt = { ...debt, clientLegalName: body.client.legalName, clientDocumentType: body.client.documentType, clientDocumentNumber: body.client.documentNumber };
+    }
     debt = { ...debt, number: 393, formattedNumber: 'No. 0393', issuedAt: `${body.issuedAt}T00:00:00Z`, concept: body.concept, servicePeriod: body.servicePeriod, items: body.items, amount: total, outstanding: total - debt.paidAmount };
     data = { message: 'Cuenta de cobro No. 0393 emitida.', receivable: debt, document: { number: 393, formattedNumber: 'No. 0393', total } };
   } else if (path.includes('/receivables/') && path.endsWith('/document')) {
@@ -97,6 +116,12 @@ axios.defaults.adapter = async config => {
   } else if (path.endsWith('/bank-reconciliation')) data = { transactions: Array.from({ length: 90 }, (_, i) => ({ id: `bank-${i}`, description: `Movimiento bancario ${i + 1}`, postedAt: '2026-09-07', amount: 10000, account, status: i === 0 ? 'MATCHED' : 'UNMATCHED', matches: i === 0 ? [{ id: 'match', status: 'APPROVED' }] : [] })), continuityGaps: [], statements: [] };
   else if (path.endsWith('/periods')) data = { periods: [] };
   else if (path.includes('/receivables/') && config.method === 'patch') { debt = { ...debt, ...body }; data = { receivable: debt }; }
+  // Crear la cuenta por cobrar puede crear la ficha del cliente en el mismo acto.
+  else if (path.endsWith('/receivables') && config.method === 'post') {
+    if (!body.clientId && !body.client?.name) throw Object.assign(new Error('Sin cliente'), { response: { data: { message: 'Elige el cliente de la cuenta por cobrar, o escribe el nombre de uno nuevo.' } } });
+    createdReceivables.push(body);
+    data = { receivable: { id: 'nuevo' } };
+  }
   else throw new Error(`Ruta no simulada: ${config.method} ${path}`);
   return { data, status: 200, statusText: 'OK', headers: {}, config };
 };

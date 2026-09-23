@@ -142,6 +142,11 @@ const serializeReceivable = (receivable) => {
         clientId: receivable.clientId || receivable.client?.id || null,
         clientName: receivable.client?.name || receivable.sourceLabel || 'Cliente sin nombre',
         clientSlug: receivable.client?.slug || null,
+        // Lo que va impreso como deudor. Vive en la ficha del cliente y se escribe una
+        // sola vez; viaja aquí para que el diálogo de emitir sepa si ya lo tiene.
+        clientLegalName: receivable.client?.legalName || null,
+        clientDocumentType: receivable.client?.documentType || null,
+        clientDocumentNumber: receivable.client?.documentNumber || null,
         amount,
         paidAmount,
         outstanding: balanceReviewRequired ? null : roundFloat(Math.max(amount - paidAmount, 0)),
@@ -445,7 +450,13 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
                 client: {
                     select: {
                         name: true,
-                        slug: true
+                        slug: true,
+                        // La identidad del tercero viaja con la obligación para que la
+                        // pantalla sepa si puede emitir sin preguntarle al servidor, y
+                        // pueda ofrecer completarla sin salir de Cartera.
+                        legalName: true,
+                        documentType: true,
+                        documentNumber: true
                     }
                 },
                 payments: {

@@ -84,6 +84,11 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
         clientId: null,
         clientName: 'Jazmin',
         clientSlug: 'jazmin',
+        // La identidad del tercero viaja con la obligación: la pantalla la necesita
+        // para saber si puede emitir, y para ofrecer completarla sin salir de Cartera.
+        clientLegalName: null,
+        clientDocumentType: null,
+        clientDocumentNumber: null,
         amount: 4680000,
         paidAmount: 680000,
         outstanding: 4000000,

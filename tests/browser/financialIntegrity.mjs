@@ -6,6 +6,8 @@ const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH 
 try {
   const page = await browser.newPage({ viewport: { width: 1440, height: 1050 } });
   await page.goto(base);
+  // Financiero abre en Movimientos: el trabajo diario es el libro, no las gráficas.
+  await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
   await page.getByRole('button', { name: 'Cartera', exact: true }).click();
   const row = page.getByRole('button', { name: /Cliente de muestra/ });
   await row.waitFor();
@@ -29,8 +31,24 @@ try {
   await page.getByRole('button', { name: 'Guardar pago', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   assert.match(await row.innerText(), /600[.,]000/);
+  // Conciliación de clientes: una lista, con el estado de cada ficha a la vista y la
+  // conexión con el cliente real dentro del panel de cada uno (Rodny, 23 de sept.).
   await page.getByRole('button', { name: 'Clientes', exact: true }).click();
-  assert.match(await page.locator('tbody').innerText(), /600[.,]000/);
+  const reconciliationRow = page.getByRole('button', { name: /Cliente de muestra/ });
+  await reconciliationRow.waitFor();
+  assert.match(await reconciliationRow.innerText(), /600[.,]000/);
+  // El desplegable de cliente real no ensucia la lista: vive dentro del panel.
+  assert.equal(await page.getByRole('combobox', { name: /Cliente real para/ }).count(), 0);
+  assert.equal(await page.getByRole('button', { name: 'Vincular', exact: true }).count(), 0);
+  // Una fila que solo existe en el Excel lo dice, que es la que pide conexión.
+  await page.getByText('solo en el Excel · sin ficha', { exact: false }).waitFor();
+  await reconciliationRow.click();
+  await page.getByText('Conexión con el cliente real', { exact: true }).waitFor();
+  await chooseOption(page.getByRole('combobox', { name: 'Cliente real para Cliente de muestra' }), 'demo-archived');
+  assert.equal(await page.getByRole('button', { name: 'Vincular', exact: true }).isEnabled(), true);
+  await page.screenshot({ path: 'output/financial-clients-list.png', fullPage: true, animations: 'disabled' });
+  await reconciliationRow.click();
+  assert.equal(await page.getByText('Conexión con el cliente real', { exact: true }).count(), 0, 'el panel se cierra');
   await page.getByRole('button', { name: 'Cartera', exact: true }).click();
   await page.screenshot({ path: 'output/financial-cartera-preview.png', fullPage: true, animations: 'disabled' });
   await page.getByRole('button', { name: 'Cambiar tema' }).click();
@@ -119,14 +137,34 @@ try {
   await chooseOption(categoryFilter, '');
   assert.equal(await rowCount(), '62');
 
+  // Una cuenta por cobrar puede crear la ficha del cliente en el mismo acto, sin salir
+  // a Clientes a crearlo primero (Rodny, 23 de septiembre de 2026).
+  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('button', { name: 'Nueva cuenta por cobrar', exact: true }).click();
+  const newDebtDialog = page.getByRole('dialog').filter({ hasText: 'Nueva cuenta por cobrar' });
+  await newDebtDialog.waitFor();
+  await newDebtDialog.getByRole('button', { name: 'Crear uno nuevo', exact: true }).click();
+  await newDebtDialog.getByRole('textbox', { name: 'Nombre del cliente nuevo' }).fill('Javid Trámite y Asesorías');
+  assert.equal(await newDebtDialog.getByRole('combobox', { name: 'Cliente de la cuenta por cobrar' }).count(), 0, 'el desplegable cede el sitio al nombre nuevo');
+  await newDebtDialog.getByRole('spinbutton', { name: 'Valor' }).fill('4710000');
+  await page.screenshot({ path: 'output/financial-new-receivable-client.png', animations: 'disabled' });
+  await newDebtDialog.getByRole('button', { name: 'Guardar', exact: true }).click();
+  await newDebtDialog.waitFor({ state: 'hidden' });
+  await page.getByText('Cliente y cuenta por cobrar creados.', { exact: true }).waitFor();
+  const [created] = await page.evaluate(() => window.__createdReceivables || []);
+  assert.equal(created.client.name, 'Javid Trámite y Asesorías');
+  assert.equal(created.clientId, '', 'la ficha la crea el servidor, no un id inventado aquí');
+
   // Emitir la cuenta de cobro: le pone número y el total del documento pasa a ser el
   // de la obligación (Elisa, reunión del 21 de septiembre de 2026).
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
   const issueRow = page.getByRole('button', { name: /Cliente de muestra/ });
   await issueRow.click();
   await page.getByRole('button', { name: 'Emitir cuenta de cobro', exact: true }).click();
   const issueDialog = page.getByRole('dialog').filter({ hasText: 'Emitir cuenta de cobro' });
   await issueDialog.waitFor();
+  // El calendario no se abre solo al abrir el diálogo: el foco se queda en el propio
+  // diálogo, no cae en el campo de fecha (Rodny, 23 de septiembre de 2026).
+  assert.equal(await page.locator('.react-datepicker').count(), 0, 'el calendario no puede abrirse solo');
   // El párrafo viene escrito para no teclearlo cada mes.
   assert.match(await issueDialog.getByRole('textbox', { name: /Concepto/ }).inputValue(), /Prestación de servicios para el diseño/);
   await issueDialog.getByRole('textbox', { name: 'Periodo del servicio' }).fill('20 de agosto al 19 de septiembre');
@@ -137,6 +175,13 @@ try {
   await issueDialog.getByRole('textbox', { name: 'Descripción del concepto 2' }).fill('Inversión de pauta en Meta Ads');
   await issueDialog.getByRole('spinbutton', { name: 'Valor del concepto 2' }).fill('400000');
   assert.match(await issueDialog.innerText(), /Total del documento\s*\$\s*1[.,]200[.,]000/);
+  // La ficha del cliente no tiene nombre legal ni documento, así que se escriben aquí
+  // y quedan guardados en ella: no hay que salir a Clientes a medio documento.
+  assert.match(await issueDialog.innerText(), /Se guardan en ella al emitir/);
+  assert.equal(await issueDialog.getByRole('button', { name: 'Emitir cuenta de cobro', exact: true }).isDisabled(), true, 'sin identidad no se puede emitir');
+  await issueDialog.getByRole('textbox', { name: 'Nombre completo o razón social' }).fill('CORPORACIÓN DEPORTIVA LOS TITANES');
+  await chooseOption(issueDialog.getByRole('combobox', { name: 'Tipo de documento del cliente' }), 'NIT');
+  await issueDialog.getByRole('textbox', { name: 'Número' }).fill('901378858');
   await page.screenshot({ path: 'output/financial-issue-dialog.png', animations: 'disabled' });
   await issueDialog.getByRole('button', { name: 'Emitir cuenta de cobro', exact: true }).click();
   await issueDialog.waitFor({ state: 'hidden' });
