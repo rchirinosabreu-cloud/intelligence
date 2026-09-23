@@ -39,6 +39,7 @@ import {
     replaceFinancialRecordAllocationsHandler,
     reverseReceivablePaymentHandler,
     streamFinancialRecordDocumentHandler,
+    streamReceivablePdfHandler,
     updateFinancialRecordHandler,
     uploadFinancialRecordDocumentHandler,
     voidFinancialRecordDocumentHandler,
@@ -98,6 +99,9 @@ router.post('/receivables', requireFinancialWrite, createReceivableHandler);
 // Emitir la cuenta de cobro: le pone número, congela sus conceptos y deja la
 // obligación con el mismo total que se le manda al cliente.
 router.post('/receivables/:id/issue', requireFinancialWrite, issueReceivableDocumentHandler);
+// El PDF que se le manda al cliente. Solo por la API autenticada, nunca por una URL
+// pública del bucket, como el resto de los documentos financieros.
+router.get('/receivables/:id/document', requireFinancialAccess, streamReceivablePdfHandler);
 router.post('/receivables/:id/payments', requireFinancialWrite, createReceivablePaymentHandler);
 // Corregir un abono mal registrado es parte del trabajo diario de quien lo registra:
 // mismo permiso que crearlo, con motivo obligatorio y auditoría.

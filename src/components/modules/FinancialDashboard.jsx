@@ -21,7 +21,7 @@ import {
 import {
     TrendingUp, TrendingDown, DollarSign, Wallet, ShieldCheck, AlertCircle,
     Users, ChevronDown, ChevronUp, Loader2, Sparkles, Calendar, PieChart as PieIcon, ListCollapse, ListCollapse as ExpandIcon,
-    UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2, Link2
+    UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2, Link2, FileText, Download
 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -114,6 +114,7 @@ const FinancialDashboard = () => {
     const [debtToIssue, setDebtToIssue] = useState(null);
     const [issueForm, setIssueForm] = useState(null);
     const [isIssuing, setIsIssuing] = useState(false);
+    const [downloadingDocumentId, setDownloadingDocumentId] = useState(null);
     // Revertir un abono mal registrado: siempre con motivo, nunca en un clic suelto.
     const [paymentToReverse, setPaymentToReverse] = useState(null);
     const [expandedReversals, setExpandedReversals] = useState({});
@@ -416,6 +417,42 @@ await invalidateFinancialQueries(queryClient);
             setImportError(error.response?.data?.message || 'No fue posible emitir la cuenta de cobro.');
         } finally {
             setIsIssuing(false);
+        }
+    };
+
+    // El PDF llega por la API autenticada, nunca por una URL del bucket. Se abre en otra
+    // pestaña para revisarlo, o se baja con el nombre que ya trae el propio documento.
+    const openReceivableDocument = async (debt, { download = false } = {}) => {
+        if (!debt?.id || downloadingDocumentId) return;
+        setDownloadingDocumentId(debt.id);
+        setImportError('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const response = await axios.get(`${baseUrl}/api/financials/receivables/${debt.id}/document`, {
+                headers: { Authorization: `Bearer ${token}` },
+                responseType: 'blob'
+            });
+            const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: 'application/pdf' });
+            const objectUrl = URL.createObjectURL(blob);
+            if (download) {
+                const anchor = window.document.createElement('a');
+                anchor.href = objectUrl;
+                anchor.download = `Cuenta de cobro ${debt.formattedNumber}.pdf`;
+                window.document.body.appendChild(anchor);
+                anchor.click();
+                anchor.remove();
+            } else {
+                window.open(objectUrl, '_blank', 'noopener');
+            }
+            // El navegador ya tiene los bytes; soltar la referencia evita retener el PDF
+            // en memoria durante toda la sesión.
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+        } catch (error) {
+            console.error('Error opening receivable document:', error.response?.data || error);
+            setImportError('No fue posible abrir la cuenta de cobro.');
+        } finally {
+            setDownloadingDocumentId(null);
         }
     };
 
@@ -1126,12 +1163,20 @@ await invalidateFinancialQueries(queryClient);
                                                                 <p className="text-xs text-zinc-600 dark:text-zinc-300">{financialDebtStatus(debt)}{debt.dueDate ? ` · Vence: ${new Date(debt.dueDate).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : ''}</p>
                                                                 {/* Una obligación importada del Excel no tiene documento; emitirla se lo pone. */}
                                                                 <div className="flex flex-wrap items-center gap-2">
-                                                                    {debt.formattedNumber ? (
+                                                                    {debt.formattedNumber ? (<>
                                                                         <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
                                                                             Cuenta de cobro {debt.formattedNumber}
                                                                             {debt.issuedAt ? <span className="font-normal text-zinc-500">· {new Date(debt.issuedAt).toLocaleDateString('es-CO', { timeZone: 'UTC' })}</span> : null}
                                                                         </span>
-                                                                    ) : canWriteFinancials && (
+                                                                        <button type="button" onClick={() => openReceivableDocument(debt)} disabled={downloadingDocumentId === debt.id}
+                                                                            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-primary transition hover:bg-primary/5 disabled:opacity-50">
+                                                                            {downloadingDocumentId === debt.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}Ver PDF
+                                                                        </button>
+                                                                        <button type="button" onClick={() => openReceivableDocument(debt, { download: true })} disabled={downloadingDocumentId === debt.id}
+                                                                            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-white/5">
+                                                                            <Download className="h-3.5 w-3.5" />Descargar
+                                                                        </button>
+                                                                    </>) : canWriteFinancials && (
                                                                         <button type="button" onClick={() => openIssueDialog(debt)}
                                                                             className="min-h-11 rounded-lg border border-primary/40 px-3 text-xs font-semibold text-primary transition hover:bg-primary/5">
                                                                             Emitir cuenta de cobro

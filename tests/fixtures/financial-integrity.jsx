@@ -71,6 +71,11 @@ axios.defaults.adapter = async config => {
     const total = body.items.reduce((sum, item) => sum + Number(item.amount), 0);
     debt = { ...debt, number: 393, formattedNumber: 'No. 0393', issuedAt: `${body.issuedAt}T00:00:00Z`, concept: body.concept, servicePeriod: body.servicePeriod, items: body.items, amount: total, outstanding: total - debt.paidAmount };
     data = { message: 'Cuenta de cobro No. 0393 emitida.', receivable: debt, document: { number: 393, formattedNumber: 'No. 0393', total } };
+  } else if (path.includes('/receivables/') && path.endsWith('/document')) {
+    // Como el servidor: el PDF llega por la API autenticada, como bytes.
+    if (!debt.number) throw Object.assign(new Error('Sin emitir'), { response: { data: { message: 'Esta obligación todavía no tiene cuenta de cobro.' } } });
+    (window.__documentRequests ||= []).push(path);
+    data = new Blob([`%PDF-1.4 muestra de la cuenta de cobro ${debt.formattedNumber}`], { type: 'application/pdf' });
   } else if (path.includes('/receivable-payments/') && path.endsWith('/reverse')) {
     const paymentId = path.split('/').at(-2);
     const target = debt.payments.find(payment => payment.id === paymentId);
