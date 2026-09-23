@@ -2,7 +2,10 @@ import { readFileSync } from 'node:fs';
 import { jsPDF } from 'jspdf';
 import { amountInWords } from '../utils/amountInWords.js';
 import { formatPartyDocument, formatPartyName } from '../lib/partyIdentity.js';
-import { formatReceivableNumber, parseReceivableConcept, receivableIssuer } from '../lib/receivableDocument.js';
+import { pathToFileURL } from 'node:url';
+import {
+    formatReceivableNumber, parseReceivableConcept, receivableIssuer, RECEIVABLE_ISSUER_DEFAULT_NAME
+} from '../lib/receivableDocument.js';
 import { FinancialDomainError } from './financialRecordService.js';
 
 // La cuenta de cobro tal como la reciben los clientes hoy en Word: mismo orden, mismo
@@ -31,6 +34,37 @@ const getLogo = () => (cachedLogo ||= `data:image/png;base64,${readFileSync(
     new URL('../../public/brainstudio-logo.png', import.meta.url)
 ).toString('base64')}`);
 
+// La rúbrica escaneada de Francisco Villa, recortada y con el fondo transparente.
+const DEFAULT_SIGNATURE = new URL('../assets/firma-francisco-villa.png', import.meta.url);
+// Alto de la firma en el documento; el ancho sale de su propia proporción.
+const SIGNATURE_HEIGHT_MM = 15;
+
+/**
+ * Qué firma lleva este documento. La rúbrica es de una persona concreta: si alguien
+ * cambia quién cobra por entorno y no pone la suya, el documento sale **sin firmar**,
+ * con el hueco en blanco, en vez de estampar la firma de otro en un cobro.
+ */
+export const receivableSignatureImage = (issuer, env = {}) => {
+    if (env.RECEIVABLE_ISSUER_SIGNATURE_IMAGE) return pathToFileURL(env.RECEIVABLE_ISSUER_SIGNATURE_IMAGE);
+    return issuer.name === RECEIVABLE_ISSUER_DEFAULT_NAME ? DEFAULT_SIGNATURE : null;
+};
+
+const signatureCache = new Map();
+const readSignature = (source) => {
+    const key = String(source);
+    if (!signatureCache.has(key)) {
+        try {
+            signatureCache.set(key, `data:image/png;base64,${readFileSync(source).toString('base64')}`);
+        } catch (error) {
+            // Una firma que no está no puede impedir el cobro: queda el hueco para
+            // firmar a mano, como antes de tenerla escaneada.
+            console.error('[Cuenta de cobro] No se pudo leer la firma, el documento sale sin firmar:', error?.message || error);
+            signatureCache.set(key, null);
+        }
+    }
+    return signatureCache.get(key);
+};
+
 const money = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', minimumFractionDigits: 0, maximumFractionDigits: 0 });
 const longDate = (value) => new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(value));
 
@@ -54,7 +88,8 @@ export const buildReceivableDocumentModel = (receivable, env = {}) => {
         // Con un solo concepto el documento no lleva tabla, como el de Elvira Utria.
         items: items.length > 1 ? items : [],
         total,
-        servicePeriod: receivable.servicePeriod || null
+        servicePeriod: receivable.servicePeriod || null,
+        signatureImage: receivableSignatureImage(issuer, env)
     };
 };
 
@@ -165,9 +200,20 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
     y += 10;
     setText(doc, { size: 10.5 });
     doc.text('Cordialmente,', PAGE.left, y);
-    // Espacio reservado para la firma escaneada; mientras no exista, se deja en blanco
-    // para que se pueda firmar a mano sobre el impreso.
-    y += 20;
+    // La firma escaneada va sobre el nombre. Sin ella el hueco queda en blanco, para
+    // poder firmar a mano sobre el impreso.
+    const signature = model.signatureImage && readSignature(model.signatureImage);
+    if (signature) {
+        let ratio = 2.5;
+        try {
+            const properties = doc.getImageProperties(signature);
+            if (properties?.width > 0 && properties?.height > 0) ratio = properties.width / properties.height;
+        } catch {
+            // Sin las medidas se dibuja con la proporción de la rúbrica de la casa.
+        }
+        doc.addImage(signature, 'PNG', PAGE.left, y + 3, SIGNATURE_HEIGHT_MM * ratio, SIGNATURE_HEIGHT_MM, undefined, 'FAST');
+    }
+    y += 22;
     setText(doc, { size: 10.5, style: 'bold' });
     doc.text(model.issuer.name.replace(/\b\p{Lu}\p{Lu}+\b/gu, (word) => word.charAt(0) + word.slice(1).toLowerCase()), PAGE.left, y);
     y += 5;

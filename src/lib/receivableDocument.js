@@ -16,9 +16,11 @@ export const RECEIVABLE_SERVICE_PERIOD_MAX = 120;
  * que las hace cuenta de cobro y no factura — por eso nunca llevan IVA.
  * Se puede cambiar por entorno sin tocar el código.
  */
+export const RECEIVABLE_ISSUER_DEFAULT_NAME = 'FRANCISCO VILLA ZÚÑIGA';
+
 export const receivableIssuer = (env = {}) => ({
     city: env.RECEIVABLE_ISSUER_CITY || 'Cartagena de Indias D.T y C.',
-    name: env.RECEIVABLE_ISSUER_NAME || 'FRANCISCO VILLA ZÚÑIGA',
+    name: env.RECEIVABLE_ISSUER_NAME || RECEIVABLE_ISSUER_DEFAULT_NAME,
     documentLabel: env.RECEIVABLE_ISSUER_DOCUMENT || "CC. 1'235.038.569",
     role: env.RECEIVABLE_ISSUER_ROLE || 'Representante Brain Studio',
     signatureLine: env.RECEIVABLE_ISSUER_SIGNATURE_LINE || 'C.C. 1235038569 - Celular: 3015201362',

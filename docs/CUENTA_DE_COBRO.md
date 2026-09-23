@@ -69,17 +69,25 @@ está, o el bucket no responde— lo regenera y aprovecha para guardarlo, porque
 no puede quedarse sin el documento de un cobro que ya está emitido. `?download=1` lo
 baja en vez de abrirlo.
 
-## Lo que falta
+## La firma
 
-- **La firma escaneada.** El PDF reserva el espacio en blanco sobre el nombre para
-  poder firmar a mano sobre el impreso; cuando llegue la imagen se incorpora ahí.
+La rúbrica escaneada de Francisco Villa (`src/assets/firma-francisco-villa.png`,
+recortada y con fondo transparente) va sobre el nombre, y el documento sale firmado.
+
+**Una rúbrica es de una persona concreta.** Si se cambia quién cobra con
+`RECEIVABLE_ISSUER_NAME` y no se pone su propia firma en
+`RECEIVABLE_ISSUER_SIGNATURE_IMAGE`, el documento sale **sin firmar**, con el hueco en
+blanco para firmar a mano: estampar la firma de Francisco bajo el nombre de otro
+convertiría el cobro en un documento firmado por quien no lo firmó. Una firma que no
+se puede leer tampoco impide emitir; deja el mismo hueco y se avisa por consola.
 
 ## Verificación
 
 - `tests/receivableDocumentService.test.js`: numeración, cuadre de conceptos, una sola
   emisión, periodo cerrado, concurrencia.
 - `tests/receivableDocumentPdf.test.js`: el documento comprobado contra la cuenta real
-  0389, la tabla solo con más de un concepto, el guardado al emitir, que un fallo del
+  0389, la tabla solo con más de un concepto, la firma —y que un emisor cambiado por
+  entorno sin la suya salga sin firmar—, el guardado al emitir, que un fallo del
   almacenamiento no tumbe la emisión, y que la descarga sirva el PDF congelado y lo
   regenere si no se puede leer.
 - `npm run preview:cuenta-de-cobro` escribe en `output/` las dos muestras —con tabla y

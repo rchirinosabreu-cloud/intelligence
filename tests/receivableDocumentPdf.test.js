@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import {
     buildReceivableDocumentModel,
     generateReceivablePdfBuffer,
     openReceivablePdf,
     receivablePdfFilename,
     receivablePdfStorageKey,
+    receivableSignatureImage,
     storeReceivablePdf
 } from '../src/services/receivablePdfService.js';
 import { issueReceivableDocument } from '../src/services/receivableDocumentService.js';
@@ -70,6 +73,27 @@ test('el emisor se puede cambiar por entorno sin tocar el código', () => {
     const model = buildReceivableDocumentModel(titanes, { RECEIVABLE_ISSUER_NAME: 'OTRA PERSONA', RECEIVABLE_ISSUER_CITY: 'Bogotá' });
     assert.equal(model.issuer.name, 'OTRA PERSONA');
     assert.equal(model.place, 'Bogotá 21 de septiembre de 2026');
+});
+
+// La firma de Rodny, del 22 de septiembre de 2026: recortada y con fondo transparente.
+test('el documento va firmado con la rúbrica escaneada de quien cobra', () => {
+    const { signatureImage } = buildReceivableDocumentModel(titanes);
+    assert.ok(signatureImage, 'la cuenta de cobro por defecto va firmada');
+    assert.ok(existsSync(fileURLToPath(signatureImage)), 'la firma tiene que existir en el repositorio');
+});
+
+// Una rúbrica es de una persona concreta: estamparla bajo el nombre de otro convertiría
+// el documento en un cobro firmado por quien no lo firmó.
+test('si se cambia quién cobra y no se pone su firma, el documento sale sin firmar', () => {
+    const otro = buildReceivableDocumentModel(titanes, { RECEIVABLE_ISSUER_NAME: 'OTRA PERSONA' });
+    assert.equal(otro.signatureImage, null);
+    const propia = receivableSignatureImage({ name: 'OTRA PERSONA' }, { RECEIVABLE_ISSUER_SIGNATURE_IMAGE: 'C:/firmas/otra.png' });
+    assert.match(String(propia), /otra\.png$/);
+});
+
+test('una firma que no está no impide emitir: queda el hueco para firmar a mano', () => {
+    const buffer = generateReceivablePdfBuffer(titanes, { RECEIVABLE_ISSUER_SIGNATURE_IMAGE: 'no-existe-esta-firma.png' });
+    assert.equal(buffer.subarray(0, 5).toString('latin1'), '%PDF-');
 });
 
 test('el concepto separa el párrafo de sus viñetas, como se escribe en Word', () => {
