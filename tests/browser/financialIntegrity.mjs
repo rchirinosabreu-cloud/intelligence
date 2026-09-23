@@ -193,11 +193,19 @@ try {
 
   // El PDF se pide por la API autenticada y el navegador lo recibe como bytes: ni la
   // vista previa ni la descarga pueden llevar a una URL del bucket.
-  const opened = page.waitForEvent('popup');
+  // El PDF se ve **en la misma ventana**, con el visor de la plataforma: nada de abrir
+  // otra pestaña (Rodny, 23 de septiembre de 2026).
+  let popups = 0;
+  page.on('popup', () => { popups += 1; });
   await page.getByRole('button', { name: 'Ver PDF', exact: true }).click();
-  const viewer = await opened;
-  assert.match(viewer.url(), /^blob:/, 'el PDF se abre desde los bytes que ya tiene el navegador');
-  await viewer.close();
+  const pdfViewer = page.getByText('Cuenta de cobro No. 0393.pdf', { exact: true });
+  await pdfViewer.waitFor();
+  // Y lo dibuja de verdad: el visor renderiza el PDF, no se queda preparándolo.
+  await page.locator('canvas').first().waitFor({ timeout: 15000 });
+  await page.screenshot({ path: 'output/financial-pdf-viewer.png', animations: 'disabled' });
+  assert.equal(popups, 0, 'el visor no abre otra ventana');
+  await page.getByRole('button', { name: /Cerrar/ }).first().click();
+  await pdfViewer.waitFor({ state: 'hidden' });
   const saved = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Descargar', exact: true }).click();
   assert.equal((await saved).suggestedFilename(), 'Cuenta de cobro No. 0393.pdf');

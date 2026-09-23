@@ -87,6 +87,12 @@ está, o el bucket no responde— lo regenera y aprovecha para guardarlo, porque
 no puede quedarse sin el documento de un cobro que ya está emitido. `?download=1` lo
 baja en vez de abrirlo.
 
+**«Ver PDF» abre el visor de la plataforma, en la misma ventana** (Rodny, 23 de
+septiembre de 2026): el mismo `ChatFilePreview` que usan los soportes de un movimiento,
+nada de una pestaña suelta. Los bytes llegan por la API autenticada y se le pasan al
+visor **como bytes**, no como una URL `blob:`, que la Content-Security-Policy de la
+página no le deja buscar. «Descargar» sí usa la URL local para guardar el archivo.
+
 ## Eliminar una obligación
 
 Una cuenta por cobrar tecleada por error, o de prueba, **se puede eliminar** (Rodny, 23
