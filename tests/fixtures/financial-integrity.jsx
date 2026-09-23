@@ -30,6 +30,7 @@ records[1] = { ...records[1], amount: 400000, origin: 'SYSTEM', description: 'Pa
 records[2] = { ...records[2], attachmentUrl: 'javascript:alert(1)' };
 if (!debt.balanceReviewRequired) debt.payments = [{ id: 'historical-payment', amount: 400000, paidAt: '2026-09-01T05:00:00Z', reference: 'ABONO-01', account, financialRecord: records[1] }];
 const createdReceivables = window.__createdReceivables = [];
+const deletedReceivables = window.__deletedReceivables = [];
 axios.defaults.adapter = async config => {
   const url = new URL(config.url, location.origin), path = url.pathname;
   for (const [key, value] of Object.entries(config.params || {})) url.searchParams.set(key, value);
@@ -48,7 +49,7 @@ axios.defaults.adapter = async config => {
   else if (path === '/api/clients') data = url.searchParams.get('isArchived') === 'all' ? [client, archivedClient] : [client];
   else if (path.endsWith('/receivables-ledger')) {
     if (new URLSearchParams(location.search).has('carteraError')) throw Object.assign(new Error('Error simulado de lectura'), { response: { data: { message: 'Error simulado de lectura' } } });
-    data = { year: 2026, items: [{ ...debt }], totals: { outstandingTotal: debt.outstanding, total: debt.outstanding, reviewCount: debt.balanceReviewRequired ? 1 : 0 } };
+    data = { year: 2026, items: debt.deleted ? [] : [{ ...debt }], totals: { outstandingTotal: debt.deleted ? 0 : debt.outstanding, total: debt.deleted ? 0 : debt.outstanding, reviewCount: debt.balanceReviewRequired ? 1 : 0 } };
   } else if (path.endsWith('/client-reconciliation')) {
     data = {
       year: 2026,
@@ -115,6 +116,15 @@ axios.defaults.adapter = async config => {
     data = { outstanding: debt.outstanding, payment: { id: 'demo-payment' } };
   } else if (path.endsWith('/bank-reconciliation')) data = { transactions: Array.from({ length: 90 }, (_, i) => ({ id: `bank-${i}`, description: `Movimiento bancario ${i + 1}`, postedAt: '2026-09-07', amount: 10000, account, status: i === 0 ? 'MATCHED' : 'UNMATCHED', matches: i === 0 ? [{ id: 'match', status: 'APPROVED' }] : [] })), continuityGaps: [], statements: [] };
   else if (path.endsWith('/periods')) data = { periods: [] };
+  else if (path.includes('/receivables/') && config.method === 'delete') {
+    // Como el servidor: con abonos vigentes no se borra, y se dice por dónde salir.
+    if ((debt.payments || []).some(payment => !payment.reversedAt)) {
+      throw Object.assign(new Error('Con abonos'), { response: { data: { message: 'Esta obligación tiene 1 abono(s) vigente(s) y borrarla dejaría ese dinero sin a qué apuntar. Reviértelos primero con «Revertir», aquí mismo en la cartera, y vuelve a eliminarla.' } } });
+    }
+    deletedReceivables.push({ id: path.split('/').at(-1), reason: body?.reason ?? null });
+    debt = { ...debt, deleted: true };
+    data = { message: 'Cuenta por cobrar eliminada.' };
+  }
   else if (path.includes('/receivables/') && config.method === 'patch') { debt = { ...debt, ...body }; data = { receivable: debt }; }
   // Crear la cuenta por cobrar puede crear la ficha del cliente en el mismo acto.
   else if (path.endsWith('/receivables') && config.method === 'post') {

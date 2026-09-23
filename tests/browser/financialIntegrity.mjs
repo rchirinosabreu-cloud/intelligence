@@ -206,6 +206,23 @@ try {
   assert.ok(documentRequests.every(path => path.endsWith('/api/financials/receivables/demo-debt/document')), documentRequests.join(' '));
   await page.getByRole('button', { name: 'Cambiar tema' }).click();
   await page.screenshot({ path: 'output/financial-issued-dark.png', fullPage: true, animations: 'disabled' });
+  await page.getByRole('button', { name: 'Cambiar tema' }).click();
+
+  // Eliminar una obligación es decisión de quien lleva el financiero, pero el diálogo
+  // dice antes qué se pierde (Rodny, 23 de septiembre de 2026). Aquí tiene un abono
+  // vigente, así que el servidor la protege y nombra por dónde salir.
+  await page.getByRole('button', { name: 'Eliminar', exact: true }).click();
+  const deleteDialog = page.getByRole('dialog').filter({ hasText: 'Eliminar la cuenta por cobrar' });
+  await deleteDialog.waitFor();
+  assert.match(await deleteDialog.innerText(), /Ya tiene emitida la cuenta de cobro No\. 0393/);
+  assert.match(await deleteDialog.innerText(), /volverá a quedar libre/);
+  await page.screenshot({ path: 'output/financial-delete-receivable.png', animations: 'disabled' });
+  await deleteDialog.getByRole('textbox', { name: /Motivo/ }).fill('Fue una prueba');
+  await deleteDialog.getByRole('button', { name: 'Eliminar', exact: true }).click();
+  await deleteDialog.getByText(/Reviértelos primero con «Revertir»/).waitFor();
+  assert.deepEqual(await page.evaluate(() => window.__deletedReceivables || []), [], 'con abonos vigentes no se borra');
+  await deleteDialog.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await deleteDialog.waitFor({ state: 'hidden' });
 
   await page.goto(base);
   await page.getByRole('button', { name: 'Movimientos', exact: true }).click();
@@ -277,5 +294,16 @@ try {
   await page.getByRole('button', { name: 'Ver 1 abono revertido', exact: true }).click();
   await page.screenshot({ path: 'output/financial-payment-reversed.png', fullPage: true, animations: 'disabled' });
 
-  console.log('Financial browser: balances, existing income application, cache, read-only, dates, errors, light/dark/mobile, category filter and payment reversal verified.');
+  // Ya sin abonos vigentes, la obligación sí se elimina, con su motivo.
+  await page.getByRole('button', { name: 'Eliminar', exact: true }).click();
+  const removeDialog = page.getByRole('dialog').filter({ hasText: 'Eliminar la cuenta por cobrar' });
+  await removeDialog.waitFor();
+  assert.match(await removeDialog.innerText(), /Se borran también sus abonos revertidos/);
+  await removeDialog.getByRole('textbox', { name: /Motivo/ }).fill('Fue una prueba');
+  await removeDialog.getByRole('button', { name: 'Eliminar', exact: true }).click();
+  await removeDialog.waitFor({ state: 'hidden' });
+  await page.getByText('Cuenta por cobrar eliminada.', { exact: true }).waitFor();
+  assert.deepEqual(await page.evaluate(() => window.__deletedReceivables || []), [{ id: 'demo-debt', reason: 'Fue una prueba' }]);
+
+  console.log('Financial browser: balances, existing income application, cache, read-only, dates, errors, light/dark/mobile, category filter, payment reversal and receivable deletion verified.');
 } finally { await browser.close(); }

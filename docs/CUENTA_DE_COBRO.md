@@ -87,6 +87,27 @@ está, o el bucket no responde— lo regenera y aprovecha para guardarlo, porque
 no puede quedarse sin el documento de un cobro que ya está emitido. `?download=1` lo
 baja en vez de abrirlo.
 
+## Eliminar una obligación
+
+Una cuenta por cobrar tecleada por error, o de prueba, **se puede eliminar** (Rodny, 23
+de septiembre de 2026): no es evidencia de nada y no tiene por qué quedarse para
+siempre. `DELETE /api/financials/receivables/:id`, con el mismo permiso de escritura
+con que se crea, en una transacción `Serializable`.
+
+Se borra de verdad —la fila y sus conceptos—, pero **el evento de auditoría conserva la
+obligación entera** en su `before`: número, conceptos, abonos revertidos y todo, con su
+actor y su motivo opcional. Si tenía cuenta de cobro emitida, **su PDF no se borra** del
+bucket, que no tiene ruta de borrado, y **su número vuelve a quedar libre** para la
+siguiente, porque el consecutivo se calcula desde el más alto emitido.
+
+La única puerta cerrada es tener **abonos vigentes**: ahí sigue habiendo dinero
+apuntando a la obligación y borrarla dejaría ese ingreso colgando. El error
+(`RECEIVABLE_HAS_PAYMENTS`) nombra la salida: revertirlos con «Revertir», en la propia
+cartera. Un abono ya revertido no impide nada.
+
+El diálogo dice antes qué se pierde: el importe, el cliente, el periodo y, si está
+emitida, su número y que el que recibió el cliente deja de existir aquí.
+
 ## La firma
 
 La rúbrica escaneada de Francisco Villa (`src/assets/firma-francisco-villa.png`,

@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createReceivable, updateReceivable } from '../src/services/financialReceivableService.js';
+import { createReceivable, deleteReceivable, updateReceivable } from '../src/services/financialReceivableService.js';
 
 const makeClient = (existing, calls) => ({
     $transaction: async (callback) => callback({
@@ -150,6 +150,82 @@ test('con un cliente elegido no se crea ninguna ficha', async () => {
 
     assert.equal(calls.some(([name]) => name === 'client.create'), false);
     assert.equal(calls.find(([name]) => name === 'receivable.create')[1].data.clientId, 'client-1');
+});
+
+// Una obligación tecleada por error o de prueba no es evidencia de nada, y se puede
+// eliminar (Rodny, 23 de septiembre de 2026). La bitácora conserva lo que decía.
+const buildDeleteTx = (existing) => {
+    const calls = [];
+    return {
+        calls,
+        client: {
+            $transaction: async (callback) => callback({
+                financialPeriod: { findUnique: async () => null },
+                accountsReceivable: {
+                    findUnique: async () => existing,
+                    delete: async (args) => { calls.push(['receivable.delete', args]); return existing; }
+                },
+                financialAuditEvent: { create: async (args) => { calls.push(['audit.create', args]); return { id: 'audit-1' }; } }
+            })
+        }
+    };
+};
+
+const deletableDebt = (overrides = {}) => ({
+    id: 'debt-1', clientId: 'client-1', amount: 100000, status: 'DEBE', number: null, pdfStorageKey: null,
+    period: new Date('2026-09-01T12:00:00Z'), year: 2026, month: 9, items: [], payments: [],
+    client: { id: 'client-1', name: 'Prueba tdd' }, ...overrides
+});
+
+test('una obligación sin abonos vigentes se elimina, y la bitácora conserva lo que decía', async () => {
+    const existing = deletableDebt({ number: 393, items: [{ description: 'Fee', amount: 100000 }] });
+    const { calls, client } = buildDeleteTx(existing);
+
+    const result = await deleteReceivable(client, 'debt-1', 'Fue una prueba', { id: 'user-1' });
+
+    assert.equal(result.number, 393);
+    const audit = calls.find(([name]) => name === 'audit.create')[1].data;
+    assert.equal(audit.action, 'DELETE');
+    assert.equal(audit.actorId, 'user-1');
+    // La fila entera queda en el «antes»: número, conceptos y todo.
+    assert.equal(audit.before.number, 393);
+    assert.deepEqual(audit.before.items, [{ description: 'Fee', amount: 100000 }]);
+    assert.equal(audit.after.reason, 'Fue una prueba');
+    // Y la auditoría se escribe antes de borrar, dentro de la misma transacción.
+    assert.deepEqual(calls.map(([name]) => name), ['audit.create', 'receivable.delete']);
+});
+
+// Ahí sigue habiendo dinero apuntando a la obligación: borrarla lo dejaría colgando.
+test('una obligación con abonos vigentes no se borra, y se dice por dónde salir', async () => {
+    const existing = deletableDebt({ payments: [{ id: 'p1', amount: 50000, reversedAt: null }] });
+    const { calls, client } = buildDeleteTx(existing);
+
+    await assert.rejects(
+        deleteReceivable(client, 'debt-1', null, { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_HAS_PAYMENTS'
+            && error.statusCode === 409
+            && /«Revertir»/.test(error.message)
+    );
+    assert.equal(calls.length, 0, 'no se borra ni se audita nada');
+});
+
+// Un abono revertido ya no sostiene dinero: su rastro queda en la bitácora.
+test('los abonos ya revertidos no impiden eliminarla', async () => {
+    const existing = deletableDebt({ payments: [{ id: 'p1', amount: 50000, reversedAt: new Date('2026-09-20T05:00:00Z') }] });
+    const { calls, client } = buildDeleteTx(existing);
+
+    await deleteReceivable(client, 'debt-1', null, { id: 'user-1' });
+
+    assert.equal(calls.find(([name]) => name === 'audit.create')[1].data.before.payments.length, 1);
+    assert.ok(calls.some(([name]) => name === 'receivable.delete'));
+});
+
+test('no se puede eliminar una obligación que no existe', async () => {
+    const { client } = buildDeleteTx(null);
+    await assert.rejects(
+        deleteReceivable(client, 'debt-404', null, { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_NOT_FOUND' && error.statusCode === 404
+    );
 });
 
 test('editing only notes preserves a remaining payment promise', async () => {
