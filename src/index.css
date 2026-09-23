@@ -378,8 +378,23 @@
 }
 
 /* Brainstudio task date picker */
+/* El calendario vive en un portal fuera del modal para no quedar recortado por el scroll del panel: tiene que
+   quedar por encima de cualquier diálogo (los existentes van de 80 a 210) y recuperar los clics, porque un
+   modal apaga los eventos de puntero del resto del documento. */
+#brain-datepicker-portal {
+  position: absolute;
+  top: 0;
+  left: 0;
+  z-index: 220;
+}
+
+#brain-datepicker-portal,
 .brain-datepicker-popper {
-  z-index: 130 !important;
+  pointer-events: auto;
+}
+
+.brain-datepicker-popper {
+  z-index: 220 !important;
 }
 
 .brain-datepicker {

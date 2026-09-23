@@ -3,10 +3,19 @@ import { registerLocale } from 'react-datepicker';
 
 registerLocale('es', es);
 
+/**
+ * El calendario se dibuja en un portal al final del documento. Dentro de un modal, el cuerpo del panel tiene
+ * scroll propio (`overflow-y-auto`), así que un calendario en línea quedaba **recortado** y no se podían pulsar
+ * los días (Rodny, 23 de septiembre de 2026). No quitar el portal ni cambiarlo por `strategy: 'fixed'`: los
+ * modales llevan `transform`, que vuelve a atrapar y a descolocar lo posicionado como fijo.
+ */
+export const BRAIN_DATEPICKER_PORTAL_ID = 'brain-datepicker-portal';
+
 export const brainDatePickerProps = {
   locale: 'es',
   calendarClassName: 'brain-datepicker',
   popperClassName: 'brain-datepicker-popper',
+  portalId: BRAIN_DATEPICKER_PORTAL_ID,
   showPopperArrow: false
 };
 

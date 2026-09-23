@@ -32,18 +32,42 @@ const DialogOverlay = React.forwardRef(({ className, ...props }, ref) => (
 ))
 DialogOverlay.displayName = DialogPrimitive.Overlay.displayName
 
+/**
+ * El calendario compartido se dibuja en su propio portal, fuera del diálogo, para que el scroll del panel no lo
+ * recorte. Elegir un día es interactuar «fuera», así que sin esto el diálogo se cerraría al pulsar una fecha
+ * (Rodny, 23 de septiembre de 2026). Vale para cualquier diálogo de la plataforma, no solo el de tareas.
+ */
+const isInsideSharedCalendar = (event) => {
+  const target = event?.detail?.originalEvent?.target ?? event?.target;
+  return target instanceof Element && Boolean(target.closest('#brain-datepicker-portal'));
+};
+
+const keepOpenForCalendar = (handler) => (event) => {
+  if (isInsideSharedCalendar(event)) {
+    event.preventDefault();
+    return;
+  }
+  handler?.(event);
+};
+
 const DialogContent = React.forwardRef(({
   className,
   overlayClassName,
   children,
   showCloseButton = true,
   closeLabel = "Cerrar",
+  onPointerDownOutside,
+  onFocusOutside,
+  onInteractOutside,
   ...props
 }, ref) => (
   <DialogPortal>
     <DialogOverlay className={overlayClassName} />
     <DialogPrimitive.Content
       ref={ref}
+      onPointerDownOutside={keepOpenForCalendar(onPointerDownOutside)}
+      onFocusOutside={keepOpenForCalendar(onFocusOutside)}
+      onInteractOutside={keepOpenForCalendar(onInteractOutside)}
       className={cn(
         "fixed left-[50%] top-[50%] z-[71] grid max-h-[calc(100dvh-2rem)] w-[calc(100vw-2rem)] max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 overflow-y-auto overscroll-contain border bg-background p-6 shadow-lg duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%] sm:rounded-xl",
         className
