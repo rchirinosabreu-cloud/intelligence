@@ -94,6 +94,10 @@ router.patch('/client-links/:sourceClientId', requireFinancialWrite, linkFinanci
 router.get('/receivables-ledger', requireFinancialAccess, getFinancialReceivablesLedger);
 router.patch('/receivables/:id', requireFinancialWrite, updateFinancialReceivable);
 router.post('/receivables', requireFinancialWrite, createReceivableHandler);
+// Emitir la cuenta de cobro (`issueReceivableDocumentHandler`) todavía **no se
+// expone**: mientras no haya pantalla ni PDF, una llamada suelta consumiría un
+// número del consecutivo de Elisa y dejaría una obligación «emitida» sin documento
+// que mandar. La ruta se añade junto con la pantalla.
 router.post('/receivables/:id/payments', requireFinancialWrite, createReceivablePaymentHandler);
 // Corregir un abono mal registrado es parte del trabajo diario de quien lo registra:
 // mismo permiso que crearlo, con motivo obligatorio y auditoría.

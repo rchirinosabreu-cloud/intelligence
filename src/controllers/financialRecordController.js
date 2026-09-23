@@ -19,6 +19,7 @@ import {
 } from '../services/financialRecordDocumentService.js';
 import { createReceivablePayment, reverseReceivablePayment } from '../services/receivablePaymentService.js';
 import { createReceivable } from '../services/financialReceivableService.js';
+import { issueReceivableDocument } from '../services/receivableDocumentService.js';
 import { auditFinancialIntegrity } from '../services/financialIntegrityAuditService.js';
 import { createFinancialAccount, listFinancialAccounts } from '../services/financialAccountService.js';
 import {
@@ -268,6 +269,21 @@ export const createReceivableHandler = async (req, res, dependencies = {}) => {
     } catch (error) {
         console.error('[Receivables API] Create failed:', error.response?.data || error);
         return respondWithError(res, error, 'RECEIVABLE_CREATE_FAILED', 'No fue posible registrar la cuenta por cobrar.');
+    }
+};
+
+export const issueReceivableDocumentHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const issueDocument = dependencies.issueDocument || issueReceivableDocument;
+    try {
+        const result = await issueDocument(prismaClient, req.params.id, req.body || {}, req.user);
+        return res.status(201).json({
+            message: `Cuenta de cobro ${result.document.formattedNumber} emitida.`,
+            ...result
+        });
+    } catch (error) {
+        console.error('[Receivables API] Issue failed:', error.response?.data || error);
+        return respondWithError(res, error, 'RECEIVABLE_ISSUE_FAILED', 'No fue posible emitir la cuenta de cobro.');
     }
 };
 

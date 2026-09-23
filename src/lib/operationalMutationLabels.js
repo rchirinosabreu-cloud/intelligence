@@ -61,6 +61,7 @@ export const humanMutationCatalog = [
   entry('POST', '/api/financials/records/:id/void', 'Movimiento anulado', 'anuló un movimiento financiero'),
   entry('POST', '/api/financials/receivables/:id/payments', 'Pago registrado', 'registró un pago de un cliente'),
   entry('POST', '/api/financials/receivable-payments/:id/reverse', 'Abono revertido', 'revirtió un abono de cartera'),
+  entry('POST', '/api/financials/receivables/:id/issue', 'Cuenta de cobro emitida', 'emitió una cuenta de cobro'),
   entry('POST', '/api/financials/payroll/periods', 'Nómina preparada', 'generó un borrador de nómina'),
   entry('POST', '/api/financials/payroll-transactions/:id/approve', 'Nómina aprobada', 'aprobó un pago de nómina'),
   entry('POST', '/api/financials/payroll-transactions/:id/pay', 'Pago de nómina', 'registró un pago de nómina'),

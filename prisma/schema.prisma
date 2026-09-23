@@ -433,6 +433,12 @@ model Client {
   id                  String               @id @default(uuid())
   name                String
   slug                String               @unique
+  // Identidad del tercero para documentos de cobro: el nombre legal y su documento
+  // no son el nombre con el que el equipo lo llama («Titanes» vs «CORPORACIÓN
+  // DEPORTIVA LOS TITANES»). Se escriben una vez en la ficha, no en cada cuenta.
+  legalName           String?
+  documentType        String?
+  documentNumber      String?
   status              ClientStatus         @default(ACTIVO)
   monthlyFee          Decimal?
   isArchived          Boolean              @default(false)
@@ -1821,6 +1827,17 @@ model AccountsReceivable {
   id            String                @id @default(uuid())
   clientId      String
   client        Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  // Cuenta de cobro (Elisa, 21 de septiembre de 2026): el documento que se manda al
+  // cliente. Una obligación puede existir sin él —las importadas del Excel no lo
+  // tienen— y emitirlo le pone número, la congela y genera el PDF.
+  // `number` no es autoincremental a propósito: la numeración es de Elisa, viene de
+  // fuera de la plataforma, y una secuencia que arranque en 1 se la rompe en silencio.
+  number        Int?                  @unique
+  issuedAt      DateTime?
+  issuedById    String?
+  concept       String?
+  pdfStorageKey String?
+  items         ReceivableItem[]
   importBatchId String?
   importBatch   FinancialImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)
   amount        Decimal
@@ -1848,6 +1865,21 @@ model AccountsReceivable {
   @@index([origin, year, month])
   @@index([clientId, year, month])
   @@index([importBatchId])
+  @@index([number])
+}
+
+// Las líneas de una cuenta de cobro: «fee mensual más lo que hayan pedido adicional».
+// Suman exactamente el subtotal en centavos, igual que el desglose de un movimiento.
+model ReceivableItem {
+  id           String             @id @default(uuid())
+  receivableId String
+  receivable   AccountsReceivable @relation(fields: [receivableId], references: [id], onDelete: Cascade)
+  description  String
+  amount       Decimal            @db.Decimal(14, 2)
+  sortOrder    Int                @default(0)
+  createdAt    DateTime           @default(now()) @db.Timestamptz()
+
+  @@index([receivableId, sortOrder])
 }
 
 model ReceivablePayment {

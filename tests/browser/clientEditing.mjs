@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
 import { createRecognitionPreview } from '../../scripts/preview-recognitions.js';
+import { chooseOption } from './selectHelpers.mjs';
 
 let preview, browser;
 before(async () => {
@@ -205,5 +206,34 @@ test('blank or malformed slugs cannot be submitted', async () => {
       assert.equal(await dialog.getByRole('button', { name: 'Guardar cambios' }).isDisabled(), true, value);
     }
     assert.equal(requests.length, 0);
+  } finally { await page.close(); }
+});
+
+// La ficha guarda el nombre legal y el documento del tercero para no repetirlos en
+// cada cuenta de cobro (Rodny, 22 de septiembre de 2026).
+test('the client record holds the legal name and document a cuenta de cobro prints', async () => {
+  const { page, requests } = await setup();
+  try {
+    const dialog = page.getByRole('dialog', { name: 'Editar cliente', exact: true });
+    await dialog.waitFor();
+    const legalName = dialog.getByRole('textbox', { name: 'Nombre completo o razón social' });
+    const number = dialog.getByRole('textbox', { name: 'Número', exact: true });
+    const save = dialog.getByRole('button', { name: 'Guardar cambios' });
+
+    // Los tres van juntos: con uno o dos no se puede guardar, y se explica.
+    await legalName.fill('CORPORACIÓN DEPORTIVA LOS TITANES');
+    assert.equal(await save.isDisabled(), true, 'media identidad no se guarda');
+    await dialog.getByRole('alert').filter({ hasText: /Los tres datos van juntos/ }).waitFor();
+
+    await chooseOption(dialog.getByRole('combobox', { name: 'Tipo de documento' }), 'NIT');
+    await number.fill('901378858');
+    assert.equal(await save.isDisabled(), false);
+    await dialog.screenshot({ path: 'output/client-edit/identidad-tercero.png', animations: 'disabled' });
+    await save.click();
+    await dialog.waitFor({ state: 'hidden' });
+
+    assert.deepEqual(requests, [{
+      legalName: 'CORPORACIÓN DEPORTIVA LOS TITANES', documentType: 'NIT', documentNumber: '901378858'
+    }], 'solo viajan los campos que se tocaron');
   } finally { await page.close(); }
 });
