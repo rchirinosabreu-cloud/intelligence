@@ -1,4 +1,5 @@
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
+import { hasPartyIdentity } from '../lib/partyIdentity.js';
 import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
 import {
     assertOpenFinancialPeriod,
@@ -112,10 +113,23 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
         return await prismaClient.$transaction(async (tx) => {
             const receivable = await tx.accountsReceivable.findUnique({
                 where: { id: receivableId },
-                include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true } } }
+                include: {
+                    payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true } },
+                    client: { select: { id: true, name: true, legalName: true, documentType: true, documentNumber: true } }
+                }
             });
             if (!receivable) {
                 throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
+            }
+            // El documento lleva el nombre legal y la cédula o NIT del cliente. Si su
+            // ficha no los tiene, se dice dónde completarlos en vez de emitir una
+            // cuenta de cobro sin el dato o con el nombre corto del equipo.
+            if (!hasPartyIdentity(receivable.client)) {
+                throw new FinancialDomainError(
+                    'RECEIVABLE_CLIENT_IDENTITY_MISSING',
+                    `La cuenta de cobro lleva el nombre completo y el documento del cliente, y la ficha de «${receivable.client?.name || 'este cliente'}» todavía no los tiene. Complétalos en Clientes → editar cliente y vuelve a emitirla.`,
+                    409
+                );
             }
             if (receivable.number) {
                 throw new FinancialDomainError(
@@ -160,7 +174,10 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
                     amount: document.total,
                     status: paidCents === document.totalCents ? 'PAGADO' : receivable.status
                 },
-                include: { items: { orderBy: { sortOrder: 'asc' } }, client: { select: { id: true, name: true } } }
+                include: {
+                    items: { orderBy: { sortOrder: 'asc' } },
+                    client: { select: { id: true, name: true, legalName: true, documentType: true, documentNumber: true } }
+                }
             });
 
             await tx.financialAuditEvent.create({

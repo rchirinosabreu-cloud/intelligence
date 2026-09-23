@@ -114,8 +114,10 @@ const buildTx = ({ receivable, highest = null }) => {
     };
 };
 
+// El cliente llega con su identidad de tercero completa: sin ella no se emite.
+const identifiedClient = { id: 'client-1', name: 'Titanes', legalName: 'CORPORACIÓN DEPORTIVA LOS TITANES', documentType: 'NIT', documentNumber: '901378858' };
 const openReceivable = (overrides = {}) => ({
-    id: 'debt-1', clientId: 'client-1', amount: 100, status: 'DEBE', number: null,
+    id: 'debt-1', clientId: 'client-1', amount: 100, status: 'DEBE', number: null, client: identifiedClient,
     period: new Date('2026-09-01T12:00:00Z'), year: 2026, month: 9, payments: [], ...overrides
 });
 

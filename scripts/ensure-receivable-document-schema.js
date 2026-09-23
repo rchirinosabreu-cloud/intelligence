@@ -33,7 +33,12 @@ try {
     CREATE INDEX IF NOT EXISTS "ReceivableItem_receivableId_sortOrder_idx"
     ON "ReceivableItem"("receivableId", "sortOrder");
   `);
-  console.log('[Cuenta de cobro] Columnas del documento, índice de número y tabla de líneas listos.');
+  // Identidad del tercero: el nombre legal y el documento con los que el cliente
+  // aparece en una cuenta de cobro. Se escriben una vez en su ficha.
+  await client.query(`ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "legalName" TEXT;`);
+  await client.query(`ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "documentType" TEXT;`);
+  await client.query(`ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "documentNumber" TEXT;`);
+  console.log('[Cuenta de cobro] Columnas del documento, índice de número, tabla de líneas e identidad del tercero listos.');
 } catch (error) {
   console.error('[Cuenta de cobro] Failed to ensure the receivable document schema:', error.message);
   process.exitCode = 1;

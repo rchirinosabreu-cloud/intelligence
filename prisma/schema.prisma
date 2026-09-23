@@ -433,6 +433,12 @@ model Client {
   id                  String               @id @default(uuid())
   name                String
   slug                String               @unique
+  // Identidad del tercero para documentos de cobro: el nombre legal y su documento
+  // no son el nombre con el que el equipo lo llama («Titanes» vs «CORPORACIÓN
+  // DEPORTIVA LOS TITANES»). Se escriben una vez en la ficha, no en cada cuenta.
+  legalName           String?
+  documentType        String?
+  documentNumber      String?
   status              ClientStatus         @default(ACTIVO)
   monthlyFee          Decimal?
   isArchived          Boolean              @default(false)
