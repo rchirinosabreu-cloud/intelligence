@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { receiveCommercialRequest, sanitizeAnswers, validateAnswers, resolveIntakeOwner, buildConfirmationEmail, CommercialRequestError } from '../src/services/commercialRequestService.js';
-import { serializeLead } from '../src/services/crmService.js';
+import { receiveCommercialRequest, sanitizeAnswers, validateAnswers, resolveIntakeOwner, buildConfirmationEmail, intakeRecipients, CommercialRequestError } from '../src/services/commercialRequestService.js';
+import { serializeLead, listLeads, metricsFor, isNewRequest } from '../src/services/crmService.js';
 import { createCrmMemoryDb } from './fixtures/crmMemoryDb.js';
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
@@ -71,6 +71,30 @@ test('receiveCommercialRequest creates lead + request + first log entry, assigne
   assert.equal(serialized.trafficLight.value, 'AMARILLO');
 });
 
+test('a fresh request never sinks in the list, can be filtered, and the dashboard counts it', async () => {
+  const db = createCrmMemoryDb({ members, leads: [
+    { id: 'old-overdue', stage: 'PROPUESTA_ENVIADA', origin: 'LINKEDIN', priority: 'ALTA', enteredAt: new Date('2026-08-01T15:00:00Z'), lastActivityAt: new Date('2026-09-10T15:00:00Z'), nextFollowUpAt: new Date('2026-09-10T00:00:00Z') }
+  ] });
+  await receiveCommercialRequest(db, { answers: complete() }, { now: NOW });
+  const { items } = await listLeads(db, {}, NOW);
+  assert.equal(items[0].hasRequest, true, 'the new request comes before an overdue lead');
+  assert.equal(isNewRequest(items[0]), true);
+  assert.equal(items[1].id, 'old-overdue');
+  assert.equal((await listLeads(db, { request: 'NUEVAS' }, NOW)).items.length, 1);
+  assert.equal((await listLeads(db, { request: 'FORMULARIO' }, NOW)).items.length, 1);
+  const metrics = await metricsFor(db, {}, NOW);
+  assert.equal(metrics.newRequests, 1);
+  assert.equal(metrics.recentRequests[0].company, 'HDI Seguros');
+  assert.deepEqual(metrics.recentRequests[0].request.services, ['WEB']);
+  assert.equal(metrics.recentRequests[0].activities, undefined);
+
+  // A referred prospect who used the form: origin REFERIDO, yet the "Formulario web" origin filter still finds it.
+  await receiveCommercialRequest(db, { answers: { ...complete(), company: 'Prueba', source: 'REFERIDO' } }, { now: NOW });
+  const byOrigin = (await listLeads(db, { origin: 'FORMULARIO' }, NOW)).items;
+  assert.deepEqual(byOrigin.map(lead => [lead.company, lead.origin]).sort(), [['HDI Seguros', 'FORMULARIO'], ['Prueba', 'REFERIDO']]);
+  assert.equal((await listLeads(db, { origin: 'LINKEDIN' }, NOW)).items.length, 1, 'other origin filters are untouched');
+});
+
 test('invalid submissions are rejected with field details and nothing is written; honeypot is swallowed', async () => {
   const db = createCrmMemoryDb({ members });
   await assert.rejects(receiveCommercialRequest(db, { answers: { ...complete(), phone: '12' } }, { now: NOW }), error => error instanceof CommercialRequestError && /dígitos/.test(error.details.phone));
@@ -85,6 +109,19 @@ test('without a matching owner the lead is still created, unassigned', async () 
   const result = await receiveCommercialRequest(db, { answers: complete() }, { now: NOW });
   assert.equal(result.ownerId, null);
   assert.equal(db.state.leads[0].ownerId, null);
+});
+
+test('the in-app notice goes to the owner and to every active admin, without duplicates', async () => {
+  const db = createCrmMemoryDb({ users: [
+    { id: 'user-francys', role: 'EDITOR', isActive: true },
+    { id: 'user-rodny', role: 'ADMIN', isActive: true },
+    { id: 'user-old-admin', role: 'ADMIN', isActive: false },
+    { id: 'user-gone', role: 'ADMIN', isActive: true, teamMemberActive: false }
+  ] });
+  assert.deepEqual(await intakeRecipients(db, 'user-francys'), ['user-francys', 'user-rodny']);
+  assert.deepEqual(await intakeRecipients(db, 'user-rodny'), ['user-rodny']);
+  assert.deepEqual(await intakeRecipients(db, null), ['user-rodny']);
+  assert.deepEqual(await intakeRecipients({}, 'x'), ['x'], 'a client without users still notifies the owner');
 });
 
 test('confirmation email is plain, mentions the reference and never needs SMTP to build', () => {

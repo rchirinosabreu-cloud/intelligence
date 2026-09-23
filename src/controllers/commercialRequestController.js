@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma.js';
-import { receiveCommercialRequest, CommercialRequestError, buildConfirmationEmail } from '../services/commercialRequestService.js';
+import { receiveCommercialRequest, CommercialRequestError, buildConfirmationEmail, intakeRecipients } from '../services/commercialRequestService.js';
 import { createNotification } from '../services/notificationService.js';
 import { sendPlainEmail } from '../services/transactionalEmailService.js';
 
@@ -11,15 +11,15 @@ export const receive = async (req, res) => {
   try {
     const result = await receiveCommercialRequest(prisma, req.body || {});
     if (result.ignored) return res.status(201).json({ ok: true, reference: null });
-    if (result.ownerUserId) {
-      createNotification({
-        userId: result.ownerUserId,
+    intakeRecipients(prisma, result.ownerUserId)
+      .then(recipients => Promise.all(recipients.map(userId => createNotification({
+        userId,
         type: 'CRM_REQUEST_RECEIVED',
         message: `Nueva solicitud comercial: ${result.company || result.contactName || 'sin nombre'} (${result.reference}).`,
         relatedId: result.leadId,
         url: `/crm/oportunidades/${result.leadId}`
-      }).catch(error => console.error('[CommercialRequest] Notification failed:', error?.message || error));
-    }
+      }))))
+      .catch(error => console.error('[CommercialRequest] Notification failed:', error?.message || error));
     if (result.email) {
       const email = buildConfirmationEmail({ contactName: result.contactName, reference: result.reference });
       sendPlainEmail({ to: result.email, ...email }).catch(error => console.error('[CommercialRequest] Confirmation email failed:', error?.message || error));

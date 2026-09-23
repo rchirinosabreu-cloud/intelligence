@@ -99,7 +99,15 @@ export const receiveCommercialRequest = async (db, payload = {}, { now = new Dat
   });
 };
 
-export const buildConfirmationEmail = ({ contactName, reference }) => ({
+/** Who gets the in-app notice: the assigned owner plus every active admin (deduplicated). */
+export const intakeRecipients = async (db, ownerUserId = null) => {
+  const admins = typeof db.user?.findMany === 'function'
+    ? await db.user.findMany({ where: { role: 'ADMIN', isActive: true, teamMember: { is: { isActive: true } } }, select: { id: true } })
+    : [];
+  return [...new Set([ownerUserId, ...admins.map(user => user.id)].filter(Boolean))];
+};
+
+export const buildConfirmationEmail =({ contactName, reference }) => ({
   subject: 'Recibimos tu solicitud · Brain Studio',
   text: `Hola ${contactName || ''}.\n\nGracias por compartirnos tu proyecto. Nuestro equipo revisará la información y se pondrá en contacto contigo para validar los detalles necesarios y avanzar con la propuesta.\n\nReferencia de tu solicitud: ${reference}.\n\nBrain Studio · Comunicación, creatividad y marketing 360° para marcas que quieren trascender.`
 });

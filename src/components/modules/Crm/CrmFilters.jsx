@@ -19,7 +19,7 @@ const selectClass = 'w-full rounded-xl border border-zinc-200 bg-white px-3 py-2
  * Shared filter bar for the dashboard, the list and the follow-ups.
  * `show` limits which controls render; the same `filters` object feeds every CRM query.
  */
-const CrmFilters = ({ filters, onChange, team = [], show = ['search', 'stage', 'origin', 'priority', 'ownerId', 'trafficLight', 'dates'], className }) => {
+const CrmFilters = ({ filters, onChange, team = [], show = ['search', 'stage', 'origin', 'priority', 'ownerId', 'trafficLight', 'request', 'dates'], className }) => {
   const [expanded, setExpanded] = useState(false);
   const set = (key, value) => onChange({ ...filters, [key]: value });
   const has = key => show.includes(key);
@@ -88,6 +88,15 @@ const CrmFilters = ({ filters, onChange, team = [], show = ['search', 'stage', '
             <Select value={filters.trafficLight || ''} onChange={event => set('trafficLight', event.target.value)} className={selectClass}>
               <option value="">Todos</option>
               {CRM_TRAFFIC_LIGHTS.map(light => <option key={light.value} value={light.value}>{light.label}</option>)}
+            </Select>
+          </Field>
+        )}
+        {has('request') && (
+          <Field label="Formulario">
+            <Select value={filters.request || ''} onChange={event => set('request', event.target.value)} className={selectClass}>
+              <option value="">Todas</option>
+              <option value="NUEVAS">Nuevas sin contactar</option>
+              <option value="FORMULARIO">Llegaron por el formulario</option>
             </Select>
           </Field>
         )}
