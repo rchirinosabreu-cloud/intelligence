@@ -163,8 +163,17 @@ const buildDeleteTx = (existing) => {
                 financialPeriod: { findUnique: async () => null },
                 accountsReceivable: {
                     findUnique: async () => existing,
-                    delete: async (args) => { calls.push(['receivable.delete', args]); return existing; }
+                    // Como PostgreSQL: la relación del abono es `onDelete: Restrict`,
+                    // así que borrar la obligación con abonos todavía en la tabla falla.
+                    delete: async (args) => {
+                        if ((existing?.payments || []).length && !calls.some(([name]) => name === 'payments.deleteMany')) {
+                            throw Object.assign(new Error('Foreign key constraint failed'), { code: 'P2003' });
+                        }
+                        calls.push(['receivable.delete', args]);
+                        return existing;
+                    }
                 },
+                receivablePayment: { deleteMany: async (args) => { calls.push(['payments.deleteMany', args]); return { count: (existing?.payments || []).length }; } },
                 financialAuditEvent: { create: async (args) => { calls.push(['audit.create', args]); return { id: 'audit-1' }; } }
             })
         }
@@ -209,15 +218,34 @@ test('una obligación con abonos vigentes no se borra, y se dice por dónde sali
     assert.equal(calls.length, 0, 'no se borra ni se audita nada');
 });
 
-// Un abono revertido ya no sostiene dinero: su rastro queda en la bitácora.
-test('los abonos ya revertidos no impiden eliminarla', async () => {
+// Un abono revertido ya no sostiene dinero: su rastro queda en la bitácora. La base de
+// datos no lo arrastra sola —su relación es `onDelete: Restrict`—, así que se borra a
+// mano y en este orden: primero la bitácora, luego los abonos, luego la obligación.
+test('los abonos ya revertidos no impiden eliminarla y se borran con ella', async () => {
     const existing = deletableDebt({ payments: [{ id: 'p1', amount: 50000, reversedAt: new Date('2026-09-20T05:00:00Z') }] });
     const { calls, client } = buildDeleteTx(existing);
 
     await deleteReceivable(client, 'debt-1', null, { id: 'user-1' });
 
     assert.equal(calls.find(([name]) => name === 'audit.create')[1].data.before.payments.length, 1);
-    assert.ok(calls.some(([name]) => name === 'receivable.delete'));
+    assert.deepEqual(calls.map(([name]) => name), ['audit.create', 'payments.deleteMany', 'receivable.delete']);
+    assert.deepEqual(calls.find(([name]) => name === 'payments.deleteMany')[1], { where: { receivableId: 'debt-1' } });
+});
+
+// La bitácora usa un valor del enum `FinancialAuditAction`; si no existiera, Prisma
+// rechazaría la escritura y el borrado fallaría con un error inesperado.
+test('la acción de la bitácora es DELETE, no una anulación', async () => {
+    const { calls, client } = buildDeleteTx(deletableDebt());
+    await deleteReceivable(client, 'debt-1', null, { id: 'user-1' });
+    assert.equal(calls.find(([name]) => name === 'audit.create')[1].data.action, 'DELETE');
+});
+
+test('un conflicto de concurrencia se explica en vez de salir como error inesperado', async () => {
+    const client = { $transaction: async () => { throw Object.assign(new Error('Write conflict'), { code: 'P2034' }); } };
+    await assert.rejects(
+        deleteReceivable(client, 'debt-1', null, { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_CONFLICT' && error.statusCode === 409
+    );
 });
 
 test('no se puede eliminar una obligación que no existe', async () => {

@@ -36,6 +36,11 @@ try {
     CREATE INDEX IF NOT EXISTS "ReceivableItem_receivableId_sortOrder_idx"
     ON "ReceivableItem"("receivableId", "sortOrder");
   `);
+  // Eliminar una cuenta por cobrar deja un evento `DELETE` en la bitácora financiera.
+  // Añadir un valor a un enum de PostgreSQL es aditivo y no reescribe ninguna fila,
+  // pero no puede ir dentro de una transacción: por eso se hace aquí, al arrancar, y
+  // no en la operación. Sin esto, Prisma rechaza el valor y el borrado falla.
+  await client.query(`ALTER TYPE "FinancialAuditAction" ADD VALUE IF NOT EXISTS 'DELETE';`);
   // Identidad del tercero: el nombre legal y el documento con los que el cliente
   // aparece en una cuenta de cobro. Se escriben una vez en su ficha.
   await client.query(`ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "legalName" TEXT;`);
