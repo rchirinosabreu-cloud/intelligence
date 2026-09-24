@@ -4,16 +4,17 @@ import Select from '@/components/ui/Select';
 import { BrainDateTimePicker } from '@/components/ui/BrainDatePicker';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { DATA_CLASSES, GOVERNANCE_FORMS, GOVERNANCE_DOCUMENTS, STATUS_LABELS } from '@/lib/aiGovernance';
+import { DATA_CLASSES, GOVERNANCE_FORMS, STATUS_LABELS } from '@/lib/aiGovernance';
 import GovernanceRecords, { displayDate } from './GovernanceRecords';
+import GovernanceDocuments from './GovernanceDocuments';
 
 const inputStyle = 'w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground';
 const buttonStyle = 'min-h-11 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50';
 const labels = { PUBLIC: 'Públicos', INTERNAL: 'Internos', CONFIDENTIAL: 'Confidenciales', RESTRICTED: 'Restringidos / sensibles', GENERATIVE: 'IA generativa', ML: 'Aprendizaje automático', NEURAL: 'Red neuronal', LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta', CRITICAL: 'Crítica' };
 const localDate = value => value ? new Date(+new Date(value) - 5 * 3600000).toISOString().slice(0, 16) : '';
-async function request(path, { method = 'GET', body, download = false } = {}) {
+async function request(path, { method = 'GET', body, download = false, text = false, signal } = {}) {
   const response = await fetch(`${getApiBaseUrl()}/api/ai-governance${path}`, {
-    method, headers: { Authorization: `Bearer ${localStorage.getItem('authToken') || ''}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    method, signal, headers: { Authorization: `Bearer ${localStorage.getItem('authToken') || ''}`, ...(body ? { 'Content-Type': 'application/json' } : {}) },
     ...(body ? { body: JSON.stringify(body) } : {})
   });
   if (!response.ok) {
@@ -21,7 +22,7 @@ async function request(path, { method = 'GET', body, download = false } = {}) {
     console.error('[Gobierno IA]', payload);
     throw new Error(payload.error || `No se pudo completar la solicitud (${response.status}).`);
   }
-  return download ? response.blob() : response.json();
+  return download ? response.blob() : text ? response.text() : response.json();
 }
 
 function RecordForm({ kind, record, options, onSaved, onClose }) {
@@ -119,7 +120,7 @@ export default function GovernanceCenter() {
       {GOVERNANCE_FORMS[tab] ? <><div className="mb-5 flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">{GOVERNANCE_FORMS[tab].label}</h2><button className={buttonStyle} onClick={() => setEditing({})}>Nuevo registro</button></div>
         <GovernanceRecords kind={tab} items={records.data?.items} loading={records.isLoading} error={records.error} onEdit={setEditing} onHistory={setHistory} />
         <div className="mt-5 flex items-center justify-end gap-3 text-sm"><button className={buttonStyle} disabled={page === 1 || records.isFetching} onClick={() => setPage(p => p - 1)}>Anterior</button><span>Página {page}</span><button className={buttonStyle} disabled={!records.data?.hasMore || records.isFetching} onClick={() => setPage(p => p + 1)}>Siguiente</button></div></>
-        : tab === 'control' ? <ClientControl options={options.data} onSaved={refresh} /> : <><h2 className="text-lg font-semibold">Documentación interna</h2><p className="my-3 text-sm text-muted-foreground">Borradores operativos para revisión y aprobación. Descarga en Markdown; no son páginas públicas ni declaraciones listas para firmar.</p><div className="grid gap-3 sm:grid-cols-2">{GOVERNANCE_DOCUMENTS.map(doc => <button key={doc.id} className={`${buttonStyle} text-left`} onClick={() => download(doc)}>{doc.title} ↓</button>)}</div></>}
+        : tab === 'control' ? <ClientControl options={options.data} onSaved={refresh} /> : <GovernanceDocuments loadDocument={(id, signal) => request(`/documents/${id}`, { text: true, signal })} onDownload={download} />}
     </section>}
     {editing && options.data && <RecordForm kind={tab} record={editing.id ? editing : null} options={options.data} onClose={() => setEditing(null)} onSaved={async () => { await refresh(); setEditing(null); setNotice('Registro guardado por el servidor.'); }} />}
     {history && <History kind={tab} record={history} onClose={() => setHistory(null)} />}
