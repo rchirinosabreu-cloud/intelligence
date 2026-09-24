@@ -140,7 +140,8 @@ export default function ChatFilePreview({
             </div>
           )}
         </div>
-        <div className="min-h-40 min-w-0 overflow-auto">
+        {/* The stage keeps one size whatever the file is; the file fits inside it (Rodny, 2026-09-24). */}
+        <div className="flex h-[min(70vh,720px)] min-w-0 flex-col overflow-auto">
           {error && (
             <p role="alert" className="text-sm text-destructive">
               {error}
@@ -155,7 +156,7 @@ export default function ChatFilePreview({
             <img
               src={url}
               alt={file.name}
-              className="mx-auto max-h-[calc(100dvh-14rem)] w-auto max-w-full rounded object-contain"
+              className="m-auto max-h-full max-w-full rounded object-contain"
             />
           )}
           {preview?.type === "pdf" && (
