@@ -125,6 +125,10 @@ const TASK_UPDATE_FIELDS = new Set([
   'isPriority',
   'priority',
   'isSpecial',
+  // Privacidad: el controlador comprueba antes que quien pide el cambio sea quien
+  // creó la tarea y siga dirigiendo (`canChangeTaskPrivacy`).
+  'isPrivate',
+  'viewerIds',
   'referenceUrl',
   'contentObjective',
   'contentReferences',

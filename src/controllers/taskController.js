@@ -18,6 +18,7 @@ import { assertTaskNotLocked, requestFocusExtension } from '../services/taskFocu
 import { recordTaskListSync } from '../services/operationalTraceService.js';
 import { traceTaskOpenHandler } from './operationalTraceController.js';
 import { canDeleteTask, canUpdateTask, isManagerRole, pickAllowedTaskUpdates, validateUploadFile } from '../config/security.js';
+import { canChangeTaskPrivacy, canCreatePrivateTask } from '../lib/taskPrivacy.js';
 import { commentFilesValidationMessage, MAX_COMMENT_FILE_BYTES } from '../lib/taskCommentAttachments.js';
 import { listTaskWorkHistory } from '../services/taskWorkSessionService.js';
 export { getMyExcessiveTaskAlertsHandler as getMyExcessiveTaskAlerts } from './excessiveTaskAlertController.js';
@@ -125,6 +126,10 @@ export const createNewTask = async (req, res) => {
         if (taskData.focusDeadlineAt && !isManagerRole(req.user?.role)) {
             return res.status(403).json({ error: 'Solo administradores y project managers pueden fijar o quitar un compromiso con hora.' });
         }
+        // Reservar trabajo del resto del equipo es una decisión de quien dirige.
+        if (taskData.isPrivate && !canCreatePrivateTask(req.user)) {
+            return res.status(403).json({ error: 'Solo administradores y project managers pueden crear un pendiente privado.' });
+        }
         const task = await createTask(taskData);
 
         if (task.assigneeId && (task.isPriority || task.isSpecial)) {
@@ -194,6 +199,11 @@ export const updateExistingTask = async (req, res) => {
         if (!task) return res.status(404).json({ error: 'Task not found' });
         if (!canUpdateTask(req.user, task)) {
             return res.status(403).json({ error: 'No tienes permisos para actualizar esta tarea' });
+        }
+        // La privacidad solo la cambia quien creó la tarea, y solo si dirige: ni otro
+        // admin ni el responsable pueden abrir al equipo algo que otro reservó.
+        if (('isPrivate' in req.body || 'viewerIds' in req.body) && !canChangeTaskPrivacy(task, req.user)) {
+            return res.status(403).json({ error: 'Solo quien creó este pendiente puede cambiar con quién se comparte.' });
         }
 
         const updateData = pickAllowedTaskUpdates(req.body);

@@ -64,6 +64,26 @@ export const taskPrivacyFilter = (viewerUserId) => (task) => (
     canOpenTask(task, viewerUserId) ? task : redactTaskBody(task)
 );
 
+const MANAGER_ROLES = new Set(['ADMIN', 'PROJECT_MANAGER']);
+const userIdOf = (user) => user?.userId || user?.id || null;
+
+/**
+ * Quién puede **crear** un pendiente privado: solo administradores y project managers
+ * (Rodny, 24 de septiembre de 2026). Reservar trabajo del resto del equipo es una
+ * decisión de quien dirige, no de cualquiera.
+ */
+export const canCreatePrivateTask = (user) => MANAGER_ROLES.has(String(user?.role || '').toUpperCase());
+
+/**
+ * Quién puede **cambiar** la privacidad de un pendiente que ya existe: solo quien lo
+ * creó, y solo si sigue siendo admin o project manager. Ni otro admin, ni el
+ * responsable: abrir al equipo algo que otro reservó no le toca a nadie más.
+ */
+export const canChangeTaskPrivacy = (task, user) => {
+    const userId = userIdOf(user);
+    return Boolean(userId) && canCreatePrivateTask(user) && task?.creatorId === userId;
+};
+
 /** Los campos que hay que traer de la base para poder decidir. */
 export const TASK_PRIVACY_SELECT = Object.freeze({
     isPrivate: true,
