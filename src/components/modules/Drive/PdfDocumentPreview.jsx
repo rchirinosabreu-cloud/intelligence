@@ -65,9 +65,16 @@ const PdfDocumentPreview = ({ data, name }) => {
 
     const load = async () => {
       try {
+        // pdf.js hands the buffer to its worker by transfer ("GetDocRequest" ships data.buffer), which
+        // leaves the caller's ArrayBuffer detached. Work on a private copy so the bytes the caller keeps
+        // (and any re-render, retry or navigation back to this file) stay intact.
+        const bytes = new Uint8Array(data).slice();
+        if (bytes.length === 0) {
+          throw Object.assign(new Error('El archivo llegó vacío al visor (0 bytes).'), { name: 'EmptyBufferError' });
+        }
         const pdfjsLib = await import('pdfjs-dist');
         pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER_URL;
-        loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(data) });
+        loadingTask = pdfjsLib.getDocument({ data: bytes });
         loadedDocument = await loadingTask.promise;
         if (active) setDocument(loadedDocument);
       } catch (loadError) {
@@ -75,7 +82,7 @@ const PdfDocumentPreview = ({ data, name }) => {
           console.error('[Drive] Error cargando PDF:', loadError);
           setError({
             message: 'No fue posible visualizar este PDF. Puedes descargarlo para abrirlo en tu dispositivo.',
-            technical: loadError?.message || String(loadError)
+            technical: `${loadError?.name || 'Error'}: ${loadError?.message || String(loadError)}`
           });
         }
       }
@@ -98,7 +105,8 @@ const PdfDocumentPreview = ({ data, name }) => {
         <AlertCircle className="h-9 w-9 text-destructive" />
         <p className="mt-3 font-medium text-zinc-900 dark:text-zinc-100">Vista previa no disponible</p>
         <p className="mt-1 text-sm leading-6 text-zinc-500 dark:text-zinc-400">{error.message}</p>
-        {import.meta.env.DEV && <code className="mt-3 max-w-full break-words text-xs text-zinc-400">{error.technical}</code>}
+        {/* The technical cause stays visible in production too: without it a failure cannot be diagnosed from a screenshot. */}
+        <p className="mt-3 max-w-full break-words text-xs text-zinc-400 dark:text-zinc-500">Detalle técnico: <code>{error.technical}</code></p>
       </div>
     );
   }

@@ -21,6 +21,17 @@ test('Drive renders PDFs internally instead of embedding a blocked browser frame
   assert.match(viewer, /dark:/);
 });
 
+test('the viewer gives pdf.js a private copy of the bytes and shows the technical cause when it fails', async () => {
+  const viewer = await read('src/components/modules/Drive/PdfDocumentPreview.jsx');
+  // pdf.js transfers data.buffer to its worker and leaves the caller's ArrayBuffer detached; a copy keeps the caller's bytes usable.
+  assert.match(viewer, /const bytes = new Uint8Array\(data\)\.slice\(\)/);
+  assert.match(viewer, /getDocument\(\{ data: bytes \}\)/);
+  assert.match(viewer, /0 bytes/);
+  // In production a screenshot of the error card must be enough to diagnose: never hide the cause behind DEV.
+  assert.doesNotMatch(viewer, /import\.meta\.env\.DEV/);
+  assert.match(viewer, /Detalle técnico/);
+});
+
 test('the responsive PDF viewer compiles as JSX', async () => {
   const viewer = await read('src/components/modules/Drive/PdfDocumentPreview.jsx');
   const result = await transformAsync(viewer, {
