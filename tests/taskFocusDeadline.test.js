@@ -167,7 +167,12 @@ test('the panel edits the hour with the shared calendar and only for managers; t
   assert.match(card, /isActiveFocusTask\(task\)[\s\S]*?<Clock/, 'the focus task shows a clock with its hour');
   // Rodny, 21 September 2026: a locked card is only dimmed. No badge, no border, no lock icon.
   assert.match(card, /lock \? "cursor-not-allowed opacity-60" : "cursor-pointer"/, 'locked cards are dimmed and nothing else');
-  assert.doesNotMatch(card, /data-task-lock-chip|Bloqueada|<Lock/, 'no "Bloqueada" badge and no lock icon on the card');
+  assert.doesNotMatch(card, /data-task-lock-chip|Bloqueada/, 'no "Bloqueada" badge on the card');
+  // El candado que sí existe (Rodny, 23 de septiembre de 2026) marca un **pendiente
+  // privado**, que se ve pero no se abre, y va atado a `task.isLocked`. El compromiso
+  // con hora —`lock`— sigue sin dibujar ninguno: solo atenúa la tarjeta.
+  assert.match(card, /\{task\.isLocked && <Lock/, 'the only padlock marks a private task');
+  assert.doesNotMatch(card, /\block\b\s*(\?|&&)[^\n]*<Lock/, 'the focus lock never draws a padlock');
   assert.doesNotMatch(card, /lock && ["'`]/, 'the lock never adds a class of its own to the card body');
   assert.match(board, /if \(!deepLinkLock\) setHighlightedTaskId\(taskId\);/, 'a locked task is not highlighted (red ring) when reached by deep link');
   assert.match(board, /focusLockNotice/, 'the explanation is a platform dialog');

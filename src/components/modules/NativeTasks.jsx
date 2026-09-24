@@ -29,9 +29,11 @@ import {
     Plus,
     Paperclip,
     RefreshCw,
-    Tag
+    Tag,
+    Lock
 } from '@/components/ui/icons';
 import { bogotaTimeOf, findFocusTaskFor, focusLockMessage, getTaskLock, hasSeenFocusNotice, isActiveFocusTask, isFocusOverdue, markFocusNoticeSeen, nextLockReaction } from '@/lib/taskFocus';
+import { PRIVATE_TASK_HINT, nextPrivateAttempt } from '@/lib/taskPrivacy';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 import FocusCommitmentNotice from '@/components/tasks/FocusCommitmentNotice';
 import { cn } from '@/lib/utils';
@@ -247,6 +249,8 @@ const NativeTasks = () => {
     // Compromiso con hora: the explanation shown when the person touches a locked task.
     const [focusLockNotice, setFocusLockNotice] = useState(null);
     const [shakingTaskId, setShakingTaskId] = useState(null);
+    // El aviso de un pendiente privado, cuando alguien insiste en abrirlo.
+    const [privateNotice, setPrivateNotice] = useState(null);
     const lockAttemptsRef = useRef({});
     // "Pedir más tiempo": the focus task the person is asking about (Rodny, 21 September 2026).
     const [extensionTask, setExtensionTask] = useState(null);
@@ -344,6 +348,11 @@ const NativeTasks = () => {
             return safeData.map(task => ({
                 id: task.id,
                 title: task.title,
+                // Lo marca el servidor: la tarea es privada y este usuario no puede
+                // abrirla, así que llega sin descripción, adjuntos ni comentarios.
+                isPrivate: task.isPrivate || false,
+                isLocked: task.isLocked || false,
+                privateHint: task.privateHint || null,
                 clientId: task.clientId,
                 client: task.client,
                 clientName: task.client?.name || 'Sin Cliente',
@@ -665,6 +674,32 @@ const NativeTasks = () => {
         const interval = window.setInterval(() => setOverdueTick((value) => value + 1), 60_000);
         return () => window.clearInterval(interval);
     }, []);
+    // Un pendiente privado se ve entero en el tablero —título, responsable, cliente y
+    // estado— pero no se abre: el servidor no manda su descripción, sus adjuntos ni su
+    // conversación a quien no puede verlos, así que no hay nada que enseñar dentro.
+    // Al primer toque la tarjeta vibra; al segundo sale el aviso, siempre (Rodny, 23 de
+    // septiembre de 2026). Regla propia y no la del compromiso con hora: aquella espera
+    // una ventana de tiempo porque allí insistir significa otra cosa.
+    const privateAttemptsRef = useRef({});
+    const onPrivateAttempt = (task) => {
+        const key = String(task.id);
+        const { reaction, attempts } = nextPrivateAttempt(privateAttemptsRef.current[key]);
+        privateAttemptsRef.current[key] = attempts;
+        if (reaction === 'explain') {
+            setPrivateNotice(task);
+            return;
+        }
+        setShakingTaskId(key);
+    };
+
+    const openTaskFromBoard = (task) => {
+        if (task.isLocked) {
+            onPrivateAttempt(task);
+            return;
+        }
+        setEditingTask(task);
+    };
+
     const myFocusTask = useMemo(() => {
         if (viewerIsManager || !currentUser?.id) return null;
         return findFocusTaskFor(tasks, { assigneeUserId: currentUser.id });
@@ -1141,6 +1176,27 @@ const NativeTasks = () => {
                 </DialogContent>
             </Dialog>
 
+            {/* Pendiente privado: sale solo si la persona insiste, con la misma regla
+                que el compromiso con hora. No ofrece ninguna salida a propósito —quien
+                puede abrirlo ya lo abre— y dice a quién pedírselo. */}
+            <Dialog open={!!privateNotice} onOpenChange={(open) => !open && setPrivateNotice(null)}>
+                <DialogContent className="sm:max-w-md border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2 text-zinc-900 dark:text-white">
+                            <Lock className="h-5 w-5 text-zinc-500" /> Pendiente privado
+                        </DialogTitle>
+                        <DialogDescription>
+                            {privateNotice?.privateHint || PRIVATE_TASK_HINT}
+                        </DialogDescription>
+                    </DialogHeader>
+                    <DialogFooter>
+                        <button type="button" onClick={() => setPrivateNotice(null)} className="rounded-xl px-4 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800">
+                            Entendido
+                        </button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
             <Dialog open={!!focusLockNotice} onOpenChange={(open) => !open && setFocusLockNotice(null)}>
                 <DialogContent className="sm:max-w-md border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
                     <DialogHeader>
@@ -1348,7 +1404,7 @@ const NativeTasks = () => {
                                                     task={task}
                                                     index={index}
                                                     highlightedTaskId={highlightedTaskId}
-                                                    onClick={(t) => setEditingTask(t)}
+                                                    onClick={(t) => openTaskFromBoard(t)}
                                                     lock={focusLockFor(task)}
                                                     onLocked={onLockedAttempt}
                                                     shaking={shakingTaskId === String(task.id)}
@@ -1440,7 +1496,7 @@ const NativeTasks = () => {
                                                         task={task}
                                                         index={index}
                                                         highlightedTaskId={highlightedTaskId}
-                                                        onClick={(t) => setEditingTask(t)}
+                                                        onClick={(t) => openTaskFromBoard(t)}
                                                         lock={focusLockFor(task)}
                                                         onLocked={onLockedAttempt}
                                                         shaking={shakingTaskId === String(task.id)}
@@ -1498,6 +1554,10 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
     const snippet = plainTextSnippet(task.comments);
     const attachmentCount = Array.isArray(task.taskAttachments) ? task.taskAttachments.length : 0;
     const commentCount = Array.isArray(task.taskComments) ? task.taskComments.length : 0;
+    // Un pendiente privado ajeno tampoco se arrastra: mover su estado es cambiarlo, y el
+    // servidor responde 403 a ese cambio. Dejar arrastrar para después fallar sería
+    // prometer algo que no se cumple.
+    const dragHandleProps = task.isLocked ? {} : provided.dragHandleProps;
     const taskCardFooterBadges = [
         overdue && {
             key: 'overdue',
@@ -1511,7 +1571,7 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                     id={snapshot.isClone ? undefined : `task-${task.id}`}
                     ref={provided.innerRef}
                     {...provided.draggableProps}
-                    {...provided.dragHandleProps}
+                    {...dragHandleProps}
                     data-task-locked={lock ? 'true' : undefined}
                     data-task-shaking={shaking ? 'true' : undefined}
                     className={cn("relative mb-3 group/card", priorityBadgeClass && "pt-6", lock ? "cursor-not-allowed opacity-60" : "cursor-pointer", shaking && "brain-shake")}
@@ -1630,9 +1690,11 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                                 </div>
                             </div>
 
-                            {/* Title */}
-                            <h4 className="text-sm font-bold leading-snug text-zinc-900 dark:text-zinc-50" title={task.title}>
-                                {task.title}
+                            {/* Title. Un pendiente privado que este usuario no puede abrir
+                                lleva un candado: el título se lee, el contenido no. */}
+                            <h4 className="flex items-start gap-1.5 text-sm font-bold leading-snug text-zinc-900 dark:text-zinc-50" title={task.isLocked ? `${task.title} · ${task.privateHint || 'Pendiente privado'}` : task.title}>
+                                {task.isLocked && <Lock data-task-private="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" aria-label="Pendiente privado" />}
+                                <span className="min-w-0">{task.title}</span>
                             </h4>
 
                             {/* Row 3: assignee + date */}

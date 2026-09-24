@@ -14,6 +14,12 @@ import * as briaMemoryController from '../controllers/briaMemoryController.js';
 import * as briaObserverController from '../controllers/briaObserverController.js';
 import * as commercialRequestController from '../controllers/commercialRequestController.js';
 import { authenticateToken, requireManagerRole, requireModulePermission } from '../middlewares/authMiddleware.js';
+// La cerradura de un pendiente privado: el tablero ya no manda su contenido, y estas
+// rutas —comentarios, adjuntos y la propia tarea— tampoco se lo dan a quien no puede
+// abrirla. Contrato que vigila que no se olvide ninguna: tests/taskPrivacyRoutes.test.js
+import { requireTaskAccess } from '../middlewares/taskPrivacyMiddleware.js';
+
+const guardTask = requireTaskAccess();
 import prisma from '../lib/prisma.js';
 import multer from 'multer';
 import { MAX_COMMENT_FILES, MAX_COMMENT_FILE_BYTES } from '../lib/taskCommentAttachments.js';
@@ -41,6 +47,7 @@ import reportPdfRouter from './api/reportPdf.js';
 import minutesRouter from './api/minutes.js';
 import driveRouter from './api/drive.js';
 import crmRouter from './api/crm.js';
+import { createAiGovernanceRouter } from './api/aiGovernance.js';
 import { createTeamChatRouter, createTeamChatMediaRouter } from './api/teamChat.js';
 import { getUpcomingEvents } from '../services/calendarService.js';
 import { handleGoogleCalendarWebhook } from '../services/operationalEventService.js';
@@ -207,21 +214,21 @@ router.post('/tasks/:taskId/work-confirmation', taskController.confirmExcessiveT
 router.post('/tasks/:taskId/alert-interaction', taskController.taskAlertInteractionHandler);
 router.post('/tasks/:taskId/returned-reminder/snooze', taskController.snoozeReturnedTaskReminder);
 router.post('/tasks/:taskId/focus-extension', taskController.requestTaskFocusExtension);
-router.patch('/tasks/:taskId', taskController.updateExistingTask);
-router.delete('/tasks/:taskId', taskController.deleteExistingTask);
+router.patch('/tasks/:taskId', guardTask, taskController.updateExistingTask);
+router.delete('/tasks/:taskId', guardTask, taskController.deleteExistingTask);
 router.post('/tasks/:taskId/toggle-follow', taskController.toggleFollow);
 router.get('/tasks/:taskId/follow-status', taskController.getFollowStatus);
 router.post('/tasks/:taskId/trace-open', taskController.traceTaskOpen);
-router.get('/tasks/:taskId/work-history', taskController.getTaskWorkHistory);
-router.get('/tasks/:taskId/attachments/:attachmentId/file', taskController.getTaskAttachmentFileProxy);
-router.get('/tasks/:taskId/attachments/:attachmentId/download', taskController.getTaskAttachmentDownloadProxy);
-router.get('/tasks/:taskId/comments', taskController.getTaskComments);
-router.post('/tasks/:taskId/comments', commentUpload.array('file', MAX_COMMENT_FILES), taskController.addTaskComment);
-router.get('/tasks/:taskId/comments/:commentId/file', taskController.getCommentFileProxy);
-router.get('/tasks/:taskId/comments/:commentId/download', taskController.getCommentFileDownloadProxy);
-router.post('/tasks/:taskId/comments/:commentId/reactions', taskController.toggleCommentReaction);
-router.patch('/tasks/:taskId/comments/:commentId', taskController.updateTaskComment);
-router.delete('/tasks/:taskId/comments/:commentId', taskController.deleteTaskComment);
+router.get('/tasks/:taskId/work-history', guardTask, taskController.getTaskWorkHistory);
+router.get('/tasks/:taskId/attachments/:attachmentId/file', guardTask, taskController.getTaskAttachmentFileProxy);
+router.get('/tasks/:taskId/attachments/:attachmentId/download', guardTask, taskController.getTaskAttachmentDownloadProxy);
+router.get('/tasks/:taskId/comments', guardTask, taskController.getTaskComments);
+router.post('/tasks/:taskId/comments', guardTask, commentUpload.array('file', MAX_COMMENT_FILES), taskController.addTaskComment);
+router.get('/tasks/:taskId/comments/:commentId/file', guardTask, taskController.getCommentFileProxy);
+router.get('/tasks/:taskId/comments/:commentId/download', guardTask, taskController.getCommentFileDownloadProxy);
+router.post('/tasks/:taskId/comments/:commentId/reactions', guardTask, taskController.toggleCommentReaction);
+router.patch('/tasks/:taskId/comments/:commentId', guardTask, taskController.updateTaskComment);
+router.delete('/tasks/:taskId/comments/:commentId', guardTask, taskController.deleteTaskComment);
 
 // Client Specific (Tasks, Links, Logo)
 router.get('/db/clients/:clientId/tasks', taskController.getClientTasksHandler);
@@ -307,5 +314,6 @@ router.use('/boards', requireModulePermission('inspiracion'), boardsRouter);
 router.use('/operative-intelligence', operativeIntelligenceRouter);
 router.use('/financials', financialsRouter);
 router.use('/crm', requireModulePermission('crm'), crmRouter);
+router.use('/ai-governance', createAiGovernanceRouter());
 
 export default router;
