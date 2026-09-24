@@ -100,8 +100,12 @@ export const deleteFromS3 = async (key) => {
     await s3Client.send(command);
 };
 
-export const uploadToS3 = async (file, folder = "chat") => {
-    validateUploadFile(file, { maxBytes: 25 * 1024 * 1024 });
+/**
+ * `maxBytes` deja que quien llama fije su propio tope. Sin él, el de siempre: 25 MB. La pieza final de una
+ * parrilla pasa el suyo, porque un video normal no cabe en 25 MB (Rodny, 24 de septiembre de 2026).
+ */
+export const uploadToS3 = async (file, folder = "chat", { maxBytes = 25 * 1024 * 1024 } = {}) => {
+    validateUploadFile(file, { maxBytes });
     const s3Client = getS3Client();
     const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
 

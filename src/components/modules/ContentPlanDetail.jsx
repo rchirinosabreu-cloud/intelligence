@@ -5,6 +5,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { getContentPlanMonthName } from '@/lib/contentPlanPeriod';
+import { checkFinalAssetSelection } from '@/lib/uploadLimits';
 import {
   ChevronLeft, Plus, Send, ExternalLink, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
@@ -900,6 +901,12 @@ const ContentPlanDetail = () => {
   };
 
   const handleFinalAssetUpload = (itemId, files) => {
+    // Avisar antes de gastar la subida: el servidor vuelve a comprobarlo, pero el peso ya se sabe aquí.
+    const problem = checkFinalAssetSelection(files);
+    if (problem) {
+      toast.error(problem);
+      return;
+    }
     finalAssetUploadMutation.mutate({ itemId, files });
   };
 

@@ -5,6 +5,7 @@ import { createTask } from './nativeTaskService.js';
 import { uploadToS3, deleteFromS3 } from './s3Service.js';
 import { randomBytes } from 'node:crypto';
 import { buildLinkedTaskUpdates } from '../lib/contentTaskReciprocity.js';
+import { FINAL_ASSET_MAX_BYTES, FINAL_ASSET_MAX_FILES, fileTooLargeMessage, tooManyFilesMessage } from '../lib/uploadLimits.js';
 import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from './briaContentPlanReviewState.js';
 
 let strategicObjectivesColumnExists = null;
@@ -650,7 +651,8 @@ export const uploadContentItemFinalAsset = async (itemId, file) => {
 
   const upload = await uploadToS3(
     file,
-    `content-plans/${item.plan.client.slug}/${item.plan.year}-${String(item.plan.month).padStart(2, '0')}/${item.id}/final`
+    `content-plans/${item.plan.client.slug}/${item.plan.year}-${String(item.plan.month).padStart(2, '0')}/${item.id}/final`,
+    { maxBytes: FINAL_ASSET_MAX_BYTES }
   );
 
   const updatedItem = await updateContentItem(itemId, {
@@ -716,7 +718,9 @@ export const deleteContentItemFinalAsset = async (itemId) => {
 
 export const uploadContentItemFinalAssets = async (itemId, files = []) => {
   if (!Array.isArray(files) || files.length === 0) throw new Error('Selecciona al menos un archivo');
-  if (files.length > 10) throw new Error('Puedes cargar hasta 10 archivos a la vez');
+  if (files.length > FINAL_ASSET_MAX_FILES) throw new Error(tooManyFilesMessage());
+  const oversized = files.find(file => Number(file?.size || file?.buffer?.length || 0) > FINAL_ASSET_MAX_BYTES);
+  if (oversized) throw new Error(fileTooLargeMessage(oversized));
   if (files.some(file => !/^image\/|^video\//.test(file.mimetype || ''))) {
     throw new Error('Solo se permiten imágenes o videos para el carrusel');
   }
@@ -734,7 +738,7 @@ export const uploadContentItemFinalAssets = async (itemId, files = []) => {
   if (item._count.finalAssets + files.length > 20) throw new Error('Una pieza puede contener máximo 20 archivos finales');
 
   const basePath = `content-plans/${item.plan.client.slug}/${item.plan.year}-${String(item.plan.month).padStart(2, '0')}/${item.id}/final-assets`;
-  const uploads = await Promise.all(files.map(file => uploadToS3(file, basePath)));
+  const uploads = await Promise.all(files.map(file => uploadToS3(file, basePath, { maxBytes: FINAL_ASSET_MAX_BYTES })));
   const firstPosition = (item.finalAssets[0]?.position ?? -1) + 1;
 
   try {

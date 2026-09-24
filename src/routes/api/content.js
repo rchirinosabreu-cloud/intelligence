@@ -27,16 +27,45 @@ import {
 } from '../../services/briaContentPlanReviewService.js';
 import { runContentPlanReviewJob } from '../../services/briaContentPlanReviewScheduler.js';
 import { createClientCriteriaRouter } from './clientCriteria.js';
+import {
+  FINAL_ASSET_MAX_BYTES,
+  FINAL_ASSET_MAX_FILES,
+  FINAL_ASSET_MAX_TOTAL_BYTES,
+  fileTooLargeMessage,
+  tooManyFilesMessage,
+  tooMuchAtOnceMessage
+} from '../../lib/uploadLimits.js';
 
 const router = express.Router();
 router.use('/plans/:planId/criteria', createClientCriteriaRouter());
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024, files: 1 }
+  limits: { fileSize: FINAL_ASSET_MAX_BYTES, files: 1 }
 });
 const carouselUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024, files: 10 }
+  limits: { fileSize: FINAL_ASSET_MAX_BYTES, files: FINAL_ASSET_MAX_FILES }
+});
+
+/**
+ * Un archivo demasiado grande no puede contestar con un código: el aviso dice el peso y el límite
+ * (Rodny, 24 de septiembre de 2026). Además comprueba el peso total, que multer no sabe sumar.
+ */
+const receiveFinalAssets = (middleware) => (req, res, next) => middleware(req, res, (error) => {
+  if (error?.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: fileTooLargeMessage(null) });
+  }
+  if (error?.code === 'LIMIT_FILE_COUNT' || error?.code === 'LIMIT_UNEXPECTED_FILE') {
+    return res.status(413).json({ error: tooManyFilesMessage() });
+  }
+  if (error) return next(error);
+
+  const files = req.files || (req.file ? [req.file] : []);
+  const total = files.reduce((sum, file) => sum + Number(file?.size || file?.buffer?.length || 0), 0);
+  if (total > FINAL_ASSET_MAX_TOTAL_BYTES) {
+    return res.status(413).json({ error: tooMuchAtOnceMessage(total) });
+  }
+  return next();
 });
 
 /**
@@ -234,7 +263,7 @@ router.patch('/items/:id', async (req, res) => {
   }
 });
 
-router.post('/items/:id/final-asset', upload.single('file'), async (req, res) => {
+router.post('/items/:id/final-asset', receiveFinalAssets(upload.single('file')), async (req, res) => {
   try {
     const item = await uploadContentItemFinalAsset(req.params.id, req.file);
     return res.json(item);
@@ -270,7 +299,7 @@ router.delete('/items/:id/final-asset', async (req, res) => {
   }
 });
 
-router.post('/items/:id/final-assets', carouselUpload.array('files', 10), async (req, res) => {
+router.post('/items/:id/final-assets', receiveFinalAssets(carouselUpload.array('files', FINAL_ASSET_MAX_FILES)), async (req, res) => {
   try {
     const assets = await uploadContentItemFinalAssets(req.params.id, req.files);
     return res.status(201).json(assets);
