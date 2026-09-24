@@ -1,3 +1,4 @@
+import { governedFetch as fetch } from '../../services/aiEgress.js';
 import express from 'express';
 import multer from 'multer';
 import prisma from '../../lib/prisma.js';

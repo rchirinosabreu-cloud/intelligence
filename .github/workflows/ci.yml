@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
 
     services:
-      # One cluster serves every suite. The chat suites refuse anything that is
+      # The shared cluster serves the general suites. Chat suites refuse anything that is
       # not 127.0.0.1:55448/recognition_test with user recognition_test, and the
       # generic suites accept any local database, so this shape satisfies both.
       postgres:
@@ -24,6 +24,20 @@ jobs:
         ports:
           - 55448:5432
         # Wait for postgres to be ready
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      governance-postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: governance_test
+          POSTGRES_DB: governance_test
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 55449:5432
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -74,3 +88,8 @@ jobs:
           JWT_SECRET: test-secret-with-at-least-32-characters
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: npm run test:ci
+
+      - name: Verify AI governance persistence and egress
+        env:
+          TEST_DATABASE_URL: postgresql://governance_test@127.0.0.1:55449/governance_test
+        run: node --test tests/aiGovernancePostgres.integration.mjs

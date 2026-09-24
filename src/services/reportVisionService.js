@@ -1,3 +1,4 @@
+import { governedFetch as fetch } from './aiEgress.js';
 import { extractModelText, parseJsonResponse } from './aiService.js';
 import { createOpenAIClient } from './openAIClient.js';
 import { adaptDatasetForChart } from '../lib/reportChartData.js';

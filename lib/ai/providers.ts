@@ -1,3 +1,4 @@
+import { governedFetch as fetch } from '../../src/services/aiEgress.js';
 import { SYSTEM_PROMPT } from "./prompt";
 
 type ChatMessage = {

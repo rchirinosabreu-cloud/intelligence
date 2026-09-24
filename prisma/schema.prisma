@@ -28,7 +28,115 @@ enum TaskPriority {
   NORMAL
 }
 
+// Private governance registry. Additive DDL: scripts/ensure-ai-governance-schema.js.
+model AiGovernanceSystem {
+  id String @id
+  name String
+  status String
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  data Json @db.JsonB
+  version Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+  risks AiGovernanceRisk[]
+  authorizations AiGovernanceAuthorization[]
+  @@index([ownerId])
+  @@index([createdAt, id])
+}
+
+model AiGovernanceRisk {
+  id String @id
+  name String
+  status String
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  clientId String
+  client Client @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  systemId String
+  system AiGovernanceSystem @relation(fields: [systemId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  data Json @db.JsonB
+  version Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+  authorizations AiGovernanceAuthorization[]
+  @@index([ownerId])
+  @@index([clientId])
+  @@index([systemId])
+  @@index([createdAt, id])
+}
+
+model AiGovernanceAuthorization {
+  id String @id
+  name String
+  status String
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  clientId String
+  client Client @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  systemId String
+  system AiGovernanceSystem @relation(fields: [systemId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  riskId String
+  risk AiGovernanceRisk @relation(fields: [riskId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  data Json @db.JsonB
+  version Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+  @@index([ownerId])
+  @@index([clientId])
+  @@index([systemId])
+  @@index([riskId])
+  @@index([createdAt, id])
+}
+
+model AiGovernanceIncident {
+  id String @id
+  name String
+  status String
+  ownerId String
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  clientId String?
+  client Client? @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  notificationDueAt DateTime @db.Timestamptz(6)
+  data Json @db.JsonB
+  version Int @default(1)
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+  @@index([ownerId])
+  @@index([clientId])
+  @@index([createdAt, id])
+  @@index([status, notificationDueAt])
+}
+
+model AiGovernanceClientPolicy {
+  clientId String @id
+  client Client @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  enabled Boolean @default(false)
+  version Int @default(1)
+  updatedAt DateTime @default(now()) @db.Timestamptz(6)
+}
+
+model AiGovernanceEvent {
+  id String @id
+  entityType String
+  entityId String
+  actorId String?
+  actor User? @relation(fields: [actorId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  action String
+  reason String
+  before Json? @db.JsonB
+  after Json @db.JsonB
+  createdAt DateTime @default(now()) @db.Timestamptz(6)
+  @@index([entityType, entityId, createdAt])
+  @@index([actorId])
+}
+
 model User {
+  aiGovernanceSystems         AiGovernanceSystem[]
+  aiGovernanceRisks           AiGovernanceRisk[]
+  aiGovernanceAuthorizations  AiGovernanceAuthorization[]
+  aiGovernanceIncidents       AiGovernanceIncident[]
+  aiGovernanceEvents          AiGovernanceEvent[]
   id                          String                  @id @default(uuid())
   name                        String
   email                       String                  @unique
@@ -429,6 +537,10 @@ enum ClientStatus {
 }
 
 model Client {
+  aiGovernanceRisks          AiGovernanceRisk[]
+  aiGovernanceAuthorizations AiGovernanceAuthorization[]
+  aiGovernanceIncidents      AiGovernanceIncident[]
+  aiGovernancePolicy        AiGovernanceClientPolicy?
   criterionDiscovery ClientCriterionDiscovery?
   editorialCriteria ClientEditorialCriterion[]
   id                  String               @id @default(uuid())

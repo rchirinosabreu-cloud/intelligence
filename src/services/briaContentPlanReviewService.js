@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { AI_MODELS } from '../config/aiConfig.js';
+import { getGovernanceService } from './aiGovernanceService.js';
+import { prepareGovernedReview } from './aiGovernanceGate.js';
 import { summarizeAiCalls } from '../lib/aiUsage.js';
 import prisma from '../lib/prisma.js';
 import { createOpenAIClient } from './openAIClient.js';
@@ -331,7 +333,8 @@ export const updateContentPlanReviewFinding = async ({
 
 export const reviewContentPlanWithBria = async ({
   planId, getPlan = getContentPlanById, searchMemory = searchBriaMemory, ai = defaultAi(), repository,
-  trigger = 'MANUAL', requestedById = null, force = false, now = () => new Date(), execution, signal
+  trigger = 'MANUAL', requestedById = null, force = false, now = () => new Date(), execution, signal,
+  governance = getPlan === getContentPlanById ? getGovernanceService() : null
 } = {}) => {
   signal?.throwIfAborted();
   const startedAt = now();
@@ -344,9 +347,10 @@ export const reviewContentPlanWithBria = async ({
   const persistence = repository || (getPlan === getContentPlanById ? createContentPlanReviewRepository() : null);
   const plan = { ...loadedPlan, approvedCriteria: await persistence?.findApprovedCriteria?.(loadedPlan.clientId || loadedPlan.client?.id, loadedPlan.id) || [] };
   const client = plan.client || { id: plan.clientId, name: '', slug: '' };
-  const candidates = await searchMemory({
+  const governed = await prepareGovernedReview({ ai, clientId: client.id, governance });
+  const candidates = governed.useHistoricalMemory ? await searchMemory({
     query: buildContentPlanReviewQuery(plan), clientId: client.id, includeUnscoped: true, limit: 16
-  });
+  }) : [];
   signal?.throwIfAborted();
   const evidence = [
     ...plan.approvedCriteria.map(criterion => ({
@@ -366,14 +370,14 @@ export const reviewContentPlanWithBria = async ({
 
   const snapshot = compactPlan(plan, { truncate: false, maxItems: Infinity });
   const aiResult = await generateContentPlanReview({
-    snapshot, evidence, analysisHash, ai, signal,
+    snapshot, evidence, analysisHash, ai: governed.ai, signal,
     loadCheckpoint: () => persistence?.loadCheckpoint?.(plan.id),
     saveCheckpoint: checkpoint => persistence?.saveCheckpoint?.(plan.id, checkpoint, { execution, now, signal })
   });
   const review = aiResult.review;
   const verificationCalls = [];
   const verifications = await verifyContentPlanFindings({
-    snapshot, findings: activeFindings, evidence, ai, signal, calls: verificationCalls
+    snapshot, findings: activeFindings, evidence, ai: governed.ai, signal, calls: verificationCalls
   });
   const usage = buildContentPlanReviewUsage({
     review: aiResult.usage || null,

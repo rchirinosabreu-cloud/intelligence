@@ -4,7 +4,7 @@ import { createOpenAIClient } from '../src/services/openAIClient.js';
 import { buildTraceableRequest } from '../src/services/briaTraceableScore.js';
 test('strict schema and reasoning are opt-in for the traceable candidate; existing requests retain defaults', async () => {
   const sent = [];
-  const ai = createOpenAIClient({ apiKey: 'test-only', fetchImpl: async (_url, options) => {
+  const ai = createOpenAIClient({ apiKey: 'test-only', governance: { assertEgress: async () => ({ allowed: true }) }, fetchImpl: async (_url, options) => {
     sent.push(JSON.parse(options.body));
     return new Response(JSON.stringify({ output_text: '{}' }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   } });

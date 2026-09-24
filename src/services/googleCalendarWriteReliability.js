@@ -1,5 +1,13 @@
 import crypto from 'node:crypto';
 import { googleCalendarRequestOptions } from './calendarSyncLock.js';
+import { getGovernanceService } from './aiGovernanceService.js';
+
+const assertCaptureAllowed = async (request, governance) => {
+  if ((request.requestBody?.attendees || []).some(person => /@fireflies\.ai$/i.test(person.email?.trim() || ''))) {
+    // Calendar events have no trusted client association yet. Never infer it from a title.
+    await (governance || getGovernanceService()).assertEgress({ provider: 'fireflies', model: 'meeting-bot', useCase: 'meetings.capture' });
+  }
+};
 
 export const googleEventIdFor = id => `brain${crypto.createHash('sha256').update(String(id)).digest('hex')}`;
 export const googleStatus = error => Number(error.response?.status || error.status || error.code) || 0;
@@ -24,10 +32,11 @@ export function googleEventMatchesPayload(remote, payload) {
     remote.extendedProperties?.private?.brainEventType === payload.extendedProperties?.private?.brainEventType;
 }
 
-export async function patchGoogleEventReliably(calendar, request, patchOptions) {
+export async function patchGoogleEventReliably(calendar, request, patchOptions, { governance } = {}) {
   const read = () => calendar.events.get({ calendarId: request.calendarId, eventId: request.eventId }, googleCalendarRequestOptions());
   const current = await read();
   if (googleEventMatchesPayload(current.data, request.requestBody)) return current;
+  await assertCaptureAllowed(request, governance);
   try { return await calendar.events.patch(request, googleCalendarRequestOptions(patchOptions)); }
   catch (error) {
     if (isRetryableGoogleWriteError(error) || googleStatus(error) === 412) {
@@ -38,7 +47,7 @@ export async function patchGoogleEventReliably(calendar, request, patchOptions) 
   }
 }
 
-export async function insertGoogleEventReliably(calendar, request) {
+export async function insertGoogleEventReliably(calendar, request, { governance } = {}) {
   const readExisting = async () => {
     try {
       const result = await calendar.events.get({ calendarId: request.calendarId, eventId: request.requestBody.id }, googleCalendarRequestOptions());
@@ -54,6 +63,7 @@ export async function insertGoogleEventReliably(calendar, request) {
   };
   const existing = await readExisting();
   if (existing) return existing;
+  await assertCaptureAllowed(request, governance);
   try { return await calendar.events.insert(request, googleCalendarRequestOptions()); }
   catch (error) {
     if (isRetryableGoogleWriteError(error)) {

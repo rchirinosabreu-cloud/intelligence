@@ -1,3 +1,4 @@
+import { createGovernedFetch } from './aiEgress.js';
 const FIREFLIES_GRAPHQL_URL = 'https://api.fireflies.ai/graphql';
 
 const requestFireflies = async ({ query, variables, apiKey, fetchImpl }) => {
@@ -21,12 +22,13 @@ const requestFireflies = async ({ query, variables, apiKey, fetchImpl }) => {
 
 export const createFirefliesClient = ({
   apiKey = process.env.FIREFLIES_API_KEY,
-  fetchImpl = globalThis.fetch
+  fetchImpl = globalThis.fetch,
+  governance
 } = {}) => ({
   async listTranscripts(limit = 25, skip = 0) {
     const data = await requestFireflies({
       apiKey,
-      fetchImpl,
+      fetchImpl: createGovernedFetch({ fetchImpl, governance }),
       variables: { limit, skip },
       query: `query BriaTranscripts($limit: Int, $skip: Int) {
         transcripts(limit: $limit, skip: $skip) {
@@ -40,7 +42,7 @@ export const createFirefliesClient = ({
   async getTranscript(id) {
     const data = await requestFireflies({
       apiKey,
-      fetchImpl,
+      fetchImpl: createGovernedFetch({ fetchImpl, governance }),
       variables: { id },
       query: `query BriaTranscript($id: String!) {
         transcript(id: $id) {

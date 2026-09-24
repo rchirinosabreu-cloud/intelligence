@@ -9,7 +9,7 @@ test('OpenAI requests abort a delayed response within their configured deadline'
     res.on('close', () => clearTimeout(timer));
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
-  const client = createOpenAIClient({ apiKey: 'local-test', requestTimeoutMs: 40,
+  const client = createOpenAIClient({ apiKey: 'local-test', requestTimeoutMs: 40, governance: { assertEgress: async () => ({ allowed: true }) },
     fetchImpl: (_url, options) => fetch(`http://127.0.0.1:${server.address().port}`, options) });
   try {
     await assert.rejects(client.generate({ prompt: 'test only' }), { code: 'OPENAI_TIMEOUT' });
