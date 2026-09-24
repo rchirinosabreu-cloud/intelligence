@@ -3,8 +3,7 @@ import { FINANCIAL_CATEGORIES, FinancialDomainError, assertOpenFinancialPeriod }
 // A breakdown ("desglose") explains what one movement paid for. The movement keeps being the only
 // money fact (one transfer, one account, one date); its lines add up exactly to its amount and only
 // feed the category indicators. Nothing here creates, moves or hides money.
-
-const MAX_LINES = 20;
+// There is no upper limit on lines (Rodny, 2026-09-24): one transfer can pay for as many things as it pays for.
 
 const toNumber = (value) => {
     if (value === undefined || value === null) return Number.NaN;
@@ -34,10 +33,6 @@ export const normalizeFinancialAllocationsInput = (record, input) => {
             'Un desglose necesita al menos dos ítems. Si el movimiento es de un solo concepto, edita su categoría directamente.'
         );
     }
-    if (input.length > MAX_LINES) {
-        throw new FinancialDomainError('FINANCIAL_ALLOCATION_TOO_MANY_LINES', `Un desglose admite hasta ${MAX_LINES} ítems.`);
-    }
-
     const lines = input.map((line, index) => {
         const source = line && typeof line === 'object' ? line : {};
         const amount = toNumber(source.amount);

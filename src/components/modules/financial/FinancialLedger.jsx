@@ -58,7 +58,6 @@ const lockReason = (record) => {
 
 // Breakdown lines are compared in cents, like the backend, so 0.1 + 0.2 still matches 0.3.
 const toCents = (value) => Math.round((Number(value) || 0) * 100);
-const MAX_ALLOCATION_LINES = 20;
 const emptyAllocationLine = (category = 'OPERATIVO') => ({ amount: '', category, description: '' });
 const allocationLinesFrom = (record) => (record?.allocations || []).map((line) => ({ amount: String(line.amount), category: line.category, description: line.description || '' }));
 const allocationPayload = (lines) => lines.map((line) => ({ amount: Number(line.amount), category: line.category, description: line.description.trim() }));
@@ -499,7 +498,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
 
     const setAllocationLine = (index, field, value) => setAllocationLines((current) => current.map((line, position) => (position === index ? { ...line, [field]: value } : line)));
     const removeAllocationLine = (index) => setAllocationLines((current) => current.filter((_, position) => position !== index));
-    const addAllocationLine = () => setAllocationLines((current) => (current.length >= MAX_ALLOCATION_LINES ? current : [...current, emptyAllocationLine(form.category)]));
+    const addAllocationLine = () => setAllocationLines((current) => [...current, emptyAllocationLine(form.category)]);
 
     const allocationTotalCents = allocationLines.reduce((sum, line) => sum + toCents(line.amount), 0);
     const allocationTargetCents = toCents(form.amount);
@@ -861,7 +860,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                                 ))}
                             </div>
                             <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-                                <button type="button" onClick={addAllocationLine} disabled={allocationLines.length >= MAX_ALLOCATION_LINES} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5"><Plus className="h-4 w-4" />Añadir ítem</button>
+                                <button type="button" onClick={addAllocationLine} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5"><Plus className="h-4 w-4" />Añadir ítem</button>
                                 <p aria-live="polite" className={cn('font-medium', allocationRemainingCents === 0 && allocationLines.length >= 2 ? 'text-emerald-600' : 'text-amber-600 dark:text-amber-400')}>
                                     {allocationRemainingCents === 0
                                         ? `Repartido ${formatCurrency(allocationTotalCents / 100)} de ${formatCurrency(allocationTargetCents / 100)}`

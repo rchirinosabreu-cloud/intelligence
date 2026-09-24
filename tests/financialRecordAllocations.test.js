@@ -41,7 +41,10 @@ test('a breakdown needs at least two real lines, each with concept, valid catego
     assert.throws(() => normalizeFinancialAllocationsInput(record, [{ ...lines[0], amount: 370000.005 }, { ...lines[1], amount: 229999.995 }]), { code: 'FINANCIAL_ALLOCATION_AMOUNT_INVALID' });
     assert.throws(() => normalizeFinancialAllocationsInput(record, [{ ...lines[0], category: 'SOFTWARE' }, { ...lines[1], amount: 230000 }]), { code: 'FINANCIAL_ALLOCATION_CATEGORY_INVALID' });
     assert.throws(() => normalizeFinancialAllocationsInput(record, [{ ...lines[0], description: '   ' }, { ...lines[1], amount: 230000 }]), { code: 'FINANCIAL_ALLOCATION_DESCRIPTION_REQUIRED' });
-    assert.throws(() => normalizeFinancialAllocationsInput(record, Array.from({ length: 21 }, () => ({ amount: 1, category: 'OPERATIVO', description: 'x' }))), { code: 'FINANCIAL_ALLOCATION_TOO_MANY_LINES' });
+    // No upper limit (Rodny, 2026-09-24): 600 lines of 1.000 still make a valid 600.000 breakdown.
+    assert.equal(normalizeFinancialAllocationsInput(record, Array.from({ length: 600 }, (_, i) => ({ amount: 1000, category: 'OPERATIVO', description: `x${i}` }))).length, 600);
+    assert.doesNotMatch(read('../src/services/financialRecordAllocationService.js'), /MAX_LINES|TOO_MANY_LINES/);
+    assert.doesNotMatch(read('../src/components/modules/financial/FinancialLedger.jsx'), /MAX_ALLOCATION_LINES/);
     assert.throws(() => normalizeFinancialAllocationsInput(record, 'no'), { code: 'FINANCIAL_ALLOCATION_INVALID' });
     assert.deepEqual(normalizeFinancialAllocationsInput(record, []), []);
 });
