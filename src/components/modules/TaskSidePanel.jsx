@@ -7,7 +7,7 @@ import {
     X, Send, MessageSquare, TaskReintegrateIcon, TaskReturnIcon, CheckCircle2, Bell,
     LayoutGrid, Calendar, Clock, ClockPlus, User, Trash2, Plus, ClipboardList,
     FileText, Database, Paperclip, ImageIcon, Eye, Download, Check,
-    MoreHorizontal, ChevronDown
+    MoreHorizontal, ChevronDown, Lock
 } from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
