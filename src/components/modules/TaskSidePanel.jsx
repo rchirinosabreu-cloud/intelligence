@@ -21,6 +21,7 @@ import { FOCUS_EXTENSION_EVENT_TYPE, FOCUS_OVERDUE_EVENT_TYPE, focusDeadlineIso,
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { useAuth } from '@/context/AuthContext';
 import { canChangeTaskPrivacy, canCreatePrivateTask } from '@/lib/taskPrivacy';
+import TaskShareControl from '@/components/tasks/TaskShareControl';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 import LinkDropdown from '@/components/ui/LinkDropdown';
 import { linkify, cleanSystemMessage } from '@/utils/chatUtils.jsx';
@@ -270,8 +271,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [showToolbar, setShowToolbar] = useState(false);
     const [showEditToolbar, setShowEditToolbar] = useState(false);
     const [showPriorityPopover, setShowPriorityPopover] = useState(false);
-    // La lista de quién puede abrir un pendiente privado, colgada del candado.
-    const [showPrivatePopover, setShowPrivatePopover] = useState(false);
     const [showContextTutorialDetails, setShowContextTutorialDetails] = useState(false);
 
     // Local state for atomic inline editing
@@ -594,7 +593,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         setShowToolbar(false);
         setShowEditToolbar(false);
         setShowPriorityPopover(false);
-        setShowPrivatePopover(false);
         setShowInputEmojiPicker(false);
         setCommentPopover({ commentId: null, view: null });
         onClose();
@@ -614,7 +612,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             setShowToolbar(false);
             setShowEditToolbar(false);
             setShowPriorityPopover(false);
-            setShowPrivatePopover(false);
             setShowContextTutorialDetails(false);
             setShowInputEmojiPicker(false);
             setCommentPopover({ commentId: null, view: null });
@@ -1987,84 +1984,15 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             2026). Encendido aparece la lista del equipo; apagado se olvida
                             a quién se eligió. Quien la crea y quien la ejecuta la abren
                             siempre, así que no salen en la lista. */}
-                        {canShareTask && <div className="relative" data-task-private-control>
-                            <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2 py-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-                                <button
-                                    type="button"
-                                    onClick={() => formData.isPrivate && setShowPrivatePopover(prev => !prev)}
-                                    className={cn(
-                                        "whitespace-nowrap text-[10px] font-bold uppercase tracking-wider",
-                                        formData.isPrivate ? "text-primary" : "text-zinc-400"
-                                    )}
-                                    title={formData.isPrivate ? "Elegir con quién se comparte" : "Compartir este pendiente solo con algunas personas"}
-                                >
-                                    Compartir solo con
-                                </button>
-                                <button
-                                    type="button"
-                                    role="switch"
-                                    aria-checked={!!formData.isPrivate}
-                                    aria-label="Compartir solo con algunas personas"
-                                    onClick={() => {
-                                        const encendido = !formData.isPrivate;
-                                        setFormData(prev => ({ ...prev, isPrivate: encendido, viewerIds: encendido ? (prev.viewerIds || []) : [] }));
-                                        setShowPrivatePopover(encendido);
-                                    }}
-                                    className={cn(
-                                        "relative h-4 w-7 shrink-0 rounded-full transition-colors",
-                                        formData.isPrivate ? "bg-primary" : "bg-zinc-300 dark:bg-zinc-600"
-                                    )}
-                                >
-                                    <span className={cn(
-                                        "absolute top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-all",
-                                        formData.isPrivate ? "left-[0.875rem]" : "left-0.5"
-                                    )} />
-                                </button>
-                            </div>
-
-                            <AnimatePresence>
-                                {showPrivatePopover && formData.isPrivate && (
-                                    <motion.div
-                                        data-task-private-popover
-                                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
-                                        transition={{ duration: 0.14 }}
-                                        className="brain-popover-surface absolute right-0 top-[calc(100%+6px)] z-[125] w-60 p-2"
-                                    >
-                                        <ul className="max-h-56 overflow-y-auto">
-                                            {teamMembers.filter(member => member.userId && member.id !== formData.assigneeId).map(member => {
-                                                const checked = (formData.viewerIds || []).includes(member.userId);
-                                                return (
-                                                    <li key={member.id}>
-                                                        <button
-                                                            type="button"
-                                                            role="menuitemcheckbox"
-                                                            aria-checked={checked}
-                                                            onClick={() => setFormData(prev => ({
-                                                                ...prev,
-                                                                viewerIds: checked
-                                                                    ? (prev.viewerIds || []).filter(id => id !== member.userId)
-                                                                    : [...(prev.viewerIds || []), member.userId]
-                                                            }))}
-                                                            className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                                                        >
-                                                            <span className={cn(
-                                                                "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
-                                                                checked ? "border-primary bg-primary text-primary-foreground" : "border-zinc-300 dark:border-zinc-600"
-                                                            )}>
-                                                                {checked && <Check size={11} />}
-                                                            </span>
-                                                            <span className="truncate">{member.name}</span>
-                                                        </button>
-                                                    </li>
-                                                );
-                                            })}
-                                        </ul>
-                                    </motion.div>
-                                )}
-                            </AnimatePresence>
-                        </div>}
+                        {canShareTask && (
+                            <TaskShareControl
+                                isPrivate={formData.isPrivate}
+                                viewerIds={formData.viewerIds}
+                                members={teamMembers}
+                                assigneeId={formData.assigneeId}
+                                onChange={(next) => setFormData(prev => ({ ...prev, ...next }))}
+                            />
+                        )}
 
 
                         {isEdition && (
