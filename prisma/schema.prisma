@@ -64,6 +64,7 @@ model User {
   taskComments                TaskComment[]
   taskCommentReactions        TaskCommentReaction[]
   taskFollowing               TaskFollower[]
+  taskViewing                 TaskViewer[]          @relation("TaskViewer")
   payrollContracts            PayrollContract[]
   payrollTransactions         PayrollTransaction[]
   financialRecords            FinancialRecord[]
@@ -888,6 +889,11 @@ model Task {
   isPriority        Boolean           @default(false)
   priority          TaskPriority?
   isSpecial         Boolean           @default(false)
+  // Pendiente privado (Rodny, 23 de septiembre de 2026): lo ven quien lo creo, quien
+  // lo ejecuta y las personas de `viewers`. Ningun rol entra por su cargo. El resto
+  // del equipo ve el titulo pero no lo abre: ver `src/lib/taskPrivacy.js`.
+  isPrivate         Boolean           @default(false)
+  viewers           TaskViewer[]
   referenceUrl      String?
   specialType       String?
   contentItemId     String?
@@ -985,6 +991,23 @@ model TaskAttachment {
   @@index([taskId])
   @@index([commentId])
   @@index([purgeState], map: "TaskAttachment_purge_idx")
+}
+
+// Quien mas puede abrir un pendiente privado. Deliberadamente **no** se reutiliza
+// `TaskFollower`, que hoy no lo usa nadie: «seguir» una tarea para enterarse y «poder
+// abrirla» son cosas distintas, y mezclarlas deja un cable cruzado para el dia que
+// los seguidores sirvan de verdad.
+model TaskViewer {
+  id        String   @id @default(uuid())
+  taskId    String
+  userId    String
+  createdAt DateTime @default(now())
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation("TaskViewer", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, userId])
+  @@index([userId])
 }
 
 model TaskFollower {

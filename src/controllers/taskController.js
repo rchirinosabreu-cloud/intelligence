@@ -80,7 +80,9 @@ export const getCompleted = async (req, res) => {
 
 export const getAllTasks = async (req, res) => {
     try {
-        const tasks = await getTasks(req.query.clientId);
+        // Quién pregunta decide qué ve: los pendientes privados de otros llegan
+        // reservados, sin título ni cliente.
+        const tasks = await getTasks(req.query.clientId, req.user?.userId || req.user?.id || null);
         res.json(tasks);
         recordTaskListSync({ userId: req.user?.userId, taskCount: tasks.length, source: req.query.syncSource }).catch((error) => {
             console.error('[TaskController] Task sync trace failed:', error?.message || error);

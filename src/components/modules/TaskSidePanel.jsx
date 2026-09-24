@@ -65,6 +65,9 @@ const EMPTY_TASK_FORM = {
     isPriority: false,
     priority: null,
     isSpecial: false,
+    // Pendiente privado: lo ven quien lo crea, quien lo ejecuta y `viewerIds`.
+    isPrivate: false,
+    viewerIds: [],
     hasReference: false,
     referenceUrl: '',
     referenceLinks: [],
@@ -2301,6 +2304,56 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         )}
                                     </AnimatePresence>
                                 </div>
+                            </div>
+
+                            {/* Pendiente privado. Quien lo crea y quien lo ejecuta lo ven
+                                siempre, así que no aparecen en la lista; para el resto del
+                                equipo la tarjeta se reserva, no desaparece del tablero. */}
+                            <div className="col-span-2 space-y-2">
+                                <label className="flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded-lg border border-zinc-200/70 px-4 py-2 dark:border-zinc-800/70">
+                                    <span className="flex items-center gap-2 text-sm">
+                                        <Lock size={14} className={formData.isPrivate ? 'text-primary' : 'text-zinc-400'} />
+                                        <span className={formData.isPrivate ? 'font-semibold text-primary' : 'text-zinc-500 dark:text-zinc-400'}>Privado</span>
+                                    </span>
+                                    <input
+                                        type="checkbox"
+                                        aria-label="Pendiente privado"
+                                        checked={!!formData.isPrivate}
+                                        onChange={(event) => setFormData(prev => ({
+                                            ...prev,
+                                            isPrivate: event.target.checked,
+                                            viewerIds: event.target.checked ? (prev.viewerIds || []) : []
+                                        }))}
+                                        className="h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                                    />
+                                </label>
+                                {formData.isPrivate && (
+                                    <div className="space-y-2 rounded-lg border border-zinc-200/70 p-3 dark:border-zinc-800/70">
+                                        <p className="text-xs text-zinc-500">
+                                            Tú y quien la ejecute la veis siempre. El resto del equipo verá «Pendiente reservado», sin título ni cliente.
+                                        </p>
+                                        <ul className="max-h-40 space-y-1 overflow-y-auto">
+                                            {teamMembers.filter(member => member.userId && member.id !== formData.assigneeId).map(member => (
+                                                <li key={member.id}>
+                                                    <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm dark:text-zinc-300">
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={(formData.viewerIds || []).includes(member.userId)}
+                                                            onChange={(event) => setFormData(prev => ({
+                                                                ...prev,
+                                                                viewerIds: event.target.checked
+                                                                    ? [...(prev.viewerIds || []), member.userId]
+                                                                    : (prev.viewerIds || []).filter(id => id !== member.userId)
+                                                            }))}
+                                                            className="h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                                                        />
+                                                        {member.name}
+                                                    </label>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
                             </div>
                         </div>
 

@@ -8,6 +8,7 @@ import { classifyTaskDeterministically } from './deterministicTaskClassifier.js'
 import { pickAllowedTaskUpdates } from '../config/security.js';
 import { closeTaskWorkSession, formatTaskReturnEventContent } from '../lib/taskTiming.js';
 import { bogotaTimeOf } from '../lib/taskFocus.js';
+import { taskPrivacyFilter } from '../lib/taskPrivacy.js';
 import {
     buildContentTaskTitle,
     buildContentItemUpdateFromTask,
@@ -43,6 +44,10 @@ const taskListInclude = {
     client: {
         select: { name: true, logoUrl: true, slug: true }
     },
+    // Quién más puede ver un pendiente privado. Va en la lista porque la decisión se
+    // toma aquí, en el servidor: si el título viajara y lo escondiera la pantalla,
+    // seguiría estando en la respuesta a la vista de cualquiera.
+    viewers: { select: { userId: true } },
     assignee: true,
     creator: {
         select: { id: true, name: true, avatarUrl: true, email: true, role: true }
@@ -179,7 +184,7 @@ if (process.env.NODE_ENV !== 'test') {
 
 export { getOrCreateSystemStreak, resetSystemStreak, processSystemStreakDailyIncrement, getQualityStreak } from './qualityStreakService.js';
 
-export const getTasks = async (clientId) => {
+export const getTasks = async (clientId, viewerUserId = null) => {
     try {
         const clientFilter = clientId ? { clientId } : {};
         const [activeTasks, recentCompletedTasks] = await Promise.all([
@@ -195,7 +200,9 @@ export const getTasks = async (clientId) => {
                 take: 200
             })
         ]);
-        const tasks = [...activeTasks, ...recentCompletedTasks];
+        // La reserva se aplica antes de cualquier otra cosa: lo que no se puede ver no
+        // debe llegar a la respuesta ni siquiera para ser transformado.
+        const tasks = [...activeTasks, ...recentCompletedTasks].map(taskPrivacyFilter(viewerUserId));
 
         // Map for frontend compatibility: task.plan -> task.contentItem.plan
         return tasks.map(task => {
@@ -233,7 +240,7 @@ const statusMapper = {
 
 export const createTask = async ({
     title, dueDate, focusDeadlineAt = null, assigneeId, creatorId, comments, status, clientId,
-    isPriority = false, priority = null, isSpecial = false, referenceUrl = null,
+    isPriority = false, priority = null, isSpecial = false, isPrivate = false, viewerIds = [], referenceUrl = null,
     contentItemId = null, followOnCreate = false,
     initial_references = [], initial_inputs = [], initial_insumos = [], initial_comments = [],
     tempAttachments = []
@@ -269,6 +276,13 @@ export const createTask = async ({
                     isPriority,
                     priority: priority || null,
                     isSpecial,
+                    isPrivate: Boolean(isPrivate),
+                    // Quien la crea y quien la ejecuta la ven por serlo, no por estar
+                    // en la lista: guardar solo a los demás evita que quitar a alguien
+                    // de la lista parezca que le quita el acceso a su propia tarea.
+                    ...(isPrivate && Array.isArray(viewerIds) && viewerIds.length
+                        ? { viewers: { createMany: { data: [...new Set(viewerIds.filter(Boolean))].map((userId) => ({ userId })), skipDuplicates: true } } }
+                        : {}),
                     referenceUrl,
                     contentItemId,
                     aiCategory: taskClassification.category,

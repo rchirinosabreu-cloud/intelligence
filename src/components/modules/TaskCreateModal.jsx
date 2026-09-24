@@ -1,6 +1,6 @@
 import Select from '@/components/ui/Select';
 import React, { useState, useEffect } from 'react';
-import { Loader2, Zap, Star, Link as LinkIcon } from '@/components/ui/icons';
+import { Loader2, Zap, Star, Link as LinkIcon, Lock } from '@/components/ui/icons';
 import { motion } from 'framer-motion';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
@@ -27,6 +27,10 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
         comments: '',
         isPriority: false,
         isSpecial: false,
+        // Pendiente privado: solo lo ven quien lo crea, quien lo ejecuta y las
+        // personas de `viewerIds`. Ningún rol entra por su cargo.
+        isPrivate: false,
+        viewerIds: [],
         hasReference: false,
         referenceUrl: ''
     });
@@ -52,6 +56,8 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                 comments: '',
                 isPriority: false,
                 isSpecial: false,
+                isPrivate: false,
+                viewerIds: [],
                 hasReference: false,
                 referenceUrl: ''
             });
@@ -101,6 +107,10 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
             status: 'PENDIENTE',
             isPriority: newTaskData.isPriority,
             isSpecial: newTaskData.isSpecial,
+            // Sin privado no se mandan personas: una lista colgando de una tarea
+            // pública no significaría nada y confundiría al leer la tarea mañana.
+            isPrivate: newTaskData.isPrivate,
+            viewerIds: newTaskData.isPrivate ? newTaskData.viewerIds : [],
             referenceUrl: newTaskData.hasReference ? newTaskData.referenceUrl : null
         };
 
@@ -240,6 +250,54 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
                                 className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary"
                             />
                         </div>
+                    </div>
+
+                    {/* Pendiente privado: al marcarlo se elige a quién se le enseña.
+                        Quien lo crea y quien lo ejecuta lo ven siempre, así que no
+                        aparecen en la lista; para el resto del equipo la tarjeta se
+                        reserva, no desaparece. */}
+                    <div className="space-y-2 py-2 border-b border-zinc-100 dark:border-zinc-800">
+                        <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                                <Lock className={cn("w-4 h-4", newTaskData.isPrivate ? "text-primary" : "text-zinc-400")} />
+                                <span className="text-xs font-bold dark:text-zinc-300">Privado</span>
+                            </div>
+                            <input
+                                type="checkbox"
+                                aria-label="Pendiente privado"
+                                checked={newTaskData.isPrivate}
+                                onChange={e => setNewTaskData({ ...newTaskData, isPrivate: e.target.checked, viewerIds: e.target.checked ? newTaskData.viewerIds : [] })}
+                                className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                            />
+                        </div>
+
+                        {newTaskData.isPrivate && (
+                            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2 overflow-hidden">
+                                <p className="text-xs text-zinc-500">
+                                    Tú y quien la ejecute la veis siempre. El resto del equipo verá «Pendiente reservado», sin título ni cliente. Añade abajo a quien más quieras que la vea.
+                                </p>
+                                <ul className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-zinc-100 p-2 dark:border-zinc-800">
+                                    {teamMembers.filter(member => member.userId && member.id !== newTaskData.assigneeId).map(member => (
+                                        <li key={member.id}>
+                                            <label className="flex min-h-11 cursor-pointer items-center gap-2 text-xs dark:text-zinc-300">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={newTaskData.viewerIds.includes(member.userId)}
+                                                    onChange={e => setNewTaskData({
+                                                        ...newTaskData,
+                                                        viewerIds: e.target.checked
+                                                            ? [...newTaskData.viewerIds, member.userId]
+                                                            : newTaskData.viewerIds.filter(id => id !== member.userId)
+                                                    })}
+                                                    className="w-4 h-4 rounded border-zinc-300 text-primary focus:ring-primary"
+                                                />
+                                                {member.name}
+                                            </label>
+                                        </li>
+                                    ))}
+                                </ul>
+                            </motion.div>
+                        )}
                     </div>
 
                     <div className="space-y-2 py-2 border-b border-zinc-100 dark:border-zinc-800">
