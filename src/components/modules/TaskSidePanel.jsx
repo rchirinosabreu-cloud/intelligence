@@ -269,6 +269,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     const [showToolbar, setShowToolbar] = useState(false);
     const [showEditToolbar, setShowEditToolbar] = useState(false);
     const [showPriorityPopover, setShowPriorityPopover] = useState(false);
+    // La lista de quién puede abrir un pendiente privado, colgada del candado.
+    const [showPrivatePopover, setShowPrivatePopover] = useState(false);
     const [showContextTutorialDetails, setShowContextTutorialDetails] = useState(false);
 
     // Local state for atomic inline editing
@@ -591,6 +593,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         setShowToolbar(false);
         setShowEditToolbar(false);
         setShowPriorityPopover(false);
+        setShowPrivatePopover(false);
         setShowInputEmojiPicker(false);
         setCommentPopover({ commentId: null, view: null });
         onClose();
@@ -610,6 +613,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             setShowToolbar(false);
             setShowEditToolbar(false);
             setShowPriorityPopover(false);
+            setShowPrivatePopover(false);
             setShowContextTutorialDetails(false);
             setShowInputEmojiPicker(false);
             setCommentPopover({ commentId: null, view: null });
@@ -1898,7 +1902,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         </div>
                     </div>
 
-                    <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:gap-3.5 sm:overflow-visible sm:px-0 sm:pb-0">
+                    {/* `sm:pr-8` separa los iconos de la X de cerrar, que queda pegada a la
+                        esquina del diálogo (Rodny, 24 de septiembre de 2026). */}
+                    <div className="-mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 sm:mx-0 sm:gap-3.5 sm:overflow-visible sm:px-0 sm:pb-0 sm:pr-8">
                         {!isEdition && hasStoredMeaningfulDraft() && (
                             <div
                                 data-task-draft-status-pill
@@ -1968,6 +1974,91 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                         >
                             <Bell size={14} className={cn(isFollowing && "fill-current animate-in zoom-in-50")} />
                         </button>
+
+                        {/* Compartir solo con: el interruptor vive en la fila de la tarea,
+                            junto a la estrella y la campana (Rodny, 24 de septiembre de
+                            2026). Encendido aparece la lista del equipo; apagado se olvida
+                            a quién se eligió. Quien la crea y quien la ejecuta la abren
+                            siempre, así que no salen en la lista. */}
+                        <div className="relative" data-task-private-control>
+                            <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2 py-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+                                <button
+                                    type="button"
+                                    onClick={() => formData.isPrivate && setShowPrivatePopover(prev => !prev)}
+                                    className={cn(
+                                        "whitespace-nowrap text-[10px] font-bold uppercase tracking-wider",
+                                        formData.isPrivate ? "text-primary" : "text-zinc-400"
+                                    )}
+                                    title={formData.isPrivate ? "Elegir con quién se comparte" : "Compartir este pendiente solo con algunas personas"}
+                                >
+                                    Compartir solo con
+                                </button>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-checked={!!formData.isPrivate}
+                                    aria-label="Compartir solo con algunas personas"
+                                    onClick={() => {
+                                        const encendido = !formData.isPrivate;
+                                        setFormData(prev => ({ ...prev, isPrivate: encendido, viewerIds: encendido ? (prev.viewerIds || []) : [] }));
+                                        setShowPrivatePopover(encendido);
+                                    }}
+                                    className={cn(
+                                        "relative h-4 w-7 shrink-0 rounded-full transition-colors",
+                                        formData.isPrivate ? "bg-primary" : "bg-zinc-300 dark:bg-zinc-600"
+                                    )}
+                                >
+                                    <span className={cn(
+                                        "absolute top-0.5 h-3 w-3 rounded-full bg-white shadow-sm transition-all",
+                                        formData.isPrivate ? "left-[0.875rem]" : "left-0.5"
+                                    )} />
+                                </button>
+                            </div>
+
+                            <AnimatePresence>
+                                {showPrivatePopover && formData.isPrivate && (
+                                    <motion.div
+                                        data-task-private-popover
+                                        initial={{ opacity: 0, y: -6, scale: 0.98 }}
+                                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                                        exit={{ opacity: 0, y: -6, scale: 0.98 }}
+                                        transition={{ duration: 0.14 }}
+                                        className="brain-popover-surface absolute right-0 top-[calc(100%+6px)] z-[125] w-60 p-2"
+                                    >
+                                        <ul className="max-h-56 overflow-y-auto">
+                                            {teamMembers.filter(member => member.userId && member.id !== formData.assigneeId).map(member => {
+                                                const checked = (formData.viewerIds || []).includes(member.userId);
+                                                return (
+                                                    <li key={member.id}>
+                                                        <button
+                                                            type="button"
+                                                            role="menuitemcheckbox"
+                                                            aria-checked={checked}
+                                                            onClick={() => setFormData(prev => ({
+                                                                ...prev,
+                                                                viewerIds: checked
+                                                                    ? (prev.viewerIds || []).filter(id => id !== member.userId)
+                                                                    : [...(prev.viewerIds || []), member.userId]
+                                                            }))}
+                                                            className="flex min-h-11 w-full items-center gap-2 rounded-lg px-2 text-left text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                                                        >
+                                                            <span className={cn(
+                                                                "flex h-4 w-4 shrink-0 items-center justify-center rounded border",
+                                                                checked ? "border-primary bg-primary text-primary-foreground" : "border-zinc-300 dark:border-zinc-600"
+                                                            )}>
+                                                                {checked && <Check size={11} />}
+                                                            </span>
+                                                            <span className="truncate">{member.name}</span>
+                                                        </button>
+                                                    </li>
+                                                );
+                                            })}
+                                        </ul>
+                                    </motion.div>
+                                )}
+                            </AnimatePresence>
+                        </div>
+
 
                         {isEdition && (
                             <div className="flex items-center gap-2 bg-zinc-50 dark:bg-zinc-900 px-2 py-1 rounded-full border border-zinc-200 dark:border-zinc-800 shadow-inner">
@@ -2242,6 +2333,14 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         data-task-priority-trigger
                                         type="button"
                                         onClick={() => {
+                                            // Con prioridad puesta, el propio botón la quita
+                                            // (Rodny, 24 de septiembre de 2026). Sin ella,
+                                            // abre las tres opciones.
+                                            if (formData.isPriority) {
+                                                setFormData(prev => ({ ...prev, priority: null, isPriority: false }));
+                                                setShowPriorityPopover(false);
+                                                return;
+                                            }
                                             setShowPriorityPopover(prev => !prev);
                                         }}
                                         aria-expanded={showPriorityPopover}
@@ -2268,11 +2367,17 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 animate={{ opacity: 1, y: 0, scale: 1 }}
                                                 exit={{ opacity: 0, y: -6, scale: 0.98 }}
                                                 transition={{ duration: 0.14 }}
-                                                className="brain-popover-surface absolute left-0 right-0 top-[calc(100%+6px)] z-[125] grid grid-cols-2 gap-2 p-2 sm:grid-cols-4 sm:gap-1.5 sm:p-1.5"
+                                                // Tres columnas para tres opciones: con cuatro
+                                                // quedaba un hueco a la derecha y las opciones
+                                                // se veían escoradas (Rodny, 24 de septiembre).
+                                                className="brain-popover-surface absolute left-0 right-0 top-[calc(100%+6px)] z-[125] grid grid-cols-3 gap-2 p-2 sm:gap-1.5 sm:p-1.5"
                                                 role="radiogroup"
                                                 aria-label="Nivel de prioridad"
                                             >
-                                                {taskPriorityOptions.map((option) => {
+                                                {/* «Sin prioridad» no es una opción de la lista
+                                                    (Rodny, 24 de septiembre de 2026): quitarla
+                                                    se hace volviendo a pulsar el botón. */}
+                                                {taskPriorityOptions.filter((option) => option.value !== 'NONE').map((option) => {
                                                     const selected = selectedPriorityValue === option.value;
                                                     return (
                                                         <button
@@ -2282,12 +2387,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                             role="radio"
                                                             aria-checked={selected}
                                                             onClick={() => {
-                                                                const isNone = option.value === 'NONE';
-                                                                setFormData(prev => ({
-                                                                    ...prev,
-                                                                    priority: isNone ? null : option.value,
-                                                                    isPriority: !isNone
-                                                                }));
+                                                                setFormData(prev => ({ ...prev, priority: option.value, isPriority: true }));
                                                                 setShowPriorityPopover(false);
                                                             }}
                                                             className={cn(
@@ -2306,55 +2406,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 </div>
                             </div>
 
-                            {/* Pendiente privado. Quien lo crea y quien lo ejecuta lo ven
-                                siempre, así que no aparecen en la lista; para el resto del
-                                equipo la tarjeta se reserva, no desaparece del tablero. */}
-                            <div className="col-span-2 space-y-2">
-                                <label className="flex min-h-11 cursor-pointer items-center justify-between gap-2 rounded-lg border border-zinc-200/70 px-4 py-2 dark:border-zinc-800/70">
-                                    <span className="flex items-center gap-2 text-sm">
-                                        <Lock size={14} className={formData.isPrivate ? 'text-primary' : 'text-zinc-400'} />
-                                        <span className={formData.isPrivate ? 'font-semibold text-primary' : 'text-zinc-500 dark:text-zinc-400'}>Privado</span>
-                                    </span>
-                                    <input
-                                        type="checkbox"
-                                        aria-label="Pendiente privado"
-                                        checked={!!formData.isPrivate}
-                                        onChange={(event) => setFormData(prev => ({
-                                            ...prev,
-                                            isPrivate: event.target.checked,
-                                            viewerIds: event.target.checked ? (prev.viewerIds || []) : []
-                                        }))}
-                                        className="h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary"
-                                    />
-                                </label>
-                                {formData.isPrivate && (
-                                    <div className="space-y-2 rounded-lg border border-zinc-200/70 p-3 dark:border-zinc-800/70">
-                                        <p className="text-xs text-zinc-500">
-                                            Tú y quien la ejecute la veis siempre. El resto del equipo verá «Pendiente reservado», sin título ni cliente.
-                                        </p>
-                                        <ul className="max-h-40 space-y-1 overflow-y-auto">
-                                            {teamMembers.filter(member => member.userId && member.id !== formData.assigneeId).map(member => (
-                                                <li key={member.id}>
-                                                    <label className="flex min-h-11 cursor-pointer items-center gap-2 text-sm dark:text-zinc-300">
-                                                        <input
-                                                            type="checkbox"
-                                                            checked={(formData.viewerIds || []).includes(member.userId)}
-                                                            onChange={(event) => setFormData(prev => ({
-                                                                ...prev,
-                                                                viewerIds: event.target.checked
-                                                                    ? [...(prev.viewerIds || []), member.userId]
-                                                                    : (prev.viewerIds || []).filter(id => id !== member.userId)
-                                                            }))}
-                                                            className="h-4 w-4 rounded border-zinc-300 text-primary focus:ring-primary"
-                                                        />
-                                                        {member.name}
-                                                    </label>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
-                            </div>
                         </div>
 
                         {/* Attachments Section (Interactive Insumos & Referencias) */}

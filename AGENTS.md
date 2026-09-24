@@ -31,6 +31,7 @@ Este archivo contiene las reglas y el contexto inmutable del proyecto para evita
 ## Herramientas de agentes y documentación
 - Las skills compartidas del repositorio viven únicamente en `.agents/skills`; conservar `skills-lock.json` y revisar cambios antes de actualizar. No versionar adaptadores/enlaces generados para otros asistentes. Las preferencias personales se instalan a nivel de usuario. Política y catálogo: `docs/AGENT_SKILLS.md`.
 - Tono de Brainstudio: **Estratégico, Analítico y Propositivo** (preservado del antiguo `.agent/skills/agency-tone.md`).
+- **Español de Latinoamérica en toda la plataforma (Rodny, 24 de septiembre de 2026):** todo texto que lea una persona —botones, avisos, mensajes de error, ayudas, correos— se escribe en español latinoamericano. **Nada de «vosotros»** ni de sus formas verbales (`veis`, `tenéis`, `podéis`, `os`): se usa «ustedes» o se reformula en impersonal. El equipo es colombiano y una frase peninsular se lee como escrita por alguien de fuera. Aplica también a los textos que escriba un agente al añadir una pantalla.
 - Las skills de desarrollo no son la memoria de Bria ni se cargan automáticamente en producción. Su comportamiento operativo se implementa y evalúa en los servicios de la aplicación.
 
 ## 5. Integridad de Estados (Task Lifecycle)
