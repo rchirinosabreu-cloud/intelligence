@@ -23,6 +23,8 @@ const records = Array.from({ length: 32 }, (_, i) => ({ id: `rodny-${i}`, year: 
 records.push({ ...records[0], id:'brain', description:'Suscripción Brain Studio', counterparty:'Brain Studio', type:'EXPENSE', amount:400000 });
 records.push({ ...records[0], id:'august', description:'Servicio Rodny agosto', month:8, date:'2026-08-01T12:00:00Z', amount:1000000 });
 records.push({ ...records[0], id:'ia-platform', description:'Inversión en IA de la plataforma, Claude Code, Eleven Labs.', counterparty:'Rodny', category:'OPERATIVO', type:'EXPENSE', amount:600000, date:'2026-09-18T12:00:00Z', allocations: [], documents: [] });
+// A movement with many evidences, like a loan documented with WhatsApp captures.
+records.push({ ...records[0], id:'loan-francisco', description:'Préstamo a Francisco', counterparty:'Francisco', category:'PRESTAMO', type:'EXPENSE', amount:18008150, date:'2026-09-01T12:00:00Z', allocations: [], documents: Array.from({ length: 9 }, (_, i) => ({ id: `loan-doc-${i + 1}`, recordId: 'loan-francisco', name: i === 4 ? 'Pagaré firmado.pdf' : `WhatsApp Image 2026-09-24 at 9.${30 - i}.png`, mimeType: i === 4 ? 'application/pdf' : 'image/png', size: 48000 + i * 1000, uploadedAt: '2026-09-24T14:00:00Z', voidedAt: null, voidReason: null })) });
 // Minimal but valid files (correct xref offsets, ASCII only) so the platform viewer really renders them.
 const demoPdf = () => {
     const text = 'BT /F1 18 Tf 40 130 Td (Factura de muestra - sin datos reales) Tj ET';

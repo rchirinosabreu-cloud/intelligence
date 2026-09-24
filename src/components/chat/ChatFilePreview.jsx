@@ -5,7 +5,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { Download } from "@/components/ui/icons";
+import { ChevronLeft, ChevronRight, Download } from "@/components/ui/icons";
 
 const PdfDocumentPreview = lazy(
   () => import("@/components/modules/Drive/PdfDocumentPreview"),
@@ -18,6 +18,10 @@ export default function ChatFilePreview({
   onClose,
   onDownload,
   downloading,
+  // Optional navigation between sibling files (e.g. the evidences of one movement).
+  onPrevious,
+  onNext,
+  position,
 }) {
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState("");
@@ -87,6 +91,10 @@ export default function ChatFilePreview({
         className="z-[111] flex max-h-[calc(100dvh-2rem)] max-w-4xl flex-col overflow-hidden p-4 text-foreground"
         overlayClassName="z-[110]"
         closeLabel="Cerrar vista previa"
+        onKeyDown={(event) => {
+          if (event.key === "ArrowLeft" && onPrevious) onPrevious();
+          if (event.key === "ArrowRight" && onNext) onNext();
+        }}
       >
         <DialogTitle className="pr-12 text-base leading-6 break-words">
           {file.name}
@@ -94,15 +102,44 @@ export default function ChatFilePreview({
         <DialogDescription className="sr-only">
           Vista previa del archivo adjunto.
         </DialogDescription>
-        <button
-          type="button"
-          onClick={onDownload}
-          disabled={downloading}
-          className="inline-flex min-h-11 items-center gap-2 self-start rounded-lg px-3 text-sm hover:bg-muted disabled:opacity-50"
-          aria-label={`Descargar ${file.name} desde el visor`}
-        >
-          <Download className="h-4 w-4" /> Descargar
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={onDownload}
+            disabled={downloading}
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm hover:bg-muted disabled:opacity-50"
+            aria-label={`Descargar ${file.name} desde el visor`}
+          >
+            <Download className="h-4 w-4" /> Descargar
+          </button>
+          {(onPrevious || onNext) && (
+            <div className="ml-auto flex items-center gap-1 text-sm text-muted-foreground">
+              <button
+                type="button"
+                onClick={onPrevious}
+                disabled={!onPrevious}
+                aria-label="Evidencia anterior"
+                className="grid h-11 w-11 place-items-center rounded-lg hover:bg-muted disabled:opacity-40"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              {position && (
+                <span aria-live="polite" className="min-w-[4.5rem] text-center tabular-nums">
+                  {position.index + 1} de {position.total}
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={onNext}
+                disabled={!onNext}
+                aria-label="Evidencia siguiente"
+                className="grid h-11 w-11 place-items-center rounded-lg hover:bg-muted disabled:opacity-40"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          )}
+        </div>
         <div className="min-h-40 min-w-0 overflow-auto">
           {error && (
             <p role="alert" className="text-sm text-destructive">
