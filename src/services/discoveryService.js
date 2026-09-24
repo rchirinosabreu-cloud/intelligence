@@ -1,6 +1,7 @@
 import { SearchServiceClient } from '@google-cloud/discoveryengine';
 import { JWT } from 'google-auth-library';
 import credentials from '../lib/googleCredentials.js';
+import { getGovernanceService } from './aiGovernanceService.js';
 
 // Use explicit project ID 'brainstudio-intelligence' if not found in credentials
 const PROJECT_ID = credentials?.project_id || 'brainstudio-intelligence';
@@ -118,13 +119,15 @@ const formatResults = (results, query, usedSource) => {
     return combinedContent;
 };
 
-export async function searchCloudStorage(query) {
-    if (!searchClient) {
+export async function searchCloudStorage(query, { client = searchClient, governance } = {}) {
+    if (!client) {
         return { text: "Error: Discovery Engine client no está inicializado.", inlineDataParts: [] };
     }
 
     try {
-        console.log(`[Discovery] Searching Cloud Storage (Engine: ${ENGINE_ID}) for: ${query}`);
+        const assertSearchAllowed = () => (governance || getGovernanceService()).assertEgress({ provider: 'google', model: 'discovery-engine', useCase: 'documents.search' });
+        await assertSearchAllowed();
+        console.log('[Discovery] Searching Cloud Storage');
 
         const engineServingConfig = `projects/${PROJECT_ID}/locations/${DISCOVERY_ENGINE_LOCATION}/collections/default_collection/engines/${ENGINE_ID}/servingConfigs/default_search`;
         const engineRequest = {
@@ -141,7 +144,7 @@ export async function searchCloudStorage(query) {
         let usedSource = "Engine";
 
         try {
-            const [engineResults] = await searchClient.search(engineRequest, { autoPaginate: false });
+            const [engineResults] = await client.search(engineRequest, { autoPaginate: false });
             if (engineResults && engineResults.length > 0) {
                 results = engineResults;
             }
@@ -164,13 +167,15 @@ export async function searchCloudStorage(query) {
                 };
 
                 try {
-                    const [dsResults] = await searchClient.search(dataStoreRequest, { autoPaginate: false });
+                    await assertSearchAllowed();
+                    const [dsResults] = await client.search(dataStoreRequest, { autoPaginate: false });
                     if (dsResults && dsResults.length > 0) {
                         results = dsResults;
                         usedSource = `DataStore:${dataStoreId}`;
                         break;
                     }
                 } catch (dsError) {
+                    if (dsError.code === 'AI_SCOPE_REQUIRED') throw dsError;
                     console.error(`[Discovery] Data Store fallback failed (${dataStoreId}): ${dsError.message}`);
                 }
             }

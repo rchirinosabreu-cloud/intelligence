@@ -34,6 +34,7 @@ test('OpenAI client preserves Responses API text, tools and reasoning contracts'
   const { createOpenAIClient } = await import('../src/services/openAIClient.js');
   const client = createOpenAIClient({
     apiKey: 'test-key',
+    governance: { assertEgress: async () => ({ allowed: true }) },
     fetchImpl,
     models: { chat: 'gpt-5.6-terra', fast: 'gpt-5.6-luna', embedding: 'text-embedding-3-large' }
   });
@@ -77,7 +78,7 @@ test('OpenAI embeddings keep the existing PostgreSQL vector dimension', async ()
   };
 
   const { createOpenAIClient } = await import('../src/services/openAIClient.js');
-  const client = createOpenAIClient({ apiKey: 'test-key', fetchImpl });
+  const client = createOpenAIClient({ apiKey: 'test-key', fetchImpl, governance: { assertEgress: async () => ({ allowed: true }) } });
   const embedding = await client.embed('memoria de prueba');
 
   assert.deepEqual(embedding, [0.1, 0.2]);

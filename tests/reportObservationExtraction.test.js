@@ -1,4 +1,5 @@
 import test from 'node:test';
+import './syntheticAiGovernance.fixture.js';
 import assert from 'node:assert/strict';
 import { cleanNumericValue, extractMetricsWithOpenAI, validateAndCleanSourceExtraction, visionExtractionSchema } from '../src/services/reportVisionService.js';
 import { sampleAugustExtraction } from './fixtures/reportObservationsAugust.js';

@@ -1,4 +1,5 @@
 import { AI_MODELS } from '../config/aiConfig.js';
+import { governedFetch as fetch } from '../services/aiEgress.js';
 
 const sendUpstreamError = (res, provider, response) => {
     const requestId = response.headers.get('x-request-id') || response.headers.get('fly-request-id');
@@ -56,6 +57,7 @@ export const openaiProxy = async (req, res) => {
         }
     } catch (error) {
         console.error('[OpenAI Proxy] Connection failed:', error.message);
+        if (['AI_SCOPE_REQUIRED', 'AI_AUTHORIZATION_REQUIRED'].includes(error.code)) return res.status(403).json({ error: error.code, message: error.message });
         res.status(504).json({ error: 'UPSTREAM_SERVICE_ERROR' });
     }
 };
@@ -80,6 +82,7 @@ export const firefliesProxy = async (req, res) => {
         res.json(data);
     } catch (error) {
         console.error('[Fireflies Proxy] Connection failed:', error.message);
+        if (['AI_SCOPE_REQUIRED', 'AI_AUTHORIZATION_REQUIRED'].includes(error.code)) return res.status(403).json({ error: error.code, message: error.message });
         res.status(504).json({ error: 'UPSTREAM_SERVICE_ERROR' });
     }
 };

@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, FolderOpen, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign, Target } from '@/components/ui/icons';
+import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, FolderOpen, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign, Target, ShieldCheck } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
@@ -34,6 +34,7 @@ const Sidebar = ({ isOpen, onClose, collapsed = false }) => {
     { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes', moduleKey: 'clientes' },
     { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo', moduleKey: 'equipo' },
     { id: 'operational-health', label: 'Salud Operativa', icon: Activity, path: '/salud-operativa', roles: ['ADMIN'] },
+    { id: 'ai-governance', label: 'Gobierno de IA', icon: ShieldCheck, path: '/gobierno-ia', roles: ['ADMIN'] },
   ];
 
   const filteredMenuItems = menuItems.filter(item => {

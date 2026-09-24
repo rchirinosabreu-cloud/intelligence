@@ -1,3 +1,5 @@
+import { createGovernedFetch } from './aiEgress.js';
+
 const OPENAI_API_BASE_URL = 'https://api.openai.com/v1';
 const DEFAULT_MODELS = Object.freeze({
   chat: 'gpt-5.6-terra',
@@ -157,12 +159,14 @@ export class OpenAIRequestError extends Error {
 export const createOpenAIClient = ({
   apiKey = process.env.OPENAI_API_KEY,
   fetchImpl = globalThis.fetch,
+  governance,
   models = {},
   requestTimeoutMs = 90000
 } = {}) => {
   const selectedModels = { ...DEFAULT_MODELS, ...models };
+  const send = createGovernedFetch({ fetchImpl, governance });
 
-  const request = async (path, body, signal) => {
+  const request = async (path, body, signal, governanceContext, technicalProbe = false) => {
     if (!apiKey) throw new OpenAIRequestError('OPENAI_API_KEY no está configurada.', { code: 'OPENAI_NOT_CONFIGURED' });
     if (typeof fetchImpl !== 'function') throw new OpenAIRequestError('No hay un cliente HTTP disponible para OpenAI.');
 
@@ -170,7 +174,7 @@ export const createOpenAIClient = ({
     const requestSignal = signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal;
     const timer = setTimeout(() => timeout.abort(), requestTimeoutMs);
     try {
-      const response = await fetchImpl(`${OPENAI_API_BASE_URL}${path}`, {
+      const response = await (technicalProbe ? fetchImpl : send)(`${OPENAI_API_BASE_URL}${path}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -178,7 +182,9 @@ export const createOpenAIClient = ({
           'User-Agent': 'BrainStudioIntelligence/3.0'
         },
         body: JSON.stringify(body),
-        signal: requestSignal
+        signal: requestSignal,
+        redirect: 'error',
+        ...(!technicalProbe ? { governanceContext } : {})
       });
 
       const requestId = response.headers?.get?.('x-request-id') || undefined;
@@ -213,7 +219,8 @@ export const createOpenAIClient = ({
     reasoningEffort,
     json = false,
     maxOutputTokens,
-    signal
+    signal,
+    governanceContext
   }) => {
     const body = {
       model,
@@ -225,7 +232,7 @@ export const createOpenAIClient = ({
       ...(maxOutputTokens ? { max_output_tokens: maxOutputTokens } : {})
     };
 
-    const { payload, requestId } = await request('/responses', body, signal);
+    const { payload, requestId } = await request('/responses', body, signal, governanceContext);
     return {
       id: payload.id,
       model: payload.model || model,
@@ -238,10 +245,11 @@ export const createOpenAIClient = ({
     };
   };
 
-  const generateContent = async ({ model, contents = [], config = {} }) => {
+  const generateContent = async ({ model, contents = [], config = {}, governanceContext }) => {
     const generationConfig = config.generationConfig || config;
     const result = await generate({
       input: convertGeminiContents(contents),
+      governanceContext,
       instructions: config.systemInstruction,
       model: model || selectedModels.chat,
       tools: config.tools || [],
@@ -265,13 +273,13 @@ export const createOpenAIClient = ({
     };
   };
 
-  const embed = async (text, { dimensions = 3072, model = selectedModels.embedding } = {}) => {
+  const embed = async (text, { dimensions = 3072, model = selectedModels.embedding, governanceContext } = {}) => {
     const { payload } = await request('/embeddings', {
       model,
       input: text,
       dimensions,
       encoding_format: 'float'
-    });
+    }, undefined, governanceContext);
     return payload?.data?.[0]?.embedding || null;
   };
 
@@ -300,17 +308,18 @@ export const createOpenAIClient = ({
     embed,
     async healthCheck() {
       const startedAt = Date.now();
-      const result = await generate({
-        prompt: 'Responde únicamente: OK',
+      // The only ungoverned probe has fixed content, with no caller-controlled input.
+      const { payload, requestId } = await request('/responses', {
+        input: 'Responde únicamente: OK',
         instructions: 'Esta es una comprobación técnica de disponibilidad.',
         model: selectedModels.fast,
-        maxOutputTokens: 16
-      });
+        max_output_tokens: 16
+      }, undefined, undefined, true);
       return {
-        ok: Boolean(result.id),
+        ok: Boolean(payload.id),
         provider: 'openai',
-        model: result.model,
-        requestId: result.requestId,
+        model: payload.model || selectedModels.fast,
+        requestId,
         latencyMs: Date.now() - startedAt
       };
     },

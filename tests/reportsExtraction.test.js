@@ -1,4 +1,5 @@
 import test from 'node:test';
+import './syntheticAiGovernance.fixture.js';
 import assert from 'node:assert';
 import {
     extractMetricsWithGemini,

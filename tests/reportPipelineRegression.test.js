@@ -1,4 +1,5 @@
 import test from 'node:test';
+import './syntheticAiGovernance.fixture.js';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { parseJsonResponse } from '../src/services/aiService.js';

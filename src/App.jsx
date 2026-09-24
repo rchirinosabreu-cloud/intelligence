@@ -29,6 +29,7 @@ const PrivacyPolicy = lazy(() => import('./components/public/PrivacyPolicy'));
 const TermsOfService = lazy(() => import('./components/public/TermsOfService'));
 const AiGovernancePolicy = lazy(() => import('./components/public/AiGovernancePolicy'));
 const HelpCenter = lazy(() => import('./components/public/HelpCenter'));
+const GovernanceCenter = lazy(() => import('./components/modules/Governance/GovernanceCenter'));
 const SharedContentPlan = lazy(() => import('./components/public/SharedContentPlan'));
 const QuotationForm = lazy(() => import('./components/modules/Quotations/QuotationForm'));
 const QuotationsLayout = lazy(() => import('./components/modules/Quotations/QuotationsLayout'));
@@ -154,6 +155,7 @@ function AppContent() {
                     <Route path="/" element={<Dashboard />} />
                     <Route path="/inicio" element={<Navigate to="/" replace />} />
                     <Route path="/dashboard" element={<Navigate to="/" replace />} />
+                    <Route path="/gobierno-ia" element={<AdminGuard><GovernanceCenter /></AdminGuard>} />
                     <Route
                       path="/salud-operativa"
                       element={
