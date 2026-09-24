@@ -20,6 +20,7 @@ import { QUARTER_HOURS } from '@/lib/brainDatePicker';
 import { FOCUS_EXTENSION_EVENT_TYPE, FOCUS_OVERDUE_EVENT_TYPE, focusDeadlineIso, focusTimeFromIso } from '@/lib/taskFocus';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { useAuth } from '@/context/AuthContext';
+import { canChangeTaskPrivacy, canCreatePrivateTask } from '@/lib/taskPrivacy';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 import LinkDropdown from '@/components/ui/LinkDropdown';
 import { linkify, cleanSystemMessage } from '@/utils/chatUtils.jsx';
@@ -853,6 +854,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     };
 
     const canSetFocusDeadline = ['ADMIN', 'PROJECT_MANAGER'].includes(currentUser?.role);
+    // Crear un pendiente privado es cosa de quien dirige; cambiar la privacidad de uno
+    // que ya existe, solo de quien lo creó. Si el control no se puede usar, no se pinta:
+    // el servidor lo rechazaría igual y enseñarlo sería prometer algo que no se cumple.
+    const canShareTask = isEdition
+        ? canChangeTaskPrivacy({ creatorId: formData.creatorId ?? formData.creator?.id }, { userId: currentUser?.id, role: currentUser?.role })
+        : canCreatePrivateTask(currentUser);
 
     const handleSave = async (e) => {
         if (e) e.preventDefault();
@@ -1980,7 +1987,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             2026). Encendido aparece la lista del equipo; apagado se olvida
                             a quién se eligió. Quien la crea y quien la ejecuta la abren
                             siempre, así que no salen en la lista. */}
-                        <div className="relative" data-task-private-control>
+                        {canShareTask && <div className="relative" data-task-private-control>
                             <div className="flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-2 py-1 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
                                 <button
                                     type="button"
@@ -2057,7 +2064,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     </motion.div>
                                 )}
                             </AnimatePresence>
-                        </div>
+                        </div>}
 
 
                         {isEdition && (

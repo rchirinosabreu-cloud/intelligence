@@ -2,6 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
     PRIVATE_TASK_HINT,
+    canChangeTaskPrivacy,
+    canCreatePrivateTask,
     canOpenTask,
     nextPrivateAttempt,
     redactTaskBody,
@@ -105,6 +107,44 @@ test('el filtro de una lista solo recorta lo que hace falta', () => {
 
 test('una lista vacía no revienta', () => {
     assert.deepEqual([].map(taskPrivacyFilter('u-otro')), []);
+});
+
+// Rodny, 24 de septiembre de 2026: reservar trabajo del resto del equipo es una
+// decisión de quien dirige, no de cualquiera.
+test('solo administradores y project managers crean un pendiente privado', () => {
+    assert.equal(canCreatePrivateTask({ role: 'ADMIN' }), true);
+    assert.equal(canCreatePrivateTask({ role: 'PROJECT_MANAGER' }), true);
+    assert.equal(canCreatePrivateTask({ role: 'admin' }), true, 'el rol no distingue mayúsculas');
+
+    assert.equal(canCreatePrivateTask({ role: 'EDITOR' }), false);
+    assert.equal(canCreatePrivateTask({ role: 'MEMBER' }), false);
+    assert.equal(canCreatePrivateTask({}), false);
+    assert.equal(canCreatePrivateTask(null), false);
+});
+
+// Ni otro admin, ni el responsable: abrir al equipo algo que otro reservó no le toca a
+// nadie más.
+test('solo quien lo creó puede cambiar su privacidad', () => {
+    const task = { creatorId: 'u-jefe', assignee: { userId: 'u-maria' } };
+
+    assert.equal(canChangeTaskPrivacy(task, { userId: 'u-jefe', role: 'ADMIN' }), true);
+    assert.equal(canChangeTaskPrivacy(task, { userId: 'u-jefe', role: 'PROJECT_MANAGER' }), true);
+
+    assert.equal(canChangeTaskPrivacy(task, { userId: 'u-otro-admin', role: 'ADMIN' }), false, 'otro admin no');
+    assert.equal(canChangeTaskPrivacy(task, { userId: 'u-maria', role: 'EDITOR' }), false, 'el responsable no');
+    // Y si quien la creó deja de dirigir, tampoco.
+    assert.equal(canChangeTaskPrivacy(task, { userId: 'u-jefe', role: 'EDITOR' }), false);
+    assert.equal(canChangeTaskPrivacy(task, null), false);
+    assert.equal(canChangeTaskPrivacy(null, { userId: 'u-jefe', role: 'ADMIN' }), false);
+});
+
+// Poder cambiar la privacidad y poder abrirla son cosas distintas: quien la creó puede
+// las dos, pero el responsable solo abre.
+test('cambiar la privacidad no es lo mismo que poder abrirla', () => {
+    const task = { isPrivate: true, creatorId: 'u-jefe', assignee: { userId: 'u-maria' }, viewers: [] };
+
+    assert.equal(canOpenTask(task, 'u-maria'), true);
+    assert.equal(canChangeTaskPrivacy(task, { userId: 'u-maria', role: 'ADMIN' }), false);
 });
 
 // Al primer toque la tarjeta vibra; al segundo sale el aviso. **Siempre al segundo**

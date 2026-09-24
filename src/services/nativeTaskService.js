@@ -950,6 +950,21 @@ export const updateTask = async (id, data, updaterId = null) => {
             delete updateData.completedAt;
         }
 
+        // Con quién se comparte un pendiente privado. Va aparte de `updateData` porque
+        // es una tabla propia, y se reemplaza entera: la lista que llega es la lista que
+        // queda. Al dejar de ser privado no queda nadie apuntado.
+        if ('viewerIds' in updateData || 'isPrivate' in updateData) {
+            const stillPrivate = 'isPrivate' in updateData ? Boolean(updateData.isPrivate) : true;
+            const chosen = stillPrivate && Array.isArray(updateData.viewerIds)
+                ? [...new Set(updateData.viewerIds.filter(Boolean))]
+                : [];
+            await tx.taskViewer.deleteMany({ where: { taskId: id } });
+            if (chosen.length) {
+                await tx.taskViewer.createMany({ data: chosen.map((userId) => ({ taskId: id, userId })), skipDuplicates: true });
+            }
+        }
+        delete updateData.viewerIds;
+
         console.log(`[nativeTaskService] FINAL updateData being sent to Prisma for ${id}:`, JSON.stringify(updateData, null, 2));
 
         const updatedTask = await tx.task.update({

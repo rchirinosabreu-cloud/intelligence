@@ -87,6 +87,29 @@ test('si la base de datos falla no se deja pasar', async () => {
     assert.equal(statusCode, 500);
 });
 
+// Rodny, 24 de septiembre de 2026: crear un privado es de admin y project manager;
+// cambiar su privacidad, solo de quien lo creó. Las dos puertas están en el servidor,
+// que es lo que manda: la pantalla esconde el control, pero eso es cortesía.
+test('el servidor rechaza crear un privado a quien no dirige, y cambiarlo a quien no lo creó', () => {
+    const controller = readFileSync(new URL('../src/controllers/taskController.js', import.meta.url), 'utf8');
+
+    assert.match(
+        controller,
+        /taskData\.isPrivate && !canCreatePrivateTask\(req\.user\)/,
+        'crear un pendiente privado tiene que comprobar el rol'
+    );
+    assert.match(
+        controller,
+        /\('isPrivate' in req\.body \|\| 'viewerIds' in req\.body\) && !canChangeTaskPrivacy\(task, req\.user\)/,
+        'cambiar la privacidad tiene que comprobar que quien pide es quien la creó'
+    );
+
+    // Y los campos tienen que estar permitidos, o el cambio se caería en silencio.
+    const security = readFileSync(new URL('../src/config/security.js', import.meta.url), 'utf8');
+    assert.match(security, /'isPrivate',/);
+    assert.match(security, /'viewerIds',/);
+});
+
 // Contrato: toda ruta que enseñe o cambie lo que hay dentro de una tarea pasa por el
 // guardián. Si mañana se añade otra y se olvida, esta prueba lo dice.
 test('todas las rutas del contenido de una tarea llevan el guardián', () => {
