@@ -23,6 +23,8 @@ const records = Array.from({ length: 32 }, (_, i) => ({ id: `rodny-${i}`, year: 
 records.push({ ...records[0], id:'brain', description:'Suscripción Brain Studio', counterparty:'Brain Studio', type:'EXPENSE', amount:400000 });
 records.push({ ...records[0], id:'august', description:'Servicio Rodny agosto', month:8, date:'2026-08-01T12:00:00Z', amount:1000000 });
 records.push({ ...records[0], id:'ia-platform', description:'Inversión en IA de la plataforma, Claude Code, Eleven Labs.', counterparty:'Rodny', category:'OPERATIVO', type:'EXPENSE', amount:600000, date:'2026-09-18T12:00:00Z', allocations: [], documents: [] });
+// A movement with many evidences, like a loan documented with WhatsApp captures.
+records.push({ ...records[0], id:'loan-francisco', description:'Préstamo a Francisco', counterparty:'Francisco', category:'PRESTAMO', type:'EXPENSE', amount:18008150, date:'2026-09-01T12:00:00Z', allocations: [], documents: Array.from({ length: 9 }, (_, i) => ({ id: `loan-doc-${i + 1}`, recordId: 'loan-francisco', name: i === 4 ? 'Pagaré firmado.pdf' : `WhatsApp Image 2026-09-24 at 9.${30 - i}.png`, mimeType: i === 4 ? 'application/pdf' : 'image/png', size: 48000 + i * 1000, uploadedAt: '2026-09-24T14:00:00Z', voidedAt: null, voidReason: null })) });
 // Minimal but valid files (correct xref offsets, ASCII only) so the platform viewer really renders them.
 const demoPdf = () => {
     const text = 'BT /F1 18 Tf 40 130 Td (Factura de muestra - sin datos reales) Tj ET';
@@ -39,7 +41,18 @@ const demoPdf = () => {
     body += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
     return new Blob([body], { type: 'application/pdf' });
 };
-const demoPng = () => new Blob([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=='), c => c.charCodeAt(0))], { type: 'image/png' });
+// Images of very different shapes, so the viewer can be checked to keep its own size and contain them.
+const demoPng = (seed = 0) => new Promise((resolve) => {
+    const canvas = document.createElement('canvas');
+    [canvas.width, canvas.height] = seed % 3 === 0 ? [1600, 500] : seed % 3 === 1 ? [400, 1400] : [120, 90];
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = ['#31AA8A', '#009BBF', '#FF6A68'][seed % 3];
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#ffffff';
+    ctx.font = `${Math.max(16, Math.round(canvas.width / 16))}px sans-serif`;
+    ctx.fillText(`${canvas.width}×${canvas.height} · muestra`, 20, Math.round(canvas.height / 2));
+    canvas.toBlob(resolve, 'image/png');
+});
 const categoryExample = new URLSearchParams(location.search).get('categories') === '1';
 if (categoryExample) records.splice(0, records.length, { ...records[0], id:'donation-demo', description:'Donación de muestra', counterparty:'', category:'OPERATIVO', origin:'IMPORT', accountId:null, account:null, type:'EXPENSE', month:8, date:'2026-08-01T05:00:00Z', amount:150000 });
 axios.defaults.adapter = async config => {
@@ -69,8 +82,9 @@ axios.defaults.adapter = async config => {
         data = { document: doc };
     }
     else if (config.method === 'get' && /\/documents\/[^/]+\/file$/.test(path)) {
-        const doc = records.flatMap(r => r.documents || []).find(d => path.endsWith(`/documents/${d.id}/file`));
-        data = doc?.mimeType?.startsWith('image/') ? demoPng() : demoPdf();
+        const docs = records.flatMap(r => r.documents || []);
+        const doc = docs.find(d => path.endsWith(`/documents/${d.id}/file`));
+        data = doc?.mimeType?.startsWith('image/') ? await demoPng(docs.indexOf(doc)) : demoPdf();
     }
     else if (config.method === 'post' && path.endsWith('/records')) {
         const body = JSON.parse(config.data);

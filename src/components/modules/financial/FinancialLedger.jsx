@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
+import FinancialDocumentGallery, { DocumentCard, ROW_DOCUMENT_LIMIT } from '@/components/modules/financial/FinancialDocumentGallery';
 import {
     Dialog,
     DialogContent,
@@ -58,7 +59,6 @@ const lockReason = (record) => {
 
 // Breakdown lines are compared in cents, like the backend, so 0.1 + 0.2 still matches 0.3.
 const toCents = (value) => Math.round((Number(value) || 0) * 100);
-const MAX_ALLOCATION_LINES = 20;
 const emptyAllocationLine = (category = 'OPERATIVO') => ({ amount: '', category, description: '' });
 const allocationLinesFrom = (record) => (record?.allocations || []).map((line) => ({ amount: String(line.amount), category: line.category, description: line.description || '' }));
 const allocationPayload = (lines) => lines.map((line) => ({ amount: Number(line.amount), category: line.category, description: line.description.trim() }));
@@ -149,6 +149,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
     const [documentVoidReason, setDocumentVoidReason] = useState('');
     const [isVoidingDocument, setIsVoidingDocument] = useState(false);
     const [documentPreview, setDocumentPreview] = useState(null);
+    const [documentGallery, setDocumentGallery] = useState(null);
     const documentInputRef = useRef(null);
     const [isAccountEditorOpen, setIsAccountEditorOpen] = useState(false);
     const [accountForm, setAccountForm] = useState(() => emptyAccountForm(selectedYear));
@@ -299,7 +300,8 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
         });
     };
 
-    const openDocument = async (recordId, item, download = false) => {
+    // `siblings` lets the viewer move to the previous/next evidence of the same movement.
+    const openDocument = async (recordId, item, download = false, siblings = null) => {
         try {
             const blob = await fetchDocumentBlob(recordId, item);
             const objectUrl = URL.createObjectURL(blob);
@@ -311,7 +313,9 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
             // PDFs go to the viewer as bytes: the page's Content-Security-Policy does not let it fetch a blob: URL.
             const data = item.mimeType === 'application/pdf' ? await blob.arrayBuffer() : undefined;
             closeDocumentPreview();
-            setDocumentPreview({ file: { id: item.id, name: item.name, mimeType: item.mimeType, size: Number(item.size) }, url: objectUrl, data });
+            const list = siblings || [item];
+            const index = Math.max(0, list.findIndex((candidate) => candidate.id === item.id));
+            setDocumentPreview({ file: { id: item.id, name: item.name, mimeType: item.mimeType, size: Number(item.size) }, url: objectUrl, data, recordId, list, index });
         } catch (requestError) {
             console.error('Error opening financial document:', requestError.response?.data || requestError);
             toast.error(requestError.response?.data?.message || 'No fue posible abrir el documento.');
@@ -499,7 +503,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
 
     const setAllocationLine = (index, field, value) => setAllocationLines((current) => current.map((line, position) => (position === index ? { ...line, [field]: value } : line)));
     const removeAllocationLine = (index) => setAllocationLines((current) => current.filter((_, position) => position !== index));
-    const addAllocationLine = () => setAllocationLines((current) => (current.length >= MAX_ALLOCATION_LINES ? current : [...current, emptyAllocationLine(form.category)]));
+    const addAllocationLine = () => setAllocationLines((current) => [...current, emptyAllocationLine(form.category)]);
 
     const allocationTotalCents = allocationLines.reduce((sum, line) => sum + toCents(line.amount), 0);
     const allocationTargetCents = toCents(form.amount);
@@ -672,9 +676,12 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                                             {activeDocuments(record).length > 0 && (
                                                 <div aria-label="Documentos de respaldo" className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
                                                     <Paperclip className="h-3.5 w-3.5 text-zinc-400" />
-                                                    {activeDocuments(record).map((item) => (
-                                                        <button key={item.id} type="button" title={`Abrir ${item.name}`} onClick={() => openDocument(record.id, item)} className="max-w-[220px] truncate text-brand-cyan-deep hover:underline dark:text-brand-cyan">{item.name}</button>
+                                                    {activeDocuments(record).slice(0, ROW_DOCUMENT_LIMIT).map((item) => (
+                                                        <button key={item.id} type="button" title={`Abrir ${item.name}`} onClick={() => openDocument(record.id, item, false, activeDocuments(record))} className="max-w-[220px] truncate text-brand-cyan-deep hover:underline dark:text-brand-cyan">{item.name}</button>
                                                     ))}
+                                                    {activeDocuments(record).length > ROW_DOCUMENT_LIMIT && (
+                                                        <button type="button" onClick={() => setDocumentGallery(record)} aria-label={`Ver las ${activeDocuments(record).length} evidencias`} className="font-medium text-zinc-500 hover:text-brand-cyan-deep dark:text-zinc-400 dark:hover:text-brand-cyan">{activeDocuments(record).length - ROW_DOCUMENT_LIMIT} más</button>
+                                                    )}
                                                 </div>
                                             )}
                                         </td>
@@ -750,27 +757,22 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                                 <input ref={documentInputRef} type="file" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png" multiple className="sr-only" aria-label="Seleccionar documentos de respaldo" onChange={(event) => { handleDocumentsSelected([...event.target.files]); event.target.value = ''; }} />
                                 <button type="button" onClick={() => documentInputRef.current?.click()} disabled={isUploadingDocument} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">{isUploadingDocument ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}{isUploadingDocument ? 'Subiendo…' : 'Añadir documento'}</button>
                             </div>
-                            {(formDocuments.length > 0 || pendingFiles.length > 0) && (
+                            {formDocuments.length > 0 && (
+                                <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
+                                    {formDocuments.map((item) => (
+                                        <DocumentCard
+                                            key={item.id}
+                                            item={item}
+                                            fetchBlob={(target) => fetchDocumentBlob(editingRecord.id, target)}
+                                            onOpen={() => openDocument(editingRecord.id, item, false, formDocuments.filter((candidate) => !candidate.voidedAt))}
+                                            onDownload={() => openDocument(editingRecord.id, item, true)}
+                                            onVoid={() => { setDocumentToVoid(item); setDocumentVoidReason(''); }}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                            {pendingFiles.length > 0 && (
                                 <ul className="mt-2 divide-y divide-zinc-100 text-sm dark:divide-white/5">
-                                    {formDocuments.map((item) => {
-                                        const Icon = documentIcon(item.mimeType);
-                                        return (
-                                            <li key={item.id} className="flex items-center gap-2 py-1.5">
-                                                <Icon className="h-4 w-4 shrink-0 text-zinc-400" />
-                                                <span className={cn('min-w-0 flex-1 truncate', item.voidedAt ? 'text-zinc-400 line-through' : 'text-zinc-800 dark:text-zinc-100')} title={item.voidedAt ? `Anulado: ${item.voidReason}` : item.name}>{item.name}</span>
-                                                <span className="shrink-0 text-xs text-zinc-400">{formatBytes(Number(item.size))}</span>
-                                                {item.voidedAt
-                                                    ? <span className="shrink-0 text-xs text-zinc-400">Anulado</span>
-                                                    : (
-                                                        <span className="flex shrink-0 gap-1">
-                                                            <button type="button" title="Ver documento" aria-label={`Ver ${item.name}`} onClick={() => openDocument(editingRecord.id, item)} className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/10"><Eye className="h-4 w-4" /></button>
-                                                            <button type="button" title="Descargar documento" aria-label={`Descargar ${item.name}`} onClick={() => openDocument(editingRecord.id, item, true)} className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/10"><Download className="h-4 w-4" /></button>
-                                                            <button type="button" title="Anular documento" aria-label={`Anular ${item.name}`} onClick={() => { setDocumentToVoid(item); setDocumentVoidReason(''); }} className="grid h-8 w-8 place-items-center rounded-md text-destructive hover:bg-destructive/10"><StopCircle className="h-4 w-4" /></button>
-                                                        </span>
-                                                    )}
-                                            </li>
-                                        );
-                                    })}
                                     {pendingFiles.map((file, index) => (
                                         <li key={`${file.name}-${file.size}-${index}`} className="flex items-center gap-2 py-1.5">
                                             <Paperclip className="h-4 w-4 shrink-0 text-zinc-400" />
@@ -861,7 +863,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                                 ))}
                             </div>
                             <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-                                <button type="button" onClick={addAllocationLine} disabled={allocationLines.length >= MAX_ALLOCATION_LINES} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5"><Plus className="h-4 w-4" />Añadir ítem</button>
+                                <button type="button" onClick={addAllocationLine} className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 disabled:opacity-40 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5"><Plus className="h-4 w-4" />Añadir ítem</button>
                                 <p aria-live="polite" className={cn('font-medium', allocationRemainingCents === 0 && allocationLines.length >= 2 ? 'text-emerald-600' : 'text-amber-600 dark:text-amber-400')}>
                                     {allocationRemainingCents === 0
                                         ? `Repartido ${formatCurrency(allocationTotalCents / 100)} de ${formatCurrency(allocationTargetCents / 100)}`
@@ -884,6 +886,17 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                 </DialogContent>
             </Dialog>
 
+            {documentGallery && (
+                <FinancialDocumentGallery
+                    record={documentGallery}
+                    documents={activeDocuments(documentGallery)}
+                    fetchBlob={(item) => fetchDocumentBlob(documentGallery.id, item)}
+                    onOpen={(index) => openDocument(documentGallery.id, activeDocuments(documentGallery)[index], false, activeDocuments(documentGallery))}
+                    onDownload={(item) => openDocument(documentGallery.id, item, true)}
+                    onClose={() => setDocumentGallery(null)}
+                />
+            )}
+
             {documentPreview && (
                 <ChatFilePreview
                     file={documentPreview.file}
@@ -891,6 +904,9 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                     data={documentPreview.data}
                     onClose={closeDocumentPreview}
                     onDownload={() => downloadBlobUrl(documentPreview.url, documentPreview.file.name)}
+                    position={documentPreview.list.length > 1 ? { index: documentPreview.index, total: documentPreview.list.length } : undefined}
+                    onPrevious={documentPreview.index > 0 ? () => openDocument(documentPreview.recordId, documentPreview.list[documentPreview.index - 1], false, documentPreview.list) : undefined}
+                    onNext={documentPreview.index < documentPreview.list.length - 1 ? () => openDocument(documentPreview.recordId, documentPreview.list[documentPreview.index + 1], false, documentPreview.list) : undefined}
                 />
             )}
 
