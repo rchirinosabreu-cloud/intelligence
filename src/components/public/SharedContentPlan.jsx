@@ -29,8 +29,10 @@ const FinalAssetPreview = ({ assets = [] }) => {
   const asset = assets[Math.min(activeIndex, assets.length - 1)];
 
   const src = getPublicAssetUrl(asset);
-  const isImage = (asset.mimeType || '').startsWith('image/');
-  const isVideo = (asset.mimeType || '').startsWith('video/');
+  // Un video entregado como enlace de Drive lo sirve Google: llega con su marco, no con una URL nuestra.
+  const isDrive = Boolean(asset.embedUrl);
+  const isImage = !isDrive && (asset.mimeType || '').startsWith('image/');
+  const isVideo = !isDrive && (asset.mimeType || '').startsWith('video/');
 
   return (
     <div className="space-y-3">
@@ -40,7 +42,17 @@ const FinalAssetPreview = ({ assets = [] }) => {
       </div>
       <div className="overflow-hidden rounded-[2rem] border border-zinc-100 dark:border-white/10 bg-zinc-50 dark:bg-white/5">
         <div className="relative bg-zinc-100 dark:bg-zinc-950">
-          {isImage ? (
+          {isDrive ? (
+            <div className="relative w-full" style={{ aspectRatio: '16 / 9' }}>
+              <iframe
+                src={asset.embedUrl}
+                title={asset.name || 'Pieza final en Drive'}
+                className="absolute inset-0 h-full w-full border-0 bg-black"
+                allow="autoplay; encrypted-media; fullscreen"
+                allowFullScreen
+              />
+            </div>
+          ) : isImage ? (
             <img
               src={src}
               alt={asset.name || 'Pieza final'}
@@ -63,9 +75,19 @@ const FinalAssetPreview = ({ assets = [] }) => {
             </>
           )}
         </div>
-        {asset.name && (
-          <div className="px-5 py-3 text-xs font-bold text-zinc-600 dark:text-zinc-300 truncate">
-            {asset.name}
+        {(asset.name || asset.openUrl) && (
+          <div className="flex items-center justify-between gap-3 px-5 py-3">
+            <span className="min-w-0 truncate text-xs font-bold text-zinc-600 dark:text-zinc-300">{asset.name}</span>
+            {asset.openUrl && (
+              <a
+                href={asset.openUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex shrink-0 items-center gap-1.5 text-xs font-bold text-[#009EB9] hover:underline"
+              >
+                Abrir en Drive <ExternalLink className="h-3.5 w-3.5" />
+              </a>
+            )}
           </div>
         )}
       </div>

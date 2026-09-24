@@ -14,6 +14,7 @@ import { initBriaMemoryScheduler } from './src/services/briaMemoryScheduler.js';
 import { initBriaObserverScheduler } from './src/services/briaObserverScheduler.js';
 import { initBriaContentPlanReviewScheduler } from './src/services/briaContentPlanReviewScheduler.js';
 import { getAIHealth } from './src/services/aiService.js';
+import { configureS3Cors } from './src/services/s3Service.js';
 import { loggerMiddleware } from './src/middlewares/logger.js';
 import { operationalAuditMiddleware } from './src/middlewares/operationalAuditMiddleware.js';
 import apiRouter from './src/routes/index.js';
@@ -206,6 +207,11 @@ async function bootstrap() {
     } catch (cronError) {
         console.error("[Service: Cron] Fallo al iniciar tareas programadas:", cronError.message);
     }
+
+    // 4b. El bucket tiene que admitir PUT desde el navegador para la subida directa de piezas finales.
+    // Va aquí y no en la cadena de `npm start`: un almacenamiento caído no puede impedir que el
+    // servidor levante. `configureS3Cors` registra su propio fallo y no lanza.
+    configureS3Cors();
 
     // 5. Start Express Server
     const PORT = process.env.PORT || 3000;

@@ -72,7 +72,8 @@ test('content pieces support persistent multi-file carousel assets internally', 
   assert.match(contentRoutes, /deleteContentItemFinalAsset/);
   assert.match(contentRoutes, /router\.delete\('\/items\/:id\/final-asset'/);
   assert.match(contentRoutes, /items\/:id\/final-asset/);
-  assert.match(contentRoutes, /carouselUpload\.array\('files', 10\)/);
+  // Desde el 24 de septiembre de 2026 el número vive en `src/lib/uploadLimits.js`, no suelto en la ruta.
+  assert.match(contentRoutes, /carouselUpload\.array\('files', FINAL_ASSET_MAX_FILES\)/);
   assert.match(contentRoutes, /items\/:id\/final-assets\/:assetId/);
   assert.match(publicRoutes, /public\/parrilla\/:token\/items\/:id\/final-asset/);
   assert.match(publicRoutes, /public\/parrilla\/:token\/items\/:id\/final-assets\/:assetId/);

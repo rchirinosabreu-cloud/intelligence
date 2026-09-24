@@ -18,25 +18,58 @@ import {
   getContentItemFinalAsset,
   getContentItemFinalAssetById,
   deleteContentItemFinalAsset,
-  deleteContentItemFinalAssetById
+  deleteContentItemFinalAssetById,
+  addContentItemDriveAsset,
+  createFinalAssetUploadTickets,
+  confirmContentItemFinalAssets
 } from '../../services/contentService.js';
 import { getFromS3Stream } from '../../services/s3Service.js';
+import { isDriveAsset } from '../../lib/finalAssetShape.js';
 import {
   getContentPlanReview,
   updateContentPlanReviewFinding
 } from '../../services/briaContentPlanReviewService.js';
 import { runContentPlanReviewJob } from '../../services/briaContentPlanReviewScheduler.js';
 import { createClientCriteriaRouter } from './clientCriteria.js';
+import {
+  FINAL_ASSET_MAX_BYTES,
+  FINAL_ASSET_MAX_FILES,
+  FINAL_ASSET_MAX_TOTAL_BYTES,
+  fileTooLargeMessage,
+  tooManyFilesMessage,
+  tooMuchAtOnceMessage
+} from '../../lib/uploadLimits.js';
 
 const router = express.Router();
 router.use('/plans/:planId/criteria', createClientCriteriaRouter());
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024, files: 1 }
+  limits: { fileSize: FINAL_ASSET_MAX_BYTES, files: 1 }
 });
 const carouselUpload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024, files: 10 }
+  limits: { fileSize: FINAL_ASSET_MAX_BYTES, files: FINAL_ASSET_MAX_FILES }
+});
+
+/**
+ * Un archivo demasiado grande no puede contestar con un código: el aviso dice el peso y el límite
+ * (Rodny, 24 de septiembre de 2026). Además comprueba el peso total, que multer no sabe sumar.
+ */
+const receiveFinalAssets = (middleware) => (req, res, next) => middleware(req, res, (error) => {
+  if (error?.code === 'LIMIT_FILE_SIZE') {
+    return res.status(413).json({ error: fileTooLargeMessage(null) });
+  }
+  if (error?.code === 'LIMIT_FILE_COUNT' || error?.code === 'LIMIT_UNEXPECTED_FILE') {
+    return res.status(413).json({ error: tooManyFilesMessage() });
+  }
+  if (error) return next(error);
+
+  const files = req.files || (req.file ? [req.file] : []);
+  const total = files.reduce((sum, file) => sum + Number(file?.size || file?.buffer?.length || 0), 0);
+  if (total > FINAL_ASSET_MAX_TOTAL_BYTES) {
+    return res.status(413).json({ error: tooMuchAtOnceMessage(total) });
+  }
+  return next();
 });
 
 /**
@@ -234,7 +267,7 @@ router.patch('/items/:id', async (req, res) => {
   }
 });
 
-router.post('/items/:id/final-asset', upload.single('file'), async (req, res) => {
+router.post('/items/:id/final-asset', receiveFinalAssets(upload.single('file')), async (req, res) => {
   try {
     const item = await uploadContentItemFinalAsset(req.params.id, req.file);
     return res.json(item);
@@ -270,7 +303,7 @@ router.delete('/items/:id/final-asset', async (req, res) => {
   }
 });
 
-router.post('/items/:id/final-assets', carouselUpload.array('files', 10), async (req, res) => {
+router.post('/items/:id/final-assets', receiveFinalAssets(carouselUpload.array('files', FINAL_ASSET_MAX_FILES)), async (req, res) => {
   try {
     const assets = await uploadContentItemFinalAssets(req.params.id, req.files);
     return res.status(201).json(assets);
@@ -280,10 +313,49 @@ router.post('/items/:id/final-assets', carouselUpload.array('files', 10), async 
   }
 });
 
+/**
+ * Un video pesado se entrega como enlace de Drive en vez de subirlo (Rodny, 24 de septiembre de 2026).
+ */
+router.post('/items/:id/final-assets/drive', async (req, res) => {
+  try {
+    const assets = await addContentItemDriveAsset(req.params.id, req.body || {});
+    return res.status(201).json(assets);
+  } catch (error) {
+    console.error('[API] Error adding a Drive final asset:', error.response?.data || error.message);
+    return res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * Subida directa: el navegador pide permisos firmados, sube al almacenamiento y después confirma.
+ * Son dos pasos a propósito — hasta que no se confirma, en la parrilla no aparece nada a medias.
+ */
+router.post('/items/:id/final-assets/direct-upload', async (req, res) => {
+  try {
+    const tickets = await createFinalAssetUploadTickets(req.params.id, req.body?.files);
+    return res.json(tickets);
+  } catch (error) {
+    console.error('[API] Error signing a direct upload:', error.response?.data || error.message);
+    return res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/items/:id/final-assets/confirm', async (req, res) => {
+  try {
+    const assets = await confirmContentItemFinalAssets(req.params.id, req.body?.uploads);
+    return res.status(201).json(assets);
+  } catch (error) {
+    console.error('[API] Error confirming a direct upload:', error.response?.data || error.message);
+    return res.status(400).json({ error: error.message });
+  }
+});
+
 router.get('/items/:id/final-assets/:assetId', async (req, res) => {
   try {
     const asset = await getContentItemFinalAssetById(req.params.id, req.params.assetId);
     if (!asset) return res.status(404).json({ error: 'Final asset not found' });
+    // Un enlace de Drive no tiene bytes nuestros que servir: se abre en Drive, no por aquí.
+    if (isDriveAsset(asset)) return res.status(409).json({ error: 'Esa pieza final es un enlace de Drive.' });
     const object = await getFromS3Stream(asset.storageKey || asset.finalAssetKey);
     res.setHeader('Content-Type', asset.mimeType || asset.finalAssetMimeType || object.ContentType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(asset.name || asset.finalAssetName || 'pieza-final')}"`);

@@ -1,5 +1,6 @@
 import { getContentPlanByToken, updateContentItem, addClientComment, getContentItemFinalAsset, getContentItemFinalAssetById } from '../services/contentService.js';
 import { getFromS3Stream } from '../services/s3Service.js';
+import { driveAssetUrls, isDriveAsset } from '../lib/finalAssetShape.js';
 
 const getAuthorizedPublicItem = async (token, itemId) => {
   const plan = await getContentPlanByToken(token);
@@ -41,15 +42,30 @@ export const getPublicPlan = async (req, res) => {
           version: item.finalAssetKey,
           url: `/api/public/parrilla/${encodeURIComponent(req.params.token)}/items/${item.id}/final-asset`
         } : null,
-        finalAssets: (item.finalAssets || []).map(asset => ({
-          id: asset.id,
-          name: asset.name,
-          mimeType: asset.mimeType,
-          size: asset.size,
-          position: asset.position,
-          version: asset.storageKey,
-          url: `/api/public/parrilla/${encodeURIComponent(req.params.token)}/items/${item.id}/final-assets/${asset.id}`
-        })),
+        finalAssets: (item.finalAssets || []).map(asset => {
+          // Un enlace de Drive no viaja por nuestra API: el cliente lo ve desde Google.
+          const drive = driveAssetUrls(asset);
+          if (drive) {
+            return {
+              id: asset.id,
+              name: asset.name,
+              position: asset.position,
+              provider: asset.externalProvider,
+              version: asset.externalFileId,
+              ...drive
+            };
+          }
+
+          return {
+            id: asset.id,
+            name: asset.name,
+            mimeType: asset.mimeType,
+            size: asset.size,
+            position: asset.position,
+            version: asset.storageKey,
+            url: `/api/public/parrilla/${encodeURIComponent(req.params.token)}/items/${item.id}/final-assets/${asset.id}`
+          };
+        }),
         status: item.status,
         comments: item.comments
       }))
@@ -128,6 +144,8 @@ export const getPublicFinalAssetById = async (req, res) => {
     if (!authorizedItem) return res.status(404).json({ error: 'Archivo final no encontrado' });
     const asset = await getContentItemFinalAssetById(req.params.id, req.params.assetId);
     if (!asset) return res.status(404).json({ error: 'Archivo final no encontrado' });
+    // Un enlace de Drive lo sirve Google, no nosotros: el portal lo muestra con `embedUrl`.
+    if (isDriveAsset(asset)) return res.status(409).json({ error: 'Esa pieza final es un enlace de Drive.' });
 
     const object = await getFromS3Stream(asset.storageKey || asset.finalAssetKey);
     res.setHeader('Content-Type', asset.mimeType || asset.finalAssetMimeType || object.ContentType || 'application/octet-stream');
