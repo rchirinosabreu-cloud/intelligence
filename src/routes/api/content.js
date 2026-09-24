@@ -18,9 +18,13 @@ import {
   getContentItemFinalAsset,
   getContentItemFinalAssetById,
   deleteContentItemFinalAsset,
-  deleteContentItemFinalAssetById
+  deleteContentItemFinalAssetById,
+  addContentItemDriveAsset,
+  createFinalAssetUploadTickets,
+  confirmContentItemFinalAssets
 } from '../../services/contentService.js';
 import { getFromS3Stream } from '../../services/s3Service.js';
+import { isDriveAsset } from '../../lib/finalAssetShape.js';
 import {
   getContentPlanReview,
   updateContentPlanReviewFinding
@@ -309,10 +313,49 @@ router.post('/items/:id/final-assets', receiveFinalAssets(carouselUpload.array('
   }
 });
 
+/**
+ * Un video pesado se entrega como enlace de Drive en vez de subirlo (Rodny, 24 de septiembre de 2026).
+ */
+router.post('/items/:id/final-assets/drive', async (req, res) => {
+  try {
+    const assets = await addContentItemDriveAsset(req.params.id, req.body || {});
+    return res.status(201).json(assets);
+  } catch (error) {
+    console.error('[API] Error adding a Drive final asset:', error.response?.data || error.message);
+    return res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * Subida directa: el navegador pide permisos firmados, sube al almacenamiento y después confirma.
+ * Son dos pasos a propósito — hasta que no se confirma, en la parrilla no aparece nada a medias.
+ */
+router.post('/items/:id/final-assets/direct-upload', async (req, res) => {
+  try {
+    const tickets = await createFinalAssetUploadTickets(req.params.id, req.body?.files);
+    return res.json(tickets);
+  } catch (error) {
+    console.error('[API] Error signing a direct upload:', error.response?.data || error.message);
+    return res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/items/:id/final-assets/confirm', async (req, res) => {
+  try {
+    const assets = await confirmContentItemFinalAssets(req.params.id, req.body?.uploads);
+    return res.status(201).json(assets);
+  } catch (error) {
+    console.error('[API] Error confirming a direct upload:', error.response?.data || error.message);
+    return res.status(400).json({ error: error.message });
+  }
+});
+
 router.get('/items/:id/final-assets/:assetId', async (req, res) => {
   try {
     const asset = await getContentItemFinalAssetById(req.params.id, req.params.assetId);
     if (!asset) return res.status(404).json({ error: 'Final asset not found' });
+    // Un enlace de Drive no tiene bytes nuestros que servir: se abre en Drive, no por aquí.
+    if (isDriveAsset(asset)) return res.status(409).json({ error: 'Esa pieza final es un enlace de Drive.' });
     const object = await getFromS3Stream(asset.storageKey || asset.finalAssetKey);
     res.setHeader('Content-Type', asset.mimeType || asset.finalAssetMimeType || object.ContentType || 'application/octet-stream');
     res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(asset.name || asset.finalAssetName || 'pieza-final')}"`);

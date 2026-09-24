@@ -771,16 +771,22 @@ model ContentPlanReviewFinding {
   @@index([lastReviewId])
 }
 
+/// Una pieza final es **o** un archivo guardado por nosotros (`storageKey`, `mimeType`, `size`)
+/// **o** un enlace a Google Drive (`externalUrl`, `externalProvider`, `externalFileId`), nunca las dos
+/// cosas ni ninguna. La regla vive en `src/lib/finalAssetShape.js` porque el esquema no puede decirlo.
 model ContentItemFinalAsset {
-  id            String      @id @default(uuid())
-  contentItemId String
-  storageKey    String      @unique
-  name          String
-  mimeType      String
-  size          Int
-  position      Int         @default(0)
-  createdAt     DateTime    @default(now())
-  contentItem   ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  id               String      @id @default(uuid())
+  contentItemId    String
+  storageKey       String?     @unique
+  name             String
+  mimeType         String?
+  size             Int?
+  externalUrl      String?
+  externalProvider String?
+  externalFileId   String?
+  position         Int         @default(0)
+  createdAt        DateTime    @default(now())
+  contentItem      ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
 
   @@index([contentItemId, position, createdAt])
 }

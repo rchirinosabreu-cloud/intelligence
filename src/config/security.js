@@ -399,6 +399,10 @@ export const securityHeaders = (req, res, next) => {
     "media-src 'self' blob:",
     "font-src 'self' data: https://fonts.gstatic.com",
     "connect-src 'self' https: wss:",
+    // El único sitio ajeno que la plataforma incrusta: el reproductor de un video de Drive entregado
+    // como pieza final (Rodny, 24 de septiembre de 2026). Sin esto el marco queda en blanco, porque
+    // `frame-src` heredaría `default-src 'self'`. No ampliar esta lista sin una razón del mismo tamaño.
+    "frame-src https://drive.google.com",
     "object-src 'none'",
     "base-uri 'self'",
     "frame-ancestors 'none'",

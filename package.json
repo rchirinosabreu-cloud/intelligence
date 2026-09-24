@@ -7,7 +7,7 @@
   "scripts": {
     "prestart": "node scripts/ensure-ai-governance-schema.js",
     "preview:gobierno-ia": "node scripts/preview-ai-governance.js",
-    "start": "node scripts/ensure-task-attachment-retention-schema.js && node scripts/ensure-calendar-invitations-schema.js && node scripts/ensure-meeting-minutes-schema.js && node scripts/ensure-drive-schema.js && node scripts/ensure-bria-memory-schema.js && node scripts/ensure-bria-observer-schema.js && node scripts/ensure-content-plan-reviews-schema.js && node scripts/ensure-returned-task-alert-index.js && node scripts/ensure-quotation-proposals-schema.js && node scripts/ensure-service-catalog-schema.js &&node scripts/ensure-recognitions-schema.js && node scripts/ensure-quality-streak-schema.js && node scripts/ensure-onboarding-schema.js && node scripts/ensure-financial-categories-schema.js && node scripts/ensure-financial-allocations-schema.js && node scripts/ensure-financial-documents-schema.js && node scripts/ensure-team-chat-schema.js && node scripts/ensure-crm-schema.js && node scripts/ensure-task-focus-schema.js && node scripts/ensure-receivable-payment-reversal-schema.js && node scripts/ensure-receivable-document-schema.js && node scripts/ensure-task-privacy-schema.js && npx prisma generate && node server.js",
+    "start": "node scripts/ensure-task-attachment-retention-schema.js && node scripts/ensure-calendar-invitations-schema.js && node scripts/ensure-meeting-minutes-schema.js && node scripts/ensure-drive-schema.js && node scripts/ensure-bria-memory-schema.js && node scripts/ensure-bria-observer-schema.js && node scripts/ensure-content-plan-reviews-schema.js && node scripts/ensure-returned-task-alert-index.js && node scripts/ensure-quotation-proposals-schema.js && node scripts/ensure-service-catalog-schema.js &&node scripts/ensure-recognitions-schema.js && node scripts/ensure-quality-streak-schema.js && node scripts/ensure-onboarding-schema.js && node scripts/ensure-financial-categories-schema.js && node scripts/ensure-financial-allocations-schema.js && node scripts/ensure-financial-documents-schema.js && node scripts/ensure-team-chat-schema.js && node scripts/ensure-crm-schema.js && node scripts/ensure-task-focus-schema.js && node scripts/ensure-receivable-payment-reversal-schema.js && node scripts/ensure-receivable-document-schema.js && node scripts/ensure-task-privacy-schema.js && node scripts/ensure-content-final-asset-links-schema.js && npx prisma generate && node server.js",
     "dev": "vite --host :: --port 3000",
     "dev:recognitions": "node scripts/preview-recognitions.js",
     "preview:crm": "node scripts/preview-crm.js",
@@ -42,6 +42,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1086.0",
+    "@aws-sdk/s3-request-presigner": "^3.1140.0",
     "@floating-ui/react": "^0.27.19",
     "@google-cloud/discoveryengine": "^2.5.2",
     "@google-cloud/storage": "^7.19.0",

@@ -5,13 +5,15 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { getContentPlanMonthName } from '@/lib/contentPlanPeriod';
-import { checkFinalAssetSelection } from '@/lib/uploadLimits';
+import { planFinalAssetUpload } from '@/lib/uploadLimits';
+import { driveLinkProblem } from '@/lib/driveLinks';
+import { driveAssetUrls } from '@/lib/finalAssetShape';
 import {
   ChevronLeft, Plus, Send, ExternalLink, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
   Calendar, User, LayoutGrid, FileText, Instagram, Facebook, Video, Image as ImageIcon,
   Edit2, Check, AlertCircle, Sparkles, Users, UserCheck, StickyNote, ChevronUp, Share2,
-  MessageSquare, Table2, UploadCloud
+  MessageSquare, Table2, UploadCloud, Link2
 } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -150,13 +152,54 @@ const parsePlanInternalNotes = (value) => {
   return legacyNote ? [legacyNote] : [];
 };
 
+/**
+ * Subida directa de una pieza final pesada (Rodny, 24 de septiembre de 2026).
+ *
+ * Tres pasos: el servidor firma un permiso por archivo, el navegador sube **al almacenamiento** sin
+ * pasar por el servidor —por eso no hay tope de memoria ni de plazo— y al final el servidor confirma
+ * lo que llegó de verdad. Hasta esa confirmación no existe nada en la parrilla, así que una subida
+ * interrumpida no deja una pieza a medias.
+ *
+ * El interceptor de `main.jsx` solo adjunta el token a nuestra API, así que la entrega al
+ * almacenamiento no lleva credenciales de la plataforma.
+ */
+const uploadFinalAssetsDirect = async (itemId, files, onProgress) => {
+  const base = `${getApiBaseUrl()}/api/content/items/${itemId}/final-assets`;
+  const { data: tickets } = await axios.post(`${base}/direct-upload`, {
+    files: files.map(file => ({ name: file.name, size: file.size, mimeType: file.type }))
+  });
+
+  const totalBytes = files.reduce((sum, file) => sum + (file.size || 0), 0) || 1;
+  const sent = new Array(files.length).fill(0);
+
+  await Promise.all(tickets.map((ticket, index) => axios.put(ticket.url, files[index], {
+    headers: { 'Content-Type': ticket.mimeType },
+    onUploadProgress: (event) => {
+      sent[index] = event.loaded || 0;
+      const done = sent.reduce((sum, value) => sum + value, 0);
+      // Se reserva el 100 % para cuando el servidor confirme: si no, la barra se llena y sigue esperando.
+      onProgress?.(Math.min(99, Math.round((done / totalBytes) * 100)));
+    }
+  })));
+
+  const { data } = await axios.post(`${base}/confirm`, {
+    uploads: tickets.map(ticket => ({ key: ticket.key, name: ticket.name }))
+  });
+  return data;
+};
+
 const FinalAssetTile = ({ item, asset, isEditing, onDelete, isDeleting }) => {
   const [previewUrl, setPreviewUrl] = useState(null);
-  const sourceUrl = `${getApiBaseUrl()}/api/content/items/${item.id}/final-assets/${asset.id}?v=${encodeURIComponent(asset.storageKey || '')}`;
-  const isImage = (asset.mimeType || '').startsWith('image/');
-  const isVideo = (asset.mimeType || '').startsWith('video/');
+  // Un enlace de Drive no tiene bytes nuestros: no se pide a la API, se muestra el reproductor de Google.
+  const drive = driveAssetUrls(asset);
+  const sourceUrl = drive
+    ? null
+    : `${getApiBaseUrl()}/api/content/items/${item.id}/final-assets/${asset.id}?v=${encodeURIComponent(asset.storageKey || '')}`;
+  const isImage = !drive && (asset.mimeType || '').startsWith('image/');
+  const isVideo = !drive && (asset.mimeType || '').startsWith('video/');
 
   useEffect(() => {
+    if (!sourceUrl) return undefined;
     let objectUrl;
     let cancelled = false;
     fetch(sourceUrl, { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } })
@@ -180,13 +223,114 @@ const FinalAssetTile = ({ item, asset, isEditing, onDelete, isDeleting }) => {
   return (
     <div className="group/asset relative overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 dark:border-white/10 dark:bg-zinc-950">
       <div className="aspect-square">
-        {isImage ? <img src={previewUrl || undefined} alt={asset.name || 'Lámina del carrusel'} className="h-full w-full object-cover" /> : isVideo ? <video src={previewUrl || undefined} className="h-full w-full object-cover" controls preload="metadata" /> : <FileText className="m-auto h-8 w-8 text-zinc-300" />}
+        {drive ? (
+          <iframe
+            src={drive.embedUrl}
+            title={asset.name || 'Pieza final en Drive'}
+            className="h-full w-full border-0 bg-black"
+            allow="autoplay; encrypted-media; fullscreen"
+            allowFullScreen
+            loading="lazy"
+          />
+        ) : isImage ? <img src={previewUrl || undefined} alt={asset.name || 'Lámina del carrusel'} className="h-full w-full object-cover" /> : isVideo ? <video src={previewUrl || undefined} className="h-full w-full object-cover" controls preload="metadata" /> : <FileText className="m-auto h-8 w-8 text-zinc-300" />}
       </div>
       <div className="flex items-center justify-between gap-2 px-2.5 py-2">
         <span className="truncate text-[10px] font-bold text-zinc-600 dark:text-zinc-300">{asset.name || 'Archivo final'}</span>
-        {isEditing && <button type="button" onClick={() => onDelete(item.id, asset.id)} disabled={isDeleting} className="brain-danger-button-icon shrink-0 rounded-lg p-1.5" aria-label={`Eliminar ${asset.name || 'archivo final'}`}><Trash2 className="h-3.5 w-3.5" /></button>}
+        <div className="flex shrink-0 items-center gap-1">
+          {drive && (
+            <a
+              href={drive.openUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg p-1.5 text-brand-cyan-deep hover:bg-brand-cyan/10 dark:text-brand-cyan"
+              aria-label={`Abrir ${asset.name || 'el archivo'} en Drive`}
+              title="Abrir en Drive"
+            >
+              <ExternalLink className="h-3.5 w-3.5" />
+            </a>
+          )}
+          {isEditing && <button type="button" onClick={() => onDelete(item.id, asset.id)} disabled={isDeleting} className="brain-danger-button-icon rounded-lg p-1.5" aria-label={`Eliminar ${asset.name || 'archivo final'}`}><Trash2 className="h-3.5 w-3.5" /></button>}
+        </div>
       </div>
     </div>
+  );
+};
+
+/**
+ * Entregar la pieza final como enlace de Drive.
+ *
+ * Se monta con `key={itemId}`, así que cada vez que se abre nace vacío: sin un `useEffect` que limpie
+ * el formulario al cerrar. El aviso de permisos no es decorativo — es el único fallo que la plataforma
+ * no puede ver: el video se abre perfecto para quien lo subió y el cliente se encuentra un muro.
+ */
+const DriveLinkDialog = ({ itemId, onClose, onSubmit, isPending }) => {
+  const [url, setUrl] = useState('');
+  const [name, setName] = useState('');
+  const problem = url.trim() ? driveLinkProblem(url) : null;
+
+  const submit = (event) => {
+    event.preventDefault();
+    const blocking = driveLinkProblem(url);
+    if (blocking) {
+      toast.error(blocking);
+      return;
+    }
+    onSubmit({ itemId, url: url.trim(), name: name.trim() });
+  };
+
+  return (
+    <Dialog open={Boolean(itemId)} onOpenChange={(next) => { if (!next) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Entregar por enlace de Drive</DialogTitle>
+          <DialogDescription>
+            Para un video que pesa demasiado para subirlo. La parrilla muestra el reproductor de Drive, igual que si estuviera cargado.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={submit} className="space-y-4">
+          <div className="space-y-1.5">
+            <span className="block text-xs font-bold text-zinc-600 dark:text-zinc-300">Enlace del archivo</span>
+            <input
+              type="url"
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder="https://drive.google.com/file/d/…/view"
+              autoFocus
+              required
+              aria-invalid={problem ? 'true' : undefined}
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+            {problem && <p className="text-xs font-semibold text-destructive">{problem}</p>}
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="block text-xs font-bold text-zinc-600 dark:text-zinc-300">Nombre <span className="font-normal text-zinc-400">(opcional)</span></span>
+            <input
+              type="text"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              placeholder="Video en Drive"
+              maxLength={120}
+              className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 outline-none focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50"
+            />
+          </div>
+
+          <p className="rounded-xl border border-zinc-200 bg-zinc-50 px-3 py-2.5 text-xs leading-relaxed text-zinc-600 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300">
+            <strong className="font-bold">Revisa los permisos en Drive.</strong> El cliente solo podrá verlo si el archivo
+            está compartido como «Cualquier persona con el enlace». A ti se te abrirá bien de todas formas, así que esto
+            no se nota desde aquí.
+          </p>
+
+          <DialogFooter>
+            <Button type="button" variant="ghost" onClick={onClose} disabled={isPending}>Cancelar</Button>
+            <Button type="submit" disabled={isPending || Boolean(problem)}>
+              {isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Añadir enlace'}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   );
 };
 
@@ -229,7 +373,9 @@ const ContentItemCard = ({
   onFinalAssetUpload,
   onFinalAssetDelete,
   isFinalAssetUploading,
-  isFinalAssetDeleting
+  isFinalAssetDeleting,
+  onDriveLink,
+  directUploadPercent
 }) => {
   const [showFeedback, setShowFeedback] = useState(false);
   const finalAssets = item.finalAssets || [];
@@ -463,6 +609,28 @@ const ContentItemCard = ({
                     />
                   </label>
                 )}
+
+                {isEditing && (
+                  <button
+                    type="button"
+                    onClick={() => onDriveLink(item.id)}
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:hover:bg-white/10"
+                    title="Para un video que pesa demasiado para subirlo"
+                  >
+                    <Link2 className="h-3.5 w-3.5" /> Enlace de Drive
+                  </button>
+                )}
+
+                {directUploadPercent !== null && (
+                  <div className="space-y-1.5 pt-1" role="status" aria-live="polite">
+                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-white/10">
+                      <div className="h-full rounded-full bg-brand-cyan transition-all" style={{ width: `${directUploadPercent}%` }} />
+                    </div>
+                    <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400">
+                      Subiendo al almacenamiento… {directUploadPercent}%
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -684,6 +852,9 @@ const ContentPlanDetail = () => {
   const [showInternalNotes, setShowInternalNotes] = useState(false);
   const [newPlanInternalNote, setNewPlanInternalNote] = useState('');
   const [newlyCreatedItemId, setNewlyCreatedItemId] = useState(null);
+  // `null` mientras no haya una subida directa en curso; un número entre 0 y 99 mientras la hay.
+  const [directUploadPercent, setDirectUploadPercent] = useState(null);
+  const [driveLinkItemId, setDriveLinkItemId] = useState(null);
   const itemRefs = useRef({});
 
   // Parse period (month-year)
@@ -812,7 +983,9 @@ const ContentPlanDetail = () => {
   });
 
   const finalAssetUploadMutation = useMutation({
-    mutationFn: async ({ itemId, files }) => {
+    mutationFn: async ({ itemId, files, mode }) => {
+      if (mode === 'direct') return uploadFinalAssetsDirect(itemId, files, setDirectUploadPercent);
+
       const uploadData = new FormData();
       files.forEach(file => uploadData.append('files', file));
       const response = await axios.post(`${getApiBaseUrl()}/api/content/items/${itemId}/final-assets`, uploadData, {
@@ -830,6 +1003,26 @@ const ContentPlanDetail = () => {
     onError: (error) => {
       console.error('Error uploading final content asset:', error.response?.data || error);
       toast.error(error.response?.data?.error || 'Error al cargar la pieza final');
+    },
+    onSettled: () => setDirectUploadPercent(null)
+  });
+
+  const driveAssetMutation = useMutation({
+    mutationFn: async ({ itemId, url, name }) => {
+      const response = await axios.post(
+        `${getApiBaseUrl()}/api/content/items/${itemId}/final-assets/drive`,
+        { url, name }
+      );
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+      setDriveLinkItemId(null);
+      toast.success('Enlace de Drive añadido');
+    },
+    onError: (error) => {
+      console.error('Error adding a Drive final asset:', error.response?.data || error);
+      toast.error(error.response?.data?.error || 'No se pudo añadir el enlace');
     }
   });
 
@@ -902,12 +1095,14 @@ const ContentPlanDetail = () => {
 
   const handleFinalAssetUpload = (itemId, files) => {
     // Avisar antes de gastar la subida: el servidor vuelve a comprobarlo, pero el peso ya se sabe aquí.
-    const problem = checkFinalAssetSelection(files);
+    // Y el peso decide el camino: lo que cabe por el servidor sigue yendo por donde siempre funcionó.
+    const { problem, mode } = planFinalAssetUpload(files);
     if (problem) {
       toast.error(problem);
       return;
     }
-    finalAssetUploadMutation.mutate({ itemId, files });
+    if (mode === 'direct') setDirectUploadPercent(0);
+    finalAssetUploadMutation.mutate({ itemId, files, mode });
   };
 
   const handleFinalAssetDelete = (itemId, assetId) => {
@@ -1131,6 +1326,8 @@ const ContentPlanDetail = () => {
               onFinalAssetDelete={handleFinalAssetDelete}
               isFinalAssetUploading={finalAssetUploadMutation.isPending}
               isFinalAssetDeleting={finalAssetDeleteMutation.isPending}
+              onDriveLink={setDriveLinkItemId}
+              directUploadPercent={finalAssetUploadMutation.variables?.itemId === item.id ? directUploadPercent : null}
             />
           ))
         ) : (
@@ -1161,6 +1358,15 @@ const ContentPlanDetail = () => {
         onConfirm={(data) => {
           sendToKanbanMutation.mutate({ id: dispatchItemId, executionData: data });
         }}
+      />
+
+      {/* `key` por pieza: cada apertura nace con el formulario vacío, sin limpiarlo con un efecto. */}
+      <DriveLinkDialog
+        key={driveLinkItemId || 'drive-link'}
+        itemId={driveLinkItemId}
+        onClose={() => setDriveLinkItemId(null)}
+        onSubmit={(payload) => driveAssetMutation.mutate(payload)}
+        isPending={driveAssetMutation.isPending}
       />
     </div>
   );

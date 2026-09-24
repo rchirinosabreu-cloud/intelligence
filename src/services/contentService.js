@@ -2,10 +2,15 @@ import prisma from '../lib/prisma.js';
 import { assertActiveTeamMembers } from './teamRosterService.js';
 import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, recordPlanRecognition } from './recognitionService.js';
 import { createTask } from './nativeTaskService.js';
-import { uploadToS3, deleteFromS3 } from './s3Service.js';
-import { randomBytes } from 'node:crypto';
+import { uploadToS3, deleteFromS3, createSignedUpload, headS3Object } from './s3Service.js';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { buildLinkedTaskUpdates } from '../lib/contentTaskReciprocity.js';
-import { FINAL_ASSET_MAX_BYTES, FINAL_ASSET_MAX_FILES, fileTooLargeMessage, tooManyFilesMessage } from '../lib/uploadLimits.js';
+import {
+  FINAL_ASSET_MAX_BYTES, FINAL_ASSET_MAX_FILES, FINAL_ASSET_DIRECT_MAX_BYTES,
+  fileTooLargeMessage, tooManyFilesMessage
+} from '../lib/uploadLimits.js';
+import { DRIVE_PROVIDER, driveLinkProblem, parseDriveFileId } from '../lib/driveLinks.js';
+import { finalAssetShapeProblem } from '../lib/finalAssetShape.js';
 import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from './briaContentPlanReviewState.js';
 
 let strategicObjectivesColumnExists = null;
@@ -725,6 +730,36 @@ export const uploadContentItemFinalAssets = async (itemId, files = []) => {
     throw new Error('Solo se permiten imágenes o videos para el carrusel');
   }
 
+  const { item, basePath, nextPosition } = await loadFinalAssetTarget(itemId, files.length);
+  const uploads = await Promise.all(files.map(file => uploadToS3(file, basePath, { maxBytes: FINAL_ASSET_MAX_BYTES })));
+
+  try {
+    await prisma.$transaction(uploads.map((upload, index) => prisma.contentItemFinalAsset.create({
+      data: {
+        contentItemId: item.id,
+        storageKey: upload.key,
+        name: upload.name,
+        mimeType: upload.mimeType,
+        size: upload.size,
+        position: nextPosition + index
+      }
+    })));
+  } catch (error) {
+    await Promise.allSettled(uploads.map(upload => deleteFromS3(upload.key)));
+    throw error;
+  }
+
+  return listFinalAssets(item.id);
+};
+
+/** El máximo de piezas que admite un carrusel, contando archivos y enlaces por igual. */
+const FINAL_ASSETS_PER_ITEM = 20;
+
+/**
+ * Dónde viven los archivos de esta pieza y cuánto sitio le queda. Lo comparten los tres caminos
+ * (formulario, subida directa y enlace) para que ninguno se salte el tope ni invente otra ruta.
+ */
+const loadFinalAssetTarget = async (itemId, incoming = 1) => {
   const item = await prisma.contentItem.findUnique({
     where: { id: itemId },
     select: {
@@ -735,32 +770,140 @@ export const uploadContentItemFinalAssets = async (itemId, files = []) => {
     }
   });
   if (!item) throw new Error('Content item not found');
-  if (item._count.finalAssets + files.length > 20) throw new Error('Una pieza puede contener máximo 20 archivos finales');
+  if (item._count.finalAssets + incoming > FINAL_ASSETS_PER_ITEM) {
+    throw new Error(`Una pieza puede contener máximo ${FINAL_ASSETS_PER_ITEM} archivos finales`);
+  }
 
-  const basePath = `content-plans/${item.plan.client.slug}/${item.plan.year}-${String(item.plan.month).padStart(2, '0')}/${item.id}/final-assets`;
-  const uploads = await Promise.all(files.map(file => uploadToS3(file, basePath, { maxBytes: FINAL_ASSET_MAX_BYTES })));
-  const firstPosition = (item.finalAssets[0]?.position ?? -1) + 1;
+  return {
+    item,
+    basePath: `content-plans/${item.plan.client.slug}/${item.plan.year}-${String(item.plan.month).padStart(2, '0')}/${item.id}/final-assets`,
+    nextPosition: (item.finalAssets[0]?.position ?? -1) + 1
+  };
+};
+
+const listFinalAssets = (itemId) => prisma.contentItemFinalAsset.findMany({
+  where: { contentItemId: itemId },
+  orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
+});
+
+const storageKeyFor = (basePath, name) => {
+  const sanitized = String(name || 'pieza-final').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
+  return `${basePath}/${Date.now()}_${randomUUID()}_${sanitized}`;
+};
+
+/**
+ * Entrega un video pesado como enlace de Google Drive en vez de subirlo (Rodny, 24 de septiembre de 2026).
+ * El enlace se resuelve aquí en su identificador y se guarda ya resuelto; lo que no se puede saber desde
+ * aquí es si el cliente podrá abrirlo, y de eso avisa la pantalla al pegarlo.
+ */
+export const addContentItemDriveAsset = async (itemId, { url, name } = {}) => {
+  const problem = driveLinkProblem(url);
+  if (problem) throw new Error(problem);
+
+  const externalFileId = parseDriveFileId(url);
+  const { item, basePath: _basePath, nextPosition } = await loadFinalAssetTarget(itemId);
+
+  const duplicate = await prisma.contentItemFinalAsset.findFirst({
+    where: { contentItemId: item.id, externalFileId }
+  });
+  if (duplicate) throw new Error('Ese archivo de Drive ya está en esta pieza.');
+
+  const data = {
+    contentItemId: item.id,
+    storageKey: null,
+    name: String(name || '').trim() || 'Video en Drive',
+    mimeType: null,
+    size: null,
+    externalUrl: String(url).trim(),
+    externalProvider: DRIVE_PROVIDER,
+    externalFileId,
+    position: nextPosition
+  };
+
+  const shapeProblem = finalAssetShapeProblem(data);
+  if (shapeProblem) throw new Error(shapeProblem);
+
+  await prisma.contentItemFinalAsset.create({ data });
+  return listFinalAssets(item.id);
+};
+
+/**
+ * Permisos firmados para que el navegador suba directo al almacenamiento lo que no cabe por el servidor.
+ * Aquí **solo** se reparten permisos: nada queda guardado en la base hasta que el navegador confirme, así
+ * que una subida a medias no deja una pieza fantasma en la parrilla.
+ */
+export const createFinalAssetUploadTickets = async (itemId, files = []) => {
+  const list = Array.isArray(files) ? files : [];
+  if (list.length === 0) throw new Error('Selecciona al menos un archivo');
+  if (list.length > FINAL_ASSET_MAX_FILES) throw new Error(tooManyFilesMessage());
+
+  const oversized = list.find(file => Number(file?.size || 0) > FINAL_ASSET_DIRECT_MAX_BYTES);
+  if (oversized) throw new Error(fileTooLargeMessage(oversized, FINAL_ASSET_DIRECT_MAX_BYTES));
+  if (list.some(file => !/^image\/|^video\//.test(String(file?.mimeType || '')))) {
+    throw new Error('Solo se permiten imágenes o videos para la pieza final');
+  }
+
+  const { basePath } = await loadFinalAssetTarget(itemId, list.length);
+
+  return Promise.all(list.map(async (file) => {
+    const key = storageKeyFor(basePath, file.name);
+    const { url } = await createSignedUpload({ key, contentType: file.mimeType });
+    return { key, url, name: String(file.name || 'pieza-final'), mimeType: file.mimeType };
+  }));
+};
+
+/**
+ * El navegador dice que ya subió; aquí se comprueba y recién entonces existe la pieza.
+ *
+ * Dos cosas que no se pueden saltar. La clave tiene que estar **dentro de la carpeta de esta pieza**: si
+ * se aceptara cualquier clave, alguien podría colgar en su parrilla un archivo de otro cliente. Y el peso
+ * y el tipo se leen del almacenamiento, no de lo que declaró el navegador, que es una promesa, no un hecho.
+ */
+export const confirmContentItemFinalAssets = async (itemId, uploads = []) => {
+  const list = Array.isArray(uploads) ? uploads : [];
+  if (list.length === 0) throw new Error('No hay archivos que confirmar');
+  if (list.length > FINAL_ASSET_MAX_FILES) throw new Error(tooManyFilesMessage());
+
+  const { item, basePath, nextPosition } = await loadFinalAssetTarget(itemId, list.length);
+
+  const verified = await Promise.all(list.map(async (upload, index) => {
+    const key = String(upload?.key || '');
+    if (!key.startsWith(`${basePath}/`)) throw new Error('Ese archivo no pertenece a esta pieza.');
+
+    const object = await headS3Object(key);
+    if (!object) throw new Error('El archivo no llegó completo al almacenamiento. Vuelve a intentarlo.');
+    if (object.size <= 0) throw new Error('El archivo llegó vacío al almacenamiento. Vuelve a intentarlo.');
+    if (object.size > FINAL_ASSET_DIRECT_MAX_BYTES) {
+      throw new Error(fileTooLargeMessage({ name: upload?.name, size: object.size }, FINAL_ASSET_DIRECT_MAX_BYTES));
+    }
+    if (!/^image\/|^video\//.test(object.mimeType || '')) {
+      throw new Error('Solo se permiten imágenes o videos para la pieza final');
+    }
+
+    return {
+      contentItemId: item.id,
+      storageKey: key,
+      name: String(upload?.name || '').trim() || 'pieza-final',
+      mimeType: object.mimeType,
+      size: object.size,
+      externalUrl: null,
+      externalProvider: null,
+      externalFileId: null,
+      position: nextPosition + index
+    };
+  }));
+
+  const shapeProblem = verified.map(finalAssetShapeProblem).find(Boolean);
+  if (shapeProblem) throw new Error(shapeProblem);
 
   try {
-    await prisma.$transaction(uploads.map((upload, index) => prisma.contentItemFinalAsset.create({
-      data: {
-        contentItemId: item.id,
-        storageKey: upload.key,
-        name: upload.name,
-        mimeType: upload.mimeType,
-        size: upload.size,
-        position: firstPosition + index
-      }
-    })));
+    await prisma.$transaction(verified.map(data => prisma.contentItemFinalAsset.create({ data })));
   } catch (error) {
-    await Promise.allSettled(uploads.map(upload => deleteFromS3(upload.key)));
+    await Promise.allSettled(verified.map(data => deleteFromS3(data.storageKey)));
     throw error;
   }
 
-  return prisma.contentItemFinalAsset.findMany({
-    where: { contentItemId: item.id },
-    orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
-  });
+  return listFinalAssets(item.id);
 };
 
 export const getContentItemFinalAssetById = async (itemId, assetId) => {
