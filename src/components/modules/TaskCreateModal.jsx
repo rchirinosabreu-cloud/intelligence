@@ -273,9 +273,7 @@ const TaskCreateModal = ({ isOpen, onClose, onSuccess, clientsList, defaultClien
 
                         {newTaskData.isPrivate && (
                             <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} className="space-y-2 overflow-hidden">
-                                <p className="text-xs text-zinc-500">
-                                    Tú y quien la ejecute la veis siempre. El resto del equipo verá «Pendiente reservado», sin título ni cliente. Añade abajo a quien más quieras que la vea.
-                                </p>
+                                <p className="text-xs text-zinc-500">Quién más puede abrirlo</p>
                                 <ul className="max-h-40 space-y-1 overflow-y-auto rounded-xl border border-zinc-100 p-2 dark:border-zinc-800">
                                     {teamMembers.filter(member => member.userId && member.id !== newTaskData.assigneeId).map(member => (
                                         <li key={member.id}>
