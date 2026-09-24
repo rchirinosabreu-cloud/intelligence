@@ -49,3 +49,5 @@ artifacts/
 /docs/REPORTS_REAL_SCREENSHOTS_AUDIT_2026-09-15.md
 /docs/REPORTS_VISION_EVALUATION_2026-09-15.md
 /docs/audits/reports-2026-09-15/
+# Andamio local de agentes: configuración y copias de trabajo en paralelo. Nunca se versiona.
+.claude/
