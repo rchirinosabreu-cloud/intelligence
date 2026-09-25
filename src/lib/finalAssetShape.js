@@ -35,6 +35,18 @@ export const finalAssetShapeProblem = (asset) => {
 };
 
 /**
+ * La forma del marco de Drive, tomada del formato de la pieza (Rodny, 25 de septiembre de 2026).
+ *
+ * Google no dice si el video es vertical u horizontal, y el marco por defecto era apaisado: un reel
+ * —que «normalmente son 9:16»— salía achatado, con dos franjas negras enormes a los lados. El único
+ * dato fiable que tenemos es el formato que el equipo eligió para la pieza, así que se usa ese.
+ */
+export const VERTICAL_FORMATS = ['Reel', 'Video', 'Historia'];
+export const driveEmbedAspect = (format) => (
+  VERTICAL_FORMATS.includes(String(format || '')) ? '9 / 16' : '16 / 9'
+);
+
+/**
  * Las tres direcciones del enlace, o `null` si la fila es un archivo nuestro. Se arman desde el
  * identificador guardado, nunca volviendo a leer el texto que pegó la persona.
  */

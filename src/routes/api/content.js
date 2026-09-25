@@ -209,7 +209,8 @@ router.patch('/plans/:id', async (req, res) => {
 
 router.post('/plans/:id/share-token', async (req, res) => {
   try {
-    const plan = await generateShareToken(req.params.id);
+    // Sin `rotate` esto devuelve el enlace que ya existe: pedirlo no puede romper el del cliente.
+    const plan = await generateShareToken(req.params.id, { rotate: req.body?.rotate === true });
     return res.json({ shareToken: plan.shareToken });
   } catch (error) {
     console.error('[API] Error generating share token:', error);

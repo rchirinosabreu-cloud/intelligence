@@ -29,6 +29,14 @@ try {
     ['mobile', 390, 844, false]
   ]) {
     const page = await browser.newPage({ viewport: { width, height }, deviceScaleFactor: 2 });
+
+    // El marco de Drive no sale a internet: se responde un marcador con la misma forma.
+    await page.route('https://drive.google.com/**', route => route.fulfill({
+      status: 200,
+      contentType: 'text/html',
+      body: '<html><body style="margin:0;height:100%;display:flex;align-items:center;justify-content:center;background:#111;color:#eee;font:600 13px system-ui">Reproductor de Google Drive</body></html>'
+    }));
+
     await page.goto(`http://127.0.0.1:${port}${PAGE}`, { waitUntil: 'networkidle' });
     if (dark) await page.evaluate(() => document.documentElement.classList.add('dark'));
     await page.evaluate(() => document.fonts.ready);
@@ -83,6 +91,30 @@ try {
     assert.equal(detail.history, true, 'el historial de lo que pidió el cliente sigue ahí');
 
     await page.screenshot({ path: `output/portal-detalle-${name}.png`, fullPage: true });
+
+    // 3. Un reel entregado por enlace de Drive se dibuja vertical, no apaisado.
+    await page.evaluate(() => {
+      [...document.querySelectorAll('button')].find(b => b.textContent.includes('Todas las piezas')).click();
+    });
+    await page.waitForFunction(() => document.body.textContent.includes('Toca una pieza para verla completa'));
+    await page.evaluate(() => {
+      [...document.querySelectorAll('main button')].find(b => b.textContent.includes('Conoce al equipo')).click();
+    });
+    await page.waitForSelector('main iframe');
+    await page.evaluate(() => document.fonts.ready);
+
+    const frame = await page.evaluate(() => {
+      const box = document.querySelector('main iframe').getBoundingClientRect();
+      return { width: Math.round(box.width), height: Math.round(box.height) };
+    });
+    assert.ok(frame.height > frame.width, `el reel se ve vertical (${frame.width}x${frame.height})`);
+    assert.ok(
+      Math.abs((frame.width / frame.height) - (9 / 16)) < 0.02,
+      `y con la proporción de un reel (${frame.width}x${frame.height})`
+    );
+    if (width >= 1024) assert.ok(frame.width <= 380, 'el ancho se acota para que no mida mil de alto');
+
+    await page.screenshot({ path: `output/portal-drive-${name}.png`, fullPage: true });
     await page.close();
   }
 

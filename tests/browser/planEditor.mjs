@@ -39,14 +39,15 @@ try {
       return {
         rows: rows.length,
         selected: nav.querySelectorAll('[aria-current="true"]').length,
+        // Rodny, 24 de septiembre de 2026: los puntos que marcaban «sin pieza final» se quitaron.
+        // A principio de mes ninguna pieza tiene material, así que se encendían en todas y no decían nada.
         missingDots: nav.querySelectorAll('[title="Sin pieza final"]').length,
         editors: document.querySelectorAll('[id^="item-"]').length
       };
     });
     assert.equal(rail.rows, 8, 'las ocho piezas del mes caben en el carril');
     assert.equal(rail.selected, 1, 'solo una pieza abierta a la vez');
-    // Cinco de las ocho de la muestra no tienen pieza final todavía.
-    assert.equal(rail.missingDots, 5, 'las piezas sin pieza final se marcan');
+    assert.equal(rail.missingDots, 0, 'el carril no lleva puntos de aviso');
     assert.equal(rail.editors, 1, 'se dibuja un solo editor, no uno por pieza');
 
     await page.screenshot({ path: `output/editor-carril-${name}.png`, fullPage: true });
@@ -65,18 +66,15 @@ try {
         internal: text.includes('Solo el equipo'),
         visible: text.includes('Esto es lo que ve el cliente'),
         renamed: text.includes('Texto de la publicación') && !text.includes('Caption (Post)'),
-        glance: text.includes('Vista del cliente'),
-        // La vista del cliente muestra el texto de publicación, nunca el guion.
-        glanceHasScript: [...document.querySelectorAll('*')]
-          .some(n => n.children.length === 0 && n.textContent.includes('ESCENA 1') && n.closest('.line-clamp-4'))
+        // Rodny pidió quitar la mirilla del cliente: las etiquetas de cada campo ya dicen qué sale.
+        glance: text.includes('Vista del cliente')
       };
     });
 
     assert.equal(editing.internal, true, 'el guion se marca como interno');
     assert.equal(editing.visible, true, 'el texto de publicación se marca como visible para el cliente');
     assert.equal(editing.renamed, true, '«Caption (Post)» pasa a llamarse por lo que es');
-    assert.equal(editing.glance, true, 'la vista del cliente se mira sin salir del editor');
-    assert.equal(editing.glanceHasScript, false, 'la vista del cliente nunca muestra el guion');
+    assert.equal(editing.glance, false, 'la vista del cliente ya no está dentro del editor');
 
     await page.screenshot({ path: `output/editor-edicion-${name}.png`, fullPage: true });
 

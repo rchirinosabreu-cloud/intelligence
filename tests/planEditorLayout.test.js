@@ -31,8 +31,11 @@ test('cada campo dice si lo ve el cliente o solo el equipo', async () => {
   assert.match(editor, /Solo el equipo/, 'el guion se marca como interno');
   assert.match(editor, /Esto es lo que ve el cliente/, 'el texto de la publicación se marca como visible');
   assert.match(editor, /Texto de la publicación/, 'deja de llamarse «Caption (Post)»');
-  assert.match(editor, /const ClientGlance/, 'la vista del cliente se mira sin salir del editor');
-  assert.match(editor, /Vista del cliente/);
+
+  // Rodny, 24 de septiembre de 2026: «no me interesa ver la sección de vista del cliente». La mirilla
+  // que la mostraba dentro del editor se quitó; las etiquetas de cada campo ya dicen qué sale y qué no.
+  assert.doesNotMatch(editor, /const ClientGlance/);
+  assert.doesNotMatch(editor, /Vista del cliente/);
 });
 
 test('el rediseño no se llevó por delante nada de lo que ya funcionaba', async () => {
