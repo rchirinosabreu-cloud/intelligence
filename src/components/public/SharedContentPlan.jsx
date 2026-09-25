@@ -187,10 +187,14 @@ const PieceCard = ({ item, index, onOpen }) => (
       <span className="absolute left-3 top-3 inline-flex items-center gap-1.5 rounded-lg bg-black/55 px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-white backdrop-blur">
         <FormatIcon format={item.format} className="h-3 w-3" /> {item.format}
       </span>
+      {/* Un punto pequeño, no un botón (Rodny, 25 de septiembre de 2026). El disco oscuro es lo que lo
+          hace legible sobre cualquier foto; el estado con todas sus letras va en el pie de la tarjeta. */}
       <span
-        className={`absolute right-3 top-3 h-5 w-5 rounded-full border-2 border-black/25 ${isApproved(item) ? 'bg-brand-green' : 'bg-brand-yellow'}`}
+        className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm"
         aria-hidden="true"
-      />
+      >
+        <span className={`h-1.5 w-1.5 rounded-full ${isApproved(item) ? 'bg-brand-green' : 'bg-brand-yellow'}`} />
+      </span>
     </div>
     <div className="flex flex-col gap-1.5 p-4">
       <span className="text-[11px] font-bold text-zinc-400">#{String(index + 1).padStart(2, '0')}</span>
