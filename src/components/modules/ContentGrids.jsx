@@ -243,7 +243,7 @@ const ContentGrids = () => {
                           <div
                             key={plan.id}
                             onClick={() => navigateToPlan(plan)}
-                            className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-white/2 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 border border-transparent hover:border-indigo-600/20 transition-all cursor-pointer group/item"
+                            className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-white/5 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 border border-transparent hover:border-indigo-600/20 transition-all cursor-pointer group/item"
                           >
                             <div className="flex items-center gap-3">
                               <div className="p-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/5 shadow-sm">

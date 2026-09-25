@@ -352,7 +352,7 @@ const FeedbackHistory = ({ comments, isOpen }) => {
         </label>
       </div>
 
-      <div className="bg-slate-50 dark:bg-white/2 border border-slate-100 dark:border-white/5 p-5 rounded-[2rem] text-sm text-slate-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed italic">
+      <div className="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 p-5 rounded-[2rem] text-sm text-slate-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed italic">
         {comments}
       </div>
     </div>
@@ -508,10 +508,10 @@ const ContentItemCard = ({
                     }
                   }}
                   placeholder="Instrucciones para el equipo..."
-                  className="w-full bg-zinc-50/50 dark:bg-white/2 border border-zinc-200/60 dark:border-white/5 rounded-xl p-3 text-[11px] font-medium focus:ring-2 focus:ring-indigo-600/10 outline-none transition-all"
+                  className="w-full bg-zinc-50/50 dark:bg-white/5 border border-zinc-200/60 dark:border-white/5 rounded-xl p-3 text-[11px] font-medium focus:ring-2 focus:ring-indigo-600/10 outline-none transition-all"
                 />
               ) : (
-                <div className="bg-zinc-50/30 dark:bg-white/2 p-3 rounded-xl text-[11px] text-zinc-500 dark:text-zinc-400 italic leading-relaxed">
+                <div className="bg-zinc-50/30 dark:bg-white/5 p-3 rounded-xl text-[11px] text-zinc-500 dark:text-zinc-400 italic leading-relaxed">
                   {item.internalNotes || <span className="text-zinc-300 dark:text-zinc-600">Sin notas internas...</span>}
                 </div>
               )}
@@ -538,7 +538,7 @@ const ContentItemCard = ({
                   className="w-full min-h-[120px] bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600/30 transition-all outline-none"
                 />
               ) : (
-                <div className="bg-zinc-50/50 dark:bg-white/2 p-4 rounded-2xl text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
+                <div className="bg-zinc-50/50 dark:bg-white/5 p-4 rounded-2xl text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
                   {item.copyText || <span className="italic text-zinc-400">Sin copy visual...</span>}
                 </div>
               )}
@@ -560,7 +560,7 @@ const ContentItemCard = ({
                   className="w-full min-h-[120px] bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600/30 transition-all outline-none"
                 />
               ) : (
-                <div className="bg-zinc-50/50 dark:bg-white/2 p-4 rounded-2xl text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
+                <div className="bg-zinc-50/50 dark:bg-white/5 p-4 rounded-2xl text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
                   {item.captionText || <span className="italic text-zinc-400">Sin caption...</span>}
                 </div>
               )}
@@ -1331,7 +1331,7 @@ const ContentPlanDetail = () => {
             />
           ))
         ) : (
-          <div className="p-20 text-center bg-zinc-50/50 dark:bg-white/2 border border-dashed border-zinc-200 dark:border-white/10 rounded-[3rem]">
+          <div className="p-20 text-center bg-zinc-50/50 dark:bg-white/5 border border-dashed border-zinc-200 dark:border-white/10 rounded-[3rem]">
             <div className="w-16 h-16 bg-zinc-100 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
               <LayoutGrid className="w-8 h-8 text-zinc-300 dark:text-zinc-600" />
             </div>
