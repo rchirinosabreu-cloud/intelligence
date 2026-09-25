@@ -51,8 +51,18 @@ try {
       result.meta.state = action === 'MARK_CORRECTED' ? 'PENDING' : 'CURRENT';
       return route.fulfill({ json: { finding: result.review.findings[0] } });
     });
+    // The panel opens collapsed, so every load starts by opening it.
+    const expand = async () => {
+      const toggle = page.getByRole('button', { name: 'Ver más', exact: true });
+      await toggle.waitFor({ timeout: 5000 });
+      await toggle.click();
+      await page.getByRole('button', { name: 'Cerrar', exact: true }).waitFor({ timeout: 5000 });
+    };
     await page.goto(`http://127.0.0.1:${port}/tests/fixtures/bria-review.html`);
     await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), dark);
+    assert.equal(await page.locator('#bria-content-plan-review-body').count(), 0, 'el panel abre cerrado');
+    await page.screenshot({ path: `output/bria-review-collapsed-${name}.png`, fullPage: true });
+    await expand();
     const retry = page.getByRole('button', { name: 'Reintentar verificación', exact: true });
     await retry.waitFor();
     // The failed state explains the last technical cause, not only the human message.
@@ -109,6 +119,7 @@ try {
     result.meta.progress = { completedBatches: 1, totalBatches: 2, reviewedItems: 12, totalItems: 13 };
     await page.reload();
     await page.evaluate(dark => document.documentElement.classList.toggle('dark', dark), dark);
+    await expand();
     await page.getByText('Avance guardado: 12/13 piezas · 1/2 lotes.', { exact: true }).waitFor();
     await page.getByText('Puntaje de la última revisión completa.', { exact: true }).waitFor();
     await page.waitForFunction(() => document.querySelector('button[aria-label="Revisar nuevamente"]')?.getBoundingClientRect().width === 44, null, { timeout: 5000 });
@@ -117,6 +128,7 @@ try {
     result.review.scope = null;
     result.meta.state = 'CURRENT';
     await page.reload();
+    await expand();
     await page.getByText('Cobertura de piezas no registrada', { exact: true }).waitFor();
     await page.getByRole('button', { name: 'Ver pieza', exact: true }).click();
     assert.ok(page.url().endsWith('?item=piece'));

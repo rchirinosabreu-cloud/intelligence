@@ -59,7 +59,10 @@ const scrollAnimationDuration = 420;
 const authConfig = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } });
 
 const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
-  const [isExpanded, setIsExpanded] = useState(true);
+  // Cerrado por defecto (Rodny, 25 de septiembre de 2026): el panel se abre al
+  // pulsarlo, o solo cuando hay algo que la persona tiene que ver (un fallo o
+  // el resultado de un reintento suyo).
+  const [isExpanded, setIsExpanded] = useState(false);
   const [isReviewing, setIsReviewing] = useState(false);
   const [result, setResult] = useState(null);
   const [error, setError] = useState('');

@@ -35,6 +35,26 @@ export const assertReviewedItems = (actual, expected) => {
   }
 };
 
+// Cada lote escribe su propio resumen. Encadenarlos tal cual producía un texto
+// que se contradecía («la revisión cubre las seis piezas del lote» junto a «las
+// cuatro piezas presentan…») y repetía la misma frase por cada lote. Se
+// compone uno solo: un recuento real y las observaciones distintas.
+export const composeReviewSummary = (completed = [], totalItems = 0) => {
+  if (completed.length === 1) return String(completed[0]?.review?.summary || '').trim();
+  const seen = new Set();
+  const sentences = [];
+  for (const part of completed) {
+    for (const sentence of String(part?.review?.summary || '').split(/(?<=\.)\s+/)) {
+      const text = sentence.trim();
+      const key = text.toLowerCase();
+      if (!text || seen.has(key)) continue;
+      seen.add(key);
+      sentences.push(text);
+    }
+  }
+  return `Revisé ${totalItems} piezas. ${sentences.join(' ')}`.trim().slice(0, 1050);
+};
+
 export const aggregateContentPlanReviewBatches = completed => {
   const totalItems = completed.reduce((count, part) => count + part.itemIds.length, 0);
   const mergedDimensions = Object.fromEntries(dimensions.map(key => {
@@ -53,7 +73,7 @@ export const aggregateContentPlanReviewBatches = completed => {
   const verdict = completed.some(part => part.review.verdict === 'RIESGO') ? 'RIESGO'
     : completed.some(part => part.review.verdict === 'REQUIERE_AJUSTES') ? 'REQUIERE_AJUSTES' : 'ALINEADA';
   return {
-    summary: completed.length === 1 ? completed[0].review.summary : `Revisé ${totalItems} piezas en ${completed.length} lotes. ${completed.map(part => part.review.summary).join(' ').slice(0, 1050)}`,
+    summary: composeReviewSummary(completed, totalItems),
     verdict, dimensions: mergedDimensions, findings: [...findings.values()],
     ...(completed.some(part => part.review.scoreChecks) ? { scoreChecks: completed.flatMap(part => part.review.scoreChecks || []) } : {}),
     scope: { version: 1, totalItems, reviewedItems: totalItems, reviewedItemIds: completed.flatMap(part => part.itemIds), batchCount: completed.length, complete: true,
