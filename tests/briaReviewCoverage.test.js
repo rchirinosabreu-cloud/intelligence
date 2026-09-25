@@ -14,7 +14,10 @@ test('service reviews every active piece with full text, publishes one weighted 
       const snapshot = reviewSnapshot(request);
       seen.push(...snapshot.items);
       return { text: '```json\n' + JSON.stringify(reviewPayload(request, { findings: snapshot.items.map(item => ({
-        ruleKey: 'COPY', field: 'copyText', category: 'GRAMATICA', severity: 'INFO', title: 'Revisar', detail: 'Revisar copy', recommendation: 'Corregir', itemId: item.id, evidenceIds: []
+        ruleKey: 'COPY', field: 'copyText', category: 'GRAMATICA',
+        // La pieza 60 vive en el último lote: su hallazgo grave debe sobrevivir al recorte.
+        severity: item.id === 'piece-60' ? 'CRITICAL' : 'WARNING',
+        title: 'Revisar', detail: 'Revisar copy', recommendation: 'Corregir', itemId: item.id, evidenceIds: []
       })) })) + '\n```' };
     } }
   });
@@ -24,7 +27,9 @@ test('service reviews every active piece with full text, publishes one weighted 
   assert.equal(result.review.scope.reviewedItems, 61);
   assert.equal(result.review.scope.totalItems, 61);
   assert.equal(result.review.scope.complete, true);
-  assert.equal(result.review.findings.length, 61);
+  // Se revisan las 61 piezas, pero se publican pocas tarjetas y las más graves primero.
+  assert.equal(result.review.findings.length, 15);
+  assert.equal(result.review.findings[0].itemId, 'piece-60');
   assert.equal(result.review.score, 80);
 });
 test('unacknowledged pieces and malformed dimensions fail before publishing a partial score', async () => {

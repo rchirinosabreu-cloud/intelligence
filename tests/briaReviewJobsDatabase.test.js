@@ -33,7 +33,8 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
     const item = await db.contentItem.create({ data: { planId: plan.id, objective: 'Objetivo', format: 'Reel', copyText: 'Texto corregido', captionText: '', publishDate: start } });
     const config = options(plan.id);
     config.reviewOptions.ai.generate = async request => ({ text: JSON.stringify({ ...reviewPayload(request, rawReview), findings: [{
-      ruleKey: 'TEXT_ERROR', field: 'copyText', itemId: item.id, category: 'GRAMATICA', severity: 'INFO', title: 'Revisar texto', detail: 'Error en el texto', recommendation: 'Corregir el texto', evidenceIds: []
+      // CRITICAL y no INFO: desde el 25 de septiembre lo informativo no se publica.
+      ruleKey: 'TEXT_ERROR', field: 'copyText', itemId: item.id, category: 'GRAMATICA', severity: 'CRITICAL', title: 'Revisar texto', detail: 'Error en el texto', recommendation: 'Corregir el texto', evidenceIds: []
     }] }) });
     const result = await scheduler.runContentPlanReviewJob(config);
     return { plan, item, finding: result.result.review.findings[0], config: options(plan.id) };
@@ -420,6 +421,68 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       config.now = () => new Date(start.getTime() + 60 * 60000);
       assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
       assert.equal((await db.contentPlan.findUnique({ where: { id: plan.id } })).briaReviewDiagnostics, null);
+    });
+    await t.test('a finding that stops being detected leaves the active list, and comes back if it reappears', async () => {
+      const { plan, item, finding, config } = await findingFixture();
+      // Una revisión completa que ya no reporta ese hallazgo.
+      config.reviewOptions.ai.generate = async request => ({ text: JSON.stringify(request.responseSchema?.properties?.verifications ? { verifications: [] } : reviewPayload(request, rawReview)), requestId: 'fixture' });
+      await db.contentItem.update({ where: { id: item.id }, data: { copyText: 'Texto nuevo que ya no tiene el error' } });
+      config.now = () => new Date(start.getTime() + 60000);
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
+
+      const stale = await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } });
+      assert.equal(stale.status, 'STALE');
+      assert.equal(stale.actionReason, 'Ya no se detecta en la parrilla actual');
+      assert.equal(stale.lastActionById, null, 'nadie lo decidió: lo decidió la ausencia');
+      assert.equal((await getContentPlanReview(plan.id, { db })).review.findings.length, 0);
+
+      // Si vuelve a detectarse, vuelve a la lista.
+      config.reviewOptions.ai.generate = async request => {
+        if (request.responseSchema?.properties?.verifications) return { text: JSON.stringify({ verifications: [] }) };
+        return { text: JSON.stringify({ ...reviewPayload(request, rawReview), findings: [{
+          ruleKey: 'TEXT_ERROR', field: 'copyText', itemId: item.id, category: 'GRAMATICA', severity: 'CRITICAL',
+          title: 'Revisar texto', detail: 'Error en el texto', recommendation: 'Corregir el texto', evidenceIds: []
+        }] }) };
+      };
+      await db.contentItem.update({ where: { id: item.id }, data: { copyText: 'Otro texto distinto' } });
+      config.now = () => new Date(start.getTime() + 120000);
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
+      assert.equal((await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } })).status, 'OPEN');
+    });
+    await t.test('a correction someone asked to verify is never archived for not being detected', async () => {
+      const { plan, item, finding, config } = await findingFixture();
+      await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', actorUserId: null, db, now: start });
+      config.reviewOptions.ai.generate = async request => ({ text: JSON.stringify(request.responseSchema?.properties?.verifications ? { verifications: [] } : reviewPayload(request, rawReview)), requestId: 'fixture' });
+      await db.contentItem.update({ where: { id: item.id }, data: { copyText: 'Texto corregido de verdad' } });
+      config.now = () => new Date(start.getTime() + 60000);
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
+      // La verificación quedó sin confirmar, así que sigue abierto para la persona, no archivado.
+      assert.equal((await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } })).status, 'OPEN');
+    });
+    await t.test('a plan never publishes more findings than a person can read', async () => {
+      const plan = await fixture();
+      const items = [];
+      for (let index = 0; index < 10; index++) {
+        items.push(await db.contentItem.create({ data: { planId: plan.id, objective: `Pieza ${index}`, format: 'Reel', copyText: `Texto ${index}`, captionText: '', publishDate: start } }));
+      }
+      const config = { ...options(plan.id), logger: { error() {} } };
+      config.reviewOptions.ai.generate = async request => {
+        if (request.responseSchema?.properties?.verifications) return { text: JSON.stringify({ verifications: [] }) };
+        const snapshotItems = JSON.parse(request.prompt.split('PARRILLA ACTUAL:\n')[1].split('\n')[0]).items;
+        // Seis hallazgos por pieza, como los que hoy llenan la parrilla.
+        const findings = snapshotItems.flatMap(snapshotItem => Array.from({ length: 6 }, (_, n) => ({
+          ruleKey: `REGLA_${n}`, field: 'copyText', itemId: snapshotItem.id, category: 'GRAMATICA',
+          severity: n === 0 ? 'CRITICAL' : n < 3 ? 'WARNING' : 'INFO',
+          title: `Hallazgo ${n}`, detail: 'Detalle', recommendation: 'Corregir', evidenceIds: []
+        })));
+        return { text: JSON.stringify({ ...reviewPayload(request, rawReview), findings }) };
+      };
+      assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
+      const published = await db.contentPlanReviewFinding.count({ where: { planId: plan.id, status: 'OPEN' } });
+      assert.ok(published <= 15, `se publicaron ${published} hallazgos`);
+      const perItem = await db.contentPlanReviewFinding.groupBy({ by: ['itemId'], where: { planId: plan.id, status: 'OPEN' }, _count: { _all: true } });
+      assert.ok(perItem.every(row => row._count._all <= 3), 'ninguna pieza acapara la lista');
+      assert.equal(await db.contentPlanReviewFinding.count({ where: { planId: plan.id, severity: 'INFO' } }), 0, 'lo informativo no se persiste');
     });
     await t.test('repeated worker crashes end in a visible failure instead of infinite recovery', async () => {
       const plan = await fixture();

@@ -152,6 +152,42 @@ export const buildContentPlanReviewUsage = ({ review = null, verification = null
   };
 };
 
+// Volumen de hallazgos (Rodny, 25 de septiembre de 2026). Revisar cien tarjetas
+// cuesta más que hacer la parrilla, así que una revisión publica pocas y buenas:
+// las informativas no entran, ninguna pieza acapara la lista y el total cabe en
+// una sentada. El puntaje no depende de esto: lo calculan las dimensiones.
+export const MAX_FINDINGS_PER_ITEM = 3;
+export const MAX_FINDINGS_PER_PLAN = 15;
+const PUBLISHABLE_SEVERITIES = { CRITICAL: 2, WARNING: 1 };
+
+export const selectPublishableFindings = (findings, {
+  maxPerItem = MAX_FINDINGS_PER_ITEM,
+  maxTotal = MAX_FINDINGS_PER_PLAN
+} = {}) => {
+  const byPriority = (a, b) => (PUBLISHABLE_SEVERITIES[b.finding.severity] - PUBLISHABLE_SEVERITIES[a.finding.severity]) || (a.index - b.index);
+  const publishable = (Array.isArray(findings) ? findings : [])
+    .filter((finding) => PUBLISHABLE_SEVERITIES[finding?.severity])
+    .map((finding, index) => ({ finding, index }));
+  // Lo que afecta a la parrilla entera (estrategia, calendario) entra primero y
+  // con cupo propio: si compitiera por orden, veinte piezas lo dejarían fuera.
+  const ordered = [
+    ...publishable.filter(({ finding }) => !finding.itemId).sort(byPriority).slice(0, maxPerItem),
+    ...publishable.filter(({ finding }) => finding.itemId).sort(byPriority)
+  ];
+  const perItem = new Map();
+  const selected = [];
+  for (const { finding } of ordered) {
+    if (selected.length >= maxTotal) break;
+    if (finding.itemId) {
+      const used = perItem.get(finding.itemId) || 0;
+      if (used >= maxPerItem) continue;
+      perItem.set(finding.itemId, used + 1);
+    }
+    selected.push(finding);
+  }
+  return selected;
+};
+
 const toApiResult = (run, findings = [], planState = 'CURRENT') => ({
   review: {
     summary: run.summary, verdict: run.verdict, score: run.score, coverage: run.coverage,
@@ -272,6 +308,28 @@ export const createContentPlanReviewRepository = (db = prisma) => ({
           lastVerifiedAt: new Date(result.meta.reviewedAt), lastReviewId: run.id
         } });
       }
+      // Un hallazgo que ya no aparece deja de ocupar la lista activa. No se
+      // declara resuelto —no aparecer no lo demuestra— y vuelve a abrirse solo
+      // si una revisión posterior lo detecta otra vez. Sin esto la pila crece
+      // para siempre: nada cerraba lo que dejaba de detectarse.
+      if (result.review.scope?.complete) {
+        const examined = verifications.map((decision) => decision.findingId).filter(Boolean);
+        await tx.contentPlanReviewFinding.updateMany({
+          where: {
+            planId: plan.id,
+            status: 'OPEN',
+            ...(detectedFingerprints.length ? { fingerprint: { notIn: detectedFingerprints } } : {}),
+            // Lo que se acaba de comprobar conserva el resultado de su verificación.
+            ...(examined.length ? { id: { notIn: examined } } : {})
+          },
+          data: {
+            status: 'STALE',
+            actionReason: 'Ya no se detecta en la parrilla actual',
+            lastActionAt: new Date(result.meta.reviewedAt),
+            lastActionById: null
+          }
+        });
+      }
       const findings = await tx.contentPlanReviewFinding.findMany({
         where: { planId: plan.id, status: { in: ['OPEN', 'VERIFYING'] } },
         orderBy: [{ severity: 'asc' }, { lastDetectedAt: 'desc' }]
@@ -374,7 +432,7 @@ export const reviewContentPlanWithBria = async ({
     loadCheckpoint: () => persistence?.loadCheckpoint?.(plan.id),
     saveCheckpoint: checkpoint => persistence?.saveCheckpoint?.(plan.id, checkpoint, { execution, now, signal })
   });
-  const review = aiResult.review;
+  const review = { ...aiResult.review, findings: selectPublishableFindings(aiResult.review.findings) };
   const verificationCalls = [];
   const verifications = await verifyContentPlanFindings({
     snapshot, findings: activeFindings, evidence, ai: governed.ai, signal, calls: verificationCalls
