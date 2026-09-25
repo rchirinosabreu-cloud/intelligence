@@ -89,6 +89,32 @@ try {
     const afterSwitch = await page.evaluate(() => document.querySelectorAll('[id^="item-"]').length);
     assert.equal(afterSwitch, 1, 'sigue habiendo un solo editor tras cambiar de pieza');
 
+    // 4. El calendario: el mismo mes, visto por días.
+    await page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Calendario').click());
+    await page.waitForFunction(() => document.body.textContent.includes('Sin fecha todavía'));
+    await page.evaluate(() => document.fonts.ready);
+
+    const calendar = await page.evaluate(() => ({
+      // Septiembre de 2026 empieza en martes: la rejilla arranca el lunes 31 de agosto.
+      firstCell: document.body.textContent.includes('LUN'),
+      editors: document.querySelectorAll('[id^="item-"]').length,
+      undated: document.body.textContent.includes('Todas las piezas tienen día'),
+      pressed: [...document.querySelectorAll('[aria-pressed="true"]')].map(b => b.textContent.trim())
+    }));
+    assert.deepEqual(calendar.pressed, ['Calendario'], 'el selector marca la vista que se está mirando');
+    assert.equal(calendar.firstCell, true, 'la semana empieza en lunes');
+    assert.equal(calendar.editors, 0, 'el calendario sustituye al editor, no se apila debajo');
+    assert.equal(calendar.undated, true, 'la muestra tiene todas las piezas con día');
+
+    await page.screenshot({ path: `output/editor-calendario-${name}.png`, fullPage: true });
+
+    // Tocar una pieza del calendario la abre en el editor.
+    await page.evaluate(() => {
+      const chip = [...document.querySelectorAll('button')].find(b => b.textContent.includes('Agenda tu cita'));
+      chip.click();
+    });
+    await page.waitForFunction(() => document.querySelectorAll('[id^="item-"]').length === 1);
+
     await page.close();
   }
 

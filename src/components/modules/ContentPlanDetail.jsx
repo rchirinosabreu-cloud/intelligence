@@ -8,6 +8,7 @@ import { getContentPlanMonthName } from '@/lib/contentPlanPeriod';
 import { planFinalAssetUpload } from '@/lib/uploadLimits';
 import { driveLinkProblem } from '@/lib/driveLinks';
 import { driveAssetUrls } from '@/lib/finalAssetShape';
+import { WEEKDAY_LABELS, buildMonthGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
 import {
   ChevronLeft, Plus, Send, ExternalLink, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
@@ -403,6 +404,114 @@ const PlanPieceRail = ({ items, selectedId, onSelect, onAdd }) => (
     </div>
   </nav>
 );
+
+const PIECE_CHIP = {
+  APROBADO: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green',
+  REALIZADO: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green',
+  PUBLICADO: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green',
+  EN_REVISION: 'bg-brand-yellow-soft text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow',
+  EN_PRODUCCION: 'bg-brand-cyan-soft text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan',
+  DEVUELTO: 'bg-destructive/10 text-destructive'
+};
+const NEUTRAL_CHIP = 'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-300';
+
+/**
+ * El mes como mes (Rodny, 24 de septiembre de 2026).
+ *
+ * El carril dice qué piezas hay; el calendario dice **cuándo**, que es lo único que una lista no puede
+ * enseñar: los días vacíos y los días con tres piezas encima. Tocar una pieza la abre en el editor —son
+ * dos formas de mirar el mismo mes, no dos sitios distintos.
+ */
+const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd }) => {
+  const weeks = buildMonthGrid(year, month);
+  const { byDay, undated } = groupItemsByDay(items);
+
+  return (
+    <div className="space-y-4">
+      <div className="overflow-hidden rounded-3xl border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
+        <div className="mb-2 grid grid-cols-7 gap-2">
+          {WEEKDAY_LABELS.map(label => (
+            <div key={label} className="px-1 text-[10px] font-black tracking-[0.08em] text-zinc-400">{label}</div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-7 gap-2">
+          {weeks.flat().map(cell => {
+            const pieces = byDay.get(cell.key) || [];
+            return (
+              <div
+                key={cell.key}
+                className={`flex min-h-[112px] flex-col gap-1.5 rounded-xl border p-2 ${
+                  cell.inMonth
+                    ? 'border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900'
+                    : 'border-zinc-100 bg-zinc-50 dark:border-white/5 dark:bg-white/5'
+                }`}
+              >
+                <span className={`text-[11px] font-bold tabular-nums ${cell.inMonth ? 'text-zinc-500 dark:text-zinc-400' : 'text-zinc-300 dark:text-zinc-600'}`}>
+                  {cell.day}
+                </span>
+
+                {pieces.slice(0, 2).map(piece => (
+                  <button
+                    key={piece.id}
+                    type="button"
+                    onClick={() => onOpenPiece(piece.id)}
+                    className={`flex flex-col gap-0.5 rounded-lg px-2 py-1.5 text-left transition-opacity hover:opacity-80 ${PIECE_CHIP[piece.status] || NEUTRAL_CHIP}`}
+                  >
+                    <span className="text-[9px] font-black uppercase tracking-wider opacity-80">{piece.format}</span>
+                    <span className="line-clamp-2 text-[11px] font-medium leading-tight text-zinc-700 dark:text-zinc-200">
+                      {piece.objective}
+                    </span>
+                  </button>
+                ))}
+
+                {pieces.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenPiece(pieces[2].id)}
+                    className="px-1 text-left text-[10px] font-bold text-zinc-500 hover:underline dark:text-zinc-400"
+                  >
+                    +{pieces.length - 2} más
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-zinc-300 bg-white p-4 dark:border-white/15 dark:bg-zinc-900">
+        <div className="flex shrink-0 flex-col">
+          <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Sin fecha todavía</span>
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+            {undated.length ? 'Ábrelas y ponles día de publicación' : 'Todas las piezas tienen día'}
+          </span>
+        </div>
+
+        {undated.map(piece => (
+          <button
+            key={piece.id}
+            type="button"
+            onClick={() => onOpenPiece(piece.id)}
+            className="flex max-w-[260px] flex-col gap-0.5 rounded-lg bg-zinc-100 px-3 py-2 text-left transition-opacity hover:opacity-80 dark:bg-white/10"
+          >
+            <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{piece.format}</span>
+            <span className="truncate text-xs font-medium text-zinc-700 dark:text-zinc-200">{piece.objective}</span>
+          </button>
+        ))}
+
+        <div className="flex-grow" />
+        <button
+          type="button"
+          onClick={onAdd}
+          className="shrink-0 rounded-xl bg-brand-cyan-deep px-4 py-2.5 text-xs font-bold text-white transition hover:brightness-110"
+        >
+          Nueva pieza
+        </button>
+      </div>
+    </div>
+  );
+};
 
 /**
  * Lo que el cliente verá de esta pieza, mientras se escribe. No es decorativo: el guion acabó en el
@@ -980,6 +1089,7 @@ const ContentPlanDetail = () => {
   const [directUploadPercent, setDirectUploadPercent] = useState(null);
   const [driveLinkItemId, setDriveLinkItemId] = useState(null);
   const [selectedItemId, setSelectedItemId] = useState(null);
+  const [planView, setPlanView] = useState('editor');
 
   // Parse period (month-year)
   const [monthName, year] = (period || '').split('-');
@@ -1426,9 +1536,40 @@ const ContentPlanDetail = () => {
         )}
       </div>
 
-      {/* El mes a la izquierda, la pieza elegida a la derecha. */}
+      {/* El mes a la izquierda, la pieza elegida a la derecha; o el mes como calendario. */}
       <div className="space-y-6">
-        {orderedPlanItems.length > 0 ? (
+        {orderedPlanItems.length > 0 && (
+          <div className="flex items-center gap-1 rounded-xl border border-zinc-200 bg-white p-1 w-fit dark:border-white/10 dark:bg-zinc-900">
+            {[
+              { key: 'editor', label: 'Editor' },
+              { key: 'calendar', label: 'Calendario' }
+            ].map(option => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setPlanView(option.key)}
+                aria-pressed={planView === option.key}
+                className={`rounded-lg px-4 py-2 text-xs font-bold transition ${
+                  planView === option.key
+                    ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                    : 'text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-white/5'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {orderedPlanItems.length > 0 && planView === 'calendar' ? (
+          <PlanCalendar
+            items={orderedPlanItems}
+            year={Number(plan.year)}
+            month={Number(plan.month)}
+            onOpenPiece={(id) => { setSelectedItemId(id); setPlanView('editor'); }}
+            onAdd={handleAddItem}
+          />
+        ) : orderedPlanItems.length > 0 ? (
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[312px_minmax(0,1fr)] lg:items-start">
             <div className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)]">
               <PlanPieceRail
