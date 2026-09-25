@@ -236,24 +236,38 @@ const FinalAssetTile = ({ item, asset, isEditing, onDelete, isDeleting }) => {
           />
         ) : isImage ? <img src={previewUrl || undefined} alt={asset.name || 'Lámina del carrusel'} className="h-full w-full object-cover" /> : isVideo ? <video src={previewUrl || undefined} className="h-full w-full object-cover" controls preload="metadata" /> : <FileText className="m-auto h-8 w-8 text-zinc-300" />}
       </div>
-      <div className="flex items-center justify-between gap-2 px-2.5 py-2">
-        <span className="truncate text-[10px] font-bold text-zinc-600 dark:text-zinc-300">{asset.name || 'Archivo final'}</span>
-        <div className="flex shrink-0 items-center gap-1">
-          {drive && (
-            <a
-              href={drive.openUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="rounded-lg p-1.5 text-brand-cyan-deep hover:bg-brand-cyan/10 dark:text-brand-cyan"
-              aria-label={`Abrir ${asset.name || 'el archivo'} en Drive`}
-              title="Abrir en Drive"
-            >
-              <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          )}
-          {isEditing && <button type="button" onClick={() => onDelete(item.id, asset.id)} disabled={isDeleting} className="brain-danger-button-icon rounded-lg p-1.5" aria-label={`Eliminar ${asset.name || 'archivo final'}`}><Trash2 className="h-3.5 w-3.5" /></button>}
-        </div>
+      {/* Las acciones van sobre la miniatura, no en la línea del nombre: compitiendo por el ancho de
+          una tarjeta pequeña, el nombre se recortaba hasta quedarse en una letra suelta
+          (Rodny, 25 de septiembre de 2026). Así el nombre se queda con la línea entera. */}
+      <div className="absolute right-1.5 top-1.5 flex items-center gap-1">
+        {drive && (
+          <a
+            href={drive.openUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="rounded-lg bg-black/55 p-1.5 text-white backdrop-blur-sm transition hover:bg-black/75"
+            aria-label={`Abrir ${asset.name || 'el archivo'} en Drive`}
+            title="Abrir en Drive"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+          </a>
+        )}
+        {isEditing && (
+          <button
+            type="button"
+            onClick={() => onDelete(item.id, asset.id)}
+            disabled={isDeleting}
+            className="rounded-lg bg-black/55 p-1.5 text-white backdrop-blur-sm transition hover:bg-destructive"
+            aria-label={`Eliminar ${asset.name || 'archivo final'}`}
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        )}
       </div>
+
+      <span className="block truncate px-2.5 py-2 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
+        {asset.name || 'Archivo final'}
+      </span>
     </div>
   );
 };
@@ -792,29 +806,39 @@ const ContentItemCard = ({
           </div>
         </div>
 
-        <div className="grid grid-cols-1 gap-6 border-t border-zinc-100 bg-zinc-50/60 px-6 py-5 dark:border-white/5 dark:bg-white/5 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
+        {/* `items-start`: sin esto las tres columnas se estiran al alto de la más alta y Referencias
+            e Insumos quedaban flotando sobre un vacío enorme. */}
+        <div className="grid grid-cols-1 items-start gap-6 border-t border-zinc-100 bg-zinc-50/60 px-6 py-5 dark:border-white/5 dark:bg-white/5 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <div className="flex flex-col gap-2.5">
             <span className={FIELD_LABEL}>Pieza final</span>
 
             {finalAssets.length > 0 && (
-              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                 {finalAssets.map(asset => (
                   <FinalAssetTile key={asset.id} item={item} asset={asset} isEditing={isEditing} onDelete={onFinalAssetDelete} isDeleting={isFinalAssetDeleting} />
                 ))}
               </div>
             )}
 
+            {/* La zona grande es el estado vacío. Con material ya cargado se encoge a una línea: un
+                rectángulo enorme pesaba más que la propia pieza (Rodny, 25 de septiembre de 2026). */}
             {isEditing ? (
-              <div className="flex flex-col items-center gap-2.5 rounded-xl border border-dashed border-zinc-300 bg-white p-5 text-center dark:border-white/15 dark:bg-zinc-900">
+              <div className={`rounded-xl border border-dashed border-zinc-300 bg-white dark:border-white/15 dark:bg-zinc-900 ${
+                finalAssets.length
+                  ? 'flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5'
+                  : 'flex flex-col items-center gap-2.5 p-5 text-center'
+              }`}>
                 {isFinalAssetUploading
-                  ? <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
-                  : <UploadCloud className="h-5 w-5 text-zinc-400" />}
-                <span className="text-[13px] text-zinc-600 dark:text-zinc-300">
-                  {finalAssets.length ? 'Añadir más material' : 'Arrastra la pieza aquí'}
-                </span>
-                <div className="flex flex-col items-center gap-1">
+                  ? <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
+                  : <UploadCloud className={finalAssets.length ? 'h-4 w-4 text-zinc-400' : 'h-5 w-5 text-zinc-400'} />}
+                {/* Con material ya cargado no hace falta anunciar «añadir más»: el propio botón
+                    dice «Añadir archivos» (Rodny, 25 de septiembre de 2026). */}
+                {finalAssets.length === 0 && (
+                  <span className="text-[13px] text-zinc-500 dark:text-zinc-400">Arrastra la pieza aquí</span>
+                )}
+                <div className={finalAssets.length ? 'flex items-center gap-2.5' : 'flex flex-col items-center gap-1'}>
                   <label className="cursor-pointer text-[13px] font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan">
-                    Elegir archivos
+                    Añadir archivos
                     <input
                       type="file"
                       multiple
@@ -828,6 +852,7 @@ const ContentItemCard = ({
                       }}
                     />
                   </label>
+                  {finalAssets.length > 0 && <span className="text-zinc-300 dark:text-zinc-600">·</span>}
                   <button
                     type="button"
                     onClick={() => onDriveLink(item.id)}
