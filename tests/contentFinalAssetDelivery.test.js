@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { DRIVE_PROVIDER } from '../src/lib/driveLinks.js';
-import { driveAssetUrls, finalAssetKind, finalAssetShapeProblem, isDriveAsset } from '../src/lib/finalAssetShape.js';
+import { driveAssetUrls, driveEmbedAspect, finalAssetKind, finalAssetShapeProblem, isDriveAsset } from '../src/lib/finalAssetShape.js';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
@@ -125,6 +125,26 @@ test('el enlace de Drive se resuelve al guardarlo y se muestra sin servir bytes 
   assert.match(screen, /const DriveLinkDialog/);
   assert.match(screen, /Revisa los permisos en Drive\./, 'el único fallo que la plataforma no puede ver se avisa al pegarlo');
   assert.match(screen, /Cualquier persona con el enlace/);
+});
+
+test('un reel de Drive se ve vertical, no achatado', async () => {
+  // Rodny, 25 de septiembre de 2026: «no me gusta como se ve, creo que podría verse más alto, porque
+  // normalmente son 9:16». Google no dice la forma del video; el formato de la pieza sí la sabe.
+  assert.equal(driveEmbedAspect('Reel'), '9 / 16');
+  assert.equal(driveEmbedAspect('Video'), '9 / 16');
+  assert.equal(driveEmbedAspect('Historia'), '9 / 16');
+  assert.equal(driveEmbedAspect('Carrusel'), '16 / 9');
+  assert.equal(driveEmbedAspect('Post'), '16 / 9');
+  assert.equal(driveEmbedAspect(null), '16 / 9', 'sin formato, lo de siempre');
+
+  const shared = await read('src/components/public/SharedContentPlan.jsx');
+  assert.match(shared, /const aspectRatio = driveEmbedAspect\(format\)/);
+  assert.match(shared, /format=\{item\.format\}/, 'el portal le pasa el formato de la pieza');
+  // Un 9:16 a lo ancho de la columna mediría mil píxeles de alto: hay que acotar el ancho.
+  assert.match(shared, /isVerticalPiece \? 'max-w-\[380px\]'/);
+
+  const editor = await read('src/components/modules/ContentPlanDetail.jsx');
+  assert.match(editor, /aspectRatio: driveEmbedAspect\(item\.format\)/, 'la miniatura del editor también');
 });
 
 test('el único sitio ajeno que la plataforma incrusta es el reproductor de Drive', async () => {

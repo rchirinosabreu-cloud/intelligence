@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { formatContentPlanDate, getContentPlanMonthName } from '@/lib/contentPlanPeriod';
+import { driveEmbedAspect } from '@/lib/finalAssetShape';
 import {
   CheckCircle2, Clock, AlertCircle, Loader2, Calendar,
   Video, Image as ImageIcon, MessageSquare, Check, X, Send,
@@ -101,7 +102,7 @@ const FinalAssetThumb = ({ item }) => {
   return <img src={src} alt="" className={base} />;
 };
 
-const FinalAssetPreview = ({ assets = [] }) => {
+const FinalAssetPreview = ({ assets = [], format }) => {
   const [activeIndex, setActiveIndex] = useState(0);
   if (!assets.length) {
     return (
@@ -118,13 +119,16 @@ const FinalAssetPreview = ({ assets = [] }) => {
   const isDrive = Boolean(asset.embedUrl);
   const isImage = !isDrive && (asset.mimeType || '').startsWith('image/');
   const isVideo = !isDrive && (asset.mimeType || '').startsWith('video/');
+  const aspectRatio = driveEmbedAspect(format);
+  const isVerticalPiece = aspectRatio === '9 / 16';
 
   return (
     <div className="space-y-3">
       <div className="overflow-hidden rounded-[2rem] border border-zinc-200 bg-zinc-900 dark:border-white/10">
         <div className="relative">
           {isDrive ? (
-            <div className="relative w-full" style={{ aspectRatio: '16 / 9' }}>
+            // Un reel es vertical: sin acotar el ancho, un 9:16 a 560 px mide mil de alto.
+            <div className={`relative mx-auto w-full ${isVerticalPiece ? 'max-w-[380px]' : ''}`} style={{ aspectRatio }}>
               <iframe
                 src={asset.embedUrl}
                 title={asset.name || 'Pieza final en Drive'}
@@ -256,7 +260,7 @@ const PieceDetail = ({
           {/* La pieza se centra en su panel: si es más corta que el texto, no deja un vacío arriba. */}
           <div className="flex items-center justify-center border-b border-zinc-100 bg-zinc-50 p-6 dark:border-white/5 dark:bg-white/5 lg:col-span-7 lg:border-b-0 lg:border-r">
             <div className="w-full">
-              <FinalAssetPreview assets={assetsOf(item)} />
+              <FinalAssetPreview assets={assetsOf(item)} format={item.format} />
             </div>
           </div>
 

@@ -7,7 +7,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { getContentPlanMonthName } from '@/lib/contentPlanPeriod';
 import { planFinalAssetUpload } from '@/lib/uploadLimits';
 import { driveLinkProblem } from '@/lib/driveLinks';
-import { driveAssetUrls } from '@/lib/finalAssetShape';
+import { driveAssetUrls, driveEmbedAspect } from '@/lib/finalAssetShape';
 import { WEEKDAY_LABELS, buildMonthGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
 import {
   ChevronLeft, Plus, Send, ExternalLink, Save, Trash2,
@@ -223,7 +223,8 @@ const FinalAssetTile = ({ item, asset, isEditing, onDelete, isDeleting }) => {
 
   return (
     <div className="group/asset relative overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 dark:border-white/10 dark:bg-zinc-950">
-      <div className="aspect-square">
+      {/* Un reel es vertical: el marco de Drive toma la forma del formato de la pieza, no la de fábrica. */}
+      <div className={drive ? '' : 'aspect-square'} style={drive ? { aspectRatio: driveEmbedAspect(item.format) } : undefined}>
         {drive ? (
           <iframe
             src={drive.embedUrl}
@@ -1111,19 +1112,37 @@ const ContentPlanDetail = () => {
   });
 
   const generateShareTokenMutation = useMutation({
-    mutationFn: async () => {
-      const response = await axios.post(`${getApiBaseUrl()}/api/content/plans/${currentPlanId}/share-token`, {}, {
+    mutationFn: async ({ rotate = false } = {}) => {
+      const response = await axios.post(`${getApiBaseUrl()}/api/content/plans/${currentPlanId}/share-token`, { rotate }, {
         headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
       });
       return response.data;
     },
-    onSuccess: (data) => {
+    onSuccess: (data, variables) => {
       queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
       const url = `${window.location.origin}/compartir/${data.shareToken}`;
       navigator.clipboard.writeText(url);
-      toast.success('¡Link compartido generado y copiado al portapapeles!');
+      toast.success(variables?.rotate ? 'Enlace nuevo copiado. El anterior ya no funciona.' : 'Enlace copiado');
+    },
+    onError: (error) => {
+      console.error('Error sharing the plan:', error.response?.data || error);
+      toast.error(error.response?.data?.error || 'No se pudo obtener el enlace');
     }
   });
+
+  /**
+   * Pedir el enlace **no** lo cambia: el cliente puede tenerlo guardado. Cambiarlo es otra acción, y
+   * avisa de lo que rompe antes de hacerlo.
+   */
+  const handleRotateShareToken = async () => {
+    const confirmed = await confirm({
+      title: 'Generar un enlace nuevo',
+      description: 'El enlace que ya le enviaste al cliente dejará de funcionar. Tendrás que mandarle el nuevo.',
+      confirmText: 'Generar uno nuevo',
+      cancelText: 'Cancelar'
+    });
+    if (confirmed) generateShareTokenMutation.mutate({ rotate: true });
+  };
 
   const createItemMutation = useMutation({
     mutationFn: async (data) => {
@@ -1351,14 +1370,26 @@ const ContentPlanDetail = () => {
             <div className="w-px h-4 bg-zinc-200 dark:bg-white/10" />
 
             <button
-              onClick={() => generateShareTokenMutation.mutate()}
+              onClick={() => generateShareTokenMutation.mutate({ rotate: false })}
               disabled={generateShareTokenMutation.isPending}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-zinc-500 hover:text-indigo-600 transition-all font-bold text-[10px] uppercase tracking-widest"
-              title={plan.shareToken ? 'Actualizar link compartido' : 'Generar link compartido'}
+              className="flex items-center gap-1.5 px-3 py-1.5 text-zinc-500 transition-all hover:text-brand-cyan-deep dark:hover:text-brand-cyan font-bold text-[10px] uppercase tracking-widest"
+              title={plan.shareToken ? 'Copiar el enlace de esta parrilla' : 'Crear el enlace para el cliente'}
             >
               {generateShareTokenMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Share2 className="w-3 h-3" />}
-              {plan.shareToken ? 'Link' : 'Compartir'}
+              {plan.shareToken ? 'Copiar link' : 'Compartir'}
             </button>
+
+            {/* Cambiar el enlace rompe el que ya tiene el cliente, así que va aparte y con aviso. */}
+            {plan.shareToken && (
+              <button
+                onClick={handleRotateShareToken}
+                disabled={generateShareTokenMutation.isPending}
+                className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300"
+                title="Generar un enlace nuevo y anular el anterior"
+              >
+                Generar un enlace nuevo
+              </button>
+            )}
           </div>
 
           <Button

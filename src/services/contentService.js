@@ -352,7 +352,24 @@ export const updateContentPlan = async (id, data) => {
   });
 };
 
-export const generateShareToken = async (id) => {
+/**
+ * El enlace público de una parrilla (Rodny, 25 de septiembre de 2026).
+ *
+ * **Es el mismo cada vez.** Antes esta función generaba un token nuevo en cada llamada y lo
+ * sobrescribía, así que volver a pulsar «Compartir» mataba el enlace que el cliente ya tenía guardado,
+ * sin avisar a nadie: el cliente se encontraba una parrilla que ya no existía.
+ *
+ * Cambiarlo sigue siendo posible —un enlace que llegó a quien no debía hay que poder anularlo— pero es
+ * una decisión explícita (`rotate`), nunca el efecto secundario de pedir el enlace.
+ */
+export const generateShareToken = async (id, { rotate = false } = {}) => {
+  const existing = await prisma.contentPlan.findUnique({
+    where: { id },
+    select: { shareToken: true }
+  });
+  if (!existing) throw new Error('Parrilla no encontrada');
+  if (existing?.shareToken && !rotate) return existing;
+
   const token = randomBytes(32).toString('base64url');
   return await prisma.contentPlan.update({
     where: { id },

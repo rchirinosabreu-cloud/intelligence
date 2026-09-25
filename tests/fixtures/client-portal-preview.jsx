@@ -52,9 +52,16 @@ const items = [
     caption: 'Antes de tu procedimiento, resuelve estas tres dudas con tu especialista.\n\n#ENDOVA #Salud',
     assets: [asset('a3', 'pieza-cuadrada.svg', 'Carrusel · lámina 1')]
   }),
+  // Un reel entregado como enlace de Drive: el marco tiene que salir vertical, no apaisado.
   piece('i3', 'Conoce al equipo de hemodinamia', 'Reel', 30, 'EN_REVISION', {
     caption: 'Detrás de cada procedimiento hay un equipo que lleva años preparándose.',
-    assets: [asset('a4', 'reel-recorrido.svg', 'Reel · equipo')]
+    assets: [{
+      id: 'a-drive', name: 'reel-equipo.mp4', position: 0, provider: 'DRIVE',
+      version: '1AbC_defGHIjklMNOpqrSTUvwx234567',
+      embedUrl: 'https://drive.google.com/file/d/1AbC_defGHIjklMNOpqrSTUvwx234567/preview',
+      thumbnailUrl: 'https://drive.google.com/thumbnail?id=1AbC_defGHIjklMNOpqrSTUvwx234567&sz=w1600',
+      openUrl: 'https://drive.google.com/file/d/1AbC_defGHIjklMNOpqrSTUvwx234567/view'
+    }]
   }),
   piece('i4', 'Qué llevar el día de tu consulta', 'Post', 22, 'APROBADO', {
     caption: 'Documento, orden médica y tus exámenes previos. Nada más.',
