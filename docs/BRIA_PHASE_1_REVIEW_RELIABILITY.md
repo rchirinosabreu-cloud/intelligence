@@ -91,6 +91,26 @@ Cambios aditivos: una columna `TIMESTAMP(3)` nullable creada por `ensure-content
 
 Pruebas: `tests/aiAvailability.test.js` (clasificación de errores), `tests/briaVerificationBudget.test.js` (prioridad, techo y rotación), `tests/briaReviewDiagnostics.test.js` (el intento se devuelve, incluso en el último), `tests/automatedMinutes.test.js` (la minuta se aparca sin gastar intento y se vuelve a tomar) y dos casos contra PostgreSQL real en `tests/briaReviewJobsDatabase.test.js` (una parrilla con 41 hallazgos abiertos publica con tres llamadas de verificación; cuatro caídas seguidas dejan la parrilla recuperable con su presupuesto intacto).
 
+## Volumen de hallazgos: pocas y buenas (25 de septiembre de 2026)
+
+Rodny lo planteó así: «no puede tomar más tiempo la corrección y revisión de los hallazgos que la creación misma de la parrilla… no puedo revisar 100 cards por parrilla y muchas, de hecho, son repetidas». Tenía razón, y el problema no era que Bria encontrara mucho: **el sistema estaba construido para acumular**. Tres causas que se sumaban:
+
+1. **Nada cerraba un hallazgo que dejaba de detectarse.** Al revisar de nuevo, un hallazgo ya no reportado seguía abierto. Solo lo cerraba una persona descartándolo o una verificación confirmando la corrección, y desde el presupuesto acotado solo se verifican doce por vuelta: con cien abiertos, la mayoría no se volvía a mirar nunca.
+2. **El mismo problema se volvía tarjeta nueva al cambiarle el nombre a la regla.** La identidad es `(pieza, ruleKey, campo)` y el `ruleKey` lo escribe el modelo en cada revisión.
+3. **El mismo problema se reportaba una vez por dimensión**, hasta cuatro tarjetas para un solo asunto.
+
+Medición del 22 de septiembre: 1.119 hallazgos abiertos, 1.002 de ellos en 25 parrillas en planificación, con 26 descartes en toda la historia de la plataforma.
+
+**Lo que se publica ahora.** `selectPublishableFindings` filtra lo `INFO`, deja hasta 3 por pieza y 15 por parrilla, y ordena por gravedad. Los hallazgos del plan entero entran primero con cupo propio. El puntaje y las dimensiones no cambian: los calcula el modelo aparte.
+
+**Lo que se archiva solo.** Al publicar una revisión de alcance completo, los `OPEN` que no volvieron a detectarse pasan a `STALE`. No se declaran resueltos, porque no aparecer no lo demuestra; salen de la lista activa y vuelven si reaparecen. Se respetan los `VERIFYING` y los que acaban de verificarse.
+
+La causa 2 deja de importar por sí sola: si el modelo renombra la regla, la tarjeta vieja se archiva al no detectarse. La causa 3 exige cambiar el prompt, y eso altera el juicio editorial, así que va aparte con evaluación comparativa (`AGENTS.md` §7).
+
+Limpieza de lo acumulado: `scripts/archive-open-review-findings.js`, en simulación salvo `--confirm ARCHIVAR`. No borra nada.
+
+Pruebas: `tests/briaFindingVolume.test.js` (techos, prioridad por gravedad, cupo del plan), `tests/briaFindingCleanup.test.js` (la limpieza no toca decisiones humanas) y tres casos nuevos contra PostgreSQL real en `tests/briaReviewJobsDatabase.test.js` (se archiva lo que deja de detectarse y vuelve si reaparece; una corrección pendiente de verificar nunca se archiva; una parrilla de diez piezas con seis hallazgos cada una publica quince como mucho, tres por pieza y ninguno informativo).
+
 ## Siguiente entrega recomendada: cobertura y criterio verificables
 
 1. Revisar todas las piezas por lotes y exponer cobertura real. Continuación implementada en [cobertura y recuperación por lotes](BRIA_REVIEW_BATCH_COVERAGE.md), con sus pruebas y límites documentados. Impedir que una revisión parcial resuelva hallazgos fuera de su cobertura.
