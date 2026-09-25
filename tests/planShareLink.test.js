@@ -18,15 +18,18 @@ test('el enlace de una parrilla es el mismo cada vez que se pide', async () => {
   assert.match(share, /\{ rotate = false \} = \{\}/, 'cambiarlo es una decisión explícita, no el camino normal');
 });
 
-test('romper el enlace del cliente exige decirlo a propósito', async () => {
+test('desde la pantalla no hay forma de romper el enlace del cliente', async () => {
   const routes = await read('src/routes/api/content.js');
   const editor = await read('src/components/modules/ContentPlanDetail.jsx');
 
   assert.match(routes, /rotate: req\.body\?\.rotate === true/, 'el servidor solo rota si se lo piden');
 
-  // La pantalla: pulsar Compartir copia; cambiarlo va aparte y avisa de lo que rompe.
-  assert.match(editor, /Copiar link|Copiar enlace/);
-  assert.match(editor, /Generar un enlace nuevo/);
-  assert.match(editor, /dejará de funcionar/, 'el aviso dice qué se rompe antes de romperlo');
+  // Rodny, 25 de septiembre de 2026: «¿no es mejor eliminar la opción de generar enlace nuevo?».
+  // El botón se quitó; `rotate` sigue en el servicio y en la ruta como salida de emergencia, pero
+  // ninguna pantalla lo ofrece, así que pulsar Compartir no puede romper nada.
+  assert.match(editor, /Copiar link/);
+  assert.doesNotMatch(editor, /Generar un enlace nuevo/);
+  assert.doesNotMatch(editor, /rotate: true/, 'ninguna pantalla pide rotar el enlace');
+  assert.match(editor, /mutate\(\{ rotate: false \}\)/, 'copiar pide explícitamente no rotar');
   assert.doesNotMatch(editor, /Link compartido generado y copiado/, 'ya no se anuncia como recién generado');
 });
