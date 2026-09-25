@@ -732,27 +732,6 @@ const ContentItemCard = ({
             </Select>
           </div>
 
-          <div className="flex min-w-[220px] flex-grow flex-col gap-1.5">
-            <label htmlFor={`nota-${item.id}`} className={FIELD_LABEL}>
-              Nota interna <span className="text-zinc-400">· solo el equipo</span>
-            </label>
-            {isEditing ? (
-              <input
-                id={`nota-${item.id}`}
-                type="text"
-                defaultValue={item.internalNotes || ''}
-                onBlur={(e) => {
-                  if (e.target.value !== item.internalNotes) onUpdate({ id: item.id, internalNotes: e.target.value });
-                }}
-                placeholder="Instrucciones para el equipo…"
-                className={FIELD_CLASS}
-              />
-            ) : (
-              <p className="flex h-11 items-center px-1 text-[13px] italic text-zinc-500 dark:text-zinc-400">
-                {item.internalNotes || <span className="text-zinc-300 dark:text-zinc-600">Sin notas internas…</span>}
-              </p>
-            )}
-          </div>
         </div>
       </div>
 
@@ -804,6 +783,29 @@ const ContentItemCard = ({
               </div>
             )}
           </div>
+        </div>
+
+        {/* La nota interna tiene su propia banda, a todo el ancho (Rodny, 25 de septiembre de 2026).
+            Estaba metida en la franja de la ficha con alto fijo, así que una nota larga se salía por
+            encima del resto de la tarjeta. Aquí crece hacia abajo y no empuja a nadie. */}
+        <div className="border-t border-zinc-100 px-6 py-5 dark:border-white/5">
+          <label htmlFor={`nota-${item.id}`} className={`${FIELD_LABEL} mb-1.5`}>
+            Nota interna <span className="text-zinc-400">· solo el equipo</span>
+          </label>
+          {isEditing ? (
+            <AutoResizeTextarea
+              defaultValue={item.internalNotes}
+              onBlur={(e) => {
+                if (e.target.value !== item.internalNotes) onUpdate({ id: item.id, internalNotes: e.target.value });
+              }}
+              placeholder="Instrucciones para el equipo…"
+              className="min-h-[72px] w-full rounded-xl border border-zinc-200 bg-white p-3.5 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900"
+            />
+          ) : (
+            <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-zinc-700 dark:text-zinc-300">
+              {item.internalNotes || <span className="text-zinc-400">Sin notas internas.</span>}
+            </p>
+          )}
         </div>
 
         {/* `items-start`: sin esto las tres columnas se estiran al alto de la más alta y Referencias

@@ -56,7 +56,9 @@ const items = [
   piece('i1', 'ENDOVA, un espacio preparado para recibirte', 'Reel', 24, 'APROBADO', {
     copyText: GUION,
     captionText: CAPTION,
-    internalNotes: 'Grabar en horario de baja afluencia.',
+    // Una nota larga de verdad: con alto fijo en la franja de la ficha, este texto se salía por
+    // encima de toda la tarjeta (Rodny, 25 de septiembre de 2026).
+    internalNotes: 'PONER TOMAS DE APOYO DE STOCK O IA. '.repeat(24).trim(),
     comments: '[Cliente - 18/09/2026]: ¿Podemos mostrar más la sala de espera?',
     finalAssets: [{ id: 'a1', name: 'reel-endova.mp4', storageKey: 'k1', mimeType: 'video/mp4', size: 31000000, position: 0 }]
   }),
