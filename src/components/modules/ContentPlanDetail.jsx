@@ -546,8 +546,14 @@ const FeedbackHistory = ({ comments, isOpen }) => {
  * nada—, los iconos decorativos de cada etiqueta, el «(Links)» de los rótulos y el verde del botón
  * Guardar, que en el resto de la plataforma significa «aprobado» y aquí decía otra cosa.
  */
-const FIELD_CLASS = 'w-full rounded-xl border border-zinc-200 bg-white px-3 text-[13px] text-zinc-900 outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50';
-const FIELD_LABEL = 'text-xs font-medium text-zinc-500 dark:text-zinc-400';
+/**
+ * Un solo alto para todos los campos de la ficha. El `Select` compartido trae `min-h-11` de fábrica,
+ * así que darle `h-9` no servía de nada: los desplegables medían 44 px y el campo de fecha 36, y la
+ * fila salía descuadrada (Rodny, 25 de septiembre de 2026). Aquí todos valen 44.
+ */
+const FIELD_CLASS = 'h-11 w-full rounded-xl border border-zinc-200 bg-white px-3 text-[13px] text-zinc-900 outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50';
+/** Alto fijo también en la etiqueta: si una ocupa dos líneas, su campo baja y rompe la fila. */
+const FIELD_LABEL = 'flex h-5 items-center text-xs font-medium text-zinc-500 dark:text-zinc-400';
 
 const ContentItemCard = ({
   item,
@@ -659,14 +665,14 @@ const ContentItemCard = ({
           </button>
         </div>
 
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="flex flex-col gap-1.5">
+        <div className="flex flex-wrap items-start gap-4">
+          <div className="flex w-36 flex-col gap-1.5">
             <span className={FIELD_LABEL}>Formato</span>
             <Select
               value={item.format}
               onChange={(e) => onUpdate({ id: item.id, format: e.target.value })}
               aria-label="Formato de la pieza"
-              className={`${FIELD_CLASS} h-9 w-36`}
+              className={FIELD_CLASS}
             >
               <option value="Reel">Reel</option>
               <option value="Carrusel">Carrusel</option>
@@ -675,8 +681,8 @@ const ContentItemCard = ({
             </Select>
           </div>
 
-          <div className="flex flex-col gap-1.5">
-            <span className={`${FIELD_LABEL} block`}>Publica el</span>
+          <div className="flex w-40 flex-col gap-1.5">
+            <span className={FIELD_LABEL}>Publicación</span>
             <DatePicker
               {...brainDatePickerProps}
               key={`${item.id}-${item.publishDate}`}
@@ -688,19 +694,19 @@ const ContentItemCard = ({
                 if (dateStr !== current) onUpdate({ id: item.id, publishDate: dateStr });
               }}
               dateFormat="dd/MM/yyyy"
-              className={`${FIELD_CLASS} h-9`}
-              wrapperClassName="w-40"
+              className={FIELD_CLASS}
+              wrapperClassName="w-full"
               placeholderText="Elegir fecha"
             />
           </div>
 
-          <div className="flex flex-col gap-1.5">
+          <div className="flex w-44 flex-col gap-1.5">
             <span className={FIELD_LABEL}>Estado</span>
             <Select
               value={item.status}
               onChange={(e) => onUpdate({ id: item.id, status: e.target.value })}
               aria-label="Estado de la pieza"
-              className={`${FIELD_CLASS} h-9 w-44`}
+              className={FIELD_CLASS}
             >
               <option value="BORRADOR">Borrador</option>
               <option value="EN_REVISION">En Revisión</option>
@@ -725,10 +731,10 @@ const ContentItemCard = ({
                   if (e.target.value !== item.internalNotes) onUpdate({ id: item.id, internalNotes: e.target.value });
                 }}
                 placeholder="Instrucciones para el equipo…"
-                className={`${FIELD_CLASS} h-9`}
+                className={FIELD_CLASS}
               />
             ) : (
-              <p className="flex h-9 items-center px-1 text-[13px] italic text-zinc-500 dark:text-zinc-400">
+              <p className="flex h-11 items-center px-1 text-[13px] italic text-zinc-500 dark:text-zinc-400">
                 {item.internalNotes || <span className="text-zinc-300 dark:text-zinc-600">Sin notas internas…</span>}
               </p>
             )}
@@ -736,9 +742,9 @@ const ContentItemCard = ({
         </div>
       </div>
 
-      {/* Escribir ocupa el ancho; el material va a un carril */}
-      <div className="flex flex-col lg:flex-row lg:items-stretch">
-        <div className="grid min-w-0 flex-grow grid-cols-1 gap-5 p-6 xl:grid-cols-2">
+      {/* Escribir se queda con el ancho entero; el material baja (Rodny, 25 de septiembre de 2026) */}
+      <div>
+        <div className="grid min-w-0 grid-cols-1 gap-5 p-6 xl:grid-cols-2">
           <div className="flex min-w-0 flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <label htmlFor={`guion-${item.id}`} className={FIELD_LABEL}>Guion</label>
@@ -786,12 +792,12 @@ const ContentItemCard = ({
           </div>
         </div>
 
-        <aside className="flex w-full shrink-0 flex-col gap-5 border-t border-zinc-100 bg-zinc-50/60 p-6 dark:border-white/5 dark:bg-white/5 lg:w-[292px] lg:border-l lg:border-t-0">
+        <div className="grid grid-cols-1 gap-6 border-t border-zinc-100 bg-zinc-50/60 px-6 py-5 dark:border-white/5 dark:bg-white/5 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
           <div className="flex flex-col gap-2.5">
             <span className={FIELD_LABEL}>Pieza final</span>
 
             {finalAssets.length > 0 && (
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-3 gap-2 sm:grid-cols-4">
                 {finalAssets.map(asset => (
                   <FinalAssetTile key={asset.id} item={item} asset={asset} isEditing={isEditing} onDelete={onFinalAssetDelete} isDeleting={isFinalAssetDeleting} />
                 ))}
@@ -869,7 +875,7 @@ const ContentItemCard = ({
               onChange={(links) => onUpdate({ id: item.id, assetsLinks: links })}
             />
           </div>
-        </aside>
+        </div>
       </div>
 
       {showFeedback && item.comments && (
@@ -1087,19 +1093,9 @@ const ContentPlanDetail = () => {
     }
   });
 
-  /**
-   * Pedir el enlace **no** lo cambia: el cliente puede tenerlo guardado. Cambiarlo es otra acción, y
-   * avisa de lo que rompe antes de hacerlo.
-   */
-  const handleRotateShareToken = async () => {
-    const confirmed = await confirm({
-      title: 'Generar un enlace nuevo',
-      description: 'El enlace que ya le enviaste al cliente dejará de funcionar. Tendrás que mandarle el nuevo.',
-      confirmText: 'Generar uno nuevo',
-      cancelText: 'Cancelar'
-    });
-    if (confirmed) generateShareTokenMutation.mutate({ rotate: true });
-  };
+  // Pedir el enlace **no** lo cambia: el cliente puede tenerlo guardado. El botón que lo rotaba se
+  // quitó por decisión de Rodny (25 de septiembre de 2026); `rotate` sigue existiendo en el servicio
+  // y en la ruta como salida de emergencia, pero ninguna pantalla lo ofrece.
 
   const createItemMutation = useMutation({
     mutationFn: async (data) => {
@@ -1329,24 +1325,12 @@ const ContentPlanDetail = () => {
             <button
               onClick={() => generateShareTokenMutation.mutate({ rotate: false })}
               disabled={generateShareTokenMutation.isPending}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-zinc-500 transition-all hover:text-brand-cyan-deep dark:hover:text-brand-cyan font-bold text-[10px] uppercase tracking-widest"
+              className="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500 transition-all hover:text-brand-cyan-deep dark:hover:text-brand-cyan"
               title={plan.shareToken ? 'Copiar el enlace de esta parrilla' : 'Crear el enlace para el cliente'}
             >
               {generateShareTokenMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Share2 className="w-3 h-3" />}
               {plan.shareToken ? 'Copiar link' : 'Compartir'}
             </button>
-
-            {/* Cambiar el enlace rompe el que ya tiene el cliente, así que va aparte y con aviso. */}
-            {plan.shareToken && (
-              <button
-                onClick={handleRotateShareToken}
-                disabled={generateShareTokenMutation.isPending}
-                className="px-2 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-400 transition-colors hover:text-zinc-600 dark:hover:text-zinc-300"
-                title="Generar un enlace nuevo y anular el anterior"
-              >
-                Generar un enlace nuevo
-              </button>
-            )}
           </div>
 
           <Button
@@ -1366,7 +1350,7 @@ const ContentPlanDetail = () => {
             <Select
               value={plan.clientId}
               onChange={(e) => updatePlanMutation.mutate({ clientId: e.target.value })}
-              className="bg-transparent border-none text-zinc-500 dark:text-zinc-400 font-medium p-0 focus:ring-0 text-sm cursor-pointer hover:text-indigo-600 transition-colors"
+              className="cursor-pointer border-none bg-transparent pl-0 pr-7 text-sm font-medium text-zinc-500 transition-colors hover:text-brand-cyan-deep focus:ring-0 dark:text-zinc-400 dark:hover:text-brand-cyan"
             >
               {clients?.map(c => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -1379,7 +1363,7 @@ const ContentPlanDetail = () => {
             <Select
               value={plan.ownerId || ''}
               onChange={(e) => updatePlanMutation.mutate({ ownerId: e.target.value || null })}
-              className="bg-transparent border-none text-zinc-500 dark:text-zinc-400 font-medium p-0 focus:ring-0 text-sm cursor-pointer hover:text-indigo-600 transition-colors"
+              className="cursor-pointer border-none bg-transparent pl-0 pr-7 text-sm font-medium text-zinc-500 transition-colors hover:text-brand-cyan-deep focus:ring-0 dark:text-zinc-400 dark:hover:text-brand-cyan"
             >
               <option value="">Sin Responsable (CM)</option>
               {team?.map(member => (

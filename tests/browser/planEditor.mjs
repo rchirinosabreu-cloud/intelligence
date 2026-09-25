@@ -45,6 +45,17 @@ try {
         editors: document.querySelectorAll('[id^="item-"]').length
       };
     });
+    // Rodny, 25 de septiembre de 2026: «copiar link, deja eso en una sola línea».
+    const share = await page.evaluate(() => {
+      const button = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Copiar link');
+      if (!button) return null;
+      const line = parseFloat(getComputedStyle(button).lineHeight) || 16;
+      return { height: button.getBoundingClientRect().height, line, rotate: document.body.textContent.includes('Generar un enlace nuevo') };
+    });
+    assert.ok(share, 'con enlace creado el botón dice «Copiar link»');
+    assert.ok(share.height < share.line * 2, `y cabe en una línea (alto ${Math.round(share.height)}px)`);
+    assert.equal(share.rotate, false, 'ya no se ofrece romper el enlace del cliente');
+
     assert.equal(rail.rows, 8, 'las ocho piezas del mes caben en el carril');
     assert.equal(rail.selected, 1, 'solo una pieza abierta a la vez');
     assert.equal(rail.missingDots, 0, 'el carril no lleva puntos de aviso');

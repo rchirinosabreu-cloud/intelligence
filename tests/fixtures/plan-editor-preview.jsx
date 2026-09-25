@@ -79,7 +79,8 @@ const items = [
 const plan = {
   id: 'p1', month: 9, year: 2026, status: 'EN_REVISION',
   strategicObjectives: 'Posicionar a ENDOVA como una unidad de atención especializada cercana.',
-  internalNotes: null, shareToken: null, client, owner: member, items
+  // Con enlace ya creado: así se ve «Copiar link», que es el estado normal de una parrilla compartida.
+  internalNotes: null, shareToken: 'demo-token-parrilla', client, owner: member, items
 };
 
 axios.defaults.adapter = async (config) => {
