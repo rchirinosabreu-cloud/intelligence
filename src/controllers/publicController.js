@@ -17,7 +17,12 @@ export const getPublicPlan = async (req, res) => {
     const plan = await getContentPlanByToken(req.params.token);
     if (!plan) return res.status(404).json({ error: 'Parrilla no encontrada' });
 
-    // Sanitize for public view: remove internal fields
+    // Sanitize for public view: remove internal fields.
+    //
+    // El guion (`copyText`) es material de producción —ESCENA 1, VOZ, CIERRE— y **no sale de aquí**
+    // (Rodny, 24 de septiembre de 2026). Esconderlo en la pantalla no bastaba: viajaba en el cuerpo de
+    // la respuesta y se leía abriendo las herramientas del navegador. El cliente ve la pieza y el texto
+    // que se va a publicar (`captionText`); lo demás es del equipo.
     const sanitizedPlan = {
       id: plan.id,
       month: plan.month,
@@ -31,7 +36,6 @@ export const getPublicPlan = async (req, res) => {
         id: item.id,
         objective: item.objective,
         format: item.format,
-        copyText: item.copyText,
         captionText: item.captionText,
         publishDate: item.publishDate,
         mediaUrl: item.mediaUrl,

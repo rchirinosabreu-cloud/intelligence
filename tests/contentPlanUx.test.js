@@ -48,8 +48,11 @@ test('shared content plan shows strategic objectives and uses a softer correctio
 test('client correction action scrolls to and focuses the feedback form', async () => {
   const shared = await read('src/components/public/SharedContentPlan.jsx');
 
-  assert.match(shared, /commentFormRefs/);
-  assert.match(shared, /commentTextareaRefs/);
+  // Desde el rediseño del 24 de septiembre de 2026 el portal muestra una pieza a la vez, así que la
+  // referencia es una, no un mapa por pieza. Lo que se vigila sigue siendo lo mismo: al pedir un
+  // cambio, el formulario se trae a la vista y recibe el foco.
+  assert.match(shared, /commentFormRef\b/);
+  assert.match(shared, /commentTextareaRef\b/);
   assert.match(shared, /scrollIntoView\(\{\s*behavior:\s*'smooth',\s*block:\s*'center'/);
   assert.match(shared, /focus\(\{\s*preventScroll:\s*true\s*\}\)/);
 });
@@ -88,7 +91,9 @@ test('content pieces support persistent multi-file carousel assets internally', 
   assert.match(editor, /Pieza final/);
   assert.match(shared, /URLSearchParams/);
   assert.match(shared, /FinalAssetPreview/);
-  assert.match(shared, /assets\.length > 1 \? 'Carrusel'/);
+  // El rótulo «Carrusel / Pieza final» encima de la vista previa se quitó: el formato ya se dice en la
+  // cabecera de la pieza y la cuenta de láminas va sobre la propia imagen, que es donde se mira.
+  assert.match(shared, /\{activeIndex \+ 1\} \/ \{assets\.length\}/, 'el carrusel sigue diciendo en qué lámina va');
   assert.match(shared, /Ver lámina siguiente/);
   assert.match(shared, /<video/);
   assert.match(shared, /<img/);

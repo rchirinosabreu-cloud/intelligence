@@ -8,12 +8,13 @@ import { getContentPlanMonthName } from '@/lib/contentPlanPeriod';
 import { planFinalAssetUpload } from '@/lib/uploadLimits';
 import { driveLinkProblem } from '@/lib/driveLinks';
 import { driveAssetUrls } from '@/lib/finalAssetShape';
+import { WEEKDAY_LABELS, buildMonthGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
 import {
   ChevronLeft, Plus, Send, ExternalLink, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
   Calendar, User, LayoutGrid, FileText, Instagram, Facebook, Video, Image as ImageIcon,
   Edit2, Check, AlertCircle, Sparkles, Users, UserCheck, StickyNote, ChevronUp, Share2,
-  MessageSquare, Table2, UploadCloud, Link2
+  MessageSquare, Table2, UploadCloud, Link2, Lock, Eye
 } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -334,6 +335,226 @@ const DriveLinkDialog = ({ itemId, onClose, onSubmit, isPending }) => {
   );
 };
 
+const PIECE_STATUS_BAR = {
+  APROBADO: 'bg-brand-green',
+  REALIZADO: 'bg-brand-green',
+  PUBLICADO: 'bg-brand-green',
+  EN_REVISION: 'bg-brand-yellow',
+  EN_PRODUCCION: 'bg-brand-cyan',
+  DEVUELTO: 'bg-destructive'
+};
+
+const shortPieceDate = (value) => (value
+  ? new Date(value).toLocaleDateString('es-CO', { day: '2-digit', month: 'short', timeZone: 'UTC' })
+  : 'Sin fecha');
+
+/**
+ * El mes entero, siempre a la vista (Rodny, 24 de septiembre de 2026).
+ *
+ * Antes la parrilla era una pila de tarjetas enormes: doce piezas eran un scroll interminable y no
+ * había forma de ver el mes como mes. Ahora el mes vive aquí y a la derecha se edita una sola pieza.
+ * El punto magenta marca lo que todavía no tiene pieza final, que es lo que suele frenar una entrega.
+ */
+const PlanPieceRail = ({ items, selectedId, onSelect, onAdd }) => (
+  <nav aria-label="Piezas de la parrilla" className="flex h-full flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
+    <div className="flex items-baseline gap-2 border-b border-zinc-100 px-4 py-3.5 dark:border-white/5">
+      <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Piezas</span>
+      <span className="text-xs text-zinc-400">{items.length}</span>
+    </div>
+
+    <div className="flex flex-col gap-1 overflow-y-auto p-2">
+      {items.map((item, index) => {
+        const isSelected = item.id === selectedId;
+        const missingAsset = !(item.finalAssets?.length);
+        return (
+          <button
+            key={item.id}
+            type="button"
+            onClick={() => onSelect(item.id)}
+            aria-current={isSelected ? 'true' : undefined}
+            className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-left transition-colors ${
+              isSelected ? 'bg-zinc-100 dark:bg-white/10' : 'hover:bg-zinc-50 dark:hover:bg-white/5'
+            }`}
+          >
+            <span className={`h-9 w-1 shrink-0 rounded-full ${PIECE_STATUS_BAR[item.status] || 'bg-zinc-200 dark:bg-white/15'}`} />
+            <span className="min-w-0 flex-grow">
+              <span className={`block truncate text-[13px] leading-tight ${isSelected ? 'font-bold text-zinc-900 dark:text-zinc-50' : 'font-medium text-zinc-700 dark:text-zinc-300'}`}>
+                {item.objective || `Pieza ${index + 1}`}
+              </span>
+              <span className="mt-0.5 block truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+                {item.format} · {shortPieceDate(item.publishDate)}
+              </span>
+            </span>
+            {missingAsset && (
+              <span className="h-2 w-2 shrink-0 rounded-full bg-brand-magenta" title="Sin pieza final" />
+            )}
+          </button>
+        );
+      })}
+    </div>
+
+    <div className="mt-auto border-t border-zinc-100 p-2.5 dark:border-white/5">
+      <button
+        type="button"
+        onClick={onAdd}
+        className="flex w-full items-center justify-center gap-2 rounded-xl border border-dashed border-zinc-300 px-3 py-2.5 text-xs font-bold text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-white/15 dark:text-zinc-300 dark:hover:bg-white/5"
+      >
+        <Plus className="h-4 w-4" /> Nueva pieza
+      </button>
+    </div>
+  </nav>
+);
+
+const PIECE_CHIP = {
+  APROBADO: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green',
+  REALIZADO: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green',
+  PUBLICADO: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green',
+  EN_REVISION: 'bg-brand-yellow-soft text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow',
+  EN_PRODUCCION: 'bg-brand-cyan-soft text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan',
+  DEVUELTO: 'bg-destructive/10 text-destructive'
+};
+const NEUTRAL_CHIP = 'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-300';
+
+/**
+ * El mes como mes (Rodny, 24 de septiembre de 2026).
+ *
+ * El carril dice qué piezas hay; el calendario dice **cuándo**, que es lo único que una lista no puede
+ * enseñar: los días vacíos y los días con tres piezas encima. Tocar una pieza la abre en el editor —son
+ * dos formas de mirar el mismo mes, no dos sitios distintos.
+ */
+const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd }) => {
+  const weeks = buildMonthGrid(year, month);
+  const { byDay, undated } = groupItemsByDay(items);
+
+  return (
+    <div className="space-y-4">
+      <div className="overflow-hidden rounded-3xl border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
+        <div className="mb-2 grid grid-cols-7 gap-2">
+          {WEEKDAY_LABELS.map(label => (
+            <div key={label} className="px-1 text-[10px] font-black tracking-[0.08em] text-zinc-400">{label}</div>
+          ))}
+        </div>
+
+        <div className="grid grid-cols-7 gap-2">
+          {weeks.flat().map(cell => {
+            const pieces = byDay.get(cell.key) || [];
+            return (
+              <div
+                key={cell.key}
+                className={`flex min-h-[112px] flex-col gap-1.5 rounded-xl border p-2 ${
+                  cell.inMonth
+                    ? 'border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900'
+                    : 'border-zinc-100 bg-zinc-50 dark:border-white/5 dark:bg-white/5'
+                }`}
+              >
+                <span className={`text-[11px] font-bold tabular-nums ${cell.inMonth ? 'text-zinc-500 dark:text-zinc-400' : 'text-zinc-300 dark:text-zinc-600'}`}>
+                  {cell.day}
+                </span>
+
+                {pieces.slice(0, 2).map(piece => (
+                  <button
+                    key={piece.id}
+                    type="button"
+                    onClick={() => onOpenPiece(piece.id)}
+                    className={`flex flex-col gap-0.5 rounded-lg px-2 py-1.5 text-left transition-opacity hover:opacity-80 ${PIECE_CHIP[piece.status] || NEUTRAL_CHIP}`}
+                  >
+                    <span className="text-[9px] font-black uppercase tracking-wider opacity-80">{piece.format}</span>
+                    <span className="line-clamp-2 text-[11px] font-medium leading-tight text-zinc-700 dark:text-zinc-200">
+                      {piece.objective}
+                    </span>
+                  </button>
+                ))}
+
+                {pieces.length > 2 && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenPiece(pieces[2].id)}
+                    className="px-1 text-left text-[10px] font-bold text-zinc-500 hover:underline dark:text-zinc-400"
+                  >
+                    +{pieces.length - 2} más
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 rounded-2xl border border-dashed border-zinc-300 bg-white p-4 dark:border-white/15 dark:bg-zinc-900">
+        <div className="flex shrink-0 flex-col">
+          <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Sin fecha todavía</span>
+          <span className="text-xs text-zinc-500 dark:text-zinc-400">
+            {undated.length ? 'Ábrelas y ponles día de publicación' : 'Todas las piezas tienen día'}
+          </span>
+        </div>
+
+        {undated.map(piece => (
+          <button
+            key={piece.id}
+            type="button"
+            onClick={() => onOpenPiece(piece.id)}
+            className="flex max-w-[260px] flex-col gap-0.5 rounded-lg bg-zinc-100 px-3 py-2 text-left transition-opacity hover:opacity-80 dark:bg-white/10"
+          >
+            <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500 dark:text-zinc-400">{piece.format}</span>
+            <span className="truncate text-xs font-medium text-zinc-700 dark:text-zinc-200">{piece.objective}</span>
+          </button>
+        ))}
+
+        <div className="flex-grow" />
+        <button
+          type="button"
+          onClick={onAdd}
+          className="shrink-0 rounded-xl bg-brand-cyan-deep px-4 py-2.5 text-xs font-bold text-white transition hover:brightness-110"
+        >
+          Nueva pieza
+        </button>
+      </div>
+    </div>
+  );
+};
+
+/**
+ * Lo que el cliente verá de esta pieza, mientras se escribe. No es decorativo: el guion acabó en el
+ * portal porque nadie podía comprobar, sin salir del editor, qué sale de la agencia y qué no.
+ */
+const ClientGlance = ({ item }) => {
+  const asset = item.finalAssets?.[0];
+  const drive = asset ? driveAssetUrls(asset) : null;
+
+  return (
+    <div className="space-y-2.5">
+      <label className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">
+        <Eye className="h-3.5 w-3.5" /> Vista del cliente
+      </label>
+
+      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-950">
+        <div className="flex aspect-[4/3] items-center justify-center bg-zinc-900">
+          {drive ? (
+            <img src={drive.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+          ) : asset ? (
+            <span className="text-[10px] font-medium text-white/50">{asset.name}</span>
+          ) : (
+            <span className="text-[10px] font-medium text-white/40">Sin pieza final</span>
+          )}
+        </div>
+        <div className="space-y-2 p-3">
+          <p className="line-clamp-4 whitespace-pre-line text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-300">
+            {item.captionText || <span className="italic text-zinc-400">Todavía sin texto de publicación.</span>}
+          </p>
+          <div className="flex gap-1.5 pt-0.5">
+            <span className="flex h-7 flex-grow items-center justify-center rounded-lg bg-brand-cyan-deep text-[10px] font-bold text-white">Aprobar</span>
+            <span className="flex h-7 flex-grow items-center justify-center rounded-lg border border-zinc-200 text-[10px] font-bold text-zinc-500 dark:border-white/10">Pedir cambio</span>
+          </div>
+        </div>
+      </div>
+
+      <p className="text-[10px] leading-relaxed text-zinc-400">
+        El guion no aparece aquí. El cliente solo ve la pieza y el texto de la publicación.
+      </p>
+    </div>
+  );
+};
+
 const serializePlanInternalNotes = (notes) => JSON.stringify(
   notes.map(note => String(note || '').trim()).filter(Boolean)
 );
@@ -352,7 +573,7 @@ const FeedbackHistory = ({ comments, isOpen }) => {
         </label>
       </div>
 
-      <div className="bg-slate-50 dark:bg-white/2 border border-slate-100 dark:border-white/5 p-5 rounded-[2rem] text-sm text-slate-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed italic">
+      <div className="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 p-5 rounded-[2rem] text-sm text-slate-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed italic">
         {comments}
       </div>
     </div>
@@ -508,10 +729,10 @@ const ContentItemCard = ({
                     }
                   }}
                   placeholder="Instrucciones para el equipo..."
-                  className="w-full bg-zinc-50/50 dark:bg-white/2 border border-zinc-200/60 dark:border-white/5 rounded-xl p-3 text-[11px] font-medium focus:ring-2 focus:ring-indigo-600/10 outline-none transition-all"
+                  className="w-full bg-zinc-50/50 dark:bg-white/5 border border-zinc-200/60 dark:border-white/5 rounded-xl p-3 text-[11px] font-medium focus:ring-2 focus:ring-indigo-600/10 outline-none transition-all"
                 />
               ) : (
-                <div className="bg-zinc-50/30 dark:bg-white/2 p-3 rounded-xl text-[11px] text-zinc-500 dark:text-zinc-400 italic leading-relaxed">
+                <div className="bg-zinc-50/30 dark:bg-white/5 p-3 rounded-xl text-[11px] text-zinc-500 dark:text-zinc-400 italic leading-relaxed">
                   {item.internalNotes || <span className="text-zinc-300 dark:text-zinc-600">Sin notas internas...</span>}
                 </div>
               )}
@@ -521,10 +742,15 @@ const ContentItemCard = ({
           {/* Column 2: Copy & Caption */}
           <div className="lg:col-span-6 space-y-6">
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
+              {/* Que cada campo diga a quién pertenece es el arreglo de fondo: el guion llegaba al
+                  portal del cliente porque nadie sabía, mirando la pantalla, qué salía de la agencia. */}
+              <div className="flex flex-wrap items-center gap-2">
                 <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-indigo-600" /> Copy Visual / Guion
+                  <FileText className="w-3.5 h-3.5 text-zinc-400" /> Guion
                 </label>
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2 py-0.5 text-[10px] font-bold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
+                  <Lock className="h-3 w-3" /> Solo el equipo
+                </span>
               </div>
               {isEditing ? (
                 <AutoResizeTextarea
@@ -538,16 +764,21 @@ const ContentItemCard = ({
                   className="w-full min-h-[120px] bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600/30 transition-all outline-none"
                 />
               ) : (
-                <div className="bg-zinc-50/50 dark:bg-white/2 p-4 rounded-2xl text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
+                <div className="bg-zinc-50/50 dark:bg-white/5 p-4 rounded-2xl text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
                   {item.copyText || <span className="italic text-zinc-400">Sin copy visual...</span>}
                 </div>
               )}
             </div>
 
             <div className="space-y-2">
-              <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
-                <Instagram className="w-3.5 h-3.5 text-indigo-600" /> Caption (Post)
-              </label>
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
+                  <Instagram className="w-3.5 h-3.5 text-brand-cyan-deep dark:text-brand-cyan" /> Texto de la publicación
+                </label>
+                <span className="inline-flex items-center gap-1.5 rounded-md bg-brand-cyan-soft px-2 py-0.5 text-[10px] font-bold text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan">
+                  <Eye className="h-3 w-3" /> Esto es lo que ve el cliente
+                </span>
+              </div>
               {isEditing ? (
                 <AutoResizeTextarea
                   defaultValue={item.captionText}
@@ -560,7 +791,7 @@ const ContentItemCard = ({
                   className="w-full min-h-[120px] bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600/30 transition-all outline-none"
                 />
               ) : (
-                <div className="bg-zinc-50/50 dark:bg-white/2 p-4 rounded-2xl text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
+                <div className="bg-zinc-50/50 dark:bg-white/5 p-4 rounded-2xl text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
                   {item.captionText || <span className="italic text-zinc-400">Sin caption...</span>}
                 </div>
               )}
@@ -656,6 +887,8 @@ const ContentItemCard = ({
                   onChange={(links) => onUpdate({ id: item.id, assetsLinks: links })}
                 />
               </div>
+
+              <ClientGlance item={item} />
 
               {latestTask ? (
                 <div className={`flex flex-col gap-2 p-4 rounded-2xl border transition-all ${
@@ -855,7 +1088,8 @@ const ContentPlanDetail = () => {
   // `null` mientras no haya una subida directa en curso; un número entre 0 y 99 mientras la hay.
   const [directUploadPercent, setDirectUploadPercent] = useState(null);
   const [driveLinkItemId, setDriveLinkItemId] = useState(null);
-  const itemRefs = useRef({});
+  const [selectedItemId, setSelectedItemId] = useState(null);
+  const [planView, setPlanView] = useState('editor');
 
   // Parse period (month-year)
   const [monthName, year] = (period || '').split('-');
@@ -904,23 +1138,9 @@ const ContentPlanDetail = () => {
     }
   });
 
-  // Highlight & Scroll Effect
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const highlightId = params.get('item') || params.get('itemId');
-    if (highlightId && plan?.items) {
-      setTimeout(() => {
-        const element = itemRefs.current[highlightId];
-        if (element) {
-          element.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          element.classList.add('ring-2', 'ring-indigo-600', 'ring-offset-4', 'dark:ring-offset-zinc-950');
-          setTimeout(() => {
-            element.classList.remove('ring-2', 'ring-indigo-600', 'ring-offset-4', 'dark:ring-offset-zinc-950');
-          }, 3000);
-        }
-      }, 500);
-    }
-  }, [location.search, plan]);
+  // El resaltado por enlace directo ya no necesita efecto: `?item=` elige esa pieza al entrar y el
+  // editor la abre. Antes esto buscaba el nodo con un `setTimeout`, le añadía clases al DOM a mano y
+  // las quitaba tres segundos después; con una pieza a la vez no hay a dónde desplazarse.
 
   const currentPlanId = plan?.id || planId;
   const planInternalNotes = parsePlanInternalNotes(plan?.internalNotes);
@@ -964,6 +1184,7 @@ const ContentPlanDetail = () => {
       queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
       setNewlyCreatedItemId(newItem.id);
       setEditingItemId(newItem.id);
+      setSelectedItemId(newItem.id);
       toast.success('Nueva pieza añadida');
     }
   });
@@ -1142,6 +1363,15 @@ const ContentPlanDetail = () => {
       ]
     : (plan.items || []);
 
+  // La pieza abierta se **deriva**, no se guarda con un efecto: si no hay elección, o la elegida ya no
+  // existe, se abre la primera. Un enlace directo (`?item=`) elige esa pieza al entrar, que es lo que
+  // antes hacía el efecto de resaltado con un `setTimeout` y clases añadidas al DOM a mano.
+  const deepLinkItemId = new URLSearchParams(location.search).get('item')
+    || new URLSearchParams(location.search).get('itemId');
+  const selectedItem = orderedPlanItems.find(item => item.id === (selectedItemId || deepLinkItemId))
+    || orderedPlanItems[0]
+    || null;
+
   return (
     <div className="space-y-8 pb-20 animate-in fade-in duration-500">
       <PageHeader
@@ -1306,32 +1536,73 @@ const ContentPlanDetail = () => {
         )}
       </div>
 
-      {/* Items List */}
+      {/* El mes a la izquierda, la pieza elegida a la derecha; o el mes como calendario. */}
       <div className="space-y-6">
-        {orderedPlanItems.length > 0 ? (
-          orderedPlanItems.map((item, index) => (
-            <ContentItemCard
-              key={item.id}
-              item={item}
-              shareToken={plan.shareToken}
-              index={index}
-              isEditing={editingItemId === item.id}
-              onEditToggle={() => setEditingItemId(editingItemId === item.id ? null : item.id)}
-              onUpdate={updateItemMutation.mutate}
-              onDelete={handleDeleteItem}
-              onDispatch={() => setDispatchItemId(item.id)}
-              navigate={navigate}
-              itemRef={el => itemRefs.current[item.id] = el}
-              onFinalAssetUpload={handleFinalAssetUpload}
-              onFinalAssetDelete={handleFinalAssetDelete}
-              isFinalAssetUploading={finalAssetUploadMutation.isPending}
-              isFinalAssetDeleting={finalAssetDeleteMutation.isPending}
-              onDriveLink={setDriveLinkItemId}
-              directUploadPercent={finalAssetUploadMutation.variables?.itemId === item.id ? directUploadPercent : null}
-            />
-          ))
+        {orderedPlanItems.length > 0 && (
+          <div className="flex items-center gap-1 rounded-xl border border-zinc-200 bg-white p-1 w-fit dark:border-white/10 dark:bg-zinc-900">
+            {[
+              { key: 'editor', label: 'Editor' },
+              { key: 'calendar', label: 'Calendario' }
+            ].map(option => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => setPlanView(option.key)}
+                aria-pressed={planView === option.key}
+                className={`rounded-lg px-4 py-2 text-xs font-bold transition ${
+                  planView === option.key
+                    ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                    : 'text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-white/5'
+                }`}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {orderedPlanItems.length > 0 && planView === 'calendar' ? (
+          <PlanCalendar
+            items={orderedPlanItems}
+            year={Number(plan.year)}
+            month={Number(plan.month)}
+            onOpenPiece={(id) => { setSelectedItemId(id); setPlanView('editor'); }}
+            onAdd={handleAddItem}
+          />
+        ) : orderedPlanItems.length > 0 ? (
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-[312px_minmax(0,1fr)] lg:items-start">
+            <div className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)]">
+              <PlanPieceRail
+                items={orderedPlanItems}
+                selectedId={selectedItem?.id}
+                onSelect={setSelectedItemId}
+                onAdd={handleAddItem}
+              />
+            </div>
+
+            {selectedItem && (
+              <ContentItemCard
+                key={selectedItem.id}
+                item={selectedItem}
+                shareToken={plan.shareToken}
+                index={orderedPlanItems.indexOf(selectedItem)}
+                isEditing={editingItemId === selectedItem.id}
+                onEditToggle={() => setEditingItemId(editingItemId === selectedItem.id ? null : selectedItem.id)}
+                onUpdate={updateItemMutation.mutate}
+                onDelete={handleDeleteItem}
+                onDispatch={() => setDispatchItemId(selectedItem.id)}
+                navigate={navigate}
+                onFinalAssetUpload={handleFinalAssetUpload}
+                onFinalAssetDelete={handleFinalAssetDelete}
+                isFinalAssetUploading={finalAssetUploadMutation.isPending}
+                isFinalAssetDeleting={finalAssetDeleteMutation.isPending}
+                onDriveLink={setDriveLinkItemId}
+                directUploadPercent={finalAssetUploadMutation.variables?.itemId === selectedItem.id ? directUploadPercent : null}
+              />
+            )}
+          </div>
         ) : (
-          <div className="p-20 text-center bg-zinc-50/50 dark:bg-white/2 border border-dashed border-zinc-200 dark:border-white/10 rounded-[3rem]">
+          <div className="p-20 text-center bg-zinc-50/50 dark:bg-white/5 border border-dashed border-zinc-200 dark:border-white/10 rounded-[3rem]">
             <div className="w-16 h-16 bg-zinc-100 dark:bg-white/5 rounded-full flex items-center justify-center mx-auto mb-4">
               <LayoutGrid className="w-8 h-8 text-zinc-300 dark:text-zinc-600" />
             </div>
