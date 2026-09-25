@@ -535,6 +535,20 @@ const FeedbackHistory = ({ comments, isOpen }) => {
   );
 };
 
+/**
+ * La tarjeta de crear contenido (rediseño de Rodny, 25 de septiembre de 2026, propuesta B).
+ *
+ * La ficha entera —formato, fecha, estado, nota— vive en una franja arriba, y el ancho que antes
+ * gastaba una columna de metadatos se lo queda lo que de verdad se hace aquí: escribir. Guion y texto
+ * de publicación van lado a lado, y el material (pieza final y enlaces) en un carril estrecho.
+ *
+ * Fuera: el icono de formato —un cuadro de color enorme al lado de la palabra «Reel», que no añadía
+ * nada—, los iconos decorativos de cada etiqueta, el «(Links)» de los rótulos y el verde del botón
+ * Guardar, que en el resto de la plataforma significa «aprobado» y aquí decía otra cosa.
+ */
+const FIELD_CLASS = 'w-full rounded-xl border border-zinc-200 bg-white px-3 text-[13px] text-zinc-900 outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50';
+const FIELD_LABEL = 'text-xs font-medium text-zinc-500 dark:text-zinc-400';
+
 const ContentItemCard = ({
   item,
   shareToken: _shareToken,
@@ -563,224 +577,238 @@ const ContentItemCard = ({
     <div
       ref={itemRef}
       id={`item-${item.id}`}
-      className={`group relative bg-white dark:bg-zinc-900 transition-all duration-300 rounded-3xl shadow-sm ${
+      className={`group relative overflow-hidden rounded-3xl border bg-white transition-all dark:bg-zinc-900 ${
         isEditing
-          ? 'ring-4 ring-indigo-600/5 overflow-visible min-h-[520px] z-20'
+          ? 'min-h-[520px] overflow-visible border-brand-cyan/30'
           : isDevuelto
-          ? 'border border-amber-500/30 overflow-hidden'
-          : 'hover:shadow-md overflow-hidden'
+          ? 'border-destructive/30'
+          : 'border-zinc-200 dark:border-white/10'
       }`}
     >
-      <div className="p-6 lg:p-8">
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Column 1: Format & Status */}
-          <div className="lg:col-span-3 space-y-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-black text-indigo-600/40 font-mono tracking-tighter">
-                  #{String(index + 1).padStart(2, '0')}
-                </span>
-                <div className={`p-2.5 rounded-xl ${isEditing ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'bg-zinc-100 dark:bg-white/5 text-zinc-500'}`}>
-                  {item.format === 'Reel' || item.format === 'Video' ? <Video className="w-5 h-5" /> : <ImageIcon className="w-5 h-5" />}
-                </div>
-                {isEditing ? (
-                  <Select
-                    value={item.format}
-                    onChange={(e) => onUpdate({ id: item.id, format: e.target.value })}
-                    className="bg-transparent border-none p-0 text-sm font-bold text-zinc-900 dark:text-white focus:ring-0"
-                  >
-                    <option value="Reel">Reel</option>
-                    <option value="Carrusel">Carrusel</option>
-                    <option value="Post">Post</option>
-                    <option value="Otro">Otro</option>
-                  </Select>
-                ) : (
-                  <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 uppercase tracking-tight">{item.format}</span>
-                )}
-              </div>
-            </div>
+      {/* La ficha, en una franja: se lee de un vistazo y deja de robar una columna */}
+      <div className="flex flex-col gap-4 border-b border-zinc-100 px-6 py-5 dark:border-white/5">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-[13px] font-bold tabular-nums text-zinc-400">#{String(index + 1).padStart(2, '0')}</span>
 
-            <div className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] block mb-1">Objetivo / Título</label>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    defaultValue={item.objective}
-                    onBlur={(e) => {
-                      if (e.target.value !== item.objective) {
-                        onUpdate({ id: item.id, objective: e.target.value });
-                      }
-                    }}
-                    className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-sm font-medium focus:ring-2 focus:ring-indigo-600/20 outline-none"
-                  />
-                ) : (
-                  <p className="text-sm font-semibold text-zinc-800 dark:text-zinc-200 leading-tight">{item.objective}</p>
-                )}
-              </div>
+          {isEditing ? (
+            <input
+              type="text"
+              defaultValue={item.objective}
+              aria-label="Objetivo de la pieza"
+              onBlur={(e) => {
+                if (e.target.value !== item.objective) onUpdate({ id: item.id, objective: e.target.value });
+              }}
+              className="min-w-0 flex-grow rounded-xl border border-transparent bg-transparent px-2 py-1.5 text-xl font-bold tracking-tight text-zinc-900 outline-none transition focus:border-zinc-200 dark:text-zinc-50 dark:focus:border-white/10"
+            />
+          ) : (
+            <h3 className="min-w-0 flex-grow truncate px-2 text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{item.objective}</h3>
+          )}
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] block mb-1">Fecha Publicación</label>
-                {isEditing ? (
-                  <DatePicker
-                    {...brainDatePickerProps}
-                    key={`${item.id}-${item.publishDate}`}
-                    selected={item.publishDate ? new Date(`${new Date(item.publishDate).toISOString().split('T')[0]}T12:00:00.000Z`) : null}
-                    onChange={(date) => {
-                      if (!date) return;
-                      const dateStr = date.toISOString().split('T')[0];
-                      const current = item.publishDate ? new Date(item.publishDate).toISOString().split('T')[0] : '';
-                      if (dateStr !== current) {
-                        onUpdate({ id: item.id, publishDate: dateStr });
-                      }
-                    }}
-                    dateFormat="dd/MM/yyyy"
-                    className="w-full bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs font-medium focus:ring-2 focus:ring-indigo-600/20 outline-none"
-                    wrapperClassName="w-full"
-                    placeholderText="Elegir fecha"
-                  />
-                ) : (
-                  <div className="flex items-center gap-2 text-sm font-bold text-indigo-600 dark:text-indigo-400">
-                    <Calendar className="w-4 h-4" />
-                    {item.publishDate ? new Date(item.publishDate).toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }) : 'Sin fecha'}
-                  </div>
-                )}
-              </div>
+          {!isEditing && item.comments && (
+            <button
+              type="button"
+              onClick={() => setShowFeedback(!showFeedback)}
+              className="inline-flex h-9 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 text-[13px] font-bold text-zinc-600 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-300"
+            >
+              <MessageSquare className="h-3.5 w-3.5" />
+              {showFeedback ? 'Ocultar feedback' : 'Feedback del cliente'}
+            </button>
+          )}
 
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] block mb-1">Estado Pieza</label>
-                <Select
-                  value={item.status}
-                  onChange={(e) => onUpdate({ id: item.id, status: e.target.value })}
-                  className={`text-[10px] font-bold uppercase tracking-widest px-3 py-1.5 rounded-full border transition-all outline-none ${
-                    isRealizado
-                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-600'
-                      : isDevuelto
-                      ? 'bg-red-500/10 border-red-500/30 text-red-600'
-                      : 'bg-zinc-100 dark:bg-white/5 border-zinc-200 dark:border-white/10 text-zinc-500'
-                  }`}
-                >
-                  <option value="BORRADOR">Borrador</option>
-                  <option value="EN_REVISION">En Revisión</option>
-                  <option value="APROBADO">Aprobado</option>
-                  <option value="EN_PRODUCCION">En Producción</option>
-                  <option value="DEVUELTO">Devuelto</option>
-                  <option value="REALIZADO">Realizado</option>
-                  <option value="PUBLICADO">Publicado</option>
-                </Select>
-              </div>
-            </div>
+          <button
+            type="button"
+            onClick={onEditToggle}
+            className="inline-flex h-9 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-4 text-[13px] font-bold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200"
+          >
+            {isEditing ? <Check className="h-3.5 w-3.5" /> : <Edit2 className="h-3.5 w-3.5" />}
+            {isEditing ? 'Guardar' : 'Editar'}
+          </button>
 
-            <div className="pt-4 border-t border-zinc-100 dark:border-white/5">
-              <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5 mb-2">
-                  <StickyNote className="w-3 h-3 text-indigo-600" /> Nota Interna
-              </label>
-              {isEditing ? (
-                <AutoResizeTextarea
-                  defaultValue={item.internalNotes}
-                  onBlur={(e) => {
-                    if (e.target.value !== item.internalNotes) {
-                      onUpdate({ id: item.id, internalNotes: e.target.value });
-                    }
-                  }}
-                  placeholder="Instrucciones para el equipo..."
-                  className="w-full bg-zinc-50/50 dark:bg-white/5 border border-zinc-200/60 dark:border-white/5 rounded-xl p-3 text-[11px] font-medium focus:ring-2 focus:ring-indigo-600/10 outline-none transition-all"
-                />
-              ) : (
-                <div className="bg-zinc-50/30 dark:bg-white/5 p-3 rounded-xl text-[11px] text-zinc-500 dark:text-zinc-400 italic leading-relaxed">
-                  {item.internalNotes || <span className="text-zinc-300 dark:text-zinc-600">Sin notas internas...</span>}
-                </div>
-              )}
-            </div>
+          {latestTask ? (
+            <button
+              type="button"
+              onClick={() => navigate(`/gestion?taskId=${latestTask.id}`)}
+              className={`inline-flex h-9 items-center gap-2 rounded-xl px-3 text-[13px] font-bold transition ${
+                isRealizado
+                  ? 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green'
+                  : isDevuelto
+                  ? 'bg-destructive/10 text-destructive'
+                  : 'bg-brand-cyan-soft text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan'
+              }`}
+            >
+              {isRealizado ? <CheckCircle2 className="h-3.5 w-3.5" /> : isDevuelto ? <AlertCircle className="h-3.5 w-3.5" /> : <Clock className="h-3.5 w-3.5" />}
+              {isRealizado ? 'Realizado' : isDevuelto ? 'Devuelto' : 'En producción'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={onDispatch}
+              className="inline-flex h-9 items-center gap-2 rounded-xl bg-brand-cyan-deep px-4 text-[13px] font-bold text-white transition hover:brightness-110"
+            >
+              <Send className="h-3.5 w-3.5" /> Despachar a Kanban
+            </button>
+          )}
+
+          <button
+            type="button"
+            onClick={() => onDelete(item.id)}
+            aria-label="Eliminar esta pieza"
+            className="brain-danger-button-icon flex h-9 w-9 items-center justify-center rounded-xl"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-end gap-4">
+          <div className="flex flex-col gap-1.5">
+            <span className={FIELD_LABEL}>Formato</span>
+            <Select
+              value={item.format}
+              onChange={(e) => onUpdate({ id: item.id, format: e.target.value })}
+              aria-label="Formato de la pieza"
+              className={`${FIELD_CLASS} h-9 w-36`}
+            >
+              <option value="Reel">Reel</option>
+              <option value="Carrusel">Carrusel</option>
+              <option value="Post">Post</option>
+              <option value="Otro">Otro</option>
+            </Select>
           </div>
 
-          {/* Column 2: Copy & Caption */}
-          <div className="lg:col-span-6 space-y-6">
-            <div className="space-y-2">
-              {/* Que cada campo diga a quién pertenece es el arreglo de fondo: el guion llegaba al
-                  portal del cliente porque nadie sabía, mirando la pantalla, qué salía de la agencia. */}
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
-                  <FileText className="w-3.5 h-3.5 text-zinc-400" /> Guion
-                </label>
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2 py-0.5 text-[10px] font-bold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
-                  <Lock className="h-3 w-3" /> Solo el equipo
-                </span>
-              </div>
-              {isEditing ? (
-                <AutoResizeTextarea
-                  defaultValue={item.copyText}
-                  onBlur={(e) => {
-                    if (e.target.value !== item.copyText) {
-                      onUpdate({ id: item.id, copyText: e.target.value });
-                    }
-                  }}
-                  placeholder="Escribe el copy visual o guion aquí..."
-                  className="w-full min-h-[120px] bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600/30 transition-all outline-none"
-                />
-              ) : (
-                <div className="bg-zinc-50/50 dark:bg-white/5 p-4 rounded-2xl text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
-                  {item.copyText || <span className="italic text-zinc-400">Sin copy visual...</span>}
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
-                  <Instagram className="w-3.5 h-3.5 text-brand-cyan-deep dark:text-brand-cyan" /> Texto de la publicación
-                </label>
-                <span className="inline-flex items-center gap-1.5 rounded-md bg-brand-cyan-soft px-2 py-0.5 text-[10px] font-bold text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan">
-                  <Eye className="h-3 w-3" /> Esto es lo que ve el cliente
-                </span>
-              </div>
-              {isEditing ? (
-                <AutoResizeTextarea
-                  defaultValue={item.captionText}
-                  onBlur={(e) => {
-                    if (e.target.value !== item.captionText) {
-                      onUpdate({ id: item.id, captionText: e.target.value });
-                    }
-                  }}
-                  placeholder="Escribe el pie de foto para redes..."
-                  className="w-full min-h-[120px] bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-2xl p-4 text-sm font-medium focus:ring-4 focus:ring-indigo-600/10 focus:border-indigo-600/30 transition-all outline-none"
-                />
-              ) : (
-                <div className="bg-zinc-50/50 dark:bg-white/5 p-4 rounded-2xl text-sm text-zinc-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed min-h-[4rem]">
-                  {item.captionText || <span className="italic text-zinc-400">Sin caption...</span>}
-                </div>
-              )}
-            </div>
-
-            <FeedbackHistory
-              comments={item.comments}
-              isOpen={showFeedback}
+          <div className="flex flex-col gap-1.5">
+            <span className={`${FIELD_LABEL} block`}>Publica el</span>
+            <DatePicker
+              {...brainDatePickerProps}
+              key={`${item.id}-${item.publishDate}`}
+              selected={item.publishDate ? new Date(`${new Date(item.publishDate).toISOString().split('T')[0]}T12:00:00.000Z`) : null}
+              onChange={(date) => {
+                if (!date) return;
+                const dateStr = date.toISOString().split('T')[0];
+                const current = item.publishDate ? new Date(item.publishDate).toISOString().split('T')[0] : '';
+                if (dateStr !== current) onUpdate({ id: item.id, publishDate: dateStr });
+              }}
+              dateFormat="dd/MM/yyyy"
+              className={`${FIELD_CLASS} h-9`}
+              wrapperClassName="w-40"
+              placeholderText="Elegir fecha"
             />
           </div>
 
-          {/* Column 3: Links & Production */}
-          <div className="lg:col-span-3 flex flex-col justify-between gap-6">
-            <div className="space-y-5">
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
-                  <UploadCloud className="w-3.5 h-3.5 text-indigo-600" /> Pieza final
-                </label>
-                {finalAssets.length ? (
-                  <div className="grid grid-cols-2 gap-2">
-                    {finalAssets.map(asset => (
-                      <FinalAssetTile key={asset.id} item={item} asset={asset} isEditing={isEditing} onDelete={onFinalAssetDelete} isDeleting={isFinalAssetDeleting} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-2xl border border-dashed border-zinc-200 dark:border-white/10 bg-zinc-50/60 dark:bg-white/5 p-4 text-[10px] text-zinc-400">
-                    Sin pieza final cargada.
-                  </div>
-                )}
+          <div className="flex flex-col gap-1.5">
+            <span className={FIELD_LABEL}>Estado</span>
+            <Select
+              value={item.status}
+              onChange={(e) => onUpdate({ id: item.id, status: e.target.value })}
+              aria-label="Estado de la pieza"
+              className={`${FIELD_CLASS} h-9 w-44`}
+            >
+              <option value="BORRADOR">Borrador</option>
+              <option value="EN_REVISION">En Revisión</option>
+              <option value="APROBADO">Aprobado</option>
+              <option value="EN_PRODUCCION">En Producción</option>
+              <option value="DEVUELTO">Devuelto</option>
+              <option value="REALIZADO">Realizado</option>
+              <option value="PUBLICADO">Publicado</option>
+            </Select>
+          </div>
 
-                {isEditing && (
-                  <label className="flex items-center justify-center gap-2 rounded-xl border border-indigo-100 dark:border-indigo-500/20 bg-indigo-50 dark:bg-indigo-500/10 px-3 py-2 text-[10px] font-black uppercase tracking-widest text-indigo-700 dark:text-indigo-300 cursor-pointer hover:bg-indigo-100 dark:hover:bg-indigo-500/20 transition-colors">
-                    {isFinalAssetUploading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UploadCloud className="w-3.5 h-3.5" />}
-                    {finalAssets.length ? 'Añadir archivos' : 'Cargar archivos'}
+          <div className="flex min-w-[220px] flex-grow flex-col gap-1.5">
+            <label htmlFor={`nota-${item.id}`} className={FIELD_LABEL}>
+              Nota interna <span className="text-zinc-400">· solo el equipo</span>
+            </label>
+            {isEditing ? (
+              <input
+                id={`nota-${item.id}`}
+                type="text"
+                defaultValue={item.internalNotes || ''}
+                onBlur={(e) => {
+                  if (e.target.value !== item.internalNotes) onUpdate({ id: item.id, internalNotes: e.target.value });
+                }}
+                placeholder="Instrucciones para el equipo…"
+                className={`${FIELD_CLASS} h-9`}
+              />
+            ) : (
+              <p className="flex h-9 items-center px-1 text-[13px] italic text-zinc-500 dark:text-zinc-400">
+                {item.internalNotes || <span className="text-zinc-300 dark:text-zinc-600">Sin notas internas…</span>}
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Escribir ocupa el ancho; el material va a un carril */}
+      <div className="flex flex-col lg:flex-row lg:items-stretch">
+        <div className="grid min-w-0 flex-grow grid-cols-1 gap-5 p-6 xl:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor={`guion-${item.id}`} className={FIELD_LABEL}>Guion</label>
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-bold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
+                <Lock className="h-3 w-3" /> Solo el equipo
+              </span>
+            </div>
+            {isEditing ? (
+              <AutoResizeTextarea
+                defaultValue={item.copyText}
+                onBlur={(e) => {
+                  if (e.target.value !== item.copyText) onUpdate({ id: item.id, copyText: e.target.value });
+                }}
+                placeholder="Escribe el guion aquí…"
+                className="min-h-[260px] w-full rounded-xl border border-zinc-200 bg-white p-4 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900"
+              />
+            ) : (
+              <div className="min-h-[260px] whitespace-pre-wrap rounded-xl bg-zinc-50 p-4 text-[13px] leading-relaxed text-zinc-700 dark:bg-white/5 dark:text-zinc-300">
+                {item.copyText || <span className="italic text-zinc-400">Sin guion…</span>}
+              </div>
+            )}
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <label htmlFor={`texto-${item.id}`} className={FIELD_LABEL}>Texto de la publicación</label>
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-brand-cyan-soft px-2 py-0.5 text-[11px] font-bold text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan">
+                <Eye className="h-3 w-3" /> Lo ve el cliente
+              </span>
+            </div>
+            {isEditing ? (
+              <AutoResizeTextarea
+                defaultValue={item.captionText}
+                onBlur={(e) => {
+                  if (e.target.value !== item.captionText) onUpdate({ id: item.id, captionText: e.target.value });
+                }}
+                placeholder="Escribe el texto que se va a publicar…"
+                className="min-h-[260px] w-full rounded-xl border-[1.5px] border-brand-cyan/30 bg-brand-cyan-soft/30 p-4 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:bg-brand-cyan/5"
+              />
+            ) : (
+              <div className="min-h-[260px] whitespace-pre-wrap rounded-xl border-[1.5px] border-brand-cyan/20 bg-brand-cyan-soft/30 p-4 text-[13px] leading-relaxed text-zinc-700 dark:bg-brand-cyan/5 dark:text-zinc-300">
+                {item.captionText || <span className="italic text-zinc-400">Sin texto de publicación…</span>}
+              </div>
+            )}
+          </div>
+        </div>
+
+        <aside className="flex w-full shrink-0 flex-col gap-5 border-t border-zinc-100 bg-zinc-50/60 p-6 dark:border-white/5 dark:bg-white/5 lg:w-[292px] lg:border-l lg:border-t-0">
+          <div className="flex flex-col gap-2.5">
+            <span className={FIELD_LABEL}>Pieza final</span>
+
+            {finalAssets.length > 0 && (
+              <div className="grid grid-cols-2 gap-2">
+                {finalAssets.map(asset => (
+                  <FinalAssetTile key={asset.id} item={item} asset={asset} isEditing={isEditing} onDelete={onFinalAssetDelete} isDeleting={isFinalAssetDeleting} />
+                ))}
+              </div>
+            )}
+
+            {isEditing ? (
+              <div className="flex flex-col items-center gap-2.5 rounded-xl border border-dashed border-zinc-300 bg-white p-5 text-center dark:border-white/15 dark:bg-zinc-900">
+                {isFinalAssetUploading
+                  ? <Loader2 className="h-5 w-5 animate-spin text-zinc-400" />
+                  : <UploadCloud className="h-5 w-5 text-zinc-400" />}
+                <span className="text-[13px] text-zinc-600 dark:text-zinc-300">
+                  {finalAssets.length ? 'Añadir más material' : 'Arrastra la pieza aquí'}
+                </span>
+                <div className="flex flex-col items-center gap-1">
+                  <label className="cursor-pointer text-[13px] font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan">
+                    Elegir archivos
                     <input
                       type="file"
                       multiple
@@ -794,132 +822,61 @@ const ContentItemCard = ({
                       }}
                     />
                   </label>
-                )}
-
-                {isEditing && (
                   <button
                     type="button"
                     onClick={() => onDriveLink(item.id)}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 py-2 text-[10px] font-black uppercase tracking-widest text-zinc-600 transition-colors hover:bg-zinc-50 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300 dark:hover:bg-white/10"
+                    className="text-[13px] font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan"
                     title="Para un video que pesa demasiado para subirlo"
                   >
-                    <Link2 className="h-3.5 w-3.5" /> Enlace de Drive
+                    Enlace de Drive
                   </button>
-                )}
-
-                {directUploadPercent !== null && (
-                  <div className="space-y-1.5 pt-1" role="status" aria-live="polite">
-                    <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-white/10">
-                      <div className="h-full rounded-full bg-brand-cyan transition-all" style={{ width: `${directUploadPercent}%` }} />
-                    </div>
-                    <p className="text-[10px] font-bold text-zinc-500 dark:text-zinc-400">
-                      Subiendo al almacenamiento… {directUploadPercent}%
-                    </p>
-                  </div>
-                )}
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
-                  <ExternalLink className="w-3.5 h-3.5 text-indigo-600" /> Referencias (Links)
-                </label>
-                <MultiLinkInput
-                  values={item.mediaUrl}
-                  isEditing={isEditing}
-                  placeholder="Link de Drive/Pinterest"
-                  onChange={(links) => onUpdate({ id: item.id, mediaUrl: links })}
-                />
-              </div>
-
-              <div className="space-y-1.5">
-                <label className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] flex items-center gap-1.5">
-                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" /> Insumos (Links)
-                </label>
-                <MultiLinkInput
-                  values={item.assetsLinks}
-                  isEditing={isEditing}
-                  placeholder="Links de fotos, logos, etc."
-                  onChange={(links) => onUpdate({ id: item.id, assetsLinks: links })}
-                />
-              </div>
-
-              {latestTask ? (
-                <div className={`flex flex-col gap-2 p-4 rounded-2xl border transition-all ${
-                  isRealizado
-                    ? 'bg-emerald-500/5 border-emerald-500/20 text-emerald-600'
-                    : isDevuelto
-                    ? 'border-destructive/20 bg-destructive/5 text-destructive'
-                    : 'bg-indigo-600/5 border-indigo-600/20 text-indigo-600'
-                }`}>
-                  <div className="flex items-center gap-2">
-                    {isRealizado ? <CheckCircle2 className="w-4 h-4" /> : isDevuelto ? <AlertCircle className="h-4 w-4 text-destructive" /> : <Clock className="w-4 h-4 animate-pulse" />}
-                    <span className="text-[10px] font-black uppercase tracking-widest">
-                      {isRealizado ? 'Realizado' : isDevuelto ? 'Devuelto' : 'En Producción'}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => navigate(`/gestion?taskId=${latestTask.id}`)}
-                    className="text-[9px] font-bold text-zinc-500 hover:text-indigo-600 flex items-center gap-1 transition-colors"
-                  >
-                    {latestTask.title.startsWith('[Publicar]') ? 'Ver Publicación' : 'Ver Producción'} <ExternalLink className="w-2 h-2" />
-                  </button>
-                  {item.tasks.length > 1 && (
-                    <span className="text-[8px] text-zinc-400 font-medium">Historial: {item.tasks.length} tareas</span>
-                  )}
                 </div>
-              ) : (
-                <Button
-                  onClick={onDispatch}
-                  variant="default"
-                  className="w-full py-6 font-black text-[10px] uppercase tracking-[0.1em]"
-                >
-                  <Send className="w-4 h-4 mr-2" />
-                  Despachar a Kanban
-                </Button>
-              )}
-            </div>
-
-            <div className="flex flex-col gap-3 mt-4 pt-4 border-t border-zinc-200/50 dark:border-white/5">
-              <div className="flex items-center justify-between">
-                <button
-                  onClick={onEditToggle}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl text-[10px] font-bold uppercase transition-all ${
-                    isEditing
-                      ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/20'
-                      : 'text-zinc-500 hover:text-indigo-600 hover:bg-indigo-600/5'
-                  }`}
-                >
-                  {isEditing ? <Check className="w-3.5 h-3.5" /> : <Edit2 className="w-3.5 h-3.5" />}
-                  {isEditing ? 'Guardar' : 'Editar'}
-                </button>
-
-                <button
-                  onClick={() => onDelete(item.id)}
-                  className="brain-danger-button-icon rounded-xl p-2"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
               </div>
+            ) : finalAssets.length === 0 && (
+              <p className="rounded-xl border border-dashed border-zinc-200 p-4 text-[13px] text-zinc-400 dark:border-white/10">
+                Sin pieza final cargada.
+              </p>
+            )}
 
-              {!isEditing && item.comments && (
-                <button
-                  onClick={() => setShowFeedback(!showFeedback)}
-                  className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                    showFeedback
-                      ? 'bg-slate-200 text-slate-700'
-                      : isDevuelto
-                      ? 'bg-amber-100 text-amber-700 border border-amber-200'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-                  }`}
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  {showFeedback ? 'Ocultar Feedback' : '💬 Feedback del Cliente'}
-                </button>
-              )}
-            </div>
+            {directUploadPercent !== null && (
+              <div className="space-y-1.5 pt-1" role="status" aria-live="polite">
+                <div className="h-1.5 w-full overflow-hidden rounded-full bg-zinc-200 dark:bg-white/10">
+                  <div className="h-full rounded-full bg-brand-cyan transition-all" style={{ width: `${directUploadPercent}%` }} />
+                </div>
+                <p className="text-[11px] font-bold text-zinc-500 dark:text-zinc-400">
+                  Subiendo al almacenamiento… {directUploadPercent}%
+                </p>
+              </div>
+            )}
           </div>
-        </div>
+
+          <div className="flex flex-col gap-2">
+            <span className={FIELD_LABEL}>Referencias</span>
+            <MultiLinkInput
+              values={item.mediaUrl}
+              isEditing={isEditing}
+              placeholder="Link de Drive/Pinterest"
+              onChange={(links) => onUpdate({ id: item.id, mediaUrl: links })}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <span className={FIELD_LABEL}>Insumos</span>
+            <MultiLinkInput
+              values={item.assetsLinks}
+              isEditing={isEditing}
+              placeholder="Links de fotos, logos, etc."
+              onChange={(links) => onUpdate({ id: item.id, assetsLinks: links })}
+            />
+          </div>
+        </aside>
       </div>
+
+      {showFeedback && item.comments && (
+        <div className="border-t border-zinc-100 px-6 py-5 dark:border-white/5">
+          <FeedbackHistory comments={item.comments} isOpen={showFeedback} />
+        </div>
+      )}
     </div>
   );
 };
