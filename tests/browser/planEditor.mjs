@@ -152,14 +152,27 @@ try {
     const sitio = await page.evaluate(() => {
       const card = document.querySelector('[id^="item-"]');
       const rect = card.getBoundingClientRect();
-      return { id: card.id, top: Math.round(rect.top), alto: window.innerHeight, scrollY: Math.round(window.scrollY) };
+      const header = document.querySelector('header');
+      return {
+        id: card.id,
+        top: Math.round(rect.top),
+        alto: window.innerHeight,
+        scrollY: Math.round(window.scrollY),
+        headerAlto: header ? Math.round(header.getBoundingClientRect().height) : 0
+      };
     });
 
     if (debeMoverse) {
       assert.equal(sitio.id, 'item-i5', 'abre la pieza que nombra el enlace');
       assert.ok(
-        sitio.top >= 0 && sitio.top < sitio.alto,
+        sitio.top < sitio.alto,
         `${etiqueta}: la deja delante (top ${sitio.top}px de ${sitio.alto}px)`
+      );
+      // Lo que se veía mal: la tarjeta aterrizaba **debajo** del header fijo y translúcido, con su
+      // cabecera cortada. Por eso no basta con «está en pantalla»: tiene que quedar por debajo de él.
+      assert.ok(
+        sitio.top >= sitio.headerAlto,
+        `${etiqueta}: no queda bajo el header fijo (top ${sitio.top}px, header ${sitio.headerAlto}px)`
       );
       await page.screenshot({ path: 'output/editor-enlace-directo.png' });
     } else {

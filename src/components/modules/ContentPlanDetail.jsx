@@ -593,12 +593,11 @@ const ContentItemCard = ({
   const isDevuelto = item.status === 'DEVUELTO';
   const latestTask = item.tasks?.[0];
 
-  // `scroll-mt-24`: al traerla al frente por un enlace, el header fijo no se le monta encima.
   return (
     <div
       ref={itemRef}
       id={`item-${item.id}`}
-      className={`group relative scroll-mt-24 overflow-hidden rounded-3xl border bg-white transition-all dark:bg-zinc-900 ${
+      className={`group relative overflow-hidden rounded-3xl border bg-white transition-all dark:bg-zinc-900 ${
         isEditing
           ? 'min-h-[520px] overflow-visible border-brand-cyan/30'
           : isDevuelto
@@ -1326,16 +1325,59 @@ const ContentPlanDetail = () => {
    * bajo los pies de quien está escribiendo. Y si la tarjeta ya se ve, no se toca el scroll.
    */
   useEffect(() => {
-    if (!linkedItemId || !plan) return;
-    if (scrolledForRef.current === linkedItemId) return;
+    if (!linkedItemId || !plan) return undefined;
+    if (scrolledForRef.current === linkedItemId) return undefined;
 
     const node = document.getElementById(`item-${linkedItemId}`);
-    if (!node) return; // todavía no está pintada; al siguiente render sí
+    if (!node) return undefined; // todavía no está pintada; al siguiente render sí
 
     scrolledForRef.current = linkedItemId;
     const { top } = node.getBoundingClientRect();
-    const yaSeVe = top >= 0 && top < window.innerHeight * 0.6;
-    if (!yaSeVe) node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (top >= 0 && top < window.innerHeight * 0.6) return undefined; // ya se ve: no se toca nada
+
+    // El header de la aplicación es fijo y translúcido (`h-16 fixed`), así que alinear la tarjeta con
+    // el borde de la ventana la mete **debajo** de él: se resta su alto, medido en vivo.
+    const header = document.querySelector('header');
+    const margen = (header && getComputedStyle(header).position === 'fixed'
+      ? header.getBoundingClientRect().height
+      : 0) + 24;
+
+    const alinear = () => {
+      const delta = node.getBoundingClientRect().top - margen;
+      if (Math.abs(delta) > 4) window.scrollBy(0, delta);
+    };
+
+    let raf = 0;
+    let cancelado = false;
+    const soltar = () => { cancelado = true; };
+
+    alinear();
+
+    /**
+     * Un solo salto no basta: lo que hay **encima** —el panel de Bria, los textos que se auto-ajustan—
+     * termina de asentarse después, cambia de alto y se lleva la tarjeta consigo; por eso aterrizaba
+     * cortada por arriba (Rodny, 25 de septiembre de 2026: «me deja muy abajo»). Se recoloca durante
+     * un segundo y medio, y se suelta en cuanto la persona toca el scroll: mandar ella, no nosotros.
+     */
+    const hasta = Date.now() + 1500;
+    const seguir = () => {
+      if (cancelado || Date.now() > hasta) return;
+      alinear();
+      raf = requestAnimationFrame(seguir);
+    };
+    raf = requestAnimationFrame(seguir);
+
+    window.addEventListener('wheel', soltar, { passive: true, once: true });
+    window.addEventListener('touchstart', soltar, { passive: true, once: true });
+    window.addEventListener('keydown', soltar, { once: true });
+
+    return () => {
+      cancelado = true;
+      cancelAnimationFrame(raf);
+      window.removeEventListener('wheel', soltar);
+      window.removeEventListener('touchstart', soltar);
+      window.removeEventListener('keydown', soltar);
+    };
   }, [linkedItemId, plan, planView]);
 
   if (planLoading) {
