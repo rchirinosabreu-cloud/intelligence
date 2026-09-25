@@ -305,7 +305,7 @@ const Clients = () => {
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="border-b border-zinc-200/50 dark:border-white/5 bg-zinc-50/50 dark:bg-white/2">
+              <tr className="border-b border-zinc-200/50 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5">
                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Cliente</th>
                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Estado Salud</th>
                 <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest text-center">Responsable</th>
@@ -337,7 +337,7 @@ const Clients = () => {
                         animate={{ opacity: 1 }}
                         exit={{ opacity: 0, x: -20 }}
                         className={cn(
-                          "group hover:bg-zinc-100/30 dark:hover:bg-white/2 transition-all cursor-pointer border-l-4",
+                          "group hover:bg-zinc-100/30 dark:hover:bg-white/5 transition-all cursor-pointer border-l-4",
                           isExpanded ? "border-indigo-600 bg-indigo-50/10" : "border-transparent"
                         )}
                         onClick={() => toggleExpand(client.id)}
@@ -476,7 +476,7 @@ const Clients = () => {
                        const lastComment = client.agencyContexts?.[0]?.content || "Sin observaciones recientes.";
 
                        return (
-                        <tr key={client.id} className="hover:bg-zinc-100/50 dark:hover:bg-white/2 transition-colors">
+                        <tr key={client.id} className="hover:bg-zinc-100/50 dark:hover:bg-white/5 transition-colors">
                           <td className="px-6 py-4">
                             <div className="flex items-center gap-3">
                               <ClientAvatar client={client} size={32} className="rounded-lg border border-zinc-200 dark:border-white/10" />
