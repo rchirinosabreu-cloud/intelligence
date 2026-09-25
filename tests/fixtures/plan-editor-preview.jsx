@@ -1,7 +1,7 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter, Routes, Route } from 'react-router-dom';
+import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import axios from 'axios';
 import ContentPlanDetail from '../../src/components/modules/ContentPlanDetail';
@@ -96,12 +96,25 @@ axios.defaults.adapter = async (config) => {
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
 
+/**
+ * Saca la URL del router a un atributo del DOM. El `MemoryRouter` no toca la barra del navegador, así
+ * que sin esto no habría forma de comprobar desde fuera que la pieza abierta la manda la URL —que es
+ * justo lo que impide que un enlace de Gestión abra la pieza equivocada.
+ */
+const LocationProbe = () => {
+  const location = useLocation();
+  return <span className="sr-only" data-preview-location={location.search} />;
+};
+
 createRoot(document.getElementById('root')).render(
   <QueryClientProvider client={queryClient}>
     <AuthProvider>
       <ConfirmDialogProvider>
-        <MemoryRouter initialEntries={['/parrillas/promogroup/9-2026']}>
+        {/* La consulta de la página entra al router, así se puede probar un enlace directo:
+            …plan-editor-preview.html?item=i5 tiene que abrir esa pieza, como al venir de Gestión. */}
+        <MemoryRouter initialEntries={[`/parrillas/promogroup/9-2026${window.location.search}`]}>
           <div className="min-h-screen bg-zinc-50 p-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+            <LocationProbe />
             <Routes>
               <Route path="/parrillas/:clientSlug/:period" element={<ContentPlanDetail />} />
             </Routes>

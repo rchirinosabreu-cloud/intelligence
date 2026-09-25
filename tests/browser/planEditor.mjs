@@ -98,6 +98,16 @@ try {
     const afterSwitch = await page.evaluate(() => document.querySelectorAll('[id^="item-"]').length);
     assert.equal(afterSwitch, 1, 'sigue habiendo un solo editor tras cambiar de pieza');
 
+    // Rodny, 25 de septiembre de 2026: «al abrir parrilla desde gestión debería viajar directo hacia
+    // el pendiente en cuestión, parece que se desincronizó». Pasaba porque convivían dos fuentes —un
+    // estado local y el `?item=` del enlace— y ganaba el estado. Lo que se vigila aquí es que la pieza
+    // abierta la mande **la URL**: con una sola fuente, un enlace nuevo no puede perder.
+    const urlTrasElegir = await page.evaluate(() => document.querySelector('[data-preview-location]')?.dataset.previewLocation);
+    assert.match(urlTrasElegir || '', /item=i3/, `elegir en el carril cambia la URL (${urlTrasElegir})`);
+
+    const abiertaPorLaUrl = await page.evaluate(() => document.querySelector('[id^="item-"]')?.id);
+    assert.equal(abiertaPorLaUrl, 'item-i3', 'y la pieza abierta es la que nombra la URL');
+
     // 4. El calendario: el mismo mes, visto por días.
     await page.evaluate(() => [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Calendario').click());
     await page.waitForFunction(() => document.body.textContent.includes('Sin fecha todavía'));
