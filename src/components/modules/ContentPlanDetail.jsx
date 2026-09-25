@@ -1021,6 +1021,24 @@ const ContentPlanDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
+
+  /**
+   * Qué pieza está abierta lo dice **la URL**, y solo la URL (Rodny, 25 de septiembre de 2026).
+   *
+   * Antes convivían dos fuentes: un estado local y el `?item=` del enlace, y el estado ganaba. Al
+   * abrir una parrilla desde Gestión por segunda vez —con otra pieza— seguía viéndose la que se había
+   * elegido a mano, porque React Router no vuelve a montar la pantalla si solo cambia la consulta.
+   * Con una sola fuente eso no puede pasar, y de paso el botón «atrás» del navegador funciona.
+   */
+  const linkedItemId = new URLSearchParams(location.search).get('item')
+    || new URLSearchParams(location.search).get('itemId');
+
+  const selectPiece = (itemId) => {
+    const params = new URLSearchParams(location.search);
+    params.delete('itemId');
+    if (itemId) params.set('item', itemId); else params.delete('item');
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+  };
   const [editingItemId, setEditingItemId] = useState(null);
   const [dispatchItemId, setDispatchItemId] = useState(null);
   const [showInternalNotes, setShowInternalNotes] = useState(false);
@@ -1029,7 +1047,6 @@ const ContentPlanDetail = () => {
   // `null` mientras no haya una subida directa en curso; un número entre 0 y 99 mientras la hay.
   const [directUploadPercent, setDirectUploadPercent] = useState(null);
   const [driveLinkItemId, setDriveLinkItemId] = useState(null);
-  const [selectedItemId, setSelectedItemId] = useState(null);
   const [planView, setPlanView] = useState('editor');
 
   // Parse period (month-year)
@@ -1133,7 +1150,7 @@ const ContentPlanDetail = () => {
       queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
       setNewlyCreatedItemId(newItem.id);
       setEditingItemId(newItem.id);
-      setSelectedItemId(newItem.id);
+      selectPiece(newItem.id);
       toast.success('Nueva pieza añadida');
     }
   });
@@ -1312,12 +1329,8 @@ const ContentPlanDetail = () => {
       ]
     : (plan.items || []);
 
-  // La pieza abierta se **deriva**, no se guarda con un efecto: si no hay elección, o la elegida ya no
-  // existe, se abre la primera. Un enlace directo (`?item=`) elige esa pieza al entrar, que es lo que
-  // antes hacía el efecto de resaltado con un `setTimeout` y clases añadidas al DOM a mano.
-  const deepLinkItemId = new URLSearchParams(location.search).get('item')
-    || new URLSearchParams(location.search).get('itemId');
-  const selectedItem = orderedPlanItems.find(item => item.id === (selectedItemId || deepLinkItemId))
+  // Si el enlace no nombra ninguna pieza, o nombra una que ya no está, se abre la primera.
+  const selectedItem = orderedPlanItems.find(item => item.id === linkedItemId)
     || orderedPlanItems[0]
     || null;
 
@@ -1515,7 +1528,7 @@ const ContentPlanDetail = () => {
             items={orderedPlanItems}
             year={Number(plan.year)}
             month={Number(plan.month)}
-            onOpenPiece={(id) => { setSelectedItemId(id); setPlanView('editor'); }}
+            onOpenPiece={(id) => { selectPiece(id); setPlanView('editor'); }}
             onAdd={handleAddItem}
           />
         ) : orderedPlanItems.length > 0 ? (
@@ -1524,7 +1537,7 @@ const ContentPlanDetail = () => {
               <PlanPieceRail
                 items={orderedPlanItems}
                 selectedId={selectedItem?.id}
-                onSelect={setSelectedItemId}
+                onSelect={selectPiece}
                 onAdd={handleAddItem}
               />
             </div>

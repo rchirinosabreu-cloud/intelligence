@@ -12,7 +12,7 @@ test('el mes va en un carril y solo se edita la pieza elegida', async () => {
   const editor = await read('src/components/modules/ContentPlanDetail.jsx');
 
   assert.match(editor, /const PlanPieceRail/, 'el carril del mes es su propio componente');
-  assert.match(editor, /selectedItemId/, 'hay una pieza elegida, no todas abiertas a la vez');
+  assert.match(editor, /const selectedItem = orderedPlanItems\.find/, 'hay una pieza abierta, no todas a la vez');
   assert.match(editor, /aria-current=\{isSelected \? 'true' : undefined\}/, 'el carril dice cuál está abierta');
 
   // Antes se pintaba un `ContentItemCard` por cada pieza del mes; ahora solo el de la elegida.
@@ -22,6 +22,25 @@ test('el mes va en un carril y solo se edita la pieza elegida', async () => {
     'ya no se dibuja una tarjeta por pieza'
   );
   assert.match(editor, /selectedItem && \(/, 'la tarjeta se dibuja para la pieza elegida');
+});
+
+test('la pieza abierta la manda la URL, no un estado paralelo', async () => {
+  const editor = await read('src/components/modules/ContentPlanDetail.jsx');
+
+  // Rodny, 25 de septiembre de 2026: «al abrir parrilla desde gestión debería viajar directo hacia el
+  // pendiente en cuestión, parece que se desincronizó». Convivían dos fuentes —un estado local y el
+  // `?item=` del enlace— y ganaba el estado, así que la segunda vez que se abría una parrilla desde
+  // Gestión seguía viéndose la pieza elegida a mano: React Router no remonta la pantalla si solo
+  // cambia la consulta. Con una sola fuente eso no puede volver a pasar.
+  assert.doesNotMatch(editor, /setSelectedItemId/, 'no queda un estado paralelo a la URL');
+  assert.match(editor, /const linkedItemId = new URLSearchParams\(location\.search\)\.get\('item'\)/);
+  assert.match(editor, /params\.delete\('itemId'\)/, 'el parámetro antiguo no se queda pegado');
+  assert.match(
+    editor,
+    /navigate\(\{ pathname: location\.pathname, search: params\.toString\(\) \}, \{ replace: true \}\)/,
+    'elegir una pieza escribe la URL'
+  );
+  assert.match(editor, /onSelect=\{selectPiece\}/, 'y el carril usa ese mismo camino');
 });
 
 test('cada campo dice si lo ve el cliente o solo el equipo', async () => {
