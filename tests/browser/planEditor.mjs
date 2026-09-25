@@ -137,7 +137,40 @@ try {
     await page.close();
   }
 
-  console.log('[Editor de parrilla] Carril y edición verificados. Capturas en output/editor-*.png');
+  // Rodny, 25 de septiembre de 2026: «yo quiero que mi pantalla quede en ese contenido, que lo deje
+  // en frente de mí». Abrir la parrilla desde Gestión llevaba a la pieza correcta, pero la página se
+  // quedaba arriba y la tarjeta caía muy por debajo, tapada por objetivos, Bria y notas internas.
+  for (const [etiqueta, query, debeMoverse] of [
+    ['con la pieza en el enlace', '?ruta=plan&item=i5', true],
+    ['sin pieza en el enlace', '?ruta=plan', false]
+  ]) {
+    const page = await browser.newPage({ viewport: { width: 1600, height: 900 }, deviceScaleFactor: 2 });
+    await page.goto(`http://127.0.0.1:${port}${PAGE}${query}`, { waitUntil: 'networkidle' });
+    await page.waitForFunction(() => document.querySelector('[id^="item-"]'));
+    await page.waitForTimeout(2200); // el desplazamiento es suave
+
+    const sitio = await page.evaluate(() => {
+      const card = document.querySelector('[id^="item-"]');
+      const rect = card.getBoundingClientRect();
+      return { id: card.id, top: Math.round(rect.top), alto: window.innerHeight, scrollY: Math.round(window.scrollY) };
+    });
+
+    if (debeMoverse) {
+      assert.equal(sitio.id, 'item-i5', 'abre la pieza que nombra el enlace');
+      assert.ok(
+        sitio.top >= 0 && sitio.top < sitio.alto,
+        `${etiqueta}: la deja delante (top ${sitio.top}px de ${sitio.alto}px)`
+      );
+      await page.screenshot({ path: 'output/editor-enlace-directo.png' });
+    } else {
+      // Abrir la parrilla sin pieza concreta no puede dar un tirón a quien solo venía a mirar.
+      assert.equal(sitio.scrollY, 0, `${etiqueta}: no se toca el scroll`);
+    }
+
+    await page.close();
+  }
+
+  console.log('[Editor de parrilla] Carril, edición y enlace directo verificados. Capturas en output/editor-*.png');
 } finally {
   await browser?.close();
   await server.close();
