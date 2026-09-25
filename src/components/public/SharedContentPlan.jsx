@@ -155,14 +155,12 @@ const FinalAssetPreview = ({ assets = [], format }) => {
         </div>
       </div>
 
-      {(asset.name || asset.openUrl) && (
-        <div className="flex items-center justify-between gap-3 px-1">
-          <span className="min-w-0 truncate text-xs font-medium text-zinc-500 dark:text-zinc-400">{asset.name}</span>
-          {asset.openUrl && (
-            <a href={asset.openUrl} target="_blank" rel="noopener noreferrer" className="flex shrink-0 items-center gap-1.5 text-xs font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan">
-              Abrir en Drive <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          )}
+      {/* Sin enlace a Drive: el cliente revisa la pieza aquí, no entra en el Drive de la agencia
+          (Rodny, 25 de septiembre de 2026). El botón de ventana emergente que sale sobre el video lo
+          dibuja Google dentro de su propio marco y no se puede quitar desde fuera. */}
+      {asset.name && (
+        <div className="px-1">
+          <span className="block truncate text-xs font-medium text-zinc-500 dark:text-zinc-400">{asset.name}</span>
         </div>
       )}
 

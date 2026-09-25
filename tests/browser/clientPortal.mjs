@@ -107,6 +107,13 @@ try {
       const box = document.querySelector('main iframe').getBoundingClientRect();
       return { width: Math.round(box.width), height: Math.round(box.height) };
     });
+    const driveLinks = await page.evaluate(() => ({
+      text: document.body.textContent.includes('Abrir en Drive'),
+      anchors: document.querySelectorAll('a[href*="drive.google.com"]').length
+    }));
+    assert.equal(driveLinks.text, false, 'el portal no invita al cliente a entrar en el Drive de la agencia');
+    assert.equal(driveLinks.anchors, 0, 'ni con un enlace suelto');
+
     assert.ok(frame.height > frame.width, `el reel se ve vertical (${frame.width}x${frame.height})`);
     assert.ok(
       Math.abs((frame.width / frame.height) - (9 / 16)) < 0.02,

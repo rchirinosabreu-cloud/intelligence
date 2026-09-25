@@ -119,7 +119,9 @@ test('el enlace de Drive se resuelve al guardarlo y se muestra sin servir bytes 
   const shared = await read('src/components/public/SharedContentPlan.jsx');
   assert.match(shared, /const isDrive = Boolean\(asset\.embedUrl\);/);
   assert.match(shared, /src=\{asset\.embedUrl\}/);
-  assert.match(shared, /Abrir en Drive/);
+  // Rodny, 25 de septiembre de 2026: el portal no lleva enlace a Drive. El cliente revisa la pieza
+  // ahí; no tiene por qué entrar en el Drive de la agencia. En el editor sí se conserva.
+  assert.doesNotMatch(shared, /Abrir en Drive/);
 
   const screen = await read('src/components/modules/ContentPlanDetail.jsx');
   assert.match(screen, /const DriveLinkDialog/);
