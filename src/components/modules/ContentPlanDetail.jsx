@@ -831,12 +831,14 @@ const ContentItemCard = ({
                 {isFinalAssetUploading
                   ? <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
                   : <UploadCloud className={finalAssets.length ? 'h-4 w-4 text-zinc-400' : 'h-5 w-5 text-zinc-400'} />}
-                <span className="text-[13px] text-zinc-500 dark:text-zinc-400">
-                  {finalAssets.length ? 'Añadir más' : 'Arrastra la pieza aquí'}
-                </span>
+                {/* Con material ya cargado no hace falta anunciar «añadir más»: el propio botón
+                    dice «Añadir archivos» (Rodny, 25 de septiembre de 2026). */}
+                {finalAssets.length === 0 && (
+                  <span className="text-[13px] text-zinc-500 dark:text-zinc-400">Arrastra la pieza aquí</span>
+                )}
                 <div className={finalAssets.length ? 'flex items-center gap-2.5' : 'flex flex-col items-center gap-1'}>
                   <label className="cursor-pointer text-[13px] font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan">
-                    Elegir archivos
+                    Añadir archivos
                     <input
                       type="file"
                       multiple
