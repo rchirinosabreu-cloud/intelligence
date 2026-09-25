@@ -47,6 +47,15 @@ test('the review is asked to write for a person, not to echo the field names of 
   assert.match(request.prompt, /note/);
 });
 
+test('changing how the review is written also changes the version, or the old text would live forever', async () => {
+  const { CONTENT_PLAN_REVIEW_PROMPT_VERSION } = await import('../src/services/briaContentPlanReviewGenerator.js');
+  // La versión entra en el hash con el que se reutiliza una revisión guardada:
+  // sin subirla, una parrilla sin cambios nunca vuelve a redactar su resumen.
+  assert.equal(CONTENT_PLAN_REVIEW_PROMPT_VERSION, 'content-plan-review-v5');
+  const service = await read('src/services/briaContentPlanReviewService.js');
+  assert.match(service, /buildContentPlanAnalysisHash\(\{ revisionHash, evidence, promptVersion/);
+});
+
 test('the shared review panel opens collapsed', async () => {
   const panel = await read('src/components/modules/ContentPlan/BriaContentPlanReview.jsx');
   assert.match(panel, /const \[isExpanded, setIsExpanded\] = useState\(false\)/);

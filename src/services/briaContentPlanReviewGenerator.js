@@ -5,7 +5,11 @@ import { reviewContentPlanBatches } from './briaReviewBatches.js';
 import { CONTENT_PLAN_REVIEW_SCHEMA, parseBriaContentPlanReview, calculateContentPlanReviewScore } from './briaContentPlanReviewContract.js';
 import { TRACEABLE_RUBRIC, buildTraceableRequest, parseTraceableReview, calculateTraceableScore } from './briaTraceableScore.js';
 
-export const CONTENT_PLAN_REVIEW_PROMPT_VERSION = 'content-plan-review-v4';
+// La versión forma parte de la clave con la que se reutiliza una revisión ya
+// guardada. Si el prompt cambia y la versión no, una parrilla sin cambios sigue
+// mostrando el texto de la revisión anterior para siempre. v5: se pide que
+// summary y note se escriban para una persona, en español claro.
+export const CONTENT_PLAN_REVIEW_PROMPT_VERSION = 'content-plan-review-v5';
 
 export const buildBriaReviewRequest = (batch, evidence, { variant = 'baseline', signal } = {}) => {
   if (variant === 'traceable') return buildTraceableRequest(batch, evidence, { signal });
