@@ -1505,7 +1505,14 @@ const ContentPlanDetail = () => {
         />
       </div>
 
-      <BriaContentPlanReview planId={currentPlanId} planUpdatedAt={plan.updatedAt} />
+      {/* Abrir una pieza desde un hallazgo es lo mismo que abrirla desde el
+          calendario: seleccionarla y volver al editor. Se suelta `scrolledForRef`
+          para que la página baje hasta ella aunque ya estuviera elegida. */}
+      <BriaContentPlanReview
+        planId={currentPlanId}
+        planUpdatedAt={plan.updatedAt}
+        onOpenItem={(id) => { scrolledForRef.current = null; selectPiece(id); setPlanView('editor'); }}
+      />
 
       {/* Internal Notes Panel */}
       <div className="bg-white/40 dark:bg-zinc-900/30 border border-zinc-200/60 dark:border-white/5 rounded-3xl overflow-hidden">

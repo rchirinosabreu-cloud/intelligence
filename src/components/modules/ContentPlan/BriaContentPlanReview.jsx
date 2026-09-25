@@ -58,7 +58,7 @@ const scrollAnimationDuration = 420;
 
 const authConfig = () => ({ headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } });
 
-const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
+const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
   // Cerrado por defecto (Rodny, 25 de septiembre de 2026): el panel se abre al
   // pulsarlo, o solo cuando hay algo que la persona tiene que ver (un fallo o
   // el resultado de un reintento suyo).
@@ -159,7 +159,12 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt }) => {
     animateFindingsScroll(rail, targetLeft);
   };
 
+  // La parrilla solo renderiza la pieza seleccionada, así que buscarla por su id
+  // en la página devolvía null en todas las demás y el botón no hacía nada.
+  // Quien sabe abrir una pieza es la parrilla: se lo pedimos a ella. El salto
+  // por ancla se conserva para cuando el panel se usa suelto (muestras locales).
   const openFindingItem = (itemId) => {
+    if (onOpenItem) return onOpenItem(itemId);
     const target = document.getElementById(`item-${itemId}`);
     if (!target) return;
     const url = new URL(window.location.href);
