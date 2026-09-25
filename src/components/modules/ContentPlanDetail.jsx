@@ -365,7 +365,6 @@ const PlanPieceRail = ({ items, selectedId, onSelect, onAdd }) => (
     <div className="flex flex-col gap-1 overflow-y-auto p-2">
       {items.map((item, index) => {
         const isSelected = item.id === selectedId;
-        const missingAsset = !(item.finalAssets?.length);
         return (
           <button
             key={item.id}
@@ -385,9 +384,6 @@ const PlanPieceRail = ({ items, selectedId, onSelect, onAdd }) => (
                 {item.format} · {shortPieceDate(item.publishDate)}
               </span>
             </span>
-            {missingAsset && (
-              <span className="h-2 w-2 shrink-0 rounded-full bg-brand-magenta" title="Sin pieza final" />
-            )}
           </button>
         );
       })}
@@ -509,48 +505,6 @@ const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd }) => {
           Nueva pieza
         </button>
       </div>
-    </div>
-  );
-};
-
-/**
- * Lo que el cliente verá de esta pieza, mientras se escribe. No es decorativo: el guion acabó en el
- * portal porque nadie podía comprobar, sin salir del editor, qué sale de la agencia y qué no.
- */
-const ClientGlance = ({ item }) => {
-  const asset = item.finalAssets?.[0];
-  const drive = asset ? driveAssetUrls(asset) : null;
-
-  return (
-    <div className="space-y-2.5">
-      <label className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400">
-        <Eye className="h-3.5 w-3.5" /> Vista del cliente
-      </label>
-
-      <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-950">
-        <div className="flex aspect-[4/3] items-center justify-center bg-zinc-900">
-          {drive ? (
-            <img src={drive.thumbnailUrl} alt="" className="h-full w-full object-cover" />
-          ) : asset ? (
-            <span className="text-[10px] font-medium text-white/50">{asset.name}</span>
-          ) : (
-            <span className="text-[10px] font-medium text-white/40">Sin pieza final</span>
-          )}
-        </div>
-        <div className="space-y-2 p-3">
-          <p className="line-clamp-4 whitespace-pre-line text-[11px] leading-relaxed text-zinc-600 dark:text-zinc-300">
-            {item.captionText || <span className="italic text-zinc-400">Todavía sin texto de publicación.</span>}
-          </p>
-          <div className="flex gap-1.5 pt-0.5">
-            <span className="flex h-7 flex-grow items-center justify-center rounded-lg bg-brand-cyan-deep text-[10px] font-bold text-white">Aprobar</span>
-            <span className="flex h-7 flex-grow items-center justify-center rounded-lg border border-zinc-200 text-[10px] font-bold text-zinc-500 dark:border-white/10">Pedir cambio</span>
-          </div>
-        </div>
-      </div>
-
-      <p className="text-[10px] leading-relaxed text-zinc-400">
-        El guion no aparece aquí. El cliente solo ve la pieza y el texto de la publicación.
-      </p>
     </div>
   );
 };
@@ -887,8 +841,6 @@ const ContentItemCard = ({
                   onChange={(links) => onUpdate({ id: item.id, assetsLinks: links })}
                 />
               </div>
-
-              <ClientGlance item={item} />
 
               {latestTask ? (
                 <div className={`flex flex-col gap-2 p-4 rounded-2xl border transition-all ${
