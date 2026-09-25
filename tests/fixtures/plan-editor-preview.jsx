@@ -101,6 +101,9 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false 
  * que sin esto no habría forma de comprobar desde fuera que la pieza abierta la manda la URL —que es
  * justo lo que impide que un enlace de Gestión abra la pieza equivocada.
  */
+const usaRutaDePlan = new URLSearchParams(window.location.search).get('ruta') === 'plan';
+const entryPath = usaRutaDePlan ? '/parrillas/p1' : '/parrillas/promogroup/9-2026';
+
 const LocationProbe = () => {
   const location = useLocation();
   return <span className="sr-only" data-preview-location={location.search} />;
@@ -111,12 +114,15 @@ createRoot(document.getElementById('root')).render(
     <AuthProvider>
       <ConfirmDialogProvider>
         {/* La consulta de la página entra al router, así se puede probar un enlace directo:
-            …plan-editor-preview.html?item=i5 tiene que abrir esa pieza, como al venir de Gestión. */}
-        <MemoryRouter initialEntries={[`/parrillas/promogroup/9-2026${window.location.search}`]}>
+            …plan-editor-preview.html?item=i5 tiene que abrir esa pieza, como al venir de Gestión.
+            Con `?ruta=plan` se usa `/parrillas/:planId`, que es la ruta real del botón «Abrir
+            Parrilla» de una tarea; sin él, la de cliente y periodo. */}
+        <MemoryRouter initialEntries={[`${entryPath}${window.location.search}`]}>
           <div className="min-h-screen bg-zinc-50 p-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
             <LocationProbe />
             <Routes>
               <Route path="/parrillas/:clientSlug/:period" element={<ContentPlanDetail />} />
+              <Route path="/parrillas/:planId" element={<ContentPlanDetail />} />
             </Routes>
             <Toaster position="top-right" />
           </div>

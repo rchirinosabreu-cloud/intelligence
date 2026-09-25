@@ -593,11 +593,12 @@ const ContentItemCard = ({
   const isDevuelto = item.status === 'DEVUELTO';
   const latestTask = item.tasks?.[0];
 
+  // `scroll-mt-24`: al traerla al frente por un enlace, el header fijo no se le monta encima.
   return (
     <div
       ref={itemRef}
       id={`item-${item.id}`}
-      className={`group relative overflow-hidden rounded-3xl border bg-white transition-all dark:bg-zinc-900 ${
+      className={`group relative scroll-mt-24 overflow-hidden rounded-3xl border bg-white transition-all dark:bg-zinc-900 ${
         isEditing
           ? 'min-h-[520px] overflow-visible border-brand-cyan/30'
           : isDevuelto
@@ -1033,6 +1034,11 @@ const ContentPlanDetail = () => {
   const linkedItemId = new URLSearchParams(location.search).get('item')
     || new URLSearchParams(location.search).get('itemId');
 
+  // Abrir una parrilla desde Gestión tiene que **dejar la pieza delante**, no solo abrirla: encima de
+  // ella van los objetivos, el panel de Bria y las notas, así que sin esto aterrizas arriba del todo y
+  // hay que bajar a buscarla (Rodny, 25 de septiembre de 2026).
+  const scrolledForRef = useRef(null);
+
   const selectPiece = (itemId) => {
     const params = new URLSearchParams(location.search);
     params.delete('itemId');
@@ -1310,6 +1316,27 @@ const ContentPlanDetail = () => {
       internalNotes: serializePlanInternalNotes(planInternalNotes.filter((_, index) => index !== indexToRemove))
     });
   };
+
+  /**
+   * Deja la pieza del enlace delante de quien llega.
+   *
+   * Va aquí, antes de los returns tempranos, porque un hook no puede vivir detrás de un `return`
+   * condicional; busca la tarjeta por su `id` en vez de depender de `selectedItem`, que se calcula
+   * más abajo. Una vez por pieza (`scrolledForRef`): si no, cada refetch volvería a mover la página
+   * bajo los pies de quien está escribiendo. Y si la tarjeta ya se ve, no se toca el scroll.
+   */
+  useEffect(() => {
+    if (!linkedItemId || !plan) return;
+    if (scrolledForRef.current === linkedItemId) return;
+
+    const node = document.getElementById(`item-${linkedItemId}`);
+    if (!node) return; // todavía no está pintada; al siguiente render sí
+
+    scrolledForRef.current = linkedItemId;
+    const { top } = node.getBoundingClientRect();
+    const yaSeVe = top >= 0 && top < window.innerHeight * 0.6;
+    if (!yaSeVe) node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [linkedItemId, plan, planView]);
 
   if (planLoading) {
     return (
