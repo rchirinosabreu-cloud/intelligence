@@ -33,7 +33,10 @@ test('client feedback is read-only in the internal content editor', async () => 
   const editor = await read('src/components/modules/ContentPlanDetail.jsx');
 
   assert.doesNotMatch(editor, /onUpdate\(\{ id: item\.id, comments: val \}\)/);
-  assert.doesNotMatch(editor, /isEditing=\{isEditing\}[\s\S]*isOpen=\{showFeedback\}/);
+  // Lo que se vigila es que `FeedbackHistory` no reciba `isEditing`. El patrón antiguo abarcaba todo
+  // el archivo y desde el rediseño del 25 de septiembre de 2026 cazaba el `isEditing` de otro
+  // componente que ahora queda por encima; se acota al propio elemento.
+  assert.doesNotMatch(editor, /<FeedbackHistory[^>]*isEditing/);
   assert.match(editor, /Feedback del Cliente|Feedback del cliente/);
 });
 
@@ -135,5 +138,7 @@ test('new content editor stays spacious and pinned first until its date changes'
   assert.match(editor, /publishDate[\s\S]*setNewlyCreatedItemId\(null\)/);
   assert.match(editor, /overflow-visible/);
   assert.match(editor, /min-h-\[520px\]/);
-  assert.match(editor, /min-h-\[120px\]/);
+  // El rediseño del 25 de septiembre de 2026 dio el ancho de la columna de metadatos a la escritura:
+  // el guion y el texto de publicación pasaron de 120 px de alto mínimo a 260.
+  assert.match(editor, /min-h-\[260px\]/);
 });

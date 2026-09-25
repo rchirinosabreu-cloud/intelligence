@@ -29,7 +29,9 @@ test('cada campo dice si lo ve el cliente o solo el equipo', async () => {
 
   // El origen del problema: nadie sabía qué salía del portal. Ahora lo dice el propio campo.
   assert.match(editor, /Solo el equipo/, 'el guion se marca como interno');
-  assert.match(editor, /Esto es lo que ve el cliente/, 'el texto de la publicación se marca como visible');
+  // La etiqueta se acortó a «Lo ve el cliente» al rediseñar la tarjeta (25 de septiembre de 2026):
+  // va pegada al rótulo del campo y una frase entera lo empujaba a dos líneas.
+  assert.match(editor, /Lo ve el cliente/, 'el texto de la publicación se marca como visible');
   assert.match(editor, /Texto de la publicación/, 'deja de llamarse «Caption (Post)»');
 
   // Rodny, 24 de septiembre de 2026: «no me interesa ver la sección de vista del cliente». La mirilla

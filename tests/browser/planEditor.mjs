@@ -57,14 +57,14 @@ try {
       const edit = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Editar');
       edit.click();
     });
-    await page.waitForFunction(() => document.body.textContent.includes('Esto es lo que ve el cliente'));
+    await page.waitForFunction(() => document.body.textContent.includes('Lo ve el cliente'));
     await page.evaluate(() => document.fonts.ready);
 
     const editing = await page.evaluate(() => {
       const text = document.body.textContent;
       return {
         internal: text.includes('Solo el equipo'),
-        visible: text.includes('Esto es lo que ve el cliente'),
+        visible: text.includes('Lo ve el cliente'),
         renamed: text.includes('Texto de la publicación') && !text.includes('Caption (Post)'),
         // Rodny pidió quitar la mirilla del cliente: las etiquetas de cada campo ya dicen qué sale.
         glance: text.includes('Vista del cliente')
