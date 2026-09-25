@@ -294,6 +294,7 @@ export const createContentPlanReviewRepository = (db = prisma) => ({
           }
         });
       }
+      const stillPresentIds = [];
       for (const decision of verifications) {
         const previous = await tx.contentPlanReviewFinding.findFirst({ where: { id: decision.findingId, planId: plan.id } });
         // A dismissal made while AI was running remains the team's decision.
@@ -301,6 +302,9 @@ export const createContentPlanReviewRepository = (db = prisma) => ({
         const contradicted = decision.outcome === 'RESOLVED' && detectedFingerprints.includes(previous.fingerprint);
         const conclusion = contradicted ? { ...decision, outcome: 'INCONCLUSIVE', reason: 'La revisión y la verificación no coinciden. El hallazgo sigue abierto para comprobarlo.' } : decision;
         const resolved = conclusion.outcome === 'RESOLVED';
+        // Solo «sigue presente» es una detección positiva: protege al hallazgo
+        // del archivado aunque la revisión general no lo haya vuelto a reportar.
+        if (conclusion.outcome === 'STILL_PRESENT') stillPresentIds.push(previous.id);
         await tx.contentPlanReviewFinding.update({ where: { id: previous.id }, data: {
           status: resolved ? 'RESOLVED' : 'OPEN', resolvedAt: resolved ? new Date(result.meta.reviewedAt) : null,
           verification: { ...conclusion, checkedAt: result.meta.reviewedAt, revisionHash },
@@ -313,14 +317,14 @@ export const createContentPlanReviewRepository = (db = prisma) => ({
       // si una revisión posterior lo detecta otra vez. Sin esto la pila crece
       // para siempre: nada cerraba lo que dejaba de detectarse.
       if (result.review.scope?.complete) {
-        const examined = verifications.map((decision) => decision.findingId).filter(Boolean);
         await tx.contentPlanReviewFinding.updateMany({
           where: {
             planId: plan.id,
             status: 'OPEN',
             ...(detectedFingerprints.length ? { fingerprint: { notIn: detectedFingerprints } } : {}),
-            // Lo que se acaba de comprobar conserva el resultado de su verificación.
-            ...(examined.length ? { id: { notIn: examined } } : {})
+            // Una verificación que no pudo confirmar nada no lo mantiene vivo;
+            // solo lo hace una que confirma que el problema sigue ahí.
+            ...(stillPresentIds.length ? { id: { notIn: stillPresentIds } } : {})
           },
           data: {
             status: 'STALE',

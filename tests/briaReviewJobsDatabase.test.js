@@ -402,7 +402,10 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       assert.equal(outcome.status, 'COMPLETED');
       assert.ok(verificationCalls <= 3, `expected a bounded number of verification calls, got ${verificationCalls}`);
       assert.equal(outcome.result.meta.usage.verification.findings, 12);
-      assert.equal(await db.contentPlanReviewFinding.count({ where: { planId: plan.id, status: 'OPEN' } }), 41);
+      // La revisión no volvió a reportar ninguno y la verificación no confirmó
+      // que siguieran presentes: salen de la lista activa, sin borrarse.
+      assert.equal(await db.contentPlanReviewFinding.count({ where: { planId: plan.id, status: 'OPEN' } }), 0);
+      assert.equal(await db.contentPlanReviewFinding.count({ where: { planId: plan.id, status: 'STALE' } }), 41);
     });
     await t.test('an outage of the provider parks the review without spending an attempt', async () => {
       const plan = await fixture();
@@ -449,14 +452,16 @@ test('review jobs preserve ownership and recover safely with real PostgreSQL', {
       assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
       assert.equal((await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } })).status, 'OPEN');
     });
-    await t.test('a correction someone asked to verify is never archived for not being detected', async () => {
+    await t.test('a verification that confirms the problem is still there protects it from being archived', async () => {
       const { plan, item, finding, config } = await findingFixture();
-      await updateContentPlanReviewFinding({ planId: plan.id, findingId: finding.id, action: 'MARK_CORRECTED', actorUserId: null, db, now: start });
-      config.reviewOptions.ai.generate = async request => ({ text: JSON.stringify(request.responseSchema?.properties?.verifications ? { verifications: [] } : reviewPayload(request, rawReview)), requestId: 'fixture' });
-      await db.contentItem.update({ where: { id: item.id }, data: { copyText: 'Texto corregido de verdad' } });
+      // La revisión general no lo vuelve a reportar, pero la verificación sí lo confirma.
+      config.reviewOptions.ai.generate = async request => {
+        if (!request.responseSchema?.properties?.verifications) return { text: JSON.stringify(reviewPayload(request, rawReview)) };
+        return { text: JSON.stringify({ verifications: [{ findingId: finding.id, outcome: 'STILL_PRESENT', reason: 'El texto sigue igual.',
+          evidence: [{ itemId: item.id, field: 'copyText', quote: 'Texto corregido' }] }] }) };
+      };
       config.now = () => new Date(start.getTime() + 60000);
       assert.equal((await scheduler.runContentPlanReviewJob(config)).status, 'COMPLETED');
-      // La verificación quedó sin confirmar, así que sigue abierto para la persona, no archivado.
       assert.equal((await db.contentPlanReviewFinding.findUnique({ where: { id: finding.id } })).status, 'OPEN');
     });
     await t.test('a plan never publishes more findings than a person can read', async () => {
