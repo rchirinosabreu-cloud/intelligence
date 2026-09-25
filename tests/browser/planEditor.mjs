@@ -87,6 +87,25 @@ try {
     assert.equal(editing.renamed, true, '«Caption (Post)» pasa a llamarse por lo que es');
     assert.equal(editing.glance, false, 'la vista del cliente ya no está dentro del editor');
 
+    // Rodny, 25 de septiembre de 2026: con la nota en la franja de la ficha y alto fijo, un texto
+    // largo se salía por encima de toda la tarjeta. Se comprueba que la nota **cabe dentro** de la
+    // tarjeta, que es lo que un alto fijo rompía, y que no se pinta en cursiva.
+    const nota = await page.evaluate(() => {
+      const card = document.querySelector('[id^="item-"]');
+      const campo = card.querySelector('textarea[placeholder*="Instrucciones"]');
+      if (!campo) return null;
+      const c = campo.getBoundingClientRect();
+      const t = card.getBoundingClientRect();
+      return {
+        dentro: c.top >= t.top - 1 && c.bottom <= t.bottom + 1,
+        cursiva: getComputedStyle(campo).fontStyle,
+        alto: Math.round(c.height)
+      };
+    });
+    assert.ok(nota, 'la nota interna tiene su propio campo');
+    assert.equal(nota.dentro, true, `la nota larga no se sale de la tarjeta (alto ${nota.alto}px)`);
+    assert.equal(nota.cursiva, 'normal', 'la nota se lee en redonda, no en cursiva');
+
     await page.screenshot({ path: `output/editor-edicion-${name}.png`, fullPage: true });
 
     // 3. Cambiar de pieza en el carril abre esa, no añade otra debajo.
@@ -152,14 +171,27 @@ try {
     const sitio = await page.evaluate(() => {
       const card = document.querySelector('[id^="item-"]');
       const rect = card.getBoundingClientRect();
-      return { id: card.id, top: Math.round(rect.top), alto: window.innerHeight, scrollY: Math.round(window.scrollY) };
+      const header = document.querySelector('header');
+      return {
+        id: card.id,
+        top: Math.round(rect.top),
+        alto: window.innerHeight,
+        scrollY: Math.round(window.scrollY),
+        headerAlto: header ? Math.round(header.getBoundingClientRect().height) : 0
+      };
     });
 
     if (debeMoverse) {
       assert.equal(sitio.id, 'item-i5', 'abre la pieza que nombra el enlace');
       assert.ok(
-        sitio.top >= 0 && sitio.top < sitio.alto,
+        sitio.top < sitio.alto,
         `${etiqueta}: la deja delante (top ${sitio.top}px de ${sitio.alto}px)`
+      );
+      // Lo que se veía mal: la tarjeta aterrizaba **debajo** del header fijo y translúcido, con su
+      // cabecera cortada. Por eso no basta con «está en pantalla»: tiene que quedar por debajo de él.
+      assert.ok(
+        sitio.top >= sitio.headerAlto,
+        `${etiqueta}: no queda bajo el header fijo (top ${sitio.top}px, header ${sitio.headerAlto}px)`
       );
       await page.screenshot({ path: 'output/editor-enlace-directo.png' });
     } else {

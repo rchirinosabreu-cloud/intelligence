@@ -56,7 +56,9 @@ const items = [
   piece('i1', 'ENDOVA, un espacio preparado para recibirte', 'Reel', 24, 'APROBADO', {
     copyText: GUION,
     captionText: CAPTION,
-    internalNotes: 'Grabar en horario de baja afluencia.',
+    // Una nota larga de verdad: con alto fijo en la franja de la ficha, este texto se salía por
+    // encima de toda la tarjeta (Rodny, 25 de septiembre de 2026).
+    internalNotes: 'PONER TOMAS DE APOYO DE STOCK O IA. '.repeat(24).trim(),
     comments: '[Cliente - 18/09/2026]: ¿Podemos mostrar más la sala de espera?',
     finalAssets: [{ id: 'a1', name: 'reel-endova.mp4', storageKey: 'k1', mimeType: 'video/mp4', size: 31000000, position: 0 }]
   }),
@@ -104,6 +106,21 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false 
 const usaRutaDePlan = new URLSearchParams(window.location.search).get('ruta') === 'plan';
 const entryPath = usaRutaDePlan ? '/parrillas/p1' : '/parrillas/promogroup/9-2026';
 
+/**
+ * Imita lo que pasa de verdad en la pantalla: lo que hay **encima** de la tarjeta —el panel de Bria,
+ * los textos que se auto-ajustan— termina de asentarse un momento después de pintarse, y la tarjeta
+ * se sube. Si el desplazamiento ya calculó su destino, se queda pasado y corta la cabecera.
+ * Se activa con `?asentar=1` para poder comprobar que el arreglo aguanta eso.
+ */
+const BloqueQueSeAsienta = () => {
+  const [alto, setAlto] = React.useState(420);
+  React.useEffect(() => {
+    const id = setTimeout(() => setAlto(90), 900);
+    return () => clearTimeout(id);
+  }, []);
+  return <div style={{ height: alto }} className="mb-6 rounded-2xl border border-dashed border-zinc-200 dark:border-white/10" aria-hidden="true" />;
+};
+
 const LocationProbe = () => {
   const location = useLocation();
   return <span className="sr-only" data-preview-location={location.search} />;
@@ -118,8 +135,13 @@ createRoot(document.getElementById('root')).render(
             Con `?ruta=plan` se usa `/parrillas/:planId`, que es la ruta real del botón «Abrir
             Parrilla» de una tarea; sin él, la de cliente y periodo. */}
         <MemoryRouter initialEntries={[`${entryPath}${window.location.search}`]}>
-          <div className="min-h-screen bg-zinc-50 p-6 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
+          {/* El header real de la aplicación es fijo y translúcido (`h-16 fixed`). Sin él aquí, una
+              tarjeta alineada con el borde de la ventana parecería bien colocada y en producción
+              quedaría debajo del header. */}
+          <header className="fixed left-0 right-0 top-0 z-50 h-16 border-b border-zinc-200 bg-white/50 backdrop-blur-md dark:border-white/5 dark:bg-zinc-950/50" />
+          <div className="min-h-screen bg-zinc-50 p-6 pt-20 text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
             <LocationProbe />
+            {new URLSearchParams(window.location.search).get('asentar') === '1' && <BloqueQueSeAsienta />}
             <Routes>
               <Route path="/parrillas/:clientSlug/:period" element={<ContentPlanDetail />} />
               <Route path="/parrillas/:planId" element={<ContentPlanDetail />} />
