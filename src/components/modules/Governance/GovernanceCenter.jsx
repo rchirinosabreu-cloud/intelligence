@@ -8,10 +8,11 @@ import { DATA_CLASSES, GOVERNANCE_FORMS, STATUS_LABELS } from '@/lib/aiGovernanc
 import GovernanceRecords, { displayDate } from './GovernanceRecords';
 import GovernanceDocuments from './GovernanceDocuments';
 import GovernanceUsage from './GovernanceUsage';
+import GovernanceDataRequests from './GovernanceDataRequests';
 
 const inputStyle = 'w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground';
 const buttonStyle = 'min-h-11 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50';
-const labels = { PUBLIC: 'Públicos', INTERNAL: 'Internos', CONFIDENTIAL: 'Confidenciales', RESTRICTED: 'Restringidos / sensibles', GENERATIVE: 'IA generativa', ML: 'Aprendizaje automático', NEURAL: 'Red neuronal', LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta', CRITICAL: 'Crítica' };
+const labels = { PUBLIC: 'Públicos', INTERNAL: 'Internos', CONFIDENTIAL: 'Confidenciales', RESTRICTED: 'Restringidos / sensibles', GENERATIVE: 'IA generativa', ML: 'Aprendizaje automático', NEURAL: 'Red neuronal', LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta', CRITICAL: 'Crítica', SI: 'Sí', NO: 'No' };
 const localDate = value => value ? new Date(+new Date(value) - 5 * 3600000).toISOString().slice(0, 16) : '';
 async function request(path, { method = 'GET', body, download = false, text = false, signal } = {}) {
   const response = await fetch(`${getApiBaseUrl()}/api/ai-governance${path}`, {
@@ -115,13 +116,13 @@ export default function GovernanceCenter() {
   return <div className="mx-auto max-w-6xl space-y-6 p-4 text-foreground sm:p-6">
     <header><p className="text-sm text-muted-foreground">Administración · Acceso privado</p><h1 className="mt-1 text-2xl font-semibold">Gobierno de IA y seguridad</h1><p className="mt-2 text-sm text-muted-foreground">Inventario, autorizaciones, riesgos y respuesta a incidentes.</p></header>
     <div className="rounded-xl border border-border bg-card p-4 text-sm text-card-foreground"><p className="font-medium">Primera versión · Cobertura parcial</p><p className="mt-1">Este registro no certifica cumplimiento legal. Las evidencias deben revisarse y los responsables deben aprobar las políticas. Registrar una notificación no envía un correo.</p></div>
-    <nav aria-label="Secciones de gobierno de IA" className="flex flex-wrap gap-2">{[...Object.entries(GOVERNANCE_FORMS).map(([id, f]) => [id, f.label]), ['control', 'Control por empresa'], ['usage', 'Uso de IA'], ['documents', 'Documentos internos']].map(([id, label]) => <button key={id} type="button" aria-current={tab === id ? 'page' : undefined} className={`${buttonStyle} ${tab === id ? 'bg-muted' : ''}`} onClick={() => { setTab(id); setPage(1); setNotice(''); }}>{label}</button>)}</nav>
+    <nav aria-label="Secciones de gobierno de IA" className="flex flex-wrap gap-2">{[...Object.entries(GOVERNANCE_FORMS).map(([id, f]) => [id, f.label]), ['control', 'Control por empresa'], ['usage', 'Uso de IA'], ['data-requests', 'Solicitudes de titulares'], ['documents', 'Documentos internos']].map(([id, label]) => <button key={id} type="button" aria-current={tab === id ? 'page' : undefined} className={`${buttonStyle} ${tab === id ? 'bg-muted' : ''}`} onClick={() => { setTab(id); setPage(1); setNotice(''); }}>{label}</button>)}</nav>
     {notice && <p role="status" className="text-sm">{notice}</p>}
     {options.isLoading ? <p role="status">Cargando acceso y opciones…</p> : options.error ? <p role="alert" className="text-destructive">{options.error.message}</p> : <section className="rounded-xl border border-border bg-card p-4 text-card-foreground sm:p-6">
       {GOVERNANCE_FORMS[tab] ? <><div className="mb-5 flex flex-wrap items-center justify-between gap-3"><h2 className="text-lg font-semibold">{GOVERNANCE_FORMS[tab].label}</h2><button className={buttonStyle} onClick={() => setEditing({})}>Nuevo registro</button></div>
         <GovernanceRecords kind={tab} items={records.data?.items} loading={records.isLoading} error={records.error} onEdit={setEditing} onHistory={setHistory} />
         <div className="mt-5 flex items-center justify-end gap-3 text-sm"><button className={buttonStyle} disabled={page === 1 || records.isFetching} onClick={() => setPage(p => p - 1)}>Anterior</button><span>Página {page}</span><button className={buttonStyle} disabled={!records.data?.hasMore || records.isFetching} onClick={() => setPage(p => p + 1)}>Siguiente</button></div></>
-        : tab === 'control' ? <ClientControl options={options.data} onSaved={refresh} /> : tab === 'usage' ? <GovernanceUsage request={request} /> : <GovernanceDocuments loadDocument={(id, signal) => request(`/documents/${id}`, { text: true, signal })} onDownload={download} />}
+        : tab === 'control' ? <ClientControl options={options.data} onSaved={refresh} /> : tab === 'usage' ? <GovernanceUsage request={request} /> : tab === 'data-requests' ? <GovernanceDataRequests request={request} /> : <GovernanceDocuments loadDocument={(id, signal) => request(`/documents/${id}`, { text: true, signal })} onDownload={download} />}
     </section>}
     {editing && options.data && <RecordForm kind={tab} record={editing.id ? editing : null} options={options.data} onClose={() => setEditing(null)} onSaved={async () => { await refresh(); setEditing(null); setNotice('Registro guardado por el servidor.'); }} />}
     {history && <History kind={tab} record={history} onClose={() => setHistory(null)} />}

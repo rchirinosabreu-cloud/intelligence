@@ -136,7 +136,7 @@ const PrivacyPolicy = () => (
       </p>
       <List>
         <li><strong>Consultas:</strong> se responden en un máximo de <strong>10 días hábiles</strong> desde su recibo. Si no es posible, le informaremos el motivo y la nueva fecha, que no superará 5 días hábiles adicionales.</li>
-        <li><strong>Reclamos</strong> (corrección, actualización, supresión o incumplimiento): se responden en un máximo de <strong>15 días hábiles</strong>, prorrogables hasta 8 días hábiles más informando el motivo. Si el reclamo está incompleto, le pediremos completarlo dentro de los 5 días siguientes; si pasan 2 meses sin respuesta, se entenderá que desistió. Mientras se tramita, el dato se marcará como «reclamo en trámite».</li>
+        <li><strong>Reclamos</strong> (corrección, actualización, supresión o incumplimiento): se responden en un máximo de <strong>15 días hábiles</strong>, prorrogables hasta 8 días hábiles más informando el motivo. Si el reclamo está incompleto, se lo haremos saber dentro de los 5 días siguientes a su recibo para que lo complete; si pasan 2 meses desde ese aviso sin que lo complete, se entenderá que desistió. Mientras se tramita, el dato se marcará como «reclamo en trámite».</li>
       </List>
 
       <H2 id="autorizacion">7. Autorización</H2>
