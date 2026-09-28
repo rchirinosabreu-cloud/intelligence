@@ -37,6 +37,7 @@ import {
 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
+import { buildMovementDraft, clearMovementDraft, draftMatchesRecord, readMovementDraft, writeMovementDraft } from '@/lib/financialMovementDraft';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import { clientOptions } from '@/utils/financialClients';
 import { FINANCIAL_CATEGORY_OPTIONS, financialCategoryLabel } from '@/lib/financialCategories';
@@ -165,6 +166,14 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
     const canAdmin = hasFinancialPermission(currentUser, 'admin');
     const canWrite = hasFinancialPermission(currentUser, 'write');
 
+    // Draft of the movement form: saved as the person types, per user, in localStorage, so a session
+    // that expires (12 h, full navigation to /login) or a reload during a deploy does not lose the work.
+    const draftStorage = typeof window !== 'undefined' ? window.localStorage : null;
+    const draftUserId = currentUser?.id;
+    const draftHydratedRef = useRef(false);
+    const [storedDraft, setStoredDraft] = useState(() => readMovementDraft(draftStorage, draftUserId));
+    const [restoredFileNames, setRestoredFileNames] = useState([]);
+
     useEffect(() => { setPage(1); }, [selectedYear, filters, selectedAccountId]);
 
     const queryString = useMemo(() => {
@@ -250,22 +259,72 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
 
     const setField = (field, value) => setForm((current) => ({ ...current, [field]: value }));
 
+    const restoreDraft = (draft) => {
+        setForm({ ...emptyForm(selectedYear), ...draft.form });
+        setFormAllocations((draft.allocations || []).map((line) => ({ amount: String(line.amount ?? ''), category: line.category, description: line.description || '' })));
+        setRestoredFileNames(draft.pendingFileNames || []);
+        toast.success('Borrador restaurado');
+    };
+
     const openCreate = () => {
+        draftHydratedRef.current = false;
         setEditingRecord(null);
-        setForm(emptyForm(selectedYear));
-        setFormAllocations([]);
         setFormDocuments([]);
         setPendingFiles([]);
+        setRestoredFileNames([]);
+        const draft = readMovementDraft(draftStorage, draftUserId);
+        if (draft?.mode === 'create') {
+            restoreDraft(draft);
+        } else {
+            setForm(emptyForm(selectedYear));
+            setFormAllocations([]);
+        }
         setIsEditorOpen(true);
     };
 
     const openEdit = (record) => {
+        draftHydratedRef.current = false;
         setEditingRecord(record);
-        setForm(toForm(record, selectedYear));
-        setFormAllocations(allocationLinesFrom(record));
         setFormDocuments([...(record.documents || [])]);
         setPendingFiles([]);
+        setRestoredFileNames([]);
+        const draft = readMovementDraft(draftStorage, draftUserId);
+        if (draftMatchesRecord(draft, record)) {
+            restoreDraft(draft);
+        } else {
+            setForm(toForm(record, selectedYear));
+            setFormAllocations(allocationLinesFrom(record));
+        }
         setIsEditorOpen(true);
+    };
+
+    // Autosave: only once the dialog holds its real content, so opening it never overwrites the stored draft with an empty form.
+    useEffect(() => {
+        if (!isEditorOpen) return;
+        if (!draftHydratedRef.current) { draftHydratedRef.current = true; return; }
+        const draft = buildMovementDraft({ form, allocations: formAllocations, pendingFiles, record: editingRecord });
+        writeMovementDraft(draftStorage, draftUserId, draft);
+        setStoredDraft(readMovementDraft(draftStorage, draftUserId));
+    }, [isEditorOpen, form, formAllocations, pendingFiles, editingRecord, draftStorage, draftUserId]);
+
+    const discardDraft = () => {
+        clearMovementDraft(draftStorage, draftUserId);
+        setStoredDraft(null);
+        setRestoredFileNames([]);
+        if (isEditorOpen) {
+            draftHydratedRef.current = false;
+            if (editingRecord) { setForm(toForm(editingRecord, selectedYear)); setFormAllocations(allocationLinesFrom(editingRecord)); }
+            else { setForm(emptyForm(selectedYear)); setFormAllocations([]); }
+            setPendingFiles([]);
+        }
+    };
+
+    const continueDraft = () => {
+        if (!storedDraft) return;
+        if (storedDraft.mode === 'create') { openCreate(); return; }
+        const record = records.find((candidate) => candidate.id === storedDraft.recordId);
+        if (record) openEdit(record);
+        else toast.error(`El movimiento «${storedDraft.recordLabel || 'sin descripción'}» no está en esta página. Búscalo y ábrelo para seguir con los cambios.`);
     };
 
     const refreshFinancialData = () => invalidateFinancialQueries(queryClient);
@@ -407,7 +466,10 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                 setPendingFiles((current) => current.filter((candidate) => candidate !== file));
             }
             await refreshFinancialData();
+            clearMovementDraft(draftStorage, draftUserId);
             setIsEditorOpen(false);
+            setStoredDraft(null);
+            setRestoredFileNames([]);
             toast.success(editingRecord ? 'Movimiento actualizado' : 'Movimiento registrado');
         } catch (requestError) {
             console.error('Error saving financial record:', requestError.response?.data || requestError);
@@ -573,6 +635,21 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                     </button>}
                 </div>
             </div>
+
+            {canWrite && storedDraft && !isEditorOpen && (
+                <div data-movement-draft-pill role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-brand-cyan/40 bg-brand-cyan-soft px-3 py-2 text-sm text-zinc-800 dark:border-brand-cyan/30 dark:bg-brand-cyan/10 dark:text-zinc-100">
+                    <span>
+                        {storedDraft.mode === 'edit'
+                            ? <>Tienes cambios sin guardar en «{storedDraft.recordLabel || 'un movimiento'}».</>
+                            : <>Tienes un movimiento a medio registrar{storedDraft.form?.description ? <> («{storedDraft.form.description}»)</> : null}.</>}
+                        {' '}Se guardó como borrador.
+                    </span>
+                    <span className="flex gap-2">
+                        <button type="button" onClick={continueDraft} className="rounded-lg bg-[#009EB9] px-3 py-1.5 text-xs font-semibold text-white hover:bg-[#008CA4]">Continuar</button>
+                        <button type="button" onClick={discardDraft} className="rounded-lg px-3 py-1.5 text-xs font-medium text-destructive hover:bg-destructive/10">Descartar borrador</button>
+                    </span>
+                </div>
+            )}
 
             {accounts.length > 0 && (
                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -804,7 +881,12 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                                 {formAllocationMismatch && <p role="alert" className="mt-2 text-xs font-medium text-destructive">Los ítems suman {formatCurrency(formAllocationCents / 100)} y el valor es {formatCurrency(toCents(form.amount) / 100)}. Ajusta el desglose antes de guardar.</p>}
                             </div>
                         )}
-                        <DialogFooter><button type="button" onClick={() => setIsEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Cancelar</button><button type="submit" disabled={isSaving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-60">{isSaving && <Loader2 className="h-4 w-4 animate-spin" />}{editingRecord ? 'Guardar cambios' : 'Registrar movimiento'}</button></DialogFooter>
+                        {restoredFileNames.length > 0 && (
+                            <p role="status" className="text-xs text-zinc-600 dark:text-zinc-300">Los archivos no se conservan en el borrador. Vuelve a adjuntar: {restoredFileNames.map((file) => file.name).join(', ')}.</p>
+                        )}
+                        <DialogFooter className="gap-2 sm:justify-between">
+                            <p className="self-center text-xs text-zinc-500 dark:text-zinc-400">{storedDraft ? <>Borrador guardado · <button type="button" onClick={discardDraft} className="font-medium text-destructive hover:underline">Descartar borrador</button></> : 'Se guarda un borrador mientras escribes.'}</p>
+                            <div className="flex gap-2"><button type="button" onClick={() => setIsEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Cancelar</button><button type="submit" disabled={isSaving} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-60">{isSaving && <Loader2 className="h-4 w-4 animate-spin" />}{editingRecord ? 'Guardar cambios' : 'Registrar movimiento'}</button></div></DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>
