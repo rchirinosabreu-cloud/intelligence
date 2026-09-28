@@ -1,7 +1,6 @@
 import prisma from '../lib/prisma.js';
 import { isActiveTeamUser } from '../services/teamRosterService.js';
 import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
 import { randomBytes } from 'node:crypto';
 import { getJwtSecret } from '../config/security.js';
 import {
@@ -11,9 +10,18 @@ import {
   requestPasswordReset
 } from '../services/passwordResetService.js';
 import { recordOperationalTrace } from '../services/operationalTraceService.js';
+import { createMfaLoginHandlers } from './mfaLoginController.js';
+import { mfaService } from '../services/mfa.js';
 
 const JWT_SECRET = getJwtSecret();
 const AUTH_TOKEN_EXPIRES_IN = process.env.AUTH_TOKEN_EXPIRES_IN || '12h';
+const mfaLogin = createMfaLoginHandlers({
+    db: prisma,
+    mfa: mfaService,
+    jwtSecret: JWT_SECRET,
+    expiresIn: AUTH_TOKEN_EXPIRES_IN,
+    trace: recordOperationalTrace
+});
 const MIN_PASSWORD_LENGTH = 8;
 const ALLOWED_SYSTEM_ROLES = new Set(['ADMIN', 'PROJECT_MANAGER', 'EDITOR', 'VIEWER']);
 const ALLOWED_FINANCIAL_ROLES = new Set(['NONE', 'VIEWER', 'EDITOR', 'APPROVER', 'ADMIN']);
@@ -41,47 +49,22 @@ export const login = async (req, res) => {
           return res.status(401).json({ message: 'Credenciales incorrectas' });
       }
 
-      const token = jwt.sign(
-          {
-              userId: user.id,
-              name: user.name,
-              email: user.email,
-              role: user.role,
-              hasFinancialAccess: user.hasFinancialAccess,
-              financialRole: user.financialRole,
-              modulePermissions: user.modulePermissions,
-              sessionVersion: user.sessionVersion
-          },
-          JWT_SECRET,
-          { expiresIn: AUTH_TOKEN_EXPIRES_IN }
-      );
-
-      await recordOperationalTrace({
-          eventType: 'SESSION_STARTED',
-          actorId: user.id,
-          subjectUserId: user.id,
-          metadata: { method: 'PASSWORD' }
-      }).catch((error) => console.error('[Auth] Login trace failed:', error?.message || error));
-
-      return res.json({
-          token,
-          user: {
-              id: user.id,
-              name: user.name,
-              email: user.email,
-              role: user.role,
-              hasFinancialAccess: user.hasFinancialAccess,
-              financialRole: user.financialRole,
-              modulePermissions: user.modulePermissions,
-              mustChangePassword: user.mustChangePassword,
-              sessionVersion: user.sessionVersion
-          }
-      });
+      // Con verificación en dos pasos activa, aquí solo sale el pase para pedir el código.
+      return await mfaLogin.respondAfterPassword(user, res);
 
   } catch (error) {
       console.error('Error during login:', error);
       return res.status(500).json({ message: 'Error interno del servidor' });
   }
+};
+
+export const loginWithMfa = async (req, res) => {
+    try {
+        return await mfaLogin.verifyLogin(req, res);
+    } catch (error) {
+        console.error('Error during MFA login:', error);
+        return res.status(500).json({ message: 'Error interno del servidor' });
+    }
 };
 
 export const sendPasswordReset = async (req, res) => {

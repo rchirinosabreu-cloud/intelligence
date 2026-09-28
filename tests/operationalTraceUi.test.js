@@ -34,7 +34,7 @@ test('trace collection covers task sync, task opening, mutations, and notificati
 test('central audit preserves mutations and login without bodies, excluding technical polls', async () => {
   const middleware = await read('src/middlewares/operationalAuditMiddleware.js');
   const server = await read('server.js');
-  const auth = await read('src/controllers/authController.js');
+  const auth = (await read('src/controllers/authController.js')) + (await read('src/controllers/mfaLoginController.js'));
   const trace = await read('src/services/operationalTraceService.js');
 
   assert.match(middleware, /POST.*PUT.*PATCH.*DELETE/);

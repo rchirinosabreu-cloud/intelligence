@@ -8,6 +8,8 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import AvatarEditor from '@/components/profile/AvatarEditor';
+import MfaSettings from '@/components/security/MfaSettings';
+import MfaAdminReset from '@/components/security/MfaAdminReset';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
 import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, Trash2, Edit2, X, Check, Calendar, Target, Award, Info, Camera } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
@@ -485,8 +487,10 @@ const Profile = () => {
                                     <Info className="w-10 h-10 text-primary mx-auto mb-4 opacity-50" />
                                     <h4 className="font-bold text-zinc-900 dark:text-white mb-2">Modo Administrador</h4>
                                     <p className="text-sm text-zinc-500">Estás viendo el perfil de un colaborador. Puedes gestionar su desempeño en la pestaña correspondiente.</p>
+                                    {isAdmin && <MfaAdminReset userId={profileData.id || userId} name={profileData.name} />}
                                 </Card>
                             )}
+                            {isOwnProfile && <MfaSettings />}
                         </div>
                     </div>
                 </TabsContent>

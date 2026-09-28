@@ -14,6 +14,7 @@ import * as briaMemoryController from '../controllers/briaMemoryController.js';
 import * as briaObserverController from '../controllers/briaObserverController.js';
 import * as commercialRequestController from '../controllers/commercialRequestController.js';
 import { authenticateToken, requireManagerRole, requireModulePermission } from '../middlewares/authMiddleware.js';
+import { isMfaRequiredForRole } from '../lib/mfaPolicy.js';
 // La cerradura de un pendiente privado: el tablero ya no manda su contenido, y estas
 // rutas —comentarios, adjuntos y la propia tarea— tampoco se lo dan a quien no puede
 // abrirla. Contrato que vigila que no se olvide ninguna: tests/taskPrivacyRoutes.test.js
@@ -78,6 +79,8 @@ router.get('/services-catalog', (req, res) => res.redirect(307, '/api/services')
 
 // --- Auth Routes ---
 router.post('/login', authController.login);
+// Segundo paso del inicio de sesión; comparte el límite de intentos de /api/login.
+router.post('/login/mfa', authController.loginWithMfa);
 router.post('/password-reset/request', authController.sendPasswordReset);
 router.post('/password-reset/confirm', authController.resetPasswordWithCode);
 router.post('/users', authenticateToken, authController.createUser);
@@ -133,9 +136,15 @@ router.get('/auth/me', async (req, res) => {
                 mustChangePassword: true,
                 sessionVersion: true,
                 createdAt: true,
-                modulePermissions: true
+                modulePermissions: true,
+                mfaEnabledAt: true
             }
         });
+        if (user) {
+            user.mfaEnabled = Boolean(user.mfaEnabledAt);
+            user.mfaEnrollmentRequired = !user.mfaEnabledAt && isMfaRequiredForRole(user.role);
+            delete user.mfaEnabledAt;
+        }
         if (user && user.modulePermissions) {
             if (typeof user.modulePermissions === 'string') {
                 try {

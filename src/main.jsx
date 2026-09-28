@@ -6,6 +6,7 @@ import '@/index.css';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { isTrustedApiRequest } from '@/lib/trustedRequest';
+import { authBlockKind } from '@/lib/mfaClient';
 import { ConfirmDialogProvider } from '@/components/ui/ConfirmDialog';
 import ApplicationErrorBoundary from '@/components/errors/ApplicationErrorBoundary';
 import { registerBrainstudioServiceWorker } from '@/pwa/registerServiceWorker';
@@ -61,6 +62,11 @@ axios.interceptors.response.use(
 
                     if (!window.location.pathname.includes('/login')) {
                         window.location.href = '/login?expired=true';
+                    }
+                } else if (authBlockKind(status, errorData) === 'mfa-enrollment') {
+                    window.dispatchEvent(new Event('mfa-enrollment-required'));
+                    if (!window.location.pathname.includes('/activar-verificacion')) {
+                        window.location.href = '/activar-verificacion';
                     }
                 } else if (status === 428 || errorData?.code === 'PASSWORD_CHANGE_REQUIRED') {
                     window.dispatchEvent(new Event('password-change-required'));
@@ -121,6 +127,12 @@ window.fetch = async (...args) => {
                 // Optional: Redirect to login if on a protected route and NOT already on login page
                 if (!window.location.pathname.includes('/login')) {
                     window.location.href = '/login?expired=true';
+                }
+            } else if (response.status === 428
+                && authBlockKind(428, await response.clone().json().catch(() => null)) === 'mfa-enrollment') {
+                window.dispatchEvent(new Event('mfa-enrollment-required'));
+                if (!window.location.pathname.includes('/activar-verificacion')) {
+                    window.location.href = '/activar-verificacion';
                 }
             } else if (response.status === 428) {
                 window.dispatchEvent(new Event('password-change-required'));

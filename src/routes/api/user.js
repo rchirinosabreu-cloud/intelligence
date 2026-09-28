@@ -4,6 +4,8 @@ import { getUserProfile, updateUserProfile, updateUserPassword } from '../../ser
 import { getUserNotes, createUserNote, updateUserNote, deleteUserNote } from '../../services/userNoteService.js';
 import { getOnboarding, acknowledgeOnboarding } from '../../services/onboardingService.js';
 import { replaceProfileAvatar } from '../../services/avatarService.js';
+import { mfaService } from '../../services/mfa.js';
+import { MfaError } from '../../services/mfaService.js';
 
 const router = express.Router();
 
@@ -114,6 +116,56 @@ router.put('/password', async (req, res) => {
         const status = error.message === 'Contraseña actual incorrecta' ? 400 : 500;
         return res.status(status).json({ error: error.message });
     }
+});
+
+// Verificación en dos pasos (27 de septiembre de 2026). Siempre sobre la cuenta de la
+// sesión; el restablecimiento de otra persona es solo de administradores.
+const sendMfaError = (res, error, action) => {
+    if (error instanceof MfaError) return res.status(error.status).json({ code: error.code, error: error.message });
+    console.error(`[MFA] ${action} failed:`, error?.message || error);
+    return res.status(500).json({ error: 'No se pudo completar la verificación en dos pasos. Inténtalo de nuevo.' });
+};
+
+router.get('/mfa', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, private');
+    try { return res.json(await mfaService.getStatus(req.user.userId)); }
+    catch (error) { return sendMfaError(res, error, 'Status'); }
+});
+
+router.post('/mfa/setup', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, private');
+    try { return res.json(await mfaService.beginEnrollment(req.user.userId)); }
+    catch (error) { return sendMfaError(res, error, 'Setup'); }
+});
+
+router.post('/mfa/confirm', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, private');
+    try {
+        const result = await mfaService.confirmEnrollment(req.user.userId, req.body?.code);
+        return res.json(result);
+    } catch (error) { return sendMfaError(res, error, 'Confirm'); }
+});
+
+router.post('/mfa/recovery-codes', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store, private');
+    try {
+        const result = await mfaService.regenerateRecoveryCodes(req.user.userId, req.body?.code);
+        return res.json(result);
+    } catch (error) { return sendMfaError(res, error, 'Recovery codes'); }
+});
+
+router.delete('/mfa', async (req, res) => {
+    try {
+        const result = await mfaService.disable(req.user.userId, { password: req.body?.password, code: req.body?.code });
+        return res.json(result);
+    } catch (error) { return sendMfaError(res, error, 'Disable'); }
+});
+
+router.post('/mfa/reset/:userId', async (req, res) => {
+    try {
+        const result = await mfaService.adminReset(req.user, req.params.userId);
+        return res.json(result);
+    } catch (error) { return sendMfaError(res, error, 'Admin reset'); }
 });
 
 // Notes Endpoints
