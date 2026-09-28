@@ -116,7 +116,7 @@ const PrivacyPolicy = () => (
         </table>
       </div>
       <p>
-        Estas transmisiones se hacen a países que la Superintendencia de Industria y Comercio reconoce con un nivel adecuado de protección o, en su defecto, bajo acuerdos contractuales de protección de datos con cada proveedor, conforme a los artículos 25 y 26 de la Ley 1581 de 2012 y al Decreto 1074 de 2015. También podremos entregar datos a autoridades que los requieran en ejercicio de sus funciones legales.
+        Como estos proveedores tratan los datos por cuenta de Brainstudio, se trata de transmisiones a encargados, amparadas en contratos que les obligan a tratar los datos solo según nuestras instrucciones, con seguridad y confidencialidad, conforme a los artículos 24 y 25 del Decreto 1377 de 2013 (compilado en el Decreto 1074 de 2015). Cualquier transferencia internacional se ajusta al artículo 26 de la Ley 1581 de 2012. También podremos entregar datos a autoridades que los requieran en ejercicio de sus funciones legales.
       </p>
 
       <H2 id="derechos">5. Derechos de los titulares</H2>
@@ -141,7 +141,7 @@ const PrivacyPolicy = () => (
 
       <H2 id="autorizacion">7. Autorización</H2>
       <p>
-        Pedimos su autorización previa, expresa e informada al recoger sus datos (por ejemplo, con la casilla del formulario de solicitud comercial) y conservamos la prueba: fecha y versión de esta política. No se requiere autorización en los casos del artículo 10 de la Ley 1581 de 2012, como los datos de naturaleza pública o los necesarios para cumplir un contrato o una obligación legal.
+        Pedimos su autorización previa, expresa e informada al recoger sus datos (por ejemplo, con la casilla del formulario de solicitud comercial) y conservamos la prueba: fecha y versión de esta política. No se requiere autorización en los casos del artículo 10 de la Ley 1581 de 2012: información requerida por una entidad pública en ejercicio de sus funciones o por orden judicial, datos de naturaleza pública, casos de urgencia médica o sanitaria, tratamiento autorizado por la ley para fines históricos, estadísticos o científicos, y datos relacionados con el Registro Civil de las personas.
       </p>
 
       <H2 id="seguridad">8. Seguridad</H2>
@@ -173,7 +173,7 @@ const PrivacyPolicy = () => (
 
       <H2 id="vigencia">12. Vigencia y cambios</H2>
       <p>
-        Esta política rige desde el 27 de septiembre de 2026 y reemplaza la versión de febrero de 2025. Las bases de datos se mantendrán mientras subsistan las finalidades que justifican su tratamiento. Los cambios sustanciales se informarán en esta página y por los canales habituales antes de aplicarse.
+        Esta política rige desde el 27 de septiembre de 2026 y reemplaza la versión de febrero de 2025. El 28 de septiembre de 2026 se corrigieron las normas citadas sobre transmisión de datos a encargados y sobre los casos en que no se requiere autorización, sin cambiar las finalidades del tratamiento. Las bases de datos se mantendrán mientras subsistan las finalidades que justifican su tratamiento. Los cambios sustanciales se informarán en esta página y por los canales habituales antes de aplicarse.
       </p>
 
       <p className="pt-8 text-sm text-zinc-500">Versión {PRIVACY_POLICY_VERSION}.</p>
