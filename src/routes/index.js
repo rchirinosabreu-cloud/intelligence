@@ -15,6 +15,7 @@ import * as briaObserverController from '../controllers/briaObserverController.j
 import * as commercialRequestController from '../controllers/commercialRequestController.js';
 import { authenticateToken, requireManagerRole, requireModulePermission } from '../middlewares/authMiddleware.js';
 import { isMfaRequiredForRole } from '../lib/mfaPolicy.js';
+import { aiRequestContextMiddleware, runWithAiContext } from '../lib/aiRequestContext.js';
 // La cerradura de un pendiente privado: el tablero ya no manda su contenido, y estas
 // rutas —comentarios, adjuntos y la propia tarea— tampoco se lo dan a quien no puede
 // abrirla. Contrato que vigila que no se olvide ninguna: tests/taskPrivacyRoutes.test.js
@@ -89,11 +90,12 @@ router.post('/users', authenticateToken, authController.createUser);
 // door. Answers 202 immediately and analyses afterwards.
 router.post('/minutes/fireflies/webhook', async (req, res) => {
     try {
-        const outcome = await handleFirefliesWebhook({
+        // Sin persona detrás: el registro de uso de IA lo anota como minutas automáticas.
+        const outcome = await runWithAiContext({ module: 'minutes-automatic', route: 'POST /api/minutes/fireflies/webhook' }, () => handleFirefliesWebhook({
             rawBody: req.rawBody,
             signature: req.headers['x-hub-signature'] || req.headers['x-hub-signature-256'],
             body: req.body
-        });
+        }));
         return res.status(outcome.status).json(outcome.body);
     } catch (error) {
         console.error('[FirefliesWebhook] Error procesando el aviso:', error.response?.data || error.message || error);
@@ -116,6 +118,8 @@ router.post('/activity/google-calendar/webhook', async (req, res) => {
 // Scoped media tickets validate user, session and exact message/attachment on every request.
 router.use('/team-chat-media', createTeamChatMediaRouter());
 router.use(authenticateToken);
+// Quién y desde qué módulo, para el registro de uso de IA del control de salida.
+router.use(aiRequestContextMiddleware);
 router.use('/team-chat', createTeamChatRouter());
 
 router.post('/sync-users', requireManagerRole, authController.syncUsers);

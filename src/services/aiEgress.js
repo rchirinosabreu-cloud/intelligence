@@ -1,9 +1,13 @@
 import { getGovernanceService } from './aiGovernanceService.js';
 import { governanceError } from '../lib/aiGovernance.js';
+import { currentAiContext } from '../lib/aiRequestContext.js';
+import { buildUsageEvent, extractUsage, getAiUsageLog } from './aiUsageLog.js';
 
 // Server-only transport. Scope must come from an authorized, persisted resource,
 // never from an arbitrary clientId supplied in a proxy request.
-export const createGovernedFetch = ({ fetchImpl, governance } = {}) => async (url, options = {}) => {
+// Every exit (allowed, blocked or failed) leaves a row in the AI usage log (27 September
+// 2026), without the content; a failing log never breaks the AI call.
+export const createGovernedFetch = ({ fetchImpl, governance, usageLog, clock = () => Date.now() } = {}) => async (url, options = {}) => {
   const target = new URL(url);
   const { governanceContext, ...outgoing } = options;
   let provider, model;
@@ -18,15 +22,49 @@ export const createGovernedFetch = ({ fetchImpl, governance } = {}) => async (ur
     throw governanceError('Destino de IA no inventariado.', 403, 'AI_DESTINATION_INVALID');
   }
   if (typeof model !== 'string' || !model.trim()) throw governanceError('Modelo de IA no identificado.', 403, 'AI_SCOPE_REQUIRED');
-  await (governance || getGovernanceService()).assertEgress({
-    clientId: governanceContext?.clientId,
-    useCase: governanceContext?.useCase,
-    provider, model,
-    // Conservative label, not automatic content classification or a DLP scanner.
-    dataClasses: ['CONFIDENTIAL']
-  });
+
+  const context = currentAiContext();
+  const startedAt = clock();
+  const log = (fields) => {
+    const event = buildUsageEvent({ provider, model, target, context, governanceContext, durationMs: clock() - startedAt, ...fields });
+    Promise.resolve()
+      .then(() => (usageLog || getAiUsageLog()).record(event))
+      .catch((error) => console.error('[AI usage] No se pudo registrar el uso:', error?.message || error));
+  };
+
+  try {
+    await (governance || getGovernanceService()).assertEgress({
+      clientId: governanceContext?.clientId,
+      useCase: governanceContext?.useCase,
+      provider, model,
+      // Conservative label, not automatic content classification or a DLP scanner.
+      dataClasses: ['CONFIDENTIAL']
+    });
+  } catch (error) {
+    log({ outcome: 'BLOCKED', errorCode: error?.code || 'AI_GOVERNANCE_BLOCKED' });
+    throw error;
+  }
   options.signal?.throwIfAborted();
-  return (fetchImpl || globalThis.fetch)(url, { ...outgoing, redirect: 'error' });
+
+  let response;
+  try {
+    response = await (fetchImpl || globalThis.fetch)(url, { ...outgoing, redirect: 'error' });
+  } catch (error) {
+    log({ outcome: 'ERROR', errorCode: error?.name === 'AbortError' ? 'ABORTED' : 'NETWORK' });
+    throw error;
+  }
+
+  const outcome = response.ok ? 'ALLOWED' : 'ERROR';
+  const isJson = (response.headers.get('content-type') || '').includes('application/json');
+  // Tokens come from a clone of JSON answers only; a stream is never read here.
+  if (response.ok && isJson && body.stream !== true) {
+    response.clone().json()
+      .then((json) => log({ outcome, statusCode: response.status, usage: extractUsage(json) }))
+      .catch(() => log({ outcome, statusCode: response.status }));
+  } else {
+    log({ outcome, statusCode: response.status, errorCode: response.ok ? null : `HTTP_${response.status}` });
+  }
+  return response;
 };
 
 export const governedFetch = createGovernedFetch();

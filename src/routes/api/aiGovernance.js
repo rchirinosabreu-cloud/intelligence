@@ -2,8 +2,9 @@ import express from 'express';
 import { readFile } from 'node:fs/promises';
 import { getGovernanceService } from '../../services/aiGovernanceService.js';
 import { GOVERNANCE_DOCUMENTS } from '../../lib/aiGovernance.js';
+import { getAiUsageLog } from '../../services/aiUsageLog.js';
 
-export function createAiGovernanceRouter({ service } = {}) {
+export function createAiGovernanceRouter({ service, usageLog } = {}) {
   const router = express.Router();
   router.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
@@ -28,6 +29,14 @@ export function createAiGovernanceRouter({ service } = {}) {
     res.attachment(`${doc.id}.md`).type('text/markdown').send(content);
   }));
   router.put('/policy/:clientId', run(async (req, res, s) => res.json(await s.setPolicy(req.user.userId, req.params.clientId, req.body))));
+  // Registro central de uso de IA (27 de septiembre de 2026). Antes de /:kind para no chocar.
+  const usage = () => usageLog || getAiUsageLog();
+  router.get('/usage/summary', run(async (req, res) => res.json(await usage().summary(req.user.userId, req.query))));
+  router.get('/usage/export', run(async (req, res) => {
+    const csv = await usage().exportCsv(req.user.userId, req.query);
+    res.attachment(`uso-ia-${new Date().toISOString().slice(0, 10)}.csv`).type('text/csv; charset=utf-8').send(`﻿${csv}`);
+  }));
+  router.get('/usage', run(async (req, res) => res.json(await usage().list(req.user.userId, req.query))));
   router.get('/:kind/:id/history', run(async (req, res, s) => res.json(await s.history(req.user.userId, req.params.kind, req.params.id))));
   router.get('/:kind', run(async (req, res, s) => res.json(await s.list(req.user.userId, req.params.kind, req.query))));
   router.post('/:kind', run(async (req, res, s) => res.status(201).json(await s.save(req.user.userId, req.params.kind, null, req.body))));
