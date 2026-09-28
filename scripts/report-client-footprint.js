@@ -36,6 +36,7 @@ export const CLIENT_RELATIONS = Object.freeze([
   { table: 'AiGovernanceAuthorization', label: 'autorizaciones de IA', recent: 'updatedAt' },
   { table: 'AiGovernanceIncident', label: 'incidentes de IA', recent: 'updatedAt' },
   { table: 'AiGovernanceClientPolicy', label: 'controles de IA', recent: 'updatedAt' },
+  { table: 'AiUsageEvent', label: 'llamadas de IA registradas', recent: 'occurredAt' },
   // En financiero la fecha contable puede estar en el futuro (proyecciones): lo que
   // dice si alguien tocó la ficha es cuándo se creó el registro, no a qué mes apunta.
   { table: 'FinancialRecord', label: 'movimientos financieros', recent: 'createdAt' },

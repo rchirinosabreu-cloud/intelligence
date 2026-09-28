@@ -131,6 +131,29 @@ model AiGovernanceEvent {
   @@index([actorId])
 }
 
+// Registro central de uso de IA (27 de septiembre de 2026). Sin relaciones a propósito: la fila
+// sobrevive a la persona o al cliente y no guarda contenido. Tabla: scripts/ensure-ai-usage-schema.js.
+model AiUsageEvent {
+  id           String   @id
+  occurredAt   DateTime @default(now())
+  actorId      String?
+  clientId     String?
+  provider     String
+  model        String
+  endpoint     String
+  flow         String
+  route        String?
+  outcome      String
+  statusCode   Int?
+  durationMs   Int?
+  inputTokens  Int?
+  outputTokens Int?
+  errorCode    String?
+  @@index([occurredAt])
+  @@index([actorId, occurredAt])
+  @@index([clientId, occurredAt])
+}
+
 model User {
   aiGovernanceSystems         AiGovernanceSystem[]
   aiGovernanceRisks           AiGovernanceRisk[]
