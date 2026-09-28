@@ -154,6 +154,37 @@ model AiUsageEvent {
   @@index([clientId, occurredAt])
 }
 
+// Consultas y reclamos de titulares (Ley 1581), 27 de septiembre de 2026. Fechas legales como
+// texto 'YYYY-MM-DD' (día de Bogotá). Tabla: scripts/ensure-data-subject-requests-schema.js.
+model DataSubjectRequest {
+  id                    String   @id
+  consecutive           Int      @unique @default(autoincrement())
+  type                  String
+  reason                String
+  channel               String
+  status                String
+  requesterName         String
+  requesterDocument     String?
+  contactEmail          String?
+  contactPhone          String?
+  description           String
+  receivedOn            String
+  extendedOn            String?
+  extensionReason       String?
+  incompleteRequestedOn String?
+  completedOn           String?
+  legendAddedOn         String?
+  respondedOn           String?
+  responseSummary       String?
+  responseEvidence      String?
+  notes                 String?
+  createdById           String?
+  updatedById           String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @default(now())
+  @@index([status, receivedOn])
+}
+
 model User {
   aiGovernanceSystems         AiGovernanceSystem[]
   aiGovernanceRisks           AiGovernanceRisk[]

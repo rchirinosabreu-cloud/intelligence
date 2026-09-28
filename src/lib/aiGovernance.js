@@ -1,4 +1,6 @@
 // Shared form vocabulary and deterministic rules. No secrets or provider calls.
+import { addBusinessDays, bogotaDate, businessDaysUntil } from './colombiaBusinessDays.js';
+
 export const DATA_CLASSES = ['PUBLIC', 'INTERNAL', 'CONFIDENTIAL', 'RESTRICTED'];
 export const GOVERNANCE_DOCUMENTS = [
   { id: '01-programa', title: 'Programa, alcance y brechas' },
@@ -40,6 +42,9 @@ export const GOVERNANCE_FORMS = {
     field('impact', 'Impacto en confidencialidad, integridad y disponibilidad', 'textarea', true),
     field('recipientEmail', 'Correo contractual de la empresa', 'email', true),
     field('notifiedAt', 'Aviso enviado (Bogotá)', 'datetime'), field('notificationEvidence', 'Referencia del correo enviado', 'textarea'),
+    // Ley 1581 / Circular Única SIC (27 de septiembre de 2026): reporte a la SIC en 15 días hábiles.
+    field('personalData', '¿Compromete datos personales?', 'select', false, ['SI', 'NO']),
+    field('sicReportedAt', 'Reporte a la SIC radicado (Bogotá)', 'datetime'), field('sicReportEvidence', 'Radicado o referencia del reporte a la SIC', 'textarea'),
     field('containment', 'Acciones de contención', 'textarea'), field('recovery', 'Recuperación y validación', 'textarea'),
     field('rootCause', 'Causa raíz', 'textarea'), field('remediation', 'Plan de remediación, responsables y fechas', 'textarea'),
     field('finalReportEvidence', 'Referencia del informe posterior enviado', 'textarea'), field('lessons', 'Aprendizaje y prevención', 'textarea')
@@ -68,6 +73,14 @@ export function addNoticeMonth(value) {
 export function incidentDeadline(data) {
   const detected = parseGovernanceDate(data.detectedAt);
   return new Date(Math.min(+detected, data.occurredAt ? +parseGovernanceDate(data.occurredAt) : +detected) + 24 * 3600000);
+}
+// Reporte a la SIC: 15 días hábiles de Colombia desde la detección, solo si hay datos personales.
+export function sicReportStatus(data, now = new Date()) {
+  if (data?.personalData !== 'SI' || !data.detectedAt) return { required: false, dueOn: null, daysLeft: null, overdue: false, reportedLate: false };
+  const dueOn = addBusinessDays(bogotaDate(parseGovernanceDate(data.detectedAt)), 15);
+  const reportedOn = data.sicReportedAt ? bogotaDate(parseGovernanceDate(data.sicReportedAt)) : null;
+  const daysLeft = reportedOn ? null : businessDaysUntil(dueOn, bogotaDate(now));
+  return { required: true, dueOn, daysLeft, overdue: daysLeft !== null && daysLeft < 0, reportedLate: Boolean(reportedOn && reportedOn > dueOn) };
 }
 export function riskScore({ probability, impact }) {
   for (const n of [probability, impact]) if (!['string', 'number'].includes(typeof n) || !Number.isInteger(Number(n)) || Number(n) < 1 || Number(n) > 5) throw governanceError('Probabilidad e impacto deben ser enteros de 1 a 5.');
@@ -117,9 +130,17 @@ export function validateRecord(kind, input, { now = new Date() } = {}) {
       need(data, ['notificationEvidence']);
       if (+parseGovernanceDate(data.notifiedAt) > +now || +parseGovernanceDate(data.notifiedAt) < +parseGovernanceDate(data.detectedAt)) throw governanceError('La notificación debe ser posterior al conocimiento y no futura.');
     }
+    if (data.sicReportedAt) {
+      if (!data.sicReportEvidence) throw governanceError('Registra el radicado o referencia del reporte a la SIC.');
+      if (+parseGovernanceDate(data.sicReportedAt) > +now || +parseGovernanceDate(data.sicReportedAt) < +parseGovernanceDate(data.detectedAt)) throw governanceError('El reporte a la SIC debe ser posterior al conocimiento y no futuro.');
+    }
     if (status !== 'OPEN') need(data, ['containment']);
     if (['RECOVERED', 'CLOSED'].includes(status)) need(data, ['recovery']);
-    if (status === 'CLOSED') need(data, ['notifiedAt', 'notificationEvidence', 'rootCause', 'remediation', 'finalReportEvidence', 'lessons']);
+    if (status === 'CLOSED') {
+      need(data, ['notifiedAt', 'notificationEvidence', 'rootCause', 'remediation', 'finalReportEvidence', 'lessons']);
+      if (!data.personalData) throw governanceError('Para cerrar indica si el incidente comprometió datos personales.');
+      if (data.personalData === 'SI' && !data.sicReportedAt) throw governanceError('Para cerrar un incidente con datos personales registra el reporte a la SIC y su radicado.');
+    }
   }
   return { name: input.name.trim(), status, data };
 }

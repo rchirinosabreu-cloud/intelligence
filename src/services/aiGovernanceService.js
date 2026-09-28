@@ -1,6 +1,6 @@
 import pg from 'pg';
 import { randomUUID } from 'node:crypto';
-import { validateRecord, authorizationDecision, incidentDeadline, governanceError } from '../lib/aiGovernance.js';
+import { validateRecord, authorizationDecision, incidentDeadline, governanceError, sicReportStatus } from '../lib/aiGovernance.js';
 
 const tables = Object.freeze({ systems: 'AiGovernanceSystem', risks: 'AiGovernanceRisk', authorizations: 'AiGovernanceAuthorization', incidents: 'AiGovernanceIncident' });
 const tableFor = kind => { if (!Object.hasOwn(tables, kind)) throw governanceError('Registro desconocido.', 404); return `"${tables[kind]}"`; };
@@ -43,6 +43,7 @@ export function createGovernanceService({ pool, clock = () => new Date() }) {
         if (kind === 'incidents') {
           item.notificationOverdue = !item.data.notifiedAt && +clock() > +new Date(item.notificationDueAt);
           item.notifiedLate = Boolean(item.data.notifiedAt && +new Date(item.data.notifiedAt) > +new Date(item.notificationDueAt));
+          item.sicReport = sicReportStatus(item.data, clock());
         }
         return item;
       }) };

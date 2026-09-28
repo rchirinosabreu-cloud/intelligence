@@ -3,8 +3,9 @@ import { readFile } from 'node:fs/promises';
 import { getGovernanceService } from '../../services/aiGovernanceService.js';
 import { GOVERNANCE_DOCUMENTS } from '../../lib/aiGovernance.js';
 import { getAiUsageLog } from '../../services/aiUsageLog.js';
+import { getDataRequestService } from '../../services/dataSubjectRequestService.js';
 
-export function createAiGovernanceRouter({ service, usageLog } = {}) {
+export function createAiGovernanceRouter({ service, usageLog, dataRequests } = {}) {
   const router = express.Router();
   router.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
@@ -37,6 +38,11 @@ export function createAiGovernanceRouter({ service, usageLog } = {}) {
     res.attachment(`uso-ia-${new Date().toISOString().slice(0, 10)}.csv`).type('text/csv; charset=utf-8').send(`﻿${csv}`);
   }));
   router.get('/usage', run(async (req, res) => res.json(await usage().list(req.user.userId, req.query))));
+  // Consultas y reclamos de titulares (Ley 1581), 27 de septiembre de 2026.
+  const requests = () => dataRequests || getDataRequestService();
+  router.get('/data-requests', run(async (req, res) => res.json(await requests().list(req.user.userId, req.query))));
+  router.post('/data-requests', run(async (req, res) => res.status(201).json(await requests().create(req.user.userId, req.body))));
+  router.patch('/data-requests/:id', run(async (req, res) => res.json(await requests().update(req.user.userId, req.params.id, req.body))));
   router.get('/:kind/:id/history', run(async (req, res, s) => res.json(await s.history(req.user.userId, req.params.kind, req.params.id))));
   router.get('/:kind', run(async (req, res, s) => res.json(await s.list(req.user.userId, req.params.kind, req.query))));
   router.post('/:kind', run(async (req, res, s) => res.status(201).json(await s.save(req.user.userId, req.params.kind, null, req.body))));
