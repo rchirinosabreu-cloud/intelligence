@@ -153,7 +153,14 @@ model User {
   mustChangePassword          Boolean                 @default(false)
   passwordChangedAt           DateTime?
   sessionVersion              Int                     @default(0)
-  authoredFeedback            FeedbackRecord[]        @relation("AuthoredFeedback")
+  mfaSecret                   String?
+  mfaPendingSecret            String?
+  mfaEnabledAt                DateTime?
+  mfaLastUsedStep             Int?
+  mfaRecoveryCodes            Json?
+  mfaFailedAttempts           Int                     @default(0)
+  mfaLockedUntil              DateTime?
+  authoredFeedback           FeedbackRecord[]        @relation("AuthoredFeedback")
   receivedFeedback            FeedbackRecord[]        @relation("ReceivedFeedback")
   generalChatMessages         GeneralChatMessage[]
   teamChatChannels            TeamChatChannel[]

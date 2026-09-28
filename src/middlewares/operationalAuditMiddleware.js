@@ -16,7 +16,8 @@ export const operationalAuditMiddleware = (req, res, next) => {
   res.on('finish', () => {
     if (res.statusCode < 200 || res.statusCode >= 400) return;
     const pathname = String(req.originalUrl || req.url || '').split('?')[0];
-    if (pathname === '/api/login' || isInternalTraceRequest(pathname)) return;
+    // El inicio de sesión (también su segundo paso) ya deja SESSION_STARTED.
+    if (pathname === '/api/login' || pathname === '/api/login/mfa' || isInternalTraceRequest(pathname)) return;
     if (alreadyCoveredByTaskTrace(method, pathname)) return;
     const details = describePlatformMutation({ method, pathname });
     const taskMatch = pathname.match(/^\/api\/tasks\/([^/]+)/);

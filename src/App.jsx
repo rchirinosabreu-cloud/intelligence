@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import AppLayout from './components/layout/AppLayout';
 import Login from './components/Login';
 import ForcePasswordChange from './components/ForcePasswordChange';
+import ForceMfaEnrollment from './components/ForceMfaEnrollment';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Toaster, toast } from 'react-hot-toast';
@@ -115,6 +116,27 @@ function AppContent() {
           <Routes>
             <Route path="/cambiar-password" element={<ForcePasswordChange />} />
             <Route path="*" element={<Navigate to="/cambiar-password" replace />} />
+          </Routes>
+          </Suspense>
+          <Toaster
+            position="top-right"
+            toastOptions={{
+              className: 'dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-800 border',
+            }}
+          />
+        </Router>
+      </ThemeProvider>
+    );
+  }
+
+  if (isAuthenticated && currentUser?.mfaEnrollmentRequired) {
+    return (
+      <ThemeProvider>
+        <Router>
+          <Suspense fallback={<AppLoader />}>
+          <Routes>
+            <Route path="/activar-verificacion" element={<ForceMfaEnrollment />} />
+            <Route path="*" element={<Navigate to="/activar-verificacion" replace />} />
           </Routes>
           </Suspense>
           <Toaster

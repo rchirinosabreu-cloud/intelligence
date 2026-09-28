@@ -98,13 +98,41 @@ export const AuthProvider = ({ children }) => {
             }
         };
 
+        // Rol con verificación en dos pasos obligatoria y aún sin activar (27 de septiembre de 2026).
+        const handleMfaEnrollmentRequired = () => {
+            const current = localStorage.getItem('currentUser');
+            if (!current) return;
+            try {
+                const user = { ...JSON.parse(current), mfaEnrollmentRequired: true };
+                localStorage.setItem('currentUser', JSON.stringify(user));
+                sessionStorage.setItem('currentUser', JSON.stringify(user));
+                setCurrentUser(user);
+                setIsAuthenticated(true);
+            } catch (error) {
+                console.error('Failed to mark MFA enrollment as required:', error);
+            }
+        };
+
         window.addEventListener('auth-error', handleAuthError);
         window.addEventListener('password-change-required', handlePasswordChangeRequired);
+        window.addEventListener('mfa-enrollment-required', handleMfaEnrollmentRequired);
         return () => {
             window.removeEventListener('auth-error', handleAuthError);
             window.removeEventListener('password-change-required', handlePasswordChangeRequired);
+            window.removeEventListener('mfa-enrollment-required', handleMfaEnrollmentRequired);
         };
     }, []);
+
+    // Cambios del propio usuario que confirmó el servidor (p. ej. MFA activado).
+    const updateCurrentUser = (patch) => {
+        setCurrentUser((previous) => {
+            if (!previous) return previous;
+            const next = { ...previous, ...patch };
+            localStorage.setItem('currentUser', JSON.stringify(next));
+            sessionStorage.setItem('currentUser', JSON.stringify(next));
+            return next;
+        });
+    };
 
     const login = (token, user) => {
         clearChatDrafts();
@@ -126,7 +154,7 @@ export const AuthProvider = ({ children }) => {
     };
 
     return (
-        <AuthContext.Provider value={{ isAuthenticated, currentUser, isLoading, login, logout }}>
+        <AuthContext.Provider value={{ isAuthenticated, currentUser, isLoading, login, logout, updateCurrentUser }}>
             {children}
         </AuthContext.Provider>
     );

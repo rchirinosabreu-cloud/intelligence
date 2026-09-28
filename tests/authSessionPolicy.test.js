@@ -6,7 +6,8 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 test('auth session policy supports revocation and mandatory password changes', async () => {
   const schema = await read('prisma/schema.prisma');
-  const authController = await read('src/controllers/authController.js');
+  // El token de sesión se firma en mfaLoginController desde que existe el segundo factor (27 de septiembre de 2026).
+  const authController = (await read('src/controllers/authController.js')) + (await read('src/controllers/mfaLoginController.js'));
   const authMiddleware = await read('src/middlewares/authMiddleware.js');
   const userService = await read('src/services/userService.js');
   const userRoutes = await read('src/routes/api/user.js');

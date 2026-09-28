@@ -480,7 +480,8 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
         where: { id: task.id },
         include: {
           assignee: true,
-          creator: true
+          // Nunca el User entero: viaja al navegador y llevaría la contraseña cifrada y el secreto del MFA.
+          creator: { select: { id: true, name: true, email: true, avatarUrl: true } }
         }
       }
     })

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ArrowLeft, KeyRound, Lock, Mail } from '@/components/ui/icons';
 import { getApiBaseUrl } from '../lib/apiBaseUrl';
+import { normalizeSecondFactorInput } from '../lib/mfaClient';
 
 const Login = ({ onLogin }) => {
   const [email, setEmail] = useState('');
@@ -13,6 +14,8 @@ const Login = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [infoMsg, setInfoMsg] = useState('');
+  const [challengeToken, setChallengeToken] = useState('');
+  const [mfaCode, setMfaCode] = useState('');
   const location = useLocation();
 
   useEffect(() => {
@@ -32,6 +35,8 @@ const Login = ({ onLogin }) => {
 
   const switchToLogin = () => {
     setAuthMode('login');
+    setChallengeToken('');
+    setMfaCode('');
     setResetCode('');
     setNewPassword('');
     setConfirmPassword('');
@@ -55,11 +60,54 @@ const Login = ({ onLogin }) => {
         throw new Error(data.message || 'Credenciales incorrectas');
       }
 
+      // Con verificación en dos pasos, la contraseña solo trae el pase para pedir el código.
+      if (data.mfaRequired && data.challengeToken) {
+        setChallengeToken(data.challengeToken);
+        setMfaCode('');
+        setAuthMode('mfa');
+        return;
+      }
+
       if (data.token) {
         onLogin(data.token, data.user);
       }
     } catch (error) {
       console.error('Login error:', error);
+      setErrorMsg(error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMfaSubmit = async (event) => {
+    event.preventDefault();
+    setLoading(true);
+    setErrorMsg('');
+
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/login/mfa`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ challengeToken, code: mfaCode })
+      });
+      const data = await response.json().catch(() => ({}));
+
+      if (response.status === 401 && data.code === 'MFA_CHALLENGE_INVALID') {
+        setChallengeToken('');
+        setPassword('');
+        setAuthMode('login');
+        throw new Error(data.message);
+      }
+      if (!response.ok) {
+        setMfaCode('');
+        throw new Error(data.message || 'El código no es válido.');
+      }
+
+      if (data.token) {
+        onLogin(data.token, { ...data.user, recoveryCodesRemaining: data.recoveryCodesRemaining });
+      }
+    } catch (error) {
+      console.error('MFA login error:', error);
       setErrorMsg(error.message);
     } finally {
       setLoading(false);
@@ -131,6 +179,7 @@ const Login = ({ onLogin }) => {
 
   const isResetRequest = authMode === 'reset-request';
   const isResetConfirm = authMode === 'reset-confirm';
+  const isMfa = authMode === 'mfa';
 
   return (
     <div className="min-h-screen bg-white text-zinc-950 dark:bg-zinc-950 dark:text-white">
@@ -162,17 +211,19 @@ const Login = ({ onLogin }) => {
               <img src="/brainstudio-logo.png" alt="Brainstudio" className="mb-7 h-16 w-auto object-contain" />
               <p className="text-sm font-semibold text-indigo-600 dark:text-indigo-300">Brainstudio Intelligence</p>
               <h1 className="mt-3 text-4xl font-bold tracking-tight text-zinc-950 dark:text-white">
-                {authMode === 'login' ? 'Bienvenido de nuevo' : 'Recupera tu acceso'}
+                {authMode === 'login' ? 'Bienvenido de nuevo' : isMfa ? 'Verificación en dos pasos' : 'Recupera tu acceso'}
               </h1>
               <p className="mt-3 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
                 {authMode === 'login'
                   ? 'Accede a la plataforma operativa de la agencia.'
-                  : 'Te enviaremos un codigo al correo registrado para crear una nueva contrasena.'}
+                  : isMfa
+                    ? 'Escribe el código de seis dígitos de tu app autenticadora, o uno de tus códigos de respaldo.'
+                    : 'Te enviaremos un codigo al correo registrado para crear una nueva contrasena.'}
               </p>
             </div>
 
             <form
-              onSubmit={isResetRequest ? handleResetRequest : isResetConfirm ? handleResetConfirm : handleSubmit}
+              onSubmit={isMfa ? handleMfaSubmit : isResetRequest ? handleResetRequest : isResetConfirm ? handleResetConfirm : handleSubmit}
               className="space-y-5"
             >
               {errorMsg && (
@@ -186,6 +237,26 @@ const Login = ({ onLogin }) => {
                 </div>
               )}
 
+              {isMfa && (
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Código de verificación</span>
+                  <div className="relative">
+                    <KeyRound className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
+                    <input
+                      type="text"
+                      autoComplete="one-time-code"
+                      autoFocus
+                      value={mfaCode}
+                      onChange={(event) => setMfaCode(normalizeSecondFactorInput(event.target.value))}
+                      className="w-full rounded-2xl border border-zinc-200 bg-white py-3 pl-11 pr-4 font-mono tracking-widest text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:ring-indigo-500/20"
+                      placeholder="000000"
+                      required
+                    />
+                  </div>
+                </label>
+              )}
+
+              {!isMfa && (
               <label className="block">
                 <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Correo electronico</span>
                 <div className="relative">
@@ -200,6 +271,7 @@ const Login = ({ onLogin }) => {
                   />
                 </div>
               </label>
+              )}
 
               {authMode === 'login' && (
                 <label className="block">
@@ -275,7 +347,9 @@ const Login = ({ onLogin }) => {
               >
                 {loading
                   ? 'Verificando...'
-                  : isResetRequest
+                  : isMfa
+                    ? 'Verificar y entrar'
+                    : isResetRequest
                     ? 'Enviar codigo'
                     : isResetConfirm
                       ? 'Actualizar contrasena'

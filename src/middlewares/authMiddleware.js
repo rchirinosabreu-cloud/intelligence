@@ -3,6 +3,7 @@ import prisma from '../lib/prisma.js';
 import { isActiveTeamUser } from '../services/teamRosterService.js';
 import { getJwtSecret, hasModulePermission, isManagerRole } from '../config/security.js';
 import { hasFinancialPermission } from '../utils/financialPermissions.js';
+import { mfaEnrollmentBlock } from '../lib/mfaPolicy.js';
 
 export { hasFinancialPermission };
 
@@ -63,7 +64,8 @@ export const authenticateToken = async (req, res, next) => {
         mustChangePassword: true,
         modulePermissions: true,
         hasFinancialAccess: true,
-        financialRole: true
+        financialRole: true,
+        mfaEnabledAt: true
       }
     });
 
@@ -90,6 +92,12 @@ export const authenticateToken = async (req, res, next) => {
         message: "Debes actualizar tu contrasena para continuar",
         code: "PASSWORD_CHANGE_REQUIRED"
       });
+    }
+
+    // Rol con verificación en dos pasos obligatoria (MFA_REQUIRED_ROLES) y aún sin activar.
+    const mfaBlock = mfaEnrollmentBlock(dbUser, req);
+    if (mfaBlock) {
+      return res.status(428).json(mfaBlock);
     }
 
     req.user = {
