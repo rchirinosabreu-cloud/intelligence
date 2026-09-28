@@ -5,9 +5,12 @@ import { transformWithEsbuild } from 'vite';
 
 const read = (file) => readFile(file, 'utf8');
 
-test('el resumen público de gobernanza distingue validación local de operación productiva', async () => {
+// Desde el despliegue del 27 de septiembre de 2026 el módulo corre en producción; lo que sigue
+// pendiente es activarlo cliente por cliente, y la página tiene que decir exactamente eso.
+test('el resumen público de gobernanza distingue módulo desplegado de control activado por cliente', async () => {
   const page = await read('src/components/public/AiGovernancePolicy.jsx');
-  for (const text of ['Gobernanza de la inteligencia artificial', 'En validación local', 'no está activado en producción', 'Inventario de sistemas', 'Autorizaciones por cliente', 'Evaluación de riesgos', 'Registro de incidentes', 'Trazabilidad de cambios', 'Control previo al envío']) {
+  assert.doesNotMatch(page, /En validación local|no está activado en producción/);
+  for (const text of ['Gobernanza de la inteligencia artificial', 'Desplegado en la plataforma', 'cliente por cliente', 'no acredita por sí mismo autorizaciones', 'Inventario de sistemas', 'Autorizaciones por cliente', 'Evaluación de riesgos', 'Registro de incidentes', 'Trazabilidad de cambios', 'Control previo al envío']) {
     assert.ok(page.includes(text), `Falta el alcance público: ${text}`);
   }
   assert.match(page, /id="gobernanza"/);

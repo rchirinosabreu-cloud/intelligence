@@ -25,6 +25,8 @@ export const sanitizeAnswers = (raw = {}) => {
   for (const [key, value] of entries) {
     if (!/^[a-zA-Z0-9_.]{1,40}$/.test(key)) continue;
     if (typeof value === 'string') answers[key] = value.trim().slice(0, MAX_TEXT);
+    // Casillas (la autorización de datos): solo el booleano, nunca un texto que lo imite.
+    else if (typeof value === 'boolean') answers[key] = value;
     else if (Array.isArray(value)) answers[key] = value.filter(item => typeof item === 'string').map(item => item.trim().slice(0, 80)).slice(0, 30);
     else if (value && typeof value === 'object') answers[key] = { amount: typeof value.amount === 'string' || typeof value.amount === 'number' ? String(value.amount).slice(0, 30) : '', undefined: Boolean(value.undefined) };
   }
@@ -67,12 +69,16 @@ export const receiveCommercialRequest = async (db, payload = {}, { now = new Dat
 
   const draft = buildLeadDraft(answers, { receivedAt: now });
   const owner = await resolveIntakeOwner(db, ownerName);
-  const meta = payload.meta && typeof payload.meta === 'object' ? {
-    referrer: typeof payload.meta.referrer === 'string' ? payload.meta.referrer.slice(0, 300) : null,
-    campaign: typeof payload.meta.campaign === 'string' ? payload.meta.campaign.slice(0, 80) : null,
-    source: typeof payload.meta.source === 'string' ? payload.meta.source.slice(0, 80) : null,
-    locale: typeof payload.meta.locale === 'string' ? payload.meta.locale.slice(0, 20) : null
-  } : null;
+  const meta = {
+    ...(payload.meta && typeof payload.meta === 'object' ? {
+      referrer: typeof payload.meta.referrer === 'string' ? payload.meta.referrer.slice(0, 300) : null,
+      campaign: typeof payload.meta.campaign === 'string' ? payload.meta.campaign.slice(0, 80) : null,
+      source: typeof payload.meta.source === 'string' ? payload.meta.source.slice(0, 80) : null,
+      locale: typeof payload.meta.locale === 'string' ? payload.meta.locale.slice(0, 20) : null
+    } : {}),
+    // Prueba de la autorización de datos: cuándo y con qué versión de la política.
+    dataAuthorization: draft.request.dataAuthorization
+  };
 
   return db.$transaction(async tx => {
     const lead = await tx.crmLead.create({

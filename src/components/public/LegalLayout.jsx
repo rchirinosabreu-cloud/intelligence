@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { LEGAL_ENTITY } from './legalEntity';
 
 const LegalLayout = ({ children, title, sectionLabel = 'Legal' }) => {
   return (
@@ -9,7 +10,7 @@ const LegalLayout = ({ children, title, sectionLabel = 'Legal' }) => {
         <div className="max-w-4xl mx-auto px-6 h-16 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">
             <img src="/brainstudio-logo.png" alt="BrainStudio" className="w-8 h-8 object-contain" />
-            <span className="font-bold tracking-tighter text-lg">BrainStudio OS</span>
+            <span className="font-bold tracking-tighter text-lg">{LEGAL_ENTITY.platform}</span>
           </Link>
           <div className="text-xs text-zinc-400 uppercase tracking-widest font-medium">
             {sectionLabel}
@@ -28,8 +29,13 @@ const LegalLayout = ({ children, title, sectionLabel = 'Legal' }) => {
       {/* Minimalist Footer */}
       <footer className="border-t border-zinc-100 dark:border-zinc-900 py-8 text-center">
         <p className="text-[10px] text-zinc-400 uppercase tracking-widest">
-          &copy; {new Date().getFullYear()} BrainStudio Agencia de Crecimiento. Todos los derechos reservados.
+          &copy; {new Date().getFullYear()} {LEGAL_ENTITY.name} · NIT {LEGAL_ENTITY.nit}. Todos los derechos reservados.
         </p>
+        <nav className="mt-3 flex justify-center gap-5 text-xs text-zinc-500 dark:text-zinc-400" aria-label="Páginas legales">
+          <Link to="/privacidad" className="hover:text-zinc-900 dark:hover:text-zinc-100">Privacidad</Link>
+          <Link to="/terminos" className="hover:text-zinc-900 dark:hover:text-zinc-100">Términos</Link>
+          <Link to="/seguridad" className="hover:text-zinc-900 dark:hover:text-zinc-100">Seguridad e IA</Link>
+        </nav>
       </footer>
     </div>
   );

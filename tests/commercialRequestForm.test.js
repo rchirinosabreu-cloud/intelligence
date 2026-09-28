@@ -64,12 +64,12 @@ test('conditional questions appear only when their trigger answer is present', (
 test('validation asks for the essentials and checks formats without blocking optional fields', () => {
   const contact = visibleSteps({}).find(step => step.id === 'contacto');
   const empty = validateStep(contact, {});
-  assert.deepEqual(Object.keys(empty).sort(), ['company', 'contactName', 'email', 'location', 'phone']);
+  assert.deepEqual(Object.keys(empty).sort(), ['company', 'contactName', 'dataAuthorization', 'email', 'location', 'phone']);
   const bad = validateStep(contact, { contactName: 'Ana', company: 'ACME', email: 'ana', phone: '12', location: 'Bogotá', website: 'nope' });
   assert.match(bad.email, /correo/);
   assert.match(bad.phone, /dígitos/);
   assert.match(bad.website, /web/);
-  assert.deepEqual(validateStep(contact, { contactName: 'Ana', company: 'ACME', email: 'ana@acme.co', phone: '+57 300 123 4567', location: 'Bogotá', website: 'instagram.com/acme' }), {});
+  assert.deepEqual(validateStep(contact, { contactName: 'Ana', company: 'ACME', email: 'ana@acme.co', phone: '+57 300 123 4567', location: 'Bogotá', website: 'instagram.com/acme', dataAuthorization: true }), {});
   const services = visibleSteps({}).find(step => step.id === 'servicios');
   assert.match(validateStep(services, { services: [] }).services, /al menos/);
   const ads = visibleSteps({ services: ['ADS'] }).find(step => step.id === 'servicio:ADS');

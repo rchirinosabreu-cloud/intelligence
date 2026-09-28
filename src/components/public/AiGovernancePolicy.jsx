@@ -1,5 +1,7 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import LegalLayout from './LegalLayout';
+import { LEGAL_ENTITY } from './legalEntity';
 
 const Status = ({ children }) => (
   <span className="inline-flex rounded-full border border-brand-green/30 bg-brand-green/10 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-brand-green-deep dark:text-brand-green">
@@ -44,10 +46,10 @@ const AiGovernancePolicy = () => (
         <h2 id="governance-title" className="border-b border-zinc-200 pb-3 text-xl font-bold dark:border-white/10">Gobernanza de la inteligencia artificial</h2>
         <p>La seguridad técnica se complementa con la gestión de quién puede usar IA, para qué finalidad, con qué información y bajo qué responsabilidad.</p>
         <div className="rounded-2xl border border-zinc-200 bg-zinc-50 p-5 dark:border-white/10 dark:bg-zinc-900">
-          <p className="m-0 font-semibold text-zinc-900 dark:text-zinc-50">En validación local</p>
-          <p className="mb-0 mt-2 text-sm text-zinc-700 dark:text-zinc-200">Hemos desarrollado y probado en un entorno local un módulo privado de gobierno de IA. Este módulo no está activado en producción. Las pruebas técnicas no acreditan autorizaciones de clientes ni cumplimiento contractual integral.</p>
+          <p className="m-0 font-semibold text-zinc-900 dark:text-zinc-50">Desplegado en la plataforma · activación cliente por cliente</p>
+          <p className="mb-0 mt-2 text-sm text-zinc-700 dark:text-zinc-200">El módulo privado de gobierno de IA está desplegado en la plataforma. Su control obligatorio se activa cliente por cliente, a medida que se registran sus autorizaciones y evaluaciones; mientras un cliente no esté activado, sus flujos de IA siguen sujetos a los demás controles de esta página. Tener el módulo desplegado no acredita por sí mismo autorizaciones de clientes ni cumplimiento contractual integral.</p>
         </div>
-        <p>El módulo reúne seis componentes, sujetos a validación y activación antes de su uso operativo:</p>
+        <p>El módulo reúne seis componentes:</p>
         <ul>
           <li><strong>Inventario de sistemas:</strong> registro de herramientas, proveedores, modelos, finalidades y condiciones de tratamiento.</li>
           <li><strong>Autorizaciones por cliente:</strong> registro de alcance, vigencia y referencias a la evidencia de aprobación escrita.</li>
@@ -64,7 +66,10 @@ const AiGovernancePolicy = () => (
         <h2 id="controls-title" className="border-b border-zinc-200 pb-3 text-xl font-bold dark:border-white/10">Controles implementados</h2>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <ControlCard title="Identidad y acceso">
-            <p>La plataforma exige autenticación, verifica que la cuenta y la persona sigan activas, permite revocar sesiones y aplica permisos por rol y módulo. Las operaciones sensibles vuelven a comprobar los permisos en el servidor.</p>
+            <p>La plataforma exige autenticación, verifica que la cuenta y la persona sigan activas, permite revocar sesiones y aplica permisos por rol y módulo. Las operaciones sensibles vuelven a comprobar los permisos en el servidor. Todas las cuentas pueden activar la verificación en dos pasos con app autenticadora (TOTP), con códigos de un solo uso y bloqueo tras intentos fallidos, y puede exigirse por rol.</p>
+          </ControlCard>
+          <ControlCard title="Proveedores de IA y salida de datos">
+            <p>Los modelos de IA se usan por API empresarial de OpenAI, bajo condiciones en las que el proveedor no entrena sus modelos con la información enviada. Las transcripciones de reuniones provienen de Fireflies. Cada solicitud hacia un proveedor de IA pasa por un control de salida que solo permite destinos autorizados.</p>
           </ControlCard>
           <ControlCard title="Protección de datos y secretos">
             <p>Las llaves de proveedores se gestionan en el servidor. Los tokens de integraciones se almacenan cifrados y los registros ocultan parámetros sensibles. Los mensajes de error del servidor se depuran antes de llegar al navegador.</p>
@@ -125,10 +130,20 @@ const AiGovernancePolicy = () => (
           <li>uso de una herramienta de IA no autorizada con datos de la empresa o de clientes;</li>
           <li>resultado falso, discriminatorio, dañino o publicado sin la revisión requerida.</li>
         </ul>
-        <p className="mb-0 text-sm">Canal de contacto: <a href="mailto:labs@brainstudioagencia.com" className="font-semibold text-brand-cyan-deep underline underline-offset-4 dark:text-brand-cyan">labs@brainstudioagencia.com</a>.</p>
+        <p className="mb-2">Cada incidente se registra y sigue las fases de detección, contención, comunicación, recuperación y aprendizaje. Cuando compromete datos personales:</p>
+        <ul className="mb-5">
+          <li>se informa al cliente afectado sin dilación indebida;</li>
+          <li>se reporta a la Superintendencia de Industria y Comercio dentro de los 15 días hábiles siguientes a su detección;</li>
+          <li>se avisa a los titulares cuando existe riesgo para sus derechos.</li>
+        </ul>
+        <p className="mb-0 text-sm">Canal de contacto: <a href={`mailto:${LEGAL_ENTITY.email}`} className="font-semibold text-brand-cyan-deep underline underline-offset-4 dark:text-brand-cyan">{LEGAL_ENTITY.email}</a> · <a href={LEGAL_ENTITY.phoneHref} className="font-semibold text-brand-cyan-deep underline underline-offset-4 dark:text-brand-cyan">{LEGAL_ENTITY.phone}</a>.</p>
       </section>
 
-      <p className="text-sm text-zinc-500 dark:text-zinc-400">Última actualización: 23 de septiembre de 2026.</p>
+      <p className="text-sm text-zinc-600 dark:text-zinc-300">
+        El tratamiento de datos personales se rige por la <Link to="/privacidad" className="font-semibold text-brand-cyan-deep underline underline-offset-4 dark:text-brand-cyan">Política de tratamiento de datos personales</Link> y el uso de la plataforma por los <Link to="/terminos" className="font-semibold text-brand-cyan-deep underline underline-offset-4 dark:text-brand-cyan">Términos y condiciones</Link>.
+      </p>
+
+      <p className="text-sm text-zinc-500 dark:text-zinc-400">Última actualización: 27 de septiembre de 2026.</p>
     </div>
   </LegalLayout>
 );
