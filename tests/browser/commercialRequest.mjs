@@ -40,6 +40,7 @@ test('desktop: a marketing + audiovisual + web request walks every step, validat
     await page.getByLabel(/WhatsApp/).fill('+57 310 000 0001');
     await page.getByLabel('Ciudad y país').fill('Bogotá, Colombia');
     await page.getByLabel(/Página web/).fill('hdi.test');
+    await page.getByLabel(/Autorizo a BRAIN STUDIO/).check();
     await shot(page, '01-datos');
     await next(page);
 
@@ -156,6 +157,7 @@ test('mobile dark: the form fits the screen and "no estoy seguro" collapses the 
     await page.getByLabel('Correo electrónico').fill('ana@ruiz.test');
     await page.getByLabel(/WhatsApp/).fill('3001234567');
     await page.getByLabel('Ciudad y país').fill('Cartagena, Colombia');
+    await page.getByLabel(/Autorizo a BRAIN STUDIO/).check();
     await next(page);
     await page.getByLabel(/Qué proyecto/).fill('Quiero vender más por Instagram pero no sé por dónde empezar.');
     await pick(page, 'Aún no está definida');

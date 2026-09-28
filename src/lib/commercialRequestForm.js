@@ -1,3 +1,5 @@
+import { PRIVACY_POLICY_VERSION } from './privacyPolicy.js';
+
 // Formulario de solicitud comercial · Brain Studio.
 // The whole form is data: steps, questions, conditional blocks, and the mapping to the CRM lead and to the
 // quotation catalog. The React component only renders what this file says; the API will validate with it too.
@@ -41,9 +43,16 @@ const CONTACT = {
     q('email', 'Correo electrónico', 'email', { required: true, autoComplete: 'email', placeholder: 'nombre@empresa.com' }),
     q('phone', 'WhatsApp / teléfono', 'phone', { required: true, autoComplete: 'tel', placeholder: '+57 300 000 0000' }),
     text('location', 'Ciudad y país', { required: true, placeholder: 'Ej. Bogotá, Colombia' }),
-    q('website', 'Página web o redes sociales', 'url', { placeholder: 'https://', help: 'Opcional.' })
+    q('website', 'Página web o redes sociales', 'url', { placeholder: 'https://', help: 'Opcional.' }),
+    // Ley 1581 de 2012: autorización previa, expresa e informada (27 de septiembre de 2026).
+    q('dataAuthorization', 'Autorizo a BRAIN STUDIO AGENCIA CREATIVA S.A.S. a tratar mis datos personales para atender esta solicitud, preparar una propuesta y contactarme por correo, teléfono o WhatsApp, conforme a su Política de tratamiento de datos personales.', 'consent', {
+      required: true, policyHref: '/privacidad', policyLabel: 'Leer la política'
+    })
   ]
 };
+
+// Versión de /privacidad vigente cuando la persona autorizó; se guarda con cada solicitud.
+export { PRIVACY_POLICY_VERSION };
 
 const NEED = {
   id: 'necesidad', title: 'Cuéntanos qué necesitas', eyebrow: 'Paso 2', intro: 'Con el mayor detalle posible. Si ya conoces cantidades, entregables, plataformas o referencias, inclúyelas aquí.',
@@ -340,6 +349,11 @@ export const validateStep = (step, answers = {}) => {
   const errors = {};
   for (const question of visibleQuestions(step, answers)) {
     const value = answers[question.id];
+    // Una autorización solo existe si la casilla se marcó: ni «false» ni un texto la sustituyen.
+    if (question.type === 'consent') {
+      if (question.required && value !== true) errors[question.id] = 'Necesitamos tu autorización para tratar tus datos y responderte.';
+      continue;
+    }
     if (question.required && !filled(value) && !(question.type === 'money' && value?.undefined)) {
       errors[question.id] = question.type === 'multi' ? 'Elige al menos una opción.' : 'Este campo es necesario para continuar.';
       continue;
@@ -478,7 +492,11 @@ export const buildLeadDraft = (answers = {}, { receivedAt = new Date() } = {}) =
       services,
       suggestedItems: suggestQuotationItems(answers),
       location: answers.location || null,
-      workedBefore: answers.workedBefore === 'SI'
+      workedBefore: answers.workedBefore === 'SI',
+      // Prueba de la autorización (Ley 1581 de 2012, art. 9; Decreto 1377 de 2013, art. 8).
+      dataAuthorization: answers.dataAuthorization === true
+        ? { granted: true, grantedAt: receivedAt.toISOString(), policyVersion: PRIVACY_POLICY_VERSION }
+        : { granted: false }
     }
   };
 };

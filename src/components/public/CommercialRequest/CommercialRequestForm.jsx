@@ -133,6 +133,28 @@ const Question = ({ question, value, error, onChange }) => {
           <MoneyInput question={question} value={value} onChange={onChange} />
         </Field>
       );
+    case 'consent':
+      // Autorización de datos (Ley 1581): casilla propia, sin etiqueta encima; el texto es la etiqueta.
+      return (
+        <div className="min-w-0 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-700 dark:bg-zinc-900" data-question={question.id}>
+          <label className="flex cursor-pointer items-start gap-3 text-sm leading-6 text-zinc-700 dark:text-zinc-200" htmlFor={`q-${question.id}`}>
+            <input
+              id={`q-${question.id}`}
+              type="checkbox"
+              className="mt-1 h-4 w-4 shrink-0 accent-primary"
+              checked={value === true}
+              onChange={event => onChange(event.target.checked)}
+            />
+            <span>{question.label}</span>
+          </label>
+          {question.policyHref && (
+            <a href={question.policyHref} target="_blank" rel="noopener noreferrer" className="ml-7 mt-1 inline-flex items-center gap-1 text-xs font-semibold text-brand-cyan-deep underline underline-offset-4 dark:text-brand-cyan">
+              {question.policyLabel || 'Política de datos'} <ExternalLink className="h-3 w-3" />
+            </a>
+          )}
+          {error && <p className="ml-7 mt-1.5 flex items-center gap-1 text-xs font-medium text-destructive" role="alert"><AlertCircle className="h-3.5 w-3.5" /> {error}</p>}
+        </div>
+      );
     default:
       return (
         <Field question={question} error={error}>

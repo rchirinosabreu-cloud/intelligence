@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { receiveCommercialRequest, sanitizeAnswers, validateAnswers, resolveIntakeOwner, buildConfirmationEmail, intakeRecipients, CommercialRequestError } from '../src/services/commercialRequestService.js';
 import { serializeLead, listLeads, metricsFor, isNewRequest } from '../src/services/crmService.js';
 import { createCrmMemoryDb } from './fixtures/crmMemoryDb.js';
+import { PRIVACY_POLICY_VERSION } from '../src/lib/commercialRequestForm.js';
 
 const read = path => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 const NOW = new Date('2026-09-18T20:00:00Z'); // Friday afternoon in Bogotá
@@ -13,7 +14,21 @@ const complete = () => ({
   need: 'Campaña de marca.', hasKeyDate: 'NO', startWhen: 'ASAP',
   services: ['WEB'], 'web.needs': ['LANDING'], 'web.hasSite': 'NO',
   'event.related': 'NO', 'amc.interest': 'NO', 'budget.has': 'NO',
-  stage: 'PRONTO', 'decision.others': 'NO', 'proposal.when': 'ASAP', source: 'INSTAGRAM', workedBefore: 'NO', extra: 'x'.repeat(5000), evil: '<script>', 'weird key!': 'no'
+  stage: 'PRONTO', 'decision.others': 'NO', 'proposal.when': 'ASAP', source: 'INSTAGRAM', workedBefore: 'NO', extra: 'x'.repeat(5000), evil: '<script>', 'weird key!': 'no',
+  dataAuthorization: true
+});
+
+// Ley 1581 (27 de septiembre de 2026): sin la casilla marcada no se crea nada.
+test('receiveCommercialRequest rejects a submission without data authorization and writes nothing', async () => {
+  const db = createCrmMemoryDb({ members });
+  const { dataAuthorization, ...withoutConsent } = complete();
+  assert.equal(dataAuthorization, true);
+  await assert.rejects(
+    receiveCommercialRequest(db, { answers: { ...withoutConsent, dataAuthorization: 'true' } }, { now: NOW }),
+    (error) => error instanceof CommercialRequestError && Boolean(error.details?.dataAuthorization)
+  );
+  assert.equal(db.state.leads.length, 0);
+  assert.equal(sanitizeAnswers(complete()).dataAuthorization, true, 'the boolean survives sanitizing');
 });
 
 const members = [{ id: 'tm-francys', name: 'Francys Villa', isActive: true, userId: 'user-francys' }, { id: 'tm-old', name: 'Francys Antigua', isActive: false }, { id: 'tm-r', name: 'Rodny Chirinos', isActive: true, userId: 'user-r' }];
@@ -59,7 +74,10 @@ test('receiveCommercialRequest creates lead + request + first log entry, assigne
   assert.equal(request.leadId, lead.id);
   assert.deepEqual(request.services, ['WEB']);
   assert.deepEqual(request.suggestedItems.map(item => item.name), ['Landing page']);
-  assert.deepEqual(request.meta, { referrer: 'https://instagram.com', campaign: 'sep26', source: null, locale: 'es-CO' });
+  assert.deepEqual(request.meta, {
+    referrer: 'https://instagram.com', campaign: 'sep26', source: null, locale: 'es-CO',
+    dataAuthorization: { granted: true, grantedAt: NOW.toISOString(), policyVersion: PRIVACY_POLICY_VERSION }
+  });
   assert.equal(db.state.activities.length, 1);
   assert.match(db.state.activities[0].note, /Solicitud recibida por el formulario comercial/);
   assert.equal(db.state.activities[0].authorId, null);
