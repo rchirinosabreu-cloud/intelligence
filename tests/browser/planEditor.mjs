@@ -156,6 +156,67 @@ try {
     await page.close();
   }
 
+  // Rodny, 29 de septiembre de 2026: «cada que selecciono una pieza se sube o se baja o salta según la
+  // extensión del contenido; quiero estabilidad, que aparezca en el mismo lugar siempre». Y en
+  // pantallas bajas el carril no llegaba hasta abajo: «aparece como una franja blanca».
+  {
+    const page = await browser.newPage({ viewport: { width: 1400, height: 620 }, deviceScaleFactor: 2 });
+    await page.goto(`http://127.0.0.1:${port}${PAGE}`, { waitUntil: 'networkidle' });
+    await page.waitForFunction(() => document.querySelector('nav[aria-label="Piezas de la parrilla"]'));
+    await page.waitForTimeout(900);
+
+    // Ya con el editor en pantalla —el carril queda pegado arriba— tiene que caber entero, con su
+    // botón de crear incluido. Antes el carril tomaba su alto natural y «Nueva pieza» quedaba fuera.
+    await page.evaluate(() => {
+      document.querySelector('nav[aria-label="Piezas de la parrilla"]').scrollIntoView({ block: 'start' });
+    });
+    await page.waitForTimeout(400);
+
+    const carril = await page.evaluate(() => {
+      const nav = document.querySelector('nav[aria-label="Piezas de la parrilla"]');
+      const crear = [...nav.querySelectorAll('button')].find(b => b.textContent.includes('Nueva pieza'));
+      return {
+        abajoDelBoton: Math.round(crear.getBoundingClientRect().bottom),
+        alto: window.innerHeight,
+        listaConScroll: nav.children[1].scrollHeight > nav.children[1].clientHeight
+      };
+    });
+    assert.ok(
+      carril.abajoDelBoton <= carril.alto,
+      `en pantalla baja se llega hasta «Nueva pieza» (acaba en ${carril.abajoDelBoton}px de ${carril.alto}px)`
+    );
+    assert.equal(carril.listaConScroll, true, 'y la lista de piezas se recorre por dentro');
+
+    // Cambiar de pieza no mueve la página ni la tarjeta, por larga o corta que sea la pieza.
+    const posicion = async () => page.evaluate(() => {
+      const card = document.querySelector('[id^="item-"]');
+      return { top: Math.round(card.getBoundingClientRect().top), scrollY: Math.round(window.scrollY) };
+    });
+
+    await page.evaluate(() => window.scrollBy(0, 260));
+    await page.waitForTimeout(300);
+    const antes = await posicion();
+
+    for (const titulo of ['Una unidad de PromoGroup IPS', 'Tres preguntas antes', 'La sala de espera']) {
+      await page.evaluate((t) => {
+        const nav = document.querySelector('nav[aria-label="Piezas de la parrilla"]');
+        [...nav.querySelectorAll('button')].find(b => b.textContent.includes(t)).click();
+      }, titulo);
+      await page.waitForTimeout(500);
+
+      // Lo que se exige es que **la tarjeta** no se mueva. El scroll sí puede cambiar: es justo el
+      // mecanismo con el que se la devuelve a su sitio cuando una pieza más corta acorta la página.
+      const ahora = await posicion();
+      assert.ok(
+        Math.abs(ahora.top - antes.top) <= 2,
+        `elegir «${titulo}» deja la tarjeta donde estaba (${antes.top}px → ${ahora.top}px)`
+      );
+    }
+
+    await page.screenshot({ path: 'output/editor-pantalla-baja.png' });
+    await page.close();
+  }
+
   // Rodny, 25 de septiembre de 2026: «yo quiero que mi pantalla quede en ese contenido, que lo deje
   // en frente de mí». Abrir la parrilla desde Gestión llevaba a la pieza correcta, pero la página se
   // quedaba arriba y la tarjeta caía muy por debajo, tapada por objetivos, Bria y notas internas.

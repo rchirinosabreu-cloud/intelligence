@@ -35,11 +35,11 @@ test('la pieza abierta la manda la URL, no un estado paralelo', async () => {
   assert.doesNotMatch(editor, /setSelectedItemId/, 'no queda un estado paralelo a la URL');
   assert.match(editor, /const linkedItemId = new URLSearchParams\(location\.search\)\.get\('item'\)/);
   assert.match(editor, /params\.delete\('itemId'\)/, 'el parámetro antiguo no se queda pegado');
-  assert.match(
-    editor,
-    /navigate\(\{ pathname: location\.pathname, search: params\.toString\(\) \}, \{ replace: true \}\)/,
-    'elegir una pieza escribe la URL'
-  );
+  // Desde el 29 de septiembre de 2026 la navegación va marcada como venida del carril, para que el
+  // desplazamiento a la pieza —que es solo para quien llega de fuera— no mueva la página al elegir.
+  assert.match(editor, /search: params\.toString\(\) \}/, 'elegir una pieza escribe la URL');
+  assert.match(editor, /\{ replace: true, state: \{ desdeElCarril: true \} \}/);
+  assert.match(editor, /if \(location\.state\?\.desdeElCarril\) return undefined;/);
   assert.match(editor, /onSelect=\{selectPiece\}/, 'y el carril usa ese mismo camino');
 });
 
