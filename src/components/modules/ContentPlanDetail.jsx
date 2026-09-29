@@ -1,5 +1,5 @@
 import Select from '@/components/ui/Select';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
@@ -371,13 +371,17 @@ const shortPieceDate = (value) => (value
  * El punto magenta marca lo que todavía no tiene pieza final, que es lo que suele frenar una entrega.
  */
 const PlanPieceRail = ({ items, selectedId, onSelect, onAdd }) => (
-  <nav aria-label="Piezas de la parrilla" className="flex h-full flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
+  /* El tope de alto va **aquí**, no en el contenedor: un `h-full` no resuelve contra un `max-height`
+     del padre, así que el carril crecía a su tamaño natural, la lista nunca activaba su scroll y
+     «Nueva pieza» quedaba cortado abajo en pantallas bajas (Rodny, 29 de septiembre de 2026). */
+  <nav aria-label="Piezas de la parrilla" className="flex max-h-[calc(100vh-7rem)] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900">
     <div className="flex items-baseline gap-2 border-b border-zinc-100 px-4 py-3.5 dark:border-white/5">
       <span className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Piezas</span>
       <span className="text-xs text-zinc-400">{items.length}</span>
     </div>
 
-    <div className="flex flex-col gap-1 overflow-y-auto p-2">
+    {/* `min-h-0`: sin él un hijo flexible no se encoge por debajo de su contenido y no hay scroll. */}
+    <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
       {items.map((item, index) => {
         const isSelected = item.id === selectedId;
         return (
@@ -752,10 +756,10 @@ const ContentItemCard = ({
                   if (e.target.value !== item.copyText) onUpdate({ id: item.id, copyText: e.target.value });
                 }}
                 placeholder="Escribe el guion aquí…"
-                className="min-h-[260px] w-full rounded-xl border border-zinc-200 bg-white p-4 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900"
+                className="min-h-[260px] max-h-[320px] overflow-y-auto w-full rounded-xl border border-zinc-200 bg-white p-4 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900"
               />
             ) : (
-              <div className="min-h-[260px] whitespace-pre-wrap rounded-xl bg-zinc-50 p-4 text-[13px] leading-relaxed text-zinc-700 dark:bg-white/5 dark:text-zinc-300">
+              <div className="min-h-[260px] max-h-[320px] overflow-y-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-4 text-[13px] leading-relaxed text-zinc-700 dark:bg-white/5 dark:text-zinc-300">
                 {item.copyText || <span className="italic text-zinc-400">Sin guion…</span>}
               </div>
             )}
@@ -775,10 +779,10 @@ const ContentItemCard = ({
                   if (e.target.value !== item.captionText) onUpdate({ id: item.id, captionText: e.target.value });
                 }}
                 placeholder="Escribe el texto que se va a publicar…"
-                className="min-h-[260px] w-full rounded-xl border-[1.5px] border-brand-cyan/30 bg-brand-cyan-soft/30 p-4 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:bg-brand-cyan/5"
+                className="min-h-[260px] max-h-[320px] overflow-y-auto w-full rounded-xl border-[1.5px] border-brand-cyan/30 bg-brand-cyan-soft/30 p-4 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:bg-brand-cyan/5"
               />
             ) : (
-              <div className="min-h-[260px] whitespace-pre-wrap rounded-xl border-[1.5px] border-brand-cyan/20 bg-brand-cyan-soft/30 p-4 text-[13px] leading-relaxed text-zinc-700 dark:bg-brand-cyan/5 dark:text-zinc-300">
+              <div className="min-h-[260px] max-h-[320px] overflow-y-auto whitespace-pre-wrap rounded-xl border-[1.5px] border-brand-cyan/20 bg-brand-cyan-soft/30 p-4 text-[13px] leading-relaxed text-zinc-700 dark:bg-brand-cyan/5 dark:text-zinc-300">
                 {item.captionText || <span className="italic text-zinc-400">Sin texto de publicación…</span>}
               </div>
             )}
@@ -799,10 +803,10 @@ const ContentItemCard = ({
                 if (e.target.value !== item.internalNotes) onUpdate({ id: item.id, internalNotes: e.target.value });
               }}
               placeholder="Instrucciones para el equipo…"
-              className="min-h-[72px] w-full rounded-xl border border-zinc-200 bg-white p-3.5 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900"
+              className="min-h-[72px] max-h-[132px] w-full overflow-y-auto rounded-xl border border-zinc-200 bg-white p-3.5 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900"
             />
           ) : (
-            <p className="whitespace-pre-wrap break-words text-[13px] leading-relaxed text-zinc-700 dark:text-zinc-300">
+            <p className="max-h-[132px] overflow-y-auto whitespace-pre-wrap break-words text-[13px] leading-relaxed text-zinc-700 dark:text-zinc-300">
               {item.internalNotes || <span className="text-zinc-400">Sin notas internas.</span>}
             </p>
           )}
@@ -1040,12 +1044,56 @@ const ContentPlanDetail = () => {
   // hay que bajar a buscarla (Rodny, 25 de septiembre de 2026).
   const scrolledForRef = useRef(null);
 
+  /**
+   * Elegir en el carril **no mueve la página** (Rodny, 29 de septiembre de 2026: «quiero estabilidad,
+   * que aparezca en el mismo lugar siempre»). Se marca la navegación como venida del carril para que
+   * el desplazamiento de abajo la ignore: ese solo es para quien llega de fuera por un enlace.
+   */
+  const anclaRef = useRef(null);
+  const reservaRef = useRef(null);
+
   const selectPiece = (itemId) => {
+    // Dónde está ahora la tarjeta en pantalla: ahí mismo tiene que aparecer la siguiente.
+    const actual = document.querySelector('[id^="item-"]');
+    anclaRef.current = actual ? actual.getBoundingClientRect().top : null;
+
     const params = new URLSearchParams(location.search);
     params.delete('itemId');
     if (itemId) params.set('item', itemId); else params.delete('item');
-    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    navigate(
+      { pathname: location.pathname, search: params.toString() },
+      { replace: true, state: { desdeElCarril: true } }
+    );
   };
+
+  /**
+   * La tarjeta aparece **en el mismo sitio**, mida lo que mida la pieza.
+   *
+   * Dos piezas pueden diferir mucho de alto (en pruebas, de 714 a 982 px). Devolverla a su sitio no
+   * basta: si la pieza nueva es más corta, la página se acorta, el navegador recorta el scroll al
+   * nuevo máximo y **ya no hay a dónde desplazarse**. Por eso se hacen las dos cosas y en este orden:
+   *
+   * 1. Se **reserva** el alto mayor visto en esta sesión, para que la página no encoja nunca.
+   * 2. Se devuelve la tarjeta a los píxeles exactos donde estaba.
+   *
+   * `useLayoutEffect` corre antes de pintar, así que nada de esto se ve.
+   */
+  useLayoutEffect(() => {
+    const node = document.querySelector('[id^="item-"]');
+    const caja = reservaRef.current;
+
+    if (node && caja) {
+      const alto = Math.ceil(node.getBoundingClientRect().height);
+      if (alto > (parseFloat(caja.style.minHeight) || 0)) caja.style.minHeight = `${alto}px`;
+    }
+
+    const objetivo = anclaRef.current;
+    if (objetivo === null || !node) return;
+    anclaRef.current = null;
+
+    const delta = node.getBoundingClientRect().top - objetivo;
+    if (Math.abs(delta) > 1) window.scrollBy(0, delta);
+  });
   const [editingItemId, setEditingItemId] = useState(null);
   const [dispatchItemId, setDispatchItemId] = useState(null);
   const [showInternalNotes, setShowInternalNotes] = useState(false);
@@ -1334,6 +1382,8 @@ const ContentPlanDetail = () => {
     if (!node) return undefined; // todavía no está pintada; al siguiente render sí
 
     scrolledForRef.current = linkedItemId;
+    // Cambiar de pieza en el carril no es «llegar»: la página se queda donde está.
+    if (location.state?.desdeElCarril) return undefined;
     const { top } = node.getBoundingClientRect();
     if (top >= 0 && top < window.innerHeight * 0.6) return undefined; // ya se ve: no se toca nada
 
@@ -1611,7 +1661,7 @@ const ContentPlanDetail = () => {
           />
         ) : orderedPlanItems.length > 0 ? (
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[312px_minmax(0,1fr)] lg:items-start">
-            <div className="lg:sticky lg:top-24 lg:max-h-[calc(100vh-8rem)]">
+            <div className="lg:sticky lg:top-24">
               <PlanPieceRail
                 items={orderedPlanItems}
                 selectedId={selectedItem?.id}
@@ -1620,7 +1670,9 @@ const ContentPlanDetail = () => {
               />
             </div>
 
-            {selectedItem && (
+            {/* Reserva el alto de la pieza más alta vista: así la página no encoge al cambiar. */}
+            <div ref={reservaRef} className="min-w-0">
+              {selectedItem && (
               <ContentItemCard
                 key={selectedItem.id}
                 item={selectedItem}
@@ -1639,7 +1691,8 @@ const ContentPlanDetail = () => {
                 onDriveLink={setDriveLinkItemId}
                 directUploadPercent={finalAssetUploadMutation.variables?.itemId === selectedItem.id ? directUploadPercent : null}
               />
-            )}
+              )}
+            </div>
           </div>
         ) : (
           <div className="p-20 text-center bg-zinc-50/50 dark:bg-white/5 border border-dashed border-zinc-200 dark:border-white/10 rounded-[3rem]">
