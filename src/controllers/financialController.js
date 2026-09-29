@@ -341,9 +341,8 @@ export const linkFinancialClient = async (req, res, dependencies = {}) => {
         const { sourceClientId } = req.params;
         const { targetClientId } = req.body || {};
         const isSourceLabel = sourceClientId?.startsWith(SOURCE_LABEL_PREFIX);
-        const sourceLabel = isSourceLabel
-            ? decodeURIComponent(sourceClientId.slice(SOURCE_LABEL_PREFIX.length))
-            : null;
+        // Express already decoded the path parameter; decoding it again broke labels with «%».
+        const sourceLabel = isSourceLabel ? sourceClientId.slice(SOURCE_LABEL_PREFIX.length) : null;
 
         if (!sourceClientId || !targetClientId || sourceClientId === targetClientId) {
             return res.status(400).json({
@@ -369,39 +368,41 @@ export const linkFinancialClient = async (req, res, dependencies = {}) => {
                 return null;
             }
 
+            const actorId = req.user?.id || req.user?.userId || null;
             const trace = {
                 reconciledFromClientId: sourceClientId,
                 reconciledToClientId: targetClientId,
-                reconciledBy: req.user?.id || null,
+                reconciledBy: actorId,
                 reconciledAt: new Date().toISOString()
             };
             const sourceWhere = isSourceLabel
                 ? { clientId: null, sourceLabel, type: 'INCOME' }
                 : { clientId: sourceClientId };
-            const [financialRecords, receivables] = await Promise.all([
-                tx.financialRecord.updateMany({
-                    where: sourceWhere,
-                    data: {
-                        clientId: targetClientId,
-                        metadata: trace
-                    }
-                }),
-                tx.accountsReceivable.updateMany({
-                    where: isSourceLabel ? { id: '__never__' } : { clientId: sourceClientId },
-                    data: {
-                        clientId: targetClientId,
-                        metadata: trace
-                    }
-                })
-            ]);
-
-            return {
-                clients,
-                moved: {
-                    financialRecords: financialRecords.count,
-                    receivables: receivables.count
+            // Row by row, merging the trace into whatever each row already carried (monthName, createdBy,
+            // editedBy...): a blanket updateMany replaced the whole metadata and erased that history.
+            const mergedMetadata = (row) => ({ ...(row.metadata && typeof row.metadata === 'object' ? row.metadata : {}), ...trace });
+            const records = await tx.financialRecord.findMany({ where: sourceWhere, select: { id: true, metadata: true } });
+            for (const row of records) {
+                await tx.financialRecord.update({ where: { id: row.id }, data: { clientId: targetClientId, metadata: mergedMetadata(row) } });
+            }
+            // A bare Excel label has no debts of its own: those always hang from a client id.
+            const debts = isSourceLabel ? [] : await tx.accountsReceivable.findMany({ where: { clientId: sourceClientId }, select: { id: true, metadata: true } });
+            for (const row of debts) {
+                await tx.accountsReceivable.update({ where: { id: row.id }, data: { clientId: targetClientId, metadata: mergedMetadata(row) } });
+            }
+            const moved = { financialRecords: records.length, receivables: debts.length };
+            await tx.financialAuditEvent.create({
+                data: {
+                    entityType: 'Client',
+                    entityId: targetClientId,
+                    action: 'UPDATE',
+                    before: { sourceClientId, sourceLabel, clients },
+                    after: { targetClientId, moved, recordIds: records.map((row) => row.id), receivableIds: debts.map((row) => row.id) },
+                    actorId
                 }
-            };
+            });
+
+            return { clients, moved };
         });
 
         if (!result) {

@@ -12,6 +12,20 @@ test('reproduce las cuentas de cobro reales', () => {
     assert.equal(amountInWords(1200000), 'UN MILLÓN DOSCIENTOS MIL PESOS');
 });
 
+// Rodny, 29 de septiembre de 2026: una cuenta de cobro salió «CUATRO MILLONES PESOS». En español la
+// preposición va solo cuando la cifra termina exactamente en millón o millones: «un millón de pesos»,
+// «cuatro millones de pesos», pero «cuatro millones doscientos mil pesos» y «un millón un pesos».
+test('los millones redondos llevan «de» delante de la moneda; los demás importes no', () => {
+    assert.equal(amountInWords(4000000), 'CUATRO MILLONES DE PESOS');
+    assert.equal(amountInWords(1000000), 'UN MILLÓN DE PESOS');
+    assert.equal(amountInWords(21000000), 'VEINTIÚN MILLONES DE PESOS');
+    assert.equal(amountInWords(4200000), 'CUATRO MILLONES DOSCIENTOS MIL PESOS');
+    assert.equal(amountInWords(1000001), 'UN MILLÓN UN PESOS');
+    assert.equal(amountInWords(4000000.5), 'CUATRO MILLONES DE PESOS CON CINCUENTA CENTAVOS');
+    assert.equal(amountInWords(4000000, { uppercase: false, currency: 'dólares' }), 'cuatro millones de dólares');
+    assert.equal(amountInWords(999000), 'NOVECIENTOS NOVENTA Y NUEVE MIL PESOS');
+});
+
 test('un millón va en singular y dos en plural', () => {
     assert.equal(integerInWords(1000000), 'un millón');
     assert.equal(integerInWords(2000000), 'dos millones');

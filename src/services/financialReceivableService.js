@@ -180,6 +180,16 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
                 }
                 throw new FinancialDomainError('RECEIVABLE_AMOUNT_INVALID', 'El monto de cartera debe ser positivo, tener como máximo dos decimales y estar dentro del rango de precisión financiera.');
             }
+            // Una cuenta emitida no se reedita: su PDF y sus conceptos ya están congelados con esa cifra.
+            // Las notas y el seguimiento sí se pueden seguir tocando.
+            if (input.amount !== undefined && (existing.number || existing.issuedAt) && amountCents !== financialCents(existing.amount)) {
+                const label = existing.number ? `No. ${String(existing.number).padStart(4, '0')}` : 'emitida';
+                throw new FinancialDomainError(
+                    'RECEIVABLE_ISSUED_IMMUTABLE',
+                    `La cuenta de cobro ${label} ya fue emitida y su valor no se reedita. Si el cliente necesita otra cifra, emite una nueva cuenta de cobro.`,
+                    409
+                );
+            }
             const amount = financialAmountFromCents(amountCents);
             let paidCents = 0;
             for (const payment of existing.payments || []) {
