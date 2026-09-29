@@ -53,6 +53,32 @@ test('updateReceivable rejects an amount below payments already registered', asy
     );
 });
 
+// Rodny, 29 de septiembre de 2026: tecleó 120.000 en vez de 1.200.000 y no tenía cómo corregirlo.
+test('el valor original de una obligación sin documento se corrige y el saldo se recalcula', async () => {
+    const calls = [];
+    const existing = { id: 'debt-1', amount: 120000, status: 'DEBE', number: null, issuedAt: null, metadata: {}, payments: [] };
+    const result = await updateReceivable(makeClient(existing, calls), 'debt-1', { amount: 1200000 }, { id: 'user-1' });
+    assert.equal(Number(calls[0][1].data.amount), 1200000);
+    assert.equal(result.status, 'DEBE');
+    assert.equal(calls[1][1].data.action, 'UPDATE');
+    assert.equal(Number(calls[1][1].data.before.amount), 120000);
+});
+
+test('una cuenta de cobro emitida no cambia de valor: se dice por dónde salir, y sus notas siguen editables', async () => {
+    const existing = { id: 'debt-1', amount: 1200000, status: 'DEBE', number: 393, issuedAt: new Date('2026-09-22T00:00:00Z'), metadata: {}, payments: [] };
+    await assert.rejects(
+        updateReceivable(makeClient(existing, []), 'debt-1', { amount: 1500000 }, { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_ISSUED_IMMUTABLE' && error.statusCode === 409 && /No\. 0393/.test(error.message) && /emite una nueva/i.test(error.message)
+    );
+    // Sending the same amount back is not a change.
+    const same = [];
+    await updateReceivable(makeClient(existing, same), 'debt-1', { amount: 1200000, comments: 'Enviada por correo' }, { id: 'user-1' });
+    assert.equal(same[0][1].data.comments, 'Enviada por correo');
+    const notes = [];
+    await updateReceivable(makeClient(existing, notes), 'debt-1', { comments: 'Cliente confirma pago el viernes' }, { id: 'user-1' });
+    assert.equal(notes[0][1].data.comments, 'Cliente confirma pago el viernes');
+});
+
 test('updateReceivable refuses a manual paid status while a balance remains', async () => {
     const existing = {
         id: 'debt-1', amount: 1000000, status: 'DEBE', metadata: {},

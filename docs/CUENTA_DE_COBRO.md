@@ -64,7 +64,17 @@ obligación con abonos aplicados que no cuadran con ese total no se emite
 (`RECEIVABLE_ALREADY_PAID_PARTIALLY`).
 
 **Una cuenta ya emitida no se reedita.** Si el cliente pide algo después, va otra cuenta
-de cobro aparte, que es como se trabaja hoy.
+de cobro aparte, que es como se trabaja hoy. Eso incluye el **valor original** de la
+obligación: antes de emitir se corrige desde la tarjeta de Cartera (una cifra tecleada mal,
+120.000 por 1.200.000), pero una vez emitida el servidor la rechaza con
+`RECEIVABLE_ISSUED_IMMUTABLE` nombrando el número («No. 0393») y la salida: emitir otra.
+Las notas y el comentario de seguimiento sí siguen editables después de emitir.
+
+**El importe en letras de los millones redondos lleva «de»** (Rodny, 29 de septiembre de
+2026): «CUATRO MILLONES DE PESOS», «UN MILLÓN DE PESOS»; con resto no lo lleva («CUATRO
+MILLONES DOSCIENTOS MIL PESOS», «UN MILLÓN UN PESOS»). Los PDF emitidos antes de ese día
+quedaron congelados en el bucket con el texto antiguo; solo cambia lo que se emita o se
+regenere desde entonces.
 
 ## El PDF
 

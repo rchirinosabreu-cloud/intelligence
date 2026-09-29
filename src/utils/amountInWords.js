@@ -72,7 +72,10 @@ export const amountInWords = (amount, { currency = 'pesos', uppercase = true } =
     const unitsInWords = integerInWords(units);
     if (unitsInWords === null) return null;
 
-    let phrase = `${unitsInWords} ${currency}`;
+    // «Cuatro millones DE pesos», pero «cuatro millones doscientos mil pesos»: la preposición
+    // aparece solo cuando la cifra termina exactamente en millón o millones.
+    const endsInWholeMillions = units >= 1000000 && units % 1000000 === 0;
+    let phrase = `${unitsInWords} ${endsInWholeMillions ? 'de ' : ''}${currency}`;
     if (remainder) {
         const centsInWords = integerInWords(remainder);
         if (centsInWords === null) return null;

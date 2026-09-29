@@ -1,5 +1,5 @@
 import Select from '@/components/ui/Select';
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -21,7 +21,7 @@ import {
 import {
     TrendingUp, TrendingDown, DollarSign, Wallet, ShieldCheck, AlertCircle,
     Users, ChevronDown, ChevronUp, Loader2, Sparkles, Calendar, PieChart as PieIcon, ListCollapse, ListCollapse as ExpandIcon,
-    UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2, Link2, FileText, Download, Trash2
+    UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2, Link2, FileText, Download, Trash2, Edit
 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
@@ -131,6 +131,13 @@ const FinancialDashboard = () => {
     // Revertir un abono mal registrado: siempre con motivo, nunca en un clic suelto.
     const [paymentToReverse, setPaymentToReverse] = useState(null);
     const [expandedReversals, setExpandedReversals] = useState({});
+    // Follow-up notes of each debt live in state while the person types (Rodny, 2026-09-29: «¿no corren
+    // riesgo de borrarse?»). They save themselves shortly after the last keystroke and on blur; a failed
+    // save keeps the text in the box and offers a retry.
+    const [receivableNotes, setReceivableNotes] = useState({});
+    const receivableNoteTimersRef = useRef({});
+    const [editingAmountId, setEditingAmountId] = useState('');
+    const [amountDraft, setAmountDraft] = useState('');
     const [reversalReason, setReversalReason] = useState('');
     const [isReversingPayment, setIsReversingPayment] = useState(false);
     const [isReceivableEditorOpen, setIsReceivableEditorOpen] = useState(false);
@@ -326,11 +333,10 @@ const FinancialDashboard = () => {
         }
     };
 
-    const handleReceivableUpdate = async (debt, patch) => {
-        if (!debt?.id) return;
+    const handleReceivableUpdate = async (debt, patch, { quiet = false } = {}) => {
+        if (!debt?.id) return false;
         setSavingReceivableId(debt.id);
-        setImportError('');
-        setImportSuccess('');
+        if (!quiet) { setImportError(''); setImportSuccess(''); }
 
         try {
             const baseUrl = getApiBaseUrl();
@@ -338,14 +344,62 @@ const FinancialDashboard = () => {
             await axios.patch(`${baseUrl}/api/financials/receivables/${debt.id}`, patch, {
                 headers: { Authorization: `Bearer ${token}` }
             });
-await invalidateFinancialQueries(queryClient);
-            setImportSuccess('Cartera actualizada.');
+            await invalidateFinancialQueries(queryClient);
+            if (!quiet) setImportSuccess('Cartera actualizada.');
+            return true;
         } catch (error) {
             console.error('Error updating financial receivable:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible guardar el cambio de cartera.');
+            if (!quiet) setImportError(error.response?.data?.message || 'No fue posible guardar el cambio de cartera.');
+            else throw error;
+            return false;
         } finally {
             setSavingReceivableId('');
         }
+    };
+
+    const RECEIVABLE_NOTE_AUTOSAVE_MS = 1500;
+    const receivableServerNote = (debt) => debt.comments || debt.notes || '';
+    const receivableNoteValue = (debt) => receivableNotes[debt.id]?.text ?? receivableServerNote(debt);
+
+    const saveReceivableNote = async (debt, text) => {
+        window.clearTimeout(receivableNoteTimersRef.current[debt.id]);
+        if (text === receivableServerNote(debt)) {
+            setReceivableNotes((current) => ({ ...current, [debt.id]: { text, status: 'saved' } }));
+            return;
+        }
+        setReceivableNotes((current) => ({ ...current, [debt.id]: { text, status: 'saving' } }));
+        try {
+            await handleReceivableUpdate(debt, { comments: text }, { quiet: true });
+            setReceivableNotes((current) => (current[debt.id]?.text === text ? { ...current, [debt.id]: { text, status: 'saved' } } : current));
+        } catch (error) {
+            setReceivableNotes((current) => ({ ...current, [debt.id]: { text, status: 'error', message: error.response?.data?.message || 'No se guardó el comentario.' } }));
+        }
+    };
+
+    const scheduleReceivableNoteSave = (debt, text) => {
+        setReceivableNotes((current) => ({ ...current, [debt.id]: { text, status: 'editing' } }));
+        window.clearTimeout(receivableNoteTimersRef.current[debt.id]);
+        receivableNoteTimersRef.current[debt.id] = window.setTimeout(() => saveReceivableNote(debt, text), RECEIVABLE_NOTE_AUTOSAVE_MS);
+    };
+
+    const flushReceivableNote = (debt) => {
+        const draft = receivableNotes[debt.id];
+        if (draft && draft.status !== 'saved' && draft.status !== 'saving') saveReceivableNote(debt, draft.text);
+    };
+
+    useEffect(() => {
+        const timers = receivableNoteTimersRef.current;
+        return () => { Object.values(timers).forEach((timer) => window.clearTimeout(timer)); };
+    }, []);
+
+    const startAmountEdit = (debt) => {
+        setEditingAmountId(debt.id);
+        setAmountDraft(String(debt.amount ?? ''));
+    };
+
+    const saveAmountEdit = async (debt) => {
+        const saved = await handleReceivableUpdate(debt, { amount: Number(amountDraft) });
+        if (saved) setEditingAmountId('');
     };
 
     const openReceivablePayment = (debt) => {
@@ -1220,7 +1274,23 @@ await invalidateFinancialQueries(queryClient);
                                                                     {savingReceivableId === debt.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600" />}
                                                                 </div>
                                                                 <div className="grid grid-cols-3 gap-2 border-y border-zinc-200 py-3 dark:border-white/10">
-                                                                    <div><span className="text-[9px] font-medium text-zinc-400">Valor original</span><p className="mt-1 text-xs font-semibold text-zinc-900 dark:text-white">{formatCurrency(debt.amount || 0)}</p></div>
+                                                                    <div data-receivable-amount-editor>
+                                                                        <span className="text-[9px] font-medium text-zinc-400">Valor original</span>
+                                                                        {editingAmountId === debt.id ? (
+                                                                            <form className="mt-1 flex flex-wrap items-center gap-1" onSubmit={(event) => { event.preventDefault(); saveAmountEdit(debt); }}>
+                                                                                <input type="number" min="0.01" step="0.01" required autoFocus aria-label="Nuevo valor original" value={amountDraft} onChange={(event) => setAmountDraft(event.target.value)} className="w-28 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-900 outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                                                                                <button type="submit" disabled={savingReceivableId === debt.id} className="rounded-lg bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground disabled:opacity-50">Guardar</button>
+                                                                                <button type="button" onClick={() => setEditingAmountId('')} className="rounded-lg px-2 py-1 text-[11px] font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/10">Cancelar</button>
+                                                                            </form>
+                                                                        ) : (
+                                                                            <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-zinc-900 dark:text-white">
+                                                                                {formatCurrency(debt.amount || 0)}
+                                                                                {canWriteFinancials && !debt.balanceReviewRequired && (debt.formattedNumber
+                                                                                    ? <span className="text-[10px] font-normal text-zinc-400" title={`La cuenta de cobro ${debt.formattedNumber} ya fue emitida y su valor no se reedita. Si el cliente necesita otra cifra, emite una nueva.`}>· emitida, no se reedita</span>
+                                                                                    : <button type="button" title="Editar valor" aria-label={`Editar valor de la obligación de ${formatFinancialPeriod(debt.period)}`} onClick={() => startAmountEdit(debt)} className="grid h-6 w-6 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-primary dark:hover:bg-white/10"><Edit className="h-3 w-3" /></button>)}
+                                                                            </p>
+                                                                        )}
+                                                                    </div>
                                                                     <div><span className="text-[9px] font-medium text-zinc-400">Abonos registrados</span><p className="mt-1 text-xs font-semibold text-emerald-600">{formatCurrency(debt.paidAmount || 0)}</p></div>
                                                                     <div><span className="text-[9px] font-medium text-zinc-400">Saldo pendiente</span><p className="mt-1 text-xs font-semibold text-amber-600">{debt.balanceReviewRequired ? 'Por verificar' : formatCurrency(debt.outstanding || 0)}</p></div>
                                                                 </div>
@@ -1314,18 +1384,24 @@ await invalidateFinancialQueries(queryClient);
                                                                     </div>
                                                                     );
                                                                 })()}
-                                                                <textarea
-                                                                    defaultValue={debt.comments || debt.notes || ''}
-                                                                    disabled={!canWriteFinancials || debt.balanceReviewRequired || savingReceivableId === debt.id}
-                                                                    onBlur={(event) => {
-                                                                        const nextComments = event.target.value;
-                                                                        if (nextComments !== (debt.comments || debt.notes || '')) {
-                                                                            handleReceivableUpdate(debt, { comments: nextComments });
-                                                                        }
-                                                                    }}
-                                                                    placeholder="Comentario de seguimiento..."
-                                                                    className="min-h-[64px] w-full resize-y rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs text-zinc-700 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-zinc-100"
-                                                                />
+                                                                <div className="space-y-1">
+                                                                    <textarea
+                                                                        value={receivableNoteValue(debt)}
+                                                                        disabled={!canWriteFinancials || debt.balanceReviewRequired}
+                                                                        onChange={(event) => scheduleReceivableNoteSave(debt, event.target.value)}
+                                                                        onBlur={() => flushReceivableNote(debt)}
+                                                                        placeholder="Comentario de seguimiento..."
+                                                                        aria-label={`Comentario de seguimiento de la obligación de ${formatFinancialPeriod(debt.period)}`}
+                                                                        className="min-h-[64px] w-full resize-y rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs text-zinc-700 outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-zinc-100"
+                                                                    />
+                                                                    {receivableNotes[debt.id] && receivableNotes[debt.id].status !== 'editing' && (
+                                                                        <p data-receivable-note-status role="status" className={cn('text-[10px]', receivableNotes[debt.id].status === 'error' ? 'font-medium text-destructive' : 'text-zinc-400')}>
+                                                                            {receivableNotes[debt.id].status === 'saving' && 'Guardando comentario…'}
+                                                                            {receivableNotes[debt.id].status === 'saved' && 'Comentario guardado.'}
+                                                                            {receivableNotes[debt.id].status === 'error' && (<>No se guardó el comentario: {receivableNotes[debt.id].message} <button type="button" onClick={() => saveReceivableNote(debt, receivableNotes[debt.id].text)} className="font-semibold underline underline-offset-2">Reintentar</button></>)}
+                                                                        </p>
+                                                                    )}
+                                                                </div>
                                                             </div>
                                                         ))}
                                                     </div>
