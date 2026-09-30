@@ -141,7 +141,22 @@ const paragraph = (doc, text, y, { width = CONTENT_WIDTH, left = PAGE.left, ...o
     return y + lines.length * ((options.size || 10.5) * 0.42 + 1.1);
 };
 
-const HEADING_SIZES = { 1: 13, 2: 12, 3: 11 };
+/**
+ * La letra del concepto (Rodny, 30 de septiembre de 2026: «siento que es muy grande …
+ * reducir un poquito el interletrado y el tamaño de letra … la viñeta es muy gigante»).
+ * Un punto menos que el cuerpo del documento, interletrado apenas cerrado y la viñeta
+ * dibujada como un punto pequeño en vez del carácter ● a tamaño de texto.
+ * `charSpace` va en milímetros por letra; jsPDF no lo cuenta al medir, así que el
+ * reparto en líneas lo suma a mano.
+ */
+export const CONCEPT_TYPOGRAPHY = {
+    size: 9.5,
+    charSpace: -0.06,
+    lineGap: 0.95,
+    headingSizes: { 1: 12, 2: 11, 3: 10.5 },
+    bulletRadius: 0.5,
+    indent: 6.5
+};
 
 // Un concepto largo con formato puede pasar de una página: se abre otra en vez de
 // escribir por debajo del borde.
@@ -161,53 +176,107 @@ const setRunFont = (doc, { bold, italic }, size) => {
 };
 
 /**
- * Un bloque con formato, palabra a palabra, con salto de línea al llegar al ancho.
- * Devuelve la altura siguiente, igual que `paragraph`.
+ * Un documento con las fuentes de la casa ya registradas. Lo usa el PDF y lo usan las
+ * pruebas que miden el reparto en líneas con la misma letra.
  */
-const richParagraph = (doc, runs, startY, { left, width, size, heading = false }) => {
-    const lineHeight = size * 0.42 + 1.1;
-    let y = startY;
-    let x = left;
+export const newReceivableDocument = () => {
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+    const fonts = getFonts();
+    doc.addFileToVFS('WorkSans-Regular.ttf', fonts.regular);
+    doc.addFont('WorkSans-Regular.ttf', 'WorkSans', 'normal');
+    doc.addFileToVFS('WorkSans-Bold.ttf', fonts.bold);
+    doc.addFont('WorkSans-Bold.ttf', 'WorkSans', 'bold');
+    return doc;
+};
+
+// Ancho real de un texto con el interletrado: jsPDF no lo suma al medir.
+const measure = (doc, text, charSpace) => doc.getTextWidth(text) + charSpace * text.length;
+
+/**
+ * Reparte los tramos de un bloque en líneas que caben en `width`. Cada palabra conserva
+ * su estilo y si iba separada de la anterior por un espacio: «Este» en negrita pegado a
+ * «:» sin negrita sigue siendo «Este:». Un salto de línea escrito fuerza línea nueva.
+ */
+export const layoutConceptLines = (doc, runs, { width, size, charSpace, heading = false }) => {
+    setRunFont(doc, {}, size);
+    const spaceWidth = measure(doc, ' ', charSpace);
+    const lines = [];
+    let line = { words: [], width: 0, hardBreak: false };
+    let pendingSpace = false;
+    const closeLine = (hardBreak) => {
+        if (line.words.length) lines.push({ ...line, hardBreak });
+        line = { words: [], width: 0, hardBreak: false };
+    };
+    const place = (word) => {
+        const gap = line.words.length && word.space ? spaceWidth : 0;
+        if (line.words.length && line.width + gap + word.width > width) {
+            closeLine(false);
+            line.words.push({ ...word, space: false });
+            line.width = word.width;
+            return;
+        }
+        line.words.push(line.words.length ? word : { ...word, space: false });
+        line.width += gap + word.width;
+    };
     for (const run of runs) {
-        const style = { bold: run.bold || heading, italic: run.italic };
+        const style = { bold: Boolean(run.bold || heading), italic: Boolean(run.italic), underline: Boolean(run.underline) };
         setRunFont(doc, style, size);
         for (const token of run.text.split(/(\s+)/)) {
             if (!token) continue;
-            if (token.includes('\n')) { y = ensureSpace(doc, y + lineHeight, lineHeight); x = left; continue; }
             if (!token.trim()) {
-                if (x > left) {
-                    const space = doc.getTextWidth(' ');
-                    // Un subrayado de varias palabras es una sola raya, no una por palabra.
-                    if (run.underline) {
-                        doc.setDrawColor(...COLORS.ink);
-                        doc.setLineWidth(0.2);
-                        doc.line(x, y + 0.8, x + space, y + 0.8);
-                    }
-                    x += space;
-                }
+                if (token.includes('\n')) { closeLine(true); pendingSpace = false; } else pendingSpace = true;
                 continue;
             }
+            // Una palabra más ancha que la columna se parte en vez de salirse.
             let remaining = token;
             while (remaining) {
-                if (x > left && x + doc.getTextWidth(remaining) > left + width) {
-                    y = ensureSpace(doc, y + lineHeight, lineHeight);
-                    x = left;
-                    setRunFont(doc, style, size);
-                }
-                // Una palabra más ancha que la columna se parte en vez de salirse.
                 let piece = remaining;
-                while (piece.length > 1 && doc.getTextWidth(piece) > width) piece = piece.slice(0, -1);
-                const measured = doc.getTextWidth(piece);
-                doc.text(piece, x, y);
-                if (run.underline) {
-                    doc.setDrawColor(...COLORS.ink);
-                    doc.setLineWidth(0.2);
-                    doc.line(x, y + 0.8, x + measured, y + 0.8);
-                }
-                x += measured;
+                while (piece.length > 1 && measure(doc, piece, charSpace) > width) piece = piece.slice(0, -1);
+                place({ text: piece, ...style, width: measure(doc, piece, charSpace), space: pendingSpace });
+                pendingSpace = false;
                 remaining = remaining.slice(piece.length);
             }
         }
+    }
+    closeLine(true);
+    return lines.map((item) => ({ ...item, spaceWidth }));
+};
+
+/**
+ * Dibuja un bloque del concepto. Las líneas se justifican repartiendo el hueco entre
+ * palabras —salvo la última de cada párrafo y los títulos—, así el texto con negritas
+ * queda tan alineado como el que no las tiene. Devuelve la altura siguiente.
+ */
+const drawConceptBlock = (doc, runs, startY, { left, width, size, charSpace, heading = false }) => {
+    const lineHeight = size * 0.42 + CONCEPT_TYPOGRAPHY.lineGap;
+    let y = startY;
+    const lines = layoutConceptLines(doc, runs, { width, size, charSpace, heading });
+    for (const [index, line] of lines.entries()) {
+        if (index > 0) y = ensureSpace(doc, y + lineHeight, lineHeight);
+        const gaps = line.words.filter((word, position) => position > 0 && word.space).length;
+        const justify = !heading && !line.hardBreak && index < lines.length - 1 && gaps > 0;
+        const extra = justify ? (width - line.width) / gaps : 0;
+        let x = left;
+        line.words.forEach((word, position) => {
+            if (position > 0 && word.space) {
+                const gap = line.spaceWidth + extra;
+                // Un subrayado de varias palabras es una sola raya, no una por palabra.
+                if (word.underline && line.words[position - 1].underline) {
+                    doc.setDrawColor(...COLORS.ink);
+                    doc.setLineWidth(0.2);
+                    doc.line(x, y + 0.8, x + gap, y + 0.8);
+                }
+                x += gap;
+            }
+            setRunFont(doc, word, size);
+            doc.text(word.text, x, y, { charSpace });
+            if (word.underline) {
+                doc.setDrawColor(...COLORS.ink);
+                doc.setLineWidth(0.2);
+                doc.line(x, y + 0.8, x + word.width, y + 0.8);
+            }
+            x += word.width;
+        });
     }
     return y + lineHeight;
 };
@@ -221,12 +290,7 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
     if (!model.amountInWords) {
         throw new Error('El importe de la cuenta de cobro no se puede escribir en letras.');
     }
-    const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
-    const fonts = getFonts();
-    doc.addFileToVFS('WorkSans-Regular.ttf', fonts.regular);
-    doc.addFont('WorkSans-Regular.ttf', 'WorkSans', 'normal');
-    doc.addFileToVFS('WorkSans-Bold.ttf', fonts.bold);
-    doc.addFont('WorkSans-Bold.ttf', 'WorkSans', 'bold');
+    const doc = newReceivableDocument();
 
     // Marca arriba a la derecha, como en el documento de Word.
     doc.addImage(getLogo(), 'PNG', PAGE.width - PAGE.right - 22, PAGE.top - 4, 22, 22, undefined, 'FAST');
@@ -259,24 +323,31 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
     setText(doc, { size: 10.5, style: 'bold' });
     doc.text('Por concepto de:', PAGE.left, y);
     y += 7;
+    const concept = CONCEPT_TYPOGRAPHY;
     for (const [index, block] of model.concept.entries()) {
         // Un título abre sección: lleva aire por encima para no pegarse a la lista anterior.
         if (block.kind === 'heading' && index > 0) y += 3;
         y = ensureSpace(doc, y, 8);
-        const indent = block.kind === 'bullet' ? 8 : 0;
+        const indent = block.kind === 'bullet' ? concept.indent : 0;
         if (block.kind === 'bullet') {
-            setText(doc, { size: 10.5 });
-            if (block.ordinal) doc.text(`${block.ordinal}.`, PAGE.left + 2, y);
-            else doc.text('●', PAGE.left + 3, y);
+            if (block.ordinal) {
+                setText(doc, { size: concept.size });
+                doc.text(`${block.ordinal}.`, PAGE.left + 1.2, y, { charSpace: concept.charSpace });
+            } else {
+                // Un punto pequeño a media altura de las minúsculas, no el ● a tamaño de texto.
+                doc.setFillColor(...COLORS.ink);
+                doc.circle(PAGE.left + 2.6, y - concept.size * 0.1, concept.bulletRadius, 'F');
+            }
         }
-        const size = block.kind === 'heading' ? HEADING_SIZES[block.level] || 11.5 : 10.5;
-        const plain = block.kind !== 'heading' && block.runs.every((run) => !run.bold && !run.italic && !run.underline);
-        // Sin formato se conserva el párrafo justificado de siempre; con formato se
-        // dibuja tramo a tramo, porque justificar mezclando fuentes descuadra las líneas.
-        y = plain
-            ? paragraph(doc, block.text, y, { left: PAGE.left + indent, width: CONTENT_WIDTH - indent })
-            : richParagraph(doc, block.runs, y, { left: PAGE.left + indent, width: CONTENT_WIDTH - indent, size, heading: block.kind === 'heading' });
-        y += block.kind === 'bullet' ? 0.6 : block.kind === 'heading' ? 2 : 1.4;
+        const heading = block.kind === 'heading';
+        y = drawConceptBlock(doc, block.runs, y, {
+            left: PAGE.left + indent,
+            width: CONTENT_WIDTH - indent,
+            size: heading ? concept.headingSizes[block.level] || concept.headingSizes[3] : concept.size,
+            charSpace: concept.charSpace,
+            heading
+        });
+        y += block.kind === 'bullet' ? 0.4 : heading ? 1.6 : 1.2;
     }
 
     if (model.items.length) {

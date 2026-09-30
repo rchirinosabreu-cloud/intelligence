@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
+    CONCEPT_TYPOGRAPHY,
+    layoutConceptLines,
+    newReceivableDocument,
     buildReceivableDocumentModel,
     generateReceivablePdfBuffer,
     openReceivablePdf,
@@ -144,6 +147,25 @@ test('el concepto viejo en texto plano sigue saliendo igual', () => {
     const { concept } = buildReceivableDocumentModel(titanes);
     assert.equal(concept[0].runs.length, 1);
     assert.equal(concept[0].runs[0].text, concept[0].text);
+});
+
+// Rodny, 30 de septiembre de 2026: «siento que es muy grande, me gustaría reducir un
+// poquito el interletrado y el tamaño de letra … la viñeta es muy gigante».
+test('el concepto va un poco más pequeño y más junto que el resto, con una viñeta discreta', () => {
+    assert.ok(CONCEPT_TYPOGRAPHY.size < 10.5 && CONCEPT_TYPOGRAPHY.size >= 9, 'un poco menor que el cuerpo del documento, no diminuto');
+    assert.ok(CONCEPT_TYPOGRAPHY.charSpace < 0 && CONCEPT_TYPOGRAPHY.charSpace > -0.15, 'interletrado apenas más cerrado');
+    assert.ok(CONCEPT_TYPOGRAPHY.bulletRadius <= 0.7, 'la viñeta es un punto pequeño, no el carácter ● a tamaño de texto');
+    assert.ok(Object.values(CONCEPT_TYPOGRAPHY.headingSizes).every((size) => size > CONCEPT_TYPOGRAPHY.size && size <= 12));
+});
+
+test('el concepto se reparte en líneas que caben en la columna, contando el interletrado', () => {
+    const doc = newReceivableDocument();
+    const runs = [{ text: 'Prestación de servicios para el diseño y ejecución de estrategias de comunicación digital para la marca, con el objetivo de visibilizar, posicionar y promocionar los servicios. ' }, { text: 'Este servicio incluye:', bold: true }];
+    const lines = layoutConceptLines(doc, runs, { width: 120, size: CONCEPT_TYPOGRAPHY.size, charSpace: CONCEPT_TYPOGRAPHY.charSpace });
+    assert.ok(lines.length > 1);
+    assert.ok(lines.every((line) => line.width <= 120 + 1e-6), 'ninguna línea se sale del margen');
+    // La negrita pegada a la palabra anterior conserva su espacio, y el texto no se pierde.
+    assert.equal(lines.flatMap((line) => line.words.map((word) => word.text)).join(' '), runs.map((run) => run.text.trim()).join(' '));
 });
 
 test('el PDF se genera con un concepto con formato', () => {
