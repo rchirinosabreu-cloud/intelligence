@@ -17,7 +17,13 @@ const user = { id: 'u-rodny', userId: 'u-rodny', name: 'Rodny Chirinos', role: '
 localStorage.setItem('authToken', `demo.${btoa(JSON.stringify({ exp: 4102444800 }))}.demo`);
 localStorage.setItem('currentUser', JSON.stringify(user));
 
-const client = { id: 'c1', name: 'PromoGroup IPS', slug: 'promogroup', logoUrl: null };
+// Redes conectadas del cliente (29 de septiembre de 2026): lo que la parrilla necesita para ofrecer
+// «Programar». Sin el token, que nunca viaja al navegador.
+const socialAccounts = [
+  { id: 'acc-fb', clientId: 'c1', platform: 'FACEBOOK', externalId: '5555', displayName: 'PromoGroup IPS', pageId: '5555', isActive: true, connectedAt: '2026-09-20T12:00:00.000Z', lastError: null },
+  { id: 'acc-ig', clientId: 'c1', platform: 'INSTAGRAM', externalId: '1789', displayName: '@promogroupips', pageId: '5555', isActive: true, connectedAt: '2026-09-20T12:00:00.000Z', lastError: null }
+];
+const client = { id: 'c1', name: 'PromoGroup IPS', slug: 'promogroup', logoUrl: null, socialAccounts };
 const member = { id: 'm-mel', userId: 'u-mel', name: 'Melissa', avatarUrl: null, role: 'Community Manager' };
 
 const GUION = `ESCENA 1 — Exterior / llegada
@@ -43,6 +49,8 @@ const piece = (id, objective, format, day, status, extra = {}) => ({
   copyText: extra.copyText || '',
   captionText: extra.captionText || '',
   publishDate: `2026-09-${String(day).padStart(2, '0')}T12:00:00.000Z`,
+  publishTime: extra.publishTime || null,
+  publications: extra.publications || [],
   mediaUrl: extra.mediaUrl || [],
   assetsLinks: [],
   internalNotes: extra.internalNotes || null,
@@ -60,7 +68,9 @@ const items = [
     // encima de toda la tarjeta (Rodny, 25 de septiembre de 2026).
     internalNotes: 'PONER TOMAS DE APOYO DE STOCK O IA. '.repeat(24).trim(),
     comments: '[Cliente - 18/09/2026]: ¿Podemos mostrar más la sala de espera?',
-    finalAssets: [{ id: 'a1', name: 'reel-endova.mp4', storageKey: 'k1', mimeType: 'video/mp4', size: 31000000, position: 0 }]
+    finalAssets: [{ id: 'a1', name: 'reel-endova.mp4', storageKey: 'k1', mimeType: 'video/mp4', size: 31000000, position: 0 }],
+    // Con hora puesta y sin programar todavía: el estado desde el que se pulsa «Programar».
+    publishTime: '10:30'
   }),
   piece('i2', 'Tres preguntas antes de tu procedimiento', 'Carrusel', 28, 'EN_REVISION', {
     copyText: 'LÁMINA 1: ¿Cuánto dura?\nLÁMINA 2: ¿Necesito acompañante?',
@@ -70,13 +80,36 @@ const items = [
   piece('i3', 'Conoce al equipo de hemodinamia', 'Reel', 30, 'EN_REVISION', { captionText: 'Detrás de cada procedimiento hay un equipo.' }),
   piece('i4', 'Qué llevar el día de tu consulta', 'Post', 22, 'APROBADO', {
     captionText: 'Documento, orden médica y exámenes previos.',
-    finalAssets: [{ id: 'a4', name: 'post-checklist.jpg', storageKey: 'k4', mimeType: 'image/jpeg', size: 300000, position: 0 }]
+    finalAssets: [{ id: 'a4', name: 'post-checklist.jpg', storageKey: 'k4', mimeType: 'image/jpeg', size: 300000, position: 0 }],
+    // Ya programada en Instagram y publicada en Facebook: cómo se ve una pieza a medio salir.
+    publishTime: '09:00',
+    publications: [
+      { id: 'pub-i4-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: '2026-09-22T14:00:00.000Z', attempts: 0 },
+      { id: 'pub-i4-fb', platform: 'FACEBOOK', status: 'PUBLISHED', publishedAt: '2026-09-22T14:00:12.000Z', permalink: 'https://www.facebook.com/5555/posts/77' }
+    ]
   }),
   piece('i5', 'La sala de espera que no parece una sala de espera', 'Reel', 18, 'BORRADOR'),
-  piece('i6', 'Agenda tu cita en tres pasos', 'Carrusel', 15, 'EN_PRODUCCION', { captionText: 'Llamas, eliges horario y listo.' }),
+  piece('i6', 'Agenda tu cita en tres pasos', 'Carrusel', 15, 'EN_PRODUCCION', {
+    captionText: 'Llamas, eliges horario y listo.',
+    finalAssets: [
+      { id: 'a6a', name: 'paso-1.jpg', storageKey: 'k6a', mimeType: 'image/jpeg', size: 300000, position: 0 },
+      { id: 'a6b', name: 'paso-2.jpg', storageKey: 'k6b', mimeType: 'image/jpeg', size: 300000, position: 1 }
+    ],
+    // Falló en Instagram con el motivo entero: así se ve lo que hay que leer.
+    publishTime: '18:00',
+    publications: [
+      { id: 'pub-i6-ig', platform: 'INSTAGRAM', status: 'FAILED', attempts: 3, error: 'Meta rechazó la proporción de la imagen: en el feed acepta de 4:5 a 1.91:1.' }
+    ]
+  }),
   piece('i7', 'Historias que empiezan con un diagnóstico a tiempo', 'Reel', 12, 'DEVUELTO', { captionText: 'Un diagnóstico a tiempo cambia el final.' }),
   piece('i8', 'Una unidad de PromoGroup IPS', 'Post', 9, 'BORRADOR')
 ];
+
+// `?futuro=1` mueve la primera pieza a mañana: la parrilla de la muestra es de septiembre de 2026 y
+// programar exige una hora por delante, así que sin esto «Programar» sale apagado con su motivo.
+if (new URLSearchParams(window.location.search).get('futuro') === '1') {
+  items[0].publishDate = `${new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}T12:00:00.000Z`;
+}
 
 const plan = {
   id: 'p1', month: 9, year: 2026, status: 'EN_REVISION',
@@ -85,10 +118,52 @@ const plan = {
   internalNotes: null, shareToken: 'demo-token-parrilla', client, owner: member, items
 };
 
+// La cola de publicación vive en memoria: «Programar», «Cancelar» y «Reintentar» cambian estas filas
+// y la parrilla se vuelve a leer, igual que con el servidor de verdad.
+const bogotaHour = (item) => `${new Date(item.publishDate).toISOString().slice(0, 10)}T${item.publishTime}:00-05:00`;
+const socialApi = (config, url, ok, fail) => {
+  const method = String(config.method || 'get').toLowerCase();
+  const body = config.data ? JSON.parse(config.data) : {};
+  if (method === 'post' && url.endsWith('/api/social/publications')) {
+    const item = items.find((candidate) => candidate.id === body.itemId);
+    if (!item) return fail(404, { error: 'La pieza no existe.' });
+    if (!item.publishTime) return fail(422, { error: 'La pieza necesita fecha y hora de publicación.', code: 'SOCIAL_PUBLICATION_INVALID', problems: ['La pieza necesita fecha y hora de publicación.'] });
+    const created = (body.platforms || []).map((platform) => {
+      const row = { id: `pub-${item.id}-${platform.toLowerCase()}`, platform, status: 'SCHEDULED', scheduledAt: new Date(bogotaHour(item)).toISOString(), attempts: 0, requestedById: user.id };
+      item.publications = [...item.publications.filter((existing) => existing.platform !== platform), row];
+      return row;
+    });
+    return { ...ok(created), status: 201 };
+  }
+  const retry = /\/api\/social\/publications\/([^/]+)\/retry$/.exec(url);
+  const cancel = method === 'delete' && /\/api\/social\/publications\/([^/]+)$/.exec(url);
+  const id = retry?.[1] || cancel?.[1];
+  if (id) {
+    for (const item of items) {
+      const row = item.publications.find((candidate) => candidate.id === id);
+      if (!row) continue;
+      if (retry) Object.assign(row, { status: 'SCHEDULED', attempts: 0, error: null, scheduledAt: new Date().toISOString() });
+      else Object.assign(row, { status: 'CANCELLED', cancelledAt: new Date().toISOString() });
+      return ok(row);
+    }
+    return fail(404, { error: 'La publicación no existe.' });
+  }
+  return null;
+};
+
 axios.defaults.adapter = async (config) => {
   const url = String(config.url || '');
   const ok = (data) => ({ data, status: 200, statusText: 'OK', headers: {}, config });
+  const fail = (status, data) => Promise.reject(Object.assign(new Error(data.error || 'Error'), { response: { status, data }, config }));
 
+  if (url.includes('/api/social/')) return socialApi(config, url, ok, fail) || ok([]);
+  // Cambiar la hora de una pieza desde la ficha: el PATCH real guarda `publishTime`.
+  const patchItem = String(config.method || '').toLowerCase() === 'patch' && /\/api\/content\/items\/([^/?]+)$/.exec(url);
+  if (patchItem) {
+    const item = items.find((candidate) => candidate.id === patchItem[1]);
+    if (item) Object.assign(item, JSON.parse(config.data || '{}'));
+    return ok(item || {});
+  }
   if (url.includes('/api/content/plans')) return ok(plan);
   if (url.includes('/api/team')) return ok([member]);
   if (url.includes('/api/clients')) return ok([client]);

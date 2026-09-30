@@ -29,6 +29,7 @@ const PROCESSORS = [
   ['OpenAI, L.L.C.', 'Modelos de inteligencia artificial (análisis, resúmenes, revisión de contenidos, lectura de capturas de métricas, búsqueda en documentos)', 'Estados Unidos'],
   ['Google LLC', 'Correo, calendario, Meet, Drive y hojas de cálculo corporativos (Google Workspace); envío de correos transaccionales; almacenamiento y búsqueda de documentos (Google Cloud); tipografías web', 'Estados Unidos'],
   ['Fireflies.ai Corp.', 'Grabación y transcripción de las reuniones en las que se activa', 'Estados Unidos'],
+  ['Meta Platforms, Inc.', 'Publicación de las piezas aprobadas en las cuentas de Instagram y Facebook de los clientes que las conectan (texto de la publicación y archivo de la pieza)', 'Estados Unidos'],
   ['Servicios de notificación del navegador (Google, Mozilla, Apple)', 'Entrega de notificaciones push a quien las activa', 'Según el navegador']
 ];
 
@@ -61,8 +62,8 @@ const PrivacyPolicy = () => (
 
       <H3>Clientes y sus representantes</H3>
       <p>
-        <strong>Datos:</strong> nombre o razón social, tipo y número de documento (NIT o cédula), datos de contacto, condiciones comerciales, pagos, identificadores de sus cuentas en redes sociales y los materiales que entregan para el servicio.
-        {' '}<strong>Finalidades:</strong> prestar los servicios contratados, planear y aprobar contenidos, elaborar reportes de resultados, emitir cuentas de cobro, llevar la cartera y cumplir obligaciones contables y tributarias.
+        <strong>Datos:</strong> nombre o razón social, tipo y número de documento (NIT o cédula), datos de contacto, condiciones comerciales, pagos, identificadores de sus cuentas en redes sociales, las credenciales de publicación que Meta emite para esas cuentas (guardadas cifradas) y los materiales que entregan para el servicio.
+        {' '}<strong>Finalidades:</strong> prestar los servicios contratados, planear y aprobar contenidos, publicar las piezas aprobadas en las cuentas de Instagram y Facebook que el cliente conecta, elaborar reportes de resultados, emitir cuentas de cobro, llevar la cartera y cumplir obligaciones contables y tributarias.
       </p>
 
       <H3>Colaboradores y contratistas de Brainstudio</H3>

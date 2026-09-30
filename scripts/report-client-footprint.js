@@ -31,6 +31,7 @@ export const CLIENT_RELATIONS = Object.freeze([
   { table: 'BriaMemorySource', label: 'fuentes de memoria de Bria', recent: null },
   { table: 'BriaObserverSignal', label: 'señales del observador de Bria', recent: null },
   { table: 'Integration', label: 'integraciones', recent: null },
+  { table: 'ClientSocialAccount', label: 'redes conectadas', recent: 'connectedAt' },
   { table: 'AgencyIntegration', label: 'integraciones v2', recent: null },
   { table: 'AiGovernanceRisk', label: 'riesgos de IA', recent: 'updatedAt' },
   { table: 'AiGovernanceAuthorization', label: 'autorizaciones de IA', recent: 'updatedAt' },

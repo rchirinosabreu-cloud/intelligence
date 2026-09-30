@@ -12,6 +12,27 @@ import {
 import { DRIVE_PROVIDER, driveLinkProblem, parseDriveFileId } from '../lib/driveLinks.js';
 import { finalAssetShapeProblem } from '../lib/finalAssetShape.js';
 import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from './briaContentPlanReviewState.js';
+import { resyncItemPublications } from './socialPublishingService.js';
+import { splitPublishTime } from '../lib/socialPublishing.js';
+
+/** Lo que la pantalla ve de una publicación programada: nunca el token, que ni siquiera vive en esa fila. */
+const publicationSelect = {
+  select: {
+    id: true, platform: true, status: true, scheduledAt: true, attempts: true, nextAttemptAt: true,
+    permalink: true, externalMediaId: true, error: true, publishedAt: true, cancelledAt: true, requestedById: true
+  },
+  orderBy: { platform: 'asc' }
+};
+
+/** Las cuentas conectadas del cliente, sin el token cifrado, para que el editor sepa a qué redes puede programar. */
+const clientWithSocialAccounts = {
+  include: {
+    socialAccounts: {
+      select: { id: true, platform: true, externalId: true, displayName: true, pageId: true, isActive: true, connectedAt: true, lastError: true },
+      orderBy: { platform: 'asc' }
+    }
+  }
+};
 
 let strategicObjectivesColumnExists = null;
 let contentItemFinalAssetColumnsExist = null;
@@ -84,6 +105,7 @@ const contentItemBaseSelect = {
   copyText: true,
   captionText: true,
   publishDate: true,
+  publishTime: true,
   mediaUrl: true,
   status: true,
   createdAt: true,
@@ -91,7 +113,8 @@ const contentItemBaseSelect = {
   assetsLinks: true,
   internalNotes: true,
   comments: true,
-  deletedAt: true
+  deletedAt: true,
+  publications: publicationSelect
 };
 
 const hasContentItemFinalAssetColumns = async () => {
@@ -222,7 +245,7 @@ export const getContentPlanById = async (id) => {
   const plan = await prisma.contentPlan.findUnique({
     where: { id },
     select: await getContentPlanSelect({
-      client: true,
+      client: clientWithSocialAccounts,
       owner: true,
       contentItems: await getPlanContentItemsSelect()
     })
@@ -259,7 +282,7 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
     },
     orderBy: { updatedAt: 'desc' },
     select: await getContentPlanSelect({
-      client: true,
+      client: clientWithSocialAccounts,
       owner: true,
       contentItems: await getPlanContentItemsSelect()
     })
@@ -551,6 +574,17 @@ export const updateContentItem = async (id, data) => {
     }
   }
 
+  // Hora de publicación en reloj de Bogotá ('HH:mm'); vacío la quita. Cualquier otra cosa se rechaza
+  // antes de tocar la base, porque de esta hora depende cuándo sale la pieza en redes.
+  if (Object.prototype.hasOwnProperty.call(normalizedData, 'publishTime')) {
+    const raw = normalizedData.publishTime;
+    if (raw === null || raw === undefined || String(raw).trim() === '') normalizedData.publishTime = null;
+    else if (!splitPublishTime(String(raw).trim())) throw Object.assign(new Error('La hora de publicación debe tener el formato HH:mm.'), { status: 400 });
+    else normalizedData.publishTime = String(raw).trim();
+  }
+  const scheduleChanged = Object.prototype.hasOwnProperty.call(normalizedData, 'publishDate')
+    || Object.prototype.hasOwnProperty.call(normalizedData, 'publishTime');
+
   const safeData = await filterContentItemData(normalizedData);
   const itemSelect = await getContentItemSelect();
   const updatedItem = await recognitionTransaction(prisma, async (tx) => {
@@ -605,6 +639,15 @@ export const updateContentItem = async (id, data) => {
 
     return item;
   });
+
+  // La pieza cambió de día o de hora: lo que estaba programado en redes la sigue (o se cancela si perdió la hora).
+  if (scheduleChanged) {
+    try {
+      await resyncItemPublications(id);
+    } catch (syncError) {
+      console.error('[Service] updateContentItem: no se pudo mover la publicación programada:', syncError.response?.data || syncError.message || syncError);
+    }
+  }
 
   // --- AUTOMATION: Auto-finalize ContentPlan ---
   if (normalizedData.status === 'PUBLICADO') {

@@ -9,10 +9,14 @@ import DeliverablesWidget from './DeliverablesWidget';
 import ClientTasksWidget from './ClientTasksWidget';
 import KeyLinksWidget from './KeyLinksWidget';
 import AnnouncementWidget from './AnnouncementWidget';
+import SocialAccountsWidget from './SocialAccountsWidget';
+import { useAuth } from '@/context/AuthContext';
 
 const ClientDetail = ({ client, onBack }) => {
   const location = useLocation();
   const navigate = useNavigate();
+  const { currentUser } = useAuth();
+  const canManageSocial = ['ADMIN', 'PROJECT_MANAGER'].includes(String(currentUser?.role || '').toUpperCase());
   const [isChatOpen, setIsChatOpen] = useState(false);
 
   useEffect(() => {
@@ -63,6 +67,7 @@ const ClientDetail = ({ client, onBack }) => {
                 externalOpen={isChatOpen}
                 onExternalOpenChange={setIsChatOpen}
             />
+            <SocialAccountsWidget clientId={client.id} canManage={canManageSocial} />
             <DigitalIdentityWidget />
             <KeyLinksWidget clientId={client.id} />
         </div>
