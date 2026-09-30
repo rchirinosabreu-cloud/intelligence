@@ -28,7 +28,7 @@ const income = () => records.filter(record => record.type === 'INCOME').reduce((
 // El ingreso que generó un abono: no se edita ni se anula desde Movimientos.
 records[1] = { ...records[1], amount: 400000, origin: 'SYSTEM', description: 'Pago de cartera: Cliente de muestra', attachmentUrl: 'https://example.invalid/soporte.pdf', receivablePayment: { id: 'historical-payment', receivableId: debt.id } };
 records[2] = { ...records[2], attachmentUrl: 'javascript:alert(1)' };
-if (!debt.balanceReviewRequired) debt.payments = [{ id: 'historical-payment', amount: 400000, paidAt: '2026-09-01T05:00:00Z', reference: 'ABONO-01', account, financialRecord: records[1] }];
+if (!debt.balanceReviewRequired) debt.payments = [{ id: 'historical-payment', amount: 400000, paidAt: '2026-09-01T05:00:00Z', reference: 'ABONO-01', notes: 'Pagó la mitad; el resto queda para el 15 de octubre.', account, financialRecord: records[1] }];
 // Un PDF de una página, válido de verdad: el visor de la plataforma lo renderiza con
 // pdf.js, así que unos bytes inventados no probarían nada.
 const samplePdf = (text) => {
@@ -116,6 +116,13 @@ axios.defaults.adapter = async config => {
     }
     debt = { ...debt, number: 393, formattedNumber: 'No. 0393', issuedAt: `${body.issuedAt}T00:00:00Z`, concept: body.concept, servicePeriod: body.servicePeriod, items: body.items, amount: total, outstanding: total - debt.paidAmount };
     data = { message: 'Cuenta de cobro No. 0393 emitida.', receivable: debt, document: { number: 393, formattedNumber: 'No. 0393', total } };
+  } else if (path.includes('/receivables/') && path.endsWith('/document') && config.method === 'put') {
+    // Como el servidor: corregir conserva el número, ajusta conceptos y valor, y rehace el PDF.
+    if (!debt.number) throw Object.assign(new Error('Sin emitir'), { response: { data: { message: 'Esta obligación todavía no tiene cuenta de cobro, así que no hay nada que corregir. Usa «Emitir cuenta de cobro».' } } });
+    const total = body.items.reduce((sum, item) => sum + Number(item.amount), 0);
+    (window.__corrections ||= []).push(body);
+    debt = { ...debt, issuedAt: `${body.issuedAt}T12:00:00Z`, concept: body.concept, servicePeriod: body.servicePeriod, items: body.items, amount: total, outstanding: total - debt.paidAmount };
+    data = { message: `Cuenta de cobro ${debt.formattedNumber} corregida. El PDF ya tiene los datos nuevos.`, receivable: debt, document: { number: debt.number, formattedNumber: debt.formattedNumber, total } };
   } else if (path.includes('/receivables/') && path.endsWith('/document')) {
     // Como el servidor: el PDF llega por la API autenticada, como bytes.
     if (!debt.number) throw Object.assign(new Error('Sin emitir'), { response: { data: { message: 'Esta obligación todavía no tiene cuenta de cobro.' } } });

@@ -31,6 +31,7 @@ import {
     generatePayrollPeriodHandler,
     getFinancialIntegrityAuditHandler,
     issueReceivableDocumentHandler,
+    correctReceivableDocumentHandler,
     createFinancialRecordHandler,
     listFinancialAccountsHandler,
     listFinancialPeriodsHandler,
@@ -106,6 +107,9 @@ router.post('/receivables/:id/issue', requireFinancialWrite, issueReceivableDocu
 // El PDF que se le manda al cliente. Solo por la API autenticada, nunca por una URL
 // pública del bucket, como el resto de los documentos financieros.
 router.get('/receivables/:id/document', requireFinancialAccess, streamReceivablePdfHandler);
+// Corregir una cuenta ya emitida (Rodny, 30 de septiembre de 2026): conserva su número,
+// ajusta conceptos y valor, y rehace el PDF sin borrar el que se había mandado.
+router.put('/receivables/:id/document', requireFinancialWrite, correctReceivableDocumentHandler);
 router.post('/receivables/:id/payments', requireFinancialWrite, createReceivablePaymentHandler);
 // Corregir un abono mal registrado es parte del trabajo diario de quien lo registra:
 // mismo permiso que crearlo, con motivo obligatorio y auditoría.

@@ -34,6 +34,34 @@ export const receivableIssuer = (env = {}) => ({
 // escriba el concepto como lo escribe hoy en Word y salga igual.
 const BULLET_START = /^\s*[-*•●]\s*/;
 
+// El concepto se escribe con la barra de formato de la plataforma (Rodny, 30 de
+// septiembre de 2026) y se guarda como el HTML del editor. Las cuentas anteriores lo
+// guardaron en texto plano; las dos formas conviven y se distinguen por la etiqueta de
+// apertura, que el editor siempre pone y que un texto escrito a mano no empieza nunca.
+const CONCEPT_HTML_START = /^\s*<(p|h[1-3]|ul|ol)[\s>]/i;
+export const isReceivableConceptHtml = (value) => typeof value === 'string' && CONCEPT_HTML_START.test(value);
+
+const escapeHtml = (value) => value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+
+/**
+ * Lo que el editor recibe al abrir una cuenta. Un concepto viejo en texto plano se
+ * convierte a formato: cada línea es un párrafo y las que empiezan por guion, una
+ * viñeta de verdad, para que al corregirla no se funda todo en un solo párrafo.
+ */
+export const receivableConceptToHtml = (concept) => {
+    if (isReceivableConceptHtml(concept)) return concept;
+    let html = '';
+    let inList = false;
+    for (const line of String(concept ?? '').split(/\r?\n/).map((item) => item.trim()).filter(Boolean)) {
+        const bullet = BULLET_START.test(line);
+        const text = escapeHtml(bullet ? line.replace(BULLET_START, '').trim() : line);
+        if (bullet && !inList) { html += '<ul>'; inList = true; }
+        if (!bullet && inList) { html += '</ul>'; inList = false; }
+        html += bullet ? `<li><p>${text}</p></li>` : `<p>${text}</p>`;
+    }
+    return inList ? `${html}</ul>` : html;
+};
+
 export const parseReceivableConcept = (concept) => String(concept ?? '')
     .split(/\r?\n/)
     .map((line) => line.trim())
