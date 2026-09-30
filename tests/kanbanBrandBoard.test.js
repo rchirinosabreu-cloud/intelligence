@@ -66,3 +66,28 @@ test('the card shows priority as a tag, then title, assignee and date, a snippet
   assert.match(card, /rounded-2xl border/, 'full soft border, rounded like the dashboard cards');
   assert.match(card, /sm:opacity-0 sm:group-hover\/card:opacity-100/, 'card actions appear on hover on desktop and stay visible on touch');
 });
+
+test('el cliente va encima del título y la tarjeta respira', () => {
+  // Rodny, 30 de septiembre de 2026: «en la tarjeta, me gustaría que respire más… el cliente
+  // colócalo arriba del título de la tarea». El cliente estaba en el pie, apretado entre la
+  // categoría y la complejidad, y su nombre se recortaba a dos sílabas («Promo Gro…»).
+  assert.match(card, /data-task-client/, 'el cliente es una fila propia, identificable');
+
+  const clienteEn = card.indexOf('data-task-client');
+  const tituloEn = card.indexOf('<h4');
+  const pieEn = card.indexOf('border-t border-zinc-100');
+  assert.ok(clienteEn > 0 && tituloEn > 0, 'existen el cliente y el título');
+  assert.ok(clienteEn < tituloEn, 'el cliente se dibuja antes que el título');
+  assert.ok(clienteEn < pieEn, 'y ya no vive en el pie de la tarjeta');
+
+  // Un solo avatar de cliente: el del pie se quitó, no se duplicó.
+  assert.equal((card.match(/<ClientAvatar/g) || []).length, 1, 'el cliente aparece una sola vez');
+
+  assert.match(card, /<div className="flex flex-col gap-4 p-5">/, 'el cuerpo gana aire: separación 4 y relleno 5');
+  assert.match(card, /border-t border-zinc-100 pt-4/, 'y el pie también');
+
+  // La fila de distintivos se dibujaba siempre, incluso vacía: sin chips dejaba un hueco
+  // encima del cliente y la tarjeta arrancaba descolgada.
+  assert.match(card, /const hasStatusChips = isFocusTask \|\| isReturned \|\| isRunning;/);
+  assert.match(card, /\{hasStatusChips && \(/, 'sin distintivos no se dibuja la fila');
+});

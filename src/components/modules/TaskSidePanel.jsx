@@ -797,9 +797,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             const token = localStorage.getItem('authToken');
             const url = `${baseUrl}/api/tasks/${formData.id}`;
 
-            if (fieldName === 'status' && finalValue === 'REALIZADA' && formData.originalStatus !== 'REALIZADA') {
-                triggerConfetti();
-            }
+            const cierraLaTarea = fieldName === 'status' && finalValue === 'REALIZADA' && formData.originalStatus !== 'REALIZADA';
 
             const res = await fetch(url, {
                 method: 'PATCH',
@@ -812,6 +810,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
             if (res.ok) {
                 const updatedTask = await res.json();
+                // La celebración va después de la respuesta del servidor, nunca al pulsar: si el
+                // guardado falla, salía confeti por una tarea que seguía abierta (regla 1 de AGENTS).
+                if (cierraLaTarea) triggerConfetti();
                 toast({ title: 'Campo actualizado', description: 'La propiedad se guardó correctamente en caliente.' });
 
                 // Update local state with fresh data
@@ -900,8 +901,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             const method = isEdition ? 'PATCH' : 'POST';
             const url = isEdition ? `${baseUrl}/api/tasks/${formData.id}` : `${baseUrl}/api/tasks`;
 
-            if (!isEdition && formData.status === 'REALIZADA') triggerConfetti();
-            if (isEdition && formData.originalStatus !== 'REALIZADA' && formData.status === 'REALIZADA') triggerConfetti();
+            const cierraLaTarea = formData.status === 'REALIZADA'
+                && (!isEdition || formData.originalStatus !== 'REALIZADA');
 
             const res = await fetch(url, {
                 method,
@@ -913,6 +914,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             });
 
             if (res.ok) {
+                // Igual que arriba: la celebración es consecuencia de la respuesta, no del clic.
+                if (cierraLaTarea) triggerConfetti();
                 toast({ title: isEdition ? 'Tarea actualizada' : 'Tarea creada', description: 'Los cambios se guardaron correctamente.' });
 
                 // Clear sessionStorage draft on successful task creation
