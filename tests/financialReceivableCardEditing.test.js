@@ -72,6 +72,13 @@ test('the document currency is chosen in the form, and a dollar account keeps a 
     assert.match(paymentDialog, /Registra los pesos que entraron/);
 });
 
+// Rodny, 30 de septiembre de 2026: «Cuenta de Cobro No. 0396 - Fundación Grit - Septiembre
+// 2026». La pantalla nombra el archivo con la misma función que el servidor.
+test('the downloaded PDF is named with number, client and month, like the server names it', () => {
+    assert.match(dashboard, /const name = receivableDocumentFilename\(\{ number: debt\.number, clientName: debt\.clientName, period: debt\.period \}\)/);
+    assert.match(read('../src/services/receivablePdfService.js'), /receivableDocumentFilename\(/);
+});
+
 // Rodny, 30 de septiembre de 2026: «en concepto añadas la barra de formato que hemos
 // estado trabajando, para poder poner viñetas, títulos, negrillas».
 test('the concept is written with the shared formatting bar, without what the PDF cannot draw', () => {

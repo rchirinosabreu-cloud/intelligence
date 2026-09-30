@@ -14,6 +14,7 @@ import {
     receivableSignatureImage,
     storeReceivablePdf
 } from '../src/services/receivablePdfService.js';
+import { receivableDocumentFilename } from '../src/lib/receivableDocument.js';
 import { issueReceivableDocument } from '../src/services/receivableDocumentService.js';
 
 // El PDF de la cuenta de cobro, comprobado contra el documento real No. 0389
@@ -232,10 +233,17 @@ test('un importe que no se puede escribir en letras no se convierte en un PDF mu
 });
 
 test('el archivo se nombra como lo nombra Elisa, y su clave es estable', () => {
-    assert.equal(receivablePdfFilename(titanes), 'Cuenta de cobro No. 0389 - CORPORACIÓN DEPORTIVA LOS TITANES.pdf');
+    // Rodny, 30 de septiembre de 2026: «Cuenta de Cobro No. 0396 - Fundación Grit - Septiembre 2026».
+    assert.equal(receivablePdfFilename({ ...titanes, period: '2026-09-01T12:00:00.000Z' }), 'Cuenta de Cobro No. 0389 - Titanes - Septiembre 2026.pdf');
+    // El periodo se lee en UTC: el primero de mes a medianoche no retrocede a diciembre.
+    assert.equal(receivablePdfFilename({ ...titanes, period: '2026-01-01T00:00:00.000Z' }), 'Cuenta de Cobro No. 0389 - Titanes - Enero 2026.pdf');
+    // El nombre es el de la ficha, no el legal en mayúsculas; sin ficha, la etiqueta.
+    assert.equal(receivableDocumentFilename({ number: 396, clientName: 'Fundación Grit', period: '2026-09-01' }), 'Cuenta de Cobro No. 0396 - Fundación Grit - Septiembre 2026.pdf');
+    // Sin periodo no se inventa un mes.
+    assert.equal(receivablePdfFilename(titanes), 'Cuenta de Cobro No. 0389 - Titanes.pdf');
     assert.equal(receivablePdfStorageKey(titanes), 'receivables/debt-0389/cuenta-de-cobro-0389.pdf');
     // Una barra en el nombre del cliente no puede inventar una carpeta ni romper la cabecera.
-    assert.equal(receivablePdfFilename({ ...titanes, client: { name: 'A/B\nC' } }), 'Cuenta de cobro No. 0389 - A B C.pdf');
+    assert.equal(receivablePdfFilename({ ...titanes, client: { name: 'A/B\nC' } }), 'Cuenta de Cobro No. 0389 - A B C.pdf');
 });
 
 const fakeStorage = () => {
@@ -347,7 +355,7 @@ test('si el PDF guardado no se puede leer, la descarga lo regenera en vez de fal
     const { buffer, filename } = await openReceivablePdf(client, storage, 'debt-0389');
 
     assert.equal(buffer.subarray(0, 5).toString('latin1'), '%PDF-');
-    assert.equal(filename, 'Cuenta de cobro No. 0389 - CORPORACIÓN DEPORTIVA LOS TITANES.pdf');
+    assert.equal(filename, 'Cuenta de Cobro No. 0389 - Titanes.pdf');
     // Y se aprovecha para dejarlo guardado donde toca.
     assert.equal(receivable.pdfStorageKey, 'receivables/debt-0389/cuenta-de-cobro-0389.pdf');
 });

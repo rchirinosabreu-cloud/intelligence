@@ -6,6 +6,7 @@ import {
   bogotaDateKey, followUpBucket, computeTrafficLight, computeMetrics
 } from '../lib/crmRules.js';
 import { assertActiveTeamMembers } from './teamRosterService.js';
+import { parseAmountText } from '../lib/amountInput.js';
 
 export class CrmValidationError extends Error {
   constructor(message) {
@@ -55,11 +56,13 @@ const parseTimestamp = (value, label) => {
   return date;
 };
 
+// El valor cotizado con la misma regla del campo de dinero (30 de septiembre de 2026):
+// antes «1.200» se guardaba como 1,20 y «1.200.000» se rechazaba, porque el punto se
+// leía como decimal. Ahora el punto de miles es de miles, venga de donde venga.
 const parseMoney = value => {
   if (value === null || value === undefined || value === '') return null;
-  const digits = String(value).replace(/[^0-9.-]/g, '');
-  const number = typeof value === 'number' ? value : (/\d/.test(digits) ? Number(digits) : NaN);
-  if (!Number.isFinite(number) || number < 0) throw new CrmValidationError('El valor cotizado debe ser un número mayor o igual a cero.');
+  const number = parseAmountText(value);
+  if (number === null || !Number.isFinite(number) || number < 0) throw new CrmValidationError('El valor cotizado debe ser un número mayor o igual a cero.');
   return Math.round(number * 100) / 100;
 };
 

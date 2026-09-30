@@ -2,6 +2,7 @@ import Select from '@/components/ui/Select';
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import ReportEvidenceWorkspace from '@/components/reports/ReportEvidenceWorkspace';
 import ReportCurrencyField from '@/components/reports/ReportCurrencyField';
+import MoneyInput from '@/components/ui/MoneyInput';
 import ReportHistory from '@/components/reports/ReportHistory';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -931,12 +932,15 @@ const ReportMetricsReview = ({ report, onApprove, isSubmitting }) => {
                   {metric.unit === 'USD' || metric.unit === 'COP' || metric.unit === 'EUR' ? (
                     <span className="text-sm font-bold text-slate-500">{metric.unit}</span>
                   ) : null}
-                  <input
-                    type="number"
-                    step="any"
+                  {/* Cifras de reporte (inversión, alcance, seguidores) con puntos de miles
+                      mientras se escriben. Hasta cuatro decimales, por las tasas. */}
+                  <MoneyInput
+                    decimals={4}
+                    allowNegative
+                    aria-label={`Valor de ${metric.label || key}`}
                     className="w-full bg-white border border-slate-200 rounded-xl px-4 py-2 text-xl font-bold text-slate-800 focus:ring-2 focus:ring-primary/20 outline-none"
                     value={metric.value === null || metric.value === undefined ? '' : String(metric.value)}
-                    onChange={(e) => handleValueChange(key, e.target.value)}
+                    onChange={(value) => handleValueChange(key, value)}
                   />
                   {metric.unit && metric.unit !== 'USD' && metric.unit !== 'COP' && metric.unit !== 'EUR' && metric.unit !== 'count' ? (
                     <span className="text-sm font-bold text-slate-500">{metric.unit}</span>

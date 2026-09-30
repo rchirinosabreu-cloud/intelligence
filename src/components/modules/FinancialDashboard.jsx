@@ -36,9 +36,10 @@ import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import { groupFinancialReceivables, financialDebtStatus, formatFinancialPeriod } from '@/utils/financialReceivables';
 import { clientOptions } from '@/utils/financialClients';
-import { RECEIVABLE_CONCEPT_DEFAULT, RECEIVABLE_ITEM_MAX, formatReceivableNumber, receivableConceptToHtml } from '@/lib/receivableDocument';
+import { RECEIVABLE_CONCEPT_DEFAULT, RECEIVABLE_ITEM_MAX, formatReceivableNumber, receivableConceptToHtml, receivableDocumentFilename } from '@/lib/receivableDocument';
 import { formatExchangeRate, formatReceivableMoney, pesosFromRate } from '@/lib/receivableCurrency';
 import CurrencyToggle from '@/components/ui/CurrencyToggle';
+import MoneyInput from '@/components/ui/MoneyInput';
 import RichTextEditor from '@/components/ui/RichTextEditor';
 import { PARTY_DOCUMENT_TYPES, hasPartyIdentity } from '@/lib/partyIdentity';
 
@@ -616,7 +617,9 @@ const FinancialDashboard = () => {
             });
             const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: 'application/pdf' });
             const objectUrl = URL.createObjectURL(blob);
-            const name = `Cuenta de cobro ${debt.formattedNumber}.pdf`;
+            // «Cuenta de Cobro No. 0396 - Fundación Grit - Septiembre 2026»: el mismo nombre
+            // que le pone el servidor (Rodny, 30 de septiembre de 2026).
+            const name = receivableDocumentFilename({ number: debt.number, clientName: debt.clientName, period: debt.period });
             if (download) {
                 downloadBlobUrl(objectUrl, name);
                 // El navegador ya tiene los bytes; soltar la referencia evita retener el
@@ -1357,7 +1360,7 @@ await invalidateFinancialQueries(queryClient);
                                                                         <span className="text-[9px] font-medium text-zinc-400">Valor original</span>
                                                                         {editingAmountId === debt.id ? (
                                                                             <form className="mt-1 flex flex-wrap items-center gap-1" onSubmit={(event) => { event.preventDefault(); saveAmountEdit(debt); }}>
-                                                                                <input type="number" min="0.01" step="0.01" required autoFocus aria-label={debt.currency === 'USD' ? 'Nuevo valor en pesos' : 'Nuevo valor original'} value={amountDraft} onChange={(event) => setAmountDraft(event.target.value)} className="w-28 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-900 outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                                                                                <MoneyInput min="0.01" required autoFocus aria-label={debt.currency === 'USD' ? 'Nuevo valor en pesos' : 'Nuevo valor original'} value={amountDraft} onChange={setAmountDraft} className="w-28 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-900 outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
                                                                                 <button type="submit" disabled={savingReceivableId === debt.id} className="rounded-lg bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground disabled:opacity-50">Guardar</button>
                                                                                 <button type="button" onClick={() => setEditingAmountId('')} className="rounded-lg px-2 py-1 text-[11px] font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/10">Cancelar</button>
                                                                             </form>
@@ -1567,12 +1570,12 @@ await invalidateFinancialQueries(queryClient);
                                                         </div>
                                                     </td>
                                                     <td className="p-4 font-medium">
-                                                        <input
-                                                            type="number"
+                                                        <MoneyInput
+                                                            aria-label={`Salario base de ${collab.name || 'la persona'}`}
                                                             defaultValue={collab.baseSalary || 0}
                                                             disabled={savingPayrollContractId === (collab.id || collab.contractId)}
-                                                            onBlur={(event) => {
-                                                                const nextValue = Number(event.target.value || 0);
+                                                            onCommit={(value) => {
+                                                                const nextValue = Number(value || 0);
                                                                 if (Number.isFinite(nextValue) && nextValue !== collab.baseSalary) {
                                                                     handlePayrollContractUpdate(collab, { baseSalary: nextValue });
                                                                 }
@@ -1584,12 +1587,12 @@ await invalidateFinancialQueries(queryClient);
                                                         />
                                                     </td>
                                                     <td className="p-4 text-zinc-500">
-                                                        <input
-                                                            type="number"
+                                                        <MoneyInput
+                                                            aria-label={`Seguridad social de ${collab.name || 'la persona'}`}
                                                             defaultValue={collab.socialSecurity || 0}
                                                             disabled={savingPayrollContractId === (collab.id || collab.contractId)}
-                                                            onBlur={(event) => {
-                                                                const nextValue = Number(event.target.value || 0);
+                                                            onCommit={(value) => {
+                                                                const nextValue = Number(value || 0);
                                                                 if (Number.isFinite(nextValue) && nextValue !== collab.socialSecurity) {
                                                                     handlePayrollContractUpdate(collab, { socialSecurity: nextValue });
                                                                 }
@@ -2107,7 +2110,7 @@ await invalidateFinancialQueries(queryClient);
                             )}
                         </div>
                         <div className="grid gap-4 sm:grid-cols-2">
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Valor<input required min="0.01" step="0.01" type="number" value={receivableForm.amount} onChange={(event) => setReceivableForm((current) => ({ ...current, amount: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Valor<MoneyInput required min="0.01" value={receivableForm.amount} onChange={(amount) => setReceivableForm((current) => ({ ...current, amount }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Periodo</span><BrainMonthPicker ariaLabel="Periodo de la cuenta por cobrar" value={receivableForm.period} onChange={(value) => setReceivableForm((current) => ({ ...current, period: value }))} className="rounded-lg py-2.5" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2"><span className="block">Fecha de vencimiento</span><BrainDatePicker ariaLabel="Fecha de vencimiento" isClearable placeholder="Opcional" value={receivableForm.dueDate} onChange={(value) => setReceivableForm((current) => ({ ...current, dueDate: value }))} className="rounded-lg py-2.5" /></label>
                         </div>
@@ -2272,8 +2275,8 @@ await invalidateFinancialQueries(queryClient);
                                             onChange={(event) => setIssueItem(index, { description: event.target.value })}
                                             placeholder="Fee mensual"
                                             className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
-                                        <input required min="0.01" step="0.01" type="number" value={item.amount} aria-label={`Valor del concepto ${index + 1}`}
-                                            onChange={(event) => setIssueItem(index, { amount: event.target.value })}
+                                        <MoneyInput required min="0.01" value={item.amount} aria-label={`Valor del concepto ${index + 1}`}
+                                            onChange={(amount) => setIssueItem(index, { amount })}
                                             className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
                                         {issueForm.items.length > 1 && <button type="button" aria-label={`Quitar el concepto ${index + 1}`}
                                             onClick={() => setIssueForm((current) => ({ ...current, items: current.items.filter((_, position) => position !== index) }))}
@@ -2296,9 +2299,9 @@ await invalidateFinancialQueries(queryClient);
                                 <div className="grid gap-4 sm:grid-cols-2">
                                     <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
                                         <span className="block">TRM</span>
-                                        <input required min="0.01" step="0.01" type="number" value={issueForm.exchangeRate}
+                                        <MoneyInput required min="0.01" value={issueForm.exchangeRate}
                                             aria-label="TRM para pasar a pesos"
-                                            onChange={(event) => setIssueForm((current) => ({ ...current, exchangeRate: event.target.value, exchangeRateSource: 'MANUAL', exchangeRateDate: null }))}
+                                            onChange={(exchangeRate) => setIssueForm((current) => ({ ...current, exchangeRate, exchangeRateSource: 'MANUAL', exchangeRateDate: null }))}
                                             className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
                                         <span className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500">
                                             {rateStatus.loading
@@ -2313,10 +2316,10 @@ await invalidateFinancialQueries(queryClient);
                                     </label>
                                     <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
                                         <span className="block">Valor en cartera (pesos)</span>
-                                        <input required min="0.01" step="0.01" type="number"
+                                        <MoneyInput required min="0.01"
                                             aria-label="Valor en pesos en cartera"
                                             value={issueForm.amountCopEdited ? issueForm.amountCop : (issueCopValue ?? '')}
-                                            onChange={(event) => setIssueForm((current) => ({ ...current, amountCop: event.target.value, amountCopEdited: true }))}
+                                            onChange={(amountCop) => setIssueForm((current) => ({ ...current, amountCop, amountCopEdited: true }))}
                                             className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
                                         <span className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500">
                                             {issueForm.amountCopEdited ? 'Escrito a mano: el que de verdad entra.' : 'Total en dólares por la TRM.'}
@@ -2426,9 +2429,9 @@ await invalidateFinancialQueries(queryClient);
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cargo<input value={payrollContractForm.position} onChange={(event) => setPayrollContractForm((current) => ({ ...current, position: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Inicio</span><BrainDatePicker ariaLabel="Inicio del contrato" value={payrollContractForm.startDate} onChange={(value) => setPayrollContractForm((current) => ({ ...current, startDate: value }))} className="rounded-lg py-2.5" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Terminación</span><BrainDatePicker ariaLabel="Terminación del contrato" isClearable placeholder="Contrato activo" value={payrollContractForm.endDate} onChange={(value) => setPayrollContractForm((current) => ({ ...current, endDate: value }))} className="rounded-lg py-2.5" /></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Salario base<input required min="0" step="0.01" type="number" value={payrollContractForm.baseSalary} onChange={(event) => setPayrollContractForm((current) => ({ ...current, baseSalary: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Seguridad social<input required min="0" step="0.01" type="number" value={payrollContractForm.socialSecurity} onChange={(event) => setPayrollContractForm((current) => ({ ...current, socialSecurity: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2">Total mensual<input required min="0" step="0.01" type="number" value={payrollContractForm.monthlyTotal} onChange={(event) => setPayrollContractForm((current) => ({ ...current, monthlyTotal: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Salario base<MoneyInput required min="0" value={payrollContractForm.baseSalary} onChange={(baseSalary) => setPayrollContractForm((current) => ({ ...current, baseSalary }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Seguridad social<MoneyInput required min="0" value={payrollContractForm.socialSecurity} onChange={(socialSecurity) => setPayrollContractForm((current) => ({ ...current, socialSecurity }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2">Total mensual<MoneyInput required min="0" value={payrollContractForm.monthlyTotal} onChange={(monthlyTotal) => setPayrollContractForm((current) => ({ ...current, monthlyTotal }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
                         </div>
                         <DialogFooter><button type="button" onClick={() => setIsPayrollContractEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingPayrollContract} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingPayrollContract && <Loader2 className="h-4 w-4 animate-spin" />}Guardar contrato</button></DialogFooter>
                     </form>
