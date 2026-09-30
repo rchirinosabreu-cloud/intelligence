@@ -116,7 +116,12 @@ export const createMetaGraphClient = ({
     }
   };
 
-  const publishToInstagram = async ({ igUserId, token, kind, caption = '', media = [], coverUrl = null }) => {
+  /**
+   * `beforePublish` se llama justo antes de la llamada que publica de verdad (todo lo anterior —crear
+   * contenedores, esperar a que Meta procese— se puede repetir sin consecuencias). Quien llama lo usa
+   * para dejar constancia: si después de ese punto se pierde la respuesta, no se vuelve a publicar solo.
+   */
+  const publishToInstagram = async ({ igUserId, token, kind, caption = '', media = [], coverUrl = null, beforePublish = null }) => {
     let creationId;
     if (kind === 'CAROUSEL') {
       const children = [];
@@ -152,6 +157,7 @@ export const createMetaGraphClient = ({
       throw new MetaGraphError(`Instagram no publica «${kind}».`, { status: 400, code: 'UNSUPPORTED_KIND' });
     }
 
+    if (beforePublish) await beforePublish();
     const published = await post(`${igUserId}/media_publish`, { creation_id: creationId, access_token: token });
     const permalink = await instagramPermalink({ mediaId: published.id, token });
     return { mediaId: published.id, permalink };
@@ -166,15 +172,17 @@ export const createMetaGraphClient = ({
     }
   };
 
-  const publishToFacebookPage = async ({ pageId, token, kind, caption = '', media = [] }) => {
+  const publishToFacebookPage = async ({ pageId, token, kind, caption = '', media = [], beforePublish = null }) => {
     if (kind === 'IMAGE') {
       const [file] = media;
+      if (beforePublish) await beforePublish();
       const photo = await post(`${pageId}/photos`, { url: file.url, message: caption, access_token: token });
       const postId = photo.post_id || photo.id;
       return { mediaId: postId, permalink: await facebookPermalink({ postId, token }) };
     }
     if (kind === 'REELS') {
       const [file] = media;
+      if (beforePublish) await beforePublish();
       const video = await post(`${pageId}/videos`, { file_url: file.url, description: caption, access_token: token });
       return { mediaId: video.id, permalink: `https://www.facebook.com/${pageId}/videos/${video.id}` };
     }
@@ -187,6 +195,8 @@ export const createMetaGraphClient = ({
       }
       const params = { message: caption, access_token: token };
       uploaded.forEach((id, index) => { params[`attached_media[${index}]`] = JSON.stringify({ media_fbid: id }); });
+      // Las fotos sin publicar no se ven; lo que publica es el post del feed.
+      if (beforePublish) await beforePublish();
       const created = await post(`${pageId}/feed`, params);
       return { mediaId: created.id, permalink: await facebookPermalink({ postId: created.id, token }) };
     }

@@ -61,6 +61,20 @@ export const createSocialAccountService = ({
         create: { clientId, platform: 'INSTAGRAM', externalId: page.instagram.id, displayName, ...shared },
         update: { externalId: page.instagram.id, displayName, ...shared }
       }));
+    } else {
+      // La página nueva no trae Instagram: el Instagram de la página anterior no puede seguir vivo, o la
+      // parrilla lo ofrecería y una pieza saldría en el perfil equivocado. Se apaga y se cancela lo suyo.
+      const stale = await db.clientSocialAccount.findUnique({ where: { clientId_platform: { clientId, platform: 'INSTAGRAM' } } });
+      if (stale?.isActive) {
+        await db.socialPublication.updateMany({
+          where: { socialAccountId: stale.id, status: 'SCHEDULED' },
+          data: { status: 'CANCELLED', cancelledAt: now(), error: 'La página conectada cambió y ya no tiene Instagram vinculado.', leaseToken: null, leaseAt: null }
+        });
+        rows.push(await db.clientSocialAccount.update({
+          where: { id: stale.id },
+          data: { isActive: false, lastError: 'La página conectada ya no tiene Instagram vinculado.', lastCheckedAt: now() }
+        }));
+      }
     }
     return rows.map(publicSocialAccount);
   };

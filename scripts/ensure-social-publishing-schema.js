@@ -42,6 +42,7 @@ try {
       "nextAttemptAt" TIMESTAMPTZ(3),
       "leaseToken" TEXT,
       "leaseAt" TIMESTAMPTZ(3),
+      "publishRequestedAt" TIMESTAMPTZ(3),
       "externalMediaId" TEXT,
       "permalink" TEXT,
       "error" TEXT,
@@ -53,6 +54,7 @@ try {
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
   `);
+  await client.query(`ALTER TABLE "SocialPublication" ADD COLUMN IF NOT EXISTS "publishRequestedAt" TIMESTAMPTZ(3);`);
   await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "SocialPublication_contentItemId_platform_key" ON "SocialPublication"("contentItemId", "platform");`);
   await client.query(`CREATE INDEX IF NOT EXISTS "SocialPublication_status_scheduledAt_idx" ON "SocialPublication"("status", "scheduledAt");`);
   await client.query(`CREATE INDEX IF NOT EXISTS "SocialPublication_status_nextAttemptAt_idx" ON "SocialPublication"("status", "nextAttemptAt");`);

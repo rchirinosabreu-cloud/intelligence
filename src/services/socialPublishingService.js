@@ -16,8 +16,12 @@ import { createMetaGraphClient } from './metaGraphService.js';
 import { createSignedDownload } from './s3Service.js';
 import {
   ACTIVE_PUBLICATION_STATUSES, MAX_PUBLICATION_ATTEMPTS, PUBLICATION_LEASE_MS, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS,
-  describeMetaMedia, humanizeMetaError, isRetryableMetaError, nextPublicationRetryAt, publishAtIso, schedulingProblems
+  describeMetaMedia, humanizeMetaError, isPublishInstantTooSoon, isRetryableMetaError, nextPublicationRetryAt, publishAtIso, schedulingProblems
 } from '../lib/socialPublishing.js';
+
+/** Una red que falló también cuenta como pendiente: la pieza no está «publicada» si una de sus redes no salió. */
+const BLOCKING_PUBLICATION_STATUSES = Object.freeze([...ACTIVE_PUBLICATION_STATUSES, 'FAILED']);
+const AMBIGUOUS_PUBLISH_MESSAGE = 'Meta recibió la orden de publicar pero no confirmó el resultado. Revisa la cuenta antes de reintentar: si la pieza ya salió, no la vuelvas a programar.';
 
 const MAX_DIAGNOSTICS = 5;
 /** Meta descarga el archivo al crear el contenedor; una hora cubre con holgura un reel de 300 MB. */
@@ -102,7 +106,7 @@ export const createSocialPublishingService = ({
     for (const platform of wanted) {
       const account = accountsOf(item).find((candidate) => candidate.platform === platform && candidate.isActive !== false);
       const fresh = {
-        status: 'SCHEDULED', scheduledAt, attempts: 0, nextAttemptAt: null, leaseToken: null, leaseAt: null,
+        status: 'SCHEDULED', scheduledAt, attempts: 0, nextAttemptAt: null, leaseToken: null, leaseAt: null, publishRequestedAt: null,
         error: null, permalink: null, externalMediaId: null, publishedAt: null, cancelledAt: null, requestedById: actorUserId
       };
       rows.push(await db.socialPublication.upsert({
@@ -130,7 +134,7 @@ export const createSocialPublishingService = ({
     const scheduledAt = new Date(row.scheduledAt).getTime() < current.getTime() ? current : row.scheduledAt;
     return db.socialPublication.update({
       where: { id: row.id },
-      data: { status: 'SCHEDULED', scheduledAt, attempts: 0, nextAttemptAt: null, error: null, leaseToken: null, leaseAt: null, requestedById: actorUserId || row.requestedById }
+      data: { status: 'SCHEDULED', scheduledAt, attempts: 0, nextAttemptAt: null, error: null, leaseToken: null, leaseAt: null, publishRequestedAt: null, requestedById: actorUserId || row.requestedById }
     });
   };
 
@@ -139,20 +143,26 @@ export const createSocialPublishingService = ({
     return rows.map(publicPublication);
   };
 
-  /** La pieza cambió de día o de hora: sus filas programadas la siguen; sin hora, se cancelan diciendo por qué. */
+  /**
+   * La pieza cambió de día o de hora: sus filas programadas la siguen. Sin hora, o con una hora que ya
+   * pasó, se cancelan diciendo por qué: mover una pieza al pasado no puede publicarla en el acto.
+   */
   const resyncItemPublications = async (itemId) => {
     const item = await db.contentItem.findUnique({ where: { id: itemId }, include: itemInclude });
     if (!item) return [];
     const scheduled = (item.publications || []).filter((row) => row.status === 'SCHEDULED');
     if (!scheduled.length) return [];
     const publishAt = publishAtIso(item.publishDate, item.publishTime);
+    const cancelReason = !publishAt
+      ? 'La pieza se quedó sin fecha u hora de publicación.'
+      : isPublishInstantTooSoon(publishAt, now()) ? 'La nueva hora de publicación ya pasó; vuelve a programar la pieza con una hora por delante.' : null;
     const updates = [];
     for (const row of scheduled) {
       updates.push(await db.socialPublication.update({
         where: { id: row.id },
-        data: publishAt
-          ? { scheduledAt: new Date(publishAt), nextAttemptAt: null }
-          : { status: 'CANCELLED', cancelledAt: now(), error: 'La pieza se quedó sin fecha u hora de publicación.' }
+        data: cancelReason
+          ? { status: 'CANCELLED', cancelledAt: now(), error: cancelReason, leaseToken: null, leaseAt: null }
+          : { scheduledAt: new Date(publishAt), nextAttemptAt: null }
       }));
     }
     return updates;
@@ -177,14 +187,17 @@ export const createSocialPublishingService = ({
     }
   };
 
-  const recordFailure = async ({ row, item, error, leaseToken }) => {
+  const recordFailure = async ({ row, item, error, leaseToken, publishRequested = false }) => {
     const attempts = Number(row.attempts || 0) + 1;
-    const retryable = isRetryableMetaError(error) && !error.permanent;
+    // Si la orden de publicar ya salió y la respuesta se perdió (red, tiempo de espera, 5xx), no se sabe si
+    // Meta publicó: repetirlo solo podría duplicar el post. Queda en manos de una persona.
+    const ambiguous = publishRequested && isRetryableMetaError(error) && !error.permanent;
+    const retryable = !ambiguous && isRetryableMetaError(error) && !error.permanent;
     const nextAttemptAt = retryable ? nextPublicationRetryAt(attempts, now()) : null;
-    const humanError = error.permanent ? error.message : humanizeMetaError(error);
+    const humanError = ambiguous ? AMBIGUOUS_PUBLISH_MESSAGE : error.permanent ? error.message : humanizeMetaError(error);
     const diagnostic = {
       at: now().toISOString(), code: error.code ?? null, subcode: error.subcode ?? null, status: error.status ?? null,
-      fbtraceId: error.fbtraceId ?? null, message: String(error.message || '').slice(0, 300), willRetry: Boolean(nextAttemptAt)
+      fbtraceId: error.fbtraceId ?? null, message: String(error.message || '').slice(0, 300), willRetry: Boolean(nextAttemptAt), ambiguous
     };
     const diagnostics = [...(Array.isArray(row.diagnostics) ? row.diagnostics : []), diagnostic].slice(-MAX_DIAGNOSTICS);
     const status = nextAttemptAt ? 'SCHEDULED' : 'FAILED';
@@ -210,8 +223,18 @@ export const createSocialPublishingService = ({
     const full = await db.socialPublication.findUnique({ where: { id: row.id }, include: { socialAccount: true } });
     const item = await db.contentItem.findUnique({ where: { id: full.contentItemId }, include: itemInclude });
     const account = full.socialAccount;
+    let publishRequested = false;
+    // Constancia de que la orden de publicar salió: se escribe **antes** de la llamada, no después.
+    const beforePublish = async () => {
+      publishRequested = true;
+      await db.socialPublication.updateMany({ where: { id: row.id, leaseToken }, data: { publishRequestedAt: now() } });
+    };
     try {
       if (!item || item.deletedAt) throw Object.assign(new Error('La pieza ya no existe.'), { permanent: true });
+      if (full.publishRequestedAt && row.status === 'PUBLISHING') {
+        // Una fila recogida con lease vencido **después** de haber mandado publicar: no se repite la orden.
+        throw Object.assign(new Error(AMBIGUOUS_PUBLISH_MESSAGE), { permanent: true, code: 'PUBLISH_AMBIGUOUS' });
+      }
       // Se vuelve a comprobar todo en el momento de salir: la pieza pudo perder la aprobación o el archivo.
       const problems = schedulingProblems({ item, assets: item.finalAssets, accounts: account ? [account] : [], platforms: [full.platform], now: new Date(0) });
       if (problems.length) throw Object.assign(new Error(problems[0]), { permanent: true });
@@ -222,14 +245,15 @@ export const createSocialPublishingService = ({
       const token = decryptToken(account.encryptedToken);
       const caption = String(item.captionText || '');
       const result = full.platform === 'INSTAGRAM'
-        ? await meta.publishToInstagram({ igUserId: account.externalId, token, kind: media.kind, caption, media: files, coverUrl: null })
-        : await meta.publishToFacebookPage({ pageId: account.externalId, token, kind: media.kind, caption, media: files });
+        ? await meta.publishToInstagram({ igUserId: account.externalId, token, kind: media.kind, caption, media: files, coverUrl: null, beforePublish })
+        : await meta.publishToFacebookPage({ pageId: account.externalId, token, kind: media.kind, caption, media: files, beforePublish });
 
       await db.socialPublication.updateMany({
         where: { id: row.id, leaseToken },
         data: { status: 'PUBLISHED', publishedAt: now(), externalMediaId: result.mediaId || null, permalink: result.permalink || null, error: null, leaseToken: null, leaseAt: null }
       });
-      const pending = await db.socialPublication.count({ where: { contentItemId: item.id, status: { in: [...ACTIVE_PUBLICATION_STATUSES] } } });
+      // Programadas, publicándose **o fallidas**: mientras una red pedida no haya salido, la pieza no está publicada.
+      const pending = await db.socialPublication.count({ where: { contentItemId: item.id, status: { in: [...BLOCKING_PUBLICATION_STATUSES] } } });
       if (pending === 0 && item.status !== 'PUBLICADO') {
         await db.contentItem.update({ where: { id: item.id }, data: { status: 'PUBLICADO' } });
       }
@@ -240,7 +264,7 @@ export const createSocialPublishingService = ({
       return { id: row.id, status: 'PUBLISHED', permalink: result.permalink || null };
     } catch (error) {
       logger.error(`[SocialPublishing] Falló la publicación ${row.id} (${full.platform}):`, error.response?.data || error.message || error);
-      const status = await recordFailure({ row: full, item: item || { id: full.contentItemId, planId: null }, error, leaseToken });
+      const status = await recordFailure({ row: full, item: item || { id: full.contentItemId, planId: null }, error, leaseToken, publishRequested });
       return { id: row.id, status, error: error.message };
     }
   };

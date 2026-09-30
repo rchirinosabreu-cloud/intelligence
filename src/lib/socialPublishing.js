@@ -20,11 +20,21 @@ export const ACTIVE_PUBLICATION_STATUSES = Object.freeze(['SCHEDULED', 'PUBLISHI
 export const PUBLISHABLE_ITEM_STATUSES = Object.freeze(['APROBADO', 'EN_PRODUCCION', 'REALIZADO']);
 
 export const MAX_PUBLICATION_ATTEMPTS = 3;
-/** Un intento que no termina en diez minutos se considera muerto y otra réplica puede recogerlo. */
-export const PUBLICATION_LEASE_MS = 10 * 60 * 1000;
+/**
+ * Un intento que no termina en media hora se considera muerto y otra réplica puede recogerlo. Media
+ * hora y no diez minutos: un carrusel con videos espera a Meta hasta ocho minutos **por archivo**, y
+ * recoger una fila viva sería publicar dos veces.
+ */
+export const PUBLICATION_LEASE_MS = 30 * 60 * 1000;
 const RETRY_BASE_MS = 2 * 60 * 1000;
 /** Programar para dentro de un minuto sería programar para «ahora»: el cron corre cada minuto. */
-const MIN_LEAD_MS = 2 * 60 * 1000;
+export const MIN_SCHEDULING_LEAD_MS = 2 * 60 * 1000;
+const MIN_LEAD_MS = MIN_SCHEDULING_LEAD_MS;
+
+/** El instante ya pasó (o está a menos de dos minutos): la misma regla que al programar. */
+export const isPublishInstantTooSoon = (publishAt, now = new Date()) => (
+  !publishAt || new Date(publishAt).getTime() < now.getTime() + MIN_SCHEDULING_LEAD_MS
+);
 
 export const CAPTION_MAX_CHARS = 2200;
 

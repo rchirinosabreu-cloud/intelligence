@@ -905,6 +905,9 @@ model SocialPublication {
   nextAttemptAt   DateTime?           @db.Timestamptz()
   leaseToken      String?
   leaseAt         DateTime?           @db.Timestamptz()
+  /// Se marca justo antes de la llamada que publica de verdad. Si después de esa marca se pierde la
+  /// respuesta, no se sabe si Meta publicó: la fila queda FAILED pidiendo revisar, nunca se repite sola.
+  publishRequestedAt DateTime?        @db.Timestamptz()
   externalMediaId String?
   permalink       String?
   error           String?

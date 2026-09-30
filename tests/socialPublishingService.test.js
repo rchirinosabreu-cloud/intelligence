@@ -79,8 +79,9 @@ const fakeMeta = (script = {}) => {
   return {
     calls,
     client: {
-      publishToInstagram: async (args) => { calls.push(['instagram', args]); if (script.instagram instanceof Error) throw script.instagram; return script.instagram || { mediaId: 'ig-1', permalink: 'https://www.instagram.com/p/1/' }; },
-      publishToFacebookPage: async (args) => { calls.push(['facebook', args]); if (script.facebook instanceof Error) throw script.facebook; return script.facebook || { mediaId: 'fb-1', permalink: 'https://www.facebook.com/1' }; }
+      // `beforePublish` is the service's own bookkeeping hook; the calls record what Meta would see.
+      publishToInstagram: async ({ beforePublish, ...args }) => { calls.push(['instagram', args]); if (script.instagram instanceof Error) throw script.instagram; await beforePublish?.(); return script.instagram || { mediaId: 'ig-1', permalink: 'https://www.instagram.com/p/1/' }; },
+      publishToFacebookPage: async ({ beforePublish, ...args }) => { calls.push(['facebook', args]); if (script.facebook instanceof Error) throw script.facebook; await beforePublish?.(); return script.facebook || { mediaId: 'fb-1', permalink: 'https://www.facebook.com/1' }; }
     }
   };
 };
@@ -201,14 +202,69 @@ test('a row another replica already claimed is skipped, not published twice', as
   assert.equal(meta.calls.length, 0);
 });
 
-test('a stale PUBLISHING row (lease older than ten minutes) is picked up again', async () => {
+test('a stale PUBLISHING row (lease older than half an hour) is picked up again, unless it had already asked Meta to publish', async () => {
   const { db } = memoryDb({ publications: [
-    { id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'PUBLISHING', leaseToken: 'dead', leaseAt: new Date(NOW.getTime() - 11 * 60 * 1000), scheduledAt: NOW, attempts: 0 }
+    { id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'PUBLISHING', leaseToken: 'dead', leaseAt: new Date(NOW.getTime() - 31 * 60 * 1000), scheduledAt: NOW, attempts: 0 }
   ] });
   const meta = fakeMeta();
   const outcomes = await build({ db, meta: meta.client }).processDuePublications();
   assert.deepEqual(outcomes.map((outcome) => outcome.status), ['PUBLISHED']);
   assert.equal(meta.calls.length, 1);
+
+  // The worker died after telling Meta to publish: nobody knows whether the post exists. Never repeat it blindly.
+  const ambiguous = memoryDb({ publications: [
+    { id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'PUBLISHING', leaseToken: 'dead', leaseAt: new Date(NOW.getTime() - 31 * 60 * 1000), publishRequestedAt: new Date(NOW.getTime() - 30 * 60 * 1000), scheduledAt: NOW, attempts: 0, requestedById: 'user-rodny' }
+  ] });
+  const metaAgain = fakeMeta();
+  const notifications = [];
+  await build({ db: ambiguous.db, meta: metaAgain.client, notifications }).processDuePublications();
+  assert.equal(metaAgain.calls.length, 0, 'Meta is not asked again');
+  assert.equal(ambiguous.state.publications[0].status, 'FAILED');
+  assert.match(ambiguous.state.publications[0].error, /Revisa la cuenta antes de reintentar/);
+  assert.equal(notifications.length, 1);
+});
+
+test('a lost response after the publish order never republishes by itself (Codex review, 30 September 2026)', async () => {
+  const { db, state } = memoryDb({ publications: [
+    { id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: NOW, attempts: 0, requestedById: 'user-rodny' }
+  ] });
+  const calls = [];
+  const meta = {
+    publishToInstagram: async ({ beforePublish }) => { calls.push('instagram'); await beforePublish(); throw Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }); },
+    publishToFacebookPage: async () => { throw new Error('unexpected'); }
+  };
+  const notifications = [];
+  await build({ db, meta, notifications }).processDuePublications();
+  const row = state.publications[0];
+  assert.equal(row.status, 'FAILED', 'a network error after the publish order is not retried automatically');
+  assert.equal(row.publishRequestedAt.toISOString(), NOW.toISOString(), 'the order was recorded before the call');
+  assert.match(row.error, /no confirmó el resultado/);
+  assert.equal(row.diagnostics.at(-1).ambiguous, true);
+  assert.equal(notifications[0].type, 'SOCIAL_PUBLICATION_FAILED');
+
+  // The same network error *before* the publish order (while creating containers) is a plain retry.
+  const early = memoryDb({ publications: [
+    { id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: NOW, attempts: 0 }
+  ] });
+  await build({ db: early.db, meta: { publishToInstagram: async () => { throw Object.assign(new Error('socket hang up'), { code: 'ECONNRESET' }); } } }).processDuePublications();
+  assert.equal(early.state.publications[0].status, 'SCHEDULED');
+  assert.equal(early.state.publications[0].publishRequestedAt ?? null, null);
+});
+
+test('a network that failed keeps the piece from becoming PUBLICADO when the other one succeeds (Codex review)', async () => {
+  const { db, state } = memoryDb({ publications: [
+    { id: 'pub-facebook', contentItemId: 'item-1', socialAccountId: 'acc-fb', platform: 'FACEBOOK', status: 'FAILED', attempts: 3, error: 'Meta respondió: x', scheduledAt: NOW },
+    { id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: NOW, attempts: 0 }
+  ] });
+  await build({ db }).processDuePublications();
+  assert.equal(state.publications[1].status, 'PUBLISHED');
+  assert.equal(state.item.status, 'APROBADO', 'one requested network never went out');
+  const cancelledInstead = memoryDb({ publications: [
+    { id: 'pub-facebook', contentItemId: 'item-1', socialAccountId: 'acc-fb', platform: 'FACEBOOK', status: 'CANCELLED', scheduledAt: NOW },
+    { id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: NOW, attempts: 0 }
+  ] });
+  await build({ db: cancelledInstead.db }).processDuePublications();
+  assert.equal(cancelledInstead.state.item.status, 'PUBLICADO', 'a cancelled network was a decision, not a failure');
 });
 
 test('a transient Meta failure goes back to the queue with a growing wait; a permanent one fails and tells the requester', async () => {
@@ -278,6 +334,20 @@ test('changing the piece hour moves its scheduled rows; losing the hour cancels 
   await service.resyncItemPublications('item-1');
   assert.equal(state.publications[0].status, 'CANCELLED');
   assert.match(state.publications[0].error, /hora/);
+});
+
+test('moving a scheduled piece to a past hour cancels the queue instead of publishing it at once (Codex review, 30 September 2026)', async () => {
+  const { db, state } = memoryDb({ publications: [
+    { id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: new Date('2036-10-03T16:00:00.000Z'), attempts: 0 }
+  ] });
+  const service = build({ db });
+  state.item.publishTime = '10:00'; // 15:00Z, half an hour before NOW
+  await service.resyncItemPublications('item-1');
+  assert.equal(state.publications[0].status, 'CANCELLED');
+  assert.match(state.publications[0].error, /ya pasó/);
+  const meta = fakeMeta();
+  await build({ db, meta: meta.client }).processDuePublications();
+  assert.equal(meta.calls.length, 0, 'nothing goes out');
 });
 
 test('the scheduler runs every minute, never overlaps itself and survives a failing cycle', async () => {

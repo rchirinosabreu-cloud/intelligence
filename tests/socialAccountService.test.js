@@ -18,7 +18,9 @@ const memoryDb = () => {
   const db = {
     clientSocialAccount: {
       findMany: async ({ where }) => accounts.filter((row) => row.clientId === where.clientId),
-      findUnique: async ({ where }) => accounts.find((row) => row.id === where.id) || null,
+      findUnique: async ({ where }) => (where.id
+        ? accounts.find((row) => row.id === where.id)
+        : accounts.find((row) => row.clientId === where.clientId_platform.clientId && row.platform === where.clientId_platform.platform)) || null,
       upsert: async ({ where, create, update }) => {
         const existing = accounts.find((row) => row.clientId === where.clientId_platform.clientId && row.platform === where.clientId_platform.platform);
         if (existing) { Object.assign(existing, update); return existing; }
@@ -84,6 +86,21 @@ test('a page without Instagram links Facebook only and says so; an unknown page 
   assert.deepEqual(linked.map((row) => row.platform), ['FACEBOOK']);
   await assert.rejects(service.linkPage({ clientId: 'client-1', pageId: '9999', actorUserId: 'u' }), (error) => error.status === 404 && /no administra/i.test(error.message));
   await assert.rejects(service.linkPage({ clientId: 'ghost', pageId: '5555', actorUserId: 'u' }), (error) => error.status === 404);
+});
+
+test('switching to a page without Instagram switches the old Instagram off and cancels what it had scheduled (Codex review, 30 September 2026)', async () => {
+  const { db, accounts, log } = memoryDb();
+  const service = build({ db });
+  await service.linkPage({ clientId: 'client-1', pageId: '5555', actorUserId: 'u' });
+  const relinked = await service.linkPage({ clientId: 'client-1', pageId: '6666', actorUserId: 'u' });
+  const instagram = accounts.find((row) => row.platform === 'INSTAGRAM');
+  assert.equal(instagram.isActive, false, 'the stale Instagram must not be offered by the editor any more');
+  assert.match(instagram.lastError, /ya no tiene Instagram/);
+  assert.deepEqual(relinked.map((row) => [row.platform, row.isActive]), [['FACEBOOK', true], ['INSTAGRAM', false]]);
+  const cancelled = log.find(([kind, where]) => kind === 'publications.updateMany' && where.socialAccountId === instagram.id);
+  assert.equal(cancelled[2].status, 'CANCELLED');
+  assert.match(cancelled[2].error, /Instagram/);
+  assert.equal(JSON.stringify(relinked).includes('enc:'), false);
 });
 
 test('disconnecting keeps the row (history) but deactivates it and cancels what was scheduled on it', async () => {

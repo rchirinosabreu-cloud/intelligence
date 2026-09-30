@@ -76,7 +76,7 @@ test('a failed publication retries a few times with a growing wait, then stops',
   assert.equal(nextPublicationRetryAt(1, now).toISOString(), '2036-10-01T12:02:00.000Z');
   assert.equal(nextPublicationRetryAt(2, now).toISOString(), '2036-10-01T12:04:00.000Z');
   assert.equal(nextPublicationRetryAt(3, now), null, 'the third failure is final');
-  assert.equal(PUBLICATION_LEASE_MS, 10 * 60 * 1000);
+  assert.equal(PUBLICATION_LEASE_MS, 30 * 60 * 1000, 'a carousel with videos waits for Meta up to eight minutes per file');
   assert.deepEqual(ACTIVE_PUBLICATION_STATUSES, ['SCHEDULED', 'PUBLISHING']);
 });
 
