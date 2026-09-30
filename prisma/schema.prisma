@@ -631,6 +631,7 @@ model Client {
   contentPlans        ContentPlan[]
   flowMessages        FlowMessage[]
   integrations        Integration[]
+  socialAccounts      ClientSocialAccount[]
   nativeTasks         Task[]
   agencyContexts      AgencyContext[]
   briaMemorySources   BriaMemorySource[]
@@ -752,6 +753,10 @@ model ContentItem {
   finalAssetMimeType String?
   finalAssetSize     Int?
   finalAssets        ContentItemFinalAsset[]
+  /// Hora de publicación en reloj de Bogotá ('HH:mm'). Meta no guarda publicaciones programadas:
+  /// la plataforma publica cuando llega esta hora (Rodny, 29 de septiembre de 2026).
+  publishTime        String?
+  publications       SocialPublication[]
   deletedAt          DateTime?
   plan               ContentPlan                @relation(fields: [planId], references: [id], onDelete: Cascade)
   tasks              Task[]
@@ -850,6 +855,62 @@ model ContentItemFinalAsset {
   contentItem      ContentItem @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
 
   @@index([contentItemId, position, createdAt])
+}
+
+/// Cuenta de Instagram o Facebook de un cliente (29 de septiembre de 2026). La conecta un administrador
+/// eligiendo la página entre las que administra el usuario del sistema de Meta; el token de página se
+/// guarda cifrado con ENCRYPTION_KEY y nunca viaja al navegador. Una cuenta por cliente y red.
+model ClientSocialAccount {
+  id             String              @id @default(uuid())
+  clientId       String
+  platform       String
+  externalId     String
+  displayName    String
+  pageId         String?
+  encryptedToken String
+  isActive       Boolean             @default(true)
+  connectedById  String?
+  connectedAt    DateTime            @default(now())
+  lastError      String?
+  lastCheckedAt  DateTime?
+  metadata       Json?
+  createdAt      DateTime            @default(now())
+  updatedAt      DateTime            @updatedAt
+  client         Client              @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  publications   SocialPublication[]
+
+  @@unique([clientId, platform])
+  @@index([platform, externalId])
+}
+
+/// La cola de publicación: una fila por pieza y red. El cron la reclama por compare-and-set (lease),
+/// publica y deja el enlace; un fallo guarda su motivo en español y reintenta con espera creciente.
+model SocialPublication {
+  id              String              @id @default(uuid())
+  contentItemId   String
+  socialAccountId String
+  platform        String
+  status          String              @default("SCHEDULED")
+  scheduledAt     DateTime            @db.Timestamptz()
+  attempts        Int                 @default(0)
+  nextAttemptAt   DateTime?           @db.Timestamptz()
+  leaseToken      String?
+  leaseAt         DateTime?           @db.Timestamptz()
+  externalMediaId String?
+  permalink       String?
+  error           String?
+  diagnostics     Json?
+  requestedById   String?
+  publishedAt     DateTime?
+  cancelledAt     DateTime?
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  contentItem     ContentItem         @relation(fields: [contentItemId], references: [id], onDelete: Cascade)
+  socialAccount   ClientSocialAccount @relation(fields: [socialAccountId], references: [id], onDelete: Cascade)
+
+  @@unique([contentItemId, platform])
+  @@index([status, scheduledAt])
+  @@index([status, nextAttemptAt])
 }
 
 model Integration {

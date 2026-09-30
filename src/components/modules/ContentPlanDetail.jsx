@@ -24,6 +24,8 @@ import {
 } from '@/components/ui/dialog';
 import DatePicker from 'react-datepicker';
 import { brainDatePickerProps } from '@/lib/brainDatePicker';
+import { BrainTimePicker } from '@/components/ui/BrainDatePicker';
+import SocialPublishingPanel from '@/components/modules/ContentPlan/SocialPublishingPanel';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import BriaContentPlanReview from '@/components/modules/ContentPlan/BriaContentPlanReview';
 
@@ -589,7 +591,13 @@ const ContentItemCard = ({
   isFinalAssetUploading,
   isFinalAssetDeleting,
   onDriveLink,
-  directUploadPercent
+  directUploadPercent,
+  socialAccounts = [],
+  onSchedulePublication,
+  onCancelPublication,
+  onRetryPublication,
+  isPublicationBusy = false,
+  publicationProblems = []
 }) => {
   const [showFeedback, setShowFeedback] = useState(false);
   const finalAssets = item.finalAssets || [];
@@ -715,6 +723,20 @@ const ContentItemCard = ({
               className={FIELD_CLASS}
               wrapperClassName="w-full"
               placeholderText="Elegir fecha"
+            />
+          </div>
+
+          {/* La hora en reloj de Bogotá: de ella depende cuándo sale la pieza en redes. Mismo reloj que el
+              compromiso de una tarea (Rodny, 29 de septiembre de 2026); nunca un campo nativo de hora. */}
+          <div className="flex flex-col gap-1.5">
+            <span className={FIELD_LABEL}>Hora</span>
+            <BrainTimePicker
+              id={`publish-time-${item.id}`}
+              value={item.publishTime || ''}
+              onChange={(time) => { if ((time || '') !== (item.publishTime || '')) onUpdate({ id: item.id, publishTime: time || null }); }}
+              ariaLabel="Hora de publicación"
+              title="Hora de publicación en redes (Bogotá)"
+              className="h-11"
             />
           </div>
 
@@ -908,6 +930,17 @@ const ContentItemCard = ({
           </div>
         </div>
       </div>
+
+      <SocialPublishingPanel
+        key={`${item.id}-${item.publishTime || ''}-${(item.publications || []).map((row) => `${row.platform}:${row.status}`).join(',')}`}
+        item={item}
+        accounts={socialAccounts}
+        onSchedule={onSchedulePublication}
+        onCancel={onCancelPublication}
+        onRetry={onRetryPublication}
+        isBusy={isPublicationBusy}
+        serverProblems={publicationProblems}
+      />
 
       {showFeedback && item.comments && (
         <div className="border-t border-zinc-100 px-6 py-5 dark:border-white/5">
@@ -1314,6 +1347,42 @@ const ContentPlanDetail = () => {
     }
   });
 
+  // Publicación en redes: el servidor vuelve a comprobar todo y, si algo impide programar, contesta 422
+  // con la lista de motivos, que se enseña bajo el panel en vez de un código (Rodny, 29 de septiembre de 2026).
+  const [publicationProblems, setPublicationProblems] = useState([]);
+  const invalidatePlan = () => queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+  const publicationError = (error, fallback) => {
+    console.error('[SocialPublishing]', error.response?.data || error.message || error);
+    const data = error.response?.data || {};
+    if (Array.isArray(data.problems) && data.problems.length) setPublicationProblems(data.problems);
+    toast.error(data.error || fallback);
+  };
+  const schedulePublicationMutation = useMutation({
+    mutationFn: async ({ itemId, platforms }) => (await axios.post(`${getApiBaseUrl()}/api/social/publications`, { itemId, platforms }, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+    })).data,
+    onSuccess: (rows) => {
+      setPublicationProblems([]);
+      invalidatePlan();
+      toast.success(rows.length > 1 ? 'Publicación programada en Instagram y Facebook' : 'Publicación programada');
+    },
+    onError: (error) => publicationError(error, 'No se pudo programar la publicación')
+  });
+  const cancelPublicationMutation = useMutation({
+    mutationFn: async (publicationId) => (await axios.delete(`${getApiBaseUrl()}/api/social/publications/${publicationId}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+    })).data,
+    onSuccess: () => { invalidatePlan(); toast.success('Publicación cancelada'); },
+    onError: (error) => publicationError(error, 'No se pudo cancelar la publicación')
+  });
+  const retryPublicationMutation = useMutation({
+    mutationFn: async (publicationId) => (await axios.post(`${getApiBaseUrl()}/api/social/publications/${publicationId}/retry`, {}, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+    })).data,
+    onSuccess: () => { invalidatePlan(); toast.success('Se volverá a intentar en un momento'); },
+    onError: (error) => publicationError(error, 'No se pudo reintentar la publicación')
+  });
+
   const handleAddItem = () => {
     createItemMutation.mutate({
       objective: 'Nuevo Objetivo',
@@ -1690,6 +1759,12 @@ const ContentPlanDetail = () => {
                 isFinalAssetDeleting={finalAssetDeleteMutation.isPending}
                 onDriveLink={setDriveLinkItemId}
                 directUploadPercent={finalAssetUploadMutation.variables?.itemId === selectedItem.id ? directUploadPercent : null}
+                socialAccounts={plan?.client?.socialAccounts || []}
+                onSchedulePublication={(itemId, platforms) => schedulePublicationMutation.mutate({ itemId, platforms })}
+                onCancelPublication={(publicationId) => cancelPublicationMutation.mutate(publicationId)}
+                onRetryPublication={(publicationId) => retryPublicationMutation.mutate(publicationId)}
+                isPublicationBusy={schedulePublicationMutation.isPending || cancelPublicationMutation.isPending || retryPublicationMutation.isPending}
+                publicationProblems={publicationProblems}
               />
               )}
             </div>

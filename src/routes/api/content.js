@@ -264,6 +264,7 @@ router.patch('/items/:id', async (req, res) => {
     return res.json(item);
   } catch (error) {
     console.error('[API] Error updating content item:', error);
+    if (Number(error.status) >= 400 && Number(error.status) < 500) return res.status(error.status).json({ error: error.message });
     return res.status(500).json({ error: 'Failed to update content item', details: error.message });
   }
 });

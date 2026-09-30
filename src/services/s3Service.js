@@ -97,6 +97,21 @@ export const createSignedUpload = async ({ key, contentType, expiresIn = 900 }) 
 };
 
 /**
+ * Una URL de lectura firmada y con vencimiento, para que un tercero (Meta, al publicar una pieza)
+ * descargue **un** objeto sin que el bucket sea público. Nunca se enseña en la pantalla.
+ */
+export const createSignedDownload = async ({ key, expiresIn = 900 }) => {
+    const s3Client = getS3Client();
+    const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
+    if (!s3Client) throw new Error("S3 client not initialized");
+    if (!key) throw new Error("A signed download needs a key");
+
+    const command = new GetObjectCommand({ Bucket: bucketName, Key: key });
+    const url = await getSignedUrl(s3Client, command, { expiresIn });
+    return { url, key, expiresIn };
+};
+
+/**
  * Lo que el almacenamiento dice que hay en esa clave, o `null` si no hay nada.
  * Es la única forma de saber el peso real de lo que subió el navegador: lo que el cliente declara
  * antes de subir es una promesa, no un hecho.
