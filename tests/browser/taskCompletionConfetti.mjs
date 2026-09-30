@@ -53,29 +53,58 @@ try {
   await page.waitForTimeout(700);
 
   const celebracion = await page.evaluate(() => {
+    // Los tres colores de marca que pidió Rodny: verde, cian y magenta (el «moradito»).
+    const MARCA = { verde: [49, 170, 138], cian: [0, 155, 191], magenta: [168, 17, 140] };
     const canvas = document.querySelector('body > canvas');
     if (!canvas) return null;
     const { data } = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height);
+    const porColor = { verde: 0, cian: 0, magenta: 0 };
     let pintados = 0;
     let blancos = 0;
+    let ajenos = 0;
     let minX = Infinity; let maxX = -Infinity; let minY = Infinity; let maxY = -Infinity;
     for (let i = 0; i < data.length; i += 4) {
       if (data[i + 3] < 24) continue;
       pintados += 1;
       if (data[i] > 236 && data[i + 1] > 236 && data[i + 2] > 236) blancos += 1;
+      // `getImageData` devuelve el color sin premultiplicar, así que una partícula a medio
+      // desvanecer conserva su tono; lo que se descarta son los bordes, que sí están mezclados.
+      if (data[i + 3] > 90) {
+        let mejor = null;
+        let distancia = Infinity;
+        for (const [nombre, [r, g, b]] of Object.entries(MARCA)) {
+          const d = Math.abs(data[i] - r) + Math.abs(data[i + 1] - g) + Math.abs(data[i + 2] - b);
+          if (d < distancia) { distancia = d; mejor = nombre; }
+        }
+        if (distancia <= 24) porColor[mejor] += 1; else ajenos += 1;
+      }
       const pixel = i / 4;
       const x = pixel % canvas.width;
       const y = Math.floor(pixel / canvas.width);
       if (x < minX) minX = x; if (x > maxX) maxX = x;
       if (y < minY) minY = y; if (y > maxY) maxY = y;
     }
-    return { pintados, blancos, ancho: canvas.width, caja: { minX, maxX, minY, maxY } };
+    return { pintados, blancos, ajenos, porColor, ancho: canvas.width, caja: { minX, maxX, minY, maxY } };
   });
 
   assert.ok(celebracion, 'el confeti crea su lienzo sobre el cuerpo del documento');
   // Con la ráfaga anterior el lienzo quedaba casi vacío; esta deja miles de píxeles de color.
   assert.ok(celebracion.pintados > 3000, `la celebración se ve (${celebracion.pintados} píxeles pintados)`);
   assert.equal(celebracion.blancos, 0, 'ni una partícula blanca: sobre una superficie clara no existe');
+
+  // Rodny, 30 de septiembre de 2026: «el confeti debe ser con los colores de brain, el verdesito
+  // y con moradito puede ser». Esta comprobación es la que encontró que pasarle los tokens como
+  // `rgb(49 170 138)` los volvía un marrón anaranjado: canvas-confetti solo entiende hexadecimales.
+  // Los bordes de una partícula y las que se solapan mezclan tonos, así que se mide en proporción:
+  // lo que no es de marca tiene que ser residuo de borde, no un cuarto color.
+  const clasificados = celebracion.ajenos + celebracion.porColor.verde + celebracion.porColor.cian + celebracion.porColor.magenta;
+  assert.ok(
+    celebracion.ajenos / clasificados < 0.01,
+    `ningún color fuera del verde, el cian y el magenta de marca (${celebracion.ajenos} de ${clasificados} píxeles)`
+  );
+  for (const color of ['verde', 'cian', 'magenta']) {
+    assert.ok(celebracion.porColor[color] > 200, `se ve el ${color} (${celebracion.porColor[color]} píxeles)`);
+  }
   // Sale de la tarjeta, que está en la columna derecha, no del centro de la ventana.
   const centroX = (celebracion.caja.minX + celebracion.caja.maxX) / 2;
   assert.ok(
@@ -85,7 +114,9 @@ try {
 
   await page.screenshot({ path: 'output/task-confetti.png' });
   console.log(`Confeti verificado: ${celebracion.pintados} píxeles de color, 0 blancos, centrado en ${Math.round(centroX)}px de ${celebracion.ancho}.`);
+  console.log(`  verde ${celebracion.porColor.verde} · cian ${celebracion.porColor.cian} · magenta ${celebracion.porColor.magenta} · ajenos ${celebracion.ajenos}`);
 } finally {
   if (browser) await browser.close();
   await server.close();
 }
+

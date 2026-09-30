@@ -5,23 +5,35 @@ import confetti from 'canvas-confetti';
 // disparadas desde el centro de abajo de la ventana —lejos de la columna «Realizado»— y repartidas
 // por 1500 px de pantalla. Técnicamente se disparaba; nadie lo registraba.
 //
-// Dos cambios: sale **desde donde ocurrió la acción** (la propia tarjeta), y los colores son los
-// de la marca leídos de los tokens de `index.css`, nunca hexadecimales escritos aquí. El blanco
-// se quitó: sobre una superficie clara no existe.
-
-const BRAND_TOKENS = ['--brand-cyan', '--brand-green', '--brand-magenta', '--brand-coral', '--brand-yellow'];
+// Dos cambios: sale **desde donde ocurrió la acción**, y los colores salen de los tokens de marca
+// de `index.css` (los hexadecimales de abajo son solo el respaldo). El blanco se quitó: sobre una
+// superficie clara no existe.
+//
+// «El confeti debe ser con los colores de brain, el verdesito y con moradito puede ser» (Rodny, el
+// mismo día). Con los cinco colores de la paleta la ráfaga salía anaranjada —el coral y el amarillo
+// se comen a los demás—, así que se queda con el verde, el cian que los une en
+// `brain-gradient-primary` y el magenta, que es el «moradito» de la marca: en la paleta oficial no
+// hay morados, están en desuso.
+const BRAND_TOKENS = ['--brand-green', '--brand-cyan', '--brand-magenta'];
 // Respaldo para cuando no hay ventana (pruebas) o los tokens aún no se han aplicado.
-const FALLBACK_COLORS = ['#009BBF', '#31AA8A', '#A8118C', '#FF6A68', '#FCD200'];
+const FALLBACK_COLORS = ['#31AA8A', '#009BBF', '#A8118C'];
 const DEFAULT_ORIGIN = { x: 0.5, y: 0.8 };
+
+// Los tokens son tripletas RGB (`0 155 191`) y **canvas-confetti solo entiende hexadecimales**:
+// a cualquier otra cosa le arranca los caracteres que no son hex y lee los seis primeros, así que
+// `rgb(49 170 138)` se convertía en `b49170…`, un marrón anaranjado. Por eso se pasa a hex aquí.
+const tripletToHex = (triplet) => {
+    const parts = String(triplet).trim().split(/[\s,/]+/).slice(0, 3).map(Number);
+    if (parts.length < 3 || parts.some(value => !Number.isFinite(value))) return null;
+    return `#${parts.map(value => Math.max(0, Math.min(255, Math.round(value))).toString(16).padStart(2, '0')).join('')}`;
+};
 
 const brandColors = () => {
     if (typeof window === 'undefined' || typeof document === 'undefined') return FALLBACK_COLORS;
     const root = getComputedStyle(document.documentElement);
-    // Los tokens son tripletas RGB (`0 155 191`), no colores completos: hay que envolverlas.
     const colors = BRAND_TOKENS
-        .map(token => root.getPropertyValue(token).trim())
-        .filter(Boolean)
-        .map(triplet => `rgb(${triplet.replace(/\s+/g, ' ')})`);
+        .map(token => tripletToHex(root.getPropertyValue(token)))
+        .filter(Boolean);
     return colors.length === BRAND_TOKENS.length ? colors : FALLBACK_COLORS;
 };
 

@@ -55,9 +55,18 @@ test('la celebración se ve: colores de marca, dos ráfagas y salida desde la ac
   // un tercio blancas sobre un tablero claro, desde el centro de abajo de la ventana.
   assert.doesNotMatch(source, /'#ffffff'|"#ffffff"/i, 'el blanco no existe sobre una superficie clara');
   assert.doesNotMatch(source, /#009EB9|#00AC8A/, 'los hexadecimales locales fuera de la paleta se fueron');
-  assert.match(source, /BRAND_TOKENS = \['--brand-cyan', '--brand-green', '--brand-magenta', '--brand-coral', '--brand-yellow'\]/,
+  // Rodny, 30 de septiembre de 2026: «el verdesito y con moradito puede ser». Con los cinco
+  // colores la ráfaga salía anaranjada: el coral y el amarillo se comen a los demás.
+  assert.match(source, /BRAND_TOKENS = \['--brand-green', '--brand-cyan', '--brand-magenta'\]/,
     'los colores se leen de los tokens de marca, nunca se escriben aquí');
-  assert.match(source, /rgb\(\$\{triplet/, 'los tokens son tripletas RGB y hay que envolverlas');
+  assert.doesNotMatch(source, /--brand-coral|--brand-yellow/, 'el coral y el amarillo se salen de la celebración');
+  assert.doesNotMatch(source, /purple|violet|indigo|fuchsia/i, 'el «moradito» de la marca es el magenta; los morados están en desuso');
+  // **canvas-confetti solo entiende hexadecimales**: a cualquier otra cosa le arranca los
+  // caracteres que no son hex y lee los seis primeros, así que `rgb(49 170 138)` se convertía en
+  // `b49170…`, un marrón anaranjado. Los tokens son tripletas y hay que pasarlas a hex.
+  assert.match(source, /const tripletToHex =/, 'las tripletas de los tokens se pasan a hexadecimal');
+  assert.doesNotMatch(source, /rgb\(\$\{/, 'nunca se le pasa un color en notación rgb()');
+  assert.match(source, /toString\(16\)\.padStart\(2, '0'\)/);
 
   assert.equal((source.match(/^\s*confetti\(\{/gm) || []).length, 2, 'dos ráfagas, no una');
   assert.match(source, /particleCount: 90/, 'la ráfaga principal se ve');
