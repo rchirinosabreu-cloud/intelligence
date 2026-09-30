@@ -198,6 +198,7 @@ export const createFinancialRecord = async (prismaClient, input, actor) => {
 const recordSourceRelations = {
     receivablePayment: { select: { id: true } },
     payrollTransaction: { select: { id: true } },
+    payrollPayment: { select: { id: true } },
     bankMatches: { where: { status: 'APPROVED' }, select: { id: true, status: true } }
 };
 
@@ -246,7 +247,7 @@ export const listFinancialRecords = async (prismaClient, filters = {}) => {
         const paymentCategories = ['MEMBRESIA', 'SERVICIO', 'PAUTA'];
         Object.assign(where, {
             status: 'POSTED', scenario: 'ACTUAL', type: 'INCOME', origin: { not: 'SYSTEM' },
-            receivablePayment: { is: null }, payrollTransaction: { is: null }, isProjection: false,
+            receivablePayment: { is: null }, payrollTransaction: { is: null }, payrollPayment: { is: null }, isProjection: false,
             category: { in: where.category ? paymentCategories.filter((category) => category === where.category) : paymentCategories },
             account: { is: { isActive: true, currency: 'COP' } }
         });
@@ -311,8 +312,8 @@ export const financialRecordLockReason = (record) => {
     if (record?.receivablePayment) {
         return 'Este movimiento es el ingreso de un abono de cartera. Para deshacerlo ve a Cartera, abre la obligación del cliente y usa «Revertir» en ese abono: este movimiento se anulará solo.';
     }
-    if (record?.payrollTransaction) {
-        return 'Este movimiento es el pago de una liquidación de nómina. Se corrige desde Nómina, sobre la liquidación que lo generó.';
+    if (record?.payrollPayment || record?.payrollTransaction) {
+        return 'Este movimiento es un pago de nómina. Se corrige desde Nómina Operativa, en la liquidación de esa persona: ahí se le sube el comprobante, se cambia la referencia, se usa «Desglosar» para repartirlo en varios pagos o «Revertir» para deshacerlo.';
     }
     if (record?.bankMatches?.some((match) => match.status === 'APPROVED')) {
         return 'Este movimiento tiene una conciliación bancaria aprobada. Primero hay que deshacer esa conciliación; mientras siga aprobada no se puede editar ni anular aquí.';
@@ -324,7 +325,7 @@ export const financialRecordLockReason = (record) => {
 };
 
 const assertIndependentFinancialRecord = (record) => {
-    if (record.receivablePayment || record.payrollTransaction || record.bankMatches?.some((match) => match.status === 'APPROVED')) {
+    if (record.receivablePayment || record.payrollTransaction || record.payrollPayment || record.bankMatches?.some((match) => match.status === 'APPROVED')) {
         throw new FinancialDomainError('FINANCIAL_RECORD_LINKED', financialRecordLockReason(record), 409);
     }
     if (record.origin === 'SYSTEM') {

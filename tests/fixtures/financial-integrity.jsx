@@ -60,6 +60,32 @@ let directoryClients = [
   { ...archivedClient, legalName: null, documentType: null, documentNumber: null, contactName: null, email: null, phone: null, address: null, city: null, country: null, formattedDocument: null },
   { id: 'demo-quiet', name: 'Cliente sin movimientos', slug: 'cliente-sin-movimientos', isArchived: false, legalName: null, documentType: null, documentNumber: null, contactName: null, email: null, phone: null, address: null, city: null, country: null, formattedDocument: null }
 ];
+// Nómina por partes (30 de septiembre de 2026): Rodny pagado de una sola vez, como quedó en
+// producción, y Elisa aprobada, con un adelanto registrado a mano esperando a aplicarse.
+const secondAccount = { id: 'demo-account-2', name: 'Nequi de muestra', type: 'BANK', currency: 'COP', balance: 900000 };
+const payrollContracts = [
+  { id: 'c-rodny', name: 'Rodny Chirinos', position: 'Project', baseSalary: 4300000, socialSecurity: 508300, monthlyTotal: 4808300 },
+  { id: 'c-elisa', name: 'Elisa Mestra', position: 'Administrativo / Contable', baseSalary: 2000000, socialSecurity: 508300, monthlyTotal: 2508300 }
+];
+const payrollTransactions = [
+  { id: 'tx-rodny', contractId: 'c-rodny', month: 9, year: 2026, status: 'PAID', netAmount: 4808300, baseSalary: 4300000, socialSecurity: 508300, paidAt: '2026-09-30T12:00:00Z' },
+  { id: 'tx-elisa', contractId: 'c-elisa', month: 9, year: 2026, status: 'APPROVED', netAmount: 2508300, baseSalary: 2000000, socialSecurity: 508300, paidAt: null }
+];
+const payrollPayments = window.__payrollPayments = [
+  { id: 'payroll-payment-legacy:tx-rodny', transactionId: 'tx-rodny', amount: 4808300, paidAt: '2026-09-30T12:00:00Z', accountId: 'demo-account', reference: null, notes: null, financialRecordId: 'rec-payroll-legacy', origin: 'SYSTEM', documents: [], reversedAt: null }
+];
+let payrollCounter = 0;
+const accountName = (id) => [account, secondAccount].find((item) => item.id === id)?.name || null;
+const serializePayrollTx = (tx) => {
+  const payments = payrollPayments.filter((payment) => payment.transactionId === tx.id).map((payment) => ({ ...payment, accountName: accountName(payment.accountId), canSplit: !payment.reversedAt && payment.origin === 'SYSTEM' }));
+  const paidAmount = payments.filter((payment) => !payment.reversedAt).reduce((sum, payment) => sum + payment.amount, 0);
+  return { ...tx, payments, paidAmount, outstanding: tx.netAmount - paidAmount };
+};
+const settlePayrollTx = (tx) => {
+  const { paidAmount } = serializePayrollTx(tx);
+  tx.status = paidAmount >= tx.netAmount ? 'PAID' : 'APPROVED';
+  tx.paidAt = tx.status === 'PAID' ? payrollPayments.filter((payment) => payment.transactionId === tx.id && !payment.reversedAt).map((payment) => payment.paidAt).sort().pop() : null;
+};
 const createdReceivables = window.__createdReceivables = [];
 const deletedReceivables = window.__deletedReceivables = [];
 axios.defaults.adapter = async config => {
@@ -88,6 +114,55 @@ axios.defaults.adapter = async config => {
     const clean = Object.fromEntries(Object.entries(body).map(([key, value]) => [key, value === '' ? null : value]));
     directoryClients = directoryClients.map((item) => (item.id === id ? { ...item, ...clean } : item));
     data = { message: 'Ficha del cliente actualizada.', client: directoryClients.find((item) => item.id === id) };
+  }
+  // Nómina por partes (30 de septiembre de 2026), con las reglas del servidor en memoria.
+  else if (path.endsWith('/payroll-ledger')) data = { year: 2026, importBatchId: null, items: payrollContracts.map((contract) => ({ ...contract, transactions: payrollTransactions.filter((tx) => tx.contractId === contract.id).map(serializePayrollTx) })) };
+  else if (path.endsWith('/payment-candidates')) {
+    const used = new Set(payrollPayments.filter((payment) => !payment.reversedAt).map((payment) => payment.financialRecordId));
+    data = { records: used.has('rec-adelanto') ? [] : [{ id: 'rec-adelanto', amount: 500000, date: '2026-09-05T12:00:00Z', description: 'Adelanto Elisa', reference: 'ADEL-01', accountId: account.id }] };
+  }
+  else if (path.includes('/payroll-transactions/') && path.endsWith('/pay')) {
+    const tx = payrollTransactions.find((item) => path.includes(item.id));
+    const outstanding = serializePayrollTx(tx).outstanding;
+    const amount = body.financialRecordId ? 500000 : Number(body.amount || outstanding);
+    if (amount > outstanding) throw Object.assign(new Error('De más'), { response: { data: { message: `El pago supera lo que falta por pagar: $ ${outstanding.toLocaleString('es-CO')}.` } } });
+    const recordId = body.financialRecordId || `rec-payroll-${++payrollCounter}`;
+    payrollPayments.push({ id: `pp-${++payrollCounter}`, transactionId: tx.id, amount, paidAt: body.financialRecordId ? '2026-09-05T12:00:00Z' : `${body.paidAt}T12:00:00Z`, accountId: body.accountId || account.id, reference: body.reference || null, notes: body.notes || null, financialRecordId: recordId, origin: body.financialRecordId ? 'MANUAL' : 'SYSTEM', documents: [], reversedAt: null });
+    settlePayrollTx(tx);
+    data = { message: tx.status === 'PAID' ? 'Pago de nómina registrado. La liquidación quedó pagada.' : 'Pago de nómina registrado.', transaction: tx, financialRecord: { id: recordId } };
+  }
+  else if (path.includes('/payroll-payments/') && path.endsWith('/split')) {
+    const payment = payrollPayments.find((item) => path.includes(item.id));
+    const sum = body.parts.reduce((total, part) => total + Number(part.amount), 0);
+    if (sum !== payment.amount) throw Object.assign(new Error('No cuadra'), { response: { data: { message: 'Los ítems tienen que sumar lo mismo que el pago.' } } });
+    Object.assign(payment, { reversedAt: new Date().toISOString(), reversalReason: `Desglosado en ${body.parts.length} pagos`, financialRecordId: null });
+    // Como el servidor: devuelve los pagos creados en el orden de los ítems.
+    const created = body.parts.map((part) => ({ id: `pp-${++payrollCounter}`, transactionId: payment.transactionId, amount: Number(part.amount), paidAt: `${part.paidAt}T12:00:00Z`, accountId: part.accountId, reference: part.reference || null, notes: null, financialRecordId: `rec-payroll-${++payrollCounter}`, origin: 'SYSTEM', documents: [], reversedAt: null }));
+    payrollPayments.push(...created);
+    settlePayrollTx(payrollTransactions.find((tx) => tx.id === payment.transactionId));
+    data = { message: `Pago desglosado en ${body.parts.length} pagos.`, payments: created };
+  }
+  else if (path.includes('/payroll-payments/') && path.endsWith('/reverse')) {
+    const payment = payrollPayments.find((item) => path.includes(item.id));
+    Object.assign(payment, { reversedAt: new Date().toISOString(), reversalReason: body.reason, financialRecordId: null });
+    settlePayrollTx(payrollTransactions.find((tx) => tx.id === payment.transactionId));
+    data = { message: 'Pago revertido. La liquidación vuelve a mostrar lo que falta por pagar.' };
+  }
+  else if (path.includes('/payroll-payments/') && config.method === 'patch') {
+    const payment = payrollPayments.find((item) => path.endsWith(item.id));
+    Object.assign(payment, body);
+    data = { message: 'Pago actualizado.', payment };
+  }
+  else if (path.includes('/records/') && path.endsWith('/documents') && config.method === 'post') {
+    const payment = payrollPayments.find((item) => path.includes(`/records/${item.financialRecordId}/`));
+    const file = body.get('file');
+    const document = { id: `doc-${++payrollCounter}`, name: file.name, mimeType: file.type || 'application/pdf', size: file.size };
+    payment?.documents.push(document);
+    window.__payrollUploads = [...(window.__payrollUploads || []), document];
+    data = { message: 'Documento guardado correctamente.', document };
+  }
+  else if (path.includes('/records/') && path.includes('/documents/') && path.endsWith('/file')) {
+    data = new Blob([samplePdf('Comprobante de pago (muestra)')], { type: 'application/pdf' });
   }
   else if (path.endsWith('/accounts')) data = { accounts: [account] };
   // TRM oficial ficticia, como la devuelve el servidor.

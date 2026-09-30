@@ -13,7 +13,9 @@ test('payroll UI can generate, approve and pay a monthly payroll period', () => 
     assert.match(dashboardSource, /post\(`\$\{baseUrl\}\/api\/financials\/payroll-contracts`/);
     assert.match(dashboardSource, /\/payroll\/periods/);
     assert.match(dashboardSource, /\/payroll-transactions\/\$\{transaction\.id\}\/approve/);
-    assert.match(dashboardSource, /\/payroll-transactions\/\$\{payrollPayment\.id\}\/pay/);
+    // El pago vive en su propio componente desde el 30 de septiembre de 2026 (pagos por partes).
+    const paymentsSource = fs.readFileSync(new URL('../src/components/modules/financial/PayrollPayments.jsx', import.meta.url), 'utf8');
+    assert.match(paymentsSource, /\/payroll-transactions\/\$\{transaction\.id\}\/pay/);
     assert.match(dashboardSource, /Generar nómina/);
 });
 
@@ -86,7 +88,9 @@ test('getFinancialPayrollLedger returns imported payroll contracts as editable r
             id: 'payroll-1', month: 8, year: 2026, status: 'DRAFT',
             baseSalary: 3000000, socialSecurity: 0, grossAmount: 3000000,
             deductions: 0, netAmount: 3000000, approvedAt: null, paidAt: null,
-            financialRecordId: null
+            financialRecordId: null,
+            // Sin pagos todavía: falta el neto entero (pagos por partes, 30 de septiembre de 2026).
+            payments: [], paidAmount: 0, outstanding: 3000000
         }]
     }]);
 });

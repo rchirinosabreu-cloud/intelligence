@@ -1,6 +1,6 @@
 // Keep matching in PostgreSQL, before pagination and aggregation.
 const SEARCH_PATHS = {
-    record: ['description', 'counterparty', 'sourceLabel', 'reference', 'notes', 'subcategory', 'client.name', 'user.name', 'account.name', 'payrollTransaction.contract.sourceLabel', 'payrollTransaction.contract.collaborator.displayName', 'payrollTransaction.contract.user.name'],
+    record: ['description', 'counterparty', 'sourceLabel', 'reference', 'notes', 'subcategory', 'client.name', 'user.name', 'account.name', 'payrollTransaction.contract.sourceLabel', 'payrollTransaction.contract.collaborator.displayName', 'payrollTransaction.contract.user.name', 'payrollPayment.transaction.contract.sourceLabel', 'payrollPayment.transaction.contract.collaborator.displayName'],
     receivable: ['sourceLabel', 'notes', 'comments', 'client.name'],
     contract: ['sourceLabel', 'collaborator.displayName', 'user.name'],
     payroll: ['user.name', 'contract.sourceLabel', 'contract.collaborator.displayName', 'contract.user.name']

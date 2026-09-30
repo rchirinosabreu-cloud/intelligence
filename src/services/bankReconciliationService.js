@@ -380,7 +380,7 @@ export const approveBankMatch = async (prismaClient, matchId, actor) => {
       const match = await tx.bankReconciliationMatch.findUnique({
         where: { id: matchId }, include: {
           bankTransaction: { include: { account: true } },
-          financialRecord: { include: { account: true, receivablePayment: true, payrollTransaction: true } }
+          financialRecord: { include: { account: true, receivablePayment: true, payrollTransaction: true, payrollPayment: true } }
         }
       });
       if (!match || match.status !== 'PROPOSED' || match.bankTransaction?.status !== 'PROPOSED') throw unavailable();
@@ -403,7 +403,7 @@ export const approveBankMatch = async (prismaClient, matchId, actor) => {
       if (record.accountId && record.accountId !== bank.accountId) {
         throw new BankReconciliationError('BANK_MATCH_ACCOUNT_CONFLICT', 'El movimiento pertenece a otra cuenta. Revisa su registro antes de conciliar.', 409);
       }
-      if (!record.accountId && (record.receivablePayment || record.payrollTransaction || !['MANUAL', 'IMPORT'].includes(record.origin))) {
+      if (!record.accountId && (record.receivablePayment || record.payrollTransaction || record.payrollPayment || !['MANUAL', 'IMPORT'].includes(record.origin))) {
         throw new BankReconciliationError('BANK_MATCH_LINKED_RECORD', 'Revisa la cuenta del pago vinculado antes de conciliar; no se modificará desde esta propuesta.', 409);
       }
       // Unassigned legacy records are denominated in COP. There is no record-level FX amount/rate yet.

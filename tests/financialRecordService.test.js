@@ -326,7 +326,7 @@ test('receivable candidates are posted actual income, independent of other payme
     });
     assert.deepEqual(query.where, {
         scenario: 'ACTUAL', type: 'INCOME', status: 'POSTED', clientId: 'client-1', accountId: 'account-1',
-        origin: { not: 'SYSTEM' }, receivablePayment: { is: null }, payrollTransaction: { is: null },
+        origin: { not: 'SYSTEM' }, receivablePayment: { is: null }, payrollTransaction: { is: null }, payrollPayment: { is: null },
         isProjection: false, category: { in: ['MEMBRESIA', 'SERVICIO', 'PAUTA'] },
         account: { is: { isActive: true, currency: 'COP' } }
     });

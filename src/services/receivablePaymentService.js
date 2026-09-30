@@ -129,14 +129,14 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
             if (financialRecordId) {
                 financialRecord = await tx.financialRecord.findUnique({
                     where: { id: financialRecordId },
-                    include: { receivablePayment: { select: { id: true } }, payrollTransaction: { select: { id: true } } }
+                    include: { receivablePayment: { select: { id: true } }, payrollTransaction: { select: { id: true } }, payrollPayment: { select: { id: true } } }
                 });
                 const recordDate = financialRecord?.date ? new Date(financialRecord.date) : null;
                 const sameDay = recordDate && !Number.isNaN(recordDate.getTime()) && recordDate.toISOString().slice(0, 10) === paidAt.toISOString().slice(0, 10);
                 if (!financialRecord || financialRecord.status !== 'POSTED' || financialRecord.scenario !== 'ACTUAL' || financialRecord.isProjection === true ||
                     financialRecord.year !== year || financialRecord.month !== month ||
                     financialRecord.type !== 'INCOME' || financialRecord.origin === 'SYSTEM' ||
-                    financialRecord.receivablePayment || financialRecord.payrollTransaction ||
+                    financialRecord.receivablePayment || financialRecord.payrollTransaction || financialRecord.payrollPayment ||
                     financialRecord.clientId !== receivable.clientId || financialRecord.accountId !== accountId ||
                     financialCents(financialRecord.amount) !== amountCents || !sameDay ||
                     !PAYMENT_CATEGORIES.has(financialRecord.category) || (category && financialRecord.category !== category)) {

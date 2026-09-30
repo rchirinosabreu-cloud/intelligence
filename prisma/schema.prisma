@@ -1686,6 +1686,7 @@ model FinancialRecord {
   updatedAt          DateTime                  @updatedAt
   receivablePayment  ReceivablePayment?
   payrollTransaction PayrollTransaction?
+  payrollPayment     PayrollPayment?
   bankMatches        BankReconciliationMatch[]
   allocations        FinancialRecordAllocation[]
   documents          FinancialRecordDocument[]
@@ -1762,6 +1763,7 @@ model FinancialAccount {
   updatedAt            DateTime                   @updatedAt
   records              FinancialRecord[]
   payments             ReceivablePayment[]
+  payrollPayments      PayrollPayment[]
   statementImports     BankStatementImport[]
   bankTransactions     BankTransaction[]
 
@@ -2001,15 +2003,45 @@ model PayrollTransaction {
   status            PayrollTransactionStatus @default(DRAFT)
   approvedAt        DateTime?
   paidAt            DateTime?
+  // Vínculo del único pago que admitía una liquidación antes del 30 de septiembre de 2026.
+  // Los pagos viven ahora en PayrollPayment; este campo solo conserva los antiguos.
   financialRecordId String?                  @unique
   financialRecord   FinancialRecord?         @relation(fields: [financialRecordId], references: [id], onDelete: SetNull)
   createdAt         DateTime                 @default(now())
   updatedAt         DateTime                 @updatedAt
   adjustments       PayrollAdjustment[]
+  payments          PayrollPayment[]
 
   @@unique([contractId, month, year])
   @@index([contractId])
   @@index([year, month])
+}
+
+// Pagos de una liquidación (Rodny, 30 de septiembre de 2026): una nómina se paga por partes
+// —adelantos, quincena del 15, quincena del 30—, cada una con su egreso, su referencia y sus
+// comprobantes. Como los abonos de Cartera: un pago no se borra, se revierte o se parte.
+// Tabla aditiva con scripts/ensure-payroll-payments-schema.js.
+model PayrollPayment {
+  id                String             @id @default(uuid())
+  transactionId     String
+  transaction       PayrollTransaction @relation(fields: [transactionId], references: [id], onDelete: Restrict)
+  accountId         String?
+  account           FinancialAccount?  @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  financialRecordId String?            @unique
+  financialRecord   FinancialRecord?   @relation(fields: [financialRecordId], references: [id], onDelete: SetNull)
+  amount            Decimal
+  paidAt            DateTime
+  reference         String?
+  notes             String?
+  createdById       String?
+  reversedAt        DateTime?
+  reversalReason    String?
+  reversedById      String?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([transactionId, paidAt])
+  @@index([accountId, paidAt])
 }
 
 enum AdjustmentType {
