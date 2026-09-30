@@ -180,13 +180,14 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
                 }
                 throw new FinancialDomainError('RECEIVABLE_AMOUNT_INVALID', 'El monto de cartera debe ser positivo, tener como máximo dos decimales y estar dentro del rango de precisión financiera.');
             }
-            // Una cuenta emitida no se reedita: su PDF y sus conceptos ya están congelados con esa cifra.
-            // Las notas y el seguimiento sí se pueden seguir tocando.
+            // El valor de una cuenta emitida es la suma de sus conceptos y está impreso en su
+            // PDF, así que no se cambia suelto por aquí: se corrige el documento con
+            // «Corregir», que ajusta conceptos y valor y rehace el PDF en un solo paso.
             if (input.amount !== undefined && (existing.number || existing.issuedAt) && amountCents !== financialCents(existing.amount)) {
                 const label = existing.number ? `No. ${String(existing.number).padStart(4, '0')}` : 'emitida';
                 throw new FinancialDomainError(
                     'RECEIVABLE_ISSUED_IMMUTABLE',
-                    `La cuenta de cobro ${label} ya fue emitida y su valor no se reedita. Si el cliente necesita otra cifra, emite una nueva cuenta de cobro.`,
+                    `La cuenta de cobro ${label} ya fue emitida: su valor sale de sus conceptos. Usa «Corregir» en la tarjeta para cambiarlo; el PDF se rehace con la cifra nueva.`,
                     409
                 );
             }

@@ -68,7 +68,7 @@ test('una cuenta de cobro emitida no cambia de valor: se dice por dónde salir, 
     const existing = { id: 'debt-1', amount: 1200000, status: 'DEBE', number: 393, issuedAt: new Date('2026-09-22T00:00:00Z'), metadata: {}, payments: [] };
     await assert.rejects(
         updateReceivable(makeClient(existing, []), 'debt-1', { amount: 1500000 }, { id: 'user-1' }),
-        (error) => error.code === 'RECEIVABLE_ISSUED_IMMUTABLE' && error.statusCode === 409 && /No\. 0393/.test(error.message) && /emite una nueva/i.test(error.message)
+        (error) => error.code === 'RECEIVABLE_ISSUED_IMMUTABLE' && error.statusCode === 409 && /No\. 0393/.test(error.message) && /Corregir/.test(error.message)
     );
     // Sending the same amount back is not a change.
     const same = [];

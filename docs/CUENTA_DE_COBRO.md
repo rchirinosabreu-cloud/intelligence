@@ -63,18 +63,40 @@ le manda al cliente y lo que queda en cartera tienen que ser la misma cifra. Una
 obligación con abonos aplicados que no cuadran con ese total no se emite
 (`RECEIVABLE_ALREADY_PAID_PARTIALLY`).
 
-**Una cuenta ya emitida no se reedita.** Si el cliente pide algo después, va otra cuenta
-de cobro aparte, que es como se trabaja hoy. Eso incluye el **valor original** de la
-obligación: antes de emitir se corrige desde la tarjeta de Cartera (una cifra tecleada mal,
-120.000 por 1.200.000), pero una vez emitida el servidor la rechaza con
-`RECEIVABLE_ISSUED_IMMUTABLE` nombrando el número («No. 0393») y la salida: emitir otra.
-Las notas y el comentario de seguimiento sí siguen editables después de emitir.
+**Una cuenta ya emitida se corrige** (Rodny, 30 de septiembre de 2026: «aunque la cta de
+cobro haya sido emitida, necesito que se pueda aún editar nuevamente y que eso remodifique
+el pdf»). Antes la regla era que no se reeditaba, y un valor mal tecleado —120.000 donde
+eran 1.200.000— se quedaba sin salida.
+
+- En Cartera, «Corregir» junto a «Ver PDF» (o el lápiz del valor) abre el mismo formulario
+  de emitir, precargado con lo que dice el documento.
+- `PUT /api/financials/receivables/:id/document` (`correctReceivableDocument`) se puede
+  repetir cuantas veces haga falta. **Conserva el número**: el consecutivo de Elisa no salta
+  por un error de digitación.
+- Cambia concepto, periodo, conceptos y fecha; el importe de la obligación vuelve a ser el
+  total y el estado se recalcula desde los abonos vigentes. No puede quedar por debajo de
+  lo ya abonado.
+- **Rehace el PDF** en una clave nueva, `…-corregida-<hora UTC>.pdf`. El que se había
+  mandado sigue en el bucket, y la auditoría guarda conceptos, valor, su clave y el motivo.
+- Emitir otra vez la misma obligación sigue sin estar permitido: se corrige, o lo que el
+  cliente pida después va en otra cuenta aparte.
+
+**El concepto lleva formato** (Rodny, 30 de septiembre de 2026). Se escribe con la barra
+de formato de la plataforma: títulos, negrita, cursiva, subrayado, viñetas y lista
+numerada, y el PDF lo dibuja igual. No hay resaltado porque el PDF no puede dibujarlo.
+
+- Se guarda como HTML y el servidor lo limpia antes de guardar: sin enlaces, sin código y
+  sin atributos. El tope de 4000 caracteres cuenta el texto que se lee.
+- Las cuentas anteriores tienen el concepto en texto plano y siguen funcionando. Al abrir
+  una en «Corregir», sus líneas con guion llegan como viñetas de verdad.
+- En el PDF, un párrafo sin formato sale justificado como siempre. Uno con negritas o
+  cursivas sale alineado a la izquierda, porque justificar mezclando fuentes descuadra.
 
 **El importe en letras de los millones redondos lleva «de»** (Rodny, 29 de septiembre de
 2026): «CUATRO MILLONES DE PESOS», «UN MILLÓN DE PESOS»; con resto no lo lleva («CUATRO
-MILLONES DOSCIENTOS MIL PESOS», «UN MILLÓN UN PESOS»). Los PDF emitidos antes de ese día
-quedaron congelados en el bucket con el texto antiguo; solo cambia lo que se emita o se
-regenere desde entonces.
+MILLONES DOSCIENTOS MIL PESOS», «UN MILLÓN UN PESOS»). El PDF guardado al emitir no se
+rehace solo cuando cambia la plantilla: para que una cuenta vieja salga con el «de», se
+abre «Corregir» y se guarda sin cambiar nada.
 
 ## El PDF
 

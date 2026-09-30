@@ -5,6 +5,7 @@ import {
     nextReceivableNumber,
     formatReceivableNumber,
     issueReceivableDocument,
+    correctReceivableDocument,
     RECEIVABLE_ITEM_MAX
 } from '../src/services/receivableDocumentService.js';
 
@@ -184,13 +185,144 @@ test('un número forzado que no es un entero positivo se rechaza', async () => {
     );
 });
 
-test('una cuenta ya emitida no se reedita: se manda otra aparte', async () => {
+test('emitir otra vez una cuenta ya emitida no le da otro número: se corrige o se manda otra aparte', async () => {
     const { tx } = buildTx({ receivable: openReceivable({ number: 144 }) });
     const prismaClient = { $transaction: async (callback) => callback(tx) };
 
     await assert.rejects(
         issueReceivableDocument(prismaClient, 'debt-1', { concept: 'X', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30' }, { id: 'user-1' }),
-        (error) => error.code === 'RECEIVABLE_ALREADY_ISSUED' && /No\. 0144/.test(error.message) && /aparte/.test(error.message)
+        (error) => error.code === 'RECEIVABLE_ALREADY_ISSUED' && /No\. 0144/.test(error.message) && /Corregir/.test(error.message) && /aparte/.test(error.message)
+    );
+});
+
+// Corregir una cuenta ya emitida (Rodny, 30 de septiembre de 2026: «no permite editar
+// las ctas de cobro una vez emitidas»; tecleó 120.000 donde eran 1.200.000). Conserva
+// su número, deja la versión anterior en la auditoría y en el bucket, y rehace el PDF.
+const issuedReceivable = (overrides = {}) => openReceivable({
+    number: 393,
+    issuedAt: new Date('2026-09-25T12:00:00Z'),
+    concept: 'Servicios de septiembre',
+    servicePeriod: '20 de agosto al 19 de septiembre',
+    amount: 120000,
+    pdfStorageKey: 'receivables/debt-1/cuenta-de-cobro-0393.pdf',
+    items: [{ id: 'item-1', description: 'Fee mensual', amount: 120000, sortOrder: 0 }],
+    ...overrides
+});
+const correctionInput = (extra = {}) => ({
+    concept: 'Servicios de septiembre',
+    servicePeriod: '20 de agosto al 19 de septiembre',
+    items: [{ description: 'Fee mensual', amount: 1200000 }],
+    ...extra
+});
+const pdfRecorder = () => {
+    const stored = [];
+    return {
+        stored,
+        storePdf: async (_prisma, _storage, receivable, _env, _prebuilt, key) => { stored.push({ receivable, key }); return key; }
+    };
+};
+
+test('corregir una cuenta emitida conserva su número y ajusta conceptos y valor', async () => {
+    const { calls, tx } = buildTx({ receivable: issuedReceivable() });
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+    const { stored, storePdf } = pdfRecorder();
+
+    const result = await correctReceivableDocument(prismaClient, 'debt-1', correctionInput({ reason: 'Se digitó 120.000, eran 1.200.000.' }), { id: 'user-1' }, { storePdf, now: new Date('2026-09-30T15:04:05Z') });
+
+    const update = calls.find(([name]) => name === 'receivable.update')[1].data;
+    assert.equal(update.amount, 1200000);
+    assert.equal(update.number, undefined, 'la corrección nunca le cambia el número');
+    // Si el PDF nuevo no se pudiera guardar, «Ver PDF» lo regenera en vez de servir el viejo.
+    assert.equal(update.pdfStorageKey, null);
+    assert.equal(result.document.formattedNumber, 'No. 0393');
+    assert.deepEqual(calls.find(([name]) => name === 'items.createMany')[1].data.map((line) => line.amount), [1200000]);
+    assert.ok(calls.some(([name]) => name === 'items.deleteMany'));
+
+    const audit = calls.find(([name]) => name === 'audit.create')[1].data;
+    assert.equal(audit.action, 'UPDATE');
+    assert.equal(audit.entityType, 'AccountsReceivable');
+    assert.equal(audit.actorId, 'user-1');
+    // Lo que se había mandado queda en la auditoría: conceptos, valor y dónde estaba su PDF.
+    assert.equal(audit.before.amount, 120000);
+    assert.equal(audit.before.items[0].amount, 120000);
+    assert.equal(audit.before.pdfStorageKey, 'receivables/debt-1/cuenta-de-cobro-0393.pdf');
+    assert.equal(audit.after.reason, 'Se digitó 120.000, eran 1.200.000.');
+
+    // El PDF se rehace en una clave nueva: el anterior se queda en el bucket.
+    assert.equal(stored.length, 1);
+    assert.notEqual(stored[0].key, 'receivables/debt-1/cuenta-de-cobro-0393.pdf');
+    assert.match(stored[0].key, /^receivables\/debt-1\/cuenta-de-cobro-0393-corregida-20260930150405\.pdf$/);
+});
+
+test('corregir sin cambiar nada rehace el PDF con la plantilla vigente', async () => {
+    const { tx } = buildTx({ receivable: issuedReceivable({ amount: 4000000, items: [{ description: 'Fee mensual', amount: 4000000 }] }) });
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+    const { stored, storePdf } = pdfRecorder();
+
+    await correctReceivableDocument(prismaClient, 'debt-1', correctionInput({ items: [{ description: 'Fee mensual', amount: 4000000 }] }), { id: 'user-1' }, { storePdf });
+
+    assert.equal(stored.length, 1, 'así una cuenta vieja sale con «CUATRO MILLONES DE PESOS»');
+});
+
+test('sin fecha nueva, la corrección conserva la fecha de emisión', async () => {
+    const { calls, tx } = buildTx({ receivable: issuedReceivable() });
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+
+    await correctReceivableDocument(prismaClient, 'debt-1', correctionInput(), { id: 'user-1' }, pdfRecorder());
+
+    const update = calls.find(([name]) => name === 'receivable.update')[1].data;
+    assert.equal(update.issuedAt, undefined);
+});
+
+test('una obligación sin emitir no se corrige: se emite', async () => {
+    const { tx } = buildTx({ receivable: openReceivable() });
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+
+    await assert.rejects(
+        correctReceivableDocument(prismaClient, 'debt-1', correctionInput(), { id: 'user-1' }, pdfRecorder()),
+        (error) => error.code === 'RECEIVABLE_NOT_ISSUED' && error.statusCode === 409 && /Emitir/.test(error.message)
+    );
+});
+
+test('la corrección no puede dejar el total por debajo de lo ya abonado', async () => {
+    const { tx } = buildTx({ receivable: issuedReceivable({ payments: [{ amount: 500000 }] }) });
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+
+    await assert.rejects(
+        correctReceivableDocument(prismaClient, 'debt-1', correctionInput({ items: [{ description: 'Fee', amount: 400000 }] }), { id: 'user-1' }, pdfRecorder()),
+        (error) => error.code === 'RECEIVABLE_AMOUNT_BELOW_PAYMENTS' && error.statusCode === 409
+    );
+});
+
+test('el estado sigue a los abonos vigentes después de corregir', async () => {
+    const paid = buildTx({ receivable: issuedReceivable({ status: 'DEBE', payments: [{ amount: 1200000 }] }) });
+    await correctReceivableDocument({ $transaction: async (callback) => callback(paid.tx) }, 'debt-1', correctionInput(), { id: 'user-1' }, pdfRecorder());
+    assert.equal(paid.calls.find(([name]) => name === 'receivable.update')[1].data.status, 'PAGADO');
+
+    // Figuraba pagada con 120.000 y ahora vale 1.200.000: vuelve a deber la diferencia.
+    const reopened = buildTx({ receivable: issuedReceivable({ status: 'PAGADO', payments: [{ amount: 120000 }] }) });
+    await correctReceivableDocument({ $transaction: async (callback) => callback(reopened.tx) }, 'debt-1', correctionInput(), { id: 'user-1' }, pdfRecorder());
+    assert.equal(reopened.calls.find(([name]) => name === 'receivable.update')[1].data.status, 'DEBE');
+
+    const promised = buildTx({ receivable: issuedReceivable({ status: 'PROMESADO' }) });
+    await correctReceivableDocument({ $transaction: async (callback) => callback(promised.tx) }, 'debt-1', correctionInput(), { id: 'user-1' }, pdfRecorder());
+    assert.equal(promised.calls.find(([name]) => name === 'receivable.update')[1].data.status, 'PROMESADO');
+});
+
+test('un periodo cerrado impide corregir', async () => {
+    const { tx } = buildTx({ receivable: issuedReceivable() });
+    tx.financialPeriod.findUnique = async () => ({ status: 'CLOSED' });
+
+    await assert.rejects(
+        correctReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', correctionInput(), { id: 'user-1' }, pdfRecorder()),
+        (error) => error.code === 'FINANCIAL_PERIOD_CLOSED'
+    );
+});
+
+test('el motivo de la corrección es opcional pero tiene tope', async () => {
+    await assert.rejects(
+        correctReceivableDocument({}, 'debt-1', correctionInput({ reason: 'x'.repeat(301) }), { id: 'user-1' }, pdfRecorder()),
+        (error) => error.code === 'RECEIVABLE_CORRECTION_REASON_TOO_LONG'
     );
 });
 

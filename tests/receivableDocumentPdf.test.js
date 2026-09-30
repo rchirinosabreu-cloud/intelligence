@@ -107,6 +107,50 @@ test('el concepto separa el párrafo de sus viñetas, como se escribe en Word', 
     assert.ok(bullets.every((block) => !block.text.startsWith('-')));
 });
 
+// El concepto con formato (Rodny, 30 de septiembre de 2026: «añadas la barra de formato
+// … para poder poner viñetas, títulos, negrillas»). Llega como HTML del editor.
+const richConcept = [
+    '<h2>Plan de <em>contenidos</em></h2>',
+    '<p>Prestación de servicios para la marca. <strong>Este servicio incluye:</strong></p>',
+    '<ul><li><p>Planeación <u>mensual</u></p></li><li><p>4 historias</p></li></ul>',
+    '<ol><li><p>Primero</p></li><li><p>Segundo</p></li></ol>',
+    '<p><script>alert(1)</script><a href="javascript:alert(1)">sin enlace</a></p>'
+].join('');
+
+test('el concepto con formato llega al documento con títulos, negritas y listas', () => {
+    const { concept } = buildReceivableDocumentModel({ ...titanes, concept: richConcept });
+    assert.equal(concept[0].kind, 'heading');
+    assert.equal(concept[0].level, 2);
+    assert.equal(concept[0].text, 'Plan de contenidos');
+    assert.ok(concept[0].runs.some((run) => run.italic && run.text === 'contenidos'));
+
+    const paragraph = concept[1];
+    assert.equal(paragraph.kind, 'paragraph');
+    assert.ok(paragraph.runs.some((run) => run.bold && run.text === 'Este servicio incluye:'));
+
+    const bullets = concept.filter((block) => block.kind === 'bullet');
+    assert.deepEqual(bullets.map((block) => block.text), ['Planeación mensual', '4 historias', 'Primero', 'Segundo']);
+    assert.ok(bullets[0].runs.some((run) => run.underline && run.text === 'mensual'));
+    assert.equal(bullets[0].ordinal, undefined, 'una viñeta no lleva número');
+    assert.deepEqual(bullets.slice(2).map((block) => block.ordinal), [1, 2]);
+
+    // Nada de código ni de enlaces dentro de un documento de cobro.
+    const all = concept.map((block) => block.text).join(' ');
+    assert.doesNotMatch(all, /alert/);
+    assert.ok(concept.every((block) => block.runs.every((run) => !run.href)));
+});
+
+test('el concepto viejo en texto plano sigue saliendo igual', () => {
+    const { concept } = buildReceivableDocumentModel(titanes);
+    assert.equal(concept[0].runs.length, 1);
+    assert.equal(concept[0].runs[0].text, concept[0].text);
+});
+
+test('el PDF se genera con un concepto con formato', () => {
+    const buffer = generateReceivablePdfBuffer({ ...titanes, concept: richConcept });
+    assert.equal(buffer.subarray(0, 5).toString('latin1'), '%PDF-');
+});
+
 // Con un solo concepto el documento no lleva tabla, como el de Elvira Utria.
 test('la tabla de conceptos solo aparece cuando hay más de uno', () => {
     assert.equal(buildReceivableDocumentModel(titanes).items.length, 2);
