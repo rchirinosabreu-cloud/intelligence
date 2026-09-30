@@ -5,7 +5,7 @@ import { formatPartyDocument, formatPartyName } from '../lib/partyIdentity.js';
 import { pathToFileURL } from 'node:url';
 import {
     formatReceivableNumber, parseReceivableConcept, receivableIssuer, RECEIVABLE_ISSUER_DEFAULT_NAME,
-    isReceivableConceptHtml
+    isReceivableConceptHtml, receivableDocumentFilename
 } from '../lib/receivableDocument.js';
 import {
     DEFAULT_RECEIVABLE_CURRENCY, formatReceivableMoney, normalizeReceivableCurrency, receivableAmountInWords
@@ -440,13 +440,12 @@ export const receivablePdfRevisionKey = (receivable, at = new Date()) => {
     return `receivables/${receivable.id}/cuenta-de-cobro-${String(receivable.number).padStart(4, '0')}-corregida-${stamp}.pdf`;
 };
 
-const safeFilenamePart = (value) => String(value || '').replace(/[\\/:*?"<>|\r\n]/g, ' ').replace(/\s+/g, ' ').trim();
-
-// El nombre con el que llega al correo del cliente: como lo nombra Elisa a mano hoy.
-export const receivablePdfFilename = (receivable) => {
-    const who = safeFilenamePart(receivable.client?.legalName || receivable.client?.name);
-    return `Cuenta de cobro ${formatReceivableNumber(receivable.number)}${who ? ` - ${who}` : ''}.pdf`.slice(0, 180);
-};
+// El nombre del archivo: número, cliente con el nombre de su ficha y mes del periodo.
+export const receivablePdfFilename = (receivable) => receivableDocumentFilename({
+    number: receivable.number,
+    clientName: receivable.client?.name || receivable.sourceLabel || receivable.client?.legalName,
+    period: receivable.period
+});
 
 const receivableForDocument = {
     items: { orderBy: { sortOrder: 'asc' } },

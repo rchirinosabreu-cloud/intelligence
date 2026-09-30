@@ -74,6 +74,23 @@ export const parseReceivableConcept = (concept) => String(concept ?? '')
         : { kind: 'paragraph', text: line }))
     .filter((block) => block.text);
 
+const MONTHS = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
+const safeFilenamePart = (value) => String(value || '').replace(/[\\/:*?"<>|\r\n]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/**
+ * El nombre del PDF al descargarlo o verlo (Rodny, 30 de septiembre de 2026): «Cuenta de
+ * Cobro No. 0396 - Fundación Grit - Septiembre 2026». El cliente con el nombre de su ficha
+ * y el mes y año del periodo de la cuenta. Lo usan el servidor y la pantalla, para que el
+ * archivo se llame igual se baje por donde se baje. El periodo se lee en UTC, como se
+ * guarda; sin periodo no se inventa un mes.
+ */
+export const receivableDocumentFilename = ({ number, clientName, period } = {}) => {
+    const date = period ? new Date(String(period).length === 10 ? `${period}T12:00:00Z` : period) : null;
+    const month = date && !Number.isNaN(date.getTime()) ? `${MONTHS[date.getUTCMonth()]} ${date.getUTCFullYear()}` : '';
+    const parts = [`Cuenta de Cobro ${formatReceivableNumber(number)}`, safeFilenamePart(clientName), month].filter(Boolean);
+    return `${parts.join(' - ').slice(0, 176)}.pdf`;
+};
+
 // Como lo escribe el documento real: «Cuenta de cobro No. 0389», cuatro dígitos y
 // sin prefijo de letras. No es un formato nuestro, es el que ya reciben los clientes.
 export const formatReceivableNumber = (number) => {

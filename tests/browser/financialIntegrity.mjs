@@ -198,7 +198,7 @@ try {
   let popups = 0;
   page.on('popup', () => { popups += 1; });
   await page.getByRole('button', { name: 'Ver PDF', exact: true }).click();
-  const pdfViewer = page.getByText('Cuenta de cobro No. 0393.pdf', { exact: true });
+  const pdfViewer = page.getByText('Cuenta de Cobro No. 0393 - Cliente de muestra - Septiembre 2026.pdf', { exact: true });
   await pdfViewer.waitFor();
   // Y lo dibuja de verdad: el visor renderiza el PDF, no se queda preparándolo.
   await page.locator('canvas').first().waitFor({ timeout: 15000 });
@@ -208,7 +208,7 @@ try {
   await pdfViewer.waitFor({ state: 'hidden' });
   const saved = page.waitForEvent('download');
   await page.getByRole('button', { name: 'Descargar', exact: true }).click();
-  assert.equal((await saved).suggestedFilename(), 'Cuenta de cobro No. 0393.pdf');
+  assert.equal((await saved).suggestedFilename(), 'Cuenta de Cobro No. 0393 - Cliente de muestra - Septiembre 2026.pdf');
   const documentRequests = await page.evaluate(() => window.__documentRequests || []);
   assert.equal(documentRequests.length, 2, 'cada acción pide el documento a la API');
   assert.ok(documentRequests.every(path => path.endsWith('/api/financials/receivables/demo-debt/document')), documentRequests.join(' '));

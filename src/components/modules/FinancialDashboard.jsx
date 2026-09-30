@@ -36,7 +36,7 @@ import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import { groupFinancialReceivables, financialDebtStatus, formatFinancialPeriod } from '@/utils/financialReceivables';
 import { clientOptions } from '@/utils/financialClients';
-import { RECEIVABLE_CONCEPT_DEFAULT, RECEIVABLE_ITEM_MAX, formatReceivableNumber, receivableConceptToHtml } from '@/lib/receivableDocument';
+import { RECEIVABLE_CONCEPT_DEFAULT, RECEIVABLE_ITEM_MAX, formatReceivableNumber, receivableConceptToHtml, receivableDocumentFilename } from '@/lib/receivableDocument';
 import { formatExchangeRate, formatReceivableMoney, pesosFromRate } from '@/lib/receivableCurrency';
 import CurrencyToggle from '@/components/ui/CurrencyToggle';
 import MoneyInput from '@/components/ui/MoneyInput';
@@ -617,7 +617,9 @@ const FinancialDashboard = () => {
             });
             const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: 'application/pdf' });
             const objectUrl = URL.createObjectURL(blob);
-            const name = `Cuenta de cobro ${debt.formattedNumber}.pdf`;
+            // «Cuenta de Cobro No. 0396 - Fundación Grit - Septiembre 2026»: el mismo nombre
+            // que le pone el servidor (Rodny, 30 de septiembre de 2026).
+            const name = receivableDocumentFilename({ number: debt.number, clientName: debt.clientName, period: debt.period });
             if (download) {
                 downloadBlobUrl(objectUrl, name);
                 // El navegador ya tiene los bytes; soltar la referencia evita retener el
