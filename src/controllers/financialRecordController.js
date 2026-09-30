@@ -19,8 +19,9 @@ import {
 } from '../services/financialRecordDocumentService.js';
 import { createReceivablePayment, reverseReceivablePayment } from '../services/receivablePaymentService.js';
 import { createReceivable, deleteReceivable } from '../services/financialReceivableService.js';
-import { issueReceivableDocument } from '../services/receivableDocumentService.js';
+import { issueReceivableDocument, correctReceivableDocument } from '../services/receivableDocumentService.js';
 import { openReceivablePdf, RECEIVABLE_PDF_MIME } from '../services/receivablePdfService.js';
+import { fetchOfficialUsdCopRate } from '../services/exchangeRateService.js';
 import { auditFinancialIntegrity } from '../services/financialIntegrityAuditService.js';
 import { createFinancialAccount, listFinancialAccounts } from '../services/financialAccountService.js';
 import {
@@ -304,6 +305,37 @@ export const issueReceivableDocumentHandler = async (req, res, dependencies = {}
     } catch (error) {
         console.error('[Receivables API] Issue failed:', error.response?.data || error);
         return respondWithError(res, error, 'RECEIVABLE_ISSUE_FAILED', 'No fue posible emitir la cuenta de cobro.');
+    }
+};
+
+export const correctReceivableDocumentHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const correctDocument = dependencies.correctDocument || correctReceivableDocument;
+    try {
+        const result = await correctDocument(prismaClient, req.params.id, req.body || {}, req.user);
+        return res.json({
+            message: `Cuenta de cobro ${result.document.formattedNumber} corregida. El PDF ya tiene los datos nuevos.`,
+            ...result
+        });
+    } catch (error) {
+        console.error('[Receivables API] Correction failed:', error.response?.data || error);
+        return respondWithError(res, error, 'RECEIVABLE_CORRECTION_FAILED', 'No fue posible corregir la cuenta de cobro.');
+    }
+};
+
+// La TRM oficial del día para convertir una cuenta en dólares a pesos (Rodny, 30 de
+// septiembre de 2026: «la conversión que hacemos en cotización, usando el TRM oficial»).
+// Misma fuente que Cotizaciones; si falla, la TRM se escribe a mano.
+export const getFinancialExchangeRateHandler = async (_req, res, dependencies = {}) => {
+    const fetchRate = dependencies.fetchRate || fetchOfficialUsdCopRate;
+    try {
+        return res.json(await fetchRate());
+    } catch (error) {
+        console.error('[Financials API] Exchange rate fetch failed:', error?.message || error);
+        return res.status(503).json({
+            error: 'FINANCIAL_EXCHANGE_RATE_UNAVAILABLE',
+            message: 'No fue posible consultar la TRM oficial. Puedes escribir la TRM a mano.'
+        });
     }
 };
 

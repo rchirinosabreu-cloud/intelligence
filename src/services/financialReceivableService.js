@@ -1,6 +1,9 @@
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
 import { createClientWith } from './clientService.js';
 import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
+import { normalizeReceivableCurrency } from '../lib/receivableCurrency.js';
+import { normalizeClientProfile } from '../lib/clientProfile.js';
+import { resolveDocumentMoney } from './receivableDocumentService.js';
 import {
     assertOpenFinancialPeriod,
     FinancialDomainError,
@@ -31,9 +34,34 @@ export const createReceivable = async (prismaClient, input = {}, actor) => {
     if (newClientName.length > CLIENT_NAME_MAX) {
         throw new FinancialDomainError('RECEIVABLE_CLIENT_NAME_TOO_LONG', `El nombre del cliente admite como máximo ${CLIENT_NAME_MAX} caracteres.`);
     }
-    const amountCents = financialCents(input.amount);
-    if (amountCents === null || amountCents <= 0) throw new FinancialDomainError('RECEIVABLE_AMOUNT_INVALID', 'El monto debe ser positivo, tener como máximo dos decimales y estar dentro del rango de precisión financiera.');
-    const amount = financialAmountFromCents(amountCents);
+    // El cliente nuevo se crea con su ficha completa (30 de septiembre de 2026), y un dato
+    // mal escrito frena antes de abrir la transacción: ni ficha ni cobro a medias.
+    let newClientProfile = null;
+    if (!clientId) {
+        const profile = normalizeClientProfile(input.client, { requireName: true });
+        if (!profile.valid) throw new FinancialDomainError('CLIENT_PROFILE_INVALID', Object.values(profile.errors)[0], 400);
+        newClientProfile = profile.data;
+    }
+
+    // Pesos o dólares (30 de septiembre de 2026). La cartera se lleva en pesos: en dólares
+    // `amount` es su valor en pesos —por la TRM, o el escrito a mano— y el valor en dólares
+    // queda en `foreignAmount`, que es el que después precarga la cuenta de cobro.
+    const currency = normalizeReceivableCurrency(input.currency);
+    if (!currency) throw new FinancialDomainError('RECEIVABLE_CURRENCY_INVALID', 'La cuenta por cobrar va en pesos (COP) o en dólares (USD).');
+    let money;
+    if (currency === 'USD') {
+        const foreignCents = financialCents(input.foreignAmount);
+        if (foreignCents === null || foreignCents <= 0) {
+            throw new FinancialDomainError('RECEIVABLE_FOREIGN_AMOUNT_INVALID', 'Escribe el valor en dólares: positivo y con como máximo dos decimales.');
+        }
+        const resolved = resolveDocumentMoney({ ...input, currency: 'USD' }, { total: financialAmountFromCents(foreignCents), totalCents: foreignCents });
+        money = { ...resolved, foreignAmount: financialAmountFromCents(foreignCents) };
+    } else {
+        const copCents = financialCents(input.amount);
+        if (copCents === null || copCents <= 0) throw new FinancialDomainError('RECEIVABLE_AMOUNT_INVALID', 'El monto debe ser positivo, tener como máximo dos decimales y estar dentro del rango de precisión financiera.');
+        money = { currency: 'COP', amountCents: copCents, exchangeRate: null, exchangeRateSource: null, exchangeRateDate: null, foreignAmount: null };
+    }
+    const amount = financialAmountFromCents(money.amountCents);
     const { date: period, year, month } = parseFinancialDateInput(input.period);
     const dueDate = parseReceivableDueDate(input.dueDate);
     const actorId = actor?.id || actor?.userId || null;
@@ -46,13 +74,13 @@ export const createReceivable = async (prismaClient, input = {}, actor) => {
             if (!client) throw new FinancialDomainError('RECEIVABLE_CLIENT_NOT_FOUND', 'El cliente seleccionado no existe.', 404);
         } else {
             // Dentro de la misma transacción: o quedan la ficha y el cobro, o ninguno.
-            client = await createClientWith(tx, { name: newClientName });
+            client = await createClientWith(tx, newClientProfile);
             await tx.financialAuditEvent.create({
                 data: {
                     entityType: 'Client',
                     entityId: client.id,
                     action: 'CREATE',
-                    after: cloneForAudit({ id: client.id, name: client.name, slug: client.slug }),
+                    after: cloneForAudit({ id: client.id, slug: client.slug, ...newClientProfile }),
                     actorId
                 }
             });
@@ -61,6 +89,11 @@ export const createReceivable = async (prismaClient, input = {}, actor) => {
             data: {
                 clientId: client.id,
                 amount,
+                currency: money.currency,
+                foreignAmount: money.foreignAmount,
+                exchangeRate: money.exchangeRate,
+                exchangeRateSource: money.exchangeRateSource,
+                exchangeRateDate: money.exchangeRateDate,
                 period,
                 year,
                 month,
@@ -180,13 +213,18 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
                 }
                 throw new FinancialDomainError('RECEIVABLE_AMOUNT_INVALID', 'El monto de cartera debe ser positivo, tener como máximo dos decimales y estar dentro del rango de precisión financiera.');
             }
-            // Una cuenta emitida no se reedita: su PDF y sus conceptos ya están congelados con esa cifra.
-            // Las notas y el seguimiento sí se pueden seguir tocando.
-            if (input.amount !== undefined && (existing.number || existing.issuedAt) && amountCents !== financialCents(existing.amount)) {
+            // El valor de una cuenta emitida en pesos es la suma de sus conceptos y está
+            // impreso en su PDF, así que no se cambia suelto por aquí: se corrige el
+            // documento con «Corregir», que ajusta conceptos y valor y rehace el PDF.
+            // En una cuenta en dólares el PDF dice dólares y lo que se edita es su valor
+            // en pesos en cartera, que sí se ajusta suelto al que de verdad entró (Rodny,
+            // 30 de septiembre de 2026).
+            const pesosOnly = normalizeReceivableCurrency(existing.currency) !== 'USD';
+            if (input.amount !== undefined && pesosOnly && (existing.number || existing.issuedAt) && amountCents !== financialCents(existing.amount)) {
                 const label = existing.number ? `No. ${String(existing.number).padStart(4, '0')}` : 'emitida';
                 throw new FinancialDomainError(
                     'RECEIVABLE_ISSUED_IMMUTABLE',
-                    `La cuenta de cobro ${label} ya fue emitida y su valor no se reedita. Si el cliente necesita otra cifra, emite una nueva cuenta de cobro.`,
+                    `La cuenta de cobro ${label} ya fue emitida: su valor sale de sus conceptos. Usa «Corregir» en la tarjeta para cambiarlo; el PDF se rehace con la cifra nueva.`,
                     409
                 );
             }

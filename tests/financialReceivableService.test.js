@@ -68,7 +68,7 @@ test('una cuenta de cobro emitida no cambia de valor: se dice por dónde salir, 
     const existing = { id: 'debt-1', amount: 1200000, status: 'DEBE', number: 393, issuedAt: new Date('2026-09-22T00:00:00Z'), metadata: {}, payments: [] };
     await assert.rejects(
         updateReceivable(makeClient(existing, []), 'debt-1', { amount: 1500000 }, { id: 'user-1' }),
-        (error) => error.code === 'RECEIVABLE_ISSUED_IMMUTABLE' && error.statusCode === 409 && /No\. 0393/.test(error.message) && /emite una nueva/i.test(error.message)
+        (error) => error.code === 'RECEIVABLE_ISSUED_IMMUTABLE' && error.statusCode === 409 && /No\. 0393/.test(error.message) && /Corregir/.test(error.message)
     );
     // Sending the same amount back is not a change.
     const same = [];
@@ -77,6 +77,18 @@ test('una cuenta de cobro emitida no cambia de valor: se dice por dónde salir, 
     const notes = [];
     await updateReceivable(makeClient(existing, notes), 'debt-1', { comments: 'Cliente confirma pago el viernes' }, { id: 'user-1' });
     assert.equal(notes[0][1].data.comments, 'Cliente confirma pago el viernes');
+});
+
+// Rodny, 30 de septiembre de 2026: en una cuenta en dólares el valor en pesos «obviamente
+// puede ser editado para colocar el valor exacto que terminó ingresando en limpio». No
+// va impreso en el documento —el documento dice dólares—, así que se edita suelto.
+test('el valor en pesos de una cuenta emitida en dólares se edita directamente', async () => {
+    const calls = [];
+    const existing = { id: 'debt-1', amount: 4694940, currency: 'USD', exchangeRate: 3912.45, status: 'DEBE', number: 394, issuedAt: new Date('2026-09-30T12:00:00Z'), metadata: {}, payments: [] };
+    await updateReceivable(makeClient(existing, calls), 'debt-1', { amount: 4650000 }, { id: 'user-1' });
+    assert.equal(Number(calls[0][1].data.amount), 4650000);
+    assert.equal(calls[0][1].data.currency, undefined, 'editar el valor en pesos no toca la moneda del documento');
+    assert.equal(Number(calls[1][1].data.before.amount), 4694940);
 });
 
 test('updateReceivable refuses a manual paid status while a balance remains', async () => {
@@ -155,6 +167,71 @@ test('createReceivable puede crear la ficha del cliente en el mismo acto', async
     const audit = calls.filter(([name]) => name === 'audit.create').map(([, args]) => args.data);
     assert.deepEqual(audit.map((event) => `${event.entityType}:${event.action}`), ['Client:CREATE', 'AccountsReceivable:CREATE']);
     assert.equal(audit[0].actorId, 'user-1');
+});
+
+// Rodny, 30 de septiembre de 2026: «al crear un cliente nuevo se desplieguen todos los
+// campos propios de un cliente, no es solo el nombre».
+test('el cliente nuevo de una cuenta por cobrar se crea con su ficha completa', async () => {
+    const { calls, tx } = buildCreateTx();
+    await createReceivable({ $transaction: async (callback) => callback(tx) }, {
+        client: { name: 'Fundación Grit', legalName: 'FUNDACIÓN GRIT', documentType: 'NIT', documentNumber: '901234567', email: 'pagos@grit.org', city: 'Cartagena' },
+        amount: 1000, period: '2026-09-01'
+    }, { id: 'user-1' });
+    const created = calls.find(([name]) => name === 'client.create')[1].data;
+    assert.equal(created.legalName, 'FUNDACIÓN GRIT');
+    assert.equal(created.documentNumber, '901234567');
+    assert.equal(created.email, 'pagos@grit.org');
+    assert.equal(calls.filter(([name]) => name === 'audit.create')[0][1].data.after.email, 'pagos@grit.org');
+});
+
+test('una ficha nueva con un dato mal escrito no deja registrar el cobro a medias', async () => {
+    const { calls, tx } = buildCreateTx();
+    await assert.rejects(
+        createReceivable({ $transaction: async (callback) => callback(tx) }, { client: { name: 'Grit', email: 'grit' }, amount: 1000, period: '2026-09-01' }, { id: 'user-1' }),
+        (error) => error.statusCode === 400 && /correo/.test(error.message)
+    );
+    assert.equal(calls.some(([name]) => name === 'receivable.create'), false);
+});
+
+// La moneda también al crear (Rodny, 30 de septiembre de 2026: «cuando le doy a "nueva
+// cuenta por cobrar" no me aparece para colocar el valor en pesos o dólares»). La cartera
+// sigue en pesos: el valor en dólares queda aparte y con su TRM.
+test('una cuenta por cobrar en dólares guarda su valor en dólares y en pesos', async () => {
+    const { calls, tx } = buildCreateTx();
+    await createReceivable({ $transaction: async (callback) => callback(tx) }, {
+        clientId: 'client-1', currency: 'USD', foreignAmount: 1200, exchangeRate: 3912.45, exchangeRateSource: 'SUPERFINANCIERA_TRM', exchangeRateDate: '2026-09-30', period: '2026-09-01'
+    }, { id: 'user-1' });
+    const data = calls.find(([name]) => name === 'receivable.create')[1].data;
+    assert.equal(data.currency, 'USD');
+    assert.equal(Number(data.foreignAmount), 1200);
+    assert.equal(Number(data.amount), 4694940, 'en cartera, los pesos por la TRM');
+    assert.equal(data.exchangeRate, 3912.45);
+    assert.equal(data.exchangeRateSource, 'SUPERFINANCIERA_TRM');
+});
+
+test('en dólares el valor en pesos se puede escribir a mano', async () => {
+    const { calls, tx } = buildCreateTx();
+    await createReceivable({ $transaction: async (callback) => callback(tx) }, {
+        clientId: 'client-1', currency: 'USD', foreignAmount: 1200, exchangeRate: 3912.45, amountCop: 4650000, period: '2026-09-01'
+    }, { id: 'user-1' });
+    assert.equal(Number(calls.find(([name]) => name === 'receivable.create')[1].data.amount), 4650000);
+});
+
+test('una cuenta en dólares sin valor en dólares o sin TRM no se registra', async () => {
+    const { tx } = buildCreateTx();
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+    await assert.rejects(createReceivable(prismaClient, { clientId: 'client-1', currency: 'USD', exchangeRate: 4000, period: '2026-09-01' }, { id: 'user-1' }), (error) => error.code === 'RECEIVABLE_FOREIGN_AMOUNT_INVALID');
+    await assert.rejects(createReceivable(prismaClient, { clientId: 'client-1', currency: 'USD', foreignAmount: 1200, period: '2026-09-01' }, { id: 'user-1' }), (error) => error.code === 'RECEIVABLE_EXCHANGE_RATE_REQUIRED');
+    await assert.rejects(createReceivable(prismaClient, { clientId: 'client-1', currency: 'EUR', amount: 1200, period: '2026-09-01' }, { id: 'user-1' }), (error) => error.code === 'RECEIVABLE_CURRENCY_INVALID');
+});
+
+test('en pesos no se guarda nada en dólares', async () => {
+    const { calls, tx } = buildCreateTx();
+    await createReceivable({ $transaction: async (callback) => callback(tx) }, { clientId: 'client-1', amount: 1200000, foreignAmount: 5, exchangeRate: 4000, period: '2026-09-01' }, { id: 'user-1' });
+    const data = calls.find(([name]) => name === 'receivable.create')[1].data;
+    assert.equal(data.currency, 'COP');
+    assert.equal(data.foreignAmount, null);
+    assert.equal(data.exchangeRate, null);
 });
 
 test('sin cliente elegido ni nombre nuevo no se registra nada', async () => {

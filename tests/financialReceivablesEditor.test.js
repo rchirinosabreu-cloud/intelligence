@@ -107,6 +107,14 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
         concept: null,
         servicePeriod: null,
         items: [],
+        // Moneda del documento: todo lo anterior a las cuentas en dólares es en pesos, y el
+        // valor en cartera (`amount`) siempre es en pesos.
+        currency: 'COP',
+        exchangeRate: null,
+        exchangeRateSource: null,
+        exchangeRateDate: null,
+        documentTotal: 0,
+        foreignAmount: null,
         payments: [{
             id: 'payment-1',
             amount: 680000,

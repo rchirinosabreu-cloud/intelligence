@@ -69,6 +69,9 @@ const RichTextEditor = React.forwardRef(({
   onSend,
   submitOnEnter = false,
   compactFormats = false,
+  // Un campo cuyo destino no sabe dibujar el resaltado (el PDF de una cuenta de cobro)
+  // no lo ofrece: prometer un formato que se pierde al imprimir es peor que no tenerlo.
+  allowHighlight = true,
   placeholder,
   className,
   showToolbar,
@@ -385,9 +388,9 @@ const RichTextEditor = React.forwardRef(({
                 <button type="button" aria-label="Subrayado" aria-pressed={formattingState.underline} onMouseDown={(e) => executeFormat(e, chain => chain.toggleUnderline())} className={formatButtonClass(formattingState.underline)} title="Subrayado">
                   <UnderlineIcon className="h-4 w-4" />
                 </button>
-                <button type="button" aria-label="Resaltado" aria-pressed={formattingState.highlight} onMouseDown={(e) => executeFormat(e, chain => chain.toggleHighlight())} className={formatButtonClass(formattingState.highlight)} title="Resaltado">
+                {allowHighlight && <button type="button" aria-label="Resaltado" aria-pressed={formattingState.highlight} onMouseDown={(e) => executeFormat(e, chain => chain.toggleHighlight())} className={formatButtonClass(formattingState.highlight)} title="Resaltado">
                   <Highlighter className="h-4 w-4" />
-                </button>
+                </button>}
                 <div className="mx-1 h-5 w-px shrink-0 bg-zinc-200 dark:bg-zinc-800" />
                 {!compactFormats && <>
                 <button type="button" aria-label="Titulo 1" aria-pressed={formattingState.heading1} onMouseDown={(e) => executeHeadingFormat(e, 1)} className={formatButtonClass(formattingState.heading1)} title="Titulo 1">

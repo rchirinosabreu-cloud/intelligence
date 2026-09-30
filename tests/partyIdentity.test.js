@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    dropIncompleteDocument,
+    normalizePartialPartyIdentity,
     normalizePartyIdentity,
     hasPartyIdentity,
     formatPartyDocument,
@@ -65,8 +67,14 @@ test('un número con letras solo se acepta en un pasaporte', () => {
     assert.equal(normalizePartyIdentity({ legalName: 'X', documentType: 'PAS', documentNumber: 'AB123456' }).valid, true);
 });
 
-test('los cuatro tipos están y cada uno tiene su etiqueta', () => {
-    assert.deepEqual(PARTY_DOCUMENT_TYPES.map((type) => type.value), ['CC', 'NIT', 'CE', 'PAS']);
+// EIN: el número fiscal de una empresa de Estados Unidos (Rodny, 30 de septiembre de
+// 2026: «si el cliente no tiene NIT o EIN»), como 2X Global.
+test('los tipos están y cada uno tiene su etiqueta, incluido el EIN', () => {
+    assert.deepEqual(PARTY_DOCUMENT_TYPES.map((type) => type.value), ['CC', 'NIT', 'CE', 'PAS', 'EIN']);
+    assert.equal(partyDocumentType('ein').label, 'EIN:');
+    // Rodny: «quita lo de (Estados Unidos), solo deja "EIN" y ya».
+    assert.equal(partyDocumentType('ein').name, 'EIN');
+    assert.equal(normalizePartyIdentity({ legalName: '2X GLOBAL LLC', documentType: 'EIN', documentNumber: '12-3456789' }).valid, true);
     for (const type of PARTY_DOCUMENT_TYPES) {
         assert.ok(type.label && type.name, `${type.value} necesita etiqueta y nombre`);
     }
@@ -74,7 +82,7 @@ test('los cuatro tipos están y cada uno tiene su etiqueta', () => {
     assert.equal(partyDocumentType('inventado'), null);
 });
 
-test('la ficha guarda los tres datos juntos o los vacía juntos', () => {
+test('la ficha guarda la identidad y la vacía', () => {
     const saved = validateClientEdit({ legalName: 'CORPORACIÓN DEPORTIVA LOS TITANES', documentType: 'NIT', documentNumber: '901378858' });
     assert.deepEqual(saved, { legalName: 'CORPORACIÓN DEPORTIVA LOS TITANES', documentType: 'NIT', documentNumber: '901378858' });
 
@@ -82,7 +90,10 @@ test('la ficha guarda los tres datos juntos o los vacía juntos', () => {
     assert.deepEqual(cleared, { legalName: null, documentType: null, documentNumber: null });
 });
 
-test('no se puede guardar media identidad en la ficha', () => {
+// Desde el 30 de septiembre de 2026 el nombre legal va solo: una ficha puede tenerlo sin
+// documento. Lo que no se guarda es un documento a medias.
+test('el nombre legal va solo; el documento va entero o no va', () => {
+    assert.deepEqual(validateClientEdit({ legalName: 'Fundación Grit', documentType: '', documentNumber: '' }), { legalName: 'Fundación Grit', documentType: null, documentNumber: null });
     assert.throws(
         () => validateClientEdit({ legalName: 'CORPORACIÓN DEPORTIVA LOS TITANES', documentType: 'NIT', documentNumber: '' }),
         (error) => error.statusCode === 400 && /número del documento/.test(error.message)
@@ -94,9 +105,10 @@ test('editar solo el nombre del cliente sigue funcionando como antes', () => {
     assert.throws(() => validateClientEdit({}), (error) => error.statusCode === 400);
 });
 
-// Emitir sin la identidad no puede producir un documento con el nombre corto del
-// equipo ni sin cédula: se niega y dice dónde completarlo.
-test('no se emite una cuenta de cobro si la ficha del cliente no tiene identidad', async () => {
+// Rodny, 30 de septiembre de 2026: «no me deja emitir cuenta de cobro si el cliente no
+// tiene NIT o EIN o nro de documento registrado, necesito levantar esa restricción».
+// La identidad sigue siendo lo que va impreso cuando existe, pero ya no es una puerta.
+test('una ficha sin identidad ya no impide emitir la cuenta de cobro', async () => {
     const receivable = {
         id: 'debt-1', clientId: 'client-1', amount: 100, status: 'DEBE', number: null, payments: [],
         period: new Date('2026-09-01T12:00:00Z'), year: 2026, month: 9,
@@ -104,21 +116,51 @@ test('no se emite una cuenta de cobro si la ficha del cliente no tiene identidad
     };
     const prismaClient = {
         $transaction: async (callback) => callback({
-            accountsReceivable: { findUnique: async () => receivable },
-            financialPeriod: { findUnique: async () => ({ status: 'OPEN' }) }
+            accountsReceivable: {
+                findUnique: async () => receivable,
+                aggregate: async () => ({ _max: { number: 392 } }),
+                update: async (args) => ({ ...receivable, ...args.data, items: [] })
+            },
+            receivableItem: { deleteMany: async () => ({ count: 0 }), createMany: async () => ({ count: 1 }) },
+            financialPeriod: { findUnique: async () => ({ status: 'OPEN' }) },
+            financialAuditEvent: { create: async () => ({ id: 'audit-1' }) }
         })
     };
 
-    await assert.rejects(
-        issueReceivableDocument(prismaClient, 'debt-1', {
-            concept: 'Servicios', items: [{ description: 'Fee', amount: 1000 }], servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30'
-        }, { id: 'user-1' }),
-        // Se dice a quién le falta y los dos sitios donde se puede escribir: aquí
-        // mismo, o en su ficha.
-        (error) => error.code === 'RECEIVABLE_CLIENT_IDENTITY_MISSING'
-            && error.statusCode === 409
-            && /«Titanes»/.test(error.message)
-            && /en este mismo formulario/.test(error.message)
-            && /Clientes → «⋯» → Editar Cliente/.test(error.message)
-    );
+    const result = await issueReceivableDocument(prismaClient, 'debt-1', {
+        concept: 'Servicios', items: [{ description: 'Fee', amount: 1000 }], servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30'
+    }, { id: 'user-1' });
+    assert.equal(result.document.formattedNumber, 'No. 0393');
+});
+
+// Sin documento el PDF dice el nombre de la ficha y se salta la línea del documento,
+// en vez de imprimir una línea vacía o un «null».
+test('sin documento no hay línea de documento, y el nombre sale de la ficha', () => {
+    assert.equal(formatPartyDocument({ legalName: null, documentType: null, documentNumber: null }), null);
+    assert.equal(formatPartyDocument({ legalName: null, documentType: 'NIT', documentNumber: '901378858' }), 'NIT: 901378858');
+    assert.equal(formatPartyName({ legalName: null }, 'Titanes'), 'TITANES');
+});
+
+// Rodny, 30 de septiembre de 2026: emitir ya no exige el documento del cliente. Lo que se
+// escriba se valida; lo que no, se deja vacío.
+test('la identidad parcial acepta lo escrito y exige tipo y número juntos', () => {
+    assert.deepEqual(normalizePartialPartyIdentity({}), { valid: true, identity: {} });
+    assert.deepEqual(normalizePartialPartyIdentity({ legalName: '  2X Global LLC ' }), { valid: true, identity: { legalName: '2X Global LLC' } });
+    assert.deepEqual(normalizePartialPartyIdentity({ documentType: 'nit', documentNumber: '900123456' }), { valid: true, identity: { documentType: 'NIT', documentNumber: '900123456' } });
+    assert.equal(normalizePartialPartyIdentity({ documentType: 'NIT' }).valid, false);
+    assert.equal(normalizePartialPartyIdentity({ documentNumber: '900123456' }).valid, false);
+    assert.equal(normalizePartialPartyIdentity({ documentType: 'CC', documentNumber: 'abc' }).valid, false);
+    assert.equal(normalizePartialPartyIdentity({ legalName: 'x'.repeat(201) }).valid, false);
+});
+
+// Rodny, 30 de septiembre de 2026: «si yo pongo en documento "sin definir" no tengo
+// necesidad de poner el número. Debería poder emitir y simplemente no aparece nro de documento».
+test('al emitir, un documento a medias no va, sin frenar nada', () => {
+    assert.deepEqual(dropIncompleteDocument({ legalName: 'X', documentType: 'NIT', documentNumber: ' ' }), { legalName: 'X', documentType: '', documentNumber: '' });
+    assert.deepEqual(dropIncompleteDocument({ legalName: 'X', documentType: '', documentNumber: '900123456' }), { legalName: 'X', documentType: '', documentNumber: '' });
+    assert.equal(normalizePartialPartyIdentity(dropIncompleteDocument({ documentType: 'NIT', documentNumber: '' })).valid, true);
+    assert.equal(normalizePartialPartyIdentity(dropIncompleteDocument({ documentType: '', documentNumber: '900123456' })).valid, true);
+    assert.deepEqual(dropIncompleteDocument({ documentType: 'CC', documentNumber: '123' }), { documentType: 'CC', documentNumber: '123' });
+    // Completo pero mal escrito sí se avisa: ese número iría impreso.
+    assert.equal(normalizePartialPartyIdentity(dropIncompleteDocument({ documentType: 'NIT', documentNumber: 'abc' })).valid, false);
 });

@@ -5,6 +5,7 @@ import {
     nextReceivableNumber,
     formatReceivableNumber,
     issueReceivableDocument,
+    correctReceivableDocument,
     RECEIVABLE_ITEM_MAX
 } from '../src/services/receivableDocumentService.js';
 
@@ -184,13 +185,229 @@ test('un número forzado que no es un entero positivo se rechaza', async () => {
     );
 });
 
-test('una cuenta ya emitida no se reedita: se manda otra aparte', async () => {
+test('emitir otra vez una cuenta ya emitida no le da otro número: se corrige o se manda otra aparte', async () => {
     const { tx } = buildTx({ receivable: openReceivable({ number: 144 }) });
     const prismaClient = { $transaction: async (callback) => callback(tx) };
 
     await assert.rejects(
         issueReceivableDocument(prismaClient, 'debt-1', { concept: 'X', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30' }, { id: 'user-1' }),
-        (error) => error.code === 'RECEIVABLE_ALREADY_ISSUED' && /No\. 0144/.test(error.message) && /aparte/.test(error.message)
+        (error) => error.code === 'RECEIVABLE_ALREADY_ISSUED' && /No\. 0144/.test(error.message) && /Corregir/.test(error.message) && /aparte/.test(error.message)
+    );
+});
+
+// Corregir una cuenta ya emitida (Rodny, 30 de septiembre de 2026: «no permite editar
+// las ctas de cobro una vez emitidas»; tecleó 120.000 donde eran 1.200.000). Conserva
+// su número, deja la versión anterior en la auditoría y en el bucket, y rehace el PDF.
+const issuedReceivable = (overrides = {}) => openReceivable({
+    number: 393,
+    issuedAt: new Date('2026-09-25T12:00:00Z'),
+    concept: 'Servicios de septiembre',
+    servicePeriod: '20 de agosto al 19 de septiembre',
+    amount: 120000,
+    pdfStorageKey: 'receivables/debt-1/cuenta-de-cobro-0393.pdf',
+    items: [{ id: 'item-1', description: 'Fee mensual', amount: 120000, sortOrder: 0 }],
+    ...overrides
+});
+const correctionInput = (extra = {}) => ({
+    concept: 'Servicios de septiembre',
+    servicePeriod: '20 de agosto al 19 de septiembre',
+    items: [{ description: 'Fee mensual', amount: 1200000 }],
+    ...extra
+});
+const pdfRecorder = () => {
+    const stored = [];
+    return {
+        stored,
+        storePdf: async (_prisma, _storage, receivable, _env, _prebuilt, key) => { stored.push({ receivable, key }); return key; }
+    };
+};
+
+test('corregir una cuenta emitida conserva su número y ajusta conceptos y valor', async () => {
+    const { calls, tx } = buildTx({ receivable: issuedReceivable() });
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+    const { stored, storePdf } = pdfRecorder();
+
+    const result = await correctReceivableDocument(prismaClient, 'debt-1', correctionInput({ reason: 'Se digitó 120.000, eran 1.200.000.' }), { id: 'user-1' }, { storePdf, now: new Date('2026-09-30T15:04:05Z') });
+
+    const update = calls.find(([name]) => name === 'receivable.update')[1].data;
+    assert.equal(update.amount, 1200000);
+    assert.equal(update.number, undefined, 'la corrección nunca le cambia el número');
+    // Si el PDF nuevo no se pudiera guardar, «Ver PDF» lo regenera en vez de servir el viejo.
+    assert.equal(update.pdfStorageKey, null);
+    assert.equal(result.document.formattedNumber, 'No. 0393');
+    assert.deepEqual(calls.find(([name]) => name === 'items.createMany')[1].data.map((line) => line.amount), [1200000]);
+    assert.ok(calls.some(([name]) => name === 'items.deleteMany'));
+
+    const audit = calls.find(([name]) => name === 'audit.create')[1].data;
+    assert.equal(audit.action, 'UPDATE');
+    assert.equal(audit.entityType, 'AccountsReceivable');
+    assert.equal(audit.actorId, 'user-1');
+    // Lo que se había mandado queda en la auditoría: conceptos, valor y dónde estaba su PDF.
+    assert.equal(audit.before.amount, 120000);
+    assert.equal(audit.before.items[0].amount, 120000);
+    assert.equal(audit.before.pdfStorageKey, 'receivables/debt-1/cuenta-de-cobro-0393.pdf');
+    assert.equal(audit.after.reason, 'Se digitó 120.000, eran 1.200.000.');
+
+    // El PDF se rehace en una clave nueva: el anterior se queda en el bucket.
+    assert.equal(stored.length, 1);
+    assert.notEqual(stored[0].key, 'receivables/debt-1/cuenta-de-cobro-0393.pdf');
+    assert.match(stored[0].key, /^receivables\/debt-1\/cuenta-de-cobro-0393-corregida-20260930150405\.pdf$/);
+});
+
+test('corregir sin cambiar nada rehace el PDF con la plantilla vigente', async () => {
+    const { tx } = buildTx({ receivable: issuedReceivable({ amount: 4000000, items: [{ description: 'Fee mensual', amount: 4000000 }] }) });
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+    const { stored, storePdf } = pdfRecorder();
+
+    await correctReceivableDocument(prismaClient, 'debt-1', correctionInput({ items: [{ description: 'Fee mensual', amount: 4000000 }] }), { id: 'user-1' }, { storePdf });
+
+    assert.equal(stored.length, 1, 'así una cuenta vieja sale con «CUATRO MILLONES DE PESOS»');
+});
+
+test('sin fecha nueva, la corrección conserva la fecha de emisión', async () => {
+    const { calls, tx } = buildTx({ receivable: issuedReceivable() });
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+
+    await correctReceivableDocument(prismaClient, 'debt-1', correctionInput(), { id: 'user-1' }, pdfRecorder());
+
+    const update = calls.find(([name]) => name === 'receivable.update')[1].data;
+    assert.equal(update.issuedAt, undefined);
+});
+
+test('una obligación sin emitir no se corrige: se emite', async () => {
+    const { tx } = buildTx({ receivable: openReceivable() });
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+
+    await assert.rejects(
+        correctReceivableDocument(prismaClient, 'debt-1', correctionInput(), { id: 'user-1' }, pdfRecorder()),
+        (error) => error.code === 'RECEIVABLE_NOT_ISSUED' && error.statusCode === 409 && /Emitir/.test(error.message)
+    );
+});
+
+test('la corrección no puede dejar el total por debajo de lo ya abonado', async () => {
+    const { tx } = buildTx({ receivable: issuedReceivable({ payments: [{ amount: 500000 }] }) });
+    const prismaClient = { $transaction: async (callback) => callback(tx) };
+
+    await assert.rejects(
+        correctReceivableDocument(prismaClient, 'debt-1', correctionInput({ items: [{ description: 'Fee', amount: 400000 }] }), { id: 'user-1' }, pdfRecorder()),
+        (error) => error.code === 'RECEIVABLE_AMOUNT_BELOW_PAYMENTS' && error.statusCode === 409
+    );
+});
+
+test('el estado sigue a los abonos vigentes después de corregir', async () => {
+    const paid = buildTx({ receivable: issuedReceivable({ status: 'DEBE', payments: [{ amount: 1200000 }] }) });
+    await correctReceivableDocument({ $transaction: async (callback) => callback(paid.tx) }, 'debt-1', correctionInput(), { id: 'user-1' }, pdfRecorder());
+    assert.equal(paid.calls.find(([name]) => name === 'receivable.update')[1].data.status, 'PAGADO');
+
+    // Figuraba pagada con 120.000 y ahora vale 1.200.000: vuelve a deber la diferencia.
+    const reopened = buildTx({ receivable: issuedReceivable({ status: 'PAGADO', payments: [{ amount: 120000 }] }) });
+    await correctReceivableDocument({ $transaction: async (callback) => callback(reopened.tx) }, 'debt-1', correctionInput(), { id: 'user-1' }, pdfRecorder());
+    assert.equal(reopened.calls.find(([name]) => name === 'receivable.update')[1].data.status, 'DEBE');
+
+    const promised = buildTx({ receivable: issuedReceivable({ status: 'PROMESADO' }) });
+    await correctReceivableDocument({ $transaction: async (callback) => callback(promised.tx) }, 'debt-1', correctionInput(), { id: 'user-1' }, pdfRecorder());
+    assert.equal(promised.calls.find(([name]) => name === 'receivable.update')[1].data.status, 'PROMESADO');
+});
+
+test('un periodo cerrado impide corregir', async () => {
+    const { tx } = buildTx({ receivable: issuedReceivable() });
+    tx.financialPeriod.findUnique = async () => ({ status: 'CLOSED' });
+
+    await assert.rejects(
+        correctReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', correctionInput(), { id: 'user-1' }, pdfRecorder()),
+        (error) => error.code === 'FINANCIAL_PERIOD_CLOSED'
+    );
+});
+
+// Cuentas en dólares (Rodny, 30 de septiembre de 2026). El documento va en dólares, pero
+// «en el financiero siempre registramos todo en pesos»: la obligación queda en cartera
+// con su equivalente en pesos por la TRM, editable al valor que de verdad entró.
+const usdInput = (extra = {}) => ({
+    concept: 'Servicios', items: [{ description: 'Fee mensual', amount: 1200 }], servicePeriod: 'Septiembre', issuedAt: '2026-09-30',
+    currency: 'USD', exchangeRate: 3912.45, exchangeRateSource: 'SUPERFINANCIERA_TRM', exchangeRateDate: '2026-09-30', ...extra
+});
+
+test('emitir en dólares deja los conceptos en dólares y la cartera en pesos con la TRM', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable(), highest: 392 });
+    const result = await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', usdInput(), { id: 'user-1' });
+    const update = calls.find(([name]) => name === 'receivable.update')[1].data;
+    assert.equal(update.currency, 'USD');
+    assert.equal(update.amount, 4694940, '1.200 dólares por 3.912,45');
+    assert.equal(update.exchangeRate, 3912.45);
+    assert.equal(update.exchangeRateSource, 'SUPERFINANCIERA_TRM');
+    assert.equal(update.exchangeRateDate, '2026-09-30');
+    assert.equal(update.foreignAmount, 1200, 'el valor en dólares queda igual al del documento');
+    assert.deepEqual(calls.find(([name]) => name === 'items.createMany')[1].data.map((line) => line.amount), [1200]);
+    assert.equal(result.document.total, 1200, 'el total del documento sigue en dólares');
+});
+
+test('el valor en pesos se puede escribir a mano al emitir', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable(), highest: 392 });
+    await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', usdInput({ amountCop: 4650000, exchangeRateSource: 'MANUAL' }), { id: 'user-1' });
+    const update = calls.find(([name]) => name === 'receivable.update')[1].data;
+    assert.equal(update.amount, 4650000);
+    assert.equal(update.exchangeRateSource, 'MANUAL');
+});
+
+test('una cuenta en dólares sin TRM no se emite: se pide', async () => {
+    await assert.rejects(
+        issueReceivableDocument({}, 'debt-1', usdInput({ exchangeRate: '' }), { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_EXCHANGE_RATE_REQUIRED' && /TRM/.test(error.message)
+    );
+    await assert.rejects(
+        issueReceivableDocument({}, 'debt-1', usdInput({ amountCop: -5 }), { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_AMOUNT_COP_INVALID'
+    );
+});
+
+test('una cuenta en pesos no guarda TRM aunque llegue una', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable(), highest: 392 });
+    await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', {
+        concept: 'Servicios', items, servicePeriod: 'Septiembre', issuedAt: '2026-09-30', currency: 'COP', exchangeRate: 4000
+    }, { id: 'user-1' });
+    const update = calls.find(([name]) => name === 'receivable.update')[1].data;
+    assert.equal(update.currency, 'COP');
+    assert.equal(update.exchangeRate, null);
+    assert.equal(update.amount, 2850000);
+});
+
+test('una moneda que no se maneja se rechaza al emitir y al corregir', async () => {
+    await assert.rejects(
+        issueReceivableDocument({}, 'debt-1', usdInput({ currency: 'EUR' }), { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_CURRENCY_INVALID'
+    );
+    await assert.rejects(
+        correctReceivableDocument({}, 'debt-1', correctionInput({ currency: 'EUR' }), { id: 'user-1' }, pdfRecorder()),
+        (error) => error.code === 'RECEIVABLE_CURRENCY_INVALID'
+    );
+});
+
+test('corregir puede pasar una cuenta de pesos a dólares, con su TRM', async () => {
+    const { calls, tx } = buildTx({ receivable: issuedReceivable() });
+    await correctReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', correctionInput({
+        currency: 'USD', exchangeRate: 4000, exchangeRateSource: 'MANUAL', items: [{ description: 'Fee', amount: 1200 }]
+    }), { id: 'user-1' }, pdfRecorder());
+    const update = calls.find(([name]) => name === 'receivable.update')[1].data;
+    assert.equal(update.currency, 'USD');
+    assert.equal(update.amount, 4800000);
+    assert.equal(update.exchangeRate, 4000);
+});
+
+// Los abonos son pesos que ya entraron: el valor en cartera no puede quedar por debajo.
+test('el valor en pesos de una cuenta en dólares tampoco baja de lo ya abonado', async () => {
+    const { tx } = buildTx({ receivable: issuedReceivable({ payments: [{ amount: 5000000 }] }) });
+    await assert.rejects(
+        correctReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', correctionInput({
+            currency: 'USD', exchangeRate: 4000, items: [{ description: 'Fee', amount: 1200 }]
+        }), { id: 'user-1' }, pdfRecorder()),
+        (error) => error.code === 'RECEIVABLE_AMOUNT_BELOW_PAYMENTS'
+    );
+});
+
+test('el motivo de la corrección es opcional pero tiene tope', async () => {
+    await assert.rejects(
+        correctReceivableDocument({}, 'debt-1', correctionInput({ reason: 'x'.repeat(301) }), { id: 'user-1' }, pdfRecorder()),
+        (error) => error.code === 'RECEIVABLE_CORRECTION_REASON_TOO_LONG'
     );
 });
 
@@ -241,17 +458,37 @@ const unidentifiedClient = { id: 'client-1', name: 'Prueba tdd', legalName: null
 const identity = { legalName: 'Corporación Deportiva Los Titanes', documentType: 'NIT', documentNumber: '901378858' };
 const issueInput = (extra = {}) => ({ concept: 'Servicios', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30', ...extra });
 
-test('sin identidad en la ficha y sin escribirla, no se emite: se dice dónde ponerla', async () => {
-    const { tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }) });
+// Rodny, 30 de septiembre de 2026: «no me deja emitir cuenta de cobro si el cliente no
+// tiene NIT o EIN o nro de documento registrado, necesito levantar esa restricción».
+test('sin documento en la ficha la cuenta de cobro se emite igual', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }), highest: 392 });
     const prismaClient = { $transaction: async (callback) => callback(tx) };
 
-    await assert.rejects(
-        issueReceivableDocument(prismaClient, 'debt-1', issueInput(), { id: 'user-1' }),
-        (error) => error.code === 'RECEIVABLE_CLIENT_IDENTITY_MISSING'
-            && error.statusCode === 409
-            && /Prueba tdd/.test(error.message)
-            && /en este mismo formulario/.test(error.message)
-    );
+    const result = await issueReceivableDocument(prismaClient, 'debt-1', issueInput(), { id: 'user-1' });
+
+    assert.equal(result.document.formattedNumber, 'No. 0393');
+    assert.equal(calls.some(([name]) => name === 'client.update'), false, 'sin datos escritos no se toca la ficha');
+});
+
+test('un formulario de identidad vacío tampoco toca la ficha', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }), highest: 392 });
+    await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', issueInput({ client: { legalName: ' ', documentType: '', documentNumber: '' } }), { id: 'user-1' });
+    assert.equal(calls.some(([name]) => name === 'client.update'), false);
+});
+
+test('solo el nombre legal, sin documento, se guarda y se emite', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }), highest: 392 });
+    await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', issueInput({ client: { legalName: '2X Global LLC', documentType: '', documentNumber: '' } }), { id: 'user-1' });
+    assert.deepEqual(calls.find(([name]) => name === 'client.update')[1].data, { legalName: '2X Global LLC' });
+});
+
+// Una ficha con el nombre legal pero sin documento: se completa lo que falta, sin
+// reescribir lo que ya tenía.
+test('una ficha a medias se completa sin reescribir lo que ya tenía', async () => {
+    const halfIdentified = { ...unidentifiedClient, legalName: 'FUNDACIÓN GRIT' };
+    const { calls, tx } = buildTx({ receivable: openReceivable({ client: halfIdentified }), highest: 392 });
+    await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', issueInput({ client: { legalName: 'Otro nombre', documentType: 'NIT', documentNumber: '900123456' } }), { id: 'user-1' });
+    assert.deepEqual(calls.find(([name]) => name === 'client.update')[1].data, { documentType: 'NIT', documentNumber: '900123456' });
 });
 
 test('la identidad escrita al emitir queda guardada en la ficha del cliente', async () => {
@@ -271,8 +508,28 @@ test('la identidad escrita al emitir queda guardada en la ficha del cliente', as
     assert.deepEqual(audit.after, identity);
 });
 
-test('una identidad incompleta o mal escrita no se guarda a medias', async () => {
-    for (const wrong of [{ ...identity, documentNumber: '' }, { ...identity, documentType: 'XX' }, { ...identity, documentNumber: 'abc' }]) {
+// Rodny, 30 de septiembre de 2026: «no me dejó emitir una cuenta de cobro con el tipo de
+// documento sin definir, tuve que ponerle '00000'». Un tipo sin número no frena nada.
+test('un tipo de documento sin número se ignora y la cuenta se emite', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }), highest: 392 });
+    const result = await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1',
+        issueInput({ client: { legalName: 'FUNDACIÓN GRIT', documentType: 'NIT', documentNumber: '  ' } }), { id: 'user-1' });
+    assert.equal(result.document.formattedNumber, 'No. 0393');
+    assert.deepEqual(calls.find(([name]) => name === 'client.update')[1].data, { legalName: 'FUNDACIÓN GRIT' });
+});
+
+// Rodny: «si yo pongo en documento "sin definir" no tengo necesidad de poner el número».
+test('con el tipo «Sin definir» el número se ignora y la cuenta sale sin documento', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }), highest: 392 });
+    const result = await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1',
+        issueInput({ client: { legalName: '', documentType: '', documentNumber: '00000' } }), { id: 'user-1' });
+    assert.equal(result.document.formattedNumber, 'No. 0393');
+    assert.equal(calls.some(([name]) => name === 'client.update'), false, 'no se guarda un número suelto en la ficha');
+});
+
+// Un documento completo pero mal escrito sí se avisa: ese número iría impreso.
+test('un documento completo pero mal escrito no se guarda', async () => {
+    for (const wrong of [{ ...identity, documentType: 'XX' }, { ...identity, documentNumber: 'abc' }]) {
         const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }) });
         const prismaClient = { $transaction: async (callback) => callback(tx) };
         await assert.rejects(

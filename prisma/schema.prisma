@@ -613,6 +613,15 @@ model Client {
   legalName           String?
   documentType        String?
   documentNumber      String?
+  // Contacto y ubicación de la ficha (30 de septiembre de 2026): a quién se le cobra y
+  // dónde. Todo opcional; la regla vive en `src/lib/clientProfile.js`. Aditivas con
+  // `scripts/ensure-client-profile-schema.js`.
+  contactName         String?
+  email               String?
+  phone               String?
+  address             String?
+  city                String?
+  country             String?
   status              ClientStatus         @default(ACTIVO)
   monthlyFee          Decimal?
   isArchived          Boolean              @default(false)
@@ -2107,6 +2116,17 @@ model AccountsReceivable {
   // septiembre»): no coincide con el mes contable y no siempre empieza el día 1.
   servicePeriod String?
   pdfStorageKey String?
+  // Moneda del documento (Rodny, 30 de septiembre de 2026): COP o USD. En USD los
+  // conceptos van en dólares, pero `amount` —lo que cuenta en cartera— sigue en pesos:
+  // el total por la TRM, editable al valor que de verdad entró. Aditivas con
+  // `scripts/ensure-receivable-currency-schema.js`.
+  currency           String                @default("COP")
+  exchangeRate       Decimal?
+  exchangeRateSource String?
+  exchangeRateDate   String?
+  // En una cuenta en dólares, lo que vale en dólares antes de emitirla (al emitir lo
+  // dicen sus conceptos). `amount` sigue siendo su valor en pesos.
+  foreignAmount      Decimal?
   items         ReceivableItem[]
   importBatchId String?
   importBatch   FinancialImportBatch? @relation(fields: [importBatchId], references: [id], onDelete: SetNull)

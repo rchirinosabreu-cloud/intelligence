@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
 import Select from '@/components/ui/Select';
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
+import MoneyInput from '@/components/ui/MoneyInput';
 import { formatEvidenceValue } from '@/lib/reportEvidenceFormat';
 import { buildReportPresentation } from '@/lib/reportPresentationModel';
 import { EditorialSummary, EditorialComment, EditorialStrategy } from './ReportEditorial';
@@ -105,7 +106,7 @@ function PanelEditor({ editing, onChange, onSave, onCancel, busy, stale }) {
     <fieldset disabled={busy} className="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-2">
       <label className="space-y-1 text-sm">Fila del panel<Select aria-label="Fila del panel" disabled={draft.excluded} value={draft.rowIndex} onChange={event => { const nextRow = panel.dataset[Number(event.target.value)]; const nextField = editableColumns(nextRow)[0] || ''; onChange({ ...draft, rowIndex: event.target.value, field: nextField, value: nextRow[nextField] ?? '' }); }}>{(panel.dataset || []).map((item, index) => <option key={`${item.id || item.label || item.name}:${index}`} value={String(index)}>{item.label || item.name || `Fila ${index + 1}`}</option>)}</Select></label>
       <label className="space-y-1 text-sm">Columna del panel<Select aria-label="Columna del panel" disabled={draft.excluded} value={draft.field} onChange={event => onChange({ ...draft, field: event.target.value, value: row[event.target.value] ?? '' })}>{editableColumns(row).map(key => <option key={key} value={key}>{columnNames[key] || key}</option>)}</Select></label>
-      <label className="space-y-1 text-sm">Valor del panel<input disabled={draft.excluded} className={field} type="number" min="0" step="any" value={draft.value} onChange={event => update('value', event.target.value)} /></label>
+      <label className="space-y-1 text-sm">Valor del panel<MoneyInput decimals={4} disabled={draft.excluded} className={field} min="0" value={draft.value} onChange={value => update('value', value)} /></label>
       <label className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" className="h-4 w-4 accent-primary" checked={draft.excluded} onChange={event => update('excluded', event.target.checked)} />Excluir este panel del informe</label>
       <label className="space-y-1 text-sm">Plataforma del panel<Select aria-label="Plataforma del panel" disabled={draft.excluded} value={draft.platform} onChange={event => update('platform', event.target.value)}>{Object.entries(platformNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
       <label className="space-y-1 text-sm">Distribución del panel<Select aria-label="Distribución del panel" disabled={draft.excluded} value={draft.scope} onChange={event => update('scope', event.target.value)}>{Object.entries(scopeNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
@@ -129,7 +130,7 @@ function ObservationEditor({ editing, onChange, onSave, onCancel, busy, stale })
     {stale && <p className="mt-3 text-sm text-destructive" role="alert">La versión cambió. Tu borrador sigue aquí; recarga la versión vigente antes de enviarlo.</p>}
     <fieldset disabled={busy} className="mt-4 grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
       <label className="space-y-1 text-sm">Indicador<Select aria-label="Indicador" value={draft.key} onChange={event => onChange({ ...draft, key: event.target.value, label: metricOptions[event.target.value] || draft.label })}>{!Object.hasOwn(metricOptions, draft.key) && <option value={draft.key}>{observation.label}</option>}{Object.entries(metricOptions).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
-      <label className="space-y-1 text-sm">Valor (vacío si no está disponible)<input ref={firstField} className={field} type="number" min="0" step="any" value={draft.value} onChange={event => change('value', event.target.value)} /></label>
+      <label className="space-y-1 text-sm">Valor (vacío si no está disponible)<MoneyInput ref={firstField} decimals={4} className={field} min="0" value={draft.value} onChange={value => change('value', value)} /></label>
       <label className="space-y-1 text-sm">Variación porcentual (vacío si no es visible)<input className={field} type="number" step="any" value={draft.changePct} onChange={event => change('changePct', event.target.value)} placeholder="Ej. −59 o +32,9" /></label>
       <label className="space-y-1 text-sm">Plataforma<Select aria-label="Plataforma" value={draft.platform} onChange={event => change('platform', event.target.value)}>{Object.entries(platformNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>
       <label className="space-y-1 text-sm">Distribución<Select aria-label="Distribución" value={draft.scope} onChange={event => change('scope', event.target.value)}>{Object.entries(scopeNames).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</Select></label>

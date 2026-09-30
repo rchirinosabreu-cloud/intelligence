@@ -3,6 +3,9 @@ import assert from 'node:assert/strict';
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import {
+    CONCEPT_TYPOGRAPHY,
+    layoutConceptLines,
+    newReceivableDocument,
     buildReceivableDocumentModel,
     generateReceivablePdfBuffer,
     openReceivablePdf,
@@ -11,6 +14,7 @@ import {
     receivableSignatureImage,
     storeReceivablePdf
 } from '../src/services/receivablePdfService.js';
+import { receivableDocumentFilename } from '../src/lib/receivableDocument.js';
 import { issueReceivableDocument } from '../src/services/receivableDocumentService.js';
 
 // El PDF de la cuenta de cobro, comprobado contra el documento real No. 0389
@@ -107,12 +111,119 @@ test('el concepto separa el párrafo de sus viñetas, como se escribe en Word', 
     assert.ok(bullets.every((block) => !block.text.startsWith('-')));
 });
 
+// El concepto con formato (Rodny, 30 de septiembre de 2026: «añadas la barra de formato
+// … para poder poner viñetas, títulos, negrillas»). Llega como HTML del editor.
+const richConcept = [
+    '<h2>Plan de <em>contenidos</em></h2>',
+    '<p>Prestación de servicios para la marca. <strong>Este servicio incluye:</strong></p>',
+    '<ul><li><p>Planeación <u>mensual</u></p></li><li><p>4 historias</p></li></ul>',
+    '<ol><li><p>Primero</p></li><li><p>Segundo</p></li></ol>',
+    '<p><script>alert(1)</script><a href="javascript:alert(1)">sin enlace</a></p>'
+].join('');
+
+test('el concepto con formato llega al documento con títulos, negritas y listas', () => {
+    const { concept } = buildReceivableDocumentModel({ ...titanes, concept: richConcept });
+    assert.equal(concept[0].kind, 'heading');
+    assert.equal(concept[0].level, 2);
+    assert.equal(concept[0].text, 'Plan de contenidos');
+    assert.ok(concept[0].runs.some((run) => run.italic && run.text === 'contenidos'));
+
+    const paragraph = concept[1];
+    assert.equal(paragraph.kind, 'paragraph');
+    assert.ok(paragraph.runs.some((run) => run.bold && run.text === 'Este servicio incluye:'));
+
+    const bullets = concept.filter((block) => block.kind === 'bullet');
+    assert.deepEqual(bullets.map((block) => block.text), ['Planeación mensual', '4 historias', 'Primero', 'Segundo']);
+    assert.ok(bullets[0].runs.some((run) => run.underline && run.text === 'mensual'));
+    assert.equal(bullets[0].ordinal, undefined, 'una viñeta no lleva número');
+    assert.deepEqual(bullets.slice(2).map((block) => block.ordinal), [1, 2]);
+
+    // Nada de código ni de enlaces dentro de un documento de cobro.
+    const all = concept.map((block) => block.text).join(' ');
+    assert.doesNotMatch(all, /alert/);
+    assert.ok(concept.every((block) => block.runs.every((run) => !run.href)));
+});
+
+test('el concepto viejo en texto plano sigue saliendo igual', () => {
+    const { concept } = buildReceivableDocumentModel(titanes);
+    assert.equal(concept[0].runs.length, 1);
+    assert.equal(concept[0].runs[0].text, concept[0].text);
+});
+
+// Rodny, 30 de septiembre de 2026: «siento que es muy grande, me gustaría reducir un
+// poquito el interletrado y el tamaño de letra … la viñeta es muy gigante».
+test('el concepto va un poco más pequeño y más junto que el resto, con una viñeta discreta', () => {
+    assert.ok(CONCEPT_TYPOGRAPHY.size < 10.5 && CONCEPT_TYPOGRAPHY.size >= 9, 'un poco menor que el cuerpo del documento, no diminuto');
+    assert.ok(CONCEPT_TYPOGRAPHY.charSpace < 0 && CONCEPT_TYPOGRAPHY.charSpace > -0.15, 'interletrado apenas más cerrado');
+    assert.ok(CONCEPT_TYPOGRAPHY.bulletRadius <= 0.7, 'la viñeta es un punto pequeño, no el carácter ● a tamaño de texto');
+    assert.ok(Object.values(CONCEPT_TYPOGRAPHY.headingSizes).every((size) => size > CONCEPT_TYPOGRAPHY.size && size <= 12));
+});
+
+test('el concepto se reparte en líneas que caben en la columna, contando el interletrado', () => {
+    const doc = newReceivableDocument();
+    const runs = [{ text: 'Prestación de servicios para el diseño y ejecución de estrategias de comunicación digital para la marca, con el objetivo de visibilizar, posicionar y promocionar los servicios. ' }, { text: 'Este servicio incluye:', bold: true }];
+    const lines = layoutConceptLines(doc, runs, { width: 120, size: CONCEPT_TYPOGRAPHY.size, charSpace: CONCEPT_TYPOGRAPHY.charSpace });
+    assert.ok(lines.length > 1);
+    assert.ok(lines.every((line) => line.width <= 120 + 1e-6), 'ninguna línea se sale del margen');
+    // La negrita pegada a la palabra anterior conserva su espacio, y el texto no se pierde.
+    assert.equal(lines.flatMap((line) => line.words.map((word) => word.text)).join(' '), runs.map((run) => run.text.trim()).join(' '));
+});
+
+test('el PDF se genera con un concepto con formato', () => {
+    const buffer = generateReceivablePdfBuffer({ ...titanes, concept: richConcept });
+    assert.equal(buffer.subarray(0, 5).toString('latin1'), '%PDF-');
+});
+
+// Cuentas en dólares (Rodny, 30 de septiembre de 2026): «que diga USD y el valor en letras
+// sea "mil doscientos dólares"». El documento dice dólares aunque la cartera guarde pesos.
+test('una cuenta en dólares dice USD y el importe en dólares, no su valor en pesos', () => {
+    const usd = buildReceivableDocumentModel({
+        ...titanes,
+        currency: 'USD',
+        exchangeRate: 3912.45,
+        amount: 4694940,
+        items: [{ description: 'Fee mensual', amount: 1000 }, { description: 'Pauta', amount: 200 }]
+    });
+    assert.equal(usd.amountInWords, 'MIL DOSCIENTOS DÓLARES');
+    assert.equal(usd.amountInFigures, '(USD 1.200)');
+    assert.equal(usd.total, 1200);
+    assert.equal(usd.currency, 'USD');
+    assert.deepEqual(usd.items.map((item) => item.formatted), ['USD 1.000', 'USD 200']);
+    assert.equal(usd.formattedTotal, 'USD 1.200');
+    // En pesos todo sigue como en la cuenta real 0389.
+    const cop = buildReceivableDocumentModel(titanes);
+    assert.equal(cop.currency, 'COP');
+    assert.equal(cop.amountInWords, 'UN MILLÓN DOSCIENTOS MIL PESOS');
+});
+
+test('la instrucción de pago en dólares se puede configurar aparte', () => {
+    const usd = { ...titanes, currency: 'USD', items: [{ description: 'Fee', amount: 1200 }] };
+    assert.match(buildReceivableDocumentModel(usd).bankLine, /Bancolombia/, 'sin configurar, la misma instrucción de siempre');
+    const configured = buildReceivableDocumentModel(usd, { RECEIVABLE_ISSUER_BANK_LINE_USD: 'Transferencia internacional a la cuenta X.' });
+    assert.equal(configured.bankLine, 'Transferencia internacional a la cuenta X.');
+    assert.match(buildReceivableDocumentModel(titanes, { RECEIVABLE_ISSUER_BANK_LINE_USD: 'X' }).bankLine, /Bancolombia/, 'una cuenta en pesos no la usa');
+});
+
+test('el PDF en dólares se genera', () => {
+    const buffer = generateReceivablePdfBuffer({ ...titanes, currency: 'USD', exchangeRate: 4000, amount: 4800000, items: [{ description: 'Fee', amount: 1200 }] });
+    assert.equal(buffer.subarray(0, 5).toString('latin1'), '%PDF-');
+});
+
 // Con un solo concepto el documento no lleva tabla, como el de Elvira Utria.
 test('la tabla de conceptos solo aparece cuando hay más de uno', () => {
     assert.equal(buildReceivableDocumentModel(titanes).items.length, 2);
     const unico = buildReceivableDocumentModel({ ...titanes, items: [{ description: 'Fee mensual', amount: 1200000 }] });
     assert.equal(unico.items.length, 0);
     assert.equal(unico.total, 1200000);
+});
+
+// Rodny, 30 de septiembre de 2026: se emite aunque el cliente no tenga documento.
+test('sin documento del cliente el PDF se genera con el nombre de la ficha', () => {
+    const sinDocumento = { ...titanes, client: { id: 'client-1', name: 'Fundación Grit', legalName: null, documentType: null, documentNumber: null } };
+    const model = buildReceivableDocumentModel(sinDocumento);
+    assert.equal(model.debtorName, 'FUNDACIÓN GRIT');
+    assert.equal(model.debtorDocument, null);
+    assert.equal(generateReceivablePdfBuffer(sinDocumento).subarray(0, 5).toString('latin1'), '%PDF-');
 });
 
 test('el PDF se genera y es un PDF', () => {
@@ -131,10 +242,17 @@ test('un importe que no se puede escribir en letras no se convierte en un PDF mu
 });
 
 test('el archivo se nombra como lo nombra Elisa, y su clave es estable', () => {
-    assert.equal(receivablePdfFilename(titanes), 'Cuenta de cobro No. 0389 - CORPORACIÓN DEPORTIVA LOS TITANES.pdf');
+    // Rodny, 30 de septiembre de 2026: «Cuenta de Cobro No. 0396 - Fundación Grit - Septiembre 2026».
+    assert.equal(receivablePdfFilename({ ...titanes, period: '2026-09-01T12:00:00.000Z' }), 'Cuenta de Cobro No. 0389 - Titanes - Septiembre 2026.pdf');
+    // El periodo se lee en UTC: el primero de mes a medianoche no retrocede a diciembre.
+    assert.equal(receivablePdfFilename({ ...titanes, period: '2026-01-01T00:00:00.000Z' }), 'Cuenta de Cobro No. 0389 - Titanes - Enero 2026.pdf');
+    // El nombre es el de la ficha, no el legal en mayúsculas; sin ficha, la etiqueta.
+    assert.equal(receivableDocumentFilename({ number: 396, clientName: 'Fundación Grit', period: '2026-09-01' }), 'Cuenta de Cobro No. 0396 - Fundación Grit - Septiembre 2026.pdf');
+    // Sin periodo no se inventa un mes.
+    assert.equal(receivablePdfFilename(titanes), 'Cuenta de Cobro No. 0389 - Titanes.pdf');
     assert.equal(receivablePdfStorageKey(titanes), 'receivables/debt-0389/cuenta-de-cobro-0389.pdf');
     // Una barra en el nombre del cliente no puede inventar una carpeta ni romper la cabecera.
-    assert.equal(receivablePdfFilename({ ...titanes, client: { name: 'A/B\nC' } }), 'Cuenta de cobro No. 0389 - A B C.pdf');
+    assert.equal(receivablePdfFilename({ ...titanes, client: { name: 'A/B\nC' } }), 'Cuenta de Cobro No. 0389 - A B C.pdf');
 });
 
 const fakeStorage = () => {
@@ -246,7 +364,7 @@ test('si el PDF guardado no se puede leer, la descarga lo regenera en vez de fal
     const { buffer, filename } = await openReceivablePdf(client, storage, 'debt-0389');
 
     assert.equal(buffer.subarray(0, 5).toString('latin1'), '%PDF-');
-    assert.equal(filename, 'Cuenta de cobro No. 0389 - CORPORACIÓN DEPORTIVA LOS TITANES.pdf');
+    assert.equal(filename, 'Cuenta de Cobro No. 0389 - Titanes.pdf');
     // Y se aprovecha para dejarlo guardado donde toca.
     assert.equal(receivable.pdfStorageKey, 'receivables/debt-0389/cuenta-de-cobro-0389.pdf');
 });

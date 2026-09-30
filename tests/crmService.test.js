@@ -62,6 +62,16 @@ test('createLead validates the catalog values and needs at least a company or a 
   assert.equal(lead.quotedValue, 1500000);
 });
 
+// 30 de septiembre de 2026: el punto se leía como decimal, así que «1.200» se guardaba
+// como 1,20 y «1.200.000» se rechazaba. El punto de miles es de miles.
+test('el valor cotizado escrito con puntos de miles se guarda completo', async () => {
+  const db = fakeDb();
+  assert.equal((await createLead(db, { company: 'Uno', quotedValue: '1.200' }, actor, NOW)).quotedValue, 1200);
+  assert.equal((await createLead(db, { company: 'Dos', quotedValue: '1.200.000' }, actor, NOW)).quotedValue, 1200000);
+  assert.equal((await createLead(db, { company: 'Tres', quotedValue: '1200000.5' }, actor, NOW)).quotedValue, 1200000.5);
+  await assert.rejects(createLead(db, { company: 'Cuatro', quotedValue: '-5' }, actor, NOW), /valor/i);
+});
+
 test('addActivity records the touch, moves the lead milestones and is idempotent by requestId', async () => {
   const db = fakeDb({ leads: [{ id: 'L1', stage: 'POR_GESTIONAR', enteredAt: new Date('2026-09-10T15:00:00-05:00'), priority: 'MEDIA', origin: 'LINKEDIN' }] });
   await assert.rejects(addActivity(db, 'L1', { type: 'FAX' }, actor), /tipo/i);

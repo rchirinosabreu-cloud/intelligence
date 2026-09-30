@@ -1,5 +1,6 @@
 import Select from '@/components/ui/Select';
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
+import MoneyInput from '@/components/ui/MoneyInput';
 import React, { useId, useRef, useState } from 'react';
 import RichTextEditor from '@/components/ui/RichTextEditor';
 import { Button } from '@/components/ui/button';
@@ -85,7 +86,9 @@ export default function ProposalDetailsEditor({ value, onChange, totalsByScenari
       {!activePlan ? <button className={action} type="button" onClick={() => updatePlan({ scenarioId: scopeId, mode: 'PERCENTAGE', installments: [{ id: crypto.randomUUID(), label: 'Anticipo', value: 50, dueType: 'MILESTONE', milestone: 'Al iniciar' }, { id: crypto.randomUUID(), label: 'Saldo', value: 50, dueType: 'MILESTONE', milestone: 'Al finalizar' }] })}>Añadir plan de pagos</button> : <>
         <label className="block space-y-2 text-sm">Distribución<Select className={proposalInput} value={activePlan.mode} onChange={e => updatePlan({ ...activePlan, mode: e.target.value, installments: activePlan.installments.map(row => ({ ...row, value: 0 })) })}><option value="PERCENTAGE">Porcentajes del total</option><option value="FIXED">Importes exactos</option></Select></label>
         {activePlan.installments.map((row, i) => <div key={row.id} className="space-y-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-          <div className="grid gap-3 sm:grid-cols-[1fr_130px]"><input aria-label={`Nombre de cuota ${i + 1}`} className={proposalInput} value={row.label} onChange={e => updateRow(i, { label: e.target.value })} placeholder={`Cuota ${i + 1}`} /><input aria-label={`Valor de cuota ${i + 1}`} className={proposalInput} type="number" min="0" step="0.01" value={row.value} onChange={e => updateRow(i, { value: e.target.value })} /></div>
+          <div className="grid gap-3 sm:grid-cols-[1fr_130px]"><input aria-label={`Nombre de cuota ${i + 1}`} className={proposalInput} value={row.label} onChange={e => updateRow(i, { label: e.target.value })} placeholder={`Cuota ${i + 1}`} />{activePlan.mode === 'FIXED'
+            ? <MoneyInput aria-label={`Valor de cuota ${i + 1}`} className={proposalInput} min="0" value={row.value} onChange={value => updateRow(i, { value })} />
+            : <input aria-label={`Valor de cuota ${i + 1}`} className={proposalInput} type="number" min="0" step="0.01" value={row.value} onChange={e => updateRow(i, { value: e.target.value })} />}</div>
           <Select aria-label={`Vencimiento de cuota ${i + 1}`} className={proposalInput} value={row.dueType} onChange={e => updateRow(i, { dueType: e.target.value })}><option value="MILESTONE">Al cumplir un hito</option><option value="DATE">En una fecha</option><option value="AFTER_START">Días después del inicio</option></Select>
           {row.dueType === 'MILESTONE' ? <input aria-label={`Hito de cuota ${i + 1}`} className={proposalInput} value={row.milestone || ''} onChange={e => updateRow(i, { milestone: e.target.value })} placeholder="Ej. Al aprobar el núcleo CRM" /> : row.dueType === 'DATE' ? <BrainDatePicker ariaLabel={`Fecha de cuota ${i + 1}`} className="py-2.5" value={row.date || ''} onChange={value => updateRow(i, { date: value })} /> : <input aria-label={`Días de cuota ${i + 1}`} className={proposalInput} type="number" min="0" value={row.days || 0} onChange={e => updateRow(i, { days: e.target.value })} />}
           <button type="button" className={destructive} onClick={() => updatePlan({ ...activePlan, installments: activePlan.installments.filter(p => p.id !== row.id) })}>Eliminar cuota {i + 1}</button>

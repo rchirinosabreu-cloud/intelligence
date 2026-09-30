@@ -32,6 +32,8 @@ export const createNewClient = async (req, res) => {
         res.status(201).json(client);
     } catch (error) {
         console.error("[ClientController] Failed to create client:", error?.message || error);
+        // Un dato de la ficha mal escrito se dice tal cual; el resto no sale del servidor.
+        if (error?.statusCode === 400) return res.status(400).json({ error: error.code || 'CLIENT_PROFILE_INVALID', message: error.message });
         res.status(500).json({ error: "Failed to create client" });
     }
 };

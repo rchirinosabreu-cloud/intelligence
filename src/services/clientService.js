@@ -1,4 +1,5 @@
 import prisma from '../lib/prisma.js';
+import { normalizeClientProfile } from '../lib/clientProfile.js';
 
 // Helper to slugify strings
 function slugify(text) {
@@ -172,10 +173,16 @@ export async function getClients(filters = {}) {
  * que ocurrir dentro de su transacción: o quedan las dos cosas, o no queda ninguna.
  */
 export async function createClientWith(db, data) {
-  const { name } = data;
-  if (!name) {
+  if (!String(data?.name ?? '').trim()) {
     throw new Error("Client name is required");
   }
+  // La ficha completa (30 de septiembre de 2026): nombre, identidad para la cuenta de
+  // cobro, contacto y ubicación. Un dato mal escrito no deja crear una ficha a medias.
+  const profile = normalizeClientProfile(data, { requireName: true });
+  if (!profile.valid) {
+    throw Object.assign(new Error(Object.values(profile.errors)[0]), { statusCode: 400, code: 'CLIENT_PROFILE_INVALID', errors: profile.errors });
+  }
+  const { name, ...details } = profile.data;
 
   let slug = slugify(data.slug || name);
   if (!slug) {
@@ -195,6 +202,7 @@ export async function createClientWith(db, data) {
   return db.client.create({
     data: {
       name,
+      ...details,
       slug: uniqueSlug,
       status: 'ACTIVO',
       logoUrl: `https://ui-avatars.com/api/?name=${encodeURIComponent(name)}&background=random&color=fff&size=128`
@@ -206,7 +214,7 @@ export async function createClient(data) {
   try {
     return await createClientWith(prisma, data);
   } catch (error) {
-    if (error?.message === 'Client name is required') throw error;
+    if (error?.message === 'Client name is required' || error?.statusCode === 400) throw error;
     console.error("[ClientService] Error creating client:", error);
     throw new Error("Failed to create client");
   }

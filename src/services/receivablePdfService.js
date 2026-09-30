@@ -4,8 +4,14 @@ import { amountInWords } from '../utils/amountInWords.js';
 import { formatPartyDocument, formatPartyName } from '../lib/partyIdentity.js';
 import { pathToFileURL } from 'node:url';
 import {
-    formatReceivableNumber, parseReceivableConcept, receivableIssuer, RECEIVABLE_ISSUER_DEFAULT_NAME
+    formatReceivableNumber, parseReceivableConcept, receivableIssuer, RECEIVABLE_ISSUER_DEFAULT_NAME,
+    isReceivableConceptHtml, receivableDocumentFilename
 } from '../lib/receivableDocument.js';
+import {
+    DEFAULT_RECEIVABLE_CURRENCY, formatReceivableMoney, normalizeReceivableCurrency, receivableAmountInWords
+} from '../lib/receivableCurrency.js';
+import { normalizeReceivableConcept } from './receivableDocumentService.js';
+import { proposalRichTextBlocks } from './quotationProposalDetails.js';
 import { FinancialDomainError } from './financialRecordService.js';
 
 // La cuenta de cobro tal como la reciben los clientes hoy en Word: mismo orden, mismo
@@ -69,26 +75,68 @@ const money = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP
 const longDate = (value) => new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(value));
 
 /**
+ * El concepto como bloques que el PDF sabe dibujar: `kind` (heading, paragraph o
+ * bullet), su texto y sus tramos con negrita, cursiva y subrayado. El concepto con
+ * formato se vuelve a limpiar aquí, aunque ya se limpió al guardarlo: el PDF no confía
+ * en lo que haya en la base. El texto plano de antes da un tramo por bloque.
+ */
+export const receivableConceptBlocks = (concept) => {
+    if (!isReceivableConceptHtml(concept)) {
+        return parseReceivableConcept(concept).map((block) => ({ ...block, runs: [{ text: block.text }] }));
+    }
+    let clean;
+    try {
+        clean = normalizeReceivableConcept(concept);
+    } catch {
+        return [];
+    }
+    return proposalRichTextBlocks(clean).map((block) => {
+        const runs = block.runs
+            .map(({ text, bold, italic, underline }) => ({ text, ...(bold ? { bold } : {}), ...(italic ? { italic } : {}), ...(underline ? { underline } : {}) }));
+        const textValue = runs.map((run) => run.text).join('').replace(/\s+/g, ' ').trim();
+        if (block.heading) return { kind: 'heading', level: block.heading, text: textValue, runs };
+        if (block.bullet) return { kind: 'bullet', ...(block.ordinal ? { ordinal: block.ordinal } : {}), text: textValue, runs };
+        return { kind: 'paragraph', text: textValue, runs };
+    }).filter((block) => block.text);
+};
+
+/**
  * Lo que el documento dice, sin dibujar nada. Separado para poder comprobarlo contra
  * las cuentas de cobro reales sin abrir un PDF.
  */
 export const buildReceivableDocumentModel = (receivable, env = {}) => {
     const issuer = receivableIssuer(env);
-    const total = Number(receivable.amount) || 0;
-    const items = (receivable.items || []).map((item) => ({ description: item.description, amount: Number(item.amount) || 0 }));
+    const currency = normalizeReceivableCurrency(receivable.currency) || DEFAULT_RECEIVABLE_CURRENCY;
+    const usd = currency === 'USD';
+    // En pesos el documento vale lo que la obligación. En dólares la obligación guarda su
+    // valor en pesos para la cartera, y el documento —que dice dólares— es la suma de sus
+    // conceptos, en centavos para no arrastrar error de coma flotante.
+    const itemCents = (receivable.items || []).reduce((sum, item) => sum + Math.round((Number(item.amount) || 0) * 100), 0);
+    const total = usd ? itemCents / 100 : Number(receivable.amount) || 0;
+    const format = (value) => (usd ? formatReceivableMoney(value, currency) : money.format(value));
+    const items = (receivable.items || []).map((item) => ({
+        description: item.description,
+        amount: Number(item.amount) || 0,
+        formatted: format(Number(item.amount) || 0)
+    }));
     return {
         issuer,
+        currency,
         place: `${issuer.city} ${longDate(receivable.issuedAt)}`,
         title: `Cuenta de cobro ${formatReceivableNumber(receivable.number)}`,
         debtorName: formatPartyName(receivable.client, receivable.client?.name),
         debtorDocument: formatPartyDocument(receivable.client),
-        amountInWords: amountInWords(total),
-        amountInFigures: `(${money.format(total)})`,
-        concept: parseReceivableConcept(receivable.concept),
+        amountInWords: usd ? receivableAmountInWords(total, currency) : amountInWords(total),
+        amountInFigures: `(${format(total)})`,
+        concept: receivableConceptBlocks(receivable.concept),
         // Con un solo concepto el documento no lleva tabla, como el de Elvira Utria.
         items: items.length > 1 ? items : [],
         total,
+        formattedTotal: format(total),
         servicePeriod: receivable.servicePeriod || null,
+        // Pagar en dólares suele ser otra instrucción que consignar en pesos: si está
+        // configurada se usa; si no, la de siempre.
+        bankLine: usd && issuer.bankLineUsd ? issuer.bankLineUsd : issuer.bankLine,
         signatureImage: receivableSignatureImage(issuer, env)
     };
 };
@@ -113,6 +161,146 @@ const paragraph = (doc, text, y, { width = CONTENT_WIDTH, left = PAGE.left, ...o
 };
 
 /**
+ * La letra del concepto (Rodny, 30 de septiembre de 2026: «siento que es muy grande …
+ * reducir un poquito el interletrado y el tamaño de letra … la viñeta es muy gigante»).
+ * Un punto menos que el cuerpo del documento, interletrado apenas cerrado y la viñeta
+ * dibujada como un punto pequeño en vez del carácter ● a tamaño de texto.
+ * `charSpace` va en milímetros por letra; jsPDF no lo cuenta al medir, así que el
+ * reparto en líneas lo suma a mano.
+ */
+export const CONCEPT_TYPOGRAPHY = {
+    size: 9.5,
+    charSpace: -0.06,
+    lineGap: 0.95,
+    headingSizes: { 1: 12, 2: 11, 3: 10.5 },
+    bulletRadius: 0.5,
+    indent: 6.5
+};
+
+// Un concepto largo con formato puede pasar de una página: se abre otra en vez de
+// escribir por debajo del borde.
+const ensureSpace = (doc, y, needed) => {
+    if (y + needed <= PAGE.height - PAGE.bottom) return y;
+    doc.addPage();
+    return PAGE.top + 4;
+};
+
+// Work Sans solo trae normal y negrita; la cursiva usa la de Helvetica, como el PDF de
+// las propuestas.
+const setRunFont = (doc, { bold, italic }, size) => {
+    doc.setFontSize(size);
+    doc.setTextColor(...COLORS.ink);
+    if (italic) doc.setFont('helvetica', bold ? 'bolditalic' : 'italic');
+    else doc.setFont('WorkSans', bold ? 'bold' : 'normal');
+};
+
+/**
+ * Un documento con las fuentes de la casa ya registradas. Lo usa el PDF y lo usan las
+ * pruebas que miden el reparto en líneas con la misma letra.
+ */
+export const newReceivableDocument = () => {
+    const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
+    const fonts = getFonts();
+    doc.addFileToVFS('WorkSans-Regular.ttf', fonts.regular);
+    doc.addFont('WorkSans-Regular.ttf', 'WorkSans', 'normal');
+    doc.addFileToVFS('WorkSans-Bold.ttf', fonts.bold);
+    doc.addFont('WorkSans-Bold.ttf', 'WorkSans', 'bold');
+    return doc;
+};
+
+// Ancho real de un texto con el interletrado: jsPDF no lo suma al medir.
+const measure = (doc, text, charSpace) => doc.getTextWidth(text) + charSpace * text.length;
+
+/**
+ * Reparte los tramos de un bloque en líneas que caben en `width`. Cada palabra conserva
+ * su estilo y si iba separada de la anterior por un espacio: «Este» en negrita pegado a
+ * «:» sin negrita sigue siendo «Este:». Un salto de línea escrito fuerza línea nueva.
+ */
+export const layoutConceptLines = (doc, runs, { width, size, charSpace, heading = false }) => {
+    setRunFont(doc, {}, size);
+    const spaceWidth = measure(doc, ' ', charSpace);
+    const lines = [];
+    let line = { words: [], width: 0, hardBreak: false };
+    let pendingSpace = false;
+    const closeLine = (hardBreak) => {
+        if (line.words.length) lines.push({ ...line, hardBreak });
+        line = { words: [], width: 0, hardBreak: false };
+    };
+    const place = (word) => {
+        const gap = line.words.length && word.space ? spaceWidth : 0;
+        if (line.words.length && line.width + gap + word.width > width) {
+            closeLine(false);
+            line.words.push({ ...word, space: false });
+            line.width = word.width;
+            return;
+        }
+        line.words.push(line.words.length ? word : { ...word, space: false });
+        line.width += gap + word.width;
+    };
+    for (const run of runs) {
+        const style = { bold: Boolean(run.bold || heading), italic: Boolean(run.italic), underline: Boolean(run.underline) };
+        setRunFont(doc, style, size);
+        for (const token of run.text.split(/(\s+)/)) {
+            if (!token) continue;
+            if (!token.trim()) {
+                if (token.includes('\n')) { closeLine(true); pendingSpace = false; } else pendingSpace = true;
+                continue;
+            }
+            // Una palabra más ancha que la columna se parte en vez de salirse.
+            let remaining = token;
+            while (remaining) {
+                let piece = remaining;
+                while (piece.length > 1 && measure(doc, piece, charSpace) > width) piece = piece.slice(0, -1);
+                place({ text: piece, ...style, width: measure(doc, piece, charSpace), space: pendingSpace });
+                pendingSpace = false;
+                remaining = remaining.slice(piece.length);
+            }
+        }
+    }
+    closeLine(true);
+    return lines.map((item) => ({ ...item, spaceWidth }));
+};
+
+/**
+ * Dibuja un bloque del concepto. Las líneas se justifican repartiendo el hueco entre
+ * palabras —salvo la última de cada párrafo y los títulos—, así el texto con negritas
+ * queda tan alineado como el que no las tiene. Devuelve la altura siguiente.
+ */
+const drawConceptBlock = (doc, runs, startY, { left, width, size, charSpace, heading = false }) => {
+    const lineHeight = size * 0.42 + CONCEPT_TYPOGRAPHY.lineGap;
+    let y = startY;
+    const lines = layoutConceptLines(doc, runs, { width, size, charSpace, heading });
+    for (const [index, line] of lines.entries()) {
+        if (index > 0) y = ensureSpace(doc, y + lineHeight, lineHeight);
+        const gaps = line.words.filter((word, position) => position > 0 && word.space).length;
+        const justify = !heading && !line.hardBreak && index < lines.length - 1 && gaps > 0;
+        const extra = justify ? (width - line.width) / gaps : 0;
+        let x = left;
+        line.words.forEach((word, position) => {
+            if (position > 0 && word.space) {
+                const gap = line.spaceWidth + extra;
+                // Un subrayado de varias palabras es una sola raya, no una por palabra.
+                if (word.underline && line.words[position - 1].underline) {
+                    doc.setDrawColor(...COLORS.ink);
+                    doc.setLineWidth(0.2);
+                    doc.line(x, y + 0.8, x + gap, y + 0.8);
+                }
+                x += gap;
+            }
+            setRunFont(doc, word, size);
+            doc.text(word.text, x, y, { charSpace });
+            if (word.underline) {
+                doc.setDrawColor(...COLORS.ink);
+                doc.setLineWidth(0.2);
+                doc.line(x, y + 0.8, x + word.width, y + 0.8);
+            }
+            x += word.width;
+        });
+    }
+    return y + lineHeight;
+};
+
+/**
  * El PDF de una cuenta de cobro emitida. Devuelve el buffer; quien llama decide si lo
  * guarda o lo sirve, porque el documento se congela al emitir.
  */
@@ -121,12 +309,7 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
     if (!model.amountInWords) {
         throw new Error('El importe de la cuenta de cobro no se puede escribir en letras.');
     }
-    const doc = new jsPDF({ unit: 'mm', format: 'a4', compress: true });
-    const fonts = getFonts();
-    doc.addFileToVFS('WorkSans-Regular.ttf', fonts.regular);
-    doc.addFont('WorkSans-Regular.ttf', 'WorkSans', 'normal');
-    doc.addFileToVFS('WorkSans-Bold.ttf', fonts.bold);
-    doc.addFont('WorkSans-Bold.ttf', 'WorkSans', 'bold');
+    const doc = newReceivableDocument();
 
     // Marca arriba a la derecha, como en el documento de Word.
     doc.addImage(getLogo(), 'PNG', PAGE.width - PAGE.right - 22, PAGE.top - 4, 22, 22, undefined, 'FAST');
@@ -144,7 +327,8 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
 
     y += 16;
     y = centered(doc, model.debtorName, y, { size: 11, style: 'bold' });
-    y = centered(doc, model.debtorDocument, y, { size: 10.5 });
+    // Sin documento en la ficha no hay línea que imprimir: emitir ya no lo exige.
+    if (model.debtorDocument) y = centered(doc, model.debtorDocument, y, { size: 10.5 });
     y += 6;
     y = centered(doc, 'Debe a:', y, { size: 10.5 });
     y += 5;
@@ -159,14 +343,31 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
     setText(doc, { size: 10.5, style: 'bold' });
     doc.text('Por concepto de:', PAGE.left, y);
     y += 7;
-    for (const block of model.concept) {
+    const concept = CONCEPT_TYPOGRAPHY;
+    for (const [index, block] of model.concept.entries()) {
+        // Un título abre sección: lleva aire por encima para no pegarse a la lista anterior.
+        if (block.kind === 'heading' && index > 0) y += 3;
+        y = ensureSpace(doc, y, 8);
+        const indent = block.kind === 'bullet' ? concept.indent : 0;
         if (block.kind === 'bullet') {
-            setText(doc, { size: 10.5 });
-            doc.text('●', PAGE.left + 3, y);
-            y = paragraph(doc, block.text, y, { left: PAGE.left + 8, width: CONTENT_WIDTH - 8 }) + 0.6;
-        } else {
-            y = paragraph(doc, block.text, y) + 1.4;
+            if (block.ordinal) {
+                setText(doc, { size: concept.size });
+                doc.text(`${block.ordinal}.`, PAGE.left + 1.2, y, { charSpace: concept.charSpace });
+            } else {
+                // Un punto pequeño a media altura de las minúsculas, no el ● a tamaño de texto.
+                doc.setFillColor(...COLORS.ink);
+                doc.circle(PAGE.left + 2.6, y - concept.size * 0.1, concept.bulletRadius, 'F');
+            }
         }
+        const heading = block.kind === 'heading';
+        y = drawConceptBlock(doc, block.runs, y, {
+            left: PAGE.left + indent,
+            width: CONTENT_WIDTH - indent,
+            size: heading ? concept.headingSizes[block.level] || concept.headingSizes[3] : concept.size,
+            charSpace: concept.charSpace,
+            heading
+        });
+        y += block.kind === 'bullet' ? 0.4 : heading ? 1.6 : 1.2;
     }
 
     if (model.items.length) {
@@ -184,8 +385,8 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
             y += 7;
         };
         row('Descripción', 'Valor', { head: true });
-        for (const item of model.items) row(item.description, money.format(item.amount));
-        row('Total', money.format(model.total), { bold: true });
+        for (const item of model.items) row(item.description, item.formatted);
+        row('Total', model.formattedTotal, { bold: true });
     }
 
     y += 9;
@@ -195,7 +396,7 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
     doc.text(` ${model.servicePeriod}`, PAGE.left + doc.getTextWidth('Periodo:'), y);
 
     y += 10;
-    y = paragraph(doc, model.issuer.bankLine, y);
+    y = paragraph(doc, model.bankLine, y);
 
     y += 10;
     setText(doc, { size: 10.5 });
@@ -228,17 +429,24 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
 
 export const RECEIVABLE_PDF_MIME = 'application/pdf';
 
-// Una obligación se emite una sola vez, así que su documento tiene una clave estable:
-// vuelve a guardarse encima de sí mismo en vez de dejar copias sueltas en el bucket.
+// La clave del PDF al emitir. Si se regenera porque el guardado no se pudo leer, vuelve
+// a guardarse encima de sí mismo en vez de dejar copias sueltas en el bucket.
 export const receivablePdfStorageKey = (receivable) => `receivables/${receivable.id}/cuenta-de-cobro-${String(receivable.number).padStart(4, '0')}.pdf`;
 
-const safeFilenamePart = (value) => String(value || '').replace(/[\\/:*?"<>|\r\n]/g, ' ').replace(/\s+/g, ' ').trim();
-
-// El nombre con el que llega al correo del cliente: como lo nombra Elisa a mano hoy.
-export const receivablePdfFilename = (receivable) => {
-    const who = safeFilenamePart(receivable.client?.legalName || receivable.client?.name);
-    return `Cuenta de cobro ${formatReceivableNumber(receivable.number)}${who ? ` - ${who}` : ''}.pdf`.slice(0, 180);
+// Cada corrección de una cuenta emitida guarda su PDF en una clave propia, con la hora
+// UTC: el que ya se había mandado al cliente sigue en el bucket y su clave queda en la
+// auditoría, así que siempre se puede ver qué versión recibió.
+export const receivablePdfRevisionKey = (receivable, at = new Date()) => {
+    const stamp = new Date(at).toISOString().replace(/[-:T]/g, '').slice(0, 14);
+    return `receivables/${receivable.id}/cuenta-de-cobro-${String(receivable.number).padStart(4, '0')}-corregida-${stamp}.pdf`;
 };
+
+// El nombre del archivo: número, cliente con el nombre de su ficha y mes del periodo.
+export const receivablePdfFilename = (receivable) => receivableDocumentFilename({
+    number: receivable.number,
+    clientName: receivable.client?.name || receivable.sourceLabel || receivable.client?.legalName,
+    period: receivable.period
+});
 
 const receivableForDocument = {
     items: { orderBy: { sortOrder: 'asc' } },
@@ -253,7 +461,7 @@ const receivableForDocument = {
  * creer que no lo está. Se avisa por consola y la descarga lo vuelve a intentar.
  */
 let warnedAboutStorage = false;
-export const storeReceivablePdf = async (prismaClient, storage, receivable, env = process.env, prebuilt = null) => {
+export const storeReceivablePdf = async (prismaClient, storage, receivable, env = process.env, prebuilt = null, keyOverride = null) => {
     // Sin bucket configurado no hay nada que intentar. Se avisa una vez por proceso, no
     // en cada emisión, y la descarga sigue funcionando generando el documento al vuelo.
     if (typeof storage?.isConfigured === 'function' && !storage.isConfigured()) {
@@ -265,7 +473,7 @@ export const storeReceivablePdf = async (prismaClient, storage, receivable, env 
     }
     try {
         const buffer = prebuilt || generateReceivablePdfBuffer(receivable, env);
-        const key = receivablePdfStorageKey(receivable);
+        const key = keyOverride || receivablePdfStorageKey(receivable);
         await storage.upload({
             key,
             body: buffer,

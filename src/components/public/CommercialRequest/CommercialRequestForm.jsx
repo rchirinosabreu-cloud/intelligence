@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, ArrowRight, Check, CheckCircle2, ExternalLink, Loader2, Sparkles, Clock, AlertCircle } from '@/components/ui/icons';
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
+import MoneyInput from '@/components/ui/MoneyInput';
 import { cn } from '@/lib/utils';
 import {
   WELCOME, THANKS, visibleSteps, visibleQuestions, validateStep, progressFor, encouragement, selectedServices, SERVICE_CATEGORIES
@@ -58,19 +59,21 @@ const OptionCard = ({ selected, onToggle, label, description, role, big = false,
   </button>
 );
 
-const MoneyInput = ({ question, value, onChange }) => {
+// El presupuesto usa el campo de dinero de la plataforma: puntos de miles mientras se
+// escribe. Sin decimales, porque el formulario lo lee en unidades enteras.
+const BudgetInput = ({ question, value, onChange }) => {
   const amount = value?.amount ?? '';
   const undefinedFlag = Boolean(value?.undefined);
   return (
     <div className="space-y-2">
       <div className="flex items-center rounded-xl border border-zinc-200 bg-white focus-within:border-primary/60 focus-within:ring-2 focus-within:ring-primary/20 dark:border-zinc-700 dark:bg-zinc-950">
         <span className="pl-4 text-sm font-semibold text-zinc-400">$</span>
-        <input
+        <MoneyInput
           id={`q-${question.id}`}
-          inputMode="numeric"
+          decimals={0}
           disabled={undefinedFlag}
           value={amount}
-          onChange={event => onChange({ amount: event.target.value.replace(/[^0-9.,]/g, ''), undefined: false })}
+          onChange={next => onChange({ amount: next, undefined: false })}
           placeholder="0"
           className="w-full bg-transparent px-2 py-3 text-base text-zinc-900 outline-none placeholder:text-zinc-400 disabled:opacity-50 dark:text-zinc-100"
         />
@@ -130,7 +133,7 @@ const Question = ({ question, value, error, onChange }) => {
     case 'money':
       return (
         <Field question={question} error={error}>
-          <MoneyInput question={question} value={value} onChange={onChange} />
+          <BudgetInput question={question} value={value} onChange={onChange} />
         </Field>
       );
     case 'consent':

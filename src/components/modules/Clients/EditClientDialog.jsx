@@ -1,52 +1,44 @@
 import React, { useId, useState } from 'react';
 import { toast } from 'react-hot-toast';
-import Select from '@/components/ui/Select';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { clientSlugPattern, clientSlugHelp } from '@/lib/clientEdit';
-import { PARTY_DOCUMENT_TYPES } from '@/lib/partyIdentity';
+import { changedClientProfile, clientProfileFrom, normalizeClientProfile } from '@/lib/clientProfile';
+import ClientProfileFields from './ClientProfileFields';
+
+const PLATFORM_FIELD = 'min-h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60';
 
 export default function EditClientDialog({ client, onSaved, onClose }) {
   const [name, setName] = useState(client.name);
   const [slug, setSlug] = useState(client.slug || '');
-  // Identidad del tercero: lo que va impreso en una cuenta de cobro. Se escribe
-  // aquí una vez y no en cada documento.
-  const [legalName, setLegalName] = useState(client.legalName || '');
-  const [documentType, setDocumentType] = useState(client.documentType || '');
-  const [documentNumber, setDocumentNumber] = useState(client.documentNumber || '');
+  // La ficha completa (30 de septiembre de 2026): identidad para la cuenta de cobro,
+  // contacto y ubicación. La misma que en Financiero y en la cuenta por cobrar.
+  const original = clientProfileFrom(client);
+  const [profile, setProfile] = useState(original);
+  const [profileErrors, setProfileErrors] = useState({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const nameId = useId();
   const slugId = useId();
   const slugWarningId = useId();
   const slugHelpId = useId();
-  const legalNameId = useId();
-  const documentTypeId = useId();
-  const documentNumberId = useId();
-  const identityHelpId = useId();
   const errorId = useId();
   const trimmedName = name.trim();
   const trimmedSlug = slug.trim();
-  const identity = {
-    legalName: legalName.trim(),
-    documentType: documentType.trim(),
-    documentNumber: documentNumber.trim()
-  };
   const nameChanged = trimmedName !== client.name;
   const slugChanged = trimmedSlug !== (client.slug || '');
-  const identityChanged = identity.legalName !== (client.legalName || '')
-    || identity.documentType !== (client.documentType || '')
-    || identity.documentNumber !== (client.documentNumber || '');
-  // Los tres van juntos: media identidad no sirve para un documento de cobro.
-  const filled = [identity.legalName, identity.documentType, identity.documentNumber].filter(Boolean).length;
-  const identityValid = filled === 0 || filled === 3;
+  // El nombre tiene su propio campo arriba; de la ficha viaja solo lo demás que cambió.
+  const { name: _name, ...profileChanges } = changedClientProfile(original, { ...profile, name: original.name });
+  const profileChanged = Object.keys(profileChanges).length > 0;
   const slugValid = !slugChanged || clientSlugPattern.test(trimmedSlug);
-  const canSave = !!trimmedName && slugValid && identityValid && (nameChanged || slugChanged || identityChanged);
+  const canSave = !!trimmedName && slugValid && (nameChanged || slugChanged || profileChanged);
 
   const save = async event => {
     event.preventDefault();
     if (saving || !canSave) return;
+    const check = normalizeClientProfile(profileChanges);
+    if (!check.valid) { setProfileErrors(check.errors); return; }
     setSaving(true);
     setError('');
     try {
@@ -60,7 +52,7 @@ export default function EditClientDialog({ client, onSaved, onClose }) {
         body: JSON.stringify({
           ...(nameChanged ? { name: trimmedName } : {}),
           ...(slugChanged ? { slug: trimmedSlug } : {}),
-          ...(identityChanged ? identity : {})
+          ...profileChanges
         }),
       });
       const result = await response.json().catch(() => ({}));
@@ -83,7 +75,7 @@ export default function EditClientDialog({ client, onSaved, onClose }) {
   };
 
   return <Dialog open onOpenChange={open => { if (!open && !saving) onClose(); }}>
-    <DialogContent className="max-w-md rounded-2xl" showCloseButton={!saving}>
+    <DialogContent className="max-h-[90vh] max-w-xl overflow-y-auto rounded-2xl" showCloseButton={!saving}>
       <DialogTitle className="pr-8">Editar cliente</DialogTitle>
       <DialogDescription>Cambiar el nombre no modifica automáticamente el slug.</DialogDescription>
       <form onSubmit={save} className="space-y-5" aria-busy={saving}>
@@ -92,54 +84,25 @@ export default function EditClientDialog({ client, onSaved, onClose }) {
           <input id={nameId} type="text" required value={name} disabled={saving}
             aria-describedby={error ? errorId : undefined}
             onChange={event => { setName(event.target.value); setError(''); }}
-            className="min-h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60" />
+            className={PLATFORM_FIELD} />
         </div>
         <div className="space-y-2">
           <label htmlFor={slugId} className="block text-sm font-medium">URL (slug)</label>
           <input id={slugId} type="text" value={slug} disabled={saving} autoCapitalize="none" autoCorrect="off" spellCheck={false}
             aria-invalid={!slugValid} aria-describedby={slugChanged ? `${slugWarningId} ${slugHelpId}` : slugHelpId}
             onChange={event => { setSlug(event.target.value); setError(''); }}
-            className="min-h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60" />
+            className={PLATFORM_FIELD} />
           <p id={slugHelpId} className="text-sm text-muted-foreground">{clientSlugHelp}</p>
           {slugChanged && <p id={slugWarningId} className="text-sm text-destructive brain-destructive-text">Esto podría afectar otros enlaces.</p>}
         </div>
-        <fieldset className="space-y-4 border-t border-zinc-200 pt-4 dark:border-white/10">
-          <legend className="sr-only">Datos para documentos de cobro</legend>
-          <div>
-            <p className="text-sm font-medium">Datos para cuentas de cobro</p>
-            <p id={identityHelpId} className="text-sm text-muted-foreground">
-              Como van impresos en el documento. Se escriben una vez aquí, no en cada cuenta de cobro.
-            </p>
-          </div>
-          <div className="space-y-2">
-            <label htmlFor={legalNameId} className="block text-sm font-medium">Nombre completo o razón social</label>
-            <input id={legalNameId} type="text" value={legalName} disabled={saving}
-              aria-describedby={identityHelpId} placeholder="Corporación Deportiva Los Titanes"
-              onChange={event => { setLegalName(event.target.value); setError(''); }}
-              className="min-h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60" />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
-            <div className="space-y-2">
-              <label htmlFor={documentTypeId} className="block text-sm font-medium">Documento</label>
-              <Select id={documentTypeId} value={documentType} disabled={saving} aria-label="Tipo de documento"
-                onChange={event => { setDocumentType(event.target.value); setError(''); }}
-                className="min-h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60">
-                <option value="">Sin definir</option>
-                {PARTY_DOCUMENT_TYPES.map(type => <option key={type.value} value={type.value}>{type.name}</option>)}
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <label htmlFor={documentNumberId} className="block text-sm font-medium">Número</label>
-              <input id={documentNumberId} type="text" value={documentNumber} disabled={saving}
-                autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="901378858"
-                onChange={event => { setDocumentNumber(event.target.value); setError(''); }}
-                className="min-h-11 w-full rounded-xl border border-input bg-background px-3 py-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60" />
-            </div>
-          </div>
-          {!identityValid && <p role="alert" className="text-sm text-destructive brain-destructive-text">
-            Los tres datos van juntos: completa el nombre, el tipo y el número, o déjalos los tres vacíos.
-          </p>}
-        </fieldset>
+        <div className="border-t border-zinc-200 pt-4 dark:border-white/10">
+          <ClientProfileFields showName={false} value={profile} errors={profileErrors} disabled={saving} fieldClassName={PLATFORM_FIELD}
+            onChange={patch => {
+              setProfileErrors(current => { const next = { ...current }; for (const key of Object.keys(patch)) delete next[key]; return next; });
+              setProfile(current => ({ ...current, ...patch }));
+              setError('');
+            }} />
+        </div>
         {error && <p id={errorId} role="alert" className="text-sm text-destructive brain-destructive-text">{error}</p>}
         <div className="flex justify-end gap-2">
           <Button type="button" variant="ghost" className="min-h-11" disabled={saving} onClick={onClose}>Cancelar</Button>

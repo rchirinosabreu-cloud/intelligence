@@ -28,7 +28,7 @@ const income = () => records.filter(record => record.type === 'INCOME').reduce((
 // El ingreso que generó un abono: no se edita ni se anula desde Movimientos.
 records[1] = { ...records[1], amount: 400000, origin: 'SYSTEM', description: 'Pago de cartera: Cliente de muestra', attachmentUrl: 'https://example.invalid/soporte.pdf', receivablePayment: { id: 'historical-payment', receivableId: debt.id } };
 records[2] = { ...records[2], attachmentUrl: 'javascript:alert(1)' };
-if (!debt.balanceReviewRequired) debt.payments = [{ id: 'historical-payment', amount: 400000, paidAt: '2026-09-01T05:00:00Z', reference: 'ABONO-01', account, financialRecord: records[1] }];
+if (!debt.balanceReviewRequired) debt.payments = [{ id: 'historical-payment', amount: 400000, paidAt: '2026-09-01T05:00:00Z', reference: 'ABONO-01', notes: 'Pagó la mitad; el resto queda para el 15 de octubre.', account, financialRecord: records[1] }];
 // Un PDF de una página, válido de verdad: el visor de la plataforma lo renderiza con
 // pdf.js, así que unos bytes inventados no probarían nada.
 const samplePdf = (text) => {
@@ -54,6 +54,12 @@ const samplePdf = (text) => {
   return pdf;
 };
 
+// El directorio de clientes (30 de septiembre de 2026): las fichas completas, en memoria.
+let directoryClients = [
+  { ...client, isArchived: false, legalName: 'CLIENTE DE MUESTRA S.A.S.', documentType: 'NIT', documentNumber: '900123456', contactName: 'Ana Gómez', email: 'pagos@muestra.co', phone: '+57 300 000 0000', address: 'Calle 1 # 2-3', city: 'Cartagena', country: 'Colombia', formattedDocument: 'NIT: 900123456' },
+  { ...archivedClient, legalName: null, documentType: null, documentNumber: null, contactName: null, email: null, phone: null, address: null, city: null, country: null, formattedDocument: null },
+  { id: 'demo-quiet', name: 'Cliente sin movimientos', slug: 'cliente-sin-movimientos', isArchived: false, legalName: null, documentType: null, documentNumber: null, contactName: null, email: null, phone: null, address: null, city: null, country: null, formattedDocument: null }
+];
 const createdReceivables = window.__createdReceivables = [];
 const deletedReceivables = window.__deletedReceivables = [];
 axios.defaults.adapter = async config => {
@@ -70,7 +76,22 @@ axios.defaults.adapter = async config => {
     const scopedExpense = category ? scoped.filter(record => record.type === 'EXPENSE').reduce((sum, record) => sum + Number(record.amount), 0) : 250000;
     data = { cashFlow: [{ year: 2026, month: 9, income: scopedIncome, expense: scopedExpense, netFlow: scopedIncome - scopedExpense }], categoriesDistribution: { INCOME: { SERVICIO: scopedIncome }, EXPENSE: { OPERATIVO: scopedExpense } }, accountsReceivable: debt.outstanding > 0 ? [{ client, clientId: client.id, totalOutstanding: debt.outstanding }] : [], payroll: { collaborators: [] }, sourceSummary: { totals: { income: scopedIncome, expense: scopedExpense, netFlow: scopedIncome - scopedExpense, receivable: debt.outstanding } } };
   }
+  else if (path === '/api/financials/clients' && config.method === 'get') data = { clients: directoryClients };
+  else if (path === '/api/financials/clients' && config.method === 'post') {
+    // Como el servidor: solo el nombre es obligatorio.
+    if (!String(body.name || '').trim()) throw Object.assign(new Error('Sin nombre'), { response: { data: { message: 'Escribe el nombre del cliente.' } } });
+    const created = { id: `demo-new-${directoryClients.length}`, slug: body.name.toLowerCase().replace(/\s+/g, '-'), isArchived: false, legalName: null, documentType: null, documentNumber: null, contactName: null, email: null, phone: null, address: null, city: null, country: null, ...body };
+    directoryClients = [...directoryClients, created];
+    data = { message: `Cliente «${created.name}» creado.`, client: created };
+  } else if (path.startsWith('/api/financials/clients/') && config.method === 'patch') {
+    const id = path.split('/').at(-1);
+    const clean = Object.fromEntries(Object.entries(body).map(([key, value]) => [key, value === '' ? null : value]));
+    directoryClients = directoryClients.map((item) => (item.id === id ? { ...item, ...clean } : item));
+    data = { message: 'Ficha del cliente actualizada.', client: directoryClients.find((item) => item.id === id) };
+  }
   else if (path.endsWith('/accounts')) data = { accounts: [account] };
+  // TRM oficial ficticia, como la devuelve el servidor.
+  else if (path.endsWith('/exchange-rate')) data = { rate: 3912.45, source: 'SUPERFINANCIERA_TRM', validFrom: '2026-09-30T00:00:00.000', validTo: '2026-09-30T00:00:00.000' };
   else if (path === '/api/clients') data = url.searchParams.get('isArchived') === 'all' ? [client, archivedClient] : [client];
   else if (path.endsWith('/receivables-ledger')) {
     if (new URLSearchParams(location.search).has('carteraError')) throw Object.assign(new Error('Error simulado de lectura'), { response: { data: { message: 'Error simulado de lectura' } } });
@@ -106,16 +127,23 @@ axios.defaults.adapter = async config => {
     // Como el servidor: le pone número, congela conceptos y el total del documento
     // pasa a ser el de la obligación.
     const total = body.items.reduce((sum, item) => sum + Number(item.amount), 0);
-    // Como el servidor: sin identidad en la ficha no se emite, y la que se escribe
-    // aquí queda guardada en ella.
-    if (!debt.clientLegalName && !body.client?.legalName) {
-      throw Object.assign(new Error('Sin identidad'), { response: { data: { message: 'La cuenta de cobro lleva el nombre completo y el documento del cliente.' } } });
-    }
+    // Como el servidor: la identidad ya no es obligatoria para emitir (30 de septiembre de
+    // 2026); la que se escribe aquí queda guardada en la ficha.
     if (body.client?.legalName) {
       debt = { ...debt, clientLegalName: body.client.legalName, clientDocumentType: body.client.documentType, clientDocumentNumber: body.client.documentNumber };
     }
-    debt = { ...debt, number: 393, formattedNumber: 'No. 0393', issuedAt: `${body.issuedAt}T00:00:00Z`, concept: body.concept, servicePeriod: body.servicePeriod, items: body.items, amount: total, outstanding: total - debt.paidAmount };
+    // Como el servidor: en dólares la cartera guarda el valor en pesos y el documento, dólares.
+    const cartera = body.currency === 'USD' ? Number(body.amountCop) : total;
+    debt = { ...debt, number: 393, formattedNumber: 'No. 0393', issuedAt: `${body.issuedAt}T00:00:00Z`, concept: body.concept, servicePeriod: body.servicePeriod, items: body.items, amount: cartera, outstanding: cartera - debt.paidAmount, documentTotal: total, currency: body.currency || 'COP', exchangeRate: body.currency === 'USD' ? body.exchangeRate : null, exchangeRateSource: body.exchangeRateSource || null, exchangeRateDate: body.exchangeRateDate || null };
     data = { message: 'Cuenta de cobro No. 0393 emitida.', receivable: debt, document: { number: 393, formattedNumber: 'No. 0393', total } };
+  } else if (path.includes('/receivables/') && path.endsWith('/document') && config.method === 'put') {
+    // Como el servidor: corregir conserva el número, ajusta conceptos y valor, y rehace el PDF.
+    if (!debt.number) throw Object.assign(new Error('Sin emitir'), { response: { data: { message: 'Esta obligación todavía no tiene cuenta de cobro, así que no hay nada que corregir. Usa «Emitir cuenta de cobro».' } } });
+    const total = body.items.reduce((sum, item) => sum + Number(item.amount), 0);
+    (window.__corrections ||= []).push(body);
+    const cartera = body.currency === 'USD' ? Number(body.amountCop) : total;
+    debt = { ...debt, issuedAt: `${body.issuedAt}T12:00:00Z`, concept: body.concept, servicePeriod: body.servicePeriod, items: body.items, amount: cartera, outstanding: cartera - debt.paidAmount, documentTotal: total, currency: body.currency || 'COP', exchangeRate: body.currency === 'USD' ? body.exchangeRate : null, exchangeRateSource: body.exchangeRateSource || null, exchangeRateDate: body.exchangeRateDate || null };
+    data = { message: `Cuenta de cobro ${debt.formattedNumber} corregida. El PDF ya tiene los datos nuevos.`, receivable: debt, document: { number: debt.number, formattedNumber: debt.formattedNumber, total } };
   } else if (path.includes('/receivables/') && path.endsWith('/document')) {
     // Como el servidor: el PDF llega por la API autenticada, como bytes.
     if (!debt.number) throw Object.assign(new Error('Sin emitir'), { response: { data: { message: 'Esta obligación todavía no tiene cuenta de cobro.' } } });

@@ -5,6 +5,8 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Search, Plus, Trash2, Copy, Check, DollarSign, FileText, Globe, Building2, User as UserIcon, ArrowLeft, Loader2, RefreshCw } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/Card';
+import CurrencyToggle from '@/components/ui/CurrencyToggle';
+import MoneyInput from '@/components/ui/MoneyInput';
 import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -664,7 +666,7 @@ const QuotationForm = () => {
                                         {scenarios.filter(({ id: scenarioId }) => scenarioId === activeScenarioId).map((scenario) => (
                                             <div key={scenario.id} className="grid gap-3 md:grid-cols-2">
                                                 <input value={scenario.name} onChange={(e) => updateScenario(scenario.id, 'name', e.target.value)} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm font-bold outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Nombre de la opción" />
-                                                <input type="number" min="0" value={scenario.externalBudget} onChange={(e) => updateScenario(scenario.id, 'externalBudget', e.target.value)} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Presupuesto externo (opcional)" />
+                                                <MoneyInput min="0" aria-label="Presupuesto externo" value={scenario.externalBudget} onChange={(value) => updateScenario(scenario.id, 'externalBudget', value)} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Presupuesto externo (opcional)" />
                                                 <textarea value={scenario.description} onChange={(e) => updateScenario(scenario.id, 'description', e.target.value)} className="min-h-[70px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Descripción de esta alternativa" />
                                                 <textarea value={scenario.externalBudgetNote} onChange={(e) => updateScenario(scenario.id, 'externalBudgetNote', e.target.value)} className="min-h-[70px] rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900" placeholder="Ej: pagado directamente por el cliente a Meta" />
                                                 <Select value={scenario.discountType} onChange={(e) => updateScenario(scenario.id, 'discountType', e.target.value)} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none dark:border-zinc-700 dark:bg-zinc-900">
@@ -672,7 +674,10 @@ const QuotationForm = () => {
                                                     <option value="PERCENTAGE">Descuento porcentual</option>
                                                     <option value="FIXED">Descuento fijo</option>
                                                 </Select>
-                                                <input type="number" min="0" max={scenario.discountType === 'PERCENTAGE' ? 100 : undefined} value={scenario.discountValue} onChange={(e) => updateScenario(scenario.id, 'discountValue', e.target.value)} disabled={!scenario.discountType} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900" placeholder={scenario.discountType === 'PERCENTAGE' ? 'Porcentaje (ej. 10)' : 'Valor del descuento'} />
+                                                {/* Un porcentaje no es dinero; un descuento fijo sí, y lleva puntos. */}
+                                                {scenario.discountType === 'PERCENTAGE'
+                                                    ? <input type="number" min="0" max={100} value={scenario.discountValue} onChange={(e) => updateScenario(scenario.id, 'discountValue', e.target.value)} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900" placeholder="Porcentaje (ej. 10)" />
+                                                    : <MoneyInput min="0" aria-label="Valor del descuento" value={scenario.discountValue} onChange={(value) => updateScenario(scenario.id, 'discountValue', value)} disabled={!scenario.discountType} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900" placeholder="Valor del descuento" />}
                                                 <input value={scenario.discountLabel} onChange={(e) => updateScenario(scenario.id, 'discountLabel', e.target.value)} disabled={!scenario.discountType} className="rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm outline-none disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-900 md:col-span-2" placeholder="Etiqueta visible (ej. Descuento de lanzamiento)" />
                                                 <div className="md:col-span-2 flex justify-between text-xs">
                                                     <span className="text-zinc-500">Los servicios que agregues ahora pertenecerán a esta opción.</span>
@@ -801,10 +806,10 @@ const QuotationForm = () => {
                                                     </div>
                                                     <div className="flex-1 flex items-center gap-2 justify-end">
                                                         <span className="text-[10px] font-bold text-zinc-400 uppercase">Precio</span>
-                                                        <input
-                                                            type="number"
+                                                        <MoneyInput
+                                                            aria-label={`Precio de ${item.name || 'el servicio'}`}
                                                             value={item.price}
-                                                            onChange={(e) => updateItem(idx, 'price', e.target.value)}
+                                                            onChange={(value) => updateItem(idx, 'price', value)}
                                                             className="w-24 bg-white dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-lg px-2 py-1 text-xs text-right font-medium"
                                                         />
                                                     </div>
@@ -848,16 +853,7 @@ const QuotationForm = () => {
                     <Card className="p-6 space-y-6 sticky top-24">
                         <div className="flex justify-between items-center">
                             <h3 className="font-bold text-sm">Resumen y Ajustes</h3>
-                            <div className="flex gap-1 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg">
-                                <button
-                                    onClick={() => handleCurrencyChange('COP')}
-                                    className={cn("px-2 py-1 text-[10px] font-bold rounded-md transition-all", currency === 'COP' ? "bg-white dark:bg-zinc-700 shadow-sm" : "text-zinc-500")}
-                                >COP</button>
-                                <button
-                                    onClick={() => handleCurrencyChange('USD')}
-                                    className={cn("px-2 py-1 text-[10px] font-bold rounded-md transition-all", currency === 'USD' ? "bg-white dark:bg-zinc-700 shadow-sm" : "text-zinc-500")}
-                                >USD</button>
-                            </div>
+                            <CurrencyToggle value={currency} onChange={handleCurrencyChange} ariaLabel="Moneda de la cotización" />
                         </div>
 
                         {selectedItems.some(item => item.billingType !== 'ONE_TIME') && <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">
@@ -886,7 +882,9 @@ const QuotationForm = () => {
                                         <option value="PERCENTAGE">Porcentaje</option>
                                         <option value="FIXED">Valor fijo</option>
                                     </Select>
-                                    <input type="number" min="0" max={discountType === 'PERCENTAGE' ? 100 : undefined} value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} disabled={!discountType} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-right text-xs outline-none disabled:opacity-50 dark:border-violet-800 dark:bg-zinc-950" placeholder={discountType === 'PERCENTAGE' ? 'Porcentaje' : 'Valor'} />
+                                    {discountType === 'PERCENTAGE'
+                                        ? <input type="number" min="0" max={100} value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-right text-xs outline-none disabled:opacity-50 dark:border-violet-800 dark:bg-zinc-950" placeholder="Porcentaje" />
+                                        : <MoneyInput min="0" aria-label="Valor del descuento" value={discountValue} onChange={setDiscountValue} disabled={!discountType} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-right text-xs outline-none disabled:opacity-50 dark:border-violet-800 dark:bg-zinc-950" placeholder="Valor" />}
                                 </div>
                                 <input value={discountLabel} onChange={(e) => setDiscountLabel(e.target.value)} disabled={!discountType} className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs outline-none disabled:opacity-50 dark:border-violet-800 dark:bg-zinc-950" placeholder="Etiqueta visible en la propuesta" />
                             </div>
@@ -915,13 +913,11 @@ const QuotationForm = () => {
                                 </div>
                                 <div className="mt-3 flex items-center gap-2">
                                     <span className="text-xs font-semibold text-zinc-500">1 USD =</span>
-                                    <input
-                                        type="number"
+                                    <MoneyInput
                                         min="0.01"
-                                        step="0.01"
                                         value={exchangeRate}
-                                        onChange={(event) => {
-                                            setExchangeRate(event.target.value);
+                                        onChange={(value) => {
+                                            setExchangeRate(value);
                                             setExchangeRateSource('MANUAL');
                                             setExchangeRateDate(new Date().toISOString());
                                             setExchangeRateError('');

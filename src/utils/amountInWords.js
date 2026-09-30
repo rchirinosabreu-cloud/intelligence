@@ -64,7 +64,9 @@ export const integerInWords = (value) => {
  */
 // La moneda se guarda en minúsculas y las mayúsculas las pone el modo, no el dato:
 // si no, pedir minúsculas devolvía «un millón doscientos mil PESOS».
-export const amountInWords = (amount, { currency = 'pesos', uppercase = true } = {}) => {
+// `currencySingular` es la moneda cuando la cifra es exactamente uno: «un peso», «un
+// dólar», nunca «un pesos». Sin él se usa el plural, como antes.
+export const amountInWords = (amount, { currency = 'pesos', currencySingular = currency === 'pesos' ? 'peso' : null, uppercase = true } = {}) => {
     const cents = financialCents(amount);
     if (cents === null) return null;
     const units = Math.floor(cents / 100);
@@ -75,7 +77,8 @@ export const amountInWords = (amount, { currency = 'pesos', uppercase = true } =
     // «Cuatro millones DE pesos», pero «cuatro millones doscientos mil pesos»: la preposición
     // aparece solo cuando la cifra termina exactamente en millón o millones.
     const endsInWholeMillions = units >= 1000000 && units % 1000000 === 0;
-    let phrase = `${unitsInWords} ${endsInWholeMillions ? 'de ' : ''}${currency}`;
+    const currencyWord = units === 1 && currencySingular ? currencySingular : currency;
+    let phrase = `${unitsInWords} ${endsInWholeMillions ? 'de ' : ''}${currencyWord}`;
     if (remainder) {
         const centsInWords = integerInWords(remainder);
         if (centsInWords === null) return null;

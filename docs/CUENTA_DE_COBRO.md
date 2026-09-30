@@ -17,27 +17,62 @@ contable de Elisa, colgando del caso «factura electrónica»: ese es el otro ca
 | En el documento | De dónde viene |
 | --- | --- |
 | Ciudad, quien cobra, su cédula, la cuenta bancaria, la firma | `receivableIssuer(env)` en `src/lib/receivableDocument.js`. Se puede cambiar por entorno (`RECEIVABLE_ISSUER_*`) sin tocar el código. |
-| Nombre y documento del deudor | La ficha del cliente: `legalName`, `documentType`, `documentNumber`. Se escriben una vez en Clientes. |
+| Nombre y documento del deudor | La ficha del cliente: `legalName`, `documentType`, `documentNumber`. Opcionales: sin nombre legal sale el nombre de la ficha, y sin documento se salta esa línea. |
 | Número | `AccountsReceivable.number`. |
 | Concepto, viñetas, periodo del servicio | Lo que se escribe al emitir; queda congelado en la obligación. |
 | Conceptos y valores | `ReceivableItem`, que suman exactamente el total. |
 
-Una cuenta de cobro con el nombre corto del equipo no sirve para cobrar, así que sin
-nombre legal y documento **no se emite**. Ese dato se escribe **una sola vez**, pero
-desde cualquiera de los dos lados (Rodny, 23 de septiembre de 2026):
+**La identidad del deudor es opcional** (Rodny, 30 de septiembre de 2026: «no me deja
+emitir cuenta de cobro si el cliente no tiene NIT o EIN o nro de documento registrado,
+necesito levantar esa restricción»). El nombre legal va solo; el documento va entero
+—tipo y número— o no va. **Un documento a medias no frena la emisión** y simplemente no
+va (`dropIncompleteDocument`): Rodny tuvo que escribir «00000» porque el botón se apagaba
+sin decir por qué, y lo dejó claro: «si yo pongo en documento "sin definir" no tengo
+necesidad de poner el número». Solo un documento completo pero mal escrito se avisa, junto
+al campo, nunca solo apagando el botón. Se escribe **una sola vez**, desde cualquiera de
+estos lados:
 
-- En **Clientes → «⋯» → Editar Cliente**, por adelantado.
-- En el propio **diálogo de emitir**, cuando la ficha todavía no lo tiene: los tres
-  campos aparecen arriba y **quedan guardados en la ficha** al emitir, en la misma
-  transacción y con su evento de auditoría. No hay que abandonar el documento a medio
-  hacer para ir a buscarlo a otra pantalla.
+- En **Clientes → «⋯» → Editar Cliente**, o en **Financiero → Clientes → Editar ficha**.
+- En el propio **diálogo de emitir**, cuando la ficha todavía no lo tiene: lo que se
+  escriba **queda guardado en la ficha** al emitir, en la misma transacción y con su
+  evento de auditoría.
 
 Si la ficha **ya está identificada**, el diálogo no la pregunta y el servidor **no la
 reescribe** aunque se le mande: emitir un cobro no es el sitio para cambiarle el nombre
-legal a un tercero. Sin identidad y sin escribirla, el servicio responde
-`RECEIVABLE_CLIENT_IDENTITY_MISSING` nombrando al cliente y los dos sitios; una
-identidad a medias o mal escrita responde `RECEIVABLE_CLIENT_IDENTITY_INVALID` y no
-guarda nada.
+legal a un tercero. Un documento mal escrito responde `RECEIVABLE_CLIENT_IDENTITY_INVALID`
+y no guarda nada.
+
+## La ficha del cliente y el directorio
+
+Rodny, 30 de septiembre de 2026: «necesito crear y tener una base de datos de los clientes,
+un directorio … los mismos datos que lleva la cuenta de cobro», y «al crear un cliente nuevo
+se desplieguen todos los campos propios de un cliente, no es solo el nombre».
+
+- **Una sola ficha, una sola regla:** `src/lib/clientProfile.js` (`normalizeClientProfile`)
+  valida nombre, nombre legal, documento (CC, CE, NIT, PAS, EIN), persona de contacto,
+  correo, teléfono, dirección, ciudad y país. La usan la pantalla y el servidor, y los campos
+  se dibujan con `ClientProfileFields.jsx` en Clientes (crear y editar), en «Nueva cuenta por
+  cobrar» y en el directorio de Financiero. Columnas aditivas en `Client` con
+  `scripts/ensure-client-profile-schema.js`.
+- **Financiero → Clientes es el directorio:** búsqueda, «Nuevo cliente» y, al desplegar una
+  fila, la ficha completa con «Editar ficha», las cifras y la vinculación de siempre. Las
+  etiquetas que solo existen en el Excel ofrecen «Crear una ficha con este nombre». Rutas
+  `GET/POST /api/financials/clients` y `PATCH /api/financials/clients/:id` con los permisos de
+  Financiero; cada alta y cambio deja su `FinancialAuditEvent`.
+
+## Borrador de emitir, corregir y nueva cuenta por cobrar
+
+Rodny, 30 de septiembre de 2026: «estaba emitiendo una cuenta de cobro e hice click afuera, y
+se me borró todo». Dos defensas:
+
+- **Un clic afuera no cierra** estos diálogos (`keepOpenOnOutsideClick`); se cierran con
+  Cancelar, la X o Escape.
+- **Lo escrito se guarda mientras se escribe** en `localStorage`, por persona y por cuenta
+  (`src/lib/receivableDraft.js`), y vuelve al reabrir con la franja «Recuperamos lo que
+  estabas escribiendo · Descartar borrador». Solo se limpia cuando el servidor confirma,
+  nunca al cancelar. Si la cuenta cambió entretanto (alguien la emitió o la corrigió), el
+  borrador de la versión anterior se descarta. Caducan a los 30 días y se guardan como
+  máximo 20.
 
 La reciprocidad va también en el otro sentido: **una cuenta por cobrar puede crear la
 ficha del cliente** en el mismo acto («Crear uno nuevo» en «Nueva cuenta por cobrar»).
@@ -63,18 +98,42 @@ le manda al cliente y lo que queda en cartera tienen que ser la misma cifra. Una
 obligación con abonos aplicados que no cuadran con ese total no se emite
 (`RECEIVABLE_ALREADY_PAID_PARTIALLY`).
 
-**Una cuenta ya emitida no se reedita.** Si el cliente pide algo después, va otra cuenta
-de cobro aparte, que es como se trabaja hoy. Eso incluye el **valor original** de la
-obligación: antes de emitir se corrige desde la tarjeta de Cartera (una cifra tecleada mal,
-120.000 por 1.200.000), pero una vez emitida el servidor la rechaza con
-`RECEIVABLE_ISSUED_IMMUTABLE` nombrando el número («No. 0393») y la salida: emitir otra.
-Las notas y el comentario de seguimiento sí siguen editables después de emitir.
+**Una cuenta ya emitida se corrige** (Rodny, 30 de septiembre de 2026: «aunque la cta de
+cobro haya sido emitida, necesito que se pueda aún editar nuevamente y que eso remodifique
+el pdf»). Antes la regla era que no se reeditaba, y un valor mal tecleado —120.000 donde
+eran 1.200.000— se quedaba sin salida.
+
+- En Cartera, «Corregir» junto a «Ver PDF» (o el lápiz del valor) abre el mismo formulario
+  de emitir, precargado con lo que dice el documento.
+- `PUT /api/financials/receivables/:id/document` (`correctReceivableDocument`) se puede
+  repetir cuantas veces haga falta. **Conserva el número**: el consecutivo de Elisa no salta
+  por un error de digitación.
+- Cambia concepto, periodo, conceptos y fecha; el importe de la obligación vuelve a ser el
+  total y el estado se recalcula desde los abonos vigentes. No puede quedar por debajo de
+  lo ya abonado.
+- **Rehace el PDF** en una clave nueva, `…-corregida-<hora UTC>.pdf`. El que se había
+  mandado sigue en el bucket, y la auditoría guarda conceptos, valor, su clave y el motivo.
+- Emitir otra vez la misma obligación sigue sin estar permitido: se corrige, o lo que el
+  cliente pida después va en otra cuenta aparte.
+
+**El concepto lleva formato** (Rodny, 30 de septiembre de 2026). Se escribe con la barra
+de formato de la plataforma: títulos, negrita, cursiva, subrayado, viñetas y lista
+numerada, y el PDF lo dibuja igual. No hay resaltado porque el PDF no puede dibujarlo.
+
+- Se guarda como HTML y el servidor lo limpia antes de guardar: sin enlaces, sin código y
+  sin atributos. El tope de 4000 caracteres cuenta el texto que se lee.
+- Las cuentas anteriores tienen el concepto en texto plano y siguen funcionando. Al abrir
+  una en «Corregir», sus líneas con guion llegan como viñetas de verdad.
+- En el PDF el concepto va a 9,5 pt, con el interletrado apenas cerrado y viñetas como un
+  punto pequeño (Rodny, 30 de septiembre de 2026: «siento que es muy grande»). Todas las
+  líneas salen justificadas, también las que llevan negritas o cursivas, salvo la última
+  de cada párrafo y los títulos. Los valores viven en `CONCEPT_TYPOGRAPHY`.
 
 **El importe en letras de los millones redondos lleva «de»** (Rodny, 29 de septiembre de
 2026): «CUATRO MILLONES DE PESOS», «UN MILLÓN DE PESOS»; con resto no lo lleva («CUATRO
-MILLONES DOSCIENTOS MIL PESOS», «UN MILLÓN UN PESOS»). Los PDF emitidos antes de ese día
-quedaron congelados en el bucket con el texto antiguo; solo cambia lo que se emita o se
-regenere desde entonces.
+MILLONES DOSCIENTOS MIL PESOS», «UN MILLÓN UN PESOS»). El PDF guardado al emitir no se
+rehace solo cuando cambia la plantilla: para que una cuenta vieja salga con el «de», se
+abre «Corregir» y se guarda sin cambiar nada.
 
 ## El PDF
 
@@ -102,6 +161,38 @@ septiembre de 2026): el mismo `ChatFilePreview` que usan los soportes de un movi
 nada de una pestaña suelta. Los bytes llegan por la API autenticada y se le pasan al
 visor **como bytes**, no como una URL `blob:`, que la Content-Security-Policy de la
 página no le deja buscar. «Descargar» sí usa la URL local para guardar el archivo.
+
+## Cuentas de cobro en dólares
+
+Rodny, 30 de septiembre de 2026: «yo escoger la moneda, y que diga USD y el valor en letras
+sea "mil doscientos dólares"», y después: «en el financiero siempre registramos todo en
+pesos … puede registrarse en pesos haciendo la conversión que hacemos en cotización, usando
+el TRM oficial, sin embargo ese valor en pesos obviamente puede ser editado».
+
+- **La moneda es del documento.** Se elige con el interruptor COP / USD de Cotizaciones
+  (`CurrencyToggle`, aquí con el borde de los campos), junto a «Conceptos y valores». En USD
+  los conceptos se escriben en dólares y el PDF dice «MIL DOSCIENTOS DÓLARES» y
+  «(USD 1.200)», con la tabla en USD. Uno va en singular: «UN DÓLAR», «UN PESO».
+- **La cartera sigue en pesos.** La obligación guarda su valor en pesos: el total en dólares
+  por la TRM, redondeado al peso. Pagos, saldos, tablero y reportes no cambian, porque nunca
+  ven dólares.
+- **La TRM** es la oficial de la Superfinanciera, la misma fuente que usan las cotizaciones
+  (`GET /api/financials/exchange-rate`, con permiso de Financiero). Se puede escribir a mano,
+  y entonces queda como «Escrita a mano». Se guardan la tasa, su origen y su fecha.
+- **El valor en pesos se edita.** Al emitir se puede escribir a mano el valor en pesos, y
+  después el lápiz de «Valor original» lo ajusta al que de verdad entró. En una cuenta en
+  dólares ese lápiz no abre «Corregir», porque el PDF dice dólares y no imprime los pesos.
+- **Al registrar el pago** se escriben los pesos que entraron, como siempre. Si entró menos
+  que el valor en pesos, se ajusta ese valor con el lápiz.
+- Si hay que dar otra instrucción de pago para dólares, va en
+  `RECEIVABLE_ISSUER_BANK_LINE_USD`. Sin ella, el PDF usa la de siempre.
+- **También al crearla.** «Nueva cuenta por cobrar» lleva el mismo interruptor: en USD se
+  escribe el valor en dólares (`foreignAmount`), la TRM y el valor en pesos que va a cartera
+  (`UsdToPesosFields`, el mismo bloque que al emitir). Al emitirla, el diálogo arranca en
+  dólares con ese valor y esa TRM.
+- Columnas aditivas: `currency`, `exchangeRate`, `exchangeRateSource`, `exchangeRateDate` y
+  `foreignAmount` en `AccountsReceivable`, con `scripts/ensure-receivable-currency-schema.js`.
+  Todo lo existente queda en COP.
 
 ## Eliminar una obligación
 
