@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { buildClientDirectoryRows, filterClientDirectoryRows } from '../src/lib/clientDirectoryRows.js';
+import { buildClientDirectoryRows, filterClientDirectoryRows, isClientDirectoryRowOpen } from '../src/lib/clientDirectoryRows.js';
 
 // La pestaña Clientes de Financiero como directorio (Rodny, 30 de septiembre de 2026:
 // «aquí debería esto rediagramarse … para que aparezca también la ficha de cada cliente
@@ -31,6 +31,22 @@ test('el directorio muestra todas las fichas, con o sin movimientos, y las etiqu
     assert.equal(excel.clientId, null);
     assert.equal(excel.sourceId, 'source-label:PAGO ELVIRA U.');
     assert.equal(rows.find((row) => row.clientId === 'c-nuevo').income, 0);
+});
+
+// Rodny, 30 de septiembre de 2026: «no puedo cerrar "ecozonorte", siempre aparece
+// desplegado». Una etiqueta del Excel no tiene ficha, y su ficha vacía coincidía con
+// «ninguna fila abierta».
+test('una fila sin ficha no queda abierta cuando no hay ninguna elegida', () => {
+    const rows = buildClientDirectoryRows(directory, reconciliation);
+    const excel = rows.find((row) => row.clientId === null);
+    const grit = rows.find((row) => row.clientId === 'c-grit');
+    assert.equal(isClientDirectoryRowOpen(excel, null), false);
+    assert.equal(isClientDirectoryRowOpen(excel, undefined), false);
+    assert.equal(isClientDirectoryRowOpen(grit, null), false);
+    assert.equal(isClientDirectoryRowOpen(excel, excel.sourceId), true);
+    assert.equal(isClientDirectoryRowOpen(grit, grit.sourceId), true);
+    assert.equal(isClientDirectoryRowOpen(grit, 'c-grit'), true, 'tras guardar su ficha se abre por su id');
+    assert.equal(isClientDirectoryRowOpen(excel, grit.sourceId), false);
 });
 
 test('se busca por nombre, nombre legal, documento o correo, sin importar tildes', () => {

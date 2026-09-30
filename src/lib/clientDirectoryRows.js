@@ -39,6 +39,17 @@ export const buildClientDirectoryRows = (directory = [], reconciliation = []) =>
     return rows.sort((a, b) => ((b.income + b.receivable) - (a.income + a.receivable)) || String(a.name).localeCompare(String(b.name), 'es'));
 };
 
+/**
+ * Si una fila está desplegada. Se abre por su `sourceId` al tocarla, o por el id de su
+ * ficha justo después de crearla o guardarla. Nada vacío coincide nunca: una etiqueta del
+ * Excel no tiene ficha, y su `clientId` nulo igualaba a «ninguna abierta» y la dejaba
+ * siempre desplegada (Rodny, 30 de septiembre de 2026: «no puedo cerrar "ecozonorte"»).
+ */
+export const isClientDirectoryRowOpen = (row, expanded) => {
+    if (!row || expanded === null || expanded === undefined || expanded === '') return false;
+    return expanded === row.sourceId || (Boolean(row.clientId) && expanded === row.clientId);
+};
+
 /** Filtra por nombre, nombre legal, documento, contacto, correo o ciudad, sin tildes. */
 export const filterClientDirectoryRows = (rows = [], search = '') => {
     const needle = normalizeText(String(search).trim());

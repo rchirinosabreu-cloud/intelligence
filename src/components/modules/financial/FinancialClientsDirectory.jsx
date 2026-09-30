@@ -9,7 +9,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { formatPartyDocument, partyDocumentType } from '@/lib/partyIdentity';
 import { cn } from '@/lib/utils';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
-import { buildClientDirectoryRows, filterClientDirectoryRows } from '@/lib/clientDirectoryRows';
+import { buildClientDirectoryRows, filterClientDirectoryRows, isClientDirectoryRowOpen } from '@/lib/clientDirectoryRows';
 
 /**
  * La pestaña Clientes de Financiero como directorio (Rodny, 30 de septiembre de 2026:
@@ -102,7 +102,7 @@ export default function FinancialClientsDirectory({
                 ) : visible.length > 0 ? (
                     <ul className="divide-y divide-zinc-200 dark:divide-white/10">
                         {visible.map((row) => {
-                            const isOpen = expanded === row.sourceId || expanded === row.clientId;
+                            const isOpen = isClientDirectoryRowOpen(row, expanded);
                             const targetId = clientLinkTargets[row.sourceId] || '';
                             const isSaving = savingClientLinkId === row.sourceId;
                             const profile = row.profile;

@@ -72,6 +72,8 @@ test('un número con letras solo se acepta en un pasaporte', () => {
 test('los tipos están y cada uno tiene su etiqueta, incluido el EIN', () => {
     assert.deepEqual(PARTY_DOCUMENT_TYPES.map((type) => type.value), ['CC', 'NIT', 'CE', 'PAS', 'EIN']);
     assert.equal(partyDocumentType('ein').label, 'EIN:');
+    // Rodny: «quita lo de (Estados Unidos), solo deja "EIN" y ya».
+    assert.equal(partyDocumentType('ein').name, 'EIN');
     assert.equal(normalizePartyIdentity({ legalName: '2X GLOBAL LLC', documentType: 'EIN', documentNumber: '12-3456789' }).valid, true);
     for (const type of PARTY_DOCUMENT_TYPES) {
         assert.ok(type.label && type.name, `${type.value} necesita etiqueta y nombre`);
