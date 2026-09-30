@@ -457,17 +457,37 @@ const unidentifiedClient = { id: 'client-1', name: 'Prueba tdd', legalName: null
 const identity = { legalName: 'Corporación Deportiva Los Titanes', documentType: 'NIT', documentNumber: '901378858' };
 const issueInput = (extra = {}) => ({ concept: 'Servicios', items, servicePeriod: '20 de agosto al 19 de septiembre', issuedAt: '2026-09-30', ...extra });
 
-test('sin identidad en la ficha y sin escribirla, no se emite: se dice dónde ponerla', async () => {
-    const { tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }) });
+// Rodny, 30 de septiembre de 2026: «no me deja emitir cuenta de cobro si el cliente no
+// tiene NIT o EIN o nro de documento registrado, necesito levantar esa restricción».
+test('sin documento en la ficha la cuenta de cobro se emite igual', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }), highest: 392 });
     const prismaClient = { $transaction: async (callback) => callback(tx) };
 
-    await assert.rejects(
-        issueReceivableDocument(prismaClient, 'debt-1', issueInput(), { id: 'user-1' }),
-        (error) => error.code === 'RECEIVABLE_CLIENT_IDENTITY_MISSING'
-            && error.statusCode === 409
-            && /Prueba tdd/.test(error.message)
-            && /en este mismo formulario/.test(error.message)
-    );
+    const result = await issueReceivableDocument(prismaClient, 'debt-1', issueInput(), { id: 'user-1' });
+
+    assert.equal(result.document.formattedNumber, 'No. 0393');
+    assert.equal(calls.some(([name]) => name === 'client.update'), false, 'sin datos escritos no se toca la ficha');
+});
+
+test('un formulario de identidad vacío tampoco toca la ficha', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }), highest: 392 });
+    await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', issueInput({ client: { legalName: ' ', documentType: '', documentNumber: '' } }), { id: 'user-1' });
+    assert.equal(calls.some(([name]) => name === 'client.update'), false);
+});
+
+test('solo el nombre legal, sin documento, se guarda y se emite', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }), highest: 392 });
+    await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', issueInput({ client: { legalName: '2X Global LLC', documentType: '', documentNumber: '' } }), { id: 'user-1' });
+    assert.deepEqual(calls.find(([name]) => name === 'client.update')[1].data, { legalName: '2X Global LLC' });
+});
+
+// Una ficha con el nombre legal pero sin documento: se completa lo que falta, sin
+// reescribir lo que ya tenía.
+test('una ficha a medias se completa sin reescribir lo que ya tenía', async () => {
+    const halfIdentified = { ...unidentifiedClient, legalName: 'FUNDACIÓN GRIT' };
+    const { calls, tx } = buildTx({ receivable: openReceivable({ client: halfIdentified }), highest: 392 });
+    await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', issueInput({ client: { legalName: 'Otro nombre', documentType: 'NIT', documentNumber: '900123456' } }), { id: 'user-1' });
+    assert.deepEqual(calls.find(([name]) => name === 'client.update')[1].data, { documentType: 'NIT', documentNumber: '900123456' });
 });
 
 test('la identidad escrita al emitir queda guardada en la ficha del cliente', async () => {
@@ -487,8 +507,9 @@ test('la identidad escrita al emitir queda guardada en la ficha del cliente', as
     assert.deepEqual(audit.after, identity);
 });
 
-test('una identidad incompleta o mal escrita no se guarda a medias', async () => {
-    for (const wrong of [{ ...identity, documentNumber: '' }, { ...identity, documentType: 'XX' }, { ...identity, documentNumber: 'abc' }]) {
+// El documento va entero o no va: un tipo sin número, o un número mal escrito, no se guarda.
+test('un documento a medias o mal escrito no se guarda', async () => {
+    for (const wrong of [{ ...identity, documentNumber: '' }, { ...identity, documentType: '' }, { ...identity, documentType: 'XX' }, { ...identity, documentNumber: 'abc' }]) {
         const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }) });
         const prismaClient = { $transaction: async (callback) => callback(tx) };
         await assert.rejects(

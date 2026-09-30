@@ -175,10 +175,10 @@ try {
   await issueDialog.getByRole('textbox', { name: 'Descripción del concepto 2' }).fill('Inversión de pauta en Meta Ads');
   await issueDialog.getByRole('textbox', { name: 'Valor del concepto 2' }).fill('400000');
   assert.match(await issueDialog.innerText(), /Total del documento\s*\$\s*1[.,]200[.,]000/);
-  // La ficha del cliente no tiene nombre legal ni documento, así que se escriben aquí
-  // y quedan guardados en ella: no hay que salir a Clientes a medio documento.
-  assert.match(await issueDialog.innerText(), /Se guardan en ella al emitir/);
-  assert.equal(await issueDialog.getByRole('button', { name: 'Emitir cuenta de cobro', exact: true }).isDisabled(), true, 'sin identidad no se puede emitir');
+  // La ficha del cliente no tiene nombre legal ni documento. Son opcionales (30 de
+  // septiembre de 2026): se puede emitir sin ellos, y si se escriben quedan en la ficha.
+  assert.match(await issueDialog.innerText(), /si no, la cuenta sale con el nombre de la ficha y sin documento/);
+  assert.equal(await issueDialog.getByRole('button', { name: 'Emitir cuenta de cobro', exact: true }).isDisabled(), false, 'sin identidad también se puede emitir');
   await issueDialog.getByRole('textbox', { name: 'Nombre completo o razón social' }).fill('CORPORACIÓN DEPORTIVA LOS TITANES');
   await chooseOption(issueDialog.getByRole('combobox', { name: 'Tipo de documento del cliente' }), 'NIT');
   await issueDialog.getByRole('textbox', { name: 'Número' }).fill('901378858');

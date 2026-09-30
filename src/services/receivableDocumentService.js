@@ -1,6 +1,6 @@
 import DOMPurify from 'isomorphic-dompurify';
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
-import { hasPartyIdentity, normalizePartyIdentity } from '../lib/partyIdentity.js';
+import { hasPartyIdentity, normalizePartialPartyIdentity } from '../lib/partyIdentity.js';
 import {
     RECEIVABLE_ITEM_MAX, RECEIVABLE_CONCEPT_MAX, RECEIVABLE_ITEM_DESCRIPTION_MAX,
     RECEIVABLE_SERVICE_PERIOD_MAX, formatReceivableNumber, isReceivableConceptHtml
@@ -204,34 +204,41 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
             // no obliga a abandonar el documento a medio hacer para ir a buscarlo.
             // Si la ficha ya los tiene, no se tocan: una cuenta de cobro no reescribe
             // la identidad de un tercero por el camino.
-            if (!hasPartyIdentity(receivable.client)) {
-                if (!input.client) {
-                    throw new FinancialDomainError(
-                        'RECEIVABLE_CLIENT_IDENTITY_MISSING',
-                        `La cuenta de cobro lleva el nombre completo y el documento del cliente, y la ficha de «${receivable.client?.name || 'este cliente'}» todavía no los tiene. Escríbelos en este mismo formulario, o complétalos en Clientes → «⋯» → Editar Cliente.`,
-                        409
-                    );
+            // Ya no es una puerta (Rodny, 30 de septiembre de 2026: «no me deja emitir
+            // cuenta de cobro si el cliente no tiene NIT o EIN o nro de documento … necesito
+            // levantar esa restricción»). Sin documento, el PDF lleva el nombre de la ficha
+            // y se salta la línea del documento. Lo que se escriba aquí se valida y rellena
+            // solo lo que le falta a la ficha: lo que ya tenía no se reescribe.
+            if (!hasPartyIdentity(receivable.client) && input.client) {
+                const written = normalizePartialPartyIdentity(input.client);
+                if (!written.valid) {
+                    throw new FinancialDomainError('RECEIVABLE_CLIENT_IDENTITY_INVALID', Object.values(written.errors)[0], 422);
                 }
-                const identity = normalizePartyIdentity(input.client);
-                if (!identity.valid) {
-                    throw new FinancialDomainError('RECEIVABLE_CLIENT_IDENTITY_INVALID', Object.values(identity.errors)[0], 422);
+                const current = receivable.client || {};
+                const missing = {};
+                if (written.identity.legalName && !String(current.legalName || '').trim()) missing.legalName = written.identity.legalName;
+                if (written.identity.documentNumber && !(current.documentType && String(current.documentNumber || '').trim())) {
+                    missing.documentType = written.identity.documentType;
+                    missing.documentNumber = written.identity.documentNumber;
                 }
-                await tx.client.update({ where: { id: receivable.clientId }, data: identity.identity });
-                await tx.financialAuditEvent.create({
-                    data: {
-                        entityType: 'Client',
-                        entityId: receivable.clientId,
-                        action: 'UPDATE',
-                        before: cloneForAudit({
-                            legalName: receivable.client?.legalName ?? null,
-                            documentType: receivable.client?.documentType ?? null,
-                            documentNumber: receivable.client?.documentNumber ?? null
-                        }),
-                        after: cloneForAudit(identity.identity),
-                        actorId
-                    }
-                });
-                receivable.client = { ...receivable.client, ...identity.identity };
+                if (Object.keys(missing).length) {
+                    await tx.client.update({ where: { id: receivable.clientId }, data: missing });
+                    await tx.financialAuditEvent.create({
+                        data: {
+                            entityType: 'Client',
+                            entityId: receivable.clientId,
+                            action: 'UPDATE',
+                            before: cloneForAudit({
+                                legalName: current.legalName ?? null,
+                                documentType: current.documentType ?? null,
+                                documentNumber: current.documentNumber ?? null
+                            }),
+                            after: cloneForAudit(missing),
+                            actorId
+                        }
+                    });
+                    receivable.client = { ...current, ...missing };
+                }
             }
             if (receivable.number) {
                 throw new FinancialDomainError(
