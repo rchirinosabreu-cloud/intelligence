@@ -25,6 +25,8 @@ import { toast } from 'react-hot-toast';
 import { Badge } from '@/components/ui/Badge';
 import ClientExpandedDetail from './Clients/ClientExpandedDetail';
 import EditClientDialog from './Clients/EditClientDialog';
+import ClientProfileFields from './Clients/ClientProfileFields';
+import { emptyClientProfile, normalizeClientProfile } from '@/lib/clientProfile';
 import { useQueryClient } from '@tanstack/react-query';
 
 const Clients = () => {
@@ -45,6 +47,8 @@ const Clients = () => {
 
   const [newClientName, setNewClientName] = useState('');
   const [newClientSlug, setNewClientSlug] = useState('');
+  const [newClientProfile, setNewClientProfile] = useState(() => emptyClientProfile());
+  const [newClientProfileErrors, setNewClientProfileErrors] = useState({});
   const [isManualSlugCreate, setIsManualSlugCreate] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -206,6 +210,10 @@ const Clients = () => {
   const handleCreateClient = async (e) => {
     e.preventDefault();
     if (!newClientName.trim() || !newClientSlug.trim()) return;
+    // La ficha completa (30 de septiembre de 2026): se revisa con la regla del servidor.
+    const { name: _unusedName, ...profileFields } = newClientProfile;
+    const check = normalizeClientProfile({ ...profileFields, name: newClientName }, { requireName: true });
+    if (!check.valid) { setNewClientProfileErrors(check.errors); return; }
 
     try {
       setIsCreating(true);
@@ -216,13 +224,13 @@ const Clients = () => {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${localStorage.getItem('authToken')}`
         },
-        body: JSON.stringify({ name: newClientName, slug: newClientSlug }),
+        body: JSON.stringify({ ...profileFields, name: newClientName, slug: newClientSlug }),
       });
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         console.error("Error creating client:", errorData);
-        throw new Error(errorData.error || 'Error al crear el cliente en el servidor');
+        throw new Error(errorData.message || errorData.error || 'Error al crear el cliente en el servidor');
       }
 
       const newClient = await res.json();
@@ -230,6 +238,8 @@ const Clients = () => {
 
       setNewClientName('');
       setNewClientSlug('');
+      setNewClientProfile(emptyClientProfile());
+      setNewClientProfileErrors({});
       setIsManualSlugCreate(false);
       setIsCreateModalOpen(false);
       toast.success("Cliente creado correctamente");
@@ -551,7 +561,7 @@ const Clients = () => {
       <Dialog.Root open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
             <Dialog.Portal>
               <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
-              <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-full max-w-md bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 p-6 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95 duration-200">
+              <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-xl max-h-[90vh] overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 p-6 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95 duration-200">
                 <Dialog.Title className="text-xl font-semibold text-zinc-900 dark:text-white mb-4">
                   Crear nuevo cliente
                 </Dialog.Title>
@@ -590,6 +600,14 @@ const Clients = () => {
                         className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all font-mono text-sm text-zinc-900 dark:text-white"
                         required
                       />
+                    </div>
+                    {/* La ficha completa del cliente, igual que en Financiero (30 de septiembre de 2026). */}
+                    <div className="border-t border-zinc-200 pt-4 dark:border-white/10">
+                      <ClientProfileFields showName={false} value={newClientProfile} errors={newClientProfileErrors} disabled={isCreating}
+                        onChange={patch => {
+                          setNewClientProfileErrors(current => { const next = { ...current }; for (const key of Object.keys(patch)) delete next[key]; return next; });
+                          setNewClientProfile(current => ({ ...current, ...patch }));
+                        }} />
                     </div>
                   </div>
 

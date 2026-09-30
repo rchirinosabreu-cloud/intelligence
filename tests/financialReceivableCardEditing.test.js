@@ -55,12 +55,12 @@ test('the document currency is chosen in the form, and a dollar account keeps a 
     assert.match(read('../src/components/ui/CurrencyToggle.jsx'), /bordered && 'border border-zinc-200 dark:border-white\/10'/);
     // Official TRM from Financiero's own route, editable by hand, with its origin shown.
     assert.match(dashboard, /\/api\/financials\/exchange-rate/);
-    assert.match(dashboard, /aria-label="TRM para pasar a pesos"/);
+    assert.match(read('../src/components/modules/financial/UsdToPesosFields.jsx'), /aria-label="TRM para pasar a pesos"/);
     assert.match(dashboard, /exchangeRateSource: 'MANUAL'/);
-    assert.match(dashboard, /Usar la TRM oficial/);
+    assert.match(read('../src/components/modules/financial/UsdToPesosFields.jsx'), /Usar la TRM oficial/);
     // The peso value defaults to total × TRM and can be written by hand.
     assert.match(dashboard, /pesosFromRate\(issueTotal, issueForm\?\.exchangeRate\)/);
-    assert.match(dashboard, /aria-label="Valor en pesos en cartera"/);
+    assert.match(read('../src/components/modules/financial/UsdToPesosFields.jsx'), /aria-label="Valor en pesos en cartera"/);
     assert.match(dashboard, /amountCopEdited: true/);
     // The payload is explicit: no stray form fields reach the server.
     assert.doesNotMatch(dashboard, /issue`, \{\s*\.\.\.issueForm/);
@@ -77,6 +77,22 @@ test('the document currency is chosen in the form, and a dollar account keeps a 
 test('the downloaded PDF is named with number, client and month, like the server names it', () => {
     assert.match(dashboard, /const name = receivableDocumentFilename\(\{ number: debt\.number, clientName: debt\.clientName, period: debt\.period \}\)/);
     assert.match(read('../src/services/receivablePdfService.js'), /receivableDocumentFilename\(/);
+});
+
+// Rodny, 30 de septiembre de 2026: «cuando le doy a "nueva cuenta por cobrar" no me aparece
+// para colocar el valor en pesos o dólares» y «al crear un cliente nuevo se desplieguen
+// todos los campos propios de un cliente».
+test('a new receivable chooses pesos or dollars and creates its client with a full profile', () => {
+    assert.match(dashboard, /<CurrencyToggle bordered value=\{receivableForm\.currency\} onChange=\{setReceivableCurrency\} ariaLabel="Moneda de la cuenta por cobrar" \/>/);
+    assert.match(dashboard, /aria-label="Valor en dólares"/);
+    assert.match(dashboard, /idPrefix="new-receivable-usd"/);
+    assert.match(dashboard, /foreignAmount: Number\(receivableForm\.foreignAmount\)/);
+    assert.match(dashboard, /data-new-client-profile[^]*?<ClientProfileFields value=\{receivableForm\.newClient\}/);
+    assert.match(dashboard, /client: receivableForm\.isNewClient \? receivableForm\.newClient : undefined/);
+    // The issue dialog and the new receivable share the same TRM block.
+    assert.equal((dashboard.match(/<UsdToPesosFields/g) || []).length, 2);
+    // An account created in dollars opens its document in dollars.
+    assert.match(dashboard, /debt\.currency === 'USD' \? debt\.foreignAmount/);
 });
 
 // Rodny, 30 de septiembre de 2026: «en concepto añadas la barra de formato que hemos

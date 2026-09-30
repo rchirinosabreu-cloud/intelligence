@@ -168,7 +168,12 @@ const serializeReceivable = (receivable) => {
         exchangeRate: receivable.exchangeRate === null || receivable.exchangeRate === undefined ? null : toNum(receivable.exchangeRate),
         exchangeRateSource: receivable.exchangeRateSource || null,
         exchangeRateDate: receivable.exchangeRateDate || null,
-        documentTotal: roundFloat((receivable.items || []).reduce((sum, item) => sum + toNum(item.amount), 0)),
+        // Emitida: la suma de sus conceptos. Sin emitir, en dólares: el valor en dólares con
+        // que se registró (30 de septiembre de 2026).
+        documentTotal: (receivable.items || []).length
+            ? roundFloat(receivable.items.reduce((sum, item) => sum + toNum(item.amount), 0))
+            : roundFloat(toNum(receivable.foreignAmount)),
+        foreignAmount: receivable.foreignAmount === null || receivable.foreignAmount === undefined ? null : toNum(receivable.foreignAmount),
         dueDate: receivable.dueDate instanceof Date ? receivable.dueDate.toISOString() : receivable.dueDate,
         status: receivable.status,
         notes: receivable.notes,

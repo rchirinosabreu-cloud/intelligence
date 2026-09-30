@@ -54,6 +54,12 @@ const samplePdf = (text) => {
   return pdf;
 };
 
+// El directorio de clientes (30 de septiembre de 2026): las fichas completas, en memoria.
+let directoryClients = [
+  { ...client, isArchived: false, legalName: 'CLIENTE DE MUESTRA S.A.S.', documentType: 'NIT', documentNumber: '900123456', contactName: 'Ana Gómez', email: 'pagos@muestra.co', phone: '+57 300 000 0000', address: 'Calle 1 # 2-3', city: 'Cartagena', country: 'Colombia', formattedDocument: 'NIT: 900123456' },
+  { ...archivedClient, legalName: null, documentType: null, documentNumber: null, contactName: null, email: null, phone: null, address: null, city: null, country: null, formattedDocument: null },
+  { id: 'demo-quiet', name: 'Cliente sin movimientos', slug: 'cliente-sin-movimientos', isArchived: false, legalName: null, documentType: null, documentNumber: null, contactName: null, email: null, phone: null, address: null, city: null, country: null, formattedDocument: null }
+];
 const createdReceivables = window.__createdReceivables = [];
 const deletedReceivables = window.__deletedReceivables = [];
 axios.defaults.adapter = async config => {
@@ -69,6 +75,19 @@ axios.defaults.adapter = async config => {
     const scopedIncome = scoped.filter(record => record.type === 'INCOME').reduce((sum, record) => sum + Number(record.amount), 0);
     const scopedExpense = category ? scoped.filter(record => record.type === 'EXPENSE').reduce((sum, record) => sum + Number(record.amount), 0) : 250000;
     data = { cashFlow: [{ year: 2026, month: 9, income: scopedIncome, expense: scopedExpense, netFlow: scopedIncome - scopedExpense }], categoriesDistribution: { INCOME: { SERVICIO: scopedIncome }, EXPENSE: { OPERATIVO: scopedExpense } }, accountsReceivable: debt.outstanding > 0 ? [{ client, clientId: client.id, totalOutstanding: debt.outstanding }] : [], payroll: { collaborators: [] }, sourceSummary: { totals: { income: scopedIncome, expense: scopedExpense, netFlow: scopedIncome - scopedExpense, receivable: debt.outstanding } } };
+  }
+  else if (path === '/api/financials/clients' && config.method === 'get') data = { clients: directoryClients };
+  else if (path === '/api/financials/clients' && config.method === 'post') {
+    // Como el servidor: solo el nombre es obligatorio.
+    if (!String(body.name || '').trim()) throw Object.assign(new Error('Sin nombre'), { response: { data: { message: 'Escribe el nombre del cliente.' } } });
+    const created = { id: `demo-new-${directoryClients.length}`, slug: body.name.toLowerCase().replace(/\s+/g, '-'), isArchived: false, legalName: null, documentType: null, documentNumber: null, contactName: null, email: null, phone: null, address: null, city: null, country: null, ...body };
+    directoryClients = [...directoryClients, created];
+    data = { message: `Cliente «${created.name}» creado.`, client: created };
+  } else if (path.startsWith('/api/financials/clients/') && config.method === 'patch') {
+    const id = path.split('/').at(-1);
+    const clean = Object.fromEntries(Object.entries(body).map(([key, value]) => [key, value === '' ? null : value]));
+    directoryClients = directoryClients.map((item) => (item.id === id ? { ...item, ...clean } : item));
+    data = { message: 'Ficha del cliente actualizada.', client: directoryClients.find((item) => item.id === id) };
   }
   else if (path.endsWith('/accounts')) data = { accounts: [account] };
   // TRM oficial ficticia, como la devuelve el servidor.

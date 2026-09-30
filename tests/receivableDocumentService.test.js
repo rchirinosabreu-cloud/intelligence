@@ -336,6 +336,7 @@ test('emitir en dólares deja los conceptos en dólares y la cartera en pesos co
     assert.equal(update.exchangeRate, 3912.45);
     assert.equal(update.exchangeRateSource, 'SUPERFINANCIERA_TRM');
     assert.equal(update.exchangeRateDate, '2026-09-30');
+    assert.equal(update.foreignAmount, 1200, 'el valor en dólares queda igual al del documento');
     assert.deepEqual(calls.find(([name]) => name === 'items.createMany')[1].data.map((line) => line.amount), [1200]);
     assert.equal(result.document.total, 1200, 'el total del documento sigue en dólares');
 });
@@ -507,9 +508,28 @@ test('la identidad escrita al emitir queda guardada en la ficha del cliente', as
     assert.deepEqual(audit.after, identity);
 });
 
-// El documento va entero o no va: un tipo sin número, o un número mal escrito, no se guarda.
-test('un documento a medias o mal escrito no se guarda', async () => {
-    for (const wrong of [{ ...identity, documentNumber: '' }, { ...identity, documentType: '' }, { ...identity, documentType: 'XX' }, { ...identity, documentNumber: 'abc' }]) {
+// Rodny, 30 de septiembre de 2026: «no me dejó emitir una cuenta de cobro con el tipo de
+// documento sin definir, tuve que ponerle '00000'». Un tipo sin número no frena nada.
+test('un tipo de documento sin número se ignora y la cuenta se emite', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }), highest: 392 });
+    const result = await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1',
+        issueInput({ client: { legalName: 'FUNDACIÓN GRIT', documentType: 'NIT', documentNumber: '  ' } }), { id: 'user-1' });
+    assert.equal(result.document.formattedNumber, 'No. 0393');
+    assert.deepEqual(calls.find(([name]) => name === 'client.update')[1].data, { legalName: 'FUNDACIÓN GRIT' });
+});
+
+// Rodny: «si yo pongo en documento "sin definir" no tengo necesidad de poner el número».
+test('con el tipo «Sin definir» el número se ignora y la cuenta sale sin documento', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }), highest: 392 });
+    const result = await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1',
+        issueInput({ client: { legalName: '', documentType: '', documentNumber: '00000' } }), { id: 'user-1' });
+    assert.equal(result.document.formattedNumber, 'No. 0393');
+    assert.equal(calls.some(([name]) => name === 'client.update'), false, 'no se guarda un número suelto en la ficha');
+});
+
+// Un documento completo pero mal escrito sí se avisa: ese número iría impreso.
+test('un documento completo pero mal escrito no se guarda', async () => {
+    for (const wrong of [{ ...identity, documentType: 'XX' }, { ...identity, documentNumber: 'abc' }]) {
         const { calls, tx } = buildTx({ receivable: openReceivable({ client: unidentifiedClient }) });
         const prismaClient = { $transaction: async (callback) => callback(tx) };
         await assert.rejects(

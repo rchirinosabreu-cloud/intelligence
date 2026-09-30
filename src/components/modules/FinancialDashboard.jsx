@@ -1,5 +1,5 @@
 import Select from '@/components/ui/Select';
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -40,8 +40,32 @@ import { RECEIVABLE_CONCEPT_DEFAULT, RECEIVABLE_ITEM_MAX, formatReceivableNumber
 import { formatExchangeRate, formatReceivableMoney, pesosFromRate } from '@/lib/receivableCurrency';
 import CurrencyToggle from '@/components/ui/CurrencyToggle';
 import MoneyInput from '@/components/ui/MoneyInput';
+import FinancialClientsDirectory from '@/components/modules/financial/FinancialClientsDirectory';
+import UsdToPesosFields from '@/components/modules/financial/UsdToPesosFields';
+import ClientProfileFields from '@/components/modules/Clients/ClientProfileFields';
+import { emptyClientProfile, normalizeClientProfile } from '@/lib/clientProfile';
 import RichTextEditor from '@/components/ui/RichTextEditor';
-import { PARTY_DOCUMENT_TYPES, hasPartyIdentity, normalizePartialPartyIdentity } from '@/lib/partyIdentity';
+import { PARTY_DOCUMENT_TYPES, dropIncompleteDocument, hasPartyIdentity, normalizePartialPartyIdentity } from '@/lib/partyIdentity';
+import { clearReceivableDraft, readReceivableDraft, receivableDraftFingerprint, receivableDraftSlot, saveReceivableDraft } from '@/lib/receivableDraft';
+
+// Un clic fuera de un formulario de cartera no lo cierra (Rodny, 30 de septiembre de 2026:
+// «hice click afuera, y se me borró todo»). Se cierra con Cancelar, la X o Escape.
+const keepOpenOnOutsideClick = (event) => event.preventDefault();
+
+const draftSavedTime = (savedAt) => {
+    const date = new Date(savedAt);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('es-CO', { timeZone: 'America/Bogota', day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+};
+
+function ReceivableDraftNotice({ savedAt, onDiscard }) {
+    return (
+        <div data-receivable-draft-notice role="status" className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-primary/30 bg-primary/5 px-3 py-2 text-sm text-zinc-700 dark:text-zinc-200">
+            <span>Recuperamos lo que estabas escribiendo{savedAt ? ` (${draftSavedTime(savedAt)})` : ''}.</span>
+            <button type="button" onClick={onDiscard} className="min-h-11 font-medium text-destructive brain-destructive-text hover:underline">Descartar borrador</button>
+        </div>
+    );
+}
 
 const CATEGORY_COLORS = {
     'MEMBRESIA': '#009EB9',
@@ -72,6 +96,25 @@ const CATEGORY_LABELS = {
     'SIEMBRA': 'Siembra',
     'PRESTAMO': 'Préstamo'
 };
+
+// El formulario de una cuenta por cobrar nueva (30 de septiembre de 2026): el cliente —uno
+// que ya existe, o uno nuevo con su ficha completa— y el valor en pesos o en dólares.
+const freshReceivableForm = (period) => ({
+    clientId: '',
+    isNewClient: false,
+    newClient: emptyClientProfile(),
+    currency: 'COP',
+    amount: '',
+    foreignAmount: '',
+    exchangeRate: '',
+    exchangeRateSource: null,
+    exchangeRateDate: null,
+    amountCop: '',
+    amountCopEdited: false,
+    period,
+    dueDate: '',
+    comments: ''
+});
 
 const FinancialDashboard = () => {
     const { currentUser } = useAuth();
@@ -104,7 +147,6 @@ const FinancialDashboard = () => {
     const [expandedClients, setExpandedClients] = useState({});
     // La conexión con el cliente real vive dentro del panel de cada uno (Rodny, 23 de
     // septiembre de 2026): una lista con un desplegable por fila era ilegible.
-    const [expandedReconciliation, setExpandedReconciliation] = useState(null);
     const [importPreview, setImportPreview] = useState(null);
     const [importFile, setImportFile] = useState(null);
     const [importError, setImportError] = useState('');
@@ -142,8 +184,27 @@ const FinancialDashboard = () => {
     const [reversalReason, setReversalReason] = useState('');
     const [isReversingPayment, setIsReversingPayment] = useState(false);
     const [isReceivableEditorOpen, setIsReceivableEditorOpen] = useState(false);
-    const [receivableForm, setReceivableForm] = useState({ clientId: '', isNewClient: false, newClientName: '', amount: '', period: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }).slice(0, 7) + '-01', dueDate: '', comments: '' });
+    const [receivableForm, setReceivableForm] = useState(() => freshReceivableForm(new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }).slice(0, 7) + '-01'));
     const [isSavingReceivable, setIsSavingReceivable] = useState(false);
+    // Borrador de emitir, corregir y nueva cuenta por cobrar (Rodny, 30 de septiembre de
+    // 2026). Se guarda mientras se escribe y solo se limpia cuando el servidor confirma.
+    const draftStorage = typeof window !== 'undefined' ? window.localStorage : null;
+    const draftUserId = currentUser?.id;
+    const issueBaselineRef = useRef(null);
+    const receivableBaselineRef = useRef(null);
+    const [restoredIssueDraft, setRestoredIssueDraft] = useState(null);
+    const [restoredReceivableDraft, setRestoredReceivableDraft] = useState(null);
+    const issueDraftSlot = debtToIssue ? receivableDraftSlot(isCorrecting ? 'correct' : 'issue', debtToIssue.id) : null;
+    useEffect(() => {
+        if (!issueForm || !issueDraftSlot || !issueBaselineRef.current) return;
+        saveReceivableDraft(draftStorage, draftUserId, issueDraftSlot, {
+            form: issueForm, baseline: issueBaselineRef.current, fingerprint: receivableDraftFingerprint(debtToIssue)
+        });
+    }, [issueForm, issueDraftSlot, debtToIssue, draftStorage, draftUserId]);
+    useEffect(() => {
+        if (!isReceivableEditorOpen || !receivableBaselineRef.current) return;
+        saveReceivableDraft(draftStorage, draftUserId, 'new', { form: receivableForm, baseline: receivableBaselineRef.current });
+    }, [receivableForm, isReceivableEditorOpen, draftStorage, draftUserId]);
     const payrollMonth = Number(filters.month) || new Date().getMonth() + 1;
     const [isGeneratingPayroll, setIsGeneratingPayroll] = useState(false);
     const [isPayrollGenerationConfirmOpen, setIsPayrollGenerationConfirmOpen] = useState(false);
@@ -408,6 +469,38 @@ const FinancialDashboard = () => {
         }
     };
 
+    // Abre el formulario con lo que se había escrito si hay borrador de esa misma versión de
+    // la cuenta; si no, con los valores de partida, que también son la vara para saber si
+    // algo cambió.
+    const startIssueForm = (mode, debt, fresh) => {
+        issueBaselineRef.current = fresh;
+        const draft = readReceivableDraft(draftStorage, draftUserId, receivableDraftSlot(mode, debt.id), { fingerprint: receivableDraftFingerprint(debt) });
+        setIssueForm(draft ? draft.form : fresh);
+        setRestoredIssueDraft(draft ? draft.savedAt : null);
+    };
+    const discardIssueDraft = () => {
+        if (issueDraftSlot) clearReceivableDraft(draftStorage, draftUserId, issueDraftSlot);
+        setIssueForm(issueBaselineRef.current);
+        setRestoredIssueDraft(null);
+    };
+    const openNewReceivable = () => {
+        setImportError('');
+        setRateStatus({ loading: false, error: '' });
+        setNewClientErrors({});
+        const fresh = freshReceivableForm(`${selectedYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`);
+        receivableBaselineRef.current = fresh;
+        const draft = readReceivableDraft(draftStorage, draftUserId, 'new');
+        setReceivableForm(draft ? draft.form : fresh);
+        setRestoredReceivableDraft(draft ? draft.savedAt : null);
+        setIsReceivableEditorOpen(true);
+    };
+    const discardReceivableDraft = () => {
+        clearReceivableDraft(draftStorage, draftUserId, 'new');
+        setNewClientErrors({});
+        setReceivableForm(receivableBaselineRef.current);
+        setRestoredReceivableDraft(null);
+    };
+
     // Corregir una cuenta ya emitida (Rodny, 30 de septiembre de 2026): el mismo formulario,
     // precargado con lo que dice el documento. Conserva el número y rehace el PDF.
     const openCorrectDialog = (debt) => {
@@ -415,7 +508,7 @@ const FinancialDashboard = () => {
         setRateStatus({ loading: false, error: '' });
         setIsCorrecting(true);
         setDebtToIssue(debt);
-        setIssueForm({
+        startIssueForm('correct', debt, {
             // Un concepto viejo en texto plano abre con sus guiones ya convertidos en viñetas.
             concept: receivableConceptToHtml(debt.concept || RECEIVABLE_CONCEPT_DEFAULT),
             servicePeriod: debt.servicePeriod || '',
@@ -449,13 +542,15 @@ const FinancialDashboard = () => {
     };
 
     const [rateStatus, setRateStatus] = useState({ loading: false, error: '' });
-    const loadOfficialRate = async () => {
+    // La TRM oficial para el formulario que la pida: la emisión (`setIssueForm`) o la
+    // cuenta por cobrar nueva (`setReceivableForm`). Misma fuente que Cotizaciones.
+    const loadOfficialRateInto = async (setForm) => {
         setRateStatus({ loading: true, error: '' });
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
             const { data } = await axios.get(`${baseUrl}/api/financials/exchange-rate`, { headers: { Authorization: `Bearer ${token}` } });
-            setIssueForm((current) => (current ? {
+            setForm((current) => (current ? {
                 ...current,
                 exchangeRate: String(data.rate),
                 exchangeRateSource: data.source || 'SUPERFINANCIERA_TRM',
@@ -467,6 +562,7 @@ const FinancialDashboard = () => {
             setRateStatus({ loading: false, error: error.response?.data?.message || 'No fue posible consultar la TRM oficial. Puedes escribir la TRM a mano.' });
         }
     };
+    const loadOfficialRate = () => loadOfficialRateInto(setIssueForm);
 
     const setIssueCurrency = (currency) => {
         setIssueForm((current) => {
@@ -491,13 +587,14 @@ const FinancialDashboard = () => {
         setRateStatus({ loading: false, error: '' });
         setIsCorrecting(false);
         setDebtToIssue(debt);
-        setIssueForm({
+        startIssueForm('issue', debt, {
             concept: receivableConceptToHtml(RECEIVABLE_CONCEPT_DEFAULT),
             servicePeriod: '',
             issuedAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }),
             // Arranca con el valor causado como un único concepto: lo normal es el fee,
             // y añadir líneas es la excepción de un mes con adicionales.
-            items: [{ description: '', amount: String(debt.outstanding || debt.amount || '') }],
+            // Una cuenta registrada en dólares arranca en dólares, con su valor y su TRM.
+            items: [{ description: '', amount: String((debt.currency === 'USD' ? debt.foreignAmount : (debt.outstanding || debt.amount)) || '') }],
             // Quién es el deudor en el documento. Solo se pide cuando su ficha todavía
             // no lo tiene, y al emitir queda guardado ahí: se escribe una sola vez.
             client: {
@@ -505,7 +602,7 @@ const FinancialDashboard = () => {
                 documentType: debt.clientDocumentType || '',
                 documentNumber: debt.clientDocumentNumber || ''
             },
-            ...issueMoneyFrom(null)
+            ...issueMoneyFrom(debt.currency === 'USD' ? debt : null)
         });
     };
 
@@ -540,7 +637,13 @@ const FinancialDashboard = () => {
     });
     // Opcional desde el 30 de septiembre de 2026: lo único que frena es un documento a
     // medias (tipo sin número o al revés), que no se guarda.
-    const issueIdentityReady = !issueNeedsIdentity || normalizePartialPartyIdentity(issueForm?.client).valid;
+    // Un documento a medias no va y no frena la emisión (Rodny tuvo que escribir «00000»
+    // para poder emitir). Solo un documento completo pero mal escrito se avisa, junto al
+    // campo, nunca apagando el botón sin decir por qué.
+    const issueClientPayload = issueForm?.client ? dropIncompleteDocument(issueForm.client) : undefined;
+    const issueIdentityCheck = issueNeedsIdentity ? normalizePartialPartyIdentity(issueClientPayload) : { valid: true };
+    const issueIdentityReady = issueIdentityCheck.valid;
+    const issueIdentityError = issueIdentityCheck.valid ? '' : Object.values(issueIdentityCheck.errors)[0];
 
     const handleIssueReceivable = async (event) => {
         event.preventDefault();
@@ -560,6 +663,7 @@ const FinancialDashboard = () => {
                     items: issueForm.items.map((item) => ({ description: item.description, amount: Number(item.amount) })),
                     ...issueMoneyPayload()
                 }, { headers: { Authorization: `Bearer ${token}` } });
+                clearReceivableDraft(draftStorage, draftUserId, issueDraftSlot);
                 await invalidateFinancialQueries(queryClient);
                 setDebtToIssue(null);
                 setIssueForm(null);
@@ -575,8 +679,9 @@ const FinancialDashboard = () => {
                 ...issueMoneyPayload(),
                 // Solo se manda si la ficha no lo tenía; el servidor tampoco la
                 // reescribe cuando ya está identificada.
-                client: issueNeedsIdentity ? issueForm.client : undefined
+                client: issueNeedsIdentity ? issueClientPayload : undefined
             }, { headers: { Authorization: `Bearer ${token}` } });
+            clearReceivableDraft(draftStorage, draftUserId, issueDraftSlot);
             await invalidateFinancialQueries(queryClient);
             setDebtToIssue(null);
             setIssueForm(null);
@@ -698,22 +803,48 @@ const FinancialDashboard = () => {
         }
     };
 
+    // Moneda de la cuenta nueva (30 de septiembre de 2026). En dólares se escribe el valor
+    // en dólares y la cartera guarda su valor en pesos: por la TRM, o el escrito a mano.
+    const receivableIsUsd = receivableForm.currency === 'USD';
+    const receivableCopValue = receivableIsUsd
+        ? (receivableForm.amountCopEdited ? Number(receivableForm.amountCop) || null : pesosFromRate(receivableForm.foreignAmount, receivableForm.exchangeRate))
+        : Number(receivableForm.amount) || null;
+    const [newClientErrors, setNewClientErrors] = useState({});
+    const setReceivableCurrency = (currency) => {
+        setReceivableForm((current) => (current.currency === currency ? current : { ...current, currency, amountCop: '', amountCopEdited: false }));
+        if (currency === 'USD' && !receivableForm.exchangeRate) loadOfficialRateInto(setReceivableForm);
+    };
+
     const handleCreateReceivable = async (event) => {
         event.preventDefault();
-        setIsSavingReceivable(true);
         setImportError('');
         setImportSuccess('');
+        // La ficha del cliente nuevo se revisa antes de enviar, con la regla del servidor.
+        if (receivableForm.isNewClient) {
+            const check = normalizeClientProfile(receivableForm.newClient, { requireName: true });
+            if (!check.valid) { setNewClientErrors(check.errors); return; }
+        }
+        setIsSavingReceivable(true);
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
-            const { isNewClient, newClientName, ...payload } = receivableForm;
             await axios.post(`${baseUrl}/api/financials/receivables`, {
-                ...payload,
-                amount: Number(receivableForm.amount),
+                clientId: receivableForm.isNewClient ? '' : receivableForm.clientId,
+                period: receivableForm.period,
                 dueDate: receivableForm.dueDate || null,
-                // El servidor crea la ficha en la misma transacción que el cobro.
-                client: isNewClient ? { name: newClientName } : undefined
+                comments: receivableForm.comments,
+                currency: receivableForm.currency,
+                ...(receivableIsUsd ? {
+                    foreignAmount: Number(receivableForm.foreignAmount),
+                    exchangeRate: Number(receivableForm.exchangeRate),
+                    exchangeRateSource: receivableForm.exchangeRateSource || 'MANUAL',
+                    exchangeRateDate: receivableForm.exchangeRateDate || null,
+                    amountCop: receivableCopValue
+                } : { amount: Number(receivableForm.amount) }),
+                // El servidor crea la ficha completa en la misma transacción que el cobro.
+                client: receivableForm.isNewClient ? receivableForm.newClient : undefined
             }, { headers: { Authorization: `Bearer ${token}` } });
+            clearReceivableDraft(draftStorage, draftUserId, 'new');
             await invalidateFinancialQueries(queryClient);
             // La ficha nueva también existe fuera de financiero.
             if (receivableForm.isNewClient) {
@@ -1276,7 +1407,7 @@ await invalidateFinancialQueries(queryClient);
                                     Controla vencimientos, promesas y pagos sin alterar el saldo histórico.
                                 </p>
                             </div>
-                            {canWriteFinancials && <button type="button" onClick={() => { setReceivableForm({ clientId: '', amount: '', period: `${selectedYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`, dueDate: '', comments: '' }); setIsReceivableEditorOpen(true); }} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700">Nueva cuenta por cobrar</button>}
+                            {canWriteFinancials && <button type="button" onClick={openNewReceivable} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700">Nueva cuenta por cobrar</button>}
                         </div>
 
                         {!filters.q && !filters.month && data?.sourceSummary?.importBatchId && data?.sourceSummary?.totals && (
@@ -1724,118 +1855,19 @@ await invalidateFinancialQueries(queryClient);
                 )}
 
                 {activeTab === 'clients' && (
-                    <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
-                        <div className="flex items-center justify-between gap-4">
-                            <div>
-                                <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Conciliación de clientes</h2>
-                                <p className="mt-1 text-xs text-zinc-500">
-                                    Cada cliente del financiero con lo que suma. Abre uno para conectarlo con el cliente real de la plataforma y unificar sus ingresos y su cartera.
-                                </p>
-                            </div>
-                            {clientReconciliation?.importBatchId && (
-                                <span className="rounded-full bg-primary/10 px-3 py-1 text-xs font-semibold text-primary">
-                                    Importación activa
-                                </span>
-                            )}
-                        </div>
-
-                        <Card className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
-                            {isClientReconciliationLoading ? (
-                                <div className="flex items-center justify-center py-16 text-sm text-zinc-500">
-                                    <Loader2 className="mr-2 h-4 w-4 animate-spin text-primary" />
-                                    Cargando conciliación de clientes...
-                                </div>
-                            ) : clientReconciliation?.clients?.length > 0 ? (
-                                <ul className="divide-y divide-zinc-200 dark:divide-white/10">
-                                    {clientReconciliation.clients.map((row) => {
-                                        const sourceId = row.sourceId || row.clientId;
-                                        const targetId = clientLinkTargets[sourceId] || '';
-                                        const isSaving = savingClientLinkId === sourceId;
-                                        const isOpen = expandedReconciliation === sourceId;
-                                        // Una fila sin `clientId` solo existe en el Excel: es la que de
-                                        // verdad pide conexión. Una con ficha ya es un cliente de la
-                                        // plataforma, y conectarla significa fundirla con otra.
-                                        const hasFicha = !!row.clientId;
-                                        return (
-                                            <li key={sourceId} className="min-w-0">
-                                                <button type="button" aria-expanded={isOpen}
-                                                    onClick={() => setExpandedReconciliation(isOpen ? null : sourceId)}
-                                                    className="flex min-h-11 w-full items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-zinc-50 dark:hover:bg-white/5">
-                                                    {isOpen ? <ChevronUp className="h-4 w-4 shrink-0 text-zinc-400" /> : <ChevronDown className="h-4 w-4 shrink-0 text-zinc-400" />}
-                                                    <div className="min-w-0 flex-1">
-                                                        <p className="truncate text-sm font-medium text-zinc-900 dark:text-white">{row.client?.name}</p>
-                                                        <p className="truncate font-mono text-xs text-zinc-500">
-                                                            {hasFicha ? (row.client?.slug || 'sin-slug') : 'solo en el Excel · sin ficha'}
-                                                            {' · '}{(row.recordCount || 0) + (row.receivableCount || 0)} registros
-                                                        </p>
-                                                    </div>
-                                                    <div className="hidden shrink-0 text-right sm:block">
-                                                        <p className="text-sm tabular-nums text-zinc-900 dark:text-white">{formatCurrency(row.income || 0)}</p>
-                                                        <p className="text-xs text-zinc-500">ingresos</p>
-                                                    </div>
-                                                    <div className="w-32 shrink-0 text-right">
-                                                        <p className={cn("text-sm tabular-nums", row.receivable > 0 ? "font-semibold text-zinc-900 dark:text-white" : "text-zinc-500")}>{formatCurrency(row.receivable || 0)}</p>
-                                                        <p className="text-xs text-zinc-500">cartera</p>
-                                                    </div>
-                                                </button>
-                                                {isOpen && (
-                                                    <div className="space-y-3 border-t border-zinc-200 bg-zinc-50/60 px-4 py-4 dark:border-white/10 dark:bg-white/5">
-                                                        <div className="grid gap-3 text-xs sm:grid-cols-3">
-                                                            <p className="text-zinc-500">Ingresos <span className="block text-sm tabular-nums text-zinc-900 dark:text-white">{formatCurrency(row.income || 0)}</span></p>
-                                                            <p className="text-zinc-500">Cartera <span className="block text-sm tabular-nums text-zinc-900 dark:text-white">{formatCurrency(row.receivable || 0)}</span></p>
-                                                            <p className="text-zinc-500">Registros <span className="block text-sm tabular-nums text-zinc-900 dark:text-white">{(row.recordCount || 0) + (row.receivableCount || 0)}</span></p>
-                                                        </div>
-                                                        <div className="space-y-2 rounded-lg border border-zinc-200 bg-white p-3 dark:border-white/10 dark:bg-zinc-900">
-                                                            <div>
-                                                                <p className="text-sm font-medium text-zinc-900 dark:text-white">Conexión con el cliente real</p>
-                                                                <p className="text-xs text-zinc-500">Sus movimientos y su cartera pasan a la ficha que elijas. Los archivados también aparecen, marcados.</p>
-                                                            </div>
-                                                            <div className="flex flex-col gap-2 sm:flex-row">
-                                                                <Select
-                                                                    value={targetId}
-                                                                    disabled={isSaving || !canWriteFinancials}
-                                                                    aria-label={`Cliente real para ${row.client?.name}`}
-                                                                    onChange={(event) => setClientLinkTargets(prev => ({ ...prev, [sourceId]: event.target.value }))}
-                                                                    className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
-                                                                >
-                                                                    <option value="">Seleccionar cliente...</option>
-                                                                    {clientTargetChoices
-                                                                        .filter((target) => target.id !== row.clientId)
-                                                                        .map((target) => (
-                                                                            <option key={target.id} value={target.id}>{target.label}</option>
-                                                                        ))}
-                                                                </Select>
-                                                                {canWriteFinancials && <button
-                                                                    type="button"
-                                                                    disabled={!targetId || isSaving}
-                                                                    onClick={() => handleClientLink(sourceId)}
-                                                                    className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50"
-                                                                >
-                                                                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
-                                                                    Vincular
-                                                                </button>}
-                                                            </div>
-                                                        </div>
-                                                        {hasFicha && <button type="button"
-                                                            className="min-h-11 text-sm font-medium text-primary underline underline-offset-2"
-                                                            onClick={() => setStatementClient({ id: row.clientId, name: row.client?.name })}>
-                                                            Ver estado de cuenta
-                                                        </button>}
-                                                    </div>
-                                                )}
-                                            </li>
-                                        );
-                                    })}
-                                </ul>
-                            ) : (
-                                <div className="py-16 text-center">
-                                    <Users className="mx-auto mb-3 h-10 w-10 text-zinc-300" />
-                                    <p className="text-sm font-semibold text-zinc-900 dark:text-white">No hay clientes financieros por conciliar</p>
-                                    <p className="mt-1 text-xs text-zinc-500">Importa primero el financiero del año seleccionado.</p>
-                                </div>
-                            )}
-                        </Card>
-                    </div>
+                    <FinancialClientsDirectory
+                        reconciliation={clientReconciliation}
+                        isReconciliationLoading={isClientReconciliationLoading}
+                        clientTargetChoices={clientTargetChoices}
+                        canWriteFinancials={canWriteFinancials}
+                        clientLinkTargets={clientLinkTargets}
+                        setClientLinkTargets={setClientLinkTargets}
+                        savingClientLinkId={savingClientLinkId}
+                        onLinkClient={handleClientLink}
+                        onOpenStatement={setStatementClient}
+                        formatCurrency={formatCurrency}
+                        onNotice={(message) => { setImportError(''); setImportSuccess(message); }}
+                    />
                 )}
 
                 {activeTab === 'import' && (
@@ -2073,35 +2105,37 @@ await invalidateFinancialQueries(queryClient);
             </Dialog>
 
             <Dialog open={isReceivableEditorOpen} onOpenChange={(open) => {
+                // Cerrar no borra nada: lo escrito queda en el borrador y vuelve al reabrir.
                 setIsReceivableEditorOpen(open);
-                // Al cerrarlo vuelve a elegir de la lista: el formulario no se reabre a
-                // medio camino de crear una ficha.
-                if (!open) setReceivableForm((current) => ({ ...current, isNewClient: false, newClientName: '' }));
             }}>
-                <DialogContent className="sm:max-w-lg dark:bg-zinc-900">
+                <DialogContent onInteractOutside={keepOpenOnOutsideClick} className="max-h-[90vh] overflow-y-auto sm:max-w-xl dark:bg-zinc-900">
                     <DialogHeader>
                         <DialogTitle>Nueva cuenta por cobrar</DialogTitle>
                         <DialogDescription>Registra el valor causado; los abonos posteriores actualizarán automáticamente el saldo.</DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleCreateReceivable} className="space-y-4">
+                        {restoredReceivableDraft && <ReceivableDraftNotice savedAt={restoredReceivableDraft} onDiscard={discardReceivableDraft} />}
                         {/* Se puede crear la ficha aquí mismo: registrar el cobro de alguien
                             nuevo no debería obligar a salir a Clientes a crearlo primero. */}
                         <div className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
                             <div className="flex flex-wrap items-center justify-between gap-2">
                                 <span>Cliente</span>
                                 <button type="button" className="min-h-11 text-sm font-medium text-primary underline underline-offset-2"
-                                    onClick={() => setReceivableForm((current) => ({ ...current, isNewClient: !current.isNewClient, clientId: '', newClientName: '' }))}>
+                                    onClick={() => { setNewClientErrors({}); setReceivableForm((current) => ({ ...current, isNewClient: !current.isNewClient, clientId: '', newClient: emptyClientProfile() })); }}>
                                     {receivableForm.isNewClient ? 'Elegir uno que ya existe' : 'Crear uno nuevo'}
                                 </button>
                             </div>
                             {receivableForm.isNewClient ? (
-                                <>
-                                    <input required autoFocus maxLength={120} value={receivableForm.newClientName} aria-label="Nombre del cliente nuevo"
-                                        onChange={(event) => setReceivableForm((current) => ({ ...current, newClientName: event.target.value }))}
-                                        placeholder="Javid Trámite y Asesorías"
-                                        className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
-                                    <p className="text-xs text-zinc-500">Se crea su ficha al guardar la cuenta por cobrar. Su nombre legal y su documento se piden al emitir la cuenta de cobro.</p>
-                                </>
+                                // La ficha completa del cliente nuevo, no solo el nombre (Rodny, 30 de
+                                // septiembre de 2026). Se crea al guardar la cuenta por cobrar.
+                                <div className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-white/10" data-new-client-profile>
+                                    <p className="text-xs text-zinc-500">Se crea su ficha al guardar la cuenta por cobrar. Solo el nombre es obligatorio; lo demás se puede completar después en Clientes.</p>
+                                    <ClientProfileFields value={receivableForm.newClient} errors={newClientErrors} nameAutoFocus
+                                        onChange={(patch) => {
+                                            setNewClientErrors((current) => { const next = { ...current }; for (const key of Object.keys(patch)) delete next[key]; return next; });
+                                            setReceivableForm((current) => ({ ...current, newClient: { ...current.newClient, ...patch } }));
+                                        }} />
+                                </div>
                             ) : (
                                 <Select required value={receivableForm.clientId} aria-label="Cliente de la cuenta por cobrar"
                                     onChange={(event) => setReceivableForm((current) => ({ ...current, clientId: event.target.value }))}
@@ -2111,11 +2145,38 @@ await invalidateFinancialQueries(queryClient);
                                 </Select>
                             )}
                         </div>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Valor<MoneyInput required min="0.01" value={receivableForm.amount} onChange={(amount) => setReceivableForm((current) => ({ ...current, amount }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
+                        {/* `items-end`: el interruptor hace más alta la etiqueta del valor y, sin
+                            esto, el campo del periodo queda más arriba que el del valor. */}
+                        <div className="grid items-end gap-4 sm:grid-cols-2">
+                            {/* Pesos o dólares, con el mismo interruptor de Cotizaciones y de la
+                                cuenta de cobro (Rodny, 30 de septiembre de 2026). */}
+                            <div className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200" data-receivable-new-value>
+                                <span className="flex items-center justify-between gap-2">
+                                    <span>{receivableIsUsd ? 'Valor en dólares' : 'Valor'}</span>
+                                    <CurrencyToggle bordered value={receivableForm.currency} onChange={setReceivableCurrency} ariaLabel="Moneda de la cuenta por cobrar" />
+                                </span>
+                                {receivableIsUsd
+                                    ? <MoneyInput required min="0.01" aria-label="Valor en dólares" value={receivableForm.foreignAmount} onChange={(foreignAmount) => setReceivableForm((current) => ({ ...current, foreignAmount }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                                    : <MoneyInput required min="0.01" aria-label="Valor" value={receivableForm.amount} onChange={(amount) => setReceivableForm((current) => ({ ...current, amount }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />}
+                            </div>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Periodo</span><BrainMonthPicker ariaLabel="Periodo de la cuenta por cobrar" value={receivableForm.period} onChange={(value) => setReceivableForm((current) => ({ ...current, period: value }))} className="rounded-lg py-2.5" /></label>
                             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200 sm:col-span-2"><span className="block">Fecha de vencimiento</span><BrainDatePicker ariaLabel="Fecha de vencimiento" isClearable placeholder="Opcional" value={receivableForm.dueDate} onChange={(value) => setReceivableForm((current) => ({ ...current, dueDate: value }))} className="rounded-lg py-2.5" /></label>
                         </div>
+                        {receivableIsUsd && (
+                            <UsdToPesosFields
+                                idPrefix="new-receivable-usd"
+                                rate={receivableForm.exchangeRate}
+                                rateSource={receivableForm.exchangeRateSource}
+                                rateDate={receivableForm.exchangeRateDate}
+                                rateStatus={rateStatus}
+                                onLoadRate={() => loadOfficialRateInto(setReceivableForm)}
+                                onRateChange={(exchangeRate) => setReceivableForm((current) => ({ ...current, exchangeRate, exchangeRateSource: 'MANUAL', exchangeRateDate: null }))}
+                                copValue={receivableForm.amountCopEdited ? receivableForm.amountCop : (receivableCopValue ?? '')}
+                                copEdited={receivableForm.amountCopEdited}
+                                onCopChange={(amountCop) => setReceivableForm((current) => ({ ...current, amountCop, amountCopEdited: true }))}
+                                onCopReset={() => setReceivableForm((current) => ({ ...current, amountCop: '', amountCopEdited: false }))}
+                            />
+                        )}
                         <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Nota<textarea rows={3} value={receivableForm.comments} onChange={(event) => setReceivableForm((current) => ({ ...current, comments: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" placeholder="Factura, compromiso o detalle de seguimiento" /></label>
                         <DialogFooter><button type="button" onClick={() => setIsReceivableEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingReceivable} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingReceivable && <Loader2 className="h-4 w-4 animate-spin" />}Guardar</button></DialogFooter>
                     </form>
@@ -2179,6 +2240,7 @@ await invalidateFinancialQueries(queryClient);
                     (Rodny, 23 de septiembre de 2026). El diálogo sigue siendo enfocable,
                     así que el lector de pantalla lo anuncia y el tabulador entra al form. */}
                 <DialogContent onOpenAutoFocus={(event) => { event.preventDefault(); event.currentTarget.focus(); }}
+                    onInteractOutside={keepOpenOnOutsideClick}
                     className="max-h-[90vh] overflow-y-auto sm:max-w-2xl dark:bg-zinc-900">
                     <DialogHeader>
                         <DialogTitle>{isCorrecting ? `Corregir cuenta de cobro ${debtToIssue?.formattedNumber || ''}` : 'Emitir cuenta de cobro'}</DialogTitle>
@@ -2189,6 +2251,7 @@ await invalidateFinancialQueries(queryClient);
                         </DialogDescription>
                     </DialogHeader>
                     {issueForm && <form onSubmit={handleIssueReceivable} className="space-y-4">
+                        {restoredIssueDraft && <ReceivableDraftNotice savedAt={restoredIssueDraft} onDiscard={discardIssueDraft} />}
                         <div className="rounded-lg bg-zinc-50 px-3 py-2.5 text-sm dark:bg-white/5">
                             <p className="font-semibold text-zinc-900 dark:text-white">{debtToIssue?.clientName}</p>
                             <p className="text-xs text-zinc-500">Periodo contable {formatFinancialPeriod(debtToIssue?.period)} · valor causado {formatCurrency(debtToIssue?.amount || 0)}</p>
@@ -2227,6 +2290,7 @@ await invalidateFinancialQueries(queryClient);
                                             className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
                                     </label>
                                 </div>
+                                {issueIdentityError && <p role="alert" data-issue-identity-error className="text-sm text-destructive brain-destructive-text">{issueIdentityError}</p>}
                             </div>
                         )}
                         <div className="grid gap-4 sm:grid-cols-2">
@@ -2297,42 +2361,19 @@ await invalidateFinancialQueries(queryClient);
                             cuenta en dólares entra a cartera con su valor en pesos, por la TRM
                             oficial o por el valor exacto que se escriba. */}
                         {issueIsUsd && (
-                            <div data-receivable-usd className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-white/10">
-                                <div className="grid gap-4 sm:grid-cols-2">
-                                    <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
-                                        <span className="block">TRM</span>
-                                        <MoneyInput required min="0.01" value={issueForm.exchangeRate}
-                                            aria-label="TRM para pasar a pesos"
-                                            onChange={(exchangeRate) => setIssueForm((current) => ({ ...current, exchangeRate, exchangeRateSource: 'MANUAL', exchangeRateDate: null }))}
-                                            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
-                                        <span className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500">
-                                            {rateStatus.loading
-                                                ? 'Consultando la TRM oficial…'
-                                                : issueForm.exchangeRateSource === 'SUPERFINANCIERA_TRM'
-                                                    ? `TRM oficial${issueForm.exchangeRateDate ? ` del ${new Date(`${issueForm.exchangeRateDate}T12:00:00Z`).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : ''}`
-                                                    : 'Escrita a mano'}
-                                            <button type="button" onClick={loadOfficialRate} disabled={rateStatus.loading}
-                                                className="min-h-11 font-medium text-primary underline underline-offset-2 disabled:opacity-50">Usar la TRM oficial</button>
-                                        </span>
-                                        {rateStatus.error && <span role="alert" className="block text-xs text-destructive">{rateStatus.error}</span>}
-                                    </label>
-                                    <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
-                                        <span className="block">Valor en cartera (pesos)</span>
-                                        <MoneyInput required min="0.01"
-                                            aria-label="Valor en pesos en cartera"
-                                            value={issueForm.amountCopEdited ? issueForm.amountCop : (issueCopValue ?? '')}
-                                            onChange={(amountCop) => setIssueForm((current) => ({ ...current, amountCop, amountCopEdited: true }))}
-                                            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
-                                        <span className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500">
-                                            {issueForm.amountCopEdited ? 'Escrito a mano: el que de verdad entra.' : 'Total en dólares por la TRM.'}
-                                            {issueForm.amountCopEdited && <button type="button"
-                                                onClick={() => setIssueForm((current) => ({ ...current, amountCop: '', amountCopEdited: false }))}
-                                                className="min-h-11 font-medium text-primary underline underline-offset-2">Volver a calcularlo</button>}
-                                        </span>
-                                    </label>
-                                </div>
-                                <p className="text-xs text-zinc-500">El documento dice dólares. En cartera se lleva en pesos, y ese valor se puede ajustar después al que de verdad entró.</p>
-                            </div>
+                            <UsdToPesosFields
+                                idPrefix="issue-usd"
+                                rate={issueForm.exchangeRate}
+                                rateSource={issueForm.exchangeRateSource}
+                                rateDate={issueForm.exchangeRateDate}
+                                rateStatus={rateStatus}
+                                onLoadRate={loadOfficialRate}
+                                onRateChange={(exchangeRate) => setIssueForm((current) => ({ ...current, exchangeRate, exchangeRateSource: 'MANUAL', exchangeRateDate: null }))}
+                                copValue={issueForm.amountCopEdited ? issueForm.amountCop : (issueCopValue ?? '')}
+                                copEdited={issueForm.amountCopEdited}
+                                onCopChange={(amountCop) => setIssueForm((current) => ({ ...current, amountCop, amountCopEdited: true }))}
+                                onCopReset={() => setIssueForm((current) => ({ ...current, amountCop: '', amountCopEdited: false }))}
+                            />
                         )}
                         {issueCopValue !== null && Math.abs(Number(issueCopValue) - Number(debtToIssue?.amount || 0)) > 0.005 && (
                             <p className="text-xs text-amber-600 dark:text-amber-400">

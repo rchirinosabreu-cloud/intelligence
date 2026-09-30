@@ -31,24 +31,26 @@ try {
   await page.getByRole('button', { name: 'Guardar pago', exact: true }).click();
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
   assert.match(await row.innerText(), /600[.,]000/);
-  // Conciliación de clientes: una lista, con el estado de cada ficha a la vista y la
-  // conexión con el cliente real dentro del panel de cada uno (Rodny, 23 de sept.).
+  // Clientes es el directorio (30 de septiembre de 2026): cada cliente con lo que suma y,
+  // al desplegarlo, su ficha y la conexión con otra ficha.
   await page.getByRole('button', { name: 'Clientes', exact: true }).click();
   const reconciliationRow = page.getByRole('button', { name: /Cliente de muestra/ });
   await reconciliationRow.waitFor();
   assert.match(await reconciliationRow.innerText(), /600[.,]000/);
+  assert.equal(await page.getByText('Importación activa', { exact: true }).count(), 0);
   // El desplegable de cliente real no ensucia la lista: vive dentro del panel.
   assert.equal(await page.getByRole('combobox', { name: /Cliente real para/ }).count(), 0);
   assert.equal(await page.getByRole('button', { name: 'Vincular', exact: true }).count(), 0);
   // Una fila que solo existe en el Excel lo dice, que es la que pide conexión.
-  await page.getByText('solo en el Excel · sin ficha', { exact: false }).waitFor();
+  await page.getByText('Solo en el Excel · sin ficha', { exact: false }).waitFor();
   await reconciliationRow.click();
-  await page.getByText('Conexión con el cliente real', { exact: true }).waitFor();
+  await page.getByText('Ficha del cliente', { exact: true }).waitFor();
+  await page.getByText('Conexión con otra ficha', { exact: true }).waitFor();
   await chooseOption(page.getByRole('combobox', { name: 'Cliente real para Cliente de muestra' }), 'demo-archived');
   assert.equal(await page.getByRole('button', { name: 'Vincular', exact: true }).isEnabled(), true);
   await page.screenshot({ path: 'output/financial-clients-list.png', fullPage: true, animations: 'disabled' });
   await reconciliationRow.click();
-  assert.equal(await page.getByText('Conexión con el cliente real', { exact: true }).count(), 0, 'el panel se cierra');
+  assert.equal(await page.getByText('Conexión con otra ficha', { exact: true }).count(), 0, 'el panel se cierra');
   await page.getByRole('button', { name: 'Cartera', exact: true }).click();
   await page.screenshot({ path: 'output/financial-cartera-preview.png', fullPage: true, animations: 'disabled' });
   await page.getByRole('button', { name: 'Cambiar tema' }).click();
