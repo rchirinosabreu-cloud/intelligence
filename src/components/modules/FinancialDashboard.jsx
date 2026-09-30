@@ -41,7 +41,7 @@ import { formatExchangeRate, formatReceivableMoney, pesosFromRate } from '@/lib/
 import CurrencyToggle from '@/components/ui/CurrencyToggle';
 import MoneyInput from '@/components/ui/MoneyInput';
 import RichTextEditor from '@/components/ui/RichTextEditor';
-import { PARTY_DOCUMENT_TYPES, hasPartyIdentity } from '@/lib/partyIdentity';
+import { PARTY_DOCUMENT_TYPES, hasPartyIdentity, normalizePartialPartyIdentity } from '@/lib/partyIdentity';
 
 const CATEGORY_COLORS = {
     'MEMBRESIA': '#009EB9',
@@ -538,7 +538,9 @@ const FinancialDashboard = () => {
         documentType: debtToIssue.clientDocumentType,
         documentNumber: debtToIssue.clientDocumentNumber
     });
-    const issueIdentityReady = !issueNeedsIdentity || hasPartyIdentity(issueForm?.client);
+    // Opcional desde el 30 de septiembre de 2026: lo único que frena es un documento a
+    // medias (tipo sin número o al revés), que no se guarda.
+    const issueIdentityReady = !issueNeedsIdentity || normalizePartialPartyIdentity(issueForm?.client).valid;
 
     const handleIssueReceivable = async (event) => {
         event.preventDefault();
@@ -2197,12 +2199,12 @@ await invalidateFinancialQueries(queryClient);
                         {issueNeedsIdentity && (
                             <div className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-white/10">
                                 <div>
-                                    <p className="text-sm font-medium text-zinc-900 dark:text-white">Datos del cliente para el documento</p>
-                                    <p className="text-xs text-zinc-500">La ficha de «{debtToIssue?.clientName}» todavía no los tiene. Se guardan en ella al emitir, así que solo se escriben esta vez.</p>
+                                    <p className="text-sm font-medium text-zinc-900 dark:text-white">Datos del cliente para el documento <span className="font-normal text-zinc-400">(opcional)</span></p>
+                                    <p className="text-xs text-zinc-500">La ficha de «{debtToIssue?.clientName}» todavía no los tiene completos. Si los escribes, se guardan en ella; si no, la cuenta sale con el nombre de la ficha y sin documento.</p>
                                 </div>
                                 <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
                                     <span className="block">Nombre completo o razón social</span>
-                                    <input required maxLength={200} value={issueForm.client.legalName}
+                                    <input maxLength={200} value={issueForm.client.legalName}
                                         onChange={(event) => setIssueClient({ legalName: event.target.value })}
                                         placeholder="Corporación Deportiva Los Titanes"
                                         className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
@@ -2210,7 +2212,7 @@ await invalidateFinancialQueries(queryClient);
                                 <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_minmax(0,1.4fr)]">
                                     <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
                                         <span className="block">Documento</span>
-                                        <Select required value={issueForm.client.documentType} aria-label="Tipo de documento del cliente"
+                                        <Select value={issueForm.client.documentType} aria-label="Tipo de documento del cliente"
                                             onChange={(event) => setIssueClient({ documentType: event.target.value })}
                                             className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white">
                                             <option value="">Sin definir</option>
@@ -2219,7 +2221,7 @@ await invalidateFinancialQueries(queryClient);
                                     </label>
                                     <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
                                         <span className="block">Número</span>
-                                        <input required maxLength={30} value={issueForm.client.documentNumber}
+                                        <input maxLength={30} value={issueForm.client.documentNumber}
                                             autoCapitalize="none" autoCorrect="off" spellCheck={false} placeholder="901378858"
                                             onChange={(event) => setIssueClient({ documentNumber: event.target.value })}
                                             className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />

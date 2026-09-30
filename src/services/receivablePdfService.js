@@ -327,7 +327,8 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
 
     y += 16;
     y = centered(doc, model.debtorName, y, { size: 11, style: 'bold' });
-    y = centered(doc, model.debtorDocument, y, { size: 10.5 });
+    // Sin documento en la ficha no hay línea que imprimir: emitir ya no lo exige.
+    if (model.debtorDocument) y = centered(doc, model.debtorDocument, y, { size: 10.5 });
     y += 6;
     y = centered(doc, 'Debe a:', y, { size: 10.5 });
     y += 5;

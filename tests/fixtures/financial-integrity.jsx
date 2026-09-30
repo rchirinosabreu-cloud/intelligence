@@ -108,11 +108,8 @@ axios.defaults.adapter = async config => {
     // Como el servidor: le pone número, congela conceptos y el total del documento
     // pasa a ser el de la obligación.
     const total = body.items.reduce((sum, item) => sum + Number(item.amount), 0);
-    // Como el servidor: sin identidad en la ficha no se emite, y la que se escribe
-    // aquí queda guardada en ella.
-    if (!debt.clientLegalName && !body.client?.legalName) {
-      throw Object.assign(new Error('Sin identidad'), { response: { data: { message: 'La cuenta de cobro lleva el nombre completo y el documento del cliente.' } } });
-    }
+    // Como el servidor: la identidad ya no es obligatoria para emitir (30 de septiembre de
+    // 2026); la que se escribe aquí queda guardada en la ficha.
     if (body.client?.legalName) {
       debt = { ...debt, clientLegalName: body.client.legalName, clientDocumentType: body.client.documentType, clientDocumentNumber: body.client.documentNumber };
     }

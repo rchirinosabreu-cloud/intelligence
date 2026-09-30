@@ -217,6 +217,15 @@ test('la tabla de conceptos solo aparece cuando hay más de uno', () => {
     assert.equal(unico.total, 1200000);
 });
 
+// Rodny, 30 de septiembre de 2026: se emite aunque el cliente no tenga documento.
+test('sin documento del cliente el PDF se genera con el nombre de la ficha', () => {
+    const sinDocumento = { ...titanes, client: { id: 'client-1', name: 'Fundación Grit', legalName: null, documentType: null, documentNumber: null } };
+    const model = buildReceivableDocumentModel(sinDocumento);
+    assert.equal(model.debtorName, 'FUNDACIÓN GRIT');
+    assert.equal(model.debtorDocument, null);
+    assert.equal(generateReceivablePdfBuffer(sinDocumento).subarray(0, 5).toString('latin1'), '%PDF-');
+});
+
 test('el PDF se genera y es un PDF', () => {
     const buffer = generateReceivablePdfBuffer(titanes);
     assert.ok(Buffer.isBuffer(buffer));

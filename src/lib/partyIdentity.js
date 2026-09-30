@@ -52,15 +52,59 @@ export const normalizePartyIdentity = ({ legalName, documentType, documentNumber
     return { valid: true, identity: { legalName: name, documentType: type.value, documentNumber: number } };
 };
 
+/**
+ * Lo que se haya escrito de la identidad, validado, sin exigir nada (Rodny, 30 de
+ * septiembre de 2026: emitir ya no pide el documento del cliente). El nombre legal va
+ * solo si se escribió; el documento va entero —tipo y número— o no va, porque a medias
+ * no identifica a nadie. Devuelve solo los campos escritos.
+ */
+export const normalizePartialPartyIdentity = ({ legalName, documentType, documentNumber } = {}) => {
+    const errors = {};
+    const identity = {};
+    const name = String(legalName ?? '').trim();
+    if (name.length > PARTY_LEGAL_NAME_MAX) errors.legalName = `El nombre admite como máximo ${PARTY_LEGAL_NAME_MAX} caracteres.`;
+    else if (name) identity.legalName = name;
+
+    const typeText = String(documentType ?? '').trim();
+    const number = String(documentNumber ?? '').trim();
+    if (typeText || number) {
+        const type = partyDocumentType(typeText);
+        if (!typeText) errors.documentType = 'Elige el tipo de documento, o borra el número.';
+        else if (!type) errors.documentType = 'Elige el tipo de documento.';
+        if (!number) errors.documentNumber = 'Escribe el número del documento, o deja el tipo sin elegir.';
+        else if (number.length > PARTY_DOCUMENT_NUMBER_MAX) errors.documentNumber = `El número admite como máximo ${PARTY_DOCUMENT_NUMBER_MAX} caracteres.`;
+        else if (type) {
+            const pattern = type.value === 'PAS' ? PASSPORT_DOCUMENT : NUMERIC_DOCUMENT;
+            if (!pattern.test(number)) {
+                errors.documentNumber = type.value === 'PAS'
+                    ? 'El pasaporte admite letras, números, puntos y guiones.'
+                    : 'El número admite dígitos, puntos y guiones.';
+            }
+        }
+        if (!errors.documentType && !errors.documentNumber) {
+            identity.documentType = type.value;
+            identity.documentNumber = number;
+        }
+    }
+
+    if (Object.keys(errors).length) return { valid: false, errors };
+    return { valid: true, identity };
+};
+
 /** Está completa cuando los tres datos existen; a medias no sirve para un documento. */
 export const hasPartyIdentity = (party) => Boolean(
     party && String(party.legalName || '').trim() && partyDocumentType(party.documentType) && String(party.documentNumber || '').trim()
 );
 
-/** «CC. 33.334.977», «NIT: 901378858». Null si falta algo: mejor nada que a medias. */
+/**
+ * «CC. 33.334.977», «NIT: 901378858». Null si falta el tipo o el número: mejor nada que
+ * a medias. Ya no depende del nombre legal: un documento sin él sigue identificando.
+ */
 export const formatPartyDocument = (party) => {
-    if (!hasPartyIdentity(party)) return null;
-    return `${partyDocumentType(party.documentType).label} ${String(party.documentNumber).trim()}`;
+    const type = partyDocumentType(party?.documentType);
+    const number = String(party?.documentNumber || '').trim();
+    if (!type || !number) return null;
+    return `${type.label} ${number}`;
 };
 
 /** El nombre como va en el documento, en mayúsculas, con el de la ficha como respaldo. */
