@@ -89,8 +89,10 @@ numerada, y el PDF lo dibuja igual. No hay resaltado porque el PDF no puede dibu
   sin atributos. El tope de 4000 caracteres cuenta el texto que se lee.
 - Las cuentas anteriores tienen el concepto en texto plano y siguen funcionando. Al abrir
   una en «Corregir», sus líneas con guion llegan como viñetas de verdad.
-- En el PDF, un párrafo sin formato sale justificado como siempre. Uno con negritas o
-  cursivas sale alineado a la izquierda, porque justificar mezclando fuentes descuadra.
+- En el PDF el concepto va a 9,5 pt, con el interletrado apenas cerrado y viñetas como un
+  punto pequeño (Rodny, 30 de septiembre de 2026: «siento que es muy grande»). Todas las
+  líneas salen justificadas, también las que llevan negritas o cursivas, salvo la última
+  de cada párrafo y los títulos. Los valores viven en `CONCEPT_TYPOGRAPHY`.
 
 **El importe en letras de los millones redondos lleva «de»** (Rodny, 29 de septiembre de
 2026): «CUATRO MILLONES DE PESOS», «UN MILLÓN DE PESOS»; con resto no lo lleva («CUATRO
