@@ -27,7 +27,11 @@ import { createFinancialAccount, listFinancialAccounts } from '../services/finan
 import {
     approvePayrollTransaction,
     generatePayrollPeriod,
-    payPayrollTransaction
+    listPayrollPaymentCandidates,
+    payPayrollTransaction,
+    reversePayrollPayment,
+    splitPayrollPayment,
+    updatePayrollPayment
 } from '../services/financialPayrollService.js';
 
 const respondWithError = (res, error, fallbackCode, fallbackMessage) => {
@@ -411,9 +415,61 @@ export const payPayrollTransactionHandler = async (req, res, dependencies = {}) 
     const payTransaction = dependencies.payTransaction || payPayrollTransaction;
     try {
         const result = await payTransaction(prismaClient, req.params.id, req.body || {}, req.user);
-        return res.json({ message: 'Pago de nomina registrado.', ...result });
+        return res.json({
+            message: result?.transaction?.status === 'PAID' ? 'Pago de nómina registrado. La liquidación quedó pagada.' : 'Pago de nómina registrado.',
+            ...result
+        });
     } catch (error) {
         console.error('[Financial payroll API] Payment failed:', error.response?.data || error);
-        return respondWithError(res, error, 'PAYROLL_PAYMENT_FAILED', 'No fue posible registrar el pago de nomina.');
+        return respondWithError(res, error, 'PAYROLL_PAYMENT_FAILED', 'No fue posible registrar el pago de nómina.');
+    }
+};
+
+// Pagos de nómina por partes (30 de septiembre de 2026): adelantos ya registrados que se pueden
+// aplicar, partir un pago, revertirlo y corregir su referencia.
+export const listPayrollPaymentCandidatesHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const listCandidates = dependencies.listCandidates || listPayrollPaymentCandidates;
+    try {
+        return res.json({ records: await listCandidates(prismaClient, req.params.id) });
+    } catch (error) {
+        console.error('[Financial payroll API] Candidates failed:', error.response?.data || error);
+        return respondWithError(res, error, 'PAYROLL_CANDIDATES_FAILED', 'No fue posible cargar los egresos que se pueden aplicar.');
+    }
+};
+
+export const splitPayrollPaymentHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const splitPayment = dependencies.splitPayment || splitPayrollPayment;
+    try {
+        const result = await splitPayment(prismaClient, req.params.paymentId, req.body || {}, req.user);
+        return res.json({ message: `Pago desglosado en ${result.payments.length} pagos.`, ...result });
+    } catch (error) {
+        console.error('[Financial payroll API] Split failed:', error.response?.data || error);
+        return respondWithError(res, error, 'PAYROLL_SPLIT_FAILED', 'No fue posible desglosar el pago de nómina.');
+    }
+};
+
+export const reversePayrollPaymentHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const reversePayment = dependencies.reversePayment || reversePayrollPayment;
+    try {
+        const result = await reversePayment(prismaClient, req.params.paymentId, req.body || {}, req.user);
+        return res.json({ message: 'Pago revertido. La liquidación vuelve a mostrar lo que falta por pagar.', ...result });
+    } catch (error) {
+        console.error('[Financial payroll API] Reversal failed:', error.response?.data || error);
+        return respondWithError(res, error, 'PAYROLL_REVERSAL_FAILED', 'No fue posible revertir el pago de nómina.');
+    }
+};
+
+export const updatePayrollPaymentHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const updatePayment = dependencies.updatePayment || updatePayrollPayment;
+    try {
+        const payment = await updatePayment(prismaClient, req.params.paymentId, req.body || {}, req.user);
+        return res.json({ message: 'Pago actualizado.', payment });
+    } catch (error) {
+        console.error('[Financial payroll API] Update failed:', error.response?.data || error);
+        return respondWithError(res, error, 'PAYROLL_PAYMENT_UPDATE_FAILED', 'No fue posible actualizar el pago de nómina.');
     }
 };

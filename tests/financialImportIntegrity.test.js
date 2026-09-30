@@ -32,7 +32,7 @@ test('replacing an import refuses linked records before deleting or replacing an
   assert.equal(writes.length, 0);
   assert.deepEqual(reads.find((read) => read.model === 'record').where, {
     year: 2026, importBatchId: { not: null }, OR: [
-      { receivablePayment: { isNot: null } }, { payrollTransaction: { isNot: null } }, { bankMatches: { some: {} } }
+      { receivablePayment: { isNot: null } }, { payrollTransaction: { isNot: null } }, { payrollPayment: { isNot: null } }, { bankMatches: { some: {} } }
     ]
   });
 });

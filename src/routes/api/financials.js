@@ -38,6 +38,10 @@ import {
     listFinancialPeriodsHandler,
     listFinancialRecordsHandler,
     payPayrollTransactionHandler,
+    listPayrollPaymentCandidatesHandler,
+    reversePayrollPaymentHandler,
+    splitPayrollPaymentHandler,
+    updatePayrollPaymentHandler,
     reopenFinancialPeriodHandler,
     replaceFinancialRecordAllocationsHandler,
     reverseReceivablePaymentHandler,
@@ -134,6 +138,10 @@ router.patch('/payroll-contracts/:id', requireFinancialWrite, updateFinancialPay
 router.post('/payroll/periods', requireFinancialWrite, generatePayrollPeriodHandler);
 router.post('/payroll-transactions/:id/approve', requireFinancialApproval, approvePayrollTransactionHandler);
 router.post('/payroll-transactions/:id/pay', requireFinancialApproval, payPayrollTransactionHandler);
+router.get('/payroll-transactions/:id/payment-candidates', requireFinancialAccess, listPayrollPaymentCandidatesHandler);
+router.post('/payroll-payments/:paymentId/split', requireFinancialApproval, splitPayrollPaymentHandler);
+router.post('/payroll-payments/:paymentId/reverse', requireFinancialApproval, reversePayrollPaymentHandler);
+router.patch('/payroll-payments/:paymentId', requireFinancialWrite, updatePayrollPaymentHandler);
 router.post('/import/preview', requireFinancialApproval, upload.single('file'), previewFinancialImport);
 router.post('/import/commit', requireFinancialApproval, upload.single('file'), commitFinancialImport);
 router.get('/bank-reconciliation', requireFinancialAccess, getBankReconciliation);

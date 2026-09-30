@@ -69,6 +69,14 @@ test('payPayrollTransaction posts the payroll expense to the selected account at
       }
     },
     financialPeriod: { findUnique: async () => ({ status: 'OPEN' }) },
+    financialAccount: { findUnique: async () => ({ id: 'account-1', isActive: true, currency: 'COP' }) },
+    payrollPayment: {
+      findMany: async () => [],
+      create: async (args) => {
+        calls.push(['payment.create', args]);
+        return { ...args.data };
+      }
+    },
     financialRecord: {
       create: async (args) => {
         calls.push(['record.create', args]);
@@ -88,7 +96,9 @@ test('payPayrollTransaction posts the payroll expense to the selected account at
   assert.equal(result.transaction.status, 'PAID');
   assert.equal(calls.find(([name]) => name === 'record.create')[1].data.type, 'EXPENSE');
   assert.equal(calls.find(([name]) => name === 'record.create')[1].data.accountId, 'account-1');
-  assert.equal(calls.find(([name]) => name === 'transaction.update')[1].data.financialRecordId, 'record-1');
+  // Desde el 30 de septiembre de 2026 el egreso cuelga del pago, no de la liquidación.
+  assert.equal(calls.find(([name]) => name === 'payment.create')[1].data.financialRecordId, 'record-1');
+  assert.equal(calls.find(([name]) => name === 'transaction.update')[1].data.financialRecordId, undefined);
 });
 
 test('payPayrollTransaction refuses unapproved payroll', async () => {

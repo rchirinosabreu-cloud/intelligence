@@ -42,6 +42,8 @@ import CurrencyToggle from '@/components/ui/CurrencyToggle';
 import MoneyInput from '@/components/ui/MoneyInput';
 import FinancialClientsDirectory from '@/components/modules/financial/FinancialClientsDirectory';
 import UsdToPesosFields from '@/components/modules/financial/UsdToPesosFields';
+import { PayrollPaymentDialog, PayrollPaymentList } from '@/components/modules/financial/PayrollPayments';
+import { payrollStatus } from '@/lib/payrollPayments';
 import ClientProfileFields from '@/components/modules/Clients/ClientProfileFields';
 import { emptyClientProfile, normalizeClientProfile } from '@/lib/clientProfile';
 import RichTextEditor from '@/components/ui/RichTextEditor';
@@ -210,8 +212,6 @@ const FinancialDashboard = () => {
     const [isPayrollGenerationConfirmOpen, setIsPayrollGenerationConfirmOpen] = useState(false);
     const [savingPayrollTransactionId, setSavingPayrollTransactionId] = useState('');
     const [payrollPayment, setPayrollPayment] = useState(null);
-    const [payrollPaymentForm, setPayrollPaymentForm] = useState({ paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }), accountId: '', reference: '' });
-    const [isSavingPayrollPayment, setIsSavingPayrollPayment] = useState(false);
     const [isPayrollContractEditorOpen, setIsPayrollContractEditorOpen] = useState(false);
     const [editingPayrollContract, setEditingPayrollContract] = useState(null);
     const [payrollContractForm, setPayrollContractForm] = useState(() => emptyPayrollContractForm(2026));
@@ -976,27 +976,12 @@ await invalidateFinancialQueries(queryClient);
         }
     };
 
-    const handlePayPayroll = async (event) => {
-        event.preventDefault();
-        if (!payrollPayment?.id) return;
-        setIsSavingPayrollPayment(true);
+    // Pagos de nómina por partes (30 de septiembre de 2026): el diálogo y la lista de pagos
+    // hablan con el servidor; aquí solo se refresca todo y se da el aviso, después de confirmar.
+    const handlePayrollChanged = async (message) => {
         setImportError('');
-        setImportSuccess('');
-        try {
-            const baseUrl = getApiBaseUrl();
-            const token = localStorage.getItem('authToken');
-            await axios.post(`${baseUrl}/api/financials/payroll-transactions/${payrollPayment.id}/pay`, payrollPaymentForm, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            await invalidatePayroll();
-            setPayrollPayment(null);
-            setImportSuccess('Pago de nómina registrado en el libro financiero.');
-        } catch (error) {
-            console.error('Error paying payroll transaction:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible registrar el pago de nómina.');
-        } finally {
-            setIsSavingPayrollPayment(false);
-        }
+        await invalidatePayroll();
+        setImportSuccess(message);
     };
 
     const handleClientLink = async (sourceClientId) => {
@@ -1689,7 +1674,8 @@ await invalidateFinancialQueries(queryClient);
                                                 const transaction = collab.transaction;
                                                 const netAmount = transaction?.netAmount ?? collab.monthlyTotal ?? collab.totalPaid ?? 0;
                                                 return (
-                                                <tr key={collab.id || collab.collaboratorId || collab.userId || collab.contractId || collab.name} className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 text-xs">
+                                                <React.Fragment key={collab.id || collab.collaboratorId || collab.userId || collab.contractId || collab.name}>
+                                                <tr className="hover:bg-zinc-50/50 dark:hover:bg-zinc-900/20 text-xs">
                                                     <td className="p-4">
                                                         <div className="flex items-center gap-3">
                                                             <div className="w-8 h-8 rounded-full bg-violet-600/10 flex items-center justify-center text-violet-600 font-bold text-[11px]">
@@ -1737,24 +1723,43 @@ await invalidateFinancialQueries(queryClient);
                                                         />
                                                     </td>
                                                     <td className="p-4">
-                                                        <span className={cn(
-                                                            "inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold",
-                                                            !transaction && "bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-300",
-                                                            transaction?.status === 'DRAFT' && "bg-amber-500/10 text-amber-700 dark:text-amber-300",
-                                                            transaction?.status === 'APPROVED' && "bg-blue-500/10 text-blue-700 dark:text-blue-300",
-                                                            transaction?.status === 'PAID' && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                                                        )}>{!transaction ? 'Sin generar' : transaction.status === 'DRAFT' ? 'Borrador' : transaction.status === 'APPROVED' ? 'Aprobada' : 'Pagada'}</span>
+                                                        {(() => {
+                                                            const status = payrollStatus(transaction);
+                                                            return (
+                                                                <span data-payroll-status={status.key} className={cn(
+                                                                    "inline-flex rounded-full px-2.5 py-1 text-[10px] font-semibold",
+                                                                    status.key === 'NONE' && "bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-300",
+                                                                    status.key === 'DRAFT' && "bg-amber-500/10 text-amber-700 dark:text-amber-300",
+                                                                    status.key === 'APPROVED' && "bg-blue-500/10 text-blue-700 dark:text-blue-300",
+                                                                    status.key === 'PARTIAL' && "bg-primary/10 text-primary",
+                                                                    status.key === 'PAID' && "bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                                                )}>{status.label}</span>
+                                                            );
+                                                        })()}
                                                     </td>
                                                     <td className="p-4 text-right font-black text-zinc-900 dark:text-white">
                                                         {formatCurrency(netAmount)}
+                                                        {transaction?.status === 'APPROVED' && Number(transaction.paidAmount) > 0 && (
+                                                            <p className="mt-0.5 text-[10px] font-medium text-zinc-500">Falta {formatCurrency(transaction.outstanding)}</p>
+                                                        )}
                                                     </td>
                                                     <td className="p-4 text-right">
                                                         {transaction?.status === 'DRAFT' && canApproveFinancials && <button type="button" disabled={savingPayrollTransactionId === transaction.id} onClick={() => handleApprovePayroll(transaction)} className="rounded-lg border border-[#009EB9]/30 px-3 py-1.5 text-[11px] font-semibold text-[#009EB9] hover:bg-[#009EB9]/10 disabled:opacity-50 dark:text-cyan-300">Aprobar</button>}
-                                                        {transaction?.status === 'APPROVED' && canApproveFinancials && <button type="button" onClick={() => { setPayrollPayment(transaction); setPayrollPaymentForm({ paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }), accountId: '', reference: '' }); }} className="rounded-lg bg-[#009EB9] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-[#008CA4]">Registrar pago</button>}
+                                                        {transaction?.status === 'APPROVED' && canApproveFinancials && <button type="button" onClick={() => setPayrollPayment({ ...transaction, collaboratorName: collab.name })} className="rounded-lg bg-[#009EB9] px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-[#008CA4]">{Number(transaction.paidAmount) > 0 ? 'Registrar otro pago' : 'Registrar pago'}</button>}
                                                         {transaction?.status === 'PAID' && <span className="text-[11px] font-medium text-zinc-500">{transaction.paidAt ? new Date(transaction.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' }) : 'Registrado'}</span>}
                                                         {!transaction && <span className="text-[11px] text-zinc-400">Pendiente</span>}
                                                     </td>
                                                 </tr>
+                                                {transaction?.payments?.length > 0 && (
+                                                    <tr className="bg-zinc-50/60 dark:bg-white/[0.02]">
+                                                        <td colSpan={6} className="px-4 pb-4 pt-0">
+                                                            <PayrollPaymentList transaction={transaction} accounts={financialAccounts?.accounts || []} formatCurrency={formatCurrency}
+                                                                canApprove={canApproveFinancials} canWrite={canWriteFinancials}
+                                                                onChanged={handlePayrollChanged} onError={(message) => { setImportSuccess(''); setImportError(message); }} />
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                </React.Fragment>
                                                 );
                                             })}
                                         </tbody>
@@ -2437,28 +2442,12 @@ await invalidateFinancialQueries(queryClient);
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={!!payrollPayment} onOpenChange={(open) => !open && setPayrollPayment(null)}>
-                <DialogContent className="sm:max-w-md dark:bg-zinc-900">
-                    <DialogHeader>
-                        <DialogTitle>Registrar pago de nómina</DialogTitle>
-                        <DialogDescription>
-                            El pago generará un egreso real y quedará vinculado con esta liquidación.
-                        </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handlePayPayroll} className="space-y-4">
-                        <div className="rounded-lg bg-zinc-50 px-3 py-2.5 text-sm dark:bg-white/5">
-                            <span className="text-zinc-500">Valor neto</span>
-                            <strong className="float-right text-zinc-900 dark:text-white">{formatCurrency(payrollPayment?.netAmount || 0)}</strong>
-                        </div>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Fecha</span><BrainDatePicker ariaLabel="Fecha del pago de nómina" required value={payrollPaymentForm.paidAt} onChange={(value) => setPayrollPaymentForm((current) => ({ ...current, paidAt: value }))} className="rounded-lg py-2.5" /></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Cuenta<Select required value={payrollPaymentForm.accountId} onChange={(event) => setPayrollPaymentForm((current) => ({ ...current, accountId: event.target.value }))} className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white"><option value="">Seleccionar...</option>{(financialAccounts?.accounts || []).map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</Select></label>
-                        </div>
-                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Referencia<input value={payrollPaymentForm.reference} onChange={(event) => setPayrollPaymentForm((current) => ({ ...current, reference: event.target.value }))} placeholder="Transferencia, comprobante..." className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" /></label>
-                        <DialogFooter><button type="button" onClick={() => setPayrollPayment(null)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingPayrollPayment} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingPayrollPayment && <Loader2 className="h-4 w-4 animate-spin" />}Guardar pago</button></DialogFooter>
-                    </form>
-                </DialogContent>
-            </Dialog>
+            {payrollPayment && (
+                <PayrollPaymentDialog transaction={payrollPayment} collaboratorName={payrollPayment.collaboratorName}
+                    accounts={financialAccounts?.accounts || []} formatCurrency={formatCurrency}
+                    onClose={() => setPayrollPayment(null)}
+                    onSaved={async (message) => { setPayrollPayment(null); await handlePayrollChanged(message); }} />
+            )}
 
             <Dialog open={isPayrollContractEditorOpen} onOpenChange={setIsPayrollContractEditorOpen}>
                 <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg dark:bg-zinc-900">

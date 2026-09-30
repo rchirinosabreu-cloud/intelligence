@@ -70,8 +70,12 @@ test('financial operational payment dates use the shared calendar', () => {
     assert.match(paymentSource, /selected=\{form\.paidAt/);
     // El tablero pasó del DatePicker crudo al componente compartido, que trae el
     // ancho, la posición del panel y el portal que lo saca del modal.
-    assert.match(dashboardSource, /<BrainDatePicker ariaLabel="Fecha del pago de nómina" required value=\{payrollPaymentForm\.paidAt\}/);
-    assert.doesNotMatch(dashboardSource, /selected=\{payrollPaymentForm\.paidAt/);
+    // El pago de nómina vive desde el 30 de septiembre de 2026 en su propio componente
+    // (pagos por partes), con el mismo calendario compartido, también en cada ítem del desglose.
+    const payrollSource = fs.readFileSync(new URL('../src/components/modules/financial/PayrollPayments.jsx', import.meta.url), 'utf8');
+    assert.match(payrollSource, /<BrainDatePicker ariaLabel="Fecha del pago de nómina" required value=\{form\.paidAt\}/);
+    assert.match(payrollSource, /<BrainDatePicker ariaLabel=\{`Fecha del ítem \$\{index \+ 1\}`\}/);
+    assert.doesNotMatch(payrollSource, /from 'react-datepicker'|type="date"/);
 });
 
 // Rodny, 22 de septiembre de 2026: el calendario se abría volteado sobre el

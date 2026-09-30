@@ -53,7 +53,7 @@ const categoryLabel = financialCategoryLabel;
 // servidor lo rechace con un error después de escribir el motivo.
 const lockReason = (record) => {
     if (record?.receivablePayment) return 'Es el ingreso de un abono de cartera. Para deshacerlo ve a Cartera, abre la obligación del cliente y usa «Revertir» en ese abono: este movimiento se anulará solo.';
-    if (record?.payrollTransaction) return 'Es el pago de una liquidación de nómina. Se corrige desde Nómina, sobre la liquidación que lo generó.';
+    if (record?.payrollPayment || record?.payrollTransaction) return 'Es un pago de nómina. Se corrige en Nómina Operativa, en la liquidación de esa persona: ahí se le sube el comprobante, se cambia la referencia, se usa «Desglosar» para repartirlo en varios pagos o «Revertir» para deshacerlo.';
     if (record?.bankMatches?.length) return 'Tiene una conciliación bancaria aprobada. Primero hay que deshacer esa conciliación.';
     if (record?.origin === 'SYSTEM') return 'Lo generó otro proceso de la plataforma, no se registró a mano. Se corrige desde donde se originó.';
     return null;

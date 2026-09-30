@@ -536,8 +536,40 @@ const serializePayrollTransaction = (transaction) => ({
     netAmount: toNum(transaction.netAmount),
     approvedAt: transaction.approvedAt || null,
     paidAt: transaction.paidAt || null,
-    financialRecordId: transaction.financialRecordId || null
+    financialRecordId: transaction.financialRecordId || null,
+    ...serializePayrollPayments(transaction)
 });
+
+// Los pagos de una liquidación (30 de septiembre de 2026): cada uno con su cuenta, su
+// referencia y los comprobantes vigentes de su egreso. Los revertidos viajan marcados y no suman.
+const serializePayrollPayments = (transaction) => {
+    const payments = (transaction.payments || []).map((payment) => ({
+        id: payment.id,
+        amount: toNum(payment.amount),
+        paidAt: payment.paidAt instanceof Date ? payment.paidAt.toISOString() : (payment.paidAt || null),
+        accountId: payment.accountId || null,
+        accountName: payment.account?.name || null,
+        reference: payment.reference || null,
+        notes: payment.notes || null,
+        financialRecordId: payment.financialRecordId || null,
+        // Solo se parte lo que creó la plataforma; un adelanto registrado a mano se revierte.
+        canSplit: !payment.reversedAt && payment.financialRecord?.origin === 'SYSTEM',
+        reversedAt: payment.reversedAt || null,
+        reversalReason: payment.reversalReason || null,
+        documents: (payment.financialRecord?.documents || []).map((document) => ({
+            id: document.id,
+            name: document.name,
+            mimeType: document.mimeType,
+            size: document.size
+        }))
+    }));
+    const paidAmount = roundFloat(payments.filter((payment) => !payment.reversedAt).reduce((sum, payment) => sum + payment.amount, 0));
+    return {
+        payments,
+        paidAmount,
+        outstanding: roundFloat(Math.max(toNum(transaction.netAmount) - paidAmount, 0))
+    };
+};
 
 const serializePayrollContract = (contract) => ({
     id: contract.id,
@@ -596,7 +628,22 @@ export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => 
                 },
                 transactions: {
                     where: { year },
-                    orderBy: { month: 'desc' }
+                    orderBy: { month: 'desc' },
+                    include: {
+                        payments: {
+                            orderBy: [{ paidAt: 'asc' }, { createdAt: 'asc' }],
+                            include: {
+                                account: { select: { id: true, name: true } },
+                                financialRecord: {
+                                    select: {
+                                        id: true,
+                                        origin: true,
+                                        documents: { where: { voidedAt: null }, orderBy: { uploadedAt: 'asc' }, select: { id: true, name: true, mimeType: true, size: true } }
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             },
             orderBy: {

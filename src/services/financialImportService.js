@@ -746,6 +746,7 @@ export const persistFinancialImportPlan = async (prismaClient, plan, options = {
                     OR: [
                         { receivablePayment: { isNot: null } },
                         { payrollTransaction: { isNot: null } },
+                        { payrollPayment: { isNot: null } },
                         { bankMatches: { some: {} } }
                     ]
                 } }),
