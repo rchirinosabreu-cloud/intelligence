@@ -31,6 +31,9 @@ localStorage.setItem('currentUser', JSON.stringify(user));
 // El tablero abre con el periodo «Hoy + Vencidas», así que las muestras vencen hoy.
 const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
 const venceHoy = `${hoy}T12:00:00.000Z`;
+// Una vencida para ver el pie completo de la tarjeta (distintivo «Vencido», categoría y complejidad).
+const ayer = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });
+const vencioAyer = `${ayer}T12:00:00.000Z`;
 
 const client = { id: 'c1', name: 'Corporación Titanes', slug: 'titanes', logoUrl: null };
 const maria = { id: 'm-maria', userId: 'u-maria', name: 'María Fernanda', avatarUrl: null, role: 'Community Manager' };
@@ -40,13 +43,15 @@ const tasks = [
   {
     id: 't1', title: 'Parrilla de octubre para Titanes', status: 'PENDIENTE', isPrivate: false,
     creatorId: 'u-jefe', clientId: client.id, client, assigneeId: maria.id, assignee: maria,
-    comments: 'Cerrar la parrilla antes del viernes.', priority: 'NORMAL', taskAttachments: [], taskComments: [],
-    dueDate: venceHoy, createdAt: '2026-09-20T12:00:00.000Z', sortOrder: 0, viewers: []
+    comments: 'Cerrar la parrilla antes del viernes.', priority: 'URGENTE', taskAttachments: [], taskComments: [],
+    aiCategory: 'MARKETING & SOCIAL', aiComplexity: 'BAJA',
+    dueDate: vencioAyer, createdAt: '2026-09-20T12:00:00.000Z', sortOrder: 0, viewers: []
   },
   {
     id: 't2', title: 'Revisión de salario de Marcela', status: 'EN_CURSO', isPrivate: true,
     creatorId: 'u-jefe', clientId: client.id, client, assigneeId: maria.id, assignee: maria,
     comments: 'Confidencial: propuesta de ajuste.', priority: 'ALTA', taskAttachments: [{ id: 'a1' }], taskComments: [],
+    aiCategory: 'ADMINISTRACIÓN', aiComplexity: 'ALTA',
     dueDate: venceHoy, createdAt: '2026-09-22T12:00:00.000Z', sortOrder: 1,
     // Solo Elisa fue añadida a la lista.
     viewers: [{ userId: 'u-elisa' }]
@@ -55,6 +60,7 @@ const tasks = [
     id: 't3', title: 'Reel de aniversario', status: 'EN_CURSO', isPrivate: false,
     creatorId: 'u-jefe', clientId: client.id, client, assigneeId: bruno.id, assignee: bruno,
     comments: 'Montaje con el material del sábado.', priority: 'NORMAL', taskAttachments: [], taskComments: [],
+    aiCategory: 'PRODUCCIÓN AUDIOVISUAL', aiComplexity: 'MEDIA',
     dueDate: venceHoy, createdAt: '2026-09-21T12:00:00.000Z', sortOrder: 2, viewers: []
   }
 ];

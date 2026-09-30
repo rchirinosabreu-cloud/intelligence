@@ -17,19 +17,49 @@ test('the optimistic completed task remains visible while the server confirms it
 test('completion confetti runs only after a successful backend response', async () => {
   const source = await readNativeTasks();
   const responseGuard = source.indexOf('if (!response.ok) throw new Error("Failed to update status in backend")');
-  const confetti = source.indexOf('triggerConfetti()', responseGuard);
+  const confetti = source.indexOf('triggerConfetti(', responseGuard);
   const catchBlock = source.indexOf('} catch (err)', responseGuard);
 
   assert.ok(responseGuard >= 0, 'the task update must validate the backend response');
   assert.ok(confetti > responseGuard, 'confetti must run after the backend confirms completion');
   assert.ok(confetti < catchBlock, 'confetti must remain inside the successful request path');
+  // Rodny, 30 de septiembre de 2026: sale de la columna donde cayó la tarjeta, no del centro
+  // de la ventana. La columna y no la tarjeta: con una respuesta rápida la tarjeta puede no
+  // estar repintada todavía y el disparo salía de la columna de origen.
+  assert.match(source, /triggerConfetti\(document\.querySelector\('\[data-rfd-droppable-id="realizado"\]'\)\)/);
 });
 
-test('completion celebration respects reduced-motion accessibility preferences', async () => {
-  const source = await readFile(
-    new URL('../src/utils/confetti.js', import.meta.url),
-    'utf8'
-  );
+test('cerrar una tarea desde el panel o el modal tampoco celebra antes de tiempo', async () => {
+  // Regla 1 de AGENTS: la celebración es consecuencia de la respuesta del servidor, nunca del clic.
+  // Los dos disparaban confeti **antes** del `fetch`, así que un guardado fallido celebraba igual.
+  for (const file of ['TaskSidePanel', 'TaskEditModal']) {
+    const source = await readFile(new URL(`../src/components/modules/${file}.jsx`, import.meta.url), 'utf8');
+    // El import es `{ triggerConfetti }`, sin paréntesis: todo lo que casa aquí es una llamada.
+    const llamadas = [...source.matchAll(/triggerConfetti\(/g)].map(m => m.index);
+    assert.ok(llamadas.length > 0, `${file}: sigue celebrando una tarea terminada`);
+    for (const posicion of llamadas) {
+      const antes = source.slice(0, posicion);
+      const ultimoOk = antes.lastIndexOf('if (res.ok)');
+      const ultimoFetch = antes.lastIndexOf('await fetch(');
+      assert.ok(ultimoOk > ultimoFetch, `${file}: el confeti va dentro del camino de éxito, después del fetch`);
+    }
+  }
+});
 
-  assert.match(source, /disableForReducedMotion:\s*true/);
+test('la celebración se ve: colores de marca, dos ráfagas y salida desde la acción', async () => {
+  const source = await readFile(new URL('../src/utils/confetti.js', import.meta.url), 'utf8');
+
+  assert.match(source, /disableForReducedMotion:\s*true/, 'se respeta el movimiento reducido');
+
+  // Rodny, 30 de septiembre de 2026: «a nadie le sale el confeti». Salía: 50 partículas diminutas,
+  // un tercio blancas sobre un tablero claro, desde el centro de abajo de la ventana.
+  assert.doesNotMatch(source, /'#ffffff'|"#ffffff"/i, 'el blanco no existe sobre una superficie clara');
+  assert.doesNotMatch(source, /#009EB9|#00AC8A/, 'los hexadecimales locales fuera de la paleta se fueron');
+  assert.match(source, /BRAND_TOKENS = \['--brand-cyan', '--brand-green', '--brand-magenta', '--brand-coral', '--brand-yellow'\]/,
+    'los colores se leen de los tokens de marca, nunca se escriben aquí');
+  assert.match(source, /rgb\(\$\{triplet/, 'los tokens son tripletas RGB y hay que envolverlas');
+
+  assert.equal((source.match(/^\s*confetti\(\{/gm) || []).length, 2, 'dos ráfagas, no una');
+  assert.match(source, /particleCount: 90/, 'la ráfaga principal se ve');
+  assert.match(source, /export const originOfElement/, 'el disparo sale del elemento que cerró la tarea');
 });

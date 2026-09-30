@@ -130,10 +130,7 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                 finalIsReturned = false;
             }
 
-            // Trigger confetti if status is changing to 'REALIZADA' (Optimistic)
-            if (editFormData.originalStatus !== 'REALIZADA' && finalStatus === 'REALIZADA') {
-                triggerConfetti();
-            }
+            const cierraLaTarea = editFormData.originalStatus !== 'REALIZADA' && finalStatus === 'REALIZADA';
 
             const url = `${baseUrl}/api/tasks/${editFormData.id}`;
 
@@ -173,6 +170,8 @@ const TaskEditModal = ({ isOpen, onClose, onSuccess, clientsList, taskData }) =>
                     ? 'Tarea corregida y reintegrada'
                     : 'Los cambios se guardaron correctamente';
 
+                // La celebración va después de la respuesta del servidor, nunca al pulsar.
+                if (cierraLaTarea) triggerConfetti();
                 toast({ title: 'Tarea actualizada', description: successMsg });
                 onSuccess();
                 onClose();
