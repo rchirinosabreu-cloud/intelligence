@@ -202,6 +202,10 @@ const AppLayout = ({ children }) => {
         || notif.type === 'TASK_FOCUS_SET' || notif.type === 'TASK_FOCUS_OVERDUE' || notif.type === 'TASK_FOCUS_EXTENSION') {
         // Compromiso con hora: the notice opens the task (the manager adjusts the hour there with the clock).
         navigate(`/gestion?taskId=${notif.taskId || notif.relatedId}`);
+    } else if (notif.type === 'SOCIAL_PUBLICATION_PUBLISHED' || notif.type === 'SOCIAL_PUBLICATION_FAILED') {
+        // La publicación en redes abre la pieza en su parrilla (`resourceId` es la parrilla, `relatedId` la pieza).
+        const target = notif.url && notif.url.startsWith('/') ? notif.url : (notif.resourceId ? `/parrillas/${notif.resourceId}?item=${notif.relatedId}` : '/parrillas');
+        navigate(target);
     }
   };
 

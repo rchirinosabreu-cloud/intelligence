@@ -87,6 +87,14 @@ export const getNotificationDisplayParts = (notification = {}) => {
         if (parsed) return parsed;
     }
 
+    // Publicación automática en redes (29 de septiembre de 2026): el mensaje ya viene en español.
+    if (type === 'SOCIAL_PUBLICATION_PUBLISHED') {
+        return { title: 'Pieza publicada en redes', context: '', body: cleanNotificationPreview(message, 140) };
+    }
+    if (type === 'SOCIAL_PUBLICATION_FAILED') {
+        return { title: 'No se pudo publicar una pieza', context: '', body: cleanNotificationPreview(message, 160) };
+    }
+
     return {
         title: cleanNotificationPreview(message, 120),
         context: '',
