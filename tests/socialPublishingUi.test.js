@@ -38,6 +38,9 @@ test('the client card lists connected networks and only managers connect or disc
   const detail = read('src/components/modules/ClientDetail.jsx');
   assert.match(detail, /<SocialAccountsWidget clientId=\{client\.id\} canManage=\{canManageSocial\} \/>/);
   assert.match(detail, /\['ADMIN', 'PROJECT_MANAGER'\]/);
+  // 30 September 2026, seen in production: the grid stretched the sidebar column and two `h-full`
+  // widgets claimed its whole height, so Chat Flow and Redes conectadas were squashed to their header.
+  assert.match(detail, /lg:col-span-1 lg:self-start flex flex-col gap-6/);
 });
 
 test('the plan payload carries the publications of each piece and the client accounts without tokens', () => {
