@@ -12,7 +12,7 @@ export const PARTY_DOCUMENT_TYPES = Object.freeze([
     { value: 'PAS', label: 'Pasaporte', name: 'Pasaporte' },
     // El número fiscal de una empresa de Estados Unidos, como 2X Global (30 de septiembre
     // de 2026). Se escribe «12-3456789»: dígitos y guion, como los numéricos de aquí.
-    { value: 'EIN', label: 'EIN:', name: 'EIN (Estados Unidos)' }
+    { value: 'EIN', label: 'EIN:', name: 'EIN' }
 ]);
 
 export const PARTY_LEGAL_NAME_MAX = 200;
