@@ -1,4 +1,5 @@
 import Select from '@/components/ui/Select';
+import MoneyInput from '@/components/ui/MoneyInput';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
@@ -120,15 +121,15 @@ const ServiceCatalogModal = ({ open, onOpenChange, service = null, initialName =
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-xs font-bold uppercase text-zinc-500">Costo real estimado</label>
-                            <input type="number" required min="0" className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20" value={formData.costo_real_estimado} onChange={(e) => updateField('costo_real_estimado', e.target.value)} placeholder="220000" />
+                            <MoneyInput required min="0" className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20" value={formData.costo_real_estimado} onChange={(value) => updateField('costo_real_estimado', value)} placeholder="220.000" />
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-xs font-bold uppercase text-zinc-500">Precio actual</label>
-                            <input type="number" required min="0" className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20" value={formData.valor_neto_actual} onChange={(e) => updateField('valor_neto_actual', e.target.value)} placeholder="350000" />
+                            <MoneyInput required min="0" className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20" value={formData.valor_neto_actual} onChange={(value) => updateField('valor_neto_actual', value)} placeholder="350.000" />
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-xs font-bold uppercase text-zinc-500">Precio final</label>
-                            <input type="number" required min="0" className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20" value={formData.valor_neto} onChange={(e) => updateField('valor_neto', e.target.value)} placeholder="730000" />
+                            <MoneyInput required min="0" className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none focus:ring-2 ring-primary/20" value={formData.valor_neto} onChange={(value) => updateField('valor_neto', value)} placeholder="730.000" />
                         </div>
                         <div className="col-span-2 grid grid-cols-2 gap-4 rounded-lg bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 p-4">
                             <div><p className="text-[10px] font-bold uppercase text-zinc-400">Ganancia</p><p className={cn('mt-1 text-base font-bold', economics.profit >= 0 ? 'text-emerald-600 dark:text-emerald-400' : 'text-rose-600 dark:text-rose-400')}>{formatCurrency(economics.profit)}</p></div>

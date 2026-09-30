@@ -146,7 +146,7 @@ try {
   await newDebtDialog.getByRole('button', { name: 'Crear uno nuevo', exact: true }).click();
   await newDebtDialog.getByRole('textbox', { name: 'Nombre del cliente nuevo' }).fill('Javid Trámite y Asesorías');
   assert.equal(await newDebtDialog.getByRole('combobox', { name: 'Cliente de la cuenta por cobrar' }).count(), 0, 'el desplegable cede el sitio al nombre nuevo');
-  await newDebtDialog.getByRole('spinbutton', { name: 'Valor' }).fill('4710000');
+  await newDebtDialog.getByRole('textbox', { name: 'Valor', exact: true }).fill('4710000');
   await page.screenshot({ path: 'output/financial-new-receivable-client.png', animations: 'disabled' });
   await newDebtDialog.getByRole('button', { name: 'Guardar', exact: true }).click();
   await newDebtDialog.waitFor({ state: 'hidden' });
@@ -169,11 +169,11 @@ try {
   assert.match(await issueDialog.getByRole('textbox', { name: /Concepto/ }).inputValue(), /Prestación de servicios para el diseño/);
   await issueDialog.getByRole('textbox', { name: 'Periodo del servicio' }).fill('20 de agosto al 19 de septiembre');
   await issueDialog.getByRole('textbox', { name: 'Descripción del concepto 1' }).fill('Fee mensual');
-  await issueDialog.getByRole('spinbutton', { name: 'Valor del concepto 1' }).fill('800000');
+  await issueDialog.getByRole('textbox', { name: 'Valor del concepto 1' }).fill('800000');
   // Un segundo concepto: «el fee mensual más lo que hayan pedido adicional».
   await issueDialog.getByRole('button', { name: 'Añadir concepto', exact: true }).click();
   await issueDialog.getByRole('textbox', { name: 'Descripción del concepto 2' }).fill('Inversión de pauta en Meta Ads');
-  await issueDialog.getByRole('spinbutton', { name: 'Valor del concepto 2' }).fill('400000');
+  await issueDialog.getByRole('textbox', { name: 'Valor del concepto 2' }).fill('400000');
   assert.match(await issueDialog.innerText(), /Total del documento\s*\$\s*1[.,]200[.,]000/);
   // La ficha del cliente no tiene nombre legal ni documento, así que se escriben aquí
   // y quedan guardados en ella: no hay que salir a Clientes a medio documento.

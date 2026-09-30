@@ -3,6 +3,7 @@ import { toast } from 'react-hot-toast';
 import SlideOver from '@/components/ui/SlideOver';
 import Select from '@/components/ui/Select';
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
+import MoneyInput from '@/components/ui/MoneyInput';
 import { Button } from '@/components/ui/button';
 import { Target, Loader2 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
@@ -107,7 +108,7 @@ const CrmLeadForm = ({ open, onOpenChange, lead = null, team = [], onSaved }) =>
               <input value={form.phone} onChange={set('phone')} className={inputClass} placeholder="+57 300 000 0000" />
             </Field>
             <Field label="Valor cotizado (COP)">
-              <input inputMode="numeric" value={form.quotedValue} onChange={set('quotedValue')} className={inputClass} placeholder="0" />
+              <MoneyInput aria-label="Valor cotizado" value={form.quotedValue} onChange={quotedValue => setForm(current => ({ ...current, quotedValue }))} className={inputClass} placeholder="0" />
             </Field>
             <Field label="Próximo seguimiento">
               <BrainDatePicker ariaLabel="Próximo seguimiento" value={form.nextFollowUpAt} onChange={value => setForm(current => ({ ...current, nextFollowUpAt: value }))} isClearable />
