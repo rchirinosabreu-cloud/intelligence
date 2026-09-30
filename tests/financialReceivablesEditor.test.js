@@ -114,6 +114,7 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
         exchangeRateSource: null,
         exchangeRateDate: null,
         documentTotal: 0,
+        foreignAmount: null,
         payments: [{
             id: 'payment-1',
             amount: 680000,

@@ -9,7 +9,10 @@ export const PARTY_DOCUMENT_TYPES = Object.freeze([
     { value: 'CC', label: 'CC.', name: 'Cédula de ciudadanía' },
     { value: 'NIT', label: 'NIT:', name: 'NIT' },
     { value: 'CE', label: 'CE.', name: 'Cédula de extranjería' },
-    { value: 'PAS', label: 'Pasaporte', name: 'Pasaporte' }
+    { value: 'PAS', label: 'Pasaporte', name: 'Pasaporte' },
+    // El número fiscal de una empresa de Estados Unidos, como 2X Global (30 de septiembre
+    // de 2026). Se escribe «12-3456789»: dígitos y guion, como los numéricos de aquí.
+    { value: 'EIN', label: 'EIN:', name: 'EIN (Estados Unidos)' }
 ]);
 
 export const PARTY_LEGAL_NAME_MAX = 200;
@@ -58,6 +61,19 @@ export const normalizePartyIdentity = ({ legalName, documentType, documentNumber
  * solo si se escribió; el documento va entero —tipo y número— o no va, porque a medias
  * no identifica a nadie. Devuelve solo los campos escritos.
  */
+/**
+ * Al emitir, un documento a medias no frena nada: simplemente no va (Rodny, 30 de
+ * septiembre de 2026: tuvo que escribir «00000» para poder emitir, y «si yo pongo en
+ * documento "sin definir" no tengo necesidad de poner el número. Debería poder emitir y
+ * simplemente no aparece nro de documento»). Tipo sin número o número sin tipo se
+ * descartan los dos; un documento completo pero mal escrito sí se sigue avisando.
+ */
+export const dropIncompleteDocument = (party = {}) => (
+    String(party?.documentType ?? '').trim() && String(party?.documentNumber ?? '').trim()
+        ? { ...party }
+        : { ...party, documentType: '', documentNumber: '' }
+);
+
 export const normalizePartialPartyIdentity = ({ legalName, documentType, documentNumber } = {}) => {
     const errors = {};
     const identity = {};

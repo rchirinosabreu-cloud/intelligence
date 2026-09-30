@@ -231,10 +231,9 @@ test('the client record holds the legal name and document a cuenta de cobro prin
     const number = dialog.getByRole('textbox', { name: 'Número', exact: true });
     const save = dialog.getByRole('button', { name: 'Guardar cambios' });
 
-    // Los tres van juntos: con uno o dos no se puede guardar, y se explica.
+    // Desde el 30 de septiembre de 2026 el nombre legal va solo; el documento va entero.
     await legalName.fill('CORPORACIÓN DEPORTIVA LOS TITANES');
-    assert.equal(await save.isDisabled(), true, 'media identidad no se guarda');
-    await dialog.getByRole('alert').filter({ hasText: /Los tres datos van juntos/ }).waitFor();
+    assert.equal(await save.isDisabled(), false, 'el nombre legal solo ya se puede guardar');
 
     await chooseOption(dialog.getByRole('combobox', { name: 'Tipo de documento' }), 'NIT');
     await number.fill('901378858');

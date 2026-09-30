@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
+    dropIncompleteDocument,
     normalizePartialPartyIdentity,
     normalizePartyIdentity,
     hasPartyIdentity,
@@ -66,8 +67,12 @@ test('un número con letras solo se acepta en un pasaporte', () => {
     assert.equal(normalizePartyIdentity({ legalName: 'X', documentType: 'PAS', documentNumber: 'AB123456' }).valid, true);
 });
 
-test('los cuatro tipos están y cada uno tiene su etiqueta', () => {
-    assert.deepEqual(PARTY_DOCUMENT_TYPES.map((type) => type.value), ['CC', 'NIT', 'CE', 'PAS']);
+// EIN: el número fiscal de una empresa de Estados Unidos (Rodny, 30 de septiembre de
+// 2026: «si el cliente no tiene NIT o EIN»), como 2X Global.
+test('los tipos están y cada uno tiene su etiqueta, incluido el EIN', () => {
+    assert.deepEqual(PARTY_DOCUMENT_TYPES.map((type) => type.value), ['CC', 'NIT', 'CE', 'PAS', 'EIN']);
+    assert.equal(partyDocumentType('ein').label, 'EIN:');
+    assert.equal(normalizePartyIdentity({ legalName: '2X GLOBAL LLC', documentType: 'EIN', documentNumber: '12-3456789' }).valid, true);
     for (const type of PARTY_DOCUMENT_TYPES) {
         assert.ok(type.label && type.name, `${type.value} necesita etiqueta y nombre`);
     }
@@ -75,7 +80,7 @@ test('los cuatro tipos están y cada uno tiene su etiqueta', () => {
     assert.equal(partyDocumentType('inventado'), null);
 });
 
-test('la ficha guarda los tres datos juntos o los vacía juntos', () => {
+test('la ficha guarda la identidad y la vacía', () => {
     const saved = validateClientEdit({ legalName: 'CORPORACIÓN DEPORTIVA LOS TITANES', documentType: 'NIT', documentNumber: '901378858' });
     assert.deepEqual(saved, { legalName: 'CORPORACIÓN DEPORTIVA LOS TITANES', documentType: 'NIT', documentNumber: '901378858' });
 
@@ -83,7 +88,10 @@ test('la ficha guarda los tres datos juntos o los vacía juntos', () => {
     assert.deepEqual(cleared, { legalName: null, documentType: null, documentNumber: null });
 });
 
-test('no se puede guardar media identidad en la ficha', () => {
+// Desde el 30 de septiembre de 2026 el nombre legal va solo: una ficha puede tenerlo sin
+// documento. Lo que no se guarda es un documento a medias.
+test('el nombre legal va solo; el documento va entero o no va', () => {
+    assert.deepEqual(validateClientEdit({ legalName: 'Fundación Grit', documentType: '', documentNumber: '' }), { legalName: 'Fundación Grit', documentType: null, documentNumber: null });
     assert.throws(
         () => validateClientEdit({ legalName: 'CORPORACIÓN DEPORTIVA LOS TITANES', documentType: 'NIT', documentNumber: '' }),
         (error) => error.statusCode === 400 && /número del documento/.test(error.message)
@@ -141,4 +149,16 @@ test('la identidad parcial acepta lo escrito y exige tipo y número juntos', () 
     assert.equal(normalizePartialPartyIdentity({ documentNumber: '900123456' }).valid, false);
     assert.equal(normalizePartialPartyIdentity({ documentType: 'CC', documentNumber: 'abc' }).valid, false);
     assert.equal(normalizePartialPartyIdentity({ legalName: 'x'.repeat(201) }).valid, false);
+});
+
+// Rodny, 30 de septiembre de 2026: «si yo pongo en documento "sin definir" no tengo
+// necesidad de poner el número. Debería poder emitir y simplemente no aparece nro de documento».
+test('al emitir, un documento a medias no va, sin frenar nada', () => {
+    assert.deepEqual(dropIncompleteDocument({ legalName: 'X', documentType: 'NIT', documentNumber: ' ' }), { legalName: 'X', documentType: '', documentNumber: '' });
+    assert.deepEqual(dropIncompleteDocument({ legalName: 'X', documentType: '', documentNumber: '900123456' }), { legalName: 'X', documentType: '', documentNumber: '' });
+    assert.equal(normalizePartialPartyIdentity(dropIncompleteDocument({ documentType: 'NIT', documentNumber: '' })).valid, true);
+    assert.equal(normalizePartialPartyIdentity(dropIncompleteDocument({ documentType: '', documentNumber: '900123456' })).valid, true);
+    assert.deepEqual(dropIncompleteDocument({ documentType: 'CC', documentNumber: '123' }), { documentType: 'CC', documentNumber: '123' });
+    // Completo pero mal escrito sí se avisa: ese número iría impreso.
+    assert.equal(normalizePartialPartyIdentity(dropIncompleteDocument({ documentType: 'NIT', documentNumber: 'abc' })).valid, false);
 });

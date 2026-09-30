@@ -1,6 +1,6 @@
 import DOMPurify from 'isomorphic-dompurify';
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
-import { hasPartyIdentity, normalizePartialPartyIdentity } from '../lib/partyIdentity.js';
+import { dropIncompleteDocument, hasPartyIdentity, normalizePartialPartyIdentity } from '../lib/partyIdentity.js';
 import {
     RECEIVABLE_ITEM_MAX, RECEIVABLE_CONCEPT_MAX, RECEIVABLE_ITEM_DESCRIPTION_MAX,
     RECEIVABLE_SERVICE_PERIOD_MAX, formatReceivableNumber, isReceivableConceptHtml
@@ -210,7 +210,7 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
             // y se salta la línea del documento. Lo que se escriba aquí se valida y rellena
             // solo lo que le falta a la ficha: lo que ya tenía no se reescribe.
             if (!hasPartyIdentity(receivable.client) && input.client) {
-                const written = normalizePartialPartyIdentity(input.client);
+                const written = normalizePartialPartyIdentity(dropIncompleteDocument(input.client));
                 if (!written.valid) {
                     throw new FinancialDomainError('RECEIVABLE_CLIENT_IDENTITY_INVALID', Object.values(written.errors)[0], 422);
                 }
@@ -289,6 +289,8 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
                     exchangeRate: money.exchangeRate,
                     exchangeRateSource: money.exchangeRateSource,
                     exchangeRateDate: money.exchangeRateDate,
+                    // En dólares, el valor en dólares pasa a ser el del documento.
+                    foreignAmount: money.currency === 'USD' ? document.total : null,
                     status: paidCents === money.amountCents ? 'PAGADO' : receivable.status
                 },
                 include: {
@@ -426,6 +428,7 @@ export const correctReceivableDocument = async (prismaClient, receivableId, inpu
                 exchangeRate: money.exchangeRate,
                 exchangeRateSource: money.exchangeRateSource,
                 exchangeRateDate: money.exchangeRateDate,
+                foreignAmount: money.currency === 'USD' ? document.total : null,
                 status,
                 pdfStorageKey: null
             };

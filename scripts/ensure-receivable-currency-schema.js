@@ -12,6 +12,8 @@ try {
   await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "exchangeRate" DECIMAL(65,30);`);
   await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "exchangeRateSource" TEXT;`);
   await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "exchangeRateDate" TEXT;`);
+  // El valor en dólares de una cuenta en dólares que aún no se emite (30 de septiembre de 2026).
+  await client.query(`ALTER TABLE "AccountsReceivable" ADD COLUMN IF NOT EXISTS "foreignAmount" DECIMAL(65,30);`);
   console.log('[Receivable currency] currency and exchange rate columns ready.');
 } catch (error) {
   console.error('[Receivable currency] Failed to ensure the currency schema:', error.message);
