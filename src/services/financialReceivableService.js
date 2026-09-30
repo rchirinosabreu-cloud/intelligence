@@ -1,6 +1,7 @@
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
 import { createClientWith } from './clientService.js';
 import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
+import { normalizeReceivableCurrency } from '../lib/receivableCurrency.js';
 import {
     assertOpenFinancialPeriod,
     FinancialDomainError,
@@ -180,10 +181,14 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
                 }
                 throw new FinancialDomainError('RECEIVABLE_AMOUNT_INVALID', 'El monto de cartera debe ser positivo, tener como máximo dos decimales y estar dentro del rango de precisión financiera.');
             }
-            // El valor de una cuenta emitida es la suma de sus conceptos y está impreso en su
-            // PDF, así que no se cambia suelto por aquí: se corrige el documento con
-            // «Corregir», que ajusta conceptos y valor y rehace el PDF en un solo paso.
-            if (input.amount !== undefined && (existing.number || existing.issuedAt) && amountCents !== financialCents(existing.amount)) {
+            // El valor de una cuenta emitida en pesos es la suma de sus conceptos y está
+            // impreso en su PDF, así que no se cambia suelto por aquí: se corrige el
+            // documento con «Corregir», que ajusta conceptos y valor y rehace el PDF.
+            // En una cuenta en dólares el PDF dice dólares y lo que se edita es su valor
+            // en pesos en cartera, que sí se ajusta suelto al que de verdad entró (Rodny,
+            // 30 de septiembre de 2026).
+            const pesosOnly = normalizeReceivableCurrency(existing.currency) !== 'USD';
+            if (input.amount !== undefined && pesosOnly && (existing.number || existing.issuedAt) && amountCents !== financialCents(existing.amount)) {
                 const label = existing.number ? `No. ${String(existing.number).padStart(4, '0')}` : 'emitida';
                 throw new FinancialDomainError(
                     'RECEIVABLE_ISSUED_IMMUTABLE',

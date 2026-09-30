@@ -5,6 +5,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Search, Plus, Trash2, Copy, Check, DollarSign, FileText, Globe, Building2, User as UserIcon, ArrowLeft, Loader2, RefreshCw } from '@/components/ui/icons';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/Card';
+import CurrencyToggle from '@/components/ui/CurrencyToggle';
 import { toast } from 'react-hot-toast';
 import { cn } from '@/lib/utils';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -848,16 +849,7 @@ const QuotationForm = () => {
                     <Card className="p-6 space-y-6 sticky top-24">
                         <div className="flex justify-between items-center">
                             <h3 className="font-bold text-sm">Resumen y Ajustes</h3>
-                            <div className="flex gap-1 bg-zinc-100 dark:bg-zinc-800 p-1 rounded-lg">
-                                <button
-                                    onClick={() => handleCurrencyChange('COP')}
-                                    className={cn("px-2 py-1 text-[10px] font-bold rounded-md transition-all", currency === 'COP' ? "bg-white dark:bg-zinc-700 shadow-sm" : "text-zinc-500")}
-                                >COP</button>
-                                <button
-                                    onClick={() => handleCurrencyChange('USD')}
-                                    className={cn("px-2 py-1 text-[10px] font-bold rounded-md transition-all", currency === 'USD' ? "bg-white dark:bg-zinc-700 shadow-sm" : "text-zinc-500")}
-                                >USD</button>
-                            </div>
+                            <CurrencyToggle value={currency} onChange={handleCurrencyChange} ariaLabel="Moneda de la cotización" />
                         </div>
 
                         {selectedItems.some(item => item.billingType !== 'ONE_TIME') && <div className="space-y-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4 dark:border-zinc-800 dark:bg-zinc-900/60">

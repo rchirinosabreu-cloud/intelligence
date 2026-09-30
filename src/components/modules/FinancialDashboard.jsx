@@ -37,6 +37,8 @@ import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import { groupFinancialReceivables, financialDebtStatus, formatFinancialPeriod } from '@/utils/financialReceivables';
 import { clientOptions } from '@/utils/financialClients';
 import { RECEIVABLE_CONCEPT_DEFAULT, RECEIVABLE_ITEM_MAX, formatReceivableNumber, receivableConceptToHtml } from '@/lib/receivableDocument';
+import { formatExchangeRate, formatReceivableMoney, pesosFromRate } from '@/lib/receivableCurrency';
+import CurrencyToggle from '@/components/ui/CurrencyToggle';
 import RichTextEditor from '@/components/ui/RichTextEditor';
 import { PARTY_DOCUMENT_TYPES, hasPartyIdentity } from '@/lib/partyIdentity';
 
@@ -409,6 +411,7 @@ const FinancialDashboard = () => {
     // precargado con lo que dice el documento. Conserva el número y rehace el PDF.
     const openCorrectDialog = (debt) => {
         setImportError('');
+        setRateStatus({ loading: false, error: '' });
         setIsCorrecting(true);
         setDebtToIssue(debt);
         setIssueForm({
@@ -420,12 +423,71 @@ const FinancialDashboard = () => {
                 ? debt.items.map((item) => ({ description: item.description || '', amount: String(item.amount ?? '') }))
                 : [{ description: '', amount: String(debt.amount || '') }],
             reason: '',
-            client: { legalName: '', documentType: '', documentNumber: '' }
+            client: { legalName: '', documentType: '', documentNumber: '' },
+            ...issueMoneyFrom(debt)
         });
+    };
+
+    // Moneda del documento (Rodny, 30 de septiembre de 2026). En dólares la cartera sigue en
+    // pesos: el total por la TRM, o el valor en pesos que se escriba a mano. Si el valor
+    // guardado no es exactamente el de la TRM, alguien lo ajustó a lo que entró: se respeta.
+    const issueMoneyFrom = (debt) => {
+        const currency = debt?.currency === 'USD' ? 'USD' : 'COP';
+        if (currency !== 'USD') {
+            return { currency, exchangeRate: '', exchangeRateSource: null, exchangeRateDate: null, amountCop: '', amountCopEdited: false };
+        }
+        const computed = pesosFromRate(debt.documentTotal, debt.exchangeRate);
+        return {
+            currency,
+            exchangeRate: debt.exchangeRate ? String(debt.exchangeRate) : '',
+            exchangeRateSource: debt.exchangeRateSource || null,
+            exchangeRateDate: debt.exchangeRateDate || null,
+            amountCop: String(debt.amount ?? ''),
+            amountCopEdited: computed === null || Math.abs(computed - Number(debt.amount)) > 0.005
+        };
+    };
+
+    const [rateStatus, setRateStatus] = useState({ loading: false, error: '' });
+    const loadOfficialRate = async () => {
+        setRateStatus({ loading: true, error: '' });
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const { data } = await axios.get(`${baseUrl}/api/financials/exchange-rate`, { headers: { Authorization: `Bearer ${token}` } });
+            setIssueForm((current) => (current ? {
+                ...current,
+                exchangeRate: String(data.rate),
+                exchangeRateSource: data.source || 'SUPERFINANCIERA_TRM',
+                exchangeRateDate: data.validFrom ? String(data.validFrom).slice(0, 10) : null
+            } : current));
+            setRateStatus({ loading: false, error: '' });
+        } catch (error) {
+            console.error('Error loading the official exchange rate:', error.response?.data || error);
+            setRateStatus({ loading: false, error: error.response?.data?.message || 'No fue posible consultar la TRM oficial. Puedes escribir la TRM a mano.' });
+        }
+    };
+
+    const setIssueCurrency = (currency) => {
+        setIssueForm((current) => {
+            if (!current || current.currency === currency) return current;
+            // El valor precargado es el de la obligación en pesos: en otra moneda sería otra
+            // cifra. Si nadie lo ha tocado, se vacía para escribirlo en la moneda elegida.
+            const prefilled = [debtToIssue?.outstanding, debtToIssue?.amount].map((value) => String(value ?? ''));
+            const untouched = current.items.length === 1 && prefilled.includes(String(current.items[0].amount));
+            return {
+                ...current,
+                currency,
+                items: untouched ? [{ ...current.items[0], amount: '' }] : current.items,
+                amountCop: '',
+                amountCopEdited: false
+            };
+        });
+        if (currency === 'USD' && !issueForm?.exchangeRate) loadOfficialRate();
     };
 
     const openIssueDialog = (debt) => {
         setImportError('');
+        setRateStatus({ loading: false, error: '' });
         setIsCorrecting(false);
         setDebtToIssue(debt);
         setIssueForm({
@@ -441,7 +503,8 @@ const FinancialDashboard = () => {
                 legalName: debt.clientLegalName || '',
                 documentType: debt.clientDocumentType || '',
                 documentNumber: debt.clientDocumentNumber || ''
-            }
+            },
+            ...issueMoneyFrom(null)
         });
     };
 
@@ -453,6 +516,20 @@ const FinancialDashboard = () => {
     const setIssueClient = (patch) => setIssueForm((current) => ({ ...current, client: { ...current.client, ...patch } }));
 
     const issueTotal = (issueForm?.items || []).reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+    const issueIsUsd = issueForm?.currency === 'USD';
+    // Lo que la obligación valdrá en cartera: en pesos es el total; en dólares, el total por
+    // la TRM salvo que se haya escrito a mano el valor que de verdad entró.
+    const issueCopValue = !issueIsUsd
+        ? issueTotal
+        : (issueForm?.amountCopEdited ? Number(issueForm.amountCop) || null : pesosFromRate(issueTotal, issueForm?.exchangeRate));
+    const issueMoneyReady = !issueIsUsd || (Number(issueForm?.exchangeRate) > 0 && Number(issueCopValue) > 0);
+    const issueMoneyPayload = () => (issueIsUsd ? {
+        currency: 'USD',
+        exchangeRate: Number(issueForm.exchangeRate),
+        exchangeRateSource: issueForm.exchangeRateSource || 'MANUAL',
+        exchangeRateDate: issueForm.exchangeRateDate || null,
+        amountCop: issueCopValue
+    } : { currency: 'COP' });
     // La ficha ya identificada no se vuelve a preguntar ni se puede reescribir desde
     // aquí: una cuenta de cobro no cambia la identidad de un tercero por el camino.
     const issueNeedsIdentity = !isCorrecting && !!debtToIssue && !hasPartyIdentity({
@@ -477,7 +554,8 @@ const FinancialDashboard = () => {
                     servicePeriod: issueForm.servicePeriod,
                     issuedAt: issueForm.issuedAt,
                     reason: issueForm.reason,
-                    items: issueForm.items.map((item) => ({ description: item.description, amount: Number(item.amount) }))
+                    items: issueForm.items.map((item) => ({ description: item.description, amount: Number(item.amount) })),
+                    ...issueMoneyPayload()
                 }, { headers: { Authorization: `Bearer ${token}` } });
                 await invalidateFinancialQueries(queryClient);
                 setDebtToIssue(null);
@@ -487,8 +565,11 @@ const FinancialDashboard = () => {
                 return;
             }
             const { data: result } = await axios.post(`${baseUrl}/api/financials/receivables/${debtToIssue.id}/issue`, {
-                ...issueForm,
+                concept: issueForm.concept,
+                servicePeriod: issueForm.servicePeriod,
+                issuedAt: issueForm.issuedAt,
                 items: issueForm.items.map((item) => ({ description: item.description, amount: Number(item.amount) })),
+                ...issueMoneyPayload(),
                 // Solo se manda si la ficha no lo tenía; el servidor tampoco la
                 // reescribe cuando ya está identificada.
                 client: issueNeedsIdentity ? issueForm.client : undefined
@@ -1276,18 +1357,25 @@ await invalidateFinancialQueries(queryClient);
                                                                         <span className="text-[9px] font-medium text-zinc-400">Valor original</span>
                                                                         {editingAmountId === debt.id ? (
                                                                             <form className="mt-1 flex flex-wrap items-center gap-1" onSubmit={(event) => { event.preventDefault(); saveAmountEdit(debt); }}>
-                                                                                <input type="number" min="0.01" step="0.01" required autoFocus aria-label="Nuevo valor original" value={amountDraft} onChange={(event) => setAmountDraft(event.target.value)} className="w-28 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-900 outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                                                                                <input type="number" min="0.01" step="0.01" required autoFocus aria-label={debt.currency === 'USD' ? 'Nuevo valor en pesos' : 'Nuevo valor original'} value={amountDraft} onChange={(event) => setAmountDraft(event.target.value)} className="w-28 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-900 outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
                                                                                 <button type="submit" disabled={savingReceivableId === debt.id} className="rounded-lg bg-primary px-2 py-1 text-[11px] font-semibold text-primary-foreground disabled:opacity-50">Guardar</button>
                                                                                 <button type="button" onClick={() => setEditingAmountId('')} className="rounded-lg px-2 py-1 text-[11px] font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/10">Cancelar</button>
                                                                             </form>
                                                                         ) : (
                                                                             <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-zinc-900 dark:text-white">
                                                                                 {formatCurrency(debt.amount || 0)}
-                                                                                {/* En una cuenta emitida el valor es la suma de sus conceptos y va
-                                                                                    impreso: el lápiz abre la corrección del documento, que rehace el PDF. */}
-                                                                                {canWriteFinancials && !debt.balanceReviewRequired && (debt.formattedNumber
+                                                                                {/* En una cuenta emitida en pesos el valor es la suma de sus conceptos y
+                                                                                    va impreso: el lápiz abre la corrección, que rehace el PDF. En una en
+                                                                                    dólares el PDF dice dólares y el lápiz ajusta su valor en pesos al que
+                                                                                    de verdad entró (Rodny, 30 de septiembre de 2026). */}
+                                                                                {canWriteFinancials && !debt.balanceReviewRequired && (debt.formattedNumber && debt.currency !== 'USD'
                                                                                     ? <button type="button" title={`Corregir la cuenta de cobro ${debt.formattedNumber}`} aria-label={`Corregir el valor de la cuenta de cobro ${debt.formattedNumber}`} onClick={() => openCorrectDialog(debt)} className="grid h-6 w-6 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-primary dark:hover:bg-white/10"><Edit className="h-3 w-3" /></button>
-                                                                                    : <button type="button" title="Editar valor" aria-label={`Editar valor de la obligación de ${formatFinancialPeriod(debt.period)}`} onClick={() => startAmountEdit(debt)} className="grid h-6 w-6 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-primary dark:hover:bg-white/10"><Edit className="h-3 w-3" /></button>)}
+                                                                                    : <button type="button" title={debt.currency === 'USD' ? 'Ajustar el valor en pesos al que entró' : 'Editar valor'} aria-label={debt.currency === 'USD' ? `Editar el valor en pesos de la cuenta de cobro ${debt.formattedNumber || ''}` : `Editar valor de la obligación de ${formatFinancialPeriod(debt.period)}`} onClick={() => startAmountEdit(debt)} className="grid h-6 w-6 place-items-center rounded-md text-zinc-400 hover:bg-zinc-100 hover:text-primary dark:hover:bg-white/10"><Edit className="h-3 w-3" /></button>)}
+                                                                            </p>
+                                                                        )}
+                                                                        {debt.currency === 'USD' && (
+                                                                            <p data-receivable-usd-summary className="mt-0.5 text-[10px] text-zinc-500">
+                                                                                Documento en {formatReceivableMoney(debt.documentTotal, 'USD')}{debt.exchangeRate ? ` · ${formatExchangeRate(debt.exchangeRate)}` : ''}
                                                                             </p>
                                                                         )}
                                                                     </div>
@@ -1315,7 +1403,7 @@ await invalidateFinancialQueries(queryClient);
                                                                 <div className="flex flex-wrap items-center gap-2">
                                                                     {debt.formattedNumber ? (<>
                                                                         <span className="inline-flex items-center gap-1.5 rounded-lg bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
-                                                                            Cuenta de cobro {debt.formattedNumber}
+                                                                            Cuenta de cobro {debt.formattedNumber}{debt.currency === 'USD' ? ' · USD' : ''}
                                                                             {debt.issuedAt ? <span className="font-normal text-zinc-500">· {new Date(debt.issuedAt).toLocaleDateString('es-CO', { timeZone: 'UTC' })}</span> : null}
                                                                         </span>
                                                                         <button type="button" onClick={() => openReceivableDocument(debt)} disabled={downloadingDocumentId === debt.id}
@@ -2169,7 +2257,13 @@ await invalidateFinancialQueries(queryClient);
                             <span className="block text-xs text-zinc-500">El párrafo viene escrito. Debajo, con la barra, añade lo que incluye el servicio: viñetas, títulos o negritas salen igual en el PDF.</span>
                         </div>
                         <div className="space-y-2">
-                            <p className="text-sm text-zinc-700 dark:text-zinc-200">Conceptos y valores</p>
+                            {/* El mismo interruptor COP / USD de Cotizaciones, con el borde de los
+                                campos (Rodny, 30 de septiembre de 2026). Va junto a los valores,
+                                porque es lo que cambia: en qué moneda se escriben. */}
+                            <div className="flex items-center justify-between gap-3">
+                                <p className="text-sm text-zinc-700 dark:text-zinc-200">Conceptos y valores{issueIsUsd ? ' en dólares' : ''}</p>
+                                <CurrencyToggle bordered value={issueForm.currency || 'COP'} onChange={setIssueCurrency} ariaLabel="Moneda de la cuenta de cobro" />
+                            </div>
                             <p className="text-xs text-zinc-500">El fee mensual y, si lo pidieron, lo adicional. Con un solo concepto el documento no lleva tabla.</p>
                             <ul className="space-y-2">
                                 {issueForm.items.map((item, index) => (
@@ -2191,16 +2285,57 @@ await invalidateFinancialQueries(queryClient);
                                 {issueForm.items.length < RECEIVABLE_ITEM_MAX && <button type="button"
                                     onClick={() => setIssueForm((current) => ({ ...current, items: [...current.items, { description: '', amount: '' }] }))}
                                     className="min-h-11 text-sm font-medium text-primary underline underline-offset-2">Añadir concepto</button>}
-                                <p className="text-sm text-zinc-700 dark:text-zinc-200">Total del documento <strong className="text-zinc-900 dark:text-white">{formatCurrency(issueTotal)}</strong></p>
+                                <p className="text-sm text-zinc-700 dark:text-zinc-200">Total del documento <strong className="text-zinc-900 dark:text-white">{formatReceivableMoney(issueTotal, issueForm.currency)}</strong></p>
                             </div>
-                            {Math.abs(issueTotal - Number(debtToIssue?.amount || 0)) > 0.005 && (
-                                <p className="text-xs text-amber-600 dark:text-amber-400">
-                                    {isCorrecting
-                                        ? `Hoy la cuenta vale ${formatCurrency(debtToIssue?.amount || 0)}. Al guardar pasará a ${formatCurrency(issueTotal)}.`
-                                        : `El valor causado de la obligación es ${formatCurrency(debtToIssue?.amount || 0)}. Al emitir, la obligación pasará a ${formatCurrency(issueTotal)}.`}
-                                </p>
-                            )}
                         </div>
+                        {/* El financiero se lleva en pesos (Rodny, 30 de septiembre de 2026): una
+                            cuenta en dólares entra a cartera con su valor en pesos, por la TRM
+                            oficial o por el valor exacto que se escriba. */}
+                        {issueIsUsd && (
+                            <div data-receivable-usd className="space-y-3 rounded-lg border border-zinc-200 p-3 dark:border-white/10">
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
+                                        <span className="block">TRM</span>
+                                        <input required min="0.01" step="0.01" type="number" value={issueForm.exchangeRate}
+                                            aria-label="TRM para pasar a pesos"
+                                            onChange={(event) => setIssueForm((current) => ({ ...current, exchangeRate: event.target.value, exchangeRateSource: 'MANUAL', exchangeRateDate: null }))}
+                                            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                                        <span className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500">
+                                            {rateStatus.loading
+                                                ? 'Consultando la TRM oficial…'
+                                                : issueForm.exchangeRateSource === 'SUPERFINANCIERA_TRM'
+                                                    ? `TRM oficial${issueForm.exchangeRateDate ? ` del ${new Date(`${issueForm.exchangeRateDate}T12:00:00Z`).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : ''}`
+                                                    : 'Escrita a mano'}
+                                            <button type="button" onClick={loadOfficialRate} disabled={rateStatus.loading}
+                                                className="min-h-11 font-medium text-primary underline underline-offset-2 disabled:opacity-50">Usar la TRM oficial</button>
+                                        </span>
+                                        {rateStatus.error && <span role="alert" className="block text-xs text-destructive">{rateStatus.error}</span>}
+                                    </label>
+                                    <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
+                                        <span className="block">Valor en cartera (pesos)</span>
+                                        <input required min="0.01" step="0.01" type="number"
+                                            aria-label="Valor en pesos en cartera"
+                                            value={issueForm.amountCopEdited ? issueForm.amountCop : (issueCopValue ?? '')}
+                                            onChange={(event) => setIssueForm((current) => ({ ...current, amountCop: event.target.value, amountCopEdited: true }))}
+                                            className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
+                                        <span className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500">
+                                            {issueForm.amountCopEdited ? 'Escrito a mano: el que de verdad entra.' : 'Total en dólares por la TRM.'}
+                                            {issueForm.amountCopEdited && <button type="button"
+                                                onClick={() => setIssueForm((current) => ({ ...current, amountCop: '', amountCopEdited: false }))}
+                                                className="min-h-11 font-medium text-primary underline underline-offset-2">Volver a calcularlo</button>}
+                                        </span>
+                                    </label>
+                                </div>
+                                <p className="text-xs text-zinc-500">El documento dice dólares. En cartera se lleva en pesos, y ese valor se puede ajustar después al que de verdad entró.</p>
+                            </div>
+                        )}
+                        {issueCopValue !== null && Math.abs(Number(issueCopValue) - Number(debtToIssue?.amount || 0)) > 0.005 && (
+                            <p className="text-xs text-amber-600 dark:text-amber-400">
+                                {isCorrecting
+                                    ? `Hoy la cuenta vale ${formatCurrency(debtToIssue?.amount || 0)} en cartera. Al guardar pasará a ${formatCurrency(issueCopValue)}.`
+                                    : `El valor causado de la obligación es ${formatCurrency(debtToIssue?.amount || 0)}. Al emitir, la obligación pasará a ${formatCurrency(issueCopValue)}.`}
+                            </p>
+                        )}
                         {isCorrecting && (
                             <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
                                 <span className="block">Qué se corrigió <span className="text-zinc-400">(opcional)</span></span>
@@ -2213,7 +2348,7 @@ await invalidateFinancialQueries(queryClient);
                         {importError && <p role="alert" className="text-sm text-destructive">{importError}</p>}
                         <DialogFooter>
                             <button type="button" onClick={() => { setDebtToIssue(null); setIssueForm(null); setIsCorrecting(false); }} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button>
-                            <button type="submit" disabled={isIssuing || issueTotal <= 0 || !issueIdentityReady} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">
+                            <button type="submit" disabled={isIssuing || issueTotal <= 0 || !issueIdentityReady || !issueMoneyReady} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">
                                 {isIssuing && <Loader2 className="h-4 w-4 animate-spin" />}{isCorrecting ? 'Guardar y rehacer PDF' : 'Emitir cuenta de cobro'}
                             </button>
                         </DialogFooter>

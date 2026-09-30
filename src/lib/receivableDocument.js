@@ -26,7 +26,10 @@ export const receivableIssuer = (env = {}) => ({
     signatureLine: env.RECEIVABLE_ISSUER_SIGNATURE_LINE || 'C.C. 1235038569 - Celular: 3015201362',
     email: env.RECEIVABLE_ISSUER_EMAIL || 'fvilladigita@gmail.com',
     bankLine: env.RECEIVABLE_ISSUER_BANK_LINE
-        || "Por favor, consignar a la Cuenta de Ahorros Bancolombia 08579170345 a nombre de Francisco Villa Zúñiga, CC 1'235,038,569 de Cartagena."
+        || "Por favor, consignar a la Cuenta de Ahorros Bancolombia 08579170345 a nombre de Francisco Villa Zúñiga, CC 1'235,038,569 de Cartagena.",
+    // Cómo pagar una cuenta en dólares, si es distinto de consignar en pesos. Sin
+    // configurar, el documento usa la instrucción de siempre.
+    bankLineUsd: env.RECEIVABLE_ISSUER_BANK_LINE_USD || null
 });
 
 // Una línea que empieza por guion o viñeta es un punto de la lista; el resto es

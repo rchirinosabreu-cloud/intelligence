@@ -5,6 +5,7 @@ import {
     RECEIVABLE_ITEM_MAX, RECEIVABLE_CONCEPT_MAX, RECEIVABLE_ITEM_DESCRIPTION_MAX,
     RECEIVABLE_SERVICE_PERIOD_MAX, formatReceivableNumber, isReceivableConceptHtml
 } from '../lib/receivableDocument.js';
+import { normalizeReceivableCurrency, pesosFromRate, DEFAULT_RECEIVABLE_CURRENCY } from '../lib/receivableCurrency.js';
 import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
 import {
     assertOpenFinancialPeriod,
@@ -59,6 +60,52 @@ export const normalizeReceivableConcept = (value) => {
     const fragment = DOMPurify.sanitize(value, { ALLOWED_TAGS: CONCEPT_TAGS, ALLOWED_ATTR: [], RETURN_DOM: true });
     text(fragment.textContent, RECEIVABLE_CONCEPT_MAX, 'RECEIVABLE_CONCEPT_REQUIRED', 'La cuenta de cobro necesita un concepto.');
     return fragment.innerHTML;
+};
+
+const EXCHANGE_RATE_SOURCES = new Set(['SUPERFINANCIERA_TRM', 'MANUAL']);
+const EXCHANGE_RATE_DATE = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * La moneda del documento y lo que la obligación vale en cartera (Rodny, 30 de
+ * septiembre de 2026). En pesos, el documento y la cartera son la misma cifra. En
+ * dólares los conceptos van en dólares, pero «en el financiero siempre registramos todo
+ * en pesos»: la cartera guarda el total por la TRM —la oficial, o una escrita a mano— o
+ * el valor en pesos que la persona escriba, porque lo que entra «en limpio» manda.
+ * `currency` vacío conserva la moneda que la obligación ya tenía.
+ */
+export const resolveDocumentMoney = (input, document, fallbackCurrency = DEFAULT_RECEIVABLE_CURRENCY) => {
+    const currency = input.currency === undefined ? normalizeReceivableCurrency(fallbackCurrency) : normalizeReceivableCurrency(input.currency);
+    if (!currency) {
+        throw new FinancialDomainError('RECEIVABLE_CURRENCY_INVALID', 'La cuenta de cobro se emite en pesos (COP) o en dólares (USD).');
+    }
+    if (currency === DEFAULT_RECEIVABLE_CURRENCY) {
+        return { currency, exchangeRate: null, exchangeRateSource: null, exchangeRateDate: null, amountCents: document.totalCents };
+    }
+
+    const exchangeRate = Number(input.exchangeRate);
+    if (input.exchangeRate === '' || input.exchangeRate === null || !Number.isFinite(exchangeRate) || exchangeRate <= 0) {
+        throw new FinancialDomainError(
+            'RECEIVABLE_EXCHANGE_RATE_REQUIRED',
+            'Una cuenta en dólares necesita la TRM con la que se pasa a pesos: la cartera se lleva en pesos. Usa la oficial o escribe la que corresponda.'
+        );
+    }
+    let amountCents;
+    if (input.amountCop === undefined || input.amountCop === null || input.amountCop === '') {
+        amountCents = pesosFromRate(document.total, exchangeRate) * 100;
+    } else {
+        amountCents = financialCents(input.amountCop);
+        if (amountCents === null || amountCents <= 0) {
+            throw new FinancialDomainError('RECEIVABLE_AMOUNT_COP_INVALID', 'El valor en pesos debe ser positivo y tener como máximo dos decimales.');
+        }
+    }
+    const exchangeRateDate = EXCHANGE_RATE_DATE.test(String(input.exchangeRateDate || '')) ? String(input.exchangeRateDate) : null;
+    return {
+        currency,
+        exchangeRate,
+        exchangeRateSource: EXCHANGE_RATE_SOURCES.has(input.exchangeRateSource) ? input.exchangeRateSource : 'MANUAL',
+        exchangeRateDate,
+        amountCents
+    };
 };
 
 /**
@@ -126,6 +173,9 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
     const concept = normalizeReceivableConcept(input.concept);
     const servicePeriod = text(input.servicePeriod, RECEIVABLE_SERVICE_PERIOD_MAX, 'RECEIVABLE_SERVICE_PERIOD_REQUIRED', 'Escribe el periodo del servicio, como «20 de agosto al 19 de septiembre».');
     const document = calculateReceivableDocument(input.items);
+    // Con moneda elegida se valida antes de abrir la transacción; sin ella se conserva la
+    // que ya tenía la obligación, que solo se sabe dentro.
+    const chosenMoney = input.currency === undefined ? null : resolveDocumentMoney(input, document);
     const { date: issuedAt } = parseFinancialDateInput(input.issuedAt);
     const actorId = actor?.id || actor?.userId || null;
     const configuredStart = options.startNumber ?? process.env.RECEIVABLE_NUMBER_START ?? RECEIVABLE_NUMBER_START_DEFAULT;
@@ -191,10 +241,13 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
                 );
             }
 
+            const money = chosenMoney || resolveDocumentMoney({ exchangeRate: receivable.exchangeRate, exchangeRateSource: receivable.exchangeRateSource, exchangeRateDate: receivable.exchangeRateDate, ...input }, document, receivable.currency);
+
             // Cambiar el importe de una obligación que ya recibió plata dejaría el
-            // saldo mintiendo: primero hay que resolver esos abonos.
+            // saldo mintiendo: primero hay que resolver esos abonos. Los abonos son pesos,
+            // así que se comparan con lo que la obligación vale en cartera.
             const paidCents = (receivable.payments || []).reduce((sum, payment) => sum + (financialCents(payment.amount) ?? 0), 0);
-            if (paidCents > 0 && paidCents !== document.totalCents) {
+            if (paidCents > 0 && paidCents !== money.amountCents) {
                 throw new FinancialDomainError(
                     'RECEIVABLE_ALREADY_PAID_PARTIALLY',
                     'Esta obligación ya tiene abonos aplicados y el total de la cuenta de cobro no coincide con ellos. Revisa los abonos antes de emitirla.',
@@ -224,8 +277,12 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
                     issuedById: actorId,
                     concept,
                     servicePeriod,
-                    amount: document.total,
-                    status: paidCents === document.totalCents ? 'PAGADO' : receivable.status
+                    amount: financialAmountFromCents(money.amountCents),
+                    currency: money.currency,
+                    exchangeRate: money.exchangeRate,
+                    exchangeRateSource: money.exchangeRateSource,
+                    exchangeRateDate: money.exchangeRateDate,
+                    status: paidCents === money.amountCents ? 'PAGADO' : receivable.status
                 },
                 include: {
                     items: { orderBy: { sortOrder: 'asc' } },
@@ -300,6 +357,7 @@ export const correctReceivableDocument = async (prismaClient, receivableId, inpu
     const concept = normalizeReceivableConcept(input.concept);
     const servicePeriod = text(input.servicePeriod, RECEIVABLE_SERVICE_PERIOD_MAX, 'RECEIVABLE_SERVICE_PERIOD_REQUIRED', 'Escribe el periodo del servicio, como «20 de agosto al 19 de septiembre».');
     const document = calculateReceivableDocument(input.items);
+    const chosenMoney = input.currency === undefined ? null : resolveDocumentMoney(input, document);
     const issuedAt = input.issuedAt ? parseFinancialDateInput(input.issuedAt).date : undefined;
     const actorId = actor?.id || actor?.userId || null;
 
@@ -331,16 +389,18 @@ export const correctReceivableDocument = async (prismaClient, receivableId, inpu
                 receivable.month || periodDate.getUTCMonth() + 1
             );
 
-            // Los abonos vigentes son plata que ya entró: el documento no puede valer menos.
+            const money = chosenMoney || resolveDocumentMoney({ exchangeRate: receivable.exchangeRate, exchangeRateSource: receivable.exchangeRateSource, exchangeRateDate: receivable.exchangeRateDate, ...input }, document, receivable.currency);
+
+            // Los abonos vigentes son pesos que ya entraron: la obligación no puede valer menos.
             const paidCents = (receivable.payments || []).reduce((sum, payment) => sum + (financialCents(payment.amount) ?? 0), 0);
-            if (paidCents > document.totalCents) {
+            if (paidCents > money.amountCents) {
                 throw new FinancialDomainError(
                     'RECEIVABLE_AMOUNT_BELOW_PAYMENTS',
                     'Esta obligación ya tiene abonos por más de lo que valdría el documento corregido. Revierte el abono que sobra antes de corregir.',
                     409
                 );
             }
-            const status = paidCents === document.totalCents
+            const status = paidCents === money.amountCents
                 ? 'PAGADO'
                 : (receivable.status === 'PROMESADO' ? 'PROMESADO' : 'DEBE');
 
@@ -351,7 +411,17 @@ export const correctReceivableDocument = async (prismaClient, receivableId, inpu
             // Se suelta la clave del PDF anterior: si el guardado del nuevo fallara, «Ver
             // PDF» lo regenera con los datos corregidos en vez de servir el viejo. La
             // clave vieja queda en el `before` de la auditoría y el archivo, en el bucket.
-            const data = { concept, servicePeriod, amount: document.total, status, pdfStorageKey: null };
+            const data = {
+                concept,
+                servicePeriod,
+                amount: financialAmountFromCents(money.amountCents),
+                currency: money.currency,
+                exchangeRate: money.exchangeRate,
+                exchangeRateSource: money.exchangeRateSource,
+                exchangeRateDate: money.exchangeRateDate,
+                status,
+                pdfStorageKey: null
+            };
             if (issuedAt) data.issuedAt = issuedAt;
             const corrected = await tx.accountsReceivable.update({
                 where: { id: receivableId },

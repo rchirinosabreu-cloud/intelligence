@@ -127,6 +127,34 @@ nada de una pestaña suelta. Los bytes llegan por la API autenticada y se le pas
 visor **como bytes**, no como una URL `blob:`, que la Content-Security-Policy de la
 página no le deja buscar. «Descargar» sí usa la URL local para guardar el archivo.
 
+## Cuentas de cobro en dólares
+
+Rodny, 30 de septiembre de 2026: «yo escoger la moneda, y que diga USD y el valor en letras
+sea "mil doscientos dólares"», y después: «en el financiero siempre registramos todo en
+pesos … puede registrarse en pesos haciendo la conversión que hacemos en cotización, usando
+el TRM oficial, sin embargo ese valor en pesos obviamente puede ser editado».
+
+- **La moneda es del documento.** Se elige con el interruptor COP / USD de Cotizaciones
+  (`CurrencyToggle`, aquí con el borde de los campos), junto a «Conceptos y valores». En USD
+  los conceptos se escriben en dólares y el PDF dice «MIL DOSCIENTOS DÓLARES» y
+  «(USD 1.200)», con la tabla en USD. Uno va en singular: «UN DÓLAR», «UN PESO».
+- **La cartera sigue en pesos.** La obligación guarda su valor en pesos: el total en dólares
+  por la TRM, redondeado al peso. Pagos, saldos, tablero y reportes no cambian, porque nunca
+  ven dólares.
+- **La TRM** es la oficial de la Superfinanciera, la misma fuente que usan las cotizaciones
+  (`GET /api/financials/exchange-rate`, con permiso de Financiero). Se puede escribir a mano,
+  y entonces queda como «Escrita a mano». Se guardan la tasa, su origen y su fecha.
+- **El valor en pesos se edita.** Al emitir se puede escribir a mano el valor en pesos, y
+  después el lápiz de «Valor original» lo ajusta al que de verdad entró. En una cuenta en
+  dólares ese lápiz no abre «Corregir», porque el PDF dice dólares y no imprime los pesos.
+- **Al registrar el pago** se escriben los pesos que entraron, como siempre. Si entró menos
+  que el valor en pesos, se ajusta ese valor con el lápiz.
+- Si hay que dar otra instrucción de pago para dólares, va en
+  `RECEIVABLE_ISSUER_BANK_LINE_USD`. Sin ella, el PDF usa la de siempre.
+- Columnas aditivas: `currency`, `exchangeRate`, `exchangeRateSource` y `exchangeRateDate` en
+  `AccountsReceivable`, con `scripts/ensure-receivable-currency-schema.js`. Todo lo existente
+  queda en COP.
+
 ## Eliminar una obligación
 
 Una cuenta por cobrar tecleada por error, o de prueba, **se puede eliminar** (Rodny, 23

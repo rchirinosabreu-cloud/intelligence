@@ -21,6 +21,7 @@ import { createReceivablePayment, reverseReceivablePayment } from '../services/r
 import { createReceivable, deleteReceivable } from '../services/financialReceivableService.js';
 import { issueReceivableDocument, correctReceivableDocument } from '../services/receivableDocumentService.js';
 import { openReceivablePdf, RECEIVABLE_PDF_MIME } from '../services/receivablePdfService.js';
+import { fetchOfficialUsdCopRate } from '../services/exchangeRateService.js';
 import { auditFinancialIntegrity } from '../services/financialIntegrityAuditService.js';
 import { createFinancialAccount, listFinancialAccounts } from '../services/financialAccountService.js';
 import {
@@ -319,6 +320,22 @@ export const correctReceivableDocumentHandler = async (req, res, dependencies = 
     } catch (error) {
         console.error('[Receivables API] Correction failed:', error.response?.data || error);
         return respondWithError(res, error, 'RECEIVABLE_CORRECTION_FAILED', 'No fue posible corregir la cuenta de cobro.');
+    }
+};
+
+// La TRM oficial del día para convertir una cuenta en dólares a pesos (Rodny, 30 de
+// septiembre de 2026: «la conversión que hacemos en cotización, usando el TRM oficial»).
+// Misma fuente que Cotizaciones; si falla, la TRM se escribe a mano.
+export const getFinancialExchangeRateHandler = async (_req, res, dependencies = {}) => {
+    const fetchRate = dependencies.fetchRate || fetchOfficialUsdCopRate;
+    try {
+        return res.json(await fetchRate());
+    } catch (error) {
+        console.error('[Financials API] Exchange rate fetch failed:', error?.message || error);
+        return res.status(503).json({
+            error: 'FINANCIAL_EXCHANGE_RATE_UNAVAILABLE',
+            message: 'No fue posible consultar la TRM oficial. Puedes escribir la TRM a mano.'
+        });
     }
 };
 

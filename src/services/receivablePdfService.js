@@ -7,6 +7,9 @@ import {
     formatReceivableNumber, parseReceivableConcept, receivableIssuer, RECEIVABLE_ISSUER_DEFAULT_NAME,
     isReceivableConceptHtml
 } from '../lib/receivableDocument.js';
+import {
+    DEFAULT_RECEIVABLE_CURRENCY, formatReceivableMoney, normalizeReceivableCurrency, receivableAmountInWords
+} from '../lib/receivableCurrency.js';
 import { normalizeReceivableConcept } from './receivableDocumentService.js';
 import { proposalRichTextBlocks } from './quotationProposalDetails.js';
 import { FinancialDomainError } from './financialRecordService.js';
@@ -103,21 +106,37 @@ export const receivableConceptBlocks = (concept) => {
  */
 export const buildReceivableDocumentModel = (receivable, env = {}) => {
     const issuer = receivableIssuer(env);
-    const total = Number(receivable.amount) || 0;
-    const items = (receivable.items || []).map((item) => ({ description: item.description, amount: Number(item.amount) || 0 }));
+    const currency = normalizeReceivableCurrency(receivable.currency) || DEFAULT_RECEIVABLE_CURRENCY;
+    const usd = currency === 'USD';
+    // En pesos el documento vale lo que la obligación. En dólares la obligación guarda su
+    // valor en pesos para la cartera, y el documento —que dice dólares— es la suma de sus
+    // conceptos, en centavos para no arrastrar error de coma flotante.
+    const itemCents = (receivable.items || []).reduce((sum, item) => sum + Math.round((Number(item.amount) || 0) * 100), 0);
+    const total = usd ? itemCents / 100 : Number(receivable.amount) || 0;
+    const format = (value) => (usd ? formatReceivableMoney(value, currency) : money.format(value));
+    const items = (receivable.items || []).map((item) => ({
+        description: item.description,
+        amount: Number(item.amount) || 0,
+        formatted: format(Number(item.amount) || 0)
+    }));
     return {
         issuer,
+        currency,
         place: `${issuer.city} ${longDate(receivable.issuedAt)}`,
         title: `Cuenta de cobro ${formatReceivableNumber(receivable.number)}`,
         debtorName: formatPartyName(receivable.client, receivable.client?.name),
         debtorDocument: formatPartyDocument(receivable.client),
-        amountInWords: amountInWords(total),
-        amountInFigures: `(${money.format(total)})`,
+        amountInWords: usd ? receivableAmountInWords(total, currency) : amountInWords(total),
+        amountInFigures: `(${format(total)})`,
         concept: receivableConceptBlocks(receivable.concept),
         // Con un solo concepto el documento no lleva tabla, como el de Elvira Utria.
         items: items.length > 1 ? items : [],
         total,
+        formattedTotal: format(total),
         servicePeriod: receivable.servicePeriod || null,
+        // Pagar en dólares suele ser otra instrucción que consignar en pesos: si está
+        // configurada se usa; si no, la de siempre.
+        bankLine: usd && issuer.bankLineUsd ? issuer.bankLineUsd : issuer.bankLine,
         signatureImage: receivableSignatureImage(issuer, env)
     };
 };
@@ -365,8 +384,8 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
             y += 7;
         };
         row('Descripción', 'Valor', { head: true });
-        for (const item of model.items) row(item.description, money.format(item.amount));
-        row('Total', money.format(model.total), { bold: true });
+        for (const item of model.items) row(item.description, item.formatted);
+        row('Total', model.formattedTotal, { bold: true });
     }
 
     y += 9;
@@ -376,7 +395,7 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
     doc.text(` ${model.servicePeriod}`, PAGE.left + doc.getTextWidth('Periodo:'), y);
 
     y += 10;
-    y = paragraph(doc, model.issuer.bankLine, y);
+    y = paragraph(doc, model.bankLine, y);
 
     y += 10;
     setText(doc, { size: 10.5 });

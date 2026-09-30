@@ -45,6 +45,33 @@ test('an issued account opens the same form in correction mode and rebuilds its 
     assert.match(dashboard, /const issueNeedsIdentity = !isCorrecting && /);
 });
 
+// Rodny, 30 de septiembre de 2026: «emitir cuentas de cobro en dólares … yo escoger la
+// moneda» y «en el financiero siempre registramos todo en pesos … usando el TRM oficial,
+// sin embargo ese valor en pesos obviamente puede ser editado».
+test('the document currency is chosen in the form, and a dollar account keeps a peso value in cartera', () => {
+    // The same COP / USD switch as Cotizaciones, with the field border (Rodny, 30 de septiembre de 2026).
+    assert.match(dashboard, /<CurrencyToggle bordered value=\{issueForm\.currency \|\| 'COP'\} onChange=\{setIssueCurrency\} ariaLabel="Moneda de la cuenta de cobro" \/>/);
+    assert.match(read('../src/components/modules/Quotations/QuotationForm.jsx'), /<CurrencyToggle value=\{currency\} onChange=\{handleCurrencyChange\}/);
+    assert.match(read('../src/components/ui/CurrencyToggle.jsx'), /bordered && 'border border-zinc-200 dark:border-white\/10'/);
+    // Official TRM from Financiero's own route, editable by hand, with its origin shown.
+    assert.match(dashboard, /\/api\/financials\/exchange-rate/);
+    assert.match(dashboard, /aria-label="TRM para pasar a pesos"/);
+    assert.match(dashboard, /exchangeRateSource: 'MANUAL'/);
+    assert.match(dashboard, /Usar la TRM oficial/);
+    // The peso value defaults to total × TRM and can be written by hand.
+    assert.match(dashboard, /pesosFromRate\(issueTotal, issueForm\?\.exchangeRate\)/);
+    assert.match(dashboard, /aria-label="Valor en pesos en cartera"/);
+    assert.match(dashboard, /amountCopEdited: true/);
+    // The payload is explicit: no stray form fields reach the server.
+    assert.doesNotMatch(dashboard, /issue`, \{\s*\.\.\.issueForm/);
+    assert.match(dashboard, /\.\.\.issueMoneyPayload\(\)/);
+    // On the card, a dollar account shows its document in USD and its pencil edits the peso value.
+    assert.match(dashboard, /data-receivable-usd-summary/);
+    assert.match(dashboard, /debt\.formattedNumber && debt\.currency !== 'USD'/);
+    const paymentDialog = read('../src/components/modules/financial/ReceivablePaymentDialog.jsx');
+    assert.match(paymentDialog, /Registra los pesos que entraron/);
+});
+
 // Rodny, 30 de septiembre de 2026: «en concepto añadas la barra de formato que hemos
 // estado trabajando, para poder poner viñetas, títulos, negrillas».
 test('the concept is written with the shared formatting bar, without what the PDF cannot draw', () => {
