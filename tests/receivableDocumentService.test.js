@@ -319,6 +319,90 @@ test('un periodo cerrado impide corregir', async () => {
     );
 });
 
+// Cuentas en dólares (Rodny, 30 de septiembre de 2026). El documento va en dólares, pero
+// «en el financiero siempre registramos todo en pesos»: la obligación queda en cartera
+// con su equivalente en pesos por la TRM, editable al valor que de verdad entró.
+const usdInput = (extra = {}) => ({
+    concept: 'Servicios', items: [{ description: 'Fee mensual', amount: 1200 }], servicePeriod: 'Septiembre', issuedAt: '2026-09-30',
+    currency: 'USD', exchangeRate: 3912.45, exchangeRateSource: 'SUPERFINANCIERA_TRM', exchangeRateDate: '2026-09-30', ...extra
+});
+
+test('emitir en dólares deja los conceptos en dólares y la cartera en pesos con la TRM', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable(), highest: 392 });
+    const result = await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', usdInput(), { id: 'user-1' });
+    const update = calls.find(([name]) => name === 'receivable.update')[1].data;
+    assert.equal(update.currency, 'USD');
+    assert.equal(update.amount, 4694940, '1.200 dólares por 3.912,45');
+    assert.equal(update.exchangeRate, 3912.45);
+    assert.equal(update.exchangeRateSource, 'SUPERFINANCIERA_TRM');
+    assert.equal(update.exchangeRateDate, '2026-09-30');
+    assert.deepEqual(calls.find(([name]) => name === 'items.createMany')[1].data.map((line) => line.amount), [1200]);
+    assert.equal(result.document.total, 1200, 'el total del documento sigue en dólares');
+});
+
+test('el valor en pesos se puede escribir a mano al emitir', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable(), highest: 392 });
+    await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', usdInput({ amountCop: 4650000, exchangeRateSource: 'MANUAL' }), { id: 'user-1' });
+    const update = calls.find(([name]) => name === 'receivable.update')[1].data;
+    assert.equal(update.amount, 4650000);
+    assert.equal(update.exchangeRateSource, 'MANUAL');
+});
+
+test('una cuenta en dólares sin TRM no se emite: se pide', async () => {
+    await assert.rejects(
+        issueReceivableDocument({}, 'debt-1', usdInput({ exchangeRate: '' }), { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_EXCHANGE_RATE_REQUIRED' && /TRM/.test(error.message)
+    );
+    await assert.rejects(
+        issueReceivableDocument({}, 'debt-1', usdInput({ amountCop: -5 }), { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_AMOUNT_COP_INVALID'
+    );
+});
+
+test('una cuenta en pesos no guarda TRM aunque llegue una', async () => {
+    const { calls, tx } = buildTx({ receivable: openReceivable(), highest: 392 });
+    await issueReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', {
+        concept: 'Servicios', items, servicePeriod: 'Septiembre', issuedAt: '2026-09-30', currency: 'COP', exchangeRate: 4000
+    }, { id: 'user-1' });
+    const update = calls.find(([name]) => name === 'receivable.update')[1].data;
+    assert.equal(update.currency, 'COP');
+    assert.equal(update.exchangeRate, null);
+    assert.equal(update.amount, 2850000);
+});
+
+test('una moneda que no se maneja se rechaza al emitir y al corregir', async () => {
+    await assert.rejects(
+        issueReceivableDocument({}, 'debt-1', usdInput({ currency: 'EUR' }), { id: 'user-1' }),
+        (error) => error.code === 'RECEIVABLE_CURRENCY_INVALID'
+    );
+    await assert.rejects(
+        correctReceivableDocument({}, 'debt-1', correctionInput({ currency: 'EUR' }), { id: 'user-1' }, pdfRecorder()),
+        (error) => error.code === 'RECEIVABLE_CURRENCY_INVALID'
+    );
+});
+
+test('corregir puede pasar una cuenta de pesos a dólares, con su TRM', async () => {
+    const { calls, tx } = buildTx({ receivable: issuedReceivable() });
+    await correctReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', correctionInput({
+        currency: 'USD', exchangeRate: 4000, exchangeRateSource: 'MANUAL', items: [{ description: 'Fee', amount: 1200 }]
+    }), { id: 'user-1' }, pdfRecorder());
+    const update = calls.find(([name]) => name === 'receivable.update')[1].data;
+    assert.equal(update.currency, 'USD');
+    assert.equal(update.amount, 4800000);
+    assert.equal(update.exchangeRate, 4000);
+});
+
+// Los abonos son pesos que ya entraron: el valor en cartera no puede quedar por debajo.
+test('el valor en pesos de una cuenta en dólares tampoco baja de lo ya abonado', async () => {
+    const { tx } = buildTx({ receivable: issuedReceivable({ payments: [{ amount: 5000000 }] }) });
+    await assert.rejects(
+        correctReceivableDocument({ $transaction: async (callback) => callback(tx) }, 'debt-1', correctionInput({
+            currency: 'USD', exchangeRate: 4000, items: [{ description: 'Fee', amount: 1200 }]
+        }), { id: 'user-1' }, pdfRecorder()),
+        (error) => error.code === 'RECEIVABLE_AMOUNT_BELOW_PAYMENTS'
+    );
+});
+
 test('el motivo de la corrección es opcional pero tiene tope', async () => {
     await assert.rejects(
         correctReceivableDocument({}, 'debt-1', correctionInput({ reason: 'x'.repeat(301) }), { id: 'user-1' }, pdfRecorder()),

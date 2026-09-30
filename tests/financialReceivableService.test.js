@@ -79,6 +79,18 @@ test('una cuenta de cobro emitida no cambia de valor: se dice por dónde salir, 
     assert.equal(notes[0][1].data.comments, 'Cliente confirma pago el viernes');
 });
 
+// Rodny, 30 de septiembre de 2026: en una cuenta en dólares el valor en pesos «obviamente
+// puede ser editado para colocar el valor exacto que terminó ingresando en limpio». No
+// va impreso en el documento —el documento dice dólares—, así que se edita suelto.
+test('el valor en pesos de una cuenta emitida en dólares se edita directamente', async () => {
+    const calls = [];
+    const existing = { id: 'debt-1', amount: 4694940, currency: 'USD', exchangeRate: 3912.45, status: 'DEBE', number: 394, issuedAt: new Date('2026-09-30T12:00:00Z'), metadata: {}, payments: [] };
+    await updateReceivable(makeClient(existing, calls), 'debt-1', { amount: 4650000 }, { id: 'user-1' });
+    assert.equal(Number(calls[0][1].data.amount), 4650000);
+    assert.equal(calls[0][1].data.currency, undefined, 'editar el valor en pesos no toca la moneda del documento');
+    assert.equal(Number(calls[1][1].data.before.amount), 4694940);
+});
+
 test('updateReceivable refuses a manual paid status while a balance remains', async () => {
     const existing = {
         id: 'debt-1', amount: 1000000, status: 'DEBE', metadata: {},

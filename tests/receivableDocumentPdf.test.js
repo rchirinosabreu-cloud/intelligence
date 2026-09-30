@@ -173,6 +173,41 @@ test('el PDF se genera con un concepto con formato', () => {
     assert.equal(buffer.subarray(0, 5).toString('latin1'), '%PDF-');
 });
 
+// Cuentas en dólares (Rodny, 30 de septiembre de 2026): «que diga USD y el valor en letras
+// sea "mil doscientos dólares"». El documento dice dólares aunque la cartera guarde pesos.
+test('una cuenta en dólares dice USD y el importe en dólares, no su valor en pesos', () => {
+    const usd = buildReceivableDocumentModel({
+        ...titanes,
+        currency: 'USD',
+        exchangeRate: 3912.45,
+        amount: 4694940,
+        items: [{ description: 'Fee mensual', amount: 1000 }, { description: 'Pauta', amount: 200 }]
+    });
+    assert.equal(usd.amountInWords, 'MIL DOSCIENTOS DÓLARES');
+    assert.equal(usd.amountInFigures, '(USD 1.200)');
+    assert.equal(usd.total, 1200);
+    assert.equal(usd.currency, 'USD');
+    assert.deepEqual(usd.items.map((item) => item.formatted), ['USD 1.000', 'USD 200']);
+    assert.equal(usd.formattedTotal, 'USD 1.200');
+    // En pesos todo sigue como en la cuenta real 0389.
+    const cop = buildReceivableDocumentModel(titanes);
+    assert.equal(cop.currency, 'COP');
+    assert.equal(cop.amountInWords, 'UN MILLÓN DOSCIENTOS MIL PESOS');
+});
+
+test('la instrucción de pago en dólares se puede configurar aparte', () => {
+    const usd = { ...titanes, currency: 'USD', items: [{ description: 'Fee', amount: 1200 }] };
+    assert.match(buildReceivableDocumentModel(usd).bankLine, /Bancolombia/, 'sin configurar, la misma instrucción de siempre');
+    const configured = buildReceivableDocumentModel(usd, { RECEIVABLE_ISSUER_BANK_LINE_USD: 'Transferencia internacional a la cuenta X.' });
+    assert.equal(configured.bankLine, 'Transferencia internacional a la cuenta X.');
+    assert.match(buildReceivableDocumentModel(titanes, { RECEIVABLE_ISSUER_BANK_LINE_USD: 'X' }).bankLine, /Bancolombia/, 'una cuenta en pesos no la usa');
+});
+
+test('el PDF en dólares se genera', () => {
+    const buffer = generateReceivablePdfBuffer({ ...titanes, currency: 'USD', exchangeRate: 4000, amount: 4800000, items: [{ description: 'Fee', amount: 1200 }] });
+    assert.equal(buffer.subarray(0, 5).toString('latin1'), '%PDF-');
+});
+
 // Con un solo concepto el documento no lleva tabla, como el de Elvira Utria.
 test('la tabla de conceptos solo aparece cuando hay más de uno', () => {
     assert.equal(buildReceivableDocumentModel(titanes).items.length, 2);

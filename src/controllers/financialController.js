@@ -162,6 +162,13 @@ const serializeReceivable = (receivable) => {
         concept: receivable.concept || null,
         servicePeriod: receivable.servicePeriod || null,
         items: (receivable.items || []).map((item) => ({ id: item.id, description: item.description, amount: toNum(item.amount) })),
+        // Moneda del documento. `amount` sigue en pesos: en una cuenta en dólares es su
+        // valor en cartera, y los conceptos y `documentTotal` van en dólares.
+        currency: receivable.currency || 'COP',
+        exchangeRate: receivable.exchangeRate === null || receivable.exchangeRate === undefined ? null : toNum(receivable.exchangeRate),
+        exchangeRateSource: receivable.exchangeRateSource || null,
+        exchangeRateDate: receivable.exchangeRateDate || null,
+        documentTotal: roundFloat((receivable.items || []).reduce((sum, item) => sum + toNum(item.amount), 0)),
         dueDate: receivable.dueDate instanceof Date ? receivable.dueDate.toISOString() : receivable.dueDate,
         status: receivable.status,
         notes: receivable.notes,

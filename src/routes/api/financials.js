@@ -32,6 +32,7 @@ import {
     getFinancialIntegrityAuditHandler,
     issueReceivableDocumentHandler,
     correctReceivableDocumentHandler,
+    getFinancialExchangeRateHandler,
     createFinancialRecordHandler,
     listFinancialAccountsHandler,
     listFinancialPeriodsHandler,
@@ -110,6 +111,8 @@ router.get('/receivables/:id/document', requireFinancialAccess, streamReceivable
 // Corregir una cuenta ya emitida (Rodny, 30 de septiembre de 2026): conserva su número,
 // ajusta conceptos y valor, y rehace el PDF sin borrar el que se había mandado.
 router.put('/receivables/:id/document', requireFinancialWrite, correctReceivableDocumentHandler);
+// TRM oficial para las cuentas de cobro en dólares; la misma fuente que Cotizaciones.
+router.get('/exchange-rate', requireFinancialAccess, getFinancialExchangeRateHandler);
 router.post('/receivables/:id/payments', requireFinancialWrite, createReceivablePaymentHandler);
 // Corregir un abono mal registrado es parte del trabajo diario de quien lo registra:
 // mismo permiso que crearlo, con motivo obligatorio y auditoría.
