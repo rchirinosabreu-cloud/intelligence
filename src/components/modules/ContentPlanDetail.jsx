@@ -8,7 +8,7 @@ import { getContentPlanMonthName } from '@/lib/contentPlanPeriod';
 import { planFinalAssetUpload } from '@/lib/uploadLimits';
 import { driveLinkProblem } from '@/lib/driveLinks';
 import { driveAssetUrls, driveEmbedAspect } from '@/lib/finalAssetShape';
-import { moveAssetId } from '@/lib/finalAssetOrder';
+import { dropSide, finalAssetOrderProblem, moveAssetId, moveAssetToIndex } from '@/lib/finalAssetOrder';
 import { WEEKDAY_LABELS, buildMonthGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
 import {
   ChevronLeft, ChevronRight, Plus, Send, ExternalLink, Save, Trash2,
@@ -192,10 +192,12 @@ const uploadFinalAssetsDirect = async (itemId, files, onProgress) => {
   return data;
 };
 
-const FinalAssetTile = ({ item, asset, isEditing, onDelete, isDeleting, position = null, total = 1, onMove, isMoving = false }) => {
+const FinalAssetTile = ({
+  item, asset, isEditing, onDelete, isDeleting, position = null, total = 1,
+  canDrag = false, isDragged = false, isDragActive = false, isSaving = false, dropMark = null,
+  onDragStart, onDragOver, onDrop, onDragEnd, onKeyMove
+}) => {
   const [previewUrl, setPreviewUrl] = useState(null);
-  // El archivo heredado de las columnas antiguas no tiene fila propia: va siempre primero y no se mueve.
-  const canMove = isEditing && total > 1 && !asset.isLegacy && typeof onMove === 'function';
   // Un enlace de Drive no tiene bytes nuestros: no se pide a la API, se muestra el reproductor de Google.
   const drive = driveAssetUrls(asset);
   const sourceUrl = drive
@@ -227,9 +229,26 @@ const FinalAssetTile = ({ item, asset, isEditing, onDelete, isDeleting, position
   }, [sourceUrl]);
 
   return (
-    <div className="group/asset relative overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 dark:border-white/10 dark:bg-zinc-950">
-      {/* Un reel es vertical: el marco de Drive toma la forma del formato de la pieza, no la de fábrica. */}
-      <div className={drive ? '' : 'aspect-square'} style={drive ? { aspectRatio: driveEmbedAspect(item.format) } : undefined}>
+    <div
+      data-final-asset-tile={asset.id}
+      draggable={canDrag}
+      onDragStart={onDragStart}
+      onDragEnter={onDragOver}
+      onDragOver={onDragOver}
+      onDrop={onDrop}
+      onDragEnd={onDragEnd}
+      title={canDrag ? 'Arrastra para cambiar el orden' : undefined}
+      className={`group/asset relative overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 transition-opacity dark:border-white/10 dark:bg-zinc-950 ${
+        canDrag ? 'cursor-grab active:cursor-grabbing' : ''
+      } ${isDragged ? 'opacity-40' : isSaving ? 'opacity-60' : ''}`}
+    >
+      {/* Un reel es vertical: el marco de Drive toma la forma del formato de la pieza, no la de fábrica.
+          Mientras se arrastra, el contenido no recibe el puntero: un marco de Drive o un video se
+          tragarían el arrastre y no habría dónde soltar. */}
+      <div
+        className={`${drive ? '' : 'aspect-square'} ${isDragActive ? 'pointer-events-none' : ''}`}
+        style={drive ? { aspectRatio: driveEmbedAspect(item.format) } : undefined}
+      >
         {drive ? (
           <iframe
             src={drive.embedUrl}
@@ -239,44 +258,45 @@ const FinalAssetTile = ({ item, asset, isEditing, onDelete, isDeleting, position
             allowFullScreen
             loading="lazy"
           />
-        ) : isImage ? <img src={previewUrl || undefined} alt={asset.name || 'Lámina del carrusel'} className="h-full w-full object-cover" /> : isVideo ? <video src={previewUrl || undefined} className="h-full w-full object-cover" controls preload="metadata" /> : <FileText className="m-auto h-8 w-8 text-zinc-300" />}
+        ) : isImage ? <img src={previewUrl || undefined} alt={asset.name || 'Lámina del carrusel'} draggable={false} className="h-full w-full object-cover" /> : isVideo ? <video src={previewUrl || undefined} className="h-full w-full object-cover" controls preload="metadata" /> : <FileText className="m-auto h-8 w-8 text-zinc-300" />}
       </div>
       {/* Las acciones van sobre la miniatura, no en la línea del nombre: compitiendo por el ancho de
           una tarjeta pequeña, el nombre se recortaba hasta quedarse en una letra suelta
           (Rodny, 25 de septiembre de 2026). Así el nombre se queda con la línea entera. */}
       {/* El orden de los archivos es el orden del carrusel que sale en redes (Rodny, 1 de octubre de
-          2026): el número dice en qué puesto va cada lámina, y al editar se mueve un puesto antes o
-          después. Un archivo reemplazado entra al final; así se devuelve a su sitio sin volver a subir todo. */}
+          2026): el número dice en qué puesto va cada lámina y, al editar, la miniatura se arrastra a
+          su sitio. Hubo dos botones por miniatura y Rodny los devolvió el mismo día («prefiero drag
+          and drop»). El número queda como asidero del teclado: con las flechas se mueve un puesto. */}
       {total > 1 && position !== null && (
-        <div className="absolute left-1.5 top-1.5 flex items-center gap-1">
-          <span data-final-asset-position className="flex h-6 min-w-6 items-center justify-center rounded-lg bg-black/55 px-1.5 text-[11px] font-bold tabular-nums text-white backdrop-blur-sm">
+        canDrag ? (
+          <button
+            type="button"
+            data-final-asset-position
+            data-final-asset-grip={asset.id}
+            onKeyDown={(event) => {
+              const direction = ['ArrowLeft', 'ArrowUp'].includes(event.key) ? -1 : ['ArrowRight', 'ArrowDown'].includes(event.key) ? 1 : 0;
+              if (!direction) return;
+              event.preventDefault();
+              onKeyMove?.(asset.id, direction);
+            }}
+            aria-label={`${asset.name || 'Archivo'}, puesto ${position + 1} de ${total}. Arrastra la miniatura o usa las flechas del teclado para cambiar el orden.`}
+            className="absolute left-1.5 top-1.5 flex h-6 min-w-6 cursor-grab items-center justify-center rounded-lg bg-black/55 px-1.5 text-[11px] font-bold tabular-nums text-white outline-none backdrop-blur-sm focus-visible:ring-2 focus-visible:ring-brand-cyan"
+          >
+            {position + 1}
+          </button>
+        ) : (
+          <span data-final-asset-position className="absolute left-1.5 top-1.5 flex h-6 min-w-6 items-center justify-center rounded-lg bg-black/55 px-1.5 text-[11px] font-bold tabular-nums text-white backdrop-blur-sm">
             {position + 1}
           </span>
-          {canMove && (
-            <>
-              <button
-                type="button"
-                onClick={() => onMove(asset.id, -1)}
-                disabled={isMoving || position === 0}
-                className="rounded-lg bg-black/55 p-1.5 text-white backdrop-blur-sm transition hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label={`Mover antes ${asset.name || 'el archivo'}`}
-                title="Mover antes"
-              >
-                <ChevronLeft className="h-3.5 w-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={() => onMove(asset.id, 1)}
-                disabled={isMoving || position === total - 1}
-                className="rounded-lg bg-black/55 p-1.5 text-white backdrop-blur-sm transition hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-40"
-                aria-label={`Mover después ${asset.name || 'el archivo'}`}
-                title="Mover después"
-              >
-                <ChevronRight className="h-3.5 w-3.5" />
-              </button>
-            </>
-          )}
-        </div>
+        )
+      )}
+
+      {/* Dónde va a quedar: una línea en el lado de la miniatura donde caerá lo que se arrastra. */}
+      {dropMark && (
+        <span
+          data-final-asset-drop-mark={dropMark}
+          className={`pointer-events-none absolute inset-y-0 w-1.5 bg-brand-cyan ${dropMark === 'before' ? 'left-0' : 'right-0'}`}
+        />
       )}
 
       <div className="absolute right-1.5 top-1.5 flex items-center gap-1">
@@ -308,6 +328,114 @@ const FinalAssetTile = ({ item, asset, isEditing, onDelete, isDeleting, position
       <span className="block truncate px-2.5 py-2 text-[11px] font-medium text-zinc-600 dark:text-zinc-300">
         {asset.name || 'Archivo final'}
       </span>
+    </div>
+  );
+};
+
+/**
+ * Las miniaturas de la pieza final, que al editar se ordenan arrastrando (Rodny, 1 de octubre de 2026).
+ *
+ * Es el arrastre del navegador y no `@hello-pangea/dnd`, que solo sabe de listas en una dirección:
+ * esto es una rejilla que da la vuelta. Al soltar, la miniatura se queda en su sitio nuevo atenuada
+ * mientras el servidor guarda; si el servidor dice que no, vuelve a donde estaba y sale el motivo.
+ * El archivo heredado de las columnas antiguas no tiene fila propia: va primero y no se mueve.
+ */
+const FinalAssetGrid = ({ item, finalAssets, isEditing, onDelete, isDeleting, onReorder }) => {
+  const gridRef = useRef(null);
+  const dragIdRef = useRef(null);
+  const [dragId, setDragId] = useState(null);
+  const [overId, setOverId] = useState(null);
+  const [saving, setSaving] = useState(null);
+
+  const legacy = finalAssets.filter(asset => asset.isLegacy);
+  const movable = finalAssets.filter(asset => !asset.isLegacy);
+  const ids = movable.map(asset => asset.id);
+  const canReorder = isEditing && ids.length > 1 && typeof onReorder === 'function';
+  // Si mientras se guardaba alguien añadió o quitó un archivo, el orden pendiente ya no vale.
+  const pending = saving && !finalAssetOrderProblem(ids, saving.order) ? saving : null;
+  const shown = pending
+    ? [...legacy, ...pending.order.map(id => movable.find(asset => asset.id === id))]
+    : finalAssets;
+
+  const focusGrip = (id) => requestAnimationFrame(() => {
+    gridRef.current?.querySelector(`[data-final-asset-grip="${id}"]`)?.focus();
+  });
+
+  const endDrag = () => {
+    dragIdRef.current = null;
+    setDragId(null);
+    setOverId(null);
+  };
+
+  const commit = async (order, movedId, { keepFocus = false } = {}) => {
+    if (order === ids || saving) return;
+    setSaving({ order, movedId });
+    // React recoloca el nodo y el navegador le quita el foco: se le devuelve para seguir con las flechas.
+    if (keepFocus) focusGrip(movedId);
+    try {
+      await onReorder(item.id, order);
+    } catch {
+      // El motivo lo dice quien guarda; aquí la miniatura solo vuelve a su sitio.
+    } finally {
+      setSaving(null);
+      if (keepFocus) focusGrip(movedId);
+    }
+  };
+
+  return (
+    <div
+      ref={gridRef}
+      className="grid grid-cols-2 gap-2.5 sm:grid-cols-3"
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget)) setOverId(null);
+      }}
+    >
+      {shown.map((asset, position) => {
+        const canDrag = canReorder && !asset.isLegacy && !saving;
+        return (
+          <FinalAssetTile
+            key={asset.id}
+            item={item}
+            asset={asset}
+            isEditing={isEditing}
+            onDelete={onDelete}
+            isDeleting={isDeleting}
+            position={position}
+            total={shown.length}
+            canDrag={canDrag}
+            isDragged={dragId === asset.id}
+            isDragActive={Boolean(dragId)}
+            isSaving={pending?.movedId === asset.id}
+            dropMark={overId === asset.id ? dropSide(ids, dragId, overId) : null}
+            onDragStart={canDrag ? (event) => {
+              event.dataTransfer.effectAllowed = 'move';
+              event.dataTransfer.setData('text/plain', asset.name || 'Archivo');
+              dragIdRef.current = asset.id;
+              // Fuera del evento: si la miniatura cambia de aspecto dentro de `dragstart`, Chrome
+              // cancela el arrastre antes de empezar.
+              setTimeout(() => { if (dragIdRef.current === asset.id) setDragId(asset.id); }, 0);
+            } : undefined}
+            onDragOver={canDrag ? (event) => {
+              // Solo cuenta una miniatura de esta rejilla; un archivo traído del escritorio no es esto.
+              // Va en `dragenter` y en `dragover`: el navegador solo deja soltar donde el último de
+              // los dos dijo que sí, y un gesto rápido suelta antes del primer `dragover`.
+              if (!dragIdRef.current) return;
+              event.preventDefault();
+              event.dataTransfer.dropEffect = 'move';
+              if (overId !== asset.id) setOverId(asset.id);
+            } : undefined}
+            onDrop={canDrag ? (event) => {
+              const movedId = dragIdRef.current;
+              if (!movedId) return;
+              event.preventDefault();
+              endDrag();
+              commit(moveAssetToIndex(ids, movedId, ids.indexOf(asset.id)), movedId);
+            } : undefined}
+            onDragEnd={canDrag ? endDrag : undefined}
+            onKeyMove={(assetId, direction) => commit(moveAssetId(ids, assetId, direction), assetId, { keepFocus: true })}
+          />
+        );
+      })}
     </div>
   );
 };
@@ -629,7 +757,6 @@ const ContentItemCard = ({
   isFinalAssetUploading,
   isFinalAssetDeleting,
   onFinalAssetReorder,
-  isFinalAssetMoving = false,
   onDriveLink,
   directUploadPercent,
   socialAccounts = [],
@@ -881,27 +1008,14 @@ const ContentItemCard = ({
             <span className={FIELD_LABEL}>Pieza final</span>
 
             {finalAssets.length > 0 && (
-              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                {finalAssets.map((asset, position) => (
-                  <FinalAssetTile
-                    key={asset.id}
-                    item={item}
-                    asset={asset}
-                    isEditing={isEditing}
-                    onDelete={onFinalAssetDelete}
-                    isDeleting={isFinalAssetDeleting}
-                    position={position}
-                    total={finalAssets.length}
-                    isMoving={isFinalAssetMoving}
-                    onMove={(assetId, direction) => {
-                      // Solo se ordenan los archivos con fila propia; el heredado se queda primero.
-                      const ids = finalAssets.filter(candidate => !candidate.isLegacy).map(candidate => candidate.id);
-                      const next = moveAssetId(ids, assetId, direction);
-                      if (next !== ids) onFinalAssetReorder(item.id, next);
-                    }}
-                  />
-                ))}
-              </div>
+              <FinalAssetGrid
+                item={item}
+                finalAssets={finalAssets}
+                isEditing={isEditing}
+                onDelete={onFinalAssetDelete}
+                isDeleting={isFinalAssetDeleting}
+                onReorder={onFinalAssetReorder}
+              />
             )}
 
             {/* La zona grande es el estado vacío. Con material ya cargado se encoge a una línea: un
@@ -1374,14 +1488,14 @@ const ContentPlanDetail = () => {
     }
   });
 
-  // El orden se guarda en el servidor y la tarjeta lo refleja cuando el servidor confirma, no antes.
+  // La miniatura soltada se queda en su sitio nuevo, atenuada, mientras esto guarda. Se devuelve la
+  // promesa de la recarga para que la espera dure hasta que la parrilla trae el orden del servidor:
+  // si terminara antes, las miniaturas saltarían un instante a su sitio viejo.
   const finalAssetOrderMutation = useMutation({
     mutationFn: async ({ itemId, order }) => (await axios.put(`${getApiBaseUrl()}/api/content/items/${itemId}/final-assets/order`, { order }, {
       headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
     })).data,
-    onSuccess: () => {
-      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
-    },
+    onSuccess: () => queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]),
     onError: (error) => {
       console.error('Error reordering final assets:', error.response?.data || error);
       toast.error(error.response?.data?.error || 'No se pudo guardar el orden');
@@ -1827,8 +1941,7 @@ const ContentPlanDetail = () => {
                 onFinalAssetDelete={handleFinalAssetDelete}
                 isFinalAssetUploading={finalAssetUploadMutation.isPending}
                 isFinalAssetDeleting={finalAssetDeleteMutation.isPending}
-                onFinalAssetReorder={(itemId, order) => finalAssetOrderMutation.mutate({ itemId, order })}
-                isFinalAssetMoving={finalAssetOrderMutation.isPending}
+                onFinalAssetReorder={(itemId, order) => finalAssetOrderMutation.mutateAsync({ itemId, order })}
                 onDriveLink={setDriveLinkItemId}
                 directUploadPercent={finalAssetUploadMutation.variables?.itemId === selectedItem.id ? directUploadPercent : null}
                 socialAccounts={plan?.client?.socialAccounts || []}
