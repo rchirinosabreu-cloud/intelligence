@@ -23,6 +23,12 @@ Rodny, 29 de septiembre de 2026: «quiero reemplazar el trabajo de un community 
 
 En Facebook: foto → `/{page}/photos`, video → `/{page}/videos`, varias fotos → fotos sin publicar + `/{page}/feed` con `attached_media`. Facebook no publica historias por la API.
 
+## PNG y proporción: la plataforma hace lo que hace Business Suite (Rodny, 30 de septiembre de 2026)
+
+El equipo exporta en PNG y publica desde Meta Business Suite, que convierte a JPEG por dentro sin decirlo. La API de Instagram no: solo acepta JPEG ([referencia](https://developers.facebook.com/docs/instagram-platform/instagram-graph-api/reference/ig-user/media)) y a un PNG contesta «Only photo or video can be accepted as media type»; en el feed rechaza además lo que se sale de 4:5–1.91:1. Facebook sí acepta PNG.
+
+Por eso, justo antes de publicar en Instagram, `socialImageDerivativeService.js` prepara **una copia** (`…/final-assets/derived/<id>-instagram.jpg`, junto al original): PNG → JPEG sRGB de calidad 92 con la transparencia en blanco, y si la proporción del feed se sale del rango, **margen blanco hasta el borde más cercano, nunca recorte** (`instagramImagePlan`, regla pura en `src/lib/socialPublishing.js`). Las historias solo cambian de formato. La copia se escribe una vez y se reutiliza; el original de la parrilla no se toca y Facebook recibe el original. Lo hace `sharp`, con binarios precompilados que `npm ci --ignore-scripts` instala sin compilar. Contrato: `tests/socialImageDerivative.test.js` (incluye una conversión real con `sharp`).
+
 Lo que Meta **no** deja hacer por API, y sigue siendo manual: música del catálogo de Instagram, stickers de historias (enlace, encuesta), etiquetar productos. Meta tampoco guarda publicaciones programadas: por eso la hora vive aquí. Límite: 100 publicaciones por cuenta de Instagram cada 24 horas.
 
 ## Lo que hay que configurar fuera de la plataforma
@@ -35,7 +41,6 @@ Lo que Meta **no** deja hacer por API, y sigue siendo manual: música del catál
 ## Lo que todavía no hace (siguiente fase)
 
 - Un **enlace de Drive** como pieza final no se publica solo: Meta no puede descargar de Drive. `schedulingProblems` lo dice al programar. Falta copiar el archivo al almacenamiento justo antes de publicar.
-- Convertir una imagen que no cumpla la proporción del feed o un PNG a JPG; hoy se rechaza antes de gastar la publicación.
 - Programar un mes entero de una vez; hoy es pieza por pieza, a propósito, hasta ver el primer mes publicado.
 - Un interruptor general para pausar el publicador sin tocar el código.
 

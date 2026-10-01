@@ -14,6 +14,7 @@ import { decrypt } from '../utils/encryption.js';
 import { createNotification } from './notificationService.js';
 import { createMetaGraphClient } from './metaGraphService.js';
 import { createSignedDownload } from './s3Service.js';
+import { imageDerivativeService } from './socialImageDerivativeService.js';
 import {
   ACTIVE_PUBLICATION_STATUSES, MAX_PUBLICATION_ATTEMPTS, PUBLICATION_LEASE_MS, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS,
   describeMetaMedia, humanizeMetaError, isPublishInstantTooSoon, isRetryableMetaError, nextPublicationRetryAt, publishAtIso, schedulingProblems
@@ -66,8 +67,16 @@ export const publicSocialAccount = (account) => account && ({
   lastError: account.lastError
 });
 
-const defaultMediaUrlFor = async (asset) => {
-  const key = asset.storageKey || asset.finalAssetKey;
+/**
+ * La URL que se le da a Meta. Para una imagen que va a Instagram, primero se prepara la copia que la
+ * API acepta (JPEG dentro de la proporción del feed); Facebook y los videos reciben el original.
+ */
+const defaultMediaUrlFor = async (asset, { platform, kind } = {}) => {
+  let key = asset.storageKey || asset.finalAssetKey;
+  if (platform === 'INSTAGRAM') {
+    const prepared = await imageDerivativeService.prepareForInstagram(asset, { kind });
+    key = prepared.key;
+  }
   const { url } = await createSignedDownload({ key, expiresIn: MEDIA_URL_TTL_SECONDS });
   return url;
 };
@@ -241,7 +250,7 @@ export const createSocialPublishingService = ({
 
       const media = describeMetaMedia({ format: item.format, assets: item.finalAssets });
       const files = [];
-      for (const asset of media.assets) files.push({ url: await mediaUrlFor(asset), isVideo: isVideoAsset(asset) });
+      for (const asset of media.assets) files.push({ url: await mediaUrlFor(asset, { platform: full.platform, kind: media.kind }), isVideo: isVideoAsset(asset) });
       const token = decryptToken(account.encryptedToken);
       const caption = String(item.captionText || '');
       const result = full.platform === 'INSTAGRAM'

@@ -38,6 +38,30 @@ export const isPublishInstantTooSoon = (publishAt, now = new Date()) => (
 
 export const CAPTION_MAX_CHARS = 2200;
 
+// Proporciones que Instagram acepta en el feed (foto y carrusel): de 4:5 a 1.91:1. Fuera de eso rechaza.
+export const INSTAGRAM_FEED_MIN_RATIO = 0.8;
+export const INSTAGRAM_FEED_MAX_RATIO = 1.91;
+
+/**
+ * Qué hacer con una imagen antes de dársela a Instagram. La API solo acepta JPEG, y en el feed solo
+ * dentro del rango de proporción: lo que no cumple se convierte en una copia (PNG → JPEG) y se le añade
+ * margen —nunca se recorta— hasta el borde más cercano del rango. Historias no tienen regla de proporción.
+ */
+export const instagramImagePlan = ({ mimeType, width, height, kind }) => {
+  const reasons = [];
+  const mime = String(mimeType || '').toLowerCase();
+  if (!/image\/jpe?g/.test(mime)) reasons.push('png');
+  let canvas = null;
+  const feed = kind === 'IMAGE' || kind === 'CAROUSEL';
+  if (feed && width > 0 && height > 0) {
+    const ratio = width / height;
+    if (ratio < INSTAGRAM_FEED_MIN_RATIO) canvas = { width: Math.ceil(height * INSTAGRAM_FEED_MIN_RATIO), height };
+    else if (ratio > INSTAGRAM_FEED_MAX_RATIO) canvas = { width, height: Math.ceil(width / INSTAGRAM_FEED_MAX_RATIO) };
+    if (canvas) reasons.push('ratio');
+  }
+  return { convert: reasons.length > 0, canvas, reasons };
+};
+
 // Límites publicados por Meta para /{ig-user-id}/media (leídos el 29 de septiembre de 2026).
 export const META_IMAGE_MAX_BYTES = 8 * MB;
 export const META_REEL_MAX_BYTES = 300 * MB;
