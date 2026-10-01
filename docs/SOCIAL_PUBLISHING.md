@@ -43,7 +43,7 @@ La primera versión traía dos botones por miniatura («Mover antes» / «Mover 
 
 Cambiar un archivo **no** exige cancelar la programación: basta con que el correcto esté cargado a la hora. Para ganar tiempo se mueve la hora de la pieza (la cola la sigue) o se pulsa «Cancelar» en la fila de la red.
 
-Lo que Meta **no** deja hacer por API, y sigue siendo manual: música del catálogo de Instagram, stickers de historias (enlace, encuesta), etiquetar productos. Meta tampoco guarda publicaciones programadas: por eso la hora vive aquí. Límite: 100 publicaciones por cuenta de Instagram cada 24 horas.
+Lo que Meta **no** deja hacer por API, y sigue siendo manual: música del catálogo de Instagram, stickers de historias (enlace, encuesta), etiquetar productos. **Instagram** tampoco guarda publicaciones programadas por la API (Facebook sí, ver arriba «El calendario de Meta»; hoy no se usa): por eso la hora vive aquí. Límite: 100 publicaciones por cuenta de Instagram cada 24 horas.
 
 ## Lo que hay que configurar fuera de la plataforma
 
