@@ -39,6 +39,30 @@ export const splitBalance = (parts = [], paymentAmount) => {
     return { partsCents, diffCents, ready: complete && diffCents === 0 };
 };
 
+/**
+ * El pago de nómina de un movimiento, para actuar sobre él desde Movimientos (Rodny, 1 de
+ * octubre de 2026: «no debería entonces mejor poder desglosar desde movimiento mismo?»).
+ * Nómina abre en el mes actual y el pago suele ser del mes anterior, así que mandar a la
+ * persona allá era mandarla a buscar. Null si el movimiento no es un pago de nómina vigente.
+ */
+export const payrollPaymentFromRecord = (record) => {
+    if (!record?.payrollPayment?.id || record.status === 'VOIDED') return null;
+    return {
+        id: record.payrollPayment.id,
+        amount: Number(record.amount),
+        paidAt: record.date,
+        accountId: record.accountId || null,
+        accountName: record.account?.name || null,
+        reference: record.reference || null,
+        notes: record.notes || null,
+        financialRecordId: record.id,
+        // Solo se desglosa lo que creó la plataforma; un adelanto registrado a mano se revierte.
+        canSplit: record.origin === 'SYSTEM',
+        reversedAt: null,
+        documents: (record.documents || []).filter((document) => !document.voidedAt)
+    };
+};
+
 /** El aviso que se da antes de subir un comprobante que el servidor va a rechazar. */
 export const payrollDocumentProblem = (file) => {
     if (!file) return null;

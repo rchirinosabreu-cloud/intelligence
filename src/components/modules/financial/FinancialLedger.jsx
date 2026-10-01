@@ -8,6 +8,8 @@ import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import MoneyInput from '@/components/ui/MoneyInput';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import FinancialDocumentGallery, { DocumentCard, ROW_DOCUMENT_LIMIT } from '@/components/modules/financial/FinancialDocumentGallery';
+import { PayrollPaymentPanel } from '@/components/modules/financial/PayrollPayments';
+import { payrollPaymentFromRecord } from '@/lib/payrollPayments';
 import {
     Dialog,
     DialogContent,
@@ -53,7 +55,9 @@ const categoryLabel = financialCategoryLabel;
 // servidor lo rechace con un error después de escribir el motivo.
 const lockReason = (record) => {
     if (record?.receivablePayment) return 'Es el ingreso de un abono de cartera. Para deshacerlo ve a Cartera, abre la obligación del cliente y usa «Revertir» en ese abono: este movimiento se anulará solo.';
-    if (record?.payrollPayment || record?.payrollTransaction) return 'Es un pago de nómina. Se corrige en Nómina Operativa, en la liquidación de esa persona: ahí se le sube el comprobante, se cambia la referencia, se usa «Desglosar» para repartirlo en varios pagos o «Revertir» para deshacerlo.';
+    // Con su pago de nómina a la mano, el lápiz abre sus acciones aquí mismo; esto solo queda
+    // para un pago antiguo que todavía no tenga su fila de pago.
+    if (record?.payrollPayment || record?.payrollTransaction) return 'Es un pago de nómina. Se corrige en Nómina Operativa: elige arriba el mes de esa liquidación y búscalo debajo de la persona para desglosarlo, subirle el comprobante, cambiar la referencia o revertirlo.';
     if (record?.bankMatches?.length) return 'Tiene una conciliación bancaria aprobada. Primero hay que deshacer esa conciliación.';
     if (record?.origin === 'SYSTEM') return 'Lo generó otro proceso de la plataforma, no se registró a mano. Se corrige desde donde se originó.';
     return null;
@@ -152,6 +156,8 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
     const [isVoidingDocument, setIsVoidingDocument] = useState(false);
     const [documentPreview, setDocumentPreview] = useState(null);
     const [documentGallery, setDocumentGallery] = useState(null);
+    // El pago de nómina cuyas acciones están abiertas desde Movimientos (1 de octubre de 2026).
+    const [payrollPanelPayment, setPayrollPanelPayment] = useState(null);
     const documentInputRef = useRef(null);
     const [isAccountEditorOpen, setIsAccountEditorOpen] = useState(false);
     const [accountForm, setAccountForm] = useState(() => emptyAccountForm(selectedYear));
@@ -769,6 +775,25 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                                         <td className="p-3 text-xs text-zinc-500">{record.origin === 'IMPORT' ? 'Importado' : 'Manual'}</td>
                                         <td className={cn('p-3 text-right font-semibold', record.type === 'INCOME' ? 'text-emerald-600' : 'text-rose-600')}>{record.type === 'INCOME' ? '+' : '-'} {formatCurrency(Number(record.amount))}</td>
                                         <td className="p-3">{canWrite && (() => {
+                                            // Un pago de nómina se corrige desde aquí mismo (Rodny, 1 de octubre de
+                                            // 2026): el lápiz y el botón de anular abren sus acciones.
+                                            const payrollPayment = payrollPaymentFromRecord(record);
+                                            if (payrollPayment) {
+                                                return (
+                                                    <div className="flex justify-end gap-1">
+                                                        <button type="button" title="Desglosar, subir comprobantes o cambiar la referencia" aria-label="Acciones del pago de nómina"
+                                                            onClick={() => setPayrollPanelPayment(payrollPayment)}
+                                                            className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-primary dark:hover:bg-white/10">
+                                                            <Edit className="h-4 w-4" />
+                                                        </button>
+                                                        <button type="button" title="Revertir el pago de nómina" aria-label="Revertir el pago de nómina"
+                                                            onClick={() => setPayrollPanelPayment(payrollPayment)}
+                                                            className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-destructive/10 hover:text-destructive">
+                                                            <StopCircle className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            }
                                             const locked = lockReason(record);
                                             const explain = () => toast(locked, { duration: 9000, icon: '🔒' });
                                             return (
@@ -968,6 +993,14 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                     )}
                 </DialogContent>
             </Dialog>
+
+            {payrollPanelPayment && (
+                <PayrollPaymentPanel payment={payrollPanelPayment} accounts={accounts} formatCurrency={formatCurrency}
+                    canApprove={canApprove} canWrite={canWrite}
+                    onClose={() => setPayrollPanelPayment(null)}
+                    onChanged={async (message) => { await refreshFinancialData(); toast.success(message); }}
+                    onError={(message) => toast.error(message)} />
+            )}
 
             {documentGallery && (
                 <FinancialDocumentGallery

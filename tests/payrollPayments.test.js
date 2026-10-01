@@ -8,7 +8,7 @@ import {
     updatePayrollPayment
 } from '../src/services/financialPayrollService.js';
 import { financialRecordLockReason } from '../src/services/financialRecordService.js';
-import { initialSplitParts, payrollDocumentProblem, payrollStatus, splitBalance } from '../src/lib/payrollPayments.js';
+import { initialSplitParts, payrollDocumentProblem, payrollPaymentFromRecord, payrollStatus, splitBalance } from '../src/lib/payrollPayments.js';
 import fs from 'node:fs';
 
 // Pagos de nómina por partes (Rodny, 30 de septiembre de 2026): «ese pago se hizo el 15 y el
@@ -247,8 +247,9 @@ test('la referencia y la nota de un pago se corrigen sin tocar el dinero', async
 
 test('en Movimientos, un pago de nómina dice dónde se parte y dónde se suben sus comprobantes', () => {
     const reason = financialRecordLockReason({ payrollPayment: { id: 'p-1' } });
-    assert.match(reason, /Nómina/);
-    assert.match(reason, /Desglosar/);
+    assert.match(reason, /lápiz de este mismo movimiento/, 'primero lo que tiene a la mano');
+    assert.match(reason, /Nómina Operativa, eligiendo arriba el mes/, 'y Nómina con el mes, que abre en el actual');
+    assert.match(reason, /desglosarlo/);
     assert.match(reason, /comprobante/);
 });
 
@@ -291,4 +292,30 @@ test('la Nómina ofrece pagar por partes, desglosar con documentos de respaldo, 
     const dashboard = fs.readFileSync(new URL('../src/components/modules/FinancialDashboard.jsx', import.meta.url), 'utf8');
     assert.match(dashboard, /<PayrollPaymentList/);
     assert.match(dashboard, /<PayrollPaymentDialog/);
+});
+
+// Rodny, 1 de octubre de 2026: «me voy a nómina y no veo esa opción... no debería entonces mejor
+// poder desglosar desde movimiento mismo?». Nómina abre en el mes actual y el pago era de
+// septiembre. El lápiz del movimiento abre ahora las acciones de su pago de nómina.
+test('un movimiento de nómina se convierte en su pago para actuar desde Movimientos', () => {
+    const record = {
+        id: 'rec-1', amount: '4808300', date: '2026-09-30T12:00:00.000Z', accountId: 'acc-1', origin: 'SYSTEM',
+        reference: 'TRX', notes: null, payrollPayment: { id: 'payroll-payment-legacy:tx-1' },
+        documents: [{ id: 'd1', name: 'a.pdf', mimeType: 'application/pdf', size: 10 }, { id: 'd2', name: 'b.pdf', voidedAt: '2026-09-30', size: 5 }],
+        account: { id: 'acc-1', name: 'Bancolombia ahorros' }
+    };
+    const payment = payrollPaymentFromRecord(record);
+    assert.equal(payment.id, 'payroll-payment-legacy:tx-1');
+    assert.equal(payment.amount, 4808300);
+    assert.equal(payment.financialRecordId, 'rec-1');
+    assert.equal(payment.accountName, 'Bancolombia ahorros');
+    assert.equal(payment.canSplit, true);
+    assert.deepEqual(payment.documents.map((document) => document.id), ['d1'], 'los anulados no se ofrecen');
+    assert.equal(payrollPaymentFromRecord({ ...record, origin: 'MANUAL' }).canSplit, false, 'un adelanto registrado a mano no se desglosa aquí');
+    assert.equal(payrollPaymentFromRecord({ ...record, payrollPayment: null }), null);
+    assert.equal(payrollPaymentFromRecord({ ...record, status: 'VOIDED' }), null);
+
+    const ledger = fs.readFileSync(new URL('../src/components/modules/financial/FinancialLedger.jsx', import.meta.url), 'utf8');
+    assert.match(ledger, /payrollPaymentFromRecord\(record\)/);
+    assert.match(ledger, /<PayrollPaymentPanel/);
 });

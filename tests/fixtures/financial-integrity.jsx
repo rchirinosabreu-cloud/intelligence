@@ -28,6 +28,11 @@ const income = () => records.filter(record => record.type === 'INCOME').reduce((
 // El ingreso que generó un abono: no se edita ni se anula desde Movimientos.
 records[1] = { ...records[1], amount: 400000, origin: 'SYSTEM', description: 'Pago de cartera: Cliente de muestra', attachmentUrl: 'https://example.invalid/soporte.pdf', receivablePayment: { id: 'historical-payment', receivableId: debt.id } };
 records[2] = { ...records[2], attachmentUrl: 'javascript:alert(1)' };
+// ?payrollRecord: el egreso del pago de nómina de Rodny en el libro, para actuar sobre él
+// desde Movimientos (1 de octubre de 2026). Fuera de esa URL el libro no cambia.
+if (new URLSearchParams(location.search).has('payrollRecord')) {
+  records.unshift({ id: 'rec-payroll-legacy', date: '2026-09-30T12:00:00Z', year: 2026, month: 9, amount: 4808300, type: 'EXPENSE', category: 'NOMINA', status: 'POSTED', scenario: 'ACTUAL', origin: 'SYSTEM', description: 'Pago de nomina: Rodny Chirinos', accountId: account.id, account, reference: null, documents: [], payrollPayment: { id: 'payroll-payment-legacy:tx-rodny' } });
+}
 if (!debt.balanceReviewRequired) debt.payments = [{ id: 'historical-payment', amount: 400000, paidAt: '2026-09-01T05:00:00Z', reference: 'ABONO-01', notes: 'Pagó la mitad; el resto queda para el 15 de octubre.', account, financialRecord: records[1] }];
 // Un PDF de una página, válido de verdad: el visor de la plataforma lo renderiza con
 // pdf.js, así que unos bytes inventados no probarían nada.

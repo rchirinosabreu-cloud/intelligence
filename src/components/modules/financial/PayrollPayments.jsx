@@ -380,7 +380,7 @@ function EditDialog({ payment, onClose, onSaved }) {
 }
 
 /** Los pagos de una liquidación, debajo de su fila en Nómina Operativa. */
-export function PayrollPaymentList({ transaction, accounts = [], formatCurrency, canApprove, canWrite, onChanged, onError }) {
+export function PayrollPaymentList({ transaction, accounts = [], formatCurrency, canApprove, canWrite, onChanged, onError, inlineActions = false }) {
     const [dialog, setDialog] = useState(null);
     const [showReversed, setShowReversed] = useState(false);
     const [uploadingFor, setUploadingFor] = useState('');
@@ -469,8 +469,17 @@ export function PayrollPaymentList({ transaction, accounts = [], formatCurrency,
                                 </>
                             )}
                         </div>
+                        {/* Desde Movimientos las acciones van a la vista, no escondidas en «⋯»:
+                            la persona llegó justo a hacer una de ellas. */}
+                        {inlineActions && (canWrite || canApprove) && (
+                            <div className="flex flex-wrap gap-2 pt-2" data-payroll-inline-actions>
+                                {canApprove && payment.canSplit && <button type="button" onClick={() => setDialog({ kind: 'split', payment })} className="inline-flex min-h-10 items-center rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90">Desglosar pago</button>}
+                                {canWrite && <button type="button" onClick={() => setDialog({ kind: 'edit', payment })} className="inline-flex min-h-10 items-center rounded-lg border border-zinc-200 px-3 text-sm font-medium text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Editar referencia</button>}
+                                {canApprove && <button type="button" onClick={() => setDialog({ kind: 'reverse', payment })} className="inline-flex min-h-10 items-center rounded-lg px-3 text-sm font-medium text-destructive brain-destructive-text hover:bg-destructive/10">Revertir</button>}
+                            </div>
+                        )}
                       </div>
-                        {(canWrite || canApprove) && (
+                        {!inlineActions && (canWrite || canApprove) && (
                             <DropdownMenu>
                                 <DropdownMenuTrigger asChild>
                                     <button type="button" aria-label={`Acciones del pago de ${formatCurrency(payment.amount)}`} className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/10"><MoreHorizontal className="h-4 w-4" /></button>
@@ -511,5 +520,27 @@ export function PayrollPaymentList({ transaction, accounts = [], formatCurrency,
                     onDownload={() => openDocument(preview.payment, preview.document, true)} />
             )}
         </div>
+    );
+}
+
+// Las acciones de un pago de nómina desde Movimientos (Rodny, 1 de octubre de 2026: «me voy a
+// nómina y no veo esa opción... no debería entonces mejor poder desglosar desde movimiento
+// mismo?»). Nómina abre en el mes actual y el pago suele ser de la liquidación anterior, así
+// que el lápiz del movimiento abre aquí lo mismo que la fila de Nómina: desglosar, subir
+// comprobantes, cambiar la referencia o revertir. Cualquier cambio cierra el panel y refresca
+// el libro, porque el movimiento que se ve aquí puede dejar de existir (desglosado o revertido).
+export function PayrollPaymentPanel({ payment, accounts = [], formatCurrency, canApprove, canWrite, onClose, onChanged, onError }) {
+    return (
+        <Dialog open onOpenChange={(open) => { if (!open) onClose(); }}>
+            <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-2xl dark:bg-zinc-900">
+                <DialogHeader>
+                    <DialogTitle>Pago de nómina</DialogTitle>
+                    <DialogDescription>Lo generó la nómina, así que su valor no se edita a mano. Aquí lo desglosas en los pagos que de verdad se hicieron, le subes los comprobantes, cambias la referencia o lo reviertes.</DialogDescription>
+                </DialogHeader>
+                <PayrollPaymentList transaction={{ payments: [payment] }} accounts={accounts} formatCurrency={formatCurrency}
+                    canApprove={canApprove} canWrite={canWrite} inlineActions
+                    onChanged={async (message) => { onClose(); await onChanged(message); }} onError={onError} />
+            </DialogContent>
+        </Dialog>
     );
 }
