@@ -1,12 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { dropSide, finalAssetOrderProblem, moveAssetId, moveAssetToIndex } from '../src/lib/finalAssetOrder.js';
+import * as finalAssetOrder from '../src/lib/finalAssetOrder.js';
 import { reorderContentItemFinalAssets } from '../src/services/finalAssetOrderService.js';
+
+const { finalAssetOrderProblem, moveAssetId, moveAssetToIndex } = finalAssetOrder;
 
 // Rodny, 1 October 2026: the order of the files of a piece is the order of the carousel that goes out,
 // and a replaced image landed last. «Sí, añade lo del orden.» The first version had two buttons per
-// thumbnail and he sent it back the same day: «no me gusta así, prefiero drag and drop».
+// thumbnail and he sent it back the same day: «no me gusta así, prefiero drag and drop». The second
+// one marked the landing place with a cyan line and he sent that back too: «no quiero que salga ese
+// borde azul sino que al hacer drag, se reorganice de una vez hasta que yo la suelte», like the task board.
 
 test('dropping a file on another one puts it in that place and shifts the rest', () => {
   const ids = ['a', 'b', 'c', 'd'];
@@ -20,13 +24,20 @@ test('dropping a file on another one puts it in that place and shifts the rest',
   assert.deepEqual(ids, ['a', 'b', 'c', 'd'], 'never a mutation');
 });
 
-test('the mark of where the file will land is on the side it will end up', () => {
-  const ids = ['a', 'b', 'c', 'd'];
-  assert.equal(dropSide(ids, 'a', 'c'), 'after');
-  assert.equal(dropSide(ids, 'd', 'b'), 'before');
-  assert.equal(dropSide(ids, 'b', 'b'), null, 'over itself there is nothing to mark');
-  assert.equal(dropSide(ids, 'a', 'legacy'), null, 'the inherited file is not a place to drop');
-  assert.equal(dropSide(ids, null, 'b'), null);
+test('while dragging, every thumbnail the pointer crosses makes room on top of the order already shown', () => {
+  // The grid applies each crossing to the order it is showing, not to the saved one.
+  let shown = ['a', 'b', 'c', 'd'];
+  shown = moveAssetToIndex(shown, 'a', shown.indexOf('b'));
+  assert.deepEqual(shown, ['b', 'a', 'c', 'd']);
+  shown = moveAssetToIndex(shown, 'a', shown.indexOf('c'));
+  assert.deepEqual(shown, ['b', 'c', 'a', 'd']);
+  shown = moveAssetToIndex(shown, 'a', shown.indexOf('b'));
+  assert.deepEqual(shown, ['a', 'b', 'c', 'd'], 'going back over the same thumbnails undoes it');
+  assert.equal(moveAssetToIndex(shown, 'a', shown.indexOf('legacy')), shown, 'the inherited file is not a place to land');
+});
+
+test('there is no landing mark any more', () => {
+  assert.equal(finalAssetOrder.dropSide, undefined);
 });
 
 test('moving a file one place swaps it with its neighbour and never falls off the ends', () => {
@@ -87,6 +98,12 @@ test('the route, the card and the publisher agree on the order', () => {
   assert.match(card, /onDragStart=/);
   assert.match(card, /onDrop=/);
   assert.doesNotMatch(card, /Mover antes|Mover después/);
+  // The thumbnails rearrange while dragging, as the cards of the task board do; no landing mark.
+  assert.match(card, /setPreview\(/);
+  assert.doesNotMatch(card, /data-final-asset-drop-mark|dropSide/);
+  // The ones that make room slide to their new place, unless the person asked for less motion.
+  assert.match(card, /\.animate\(/);
+  assert.match(card, /prefers-reduced-motion/);
   // An image is draggable by itself: without this the browser drags the picture, not the thumbnail.
   assert.match(card, /<img[^>]*draggable=\{false\}/);
   // Whoever cannot drag moves it with the arrow keys from the position badge.

@@ -7,9 +7,10 @@
  */
 
 /**
- * Soltar un archivo sobre el puesto de otro: ocupa ese puesto y los demás se corren. Arrastrado hacia
- * adelante queda después del que estaba ahí; hacia atrás, antes. Si no cambia nada devuelve el mismo
- * arreglo, para que quien llama no guarde un orden idéntico.
+ * Llevar un archivo al puesto de otro: ocupa ese puesto y los demás se corren. Arrastrado hacia
+ * adelante queda después del que estaba ahí; hacia atrás, antes. La rejilla lo aplica en cada
+ * miniatura que cruza el puntero, sobre el orden que ya está mostrando. Si no cambia nada devuelve
+ * el mismo arreglo, para que quien llama no repinte ni guarde un orden idéntico.
  */
 export const moveAssetToIndex = (ids, id, toIndex) => {
   const from = ids.indexOf(id);
@@ -18,14 +19,6 @@ export const moveAssetToIndex = (ids, id, toIndex) => {
   next.splice(from, 1);
   next.splice(toIndex, 0, id);
   return next;
-};
-
-/** De qué lado de la miniatura de destino va la marca: el lado donde quedará lo que se arrastra. */
-export const dropSide = (ids, draggedId, overId) => {
-  const from = ids.indexOf(draggedId);
-  const to = ids.indexOf(overId);
-  if (from < 0 || to < 0 || from === to) return null;
-  return from < to ? 'after' : 'before';
 };
 
 /** Con el teclado: un puesto antes (-1) o después (+1). Devuelve un arreglo nuevo si cambia algo. */

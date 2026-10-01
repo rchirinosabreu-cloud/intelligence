@@ -8,7 +8,7 @@ import { getContentPlanMonthName } from '@/lib/contentPlanPeriod';
 import { planFinalAssetUpload } from '@/lib/uploadLimits';
 import { driveLinkProblem } from '@/lib/driveLinks';
 import { driveAssetUrls, driveEmbedAspect } from '@/lib/finalAssetShape';
-import { dropSide, finalAssetOrderProblem, moveAssetId, moveAssetToIndex } from '@/lib/finalAssetOrder';
+import { finalAssetOrderProblem, moveAssetId, moveAssetToIndex } from '@/lib/finalAssetOrder';
 import { WEEKDAY_LABELS, buildMonthGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
 import {
   ChevronLeft, ChevronRight, Plus, Send, ExternalLink, Save, Trash2,
@@ -194,8 +194,8 @@ const uploadFinalAssetsDirect = async (itemId, files, onProgress) => {
 
 const FinalAssetTile = ({
   item, asset, isEditing, onDelete, isDeleting, position = null, total = 1,
-  canDrag = false, isDragged = false, isDragActive = false, isSaving = false, dropMark = null,
-  onDragStart, onDragOver, onDrop, onDragEnd, onKeyMove
+  canDrag = false, isDragged = false, isDragActive = false, isSaving = false,
+  onDragStart, onDragOver, onDragEnd, onKeyMove
 }) => {
   const [previewUrl, setPreviewUrl] = useState(null);
   // Un enlace de Drive no tiene bytes nuestros: no se pide a la API, se muestra el reproductor de Google.
@@ -235,12 +235,11 @@ const FinalAssetTile = ({
       onDragStart={onDragStart}
       onDragEnter={onDragOver}
       onDragOver={onDragOver}
-      onDrop={onDrop}
       onDragEnd={onDragEnd}
       title={canDrag ? 'Arrastra para cambiar el orden' : undefined}
       className={`group/asset relative overflow-hidden rounded-xl border border-zinc-200 bg-zinc-100 transition-opacity dark:border-white/10 dark:bg-zinc-950 ${
         canDrag ? 'cursor-grab active:cursor-grabbing' : ''
-      } ${isDragged ? 'opacity-40' : isSaving ? 'opacity-60' : ''}`}
+      } ${isDragged ? 'opacity-30' : isSaving ? 'opacity-60' : ''}`}
     >
       {/* Un reel es vertical: el marco de Drive toma la forma del formato de la pieza, no la de fábrica.
           Mientras se arrastra, el contenido no recibe el puntero: un marco de Drive o un video se
@@ -266,7 +265,8 @@ const FinalAssetTile = ({
       {/* El orden de los archivos es el orden del carrusel que sale en redes (Rodny, 1 de octubre de
           2026): el número dice en qué puesto va cada lámina y, al editar, la miniatura se arrastra a
           su sitio. Hubo dos botones por miniatura y Rodny los devolvió el mismo día («prefiero drag
-          and drop»). El número queda como asidero del teclado: con las flechas se mueve un puesto. */}
+          and drop»). El número queda como asidero del teclado: con las flechas se mueve un puesto.
+          Mientras se arrastra, la miniatura atenuada es el hueco donde va a quedar. */}
       {total > 1 && position !== null && (
         canDrag ? (
           <button
@@ -289,14 +289,6 @@ const FinalAssetTile = ({
             {position + 1}
           </span>
         )
-      )}
-
-      {/* Dónde va a quedar: una línea en el lado de la miniatura donde caerá lo que se arrastra. */}
-      {dropMark && (
-        <span
-          data-final-asset-drop-mark={dropMark}
-          className={`pointer-events-none absolute inset-y-0 w-1.5 bg-brand-cyan ${dropMark === 'before' ? 'left-0' : 'right-0'}`}
-        />
       )}
 
       <div className="absolute right-1.5 top-1.5 flex items-center gap-1">
@@ -332,30 +324,76 @@ const FinalAssetTile = ({
   );
 };
 
+/** Dónde está cada miniatura dentro de la rejilla. `offsetLeft`/`offsetTop` no ven ni el scroll ni un deslizamiento a medias. */
+const measureTilePlaces = (grid) => {
+  const places = new Map();
+  grid?.querySelectorAll('[data-final-asset-tile]').forEach((node) => {
+    places.set(node.dataset.finalAssetTile, { left: node.offsetLeft, top: node.offsetTop, node });
+  });
+  return places;
+};
+
 /**
  * Las miniaturas de la pieza final, que al editar se ordenan arrastrando (Rodny, 1 de octubre de 2026).
+ *
+ * Se comporta como las tarjetas del tablero de Gestión: mientras se arrastra, las demás se corren
+ * para abrirle el hueco y lo que se ve es lo que queda al soltar. Hubo una línea cian que marcaba
+ * dónde iba a caer y Rodny la devolvió el mismo día («no quiero que salga ese borde azul sino que
+ * al hacer drag, se reorganice de una vez hasta que yo la suelte»): no reponerla.
  *
  * Es el arrastre del navegador y no `@hello-pangea/dnd`, que solo sabe de listas en una dirección:
  * esto es una rejilla que da la vuelta. Al soltar, la miniatura se queda en su sitio nuevo atenuada
  * mientras el servidor guarda; si el servidor dice que no, vuelve a donde estaba y sale el motivo.
+ * Soltar fuera de la rejilla, o pulsar Escape, lo deja todo como estaba.
  * El archivo heredado de las columnas antiguas no tiene fila propia: va primero y no se mueve.
  */
 const FinalAssetGrid = ({ item, finalAssets, isEditing, onDelete, isDeleting, onReorder }) => {
   const gridRef = useRef(null);
   const dragIdRef = useRef(null);
+  const previewRef = useRef(null);
+  const placesRef = useRef(new Map());
+  const slidesRef = useRef(new Map());
+  const slideNextRef = useRef(false);
   const [dragId, setDragId] = useState(null);
-  const [overId, setOverId] = useState(null);
+  const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(null);
 
   const legacy = finalAssets.filter(asset => asset.isLegacy);
   const movable = finalAssets.filter(asset => !asset.isLegacy);
   const ids = movable.map(asset => asset.id);
   const canReorder = isEditing && ids.length > 1 && typeof onReorder === 'function';
-  // Si mientras se guardaba alguien añadió o quitó un archivo, el orden pendiente ya no vale.
+  // Si mientras se arrastraba o se guardaba alguien añadió o quitó un archivo, ese orden ya no vale.
   const pending = saving && !finalAssetOrderProblem(ids, saving.order) ? saving : null;
-  const shown = pending
-    ? [...legacy, ...pending.order.map(id => movable.find(asset => asset.id === id))]
+  const live = !pending && preview && !finalAssetOrderProblem(ids, preview) ? preview : null;
+  const shownOrder = pending?.order || live;
+  const shown = shownOrder
+    ? [...legacy, ...shownOrder.map(id => movable.find(asset => asset.id === id))]
     : finalAssets;
+  const orderKey = shown.map(asset => asset.id).join('|');
+
+  // Las que hacen sitio se deslizan a su puesto nuevo en vez de saltar. La que se arrastra no: ya
+  // está en su hueco. Solo se anima un cambio de orden que hizo la persona, nunca una recarga.
+  useLayoutEffect(() => {
+    const before = placesRef.current;
+    const after = measureTilePlaces(gridRef.current);
+    placesRef.current = after;
+    const slide = slideNextRef.current;
+    slideNextRef.current = false;
+    if (!slide || window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+    after.forEach((place, id) => {
+      const from = before.get(id);
+      if (!from || id === dragIdRef.current || (from.left === place.left && from.top === place.top)) return;
+      slidesRef.current.get(id)?.cancel();
+      const motion = place.node.animate(
+        [{ transform: `translate(${from.left - place.left}px, ${from.top - place.top}px)` }, { transform: 'translate(0px, 0px)' }],
+        { duration: 180, easing: 'cubic-bezier(0.2, 0, 0, 1)' }
+      );
+      slidesRef.current.set(id, motion);
+      const settle = () => { if (slidesRef.current.get(id) === motion) slidesRef.current.delete(id); };
+      motion.onfinish = settle;
+      motion.oncancel = settle;
+    });
+  }, [orderKey]);
 
   const focusGrip = (id) => requestAnimationFrame(() => {
     gridRef.current?.querySelector(`[data-final-asset-grip="${id}"]`)?.focus();
@@ -363,12 +401,15 @@ const FinalAssetGrid = ({ item, finalAssets, isEditing, onDelete, isDeleting, on
 
   const endDrag = () => {
     dragIdRef.current = null;
+    previewRef.current = null;
     setDragId(null);
-    setOverId(null);
+    setPreview(null);
   };
 
   const commit = async (order, movedId, { keepFocus = false } = {}) => {
-    if (order === ids || saving) return;
+    if (saving || order.join('|') === ids.join('|')) return;
+    placesRef.current = measureTilePlaces(gridRef.current);
+    slideNextRef.current = true;
     setSaving({ order, movedId });
     // React recoloca el nodo y el navegador le quita el foco: se le devuelve para seguir con las flechas.
     if (keepFocus) focusGrip(movedId);
@@ -376,18 +417,37 @@ const FinalAssetGrid = ({ item, finalAssets, isEditing, onDelete, isDeleting, on
       await onReorder(item.id, order);
     } catch {
       // El motivo lo dice quien guarda; aquí la miniatura solo vuelve a su sitio.
+      slideNextRef.current = true;
     } finally {
       setSaving(null);
       if (keepFocus) focusGrip(movedId);
     }
   };
 
+  // El navegador solo deja soltar donde el último `dragenter` o `dragover` dijo que sí, y un gesto
+  // rápido suelta antes del primer `dragover`: por eso van los dos, en la miniatura y en la rejilla
+  // (el hueco entre dos miniaturas también es un sitio válido para soltar).
+  const allowDrop = (event) => {
+    // Solo cuenta una miniatura de esta rejilla; un archivo traído del escritorio no es esto.
+    if (!dragIdRef.current) return false;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'move';
+    return true;
+  };
+
   return (
     <div
       ref={gridRef}
       className="grid grid-cols-2 gap-2.5 sm:grid-cols-3"
-      onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget)) setOverId(null);
+      onDragEnter={allowDrop}
+      onDragOver={allowDrop}
+      onDrop={(event) => {
+        const movedId = dragIdRef.current;
+        if (!movedId) return;
+        event.preventDefault();
+        const order = previewRef.current || ids;
+        endDrag();
+        commit(order, movedId);
       }}
     >
       {shown.map((asset, position) => {
@@ -406,32 +466,35 @@ const FinalAssetGrid = ({ item, finalAssets, isEditing, onDelete, isDeleting, on
             isDragged={dragId === asset.id}
             isDragActive={Boolean(dragId)}
             isSaving={pending?.movedId === asset.id}
-            dropMark={overId === asset.id ? dropSide(ids, dragId, overId) : null}
             onDragStart={canDrag ? (event) => {
               event.dataTransfer.effectAllowed = 'move';
               event.dataTransfer.setData('text/plain', asset.name || 'Archivo');
               dragIdRef.current = asset.id;
+              previewRef.current = ids;
+              placesRef.current = measureTilePlaces(gridRef.current);
               // Fuera del evento: si la miniatura cambia de aspecto dentro de `dragstart`, Chrome
               // cancela el arrastre antes de empezar.
               setTimeout(() => { if (dragIdRef.current === asset.id) setDragId(asset.id); }, 0);
             } : undefined}
             onDragOver={canDrag ? (event) => {
-              // Solo cuenta una miniatura de esta rejilla; un archivo traído del escritorio no es esto.
-              // Va en `dragenter` y en `dragover`: el navegador solo deja soltar donde el último de
-              // los dos dijo que sí, y un gesto rápido suelta antes del primer `dragover`.
-              if (!dragIdRef.current) return;
-              event.preventDefault();
-              event.dataTransfer.dropEffect = 'move';
-              if (overId !== asset.id) setOverId(asset.id);
-            } : undefined}
-            onDrop={canDrag ? (event) => {
+              if (!allowDrop(event)) return;
               const movedId = dragIdRef.current;
-              if (!movedId) return;
-              event.preventDefault();
-              endDrag();
-              commit(moveAssetToIndex(ids, movedId, ids.indexOf(asset.id)), movedId);
+              // Una miniatura que todavía se desliza pasa por debajo del puntero sin que la persona
+              // la haya buscado: no cuenta hasta que llega a su sitio. Sin esto el orden baila.
+              if (asset.id === movedId || slidesRef.current.has(asset.id)) return;
+              const current = previewRef.current || ids;
+              const next = moveAssetToIndex(current, movedId, current.indexOf(asset.id));
+              if (next === current) return;
+              previewRef.current = next;
+              slideNextRef.current = true;
+              setPreview(next);
             } : undefined}
-            onDragEnd={canDrag ? endDrag : undefined}
+            onDragEnd={canDrag ? () => {
+              // Si llega con el arrastre todavía vivo es que no se soltó dentro de la rejilla.
+              if (!dragIdRef.current) return;
+              slideNextRef.current = true;
+              endDrag();
+            } : undefined}
             onKeyMove={(assetId, direction) => commit(moveAssetId(ids, assetId, direction), assetId, { keepFocus: true })}
           />
         );
