@@ -93,7 +93,8 @@ const items = [
     captionText: 'Llamas, eliges horario y listo.',
     finalAssets: [
       { id: 'a6a', name: 'paso-1.jpg', storageKey: 'k6a', mimeType: 'image/jpeg', size: 300000, position: 0 },
-      { id: 'a6b', name: 'paso-2.jpg', storageKey: 'k6b', mimeType: 'image/jpeg', size: 300000, position: 1 }
+      { id: 'a6b', name: 'paso-2.jpg', storageKey: 'k6b', mimeType: 'image/jpeg', size: 300000, position: 1 },
+      { id: 'a6c', name: 'paso-3.jpg', storageKey: 'k6c', mimeType: 'image/jpeg', size: 300000, position: 2 }
     ],
     // Falló en Instagram con el motivo entero: así se ve lo que hay que leer.
     publishTime: '18:00',
@@ -157,6 +158,14 @@ axios.defaults.adapter = async (config) => {
   const fail = (status, data) => Promise.reject(Object.assign(new Error(data.error || 'Error'), { response: { status, data }, config }));
 
   if (url.includes('/api/social/')) return socialApi(config, url, ok, fail) || ok([]);
+  // Ordenar los archivos de una pieza: el PUT real reescribe las posiciones y devuelve la lista.
+  const reorder = String(config.method || '').toLowerCase() === 'put' && /\/api\/content\/items\/([^/?]+)\/final-assets\/order$/.exec(url);
+  if (reorder) {
+    const item = items.find((candidate) => candidate.id === reorder[1]);
+    const order = JSON.parse(config.data || '{}').order || [];
+    if (item) item.finalAssets = order.map((id, position) => ({ ...item.finalAssets.find((asset) => asset.id === id), position }));
+    return ok(item?.finalAssets || []);
+  }
   // Cambiar la hora de una pieza desde la ficha: el PATCH real guarda `publishTime`.
   const patchItem = String(config.method || '').toLowerCase() === 'patch' && /\/api\/content\/items\/([^/?]+)$/.exec(url);
   if (patchItem) {

@@ -8,9 +8,10 @@ import { getContentPlanMonthName } from '@/lib/contentPlanPeriod';
 import { planFinalAssetUpload } from '@/lib/uploadLimits';
 import { driveLinkProblem } from '@/lib/driveLinks';
 import { driveAssetUrls, driveEmbedAspect } from '@/lib/finalAssetShape';
+import { moveAssetId } from '@/lib/finalAssetOrder';
 import { WEEKDAY_LABELS, buildMonthGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
 import {
-  ChevronLeft, Plus, Send, ExternalLink, Save, Trash2,
+  ChevronLeft, ChevronRight, Plus, Send, ExternalLink, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
   Calendar, User, LayoutGrid, FileText, Instagram, Facebook, Video, Image as ImageIcon,
   Edit2, Check, AlertCircle, Sparkles, Users, UserCheck, StickyNote, ChevronUp, Share2,
@@ -191,8 +192,10 @@ const uploadFinalAssetsDirect = async (itemId, files, onProgress) => {
   return data;
 };
 
-const FinalAssetTile = ({ item, asset, isEditing, onDelete, isDeleting }) => {
+const FinalAssetTile = ({ item, asset, isEditing, onDelete, isDeleting, position = null, total = 1, onMove, isMoving = false }) => {
   const [previewUrl, setPreviewUrl] = useState(null);
+  // El archivo heredado de las columnas antiguas no tiene fila propia: va siempre primero y no se mueve.
+  const canMove = isEditing && total > 1 && !asset.isLegacy && typeof onMove === 'function';
   // Un enlace de Drive no tiene bytes nuestros: no se pide a la API, se muestra el reproductor de Google.
   const drive = driveAssetUrls(asset);
   const sourceUrl = drive
@@ -241,6 +244,41 @@ const FinalAssetTile = ({ item, asset, isEditing, onDelete, isDeleting }) => {
       {/* Las acciones van sobre la miniatura, no en la línea del nombre: compitiendo por el ancho de
           una tarjeta pequeña, el nombre se recortaba hasta quedarse en una letra suelta
           (Rodny, 25 de septiembre de 2026). Así el nombre se queda con la línea entera. */}
+      {/* El orden de los archivos es el orden del carrusel que sale en redes (Rodny, 1 de octubre de
+          2026): el número dice en qué puesto va cada lámina, y al editar se mueve un puesto antes o
+          después. Un archivo reemplazado entra al final; así se devuelve a su sitio sin volver a subir todo. */}
+      {total > 1 && position !== null && (
+        <div className="absolute left-1.5 top-1.5 flex items-center gap-1">
+          <span data-final-asset-position className="flex h-6 min-w-6 items-center justify-center rounded-lg bg-black/55 px-1.5 text-[11px] font-bold tabular-nums text-white backdrop-blur-sm">
+            {position + 1}
+          </span>
+          {canMove && (
+            <>
+              <button
+                type="button"
+                onClick={() => onMove(asset.id, -1)}
+                disabled={isMoving || position === 0}
+                className="rounded-lg bg-black/55 p-1.5 text-white backdrop-blur-sm transition hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label={`Mover antes ${asset.name || 'el archivo'}`}
+                title="Mover antes"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onMove(asset.id, 1)}
+                disabled={isMoving || position === total - 1}
+                className="rounded-lg bg-black/55 p-1.5 text-white backdrop-blur-sm transition hover:bg-black/75 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label={`Mover después ${asset.name || 'el archivo'}`}
+                title="Mover después"
+              >
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
+        </div>
+      )}
+
       <div className="absolute right-1.5 top-1.5 flex items-center gap-1">
         {drive && (
           <a
@@ -590,6 +628,8 @@ const ContentItemCard = ({
   onFinalAssetDelete,
   isFinalAssetUploading,
   isFinalAssetDeleting,
+  onFinalAssetReorder,
+  isFinalAssetMoving = false,
   onDriveLink,
   directUploadPercent,
   socialAccounts = [],
@@ -842,8 +882,24 @@ const ContentItemCard = ({
 
             {finalAssets.length > 0 && (
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                {finalAssets.map(asset => (
-                  <FinalAssetTile key={asset.id} item={item} asset={asset} isEditing={isEditing} onDelete={onFinalAssetDelete} isDeleting={isFinalAssetDeleting} />
+                {finalAssets.map((asset, position) => (
+                  <FinalAssetTile
+                    key={asset.id}
+                    item={item}
+                    asset={asset}
+                    isEditing={isEditing}
+                    onDelete={onFinalAssetDelete}
+                    isDeleting={isFinalAssetDeleting}
+                    position={position}
+                    total={finalAssets.length}
+                    isMoving={isFinalAssetMoving}
+                    onMove={(assetId, direction) => {
+                      // Solo se ordenan los archivos con fila propia; el heredado se queda primero.
+                      const ids = finalAssets.filter(candidate => !candidate.isLegacy).map(candidate => candidate.id);
+                      const next = moveAssetId(ids, assetId, direction);
+                      if (next !== ids) onFinalAssetReorder(item.id, next);
+                    }}
+                  />
                 ))}
               </div>
             )}
@@ -1318,6 +1374,20 @@ const ContentPlanDetail = () => {
     }
   });
 
+  // El orden se guarda en el servidor y la tarjeta lo refleja cuando el servidor confirma, no antes.
+  const finalAssetOrderMutation = useMutation({
+    mutationFn: async ({ itemId, order }) => (await axios.put(`${getApiBaseUrl()}/api/content/items/${itemId}/final-assets/order`, { order }, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+    })).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+    },
+    onError: (error) => {
+      console.error('Error reordering final assets:', error.response?.data || error);
+      toast.error(error.response?.data?.error || 'No se pudo guardar el orden');
+    }
+  });
+
   const deleteItemMutation = useMutation({
     mutationFn: async (id) => {
       await axios.delete(`${getApiBaseUrl()}/api/content/items/${id}`, {
@@ -1757,6 +1827,8 @@ const ContentPlanDetail = () => {
                 onFinalAssetDelete={handleFinalAssetDelete}
                 isFinalAssetUploading={finalAssetUploadMutation.isPending}
                 isFinalAssetDeleting={finalAssetDeleteMutation.isPending}
+                onFinalAssetReorder={(itemId, order) => finalAssetOrderMutation.mutate({ itemId, order })}
+                isFinalAssetMoving={finalAssetOrderMutation.isPending}
                 onDriveLink={setDriveLinkItemId}
                 directUploadPercent={finalAssetUploadMutation.variables?.itemId === selectedItem.id ? directUploadPercent : null}
                 socialAccounts={plan?.client?.socialAccounts || []}

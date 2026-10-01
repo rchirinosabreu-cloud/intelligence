@@ -29,6 +29,18 @@ El equipo exporta en PNG y publica desde Meta Business Suite, que convierte a JP
 
 Por eso, justo antes de publicar en Instagram, `socialImageDerivativeService.js` prepara **una copia** (`…/final-assets/derived/<id>-instagram.jpg`, junto al original): PNG → JPEG sRGB de calidad 92 con la transparencia en blanco, y si la proporción del feed se sale del rango, **margen blanco hasta el borde más cercano, nunca recorte** (`instagramImagePlan`, regla pura en `src/lib/socialPublishing.js`). Las historias solo cambian de formato. La copia se escribe una vez y se reutiliza; el original de la parrilla no se toca y Facebook recibe el original. Lo hace `sharp`, con binarios precompilados que `npm ci --ignore-scripts` instala sin compilar. Contrato: `tests/socialImageDerivative.test.js` (incluye una conversión real con `sharp`).
 
+## Facebook, auditado contra la referencia de Meta (1 de octubre de 2026)
+
+La frase de arriba «Facebook sí acepta PNG» era media verdad. `/{page-id}/photos` acepta JPEG, BMP, PNG, GIF y TIFF, pero **ningún archivo de más de 4 MB**, y recomienda PNG de hasta 1 MB. Por eso Facebook recibe también su propia copia (`derived/<id>-facebook.jpg`, `facebookImagePlan`), comprimida por pasos hasta caber; la de Instagram se comprime igual hasta 8 MB, así que **el peso de una imagen ya no bloquea la programación**. Y **un post de varias fotos no lleva video**: un carrusel mixto sale en Facebook solo con las fotos (`facebookMedia`), y la banda lo avisa antes de programar (`schedulingNotices`); un carrusel de solo videos hacia Facebook se bloquea. Contrato: `tests/socialFacebookMedia.test.js`.
+
+**El calendario de Meta.** Instagram no tiene programación por API (la referencia de `POST /{ig-user-id}/media` no trae ningún parámetro para ello), así que nada programado aquí aparece en el planificador de Business Suite antes de salir. Facebook sí la tiene (`published=false` + `scheduled_publish_time`, entre 10 minutos y 30 días según la guía de la API de páginas; la referencia de `/feed` dice 75). Se decidió **no** usarla todavía: daría un calendario a medias, con Facebook y sin Instagram. El calendario cierto es el de la parrilla.
+
+## El orden de los archivos es el orden del carrusel (Rodny, 1 de octubre de 2026)
+
+El publicador lee los archivos de la pieza por `position` en el momento de publicar: lo que la tarjeta muestra es lo que sale. Un archivo nuevo entra al final, así que al reemplazar una lámina del medio quedaba de última. Ahora cada miniatura lleva su número de puesto y, al editar, «Mover antes» / «Mover después» (`moveAssetId`); el orden se guarda con `PUT /api/content/items/:id/final-assets/order` (`reorderContentItemFinalAssets`: exige la lista completa, sin repetidos ni ajenos, y reescribe todas las posiciones en una transacción). Contrato: `tests/finalAssetOrder.test.js`.
+
+Cambiar un archivo **no** exige cancelar la programación: basta con que el correcto esté cargado a la hora. Para ganar tiempo se mueve la hora de la pieza (la cola la sigue) o se pulsa «Cancelar» en la fila de la red.
+
 Lo que Meta **no** deja hacer por API, y sigue siendo manual: música del catálogo de Instagram, stickers de historias (enlace, encuesta), etiquetar productos. Meta tampoco guarda publicaciones programadas: por eso la hora vive aquí. Límite: 100 publicaciones por cuenta de Instagram cada 24 horas.
 
 ## Lo que hay que configurar fuera de la plataforma
