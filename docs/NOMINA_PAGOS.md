@@ -34,6 +34,15 @@ reflejar que el dinero salió en varias fechas.
 - **Subir comprobante** en cada pago, en cualquier momento. Se ven con el visor de la
   plataforma.
 
+## Desde Movimientos
+
+Rodny, 1 de octubre de 2026: «me voy a nómina y no veo esa opción... no debería entonces mejor
+poder desglosar desde movimiento mismo?». Nómina Operativa abre en el mes actual, y un pago suele
+ser de la liquidación del mes anterior: mandar allá era mandar a buscar. Por eso el lápiz (y el
+botón de anular) de un pago de nómina en Movimientos abre el panel «Pago de nómina»
+(`PayrollPaymentPanel`) con las mismas acciones a la vista: desglosar, subir comprobante, editar
+referencia y revertir. Cualquier cambio cierra el panel y refresca el libro.
+
 Nada se borra. El pago desglosado o revertido queda en el historial de la liquidación
 («Ver N pagos revertidos o desglosados») y su egreso, anulado con su motivo.
 

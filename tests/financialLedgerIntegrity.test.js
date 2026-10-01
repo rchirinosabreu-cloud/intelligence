@@ -31,7 +31,8 @@ const ledgerFixture = (record, { closedMonth } = {}) => {
 // o quien lo lee se queda sin salida (Rodny, 22 de septiembre de 2026).
 for (const [label, relations, wayOut] of [
   ['receivable payment', { receivablePayment: { id: 'payment-1' } }, /Cartera[\s\S]*«Revertir»/],
-  ['payroll payment', { payrollTransaction: { id: 'payroll-1' } }, /Se corrige desde Nómina/],
+  // Desde el 1 de octubre de 2026 el pago de nómina se corrige con el lápiz del propio movimiento.
+  ['payroll payment', { payrollTransaction: { id: 'payroll-1' } }, /lápiz de este mismo movimiento[\s\S]*Nómina Operativa/],
   ['approved bank match', { bankMatches: [{ id: 'match-1', status: 'APPROVED' }] }, /deshacer esa conciliación/]
 ]) {
   for (const operation of ['update', 'void']) {

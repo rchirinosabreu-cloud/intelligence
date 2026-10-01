@@ -313,7 +313,7 @@ export const financialRecordLockReason = (record) => {
         return 'Este movimiento es el ingreso de un abono de cartera. Para deshacerlo ve a Cartera, abre la obligación del cliente y usa «Revertir» en ese abono: este movimiento se anulará solo.';
     }
     if (record?.payrollPayment || record?.payrollTransaction) {
-        return 'Este movimiento es un pago de nómina. Se corrige desde Nómina Operativa, en la liquidación de esa persona: ahí se le sube el comprobante, se cambia la referencia, se usa «Desglosar» para repartirlo en varios pagos o «Revertir» para deshacerlo.';
+        return 'Este movimiento es un pago de nómina y su valor no se edita a mano. Usa el lápiz de este mismo movimiento en Movimientos —o la liquidación en Nómina Operativa, eligiendo arriba el mes de esa liquidación— para desglosarlo, subirle el comprobante, cambiar la referencia o revertirlo.';
     }
     if (record?.bankMatches?.some((match) => match.status === 'APPROVED')) {
         return 'Este movimiento tiene una conciliación bancaria aprobada. Primero hay que deshacer esa conciliación; mientras siga aprobada no se puede editar ni anular aquí.';
