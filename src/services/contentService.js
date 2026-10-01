@@ -11,6 +11,7 @@ import {
 } from '../lib/uploadLimits.js';
 import { DRIVE_PROVIDER, driveLinkProblem, parseDriveFileId } from '../lib/driveLinks.js';
 import { finalAssetShapeProblem } from '../lib/finalAssetShape.js';
+import { fileContentProblem } from '../lib/fileSignature.js';
 import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from './briaContentPlanReviewState.js';
 import { resyncItemPublications } from './socialPublishingService.js';
 import { splitPublishTime } from '../lib/socialPublishing.js';
@@ -790,6 +791,10 @@ export const uploadContentItemFinalAssets = async (itemId, files = []) => {
   if (files.some(file => !/^image\/|^video\//.test(file.mimetype || ''))) {
     throw new Error('Solo se permiten imágenes o videos para el carrusel');
   }
+  // Un video con extensión .png entraba como imagen y la publicación fallaba a su hora (Rodny,
+  // 1 de octubre de 2026). Se dice aquí, con el nombre del archivo, antes de gastar la subida.
+  const mismatched = files.map(file => fileContentProblem({ name: file.originalname, mimeType: file.mimetype, bytes: file.buffer })).find(Boolean);
+  if (mismatched) throw Object.assign(new Error(mismatched), { status: 400 });
 
   const { item, basePath, nextPosition } = await loadFinalAssetTarget(itemId, files.length);
   const uploads = await Promise.all(files.map(file => uploadToS3(file, basePath, { maxBytes: FINAL_ASSET_MAX_BYTES })));

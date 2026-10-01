@@ -95,7 +95,9 @@ test('Meta errors are told apart: transient ones retry, permanent ones explain t
   assert.match(humanizeMetaError({ code: 9007 }), /archivo|formato/i);
   assert.match(humanizeMetaError({ code: 2207026 }), /video/i);
   assert.match(humanizeMetaError({ code: 'CONTAINER_ERROR', message: 'Meta could not process the media' }), /Meta/);
-  assert.equal(humanizeMetaError({ message: 'Something odd' }), 'Meta respondió: Something odd');
+  assert.equal(humanizeMetaError({ name: 'MetaGraphError', status: 400, message: 'Something odd' }), 'Meta respondió: Something odd');
+  // A failure of ours before asking Meta anything is not reported as said by Meta (1 October 2026).
+  assert.equal(humanizeMetaError({ message: 'Something odd' }), 'No se pudo preparar la publicación: Something odd');
   assert.equal(humanizeMetaError(null), 'Meta no respondió.');
   assert.doesNotMatch(humanizeMetaError({ code: 190 }), /\b190\b/, 'no bare codes for people');
 });

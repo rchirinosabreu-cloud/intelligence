@@ -10,6 +10,7 @@
  */
 import { getS3ObjectBuffer, headS3Object, putS3Object } from './s3Service.js';
 import { FACEBOOK_PHOTO_MAX_BYTES, META_IMAGE_MAX_BYTES, facebookImagePlan, instagramImagePlan } from '../lib/socialPublishing.js';
+import { fileContentProblem } from '../lib/fileSignature.js';
 
 /** De más a menos calidad: se baja solo lo necesario para caber en el tope de la red. */
 const JPEG_QUALITIES = [92, 86, 80, 72, 64];
@@ -24,6 +25,20 @@ export const derivedKeyFor = (asset, platform = 'INSTAGRAM') => {
   const slash = key.lastIndexOf('/');
   const folder = slash >= 0 ? key.slice(0, slash) : '';
   return `${folder ? `${folder}/` : ''}derived/${asset.id}-${String(platform).toLowerCase()}.jpg`;
+};
+
+/**
+ * El primer carrusel real no salió porque «02.png» era un video con la extensión cambiada (Rodny,
+ * 1 de octubre de 2026). El error es `permanent` —la cola no lo repite— y su mensaje es el que lee
+ * la persona: nombra el archivo y dice qué hacer, nunca el texto interno del conversor.
+ */
+const unreadableAssetError = (asset, buffer, cause) => {
+  const mismatch = fileContentProblem({ name: asset.name, mimeType: asset.mimeType, bytes: buffer });
+  const error = new Error(mismatch || `No se pudo leer «${asset.name || 'un archivo de la pieza'}» como imagen: está dañado o no es una imagen. Vuelve a subir ese archivo.`);
+  error.permanent = true;
+  error.code = 'FINAL_ASSET_UNREADABLE';
+  error.cause = cause;
+  return error;
 };
 
 /** Ancho y alto reales, ya con la orientación EXIF aplicada (una foto de celular «vertical» suele venir girada). */
@@ -72,18 +87,29 @@ export const createImageDerivativeService = ({
 
     let plan;
     let buffer = null;
+    // Leer la imagen puede fallar porque el archivo no es una imagen (un video con la extensión
+    // cambiada) o está dañado. Eso no lo arregla un reintento ni lo dijo Meta: se dice qué archivo es.
+    const readingImage = async (work) => {
+      try {
+        return await work();
+      } catch (cause) {
+        logger.error?.(`[SocialPublishing] No se pudo leer «${asset.name || asset.id}» como imagen:`, cause?.message || cause);
+        throw unreadableAssetError(asset, buffer, cause);
+      }
+    };
     if (platform === 'FACEBOOK') {
       // Facebook no tiene regla de proporción: se decide solo con el tipo y el peso, sin leer el archivo.
       plan = facebookImagePlan({ mimeType: asset.mimeType, size: asset.size });
     } else {
       buffer = await readObject(originalKey);
-      const { width, height } = await probe(buffer);
+      const { width, height } = await readingImage(() => probe(buffer));
       plan = instagramImagePlan({ mimeType: asset.mimeType, width, height, kind, size: asset.size });
     }
     if (!plan.convert) return { key: originalKey, derived: false };
 
     const maxBytes = platform === 'FACEBOOK' ? FACEBOOK_PHOTO_MAX_BYTES : META_IMAGE_MAX_BYTES;
-    const jpeg = await transform(buffer || await readObject(originalKey), plan, { maxBytes });
+    buffer = buffer || await readObject(originalKey);
+    const jpeg = await readingImage(() => transform(buffer, plan, { maxBytes }));
     await writeObject({ key, body: jpeg, contentType: 'image/jpeg' });
     logger.info?.(`[SocialPublishing] Copia para ${platform === 'FACEBOOK' ? 'Facebook' : 'Instagram'} de «${asset.name || asset.id}»: ${plan.reasons.join(', ')}${plan.canvas ? ` → ${plan.canvas.width}×${plan.canvas.height}` : ''}`);
     return { key, derived: true, cached: false, plan };
