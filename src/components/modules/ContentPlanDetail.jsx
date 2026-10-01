@@ -826,6 +826,7 @@ const ContentItemCard = ({
   onSchedulePublication,
   onCancelPublication,
   onRetryPublication,
+  onReopenPublication,
   isPublicationBusy = false,
   publicationProblems = []
 }) => {
@@ -1171,6 +1172,7 @@ const ContentItemCard = ({
         onSchedule={onSchedulePublication}
         onCancel={onCancelPublication}
         onRetry={onRetryPublication}
+        onReopen={onReopenPublication}
         isBusy={isPublicationBusy}
         serverProblems={publicationProblems}
       />
@@ -1629,6 +1631,24 @@ const ContentPlanDetail = () => {
     onSuccess: () => { invalidatePlan(); toast.success('Se volverá a intentar en un momento'); },
     onError: (error) => publicationError(error, 'No se pudo reintentar la publicación')
   });
+  const reopenPublicationMutation = useMutation({
+    mutationFn: async (publicationId) => (await axios.post(`${getApiBaseUrl()}/api/social/publications/${publicationId}/reopen`, {}, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+    })).data,
+    onSuccess: () => { setPublicationProblems([]); invalidatePlan(); toast.success('Lista para programar de nuevo'); },
+    onError: (error) => publicationError(error, 'No se pudo reabrir la publicación')
+  });
+  // La plataforma no sabe si la publicación anterior sigue en la red: si sigue, volver a publicar la
+  // duplica. Se dice antes, y reabrir no manda nada: solo deja la red lista para «Programar».
+  const handleReopenPublication = async (publicationId, platform) => {
+    const network = platform === 'FACEBOOK' ? 'Facebook' : 'Instagram';
+    const accepted = await confirm({
+      title: `Publicar de nuevo en ${network}`,
+      description: `Esta pieza ya salió en ${network}. Si la publicación anterior sigue en la cuenta, quedará duplicada: bórrala primero en ${network}. Al continuar no se publica nada todavía; la red queda lista para que elijas la hora y pulses «Programar».`,
+      confirmLabel: 'Continuar'
+    });
+    if (accepted) reopenPublicationMutation.mutate(publicationId);
+  };
 
   const handleAddItem = () => {
     createItemMutation.mutate({
@@ -2011,7 +2031,8 @@ const ContentPlanDetail = () => {
                 onSchedulePublication={(itemId, platforms) => schedulePublicationMutation.mutate({ itemId, platforms })}
                 onCancelPublication={(publicationId) => cancelPublicationMutation.mutate(publicationId)}
                 onRetryPublication={(publicationId) => retryPublicationMutation.mutate(publicationId)}
-                isPublicationBusy={schedulePublicationMutation.isPending || cancelPublicationMutation.isPending || retryPublicationMutation.isPending}
+                onReopenPublication={handleReopenPublication}
+                isPublicationBusy={schedulePublicationMutation.isPending || cancelPublicationMutation.isPending || retryPublicationMutation.isPending || reopenPublicationMutation.isPending}
                 publicationProblems={publicationProblems}
               />
               )}

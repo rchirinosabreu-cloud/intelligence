@@ -145,6 +145,42 @@ test('retrying a failed publication puts it back in the queue for right now, wit
   await assert.rejects(service.retryPublication({ publicationId: 'pub-instagram', actorUserId: 'u' }), (error) => error.status === 409, 'only FAILED rows retry');
 });
 
+// Rodny, 1 October 2026: the first real carousel went out, he deleted it on both networks to fix the
+// first image, and the platform kept saying «Publicada» with no way to send it again.
+test('a published row can be reopened to publish again: it remembers what went out and the piece is programmable again', async () => {
+  const publishedAt = new Date('2036-10-03T16:16:00.000Z');
+  const { db, state } = memoryDb({
+    item: { ...baseItem(), status: 'PUBLICADO' },
+    publications: [
+      { id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'PUBLISHED', scheduledAt: NOW, attempts: 1, publishedAt, permalink: 'https://www.instagram.com/p/1/', externalMediaId: 'ig-1', publishRequestedAt: publishedAt, diagnostics: [] },
+      { id: 'pub-facebook', contentItemId: 'item-1', socialAccountId: 'acc-fb', platform: 'FACEBOOK', status: 'PUBLISHED', scheduledAt: NOW, publishedAt, permalink: 'https://www.facebook.com/1', externalMediaId: 'fb-1' }
+    ]
+  });
+  const service = build({ db });
+  const row = await service.reopenPublication({ publicationId: 'pub-instagram', actorUserId: 'user-rodny' });
+  assert.equal(row.status, 'CANCELLED');
+  assert.equal(row.permalink, null);
+  assert.equal(row.publishedAt, null);
+  assert.equal(row.externalMediaId, null);
+  assert.equal(row.publishRequestedAt, null, 'a clean slate: the next order to publish is a new one');
+  assert.match(row.error, /publicar de nuevo/i);
+  const trace = row.diagnostics.at(-1);
+  assert.deepEqual(
+    [trace.reopened, trace.previousPermalink, trace.previousMediaId, trace.previousPublishedAt, trace.actorUserId],
+    [true, 'https://www.instagram.com/p/1/', 'ig-1', publishedAt.toISOString(), 'user-rodny'],
+    'what had gone out is never forgotten'
+  );
+  assert.equal(state.item.status, 'REALIZADO', 'PUBLICADO cannot be scheduled; the piece goes back to done-and-waiting');
+  assert.equal(state.publications[1].status, 'PUBLISHED', 'the other network is not touched');
+
+  // From here the ordinary «Programar» applies, with all its rules.
+  const again = await service.schedulePublications({ itemId: 'item-1', platforms: ['INSTAGRAM'], actorUserId: 'user-rodny' });
+  assert.equal(again[0].status, 'SCHEDULED');
+
+  await assert.rejects(service.reopenPublication({ publicationId: 'pub-instagram', actorUserId: 'u' }), (error) => error.status === 409 && /ya publicada/i.test(error.message));
+  await assert.rejects(service.reopenPublication({ publicationId: 'nope', actorUserId: 'u' }), (error) => error.status === 404);
+});
+
 test('the cron claims due rows by compare-and-set, publishes with signed URLs and marks the piece PUBLICADO once every network is out', async () => {
   const { db, state } = memoryDb({ publications: [
     { id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: new Date('2036-10-03T15:30:00.000Z'), attempts: 0, requestedById: 'user-rodny' },

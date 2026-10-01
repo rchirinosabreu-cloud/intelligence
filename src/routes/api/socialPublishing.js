@@ -68,6 +68,15 @@ export const createSocialPublishingRouter = ({
     }
   });
 
+  // Volver a publicar lo que ya salió (la persona lo borró en la red): deja la fila libre para «Programar».
+  router.post('/publications/:publicationId/reopen', async (req, res) => {
+    try {
+      return res.json(await publishing.reopenPublication({ publicationId: req.params.publicationId, actorUserId: req.user.userId }));
+    } catch (error) {
+      return reply(res, error, logger);
+    }
+  });
+
   router.get('/accounts', async (req, res) => {
     try {
       const clientId = String(req.query.clientId || '').trim();

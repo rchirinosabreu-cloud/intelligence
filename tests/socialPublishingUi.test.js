@@ -29,6 +29,24 @@ test('the publishing band only offers «Programar» explicitly and explains itse
   assert.match(panel, /dark:/, 'dual theme');
 });
 
+// Rodny, 1 October 2026: he deleted the post on both networks to fix an image and the band still said
+// «Publicada» with nothing to press.
+test('a published row offers «Publicar de nuevo», which asks first because a post left on the network would be doubled', () => {
+  const panel = read('src/components/modules/ContentPlan/SocialPublishingPanel.jsx');
+  assert.match(panel, /Publicar de nuevo/);
+  assert.match(panel, /onReopen\(row\.id, account\.platform\)/);
+  // A reopened network comes back ticked: the band remembers what was unticked, not what was ticked.
+  assert.match(panel, /excluded/);
+  // The reason a row is cancelled (reopened, hour moved to the past) is said, not just «Cancelada».
+  assert.match(panel, /CANCELLED: \(row\) => row\.error \|\| 'Cancelada'/);
+  const card = read('src/components/modules/ContentPlanDetail.jsx');
+  assert.match(card, /publications\/\$\{publicationId\}\/reopen/);
+  const handler = card.slice(card.indexOf('const handleReopenPublication'));
+  assert.match(handler, /await confirm\(/);
+  assert.match(handler, /duplicad/);
+  assert.ok(handler.indexOf('await confirm(') < handler.indexOf('reopenPublicationMutation.mutate('), 'nothing is reopened before the person says yes');
+});
+
 test('the client card lists connected networks and only managers connect or disconnect', () => {
   const widget = read('src/components/modules/SocialAccountsWidget.jsx');
   assert.match(widget, /api\/social\/accounts\/available/);

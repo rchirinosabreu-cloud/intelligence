@@ -138,12 +138,17 @@ const socialApi = (config, url, ok, fail) => {
   }
   const retry = /\/api\/social\/publications\/([^/]+)\/retry$/.exec(url);
   const cancel = method === 'delete' && /\/api\/social\/publications\/([^/]+)$/.exec(url);
-  const id = retry?.[1] || cancel?.[1];
+  const reopen = /\/api\/social\/publications\/([^/]+)\/reopen$/.exec(url);
+  const id = retry?.[1] || reopen?.[1] || cancel?.[1];
   if (id) {
     for (const item of items) {
       const row = item.publications.find((candidate) => candidate.id === id);
       if (!row) continue;
       if (retry) Object.assign(row, { status: 'SCHEDULED', attempts: 0, error: null, scheduledAt: new Date().toISOString() });
+      else if (reopen) {
+        Object.assign(row, { status: 'CANCELLED', error: 'Lista para publicar de nuevo: elige la hora y pulsa «Programar».', permalink: null, publishedAt: null });
+        if (item.status === 'PUBLICADO') item.status = 'REALIZADO';
+      }
       else Object.assign(row, { status: 'CANCELLED', cancelledAt: new Date().toISOString() });
       return ok(row);
     }
