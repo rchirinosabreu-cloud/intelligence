@@ -26,7 +26,9 @@ const STATUS_TEXT = {
   PUBLISHING: () => 'Publicando…',
   PUBLISHED: (row) => `Publicada · ${bogotaStamp(row.publishedAt)}`,
   FAILED: (row) => row.error || 'No se pudo publicar.',
-  CANCELLED: () => 'Cancelada'
+  // El motivo se dice: «Cancelada» a secas no distingue lo que canceló una persona de lo que la
+  // plataforma soltó por un cambio de hora o de lo que se reabrió para publicar de nuevo.
+  CANCELLED: (row) => row.error || 'Cancelada'
 };
 
 const STATUS_CLASS = {
@@ -39,15 +41,17 @@ const STATUS_CLASS = {
 
 const ACTION_CLASS = 'text-[12px] font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan disabled:cursor-not-allowed disabled:opacity-50';
 
-export default function SocialPublishingPanel({ item, accounts = [], onSchedule, onCancel, onRetry, isBusy = false, serverProblems = [] }) {
+export default function SocialPublishingPanel({ item, accounts = [], onSchedule, onCancel, onRetry, onReopen, isBusy = false, serverProblems = [] }) {
   const connected = useMemo(() => accounts.filter((account) => SOCIAL_PLATFORMS.includes(account.platform)), [accounts]);
   const active = useMemo(() => connected.filter((account) => account.isActive !== false), [connected]);
   const publications = item.publications || [];
   const rowFor = (platform) => publications.find((row) => row.platform === platform) || null;
   // Lo fallido se vuelve a intentar con «Reintentar», no con «Programar»: dos caminos para lo mismo confunden.
   const selectable = active.filter((account) => !['SCHEDULED', 'PUBLISHING', 'PUBLISHED', 'FAILED'].includes(rowFor(account.platform)?.status));
-  const [chosen, setChosen] = useState(() => new Set(selectable.map((account) => account.platform)));
-  const platforms = selectable.map((account) => account.platform).filter((platform) => chosen.has(platform));
+  // Se recuerda lo que la persona desmarcó, no lo marcado: así una red que vuelve a estar disponible
+  // (cancelada, o reabierta para publicar de nuevo) aparece marcada sin tener que acordarse de hacerlo.
+  const [excluded, setExcluded] = useState(() => new Set());
+  const platforms = selectable.map((account) => account.platform).filter((platform) => !excluded.has(platform));
   const problems = platforms.length
     ? schedulingProblems({ item, assets: item.finalAssets || [], accounts: active, platforms, now: new Date() })
     : [];
@@ -105,8 +109,8 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
               {canChoose ? (
                 <input
                   type="checkbox"
-                  checked={chosen.has(account.platform)}
-                  onChange={(event) => setChosen((prev) => { const next = new Set(prev); if (event.target.checked) next.add(account.platform); else next.delete(account.platform); return next; })}
+                  checked={!excluded.has(account.platform)}
+                  onChange={(event) => setExcluded((prev) => { const next = new Set(prev); if (event.target.checked) next.delete(account.platform); else next.add(account.platform); return next; })}
                   aria-label={`Programar en ${SOCIAL_PLATFORM_LABELS[account.platform]}`}
                   className="h-4 w-4 shrink-0 accent-brand-cyan"
                 />
@@ -132,6 +136,11 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
                 <a href={row.permalink} target="_blank" rel="noreferrer" className={`${ACTION_CLASS} inline-flex shrink-0 items-center gap-1`}>
                   Ver <ExternalLink className="h-3 w-3" />
                 </a>
+              )}
+              {/* Lo que ya salió se puede volver a mandar (Rodny, 1 de octubre de 2026: borró el carrusel
+                  en la red para corregir una imagen y aquí no había nada que pulsar). Pregunta antes. */}
+              {row?.status === 'PUBLISHED' && !disconnected && typeof onReopen === 'function' && (
+                <button type="button" onClick={() => onReopen(row.id, account.platform)} disabled={isBusy} className={`${ACTION_CLASS} shrink-0`}>Publicar de nuevo</button>
               )}
             </li>
           );

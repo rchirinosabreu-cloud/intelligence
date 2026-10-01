@@ -130,7 +130,8 @@ export const createSocialPublishingService = ({
     if (!row) throw httpError(404, 'La publicación programada no existe.');
     if (row.status === 'PUBLISHING') throw httpError(409, 'Esta pieza se está publicando ahora mismo; ya no se puede cancelar.');
     if (row.status !== 'SCHEDULED') throw httpError(409, 'Solo se cancela una publicación que todavía está programada.');
-    return db.socialPublication.update({ where: { id: row.id }, data: { status: 'CANCELLED', cancelledAt: now(), leaseToken: null, leaseAt: null } });
+    // El motivo de un intento fallido anterior no es el motivo de esta cancelación: la banda lo mostraría como tal.
+    return db.socialPublication.update({ where: { id: row.id }, data: { status: 'CANCELLED', cancelledAt: now(), error: null, leaseToken: null, leaseAt: null } });
   };
 
   const retryPublication = async ({ publicationId, actorUserId = null }) => {
@@ -143,6 +144,38 @@ export const createSocialPublishingService = ({
       where: { id: row.id },
       data: { status: 'SCHEDULED', scheduledAt, attempts: 0, nextAttemptAt: null, error: null, leaseToken: null, leaseAt: null, publishRequestedAt: null, requestedById: actorUserId || row.requestedById }
     });
+  };
+
+  /**
+   * Volver a publicar lo que ya salió (Rodny, 1 de octubre de 2026): borró el carrusel en las dos redes
+   * para corregir una imagen y la fila seguía «Publicada», sin nada que pulsar. Reabrir no publica nada:
+   * deja la fila libre para el «Programar» de siempre, con todas sus reglas. Lo que había salido —enlace,
+   * identificador, hora— queda en el historial de la fila. La plataforma no sabe si la publicación
+   * anterior sigue en la red; por eso la pantalla pregunta antes y avisa de que quedaría duplicada.
+   */
+  const reopenPublication = async ({ publicationId, actorUserId = null }) => {
+    const row = await db.socialPublication.findUnique({ where: { id: publicationId } });
+    if (!row) throw httpError(404, 'La publicación no existe.');
+    if (row.status !== 'PUBLISHED') throw httpError(409, 'Solo se vuelve a publicar una pieza ya publicada en esa red.');
+    const current = now();
+    const trace = {
+      at: current.toISOString(), reopened: true, actorUserId,
+      previousPermalink: row.permalink || null, previousMediaId: row.externalMediaId || null,
+      previousPublishedAt: row.publishedAt ? new Date(row.publishedAt).toISOString() : null
+    };
+    const diagnostics = [...(Array.isArray(row.diagnostics) ? row.diagnostics : []), trace].slice(-MAX_DIAGNOSTICS);
+    const updated = await db.socialPublication.update({
+      where: { id: row.id },
+      data: {
+        status: 'CANCELLED', cancelledAt: current, error: 'Lista para publicar de nuevo: elige la hora y pulsa «Programar».',
+        permalink: null, externalMediaId: null, publishedAt: null, publishRequestedAt: null,
+        attempts: 0, nextAttemptAt: null, leaseToken: null, leaseAt: null, diagnostics
+      }
+    });
+    // `PUBLICADO` lo puso la cola y no se puede programar: la pieza vuelve a «hecha y por salir».
+    const item = await db.contentItem.findUnique({ where: { id: row.contentItemId } });
+    if (item?.status === 'PUBLICADO') await db.contentItem.update({ where: { id: item.id }, data: { status: 'REALIZADO' } });
+    return updated;
   };
 
   const listPlanPublications = async (planId) => {
@@ -304,7 +337,7 @@ export const createSocialPublishingService = ({
     return outcomes;
   };
 
-  return { schedulePublications, cancelPublication, retryPublication, listPlanPublications, resyncItemPublications, processDuePublications, publishOne };
+  return { schedulePublications, cancelPublication, retryPublication, reopenPublication, listPlanPublications, resyncItemPublications, processDuePublications, publishOne };
 };
 
 export const socialPublishingService = createSocialPublishingService();

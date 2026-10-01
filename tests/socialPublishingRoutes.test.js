@@ -8,7 +8,7 @@ import { createSocialPublishingRouter } from '../src/routes/api/socialPublishing
 
 const buildApp = ({ role = 'ADMIN' } = {}) => {
   const calls = [];
-  const publishing = Object.fromEntries(['schedulePublications', 'cancelPublication', 'retryPublication', 'listPlanPublications'].map((name) => [name, async (args) => {
+  const publishing = Object.fromEntries(['schedulePublications', 'cancelPublication', 'retryPublication', 'reopenPublication', 'listPlanPublications'].map((name) => [name, async (args) => {
     calls.push([name, args]);
     if (args?.itemId === 'invalid') throw Object.assign(new Error('La pieza necesita hora.'), { status: 422, code: 'SOCIAL_PUBLICATION_INVALID', problems: ['La pieza necesita hora.', 'Falta Instagram.'] });
     if (args?.itemId === 'boom') throw new Error('postgres://secret');
@@ -59,6 +59,8 @@ test('scheduling, cancelling and retrying use the session identity and pass the 
     assert.deepEqual(calls.at(-1), ['cancelPublication', { publicationId: 'p1', actorUserId: 'actual-actor' }]);
     assert.equal((await fetch(`${base}/publications/p1/retry`, { method: 'POST' })).status, 200);
     assert.deepEqual(calls.at(-1), ['retryPublication', { publicationId: 'p1', actorUserId: 'actual-actor' }]);
+    assert.equal((await fetch(`${base}/publications/p1/reopen`, json('POST', { actorUserId: 'spoofed' }))).status, 200);
+    assert.deepEqual(calls.at(-1), ['reopenPublication', { publicationId: 'p1', actorUserId: 'actual-actor' }]);
     const list = await fetch(`${base}/publications?planId=plan-1`);
     assert.equal(list.status, 200);
     assert.deepEqual(calls.at(-1), ['listPlanPublications', 'plan-1']);
