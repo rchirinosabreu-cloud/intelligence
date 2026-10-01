@@ -53,6 +53,14 @@ test('the client card lists connected networks and only managers connect or disc
   assert.match(widget, /api\/social\/accounts\/link/);
   assert.match(widget, /canManage &&/);
   assert.doesNotMatch(widget, /type="text"[^>]*token/i, 'nobody pastes a token');
+  // 1 October 2026: 69 pages. The list is searched, scrolls inside the dialog, and «Conectar» only
+  // sends a page that is in sight — a page hidden by the search can never be connected by mistake.
+  assert.match(widget, /filterSocialPages\(pages, search\)/);
+  assert.match(widget, /type="search"/);
+  assert.match(widget, /aria-label="Buscar página"/);
+  assert.match(widget, /overflow-y-auto/);
+  assert.match(widget, /visible\.some\(\(page\) => page\.pageId === pageId\)/);
+  assert.match(widget, /Ninguna página coincide/);
   const detail = read('src/components/modules/ClientDetail.jsx');
   assert.match(detail, /<SocialAccountsWidget clientId=\{client\.id\} canManage=\{canManageSocial\} \/>/);
   assert.match(detail, /\['ADMIN', 'PROJECT_MANAGER'\]/);

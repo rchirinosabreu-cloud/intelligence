@@ -3,8 +3,27 @@ import assert from 'node:assert/strict';
 import {
   ACTIVE_PUBLICATION_STATUSES, MAX_PUBLICATION_ATTEMPTS, PUBLICATION_LEASE_MS, PUBLISHABLE_ITEM_STATUSES,
   SOCIAL_PLATFORMS, describeMetaMedia, humanizeMetaError, isRetryableMetaError, nextPublicationRetryAt,
-  publishAtIso, schedulingProblems, splitPublishTime
+  filterSocialPages, publishAtIso, schedulingProblems, splitPublishTime
 } from '../src/lib/socialPublishing.js';
+
+// Rodny, 1 October 2026: with the CEO's key the «Conectar página» list went from 1 page to 69.
+test('the list of pages is searched by page name or Instagram handle, ignoring accents and case, and comes sorted', () => {
+  const pages = [
+    { pageId: '3', pageName: 'Martínez & Nájera Abogados', instagram: { id: 'i3', username: 'martinezynajeraabogados' } },
+    { pageId: '1', pageName: 'Endova ', instagram: { id: 'i1', username: 'endova.salud' } },
+    { pageId: '2', pageName: 'Barra Lima', instagram: null },
+    { pageId: '4', pageName: 'Wine & Wonder by Foobespain', instagram: { id: 'i4', username: 'wineandwonder_byfoobespain' } }
+  ];
+  assert.deepEqual(filterSocialPages(pages, '').map((page) => page.pageId), ['2', '1', '3', '4'], 'no search: every page, in alphabetical order');
+  assert.deepEqual(filterSocialPages(pages, '  ENDOVA ').map((page) => page.pageId), ['1']);
+  assert.deepEqual(filterSocialPages(pages, 'najera').map((page) => page.pageId), ['3'], 'accents do not matter');
+  assert.deepEqual(filterSocialPages(pages, 'salud').map((page) => page.pageId), ['1'], 'the Instagram handle counts');
+  assert.deepEqual(filterSocialPages(pages, '@endova').map((page) => page.pageId), ['1'], 'with or without the @');
+  assert.deepEqual(filterSocialPages(pages, 'foobe wine').map((page) => page.pageId), ['4'], 'every word must match, in any order');
+  assert.deepEqual(filterSocialPages(pages, 'zzz'), []);
+  assert.deepEqual(filterSocialPages(null, 'x'), []);
+  assert.equal(pages[0].pageId, '3', 'the original list is not reordered');
+});
 
 // Rodny, 29 September 2026: the platform itself publishes the approved pieces of a plan on Instagram and
 // Facebook at the day and hour the team set. Meta cannot hold a scheduled post, so the hour lives here.

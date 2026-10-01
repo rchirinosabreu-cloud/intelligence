@@ -6,20 +6,21 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { AlertCircle, Facebook, Instagram, Loader2, Plus, Share2, Trash2 } from '@/components/ui/icons';
+import { AlertCircle, Facebook, Instagram, Loader2, Plus, Search, Share2, Trash2 } from '@/components/ui/icons';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { SOCIAL_PLATFORM_LABELS } from '@/lib/socialPublishing';
+import { SOCIAL_PLATFORM_LABELS, filterSocialPages } from '@/lib/socialPublishing';
 
 /**
- * Redes conectadas de un cliente (Rodny, 29 de septiembre de 2026). El «robot» que publica es el
- * usuario del sistema de Meta de Brain Studio; un administrador elige aquí qué página administra ese
- * usuario para este cliente. Nadie pega tokens: el servidor lista las páginas y guarda el token cifrado.
+ * Redes conectadas de un cliente (Rodny, 29 de septiembre de 2026). Un administrador elige aquí cuál
+ * de las páginas que administra la cuenta de Meta de la agencia es la de este cliente. Nadie pega
+ * tokens: el servidor lista las páginas y guarda el token de la página cifrado.
  */
 const PLATFORM_ICON = { INSTAGRAM: Instagram, FACEBOOK: Facebook };
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('authToken')}` });
 
 const ConnectPageDialog = ({ clientId, open, onClose, onLinked }) => {
   const [pageId, setPageId] = useState('');
+  const [search, setSearch] = useState('');
   const listId = useId();
   const { data, isLoading, error } = useQuery({
     queryKey: ['social-available-pages'],
@@ -27,12 +28,19 @@ const ConnectPageDialog = ({ clientId, open, onClose, onLinked }) => {
     staleTime: 60_000,
     queryFn: async () => (await axios.get(`${getApiBaseUrl()}/api/social/accounts/available`, { headers: authHeaders() })).data
   });
+  // Al cerrar se olvida la búsqueda y la elección: el diálogo se queda montado y la próxima vez
+  // abriría con la página de antes marcada.
+  const close = () => {
+    setSearch('');
+    setPageId('');
+    onClose();
+  };
   const link = useMutation({
-    mutationFn: async () => (await axios.post(`${getApiBaseUrl()}/api/social/accounts/link`, { clientId, pageId }, { headers: authHeaders() })).data,
+    mutationFn: async (selectedPageId) => (await axios.post(`${getApiBaseUrl()}/api/social/accounts/link`, { clientId, pageId: selectedPageId }, { headers: authHeaders() })).data,
     onSuccess: (rows) => {
       onLinked(rows);
       toast.success(rows.length > 1 ? 'Facebook e Instagram conectados' : 'Facebook conectado');
-      onClose();
+      close();
     },
     onError: (err) => {
       console.error('[SocialAccounts] No se pudo conectar la página:', err.response?.data || err.message || err);
@@ -41,9 +49,14 @@ const ConnectPageDialog = ({ clientId, open, onClose, onLinked }) => {
   });
   const pages = data?.pages || [];
   const unavailable = error?.response?.data?.error;
+  // Con la llave del CEO la lista pasó de una página a 69 (Rodny, 1 de octubre de 2026): se busca y
+  // se ordena. Solo se conecta una página que está a la vista: si la búsqueda esconde la elegida,
+  // «Conectar» se apaga, para que nunca se enlace por error la página de otro cliente.
+  const visible = filterSocialPages(pages, search);
+  const chosenId = visible.some((page) => page.pageId === pageId) ? pageId : '';
 
   return (
-    <Dialog open={open} onOpenChange={(next) => { if (!next) onClose(); }}>
+    <Dialog open={open} onOpenChange={(next) => { if (!next) close(); }}>
       <DialogContent className="max-w-md">
         <DialogTitle>Conectar una página</DialogTitle>
         <DialogDescription>Elige la página de Facebook del cliente. Si tiene un Instagram profesional vinculado, se conecta también.</DialogDescription>
@@ -52,26 +65,49 @@ const ConnectPageDialog = ({ clientId, open, onClose, onLinked }) => {
         ) : unavailable ? (
           <p className="rounded-xl border border-destructive/30 bg-destructive/5 p-3 text-sm text-destructive">{unavailable}</p>
         ) : pages.length === 0 ? (
-          <p className="text-sm text-zinc-500 dark:text-zinc-400">El usuario del sistema de Meta todavía no administra ninguna página. Dale acceso a la página del cliente desde el Business Manager.</p>
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">La cuenta de Meta de la agencia todavía no administra ninguna página. Hay que darle acceso a la página del cliente en Meta Business.</p>
         ) : (
-          <fieldset className="space-y-2" aria-labelledby={listId}>
-            <legend id={listId} className="sr-only">Páginas disponibles</legend>
-            {pages.map((page) => (
-              <label key={page.pageId} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition ${pageId === page.pageId ? 'border-brand-cyan bg-brand-cyan-soft/40 dark:bg-brand-cyan/10' : 'border-zinc-200 hover:bg-zinc-50 dark:border-white/10 dark:hover:bg-white/5'}`}>
-                <input type="radio" name="social-page" value={page.pageId} checked={pageId === page.pageId} onChange={() => setPageId(page.pageId)} className="accent-brand-cyan" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-bold text-zinc-900 dark:text-zinc-50">{page.pageName}</span>
-                  <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
-                    {page.instagram ? `Instagram: @${page.instagram.username || page.instagram.id}` : 'Sin Instagram profesional vinculado'}
-                  </span>
-                </span>
-              </label>
-            ))}
-          </fieldset>
+          <div className="flex min-h-0 flex-col gap-3">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" aria-hidden="true" />
+              <input
+                type="search"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Buscar por nombre o usuario de Instagram"
+                aria-label="Buscar página"
+                autoComplete="off"
+                className="h-11 w-full rounded-xl border border-zinc-200 bg-white pl-9 pr-3 text-sm text-zinc-900 outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-50"
+              />
+            </div>
+            <p className="text-xs text-zinc-500 dark:text-zinc-400" aria-live="polite" data-social-pages-count>
+              {search.trim() ? `${visible.length} de ${pages.length} páginas` : `${pages.length} páginas`}
+            </p>
+            {visible.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-zinc-200 p-4 text-sm text-zinc-500 dark:border-white/10 dark:text-zinc-400">
+                Ninguna página coincide con «{search.trim()}».
+              </p>
+            ) : (
+              <fieldset className="max-h-[50vh] space-y-2 overflow-y-auto pr-1" aria-labelledby={listId}>
+                <legend id={listId} className="sr-only">Páginas disponibles</legend>
+                {visible.map((page) => (
+                  <label key={page.pageId} className={`flex cursor-pointer items-center gap-3 rounded-xl border px-3 py-2.5 text-sm transition ${chosenId === page.pageId ? 'border-brand-cyan bg-brand-cyan-soft/40 dark:bg-brand-cyan/10' : 'border-zinc-200 hover:bg-zinc-50 dark:border-white/10 dark:hover:bg-white/5'}`}>
+                    <input type="radio" name="social-page" value={page.pageId} checked={chosenId === page.pageId} onChange={() => setPageId(page.pageId)} className="accent-brand-cyan" />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-bold text-zinc-900 dark:text-zinc-50">{page.pageName}</span>
+                      <span className="block truncate text-xs text-zinc-500 dark:text-zinc-400">
+                        {page.instagram ? `Instagram: @${page.instagram.username || page.instagram.id}` : 'Sin Instagram profesional vinculado'}
+                      </span>
+                    </span>
+                  </label>
+                ))}
+              </fieldset>
+            )}
+          </div>
         )}
         <div className="mt-4 flex justify-end gap-2">
-          <Button type="button" variant="ghost" onClick={onClose}>Cancelar</Button>
-          <Button type="button" onClick={() => link.mutate()} disabled={!pageId || link.isPending}>
+          <Button type="button" variant="ghost" onClick={close}>Cancelar</Button>
+          <Button type="button" onClick={() => link.mutate(chosenId)} disabled={!chosenId || link.isPending}>
             {link.isPending ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
             Conectar
           </Button>
