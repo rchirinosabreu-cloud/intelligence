@@ -890,7 +890,13 @@ const NativeTasks = () => {
                 body: JSON.stringify(payload)
             });
             if (!response.ok) throw new Error("Failed to update status in backend");
-            if (sourceColumnId !== 'realizado' && destinationColumnId === 'realizado') triggerConfetti();
+            // El confeti sale de la columna «Realizado», donde acaba de caer la tarjeta (Rodny, 30 de
+            // septiembre de 2026). Se apunta a la columna y no a la tarjeta porque la tarjeta puede
+            // no estar todavía repintada en su sitio cuando el servidor contesta rápido, y entonces
+            // el disparo salía de la columna de la que venía.
+            if (sourceColumnId !== 'realizado' && destinationColumnId === 'realizado') {
+                triggerConfetti(document.querySelector('[data-rfd-droppable-id="realizado"]'));
+            }
             await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
             queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
             queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
@@ -1552,6 +1558,10 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
     const priorityBadgeClass = task.priority ? taskPriorityBadgeConfig[task.priority] : null;
     const priorityLabel = task.priority ? (taskPriorityLabels[task.priority] || task.priority) : null;
     const snippet = plainTextSnippet(task.comments);
+    const isRunning = String(task.status || '').toUpperCase() === 'EN_CURSO';
+    // La fila de distintivos solo existe si tiene algo que decir: vacía dejaba un hueco
+    // encima del cliente y la tarjeta arrancaba descolgada (Rodny, 30 de septiembre de 2026).
+    const hasStatusChips = isFocusTask || isReturned || isRunning;
     const attachmentCount = Array.isArray(task.taskAttachments) ? task.taskAttachments.length : 0;
     const commentCount = Array.isArray(task.taskComments) ? task.taskComments.length : 0;
     // Un pendiente privado ajeno tampoco se arrastra: mover su estado es cambiarlo, y el
@@ -1631,10 +1641,10 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                         !snapshot.isDragging && !isHighlighted && !overdue && !task.isSpecial ? "border-zinc-200/80 hover:border-zinc-300 dark:border-white/10 dark:hover:border-white/20" : "",
                         isReturned && !isHighlighted && "border-destructive/50"
                     )}>
-                        <div className="flex flex-col gap-3 p-4">
-                            {/* Row 1: status chips (returned, timer) + quick actions on the top-right corner */}
-                            <div className="flex items-start justify-between gap-2 pr-16">
-                                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                        <div className="flex flex-col gap-4 p-5">
+                            {/* Distintivos de estado (devuelta, cronómetro). Solo se dibuja la fila si hay alguno. */}
+                            {hasStatusChips && (
+                                <div className="flex min-w-0 flex-wrap items-center gap-1.5 pr-16">
                                     {isFocusTask && (
                                         <span
                                             data-task-focus-chip
@@ -1657,47 +1667,63 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                                             <TaskReturnIcon className="w-2.5 h-2.5" /> Devuelto
                                         </span>
                                     )}
-                                    {String(task.status || '').toUpperCase() === 'EN_CURSO' && <TaskTimerBadge task={task} />}
+                                    {isRunning && <TaskTimerBadge task={task} />}
                                 </div>
-                                <div className="absolute right-2 top-2 flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:group-hover/card:opacity-100 sm:focus-within:opacity-100 transition-opacity">
-                                    {lifecycleAction === 'reintegrate' ? (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onReopen(task); }}
-                                            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 text-zinc-400 transition-colors hover:bg-brand-cyan/10 hover:text-brand-cyan-deep dark:hover:text-brand-cyan sm:min-h-8 sm:min-w-8"
-                                            title="Reintegrar tarea"
-                                            aria-label="Reintegrar tarea"
-                                        >
-                                            <TaskReintegrateIcon className="w-3.5 h-3.5" />
-                                        </button>
-                                    ) : lifecycleAction === 'return' ? (
-                                        <button
-                                            onClick={(e) => { e.stopPropagation(); onReturn(task); }}
-                                            className="brain-danger-button-icon group/btn inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 sm:min-h-8 sm:min-w-8"
-                                            title="Devolver tarea"
-                                            aria-label="Devolver tarea"
-                                        >
-                                            <TaskReturnIcon className="w-3.5 h-3.5" />
-                                        </button>
-                                    ) : null}
+                            )}
+
+                            {/* Acciones rápidas, ancladas a la esquina superior derecha de la tarjeta. */}
+                            <div className="absolute right-2 top-2 flex shrink-0 items-center gap-0.5 sm:opacity-0 sm:group-hover/card:opacity-100 sm:focus-within:opacity-100 transition-opacity">
+                                {lifecycleAction === 'reintegrate' ? (
                                     <button
-                                        onClick={(e) => { e.stopPropagation(); onDelete(task); }}
-                                        className="brain-danger-button-icon group/btn inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 sm:min-h-8 sm:min-w-8"
-                                        aria-label="Eliminar tarea"
-                                        title="Eliminar tarea"
+                                        onClick={(e) => { e.stopPropagation(); onReopen(task); }}
+                                        className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 text-zinc-400 transition-colors hover:bg-brand-cyan/10 hover:text-brand-cyan-deep dark:hover:text-brand-cyan sm:min-h-8 sm:min-w-8"
+                                        title="Reintegrar tarea"
+                                        aria-label="Reintegrar tarea"
                                     >
-                                        <Trash2 className="w-3.5 h-3.5" />
+                                        <TaskReintegrateIcon className="w-3.5 h-3.5" />
                                     </button>
-                                </div>
+                                ) : lifecycleAction === 'return' ? (
+                                    <button
+                                        onClick={(e) => { e.stopPropagation(); onReturn(task); }}
+                                        className="brain-danger-button-icon group/btn inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 sm:min-h-8 sm:min-w-8"
+                                        title="Devolver tarea"
+                                        aria-label="Devolver tarea"
+                                    >
+                                        <TaskReturnIcon className="w-3.5 h-3.5" />
+                                    </button>
+                                ) : null}
+                                <button
+                                    onClick={(e) => { e.stopPropagation(); onDelete(task); }}
+                                    className="brain-danger-button-icon group/btn inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl p-1 sm:min-h-8 sm:min-w-8"
+                                    aria-label="Eliminar tarea"
+                                    title="Eliminar tarea"
+                                >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                             </div>
 
-                            {/* Title. Un pendiente privado que este usuario no puede abrir
-                                lleva un candado: el título se lee, el contenido no. */}
-                            <h4 className="flex items-start gap-1.5 text-sm font-bold leading-snug text-zinc-900 dark:text-zinc-50" title={task.isLocked ? `${task.title} · ${task.privateHint || 'Pendiente privado'}` : task.title}>
-                                {task.isLocked && <Lock data-task-private="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" aria-label="Pendiente privado" />}
-                                <span className="min-w-0">{task.title}</span>
-                            </h4>
+                            {/* Cliente y título, juntos y en ese orden (Rodny, 30 de septiembre de 2026): de quién es
+                                el trabajo antes que el trabajo. El cliente estaba abajo, apretado entre la categoría
+                                y la complejidad, y su nombre se recortaba a dos sílabas. Lleva `pr-16` porque las
+                                acciones del hover caen justo encima. El candado marca un pendiente privado que este
+                                usuario no puede abrir: el título se lee, el contenido no. */}
+                            <div className="flex flex-col gap-2">
+                                <div data-task-client className="flex min-w-0 items-center gap-2 pr-16" title={`${task.clientName} · Creado por ${task.creatorName}`}>
+                                    <ClientAvatar
+                                        client={{ id: task.clientId, name: task.clientName, logoUrl: task.client?.logoUrl }}
+                                        size={20}
+                                    />
+                                    <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                                        {task.clientName}
+                                    </span>
+                                </div>
+                                <h4 className="flex items-start gap-1.5 text-sm font-bold leading-relaxed text-zinc-900 dark:text-zinc-50" title={task.isLocked ? `${task.title} · ${task.privateHint || 'Pendiente privado'}` : task.title}>
+                                    {task.isLocked && <Lock data-task-private="true" className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" aria-label="Pendiente privado" />}
+                                    <span className="min-w-0">{task.title}</span>
+                                </h4>
+                            </div>
 
-                            {/* Row 3: assignee + date */}
+                            {/* Responsable + fecha */}
                             <div className="flex items-center justify-between gap-3 text-xs">
                                 <div data-task-assignee className="flex min-w-0 items-center gap-2" title={`Asignada a ${task.assigneeName} · Creado por ${task.creatorName}`}>
                                     <UserAvatarPopover user={{
@@ -1731,19 +1757,13 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                                 <p className="line-clamp-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">{snippet}</p>
                             )}
 
-                            {/* Footer: client, category/complexity, files, comments, badges */}
-                            <div className="flex items-center justify-between gap-2 border-t border-zinc-100 pt-3 dark:border-white/10">
-                                <div className="flex min-w-0 items-center gap-2">
-                                    <ClientAvatar
-                                        client={{ id: task.clientId, name: task.clientName, logoUrl: task.client?.logoUrl }}
-                                        size={18}
-                                    />
-                                    <span className="truncate text-[11px] font-semibold text-zinc-600 dark:text-zinc-300" title={`${task.clientName} · Creado por ${task.creatorName}`}>
-                                        {task.clientName}
-                                    </span>
-                                    <span className="hidden items-center gap-1 text-[10px] font-semibold uppercase tracking-tight text-zinc-400 sm:inline-flex">
+                            {/* Pie: categoría y complejidad, adjuntos, comentarios y distintivos. El cliente
+                                subió al encabezado, así que la categoría recupera el ancho que le faltaba. */}
+                            <div className="flex items-center justify-between gap-2 border-t border-zinc-100 pt-4 dark:border-white/10">
+                                <div className="flex min-w-0 items-center gap-2.5">
+                                    <span className="hidden items-center gap-1.5 text-[10px] font-semibold uppercase tracking-tight text-zinc-400 sm:inline-flex">
                                         <span className="h-1.5 w-1.5 rounded-full" style={{ backgroundColor: CATEGORY_COLORS[task.aiCategory] || '#94a3b8' }} />
-                                        <span className="truncate max-w-[110px]">{task.aiCategory || 'Sin clasificar'}</span>
+                                        <span className="truncate max-w-[160px]">{task.aiCategory || 'Sin clasificar'}</span>
                                     </span>
                                     {task.aiComplexity && (
                                         <span className={cn(

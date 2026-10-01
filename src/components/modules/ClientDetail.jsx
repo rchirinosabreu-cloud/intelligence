@@ -60,8 +60,12 @@ const ClientDetail = ({ client, onBack }) => {
             <ClientTasksWidget clientId={client.id} />
         </div>
 
-        {/* Right Column (Sidebar) */}
-        <div className="lg:col-span-1 flex flex-col gap-6">
+        {/* Right Column (Sidebar). `lg:self-start`: la rejilla estiraba esta columna a la altura de la
+            izquierda y dos widgets con `h-full` (Identidad Digital, Enlaces clave) reclamaban cada uno
+            esa altura entera, así que el flex aplastaba a Chat Flow y a Redes conectadas hasta dejar
+            solo la cabecera (30 de septiembre de 2026). Con la columna a su altura natural, `h-full`
+            deja de significar nada y cada tarjeta mide lo que contiene. */}
+        <div className="lg:col-span-1 lg:self-start flex flex-col gap-6">
             <FlowWidget
                 clientId={client.id}
                 externalOpen={isChatOpen}

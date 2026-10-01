@@ -111,6 +111,24 @@ export const createSignedDownload = async ({ key, expiresIn = 900 }) => {
     return { url, key, expiresIn };
 };
 
+/** El objeto entero en memoria: solo para imágenes (≤ 8 MB, el tope de Meta); nunca para un video. */
+export const getS3ObjectBuffer = async (key) => {
+    const response = await getFromS3Stream(key);
+    const chunks = [];
+    for await (const chunk of response.Body) chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    return Buffer.concat(chunks);
+};
+
+/** Escribe un objeto en una clave que elige quien llama (la copia para Instagram va junto al original). */
+export const putS3Object = async ({ key, body, contentType }) => {
+    const s3Client = getS3Client();
+    const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
+    if (!s3Client) throw new Error("S3 client not initialized");
+    if (!key) throw new Error("A put needs a key");
+    await s3Client.send(new PutObjectCommand({ Bucket: bucketName, Key: key, Body: body, ContentType: contentType }));
+    return { key, size: body.length, mimeType: contentType };
+};
+
 /**
  * Lo que el almacenamiento dice que hay en esa clave, o `null` si no hay nada.
  * Es la única forma de saber el peso real de lo que subió el navegador: lo que el cliente declara
