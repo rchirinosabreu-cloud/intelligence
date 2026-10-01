@@ -762,7 +762,7 @@ model ContentItem {
   finalAssetMimeType String?
   finalAssetSize     Int?
   finalAssets        ContentItemFinalAsset[]
-  /// Hora de publicación en reloj de Bogotá ('HH:mm'). Meta no guarda publicaciones programadas:
+  /// Hora de publicación en reloj de Bogotá ('HH:mm'). Instagram no admite programar por la API:
   /// la plataforma publica cuando llega esta hora (Rodny, 29 de septiembre de 2026).
   publishTime        String?
   publications       SocialPublication[]
