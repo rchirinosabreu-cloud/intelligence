@@ -53,9 +53,15 @@ Lo que Meta **no** deja hacer por API, y sigue siendo manual: música del catál
 
 ## Lo que hay que configurar fuera de la plataforma
 
-- Business Manager de Brain Studio verificado, con una **app de tipo Business** y un **usuario del sistema** con los permisos `pages_manage_posts`, `pages_read_engagement`, `instagram_basic`, `instagram_content_publish` y `business_management`.
-- Cada cliente da a Brain Studio acceso de socio sobre su página y su Instagram profesional (que debe estar vinculado a esa página).
-- El token del usuario del sistema (sin vencimiento) va en `META_SYSTEM_USER_TOKEN` en Railway. Sin él, «Conectar página» explica que falta y nada publica.
+**Desde el 1 de octubre de 2026 la llave es de una persona, no del usuario del sistema (decisión de Rodny).** Cada cliente tiene su propio portfolio en Meta y quien tiene acceso a todos es Francisco Villa, el CEO, como persona. El usuario del sistema del portfolio Brain Studio solo veía la página de Brain Studio, y para llegar a páginas de otros negocios Meta exige hacerse «proveedor de tecnología» (verificación y revisión de la app). Con un token de usuario de alguien con rol en la app basta el acceso estándar.
+
+- `META_SYSTEM_USER_TOKEN` en Railway (el nombre es histórico) contiene un **token de usuario de Francisco**, de la app `BrainStudio Metrics`, con `pages_show_list`, `pages_read_engagement`, `pages_manage_posts`, `instagram_basic`, `instagram_content_publish` y `business_management`. Ve las páginas en las que Francisco tiene rol (69 ese día). Sin él, «Conectar página» explica que falta y nada publica.
+- **Tiene que ser el token extendido.** Se genera en el Explorador de la API Graph y se extiende en el depurador de tokens («Extender token de acceso»). Las llaves de página que guarda la plataforma al conectar un cliente salen de él: de un token corto salen llaves cortas, que dejan de publicar en una o dos horas. Según Meta, las que salen de un token extendido no tienen fecha de caducidad.
+- **Renovarlo antes del 30 de diciembre de 2026**: el token no caduca, pero Meta marca esa fecha como fin del «acceso a datos». No está comprobado qué deja de funcionar ese día.
+- **Deja de valer antes** si Francisco cambia su contraseña, cierra la sesión de la app o Meta detecta un evento de seguridad en su cuenta. Entonces hay que generar otro y reconectar los clientes desde su ficha.
+- El token trae además permisos de anuncios que Francisco ya le había concedido a la app; Meta los incluye en cualquier token nuevo y quitarlos exige revocárselos a la app, lo que rompería sus otros usos.
+- El Instagram del cliente debe ser profesional y estar vinculado a su página de Facebook; si no, solo se conecta Facebook.
+- Con tantas páginas, «Conectar página» lleva buscador (`filterSocialPages`: nombre de la página o usuario de Instagram, sin tildes ni mayúsculas) y lista con scroll, y **solo conecta una página que está a la vista**: si la búsqueda esconde la elegida, «Conectar» se apaga.
 - El bucket de piezas finales sigue privado: Meta descarga por URL firmada (`createSignedDownload`), nunca por una URL pública.
 
 ## Lo que todavía no hace (siguiente fase)

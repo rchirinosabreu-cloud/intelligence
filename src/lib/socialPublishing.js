@@ -252,7 +252,24 @@ export const schedulingProblems = ({ item, assets = [], accounts = [], platforms
 };
 
 /** Espera creciente entre intentos: 2, 4 minutos… y al tercero se rinde. */
-export const nextPublicationRetryAt = (attempts, now = new Date()) => {
+const searchable = (value) => String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/**
+ * Las páginas de «Conectar página», buscadas y en orden alfabético (Rodny, 1 de octubre de 2026: con
+ * la llave del CEO la lista pasó de 1 página a 69). Busca en el nombre de la página y en el usuario
+ * de Instagram, sin distinguir tildes ni mayúsculas; cada palabra escrita tiene que aparecer.
+ */
+export const filterSocialPages = (pages, query = '') => {
+  const words = searchable(query).replace(/@/g, ' ').split(/\s+/).filter(Boolean);
+  return [...(Array.isArray(pages) ? pages : [])]
+    .filter((page) => {
+      const haystack = searchable(`${page.pageName || ''} ${page.instagram?.username || ''}`);
+      return words.every((word) => haystack.includes(word));
+    })
+    .sort((a, b) => String(a.pageName || '').trim().localeCompare(String(b.pageName || '').trim(), 'es', { sensitivity: 'base' }));
+};
+
+export const nextPublicationRetryAt =(attempts, now = new Date()) => {
   if (attempts >= MAX_PUBLICATION_ATTEMPTS) return null;
   return new Date(now.getTime() + RETRY_BASE_MS * 2 ** Math.max(0, attempts - 1));
 };

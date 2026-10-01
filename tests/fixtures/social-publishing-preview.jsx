@@ -42,6 +42,16 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: In
 queryClient.setQueryData(['social-accounts', 'c1'], [fb, ig]);
 queryClient.setQueryData(['social-accounts', 'c2'], []);
 queryClient.setQueryData(['social-accounts', 'c3'], [fbDead, ig]);
+// «Conectar página» con muchas páginas (1 de octubre de 2026: en producción pasaron a ser 69): el
+// buscador, el orden alfabético y la lista con scroll se ven aquí sin llamar a Meta.
+const SAMPLE_PAGES = [
+  ['Titanes Cartagena', 'titanescartagena'], ['Martínez & Nájera Abogados', 'martinezynajera'], ['Clínica del Mar', 'clinicadelmar'],
+  ['Barra Lima', null], ['Fundación Río Claro', 'fundacionrioclaro'], ['Colegio Los Álamos', 'colegiolosalamos'],
+  ['Panadería La Espiga', null], ['Óptica Central', 'opticacentral'], ['Hotel Bahía Azul', 'hotelbahiaazul'],
+  ['Academia Samurái', 'academiasamurai'], ['Vinos del Puerto', 'vinosdelpuerto'], ['Ferretería El Tornillo', null],
+  ['Estudio Ñandú', 'estudionandu'], ['Zapatería Paso Firme', 'pasofirme']
+].map(([pageName, username], index) => ({ pageId: `page-${index + 1}`, pageName, instagram: username ? { id: `ig-${index + 1}`, username } : null }));
+queryClient.setQueryData(['social-available-pages'], { configured: true, pages: SAMPLE_PAGES });
 
 function Caso({ title, item, accounts }) {
   const [hora, setHora] = useState(item.publishTime || '');
