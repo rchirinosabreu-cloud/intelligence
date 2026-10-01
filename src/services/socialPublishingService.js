@@ -17,7 +17,7 @@ import { createSignedDownload } from './s3Service.js';
 import { imageDerivativeService } from './socialImageDerivativeService.js';
 import {
   ACTIVE_PUBLICATION_STATUSES, MAX_PUBLICATION_ATTEMPTS, PUBLICATION_LEASE_MS, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS,
-  describeMetaMedia, humanizeMetaError, isPublishInstantTooSoon, isRetryableMetaError, nextPublicationRetryAt, publishAtIso, schedulingProblems
+  describeMetaMedia, facebookMedia, humanizeMetaError, isPublishInstantTooSoon, isRetryableMetaError, nextPublicationRetryAt, publishAtIso, schedulingProblems
 } from '../lib/socialPublishing.js';
 
 /** Una red que falló también cuenta como pendiente: la pieza no está «publicada» si una de sus redes no salió. */
@@ -68,15 +68,13 @@ export const publicSocialAccount = (account) => account && ({
 });
 
 /**
- * La URL que se le da a Meta. Para una imagen que va a Instagram, primero se prepara la copia que la
- * API acepta (JPEG dentro de la proporción del feed); Facebook y los videos reciben el original.
+ * La URL que se le da a Meta. Para una imagen se prepara primero la copia que esa red acepta: JPEG
+ * dentro de la proporción del feed en Instagram, JPEG de hasta 4 MB en Facebook. Los videos van tal cual.
  */
 const defaultMediaUrlFor = async (asset, { platform, kind } = {}) => {
   let key = asset.storageKey || asset.finalAssetKey;
-  if (platform === 'INSTAGRAM') {
-    const prepared = await imageDerivativeService.prepareForInstagram(asset, { kind });
-    key = prepared.key;
-  }
+  if (platform === 'INSTAGRAM') key = (await imageDerivativeService.prepareForInstagram(asset, { kind })).key;
+  else if (platform === 'FACEBOOK') key = (await imageDerivativeService.prepareForFacebook(asset)).key;
   const { url } = await createSignedDownload({ key, expiresIn: MEDIA_URL_TTL_SECONDS });
   return url;
 };
@@ -248,7 +246,9 @@ export const createSocialPublishingService = ({
       const problems = schedulingProblems({ item, assets: item.finalAssets, accounts: account ? [account] : [], platforms: [full.platform], now: new Date(0) });
       if (problems.length) throw Object.assign(new Error(problems[0]), { permanent: true });
 
-      const media = describeMetaMedia({ format: item.format, assets: item.finalAssets });
+      const described = describeMetaMedia({ format: item.format, assets: item.finalAssets });
+      // Facebook recibe el carrusel sin sus videos (su API no los admite entre varias fotos).
+      const media = full.platform === 'FACEBOOK' ? facebookMedia({ kind: described.kind, assets: described.assets }) : described;
       const files = [];
       for (const asset of media.assets) files.push({ url: await mediaUrlFor(asset, { platform: full.platform, kind: media.kind }), isVideo: isVideoAsset(asset) });
       const token = decryptToken(account.encryptedToken);

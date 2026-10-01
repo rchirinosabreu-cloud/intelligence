@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Clock, ExternalLink, Facebook, Info, Instagram, Loader2, Send } from '@/components/ui/icons';
-import { SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS, publishAtIso, schedulingProblems } from '@/lib/socialPublishing';
+import { SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS, publishAtIso, schedulingNotices, schedulingProblems } from '@/lib/socialPublishing';
 
 /**
  * Publicación automática de una pieza en Instagram y Facebook (Rodny, 29 de septiembre de 2026).
@@ -50,6 +50,10 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
   const platforms = selectable.map((account) => account.platform).filter((platform) => chosen.has(platform));
   const problems = platforms.length
     ? schedulingProblems({ item, assets: item.finalAssets || [], accounts: active, platforms, now: new Date() })
+    : [];
+  // Lo que no impide programar pero hay que saber antes de pulsar (en Facebook el carrusel sale sin video).
+  const notices = platforms.length && !problems.length
+    ? schedulingNotices({ item, assets: item.finalAssets || [], platforms })
     : [];
   const publishAt = publishAtIso(item.publishDate, item.publishTime);
 
@@ -141,6 +145,18 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
               {/* Son avisos de qué falta, no errores: icono informativo, sin el color destructivo. */}
               <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" aria-hidden="true" />
               <span>{problem}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {/* Avisos que no bloquean: se puede programar, pero la persona sabe antes qué sale distinto. */}
+      {notices.length > 0 && (
+        <ul className="mt-3 space-y-1 text-[12px] text-zinc-600 dark:text-zinc-300" data-social-notices>
+          {notices.map((notice) => (
+            <li key={notice} className="flex items-start gap-1.5">
+              <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-brand-cyan-deep dark:text-brand-cyan" aria-hidden="true" />
+              <span>{notice}</span>
             </li>
           ))}
         </ul>

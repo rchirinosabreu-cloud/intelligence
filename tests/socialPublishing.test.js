@@ -46,7 +46,8 @@ test('each format maps to the Meta content type that Meta can actually publish',
 });
 
 test('Meta limits are checked before spending the publication', () => {
-  assert.match(describeMetaMedia({ format: 'Post', assets: [{ ...image, size: 9 * 1024 * 1024 }] }).problem, /8 MB/);
+  // 1 October 2026: an image's weight no longer blocks scheduling; the copy sent to Meta is compressed to fit.
+  assert.equal(describeMetaMedia({ format: 'Post', assets: [{ ...image, size: 9 * 1024 * 1024 }] }).problem, null);
   assert.match(describeMetaMedia({ format: 'Reel', assets: [{ ...video, size: 301 * 1024 * 1024 }] }).problem, /300 MB/);
   assert.match(describeMetaMedia({ format: 'Historia', assets: [{ ...video, size: 101 * 1024 * 1024 }] }).problem, /100 MB/);
   assert.match(describeMetaMedia({ format: 'Post', assets: [{ ...image, mimeType: 'image/gif' }] }).problem, /JPG|PNG/);
