@@ -295,5 +295,9 @@ export const humanizeMetaError = (error) => {
   if (Number.isFinite(code) && META_ERROR_TEXT[code]) return META_ERROR_TEXT[code];
   if (NETWORK_CODES.has(String(error.code))) return 'No se pudo llegar a Meta; se vuelve a intentar.';
   const message = String(error.userMessage || error.message || '').trim();
+  // Solo lo que dijo Meta se cuenta como dicho por Meta. Un fallo nuestro antes de pedirle nada
+  // (leer el archivo, firmar la URL) salía como «Meta respondió: …» y mandaba a buscar donde no era.
+  const fromMeta = error.name === 'MetaGraphError' || Number(error.status) > 0 || (error.code != null && Number.isFinite(code));
+  if (!fromMeta) return message ? `No se pudo preparar la publicación: ${message}` : 'No se pudo preparar la publicación.';
   return message ? `Meta respondió: ${message}` : 'Meta respondió con un error sin detalle.';
 };

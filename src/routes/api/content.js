@@ -312,7 +312,8 @@ router.post('/items/:id/final-assets', receiveFinalAssets(carouselUpload.array('
     return res.status(201).json(assets);
   } catch (error) {
     console.error('[API] Error uploading final carousel assets:', error.response?.data || error);
-    return res.status(500).json({ error: error.message || 'Failed to upload final assets', details: error.message });
+    // Un archivo rechazado por su contenido es un 400 con su motivo: en producción un 5xx pierde el mensaje.
+    return res.status(error.status === 400 ? 400 : 500).json({ error: error.message || 'Failed to upload final assets', details: error.message });
   }
 });
 
