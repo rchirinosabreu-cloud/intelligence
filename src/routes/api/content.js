@@ -24,6 +24,7 @@ import {
   confirmContentItemFinalAssets
 } from '../../services/contentService.js';
 import { getFromS3Stream } from '../../services/s3Service.js';
+import { reorderContentItemFinalAssets } from '../../services/finalAssetOrderService.js';
 import { isDriveAsset } from '../../lib/finalAssetShape.js';
 import {
   getContentPlanReview,
@@ -349,6 +350,20 @@ router.post('/items/:id/final-assets/confirm', async (req, res) => {
   } catch (error) {
     console.error('[API] Error confirming a direct upload:', error.response?.data || error.message);
     return res.status(400).json({ error: error.message });
+  }
+});
+
+/**
+ * El orden de los archivos es el orden del carrusel que sale en redes (Rodny, 1 de octubre de 2026).
+ * El cuerpo trae la lista completa de identificadores en el orden nuevo.
+ */
+router.put('/items/:id/final-assets/order', async (req, res) => {
+  try {
+    return res.json(await reorderContentItemFinalAssets(req.params.id, req.body?.order));
+  } catch (error) {
+    console.error('[API] Error reordering final assets:', error.response?.data || error.message);
+    const status = Number(error.status) >= 400 && Number(error.status) < 500 ? error.status : 500;
+    return res.status(status).json({ error: status === 500 ? 'No se pudo guardar el orden. Inténtalo de nuevo.' : error.message });
   }
 });
 
