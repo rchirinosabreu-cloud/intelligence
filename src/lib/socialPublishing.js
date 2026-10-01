@@ -47,7 +47,7 @@ export const INSTAGRAM_FEED_MAX_RATIO = 1.91;
  * dentro del rango de proporción: lo que no cumple se convierte en una copia (PNG → JPEG) y se le añade
  * margen —nunca se recorta— hasta el borde más cercano del rango. Historias no tienen regla de proporción.
  */
-export const instagramImagePlan = ({ mimeType, width, height, kind }) => {
+export const instagramImagePlan = ({ mimeType, width, height, kind, size = 0 }) => {
   const reasons = [];
   const mime = String(mimeType || '').toLowerCase();
   if (!/image\/jpe?g/.test(mime)) reasons.push('png');
@@ -59,11 +59,29 @@ export const instagramImagePlan = ({ mimeType, width, height, kind }) => {
     else if (ratio > INSTAGRAM_FEED_MAX_RATIO) canvas = { width, height: Math.ceil(width / INSTAGRAM_FEED_MAX_RATIO) };
     if (canvas) reasons.push('ratio');
   }
+  if (Number(size) > META_IMAGE_MAX_BYTES) reasons.push('size');
   return { convert: reasons.length > 0, canvas, reasons };
 };
 
 // Límites publicados por Meta para /{ig-user-id}/media (leídos el 29 de septiembre de 2026).
 export const META_IMAGE_MAX_BYTES = 8 * MB;
+/**
+ * Facebook, `/{page-id}/photos` (leído el 1 de octubre de 2026): acepta JPEG, BMP, PNG, GIF y TIFF,
+ * pero «los archivos no pueden superar los 4 MB» y recomienda que un PNG no pase de 1 MB. Un PNG de
+ * diseño pesa varias veces eso, así que a Facebook también se le manda una copia JPEG.
+ */
+export const FACEBOOK_PHOTO_MAX_BYTES = 4 * MB;
+const FACEBOOK_PNG_RECOMMENDED_BYTES = 1 * MB;
+
+/** Qué hacer con una imagen antes de dársela a Facebook: sin regla de proporción, solo formato y peso. */
+export const facebookImagePlan = ({ mimeType, size = 0 }) => {
+  const reasons = [];
+  const mime = String(mimeType || '').toLowerCase();
+  const jpeg = /image\/jpe?g/.test(mime);
+  if (!jpeg && Number(size) > FACEBOOK_PNG_RECOMMENDED_BYTES) reasons.push('png');
+  if (Number(size) > FACEBOOK_PHOTO_MAX_BYTES) reasons.push('size');
+  return { convert: reasons.length > 0, canvas: null, reasons };
+};
 export const META_REEL_MAX_BYTES = 300 * MB;
 export const META_STORY_VIDEO_MAX_BYTES = 100 * MB;
 export const CAROUSEL_MIN_ITEMS = 2;
@@ -111,7 +129,8 @@ const mediaFileProblem = (asset, { kind }) => {
   }
   if (isImage(asset)) {
     if (!IMAGE_TYPES.has(mimeOf(asset))) return `«${name}» debe ser JPG o PNG para publicarse en Meta.`;
-    if (Number(asset.size || 0) > META_IMAGE_MAX_BYTES) return `«${name}» pesa ${formatMb(asset.size)}; Meta acepta imágenes de hasta 8 MB.`;
+    // El peso de una imagen ya no impide nada: la copia que se le manda a Meta se comprime hasta caber
+    // (8 MB en Instagram, 4 MB en Facebook). Antes un PNG de diseño de 9 MB bloqueaba la programación.
     return null;
   }
   if (isVideo(asset)) {
@@ -159,6 +178,40 @@ export const describeMetaMedia = ({ format, assets = [] }) => {
   return result(kind, fileProblem || null);
 };
 
+/**
+ * Lo que de verdad recibe Facebook. Su API no ofrece un post de varias fotos con un video dentro
+ * (`/{page-id}/feed` con fotos sin publicar no admite videos), así que un carrusel mixto sale en
+ * Facebook **solo con las fotos** (Rodny, 1 de octubre de 2026: «publiquemos también en FB sin el
+ * video»). Una sola foto restante es un post de foto; ninguna, no hay qué publicar.
+ */
+export const facebookMedia = ({ kind, assets = [] }) => {
+  if (kind !== 'CAROUSEL') return { kind, assets, droppedVideos: [], problem: null };
+  const photos = assets.filter((asset) => !isVideo(asset));
+  const droppedVideos = assets.filter(isVideo);
+  if (!photos.length) {
+    return { kind, assets: [], droppedVideos, problem: 'En Facebook una publicación de varios archivos solo lleva fotos, y esta pieza solo tiene videos.' };
+  }
+  return { kind: photos.length === 1 ? 'IMAGE' : 'CAROUSEL', assets: photos, droppedVideos, problem: null };
+};
+
+/**
+ * Avisos que no impiden programar pero que la persona tiene que saber antes de pulsar: hoy, que en
+ * Facebook el carrusel sale sin sus videos. Se dicen en la banda, junto a los motivos que sí bloquean.
+ */
+export const schedulingNotices = ({ item, assets = [], platforms = [] }) => {
+  const notices = [];
+  const wanted = (platforms || []).map((platform) => String(platform || '').toUpperCase());
+  if (!wanted.includes('FACEBOOK')) return notices;
+  const media = describeMetaMedia({ format: item?.format, assets });
+  if (media.problem) return notices;
+  const facebook = facebookMedia({ kind: media.kind, assets });
+  if (facebook.droppedVideos.length && !facebook.problem) {
+    const names = facebook.droppedVideos.map((asset) => `«${asset.name || 'video'}»`).join(', ');
+    notices.push(`En Facebook sale sin ${facebook.droppedVideos.length > 1 ? 'los videos' : 'el video'} ${names}: Facebook no admite video dentro de una publicación de varias fotos. En Instagram sale completo.`);
+  }
+  return notices;
+};
+
 const platformLabel = (platform) => SOCIAL_PLATFORM_LABELS[platform] || platform;
 
 /**
@@ -186,6 +239,10 @@ export const schedulingProblems = ({ item, assets = [], accounts = [], platforms
     const media = describeMetaMedia({ format: item?.format, assets });
     if (media.problem) problems.push(media.problem);
     else if (media.kind === 'STORIES' && wanted.includes('FACEBOOK')) problems.push('Una historia solo se publica en Instagram, no en Facebook.');
+    else if (wanted.includes('FACEBOOK')) {
+      const facebook = facebookMedia({ kind: media.kind, assets });
+      if (facebook.problem) problems.push(facebook.problem);
+    }
   }
 
   if (String(item?.captionText || '').length > CAPTION_MAX_CHARS) {
