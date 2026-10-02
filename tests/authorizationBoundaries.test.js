@@ -65,12 +65,10 @@ test('notification reads are scoped to the authenticated user', async () => {
   assert.match(service, /where:\s*\{\s*id:\s*notificationId,\s*userId\s*\}/);
 });
 
-test('integration credentials are never serialized and management requires a manager role', async () => {
-  const integrations = await read('src/routes/api/integrations.js');
+test('the retired integrations API (stored credentials) is no longer mounted', async () => {
+  const routes = await read('src/routes/index.js');
 
-  assert.match(integrations, /router\.use\(requireManagerRole\)/);
-  assert.match(integrations, /select:\s*publicIntegrationSelect/);
-  assert.doesNotMatch(integrations, /credentials:\s*true/);
+  assert.doesNotMatch(routes, /integrationsRouter|['"]\/integrations['"]/);
 });
 
 test('legacy announcement writes and direct notification creation require managers', async () => {

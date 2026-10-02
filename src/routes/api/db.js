@@ -1,5 +1,4 @@
 import express from 'express';
-import prisma from '../../lib/prisma.js';
 import { getClientByIdentifier, getClients } from '../../services/clientService.js';
 
 const router = express.Router();
@@ -25,19 +24,6 @@ router.get('/clients', async (req, res) => {
         };
         const clients = await getClients(filters);
         return res.json(clients);
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
-});
-
-// Get service catalog for quotations
-router.get('/service-catalog', async (req, res) => {
-    try {
-        const catalog = await prisma.serviceCatalog.findMany({
-            where: { activo: true },
-            orderBy: { category: 'asc' }
-        });
-        return res.json(catalog);
     } catch (error) {
         return res.status(500).json({ error: error.message });
     }

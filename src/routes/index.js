@@ -1,6 +1,5 @@
 import express from 'express';
 import * as authController from '../controllers/authController.js';
-import * as chatController from '../controllers/chatController.js';
 import * as taskController from '../controllers/taskController.js';
 import * as clientController from '../controllers/clientController.js';
 import * as notificationController from '../controllers/notificationController.js';
@@ -30,7 +29,6 @@ import { MAX_COMMENT_FILES, MAX_COMMENT_FILE_BYTES } from '../lib/taskCommentAtt
 import teamRouter from './api/team.js';
 import userRouter from './api/user.js';
 import feedbackRouter from './api/feedback.js';
-import integrationsRouter from './api/integrations.js';
 import contentRouter from './api/content.js';
 import dbRouter from './api/db.js';
 import servicesRouter from './api/services.js';
@@ -38,10 +36,8 @@ import clientFileRouter from './api/clientFiles.js';
 import talentRadarRouter from './api/talentRadar.js';
 import activityRouter from './api/activity.js';
 import reportsRouter from './api/reports.js';
-import brainCoreRouter from './api/brainCore.js';
 import boardsRouter from './api/boards.js';
 import quotationsRouter from './api/quotations.js';
-import operativeIntelligenceRouter from './api/operativeIntelligence.js';
 import financialsRouter from './api/financials.js';
 import dashboardRouter from './api/dashboard.js';
 import recognitionRouter from './api/recognitions.js';
@@ -53,7 +49,6 @@ import socialPublishingRouter from './api/socialPublishing.js';
 import clientOperationsRouter from './api/clientOperations.js';
 import { createAiGovernanceRouter } from './api/aiGovernance.js';
 import { createTeamChatRouter, createTeamChatMediaRouter } from './api/teamChat.js';
-import { getUpcomingEvents } from '../services/calendarService.js';
 import { handleGoogleCalendarWebhook } from '../services/operationalEventService.js';
 import { handleFirefliesWebhook } from '../services/firefliesWebhookService.js';
 
@@ -124,8 +119,6 @@ router.use(authenticateToken);
 router.use(aiRequestContextMiddleware);
 router.use('/team-chat', createTeamChatRouter());
 
-router.post('/sync-users', requireManagerRole, authController.syncUsers);
-
 router.get('/auth/me', async (req, res) => {
     try {
         const user = await prisma.user.findUnique({
@@ -163,12 +156,6 @@ router.get('/auth/me', async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
-
-// System Health
-router.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
-
-// Chat
-router.post('/chat', requireModulePermission('manager'), chatController.handleChat);
 
 // Manager descriptive task intelligence. Keep this restricted to operational leaders.
 router.get(
@@ -216,7 +203,6 @@ router.patch(
 
 // Tasks
 router.use('/tasks', requireModulePermission('gestion'));
-router.get('/metrics/tasks', taskController.getMetrics);
 router.get('/metrics/quality-streak', taskController.getStreak);
 router.get('/tasks/completed', taskController.getCompleted);
 router.get('/tasks/work-alerts', taskController.getMyExcessiveTaskAlerts);
@@ -245,12 +231,7 @@ router.post('/tasks/:taskId/comments/:commentId/reactions', guardTask, taskContr
 router.patch('/tasks/:taskId/comments/:commentId', guardTask, taskController.updateTaskComment);
 router.delete('/tasks/:taskId/comments/:commentId', guardTask, taskController.deleteTaskComment);
 
-// Client Specific (Tasks, Links, Logo)
-router.get('/db/clients/:clientId/tasks', taskController.getClientTasksHandler);
-router.post('/db/clients/:clientId/tasks', taskController.createClientTaskHandler);
-router.patch('/db/tasks/:taskId', taskController.updateClientTaskHandler);
-router.delete('/db/tasks/:taskId', taskController.deleteClientTaskHandler);
-
+// Client Specific (Links, Logo)
 router.get('/db/clients/:clientId/links', clientController.getLinks);
 router.post('/db/clients/:clientId/links', clientController.addLink);
 router.delete('/db/links/:linkId', clientController.deleteLink);
@@ -266,7 +247,6 @@ router.patch('/clients/:id/archive', requireManagerRole, clientController.archiv
 
 // Notifications
 router.get('/notifications', notificationController.listNotifications);
-router.get('/notifications/unread-count', notificationController.getUnreadCount);
 router.post('/notifications', requireManagerRole, notificationController.addNotification);
 router.patch('/notifications/:id/read', notificationController.markRead);
 router.post('/notifications/read-all', notificationController.markAllRead);
@@ -291,16 +271,6 @@ router.post('/clients/:clientId/flow', flowController.addFlow);
 router.get('/general-chat', flowController.listGeneral);
 router.post('/general-chat', flowController.addGeneral);
 
-// Calendar
-router.get('/calendar/upcoming', async (req, res) => {
-    try {
-        const events = await getUpcomingEvents();
-        res.json(events);
-    } catch (error) {
-        res.status(500).json({ error: "Failed to fetch calendar events" });
-    }
-});
-
 // Proxies
 router.post('/openai/v1/chat/completions', requireModulePermission('manager'), proxyController.openaiProxy);
 router.post('/fireflies/graphql', requireModulePermission('minutas'), proxyController.firefliesProxy);
@@ -312,7 +282,6 @@ router.use('/drive', requireModulePermission('minutas'), driveRouter);
 router.use('/user', userRouter);
 router.use('/team', teamRouter);
 router.use('/feedback', feedbackRouter);
-router.use('/integrations', integrationsRouter);
 router.use('/content', requireModulePermission('parrillas'), contentRouter);
 router.use('/social', requireModulePermission('parrillas'), socialPublishingRouter);
 router.use('/db', dbRouter);
@@ -323,9 +292,7 @@ router.use('/activity', requireModulePermission('actividad'), activityRouter);
 router.use('/dashboard', dashboardRouter);
 router.use('/recognitions', recognitionRouter);
 router.use('/reports', requireModulePermission('reportes'), reportsRouter);
-router.use('/brain-core', brainCoreRouter);
 router.use('/boards', requireModulePermission('inspiracion'), boardsRouter);
-router.use('/operative-intelligence', operativeIntelligenceRouter);
 router.use('/financials', financialsRouter);
 router.use('/crm', requireModulePermission('crm'), crmRouter);
 router.use('/ai-governance', createAiGovernanceRouter());

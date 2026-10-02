@@ -164,21 +164,6 @@ export const markAllNotificationsAsRead = async (userId) => {
     }
 };
 
-export const getUnreadNotificationCount = async (userId) => {
-    try {
-        const count = await prisma.notification.count({
-            where: {
-                userId,
-                isRead: false
-            }
-        });
-        return count;
-    } catch (error) {
-        console.error(`[${new Date().toISOString()}] [NotificationService] Error counting notifications:`, error?.message || error);
-        throw error;
-    }
-};
-
 export const getNotifications = async (userId) => {
     try {
         const notifications = await prisma.notification.findMany({

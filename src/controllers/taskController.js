@@ -9,8 +9,7 @@ const sanitizeHTML = (html) => {
     });
 };
 
-import { getDashboardMetrics, getQualityStreak, getCompletedTasks, getTasks, createTask, updateTask, auditAndDeleteTask, toggleTaskFollow, checkIsFollowing } from '../services/nativeTaskService.js';
-import { getClientTasks, createClientTask, updateTaskStatus as updateClientTaskStatus, deleteTask } from '../services/clientTaskService.js';
+import { getQualityStreak, getCompletedTasks, getTasks, createTask, updateTask, auditAndDeleteTask, toggleTaskFollow, checkIsFollowing } from '../services/nativeTaskService.js';
 import { uploadToS3, getFromS3Stream, deleteFromS3 } from '../services/s3Service.js';
 import { resolveTaskCommentFile } from '../services/taskCommentFileService.js';
 import { createNotification, processMentionsAndNotifications } from '../services/notificationService.js';
@@ -51,15 +50,6 @@ const extractManagedS3Key = (rawUrl) => {
 const safeDownloadName = (name = 'adjunto_tarea') => String(name)
     .replace(/[\r\n"\\/]/g, '_')
     .slice(0, 180) || 'adjunto_tarea';
-
-export const getMetrics = async (req, res) => {
-    try {
-        const metrics = await getDashboardMetrics();
-        res.json(metrics);
-    } catch (error) {
-        res.status(500).json({ error: "Failed to fetch metrics", details: error.message });
-    }
-};
 
 export const getStreak = async (req, res) => {
     try {
@@ -665,43 +655,5 @@ export const deleteTaskComment = async (req, res) => {
         res.json({ success: true, message: "Comentario eliminado exitosamente" });
     } catch (error) {
         res.status(500).json({ error: "Failed to delete comment", details: error.message });
-    }
-};
-
-export const getClientTasksHandler = async (req, res) => {
-    try {
-        const tasks = await getClientTasks(req.params.clientId);
-        res.json(tasks);
-    } catch (error) {
-        res.status(500).json({ error: "Failed to fetch tasks", details: error.message });
-    }
-};
-
-export const createClientTaskHandler = async (req, res) => {
-    try {
-        const { text, dueDate, assigneeId } = req.body;
-        if (!text) return res.status(400).json({ error: "Missing text" });
-        const task = await createClientTask({ clientId: req.params.clientId, text, dueDate, assigneeId });
-        res.json(task);
-    } catch (error) {
-        res.status(500).json({ error: "Failed to create task", details: error.message });
-    }
-};
-
-export const updateClientTaskHandler = async (req, res) => {
-    try {
-        const task = await updateClientTaskStatus(req.params.taskId, req.body);
-        res.json(task);
-    } catch (error) {
-        res.status(500).json({ error: "Failed to update task", details: error.message });
-    }
-};
-
-export const deleteClientTaskHandler = async (req, res) => {
-    try {
-        await deleteTask(req.params.taskId);
-        res.json({ success: true });
-    } catch (error) {
-        res.status(500).json({ error: "Failed to delete task", details: error.message });
     }
 };

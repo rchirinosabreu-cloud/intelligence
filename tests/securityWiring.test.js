@@ -4,14 +4,11 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-test('external website analysis and moodboard unfurl use the SSRF-safe fetcher', async () => {
+test('moodboard unfurl uses the SSRF-safe fetcher', async () => {
   const boards = await read('src/routes/api/boards.js');
-  const audit = await read('src/services/auditService.js');
 
   assert.match(boards, /safeFetchText/);
   assert.doesNotMatch(boards, /axios\.get\(url/);
-  assert.match(audit, /safeFetchText/);
-  assert.doesNotMatch(audit, /fetch\(url/);
 });
 
 test('server wires security headers, rate limits, public health, and production-safe errors', async () => {
@@ -31,10 +28,9 @@ test('memory uploads have explicit file and count limits', async () => {
   const mainRoutes = await read('src/routes/index.js');
   const reports = await read('src/routes/api/reports.js');
   const radar = await read('src/routes/api/talentRadar.js');
-  const brainCore = await read('src/routes/api/brainCore.js');
   const content = await read('src/routes/api/content.js');
 
-  for (const source of [mainRoutes, reports, radar, brainCore, content]) {
+  for (const source of [mainRoutes, reports, radar, content]) {
     assert.match(source, /limits:\s*\{/);
     assert.match(source, /fileSize:/);
   }

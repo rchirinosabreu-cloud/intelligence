@@ -27,7 +27,6 @@ test('global interceptors consult the trusted request boundary before adding JWT
 
 test('production modules use the canonical authToken storage key', async () => {
   const files = [
-    'src/components/modules/Chat.jsx',
     'src/components/modules/Reports.jsx',
     'src/components/modules/Quotations/QuotationList.jsx',
     'src/components/modules/Quotations/QuotationForm.jsx'

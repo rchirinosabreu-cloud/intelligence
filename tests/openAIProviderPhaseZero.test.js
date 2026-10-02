@@ -116,17 +116,16 @@ test('OpenAI health accepts a successful authenticated response even when the ti
 });
 
 test('Phase 0 selects OpenAI in every active Brain runtime and reports real AI health', async () => {
-  const [config, aiService, brainCore, talentRadar, proxy, server] = await Promise.all([
+  const [config, aiService, talentRadar, proxy, server] = await Promise.all([
     readFile('src/config/aiConfig.js', 'utf8'),
     readFile('src/services/aiService.js', 'utf8'),
-    readFile('src/services/brainCoreService.js', 'utf8'),
     readFile('src/routes/api/talentRadar.js', 'utf8'),
     readFile('src/controllers/proxyController.js', 'utf8'),
     readFile('server.js', 'utf8')
   ]);
 
   assert.match(config, /provider:\s*['"]openai['"]/);
-  for (const source of [aiService, brainCore, talentRadar]) {
+  for (const source of [aiService, talentRadar]) {
     assert.doesNotMatch(source, /@google\/genai|GoogleGenAI|GEMINI_API_KEY|GEMINI_MODEL/);
   }
   assert.doesNotMatch(server, /Google GenAI iniciado correctamente/);

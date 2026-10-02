@@ -1,4 +1,4 @@
-import { getNotifications, getUnreadNotificationCount, createNotification, markAsRead, markAllNotificationsAsRead } from '../services/notificationService.js';
+import { getNotifications,createNotification, markAsRead, markAllNotificationsAsRead } from '../services/notificationService.js';
 
 export const listNotifications = async (req, res) => {
     try {
@@ -7,16 +7,6 @@ export const listNotifications = async (req, res) => {
         res.json(notifications);
     } catch (error) {
         res.status(500).json({ error: "Failed to fetch notifications" });
-    }
-};
-
-export const getUnreadCount = async (req, res) => {
-    try {
-        res.setHeader('Cache-Control', 'no-store, max-age=0');
-        const count = await getUnreadNotificationCount(req.user.userId);
-        res.json({ count });
-    } catch (error) {
-        res.status(500).json({ error: "Failed to fetch unread count" });
     }
 };
 
