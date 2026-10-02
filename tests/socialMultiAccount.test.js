@@ -190,4 +190,9 @@ test('the band lets the person choose the accounts of the piece, and the month s
   const widget = readFileSync('src/components/modules/SocialAccountsWidget.jsx', 'utf8');
   assert.match(widget, /socialPagesOf\(/);
   assert.match(widget, /Conectar otra página/);
+  // Rodny, 2 October 2026: «ese botón está muy largo… solo deja el icono de +». With accounts already
+  // connected the button is the plus alone; what it does is said to a screen reader and on hover.
+  assert.match(widget, /aria-label=\{connectLabel\}/);
+  assert.match(widget, /title=\{connectLabel\}/);
+  assert.match(widget, /\{!accounts\.length && <span>Conectar página<\/span>\}/);
 });
