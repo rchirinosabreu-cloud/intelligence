@@ -1,5 +1,5 @@
 import React, { useLayoutEffect } from 'react';
-import { CalendarDays, CheckCircle2, CheckSquare, Edit, ExternalLink, FileBarChart, Instagram, LayoutGrid, Plus, Video } from '@/components/ui/icons';
+import { CalendarDays, CheckCircle2, CheckSquare, Edit, ExternalLink, FileBarChart, Instagram, LayoutGrid, Plus, RotateCcw, Video } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import ClientAvatar from '@/components/ui/ClientAvatar';
@@ -55,7 +55,7 @@ function Attention({ evaluation }) {
   );
 }
 
-function CurrentCycle({ cycle, today, onMarkPublished, onOpenPlan }) {
+function CurrentCycle({ cycle, today, onMarkPublished, onUndoPublished, onOpenPlan }) {
   return (
     <section className={CARD} aria-label={`Parrilla de ${cycle.label}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -96,6 +96,13 @@ function CurrentCycle({ cycle, today, onMarkPublished, onOpenPlan }) {
                     <td className="px-3 py-2.5"><span className={cn('inline-flex rounded-md px-2 py-0.5 text-xs font-semibold', status.chip)}>{status.label}</span></td>
                     <td className="px-3 py-1 text-right">
                       {late && <button type="button" onClick={() => onMarkPublished(piece)} className={cn(TEXT_ACTION, 'min-h-9 text-xs')}><CheckCircle2 className="h-4 w-4" />Ya se publicó</button>}
+                      {/* Lo marcado a mano se puede deshacer: vuelve al estado que tenía antes del clic. */}
+                      {piece.markedByHand && onUndoPublished && (
+                        <button type="button" onClick={() => onUndoPublished(piece)} title="Marcada a mano como publicada: vuelve al estado que tenía"
+                          className="inline-flex min-h-9 items-center gap-1.5 rounded-xl px-3 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5">
+                          <RotateCcw className="h-4 w-4" />Deshacer
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
@@ -197,7 +204,7 @@ function Profile({ client, canManage, onEdit }) {
   );
 }
 
-function Tasks({ tasks, onNewTask }) {
+function Tasks({ tasks, onNewTask, onOpenTask }) {
   return (
     <section className={CARD} aria-label="Tareas abiertas">
       <div className="flex items-center justify-between gap-3">
@@ -207,10 +214,14 @@ function Tasks({ tasks, onNewTask }) {
       {tasks.length ? (
         <ul className="mt-2 divide-y divide-zinc-100 dark:divide-white/5">
           {tasks.map((task) => (
-            <li key={task.id} className="flex min-w-0 items-center gap-3 py-2.5">
-              <TeamAvatar member={task.assignee} size={24} />
-              <p className="min-w-0 flex-1 text-sm text-zinc-800 dark:text-zinc-100">{task.title}</p>
-              <span className={cn('shrink-0 text-xs tabular-nums', task.overdue ? 'font-semibold text-destructive' : 'text-zinc-500')}>{task.overdue ? `Venció ${shortDate(task.dueDate)}` : shortDate(task.dueDate)}</span>
+            <li key={task.id}>
+              {/* La tarea se abre en Gestión, en el mismo panel de siempre. */}
+              <button type="button" onClick={() => onOpenTask?.(task)} title="Abrir en Gestión"
+                className="flex min-h-11 w-full min-w-0 items-center gap-3 py-2.5 text-left hover:text-brand-cyan-deep dark:hover:text-brand-cyan">
+                <TeamAvatar member={task.assignee} size={24} />
+                <span className="min-w-0 flex-1 text-sm text-zinc-800 dark:text-zinc-100">{task.title}</span>
+                <span className={cn('shrink-0 text-xs tabular-nums', task.overdue ? 'font-semibold text-destructive' : 'text-zinc-500')}>{task.overdue ? `Venció ${shortDate(task.dueDate)}` : shortDate(task.dueDate)}</span>
+              </button>
             </li>
           ))}
         </ul>
@@ -221,7 +232,7 @@ function Tasks({ tasks, onNewTask }) {
 
 export default function ClientOperationPage({
   client, evaluation, today, canManage, currentUserId, isAdmin,
-  onEditProfile, onMarkPublished, onMarkReport, onOpenPlan, onNewTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
+  onEditProfile, onMarkPublished, onUndoPublished, onMarkReport, onOpenPlan, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
 }) {
   const measured = isMeasured(client);
   const { current } = client.cycles || {};
@@ -244,13 +255,13 @@ export default function ClientOperationPage({
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
           <ClientObservations observations={client.observations || []} currentUserId={currentUserId} isAdmin={isAdmin}
             onAdd={onAddObservation} onDelete={onDeleteObservation} />
-          {measured && current && <CurrentCycle cycle={current} today={today} onMarkPublished={onMarkPublished} onOpenPlan={onOpenPlan} />}
-          {!measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} />}
+          {measured && current && <CurrentCycle cycle={current} today={today} onMarkPublished={onMarkPublished} onUndoPublished={onUndoPublished} onOpenPlan={onOpenPlan} />}
+          {!measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
           {measured && history.length > 0 && <History months={history} monthlyReport={client.contract.monthlyReport} onMarkReport={onMarkReport} />}
         </div>
         <div className="flex min-w-0 flex-col gap-6">
           <Profile client={client} canManage={canManage} onEdit={onEditProfile} />
-          {measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} />}
+          {measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
         </div>
       </div>
     </div>

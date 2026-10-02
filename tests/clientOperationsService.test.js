@@ -160,14 +160,48 @@ test('la ficha mal llenada o con personas inactivas se rechaza con el motivo por
   assert.equal(writes.length, 0);
 });
 
-test('«Ya se publicó» solo vale para piezas del propio cliente y pasa por el camino de la parrilla', async () => {
+test('«Ya se publicó» anota el estado anterior, solo vale para piezas del cliente y pasa por el camino de la parrilla', async () => {
   const { db } = fixture();
   const updates = [];
-  db.contentItem = { findFirst: async ({ where }) => (where.id === 'o1' && where.plan.clientId === 'c-nattal' ? { id: 'o1', status: 'APROBADO' } : null) };
+  db.contentItem = { findFirst: async ({ where }) => (where.id === 'o1' && where.plan.clientId === 'c-nattal' ? { id: 'o1', status: 'APROBADO', manualPublish: null, plan: { id: 'p-oct', status: 'ACTIVO' } } : null) };
   const service = createClientOperationsService({ db, now: () => NOW, updateItem: async (id, data) => updates.push([id, data]) });
-  assert.deepEqual(await service.markPiecePublished({ clientId: 'c-nattal', itemId: 'o1' }), { id: 'o1', status: 'PUBLICADO' });
-  assert.deepEqual(updates, [['o1', { status: 'PUBLICADO' }]]);
-  await assert.rejects(() => service.markPiecePublished({ clientId: 'c-mimas', itemId: 'o1' }), { status: 404 });
+  assert.deepEqual(await service.markPiecePublished({ clientId: 'c-nattal', itemId: 'o1', actorUserId: 'u1' }), { id: 'o1', status: 'PUBLICADO' });
+  assert.deepEqual(updates, [['o1', { status: 'PUBLICADO', manualPublish: { previousStatus: 'APROBADO', previousPlanStatus: 'ACTIVO', at: NOW.toISOString(), by: 'u1' } }]]);
+  await assert.rejects(() => service.markPiecePublished({ clientId: 'c-mimas', itemId: 'o1', actorUserId: 'u1' }), { status: 404 });
+});
+
+test('deshacer «Ya se publicó» devuelve la pieza a su estado y reabre la parrilla si ese clic la cerró', async () => {
+  const { db } = fixture();
+  const updates = [];
+  const plans = [];
+  const items = {
+    o1: { id: 'o1', status: 'PUBLICADO', manualPublish: { previousStatus: 'BORRADOR', previousPlanStatus: 'ACTIVO' }, plan: { id: 'p-oct', status: 'FINALIZADO' } },
+    meta: { id: 'meta', status: 'PUBLICADO', manualPublish: null, plan: { id: 'p-oct', status: 'ACTIVO' } },
+    moved: { id: 'moved', status: 'APROBADO', manualPublish: { previousStatus: 'BORRADOR', previousPlanStatus: 'ACTIVO' }, plan: { id: 'p-oct', status: 'ACTIVO' } },
+  };
+  db.contentItem = { findFirst: async ({ where }) => (where.plan.clientId === 'c-nattal' ? items[where.id] || null : null) };
+  db.contentPlan = { update: async (args) => { plans.push(args); return {}; } };
+  const service = createClientOperationsService({ db, now: () => NOW, updateItem: async (id, data) => updates.push([id, data]) });
+
+  assert.deepEqual(await service.undoPiecePublished({ clientId: 'c-nattal', itemId: 'o1' }), { id: 'o1', status: 'BORRADOR' });
+  assert.equal(updates[0][0], 'o1');
+  assert.equal(updates[0][1].status, 'BORRADOR');
+  assert.ok('manualPublish' in updates[0][1], 'la marca se borra para que no se pueda deshacer dos veces');
+  assert.deepEqual(plans, [{ where: { id: 'p-oct' }, data: { status: 'ACTIVO' } }]);
+
+  // Lo que publicó Meta o lo que ya cambió de estado por otro camino no se deshace desde aquí.
+  await assert.rejects(() => service.undoPiecePublished({ clientId: 'c-nattal', itemId: 'meta' }), { status: 409 });
+  await assert.rejects(() => service.undoPiecePublished({ clientId: 'c-nattal', itemId: 'moved' }), { status: 409 });
+  await assert.rejects(() => service.undoPiecePublished({ clientId: 'c-mimas', itemId: 'o1' }), { status: 404 });
+  assert.equal(updates.length, 1);
+});
+
+test('la pieza marcada a mano lo dice en el detalle, para ofrecer «Deshacer»', async () => {
+  const { db, service } = fixture();
+  const stored = await db.client.findFirst({ where: { slug: 'nattal' } });
+  stored.contentPlans[1].contentItems.push(item('o4', '2026-10-09', 'PUBLICADO', { manualPublish: { previousStatus: 'BORRADOR', previousPlanStatus: 'ACTIVO' } }));
+  const nattal = await service.getOperation('nattal');
+  assert.deepEqual(nattal.cycles.current.pieces.map((p) => [p.id, p.markedByHand]), [['o1', false], ['o2', false], ['o3', false], ['o4', true]]);
 });
 
 test('el informe del mes se marca y se desmarca, con quién lo hizo', async () => {

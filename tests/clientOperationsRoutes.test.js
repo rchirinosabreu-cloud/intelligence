@@ -8,7 +8,7 @@ import { createClientOperationsRouter } from '../src/routes/api/clientOperations
 
 const buildApp = (role = 'ADMIN') => {
   const calls = [];
-  const service = Object.fromEntries(['listOperations', 'getOperation', 'saveProfile', 'setMonthlyReport', 'markPiecePublished', 'addObservation', 'deleteObservation', 'setTeamHighlight'].map((name) => [name, async (args) => {
+  const service = Object.fromEntries(['listOperations', 'getOperation', 'saveProfile', 'setMonthlyReport', 'markPiecePublished', 'undoPiecePublished', 'addObservation', 'deleteObservation', 'setTeamHighlight'].map((name) => [name, async (args) => {
     calls.push([name, args]);
     if (args?.clientId === 'invalid') throw Object.assign(new Error('Revisa los campos marcados.'), { status: 422, code: 'CLIENT_OPERATION_INVALID', errors: { agency: 'Elige Brain Studio o MIO Agencia.' } });
     if (args === 'boom') throw new Error('postgres://secret');
@@ -68,7 +68,9 @@ test('el informe del mes y «Ya se publicó»', async () => {
     assert.deepEqual(calls.at(-1), ['setMonthlyReport', { clientId: 'c1', year: 2026, month: 9, delivered: true, actorUserId: 'actual-actor' }]);
     assert.equal((await fetch(`${base}/c1/reports/2026/9`, json('PUT', { delivered: 'sí' }))).status, 400, 'delivered tiene que ser booleano');
     assert.equal((await fetch(`${base}/c1/pieces/item-1/published`, { method: 'POST' })).status, 200);
-    assert.deepEqual(calls.at(-1), ['markPiecePublished', { clientId: 'c1', itemId: 'item-1' }]);
+    assert.deepEqual(calls.at(-1), ['markPiecePublished', { clientId: 'c1', itemId: 'item-1', actorUserId: 'actual-actor' }]);
+    assert.equal((await fetch(`${base}/c1/pieces/item-1/published`, { method: 'DELETE' })).status, 200);
+    assert.deepEqual(calls.at(-1), ['undoPiecePublished', { clientId: 'c1', itemId: 'item-1' }]);
   });
 });
 

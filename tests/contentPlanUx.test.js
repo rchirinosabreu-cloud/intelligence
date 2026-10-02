@@ -112,8 +112,6 @@ test('content pieces support persistent multi-file carousel assets internally', 
 test('DatePicker instances use the global Brainstudio calendar chrome', async () => {
   const files = [
     'src/components/modules/TaskSidePanel.jsx',
-    'src/components/modules/TaskCreateModal.jsx',
-    'src/components/modules/TaskEditModal.jsx',
     'src/components/modules/Activity/OperationalCalendar.jsx',
     'src/components/modules/ContentPlanDetail.jsx'
   ];

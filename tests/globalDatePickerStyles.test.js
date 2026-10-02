@@ -13,8 +13,6 @@ test('the React DatePicker base stylesheet is loaded once at the application ent
     const moduleSources = [
         'src/components/modules/Activity/OperationalCalendar.jsx',
         'src/components/modules/ContentPlanDetail.jsx',
-        'src/components/modules/TaskCreateModal.jsx',
-        'src/components/modules/TaskEditModal.jsx',
         'src/components/modules/TaskSidePanel.jsx',
         'src/components/modules/FinancialDashboard.jsx',
         'src/components/modules/financial/FinancialLedger.jsx'

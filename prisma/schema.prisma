@@ -841,6 +841,9 @@ model ContentItem {
   /// varias cuentas no va a ninguna; con una sola va a esa (Rodny, 2 de octubre de 2026).
   socialPageIds      String[]            @default([])
   publications       SocialPublication[]
+  /// «Ya se publicó» marcado a mano desde Operación de clientes (2 de octubre de 2026): estado anterior de la
+  /// pieza y de su parrilla, quién y cuándo. Permite deshacerlo; se vacía al deshacer.
+  manualPublish      Json?
   deletedAt          DateTime?
   plan               ContentPlan                @relation(fields: [planId], references: [id], onDelete: Cascade)
   tasks              Task[]

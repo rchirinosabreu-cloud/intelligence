@@ -77,6 +77,14 @@ export function useSetTeamHighlight() {
   });
 }
 
+export function useUndoPiecePublished() {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: ({ clientId, itemId }) => request(`/${clientId}/pieces/${itemId}/published`, { method: 'DELETE' }),
+    onSuccess: refresh,
+  });
+}
+
 export function useMarkPiecePublished() {
   const refresh = useRefresh();
   return useMutation({

@@ -69,7 +69,12 @@ export const createClientOperationsRouter = ({ service = clientOperationsService
   });
 
   router.post('/:clientId/pieces/:itemId/published', async (req, res) => {
-    try { return res.json(await service.markPiecePublished({ clientId: req.params.clientId, itemId: req.params.itemId })); } catch (error) { return reply(res, error, logger); }
+    try { return res.json(await service.markPiecePublished({ clientId: req.params.clientId, itemId: req.params.itemId, actorUserId: req.user.userId })); } catch (error) { return reply(res, error, logger); }
+  });
+
+  // Deshacer «Ya se publicó».
+  router.delete('/:clientId/pieces/:itemId/published', async (req, res) => {
+    try { return res.json(await service.undoPiecePublished({ clientId: req.params.clientId, itemId: req.params.itemId })); } catch (error) { return reply(res, error, logger); }
   });
 
   return router;

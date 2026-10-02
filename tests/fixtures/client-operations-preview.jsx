@@ -93,7 +93,7 @@ function ClientPage() {
   const { client, evaluation } = found;
 
   const markPublished = (piece) => update(client.id, (c) => {
-    const pieces = c.cycles.current.pieces.map((p) => (p.id === piece.id ? { ...p, status: 'PUBLICADO' } : p));
+    const pieces = c.cycles.current.pieces.map((p) => (p.id === piece.id ? { ...p, status: 'PUBLICADO', markedByHand: true, previousStatus: p.status } : p));
     const published = pieces.filter((p) => p.status === 'PUBLICADO').length;
     const overdue = pieces.filter((p) => p.date < TODAY && p.status !== 'PUBLICADO').length;
     const r = c.cycles.current.reached;
@@ -124,6 +124,15 @@ function ClientPage() {
         }}
         onEditProfile={() => setEditing(true)}
         onMarkPublished={(piece) => { markPublished(piece); toast.success(`«${piece.title}» quedó como publicada.`); }}
+        onUndoPublished={(piece) => {
+          update(client.id, (c) => {
+            const pieces = c.cycles.current.pieces.map((p) => (p.id === piece.id ? { ...p, status: p.previousStatus, markedByHand: false } : p));
+            const published = pieces.filter((p) => p.status === 'PUBLICADO').length;
+            const overdue = pieces.filter((p) => p.date < TODAY && p.status !== 'PUBLICADO').length;
+            return { ...c, cycles: { ...c.cycles, current: { ...c.cycles.current, pieces, overdueItems: overdue, reached: { ...c.cycles.current.reached, publicada: published } } } };
+          });
+          toast.success(`«${piece.title}» volvió a su estado anterior (solo en la muestra).`);
+        }}
         onMarkReport={(month) => { markReport(month); toast.success(`Informe de ${month.label.toLowerCase()} marcado como entregado.`); }}
         onOpenPlan={() => toast(`Abriría la parrilla de ${client.name}.`)}
         onNewTask={() => toast(`Abriría «Nueva tarea» con ${client.name} ya elegido.`)}
