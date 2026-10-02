@@ -231,7 +231,7 @@ const ReportMetaSources = ({ clientId, canManage = false, disabled = false, peri
               </div>
             )}
             {Boolean(chosenFacebook) && (
-              <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400" data-report-meta-facebook-note>De la página llegan visualizaciones, interacciones, visitas y seguidores. Las personas distintas que la vieron en el período no: Meta no las entrega para un período a la medida.</p>
+              <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400" data-report-meta-facebook-note>De la página llegan visualizaciones, espectadores, interacciones, visitas, seguidores y cada publicación del período.</p>
             )}
           </div>
 

@@ -42,7 +42,7 @@ octubre de 2026.
 | Facebook: visualizaciones, interacciones, reproducciones de video, visitas, clics en el contacto y el botón | Sí, con `read_insights` | Se piden día a día y se suman. Meta no cuenta en las interacciones las de los reels |
 | Facebook: nuevos seguidores y quienes dejaron de seguir | Sí | Meta los marca como estimación |
 | Facebook: total de seguidores | Sí | El del **último día del período** que Meta tiene, no el de hoy |
-| Facebook: espectadores de la página (personas distintas) | **No** | Meta los da por día, semana o 28 días, no para el período del informe. No se suman: se avisa |
+| Facebook: espectadores de la página (personas distintas) | Sí | Para el período exacto, con `period=total_over_range` (`until` exclusivo). Si Meta no lo da, se avisa; nunca se suman los días |
 | Facebook: cada publicación del período | Sí, hasta 60 | Reacciones, comentarios y compartidos vienen de la publicación; visualizaciones, espectadores y clics, de sus estadísticas, acumulados |
 | Resultados y costo por resultado de la pauta | **Todavía no** | Dependen del objetivo de cada campaña; se añaden cuando se defina cómo leerlos |
 
@@ -67,7 +67,15 @@ métricas cambian con las versiones; **antes de tocar una consulta se lee la ref
   de 88 días con dos de margen —el tope son 90— y solo se cuentan los días de cada tramo: el margen de un
   tramo cae dentro del siguiente y, contado dos veces, inflaría el total. Los días son los de Meta, no los
   de Bogotá: en los bordes del período puede haber unas horas de diferencia con Meta Business Suite.
+- **Espectadores del período exacto**: `page_total_media_view_unique` con `period=total_over_range`, `since`
+  el primer día y `until` **el día siguiente al último** (comprobado: 1→2 de septiembre devuelve el día 1;
+  1→1 de octubre devuelve septiembre entero, 642 personas en la página de la agencia).
+- **Una publicación trae algunas métricas dos veces**: acumulada (`lifetime`) y por día con ceros. Solo
+  vale la acumulada; la segunda pisaba a la primera y 917 visualizaciones salían con 0 espectadores.
 - Las páginas con menos de 100 «me gusta» no tienen estadísticas (límite de Meta).
+- Comprobado con datos reales el 2 de octubre de 2026 (página de la agencia, septiembre): 1.400
+  visualizaciones, 642 espectadores, 145 interacciones, 363 seguidores al cierre, 7 publicaciones con
+  estadísticas; los valores diarios suman lo mismo que `total_over_range` (1.400).
 
 ## Una cuenta publicitaria no es un cliente
 
@@ -115,8 +123,6 @@ informe sale sin pauta de Meta y lo avisa; no pone una fila de ceros.
 
 ## Lo que falta
 
-- **Espectadores de la página de Facebook** para el período exacto: la referencia lista un período
-  `total_over_range`; falta comprobar con datos reales si sirve para `page_total_media_view_unique`.
 - **Resultados de la pauta** (mensajes, clientes potenciales, compras) y su costo.
 - **La llave vence para datos el 30 de diciembre de 2026**: la misma renovación que necesita la publicación.
 - Las cuentas de Instagram sin página de Facebook visible para la llave (Nattal) no aparecen: primero hay

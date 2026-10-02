@@ -14,7 +14,7 @@
  * en registros y la llave no. La conversión a fuentes del informe es de `lib/metaReportSources.js`.
  */
 import { META_GRAPH_ORIGIN, META_GRAPH_VERSION, MetaGraphError } from './metaGraphService.js';
-import { insightWindows, pageInsightWindows, pageValueDay, previousPeriod } from '../lib/metaReportSources.js';
+import { insightWindows, pageInsightWindows, pageTotalRange, pageValueDay, previousPeriod } from '../lib/metaReportSources.js';
 
 const DEFAULT_TIMEOUT_MS = 30 * 1000;
 /** Con el alcance: solo cuando el período cabe en un tramo. */
@@ -172,6 +172,15 @@ export const createMetaInsightsService = ({
     return { totals, followerTotal, followerDay };
   };
 
+  /** Personas distintas que vieron la página en el período exacto: `total_over_range`, con `until` exclusivo. */
+  const pageUniqueViewers = async (pageId, token, target) => {
+    const range = pageTotalRange(target.start, target.end);
+    if (!range) return null;
+    const payload = await get(`${pageId}/insights`, { metric: 'page_total_media_view_unique', period: 'total_over_range', since: range.since, until: range.until }, token);
+    const value = payload?.data?.[0]?.values?.[0]?.value;
+    return typeof value === 'number' ? value : null;
+  };
+
   /**
    * Una página de Facebook en un período: totales, comparación, seguidores al cierre y sus publicaciones.
    * Los nombres de las métricas son los de la referencia de Page Insights (v26); las «impresiones» de
@@ -186,6 +195,8 @@ export const createMetaInsightsService = ({
     }
     const comparison = previousPeriod(period);
     const previous = comparison ? await optional(() => pageTotals(pageId, token, comparison, PAGE_COMPARISON_METRICS)) : null;
+    const uniqueViewers = await optional(() => pageUniqueViewers(pageId, token, period));
+    const previousUniqueViewers = comparison ? await optional(() => pageUniqueViewers(pageId, token, comparison)) : null;
 
     const posts = [];
     const windows = insightWindows(period.start, period.end);
@@ -200,7 +211,10 @@ export const createMetaInsightsService = ({
     for (const post of posts) {
       post.insights = await optional(async () => {
         const payload = await get(`${post.id}/insights`, { metric: PAGE_POST_METRICS }, token);
-        const values = Object.fromEntries((payload?.data || []).filter((entry) => typeof entry?.values?.[0]?.value === 'number').map((entry) => [entry.name, entry.values[0].value]));
+        // Meta devuelve algunas métricas dos veces, acumulada («lifetime») y por día con ceros; la
+        // segunda pisaba a la primera y 917 visualizaciones salían con 0 espectadores (2 de octubre de 2026).
+        const lifetime = (payload?.data || []).filter((entry) => !entry?.period || entry.period === 'lifetime');
+        const values = Object.fromEntries(lifetime.filter((entry) => typeof entry?.values?.[0]?.value === 'number').map((entry) => [entry.name, entry.values[0].value]));
         return Object.keys(values).length ? values : null;
       });
     }
@@ -208,7 +222,7 @@ export const createMetaInsightsService = ({
     return {
       account: { id: String(pageId), name: pageName }, period, fetchedAt: now().toISOString(), totals: current.totals,
       previousTotals: previous && Object.keys(previous.totals).length ? previous.totals : null, previousPeriod: comparison,
-      followerTotal: current.followerTotal, followerDay: current.followerDay, posts
+      followerTotal: current.followerTotal, followerDay: current.followerDay, uniqueViewers, previousUniqueViewers, posts
     };
   };
 

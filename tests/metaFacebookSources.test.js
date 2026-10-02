@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { buildEvidenceReport } from '../src/lib/reportEvidence.js';
 import { buildReportPresentation } from '../src/lib/reportPresentationModel.js';
-import { FACEBOOK_VIEWERS_NOTE, META_PAGE_WINDOW_DAYS, buildFacebookSources, pageInsightWindows, pageValueDay } from '../src/lib/metaReportSources.js';
+import { FACEBOOK_VIEWERS_NOTE, META_PAGE_WINDOW_DAYS, buildFacebookSources, pageInsightWindows, pageTotalRange, pageValueDay } from '../src/lib/metaReportSources.js';
 
 // Rodny, 2 October 2026: «ahora añadamos las cifras de Facebook». The page of a client enters the
 // report as one more source of Meta. Metric names read in the Page Insights reference (v26): the page
@@ -21,6 +21,8 @@ const page = {
   previousPeriod: { start: '2026-08-02', end: '2026-08-31' },
   followerTotal: 363,
   followerDay: '2026-09-30',
+  uniqueViewers: 642,
+  previousUniqueViewers: 500,
   posts: [
     { id: 'p_2', message: 'Hay relaciones que empiezan con un proyecto.\nY siguen.', created_time: '2026-09-29T22:42:48+0000', permalink_url: 'https://www.facebook.com/p/2', status_type: 'added_video', reactions: { summary: { total_count: 1 } }, comments: { summary: { total_count: 0 } }, insights: { post_media_view: 240, post_total_media_view_unique: 180, post_clicks: 12 } },
     { id: 'p_1', message: 'Una marca puede estar presente en todas partes.', created_time: '2026-09-09T17:51:33+0000', permalink_url: 'https://www.facebook.com/p/1', status_type: 'added_photos', shares: { count: 3 }, reactions: { summary: { total_count: 4 } }, comments: { summary: { total_count: 2 } }, insights: null }
@@ -67,10 +69,18 @@ test('the figures of the page enter the report as Facebook sources, exact and wi
   assert.match(evidence.observations.find((item) => item.key === 'interactions' && item.entityLevel === 'ACCOUNT').evidence, /reels/, 'what Meta leaves out is said');
 });
 
-test('the people who saw the page are not added up day by day: they are left out, saying so', () => {
+test('the people who saw the page come for the exact period; if Meta does not give them, it is said, never added up', () => {
   const [account] = buildFacebookSources(page);
-  assert.deepEqual(account.warnings, [FACEBOOK_VIEWERS_NOTE]);
-  assert.equal(account.observations.some((item) => ['viewers', 'reach'].includes(item.key)), false);
+  assert.deepEqual(account.warnings, []);
+  const viewers = account.observations.find((item) => item.key === 'viewers');
+  assert.equal(viewers.value, 642);
+  assert.equal(viewers.changePct, 28.4);
+  assert.match(viewers.evidence, /personas distintas/);
+  const [without] = buildFacebookSources({ ...page, uniqueViewers: null });
+  assert.deepEqual(without.warnings, [FACEBOOK_VIEWERS_NOTE]);
+  assert.equal(without.observations.some((item) => ['viewers', 'reach'].includes(item.key)), false);
+  assert.deepEqual(pageTotalRange('2026-09-01', '2026-09-30'), { since: '2026-09-01', until: '2026-10-01' });
+  assert.equal(pageTotalRange('2026-09-30', '2026-09-01'), null);
 });
 
 test('each post brings what the post itself says, and its statistics only if Meta gives them', () => {

@@ -94,6 +94,10 @@ test('followers gained are not given for small accounts: the rest of the report 
 const dailyValues = (first, days, value) => Array.from({ length: days }, (_, index) => ({ value: typeof value === 'function' ? value(index) : value, end_time: new Date(Date.parse(`${first}T07:00:00Z`) + (index + 1) * 86400000).toISOString().replace('.000Z', '+0000') }));
 const facebookHandler = ({ path, query }) => {
   if (path === 'page-1' && query.fields === 'access_token') return ok({ access_token: 'fresh-page-token', id: 'page-1' });
+  if (path === 'page-1/insights' && query.period === 'total_over_range') {
+    // Seen on 2 October 2026: `until` is exclusive here, and the answer is one value stamped with the end.
+    return ok({ data: [{ name: 'page_total_media_view_unique', period: 'total_over_range', values: [{ value: query.until === '2026-10-01' ? 642 : 500, end_time: `${query.until}T07:00:00+0000` }] }] });
+  }
   if (path === 'page-1/insights') {
     // Meta answers with one more day than the period (the margin asked for): it must not be counted.
     const days = Math.round((Date.parse(query.until) - Date.parse(query.since)) / 86400000);
@@ -103,7 +107,8 @@ const facebookHandler = ({ path, query }) => {
     { id: 'page-1_2', message: 'Video', created_time: '2026-09-29T22:42:48+0000', permalink_url: 'https://www.facebook.com/p/2', status_type: 'added_video', reactions: { summary: { total_count: 1 } }, comments: { summary: { total_count: 0 } } },
     { id: 'page-1_1', message: 'Foto', created_time: '2026-09-09T17:51:33+0000', permalink_url: 'https://www.facebook.com/p/1', status_type: 'added_photos', shares: { count: 3 }, reactions: { summary: { total_count: 4 } }, comments: { summary: { total_count: 2 } } }
   ] });
-  if (path === 'page-1_2/insights') return ok({ data: [{ name: 'post_media_view', period: 'lifetime', values: [{ value: 240 }] }, { name: 'post_total_media_view_unique', period: 'lifetime', values: [{ value: 180 }] }] });
+  // Seen on 2 October 2026: Meta returns `post_total_media_view_unique` twice, accumulated and by day with zeros.
+  if (path === 'page-1_2/insights') return ok({ data: [{ name: 'post_media_view', period: 'lifetime', values: [{ value: 240 }] }, { name: 'post_total_media_view_unique', period: 'lifetime', values: [{ value: 180 }] }, { name: 'post_clicks', period: 'lifetime', values: [{ value: 0 }] }, { name: 'post_total_media_view_unique', period: 'day', values: [{ value: 0, end_time: '2026-09-29T07:00:00+0000' }, { value: 0, end_time: '2026-09-30T07:00:00+0000' }] }] });
   if (path === 'page-1_1/insights') return ok({ data: [] });
   return fail(404, { code: 803, message: `unexpected ${path}` });
 };
@@ -120,7 +125,11 @@ test('a page is asked day by day and only the days of the period count; follower
   assert.deepEqual(report.previousPeriod, { start: '2026-08-02', end: '2026-08-31' });
   assert.equal(report.previousTotals.page_media_view, 300);
   assert.equal(report.posts.length, 2);
-  assert.deepEqual(report.posts[0].insights, { post_media_view: 240, post_total_media_view_unique: 180 });
+  assert.deepEqual(report.posts[0].insights, { post_media_view: 240, post_total_media_view_unique: 180, post_clicks: 0 }, 'the accumulated figure, never the daily zero that came after it');
+  assert.equal(report.uniqueViewers, 642, 'people, for the exact period');
+  assert.equal(report.previousUniqueViewers, 500);
+  const viewers = calls.find((call) => call.path === 'page-1/insights' && call.query.period === 'total_over_range');
+  assert.deepEqual({ since: viewers.query.since, until: viewers.query.until }, { since: '2026-09-01', until: '2026-10-01' }, 'until is exclusive: the day after the last one');
   assert.equal(report.posts[1].insights, null);
   assert.equal(report.posts[1].shares.count, 3);
   const page = calls.find((call) => call.path === 'page-1/insights');
@@ -133,7 +142,7 @@ test('a quarter of 92 days is asked in two stretches and added up', async () => 
   const { calls, service } = fakeMeta(facebookHandler);
   const report = await service.fetchFacebookPageReport({ pageId: 'page-1', pageName: 'x', token: 't', period: { start: '2026-07-01', end: '2026-09-30' } });
   assert.equal(report.totals.page_media_view, 920);
-  assert.equal(calls.filter((call) => call.path === 'page-1/insights' && call.query.since >= '2026-07-01').length, 2);
+  assert.equal(calls.filter((call) => call.path === 'page-1/insights' && call.query.period === 'day' && call.query.since >= '2026-07-01').length, 2);
 });
 
 test('a page that gives no figure at all says why instead of a report of zeros', async () => {

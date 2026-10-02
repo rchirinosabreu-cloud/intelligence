@@ -300,7 +300,13 @@ const FACEBOOK_PAGE_METRICS = [
   ['page_daily_unfollows_unique', 'unfollows', 'Dejaron de seguir', 'account_audience', ' · estimación de Meta']
 ];
 const FACEBOOK_POST_KINDS = { added_video: 'Video', added_photos: 'Foto', shared_story: 'Enlace', mobile_status_update: 'Publicación', created_event: 'Evento' };
-export const FACEBOOK_VIEWERS_NOTE = 'Facebook: Meta entrega los espectadores de la página (personas distintas) por día, por semana o por 28 días, no para el período del informe; sumar días contaría dos veces a la misma persona, así que no se incluyen. Los de cada publicación sí llegan.';
+export const FACEBOOK_VIEWERS_NOTE = 'Facebook: Meta no entregó los espectadores de la página (personas distintas) para este período, así que el informe sale sin ellos. Sumar los de cada día contaría dos veces a la misma persona.';
+
+/**
+ * Los espectadores de la página para el período exacto se piden con `period=total_over_range`, y ahí
+ * `until` es **exclusivo** (comprobado el 2 de octubre de 2026: 1→2 de septiembre devolvió el día 1).
+ */
+export const pageTotalRange = (start, end) => (isDay(start) && isDay(end) && start <= end ? { since: start, until: shiftDay(end, 1) } : null);
 
 /**
  * Una página de Facebook como fuentes del informe: la página (resumen y seguidores) y sus publicaciones.
@@ -311,12 +317,25 @@ export const FACEBOOK_VIEWERS_NOTE = 'Facebook: Meta entrega los espectadores de
  */
 export const buildFacebookSources = ({
   account, period, fetchedAt = new Date().toISOString(), totals = {}, previousTotals = null, previousPeriod: comparison = null,
-  followerTotal = null, followerDay = null, posts = [], sourceIds = {}
+  followerTotal = null, followerDay = null, uniqueViewers = null, previousUniqueViewers = null, posts = [], sourceIds = {}
 } = {}) => {
   const name = account?.name || 'Facebook';
   const asked = longDay(fetchedAt);
   const base = { platform: 'FACEBOOK', unit: 'count', precision: 'EXACT', confidence: 1, period, periodProvenance: 'SOURCE_VISIBLE' };
   const observations = [];
+  const warnings = [];
+
+  // Espectadores: personas distintas en el período exacto, que Meta sí da para una página (a
+  // diferencia de Instagram, donde el alcance se corta a 30 días).
+  const viewers = number(uniqueViewers);
+  if (viewers !== null) {
+    const change = changePct(viewers, previousUniqueViewers);
+    observations.push({
+      ...base, id: 'page-viewers', key: 'viewers', label: 'Espectadores', value: viewers, scope: 'TOTAL', entityLevel: 'ACCOUNT', contextKey: 'account_content',
+      evidence: `Meta · personas distintas que vieron contenido de la página «${name}» en el período · consultado el ${asked}`,
+      ...(change !== null && comparison ? { changePct: change, comparisonPeriod: comparison } : {})
+    });
+  } else warnings.push(FACEBOOK_VIEWERS_NOTE);
 
   for (const [metaKey, key, label, contextKey, note] of FACEBOOK_PAGE_METRICS) {
     const value = number(totals?.[metaKey]);
@@ -341,7 +360,7 @@ export const buildFacebookSources = ({
   const accountSource = {
     sourceId: sourceIds.account || `meta-facebook-${account?.id || 'pagina'}-account`, origin: META_API_ORIGIN, platform: 'FACEBOOK', screenType: 'META_API_FACEBOOK_PAGE',
     originalName: `Facebook «${name}» · cifras de Meta`, declaredCategory: 'SOCIAL', period, contextKey: 'account_content', confidence: 1, fetchedAt,
-    warnings: [FACEBOOK_VIEWERS_NOTE], observations, panels: []
+    warnings, observations, panels: []
   };
 
   const contentObservations = [];

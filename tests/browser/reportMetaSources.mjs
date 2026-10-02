@@ -82,7 +82,7 @@ const insights = {
       account: { id: pageId, name: pageName }, period, fetchedAt: '2026-10-02T15:00:00.000Z',
       totals: { page_media_view: 9120, page_post_engagements: 296, page_video_views: 1410, page_views_total: 233, page_total_actions: 17, page_daily_follows_unique: 29, page_daily_unfollows_unique: 4 },
       previousTotals: { page_media_view: 8000, page_post_engagements: 310 }, previousPeriod: { start: '2026-08-02', end: '2026-08-31' },
-      followerTotal: 3363, followerDay: '2026-09-30',
+      followerTotal: 3363, followerDay: '2026-09-30', uniqueViewers: 6420, previousUniqueViewers: 5000,
       posts: [
         { id: 'p_2', message: 'Detrás de cámaras del rodaje', created_time: '2026-09-29T22:42:48+0000', permalink_url: 'https://www.facebook.com/p/2', status_type: 'added_video', reactions: { summary: { total_count: 31 } }, comments: { summary: { total_count: 4 } }, shares: { count: 6 }, insights: { post_media_view: 2240, post_total_media_view_unique: 1180, post_clicks: 52 } },
         { id: 'p_1', message: 'Así se ve un mes bien planeado', created_time: '2026-09-09T17:51:33+0000', permalink_url: 'https://www.facebook.com/p/1', status_type: 'added_photos', reactions: { summary: { total_count: 12 } }, comments: { summary: { total_count: 1 } }, insights: { post_media_view: 910, post_total_media_view_unique: 640, post_clicks: 18 } }
