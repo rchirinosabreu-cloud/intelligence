@@ -1,7 +1,6 @@
 import prisma from '../lib/prisma.js';
 import { isActiveTeamUser } from '../services/teamRosterService.js';
 import bcrypt from 'bcryptjs';
-import { randomBytes } from 'node:crypto';
 import { getJwtSecret } from '../config/security.js';
 import {
   completePasswordReset,
@@ -99,67 +98,6 @@ export const resetPasswordWithCode = async (req, res) => {
             message: status === 500 ? 'No se pudo actualizar la contrasena' : error.message
         });
     }
-};
-
-export const syncUsers = async (req, res) => {
-  console.log("[Sync] Iniciando sincronización de TeamMembers a Users...");
-
-  try {
-    const teamMembers = await prisma.teamMember.findMany({
-      where: {
-        isActive: true,
-        email: { not: null, not: '' }
-      }
-    });
-
-    if (teamMembers.length === 0) {
-      return res.json({ success: true, message: "No se encontraron TeamMembers con email para sincronizar." });
-    }
-
-    let createdCount = 0;
-    let skippedCount = 0;
-
-    for (const member of teamMembers) {
-      const normalizedEmail = member.email.trim().toLowerCase();
-
-      let user = await prisma.user.findUnique({
-        where: { email: normalizedEmail }
-      });
-
-      if (!user || user.isActive === false) {
-        const unusablePassword = randomBytes(32).toString('hex');
-        const hashedPassword = await bcrypt.hash(unusablePassword, 10);
-        user = await prisma.user.create({
-          data: {
-            name: member.name,
-            email: normalizedEmail,
-            password: hashedPassword,
-            role: 'EDITOR',
-            mustChangePassword: true
-          }
-        });
-        createdCount++;
-      } else {
-        skippedCount++;
-      }
-
-      await prisma.teamMember.update({
-        where: { id: member.id },
-        data: { userId: user.id }
-      });
-    }
-
-    return res.json({
-        success: true,
-        message: "Sincronización completada. Los usuarios nuevos deben usar recuperación de contraseña.",
-        sincronizados: createdCount,
-        omitidos_ya_existian: skippedCount
-    });
-
-  } catch (error) {
-    console.error("[Sync] Error durante la sincronización:", error);
-    return res.status(500).json({ success: false, error: 'No se pudo sincronizar a los usuarios' });
-  }
 };
 
 export const createUser = async (req, res) => {

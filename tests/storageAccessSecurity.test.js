@@ -30,7 +30,7 @@ test('report image proxy requires authentication and only streams registered sou
   assert.match(routes, /router\.use\('\/reports',\s*requireModulePermission\('reportes'\),\s*reportsRouter\)/);
 });
 
-test('assistant document search is protected by the Manager module permission', async () => {
+test('the retired assistant document search (/api/chat) is no longer mounted', async () => {
   const routes = await read('src/routes/index.js');
-  assert.match(routes, /router\.post\('\/chat',\s*requireModulePermission\('manager'\),/);
+  assert.doesNotMatch(routes, /router\.post\('\/chat'/);
 });

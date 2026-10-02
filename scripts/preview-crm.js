@@ -18,7 +18,6 @@ export async function createCrmPreview({ port = 3100 } = {}) {
   api.get('/api/user/profile', (_req, res) => res.json(crmDemoUser));
   api.get('/api/team', (_req, res) => res.json(crmDemoMembers));
   api.get('/api/notifications', (_req, res) => res.json([]));
-  api.get('/api/notifications/unread-count', (_req, res) => res.json({ count: 0 }));
   api.all('/api/*', (req, res) => res.status(404).json({ error: `Consulta no disponible en esta muestra local: ${req.path}` }));
 
   const server = await createServer({

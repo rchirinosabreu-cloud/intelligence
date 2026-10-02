@@ -50,7 +50,7 @@ flowchart TD
 - `src/utils`: utilidades de frontend, documentos, audio, PDF y prompts.
 - `prisma`: schema de Prisma. La fuente valida es `prisma/schema.prisma`.
 - `scripts`: scripts operativos, seeds, migraciones manuales y verificaciones.
-- `tests` y `src/tests`: pruebas unitarias, integracion ligera y Playwright.
+- `tests`: pruebas unitarias, integracion ligera y recorridos de navegador (`tests/browser`).
 - `docs`: documentacion tecnica especifica.
 - `public`: assets estaticos para Vite.
 - `Dockerfile`: build productivo usado por Railway.
@@ -120,7 +120,6 @@ Schema principal: `prisma/schema.prisma`.
 Reglas importantes:
 
 - El provider debe seguir siendo `postgresql`.
-- No usar `schema.sqlite.prisma` como fuente real.
 - `DATABASE_URL` es obligatoria para backend y Prisma.
 - `Task.completedAt` es parte critica del ciclo de vida de tareas.
 - Los cambios de esquema se aplican con cuidado, normalmente mediante `prisma db push` o scripts operativos del proyecto.
@@ -167,8 +166,6 @@ Variables externas adicionales:
 - `AWS_S3_BUCKET_NAME`
 - `GOOGLE_CALENDAR_ID`
 - `GOOGLE_WORKSPACE_SUBJECT`
-- `DISCOVERY_ENGINE_ENGINE_ID`
-- `DATA_STORE_ID`
 - `ENCRYPTION_KEY`
 
 Variable frontend critica:
@@ -183,7 +180,7 @@ Variable frontend critica:
 - Reportes y Brain Core dependen de Gemini.
 - Fireflies y OpenAI solo funcionan si sus API keys existen.
 - Algunos scripts financieros/evidencias dependen de S3 compatible.
-- Google Calendar, Sheets y Discovery Engine dependen del service account de Google.
+- Google Calendar y Sheets dependen del service account de Google.
 
 ## Rutas Publicas
 
@@ -198,7 +195,6 @@ Rutas publicas definidas antes del middleware global de autenticacion:
 - `POST /api/login`
 - `POST /api/password-reset/request`
 - `POST /api/password-reset/confirm`
-- `GET /api/sync-users`
 
 Ademas, `authenticateToken` permite bypass para recursos usados en tags de imagen:
 
