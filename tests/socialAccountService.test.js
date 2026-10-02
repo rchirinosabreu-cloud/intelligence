@@ -30,6 +30,9 @@ const memoryDb = () => {
     socialPublication: {
       updateMany: async ({ where, data }) => { log.push(['publications.updateMany', where, data]); return { count: 1 }; }
     },
+    contentItem: {
+      updateMany: async ({ where, data }) => { log.push(['items.updateMany', where, data]); return { count: 0 }; }
+    },
     client: { findUnique: async ({ where }) => (where.id === 'client-1' ? { id: 'client-1', name: 'Titanes' } : null) }
   };
   return { db, accounts, publications, log };
@@ -98,6 +101,14 @@ test('linking a second page adds an account: the first one is left exactly as it
   assert.deepEqual(accounts.slice(0, 2), before, 'the accounts already connected are not touched');
   assert.deepEqual(accounts.map((row) => [row.pageId, row.isPrimary, row.isActive]), [['5555', true, true], ['5555', true, true], ['6666', false, true]]);
   assert.equal(log.some(([kind]) => kind === 'publications.updateMany'), false, 'nothing scheduled on the first account is cancelled');
+  // With one account the pieces name none; with two, a piece that names none goes nowhere. So what was
+  // already scheduled on the only account now names it, and keeps its destination.
+  const stamped = log.filter(([kind]) => kind === 'items.updateMany');
+  assert.equal(stamped.length, 1, 'only when the client goes from one account to two');
+  assert.deepEqual(stamped[0][2], { socialPageIds: ['5555'] });
+  assert.deepEqual(stamped[0][1].socialPageIds, { isEmpty: true }, 'a piece that already chose is left alone');
+  assert.deepEqual(stamped[0][1].publications.some.status, { in: ['SCHEDULED', 'PUBLISHING'] });
+  assert.deepEqual(stamped[0][1].publications.some.socialAccountId.in.sort(), ['acc-facebook-5555', 'acc-instagram-1789']);
   const listed = await service.listClientAccounts('client-1');
   assert.deepEqual(listed.map((row) => row.isPrimary), [true, true, false]);
 });

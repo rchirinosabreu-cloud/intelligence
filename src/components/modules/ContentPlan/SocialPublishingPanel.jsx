@@ -13,9 +13,9 @@ import {
  * con la misma regla del servidor (`schedulingProblems`) y se dicen antes de pedirlo.
  *
  * Un cliente puede tener varias cuentas (Rodny, 2 de octubre de 2026: PromoGroup y Endova comparten
- * parrilla). Entonces la banda pregunta primero **a qué cuentas va esta pieza** —una o varias; por
- * defecto solo la primera que se conectó— y debajo muestra el Facebook y el Instagram de esas cuentas.
- * Con una sola cuenta esa pregunta no aparece y todo se ve como siempre.
+ * parrilla). Entonces la banda pregunta primero **a qué cuentas va esta pieza** —una, varias o
+ * ninguna: nada viene marcado y todo se puede desmarcar— y debajo muestra el Facebook y el Instagram
+ * de las marcadas. Con una sola cuenta esa pregunta no aparece y todo se ve como siempre.
  */
 const PLATFORM_ICON = { INSTAGRAM: Instagram, FACEBOOK: Facebook };
 
@@ -82,10 +82,10 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
   const publishAt = publishAtIso(item.publishDate, item.publishTime);
   const canChoosePages = pages.length > 1 && typeof onChangePages === 'function';
 
+  // Se marca y se desmarca libremente, también la última (Rodny, 2 de octubre de 2026: «quiero poder
+  // seleccionar y deseleccionar, no importa, no quiero que nada esté marcado por defecto»).
   const togglePage = (pageId) => {
-    const next = chosenPageIds.includes(pageId) ? chosenPageIds.filter((id) => id !== pageId) : [...chosenPageIds, pageId];
-    // La pieza tiene que ir al menos a una cuenta: la última marcada no se desmarca.
-    if (next.length) onChangePages(item.id, next);
+    onChangePages(item.id, chosenPageIds.includes(pageId) ? chosenPageIds.filter((id) => id !== pageId) : [...chosenPageIds, pageId]);
   };
 
   if (!connected.length) {
@@ -127,11 +127,9 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
           <span className="mr-1 text-xs font-medium text-zinc-500 dark:text-zinc-400">Esta pieza va a</span>
           {pages.map((page) => {
             const checked = chosenPageIds.includes(page.pageId);
-            const isLast = checked && chosenPageIds.length === 1;
             return (
               <label
                 key={page.pageId}
-                title={isLast ? 'La pieza tiene que ir al menos a una cuenta' : undefined}
                 className={`inline-flex min-h-9 cursor-pointer items-center gap-2 rounded-xl border px-3 text-[13px] font-medium transition ${
                   checked
                     ? 'border-brand-cyan bg-brand-cyan-soft/40 text-brand-cyan-deep dark:bg-brand-cyan/10 dark:text-brand-cyan'
@@ -141,7 +139,7 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
                 <input
                   type="checkbox"
                   checked={checked}
-                  disabled={isBusy || isLast}
+                  disabled={isBusy}
                   onChange={() => togglePage(page.pageId)}
                   className="h-3.5 w-3.5 shrink-0 accent-brand-cyan"
                 />
@@ -153,8 +151,16 @@ export default function SocialPublishingPanel({ item, accounts = [], onSchedule,
         </div>
       )}
 
+      {/* Ninguna cuenta viene marcada: hasta que la persona marque una, la pieza no va a ningún lado. */}
+      {canChoosePages && chosenPageIds.length === 0 && (
+        <p className="mt-3 flex items-start gap-1.5 text-[12px] text-zinc-600 dark:text-zinc-300" data-social-choose-account>
+          <Info className="mt-0.5 h-3.5 w-3.5 shrink-0 text-zinc-400" aria-hidden="true" />
+          <span>Marca a qué cuenta va esta pieza para poder programarla.</span>
+        </p>
+      )}
+
       {/* Una columna y texto que se ajusta: el motivo de un fallo es justo lo que hay que poder leer entero. */}
-      <ul className="mt-3 flex flex-col gap-2">
+      <ul className={`mt-3 flex flex-col gap-2 ${shown.length ? '' : 'hidden'}`}>
         {shown.map((account) => {
           const Icon = PLATFORM_ICON[account.platform];
           const row = rowFor(account);

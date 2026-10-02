@@ -219,9 +219,9 @@ const platformLabel = (platform) => SOCIAL_PLATFORM_LABELS[platform] || platform
  * publica en diferentes cuentas» — PromoGroup y Endova, o Foobespain, Wine & Wonder y Wine Summit.
  *
  * Una **cuenta** es una página de Facebook con su Instagram. Aquí se leen las filas conectadas de un
- * cliente como páginas: la que sale por defecto primero (la primera que se conectó, `isPrimary`) y el
- * resto por nombre. Si la marcada por defecto está desconectada, el puesto pasa a una que sí pueda
- * publicar. Las filas anteriores a que se guardara la página van juntas, no como dos «páginas».
+ * cliente como páginas, en un orden estable: la primera que se conectó (`isPrimary`) y el resto por
+ * nombre. `isPrimary` es **solo orden**: ninguna cuenta sale «por defecto» (ver `pieceSocialPageIds`).
+ * Las filas anteriores a que se guardara la página van juntas, no como dos «páginas».
  */
 export const socialPagesOf = (accounts = []) => {
   const groups = new Map();
@@ -249,17 +249,28 @@ export const socialPagesOf = (accounts = []) => {
 };
 
 /**
- * A qué cuentas va una pieza. Las que nombra (`socialPageIds`) si siguen conectadas; si no nombra
- * ninguna —todas las piezas de antes, y todo cliente con una sola cuenta—, la que sale por defecto.
- * Una cuenta que ya no está conectada nunca deja la pieza sin destino ni la manda a otra a escondidas.
+ * A qué cuentas va una pieza.
+ *
+ * Con **una sola cuenta** no hay nada que elegir: toda pieza va a ella, como siempre.
+ * Con **varias**, la pieza va solo a las que nombra (`socialPageIds`), y si no nombra ninguna no va a
+ * ninguna. La primera versión marcaba por defecto la primera cuenta conectada y no dejaba desmarcar la
+ * última; Rodny la devolvió el mismo día (2 de octubre de 2026): «quiero poder seleccionar y
+ * deseleccionar, no importa, no quiero que nada esté marcado por defecto». No reponer un valor por
+ * defecto: mandaría una pieza de Endova a PromoGroup sin que nadie lo hubiera pedido.
  */
 export const pieceSocialPageIds = (item, accounts = []) => {
   const pages = socialPagesOf(accounts);
   if (!pages.length) return [];
+  if (pages.length === 1) return [pages[0].pageId];
   const named = new Set((Array.isArray(item?.socialPageIds) ? item.socialPageIds : []).map(String));
-  const chosen = pages.filter((page) => named.has(page.pageId)).map((page) => page.pageId);
-  return chosen.length ? chosen : [pages[0].pageId];
+  return pages.filter((page) => named.has(page.pageId)).map((page) => page.pageId);
 };
+
+/** Hay que elegir cuenta antes de programar: el cliente tiene varias y la pieza no ha marcado ninguna. */
+export const pieceNeedsAccountChoice = (item, accounts = []) => (
+  socialPagesOf(accounts).length > 1 && pieceSocialPageIds(item, accounts).length === 0
+);
+export const CHOOSE_ACCOUNT_FIRST = 'Elige primero a qué cuenta va esta pieza.';
 
 /** Las filas (Facebook e Instagram) de las cuentas a las que va la pieza. */
 export const pieceTargetAccounts = (item, accounts = []) => {
@@ -267,7 +278,11 @@ export const pieceTargetAccounts = (item, accounts = []) => {
   return socialPagesOf(accounts).filter((page) => chosen.has(page.pageId)).flatMap((page) => page.accounts);
 };
 
-/** El rótulo de la pieza en el carril y el calendario. Con una sola cuenta no hay nada que distinguir. */
+/**
+ * El rótulo de la pieza en el carril y el calendario. Con una sola cuenta no hay nada que distinguir, y
+ * una pieza que todavía no eligió no lleva rótulo: a principio de mes ninguna ha elegido, y una marca
+ * de «sin cuenta» encendida en todas las filas no diría nada.
+ */
 export const pieceAccountLabel = (item, accounts = []) => {
   const pages = socialPagesOf(accounts);
   if (pages.length < 2) return null;

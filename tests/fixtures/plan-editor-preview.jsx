@@ -19,8 +19,8 @@ localStorage.setItem('currentUser', JSON.stringify(user));
 
 // Redes conectadas del cliente (29 de septiembre de 2026): lo que la parrilla necesita para ofrecer
 // «Programar». Sin el token, que nunca viaja al navegador.
-// Dos cuentas en un mismo cliente (2 de octubre de 2026): PromoGroup IPS, que sale por defecto, y
-// Endova, una unidad suya. La misma parrilla lleva piezas para una, para la otra y para las dos.
+// Dos cuentas en un mismo cliente (2 de octubre de 2026): PromoGroup IPS y Endova, una unidad suya.
+// La misma parrilla lleva piezas para una, para la otra, para las dos y piezas que aún no eligieron.
 // `?unaCuenta=1` deja solo PromoGroup, para ver que con una cuenta nada cambia.
 const oneAccountOnly = new URLSearchParams(window.location.search).get('unaCuenta') === '1';
 const socialAccounts = [
@@ -96,6 +96,7 @@ const items = [
     finalAssets: [{ id: 'a4', name: 'post-checklist.jpg', storageKey: 'k4', mimeType: 'image/jpeg', size: 300000, position: 0 }],
     // Ya programada en Instagram y publicada en Facebook: cómo se ve una pieza a medio salir.
     publishTime: '09:00',
+    socialPageIds: ['5555'],
     publications: [
       { id: 'pub-i4-ig', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: '2026-09-22T14:00:00.000Z', attempts: 0 },
       { id: 'pub-i4-fb', socialAccountId: 'acc-fb', platform: 'FACEBOOK', status: 'PUBLISHED', publishedAt: '2026-09-22T14:00:12.000Z', permalink: 'https://www.facebook.com/5555/posts/77' }
@@ -111,6 +112,7 @@ const items = [
     ],
     // Falló en Instagram con el motivo entero: así se ve lo que hay que leer.
     publishTime: '18:00',
+    socialPageIds: ['5555'],
     publications: [
       { id: 'pub-i6-ig', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'FAILED', attempts: 3, error: 'Meta rechazó la proporción de la imagen: en el feed acepta de 4:5 a 1.91:1.' }
     ]
