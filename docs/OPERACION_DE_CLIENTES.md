@@ -31,20 +31,10 @@ Decisión de Rodny, 1 y 2 de octubre de 2026: dejar el Excel «PENDIENTES BRAIN 
 
 Administradores y project managers: pestañas «Operación» y «Equipo» en Clientes y la página `/clientes/operacion/:slug`. El resto del equipo ve el directorio.
 
-## Cargar el Excel una sola vez
+## El Excel ya se cargó (2 de octubre de 2026)
 
-La plataforma manda: el Excel solo llena campos vacíos, quien ya tiene contrato no recibe otro, no se crean clientes y no se tocan los archivados. Todo lo que no coincide o no se entiende queda en el informe.
+El Excel se cargó una sola vez y el Excel se abandona: no hay función de carga en la plataforma y el script que lo hizo se retiró. Reglas que se siguieron, por si alguien revisa los datos:
 
-```
-node scripts/import-client-operations-excel.js "PENDIENTES BRAIN STUDIO 2026.xlsx"
-```
-
-Eso solo simula y deja `informe-carga-operacion-<fecha>.md`. Después de revisarlo:
-
-```
-node scripts/import-client-operations-excel.js "PENDIENTES BRAIN STUDIO 2026.xlsx" --confirm IMPORTAR --crear-tareas --creador <correo>
-```
-
-Cada cliente se guarda en su propia transacción y volver a correrlo no duplica contratos ni tareas.
-
-Lo que la carga no adivina y deja como duda: el día de corte (siempre 1; si el contrato empieza otro día se avisa), «carretes» (se leen como carrusel), contenidos sin desglose (se cargan como formato «Otro») y vigencias sin dos fechas (el contrato arranca el 1 del mes en curso).
+- La plataforma mandó: el Excel solo llenó campos vacíos, nadie que ya tuviera contrato recibió otro, no se crearon clientes y no se tocaron los archivados. Se emparejó primero con las fichas activas («Corporación Titanes», no la «Titanes» archivada).
+- Resultado: 34 fichas completadas, 33 contratos (`source = 'EXCEL'`), 52 observaciones (`source = 'EXCEL'`, con su columna de origen) y la acción destacada de Helen y Sara. Jarlan y Camila ya no estaban activos en el equipo.
+- Lo que no se adivinó y conviene revisar en cada ficha: el día de corte (quedó en 1; Mimas, Titanes, Félix y Aristea empiezan otro día), «carretes» (se leyeron como carrusel), contenidos sin desglose (formato «Otro») y vigencias sin dos fechas (el contrato arranca el 1 de octubre de 2026).
