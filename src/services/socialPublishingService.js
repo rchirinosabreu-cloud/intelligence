@@ -18,8 +18,8 @@ import { createSignedDownload } from './s3Service.js';
 import { imageDerivativeService } from './socialImageDerivativeService.js';
 import {
   ACTIVE_PUBLICATION_STATUSES, MAX_PUBLICATION_ATTEMPTS, PUBLICATION_LEASE_MS, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS,
-  describeMetaMedia, facebookMedia, humanizeMetaError, isPublishInstantTooSoon, isRetryableMetaError, nextPublicationRetryAt,
-  pieceTargetAccounts, publishAtIso, schedulingProblems, socialPagesOf
+  CHOOSE_ACCOUNT_FIRST, describeMetaMedia, facebookMedia, humanizeMetaError, isPublishInstantTooSoon, isRetryableMetaError, nextPublicationRetryAt,
+  pieceNeedsAccountChoice, pieceTargetAccounts, publishAtIso, schedulingProblems, socialPagesOf
 } from '../lib/socialPublishing.js';
 
 /** Una red que falló también cuenta como pendiente: la pieza no está «publicada» si una de sus redes no salió. */
@@ -113,6 +113,10 @@ export const createSocialPublishingService = ({
   const schedulePublications = async ({ itemId, accountIds = null, platforms = [], actorUserId = null }) => {
     const item = await loadItem(itemId);
     const pool = pieceTargetAccounts(item, accountsOf(item));
+    // Con varias cuentas y ninguna marcada no hay dónde programar: se pide elegir, nunca se asume una.
+    if (pieceNeedsAccountChoice(item, accountsOf(item))) {
+      throw httpError(422, CHOOSE_ACCOUNT_FIRST, { code: 'SOCIAL_PUBLICATION_INVALID', problems: [CHOOSE_ACCOUNT_FIRST] });
+    }
     let targets;
     let problems;
     if (Array.isArray(accountIds)) {
@@ -151,17 +155,17 @@ export const createSocialPublishingService = ({
   /**
    * A qué cuentas va la pieza. Se guarda en la pieza y, en el mismo acto, se cancela lo que estuviera
    * programado en las cuentas que deja: nada sale en una cuenta que la pieza ya no nombra. Lo que ya
-   * salió no se toca.
+   * salió no se toca. Se pueden desmarcar todas (Rodny, 2 de octubre de 2026: «quiero poder
+   * seleccionar y deseleccionar»): la pieza queda sin destino hasta que alguien marque uno.
    */
   const setItemSocialPages = async ({ itemId, pageIds = [] }) => {
     const item = await loadItem(itemId);
     const pages = socialPagesOf(accountsOf(item));
     const wanted = Array.from(new Set((Array.isArray(pageIds) ? pageIds : []).map((id) => String(id))));
-    if (!wanted.length) throw httpError(422, 'La pieza tiene que ir al menos a una cuenta.');
     if (wanted.some((id) => !pages.some((page) => page.pageId === id))) throw httpError(422, 'Esa cuenta no está conectada a este cliente.');
     const socialPageIds = pages.filter((page) => wanted.includes(page.pageId)).map((page) => page.pageId);
     await db.contentItem.update({ where: { id: item.id }, data: { socialPageIds } });
-    await resyncItemPublications(item.id);
+    await resyncItemPublications(item.id, { enforceTargets: true });
     return { itemId: item.id, socialPageIds };
   };
 
@@ -227,7 +231,7 @@ export const createSocialPublishingService = ({
    * La pieza cambió de día o de hora: sus filas programadas la siguen. Sin hora, o con una hora que ya
    * pasó, se cancelan diciendo por qué: mover una pieza al pasado no puede publicarla en el acto.
    */
-  async function resyncItemPublications(itemId) {
+  async function resyncItemPublications(itemId, { enforceTargets = false } = {}) {
     const item = await db.contentItem.findUnique({ where: { id: itemId }, include: itemInclude });
     if (!item) return [];
     const scheduled = (item.publications || []).filter((row) => row.status === 'SCHEDULED');
@@ -236,11 +240,13 @@ export const createSocialPublishingService = ({
     const cancelReason = !publishAt
       ? 'La pieza se quedó sin fecha u hora de publicación.'
       : isPublishInstantTooSoon(publishAt, now()) ? 'La nueva hora de publicación ya pasó; vuelve a programar la pieza con una hora por delante.' : null;
-    // Las cuentas a las que va la pieza hoy: lo programado en una que ya no nombra no puede salir.
+    // Las cuentas a las que va la pieza hoy: lo programado en una que ya no nombra no puede salir. Solo
+    // se aplica cuando alguien acaba de cambiar las cuentas de la pieza (`enforceTargets`): un cambio de
+    // día u hora mueve lo programado, pero nunca lo cancela porque la pieza no tuviera cuenta marcada.
     const stillTargets = new Set(pieceTargetAccounts(item, accountsOf(item)).map((account) => account.id));
     const updates = [];
     for (const row of scheduled) {
-      const reason = stillTargets.has(row.socialAccountId) ? cancelReason : 'La pieza ya no va a esta cuenta.';
+      const reason = enforceTargets && !stillTargets.has(row.socialAccountId) ? 'La pieza ya no va a esta cuenta.' : cancelReason;
       updates.push(await db.socialPublication.update({
         where: { id: row.id },
         data: reason

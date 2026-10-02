@@ -51,7 +51,7 @@ export const createSocialAccountService = ({
     // no reemplaza. Antes se guardaba «la cuenta de Facebook del cliente» y una segunda página pisaba la
     // primera, con lo que lo programado para Endova habría salido en la página nueva.
     const existing = await db.clientSocialAccount.findMany({ where: { clientId } });
-    // La primera página que se conecta es la que sale por defecto en las piezas que no nombran cuenta.
+    // La primera página que se conectó va primero en las listas. Es solo orden: ninguna sale por defecto.
     const becomesPrimary = !existing.some((row) => row.isPrimary);
     const shared = { encryptedToken: encryptToken(page.pageToken), pageId: page.pageId, isActive: true, connectedById: actorUserId, connectedAt: now(), lastError: null, lastCheckedAt: now() };
     const save = async ({ platform, externalId, displayName }) => {
@@ -61,6 +61,20 @@ export const createSocialAccountService = ({
       }
       return db.clientSocialAccount.create({ data: { clientId, platform, externalId, displayName, isPrimary: becomesPrimary, ...shared } });
     };
+
+    // El cliente tenía una sola cuenta y ahora va a tener dos. Con una sola, las piezas no nombran
+    // cuenta (van a la única); con varias, la que no nombra ninguna no va a ninguna. Para que lo ya
+    // programado no se quede sin destino, esas piezas pasan a nombrar la cuenta donde estaban.
+    const priorPages = Array.from(new Set(existing.map((row) => row.pageId)));
+    if (priorPages.length === 1 && priorPages[0] && priorPages[0] !== page.pageId) {
+      await db.contentItem.updateMany({
+        where: {
+          socialPageIds: { isEmpty: true },
+          publications: { some: { socialAccountId: { in: existing.map((row) => row.id) }, status: { in: ['SCHEDULED', 'PUBLISHING'] } } }
+        },
+        data: { socialPageIds: [priorPages[0]] }
+      });
+    }
 
     const rows = [await save({ platform: 'FACEBOOK', externalId: page.pageId, displayName: page.pageName })];
     const instagramId = page.instagram?.id ? String(page.instagram.id) : null;

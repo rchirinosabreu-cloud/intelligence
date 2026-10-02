@@ -188,18 +188,13 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
       ) : (
         <>
           {/* Un cliente puede tener varias cuentas (Rodny, 2 de octubre de 2026): cada una es una página
-              de Facebook con su Instagram. Con más de una se agrupan por página y se dice cuál sale
-              por defecto; con una sola la tarjeta se ve como siempre. */}
+              de Facebook con su Instagram. Con más de una se agrupan por página; con una sola la tarjeta
+              se ve como siempre. Ninguna es «la principal»: en la parrilla cada pieza marca a cuál va. */}
           <ul className="space-y-3">
             {pages.map((page) => (
               <li key={page.pageId} data-social-page={page.pageId}>
                 {pages.length > 1 && (
-                  <div className="mb-1.5 flex min-w-0 items-center gap-2">
-                    <span className="truncate text-xs font-bold text-zinc-700 dark:text-zinc-200">{page.name}</span>
-                    {page.isPrimary && (
-                      <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:bg-white/10 dark:text-zinc-300">Por defecto</span>
-                    )}
-                  </div>
+                  <span className="mb-1.5 block truncate text-xs font-bold text-zinc-700 dark:text-zinc-200">{page.name}</span>
                 )}
                 <ul className="space-y-2">
                   {page.accounts.map((account) => {
@@ -233,7 +228,7 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
           </ul>
           {pages.length > 1 && (
             <p className="mt-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
-              En la parrilla, cada pieza elige a cuál de estas cuentas va. Si no se elige, va a la que dice «Por defecto».
+              En la parrilla, cada pieza marca a cuál de estas cuentas va.
             </p>
           )}
         </>

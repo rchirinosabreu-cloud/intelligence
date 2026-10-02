@@ -8,7 +8,9 @@ import { createSocialPublishingService } from '../src/services/socialPublishingS
 
 // Rodny, 2 October 2026: «tengo una parrilla pero se maneja y publica en diferentes cuentas… hay post
 // de esa parrilla que son para PromoGroup y otros para Endova». One client, several accounts; each
-// piece says where it goes. It may go to several; only the first one connected comes ticked.
+// piece says where it goes. It may go to several. The first version ticked the first account connected
+// by default and would not let the last one be unticked; he sent that back the same day: «quiero poder
+// seleccionar y deseleccionar, no importa, no quiero que nada esté marcado por defecto».
 
 const NOW = new Date('2036-10-03T15:31:00.000Z'); // 10:31 in Bogotá
 const account = (id, platform, pageId, displayName, extra = {}) => ({ id, clientId: 'client-1', platform, externalId: `${platform === 'INSTAGRAM' ? 'ig' : ''}${pageId}`, displayName, pageId, encryptedToken: `enc:${id}`, isActive: true, isPrimary: false, ...extra });
@@ -19,7 +21,7 @@ const endovaIg = account('endova-ig', 'INSTAGRAM', '200', '@endova.salud');
 const barraFb = account('barra-fb', 'FACEBOOK', '300', 'Barra Lima');
 const ALL = [endovaIg, promoFb, barraFb, endovaFb, promoIg];
 
-test('the accounts of a client are read as pages: the default one first, the rest by name, each with its networks', () => {
+test('the accounts of a client are read as pages: the first one connected first, the rest by name, each with its networks', () => {
   const pages = socialPagesOf(ALL);
   assert.deepEqual(pages.map((page) => [page.pageId, page.name, page.isPrimary, page.accounts.map((row) => row.id)]), [
     ['100', 'PromoGroup IPS', true, ['promo-fb', 'promo-ig']],
@@ -36,21 +38,31 @@ test('the accounts of a client are read as pages: the default one first, the res
   assert.equal(socialPagesOf([{ ...promoFb, pageId: null }, { ...promoIg, pageId: null }]).length, 1);
 });
 
-test('a piece goes to the accounts it names; one that names none goes to the default account only', () => {
-  assert.deepEqual(pieceSocialPageIds({ socialPageIds: [] }, ALL), ['100']);
-  assert.deepEqual(pieceSocialPageIds({}, ALL), ['100']);
+test('with several accounts a piece goes only where it says; saying nothing means nowhere, never a default', () => {
+  assert.deepEqual(pieceSocialPageIds({ socialPageIds: [] }, ALL), [], 'nothing comes ticked');
+  assert.deepEqual(pieceSocialPageIds({}, ALL), []);
   assert.deepEqual(pieceSocialPageIds({ socialPageIds: ['200'] }, ALL), ['200']);
   assert.deepEqual(pieceSocialPageIds({ socialPageIds: ['200', '100', '200'] }, ALL), ['100', '200'], 'several, once each, in the order of the pages');
-  assert.deepEqual(pieceSocialPageIds({ socialPageIds: ['999'] }, ALL), ['100'], 'an account that is no longer connected never leaves the piece without destination');
+  assert.deepEqual(pieceSocialPageIds({ socialPageIds: ['999'] }, ALL), [], 'an account that is no longer connected is not swapped for another one behind anybody\'s back');
   assert.deepEqual(pieceSocialPageIds({ socialPageIds: ['200'] }, []), []);
   assert.deepEqual(pieceTargetAccounts({ socialPageIds: ['200'] }, ALL).map((row) => row.id), ['endova-fb', 'endova-ig']);
-  assert.deepEqual(pieceTargetAccounts({}, ALL).map((row) => row.id), ['promo-fb', 'promo-ig']);
+  assert.deepEqual(pieceTargetAccounts({}, ALL), []);
 });
 
-test('the label of a piece names its accounts only when the client has more than one', () => {
+test('with a single account there is nothing to choose: every piece goes to it, as always', () => {
+  const single = [promoFb, promoIg];
+  assert.deepEqual(pieceSocialPageIds({}, single), ['100']);
+  assert.deepEqual(pieceSocialPageIds({ socialPageIds: [] }, single), ['100']);
+  assert.deepEqual(pieceSocialPageIds({ socialPageIds: ['999'] }, single), ['100']);
+  assert.deepEqual(pieceTargetAccounts({}, single).map((row) => row.id), ['promo-fb', 'promo-ig']);
+});
+
+test('the label of a piece names its accounts only when the client has more than one and the piece chose', () => {
   assert.equal(pieceAccountLabel({ socialPageIds: ['200'] }, ALL), 'Endova');
-  assert.equal(pieceAccountLabel({}, ALL), 'PromoGroup IPS');
   assert.equal(pieceAccountLabel({ socialPageIds: ['100', '200'] }, ALL), 'PromoGroup IPS + Endova');
+  // No «sin cuenta» mark: at the start of a month no piece has chosen yet, and a mark that lights
+  // up on every row says nothing.
+  assert.equal(pieceAccountLabel({}, ALL), null);
   assert.equal(pieceAccountLabel({}, [promoFb, promoIg]), null, 'one account: nothing to tell apart');
   assert.equal(pieceAccountLabel({}, []), null);
 });
@@ -118,8 +130,21 @@ test('the same piece can go out on two accounts of the client: one row for each,
   assert.deepEqual(state.publications.map((row) => row.platform), ['INSTAGRAM', 'INSTAGRAM']);
 });
 
-test('a piece that names no account is scheduled on the default one, as every client with a single account', async () => {
-  const { db } = memoryDb();
+test('with several accounts, a piece that has not chosen cannot be scheduled anywhere: it is asked to choose', async () => {
+  const { db, state } = memoryDb();
+  const service = build(db);
+  for (const request of [{ accountIds: ['promo-ig'] }, { platforms: ['INSTAGRAM', 'FACEBOOK'] }, { accountIds: [] }]) {
+    await assert.rejects(service.schedulePublications({ itemId: 'item-1', actorUserId: 'u', ...request }), (error) => (
+      error.status === 422 && /Elige primero a qué cuenta va esta pieza/.test(error.problems[0])
+    ));
+  }
+  assert.equal(state.publications.length, 0, 'never a default account behind the person\'s back');
+});
+
+test('a client with a single account schedules as it always did, without choosing anything', async () => {
+  const item = baseItem();
+  item.plan.client.socialAccounts = [promoFb, promoIg];
+  const { db } = memoryDb({ item });
   const rows = await build(db).schedulePublications({ itemId: 'item-1', platforms: ['INSTAGRAM', 'FACEBOOK'], actorUserId: 'u' });
   assert.deepEqual(rows.map((row) => row.socialAccountId), ['promo-ig', 'promo-fb']);
 });
@@ -138,9 +163,30 @@ test('changing where a piece goes cancels what was scheduled on the accounts it 
   assert.match(state.publications[0].error, /ya no va a esta cuenta/);
   assert.equal(state.publications[1].status, 'PUBLISHED', 'what already went out is history, not undone');
 
-  await assert.rejects(service.setItemSocialPages({ itemId: 'item-1', pageIds: [], actorUserId: 'u' }), (error) => error.status === 422 && /al menos a una cuenta/.test(error.message));
   await assert.rejects(service.setItemSocialPages({ itemId: 'item-1', pageIds: ['999'], actorUserId: 'u' }), (error) => error.status === 422 && /no está conectada/.test(error.message));
   assert.deepEqual(state.item.socialPageIds, ['200'], 'a refused change changes nothing');
+});
+
+test('moving the day or the hour never cancels a publication just because the piece had no account ticked', async () => {
+  // A piece scheduled when the client had one account; the client now has several and the piece names none.
+  const { db, state } = memoryDb({ item: baseItem({ publishTime: '12:00' }), publications: [
+    { id: 'p-promo-ig', contentItemId: 'item-1', socialAccountId: 'promo-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: new Date('2036-10-03T16:00:00.000Z') }
+  ] });
+  await build(db).resyncItemPublications('item-1');
+  assert.equal(state.publications[0].status, 'SCHEDULED', 'it follows the new hour instead of being cancelled');
+  assert.equal(state.publications[0].scheduledAt.toISOString(), '2036-10-03T17:00:00.000Z');
+});
+
+test('every account can be unticked: the piece then goes nowhere and whatever was scheduled is cancelled', async () => {
+  const scheduledAt = new Date('2036-10-03T16:00:00.000Z');
+  const { db, state } = memoryDb({ item: baseItem({ socialPageIds: ['200'] }), publications: [
+    { id: 'p-endova-ig', contentItemId: 'item-1', socialAccountId: 'endova-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt }
+  ] });
+  const result = await build(db).setItemSocialPages({ itemId: 'item-1', pageIds: [], actorUserId: 'user-rodny' });
+  assert.deepEqual(result.socialPageIds, []);
+  assert.deepEqual(state.item.socialPageIds, []);
+  assert.equal(state.publications[0].status, 'CANCELLED');
+  assert.match(state.publications[0].error, /ya no va a esta cuenta/);
 });
 
 test('the schema, the start script and the routes carry several accounts per client', () => {
@@ -182,6 +228,11 @@ test('the band lets the person choose the accounts of the piece, and the month s
   assert.match(panel, /type="checkbox"/, 'several accounts: a real multiple choice, not a single select');
   assert.match(panel, /onChangePages\(/);
   assert.match(panel, /row\.socialAccountId === account\.id/, 'a row belongs to an account, not to a network');
+  // Nothing ticked by default and nothing that cannot be unticked (Rodny, 2 October 2026).
+  assert.doesNotMatch(panel, /isLast/);
+  assert.match(panel, /Marca a qué cuenta va esta pieza/);
+  const widgetSource = readFileSync('src/components/modules/SocialAccountsWidget.jsx', 'utf8');
+  assert.doesNotMatch(widgetSource, /Por defecto/, 'there is no default account any more');
   const card = readFileSync('src/components/modules/ContentPlanDetail.jsx', 'utf8');
   assert.match(card, /api\/social\/items\/\$\{itemId\}\/pages/);
   assert.match(card, /accountIds/);

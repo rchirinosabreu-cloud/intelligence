@@ -74,9 +74,19 @@ try {
     state = await bandState(page);
     assert.deepEqual(state.chips, ['PromoGroup IPS:true', 'Endova:false']);
     assert.ok(state.rows.every((row) => /PromoGroup IPS|@promogroup\.ips/.test(row) && /Programada/.test(row)), 'what was scheduled on the account that stays is untouched');
-    // La última cuenta marcada no se puede desmarcar: la pieza tiene que ir al menos a una.
-    assert.equal(await page.locator('[data-social-page-choice] label', { hasText: 'PromoGroup IPS' }).locator('input').isDisabled(), true);
     await shotBand(`output/cuentas-5-solo-promogroup-${name}.png`);
+
+    // 4b. Y se le quita también la última: nada queda marcado, nada queda programado, y la banda pide
+    // elegir (Rodny, 2 de octubre de 2026: «quiero poder seleccionar y deseleccionar»).
+    const lastChip = page.locator('[data-social-page-choice] label', { hasText: 'PromoGroup IPS' });
+    assert.equal(await lastChip.locator('input').isDisabled(), false, 'the last account can be unticked too');
+    await lastChip.click();
+    await page.waitForSelector('[data-social-choose-account]');
+    state = await bandState(page);
+    assert.deepEqual(state.chips, ['PromoGroup IPS:false', 'Endova:false']);
+    assert.deepEqual(state.rows, [], 'what was scheduled is cancelled and the piece goes nowhere');
+    assert.equal(await page.locator(`${band} button`, { hasText: 'Programar' }).count(), 0);
+    await shotBand(`output/cuentas-5b-ninguna-marcada-${name}.png`);
 
     // 5. El calendario del mes también lo dice.
     await page.getByRole('button', { name: 'Calendario' }).click();
@@ -89,6 +99,16 @@ try {
     await page.waitForTimeout(4500);
     await page.screenshot({ path: `output/cuentas-6-calendario-${name}.png`, fullPage: false });
 
+    // 5b. Una pieza que todavía no eligió: ninguna casilla marcada, ninguna fila, y se le pide elegir.
+    await open(`${EDITOR}?item=i8`);
+    await page.waitForSelector(band);
+    await page.waitForTimeout(2000);
+    state = await bandState(page);
+    assert.deepEqual(state.chips, ['PromoGroup IPS:false', 'Endova:false'], 'nothing comes ticked');
+    assert.deepEqual(state.rows, []);
+    assert.equal(await page.locator('[data-social-choose-account]').count(), 1);
+    await shotBand(`output/cuentas-5c-pieza-sin-elegir-${name}.png`);
+
     // 6. Con una sola cuenta nada cambia: sin pregunta en la banda, sin rótulos en el mes.
     await open(`${EDITOR}?item=i1&futuro=1&unaCuenta=1`);
     await page.waitForSelector(band);
@@ -99,14 +119,14 @@ try {
     assert.deepEqual(state.rows, ['PromoGroup IPS · Sin programar', '@promogroup.ips · Sin programar']);
     await shotBand(`output/cuentas-7-una-sola-cuenta-${name}.png`);
 
-    // 7. La ficha del cliente: las cuentas agrupadas por página, y cuál sale por defecto.
+    // 7. La ficha del cliente: las cuentas agrupadas por página; ninguna es «la principal».
     await open(CLIENT);
     const widget = page.locator('[data-social-accounts-widget]').first();
     await widget.waitFor();
     const pages = await widget.evaluate((node) => [...node.querySelectorAll('[data-social-page]')].map((group) => group.innerText.replace(/\n/g, ' | ')));
     assert.equal(pages.length, 2);
-    assert.match(pages[0], /PromoGroup IPS \| Por defecto/);
-    assert.doesNotMatch(pages[1], /Por defecto/);
+    assert.match(pages[0], /^PromoGroup IPS/);
+    assert.doesNotMatch(await widget.innerText(), /Por defecto/, 'no account is the default one');
     // Con cuentas ya conectadas el botón es solo el «+»: su nombre lo lleva la etiqueta, no el texto.
     const connect = widget.getByRole('button', { name: 'Conectar otra página' });
     assert.equal(await connect.count(), 1);

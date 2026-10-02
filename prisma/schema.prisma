@@ -765,8 +765,8 @@ model ContentItem {
   /// Hora de publicación en reloj de Bogotá ('HH:mm'). Instagram no admite programar por la API:
   /// la plataforma publica cuando llega esta hora (Rodny, 29 de septiembre de 2026).
   publishTime        String?
-  /// A qué cuentas del cliente va la pieza (el `pageId` de cada una). Vacío = la que sale por defecto.
-  /// Un cliente puede tener varias cuentas y una pieza ir a una o a varias (Rodny, 2 de octubre de 2026).
+  /// A qué cuentas del cliente va la pieza (el `pageId` de cada una). Vacío = ninguna elegida: con
+  /// varias cuentas no va a ninguna; con una sola va a esa (Rodny, 2 de octubre de 2026).
   socialPageIds      String[]            @default([])
   publications       SocialPublication[]
   deletedAt          DateTime?
@@ -873,7 +873,7 @@ model ContentItemFinalAsset {
 /// eligiendo la página entre las que administra el usuario del sistema de Meta; el token de página se
 /// guarda cifrado con ENCRYPTION_KEY y nunca viaja al navegador. Un cliente puede tener varias cuentas
 /// (PromoGroup y Endova; Foobespain, Wine & Wonder y Wine Summit): las filas de una misma página
-/// comparten `pageId`, y `isPrimary` marca la que sale por defecto, la primera que se conectó.
+/// comparten `pageId`, y `isPrimary` marca la primera que se conectó, que va primero en las listas.
 model ClientSocialAccount {
   id             String              @id @default(uuid())
   clientId       String
