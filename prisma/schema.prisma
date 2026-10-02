@@ -646,16 +646,88 @@ model Client {
   briaMemorySources   BriaMemorySource[]
   boards              Board[]
   healthRecords       ClientHealth[]
+  // `responsible` es el community manager; `projectManager` quien lleva la cuenta (2 de octubre de 2026).
   responsibleId       String?
   responsible         TeamMember?          @relation("ClientResponsible", fields: [responsibleId], references: [id])
+  // Ficha operativa (2 de octubre de 2026): lo que el Excel «PENDIENTES» guardaba por cliente. Aditivas con
+  // `scripts/ensure-client-operations-schema.js`; la regla vive en `src/lib/clientOperations.js`.
+  description         String?
+  instagramUrl        String?
+  agency              String?
+  complexity          String?
+  projectManagerId    String?
+  projectManager      TeamMember?          @relation("ClientProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
+  contracts           ClientContract[]
+  monthlyReports      ClientMonthlyReport[]
+  observations        ClientObservation[]
   financialRecords    FinancialRecord[]
   accountsReceivables AccountsReceivable[]
   metricReports       MetricReport[]
   crmLeads            CrmLead[]
 
   @@index([isArchived, responsibleId])
+  @@index([projectManagerId])
 }
 
+/// Lo que se le vendió al cliente (2 de octubre de 2026). Un contrato por periodo: renovar crea otro y el
+/// anterior queda de historial; el vigente es el de inicio más reciente. Fechas como texto «YYYY-MM-DD».
+/// `deliverables` = [{ format, quantity }] con los formatos de la parrilla.
+model ClientContract {
+  id             String   @id @default(uuid())
+  clientId       String
+  serviceType    String   @default("PARRILLA")
+  status         String   @default("ACTIVO")
+  startDate      String
+  endDate        String?
+  standBySince   String?
+  cutDay         Int      @default(1)
+  deliverables   Json     @default("[]")
+  storiesPerWeek Int      @default(0)
+  productionDays Int      @default(0)
+  monthlyReport  Boolean  @default(false)
+  notes          String?
+  source         String   @default("MANUAL")
+  createdById    String?
+  updatedById    String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, startDate])
+}
+
+/// El informe de un mes se entregó (2 de octubre de 2026): quién y cuándo. Una fila por cliente y mes.
+model ClientMonthlyReport {
+  id            String   @id @default(uuid())
+  clientId      String
+  year          Int
+  month         Int
+  deliveredAt   DateTime @default(now()) @db.Timestamptz(3)
+  deliveredById String?
+  createdAt     DateTime @default(now())
+  client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, year, month])
+}
+
+/// Observaciones de un cliente (2 de octubre de 2026): lo que el Excel guardaba en «Comentario» y
+/// «OBSERVACIONES». Contexto que el equipo tiene que leer, no pendientes: los pendientes van a Gestión.
+/// `source` es MANUAL o EXCEL; `sourceLabel` dice de qué columna del Excel salió.
+model ClientObservation {
+  id          String   @id @default(uuid())
+  clientId    String
+  text        String
+  source      String   @default("MANUAL")
+  sourceLabel String?
+  authorId    String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+}
+
+/// En desuso desde el 2 de octubre de 2026: la «salud» manual del cliente la reemplaza la Operación de
+/// clientes, que se calcula. Ningún código la lee ni la escribe; se conserva para no perder datos.
 model ClientHealth {
   id            String   @id @default(uuid())
   clientId      String
@@ -999,11 +1071,14 @@ model TeamMember {
   desktopX           Int?
   desktopY           Int?
   statusMessage      String?
+  // «Acción destacada» del Excel de pendientes (2 de octubre de 2026): qué hace la persona en la operación.
+  highlightedAction  String?
   clientTasks        ClientTask[]
   contentPlans       ContentPlan[]
   flowMessages       FlowMessage[]
   nativeTasks        Task[]
   responsibleClients Client[]      @relation("ClientResponsible")
+  managedClients     Client[]      @relation("ClientProjectManager")
   crmLeads           CrmLead[]     @relation("CrmLeadOwner")
 }
 

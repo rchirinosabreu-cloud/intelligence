@@ -13,9 +13,7 @@ const PAGE = '/tests/fixtures/client-edit-preview.html';
 
 const client = (id, name, slug, isArchived = false) => ({
   id, name, slug, isArchived,
-  responsible: { id: `m-${id}`, name: 'Melissa', avatarUrl: null },
-  agencyContexts: [],
-  healthRecords: []
+  responsible: { id: `m-${id}`, name: 'Melissa', avatarUrl: null }
 });
 
 const CLIENTS = [

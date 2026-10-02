@@ -1,6 +1,5 @@
 import prisma from '../lib/prisma.js';
 import { getClients, createClient, getClientLinks, addClientLink, removeClientLink } from '../services/clientService.js';
-import { fetchClientHealth } from '../services/healthService.js';
 import { createUpdateClientHandler } from './clientUpdateHandler.js';
 
 export const listClients = async (req, res) => {
@@ -14,15 +13,6 @@ export const listClients = async (req, res) => {
     } catch (error) {
         console.error("[ClientController] Failed to list clients:", error?.message || error);
         res.status(500).json({ error: "Failed to list clients" });
-    }
-};
-
-export const getHealth = async (req, res) => {
-    try {
-        const clients = await fetchClientHealth();
-        res.json(clients);
-    } catch (error) {
-        res.status(500).json({ error: "Failed to fetch health indicators" });
     }
 };
 
@@ -60,99 +50,6 @@ export const archiveClientHandler = async (req, res) => {
         res.json(client);
     } catch (error) {
         res.status(500).json({ error: "Failed to archive client" });
-    }
-};
-
-export const addHealthCommentHandler = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { comment } = req.body;
-        const authorId = req.user?.userId;
-
-        if (!comment) return res.status(400).json({ error: "Comment is required" });
-
-        const agencyContext = await prisma.agencyContext.create({
-            data: {
-                clientId: id,
-                content: comment,
-                type: 'TEXT',
-                status: 'APPROVED',
-                metadata: {
-                    authorId,
-                    category: 'HEALTH_COMMENT'
-                }
-            }
-        });
-        res.json(agencyContext);
-    } catch (error) {
-        console.error("Health comment error:", error);
-        res.status(500).json({ error: "Failed to add health comment" });
-    }
-};
-
-export const updateHealthHandler = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const { mode, score, contentStatus, reportStatus, isExternal, comment } = req.body;
-        const authorId = req.user?.userId;
-
-        const now = new Date();
-        const month = now.getMonth() + 1;
-        const year = now.getFullYear();
-
-        let finalScore = score;
-
-        if (mode === 'auto') {
-            // Logic to be handled by service if needed, for now setting default
-            finalScore = score || 85;
-        }
-
-        // 1. Upsert Health Record
-        const health = await prisma.clientHealth.upsert({
-            where: {
-                clientId_month_year: { clientId: id, month, year }
-            },
-            update: {
-                score: finalScore,
-                contentStatus,
-                reportStatus,
-                isExternal: !!isExternal
-            },
-            create: {
-                clientId: id,
-                month,
-                year,
-                score: finalScore,
-                contentStatus,
-                reportStatus,
-                isExternal: !!isExternal
-            }
-        });
-
-        // 2. Insert Comment if provided
-        if (comment && comment.trim() !== '') {
-            await prisma.agencyContext.create({
-                data: {
-                    clientId: id,
-                    content: comment,
-                    type: 'TEXT',
-                    status: 'APPROVED',
-                    metadata: {
-                        authorId,
-                        category: 'HEALTH_COMMENT'
-                    }
-                }
-            });
-        }
-
-        // 3. Return updated client view
-        const updatedClient = await getClients({ isArchived: 'all' }); // Get all to find our specific one
-        const client = updatedClient.find(c => c.id === id);
-
-        res.json(client);
-    } catch (error) {
-        console.error("Update health error:", error);
-        res.status(500).json({ error: "Failed to update health configuration" });
     }
 };
 

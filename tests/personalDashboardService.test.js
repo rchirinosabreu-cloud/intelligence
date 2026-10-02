@@ -30,7 +30,7 @@ const makeTask = (overrides = {}) => ({
   assigneeId: overrides.assigneeId || null,
   assignee: overrides.assignee || null,
   updatedAt: overrides.updatedAt || fixedNow,
-  client: overrides.client || { id: 'client-1', name: 'Cliente Uno', slug: 'cliente-uno', logoUrl: null, healthRecords: [{ score: 72 }] },
+  client: overrides.client || { id: 'client-1', name: 'Cliente Uno', slug: 'cliente-uno', logoUrl: null },
   taskComments: overrides.taskComments || []
 });
 
@@ -478,7 +478,6 @@ test('buildPersonalDashboard only asks community managers to document tasks they
           name: 'Marca Norte',
           slug: 'marca-norte',
           logoUrl: null,
-          healthRecords: [{ score: 86, contentStatus: 'APROBADA', reportStatus: 'COMPLETA' }],
           contentPlans: [{ id: 'plan-1', status: 'ACTIVO', month: 8, year: 2026, updatedAt: fixedNow }],
           nativeTasks: []
         }
@@ -595,7 +594,6 @@ test('buildPersonalDashboard frames community manager work around assigned clien
           name: 'Marca Norte',
           slug: 'marca-norte',
           logoUrl: null,
-          healthRecords: [{ score: 58, contentStatus: 'SIN_PARRILLA', reportStatus: 'EN_PROCESO' }],
           contentPlans: [],
           nativeTasks: [
             makeTask({ id: 'client-task-1', status: 'PENDIENTE', dueDate: new Date('2026-08-09T12:00:00.000Z') }),
@@ -607,7 +605,6 @@ test('buildPersonalDashboard frames community manager work around assigned clien
           name: 'Marca Sur',
           slug: 'marca-sur',
           logoUrl: null,
-          healthRecords: [{ score: 86, contentStatus: 'APROBADA', reportStatus: 'COMPLETA' }],
           contentPlans: [{ id: 'plan-1', status: 'ACTIVO', month: 8, year: 2026, updatedAt: fixedNow }],
           nativeTasks: []
         }
