@@ -1,7 +1,8 @@
 /**
  * La cola de publicación en Instagram y Facebook (Rodny, 29 de septiembre de 2026).
  *
- * Una fila de `SocialPublication` por pieza y red. Programar comprueba con `schedulingProblems` todo lo
+ * Una fila de `SocialPublication` por pieza y **cuenta** (desde el 2 de octubre de 2026 un cliente puede
+ * tener varias cuentas, y una pieza puede ir a una o a varias). Programar comprueba con `schedulingProblems` todo lo
  * que impide salir y lo dice de una vez; el cron reclama las filas vencidas por compare-and-set (como
  * las revisiones de Bria: dos réplicas nunca publican la misma pieza), pide a Meta que publique con una
  * URL firmada del archivo y deja el enlace. Un fallo transitorio vuelve a la cola con espera creciente;
@@ -17,7 +18,8 @@ import { createSignedDownload } from './s3Service.js';
 import { imageDerivativeService } from './socialImageDerivativeService.js';
 import {
   ACTIVE_PUBLICATION_STATUSES, MAX_PUBLICATION_ATTEMPTS, PUBLICATION_LEASE_MS, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS,
-  describeMetaMedia, facebookMedia, humanizeMetaError, isPublishInstantTooSoon, isRetryableMetaError, nextPublicationRetryAt, publishAtIso, schedulingProblems
+  describeMetaMedia, facebookMedia, humanizeMetaError, isPublishInstantTooSoon, isRetryableMetaError, nextPublicationRetryAt,
+  pieceTargetAccounts, publishAtIso, schedulingProblems, socialPagesOf
 } from '../lib/socialPublishing.js';
 
 /** Una red que falló también cuenta como pendiente: la pieza no está «publicada» si una de sus redes no salió. */
@@ -42,6 +44,7 @@ const isVideoAsset = (asset) => String(asset?.mimeType || '').toLowerCase().star
 export const publicPublication = (row) => row && ({
   id: row.id,
   contentItemId: row.contentItemId,
+  socialAccountId: row.socialAccountId,
   platform: row.platform,
   status: row.status,
   scheduledAt: row.scheduledAt,
@@ -63,6 +66,7 @@ export const publicSocialAccount = (account) => account && ({
   displayName: account.displayName,
   pageId: account.pageId,
   isActive: account.isActive,
+  isPrimary: Boolean(account.isPrimary),
   connectedAt: account.connectedAt,
   lastError: account.lastError
 });
@@ -97,32 +101,68 @@ export const createSocialPublishingService = ({
 
   const accountsOf = (item) => (item.plan?.client?.socialAccounts || []);
 
-  const schedulePublications = async ({ itemId, platforms = [], actorUserId = null }) => {
+  /** «Instagram (@endova.salud)»: con varias cuentas por cliente, la red sola ya no dice dónde. */
+  const whereLabel = (account) => `${SOCIAL_PLATFORM_LABELS[account.platform] || account.platform}${account.displayName ? ` (${account.displayName})` : ''}`;
+
+  /**
+   * Programar en las cuentas elegidas (`accountIds`). Solo valen las cuentas a las que va la pieza
+   * (`pieceTargetAccounts`): una cuenta del cliente que la pieza no nombra se rechaza, nunca se añade
+   * a escondidas. `platforms` es la forma de antes, cuando había una cuenta por red: se resuelve
+   * contra las cuentas de la pieza.
+   */
+  const schedulePublications = async ({ itemId, accountIds = null, platforms = [], actorUserId = null }) => {
     const item = await loadItem(itemId);
-    const wanted = Array.from(new Set(platforms.map((platform) => String(platform || '').toUpperCase())));
-    const problems = schedulingProblems({ item, assets: item.finalAssets, accounts: accountsOf(item), platforms: wanted, now: now() });
-    for (const platform of wanted) {
-      const existing = (item.publications || []).find((row) => row.platform === platform);
-      if (existing?.status === 'PUBLISHED') problems.push(`Esta pieza ya se publicó en ${SOCIAL_PLATFORM_LABELS[platform] || platform}.`);
-      else if (existing?.status === 'PUBLISHING') problems.push(`Esta pieza se está publicando en ${SOCIAL_PLATFORM_LABELS[platform] || platform} ahora mismo.`);
+    const pool = pieceTargetAccounts(item, accountsOf(item));
+    let targets;
+    let problems;
+    if (Array.isArray(accountIds)) {
+      const wantedIds = Array.from(new Set(accountIds.map((id) => String(id))));
+      targets = wantedIds.map((id) => pool.find((account) => account.id === id)).filter(Boolean);
+      problems = targets.length === wantedIds.length ? [] : ['Una de las cuentas elegidas no es de esta pieza. Elige la cuenta en la pieza y vuelve a programar.'];
+      problems.push(...schedulingProblems({ item, assets: item.finalAssets, targets, now: now() }));
+    } else {
+      const wanted = Array.from(new Set(platforms.map((platform) => String(platform || '').toUpperCase())));
+      problems = schedulingProblems({ item, assets: item.finalAssets, accounts: pool, platforms: wanted, now: now() });
+      targets = wanted.map((platform) => pool.find((candidate) => candidate.platform === platform && candidate.isActive !== false)).filter(Boolean);
+    }
+    for (const account of targets) {
+      const existing = (item.publications || []).find((row) => row.socialAccountId === account.id);
+      if (existing?.status === 'PUBLISHED') problems.push(`Esta pieza ya se publicó en ${whereLabel(account)}.`);
+      else if (existing?.status === 'PUBLISHING') problems.push(`Esta pieza se está publicando en ${whereLabel(account)} ahora mismo.`);
     }
     if (problems.length) throw httpError(422, problems[0], { code: 'SOCIAL_PUBLICATION_INVALID', problems });
 
     const scheduledAt = new Date(publishAtIso(item.publishDate, item.publishTime));
     const rows = [];
-    for (const platform of wanted) {
-      const account = accountsOf(item).find((candidate) => candidate.platform === platform && candidate.isActive !== false);
+    for (const account of targets) {
       const fresh = {
         status: 'SCHEDULED', scheduledAt, attempts: 0, nextAttemptAt: null, leaseToken: null, leaseAt: null, publishRequestedAt: null,
         error: null, permalink: null, externalMediaId: null, publishedAt: null, cancelledAt: null, requestedById: actorUserId
       };
       rows.push(await db.socialPublication.upsert({
-        where: { contentItemId_platform: { contentItemId: item.id, platform } },
-        create: { contentItemId: item.id, socialAccountId: account.id, platform, ...fresh },
-        update: { socialAccountId: account.id, ...fresh }
+        where: { contentItemId_socialAccountId: { contentItemId: item.id, socialAccountId: account.id } },
+        create: { contentItemId: item.id, socialAccountId: account.id, platform: account.platform, ...fresh },
+        update: { platform: account.platform, ...fresh }
       }));
     }
     return rows;
+  };
+
+  /**
+   * A qué cuentas va la pieza. Se guarda en la pieza y, en el mismo acto, se cancela lo que estuviera
+   * programado en las cuentas que deja: nada sale en una cuenta que la pieza ya no nombra. Lo que ya
+   * salió no se toca.
+   */
+  const setItemSocialPages = async ({ itemId, pageIds = [] }) => {
+    const item = await loadItem(itemId);
+    const pages = socialPagesOf(accountsOf(item));
+    const wanted = Array.from(new Set((Array.isArray(pageIds) ? pageIds : []).map((id) => String(id))));
+    if (!wanted.length) throw httpError(422, 'La pieza tiene que ir al menos a una cuenta.');
+    if (wanted.some((id) => !pages.some((page) => page.pageId === id))) throw httpError(422, 'Esa cuenta no está conectada a este cliente.');
+    const socialPageIds = pages.filter((page) => wanted.includes(page.pageId)).map((page) => page.pageId);
+    await db.contentItem.update({ where: { id: item.id }, data: { socialPageIds } });
+    await resyncItemPublications(item.id);
+    return { itemId: item.id, socialPageIds };
   };
 
   const cancelPublication = async ({ publicationId }) => {
@@ -187,7 +227,7 @@ export const createSocialPublishingService = ({
    * La pieza cambió de día o de hora: sus filas programadas la siguen. Sin hora, o con una hora que ya
    * pasó, se cancelan diciendo por qué: mover una pieza al pasado no puede publicarla en el acto.
    */
-  const resyncItemPublications = async (itemId) => {
+  async function resyncItemPublications(itemId) {
     const item = await db.contentItem.findUnique({ where: { id: itemId }, include: itemInclude });
     if (!item) return [];
     const scheduled = (item.publications || []).filter((row) => row.status === 'SCHEDULED');
@@ -196,17 +236,20 @@ export const createSocialPublishingService = ({
     const cancelReason = !publishAt
       ? 'La pieza se quedó sin fecha u hora de publicación.'
       : isPublishInstantTooSoon(publishAt, now()) ? 'La nueva hora de publicación ya pasó; vuelve a programar la pieza con una hora por delante.' : null;
+    // Las cuentas a las que va la pieza hoy: lo programado en una que ya no nombra no puede salir.
+    const stillTargets = new Set(pieceTargetAccounts(item, accountsOf(item)).map((account) => account.id));
     const updates = [];
     for (const row of scheduled) {
+      const reason = stillTargets.has(row.socialAccountId) ? cancelReason : 'La pieza ya no va a esta cuenta.';
       updates.push(await db.socialPublication.update({
         where: { id: row.id },
-        data: cancelReason
-          ? { status: 'CANCELLED', cancelledAt: now(), error: cancelReason, leaseToken: null, leaseAt: null }
+        data: reason
+          ? { status: 'CANCELLED', cancelledAt: now(), error: reason, leaseToken: null, leaseAt: null }
           : { scheduledAt: new Date(publishAt), nextAttemptAt: null }
       }));
     }
     return updates;
-  };
+  }
 
   const claim = async (row) => {
     const token = randomId();
@@ -251,7 +294,7 @@ export const createSocialPublishingService = ({
     if (status === 'FAILED') {
       await notifyRequester(row, item, {
         type: 'SOCIAL_PUBLICATION_FAILED',
-        message: `No se pudo publicar «${item.objective || item.format}» en ${SOCIAL_PLATFORM_LABELS[row.platform] || row.platform}: ${humanError}`
+        message: `No se pudo publicar «${item.objective || item.format}» en ${row.socialAccount ? whereLabel(row.socialAccount) : (SOCIAL_PLATFORM_LABELS[row.platform] || row.platform)}: ${humanError}`
       });
     }
     return status;
@@ -301,7 +344,7 @@ export const createSocialPublishingService = ({
       }
       await notifyRequester(full, item, {
         type: 'SOCIAL_PUBLICATION_PUBLISHED',
-        message: `«${item.objective || item.format}» ya está publicado en ${SOCIAL_PLATFORM_LABELS[full.platform] || full.platform}.`
+        message: `«${item.objective || item.format}» ya está publicado en ${account ? whereLabel(account) : (SOCIAL_PLATFORM_LABELS[full.platform] || full.platform)}.`
       });
       return { id: row.id, status: 'PUBLISHED', permalink: result.permalink || null };
     } catch (error) {
@@ -337,7 +380,7 @@ export const createSocialPublishingService = ({
     return outcomes;
   };
 
-  return { schedulePublications, cancelPublication, retryPublication, reopenPublication, listPlanPublications, resyncItemPublications, processDuePublications, publishOne };
+  return { schedulePublications, setItemSocialPages, cancelPublication, retryPublication, reopenPublication, listPlanPublications, resyncItemPublications, processDuePublications, publishOne };
 };
 
 export const socialPublishingService = createSocialPublishingService();

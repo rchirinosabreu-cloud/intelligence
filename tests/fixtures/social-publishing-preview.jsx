@@ -42,6 +42,13 @@ const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: In
 queryClient.setQueryData(['social-accounts', 'c1'], [fb, ig]);
 queryClient.setQueryData(['social-accounts', 'c2'], []);
 queryClient.setQueryData(['social-accounts', 'c3'], [fbDead, ig]);
+// Un cliente con dos cuentas (2 de octubre de 2026): PromoGroup IPS, la primera que se conectó, y Endova.
+queryClient.setQueryData(['social-accounts', 'c4'], [
+  { id: 'p-fb', clientId: 'c4', platform: 'FACEBOOK', externalId: '100', displayName: 'PromoGroup IPS', pageId: '100', isActive: true, isPrimary: true, lastError: null },
+  { id: 'p-ig', clientId: 'c4', platform: 'INSTAGRAM', externalId: 'ig100', displayName: '@promogroup.ips', pageId: '100', isActive: true, isPrimary: true, lastError: null },
+  { id: 'e-fb', clientId: 'c4', platform: 'FACEBOOK', externalId: '200', displayName: 'Endova', pageId: '200', isActive: true, isPrimary: false, lastError: null },
+  { id: 'e-ig', clientId: 'c4', platform: 'INSTAGRAM', externalId: 'ig200', displayName: '@endova.salud', pageId: '200', isActive: true, isPrimary: false, lastError: null }
+]);
 // «Conectar página» con muchas páginas (1 de octubre de 2026: en producción pasaron a ser 69): el
 // buscador, el orden alfabético y la lista con scroll se ven aquí sin llamar a Meta.
 const SAMPLE_PAGES = [
@@ -96,6 +103,7 @@ function App() {
             </button>
           </header>
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+            <SocialAccountsWidget clientId="c4" canManage />
             <SocialAccountsWidget clientId="c1" canManage />
             <SocialAccountsWidget clientId="c2" canManage />
             <SocialAccountsWidget clientId="c3" canManage={false} />

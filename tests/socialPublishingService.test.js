@@ -51,10 +51,11 @@ const memoryDb = ({ item = baseItem(), publications = [] } = {}) => {
         return { ...row, contentItem: { ...state.item }, socialAccount: [igAccount, fbAccount].find((account) => account.id === row.socialAccountId) };
       },
       upsert: async ({ where, create, update }) => {
-        const { contentItemId, platform } = where.contentItemId_platform;
-        const existing = state.publications.find((row) => row.contentItemId === contentItemId && row.platform === platform);
+        // One row per piece and account (2 October 2026: a client may have several accounts of a network).
+        const { contentItemId, socialAccountId } = where.contentItemId_socialAccountId;
+        const existing = state.publications.find((row) => row.contentItemId === contentItemId && row.socialAccountId === socialAccountId);
         if (existing) { Object.assign(existing, update); return existing; }
-        const row = { id: `pub-${platform.toLowerCase()}`, attempts: 0, nextAttemptAt: null, leaseToken: null, leaseAt: null, error: null, ...create };
+        const row = { id: `pub-${create.platform.toLowerCase()}`, attempts: 0, nextAttemptAt: null, leaseToken: null, leaseAt: null, error: null, ...create };
         state.publications.push(row);
         return row;
       },
@@ -408,7 +409,8 @@ test('the schema, the ensure script and the server wire the queue in', () => {
   assert.match(schema, /model ClientSocialAccount \{/);
   assert.match(schema, /model SocialPublication \{/);
   assert.match(schema, /publishTime\s+String\?/);
-  assert.match(schema, /@@unique\(\[contentItemId, platform\]\)/);
+  // One row per piece and account since 2 October 2026 (a client may have several accounts of a network).
+  assert.match(schema, /@@unique\(\[contentItemId, socialAccountId\]\)/);
   const script = readFileSync('scripts/ensure-social-publishing-schema.js', 'utf8');
   assert.match(script, /ADD COLUMN IF NOT EXISTS "publishTime"/);
   assert.match(script, /CREATE TABLE IF NOT EXISTS "ClientSocialAccount"/);

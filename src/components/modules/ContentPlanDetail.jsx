@@ -27,6 +27,7 @@ import DatePicker from 'react-datepicker';
 import { brainDatePickerProps } from '@/lib/brainDatePicker';
 import { BrainTimePicker } from '@/components/ui/BrainDatePicker';
 import SocialPublishingPanel from '@/components/modules/ContentPlan/SocialPublishingPanel';
+import { pieceAccountLabel } from '@/lib/socialPublishing';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import BriaContentPlanReview from '@/components/modules/ContentPlan/BriaContentPlanReview';
 
@@ -601,7 +602,7 @@ const shortPieceDate = (value) => (value
  * había forma de ver el mes como mes. Ahora el mes vive aquí y a la derecha se edita una sola pieza.
  * El punto magenta marca lo que todavía no tiene pieza final, que es lo que suele frenar una entrega.
  */
-const PlanPieceRail = ({ items, selectedId, onSelect, onAdd }) => (
+const PlanPieceRail = ({ items, selectedId, onSelect, onAdd, accounts = [] }) => (
   /* El tope de alto va **aquí**, no en el contenedor: un `h-full` no resuelve contra un `max-height`
      del padre, así que el carril crecía a su tamaño natural, la lista nunca activaba su scroll y
      «Nueva pieza» quedaba cortado abajo en pantallas bajas (Rodny, 29 de septiembre de 2026). */
@@ -615,6 +616,9 @@ const PlanPieceRail = ({ items, selectedId, onSelect, onAdd }) => (
     <div className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto p-2">
       {items.map((item, index) => {
         const isSelected = item.id === selectedId;
+        // Con varias cuentas en el cliente (PromoGroup y Endova en una misma parrilla), cada pieza dice
+        // a cuál va: así se ve cómo se reparte el mes. Con una sola cuenta no hay nada que decir.
+        const accountLabel = pieceAccountLabel(item, accounts);
         return (
           <button
             key={item.id}
@@ -631,6 +635,7 @@ const PlanPieceRail = ({ items, selectedId, onSelect, onAdd }) => (
                 {item.objective || `Pieza ${index + 1}`}
               </span>
               <span className="mt-0.5 block truncate text-[11px] text-zinc-500 dark:text-zinc-400">
+                {accountLabel && <><span data-piece-account className="font-bold text-zinc-600 dark:text-zinc-300">{accountLabel}</span> · </>}
                 {item.format} · {shortPieceDate(item.publishDate)}
               </span>
             </span>
@@ -668,7 +673,7 @@ const NEUTRAL_CHIP = 'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-
  * enseñar: los días vacíos y los días con tres piezas encima. Tocar una pieza la abre en el editor —son
  * dos formas de mirar el mismo mes, no dos sitios distintos.
  */
-const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd }) => {
+const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd, accounts = [] }) => {
   const weeks = buildMonthGrid(year, month);
   const { byDay, undated } = groupItemsByDay(items);
 
@@ -704,7 +709,10 @@ const PlanCalendar = ({ items, year, month, onOpenPiece, onAdd }) => {
                     onClick={() => onOpenPiece(piece.id)}
                     className={`flex flex-col gap-0.5 rounded-lg px-2 py-1.5 text-left transition-opacity hover:opacity-80 ${PIECE_CHIP[piece.status] || NEUTRAL_CHIP}`}
                   >
-                    <span className="text-[9px] font-black uppercase tracking-wider opacity-80">{piece.format}</span>
+                    <span className="truncate text-[9px] font-black uppercase tracking-wider opacity-80">
+                      {piece.format}
+                      {pieceAccountLabel(piece, accounts) && <span data-piece-account> · {pieceAccountLabel(piece, accounts)}</span>}
+                    </span>
                     <span className="line-clamp-2 text-[11px] font-medium leading-tight text-zinc-700 dark:text-zinc-200">
                       {piece.objective}
                     </span>
@@ -827,6 +835,7 @@ const ContentItemCard = ({
   onCancelPublication,
   onRetryPublication,
   onReopenPublication,
+  onChangeSocialPages,
   isPublicationBusy = false,
   publicationProblems = []
 }) => {
@@ -1166,13 +1175,14 @@ const ContentItemCard = ({
       </div>
 
       <SocialPublishingPanel
-        key={`${item.id}-${item.publishTime || ''}-${(item.publications || []).map((row) => `${row.platform}:${row.status}`).join(',')}`}
+        key={`${item.id}-${item.publishTime || ''}-${(item.socialPageIds || []).join('+')}-${(item.publications || []).map((row) => `${row.socialAccountId || row.platform}:${row.status}`).join(',')}`}
         item={item}
         accounts={socialAccounts}
         onSchedule={onSchedulePublication}
         onCancel={onCancelPublication}
         onRetry={onRetryPublication}
         onReopen={onReopenPublication}
+        onChangePages={onChangeSocialPages}
         isBusy={isPublicationBusy}
         serverProblems={publicationProblems}
       />
@@ -1606,16 +1616,27 @@ const ContentPlanDetail = () => {
     if (Array.isArray(data.problems) && data.problems.length) setPublicationProblems(data.problems);
     toast.error(data.error || fallback);
   };
+  // Se programa por cuenta, no por red: un cliente puede tener varias cuentas (Rodny, 2 de octubre de 2026).
   const schedulePublicationMutation = useMutation({
-    mutationFn: async ({ itemId, platforms }) => (await axios.post(`${getApiBaseUrl()}/api/social/publications`, { itemId, platforms }, {
+    mutationFn: async ({ itemId, accountIds }) => (await axios.post(`${getApiBaseUrl()}/api/social/publications`, { itemId, accountIds }, {
       headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
     })).data,
     onSuccess: (rows) => {
       setPublicationProblems([]);
       invalidatePlan();
-      toast.success(rows.length > 1 ? 'Publicación programada en Instagram y Facebook' : 'Publicación programada');
+      // «Perfiles» y no «cuentas»: una cuenta es una página con su Instagram, y aquí se cuentan los dos.
+      toast.success(rows.length > 1 ? `Publicación programada en ${rows.length} perfiles` : 'Publicación programada');
     },
     onError: (error) => publicationError(error, 'No se pudo programar la publicación')
+  });
+  // A qué cuentas va la pieza. El servidor cancela lo programado en las que deja; la banda lo muestra
+  // cuando la parrilla se recarga, no antes.
+  const socialPagesMutation = useMutation({
+    mutationFn: async ({ itemId, pageIds }) => (await axios.put(`${getApiBaseUrl()}/api/social/items/${itemId}/pages`, { pageIds }, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+    })).data,
+    onSuccess: () => { setPublicationProblems([]); invalidatePlan(); },
+    onError: (error) => publicationError(error, 'No se pudo cambiar la cuenta de la pieza')
   });
   const cancelPublicationMutation = useMutation({
     mutationFn: async (publicationId) => (await axios.delete(`${getApiBaseUrl()}/api/social/publications/${publicationId}`, {
@@ -1994,6 +2015,7 @@ const ContentPlanDetail = () => {
             month={Number(plan.month)}
             onOpenPiece={(id) => { selectPiece(id); setPlanView('editor'); }}
             onAdd={handleAddItem}
+            accounts={plan?.client?.socialAccounts || []}
           />
         ) : orderedPlanItems.length > 0 ? (
           <div className="grid grid-cols-1 gap-5 lg:grid-cols-[312px_minmax(0,1fr)] lg:items-start">
@@ -2003,6 +2025,7 @@ const ContentPlanDetail = () => {
                 selectedId={selectedItem?.id}
                 onSelect={selectPiece}
                 onAdd={handleAddItem}
+                accounts={plan?.client?.socialAccounts || []}
               />
             </div>
 
@@ -2028,11 +2051,12 @@ const ContentPlanDetail = () => {
                 onDriveLink={setDriveLinkItemId}
                 directUploadPercent={finalAssetUploadMutation.variables?.itemId === selectedItem.id ? directUploadPercent : null}
                 socialAccounts={plan?.client?.socialAccounts || []}
-                onSchedulePublication={(itemId, platforms) => schedulePublicationMutation.mutate({ itemId, platforms })}
+                onSchedulePublication={(itemId, accountIds) => schedulePublicationMutation.mutate({ itemId, accountIds })}
+                onChangeSocialPages={(itemId, pageIds) => socialPagesMutation.mutate({ itemId, pageIds })}
                 onCancelPublication={(publicationId) => cancelPublicationMutation.mutate(publicationId)}
                 onRetryPublication={(publicationId) => retryPublicationMutation.mutate(publicationId)}
                 onReopenPublication={handleReopenPublication}
-                isPublicationBusy={schedulePublicationMutation.isPending || cancelPublicationMutation.isPending || retryPublicationMutation.isPending || reopenPublicationMutation.isPending}
+                isPublicationBusy={schedulePublicationMutation.isPending || cancelPublicationMutation.isPending || retryPublicationMutation.isPending || reopenPublicationMutation.isPending || socialPagesMutation.isPending}
                 publicationProblems={publicationProblems}
               />
               )}
