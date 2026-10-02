@@ -14,9 +14,10 @@ Decisión de Rodny, 1 y 2 de octubre de 2026: dejar el Excel «PENDIENTES BRAIN 
 | Agencia (BRAIN/MIO), Nivel de complejidad | Ficha operativa, filtro del tablero |
 | Informe MES | Informe entregado por mes, con quién y cuándo |
 | Estado, % del mes, estados de redacción/diseño/aprobación/programación | Calculado con la parrilla |
-| Comentarios y observaciones | Tareas del cliente en Gestión |
+| Comentario (INDICADORES) y OBSERVACIONES (MIO) | Sección «Observaciones» de cada cliente, con su origen; la última también en el tablero |
+| Bloque HISTORIAS (MIO) | Contrato: historias por semana |
 | Stand by / Servicios | Estado «Stand by» y tipo «Servicios» |
-| Colaborador / Clientes a cargo | Pestaña «Equipo» |
+| Colaborador / Acción destacada / Clientes a cargo | Pestaña «Equipo», con la acción destacada editable |
 | Hojas de enero, febrero y marzo | Gestión |
 | Estado de pauta | Fuera de alcance (decisión de Rodny) |
 

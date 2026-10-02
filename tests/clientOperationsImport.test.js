@@ -81,10 +81,10 @@ test('dos filas del mismo cliente se completan entre sí en vez de perder datos'
 
 test('un cliente archivado en la plataforma no se toca', () => {
   const plan = planImport({
-    excelClients: [{ name: 'Salsipuedes', description: 'Restaurante', agency: 'BRAIN', contract: null, observations: ['Cliente que se va'], doubts: [] }],
+    excelClients: [{ name: 'Salsipuedes', description: 'Restaurante', agency: 'BRAIN', contract: null, observations: [{ sheet: 'INDICADORES', text: 'Cliente que se va' }], doubts: [] }],
     platformClients: [{ id: 'c-s', name: 'Salsipuedes', isArchived: true, contracts: [] }], team: [], today: '2026-10-02',
   });
-  assert.deepEqual([plan.updates.length, plan.tasks.length], [0, 0]);
+  assert.deepEqual([plan.updates.length, plan.tasks.length, plan.observations.length], [0, 0, 0]);
   assert.deepEqual(plan.archived, ['Salsipuedes']);
 });
 
@@ -112,8 +112,11 @@ test('el Excel se lee por cliente: une filas repetidas y junta la hoja MIO', () 
   assert.equal(mimas.monthlyReport, true);
   assert.deepEqual(mimas.contract.deliverables, [{ format: 'Reel', quantity: 5 }, { format: 'Post', quantity: 7 }]);
   assert.deepEqual([mimas.contract.startDate, mimas.contract.endDate], ['2026-01-15', '2026-12-15']);
-  // Las tareas salen de las observaciones de la hoja MIO; el «Comentario» de INDICADORES es un estado viejo.
-  assert.deepEqual(mimas.observations, ['Jarlan debe programar los post.']);
+  // Las dos columnas de texto libre del Excel pasan a las observaciones del cliente, cada una con su hoja.
+  assert.deepEqual(mimas.observations, [
+    { sheet: 'INDICADORES', text: 'Redactada, falta revisión' },
+    { sheet: 'MIO', text: 'Jarlan debe programar los post.' },
+  ]);
   assert.equal(clients.filter((c) => normalizeName(c.name) === normalizeName('Muebles Nuva')).length, 1, 'las filas repetidas se unen');
   assert.ok(doubts.some((d) => /Muebles Nuva/.test(d) && /repetid/.test(d)));
   const abitat = clients.find((c) => normalizeName(c.name).startsWith('abitat'));
@@ -149,8 +152,41 @@ test('la plataforma manda: solo se llenan huecos y las diferencias se informan',
   assert.equal(nuva.contract, null, 'un cliente que ya tiene contrato en la plataforma no recibe otro');
 
   assert.ok(plan.notFound.includes('Cliente Fantasma'), 'lo que no existe en la plataforma no se crea');
+  // Las observaciones van completas a la sección del cliente, sin repetir la fila duplicada.
+  assert.deepEqual(plan.observations.filter((o) => o.clientId === 'c-mimas').map((o) => o.text), ['Redactada, falta revisión', 'Jarlan debe programar los post.']);
+  assert.deepEqual(plan.observations.filter((o) => o.clientId === 'c-nuva').map((o) => o.text), ['Revisión julio']);
+  assert.equal(plan.observations.find((o) => o.clientId === 'c-nuva').label, 'Comentario (INDICADORES)');
+  // Las tareas, que solo se crean con --crear-tareas, salen de las observaciones de la hoja MIO.
   assert.equal(plan.tasks.length, 2);
   assert.deepEqual(plan.tasks.find((t) => t.clientId === 'c-mimas'), {
     clientId: 'c-mimas', assigneeId: 'm-sara', title: 'Pendientes que venían del Excel', comments: '- Jarlan debe programar los post.',
   });
+});
+
+test('el bloque HISTORIAS de la hoja MIO fija la frecuencia de historias de cada cliente', () => {
+  const withStories = [...mio, ['', '', '', '', '', 'Jarlan', 'HISTORIAS'], ['', '', '', '', '', 'Mimas Kitchen', '3 veces por semana'], ['', '', '', '', '', 'Ábitat insurance', 'Todos los dias '], ['', '', '', '', '', 'Multik Multimarcas', '']];
+  const { clients } = readExcelClients({ indicadores, mio: withStories, year: 2026 });
+  assert.equal(clients.find((c) => c.name === 'Mimas Kitchen').contract.storiesPerWeek, 3);
+  assert.equal(clients.find((c) => normalizeName(c.name).startsWith('abitat')).contract.storiesPerWeek, 7);
+});
+
+test('la «Acción destacada» de cada colaborador se lee de las dos hojas y manda la más reciente', () => {
+  const ind = [...indicadores, ['', 'Colaborador ', '', 'Jarlan', 'Helen', 'Camila'], ['', 'Acción destacada', '', 'Informes y prospección de clientes', 'Parrillas de contenidos y piezas con GPT', 'Edición de videos y jornadas de producción']];
+  const mioTeam = [...mio, [''], ['', '', '', '', '', 'Jarlan', 'Helen', '', '', '', 'Sara '], ['', '', '', '', '', 'Informes y prospección de clientes', 'Parrillas de contenidos y piezas con GPT y Bria', '', '', '', 'Practicante / apoyo piezas']];
+  const { teamHighlights } = readExcelClients({ indicadores: ind, mio: mioTeam, year: 2026 });
+  assert.deepEqual(teamHighlights, {
+    Jarlan: 'Informes y prospección de clientes',
+    Helen: 'Parrillas de contenidos y piezas con GPT y Bria',
+    Camila: 'Edición de videos y jornadas de producción',
+    Sara: 'Practicante / apoyo piezas',
+  });
+  const plan = planImport({
+    excelClients: [], platformClients: [], today: '2026-10-02', teamHighlights,
+    team: [...team, { id: 'm-camila', name: 'Camila Ríos', isActive: true, highlightedAction: 'Ya escrito en la plataforma' }],
+  });
+  assert.deepEqual(plan.teamHighlights, [
+    { memberId: 'm-jarlan', name: 'Jarlan Pérez', text: 'Informes y prospección de clientes' },
+    { memberId: 'm-helen', name: 'Helen Hernández', text: 'Parrillas de contenidos y piezas con GPT y Bria' },
+    { memberId: 'm-sara', name: 'Sara Gómez', text: 'Practicante / apoyo piezas' },
+  ], 'lo que la plataforma ya tiene no se pisa');
 });

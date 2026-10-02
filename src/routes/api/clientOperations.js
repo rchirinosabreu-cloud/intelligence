@@ -51,6 +51,23 @@ export const createClientOperationsRouter = ({ service = clientOperationsService
     } catch (error) { return reply(res, error, logger); }
   });
 
+  // Observaciones del cliente: el autor es siempre quien tiene la sesión.
+  router.post('/:clientId/observations', async (req, res) => {
+    try {
+      return res.status(201).json(await service.addObservation({ clientId: req.params.clientId, text: req.body?.text, actorUserId: req.user.userId }));
+    } catch (error) { return reply(res, error, logger); }
+  });
+
+  router.delete('/:clientId/observations/:observationId', async (req, res) => {
+    try {
+      return res.json(await service.deleteObservation({ clientId: req.params.clientId, observationId: req.params.observationId, actor: { userId: req.user.userId, role: req.user.role } }));
+    } catch (error) { return reply(res, error, logger); }
+  });
+
+  router.put('/team/:memberId/highlight', async (req, res) => {
+    try { return res.json(await service.setTeamHighlight({ memberId: req.params.memberId, text: req.body?.text })); } catch (error) { return reply(res, error, logger); }
+  });
+
   router.post('/:clientId/pieces/:itemId/published', async (req, res) => {
     try { return res.json(await service.markPiecePublished({ clientId: req.params.clientId, itemId: req.params.itemId })); } catch (error) { return reply(res, error, logger); }
   });

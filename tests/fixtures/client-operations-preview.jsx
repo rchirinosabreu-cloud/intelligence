@@ -44,7 +44,8 @@ function ClientsStore({ children }) {
       || b.evaluation.reasons.length - a.evaluation.reasons.length
       || a.client.name.localeCompare(b.client.name, 'es')), [clients]);
   const update = (id, change) => setClients((list) => list.map((c) => (c.id === id ? change(c) : c)));
-  return <ClientsContext.Provider value={{ evaluated, update }}>{children}</ClientsContext.Provider>;
+  const updateAll = (change) => setClients((list) => list.map(change));
+  return <ClientsContext.Provider value={{ evaluated, update, updateAll }}>{children}</ClientsContext.Provider>;
 }
 
 // El directorio de siempre (hoy la tabla de Clientes, sin la columna de salud).
@@ -67,11 +68,17 @@ function Directory({ evaluated, onOpen }) {
 }
 
 function ClientsPage() {
-  const { evaluated } = useContext(ClientsContext);
+  const { evaluated, updateAll } = useContext(ClientsContext);
   const navigate = useNavigate();
   const open = (client) => navigate(`/clientes/operacion/${client.slug}`);
+  // La acción destacada vive en la persona: se actualiza en todos los clientes donde aparece.
+  const saveHighlight = async (member, text) => {
+    const patch = (m) => (m?.id === member.id ? { ...m, highlightedAction: text.trim() || null } : m);
+    updateAll((c) => ({ ...c, projectManager: patch(c.projectManager), communityManager: patch(c.communityManager) }));
+    toast.success(`Acción destacada de ${member.name} guardada (solo en la muestra).`);
+  };
   return (
-    <ClientsSection canManage evaluated={evaluated} team={team} onOpenClient={open}
+    <ClientsSection canManage evaluated={evaluated} team={team} onOpenClient={open} onSaveHighlight={saveHighlight}
       directory={<Directory evaluated={evaluated} onOpen={() => toast('Abriría el espacio de trabajo del cliente, como hoy.')} />}
       onNewClient={() => toast('En la muestra no se crean clientes.')} />
   );
@@ -103,6 +110,18 @@ function ClientPage() {
   return (
     <>
       <ClientOperationPage client={client} evaluation={evaluation} today={TODAY} canManage
+        currentUserId={dashboardDemoUser.id} isAdmin
+        onAddObservation={async (text) => {
+          const note = { id: `nota-${Date.now()}`, text, date: TODAY, by: dashboardDemoUser.name, source: 'MANUAL', label: null, authorId: dashboardDemoUser.id };
+          update(client.id, (c) => ({ ...c, observations: [note, ...(c.observations || [])], latestObservation: { text, date: TODAY, by: dashboardDemoUser.name } }));
+          toast.success('Observación guardada (solo en la muestra).');
+        }}
+        onDeleteObservation={async (observation) => {
+          update(client.id, (c) => {
+            const observations = (c.observations || []).filter((o) => o.id !== observation.id);
+            return { ...c, observations, latestObservation: observations[0] ? { text: observations[0].text, date: observations[0].date, by: observations[0].by } : null };
+          });
+        }}
         onEditProfile={() => setEditing(true)}
         onMarkPublished={(piece) => { markPublished(piece); toast.success(`«${piece.title}» quedó como publicada.`); }}
         onMarkReport={(month) => { markReport(month); toast.success(`Informe de ${month.label.toLowerCase()} marcado como entregado.`); }}

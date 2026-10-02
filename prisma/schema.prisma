@@ -659,6 +659,7 @@ model Client {
   projectManager      TeamMember?          @relation("ClientProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
   contracts           ClientContract[]
   monthlyReports      ClientMonthlyReport[]
+  observations        ClientObservation[]
   financialRecords    FinancialRecord[]
   accountsReceivables AccountsReceivable[]
   metricReports       MetricReport[]
@@ -707,6 +708,22 @@ model ClientMonthlyReport {
   client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([clientId, year, month])
+}
+
+/// Observaciones de un cliente (2 de octubre de 2026): lo que el Excel guardaba en «Comentario» y
+/// «OBSERVACIONES». Contexto que el equipo tiene que leer, no pendientes: los pendientes van a Gestión.
+/// `source` es MANUAL o EXCEL; `sourceLabel` dice de qué columna del Excel salió.
+model ClientObservation {
+  id          String   @id @default(uuid())
+  clientId    String
+  text        String
+  source      String   @default("MANUAL")
+  sourceLabel String?
+  authorId    String?
+  createdAt   DateTime @default(now()) @db.Timestamptz(3)
+  client      Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
 }
 
 /// En desuso desde el 2 de octubre de 2026: la «salud» manual del cliente la reemplaza la Operación de
@@ -1048,6 +1065,8 @@ model TeamMember {
   desktopX           Int?
   desktopY           Int?
   statusMessage      String?
+  // «Acción destacada» del Excel de pendientes (2 de octubre de 2026): qué hace la persona en la operación.
+  highlightedAction  String?
   clientTasks        ClientTask[]
   contentPlans       ContentPlan[]
   flowMessages       FlowMessage[]

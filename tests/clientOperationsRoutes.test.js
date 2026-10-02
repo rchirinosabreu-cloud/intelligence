@@ -8,7 +8,7 @@ import { createClientOperationsRouter } from '../src/routes/api/clientOperations
 
 const buildApp = (role = 'ADMIN') => {
   const calls = [];
-  const service = Object.fromEntries(['listOperations', 'getOperation', 'saveProfile', 'setMonthlyReport', 'markPiecePublished'].map((name) => [name, async (args) => {
+  const service = Object.fromEntries(['listOperations', 'getOperation', 'saveProfile', 'setMonthlyReport', 'markPiecePublished', 'addObservation', 'deleteObservation', 'setTeamHighlight'].map((name) => [name, async (args) => {
     calls.push([name, args]);
     if (args?.clientId === 'invalid') throw Object.assign(new Error('Revisa los campos marcados.'), { status: 422, code: 'CLIENT_OPERATION_INVALID', errors: { agency: 'Elige Brain Studio o MIO Agencia.' } });
     if (args === 'boom') throw new Error('postgres://secret');
@@ -69,5 +69,18 @@ test('el informe del mes y «Ya se publicó»', async () => {
     assert.equal((await fetch(`${base}/c1/reports/2026/9`, json('PUT', { delivered: 'sí' }))).status, 400, 'delivered tiene que ser booleano');
     assert.equal((await fetch(`${base}/c1/pieces/item-1/published`, { method: 'POST' })).status, 200);
     assert.deepEqual(calls.at(-1), ['markPiecePublished', { clientId: 'c1', itemId: 'item-1' }]);
+  });
+});
+
+test('observaciones y acción destacada usan la identidad de la sesión', async () => {
+  const { app, calls } = buildApp('PROJECT_MANAGER');
+  await withServer(app, async (base) => {
+    const created = await fetch(`${base}/c1/observations`, json('POST', { text: 'El cliente pide otro tono.', authorId: 'spoofed', source: 'EXCEL' }));
+    assert.equal(created.status, 201);
+    assert.deepEqual(calls.at(-1), ['addObservation', { clientId: 'c1', text: 'El cliente pide otro tono.', actorUserId: 'actual-actor' }]);
+    assert.equal((await fetch(`${base}/c1/observations/ob1`, { method: 'DELETE' })).status, 200);
+    assert.deepEqual(calls.at(-1), ['deleteObservation', { clientId: 'c1', observationId: 'ob1', actor: { userId: 'actual-actor', role: 'PROJECT_MANAGER' } }]);
+    assert.equal((await fetch(`${base}/team/m1/highlight`, json('PUT', { text: 'Informes' }))).status, 200);
+    assert.deepEqual(calls.at(-1), ['setTeamHighlight', { memberId: 'm1', text: 'Informes' }]);
   });
 });

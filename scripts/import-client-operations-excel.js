@@ -11,7 +11,10 @@ import { bogotaDate } from '../src/lib/colombiaBusinessDays.js';
 //
 //   node scripts/import-client-operations-excel.js "<ruta al Excel>"                       (simulación)
 //   node scripts/import-client-operations-excel.js "<ruta al Excel>" --confirm IMPORTAR     (escribe)
-//   … --crear-tareas --creador correo@brainstudio.com   (además crea las tareas de las observaciones)
+//   … --crear-tareas --creador correo@brainstudio.com   (además crea tareas con las observaciones de la hoja MIO)
+//
+// Las observaciones («Comentario» de INDICADORES y «OBSERVACIONES» de MIO) se cargan siempre a la sección
+// Observaciones de cada cliente, y la «Acción destacada» de cada colaborador a su ficha del equipo.
 //
 // Cada cliente se guarda en su propia transacción: o queda completo o no queda. Volver a correrlo no
 // duplica nada: los campos ya llenos no se tocan, quien tiene contrato no recibe otro y una tarea con el
@@ -40,7 +43,11 @@ export function renderReport(plan, { confirmed, withTasks }) {
     if (u.contract) parts.push(`contrato ${u.contract.serviceType === 'PARRILLA' ? `${u.contract.deliverables.map((d) => `${d.quantity} ${d.format}`).join(', ')}` : 'de servicios'} desde ${u.contract.startDate}${u.contract.endDate ? ` hasta ${u.contract.endDate}` : ''}${u.contract.status === 'STAND_BY' ? ' (stand by)' : ''}`);
     lines.push(`- **${u.client}**: ${parts.join(' · ')}`);
   }
-  lines.push('', `## Tareas de las observaciones (${plan.tasks.length})${withTasks ? '' : ' — no se crean sin `--crear-tareas`'}`, '');
+  lines.push('', `## Observaciones que pasan a cada cliente (${plan.observations.length})`, '');
+  for (const o of plan.observations) lines.push(`- **${o.client}** (${o.label}): ${o.text.replace(/\n/g, ' ')}`);
+  lines.push('', `## Acción destacada del equipo (${plan.teamHighlights.length})`, '');
+  for (const h of plan.teamHighlights) lines.push(`- **${h.name}**: ${h.text}`);
+  lines.push('', `## Tareas de las observaciones de la hoja MIO (${plan.tasks.length})${withTasks ? '' : ' — no se crean sin `--crear-tareas`'}`, '');
   for (const t of plan.tasks) lines.push(`- **${plan.updates.find((u) => u.clientId === t.clientId)?.client}**: ${t.comments.replace(/\n/g, ' ')}`);
   lines.push('', `## Diferencias: la plataforma dice otra cosa y se dejó lo de la plataforma (${plan.differences.length})`, '');
   for (const d of plan.differences) lines.push(`- **${d.client}**: ${d.text}`);
@@ -55,10 +62,11 @@ export function renderReport(plan, { confirmed, withTasks }) {
 
 /** Aplica el plan. Solo escribe lo que el plan dice, cliente por cliente y cada uno en su transacción. */
 export async function applyPlan(db, plan, { withTasks = false, creatorUserId = null } = {}) {
-  const result = { clients: 0, contracts: 0, tasks: 0 };
+  const result = { clients: 0, contracts: 0, tasks: 0, observations: 0, highlights: 0 };
   for (const update of plan.updates) {
     const task = withTasks ? plan.tasks.find((t) => t.clientId === update.clientId) : null;
-    if (!Object.keys(update.data).length && !update.contract && !task) continue;
+    const notes = (plan.observations || []).filter((o) => o.clientId === update.clientId);
+    if (!Object.keys(update.data).length && !update.contract && !task && !notes.length) continue;
     await db.$transaction(async (tx) => {
       if (Object.keys(update.data).length) {
         await tx.client.update({ where: { id: update.clientId }, data: update.data });
@@ -72,6 +80,14 @@ export async function applyPlan(db, plan, { withTasks = false, creatorUserId = n
           result.contracts += 1;
         }
       }
+      // Una observación con el mismo texto para el mismo cliente no se repite al volver a correrlo.
+      for (const note of notes) {
+        const exists = await tx.clientObservation.count({ where: { clientId: update.clientId, text: note.text } });
+        if (!exists) {
+          await tx.clientObservation.create({ data: { clientId: update.clientId, text: note.text, source: 'EXCEL', sourceLabel: note.label, authorId: creatorUserId } });
+          result.observations += 1;
+        }
+      }
       if (task) {
         const exists = await tx.task.count({ where: { clientId: task.clientId, title: TASK_TITLE } });
         if (!exists) {
@@ -80,6 +96,11 @@ export async function applyPlan(db, plan, { withTasks = false, creatorUserId = n
         }
       }
     });
+  }
+  // La acción destacada solo se escribe si la persona todavía no tiene una (la plataforma manda).
+  for (const highlight of plan.teamHighlights || []) {
+    const { count } = await db.teamMember.updateMany({ where: { id: highlight.memberId, highlightedAction: null }, data: { highlightedAction: highlight.text } });
+    result.highlights += count;
   }
   return result;
 }
@@ -98,12 +119,12 @@ async function main() {
   try {
     console.log(`Base: ${new URL(process.env.DATABASE_URL).host}`);
     const today = bogotaDate();
-    const { clients: excelClients, generalDoubts } = readExcelClients({ ...readWorkbook(file), year: Number(today.slice(0, 4)) });
+    const { clients: excelClients, generalDoubts, teamHighlights } = readExcelClients({ ...readWorkbook(file), year: Number(today.slice(0, 4)) });
     const platformClients = await prisma.client.findMany({
       select: { id: true, name: true, slug: true, isArchived: true, description: true, instagramUrl: true, agency: true, complexity: true, responsibleId: true, projectManagerId: true, contracts: { select: { id: true } } },
     });
-    const team = await prisma.teamMember.findMany({ select: { id: true, name: true, isActive: true } });
-    const plan = planImport({ excelClients, platformClients, team, today, doubts: generalDoubts });
+    const team = await prisma.teamMember.findMany({ select: { id: true, name: true, isActive: true, highlightedAction: true } });
+    const plan = planImport({ excelClients, platformClients, team, today, doubts: generalDoubts, teamHighlights });
 
     let creatorUserId = null;
     if (withTasks) {
@@ -123,7 +144,7 @@ async function main() {
       return;
     }
     const result = await applyPlan(prisma, plan, { withTasks, creatorUserId });
-    console.log(`\nListo: ${result.clients} fichas completadas, ${result.contracts} contratos cargados, ${result.tasks} tareas creadas.`);
+    console.log(`\nListo: ${result.clients} fichas completadas, ${result.contracts} contratos cargados, ${result.observations} observaciones, ${result.highlights} acciones destacadas y ${result.tasks} tareas creadas.`);
   } finally {
     await prisma.$disconnect();
   }

@@ -17,6 +17,9 @@ const OPEN_TASK_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 const ACTIVE_PUBLICATION = new Set(['SCHEDULED', 'PUBLISHING', 'PUBLISHED']);
 const HISTORY_MONTHS = 3;
 const PERSON = { select: { id: true, name: true, avatarUrl: true } };
+const TEAM_PERSON = { select: { id: true, name: true, avatarUrl: true, role: true, highlightedAction: true } };
+const OBSERVATION_MAX = 2000;
+const OBSERVATIONS_SHOWN = 100;
 
 // Ventana de meses que se leen: la parrilla en curso, la anterior y el historial. Con día de corte la
 // parrilla en curso puede ser la del mes pasado, así que se lee un mes más.
@@ -31,7 +34,9 @@ function monthWindow(todayKey) {
 const clientSelect = (window) => ({
   id: true, name: true, slug: true, logoUrl: true, isArchived: true,
   description: true, instagramUrl: true, agency: true, complexity: true,
-  responsible: PERSON, projectManager: PERSON,
+  responsible: TEAM_PERSON, projectManager: TEAM_PERSON,
+  // Las observaciones del cliente (lo que el Excel guardaba en «Comentario» y «OBSERVACIONES»).
+  observations: { orderBy: { createdAt: 'desc' }, take: OBSERVATIONS_SHOWN, select: { id: true, text: true, source: true, sourceLabel: true, authorId: true, createdAt: true } },
   contracts: { orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }], take: 1 },
   monthlyReports: { where: { OR: window } },
   contentPlans: {
@@ -56,6 +61,12 @@ const clientSelect = (window) => ({
 
 const dayKey = (value) => (value ? new Date(value).toISOString().slice(0, 10) : null);
 const person = (member) => (member ? { id: member.id, name: member.name, avatarUrl: member.avatarUrl ?? null } : null);
+// PM y CM llevan además su cargo y su «acción destacada», que la pestaña Equipo muestra.
+const teamPerson = (member) => (member ? { ...person(member), role: member.role ?? null, highlightedAction: member.highlightedAction ?? null } : null);
+const publicObservation = (row, names) => ({
+  id: row.id, text: row.text, date: bogotaDate(row.createdAt), by: names.get(row.authorId) || null,
+  source: row.source, label: row.sourceLabel ?? null, authorId: row.authorId ?? null,
+});
 
 function publicContract(row) {
   if (!row) return null;
@@ -87,12 +98,13 @@ function cycleSummary(client, cycle, quota, today, reporters) {
 }
 
 function buildOperation(client, { today, reporters, detail }) {
+  const observations = (client.observations || []).map((row) => publicObservation(row, reporters));
   const contract = publicContract(client.contracts?.[0]);
   const base = {
     id: client.id, name: client.name, slug: client.slug, logoUrl: client.logoUrl ?? null,
     description: client.description ?? null, instagramUrl: client.instagramUrl ?? null,
     agency: client.agency ?? null, complexity: client.complexity ?? null,
-    projectManager: person(client.projectManager), communityManager: person(client.responsible),
+    projectManager: teamPerson(client.projectManager), communityManager: teamPerson(client.responsible),
     contract,
     openTasks: (client.nativeTasks || []).map((task) => {
       const due = task.dueDate ? bogotaDate(task.dueDate) : null;
@@ -100,6 +112,8 @@ function buildOperation(client, { today, reporters, detail }) {
     }),
     cycles: {},
     history: [],
+    observations,
+    latestObservation: observations[0] ? { text: observations[0].text, date: observations[0].date, by: observations[0].by } : null,
   };
   if (isMeasured(base)) {
     const quota = contract.deliverables.reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
@@ -120,7 +134,7 @@ function buildOperation(client, { today, reporters, detail }) {
       if (base.cycles.previous) base.cycles.previous = base.history[0];
     }
   }
-  if (!detail) delete base.history;
+  if (!detail) { delete base.history; delete base.observations; }
   base.evaluation = evaluateClientOperation(base, { today });
   return base;
 }
@@ -133,7 +147,10 @@ export const createClientOperationsService = ({ db = prisma, now = () => new Dat
   const todayKey = () => bogotaDate(now());
 
   const reporterNames = async (clients) => {
-    const ids = [...new Set(clients.flatMap((c) => c.monthlyReports || []).map((r) => r.deliveredById).filter(Boolean))];
+    const ids = [...new Set([
+      ...clients.flatMap((c) => c.monthlyReports || []).map((r) => r.deliveredById),
+      ...clients.flatMap((c) => c.observations || []).map((o) => o.authorId),
+    ].filter(Boolean))];
     if (!ids.length) return new Map();
     const users = await db.user.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } });
     return new Map(users.map((u) => [u.id, u.name]));
@@ -219,7 +236,34 @@ export const createClientOperationsService = ({ db = prisma, now = () => new Dat
     return { id: item.id, status: 'PUBLICADO' };
   };
 
-  return { listOperations, getOperation, saveProfile, setMonthlyReport, markPiecePublished };
+  const addObservation = async ({ clientId, text, actorUserId }) => {
+    const value = String(text ?? '').trim();
+    if (!value) throw httpError(422, 'Escribe la observación antes de guardarla.');
+    if (value.length > OBSERVATION_MAX) throw httpError(422, `La observación pasa de ${OBSERVATION_MAX} caracteres; pártela en dos.`);
+    const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { id: true } });
+    if (!client) throw httpError(404, 'No encontramos ese cliente.');
+    return db.clientObservation.create({ data: { clientId: client.id, text: value, source: 'MANUAL', authorId: actorUserId || null } });
+  };
+
+  // Una observación la borra quien la escribió o un administrador; las del Excel, solo un administrador.
+  const deleteObservation = async ({ clientId, observationId, actor }) => {
+    const row = await db.clientObservation.findFirst({ where: { id: String(observationId || ''), clientId: String(clientId || '') }, select: { id: true, authorId: true } });
+    if (!row) throw httpError(404, 'Esa observación ya no existe.');
+    const isAdmin = String(actor?.role || '').toUpperCase() === 'ADMIN';
+    if (!isAdmin && (!row.authorId || row.authorId !== actor?.userId)) throw httpError(403, 'Solo quien escribió la observación o un administrador puede borrarla.');
+    await db.clientObservation.delete({ where: { id: row.id } });
+    return { id: row.id, deleted: true };
+  };
+
+  // «Acción destacada» del Excel: qué hace cada persona del equipo, para la pestaña Equipo.
+  const setTeamHighlight = async ({ memberId, text }) => {
+    const member = await db.teamMember.findFirst({ where: { id: String(memberId || ''), isActive: true }, select: { id: true } });
+    if (!member) throw httpError(404, 'Esa persona no está activa en el equipo.');
+    const value = String(text ?? '').trim().slice(0, 300) || null;
+    return db.teamMember.update({ where: { id: member.id }, data: { highlightedAction: value } });
+  };
+
+  return { listOperations, getOperation, saveProfile, setMonthlyReport, markPiecePublished, addObservation, deleteObservation, setTeamHighlight };
 };
 
 export const clientOperationsService = createClientOperationsService();

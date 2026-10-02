@@ -53,6 +53,30 @@ export function useSetMonthlyReport() {
   });
 }
 
+export function useAddObservation() {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: ({ clientId, text }) => request(`/${clientId}/observations`, { method: 'POST', body: JSON.stringify({ text }) }),
+    onSuccess: refresh,
+  });
+}
+
+export function useDeleteObservation() {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: ({ clientId, observationId }) => request(`/${clientId}/observations/${observationId}`, { method: 'DELETE' }),
+    onSuccess: refresh,
+  });
+}
+
+export function useSetTeamHighlight() {
+  const refresh = useRefresh();
+  return useMutation({
+    mutationFn: ({ memberId, text }) => request(`/team/${memberId}/highlight`, { method: 'PUT', body: JSON.stringify({ text }) }),
+    onSuccess: refresh,
+  });
+}
+
 export function useMarkPiecePublished() {
   const refresh = useRefresh();
   return useMutation({

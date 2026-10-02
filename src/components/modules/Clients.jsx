@@ -20,7 +20,7 @@ import { toast } from 'react-hot-toast';
 import EditClientDialog from './Clients/EditClientDialog';
 import ClientProfileFields from './Clients/ClientProfileFields';
 import ClientsSection from './Clients/operations/ClientsSection';
-import { useClientOperations } from './Clients/operations/clientOperationsApi';
+import { useClientOperations, useSetTeamHighlight } from './Clients/operations/clientOperationsApi';
 import { emptyClientProfile, normalizeClientProfile } from '@/lib/clientProfile';
 import { OPERATION_LEVELS } from '@/lib/clientOperations';
 import { useAuth } from '@/context/AuthContext';
@@ -169,6 +169,7 @@ const Clients = () => {
   const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
   const operations = useClientOperations({ enabled: canManage });
+  const setTeamHighlight = useSetTeamHighlight();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
@@ -306,6 +307,10 @@ const Clients = () => {
         loading={canManage && operations.isLoading}
         error={canManage && operations.isError ? 'No se pudo cargar la operación de clientes. Recarga la página para intentarlo de nuevo.' : ''}
         onOpenClient={(client) => navigate(`/clientes/operacion/${client.slug}`)}
+        onSaveHighlight={async (member, text) => {
+          await setTeamHighlight.mutateAsync({ memberId: member.id, text });
+          toast.success(`Acción destacada de ${member.name} guardada.`);
+        }}
         onNewClient={() => setIsCreateModalOpen(true)} />
 
       {editingClient && <EditClientDialog key={editingClient.id} client={editingClient}

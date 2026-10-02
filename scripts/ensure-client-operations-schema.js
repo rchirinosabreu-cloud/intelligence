@@ -49,7 +49,20 @@ try {
     );
   `);
   await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ClientMonthlyReport_clientId_year_month_key" ON "ClientMonthlyReport"("clientId", "year", "month");`);
-  console.log('[Client operations] profile columns, ClientContract and ClientMonthlyReport ready.');
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS "ClientObservation" (
+      "id" TEXT PRIMARY KEY,
+      "clientId" TEXT NOT NULL REFERENCES "Client"("id") ON DELETE CASCADE,
+      "text" TEXT NOT NULL,
+      "source" TEXT NOT NULL DEFAULT 'MANUAL',
+      "sourceLabel" TEXT,
+      "authorId" TEXT,
+      "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  await client.query(`CREATE INDEX IF NOT EXISTS "ClientObservation_clientId_createdAt_idx" ON "ClientObservation"("clientId", "createdAt");`);
+  await client.query(`ALTER TABLE "TeamMember" ADD COLUMN IF NOT EXISTS "highlightedAction" TEXT;`);
+  console.log('[Client operations] profile columns, ClientContract, ClientMonthlyReport, ClientObservation and TeamMember.highlightedAction ready.');
 } catch (error) {
   console.error('[Client operations] Failed to ensure the client operations schema:', error.message);
   process.exitCode = 1;

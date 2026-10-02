@@ -31,6 +31,10 @@ function fixture() {
         ] },
       ],
       nativeTasks: [{ id: 't1', title: 'Subir los videos', dueDate: new Date('2026-09-30T20:00:00Z'), status: 'PENDIENTE', isPrivate: false, assignee: member('m-rodny', 'Rodny') }],
+      observations: [
+        { id: 'ob2', text: 'El cliente pide mover el reel del 8 al 10.', source: 'MANUAL', sourceLabel: null, authorId: 'u-kamila', createdAt: new Date('2026-10-01T15:00:00Z') },
+        { id: 'ob1', text: 'Septiembre 100%. Faltan los videos de octubre.', source: 'EXCEL', sourceLabel: 'Observaciones (MIO)', authorId: null, createdAt: new Date('2026-09-30T15:00:00Z') },
+      ],
     },
     {
       id: 'c-mimas', name: 'Mimas Kitchen', slug: 'mimas', logoUrl: null, isArchived: false,
@@ -44,13 +48,23 @@ function fixture() {
   ];
   const writes = [];
   const team = [member('m-kamila', 'Kamila'), member('m-jarlan', 'Jarlan'), member('m-old', 'Exempleado', false)];
+  const observations = [{ id: 'ob2', clientId: 'c-nattal', authorId: 'u-kamila' }, { id: 'ob1', clientId: 'c-nattal', authorId: null }];
   const db = {
     client: {
       findMany: async () => clients,
       findFirst: async ({ where }) => clients.find((c) => (where.slug ? c.slug === where.slug : c.id === where.id)) || null,
       update: async (args) => { writes.push(['client.update', args]); return clients.find((c) => c.id === args.where.id); },
     },
-    teamMember: { findMany: async ({ where }) => team.filter((m) => where.id.in.includes(m.id) && m.isActive === where.isActive) },
+    teamMember: {
+      findMany: async ({ where }) => team.filter((m) => where.id.in.includes(m.id) && m.isActive === where.isActive),
+      findFirst: async ({ where }) => team.find((m) => m.id === where.id && m.isActive === where.isActive) || null,
+      update: async (args) => { writes.push(['member.update', args]); return { id: args.where.id, ...args.data }; },
+    },
+    clientObservation: {
+      create: async (args) => { writes.push(['observation.create', args]); return { id: 'new', createdAt: NOW, ...args.data }; },
+      findFirst: async ({ where }) => observations.find((o) => o.id === where.id && o.clientId === where.clientId) || null,
+      delete: async (args) => { writes.push(['observation.delete', args]); return {}; },
+    },
     user: { findMany: async ({ where }) => [{ id: 'u-kamila', name: 'Kamila' }].filter((u) => where.id.in.includes(u.id)) },
     clientContract: {
       create: async (args) => { writes.push(['contract.create', args]); return args.data; },
@@ -80,6 +94,8 @@ test('el tablero calcula avance, atrasos y tareas con lo que hay en la plataform
   assert.equal(nattal.cycles.previous.report.by, 'Kamila');
   assert.deepEqual(nattal.openTasks, [{ id: 't1', title: 'Subir los videos', dueDate: '2026-09-30', overdue: true, assignee: { id: 'm-rodny', name: 'Rodny', avatarUrl: null } }]);
   assert.equal(nattal.evaluation.level, 'red');
+  assert.deepEqual(nattal.latestObservation, { text: 'El cliente pide mover el reel del 8 al 10.', date: '2026-10-01', by: 'Kamila' });
+  assert.equal(nattal.observations, undefined, 'el tablero solo lleva la última observación');
 });
 
 test('con día de corte, el 2 de octubre todavía corre la parrilla de septiembre', async () => {
@@ -163,4 +179,40 @@ test('el informe del mes se marca y se desmarca, con quién lo hizo', async () =
   await service.setMonthlyReport({ clientId: 'c-nattal', year: 2026, month: 9, delivered: false, actorUserId: 'u1' });
   assert.equal(writes.at(-1)[0], 'report.delete');
   await assert.rejects(() => service.setMonthlyReport({ clientId: 'c-nattal', year: 2026, month: 13, delivered: true, actorUserId: 'u1' }), { status: 400 });
+});
+
+test('la página del cliente trae sus observaciones, las del Excel con su hoja', async () => {
+  const { service } = fixture();
+  const nattal = await service.getOperation('nattal');
+  assert.deepEqual(nattal.observations, [
+    { id: 'ob2', text: 'El cliente pide mover el reel del 8 al 10.', date: '2026-10-01', by: 'Kamila', source: 'MANUAL', label: null, authorId: 'u-kamila' },
+    { id: 'ob1', text: 'Septiembre 100%. Faltan los videos de octubre.', date: '2026-09-30', by: null, source: 'EXCEL', label: 'Observaciones (MIO)', authorId: null },
+  ]);
+});
+
+test('una observación nueva se guarda con su autor; vacía o enorme se rechaza', async () => {
+  const { service, writes } = fixture();
+  await service.addObservation({ clientId: 'c-nattal', text: '  Sebastián no quiere la flor de loto.  ', actorUserId: 'u1' });
+  assert.deepEqual(writes.at(-1), ['observation.create', { data: { clientId: 'c-nattal', text: 'Sebastián no quiere la flor de loto.', source: 'MANUAL', authorId: 'u1' } }]);
+  await assert.rejects(() => service.addObservation({ clientId: 'c-nattal', text: '   ', actorUserId: 'u1' }), { status: 422 });
+  await assert.rejects(() => service.addObservation({ clientId: 'c-nattal', text: 'x'.repeat(2001), actorUserId: 'u1' }), { status: 422 });
+  await assert.rejects(() => service.addObservation({ clientId: 'nadie', text: 'hola', actorUserId: 'u1' }), { status: 404 });
+});
+
+test('una observación la borra quien la escribió o un administrador', async () => {
+  const { service, writes } = fixture();
+  await assert.rejects(() => service.deleteObservation({ clientId: 'c-nattal', observationId: 'ob2', actor: { userId: 'otro', role: 'PROJECT_MANAGER' } }), { status: 403 });
+  await service.deleteObservation({ clientId: 'c-nattal', observationId: 'ob2', actor: { userId: 'u-kamila', role: 'PROJECT_MANAGER' } });
+  await service.deleteObservation({ clientId: 'c-nattal', observationId: 'ob1', actor: { userId: 'cualquiera', role: 'ADMIN' } });
+  assert.deepEqual(writes.filter(([kind]) => kind === 'observation.delete').map(([, args]) => args.where.id), ['ob2', 'ob1']);
+  await assert.rejects(() => service.deleteObservation({ clientId: 'c-mimas', observationId: 'ob2', actor: { userId: 'u-kamila', role: 'ADMIN' } }), { status: 404 });
+});
+
+test('la acción destacada de una persona del equipo se escribe y se puede vaciar', async () => {
+  const { service, writes } = fixture();
+  await service.setTeamHighlight({ memberId: 'm-jarlan', text: ' Informes y prospección de clientes ' });
+  assert.deepEqual(writes.at(-1), ['member.update', { where: { id: 'm-jarlan' }, data: { highlightedAction: 'Informes y prospección de clientes' } }]);
+  await service.setTeamHighlight({ memberId: 'm-jarlan', text: '' });
+  assert.equal(writes.at(-1)[1].data.highlightedAction, null);
+  await assert.rejects(() => service.setTeamHighlight({ memberId: 'm-old', text: 'x' }), { status: 404 });
 });

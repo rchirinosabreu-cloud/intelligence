@@ -11,6 +11,7 @@ import {
 } from '@/lib/clientOperations';
 import { LEVEL_META, PIECE_STATUS, STAGE_TONE } from './operationTones';
 import CycleBar from './CycleBar';
+import ClientObservations from './ClientObservations';
 
 // Página completa de un cliente en «Operación» (borrador del 2 de octubre de 2026). Todo lo que la fila
 // del Excel tenía de ese cliente, más lo que se trabaja desde aquí: marcar lo publicado por fuera,
@@ -218,7 +219,10 @@ function Tasks({ tasks, onNewTask }) {
   );
 }
 
-export default function ClientOperationPage({ client, evaluation, today, canManage, onEditProfile, onMarkPublished, onMarkReport, onOpenPlan, onNewTask, onOpenWorkspace }) {
+export default function ClientOperationPage({
+  client, evaluation, today, canManage, currentUserId, isAdmin,
+  onEditProfile, onMarkPublished, onMarkReport, onOpenPlan, onNewTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
+}) {
   const measured = isMeasured(client);
   const { current } = client.cycles || {};
   const history = client.history || [];
@@ -238,6 +242,8 @@ export default function ClientOperationPage({ client, evaluation, today, canMana
 
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-3">
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
+          <ClientObservations observations={client.observations || []} currentUserId={currentUserId} isAdmin={isAdmin}
+            onAdd={onAddObservation} onDelete={onDeleteObservation} />
           {measured && current && <CurrentCycle cycle={current} today={today} onMarkPublished={onMarkPublished} onOpenPlan={onOpenPlan} />}
           {!measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} />}
           {measured && history.length > 0 && <History months={history} monthlyReport={client.contract.monthlyReport} onMarkReport={onMarkReport} />}

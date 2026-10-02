@@ -4,8 +4,17 @@
 
 export const TODAY = '2026-10-02';
 
-const person = (id, name) => ({ id: `member-${id}`, name, avatarUrl: null, isActive: true });
-export const team = [person('kamila', 'Kamila Ortiz'), person('jarlan', 'Jarlan Pérez'), person('helen', 'Helen Hernández'), person('sara', 'Sara Gómez'), person('camila', 'Camila Ríos'), person('rodny', 'Rodny Chirinos')];
+const person = (id, name, role = null, highlightedAction = null) => ({ id: `member-${id}`, name, role, highlightedAction, avatarUrl: null, isActive: true });
+// Las «Acción destacada» son las del Excel.
+export const team = [
+  person('kamila', 'Kamila Ortiz', 'Project Manager'),
+  person('jarlan', 'Jarlan Pérez', 'Community Manager', 'Informes y prospección de clientes'),
+  person('helen', 'Helen Hernández', 'Community Manager', 'Parrillas de contenidos y piezas con GPT'),
+  person('sara', 'Sara Gómez', 'Practicante', 'Practicante / apoyo piezas'),
+  person('camila', 'Camila Ríos', 'Producción', 'Edición de videos y jornadas de producción'),
+  person('rodny', 'Rodny Chirinos', 'Director'),
+];
+const excelNote = (id, text, label = 'Observaciones (MIO)') => ({ id, text, date: '2026-10-02', by: null, source: 'EXCEL', label, authorId: null });
 const [kamila, jarlan, helen, sara, , rodny] = team;
 
 const addDays = (key, n) => { const [y, m, d] = key.split('-').map(Number); return new Date(Date.UTC(y, m - 1, d + n)).toISOString().slice(0, 10); };
@@ -55,7 +64,8 @@ const contract = (extra) => ({ serviceType: 'PARRILLA', status: 'ACTIVO', startD
 
 /** Arma el cliente: ciclo actual con sus piezas, mes anterior e historial de los tres anteriores. */
 function client(slug, name, { current, previous, earlier = [], ...extra }) {
-  const base = { id: `client-${slug}`, slug, name, logoUrl: null, agency: 'BRAIN', projectManager: kamila, openTasks: [], ...extra };
+  const base = { id: `client-${slug}`, slug, name, logoUrl: null, agency: 'BRAIN', projectManager: kamila, openTasks: [], observations: [], ...extra };
+  base.latestObservation = base.observations[0] ? { text: base.observations[0].text, date: base.observations[0].date, by: base.observations[0].by } : null;
   if (!current) return { ...base, cycles: {}, history: [] };
   const cycle = cycleOf(current);
   cycle.pieces = piecesFor(slug, cycle, base.contract.deliverables);
@@ -69,6 +79,10 @@ const earlierFull = (q) => [month('Agosto', q, q, delivered('2026-09-02')), mont
 export const clients = [
   client('titanes', 'Corporación Deportiva Titanes', {
     communityManager: jarlan, complexity: 'BAJA',
+    observations: [
+      excelNote('ti1', 'Sept 100% OCT 10%. Hay que revisar la pauta con Keila y hay que mandar los post al grupo del cliente y dejar para el desarrollo de piezas y videos después de que paguen así sea un mes.'),
+      excelNote('ti2', 'Faltan 2 videos para septiembre', 'Comentario (INDICADORES)'),
+    ],
     description: 'Organización sin ánimo de lucro de Cartagena que forma niños, jóvenes y familias con deporte, educación, arte y emprendimiento. Natación y patinaje desde iniciación hasta alto rendimiento.',
     instagramUrl: 'https://www.instagram.com/corporaciondeportitanes',
     contract: contract({ startDate: '2026-07-20', endDate: '2027-01-19', cutDay: 20, deliverables: deliver([3, 'Reel'], [3, 'Post']), productionDays: 1, notes: 'Automatización de WhatsApp: implementación inicial, una sola vez.' }),
@@ -88,6 +102,11 @@ export const clients = [
   }),
   client('pablo-hoff', 'Colegio Pablo Hoff', {
     communityManager: jarlan, complexity: 'ALTA',
+    observations: [
+      { id: 'ph3', text: 'El rector pidió que el video de inscripciones salga antes del 15.', date: '2026-10-02', by: 'Rodny Chirinos', source: 'MANUAL', label: null, authorId: 'dashboard-demo-user' },
+      excelNote('ph1', 'Septiembre 100% OCT 50%. Hay que revisar que los post de septiembre que no salieron estén en la parrilla de octubre y hacerle seguimiento a la jornada de producción y a la programación de contenidos. Otro tema importante a revisar es la fecha de publicaciones: empezar con más piezas que videos y que no queden post los mismos días; tenemos 12 post para pasarlos en un mes, la diferencia debe ser máximo 3 días.'),
+      excelNote('ph2', 'Pendiente programar', 'Comentario (INDICADORES)'),
+    ],
     description: 'Institución educativa cristiana de Cartagena: excelencia académica, principios bíblicos, aprendizaje activo e inglés intensivo.',
     instagramUrl: 'https://www.instagram.com/colegiopablohoff_',
     contract: contract({ startDate: '2025-08-01', endDate: '2026-07-31', deliverables: deliver([4, 'Reel'], [2, 'Carrusel'], [6, 'Post']), storiesPerWeek: 7, productionDays: 1, notes: 'Administración de pauta y actualizaciones web mensuales.' }),
@@ -106,6 +125,7 @@ export const clients = [
   }),
   client('mimas', 'Mimas Kitchen', {
     communityManager: jarlan, complexity: 'MEDIA',
+    observations: [excelNote('mi1', 'Todo está realizado pero no está programado: Jarlan debe programar los post. El nuevo CM (Sara) debe revisar que esos post estén bien programados. El porcentaje sería un 80%.')],
     description: 'Restaurante y café casual en Miami: café, sándwiches, hamburguesas y opciones dulces y saladas, junto a una estación de gasolina 24 horas.',
     instagramUrl: 'https://www.instagram.com/mimaskitchenoficial/',
     contract: contract({ startDate: '2026-01-15', endDate: '2026-12-15', cutDay: 15, deliverables: deliver([5, 'Reel'], [7, 'Post']) }),
@@ -142,6 +162,7 @@ export const clients = [
   }),
   client('grit', 'Fundación Grit · ELAR', {
     communityManager: sara, complexity: 'ALTA',
+    observations: [excelNote('gr1', 'Hay que hacer el seguimiento del lookbook que fue aprobado; antes del 15 del otro mes debe quedar ese documento. Del drop II deben enviar información. Sara debe tener en sus pendientes todos los días contestar los mensajes de Instagram.')],
     description: 'ELAR Bolívar: moda con propósito del proyecto Marca Bolívar, con técnicas artesanales del departamento (crochet, palma sará, madera y totumo).',
     instagramUrl: 'https://www.instagram.com/fundaciongrit/',
     contract: contract({ startDate: '2026-09-01', endDate: '2026-10-31', deliverables: deliver([6, 'Reel'], [4, 'Post']), notes: 'Catálogo ELAR: lookbook aprobado, un drop a la vez. Responder mensajes de Instagram a diario.' }),

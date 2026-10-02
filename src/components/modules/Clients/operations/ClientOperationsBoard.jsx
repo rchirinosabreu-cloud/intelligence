@@ -83,6 +83,11 @@ function ClientRow({ client, evaluation, onOpen }) {
 
         <span className="col-span-2 min-w-0 text-sm text-zinc-700 dark:text-zinc-300 lg:col-span-1">
           {first ? <span className="line-clamp-2">{first.text}{rest.length > 0 && <span className="text-zinc-400"> · y {rest.length} más</span>}</span> : <span className="text-zinc-400">Todo al día.</span>}
+          {client.latestObservation && (
+            <span className="mt-1 block truncate text-xs text-zinc-500 dark:text-zinc-400" title={client.latestObservation.text}>
+              <span className="font-medium">Observación:</span> {client.latestObservation.text}
+            </span>
+          )}
         </span>
       </button>
     </li>

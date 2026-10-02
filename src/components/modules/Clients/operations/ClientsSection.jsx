@@ -15,7 +15,7 @@ const TRIGGER = 'flex flex-1 items-center gap-2 rounded-xl py-2';
 const Loading = () => <div className="flex min-h-[30vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-brand-cyan" /></div>;
 const LoadError = ({ text }) => <p role="alert" className="brain-alert-surface rounded-xl p-4 text-sm">{text}</p>;
 
-export default function ClientsSection({ canManage, evaluated, team, directory, loading = false, error = '', onOpenClient, onNewClient }) {
+export default function ClientsSection({ canManage, evaluated, team, directory, loading = false, error = '', onOpenClient, onNewClient, onSaveHighlight }) {
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = MANAGER_TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'operacion';
   const selectTab = (value) => {
@@ -40,7 +40,7 @@ export default function ClientsSection({ canManage, evaluated, team, directory, 
             <TabsTrigger value="directorio" className={TRIGGER}><Building2 className="h-4 w-4" />Directorio</TabsTrigger>
           </TabsList>
           <TabsContent value="operacion" className="outline-none">{body(<ClientOperationsBoard evaluated={evaluated} team={team} onOpenClient={onOpenClient} />)}</TabsContent>
-          <TabsContent value="equipo" className="outline-none">{body(<TeamLoadView evaluated={evaluated} onOpenClient={onOpenClient} />)}</TabsContent>
+          <TabsContent value="equipo" className="outline-none">{body(<TeamLoadView evaluated={evaluated} onOpenClient={onOpenClient} onSaveHighlight={onSaveHighlight} />)}</TabsContent>
           <TabsContent value="directorio" className="outline-none">{directory}</TabsContent>
         </Tabs>
       ) : directory}

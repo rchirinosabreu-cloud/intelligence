@@ -125,7 +125,7 @@ export function readExcelClients({ indicadores, mio, year }) {
     const col = {
       name: column(h, 'CLIENTES'), def: column(h, 'Definición'), dates: column(h, 'Fecha inicio / terminación'), ig: column(h, 'Link y cuenta Instagram'),
       content: column(h, 'CONTENIDOS'), production: column(h, 'Producción'), pm: column(h, 'PROJECT MANAGER'), cm: column(h, 'CM'),
-      report: column(h, 'Informe MES'), status: column(h, 'Estado'),
+      report: column(h, 'Informe MES'), status: column(h, 'Estado'), comment: column(h, 'Comentario'),
     };
     for (const row of indicadores.slice(hi + 1)) {
       const name = clean(row[col.name]);
@@ -135,6 +135,8 @@ export function readExcelClients({ indicadores, mio, year }) {
         content: clean(row[col.content]), production: clean(row[col.production]), pmName: clean(row[col.pm]) || null, cmName: clean(row[col.cm]) || null,
         report: clean(row[col.report]), status: clean(row[col.status]), observations: [], agency: null, complexity: null, service: '',
       };
+      const comment = col.comment >= 0 ? clean(row[col.comment]) : '';
+      if (comment) record.observations.push({ sheet: 'INDICADORES', text: comment });
       const key = normalizeName(name);
       const previous = byName.get(key);
       if (previous) {
@@ -185,8 +187,45 @@ export function readExcelClients({ indicadores, mio, year }) {
       record.cmName = clean(row[col.responsible]) || record.cmName;
       record.service = clean(row[col.service]);
       const note = clean(row[col.notes]);
-      if (note) record.observations.push(note);
+      if (note) record.observations.push({ sheet: 'MIO', text: note });
     }
+  }
+
+  // Bloque «HISTORIAS» de la hoja MIO: cliente y frecuencia, debajo de la tabla principal.
+  const stories = new Map();
+  mio.forEach((row, r) => {
+    const c = row.findIndex((cell) => plain(cell).trim() === 'historias');
+    if (c < 1) return;
+    for (const next of mio.slice(r + 1)) {
+      const name = clean(next[c - 1]);
+      if (!name) break;
+      const frequency = plain(next[c]);
+      const value = /todos los dias/.test(frequency) ? 7 : Number(frequency.match(/(\d+)\s*veces/)?.[1]) || null;
+      if (value) stories.set(name, value);
+    }
+  });
+
+  // «Acción destacada» de cada colaborador: en INDICADORES va rotulada; en MIO son las dos primeras filas
+  // con texto debajo de la tabla (nombres y, debajo, lo que hace cada uno). MIO es la más reciente y manda.
+  const teamHighlights = {};
+  const addHighlights = (names, actions, from) => {
+    names.forEach((cell, i) => {
+      const name = clean(cell);
+      const action = clean(actions[i]);
+      if (i < from || !name || !action || name.split(' ').length > 2) return;
+      teamHighlights[name] = action;
+    });
+  };
+  indicadores.forEach((row, r) => {
+    const c = row.findIndex((cell) => plain(cell).trim() === 'accion destacada');
+    if (c >= 0 && r > 0) addHighlights(indicadores[r - 1], row, c + 1);
+  });
+  if (mi >= 0) {
+    const uni = column(mio[mi], 'UNI');
+    let last = mi;
+    mio.forEach((row, r) => { if (r > mi && clean(row[uni])) last = r; });
+    const rest = mio.slice(last + 1).filter((row) => row.some((cell) => clean(cell)));
+    if (rest.length >= 2 && !rest[0].some((cell) => plain(cell).trim() === 'historias')) addHighlights(rest[0], rest[1], 0);
   }
 
   const generalDoubts = doubts;
@@ -199,7 +238,7 @@ export function readExcelClients({ indicadores, mio, year }) {
     const text = `${record.content} ${record.service}`;
     const vigencia = parseVigencia(record.dates, { year });
     const neutral = /neutro/.test(plain(record.status)) && !parsed.total && !record.content;
-    const standBy = /no continua|en pausa|stand by/.test(plain(`${record.observations.join(' ')} ${record.status}`));
+    const standBy = /no continua|en pausa|stand by/.test(plain(`${record.observations.map((o) => o.text).join(' ')} ${record.status}`));
     let contract = null;
     if (!neutral && (parsed.total || record.content || record.service)) {
       const deliverables = parsed.deliverables.length ? parsed.deliverables : parsed.total ? [{ format: 'Otro', quantity: parsed.total }] : [];
@@ -211,7 +250,7 @@ export function readExcelClients({ indicadores, mio, year }) {
         endDate: vigencia?.endDate || null,
         cutDay: 1,
         deliverables,
-        storiesPerWeek: parseStories(text),
+        storiesPerWeek: [...stories].find(([name]) => normalizeName(name) === normalizeName(record.name))?.[1] ?? parseStories(text),
         productionDays: parseProductionDays(text, record.production),
         monthlyReport: /^(ok|si)$/.test(plain(record.report).trim()) || /informe/.test(plain(text)),
         notes: clean(`Del Excel: ${[record.content, record.service].filter(Boolean).join(' · ')}`).slice(0, 2000),
@@ -221,14 +260,16 @@ export function readExcelClients({ indicadores, mio, year }) {
     } else if (neutral) {
       doubts.push(`${record.name}: figura como «Neutro» y sin contenidos; no se le cargó contrato.`);
     }
-    if (/cliente que se va/.test(plain(record.content + record.status + record.observations.join(' ')))) doubts.push(`${record.name}: el Excel dice «cliente que se va»; confirmar si se termina el contrato.`);
+    if (/cliente que se va/.test(plain(record.content + record.status + record.observations.map((o) => o.text).join(' ')))) doubts.push(`${record.name}: el Excel dice «cliente que se va»; confirmar si se termina el contrato.`);
     return {
       name: record.name, description: record.description, instagramUrl: record.instagram, agency: record.agency, complexity: record.complexity,
-      pmName: record.pmName, cmName: record.cmName, monthlyReport: contract?.monthlyReport || false, contract, observations: record.observations,
+      pmName: record.pmName, cmName: record.cmName, monthlyReport: contract?.monthlyReport || false, contract,
+      // Una fila repetida no repite su observación.
+      observations: record.observations.filter((o, i, all) => all.findIndex((x) => x.text === o.text) === i),
       doubts,
     };
   });
-  return { clients, generalDoubts, doubts: [...generalDoubts, ...clients.flatMap((c) => c.doubts)] };
+  return { clients, teamHighlights, generalDoubts, doubts: [...generalDoubts, ...clients.flatMap((c) => c.doubts)] };
 }
 
 const firstName = (value) => plain(value).replace(/[^a-z0-9 ]+/g, ' ').trim().split(/\s+/)[0] || '';
@@ -246,13 +287,16 @@ function resolveMember(name, team, doubts, context) {
  * Qué escribiría la carga. La plataforma manda: solo se llenan campos vacíos, solo recibe contrato quien
  * no tiene ninguno, y cada diferencia se informa para que una persona decida.
  */
-export function planImport({ excelClients, platformClients, team, today, doubts: readDoubts = [] }) {
+const OBSERVATION_LABEL = { INDICADORES: 'Comentario (INDICADORES)', MIO: 'Observaciones (MIO)' };
+
+export function planImport({ excelClients, platformClients, team, today, doubts: readDoubts = [], teamHighlights = {} }) {
   const doubts = [...readDoubts];
   const differences = [];
   const notFound = [];
   const updates = [];
   const tasks = [];
   const archived = [];
+  const observations = [];
   const monthStart = `${today.slice(0, 7)}-01`;
   const memberName = (id) => team.find((m) => m.id === id)?.name || 'otra persona';
 
@@ -317,14 +361,28 @@ export function planImport({ excelClients, platformClients, team, today, doubts:
 
     updates.push({ clientId: client.id, client: client.name, data, contract });
 
-    if (excel.observations.length) {
+    for (const observation of excel.observations) {
+      observations.push({ clientId: client.id, client: client.name, text: observation.text, label: OBSERVATION_LABEL[observation.sheet] || 'Excel' });
+    }
+    const pending = excel.observations.filter((o) => o.sheet === 'MIO');
+    if (pending.length) {
       tasks.push({
         clientId: client.id,
         assigneeId: client.responsibleId || cm?.id || null,
         title: 'Pendientes que venían del Excel',
-        comments: excel.observations.map((text) => `- ${text}`).join('\n'),
+        comments: pending.map((o) => `- ${o.text}`).join('\n'),
       });
     }
   }
-  return { updates, tasks, differences, doubts, notFound, archived };
+  const highlights = [];
+  for (const [name, text] of Object.entries(teamHighlights)) {
+    const member = resolveMember(name, team, doubts, 'Acción destacada');
+    if (!member) continue;
+    if (member.highlightedAction) {
+      if (member.highlightedAction !== text) differences.push({ clientId: null, client: member.name, text: `Acción destacada: la plataforma dice «${member.highlightedAction}» y el Excel «${text}». Se dejó lo de la plataforma.` });
+      continue;
+    }
+    highlights.push({ memberId: member.id, name: member.name, text });
+  }
+  return { updates, tasks, observations, teamHighlights: highlights, differences, doubts, notFound, archived };
 }

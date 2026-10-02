@@ -8,7 +8,9 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import TaskCreateModal from '../../TaskCreateModal';
 import ClientOperationPage from './ClientOperationPage';
 import ClientOperationDialog from './ClientOperationDialog';
-import { useClientOperation, useMarkPiecePublished, useSaveOperationProfile, useSetMonthlyReport } from './clientOperationsApi';
+import {
+  useAddObservation, useClientOperation, useDeleteObservation, useMarkPiecePublished, useSaveOperationProfile, useSetMonthlyReport,
+} from './clientOperationsApi';
 import { bogotaDate } from '@/lib/colombiaBusinessDays';
 
 // `/clientes/operacion/:slug`: la página completa de un cliente (Rodny, 2 de octubre de 2026: «necesito
@@ -35,6 +37,8 @@ export default function ClientOperationRoute() {
   const saveProfile = useSaveOperationProfile();
   const setReport = useSetMonthlyReport();
   const markPublished = useMarkPiecePublished();
+  const addObservation = useAddObservation();
+  const deleteObservation = useDeleteObservation();
   const [editing, setEditing] = useState(false);
   const [creatingTask, setCreatingTask] = useState(false);
   // El día se fija una vez por visita, nunca un `new Date()` en cada render (incidente del 18 de septiembre).
@@ -56,6 +60,22 @@ export default function ClientOperationRoute() {
   return (
     <>
       <ClientOperationPage client={client} evaluation={client.evaluation} today={today} canManage
+        currentUserId={currentUser?.id} isAdmin={String(currentUser?.role || '').toUpperCase() === 'ADMIN'}
+        onAddObservation={async (text) => {
+          // Si falla, el error vuelve a la tarjeta y lo escrito no se pierde.
+          await addObservation.mutateAsync({ clientId: client.id, text });
+          await refetch();
+          toast.success('Observación guardada.');
+        }}
+        onDeleteObservation={async (observation) => {
+          try {
+            await deleteObservation.mutateAsync({ clientId: client.id, observationId: observation.id });
+            await refetch();
+            toast.success('Observación borrada.');
+          } catch (failure) {
+            toast.error(failure.message);
+          }
+        }}
         onEditProfile={() => setEditing(true)}
         onMarkPublished={async (piece) => {
           try {
