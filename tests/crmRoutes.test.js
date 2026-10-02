@@ -36,7 +36,14 @@ test('the CRM router exposes the phase-1 endpoints and maps validation errors to
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => { req.user = { userId: 'u1', role: 'EDITOR' }; next(); });
-  app.use('/api/crm', createCrmRouter({ service, db: {} }));
+  const drafts = {
+    createQuotationDraftForLead: async (_db, id, actor) => {
+      if (id === 'nope') throw Object.assign(new Error('Oportunidad no encontrada.'), { statusCode: 404 });
+      calls.push(['draft', id, actor.userId]);
+      return { created: true, quotation: { id: 'q1', code: 'COT-0001' } };
+    }
+  };
+  app.use('/api/crm', createCrmRouter({ service, drafts, db: {} }));
   const server = app.listen(0);
   await once(server, 'listening');
   const base = `http://127.0.0.1:${server.address().port}/api/crm`;
@@ -57,6 +64,11 @@ test('the CRM router exposes the phase-1 endpoints and maps validation errors to
     assert.equal((await json('/leads/L1/activities/a1', { method: 'PATCH', body: JSON.stringify({ note: 'x' }) })).status, 200);
     assert.equal((await json('/leads/L1/traffic-light', { method: 'POST', body: JSON.stringify({ value: 'VERDE', reason: 'ok' }) })).body.trafficLight.mode, 'MANUAL');
     assert.equal((await json('/leads/L1/archive', { method: 'POST' })).status, 200);
+    const draft = await json('/leads/L1/quotations', { method: 'POST' });
+    assert.equal(draft.status, 201);
+    assert.equal(draft.body.quotation.code, 'COT-0001');
+    assert.deepEqual(calls.find(([name]) => name === 'draft'), ['draft', 'L1', 'u1']);
+    assert.equal((await json('/leads/nope/quotations', { method: 'POST' })).status, 404);
     assert.equal((await json('/followups')).status, 200);
     assert.equal((await json('/metrics?from=2026-09-01')).status, 200);
     assert.equal(calls.find(([name]) => name === 'metrics')[1].from, '2026-09-01');

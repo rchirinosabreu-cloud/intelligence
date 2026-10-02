@@ -5,14 +5,15 @@ const nextId = prefix => `${prefix}-${String(++counter).padStart(4, '0')}`;
 
 const byOccurredDesc = (a, b) => new Date(b.occurredAt) - new Date(a.occurredAt);
 
-export function createCrmMemoryDb({ leads = [], activities = [], members = [], users = [], requests = [], quotations = [] } = {}) {
+export function createCrmMemoryDb({ leads = [], activities = [], members = [], users = [], requests = [], quotations = [], catalog = [] } = {}) {
   const state = {
     leads: leads.map((lead, index) => ({ consecutive: index + 1, createdAt: lead.enteredAt || new Date(), updatedAt: new Date(), ...lead })),
     activities: activities.map(activity => ({ createdAt: activity.occurredAt || new Date(), ...activity })),
     members,
     users,
     requests: [...requests],
-    quotations: [...quotations]
+    quotations: [...quotations],
+    catalog: [...catalog]
   };
   const author = id => state.users.find(user => user.id === id) || null;
   const relations = lead => lead && ({
@@ -66,6 +67,18 @@ export function createCrmMemoryDb({ leads = [], activities = [], members = [], u
         return request;
       },
       findUnique: async ({ where }) => state.requests.find(item => item.leadId === where.leadId || item.id === where.id) || null
+    },
+    serviceCatalog: {
+      findMany: async ({ where = {} } = {}) => state.catalog.filter(service => where.activo === undefined || (service.activo ?? true) === where.activo)
+    },
+    quotation: {
+      create: async ({ data }) => {
+        const quotation = { id: nextId('quo'), consecutive: state.quotations.length + 1, updated_at: new Date(), ...data };
+        state.quotations.push(quotation);
+        return quotation;
+      },
+      findUnique: async ({ where }) => state.quotations.find(item => item.id === where.id) || null,
+      findMany: async () => state.quotations
     },
     user: {
       findMany: async ({ where = {} } = {}) => state.users.filter(user => (where.role === undefined || user.role === where.role) && (where.isActive === undefined || (user.isActive ?? true) === where.isActive) && (!where.teamMember || (user.teamMemberActive ?? true))).map(user => ({ id: user.id }))

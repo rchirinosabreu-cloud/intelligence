@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { readFile } from 'node:fs/promises';
 import express from 'express';
 import { createServer } from 'vite';
 import { createCrmRouter } from '../src/routes/api/crm.js';
@@ -9,7 +10,10 @@ import { crmDemoLeads, crmDemoActivities, crmDemoMembers, crmDemoUsers, crmDemoU
 // Local laboratory for the CRM screens: the real router and service run over an in-memory store.
 // No dotenv, no database, no production server, no external calls.
 export async function createCrmPreview({ port = 3100 } = {}) {
-  const db = createCrmMemoryDb({ leads: crmDemoLeads, activities: crmDemoActivities, members: crmDemoMembers, users: crmDemoUsers, requests: crmDemoRequests });
+  // The real catalog, so «Crear borrador» prices the lines exactly as production would.
+  const catalog = JSON.parse(await readFile(path.resolve(import.meta.dirname, '../data/service_catalog_2026.json'), 'utf8'))
+    .map((service, index) => ({ id: `svc-${index + 1}`, category: service.category, name: service.name, description: service.description, costo_real_estimado: service.estimatedCost, valor_neto: service.finalPrice, activo: true }));
+  const db = createCrmMemoryDb({ leads: crmDemoLeads, activities: crmDemoActivities, members: crmDemoMembers, users: crmDemoUsers, requests: crmDemoRequests, catalog });
   const api = express();
   api.use(express.json());
   api.use((req, _res, next) => { req.user = { userId: crmDemoUser.id, role: crmDemoUser.role }; next(); });

@@ -26,6 +26,16 @@ import {
     quotationProposalTotals
 } from '../services/quotationDomainService.js';
 import { fetchOfficialUsdCopRate } from '../services/exchangeRateService.js';
+import { syncLeadStageFromQuotation } from '../services/quotationDraftService.js';
+
+// A quotation born from the CRM moves its opportunity forward; a CRM hiccup never undoes the quotation itself.
+const syncLeadStage = async (quotation, event) => {
+    try {
+        await syncLeadStageFromQuotation(prisma, quotation, event);
+    } catch (error) {
+        console.error(`[QuotationController] CRM stage sync (${event}) failed:`, error?.message || error);
+    }
+};
 import {
     QuotationAcceptanceError,
     acceptQuotationBySlug
@@ -313,6 +323,8 @@ export const updateQuotation = async (req, res) => {
             }
         });
 
+        if (existing.status === 'BORRADOR' && targetStatus === 'ACTIVA') await syncLeadStage(quotation, 'ISSUED');
+
         res.json({
             ...quotation,
             consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`
@@ -371,6 +383,7 @@ export const acceptPublicQuotation = async (req, res) => {
             scenarioId,
             expectedUpdatedAt
         });
+        if (!alreadyAccepted) await syncLeadStage(quotation, 'ACCEPTED');
         const publicQuotation = serializePublicQuotation(quotation);
         const emisor_data = EMISORES_DATA[quotation.emisor_type] || {};
 

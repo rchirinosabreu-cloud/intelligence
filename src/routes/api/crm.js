@@ -1,9 +1,10 @@
 import express from 'express';
 import prisma from '../../lib/prisma.js';
 import * as crmService from '../../services/crmService.js';
+import * as quotationDrafts from '../../services/quotationDraftService.js';
 
 // Mounted in src/routes/index.js behind authenticateToken + requireModulePermission('crm').
-export const createCrmRouter = ({ service = crmService, db = prisma } = {}) => {
+export const createCrmRouter = ({ service = crmService, drafts = quotationDrafts, db = prisma } = {}) => {
   const router = express.Router();
 
   const send = (res, error, fallback) => {
@@ -68,6 +69,11 @@ export const createCrmRouter = ({ service = crmService, db = prisma } = {}) => {
 
   router.post('/leads/:leadId/archive', handle('No pudimos archivar la oportunidad.', async (req, res) => {
     res.json(await service.archiveLead(db, req.params.leadId, req.user));
+  }));
+
+  // Manual path: always a new BORRADOR in Cotizaciones, linked to the lead, built from its request (if any).
+  router.post('/leads/:leadId/quotations', handle('No pudimos crear el borrador de cotización.', async (req, res) => {
+    res.status(201).json(await drafts.createQuotationDraftForLead(db, req.params.leadId, req.user));
   }));
 
   return router;
