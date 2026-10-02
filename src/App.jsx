@@ -14,6 +14,7 @@ const Dashboard = lazy(() => import('./components/modules/Dashboard'));
 const NativeTasks = lazy(() => import('./components/modules/NativeTasks'));
 const Clients = lazy(() => import('./components/modules/Clients'));
 const ClientDetailWrapper = lazy(() => import('./components/modules/ClientDetailWrapper'));
+const ClientOperationRoute = lazy(() => import('./components/modules/Clients/operations/ClientOperationRoute'));
 const Team = lazy(() => import('./components/modules/Team'));
 const Profile = lazy(() => import('./components/modules/Profile'));
 const ContentGrids = lazy(() => import('./components/modules/ContentGrids'));
@@ -329,6 +330,14 @@ function AppContent() {
                       element={
                         <ModuleGuard module="clientes">
                           <Clients />
+                        </ModuleGuard>
+                      }
+                    />
+                    <Route
+                      path="/clientes/operacion/:slug"
+                      element={
+                        <ModuleGuard module="clientes">
+                          <ClientOperationRoute />
                         </ModuleGuard>
                       }
                     />

@@ -16,7 +16,7 @@ after(async () => { await browser?.close(); await preview?.close(); });
 async function setup({ save, mobile = false, screenshot = false } = {}) {
   const page = await browser.newPage({ viewport: mobile ? { width: 390, height: 844 } : { width: 1280, height: 900 }, hasTouch: mobile, isMobile: mobile, reducedMotion: 'reduce' });
   page.setDefaultTimeout(5000);
-  let client = { id: 'sample-client', name: 'Marca de ejemplo', slug: 'marca-original', isArchived: false, responsible: { id: 'sample-pm', name: 'PM de ejemplo' }, healthRecords: [{ score: 85 }], agencyContexts: [] };
+  let client = { id: 'sample-client', name: 'Marca de ejemplo', slug: 'marca-original', isArchived: false, responsible: { id: 'sample-pm', name: 'PM de ejemplo' } };
   const requests = [];
   await page.route('**/api/**', async route => {
     const request = route.request(), url = new URL(request.url());
@@ -46,11 +46,11 @@ async function setup({ save, mobile = false, screenshot = false } = {}) {
     await page.screenshot({ path: 'output/client-edit/clients-list.png', animations: 'disabled' });
   }
   await menu.click();
-  await page.getByRole('menuitem', { name: 'Editar Cliente', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Editar cliente', exact: true }).click();
   return { page, requests };
 }
 
-test('Editar Cliente opens the form, renames only the selected client and preserves its links and list metadata', async () => {
+test('Editar cliente opens the form, renames only the selected client and preserves its links and list metadata', async () => {
   const { page, requests } = await setup({ screenshot: true });
   try {
     const dialog = page.getByRole('dialog', { name: 'Editar cliente', exact: true });
@@ -137,7 +137,7 @@ test('keyboard submission and Escape cancellation preserve the same edit flow', 
     const options = page.getByRole('button', { name: 'Opciones de Nombre desde teclado' });
     await options.focus();
     await options.press('Enter');
-    await page.getByRole('menuitem', { name: 'Editar Cliente', exact: true }).focus();
+    await page.getByRole('menuitem', { name: 'Editar cliente', exact: true }).focus();
     await page.keyboard.press('Enter');
     await dialog.waitFor();
     assert.equal(await field.inputValue(), 'Nombre desde teclado');
@@ -184,7 +184,7 @@ test('slug can change independently, with a visible warning before saving', asyn
     assert.deepEqual(requests, [{ slug: 'marca-nueva' }]);
     await page.reload();
     await page.getByRole('row').filter({ hasText: 'Marca de ejemplo' }).locator('button[aria-haspopup="menu"]').click();
-    await page.getByRole('menuitem', { name: 'Editar Cliente', exact: true }).click();
+    await page.getByRole('menuitem', { name: 'Editar cliente', exact: true }).click();
     assert.equal(await slug.inputValue(), 'marca-nueva');
   } finally { await page.close(); }
 });

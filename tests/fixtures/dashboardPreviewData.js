@@ -32,7 +32,7 @@ const people = {
 
 export const dashboardDemoTeam = [dashboardDemoMember, ...Object.values(people).map((person) => ({ ...person, isActive: true, avatarUrl: null }))];
 
-const client = (key, name) => ({ id: `client-${key}`, name, slug: key, logoUrl: null, healthScore: 82 });
+const client = (key, name) => ({ id: `client-${key}`, name, slug: key, logoUrl: null });
 
 export function dashboardDemoDashboard(now = new Date()) {
   // Los campos extra (tiempo, fechas, categoría, descripción) alimentan el detalle que abre el historial de logros.

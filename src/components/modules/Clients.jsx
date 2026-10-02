@@ -1,15 +1,10 @@
 import Select from '@/components/ui/Select';
-import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
-  Plus, Search, MoreVertical, Loader2, Edit,
+  Search, MoreVertical, Loader2, Edit,
   Archive, RotateCcw, ChevronDown, ChevronUp,
-  Thermometer, User as UserIcon, MessageSquare, Activity,
-  ExternalLink, CheckCircle2, Settings2, Layout, ShieldCheck,
-  AlertTriangle, Clock, X
+  User as UserIcon, ExternalLink,
 } from '@/components/ui/icons';
-import { motion, AnimatePresence } from 'framer-motion';
-import PageHeader from '@/components/ui/PageHeader';
-import { Button } from '@/components/ui/button';
 import * as Dialog from '@radix-ui/react-dialog';
 import {
   DropdownMenu,
@@ -17,34 +12,166 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useNavigate } from 'react-router-dom';
 import ClientAvatar from '@/components/ui/ClientAvatar';
+import TeamAvatar from '@/components/ui/TeamAvatar';
 import { toast } from 'react-hot-toast';
-import { Badge } from '@/components/ui/Badge';
-import ClientExpandedDetail from './Clients/ClientExpandedDetail';
 import EditClientDialog from './Clients/EditClientDialog';
 import ClientProfileFields from './Clients/ClientProfileFields';
+import ClientsSection from './Clients/operations/ClientsSection';
+import { useClientOperations } from './Clients/operations/clientOperationsApi';
 import { emptyClientProfile, normalizeClientProfile } from '@/lib/clientProfile';
+import { OPERATION_LEVELS } from '@/lib/clientOperations';
+import { useAuth } from '@/context/AuthContext';
 import { useQueryClient } from '@tanstack/react-query';
+
+// Clientes (2 de octubre de 2026). Administradores y project managers ven «Operación» y «Equipo», que
+// sustituyen al Excel «PENDIENTES»; el directorio de siempre queda en su propia pestaña y es lo único
+// que ven los demás. La «salud» manual y su bitácora se retiraron: el avance se calcula.
+
+const MANAGER_ROLES = ['ADMIN', 'PROJECT_MANAGER'];
+
+function Person({ member }) {
+  if (!member?.name) return <span className="text-xs text-zinc-400">—</span>;
+  return (
+    <span className="inline-flex min-w-0 items-center gap-2">
+      <TeamAvatar member={member} size={24} />
+      <span className="truncate text-sm text-zinc-700 dark:text-zinc-300">{member.name}</span>
+    </span>
+  );
+}
+
+function ClientsDirectory({ clients, loading, team, onEdit, onArchiveToggle }) {
+  const navigate = useNavigate();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [responsibleId, setResponsibleId] = useState('all');
+  const [showArchived, setShowArchived] = useState(false);
+  const matches = (client) => client.name.toLowerCase().includes(searchQuery.toLowerCase())
+    && (responsibleId === 'all' || client.responsible?.id === responsibleId);
+  const active = clients.filter((c) => !c.isArchived && matches(c));
+  const archived = clients.filter((c) => c.isArchived && matches(c));
+
+  const row = (client) => (
+    <tr key={client.id} className="transition-colors hover:bg-zinc-50 dark:hover:bg-white/[0.03]">
+      <td className="px-6 py-4">
+        <div className="flex items-center gap-3">
+          <ClientAvatar client={client} size={32} className="rounded-lg border border-zinc-200 dark:border-white/10" />
+          <span className="whitespace-nowrap font-semibold text-zinc-900 dark:text-zinc-100">{client.name}</span>
+        </div>
+      </td>
+      <td className="px-6 py-4"><Person member={client.responsible} /></td>
+      <td className="px-6 py-4"><Person member={client.projectManager} /></td>
+      <td className="px-6 py-4 text-right">
+        <div className="flex items-center justify-end gap-1">
+          {!client.isArchived && (
+            <button type="button" aria-label={`Abrir el espacio de ${client.name}`} onClick={() => navigate(`/cliente/${client.slug}`)}
+              className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-brand-cyan/10 hover:text-brand-cyan-deep dark:hover:text-brand-cyan">
+              <ExternalLink className="h-4 w-4" />
+            </button>
+          )}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" aria-label={`Opciones de ${client.name}`} className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-xl text-zinc-400 transition-colors hover:bg-zinc-100 hover:text-zinc-700 dark:hover:bg-white/10 dark:hover:text-zinc-200">
+                <MoreVertical className="h-4 w-4" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              {!client.isArchived && (
+                <DropdownMenuItem className="gap-2 py-2.5" onSelect={() => onEdit(client)}>
+                  <Edit className="h-4 w-4" /><span>Editar cliente</span>
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem className="gap-2 py-2.5" onSelect={() => onArchiveToggle(client)}>
+                {client.isArchived ? <RotateCcw className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+                <span>{client.isArchived ? 'Reactivar cliente' : 'Archivar cliente'}</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </td>
+    </tr>
+  );
+
+  const head = (
+    <thead>
+      <tr className="border-b border-zinc-100 bg-zinc-50/60 text-xs font-medium text-zinc-500 dark:border-white/5 dark:bg-white/[0.02]">
+        <th className="px-6 py-3">Cliente</th>
+        <th className="px-6 py-3">Community manager</th>
+        <th className="px-6 py-3">Project manager</th>
+        <th className="px-6 py-3"><span className="sr-only">Acciones</span></th>
+      </tr>
+    </thead>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="brain-glass flex flex-col gap-3 p-3 lg:flex-row lg:items-center">
+        <label className="relative flex-1">
+          <span className="sr-only">Buscar cliente</span>
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-400" />
+          <input type="text" placeholder="Buscar cliente…" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+            className="min-h-11 w-full rounded-xl border border-transparent bg-zinc-100 pl-10 pr-4 text-sm text-zinc-900 focus:border-primary/40 focus:outline-none dark:bg-white/5 dark:text-zinc-100" />
+        </label>
+        <div className="flex items-center gap-2 rounded-xl bg-zinc-100 pl-3 dark:bg-white/5">
+          <UserIcon className="h-4 w-4 shrink-0 text-zinc-400" />
+          <Select value={responsibleId} onChange={(e) => setResponsibleId(e.target.value)} aria-label="Community manager" className="min-h-11 border-none bg-transparent pl-0 pr-9 text-sm">
+            <option value="all">Todos los CM</option>
+            {team.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
+          </Select>
+        </div>
+      </div>
+
+      <section className="overflow-hidden rounded-3xl border border-zinc-200 bg-white dark:border-white/10 dark:bg-zinc-900" aria-label="Clientes activos">
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-left">
+            {head}
+            <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+              {loading ? (
+                <tr><td colSpan={4} className="p-16 text-center"><Loader2 className="mx-auto h-8 w-8 animate-spin text-brand-cyan" /></td></tr>
+              ) : active.length ? active.map(row) : (
+                <tr><td colSpan={4} className="p-16 text-center text-sm text-zinc-500">Ningún cliente activo con estos filtros.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <div className="border-t border-zinc-200 pt-6 dark:border-white/5">
+        <button type="button" onClick={() => setShowArchived(!showArchived)} aria-expanded={showArchived}
+          className="flex min-h-11 items-center gap-2 text-sm font-semibold text-zinc-500 transition-colors hover:text-zinc-900 dark:hover:text-zinc-100">
+          {showArchived ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          Clientes archivados ({archived.length})
+        </button>
+        {showArchived && (
+          <section className="mt-4 overflow-hidden rounded-3xl border border-zinc-200 bg-zinc-50 dark:border-white/10 dark:bg-white/5" aria-label="Clientes archivados">
+            <div className="overflow-x-auto">
+              <table className="w-full border-collapse text-left">
+                {head}
+                <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
+                  {archived.length ? archived.map(row) : <tr><td colSpan={4} className="p-10 text-center text-sm text-zinc-400">No hay clientes archivados.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+      </div>
+    </div>
+  );
+}
 
 const Clients = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { currentUser } = useAuth();
+  const canManage = MANAGER_ROLES.includes(String(currentUser?.role || '').toUpperCase());
   const [clients, setClients] = useState([]);
-  const [pms, setPms] = useState([]);
+  const [team, setTeam] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedPmId, setSelectedPmId] = useState('all');
-  const [selectedTemperature, setSelectedTemperature] = useState('all'); // Verde, Amarillo, Rojo
-  const [showArchived, setShowArchived] = useState(false);
-  const [expandedClientId, setExpandedClientId] = useState(null);
+  const operations = useClientOperations({ enabled: canManage });
 
-  // Modal States
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState(null);
-
   const [newClientName, setNewClientName] = useState('');
   const [newClientSlug, setNewClientSlug] = useState('');
   const [newClientProfile, setNewClientProfile] = useState(() => emptyClientProfile());
@@ -55,581 +182,186 @@ const Clients = () => {
   const fetchClients = useCallback(async () => {
     try {
       setLoading(true);
-      const baseUrl = getApiBaseUrl();
-      const params = new URLSearchParams();
-      if (selectedPmId !== 'all') params.append('responsibleId', selectedPmId);
-      params.append('isArchived', 'false'); // Get active by default
-
-      const res = await fetch(`${baseUrl}/api/clients?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
-      });
+      const res = await fetch(`${getApiBaseUrl()}/api/clients?isArchived=all`);
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        console.error("Error fetching active clients:", errorData);
-        throw new Error(errorData.error || "Error al cargar clientes activos");
+        console.error('Error fetching clients:', errorData);
+        throw new Error(errorData.error || 'Error al cargar clientes');
       }
-      const activeData = await res.json();
-
-      params.set('isArchived', 'true');
-      const resArchived = await fetch(`${baseUrl}/api/clients?${params.toString()}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
-      });
-      if (!resArchived.ok) {
-        const errorData = await resArchived.json().catch(() => ({}));
-        console.error("Error fetching archived clients:", errorData);
-        throw new Error(errorData.error || "Error al cargar clientes archivados");
-      }
-      const archivedData = await resArchived.json();
-
-      // Combined and Sorted by Score ASC (Critical first)
-      const combined = [...activeData, ...archivedData];
-      setClients(combined);
+      setClients(await res.json());
     } catch (err) {
-      console.error("Error loading clients:", err);
-      toast.error(err.message || "Error al cargar clientes");
+      console.error('Error loading clients:', err);
+      toast.error(err.message || 'Error al cargar clientes');
     } finally {
       setLoading(false);
     }
-  }, [selectedPmId]);
-
-  const fetchPms = useCallback(async () => {
-    try {
-      const baseUrl = getApiBaseUrl();
-      const res = await fetch(`${baseUrl}/api/team`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
-      });
-      const data = await res.json();
-      // Filter PMs/Admins or just all active team members
-      setPms(data.filter(m => m.isActive));
-    } catch (err) {
-      console.error("Error fetching PMs:", err);
-    }
   }, []);
 
-  // Click Outside Behavior
-  const gridRef = useRef(null);
-  useEffect(() => {
-    const handleClickOutside = (event) => {
-      if (gridRef.current && !gridRef.current.contains(event.target)) {
-        setExpandedClientId(null);
-      }
-    };
-    document.addEventListener("click", handleClickOutside);
-    return () => document.removeEventListener("click", handleClickOutside);
+  const fetchTeam = useCallback(async () => {
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/api/team`);
+      const data = await res.json();
+      setTeam(Array.isArray(data) ? data.filter((m) => m.isActive) : []);
+    } catch (err) {
+      console.error('Error fetching team:', err);
+    }
   }, []);
 
   useEffect(() => {
     fetchClients();
-    fetchPms();
-  }, [fetchClients, fetchPms]);
+    fetchTeam();
+  }, [fetchClients, fetchTeam]);
 
-  const toggleExpand = (clientId) => {
-    setExpandedClientId(prev => (prev === clientId ? null : clientId));
+  const evaluated = useMemo(() => (operations.data || [])
+    .map((client) => ({ client, evaluation: client.evaluation }))
+    .sort((a, b) => OPERATION_LEVELS.indexOf(a.evaluation.level) - OPERATION_LEVELS.indexOf(b.evaluation.level)
+      || b.evaluation.reasons.length - a.evaluation.reasons.length
+      || a.client.name.localeCompare(b.client.name, 'es')), [operations.data]);
+
+  const refreshEverywhere = () => {
+    for (const key of ['clients-list', 'clientsDropdown', 'client-operations', 'dashboard-assignment-clients', 'financial-record-clients']) {
+      queryClient.invalidateQueries({ queryKey: [key] });
+    }
   };
 
   const handleArchiveToggle = async (client) => {
     try {
-      const baseUrl = getApiBaseUrl();
-      const res = await fetch(`${baseUrl}/api/clients/${client.id}/archive`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/clients/${client.id}/archive`, {
         method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${localStorage.getItem('authToken')}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ isArchived: !client.isArchived }),
       });
-
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        console.error("Error toggling client archive:", errorData);
-        throw new Error(errorData.error || "Error al procesar solicitud");
+        console.error('Error toggling client archive:', errorData);
+        throw new Error(errorData.error || 'Error al procesar solicitud');
       }
-
       const updated = await res.json();
-      setClients(prev => prev.map(c => c.id === updated.id ? { ...c, isArchived: updated.isArchived } : c));
-      toast.success(updated.isArchived ? "Cliente archivado" : "Cliente reactivado");
+      setClients((prev) => prev.map((c) => (c.id === updated.id ? { ...c, isArchived: updated.isArchived } : c)));
+      refreshEverywhere();
+      toast.success(updated.isArchived ? 'Cliente archivado' : 'Cliente reactivado');
     } catch (err) {
-      console.error("Error processing archive request:", err);
-      toast.error(err.message || "Error al procesar solicitud");
+      console.error('Error processing archive request:', err);
+      toast.error(err.message || 'Error al procesar solicitud');
     }
   };
 
-  const getScoreColor = (score) => {
-    if (score >= 80) return 'bg-emerald-500';
-    if (score >= 50) return 'bg-amber-500';
-    return 'bg-red-500';
-  };
+  const generateSlug = (name) => name
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .trim()
+    .replace(/\s+/g, '-');
 
-  const activeClients = useMemo(() => {
-    return clients
-      .filter(c => !c.isArchived)
-      .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()))
-      .filter(c => {
-        if (selectedTemperature === 'all') return true;
-        const score = c.healthRecords?.[0]?.score || 0;
-        if (selectedTemperature === 'sano') return score >= 80;
-        if (selectedTemperature === 'alerta') return score >= 50 && score < 80;
-        if (selectedTemperature === 'critico') return score < 50;
-        return true;
-      })
-      .sort((a, b) => {
-        const scoreA = a.healthRecords?.[0]?.score || 0;
-        const scoreB = b.healthRecords?.[0]?.score || 0;
-        return scoreA - scoreB; // Menor score arriba (fuego primero)
-      });
-  }, [clients, searchQuery, selectedTemperature]);
-
-  const handleUpdateClientData = (updatedClient) => {
-    setClients(prev => prev.map(c => c.id === updatedClient.id ? updatedClient : c));
-  };
-
-  const archivedClients = useMemo(() => {
-    return clients
-      .filter(c => c.isArchived)
-      .filter(c => c.name.toLowerCase().includes(searchQuery.toLowerCase()));
-  }, [clients, searchQuery]);
-
-  const generateSlug = (name) => {
-    return name
-      .toLowerCase()
-      .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove accents
-      .replace(/[^a-z0-9\s-]/g, '') // remove invalid chars
-      .trim()
-      .replace(/\s+/g, '-'); // replace spaces with dashes
-  };
-
-  // Auto-complete slug when typing name (Create)
   useEffect(() => {
-    if (!isManualSlugCreate && newClientName) {
-      setNewClientSlug(generateSlug(newClientName));
-    } else if (!newClientName) {
-      setNewClientSlug('');
-    }
+    if (!isManualSlugCreate && newClientName) setNewClientSlug(generateSlug(newClientName));
+    else if (!newClientName) setNewClientSlug('');
   }, [newClientName, isManualSlugCreate]);
 
   const handleCreateClient = async (e) => {
     e.preventDefault();
     if (!newClientName.trim() || !newClientSlug.trim()) return;
-    // La ficha completa (30 de septiembre de 2026): se revisa con la regla del servidor.
     const { name: _unusedName, ...profileFields } = newClientProfile;
     const check = normalizeClientProfile({ ...profileFields, name: newClientName }, { requireName: true });
     if (!check.valid) { setNewClientProfileErrors(check.errors); return; }
 
     try {
       setIsCreating(true);
-      const baseUrl = getApiBaseUrl();
-      const res = await fetch(`${baseUrl}/api/clients`, {
+      const res = await fetch(`${getApiBaseUrl()}/api/clients`, {
         method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${localStorage.getItem('authToken')}`
-        },
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...profileFields, name: newClientName, slug: newClientSlug }),
       });
-
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
-        console.error("Error creating client:", errorData);
+        console.error('Error creating client:', errorData);
         throw new Error(errorData.message || errorData.error || 'Error al crear el cliente en el servidor');
       }
-
       const newClient = await res.json();
-      setClients(prev => [newClient, ...prev]);
-
+      setClients((prev) => [newClient, ...prev]);
+      refreshEverywhere();
       setNewClientName('');
       setNewClientSlug('');
       setNewClientProfile(emptyClientProfile());
       setNewClientProfileErrors({});
       setIsManualSlugCreate(false);
       setIsCreateModalOpen(false);
-      toast.success("Cliente creado correctamente");
+      toast.success('Cliente creado correctamente');
     } catch (err) {
-      console.error("Error creating client:", err);
+      console.error('Error creating client:', err);
       toast.error(err.message);
     } finally {
       setIsCreating(false);
     }
   };
 
+  const directory = (
+    <ClientsDirectory clients={clients} loading={loading} team={team}
+      onEdit={setEditingClient} onArchiveToggle={handleArchiveToggle} />
+  );
+
   return (
-    <div className="space-y-6 pb-20 animate-in fade-in duration-500">
-      <PageHeader
-        title="Clientes"
-        subtitle="Tablero de salud y gestión de espacios de trabajo."
-      >
-        <Button onClick={() => setIsCreateModalOpen(true)} size="lg" className="shadow-lg shadow-indigo-500/20">
-          <Plus className="w-4 h-4 mr-2" />
-          Nuevo Cliente
-        </Button>
-      </PageHeader>
-
-      {/* Filter Bar */}
-      <div className="p-4 rounded-2xl bg-white/50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/5 backdrop-blur-sm flex flex-col lg:flex-row items-center gap-4">
-        {/* Search */}
-        <div className="relative flex-1 w-full">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-          <input
-            type="text"
-            placeholder="Buscar por nombre de marca..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-10 pr-4 py-2.5 bg-zinc-100 dark:bg-white/5 border-transparent focus:border-indigo-600/50 focus:ring-0 rounded-xl text-sm transition-all text-zinc-900 dark:text-zinc-100"
-          />
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-          {/* PM Selector */}
-          <div className="flex items-center gap-2 bg-zinc-100 dark:bg-white/5 p-1 rounded-xl border border-transparent focus-within:border-indigo-500/30 transition-all">
-            <UserIcon className="w-4 h-4 ml-2 text-zinc-400" />
-            <Select
-              value={selectedPmId}
-              onChange={(e) => setSelectedPmId(e.target.value)}
-              className="bg-transparent border-none focus:ring-0 text-sm py-1.5 pr-8 text-zinc-700 dark:text-zinc-300"
-            >
-              <option value="all">Todos los PMs</option>
-              {pms.map(pm => (
-                <option key={pm.id} value={pm.id}>{pm.name}</option>
-              ))}
-            </Select>
-          </div>
-
-          {/* Temperature Filter */}
-          <div className="flex items-center gap-2 bg-zinc-100 dark:bg-white/5 p-1 rounded-xl border border-transparent focus-within:border-indigo-500/30 transition-all">
-            <Thermometer className="w-4 h-4 ml-2 text-zinc-400" />
-            <Select
-              value={selectedTemperature}
-              onChange={(e) => setSelectedTemperature(e.target.value)}
-              className="bg-transparent border-none focus:ring-0 text-sm py-1.5 pr-8 text-zinc-700 dark:text-zinc-300"
-            >
-              <option value="all">Cualquier Temperatura</option>
-              <option value="sano">Verde (Sano)</option>
-              <option value="alerta">Amarillo (Alerta)</option>
-              <option value="critico">Rojo (Crítico)</option>
-            </Select>
-          </div>
-        </div>
-      </div>
-
-      {/* Active Clients Table */}
-      <div ref={gridRef} className="bg-white/50 dark:bg-zinc-900/50 border border-zinc-200/50 dark:border-white/5 backdrop-blur-md rounded-3xl overflow-hidden shadow-xl shadow-black/5">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-zinc-200/50 dark:border-white/5 bg-zinc-50/50 dark:bg-white/5">
-                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Cliente</th>
-                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Estado Salud</th>
-                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest text-center">Responsable</th>
-                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest">Último Comentario</th>
-                <th className="px-6 py-4 text-xs font-bold text-zinc-500 uppercase tracking-widest text-right"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-zinc-200/50 dark:divide-white/5">
-              {loading ? (
-                <tr>
-                  <td colSpan={5} className="p-20 text-center">
-                    <Loader2 className="w-8 h-8 text-indigo-600 animate-spin mx-auto mb-4" />
-                    <p className="text-zinc-500">Analizando métricas de salud...</p>
-                  </td>
-                </tr>
-              ) : activeClients.length > 0 ? (
-                <AnimatePresence mode="popLayout">
-                  {activeClients.map((client) => {
-                    const score = client.healthRecords?.[0]?.score || 0;
-                    const lastComment = client.agencyContexts?.[0]?.content || "Sin observaciones recientes.";
-
-                    const isExpanded = expandedClientId === client.id;
-
-                    return (
-                      <React.Fragment key={client.id}>
-                      <motion.tr
-                        layout
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0, x: -20 }}
-                        className={cn(
-                          "group hover:bg-zinc-100/30 dark:hover:bg-white/5 transition-all cursor-pointer border-l-4",
-                          isExpanded ? "border-indigo-600 bg-indigo-50/10" : "border-transparent"
-                        )}
-                        onClick={() => toggleExpand(client.id)}
-                      >
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-3">
-                            <ClientAvatar client={client} size={32} className="rounded-lg border border-zinc-200 dark:border-white/10" />
-                            <span className="font-bold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{client.name}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 min-w-[180px]">
-                          <div className="flex items-center gap-3">
-                            <div className="flex-1 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden max-w-[100px]">
-                              <motion.div
-                                initial={{ width: 0 }}
-                                animate={{ width: `${score}%` }}
-                                className={cn("h-full", getScoreColor(score))}
-                              />
-                            </div>
-                            <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300">{score}</span>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-center">
-                          {client.responsible?.name ? (
-                            <Badge variant="outline" className="bg-indigo-50/50 dark:bg-indigo-900/10 text-indigo-600 dark:text-indigo-400 border-indigo-200/50 dark:border-indigo-500/20">
-                              {client.responsible.name}
-                            </Badge>
-                          ) : (
-                            <span className="text-xs text-zinc-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-6 py-4 max-w-xs">
-                          <div className="flex items-center gap-2 text-zinc-500 dark:text-zinc-400 text-sm">
-                            <MessageSquare className="w-3.5 h-3.5 shrink-0 opacity-50" />
-                            <p className="truncate italic">"{lastComment}"</p>
-                          </div>
-                        </td>
-                        <td className="px-6 py-4 text-right" onClick={(e) => e.stopPropagation()}>
-                          <div className="flex items-center justify-end gap-2">
-                             <button
-                               aria-label={`Abrir la ficha de ${client.name}`}
-                               onClick={() => navigate(`/cliente/${client.slug}`)}
-                               className="p-2 hover:bg-indigo-100 dark:hover:bg-indigo-900/30 rounded-xl text-zinc-400 hover:text-indigo-600 transition-colors"
-                             >
-                               <ExternalLink className="w-4 h-4" />
-                             </button>
-                             {/* Editar el cliente —y con ello su nombre legal y su documento—
-                                 vive aquí dentro. Estaba escondido tras el hover de la fila:
-                                 con el ratón había que adivinarlo y en táctil no aparecía nunca. */}
-                             <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button aria-label={`Opciones de ${client.name}`} className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-xl transition-colors text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200">
-                                  <MoreVertical className="w-4 h-4" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-48">
-                                <DropdownMenuItem className="gap-2 py-2.5" onClick={() => toggleExpand(client.id)}>
-                                  <Activity className="w-4 h-4" />
-                                  <span>{isExpanded ? 'Cerrar Detalle' : 'Configurar Salud'}</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem className="gap-2 py-2.5" onSelect={() => setEditingClient(client)}>
-                                  <Edit className="w-4 h-4" />
-                                  <span>Editar Cliente</span>
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => handleArchiveToggle(client)}
-                                  className="gap-2 py-2.5 text-amber-600 dark:text-amber-400"
-                                >
-                                  <Archive className="w-4 h-4" />
-                                  <span>Archivar Cliente</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                            {isExpanded ? <ChevronUp className="w-4 h-4 text-indigo-600" /> : <ChevronDown className="w-4 h-4 text-zinc-300" />}
-                          </div>
-                        </td>
-                      </motion.tr>
-
-                      {/* Expanded Section */}
-                      <AnimatePresence>
-                        {isExpanded && (
-                          <motion.tr
-                            initial={{ opacity: 0, height: 0 }}
-                            animate={{ opacity: 1, height: 'auto' }}
-                            exit={{ opacity: 0, height: 0 }}
-                            className="bg-zinc-50/50 dark:bg-white/[0.01]"
-                          >
-                            <td colSpan={5} className="p-0 border-b border-zinc-200 dark:border-white/5 shadow-inner">
-                               <ClientExpandedDetail
-                                 client={client}
-                                 onUpdate={handleUpdateClientData}
-                               />
-                            </td>
-                          </motion.tr>
-                        )}
-                      </AnimatePresence>
-                      </React.Fragment>
-                    );
-                  })}
-                </AnimatePresence>
-              ) : (
-                <tr>
-                  <td colSpan={5} className="p-20 text-center text-zinc-500">
-                    No se encontraron clientes activos con los filtros aplicados.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* Archived Section */}
-      <div className="mt-12 pt-6 border-t border-zinc-200 dark:border-white/5">
-        <button
-          onClick={() => setShowArchived(!showArchived)}
-          className="flex items-center gap-2 text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors font-bold text-sm uppercase tracking-widest"
-        >
-          {showArchived ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          Clientes Inactivos / Archivados ({archivedClients.length})
-        </button>
-
-        <AnimatePresence>
-          {showArchived && (
-            <motion.div
-              initial={{ height: 0, opacity: 0 }}
-              animate={{ height: 'auto', opacity: 1 }}
-              exit={{ height: 0, opacity: 0 }}
-              className="overflow-hidden mt-4"
-            >
-              <div className="bg-zinc-50/50 dark:bg-white/1 border border-zinc-200/50 dark:border-white/5 rounded-3xl overflow-hidden opacity-60 grayscale-[0.5]">
-                <table className="w-full text-left border-collapse">
-                  <tbody className="divide-y divide-zinc-200/50 dark:divide-white/5">
-                    {archivedClients.map((client) => {
-                       const score = client.healthRecords?.[0]?.score || 0;
-                       const lastComment = client.agencyContexts?.[0]?.content || "Sin observaciones recientes.";
-
-                       return (
-                        <tr key={client.id} className="hover:bg-zinc-100/50 dark:hover:bg-white/5 transition-colors">
-                          <td className="px-6 py-4">
-                            <div className="flex items-center gap-3">
-                              <ClientAvatar client={client} size={32} className="rounded-lg border border-zinc-200 dark:border-white/10" />
-                              <span className="font-bold text-zinc-900 dark:text-zinc-100 whitespace-nowrap">{client.name}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 min-w-[180px]">
-                            <div className="flex items-center gap-3">
-                              <div className="flex-1 h-1.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden max-w-[100px]">
-                                <div className={cn("h-full", getScoreColor(score))} style={{ width: `${score}%` }} />
-                              </div>
-                              <span className="text-sm font-bold text-zinc-700 dark:text-zinc-300">{score}</span>
-                            </div>
-                          </td>
-                          <td className="px-6 py-4 text-center">
-                            {client.responsible?.name ? (
-                              <Badge variant="outline" className="bg-indigo-50/50 dark:bg-indigo-900/10 text-indigo-600 dark:text-indigo-400 border-indigo-200/50 dark:border-indigo-500/20">
-                                {client.responsible.name}
-                              </Badge>
-                            ) : (
-                              <span className="text-xs text-zinc-400">—</span>
-                            )}
-                          </td>
-                          <td className="px-6 py-4 max-w-xs text-sm italic truncate">
-                             "{lastComment}"
-                          </td>
-                          <td className="px-6 py-4 text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <button className="p-2 hover:bg-zinc-200/50 dark:hover:bg-white/10 rounded-xl transition-colors text-zinc-500">
-                                  <MoreVertical className="w-4 h-4" />
-                                </button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end" className="w-48">
-                                <DropdownMenuItem
-                                  onClick={() => handleArchiveToggle(client)}
-                                  className="gap-2 py-2.5 text-indigo-600 dark:text-indigo-400"
-                                >
-                                  <RotateCcw className="w-4 h-4" />
-                                  <span>Reactivar Cliente</span>
-                                </DropdownMenuItem>
-                              </DropdownMenuContent>
-                            </DropdownMenu>
-                          </td>
-                        </tr>
-                       );
-                    })}
-                    {archivedClients.length === 0 && (
-                      <tr>
-                        <td className="p-10 text-center text-zinc-400 text-sm">No hay clientes archivados.</td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </div>
+    <>
+      <ClientsSection canManage={canManage} evaluated={evaluated} team={team} directory={directory}
+        loading={canManage && operations.isLoading}
+        error={canManage && operations.isError ? 'No se pudo cargar la operación de clientes. Recarga la página para intentarlo de nuevo.' : ''}
+        onOpenClient={(client) => navigate(`/clientes/operacion/${client.slug}`)}
+        onNewClient={() => setIsCreateModalOpen(true)} />
 
       {editingClient && <EditClientDialog key={editingClient.id} client={editingClient}
         onClose={() => setEditingClient(null)}
-        onSaved={updated => {
-          // PATCH does not include the health/PM relations returned by the list.
-          setClients(previous => previous.map(client => client.id === updated.id ? { ...client, ...updated } : client));
-          for (const key of ['clients-list', 'clientsDropdown', 'clientsHealth', 'dashboard-assignment-clients', 'financial-record-clients']) {
-            queryClient.invalidateQueries({ queryKey: [key] });
-          }
+        onSaved={(updated) => {
+          setClients((previous) => previous.map((client) => (client.id === updated.id ? { ...client, ...updated } : client)));
+          refreshEverywhere();
         }} />}
 
-      {/* Create Client Modal */}
       <Dialog.Root open={isCreateModalOpen} onOpenChange={setIsCreateModalOpen}>
-            <Dialog.Portal>
-              <Dialog.Overlay className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
-              <Dialog.Content className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 w-[calc(100%-2rem)] max-w-xl max-h-[90vh] overflow-y-auto bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-white/10 p-6 rounded-2xl shadow-2xl z-50 animate-in zoom-in-95 duration-200">
-                <Dialog.Title className="text-xl font-semibold text-zinc-900 dark:text-white mb-4">
-                  Crear nuevo cliente
-                </Dialog.Title>
-
-                <form onSubmit={handleCreateClient} className="space-y-4">
-                  <div className="space-y-4">
-                    <div>
-                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                        Nombre del cliente
-                      </label>
-                      <input
-                        type="text"
-                        value={newClientName}
-                        onChange={(e) => {
-                          setNewClientName(e.target.value);
-                          setIsManualSlugCreate(false);
-                        }}
-                        placeholder="Ej. SunPartners"
-                        className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all text-zinc-900 dark:text-white"
-                        autoFocus
-                        required
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                        URL (Slug)
-                      </label>
-                      <input
-                        type="text"
-                        value={newClientSlug}
-                        onChange={(e) => {
-                          setNewClientSlug(e.target.value);
-                          setIsManualSlugCreate(true);
-                        }}
-                        placeholder="ej-sunpartners"
-                        className="w-full px-4 py-2.5 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-white/10 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all font-mono text-sm text-zinc-900 dark:text-white"
-                        required
-                      />
-                    </div>
-                    {/* La ficha completa del cliente, igual que en Financiero (30 de septiembre de 2026). */}
-                    <div className="border-t border-zinc-200 pt-4 dark:border-white/10">
-                      <ClientProfileFields showName={false} value={newClientProfile} errors={newClientProfileErrors} disabled={isCreating}
-                        onChange={patch => {
-                          setNewClientProfileErrors(current => { const next = { ...current }; for (const key of Object.keys(patch)) delete next[key]; return next; });
-                          setNewClientProfile(current => ({ ...current, ...patch }));
-                        }} />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-3 pt-4">
-                    <Dialog.Close asChild>
-                      <button type="button" className="px-4 py-2 text-zinc-600 dark:text-zinc-400 hover:bg-zinc-100 dark:hover:bg-white/5 rounded-xl transition-colors font-medium text-sm">
-                        Cancelar
-                      </button>
-                    </Dialog.Close>
-                    <button
-                      type="submit"
-                      disabled={isCreating || !newClientName.trim() || !newClientSlug.trim()}
-                      className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground rounded-xl font-medium transition-colors shadow-lg shadow-primary/20 text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                    >
-                      {isCreating ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Crear espacio'}
-                    </button>
-                  </div>
-                </form>
-              </Dialog.Content>
-            </Dialog.Portal>
-          </Dialog.Root>
-    </div>
+        <Dialog.Portal>
+          <Dialog.Overlay className="fixed inset-0 z-[70] bg-black/40 backdrop-blur-sm animate-in fade-in duration-200" />
+          <Dialog.Content className="fixed left-1/2 top-1/2 z-[71] max-h-[90vh] w-[calc(100%-2rem)] max-w-xl -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-zinc-200 bg-white p-6 shadow-2xl animate-in zoom-in-95 duration-200 dark:border-white/10 dark:bg-zinc-900">
+            <Dialog.Title className="mb-4 text-xl font-semibold text-zinc-900 dark:text-white">Crear nuevo cliente</Dialog.Title>
+            <Dialog.Description className="sr-only">Nombre, dirección del espacio y ficha del cliente.</Dialog.Description>
+            <form onSubmit={handleCreateClient} className="space-y-4">
+              <div className="space-y-4">
+                <div>
+                  <label htmlFor="new-client-name" className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Nombre del cliente</label>
+                  <input id="new-client-name" type="text" value={newClientName}
+                    onChange={(e) => { setNewClientName(e.target.value); setIsManualSlugCreate(false); }}
+                    placeholder="Ej. SunPartners"
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 text-zinc-900 transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-white/10 dark:bg-zinc-800/50 dark:text-white"
+                    autoFocus required />
+                </div>
+                <div>
+                  <label htmlFor="new-client-slug" className="mb-1.5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">URL (slug)</label>
+                  <input id="new-client-slug" type="text" value={newClientSlug}
+                    onChange={(e) => { setNewClientSlug(e.target.value); setIsManualSlugCreate(true); }}
+                    placeholder="ej-sunpartners"
+                    className="w-full rounded-xl border border-zinc-200 bg-zinc-50 px-4 py-2.5 font-mono text-sm text-zinc-900 transition-all focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/50 dark:border-white/10 dark:bg-zinc-800/50 dark:text-white"
+                    required />
+                </div>
+                {/* La ficha completa del cliente, igual que en Financiero (30 de septiembre de 2026). */}
+                <div className="border-t border-zinc-200 pt-4 dark:border-white/10">
+                  <ClientProfileFields showName={false} value={newClientProfile} errors={newClientProfileErrors} disabled={isCreating}
+                    onChange={(patch) => {
+                      setNewClientProfileErrors((current) => { const next = { ...current }; for (const key of Object.keys(patch)) delete next[key]; return next; });
+                      setNewClientProfile((current) => ({ ...current, ...patch }));
+                    }} />
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 pt-4">
+                <Dialog.Close asChild>
+                  <button type="button" className="min-h-11 rounded-xl px-4 text-sm font-medium text-zinc-600 transition-colors hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-white/5">Cancelar</button>
+                </Dialog.Close>
+                <button type="submit" disabled={isCreating || !newClientName.trim() || !newClientSlug.trim()}
+                  className="flex min-h-11 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50">
+                  {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Crear espacio'}
+                </button>
+              </div>
+            </form>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   );
 };
 

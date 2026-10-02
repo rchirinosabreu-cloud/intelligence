@@ -50,6 +50,7 @@ import minutesRouter from './api/minutes.js';
 import driveRouter from './api/drive.js';
 import crmRouter from './api/crm.js';
 import socialPublishingRouter from './api/socialPublishing.js';
+import clientOperationsRouter from './api/clientOperations.js';
 import { createAiGovernanceRouter } from './api/aiGovernance.js';
 import { createTeamChatRouter, createTeamChatMediaRouter } from './api/teamChat.js';
 import { getUpcomingEvents } from '../services/calendarService.js';
@@ -259,12 +260,9 @@ router.get('/clients/:clientId/logo-image', clientController.getLogoProxy);
 // Clients
 router.get('/clients', clientController.listClients);
 router.get('/db/clients', clientController.listClients);
-router.get('/clients/health', clientController.getHealth);
 router.post('/clients', requireManagerRole, clientController.createNewClient);
 router.patch('/clients/:id', requireManagerRole, clientController.updateClient);
 router.patch('/clients/:id/archive', requireManagerRole, clientController.archiveClientHandler);
-router.post('/clients/:id/health', clientController.updateHealthHandler);
-router.post('/clients/:id/health-comment', clientController.addHealthCommentHandler);
 
 // Notifications
 router.get('/notifications', notificationController.listNotifications);
@@ -319,6 +317,7 @@ router.use('/content', requireModulePermission('parrillas'), contentRouter);
 router.use('/social', requireModulePermission('parrillas'), socialPublishingRouter);
 router.use('/db', dbRouter);
 router.use('/clients/:clientId', requireModulePermission('clientes'), clientFileRouter);
+router.use('/client-operations', requireModulePermission('clientes'), clientOperationsRouter);
 router.use('/talent-radar', talentRadarRouter);
 router.use('/activity', requireModulePermission('actividad'), activityRouter);
 router.use('/dashboard', dashboardRouter);

@@ -65,9 +65,6 @@ export async function getClientByIdentifier(identifier) {
 export async function getClients(filters = {}) {
   try {
     const { isArchived = false, responsibleId } = filters;
-    const now = new Date();
-    const currentMonth = now.getMonth() + 1;
-    const currentYear = now.getFullYear();
 
     // «all» devuelve activos y archivados. Un cliente archivado sigue debiendo
     // plata, así que financiero necesita poder nombrarlo; el resto de módulos
@@ -80,7 +77,9 @@ export async function getClients(filters = {}) {
         where.responsibleId = responsibleId;
     }
 
-    const clients = await prisma.client.findMany({
+    // La «salud» manual, la bitácora y la telemetría que viajaban aquí se retiraron el 2 de octubre de
+    // 2026: el avance de cada cliente lo calcula la Operación de clientes (`clientOperationsService.js`).
+    return await prisma.client.findMany({
       where,
       orderBy: {
         name: 'asc',
@@ -93,73 +92,13 @@ export async function getClients(filters = {}) {
               tasks: true
             }
         },
-        healthRecords: {
-            where: {
-                month: currentMonth,
-                year: currentYear
-            },
-            take: 1
-        },
-        agencyContexts: {
-            orderBy: { createdAt: 'desc' }
-        },
         responsible: {
             select: { id: true, name: true, avatarUrl: true }
         },
-        contentPlans: {
-            where: {
-                month: currentMonth,
-                year: currentYear,
-                deletedAt: null
-            },
-            select: {
-                id: true,
-                month: true,
-                year: true,
-                status: true,
-                contentItems: {
-                    select: { format: true }
-                }
-            },
-            take: 1
-        },
-        nativeTasks: {
-            where: {
-                createdAt: {
-                    gte: new Date(currentYear, currentMonth - 1, 1),
-                    lt: new Date(currentYear, currentMonth, 1)
-                }
-            },
-            select: { status: true }
+        projectManager: {
+            select: { id: true, name: true, avatarUrl: true }
         }
       }
-    });
-
-    // Post-process to inject telemetry
-    return clients.map(client => {
-        // 1. Content Quotas
-        const activePlan = client.contentPlans?.[0];
-        let contentsText = "0 contenidos";
-        if (activePlan) {
-            const items = activePlan.contentItems || [];
-            const reels = items.filter(i => (i.format || '').toLowerCase().includes('reel')).length;
-            const pieces = items.length - reels;
-            contentsText = `${items.length} contenidos (${reels} reels y ${pieces} piezas)`;
-        }
-
-        // 2. Kanban Telemetry
-        const tasks = client.nativeTasks || [];
-        const completed = tasks.filter(t => t.status === 'REALIZADA' || t.status === 'PUBLISHED').length;
-        const total = tasks.length;
-        const progress = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-        return {
-            ...client,
-            telemetry: {
-                planning: contentsText,
-                kanbanProgress: progress
-            }
-        };
     });
   } catch (error) {
     console.error(`[${new Date().toISOString()}] [ClientService] Error fetching clients:`, error?.message || error);
@@ -271,20 +210,5 @@ export async function toggleClientArchive(clientId, archiveStatus) {
     return await prisma.client.update({
         where: { id: clientId },
         data: { isArchived: archiveStatus }
-    });
-}
-
-export async function addHealthComment(clientId, content, authorId) {
-    return await prisma.agencyContext.create({
-        data: {
-            clientId,
-            content,
-            type: 'TEXT',
-            status: 'APPROVED',
-            metadata: {
-                authorId,
-                category: 'HEALTH_COMMENT'
-            }
-        }
     });
 }

@@ -361,8 +361,7 @@ const Dashboard = () => {
                                 <p className="text-xs text-zinc-500 dark:text-zinc-400">{client.activeTasks} tareas activas</p>
                               </div>
                             </div>
-                            <div className="grid grid-cols-3 gap-2 mt-4 text-center text-xs">
-                              <span className="rounded-lg bg-white dark:bg-zinc-900 py-2 text-zinc-500 dark:text-zinc-400">Salud {client.healthScore ?? '-'}</span>
+                            <div className="grid grid-cols-2 gap-2 mt-4 text-center text-xs">
                               <span className="rounded-lg bg-white dark:bg-zinc-900 py-2 text-brand-yellow-deep dark:text-brand-yellow">{client.overdueTasks} venc.</span>
                               <span className="rounded-lg bg-white dark:bg-zinc-900 py-2 text-destructive">{client.returnedTasks} dev.</span>
                             </div>

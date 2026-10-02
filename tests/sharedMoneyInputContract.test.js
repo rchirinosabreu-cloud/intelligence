@@ -20,7 +20,9 @@ const NON_MONEY_NUMBER_FIELDS = {
     // Duración «desde» y «hasta», días de una cuota y la cuota cuando es un porcentaje.
     'src/components/modules/Quotations/ProposalDetailsEditor.jsx': 4,
     // Variación porcentual de una métrica.
-    'src/components/reports/ReportEvidenceWorkspace.jsx': 1
+    'src/components/reports/ReportEvidenceWorkspace.jsx': 1,
+    // Ficha operativa del cliente: día de corte de la parrilla, piezas al mes por formato y jornadas al mes.
+    'src/components/modules/Clients/operations/ClientOperationDialog.jsx': 3
 };
 
 const ROOT = new URL('..', import.meta.url);

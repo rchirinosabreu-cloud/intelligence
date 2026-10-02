@@ -148,8 +148,7 @@ const formatTask = (task) => ({
     id: task.client.id,
     name: task.client.name,
     slug: task.client.slug,
-    logoUrl: task.client.logoUrl,
-    healthScore: task.client.healthRecords?.[0]?.score ?? null
+    logoUrl: task.client.logoUrl
   } : null
 });
 
@@ -179,25 +178,18 @@ const summarizeTaskCounts = (tasks, now) => {
 
 const buildAssignedClientSummaries = (clients, now) => {
   return (clients || []).map((client) => {
-    const latestHealth = client.healthRecords?.[0] || null;
     const taskCounts = summarizeTaskCounts(client.nativeTasks || [], now);
     return {
       id: client.id,
       name: client.name,
       slug: client.slug,
       logoUrl: client.logoUrl,
-      healthScore: latestHealth?.score ?? null,
-      contentStatus: latestHealth?.contentStatus || null,
-      reportStatus: latestHealth?.reportStatus || null,
       contentPlanStatus: client.contentPlans?.[0]?.status || null,
       ...taskCounts
     };
-  }).sort((a, b) => {
-    const healthA = a.healthScore ?? 101;
-    const healthB = b.healthScore ?? 101;
-    if (healthA !== healthB) return healthA - healthB;
-    return b.activeTasks - a.activeTasks;
-  }).slice(0, 8);
+  }).sort((a, b) => (
+    (b.overdueTasks + b.returnedTasks) - (a.overdueTasks + a.returnedTasks) || b.activeTasks - a.activeTasks
+  )).slice(0, 8);
 };
 
 const buildClientSummaries = (tasks, now) => {
@@ -209,7 +201,6 @@ const buildClientSummaries = (tasks, now) => {
       name: task.client.name,
       slug: task.client.slug,
       logoUrl: task.client.logoUrl,
-      healthScore: task.client.healthRecords?.[0]?.score ?? null,
       activeTasks: 0,
       returnedTasks: 0,
       overdueTasks: 0
@@ -416,8 +407,8 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
   }, new Map());
   const operationalEventsThisWeek = [...operationalEventsByWorkday.values()]
     .reduce((total, eventCount) => total + Math.min(eventCount, 2), 0);
-  const clientsNeedingAttention = assignedClients.filter((client) => (client.healthScore ?? 100) < 70 || client.returnedTasks > 0 || client.overdueTasks > 0);
-  const clientsWithoutPlan = assignedClients.filter((client) => !client.contentPlanStatus || client.contentStatus === 'SIN_PARRILLA');
+  const clientsNeedingAttention = assignedClients.filter((client) => client.returnedTasks > 0 || client.overdueTasks > 0);
+  const clientsWithoutPlan = assignedClients.filter((client) => !client.contentPlanStatus);
 
   const weeklyHabit = isCommunityManager
     ? {
@@ -458,7 +449,7 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
     focusCards.push({
       id: 'cm-client-health',
       type: 'OPORTUNIDAD',
-      severity: clientsNeedingAttention.some((client) => (client.healthScore ?? 100) < 60 || client.overdueTasks > 0) ? 'warning' : 'info',
+      severity: clientsNeedingAttention.some((client) => client.overdueTasks > 0) ? 'warning' : 'info',
       title: `${clientsNeedingAttention.length} ${clientsNeedingAttention.length === 1 ? 'cliente pide liderazgo' : 'clientes piden liderazgo'}`,
       content: 'Lleva a la proxima revision una propuesta, no solo una lista de pendientes: objetivo, insight y siguiente accion.',
       actionLabel: 'Ver mis clientes',
@@ -466,7 +457,7 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
       items: clientsNeedingAttention.slice(0, 5).map((client) => ({
         id: client.id,
         title: client.name,
-        status: `Salud ${client.healthScore ?? '-'}`,
+        status: `${client.overdueTasks} vencidas · ${client.returnedTasks} devueltas`,
         dueDate: null,
         client
       }))
@@ -608,12 +599,7 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
         id: true,
         name: true,
         slug: true,
-        logoUrl: true,
-        healthRecords: {
-          orderBy: { updatedAt: 'desc' },
-          take: 1,
-          select: { score: true }
-        }
+        logoUrl: true
       }
     },
     taskComments: {
@@ -641,15 +627,6 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
           name: true,
           slug: true,
           logoUrl: true,
-          healthRecords: {
-            orderBy: { updatedAt: 'desc' },
-            take: 1,
-            select: {
-              score: true,
-              contentStatus: true,
-              reportStatus: true
-            }
-          },
           contentPlans: {
             where: { deletedAt: null },
             orderBy: { updatedAt: 'desc' },
@@ -731,12 +708,7 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
             id: true,
             name: true,
             slug: true,
-            logoUrl: true,
-            healthRecords: {
-              orderBy: { updatedAt: 'desc' },
-              take: 1,
-              select: { score: true }
-            }
+            logoUrl: true
           }
         }
       }
@@ -767,12 +739,7 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
               id: true,
               name: true,
               slug: true,
-              logoUrl: true,
-              healthRecords: {
-                orderBy: { updatedAt: 'desc' },
-                take: 1,
-                select: { score: true }
-              }
+              logoUrl: true
             }
           },
           taskComments: {
