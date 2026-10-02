@@ -48,15 +48,24 @@ Además: primera gestión automática en la bitácora (`NOTA` «Solicitud recibi
 
 Las diez categorías del formulario **son** las del catálogo (`ServiceCategory`). Cada respuesta de los bloques sugiere una línea del catálogo por nombre exacto (por ejemplo «Fotografía» → «Sesión fotográfica de 2 horas», «Landing page» → «Landing page», «WhatsApp» en web → «Integración de WhatsApp en sitio web»); cuando no hay equivalente (Drone, TikTok Ads, Blog) se sugiere una **línea personalizada**, que el módulo de propuestas ya admite sin `serviceId`. Ejemplo pedido por Rodny: Producción audiovisual → video + fotografía + drone da «Video individual grabado y editado», «Sesión fotográfica de 2 horas» y «Drone» (personalizada).
 
-En la ficha del lead habrá un botón **«Crear cotización»** que abre `/cotizaciones/nueva?leadId=<id>` con cliente, empresa, correo, teléfono, moneda y esas líneas ya cargadas (cantidad 1, precio del catálogo, editable). La cotización guarda `leadId`; una oportunidad puede tener varias cotizaciones (versiones) y todas se listan en la ficha. Cuando el cliente acepta una cotización, el lead pasa a `APROBADA` con una gestión automática; al emitirla, a `PROPUESTA_ENVIADA`.
+### 5.1 El borrador de cotización (Rodny, 2 de octubre de 2026)
+
+Construido en `src/services/quotationDraftService.js`, sin IA: todo sale de la tabla de mapeo y del catálogo real.
+
+- **Automático al entrar:** `commercialRequestController.receive` crea un `BORRADOR` en Cotizaciones justo después de registrar la solicitud (`createQuotationDraftForLead(..., { auto: true })`), con `lead_id`, fuera de la respuesta al prospecto y sin poder fallarla. El automático no duplica: si la oportunidad ya tiene un borrador, no crea otro.
+- **Manual desde la ficha:** botón «Crear borrador» en el panel «Cotizaciones» (`POST /api/crm/leads/:leadId/quotations`), que siempre crea una versión nueva, también para leads sin solicitud (sale vacío con los datos de contacto). Al confirmar el servidor, el aviso dice el código y la pantalla salta al editor.
+- **Qué lleva:** las líneas sugeridas con precio `valor_neto` del catálogo, descripción HTML, cobro mensual o único según el nombre (`guessBillingType`), líneas personalizadas a precio 0, duración 3 meses si hay algo recurrente, introducción de la propuesta con lo que escribió el prospecto, términos sugeridos. Las notas de línea las lee el cliente: ahí no va nada interno.
+- **El presupuesto del cliente es un tope** («si el cliente dijo que el presupuesto es de hasta 3 millones, la cotización no se puede salir de ahí»): `budgetCeiling` lee `budget.amount`/`budget.scope`; mensual acota lo que paga en cualquier mes, el resto acota la propuesta entera (un presupuesto de proyecto compra un solo mes de lo recurrente; anual, doce). `fitItemsToBudget` recorre las líneas en el orden en que las eligió: la que no cabe baja al nivel inferior de su familia (`TIER_LADDERS`: Marketing Inicial/Básico/Estándar/…, Marca Plan, Plan Reactivación/Presencia/Impulso, Administración Meta Ads) y, si ninguno cabe, queda fuera. Todo cambio se escribe en la bitácora (`describeBudgetFit`); nunca se recorta en silencio. Un presupuesto en otra moneda solo se señala.
+- **Etapa:** crear el borrador no mueve la etapa. Emitirlo (BORRADOR → ACTIVA) lleva el lead a `PROPUESTA_ENVIADA` y la aceptación pública a `APROBADA` (`syncLeadStageFromQuotation`), nunca hacia atrás ni sobre un lead ganado; un fallo del CRM no deshace la cotización.
+- Contratos: `tests/quotationDraftService.test.js`, `tests/crmRoutes.test.js`. Muestra local con el catálogo real: `npm run preview:crm`.
 
 ## 6. Plan de integración (después de aprobar el formulario)
 
 1. **Datos**: tabla `CrmRequest` (id, leadId, answers JSONB, services, suggestedItems, meta, receivedAt) y columna `Quotation.lead_id` con índice, ambas en `scripts/ensure-crm-schema.js` de forma aditiva.
 2. **API pública**: `POST /api/public/commercial-request` con límite de tasa (el `publicRateLimiter` existente), validación con `validateStep` de cada paso visible, honeypot y tamaño máximo. Crea lead + request + gestión inicial en una transacción; asigna a Francys por nombre resuelto en el roster; notifica; responde `{ reference }`.
 3. **Ruta pública** `/solicitud` en `App.jsx` (como `/cotizaciones/ver/:slug`).
-4. **CRM**: bloque «Solicitud del cliente» y lista «Cotizaciones» en la ficha; botón «Crear cotización»; contador de solicitudes nuevas en el dashboard del CRM y en Recordatorios.
-5. **Cotizaciones**: `QuotationForm` acepta `?leadId=` y precarga; guarda `lead_id`; al aceptar/emitir actualiza la etapa del lead.
+4. **CRM**: bloque «Solicitud del cliente» y lista «Cotizaciones» en la ficha; botón «Crear borrador» (hecho, ver 5.1); contador de solicitudes nuevas en el dashboard del CRM y en Recordatorios.
+5. **Cotizaciones**: el borrador se crea en el servidor con `lead_id` (hecho, ver 5.1); al aceptar/emitir actualiza la etapa del lead (hecho).
 6. **Correo**: confirmación al prospecto con el resumen y aviso interno a Francys (SMTP ya configurado en la plataforma).
 
 ## 7. Pendientes de Rodny para cerrar el diseño

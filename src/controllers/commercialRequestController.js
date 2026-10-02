@@ -2,6 +2,7 @@ import prisma from '../lib/prisma.js';
 import { receiveCommercialRequest, CommercialRequestError, buildConfirmationEmail, intakeRecipients } from '../services/commercialRequestService.js';
 import { createNotification } from '../services/notificationService.js';
 import { sendPlainEmail } from '../services/transactionalEmailService.js';
+import { createQuotationDraftForLead } from '../services/quotationDraftService.js';
 
 /**
  * POST /api/public/commercial-request — public, rate limited by the /api/public limiter.
@@ -11,6 +12,10 @@ export const receive = async (req, res) => {
   try {
     const result = await receiveCommercialRequest(prisma, req.body || {});
     if (result.ignored) return res.status(201).json({ ok: true, reference: null });
+    // The draft quotation is a convenience for the team: it never blocks nor fails the prospect's submission.
+    createQuotationDraftForLead(prisma, result.leadId, {}, { auto: true })
+      .then(draft => { if (draft.created) console.log(`[CommercialRequest] Borrador ${draft.quotation.code} creado para ${result.reference}.`); })
+      .catch(error => console.error('[CommercialRequest] Quotation draft failed:', error?.message || error));
     intakeRecipients(prisma, result.ownerUserId)
       .then(recipients => Promise.all(recipients.map(userId => createNotification({
         userId,

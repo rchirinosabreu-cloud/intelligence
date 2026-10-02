@@ -9,9 +9,9 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { ArrowLeft, Pencil, Archive, Mail, Smartphone, Link2, ExternalLink, AlertCircle, ChevronDown, CalendarClock, Loader2 } from '@/components/ui/icons';
+import { ArrowLeft, Pencil, Archive, Mail, Smartphone, Link2, ExternalLink, AlertCircle, ChevronDown, CalendarClock, Loader2, FileText } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
-import { useCrmLead, useCrmTeam, useChangeStage, useSetTrafficLight, useArchiveLead, useUpdateLead } from './crmApi';
+import { useCrmLead, useCrmTeam, useChangeStage, useSetTrafficLight, useArchiveLead, useUpdateLead, useCreateQuotationDraft } from './crmApi';
 import CrmLeadForm from './CrmLeadForm';
 import CrmActivityForm from './CrmActivityForm';
 import CrmActivityTimeline from './CrmActivityTimeline';
@@ -42,6 +42,9 @@ const ExternalText = ({ href, children }) => href
   ? <a href={href} target="_blank" rel="noreferrer" className="inline-flex max-w-full items-center gap-1 truncate text-primary hover:underline">{children} <ExternalLink className="h-3 w-3 shrink-0" /></a>
   : <span className="text-zinc-400">—</span>;
 
+const QUOTATION_STATUS_LABELS = { BORRADOR: 'Borrador', ACTIVA: 'Emitida', APROBADA: 'Aprobada', VENCIDA: 'Vencida', RECHAZADA: 'Rechazada' };
+const quotationStatusLabel = status => QUOTATION_STATUS_LABELS[status] || status;
+
 const StageControl = ({ lead, onChange, pending }) => (
   <div className="relative">
     <Select
@@ -66,6 +69,7 @@ const CrmLeadDetail = () => {
   const setLight = useSetTrafficLight();
   const archive = useArchiveLead();
   const update = useUpdateLead();
+  const createDraft = useCreateQuotationDraft();
   const [editing, setEditing] = useState(false);
   const [losing, setLosing] = useState(null);       // { stage, lostReason }
   const [manualLight, setManualLight] = useState(null); // { value, reason }
@@ -107,6 +111,22 @@ const CrmLeadDetail = () => {
       await update.mutateAsync({ id: lead.id, nextAction: nextStep.nextAction, nextFollowUpAt: nextStep.nextFollowUpAt });
       toast.success('Siguiente paso actualizado');
       setNextStep(null);
+    } catch (mutationError) {
+      toast.error(mutationError.message);
+    }
+  };
+
+  // Only after the server confirms: the toast names the real code and the editor opens on the saved draft.
+  const createQuotationDraft = async () => {
+    try {
+      const result = await createDraft.mutateAsync({ id: lead.id });
+      const adjustments = result.budget?.changes?.length || 0;
+      toast.success([
+        `Borrador ${result.quotation.code} creado`,
+        result.quotation.customLines ? `${result.quotation.customLines} línea(s) por tarifar` : null,
+        adjustments ? `${adjustments} ajuste(s) por el presupuesto del cliente` : null
+      ].filter(Boolean).join(' · '));
+      navigate(`/cotizaciones/editar/${result.quotation.id}`);
     } catch (mutationError) {
       toast.error(mutationError.message);
     }
@@ -253,19 +273,30 @@ const CrmLeadDetail = () => {
             </dl>
           </Panel>
 
-          <Panel title={`Cotizaciones · ${lead.quotations?.length || 0}`}>
+          <Panel
+            title={`Cotizaciones · ${lead.quotations?.length || 0}`}
+            action={!lead.archivedAt && (
+              <Button type="button" variant="outline" size="sm" onClick={createQuotationDraft} disabled={createDraft.isPending} data-crm-create-quotation-draft className="h-8 rounded-lg text-xs">
+                {createDraft.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <FileText className="h-3.5 w-3.5" />}
+                Crear borrador
+              </Button>
+            )}
+          >
             {lead.quotations?.length ? (
               <ul className="divide-y divide-zinc-100 dark:divide-zinc-800/80">
                 {lead.quotations.map(quotation => (
                   <li key={quotation.id} className="flex items-center justify-between gap-3 py-2 text-sm">
                     <Link to={`/cotizaciones/editar/${quotation.id}`} className="font-semibold text-primary hover:underline">{quotation.code}</Link>
-                    <span className="text-xs text-zinc-500">{quotation.status}</span>
+                    <span className={cn('text-xs', quotation.status === 'APROBADA' ? 'font-medium text-status-positive' : 'text-zinc-500')}>{quotationStatusLabel(quotation.status)}</span>
                     <span className="font-semibold tabular-nums text-zinc-800 dark:text-zinc-100">{formatCurrency(quotation.total, quotation.currency)}</span>
                   </li>
                 ))}
               </ul>
             ) : (
-              <p className="text-sm leading-6 text-zinc-500 dark:text-zinc-400">Aún no hay cotizaciones para esta oportunidad.{lead.request?.suggestedItems?.length ? ' La solicitud ya trae líneas sugeridas para la primera.' : ''}</p>
+              <p className="text-sm leading-6 text-zinc-500 dark:text-zinc-400">
+                Aún no hay cotizaciones para esta oportunidad.
+                {lead.request?.suggestedItems?.length ? ' «Crear borrador» arma la primera con las líneas que pidió en el formulario.' : ' «Crear borrador» abre una en Cotizaciones con los datos de contacto ya puestos.'}
+              </p>
             )}
           </Panel>
 
