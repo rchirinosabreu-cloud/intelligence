@@ -107,7 +107,12 @@ try {
     assert.equal(pages.length, 2);
     assert.match(pages[0], /PromoGroup IPS \| Por defecto/);
     assert.doesNotMatch(pages[1], /Por defecto/);
-    assert.match(await widget.innerText(), /Conectar otra página/);
+    // Con cuentas ya conectadas el botón es solo el «+»: su nombre lo lleva la etiqueta, no el texto.
+    const connect = widget.getByRole('button', { name: 'Conectar otra página' });
+    assert.equal(await connect.count(), 1);
+    assert.equal((await connect.innerText()).trim(), '');
+    const titleBox = await widget.locator('h3').boundingBox();
+    assert.ok(titleBox.height < 32, 'the title of the card stays on one line');
     await widget.screenshot({ path: `output/cuentas-8-ficha-del-cliente-${name}.png` });
 
     await page.close();

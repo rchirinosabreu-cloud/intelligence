@@ -140,6 +140,7 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
   });
 
   const pages = socialPagesOf(accounts);
+  const connectLabel = accounts.length ? 'Conectar otra página' : 'Conectar página';
 
   const handleDisconnect = async (account) => {
     const ok = await confirm({
@@ -161,12 +162,19 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
           <h3 className="font-semibold text-zinc-900 dark:text-white">Redes conectadas</h3>
         </div>
         {canManage && (
+          /* Con cuentas ya conectadas el botón es solo el «+» (Rodny, 2 de octubre de 2026: «ese botón
+             está muy largo… solo deja el icono de +»): con el texto partía el título de la tarjeta en
+             dos líneas. Lo que hace se dice al pasar el cursor y a un lector de pantalla. Sin ninguna
+             cuenta todavía sí lleva el texto, porque ahí es la única acción de la tarjeta. */
           <button
             type="button"
             onClick={() => setDialogOpen(true)}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 text-[13px] font-bold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200"
+            aria-label={connectLabel}
+            title={connectLabel}
+            className={`inline-flex h-9 shrink-0 items-center justify-center gap-1.5 rounded-xl border border-zinc-200 bg-white text-[13px] font-bold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200 ${accounts.length ? 'w-9' : 'px-3'}`}
           >
-            <Plus className="h-3.5 w-3.5" /> {accounts.length ? 'Conectar otra página' : 'Conectar página'}
+            <Plus className="h-4 w-4" />
+            {!accounts.length && <span>Conectar página</span>}
           </button>
         )}
       </div>
