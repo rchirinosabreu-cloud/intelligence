@@ -13,9 +13,17 @@ const metricNames = {
   linkClicks: 'Clics en el enlace', clicks: 'Clics', profileVisits: 'Visitas al perfil', follows: 'Nuevos seguidores', followers: 'Seguidores del período', followerTotal: 'Seguidores',
   contentCount: 'Contenido publicado', spend: 'Importe gastado', budget: 'Presupuesto', costPerResult: 'Costo por resultado', results: 'Resultados', ctr: 'CTR', cpc: 'CPC', cpm: 'CPM',
   watchTime: 'Tiempo de reproducción', threeSecondVideoViews: 'Reproducciones de 3 segundos', videoViews3s: 'Reproducciones de 3 segundos', videoViews: 'Reproducciones de video',
-  percentage: 'Porcentaje', count: 'Cantidad', value: 'Valor observado', hombres: 'Hombres', mujeres: 'Mujeres'
+  percentage: 'Porcentaje', count: 'Cantidad', value: 'Valor observado', hombres: 'Hombres', mujeres: 'Mujeres',
+  // Lo que Meta entrega aparte y una captura casi nunca muestra (cifras de Meta, 2 de octubre de 2026).
+  likes: 'Me gusta', comments: 'Comentarios', shares: 'Compartidos', saves: 'Guardados', accountsEngaged: 'Cuentas que interactuaron',
+  websiteClicks: 'Clics al sitio web', unfollows: 'Dejaron de seguir'
 };
-const metricOrder = ['views', 'reach', 'viewers', 'interactions', 'profileVisits', 'linkClicks', 'clicks', 'follows', 'followers', 'followerTotal', 'contentCount', 'watchTime', 'threeSecondVideoViews', 'videoViews3s'];
+const metricOrder = ['views', 'reach', 'viewers', 'interactions', 'accountsEngaged', 'likes', 'comments', 'shares', 'saves', 'profileVisits', 'linkClicks', 'websiteClicks', 'clicks', 'follows', 'unfollows', 'followers', 'followerTotal', 'contentCount', 'watchTime', 'threeSecondVideoViews', 'videoViews3s'];
+// La pauta se lee empezando por lo que se invirtió y lo que eso compró; por orden alfabético abría con «CPC».
+const paidOrder = ['spend', 'budget', 'results', 'costPerResult', 'impressions', 'reach', 'clicks', 'linkClicks', 'ctr', 'cpc', 'cpm'];
+const CONTENT_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
+/** «8 sept · Reel · …» → un número que ordena por fecha dentro del período; `null` si la etiqueta no empieza por un día. */
+const contentDay = label => { const match = /^(\d{1,2}) ([a-z]+)\b/.exec(text(label)); const month = match ? CONTENT_MONTHS.indexOf(match[2]) : -1; return month < 0 ? null : month * 100 + Number(match[1]); };
 const tableOrder = ['contentCount', 'views', 'interactions', 'results', 'reach', 'impressions', 'spend', 'costPerResult', 'clicks', 'ctr', 'cpc', 'cpm'];
 const orderOf = (key, order) => order.includes(key) ? order.indexOf(key) : order.length;
 export const getReportMetricLabel = (key, fallback = '') => metricNames[key] || text(fallback) || text(key) || 'Indicador';
@@ -38,6 +46,8 @@ const makeCell = items => ({
 const sectionTitle = (item, level) => {
   const platform = platformNames[item.platform] || text(item.platform);
   if (level === 'FORMAT') return `${item.key === 'contentCount' ? 'Volumen publicado' : 'Rendimiento por formato'} · ${platform}`;
+  // Las publicaciones una por una solo llegan de las cifras de Meta (2 de octubre de 2026).
+  if (level === 'CONTENT') return `Publicaciones del período · ${platform}`;
   if (level === 'AD') return 'Resultados por anuncio';
   if (level === 'CAMPAIGN') return 'Resultados por campaña';
   if (['AD_SET', 'ADSET'].includes(level)) return 'Resultados por conjunto de anuncios';
@@ -121,9 +131,11 @@ export function buildReportPresentation(report = {}) {
     if (section.kind === 'table') {
       const keys = unique(section.rows.flatMap(row => Object.keys(row.cells))).sort((a, b) => orderOf(a, tableOrder) - orderOf(b, tableOrder) || a.localeCompare(b));
       section.columns = keys.map(key => ({ key, label: getReportMetricLabel(key) }));
-      section.rows.sort((a, b) => a.label.localeCompare(b.label, 'es') || a.id.localeCompare(b.id));
+      // Las publicaciones van en el orden en que salieron: por orden alfabético «15 sept» quedaba antes que «8 sept».
+      const byDay = section.entityLevel === 'CONTENT' ? (a, b) => (contentDay(a.label) ?? 9999) - (contentDay(b.label) ?? 9999) : () => 0;
+      section.rows.sort((a, b) => byDay(a, b) || a.label.localeCompare(b.label, 'es') || a.id.localeCompare(b.id));
       for (const row of section.rows) for (const key of keys) row.cells[key] ||= { text: 'No disponible', value: null, facts: [], observationIds: [], sourceIds: [], references: [] };
-    } else section.rows.sort((a, b) => orderOf(a.metricKey, metricOrder) - orderOf(b.metricKey, metricOrder) || orderOf(a.scope, ['TOTAL', 'ORGANIC', 'PAID', 'UNKNOWN']) - orderOf(b.scope, ['TOTAL', 'ORGANIC', 'PAID', 'UNKNOWN']) || a.label.localeCompare(b.label, 'es'));
+    } else section.rows.sort((a, b) => orderOf(a.metricKey, section.platform === 'META_ADS' ? paidOrder : metricOrder) - orderOf(b.metricKey, section.platform === 'META_ADS' ? paidOrder : metricOrder) || orderOf(a.scope, ['TOTAL', 'ORGANIC', 'PAID', 'UNKNOWN']) - orderOf(b.scope, ['TOTAL', 'ORGANIC', 'PAID', 'UNKNOWN']) || a.label.localeCompare(b.label, 'es'));
   }
 
   // Panels supplement the facts. Only explicit cell references remove a repeated

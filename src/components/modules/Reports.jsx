@@ -4,6 +4,8 @@ import ReportEvidenceWorkspace from '@/components/reports/ReportEvidenceWorkspac
 import ReportCurrencyField from '@/components/reports/ReportCurrencyField';
 import MoneyInput from '@/components/ui/MoneyInput';
 import ReportHistory from '@/components/reports/ReportHistory';
+import ReportMetaSources from '@/components/reports/ReportMetaSources';
+import { reportSourcePlan } from '@/lib/metaReportSources';
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -993,6 +995,10 @@ const Reports = () => {
   const [organicFiles, setOrganicFiles] = useState([]);
   const [adsFiles, setAdsFiles] = useState([]);
   const [logoFile, setLogoFile] = useState(null);
+  // Cifras de Meta (2 de octubre de 2026): qué cuenta de Instagram y qué cuenta publicitaria trae este
+  // informe. Nada viene marcado, y lo elegido es de un cliente: al cambiar de cliente se suelta.
+  const [metaInstagramId, setMetaInstagramId] = useState('');
+  const [metaAdAccountId, setMetaAdAccountId] = useState('');
 
   const [organicPreviews, setOrganicPreviews] = useState([]);
   const [adsPreviews, setAdsPreviews] = useState([]);
@@ -1151,6 +1157,9 @@ const Reports = () => {
     }
   };
 
+  const sourcePlan = reportSourcePlan({ screenshots: organicFiles.length + adsFiles.length, instagramAccountId: metaInstagramId, adAccountId: metaAdAccountId });
+  const canManageMeta = ['ADMIN', 'PROJECT_MANAGER'].includes(String(currentUser?.role || '').toUpperCase());
+
   const generateReport = async () => {
     if (isGeneratingRef.current) return;
     if (isGenerating) return;
@@ -1158,8 +1167,8 @@ const Reports = () => {
       toast.error('Selecciona un cliente');
       return;
     }
-    if (organicFiles.length === 0 && adsFiles.length === 0) {
-        toast.error('Sube al menos un pantallazo');
+    if (!sourcePlan.ready) {
+        toast.error('Sube al menos un pantallazo o elige las cifras de Meta');
         return;
     }
     if (!startDate || !endDate || startDate > endDate) {
@@ -1184,6 +1193,8 @@ const Reports = () => {
     adsFiles.forEach(file => formData.append('adsFiles', file));
     organicFiles.forEach(file => formData.append('organicFiles', file));
     if (logoFile) formData.append('logo', logoFile);
+    if (metaInstagramId) formData.append('metaInstagramAccountId', metaInstagramId);
+    if (metaAdAccountId) formData.append('metaAdAccountId', metaAdAccountId);
 
     try {
       const response = await axios.post(`${getApiBaseUrl()}/api/reports/extract-metrics`, formData, {
@@ -1523,16 +1534,16 @@ const Reports = () => {
          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 dark:border-slate-700 pb-6">
             <div className="space-y-1">
               <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-50">Reporte de desempeño digital</h1>
-              <p className="text-sm text-slate-600 dark:text-slate-300">Carga las capturas, revisa las cifras y prepara el informe del cliente.</p>
+              <p className="text-sm text-slate-600 dark:text-slate-300">Trae las cifras de Meta o carga capturas, revísalas y prepara el informe del cliente.</p>
             </div>
             <div className="flex flex-wrap gap-3">
                <button
                 onClick={generateReport}
-                disabled={isGenerating || (organicFiles.length === 0 && adsFiles.length === 0)}
+                disabled={isGenerating || !sourcePlan.ready}
                 className="min-h-11 px-4 py-2.5 bg-primary hover:opacity-90 disabled:opacity-50 text-white text-sm font-medium rounded-xl transition-colors flex items-center gap-2"
                >
                 {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
-                {isGenerating ? "Leyendo capturas…" : "Leer capturas"}
+                {isGenerating ? sourcePlan.busyLabel : sourcePlan.label}
                </button>
             </div>
          </div>
@@ -1546,7 +1557,7 @@ const Reports = () => {
                 disabled={isGenerating}
                 className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 text-sm font-medium"
                 value={selectedClientId}
-                onChange={(e) => setSelectedClientId(e.target.value)}
+                onChange={(e) => { setSelectedClientId(e.target.value); setMetaInstagramId(''); setMetaAdAccountId(''); }}
               >
                 <option value="">Marca...</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1621,6 +1632,18 @@ const Reports = () => {
                </div>
             </div>
          </div>
+
+         {/* Las cifras de Meta van al lado de las capturas, no en su lugar: se pueden combinar. */}
+         <ReportMetaSources
+           clientId={selectedClientId}
+           canManage={canManageMeta}
+           disabled={isGenerating}
+           period={{ start: startDate, end: endDate }}
+           instagramAccountId={metaInstagramId}
+           adAccountId={metaAdAccountId}
+           onInstagramChange={setMetaInstagramId}
+           onAdAccountChange={setMetaAdAccountId}
+         />
       </div>
 
       <ReportHistory clientId={selectedClientId} apiBaseUrl={getApiBaseUrl()} onOpen={setReport} disabled={isGenerating} refreshKey={report ? `${report.id}:${report.normalizedMetrics?.version || 0}` : ''} />

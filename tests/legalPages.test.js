@@ -30,7 +30,7 @@ test('la política de datos cumple el contenido mínimo del Decreto 1074 de 2015
     ]) {
         assert.ok(page.includes(expected), `Falta en la política: ${expected}`);
     }
-    assert.match(PRIVACY_POLICY_VERSION, /^2\.2 · 2026-09-29$/);
+    assert.match(PRIVACY_POLICY_VERSION, /^2\.3 · 2026-10-02$/);
 });
 
 // Contrastado con el texto oficial (Función Pública, 28 de septiembre de 2026): el art. 25 de la
@@ -64,6 +64,11 @@ test('la política ya no describe una plataforma que no existe', async () => {
     // Desde el 29 de septiembre de 2026 la plataforma sí publica en Instagram y Facebook: Meta es encargado.
     assert.match(page, /Meta Platforms, Inc\./);
     assert.match(page, /guardadas cifradas/);
+    // Desde el 2 de octubre de 2026 también lee de Meta las cifras de los reportes: decir que «no se
+    // conecta a las cuentas de los clientes» sería falso. Solo agregados, nunca personas.
+    assert.doesNotMatch(page, /no se conecta a las cuentas de Facebook o Instagram/);
+    assert.match(page, /estadísticas agregadas/);
+    assert.match(page, /No descarga la lista de seguidores, mensajes, comentarios ni datos de personas individuales/);
 });
 
 test('los términos fijan ley colombiana, rol de Encargado, cláusula de IA y no prometen patentes', async () => {
