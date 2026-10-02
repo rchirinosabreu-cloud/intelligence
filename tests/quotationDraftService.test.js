@@ -59,21 +59,25 @@ test('the budget the prospect wrote is a ceiling: monthly caps any single month,
 test('Narcobollo: with 3.000.000 mensuales everything they chose fits and nothing changes', () => {
   const body = buildDraftBody(lead, withBudget('3.000.000', 'MENSUAL'), CATALOG);
   assert.deepEqual(body.items.map(item => item.name), ['Marketing Básico – 8 contenidos', 'Sesión fotográfica de 2 horas', 'Drone']);
-  assert.deepEqual(body.budget.changes, []);
-  assert.equal(body.duration_months, 3);
+  assert.deepEqual(body.budget.changes, [{ kind: 'ONE_TIME_APART', name: 'Sesión fotográfica de 2 horas', charge: Math.round(price('Sesión fotográfica de 2 horas') * 1.19) }]);
+  assert.equal(body.duration_months, 1, 'nobody said for how long: one month');
   assert.equal(describeBudgetFit(budgetCeiling(withBudget('3.000.000', 'MENSUAL')), []), 'Dentro del presupuesto indicado: $3.000.000 COP (presupuesto mensual).');
+  assert.equal(describeBudgetFit(budgetCeiling(withBudget('3.000.000', 'MENSUAL')), body.budget.changes), 'Dentro del presupuesto indicado: $3.000.000 COP (presupuesto mensual). Se cobra una sola vez, fuera del tope mensual: «Sesión fotográfica de 2 horas» ($254.898 con IVA).');
 });
 
-test('a line that does not fit drops to the cheaper tier of its family; without one it stays out, and both are reported', () => {
+test('a monthly line that does not fit drops to the cheaper tier of its family; a one-time line stays apart from the monthly ceiling', () => {
   const ceiling = budgetCeiling(withBudget('1.000.000', 'MENSUAL'));
   const { items, changes } = fitItemsToBudget(draftItemsFromRequest(request, CATALOG), ceiling, CATALOG, 3);
-  assert.deepEqual(items.map(item => item.name), ['Marketing Inicial – 6 contenidos', 'Drone']);
+  assert.deepEqual(items.map(item => item.name), ['Marketing Inicial – 6 contenidos', 'Sesión fotográfica de 2 horas', 'Drone']);
   assert.ok(price('Marketing Básico – 8 contenidos') * 1.19 > 1_000_000 && price('Marketing Inicial – 6 contenidos') * 1.19 <= 1_000_000);
   assert.deepEqual(changes, [
     { kind: 'DOWNGRADED', from: 'Marketing Básico – 8 contenidos', to: 'Marketing Inicial – 6 contenidos' },
-    { kind: 'EXCLUDED', name: 'Sesión fotográfica de 2 horas' }
+    { kind: 'ONE_TIME_APART', name: 'Sesión fotográfica de 2 horas', charge: 254898 }
   ]);
-  assert.equal(describeBudgetFit(ceiling, changes), 'Ajustado al presupuesto de $1.000.000 COP (presupuesto mensual): «Marketing Básico – 8 contenidos» bajó a «Marketing Inicial – 6 contenidos»; «Sesión fotográfica de 2 horas» quedó fuera.');
+  assert.equal(describeBudgetFit(ceiling, changes), 'Ajustado al presupuesto de $1.000.000 COP (presupuesto mensual): «Marketing Básico – 8 contenidos» bajó a «Marketing Inicial – 6 contenidos». Se cobra una sola vez, fuera del tope mensual: «Sesión fotográfica de 2 horas» ($254.898 con IVA).');
+  const total = budgetCeiling(withBudget('1.000.000', 'PROYECTO'));
+  const capped = fitItemsToBudget(draftItemsFromRequest(request, CATALOG), total, CATALOG, 1);
+  assert.deepEqual(capped.changes.map(change => change.kind), ['DOWNGRADED', 'EXCLUDED'], 'a total budget still caps one-time lines');
 });
 
 test('a one-off budget buys one month of a recurring plan and caps the whole proposal; a foreign-currency budget is only flagged', () => {
@@ -103,7 +107,7 @@ test('the composed record is a valid BORRADOR with real totals, terms and the pr
   assert.equal(body.status, 'BORRADOR');
   assert.equal(body.client_company, 'Narcobollo');
   assert.equal(body.client_name, 'Laura Pérez');
-  assert.equal(body.duration_months, 3, 'a recurring line makes the draft a 3-month proposal');
+  assert.equal(body.duration_months, 1, 'a recurring line without a stated term is quoted for one month');
   const used = CATALOG.filter(service => body.items.some(item => item.serviceId === service.id));
   const record = composeDraftRecord(body, used, NOW);
   assert.equal(record.status, 'BORRADOR');
@@ -111,8 +115,8 @@ test('the composed record is a valid BORRADOR with real totals, terms and the pr
   assert.equal(record.is_tax_exempt, false);
   const monthly = CATALOG.find(service => service.name === 'Marketing Básico – 8 contenidos').valor_neto;
   const oneTime = CATALOG.find(service => service.name === 'Sesión fotográfica de 2 horas').valor_neto;
-  assert.equal(record.subtotal, monthly * 3 + oneTime);
-  assert.equal(record.total_amount, Math.round((monthly * 3 + oneTime) * 1.19 * 100) / 100);
+  assert.equal(record.subtotal, monthly + oneTime);
+  assert.equal(record.total_amount, Math.round((monthly + oneTime) * 1.19 * 100) / 100);
   assert.equal(record.issued_at, null);
   assert.ok(record.expires_at instanceof Date);
   assert.match(record.terms_and_conditions, /\S/);
@@ -123,7 +127,7 @@ test('the composed record is a valid BORRADOR with real totals, terms and the pr
 
 test('createQuotationDraftForLead writes the quotation linked to the lead and a note in the bitácora', async () => {
   const db = createCrmMemoryDb({ leads: [lead], requests: [{ id: 'req-1', leadId: lead.id, ...request }], catalog: CATALOG });
-  const auto = await createQuotationDraftForLead(db, lead.id, {}, { now: NOW, auto: true });
+  const auto = await createQuotationDraftForLead(db, lead.id, {}, { now: NOW, auto: true, generate: null });
   assert.equal(auto.created, true);
   assert.equal(auto.quotation.code, 'COT-0001');
   assert.equal(auto.quotation.itemCount, 3);
@@ -133,18 +137,18 @@ test('createQuotationDraftForLead writes the quotation linked to the lead and a 
   assert.match(db.state.activities.at(-1).note, /generado automáticamente: COT-0001 con 3 líneas \(1 personalizada por tarifar\)\.\nDentro del presupuesto indicado: \$2\.500\.000 COP \(presupuesto mensual\)\./);
   assert.equal(db.state.leads[0].stage, 'POR_GESTIONAR', 'a draft never moves the stage');
 
-  const again = await createQuotationDraftForLead(db, lead.id, {}, { now: NOW, auto: true });
+  const again = await createQuotationDraftForLead(db, lead.id, {}, { now: NOW, auto: true, generate: null });
   assert.equal(again.created, false, 'the automatic path never duplicates a draft');
-  const manual = await createQuotationDraftForLead(db, lead.id, { userId: 'u-francys' }, { now: NOW });
+  const manual = await createQuotationDraftForLead(db, lead.id, { userId: 'u-francys' }, { now: NOW, generate: null });
   assert.equal(manual.created, true);
   assert.equal(manual.quotation.code, 'COT-0002', 'a manual call adds another version');
   assert.equal(db.state.activities.at(-1).authorId, 'u-francys');
-  await assert.rejects(createQuotationDraftForLead(db, 'missing', {}, { now: NOW }), /encontrada/);
+  await assert.rejects(createQuotationDraftForLead(db, 'missing', {}, { now: NOW, generate: null }), /encontrada/);
 });
 
 test('a lead without a request still gets an empty draft with its contact data', async () => {
   const db = createCrmMemoryDb({ leads: [{ ...lead, id: 'lead-manual' }], catalog: CATALOG });
-  const result = await createQuotationDraftForLead(db, 'lead-manual', {}, { now: NOW });
+  const result = await createQuotationDraftForLead(db, 'lead-manual', {}, { now: NOW, generate: null });
   assert.equal(result.created, true);
   assert.equal(result.quotation.itemCount, 0);
   assert.equal(db.state.quotations[0].client_company, 'Narcobollo');
@@ -154,14 +158,14 @@ test('a lead without a request still gets an empty draft with its contact data',
 test('issuing moves the lead to Propuesta enviada and acceptance to Aprobada, never backwards', async () => {
   const db = createCrmMemoryDb({ leads: [{ ...lead, stage: 'CONTACTADO', enteredAt: NOW }] });
   const quotation = { id: 'q1', consecutive: 7, lead_id: lead.id };
-  const issued = await syncLeadStageFromQuotation(db, quotation, 'ISSUED', { now: NOW });
+  const issued = await syncLeadStageFromQuotation(db, quotation, 'ISSUED', { now: NOW, generate: null });
   assert.equal(issued.stage, 'PROPUESTA_ENVIADA');
   assert.equal(db.state.leads[0].proposalSentAt.toISOString(), NOW.toISOString());
   assert.match(db.state.activities.at(-1).note, /COT-0007 emitida/);
-  const accepted = await syncLeadStageFromQuotation(db, quotation, 'ACCEPTED', { now: NOW });
+  const accepted = await syncLeadStageFromQuotation(db, quotation, 'ACCEPTED', { now: NOW, generate: null });
   assert.equal(accepted.stage, 'APROBADA');
-  assert.equal(await syncLeadStageFromQuotation(db, quotation, 'ISSUED', { now: NOW }), null, 'issuing again does not regress an approved lead');
+  assert.equal(await syncLeadStageFromQuotation(db, quotation, 'ISSUED', { now: NOW, generate: null }), null, 'issuing again does not regress an approved lead');
   db.state.leads[0].stage = 'GANADO';
-  assert.equal(await syncLeadStageFromQuotation(db, quotation, 'ACCEPTED', { now: NOW }), null);
+  assert.equal(await syncLeadStageFromQuotation(db, quotation, 'ACCEPTED', { now: NOW, generate: null }), null);
   assert.equal(await syncLeadStageFromQuotation(db, { id: 'q2', consecutive: 8, lead_id: null }, 'ISSUED'), null);
 });

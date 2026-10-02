@@ -9,9 +9,12 @@ import { catalogServiceHtml } from './serviceCatalogDescription.js';
 import { answerLabel, selectedServices, SERVICE_CATEGORIES } from '../lib/commercialRequestForm.js';
 import { formatLeadCode, stageOrder, stageGroup } from '../lib/crmRules.js';
 import { changeStage } from './crmService.js';
+import { isProviderUnavailable } from '../lib/aiAvailability.js';
+import { buildQuotationDraftRequest, applyModelDraft, generateQuotationDraft } from './quotationDraftAi.js';
 
-// A quotation draft born from a CRM opportunity. Deterministic: every line comes from the catalog name the
-// public form already suggested, or is an explicit custom line with price 0 for Francys to complete.
+// A quotation draft born from a CRM opportunity. The lines come from the model reading the whole request
+// (quotationDraftAi.js) and, when the model cannot answer, from the catalog names the public form suggested.
+// Either way the prices come from the catalog and the prospect's budget is a ceiling the code enforces.
 
 const RECURRING_NAME = /mensual|marketing (inicial|b[aá]sico|est[aá]ndar|producci[oó]n ampliada|pro)\b|community management|administraci[oó]n|gesti[oó]n (de )?(meta|google|seo|linkedin|boost)|plan (reactivaci|presencia|impulso)|mantenimiento|soporte t[eé]cnico|apoyo mensual/i;
 
@@ -22,7 +25,7 @@ export const guessBillingType = name => (RECURRING_NAME.test(fold(name)) ? 'MONT
 export const formatQuotationCode = consecutive => `COT-${String(consecutive ?? 0).padStart(4, '0')}`;
 
 // Item notes are printed for the client, so nothing internal goes there: the review hints live in the bitácora.
-const catalogItem = (service, quantity = 1) => ({
+export const catalogItem = (service, quantity = 1) => ({
   serviceId: service.id,
   name: service.name,
   description: service.description || '',
@@ -38,7 +41,23 @@ const catalogItem = (service, quantity = 1) => ({
 
 const catalogIndex = catalog => new Map(catalog.filter(service => service.activo !== false).map(service => [fold(service.name), service]));
 
-/** Lines for the draft: catalog items by exact (accent-insensitive) name, custom lines for the rest. */
+/** A line the catalog does not have: price 0, for Francys to complete before issuing. */
+export const customItem = ({ name, detail, category = null, quantity = 1 }) => {
+  const description = detail && !/^Sin equivalente/i.test(detail) ? String(detail).slice(0, 600) : 'Alcance por definir con el cliente.';
+  return {
+    name,
+    description,
+    descriptionHtml: plainTextToProposalHtml(description),
+    category,
+    price: 0,
+    quantity: Math.max(1, Number(quantity) || 1),
+    note: '',
+    estimatedCost: null,
+    billingType: 'ONE_TIME'
+  };
+};
+
+/** Fallback lines without the model: catalog items by exact (accent-insensitive) name, custom lines for the rest. */
 export const draftItemsFromRequest = (request, catalog = []) => {
   const byName = catalogIndex(catalog);
   const items = [];
@@ -48,22 +67,7 @@ export const draftItemsFromRequest = (request, catalog = []) => {
     const key = service ? `catalog:${service.id}` : `custom:${fold(suggestion.name)}`;
     if (seen.has(key)) continue;
     seen.add(key);
-    if (service) {
-      items.push(catalogItem(service, suggestion.quantity));
-    } else {
-      const description = suggestion.detail && !/^Sin equivalente/i.test(suggestion.detail) ? suggestion.detail : 'Alcance por definir con el cliente.';
-      items.push({
-        name: suggestion.name,
-        description,
-        descriptionHtml: plainTextToProposalHtml(description),
-        category: suggestion.category || null,
-        price: 0,
-        quantity: Math.max(1, Number(suggestion.quantity) || 1),
-        note: '',
-        estimatedCost: null,
-        billingType: 'ONE_TIME'
-      });
-    }
+    items.push(service ? catalogItem(service, suggestion.quantity) : customItem({ name: suggestion.name, detail: suggestion.detail, category: suggestion.category, quantity: suggestion.quantity }));
   }
   return items;
 };
@@ -110,8 +114,10 @@ const itemCharge = (item, mode, durationMonths) => {
 };
 
 /**
- * Keeps the draft under the ceiling, line by line and in the order the client chose them: a line that does not fit
- * drops to the priciest cheaper tier of its family that does; without one, it stays out. Every change is reported.
+ * Keeps the draft under the ceiling, line by line and in the order of priority: a line that does not fit drops to
+ * the priciest cheaper tier of its family that does; without one, it stays out. Every change is reported.
+ * A monthly ceiling is about the fee: a one-time line (a landing page) does not consume it, but it is reported
+ * apart so the team confirms it with the client instead of discovering it on the total.
  */
 export const fitItemsToBudget = (items, ceiling, catalog = [], durationMonths = 1) => {
   if (!ceiling || ceiling.unsupported) return { items, changes: [] };
@@ -120,6 +126,11 @@ export const fitItemsToBudget = (items, ceiling, catalog = [], durationMonths = 
   const changes = [];
   let spent = 0;
   for (const item of items) {
+    if (ceiling.mode === 'MONTHLY' && item.billingType === 'ONE_TIME') {
+      kept.push(item);
+      if (Number(item.price) > 0) changes.push({ kind: 'ONE_TIME_APART', name: item.name, charge: Math.round(itemCharge(item, 'MONTHLY', 1)) });
+      continue;
+    }
     const charge = itemCharge(item, ceiling.mode, durationMonths);
     if (spent + charge <= ceiling.amount) {
       kept.push(item);
@@ -150,9 +161,12 @@ export const describeBudgetFit = (ceiling, changes = []) => {
   if (!ceiling) return null;
   const figure = `${formatCop(ceiling.amount)} ${ceiling.currency} (${ceiling.scopeLabel.toLowerCase()})`;
   if (ceiling.unsupported) return `Presupuesto indicado en ${ceiling.currency}: no se ajustó automáticamente, revisar contra ${figure}.`;
-  if (!changes.length) return `Dentro del presupuesto indicado: ${figure}.`;
-  const parts = changes.map(change => (change.kind === 'DOWNGRADED' ? `«${change.from}» bajó a «${change.to}»` : `«${change.name}» quedó fuera`));
-  return `Ajustado al presupuesto de ${figure}: ${parts.join('; ')}.`;
+  const apart = changes.filter(change => change.kind === 'ONE_TIME_APART');
+  const cuts = changes.filter(change => change.kind !== 'ONE_TIME_APART');
+  const apartNote = apart.length ? ` Se cobra una sola vez, fuera del tope mensual: ${apart.map(change => `«${change.name}» (${formatCop(change.charge)} con IVA)`).join(', ')}.` : '';
+  if (!cuts.length) return `Dentro del presupuesto indicado: ${figure}.${apartNote}`;
+  const parts = cuts.map(change => (change.kind === 'DOWNGRADED' ? `«${change.from}» bajó a «${change.to}»` : `«${change.name}» quedó fuera`));
+  return `Ajustado al presupuesto de ${figure}: ${parts.join('; ')}.${apartNote}`;
 };
 
 const line = (label, value) => (value ? `${label}: ${value}` : null);
@@ -175,18 +189,24 @@ export const draftIntroductionText = (lead, request) => {
   ].filter(Boolean).join('\n');
 };
 
-/** Months the proposal covers: a one-off budget buys one month of anything recurring, an annual one buys twelve. */
+/**
+ * Months the proposal covers when nobody said: one. Rodny, 2 de octubre de 2026: the form never asks for how
+ * long, so a 3-month default turned a «3 millones al mes» request into a 7.4-million document. Only an annual
+ * budget implies a term.
+ */
 const durationFor = (items, ceiling) => {
   if (!items.some(item => item.billingType === 'MONTHLY')) return 1;
-  if (!ceiling || ceiling.unsupported || ceiling.scope === 'MENSUAL') return 3;
-  return ceiling.scope === 'ANUAL' ? 12 : 1;
+  return ceiling && !ceiling.unsupported && ceiling.scope === 'ANUAL' ? 12 : 1;
 };
 
-/** Pure: the request body a human would have sent to POST /api/quotations for this lead, plus what the budget did. */
-export const buildDraftBody = (lead, request, catalog = []) => {
-  const suggested = draftItemsFromRequest(request, catalog);
+/**
+ * Pure: the request body a human would have sent to POST /api/quotations for this lead, plus what the budget did.
+ * `ai` is the model's reading of the request (applyModelDraft); without it the form's suggested lines are used.
+ */
+export const buildDraftBody = (lead, request, catalog = [], { ai = null } = {}) => {
+  const suggested = ai ? ai.items : draftItemsFromRequest(request, catalog);
   const ceiling = budgetCeiling(request);
-  const durationMonths = durationFor(suggested, ceiling);
+  const durationMonths = ai ? ai.durationMonths : durationFor(suggested, ceiling);
   const { items, changes } = fitItemsToBudget(suggested, ceiling, catalog, durationMonths);
   return {
     emisor_type: 'BRAIN_STUDIO',
@@ -197,7 +217,7 @@ export const buildDraftBody = (lead, request, catalog = []) => {
     client_email: lead.email || '',
     client_phone: lead.phone || '',
     currency: 'COP',
-    duration_months: durationFor(items, ceiling) || durationMonths,
+    duration_months: items.some(item => item.billingType === 'MONTHLY') ? durationMonths : 1,
     items,
     proposal_details: { version: 1, title: `Propuesta para ${lead.company || lead.contactName || 'el cliente'}`, introductionHtml: plainTextToProposalHtml(draftIntroductionText(lead, request)) },
     budget: ceiling ? { amount: ceiling.amount, currency: ceiling.currency, scopeLabel: ceiling.scopeLabel, unsupported: ceiling.unsupported, changes } : null
@@ -246,32 +266,66 @@ export const composeDraftRecord = (body, catalogServices, now = new Date()) => {
 
 const notFound = () => Object.assign(new Error('Oportunidad no encontrada.'), { statusCode: 404 });
 
+/** Why the draft came out without the model, in words the team understands. */
+export const humanizeDraftAiFailure = error => {
+  if (error?.code === 'AI_SCOPE_REQUIRED' || error?.code === 'AI_GOVERNANCE_BLOCKED') return 'Gobierno de IA bloqueó el envío.';
+  if (error?.code === 'OPENAI_NOT_CONFIGURED') return 'la IA no está configurada en este servidor.';
+  if (isProviderUnavailable(error)) return 'el proveedor de IA no estaba disponible.';
+  if (error instanceof SyntaxError) return 'la respuesta del modelo no se pudo leer.';
+  return `${String(error?.message || 'error desconocido').slice(0, 160)}.`;
+};
+
+/**
+ * Asks the model to read the request and choose lines. Any failure degrades to the form's suggested lines,
+ * and the bitácora says so: Francys must know when a draft came out without the brief being read.
+ */
+const readRequestWithModel = async ({ lead, request, catalog, generate }) => {
+  if (!request || typeof generate !== 'function') return { ai: null, failure: null };
+  try {
+    const { draft, model } = await generate(buildQuotationDraftRequest({ lead, request, catalog, ceiling: budgetCeiling(request) }));
+    return { ai: { ...applyModelDraft(draft, catalog, { catalogItem, customItem }), model: model || null }, failure: null };
+  } catch (error) {
+    console.error('[QuotationDraft] El modelo no pudo armar el borrador:', error?.message || error);
+    return { ai: null, failure: humanizeDraftAiFailure(error) };
+  }
+};
+
+const bulletList = (title, lines = []) => (lines.length ? [`${title}:`, ...lines.map(line => `- ${line}`)].join('\n') : null);
+
 /**
  * Creates a BORRADOR quotation linked to the lead and logs it in the lead's bitácora.
  * `auto: true` (intake) creates nothing when the lead already has a draft; a manual call always adds a new version.
+ * `generate` is the model transport (injected by tests); it is only used when the lead has a request to read.
  */
-export const createQuotationDraftForLead = async (db, leadId, actor = {}, { now = new Date(), auto = false } = {}) => {
+export const createQuotationDraftForLead = async (db, leadId, actor = {}, { now = new Date(), auto = false, generate = generateQuotationDraft } = {}) => {
   const lead = await db.crmLead.findUnique({ where: { id: leadId }, include: { request: true, quotations: { select: { id: true, status: true, consecutive: true } } } });
   if (!lead || lead.archivedAt) throw notFound();
   if (auto && (lead.quotations || []).some(quotation => quotation.status === 'BORRADOR')) {
     return { created: false, reason: 'already-has-draft', quotation: null };
   }
   const catalog = await db.serviceCatalog.findMany({ where: { activo: true } });
-  const body = buildDraftBody(lead, lead.request, catalog);
+  const { ai, failure } = await readRequestWithModel({ lead, request: lead.request, catalog, generate });
+  const body = buildDraftBody(lead, lead.request, catalog, { ai });
   const used = catalog.filter(service => body.items.some(item => item.serviceId === service.id));
   const data = { ...composeDraftRecord(body, used, now), lead_id: lead.id };
   const customLines = body.items.filter(item => !item.serviceId).length;
   const budgetNote = describeBudgetFit(budgetCeiling(lead.request), body.budget?.changes);
+  const note = [
+    `${auto ? 'Borrador de cotización generado automáticamente' : 'Borrador de cotización creado'}: ${formatQuotationCode('{code}')} con ${body.items.length} ${body.items.length === 1 ? 'línea' : 'líneas'}${customLines ? ` (${customLines} personalizada${customLines === 1 ? '' : 's'} por tarifar)` : ''}.`,
+    ai?.summary || null,
+    bulletList('Por qué cada línea', ai?.reasons),
+    bulletList('Pendientes antes de emitir', ai?.pending),
+    budgetNote,
+    failure ? `Se armó sin leer el brief con IA (${failure}) a partir de las casillas del formulario: revisar con más cuidado.` : null,
+    !lead.request ? 'La oportunidad no tiene solicitud del formulario: el borrador sale vacío, con los datos de contacto.' : null
+  ].filter(Boolean).join('\n');
   return db.$transaction(async tx => {
     const quotation = await tx.quotation.create({ data });
     const code = formatQuotationCode(quotation.consecutive);
     await tx.crmActivity.create({
       data: {
         leadId: lead.id, type: 'NOTA', occurredAt: now, authorId: actor.userId || actor.id || null,
-        note: [
-          `${auto ? 'Borrador de cotización generado automáticamente' : 'Borrador de cotización creado'}: ${code} con ${body.items.length} ${body.items.length === 1 ? 'línea' : 'líneas'}${customLines ? ` (${customLines} personalizada${customLines === 1 ? '' : 's'} por tarifar)` : ''}.`,
-          budgetNote
-        ].filter(Boolean).join('\n'),
+        note: note.replace(formatQuotationCode('{code}'), code),
         result: 'Pendiente de revisión en Cotizaciones antes de emitir.',
         nextAction: 'Revisar el borrador de cotización y emitirlo.'
       }
@@ -280,7 +334,8 @@ export const createQuotationDraftForLead = async (db, leadId, actor = {}, { now 
     return {
       created: true,
       quotation: { id: quotation.id, code, status: quotation.status, total: Number(quotation.total_amount), currency: quotation.currency, itemCount: body.items.length, customLines },
-      budget: body.budget
+      budget: body.budget,
+      ai: { used: Boolean(ai), model: ai?.model || null, pending: ai?.pending || [], failure }
     };
   });
 };

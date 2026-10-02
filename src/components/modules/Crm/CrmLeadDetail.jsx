@@ -124,7 +124,8 @@ const CrmLeadDetail = () => {
       toast.success([
         `Borrador ${result.quotation.code} creado`,
         result.quotation.customLines ? `${result.quotation.customLines} línea(s) por tarifar` : null,
-        adjustments ? `${adjustments} ajuste(s) por el presupuesto del cliente` : null
+        adjustments ? `${adjustments} ajuste(s) por el presupuesto del cliente` : null,
+        result.ai?.failure ? 'armado sin IA, revisar con cuidado' : null
       ].filter(Boolean).join(' · '));
       navigate(`/cotizaciones/editar/${result.quotation.id}`);
     } catch (mutationError) {
