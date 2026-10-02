@@ -28,7 +28,6 @@ try {
       "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
     );
   `);
-  await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ClientSocialAccount_clientId_platform_key" ON "ClientSocialAccount"("clientId", "platform");`);
   await client.query(`CREATE INDEX IF NOT EXISTS "ClientSocialAccount_platform_externalId_idx" ON "ClientSocialAccount"("platform", "externalId");`);
   await client.query(`
     CREATE TABLE IF NOT EXISTS "SocialPublication" (
@@ -55,10 +54,33 @@ try {
     );
   `);
   await client.query(`ALTER TABLE "SocialPublication" ADD COLUMN IF NOT EXISTS "publishRequestedAt" TIMESTAMPTZ(3);`);
-  await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "SocialPublication_contentItemId_platform_key" ON "SocialPublication"("contentItemId", "platform");`);
   await client.query(`CREATE INDEX IF NOT EXISTS "SocialPublication_status_scheduledAt_idx" ON "SocialPublication"("status", "scheduledAt");`);
   await client.query(`CREATE INDEX IF NOT EXISTS "SocialPublication_status_nextAttemptAt_idx" ON "SocialPublication"("status", "nextAttemptAt");`);
-  console.log('[Social publishing] publishTime column, ClientSocialAccount and SocialPublication tables ready.');
+
+  // Varias cuentas por cliente (Rodny, 2 de octubre de 2026): PromoGroup y Endova comparten parrilla, y
+  // Foobespain, Wine & Wonder y Wine Summit también. Antes un cliente tenía una cuenta por red y una
+  // pieza una fila por red; ahora la unicidad es por cuenta. Aditivo: no se borra ninguna fila. Primero
+  // se crea la regla nueva y después se suelta la vieja, para que nunca falte una.
+  await client.query(`ALTER TABLE "ContentItem" ADD COLUMN IF NOT EXISTS "socialPageIds" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];`);
+  await client.query(`ALTER TABLE "ClientSocialAccount" ADD COLUMN IF NOT EXISTS "isPrimary" BOOLEAN NOT NULL DEFAULT FALSE;`);
+  await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ClientSocialAccount_clientId_platform_externalId_key" ON "ClientSocialAccount"("clientId", "platform", "externalId");`);
+  await client.query(`DROP INDEX IF EXISTS "ClientSocialAccount_clientId_platform_key";`);
+  await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "SocialPublication_contentItemId_socialAccountId_key" ON "SocialPublication"("contentItemId", "socialAccountId");`);
+  await client.query(`DROP INDEX IF EXISTS "SocialPublication_contentItemId_platform_key";`);
+  // La cuenta que sale por defecto es la primera que se conectó. Un cliente sin ninguna marcada (todos
+  // los de antes de este cambio) recibe la marca en su página más antigua, una sola vez.
+  await client.query(`
+    UPDATE "ClientSocialAccount" account SET "isPrimary" = TRUE
+    WHERE NOT EXISTS (
+      SELECT 1 FROM "ClientSocialAccount" other WHERE other."clientId" = account."clientId" AND other."isPrimary"
+    )
+    AND account."pageId" IS NOT DISTINCT FROM (
+      SELECT first."pageId" FROM "ClientSocialAccount" first
+      WHERE first."clientId" = account."clientId"
+      ORDER BY first."connectedAt" ASC, first."id" ASC LIMIT 1
+    );
+  `);
+  console.log('[Social publishing] publishTime column, ClientSocialAccount and SocialPublication tables ready (several accounts per client).');
 } catch (error) {
   console.error('[Social publishing] Failed to ensure the social publishing schema:', error.message);
   process.exitCode = 1;

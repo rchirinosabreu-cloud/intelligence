@@ -19,7 +19,7 @@ import { splitPublishTime } from '../lib/socialPublishing.js';
 /** Lo que la pantalla ve de una publicación programada: nunca el token, que ni siquiera vive en esa fila. */
 const publicationSelect = {
   select: {
-    id: true, platform: true, status: true, scheduledAt: true, attempts: true, nextAttemptAt: true,
+    id: true, socialAccountId: true, platform: true, status: true, scheduledAt: true, attempts: true, nextAttemptAt: true,
     permalink: true, externalMediaId: true, error: true, publishedAt: true, cancelledAt: true, requestedById: true
   },
   orderBy: { platform: 'asc' }
@@ -29,7 +29,7 @@ const publicationSelect = {
 const clientWithSocialAccounts = {
   include: {
     socialAccounts: {
-      select: { id: true, platform: true, externalId: true, displayName: true, pageId: true, isActive: true, connectedAt: true, lastError: true },
+      select: { id: true, platform: true, externalId: true, displayName: true, pageId: true, isActive: true, isPrimary: true, connectedAt: true, lastError: true },
       orderBy: { platform: 'asc' }
     }
   }
@@ -107,6 +107,7 @@ const contentItemBaseSelect = {
   captionText: true,
   publishDate: true,
   publishTime: true,
+  socialPageIds: true,
   mediaUrl: true,
   status: true,
   createdAt: true,

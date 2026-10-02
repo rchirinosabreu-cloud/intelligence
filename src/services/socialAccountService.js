@@ -35,7 +35,7 @@ export const createSocialAccountService = ({
   };
 
   const listClientAccounts = async (clientId) => {
-    const rows = await db.clientSocialAccount.findMany({ where: { clientId }, orderBy: { platform: 'asc' } });
+    const rows = await db.clientSocialAccount.findMany({ where: { clientId }, orderBy: [{ connectedAt: 'asc' }, { platform: 'asc' }] });
     return rows.map(publicSocialAccount);
   };
 
@@ -44,37 +44,42 @@ export const createSocialAccountService = ({
     const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
     if (!client) throw httpError(404, 'El cliente no existe.');
     const page = (await meta.listManagedPages(token)).find((candidate) => candidate.pageId === String(pageId));
-    if (!page) throw httpError(404, 'El usuario del sistema de Meta no administra esa página. Dale acceso desde el Business Manager y vuelve a intentarlo.');
+    if (!page) throw httpError(404, 'La cuenta de Meta de la agencia no administra esa página. Dale acceso a la página y vuelve a intentarlo.');
     if (!page.pageToken) throw httpError(422, 'Meta no entregó un token para esa página.');
 
+    // Un cliente puede tener varias cuentas (Rodny, 2 de octubre de 2026): conectar otra página **añade**,
+    // no reemplaza. Antes se guardaba «la cuenta de Facebook del cliente» y una segunda página pisaba la
+    // primera, con lo que lo programado para Endova habría salido en la página nueva.
+    const existing = await db.clientSocialAccount.findMany({ where: { clientId } });
+    // La primera página que se conecta es la que sale por defecto en las piezas que no nombran cuenta.
+    const becomesPrimary = !existing.some((row) => row.isPrimary);
     const shared = { encryptedToken: encryptToken(page.pageToken), pageId: page.pageId, isActive: true, connectedById: actorUserId, connectedAt: now(), lastError: null, lastCheckedAt: now() };
-    const rows = [];
-    rows.push(await db.clientSocialAccount.upsert({
-      where: { clientId_platform: { clientId, platform: 'FACEBOOK' } },
-      create: { clientId, platform: 'FACEBOOK', externalId: page.pageId, displayName: page.pageName, ...shared },
-      update: { externalId: page.pageId, displayName: page.pageName, ...shared }
-    }));
-    if (page.instagram?.id) {
-      const displayName = page.instagram.username ? `@${page.instagram.username}` : page.pageName;
-      rows.push(await db.clientSocialAccount.upsert({
-        where: { clientId_platform: { clientId, platform: 'INSTAGRAM' } },
-        create: { clientId, platform: 'INSTAGRAM', externalId: page.instagram.id, displayName, ...shared },
-        update: { externalId: page.instagram.id, displayName, ...shared }
-      }));
-    } else {
-      // La página nueva no trae Instagram: el Instagram de la página anterior no puede seguir vivo, o la
-      // parrilla lo ofrecería y una pieza saldría en el perfil equivocado. Se apaga y se cancela lo suyo.
-      const stale = await db.clientSocialAccount.findUnique({ where: { clientId_platform: { clientId, platform: 'INSTAGRAM' } } });
-      if (stale?.isActive) {
-        await db.socialPublication.updateMany({
-          where: { socialAccountId: stale.id, status: 'SCHEDULED' },
-          data: { status: 'CANCELLED', cancelledAt: now(), error: 'La página conectada cambió y ya no tiene Instagram vinculado.', leaseToken: null, leaseAt: null }
-        });
-        rows.push(await db.clientSocialAccount.update({
-          where: { id: stale.id },
-          data: { isActive: false, lastError: 'La página conectada ya no tiene Instagram vinculado.', lastCheckedAt: now() }
-        }));
+    const save = async ({ platform, externalId, displayName }) => {
+      const current = existing.find((row) => row.platform === platform && row.externalId === externalId);
+      if (current) {
+        return db.clientSocialAccount.update({ where: { id: current.id }, data: { displayName, ...shared, ...(becomesPrimary ? { isPrimary: true } : {}) } });
       }
+      return db.clientSocialAccount.create({ data: { clientId, platform, externalId, displayName, isPrimary: becomesPrimary, ...shared } });
+    };
+
+    const rows = [await save({ platform: 'FACEBOOK', externalId: page.pageId, displayName: page.pageName })];
+    const instagramId = page.instagram?.id ? String(page.instagram.id) : null;
+    if (instagramId) {
+      rows.push(await save({ platform: 'INSTAGRAM', externalId: instagramId, displayName: page.instagram.username ? `@${page.instagram.username}` : page.pageName }));
+    }
+    // El Instagram que esta misma página tenía y ya no tiene (lo quitaron o lo cambiaron por otro) no
+    // puede seguir vivo: la parrilla lo ofrecería y una pieza saldría en el perfil equivocado. Se apaga
+    // y se cancela lo suyo. Solo el de **esta** página: el de otra cuenta del cliente no se toca.
+    const stale = existing.filter((row) => row.platform === 'INSTAGRAM' && row.pageId === page.pageId && row.externalId !== instagramId && row.isActive !== false);
+    for (const row of stale) {
+      await db.socialPublication.updateMany({
+        where: { socialAccountId: row.id, status: 'SCHEDULED' },
+        data: { status: 'CANCELLED', cancelledAt: now(), error: 'La página conectada cambió y ya no tiene Instagram vinculado.', leaseToken: null, leaseAt: null }
+      });
+      rows.push(await db.clientSocialAccount.update({
+        where: { id: row.id },
+        data: { isActive: false, lastError: 'La página conectada ya no tiene Instagram vinculado.', lastCheckedAt: now() }
+      }));
     }
     return rows.map(publicSocialAccount);
   };

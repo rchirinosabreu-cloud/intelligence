@@ -215,10 +215,74 @@ export const schedulingNotices = ({ item, assets = [], platforms = [] }) => {
 const platformLabel = (platform) => SOCIAL_PLATFORM_LABELS[platform] || platform;
 
 /**
+ * Varias cuentas por cliente (Rodny, 2 de octubre de 2026): «tengo una parrilla pero se maneja y
+ * publica en diferentes cuentas» — PromoGroup y Endova, o Foobespain, Wine & Wonder y Wine Summit.
+ *
+ * Una **cuenta** es una página de Facebook con su Instagram. Aquí se leen las filas conectadas de un
+ * cliente como páginas: la que sale por defecto primero (la primera que se conectó, `isPrimary`) y el
+ * resto por nombre. Si la marcada por defecto está desconectada, el puesto pasa a una que sí pueda
+ * publicar. Las filas anteriores a que se guardara la página van juntas, no como dos «páginas».
+ */
+export const socialPagesOf = (accounts = []) => {
+  const groups = new Map();
+  for (const account of Array.isArray(accounts) ? accounts : []) {
+    if (!account || !SOCIAL_PLATFORMS.includes(account.platform)) continue;
+    const pageId = String(account.pageId || 'sin-pagina');
+    const group = groups.get(pageId) || { pageId, rows: [] };
+    group.rows.push(account);
+    groups.set(pageId, group);
+  }
+  const pages = [...groups.values()].map(({ pageId, rows }) => {
+    const facebook = rows.find((row) => row.platform === 'FACEBOOK');
+    const instagram = rows.find((row) => row.platform === 'INSTAGRAM');
+    return {
+      pageId,
+      name: String((facebook || instagram)?.displayName || '').trim(),
+      isActive: rows.some((row) => row.isActive !== false),
+      flagged: rows.some((row) => row.isPrimary),
+      accounts: [facebook, instagram].filter(Boolean)
+    };
+  }).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
+  const primary = pages.find((page) => page.flagged && page.isActive) || pages.find((page) => page.isActive) || pages.find((page) => page.flagged) || pages[0] || null;
+  return [primary, ...pages.filter((page) => page !== primary)].filter(Boolean)
+    .map(({ flagged: _flagged, ...page }) => ({ ...page, isPrimary: page.pageId === primary.pageId }));
+};
+
+/**
+ * A qué cuentas va una pieza. Las que nombra (`socialPageIds`) si siguen conectadas; si no nombra
+ * ninguna —todas las piezas de antes, y todo cliente con una sola cuenta—, la que sale por defecto.
+ * Una cuenta que ya no está conectada nunca deja la pieza sin destino ni la manda a otra a escondidas.
+ */
+export const pieceSocialPageIds = (item, accounts = []) => {
+  const pages = socialPagesOf(accounts);
+  if (!pages.length) return [];
+  const named = new Set((Array.isArray(item?.socialPageIds) ? item.socialPageIds : []).map(String));
+  const chosen = pages.filter((page) => named.has(page.pageId)).map((page) => page.pageId);
+  return chosen.length ? chosen : [pages[0].pageId];
+};
+
+/** Las filas (Facebook e Instagram) de las cuentas a las que va la pieza. */
+export const pieceTargetAccounts = (item, accounts = []) => {
+  const chosen = new Set(pieceSocialPageIds(item, accounts));
+  return socialPagesOf(accounts).filter((page) => chosen.has(page.pageId)).flatMap((page) => page.accounts);
+};
+
+/** El rótulo de la pieza en el carril y el calendario. Con una sola cuenta no hay nada que distinguir. */
+export const pieceAccountLabel = (item, accounts = []) => {
+  const pages = socialPagesOf(accounts);
+  if (pages.length < 2) return null;
+  const chosen = new Set(pieceSocialPageIds(item, accounts));
+  return pages.filter((page) => chosen.has(page.pageId)).map((page) => page.name).join(' + ') || null;
+};
+
+/**
  * Todo lo que impide programar la pieza, dicho de una vez y en español: la pantalla lo muestra antes de
  * pedirlo y el servidor lo vuelve a comprobar antes de crear la cola.
+ *
+ * Con `targets` se pregunta por cuentas concretas (un cliente puede tener varias de la misma red);
+ * con `accounts` + `platforms`, por redes, que es como se preguntaba cuando había una cuenta por red.
  */
-export const schedulingProblems = ({ item, assets = [], accounts = [], platforms = [], now = new Date() }) => {
+export const schedulingProblems = ({ item, assets = [], accounts = [], platforms = [], targets = null, now = new Date() }) => {
   const problems = [];
   const status = String(item?.status || '');
   if (status === 'PUBLICADO') problems.push('Esta pieza ya está publicada.');
@@ -228,14 +292,28 @@ export const schedulingProblems = ({ item, assets = [], accounts = [], platforms
   if (!publishAt) problems.push('La pieza necesita fecha y hora de publicación.');
   else if (new Date(publishAt).getTime() < now.getTime() + MIN_LEAD_MS) problems.push('La hora de publicación ya pasó o está demasiado cerca: elige una hora al menos dos minutos más adelante.');
 
-  const wanted = Array.from(new Set((platforms || []).map((platform) => String(platform || '').toUpperCase())));
-  if (!wanted.length || wanted.some((platform) => !SOCIAL_PLATFORMS.includes(platform))) {
-    problems.push('Elige al menos una red: Instagram o Facebook.');
-  } else {
-    for (const platform of wanted) {
-      const account = accounts.find((candidate) => candidate.platform === platform && candidate.isActive !== false);
-      if (!account) problems.push(`Este cliente no tiene ${platformLabel(platform)} conectado. Se conecta desde la ficha del cliente.`);
+  let wanted = [];
+  if (Array.isArray(targets)) {
+    const valid = targets.filter((target) => target && SOCIAL_PLATFORMS.includes(target.platform));
+    if (!valid.length) problems.push('Elige al menos una cuenta donde publicar.');
+    for (const target of valid) {
+      if (target.isActive === false) problems.push(`${target.displayName || platformLabel(target.platform)} está desconectada. Vuelve a conectarla desde la ficha del cliente.`);
     }
+    wanted = Array.from(new Set(valid.map((target) => target.platform)));
+  } else {
+    const asked = Array.from(new Set((platforms || []).map((platform) => String(platform || '').toUpperCase())));
+    if (!asked.length || asked.some((platform) => !SOCIAL_PLATFORMS.includes(platform))) {
+      problems.push('Elige al menos una red: Instagram o Facebook.');
+    } else {
+      for (const platform of asked) {
+        const account = accounts.find((candidate) => candidate.platform === platform && candidate.isActive !== false);
+        if (!account) problems.push(`Este cliente no tiene ${platformLabel(platform)} conectado. Se conecta desde la ficha del cliente.`);
+      }
+      wanted = asked;
+    }
+  }
+
+  if (wanted.length) {
     const media = describeMetaMedia({ format: item?.format, assets });
     if (media.problem) problems.push(media.problem);
     else if (media.kind === 'STORIES' && wanted.includes('FACEBOOK')) problems.push('Una historia solo se publica en Instagram, no en Facebook.');
@@ -251,8 +329,7 @@ export const schedulingProblems = ({ item, assets = [], accounts = [], platforms
   return problems;
 };
 
-/** Espera creciente entre intentos: 2, 4 minutos… y al tercero se rinde. */
-const searchable = (value) => String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const searchable = (value) => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
 
 /**
  * Las páginas de «Conectar página», buscadas y en orden alfabético (Rodny, 1 de octubre de 2026: con
@@ -269,7 +346,8 @@ export const filterSocialPages = (pages, query = '') => {
     .sort((a, b) => String(a.pageName || '').trim().localeCompare(String(b.pageName || '').trim(), 'es', { sensitivity: 'base' }));
 };
 
-export const nextPublicationRetryAt =(attempts, now = new Date()) => {
+/** Espera creciente entre intentos: 2, 4 minutos… y al tercero se rinde. */
+export const nextPublicationRetryAt = (attempts, now = new Date()) => {
   if (attempts >= MAX_PUBLICATION_ATTEMPTS) return null;
   return new Date(now.getTime() + RETRY_BASE_MS * 2 ** Math.max(0, attempts - 1));
 };

@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { AlertCircle, Facebook, Instagram, Loader2, Plus, Search, Share2, Trash2 } from '@/components/ui/icons';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { SOCIAL_PLATFORM_LABELS, filterSocialPages } from '@/lib/socialPublishing';
+import { SOCIAL_PLATFORM_LABELS, filterSocialPages, socialPagesOf } from '@/lib/socialPublishing';
 
 /**
  * Redes conectadas de un cliente (Rodny, 29 de septiembre de 2026). Un administrador elige aquí cuál
@@ -139,6 +139,8 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
     }
   });
 
+  const pages = socialPagesOf(accounts);
+
   const handleDisconnect = async (account) => {
     const ok = await confirm({
       title: `Desconectar ${SOCIAL_PLATFORM_LABELS[account.platform] || account.platform}`,
@@ -164,7 +166,7 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
             onClick={() => setDialogOpen(true)}
             className="inline-flex h-9 items-center gap-1.5 rounded-xl border border-zinc-200 bg-white px-3 text-[13px] font-bold text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-200"
           >
-            <Plus className="h-3.5 w-3.5" /> Conectar página
+            <Plus className="h-3.5 w-3.5" /> {accounts.length ? 'Conectar otra página' : 'Conectar página'}
           </button>
         )}
       </div>
@@ -176,33 +178,57 @@ const SocialAccountsWidget = ({ clientId, canManage = false }) => {
           Sin redes conectadas. {canManage ? 'Conecta la página de Facebook del cliente para programar sus publicaciones desde la parrilla.' : 'Un administrador puede conectar la página del cliente.'}
         </p>
       ) : (
-        <ul className="space-y-2">
-          {accounts.map((account) => {
-            const Icon = PLATFORM_ICON[account.platform] || Share2;
-            return (
-              <li key={account.id} className={`flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2.5 text-[13px] ${account.isActive ? 'border-zinc-200 dark:border-white/10' : 'border-destructive/30 bg-destructive/5'}`}>
-                <Icon className={`h-4 w-4 shrink-0 ${account.isActive ? 'text-zinc-500 dark:text-zinc-400' : 'text-destructive'}`} aria-hidden="true" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-bold text-zinc-900 dark:text-zinc-50">{account.displayName}</span>
-                  <span className={`block truncate text-xs ${account.isActive ? 'text-zinc-500 dark:text-zinc-400' : 'text-destructive'}`}>
-                    {account.isActive ? SOCIAL_PLATFORM_LABELS[account.platform] || account.platform : `Desconectada${account.lastError ? ` · ${account.lastError}` : ''}`}
-                  </span>
-                </span>
-                {!account.isActive && <AlertCircle className="h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />}
-                {canManage && account.isActive && (
-                  <button
-                    type="button"
-                    onClick={() => handleDisconnect(account)}
-                    aria-label={`Desconectar ${account.displayName}`}
-                    className="brain-danger-button-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
+        <>
+          {/* Un cliente puede tener varias cuentas (Rodny, 2 de octubre de 2026): cada una es una página
+              de Facebook con su Instagram. Con más de una se agrupan por página y se dice cuál sale
+              por defecto; con una sola la tarjeta se ve como siempre. */}
+          <ul className="space-y-3">
+            {pages.map((page) => (
+              <li key={page.pageId} data-social-page={page.pageId}>
+                {pages.length > 1 && (
+                  <div className="mb-1.5 flex min-w-0 items-center gap-2">
+                    <span className="truncate text-xs font-bold text-zinc-700 dark:text-zinc-200">{page.name}</span>
+                    {page.isPrimary && (
+                      <span className="shrink-0 rounded-full bg-zinc-100 px-2 py-0.5 text-[11px] font-medium text-zinc-600 dark:bg-white/10 dark:text-zinc-300">Por defecto</span>
+                    )}
+                  </div>
                 )}
+                <ul className="space-y-2">
+                  {page.accounts.map((account) => {
+                    const Icon = PLATFORM_ICON[account.platform] || Share2;
+                    return (
+                      <li key={account.id} className={`flex min-w-0 items-center gap-3 rounded-xl border px-3 py-2.5 text-[13px] ${account.isActive ? 'border-zinc-200 dark:border-white/10' : 'border-destructive/30 bg-destructive/5'}`}>
+                        <Icon className={`h-4 w-4 shrink-0 ${account.isActive ? 'text-zinc-500 dark:text-zinc-400' : 'text-destructive'}`} aria-hidden="true" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-bold text-zinc-900 dark:text-zinc-50">{account.displayName}</span>
+                          <span className={`block truncate text-xs ${account.isActive ? 'text-zinc-500 dark:text-zinc-400' : 'text-destructive'}`}>
+                            {account.isActive ? SOCIAL_PLATFORM_LABELS[account.platform] || account.platform : `Desconectada${account.lastError ? ` · ${account.lastError}` : ''}`}
+                          </span>
+                        </span>
+                        {!account.isActive && <AlertCircle className="h-4 w-4 shrink-0 text-destructive" aria-hidden="true" />}
+                        {canManage && account.isActive && (
+                          <button
+                            type="button"
+                            onClick={() => handleDisconnect(account)}
+                            aria-label={`Desconectar ${account.displayName}`}
+                            className="brain-danger-button-icon flex h-8 w-8 shrink-0 items-center justify-center rounded-lg"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </li>
+                    );
+                  })}
+                </ul>
               </li>
-            );
-          })}
-        </ul>
+            ))}
+          </ul>
+          {pages.length > 1 && (
+            <p className="mt-3 text-xs leading-relaxed text-zinc-500 dark:text-zinc-400">
+              En la parrilla, cada pieza elige a cuál de estas cuentas va. Si no se elige, va a la que dice «Por defecto».
+            </p>
+          )}
+        </>
       )}
 
       {canManage && (

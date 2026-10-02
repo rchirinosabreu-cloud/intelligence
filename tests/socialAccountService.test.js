@@ -18,13 +18,10 @@ const memoryDb = () => {
   const db = {
     clientSocialAccount: {
       findMany: async ({ where }) => accounts.filter((row) => row.clientId === where.clientId),
-      findUnique: async ({ where }) => (where.id
-        ? accounts.find((row) => row.id === where.id)
-        : accounts.find((row) => row.clientId === where.clientId_platform.clientId && row.platform === where.clientId_platform.platform)) || null,
-      upsert: async ({ where, create, update }) => {
-        const existing = accounts.find((row) => row.clientId === where.clientId_platform.clientId && row.platform === where.clientId_platform.platform);
-        if (existing) { Object.assign(existing, update); return existing; }
-        const row = { id: `acc-${create.platform.toLowerCase()}`, ...create };
+      findUnique: async ({ where }) => accounts.find((row) => row.id === where.id) || null,
+      // No upsert by «client and network» any more: a client may have several accounts of a network.
+      create: async ({ data }) => {
+        const row = { id: `acc-${data.platform.toLowerCase()}-${data.externalId}`, isPrimary: false, ...data };
         accounts.push(row);
         return row;
       },
@@ -88,18 +85,39 @@ test('a page without Instagram links Facebook only and says so; an unknown page 
   await assert.rejects(service.linkPage({ clientId: 'ghost', pageId: '5555', actorUserId: 'u' }), (error) => error.status === 404);
 });
 
-test('switching to a page without Instagram switches the old Instagram off and cancels what it had scheduled (Codex review, 30 September 2026)', async () => {
+// Rodny, 2 October 2026: «conectar más de una cuenta a un cliente». Before this, linking a second page
+// replaced the first one, and what was scheduled for Endova would have gone out on the new page.
+test('linking a second page adds an account: the first one is left exactly as it was and stays the default', async () => {
   const { db, accounts, log } = memoryDb();
   const service = build({ db });
   await service.linkPage({ clientId: 'client-1', pageId: '5555', actorUserId: 'u' });
-  const relinked = await service.linkPage({ clientId: 'client-1', pageId: '6666', actorUserId: 'u' });
-  const instagram = accounts.find((row) => row.platform === 'INSTAGRAM');
-  assert.equal(instagram.isActive, false, 'the stale Instagram must not be offered by the editor any more');
-  assert.match(instagram.lastError, /ya no tiene Instagram/);
+  const before = accounts.map((row) => ({ ...row }));
+  const added = await service.linkPage({ clientId: 'client-1', pageId: '6666', actorUserId: 'u' });
+  assert.deepEqual(added.map((row) => [row.platform, row.externalId, row.isPrimary]), [['FACEBOOK', '6666', false]]);
+  assert.equal(accounts.length, 3);
+  assert.deepEqual(accounts.slice(0, 2), before, 'the accounts already connected are not touched');
+  assert.deepEqual(accounts.map((row) => [row.pageId, row.isPrimary, row.isActive]), [['5555', true, true], ['5555', true, true], ['6666', false, true]]);
+  assert.equal(log.some(([kind]) => kind === 'publications.updateMany'), false, 'nothing scheduled on the first account is cancelled');
+  const listed = await service.listClientAccounts('client-1');
+  assert.deepEqual(listed.map((row) => row.isPrimary), [true, true, false]);
+});
+
+test('a page that lost its Instagram switches that Instagram off — its own, never the one of another account', async () => {
+  const { db, accounts, log } = memoryDb();
+  let current = pages;
+  const service = build({ db, listManagedPages: async () => current });
+  await service.linkPage({ clientId: 'client-1', pageId: '5555', actorUserId: 'u' });
+  current = [{ ...pages[0], instagram: null }, { pageId: '7777', pageName: 'Otra', pageToken: 't-7777', instagram: { id: '2000', username: 'otra' } }];
+  await service.linkPage({ clientId: 'client-1', pageId: '7777', actorUserId: 'u' });
+  const relinked = await service.linkPage({ clientId: 'client-1', pageId: '5555', actorUserId: 'u' });
+  const stale = accounts.find((row) => row.platform === 'INSTAGRAM' && row.pageId === '5555');
+  assert.equal(stale.isActive, false, 'the stale Instagram must not be offered by the editor any more');
+  assert.match(stale.lastError, /ya no tiene Instagram/);
   assert.deepEqual(relinked.map((row) => [row.platform, row.isActive]), [['FACEBOOK', true], ['INSTAGRAM', false]]);
-  const cancelled = log.find(([kind, where]) => kind === 'publications.updateMany' && where.socialAccountId === instagram.id);
+  const cancelled = log.find(([kind, where]) => kind === 'publications.updateMany' && where.socialAccountId === stale.id);
   assert.equal(cancelled[2].status, 'CANCELLED');
   assert.match(cancelled[2].error, /Instagram/);
+  assert.equal(accounts.find((row) => row.platform === 'INSTAGRAM' && row.pageId === '7777').isActive, true, 'the Instagram of the other account stays on');
   assert.equal(JSON.stringify(relinked).includes('enc:'), false);
 });
 
@@ -124,5 +142,5 @@ test('listing a client\'s accounts returns the public shape only', async () => {
   const rows = await service.listClientAccounts('client-1');
   assert.equal(rows.length, 2);
   assert.equal('encryptedToken' in rows[0], false);
-  assert.deepEqual(Object.keys(rows[0]).sort(), ['clientId', 'connectedAt', 'displayName', 'externalId', 'id', 'isActive', 'lastError', 'pageId', 'platform']);
+  assert.deepEqual(Object.keys(rows[0]).sort(), ['clientId', 'connectedAt', 'displayName', 'externalId', 'id', 'isActive', 'isPrimary', 'lastError', 'pageId', 'platform']);
 });

@@ -45,8 +45,20 @@ export const createSocialPublishingRouter = ({
       const itemId = String(req.body?.itemId || '').trim();
       const platforms = Array.isArray(req.body?.platforms) ? req.body.platforms.map((value) => String(value)) : [];
       if (!itemId) return res.status(400).json({ error: 'Falta itemId.' });
-      const rows = await publishing.schedulePublications({ itemId, platforms, actorUserId: req.user.userId });
+      // Con varias cuentas por cliente se programa por cuenta (`accountIds`); `platforms` es la forma de antes.
+      const accountIds = Array.isArray(req.body?.accountIds) ? req.body.accountIds.map((value) => String(value)) : null;
+      const rows = await publishing.schedulePublications({ itemId, platforms, ...(accountIds ? { accountIds } : {}), actorUserId: req.user.userId });
       return res.status(201).json(rows);
+    } catch (error) {
+      return reply(res, error, logger);
+    }
+  });
+
+  // A qué cuentas del cliente va una pieza (Rodny, 2 de octubre de 2026). Cancela lo programado en las que deja.
+  router.put('/items/:itemId/pages', async (req, res) => {
+    try {
+      const pageIds = Array.isArray(req.body?.pageIds) ? req.body.pageIds.map((value) => String(value)) : [];
+      return res.json(await publishing.setItemSocialPages({ itemId: req.params.itemId, pageIds, actorUserId: req.user.userId }));
     } catch (error) {
       return reply(res, error, logger);
     }

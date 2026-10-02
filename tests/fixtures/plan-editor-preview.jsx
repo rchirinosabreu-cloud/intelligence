@@ -19,11 +19,19 @@ localStorage.setItem('currentUser', JSON.stringify(user));
 
 // Redes conectadas del cliente (29 de septiembre de 2026): lo que la parrilla necesita para ofrecer
 // «Programar». Sin el token, que nunca viaja al navegador.
+// Dos cuentas en un mismo cliente (2 de octubre de 2026): PromoGroup IPS, que sale por defecto, y
+// Endova, una unidad suya. La misma parrilla lleva piezas para una, para la otra y para las dos.
+// `?unaCuenta=1` deja solo PromoGroup, para ver que con una cuenta nada cambia.
+const oneAccountOnly = new URLSearchParams(window.location.search).get('unaCuenta') === '1';
 const socialAccounts = [
-  { id: 'acc-fb', clientId: 'c1', platform: 'FACEBOOK', externalId: '5555', displayName: 'PromoGroup IPS', pageId: '5555', isActive: true, connectedAt: '2026-09-20T12:00:00.000Z', lastError: null },
-  { id: 'acc-ig', clientId: 'c1', platform: 'INSTAGRAM', externalId: '1789', displayName: '@promogroupips', pageId: '5555', isActive: true, connectedAt: '2026-09-20T12:00:00.000Z', lastError: null }
+  { id: 'acc-fb', clientId: 'c1', platform: 'FACEBOOK', externalId: '5555', displayName: 'PromoGroup IPS', pageId: '5555', isActive: true, isPrimary: true, connectedAt: '2026-09-20T12:00:00.000Z', lastError: null },
+  { id: 'acc-ig', clientId: 'c1', platform: 'INSTAGRAM', externalId: '1789', displayName: '@promogroup.ips', pageId: '5555', isActive: true, isPrimary: true, connectedAt: '2026-09-20T12:00:00.000Z', lastError: null },
+  ...(oneAccountOnly ? [] : [
+    { id: 'acc-endova-fb', clientId: 'c1', platform: 'FACEBOOK', externalId: '7777', displayName: 'Endova', pageId: '7777', isActive: true, isPrimary: false, connectedAt: '2026-10-02T12:00:00.000Z', lastError: null },
+    { id: 'acc-endova-ig', clientId: 'c1', platform: 'INSTAGRAM', externalId: '2789', displayName: '@endova.salud', pageId: '7777', isActive: true, isPrimary: false, connectedAt: '2026-10-02T12:00:00.000Z', lastError: null }
+  ])
 ];
-const client = { id: 'c1', name: 'PromoGroup IPS', slug: 'promogroup', logoUrl: null, socialAccounts };
+const client = { id: 'c1', name: 'Promo Group / Endova', slug: 'promogroup', logoUrl: null, socialAccounts };
 const member = { id: 'm-mel', userId: 'u-mel', name: 'Melissa', avatarUrl: null, role: 'Community Manager' };
 
 const GUION = `ESCENA 1 — Exterior / llegada
@@ -50,6 +58,7 @@ const piece = (id, objective, format, day, status, extra = {}) => ({
   captionText: extra.captionText || '',
   publishDate: `2026-09-${String(day).padStart(2, '0')}T12:00:00.000Z`,
   publishTime: extra.publishTime || null,
+  socialPageIds: extra.socialPageIds || [],
   publications: extra.publications || [],
   mediaUrl: extra.mediaUrl || [],
   assetsLinks: [],
@@ -70,22 +79,26 @@ const items = [
     comments: '[Cliente - 18/09/2026]: ¿Podemos mostrar más la sala de espera?',
     finalAssets: [{ id: 'a1', name: 'reel-endova.mp4', storageKey: 'k1', mimeType: 'video/mp4', size: 31000000, position: 0 }],
     // Con hora puesta y sin programar todavía: el estado desde el que se pulsa «Programar».
-    publishTime: '10:30'
+    publishTime: '10:30',
+    // Una pieza de Endova dentro de la parrilla de PromoGroup.
+    socialPageIds: ['7777']
   }),
   piece('i2', 'Tres preguntas antes de tu procedimiento', 'Carrusel', 28, 'EN_REVISION', {
     copyText: 'LÁMINA 1: ¿Cuánto dura?\nLÁMINA 2: ¿Necesito acompañante?',
     captionText: 'Antes de tu procedimiento, resuelve estas tres dudas.',
-    finalAssets: [{ id: 'a2', name: 'carrusel-1.jpg', storageKey: 'k2', mimeType: 'image/jpeg', size: 400000, position: 0 }]
+    finalAssets: [{ id: 'a2', name: 'carrusel-1.jpg', storageKey: 'k2', mimeType: 'image/jpeg', size: 400000, position: 0 }],
+    // La misma pieza en las dos cuentas.
+    socialPageIds: ['5555', '7777']
   }),
-  piece('i3', 'Conoce al equipo de hemodinamia', 'Reel', 30, 'EN_REVISION', { captionText: 'Detrás de cada procedimiento hay un equipo.' }),
+  piece('i3', 'Conoce al equipo de hemodinamia', 'Reel', 30, 'EN_REVISION', { captionText: 'Detrás de cada procedimiento hay un equipo.', socialPageIds: ['7777'] }),
   piece('i4', 'Qué llevar el día de tu consulta', 'Post', 22, 'APROBADO', {
     captionText: 'Documento, orden médica y exámenes previos.',
     finalAssets: [{ id: 'a4', name: 'post-checklist.jpg', storageKey: 'k4', mimeType: 'image/jpeg', size: 300000, position: 0 }],
     // Ya programada en Instagram y publicada en Facebook: cómo se ve una pieza a medio salir.
     publishTime: '09:00',
     publications: [
-      { id: 'pub-i4-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: '2026-09-22T14:00:00.000Z', attempts: 0 },
-      { id: 'pub-i4-fb', platform: 'FACEBOOK', status: 'PUBLISHED', publishedAt: '2026-09-22T14:00:12.000Z', permalink: 'https://www.facebook.com/5555/posts/77' }
+      { id: 'pub-i4-ig', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: '2026-09-22T14:00:00.000Z', attempts: 0 },
+      { id: 'pub-i4-fb', socialAccountId: 'acc-fb', platform: 'FACEBOOK', status: 'PUBLISHED', publishedAt: '2026-09-22T14:00:12.000Z', permalink: 'https://www.facebook.com/5555/posts/77' }
     ]
   }),
   piece('i5', 'La sala de espera que no parece una sala de espera', 'Reel', 18, 'BORRADOR'),
@@ -99,7 +112,7 @@ const items = [
     // Falló en Instagram con el motivo entero: así se ve lo que hay que leer.
     publishTime: '18:00',
     publications: [
-      { id: 'pub-i6-ig', platform: 'INSTAGRAM', status: 'FAILED', attempts: 3, error: 'Meta rechazó la proporción de la imagen: en el feed acepta de 4:5 a 1.91:1.' }
+      { id: 'pub-i6-ig', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'FAILED', attempts: 3, error: 'Meta rechazó la proporción de la imagen: en el feed acepta de 4:5 a 1.91:1.' }
     ]
   }),
   piece('i7', 'Historias que empiezan con un diagnóstico a tiempo', 'Reel', 12, 'DEVUELTO', { captionText: 'Un diagnóstico a tiempo cambia el final.' }),
@@ -129,12 +142,28 @@ const socialApi = (config, url, ok, fail) => {
     const item = items.find((candidate) => candidate.id === body.itemId);
     if (!item) return fail(404, { error: 'La pieza no existe.' });
     if (!item.publishTime) return fail(422, { error: 'La pieza necesita fecha y hora de publicación.', code: 'SOCIAL_PUBLICATION_INVALID', problems: ['La pieza necesita fecha y hora de publicación.'] });
-    const created = (body.platforms || []).map((platform) => {
-      const row = { id: `pub-${item.id}-${platform.toLowerCase()}`, platform, status: 'SCHEDULED', scheduledAt: new Date(bogotaHour(item)).toISOString(), attempts: 0, requestedById: user.id };
-      item.publications = [...item.publications.filter((existing) => existing.platform !== platform), row];
+    // Una fila por cuenta, como en el servidor: dos Instagram de un mismo cliente son dos filas.
+    const created = (body.accountIds || []).map((accountId) => {
+      const account = socialAccounts.find((candidate) => candidate.id === accountId);
+      const row = { id: `pub-${item.id}-${accountId}`, socialAccountId: accountId, platform: account.platform, status: 'SCHEDULED', scheduledAt: new Date(bogotaHour(item)).toISOString(), attempts: 0, requestedById: user.id };
+      item.publications = [...item.publications.filter((existing) => existing.socialAccountId !== accountId), row];
       return row;
     });
     return { ...ok(created), status: 201 };
+  }
+  // A qué cuentas va la pieza: lo programado en la cuenta que deja se cancela con su motivo.
+  const pagesOfItem = method === 'put' && /\/api\/social\/items\/([^/]+)\/pages$/.exec(url);
+  if (pagesOfItem) {
+    const item = items.find((candidate) => candidate.id === pagesOfItem[1]);
+    if (!item) return fail(404, { error: 'La pieza no existe.' });
+    item.socialPageIds = body.pageIds || [];
+    for (const row of item.publications) {
+      const account = socialAccounts.find((candidate) => candidate.id === row.socialAccountId);
+      if (row.status === 'SCHEDULED' && account && !item.socialPageIds.includes(account.pageId)) {
+        Object.assign(row, { status: 'CANCELLED', error: 'La pieza ya no va a esta cuenta.', cancelledAt: new Date().toISOString() });
+      }
+    }
+    return ok({ itemId: item.id, socialPageIds: item.socialPageIds });
   }
   const retry = /\/api\/social\/publications\/([^/]+)\/retry$/.exec(url);
   const cancel = method === 'delete' && /\/api\/social\/publications\/([^/]+)$/.exec(url);
