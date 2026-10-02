@@ -18,6 +18,19 @@ test('the button says what it is going to do, and without screenshots or Meta th
   assert.deepEqual(reportSourcePlan({ instagramAccountId: 's-ig' }), { ready: true, label: 'Traer cifras de Meta', busyLabel: 'Consultando Meta…' });
   assert.equal(reportSourcePlan({ adAccountId: 'ad-1' }).ready, true);
   assert.equal(reportSourcePlan({ screenshots: 1, adAccountId: 'ad-1' }).label, 'Leer capturas y traer cifras');
+  assert.deepEqual(reportSourcePlan({ facebookAccountId: 's-fb' }), { ready: true, label: 'Traer cifras de Meta', busyLabel: 'Consultando Meta…' });
+});
+
+// «Ahora añadamos las cifras de Facebook» (Rodny, 2 October 2026).
+test('Facebook is chosen like Instagram: the page already connected, nothing ticked, one per report', () => {
+  assert.match(panel, /data-report-meta-facebook=\{account\.id\}/);
+  assert.match(panel, /onFacebookChange\(active \? '' : account\.id\)/);
+  assert.match(panel, /facebook\.some\(\(account\) => account\.id === facebookAccountId\)/);
+  assert.match(panel, /Este cliente no tiene página de Facebook conectada\. Se conecta en su ficha/);
+  assert.match(panel, /data-report-meta-facebook-note/);
+  assert.match(reports, /const \[metaFacebookId, setMetaFacebookId\] = useState\(''\)/);
+  assert.match(reports, /formData\.append\('metaFacebookAccountId', metaFacebookId\)/);
+  assert.match(reports, /facebookAccountId: metaFacebookId/);
 });
 
 test('uploading screenshots stays exactly where it was', () => {
@@ -29,7 +42,7 @@ test('uploading screenshots stays exactly where it was', () => {
   assert.match(reports, /formData\.append\('metaAdAccountId', metaAdAccountId\)/);
   assert.match(reports, /disabled=\{isGenerating \|\| !sourcePlan\.ready\}/);
   // What was chosen belongs to a client: changing the client lets go of it.
-  assert.match(reports, /setSelectedClientId\(e\.target\.value\); setMetaInstagramId\(''\); setMetaAdAccountId\(''\);/);
+  assert.match(reports, /setSelectedClientId\(e\.target\.value\); setMetaInstagramId\(''\); setMetaFacebookId\(''\); setMetaAdAccountId\(''\);/);
 });
 
 test('nothing comes ticked: the person chooses what the report brings, and can let go of it', () => {
@@ -45,7 +58,8 @@ test('nothing comes ticked: the person chooses what the report brings, and can l
 
 test('the panel says where each thing is connected and what Meta does not give', () => {
   assert.match(panel, /Este cliente no tiene Instagram conectado\. Se conecta en su ficha/);
-  assert.match(panel, /Facebook, por ahora/);
+  assert.match(panel, /Instagram, Facebook y la pauta llegan directo de Meta/);
+  assert.doesNotMatch(panel, /Facebook, por ahora/, 'Facebook ya llega de Meta');
   assert.match(panel, /data-report-meta-long-period/);
   assert.match(panel, /Solo las campañas cuyo nombre contiene/);
   assert.match(panel, /data-report-campaign-filter/);

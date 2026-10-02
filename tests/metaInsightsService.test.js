@@ -90,6 +90,66 @@ test('followers gained are not given for small accounts: the rest of the report 
   assert.equal(report.totals.views, 10);
 });
 
+// Facebook (2 October 2026). Daily values of a page come one per day, stamped with the END of the day.
+const dailyValues = (first, days, value) => Array.from({ length: days }, (_, index) => ({ value: typeof value === 'function' ? value(index) : value, end_time: new Date(Date.parse(`${first}T07:00:00Z`) + (index + 1) * 86400000).toISOString().replace('.000Z', '+0000') }));
+const facebookHandler = ({ path, query }) => {
+  if (path === 'page-1' && query.fields === 'access_token') return ok({ access_token: 'fresh-page-token', id: 'page-1' });
+  if (path === 'page-1/insights') {
+    // Meta answers with one more day than the period (the margin asked for): it must not be counted.
+    const days = Math.round((Date.parse(query.until) - Date.parse(query.since)) / 86400000);
+    return ok({ data: query.metric.split(',').map((name) => ({ name, period: 'day', values: dailyValues(query.since, days, name === 'page_follows' ? (index) => 300 + index : name === 'page_media_view' ? 10 : 1) })) });
+  }
+  if (path === 'page-1/published_posts') return ok({ data: [
+    { id: 'page-1_2', message: 'Video', created_time: '2026-09-29T22:42:48+0000', permalink_url: 'https://www.facebook.com/p/2', status_type: 'added_video', reactions: { summary: { total_count: 1 } }, comments: { summary: { total_count: 0 } } },
+    { id: 'page-1_1', message: 'Foto', created_time: '2026-09-09T17:51:33+0000', permalink_url: 'https://www.facebook.com/p/1', status_type: 'added_photos', shares: { count: 3 }, reactions: { summary: { total_count: 4 } }, comments: { summary: { total_count: 2 } } }
+  ] });
+  if (path === 'page-1_2/insights') return ok({ data: [{ name: 'post_media_view', period: 'lifetime', values: [{ value: 240 }] }, { name: 'post_total_media_view_unique', period: 'lifetime', values: [{ value: 180 }] }] });
+  if (path === 'page-1_1/insights') return ok({ data: [] });
+  return fail(404, { code: 803, message: `unexpected ${path}` });
+};
+
+test('a page is asked day by day and only the days of the period count; followers are those of its last day', async () => {
+  const { calls, service } = fakeMeta(facebookHandler);
+  const report = await service.fetchFacebookPageReport({ pageId: 'page-1', pageName: 'Brain Studio', token: 'page-token', period: { start: '2026-09-01', end: '2026-09-30' } });
+  assert.deepEqual(report.account, { id: 'page-1', name: 'Brain Studio' });
+  assert.equal(report.totals.page_media_view, 300, '30 days of 10, not the 31 Meta sent');
+  assert.equal(report.totals.page_post_engagements, 30);
+  assert.equal(report.totals.page_follows, undefined, 'a running total is never added up');
+  assert.equal(report.followerTotal, 329);
+  assert.equal(report.followerDay, '2026-09-30');
+  assert.deepEqual(report.previousPeriod, { start: '2026-08-02', end: '2026-08-31' });
+  assert.equal(report.previousTotals.page_media_view, 300);
+  assert.equal(report.posts.length, 2);
+  assert.deepEqual(report.posts[0].insights, { post_media_view: 240, post_total_media_view_unique: 180 });
+  assert.equal(report.posts[1].insights, null);
+  assert.equal(report.posts[1].shares.count, 3);
+  const page = calls.find((call) => call.path === 'page-1/insights');
+  assert.deepEqual({ period: page.query.period, since: page.query.since, until: page.query.until }, { period: 'day', since: '2026-09-01', until: '2026-10-02' });
+  assert.doesNotMatch(page.query.metric, /impressions|page_fans/, 'the metrics Meta retired are not asked for');
+  for (const call of calls) { assert.equal(call.headers.Authorization, 'Bearer page-token'); assert.equal('access_token' in call.query, false); }
+});
+
+test('a quarter of 92 days is asked in two stretches and added up', async () => {
+  const { calls, service } = fakeMeta(facebookHandler);
+  const report = await service.fetchFacebookPageReport({ pageId: 'page-1', pageName: 'x', token: 't', period: { start: '2026-07-01', end: '2026-09-30' } });
+  assert.equal(report.totals.page_media_view, 920);
+  assert.equal(calls.filter((call) => call.path === 'page-1/insights' && call.query.since >= '2026-07-01').length, 2);
+});
+
+test('a page that gives no figure at all says why instead of a report of zeros', async () => {
+  const { service } = fakeMeta((call) => (call.path === 'page-1/insights' ? ok({ data: [] }) : facebookHandler(call)));
+  await assert.rejects(service.fetchFacebookPageReport({ pageId: 'page-1', pageName: 'x', token: 't', period: { start: '2026-09-01', end: '2026-09-30' } }),
+    (error) => error.code === 'META_PAGE_INSIGHTS_EMPTY' && /read_insights/.test(error.message) && /100/.test(error.message));
+});
+
+test('the key of the page is asked of Meta fresh, so it carries the permissions the agency key has today', async () => {
+  const { calls, service } = fakeMeta(facebookHandler);
+  assert.equal(await service.getPageToken({ pageId: 'page-1', token: 'user-token' }), 'fresh-page-token');
+  assert.equal(calls[0].headers.Authorization, 'Bearer user-token');
+  const { service: none } = fakeMeta(() => ok({ id: 'page-1' }));
+  await assert.rejects(none.getPageToken({ pageId: 'page-1', token: 'user-token' }), (error) => error.status === 422);
+});
+
 const adsHandler = ({ path, query }) => {
   if (path === 'act_123') return ok({ name: 'Brain Studio Agencia', account_id: '123', currency: 'COP' });
   if (path === 'act_123/insights') {

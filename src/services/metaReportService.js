@@ -16,7 +16,7 @@ import prisma from '../lib/prisma.js';
 import { decrypt as decryptSecret } from '../utils/encryption.js';
 import { META_GRAPH_VERSION } from './metaGraphService.js';
 import { metaInsightsService } from './metaInsightsService.js';
-import { buildInstagramSources, buildMetaAdsSource, humanizeMetaReadError } from '../lib/metaReportSources.js';
+import { buildFacebookSources, buildInstagramSources, buildMetaAdsSource, humanizeMetaReadError } from '../lib/metaReportSources.js';
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { status, ...extra });
 export const CAMPAIGN_FILTER_MAX = 80;
@@ -45,12 +45,14 @@ export const createMetaReportService = ({
   /** Lo que este cliente puede traer de Meta. Sin llaves: solo nombres e identificadores. */
   const listClientSources = async (clientId) => {
     const [social, ads] = await Promise.all([
-      db.clientSocialAccount.findMany({ where: { clientId, platform: 'INSTAGRAM', isActive: true }, orderBy: [{ connectedAt: 'asc' }] }),
+      db.clientSocialAccount.findMany({ where: { clientId, isActive: true }, orderBy: [{ connectedAt: 'asc' }] }),
       db.clientAdAccount.findMany({ where: { clientId, isActive: true }, orderBy: [{ createdAt: 'asc' }] })
     ]);
+    const accountsOf = (platform) => social.filter((row) => row.platform === platform).map((row) => ({ id: row.id, displayName: row.displayName, pageId: row.pageId || null }));
     return {
       configured: isConfigured(),
-      instagram: social.map((row) => ({ id: row.id, displayName: row.displayName, pageId: row.pageId || null })),
+      instagram: accountsOf('INSTAGRAM'),
+      facebook: accountsOf('FACEBOOK'),
       adAccounts: ads.map(publicAdAccount)
     };
   };
@@ -98,6 +100,27 @@ export const createMetaReportService = ({
     }
   };
 
+  /**
+   * La página de Facebook del cliente. Su llave se le pide a Meta en el momento con la de la agencia: la
+   * que se guardó al conectar la página no lleva el permiso de estadísticas si se concedió después.
+   */
+  const fetchFacebook = async ({ clientId, period, facebookAccountId }) => {
+    const row = await db.clientSocialAccount.findUnique({ where: { id: facebookAccountId } });
+    if (!row || row.clientId !== clientId || row.platform !== 'FACEBOOK') throw httpError(422, 'Esa página de Facebook no es de este cliente.');
+    const label = `Facebook «${row.displayName}» · cifras de Meta`;
+    if (row.isActive === false) return { kind: 'FACEBOOK', label, error: `La página ${row.displayName} está desconectada: vuelve a conectarla desde la ficha del cliente.` };
+    try {
+      const token = isConfigured() ? await insights.getPageToken({ pageId: row.externalId, token: requireToken() }) : decrypt(row.encryptedToken);
+      const report = await insights.fetchFacebookPageReport({ pageId: row.externalId, pageName: row.displayName, token, period });
+      const sources = buildFacebookSources({ ...report, sourceIds: { account: newId(), content: newId() } });
+      return { kind: 'FACEBOOK', label, sources, raw: receipt('FACEBOOK', { pageId: row.externalId, period }, report) };
+    } catch (error) {
+      console.error('[MetaReports] Facebook no entregó cifras:', error.code ?? '', error.message);
+      // Este motivo ya está escrito para quien arma el informe; no se le antepone nada.
+      return { kind: 'FACEBOOK', label, error: error.code === 'META_PAGE_INSIGHTS_EMPTY' ? error.message : humanizeMetaReadError(error) };
+    }
+  };
+
   const fetchAds = async ({ clientId, period, adAccountLinkId }) => {
     const row = await db.clientAdAccount.findUnique({ where: { id: adAccountLinkId } });
     if (!row || row.clientId !== clientId || row.isActive === false) throw httpError(422, 'Esa cuenta publicitaria no está vinculada a este cliente.');
@@ -123,9 +146,10 @@ export const createMetaReportService = ({
    * `error` (Meta no las dio, con el motivo en español) o `note` (no hay nada que traer). Una cuenta
    * que falla no tumba a la otra. Pedir la cuenta de otro cliente sí es un error de la petición.
    */
-  const fetchSources = async ({ clientId, period, instagramAccountId = null, adAccountLinkId = null }) => {
+  const fetchSources = async ({ clientId, period, instagramAccountId = null, facebookAccountId = null, adAccountLinkId = null }) => {
     const work = [];
     if (instagramAccountId) work.push(fetchInstagram({ clientId, period, instagramAccountId }));
+    if (facebookAccountId) work.push(fetchFacebook({ clientId, period, facebookAccountId }));
     if (adAccountLinkId) work.push(fetchAds({ clientId, period, adAccountLinkId }));
     return Promise.all(work);
   };

@@ -10,12 +10,13 @@ En Reportes, debajo de las capturas, aparece **Cifras de Meta** al elegir el cli
 
 - **Instagram**: las cuentas que el cliente ya tiene conectadas para publicar (ficha del cliente →
   «Redes conectadas»). Se marca una.
+- **Facebook** (desde el mismo 2 de octubre: «ahora añadamos las cifras de Facebook»): la página que el
+  cliente ya tiene conectada. Se marca una.
 - **Pauta**: la cuenta publicitaria del cliente. Un administrador o project manager la vincula una vez
   con el «+» y queda para todos sus informes. Se marca una.
 
 Nada viene marcado. El botón dice lo que va a hacer: «Leer capturas», «Traer cifras de Meta» o «Leer
-capturas y traer cifras». **Subir capturas sigue igual** y se puede combinar (por ejemplo: Instagram y
-pauta desde Meta, Facebook con capturas).
+capturas y traer cifras». **Subir capturas sigue igual** y se puede combinar con lo que llega de Meta.
 
 El informe que sale es el de siempre: revisión, análisis, emisión y PDF. Las fuentes de Meta se llaman
 «Instagram @cuenta · cifras de Meta», «Publicaciones de @cuenta · cifras de Meta» y «Pauta «cuenta» ·
@@ -38,11 +39,35 @@ octubre de 2026.
 | Comparación con el período anterior | Sí | Los mismos días justo antes, como compara Meta Business Suite |
 | Pauta: inversión, impresiones, alcance, clics, clics en el enlace, CTR, CPC, CPM | Sí | En la moneda de la cuenta publicitaria, sin convertir |
 | Pauta por campaña y por anuncio | Sí | Los 25 de mayor inversión; si hay más, se avisa |
-| Facebook orgánico (página) | **Todavía no** | La llave no tiene el permiso `read_insights`; se sigue subiendo con capturas |
+| Facebook: visualizaciones, interacciones, reproducciones de video, visitas, clics en el contacto y el botón | Sí, con `read_insights` | Se piden día a día y se suman. Meta no cuenta en las interacciones las de los reels |
+| Facebook: nuevos seguidores y quienes dejaron de seguir | Sí | Meta los marca como estimación |
+| Facebook: total de seguidores | Sí | El del **último día del período** que Meta tiene, no el de hoy |
+| Facebook: espectadores de la página (personas distintas) | **No** | Meta los da por día, semana o 28 días, no para el período del informe. No se suman: se avisa |
+| Facebook: cada publicación del período | Sí, hasta 60 | Reacciones, comentarios y compartidos vienen de la publicación; visualizaciones, espectadores y clics, de sus estadísticas, acumulados |
 | Resultados y costo por resultado de la pauta | **Todavía no** | Dependen del objetivo de cada campaña; se añaden cuando se defina cómo leerlos |
 
 `impressions` ya no existe en Instagram (Meta la retiró en abril de 2025): es `views`. Los nombres de las
 métricas cambian con las versiones; **antes de tocar una consulta se lee la referencia, no se adivina**.
+
+## Facebook: lo que hay que saber
+
+- **Permiso**: las estadísticas de una página exigen `read_insights` además de `pages_read_engagement`.
+  **Sin el permiso Meta no da error: responde una lista vacía.** Por eso una página que no entrega ninguna
+  cifra queda como fuente pendiente con el motivo escrito («le falta el permiso… o la página tiene menos
+  de 100 "me gusta"»), nunca como un informe de ceros.
+- **La llave de la página se pide a Meta en el momento** con la de la agencia (`getPageToken`). La que se
+  guardó al conectar la página se emitió con los permisos de ese día; así no hay que reconectar a ningún
+  cliente cuando se añade un permiso.
+- **Nombres**: los de la referencia de Page Insights v26 (`page_media_view`, `page_post_engagements`,
+  `page_video_views`, `page_views_total`, `page_total_actions`, `page_daily_follows_unique`,
+  `page_daily_unfollows_unique`, `page_follows`; por publicación `post_media_view`,
+  `post_total_media_view_unique`, `post_clicks`). `page_impressions_unique`, `page_fans` y
+  `post_impressions_unique` **ya no existen**: Meta responde error 100.
+- **Días**: Meta marca cada valor diario con el final de su día (medianoche del Pacífico). Se piden tramos
+  de 88 días con dos de margen —el tope son 90— y solo se cuentan los días de cada tramo: el margen de un
+  tramo cae dentro del siguiente y, contado dos veces, inflaría el total. Los días son los de Meta, no los
+  de Bogotá: en los bordes del período puede haber unas horas de diferencia con Meta Business Suite.
+- Las páginas con menos de 100 «me gusta» no tienen estadísticas (límite de Meta).
 
 ## Una cuenta publicitaria no es un cliente
 
@@ -69,7 +94,7 @@ informe sale sin pauta de Meta y lo avisa; no pone una fila de ceros.
 | `src/services/metaInsightsService.js` | Las consultas a Meta. Solo lee. La llave va en la cabecera `Authorization`, nunca en la dirección |
 | `src/services/metaReportService.js` | Qué cuentas tiene el cliente, vínculo de la cuenta publicitaria, y las fuentes de un período |
 | `src/routes/api/reportMetaRoutes.js` | `GET /api/reports/meta/sources`, `GET /ad-accounts/available`, `POST` y `DELETE /ad-accounts` |
-| `src/routes/api/reportEvidenceRoutes.js` | `POST /api/reports/extract-metrics` acepta `metaInstagramAccountId` y `metaAdAccountId`; las capturas pasan a ser opcionales cuando hay Meta |
+| `src/routes/api/reportEvidenceRoutes.js` | `POST /api/reports/extract-metrics` acepta `metaInstagramAccountId`, `metaFacebookAccountId` y `metaAdAccountId`; las capturas pasan a ser opcionales cuando hay Meta |
 | `src/components/reports/ReportMetaSources.jsx` | El bloque «Cifras de Meta» |
 | `ClientAdAccount` | La cuenta publicitaria por cliente y su filtro. Sin llaves. Aditiva con `scripts/ensure-social-publishing-schema.js` |
 
@@ -80,7 +105,7 @@ informe sale sin pauta de Meta y lo avisa; no pone una fila de ceros.
   cliente y su ruta es el `storagePath` de la fuente. Si no se puede guardar, las cifras no se usan.
 - **Fallos**: una cuenta que Meta niega queda en «Revisión pendiente» con su motivo (`humanizeMetaReadError`);
   la otra cuenta y las capturas siguen. Pedir la cuenta de otro cliente se rechaza (422).
-- **Un informe, una cuenta de cada tipo**: dos cuentas de Instagram en el mismo informe darían dos cifras
+- **Un informe, una cuenta de cada tipo** (una de Instagram, una página, una de pauta): dos cuentas de Instagram en el mismo informe darían dos cifras
   para el mismo indicador y la conciliación las marcaría como conflicto. Un cliente con varias cuentas
   (PromoGroup y Endova) hace un informe por cuenta.
 - **Permisos**: todo bajo el permiso de Reportes; vincular o desvincular la cuenta publicitaria es de
@@ -90,8 +115,8 @@ informe sale sin pauta de Meta y lo avisa; no pone una fila de ceros.
 
 ## Lo que falta
 
-- **Facebook orgánico**: añadir `read_insights` a la llave y leer la referencia vigente de las métricas de
-  página (los nombres cambiaron).
+- **Espectadores de la página de Facebook** para el período exacto: la referencia lista un período
+  `total_over_range`; falta comprobar con datos reales si sirve para `page_total_media_view_unique`.
 - **Resultados de la pauta** (mensajes, clientes potenciales, compras) y su costo.
 - **La llave vence para datos el 30 de diciembre de 2026**: la misma renovación que necesita la publicación.
 - Las cuentas de Instagram sin página de Facebook visible para la llave (Nattal) no aparecen: primero hay
@@ -99,7 +124,7 @@ informe sale sin pauta de Meta y lo avisa; no pone una fila de ceros.
 
 ## Pruebas
 
-- `tests/metaReportSources.test.js`, `tests/metaInsightsService.test.js`, `tests/metaReportService.test.js`,
+- `tests/metaReportSources.test.js`, `tests/metaFacebookSources.test.js`, `tests/metaInsightsService.test.js`, `tests/metaReportService.test.js`,
   `tests/reportEvidenceRoutes.test.js`, `tests/reportMetaRoutes.test.js`, `tests/reportMetaUi.test.js`.
 - Recorrido en navegador con capturas, sin llamar a Meta: `node tests/browser/reportMetaSources.mjs`
   (deja `output/reportes-meta-*.png`).

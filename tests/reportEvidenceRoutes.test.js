@@ -92,7 +92,7 @@ test('a report can be born from the figures of Meta alone, with the answer of Me
   deps.fetchMetaSources = async input => { asked.push(input); return [{ kind: 'INSTAGRAM', label: 'Instagram @cliente · cifras de Meta', sources: [metaSource('m-1'), metaSource('m-2', { screenType: 'META_API_INSTAGRAM_CONTENT', observations: [] })], raw: { provider: 'META_GRAPH_API', response: { totals: { views: 4489 } } } }]; };
   await routes.createEvidenceExtractionHandler(deps)(metaReq({ metaAdAccountId: 'ad-1' }), res);
   assert.equal(res.code, 201);
-  assert.deepEqual(asked, [{ clientId: 'c1', period: { start: '2026-08-01', end: '2026-08-31' }, instagramAccountId: 's-ig', adAccountLinkId: 'ad-1' }]);
+  assert.deepEqual(asked, [{ clientId: 'c1', period: { start: '2026-08-01', end: '2026-08-31' }, instagramAccountId: 's-ig', facebookAccountId: null, adAccountLinkId: 'ad-1' }]);
   assert.equal(calls.extraction.length, 0, 'no screenshot, no reading with AI');
   assert.equal(calls.uploads.length, 1, 'one receipt per account asked');
   assert.match(calls.uploads[0], /cifras-de-meta\.json$/);
@@ -106,6 +106,17 @@ test('a report can be born from the figures of Meta alone, with the answer of Me
   assert.equal(calls.saved.sources.create.length, 1);
   assert.equal(calls.saved.sources.create[0].platform, 'ORGANIC_RRSS');
   assert.equal(calls.saved.sources.create[0].confidence, 1);
+});
+
+test('the Facebook page alone is enough to start a report', async () => {
+  const { calls, deps } = dependencies(); const res = response();
+  const asked = [];
+  deps.fetchMetaSources = async input => { asked.push(input); return [{ kind: 'FACEBOOK', label: 'Facebook «Cliente» · cifras de Meta', sources: [metaSource('m-fb', { platform: 'FACEBOOK', screenType: 'META_API_FACEBOOK_PAGE', observations: [{ id: 'page-views', key: 'views', label: 'Visualizaciones', value: 5120, unit: 'count', platform: 'FACEBOOK', scope: 'TOTAL', precision: 'EXACT', entityLevel: 'ACCOUNT', contextKey: 'account_content', period: { start: '2026-08-01', end: '2026-08-31' }, evidence: 'Meta' }] })], raw: {} }]; };
+  await routes.createEvidenceExtractionHandler(deps)(metaReq({ metaInstagramAccountId: '', metaFacebookAccountId: 's-fb' }), res);
+  assert.equal(res.code, 201);
+  assert.deepEqual(asked, [{ clientId: 'c1', period: { start: '2026-08-01', end: '2026-08-31' }, instagramAccountId: null, facebookAccountId: 's-fb', adAccountLinkId: null }]);
+  assert.equal(calls.saved.normalizedMetrics.facts.find(fact => fact.key === 'views').platform, 'FACEBOOK');
+  assert.equal(calls.saved.sources.create[0].platform, 'ORGANIC_RRSS');
 });
 
 test('figures of Meta and screenshots travel together in the same report', async () => {

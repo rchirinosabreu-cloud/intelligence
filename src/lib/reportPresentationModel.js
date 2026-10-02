@@ -16,15 +16,15 @@ const metricNames = {
   percentage: 'Porcentaje', count: 'Cantidad', value: 'Valor observado', hombres: 'Hombres', mujeres: 'Mujeres',
   // Lo que Meta entrega aparte y una captura casi nunca muestra (cifras de Meta, 2 de octubre de 2026).
   likes: 'Me gusta', comments: 'Comentarios', shares: 'Compartidos', saves: 'Guardados', accountsEngaged: 'Cuentas que interactuaron',
-  websiteClicks: 'Clics al sitio web', unfollows: 'Dejaron de seguir'
+  websiteClicks: 'Clics al sitio web', unfollows: 'Dejaron de seguir', reactions: 'Reacciones', pageActions: 'Clics en el contacto y el botón de la página'
 };
-const metricOrder = ['views', 'reach', 'viewers', 'interactions', 'accountsEngaged', 'likes', 'comments', 'shares', 'saves', 'profileVisits', 'linkClicks', 'websiteClicks', 'clicks', 'follows', 'unfollows', 'followers', 'followerTotal', 'contentCount', 'watchTime', 'threeSecondVideoViews', 'videoViews3s'];
+const metricOrder = ['views', 'reach', 'viewers', 'interactions', 'accountsEngaged', 'reactions', 'likes', 'comments', 'shares', 'saves', 'videoViews', 'profileVisits', 'pageActions', 'linkClicks', 'websiteClicks', 'clicks', 'follows', 'unfollows', 'followers', 'followerTotal', 'contentCount', 'watchTime', 'threeSecondVideoViews', 'videoViews3s'];
 // La pauta se lee empezando por lo que se invirtió y lo que eso compró; por orden alfabético abría con «CPC».
 const paidOrder = ['spend', 'budget', 'results', 'costPerResult', 'impressions', 'reach', 'clicks', 'linkClicks', 'ctr', 'cpc', 'cpm'];
 const CONTENT_MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sept', 'oct', 'nov', 'dic'];
 /** «8 sept · Reel · …» → un número que ordena por fecha dentro del período; `null` si la etiqueta no empieza por un día. */
 const contentDay = label => { const match = /^(\d{1,2}) ([a-z]+)\b/.exec(text(label)); const month = match ? CONTENT_MONTHS.indexOf(match[2]) : -1; return month < 0 ? null : month * 100 + Number(match[1]); };
-const tableOrder = ['contentCount', 'views', 'interactions', 'results', 'reach', 'impressions', 'spend', 'costPerResult', 'clicks', 'ctr', 'cpc', 'cpm'];
+const tableOrder = ['contentCount', 'views', 'viewers', 'interactions', 'reactions', 'comments', 'results', 'reach', 'impressions', 'spend', 'costPerResult', 'clicks', 'ctr', 'cpc', 'cpm'];
 const orderOf = (key, order) => order.includes(key) ? order.indexOf(key) : order.length;
 export const getReportMetricLabel = (key, fallback = '') => metricNames[key] || text(fallback) || text(key) || 'Indicador';
 

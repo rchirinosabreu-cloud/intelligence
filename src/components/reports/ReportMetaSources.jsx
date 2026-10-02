@@ -5,7 +5,7 @@ import { toast } from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
-import { Instagram, Loader2, Megaphone, Plus, Search, X } from '@/components/ui/icons';
+import { Facebook, Instagram, Loader2, Megaphone, Plus, Search, X } from '@/components/ui/icons';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { filterAdAccounts, insightWindows } from '@/lib/metaReportSources';
 
@@ -15,8 +15,10 @@ import { filterAdAccounts, insightWindows } from '@/lib/metaReportSources';
  * conectada para publicar; la pauta, de una cuenta publicitaria que se elige una vez por cliente.
  * Subir capturas sigue al lado, igual que siempre, y se puede combinar.
  *
+ * Facebook llegó el mismo día: la página que el cliente ya tiene conectada.
+ *
  * Nada viene marcado: la persona elige qué trae (misma regla que las cuentas de una pieza). Un informe
- * lleva **una** cuenta de Instagram y **una** de pauta: dos cuentas del mismo tipo darían dos cifras
+ * lleva **una** cuenta de Instagram, **una** página y **una** de pauta: dos del mismo tipo darían dos cifras
  * distintas para el mismo indicador y el informe las marcaría como conflicto.
  */
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('authToken')}` });
@@ -132,7 +134,7 @@ const LinkAdAccountDialog = ({ clientId, open, onClose, onLinked }) => {
   );
 };
 
-const ReportMetaSources = ({ clientId, canManage = false, disabled = false, period, instagramAccountId = '', adAccountId = '', onInstagramChange, onAdAccountChange }) => {
+const ReportMetaSources = ({ clientId, canManage = false, disabled = false, period, instagramAccountId = '', facebookAccountId = '', adAccountId = '', onInstagramChange, onFacebookChange, onAdAccountChange }) => {
   const queryClient = useQueryClient();
   const confirm = useConfirmDialog();
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -159,7 +161,9 @@ const ReportMetaSources = ({ clientId, canManage = false, disabled = false, peri
   const instagram = data?.instagram || [];
   const adAccounts = data?.adAccounts || [];
   // Lo elegido solo vale si sigue en la lista: una cuenta desconectada entretanto no se manda.
+  const facebook = data?.facebook || [];
   const chosenInstagram = instagram.some((account) => account.id === instagramAccountId) ? instagramAccountId : '';
+  const chosenFacebook = facebook.some((account) => account.id === facebookAccountId) ? facebookAccountId : '';
   const chosenAds = adAccounts.some((account) => account.id === adAccountId) ? adAccountId : '';
   const longPeriod = Boolean(chosenInstagram) && insightWindows(period?.start, period?.end).length > 1;
 
@@ -176,7 +180,7 @@ const ReportMetaSources = ({ clientId, canManage = false, disabled = false, peri
   return (
     <section className="border-t border-slate-200 pt-6 dark:border-slate-700" aria-labelledby="report-meta-title" data-report-meta-sources>
       <h2 id="report-meta-title" className="text-sm font-semibold text-slate-900 dark:text-slate-50">Cifras de Meta</h2>
-      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Instagram y la pauta llegan directo de Meta, sin capturas. Marca lo que quieras traer; lo demás (Facebook, por ahora) se sigue subiendo con capturas.</p>
+      <p className="mt-1 text-sm text-slate-600 dark:text-slate-300">Instagram, Facebook y la pauta llegan directo de Meta, sin capturas. Marca lo que quieras traer; también puedes sumar capturas.</p>
 
       {isLoading ? (
         <div className="mt-4 flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Cargando las cuentas del cliente…</div>
@@ -185,7 +189,7 @@ const ReportMetaSources = ({ clientId, canManage = false, disabled = false, peri
       ) : data?.configured === false ? (
         <p className="mt-4 rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">La conexión con Meta no está configurada en el servidor. Por ahora el informe se arma con capturas.</p>
       ) : (
-        <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2">
+        <div className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
           <div className="min-w-0 space-y-2" role="group" aria-labelledby="report-meta-instagram">
             <h3 id="report-meta-instagram" className="flex min-h-9 items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200"><Instagram className="h-4 w-4" aria-hidden="true" /> Instagram</h3>
             {instagram.length === 0 ? (
@@ -208,8 +212,31 @@ const ReportMetaSources = ({ clientId, canManage = false, disabled = false, peri
             )}
           </div>
 
+          {/* Facebook (2 de octubre de 2026): la página que el cliente ya tiene conectada para publicar. */}
+          <div className="min-w-0 space-y-2" role="group" aria-labelledby="report-meta-facebook">
+            <h3 id="report-meta-facebook" className="flex min-h-9 items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200"><Facebook className="h-4 w-4" aria-hidden="true" /> Facebook</h3>
+            {facebook.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-slate-200 p-3 text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">Este cliente no tiene página de Facebook conectada. Se conecta en su ficha, en «Redes conectadas».</p>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {facebook.map((account) => {
+                  const active = chosenFacebook === account.id;
+                  return (
+                    <button key={account.id} type="button" disabled={disabled} aria-pressed={active} data-report-meta-facebook={account.id}
+                      onClick={() => onFacebookChange(active ? '' : account.id)} className={chipClass(active)}>
+                      <span className="truncate font-medium">{account.displayName}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+            {Boolean(chosenFacebook) && (
+              <p className="text-xs leading-relaxed text-slate-500 dark:text-slate-400" data-report-meta-facebook-note>De la página llegan visualizaciones, interacciones, visitas y seguidores. Las personas distintas que la vieron en el período no: Meta no las entrega para un período a la medida.</p>
+            )}
+          </div>
+
           <div className="min-w-0 space-y-2" role="group" aria-labelledby="report-meta-ads">
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex min-h-9 items-center justify-between gap-2">
               <h3 id="report-meta-ads" className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200"><Megaphone className="h-4 w-4" aria-hidden="true" /> Pauta</h3>
               {canManage && (
                 <button type="button" disabled={disabled} onClick={() => setDialogOpen(true)} aria-label="Vincular cuenta publicitaria" title="Vincular cuenta publicitaria"
