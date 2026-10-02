@@ -641,6 +641,7 @@ model Client {
   flowMessages        FlowMessage[]
   integrations        Integration[]
   socialAccounts      ClientSocialAccount[]
+  adAccounts          ClientAdAccount[]
   nativeTasks         Task[]
   agencyContexts      AgencyContext[]
   briaMemorySources   BriaMemorySource[]
@@ -971,6 +972,26 @@ model ClientSocialAccount {
 
   @@unique([clientId, platform, externalId])
   @@index([platform, externalId])
+}
+
+/// La cuenta publicitaria de Meta de la que salen las cifras de pauta de un cliente en Reportes
+/// (2 de octubre de 2026). Una cuenta publicitaria no es un cliente: la de la agencia lleva campañas de
+/// varios, así que `campaignFilter` guarda las palabras que distinguen las de este. No guarda llaves.
+/// Aditiva con `scripts/ensure-social-publishing-schema.js`.
+model ClientAdAccount {
+  id             String   @id @default(uuid())
+  clientId       String
+  adAccountId    String
+  name           String
+  currency       String?
+  campaignFilter String?
+  isActive       Boolean  @default(true)
+  connectedById  String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, adAccountId])
 }
 
 /// La cola de publicación: una fila por pieza y cuenta. El cron la reclama por compare-and-set (lease),

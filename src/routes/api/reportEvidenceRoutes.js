@@ -9,7 +9,13 @@ const errorResponse = (res, error) => {
   return res.status(error.status || (error.isAIUnavailable ? 502 : 500)).json({ error: error.message || 'No se pudo completar la operación del informe.' });
 };
 
-export function createEvidenceExtractionHandler({ prisma, uploadClientFile, extractMetrics, cleanExtraction }) {
+/**
+ * Un informe nace de capturas leídas con visión, de las cifras que entrega Meta, o de las dos cosas
+ * (Rodny, 2 de octubre de 2026: «no eliminemos la opción que tenemos actualmente de subir los
+ * pantallazos»). Las cifras de Meta llegan ya como fuentes (`fetchMetaSources`); aquí solo se les
+ * guarda el comprobante —la respuesta de Meta, tal cual— y entran a la misma conciliación.
+ */
+export function createEvidenceExtractionHandler({ prisma, uploadClientFile, extractMetrics, cleanExtraction, fetchMetaSources = null }) {
   return async (req, res) => {
     try {
       const { clientId, periodKind = 'MONTHLY', startDate, endDate } = req.body || {};
@@ -21,7 +27,11 @@ export function createEvidenceExtractionHandler({ prisma, uploadClientFile, extr
       if (incoming.some(file => !['logo', 'files', 'organicFiles', 'adsFiles'].includes(file.fieldname))) throw reportWorkflowError('La carga contiene un campo de archivo desconocido.');
       const files = incoming.filter(file => file.fieldname !== 'logo');
       const logos = incoming.filter(file => file.fieldname === 'logo');
-      if (!files.length || files.length > 14 || logos.length > 1) throw reportWorkflowError('Carga entre una y catorce capturas y un solo logo opcional.');
+      const instagramAccountId = String(req.body?.metaInstagramAccountId || '').trim() || null;
+      const adAccountLinkId = String(req.body?.metaAdAccountId || '').trim() || null;
+      const wantsMeta = Boolean(instagramAccountId || adAccountLinkId);
+      if ((!files.length && !wantsMeta) || files.length > 14 || logos.length > 1) throw reportWorkflowError('Carga entre una y catorce capturas o elige las cifras de Meta, y un solo logo opcional.');
+      if (wantsMeta && typeof fetchMetaSources !== 'function') throw reportWorkflowError('Las cifras de Meta no están disponibles en este servidor.', 503);
       if (logos.some(file => file.buffer.length > 1024 * 1024)) throw reportWorkflowError('El logo debe pesar como máximo 1 MB para incluirlo en el informe.');
       if (incoming.some(file => !['image/png', 'image/jpeg', 'image/webp'].includes(file.mimetype))) throw reportWorkflowError('Usa imágenes PNG, JPEG o WebP.');
       if (incoming.reduce((sum, file) => sum + (file.buffer?.length || 0), 0) > 100 * 1024 * 1024) throw reportWorkflowError('El lote supera los 100 MB.');
@@ -54,13 +64,48 @@ export function createEvidenceExtractionHandler({ prisma, uploadClientFile, extr
           }
         }
       };
-      await Promise.all(Array.from({ length: Math.min(3, jobs.length) }, run));
+      // Meta se consulta mientras se leen las capturas. Una cuenta que falla queda como fuente
+      // pendiente con su motivo; una que no tiene nada que traer (sin inversión) queda como aviso.
+      const metaResults = [];
+      const metaNotes = [];
+      const readMeta = async () => {
+        if (!wantsMeta) return;
+        for (const entry of await fetchMetaSources({ clientId, period: reportPeriod, instagramAccountId, adAccountLinkId })) {
+          const declaredCategory = entry.kind === 'ADS' ? 'ADS' : 'SOCIAL';
+          const failed = error => metaResults.push({ sourceId: randomUUID(), origin: 'META_API', originalName: entry.label, declaredCategory, outcome: 'FAILED', usable: false, error, observations: [], panels: [] });
+          if (entry.note) metaNotes.push(entry.note);
+          if (entry.error) failed(entry.error);
+          if (!entry.sources?.length) continue;
+          const body = Buffer.from(JSON.stringify(entry.raw ?? {}));
+          const contentHash = createHash('sha256').update(body).digest('hex');
+          let storagePath;
+          try {
+            storagePath = (await uploadClientFile({ originalname: `${entry.sources[0].sourceId}-cifras-de-meta.json`, mimetype: 'application/json', buffer: body, size: body.length }, client.name)).gcsPath;
+          } catch (error) {
+            // Sin comprobante no se usan las cifras: después nadie podría mostrar de dónde salieron.
+            console.error('[Reports evidence] Meta receipt upload failed:', error.message);
+            failed('Meta entregó las cifras, pero no se pudo guardar su comprobante. Inténtalo de nuevo.');
+            continue;
+          }
+          for (const source of entry.sources) {
+            const observations = normalizeReportObservations(source, { sourceId: source.sourceId, reportPeriod, currency });
+            if (!observations.some(item => item.value !== null)) continue;
+            metaResults.push({ ...source, contentHash, storagePath, observations, panels: [], usable: true, outcome: 'SUCCESS', error: null });
+          }
+        }
+      };
+      await Promise.all([...Array.from({ length: Math.min(3, jobs.length) }, run), readMeta()]);
+      results.push(...metaResults);
       const successful = results.filter(source => source.usable);
-      const sourceFailures = results.filter(source => !source.usable).map(({ sourceId, originalName, error, outcome }) => ({ sourceId, originalName, error, outcome }));
-      const processingSummary = { totalFiles: files.length, successfulFiles: successful.length, partialFiles: results.filter(source => source.outcome === 'PARTIAL').length, failedFiles: results.filter(source => source.outcome === 'FAILED').length };
-      if (!successful.length) return res.status(422).json({ error: 'No se obtuvo una lectura utilizable. Las capturas no se publicaron.', processingSummary, sourceFailures });
+      const sourceFailures = results.filter(source => !source.usable).map(({ sourceId, originalName, error, outcome, origin }) => ({ sourceId, originalName, error, outcome, ...(origin ? { origin } : {}) }));
+      const processingSummary = { totalFiles: files.length, metaSources: metaResults.filter(source => source.usable).length, successfulFiles: successful.length, partialFiles: results.filter(source => source.outcome === 'PARTIAL').length, failedFiles: results.filter(source => source.outcome === 'FAILED').length };
+      if (!successful.length) {
+        // Solo con Meta, lo que hay que decir es lo que dijo Meta, no «las capturas no se publicaron».
+        const error = files.length ? 'No se obtuvo una lectura utilizable. Las capturas no se publicaron.' : sourceFailures[0]?.error || metaNotes[0] || 'Meta no entregó cifras para este período.';
+        return res.status(422).json({ error, processingSummary, sourceFailures });
+      }
       const branding = {};
-      const warnings = results.flatMap(source => source.warnings || []);
+      const warnings = [...results.flatMap(source => source.warnings || []), ...metaNotes];
       if (logos[0]) {
         try {
           branding.logoStoragePath = (await uploadClientFile(logos[0], client.name)).gcsPath;

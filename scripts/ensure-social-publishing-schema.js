@@ -80,7 +80,26 @@ try {
       ORDER BY first."connectedAt" ASC, first."id" ASC LIMIT 1
     );
   `);
-  console.log('[Social publishing] publishTime column, ClientSocialAccount and SocialPublication tables ready (several accounts per client).');
+
+  // Cifras de Meta para los informes (Rodny, 2 de octubre de 2026): la cuenta publicitaria de la que
+  // sale la pauta de un cliente y las palabras que distinguen sus campañas, porque una cuenta puede
+  // llevar las de varios clientes. Tabla nueva; va aquí porque es parte de la misma conexión con Meta.
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS "ClientAdAccount" (
+      "id" TEXT PRIMARY KEY,
+      "clientId" TEXT NOT NULL REFERENCES "Client"("id") ON DELETE CASCADE,
+      "adAccountId" TEXT NOT NULL,
+      "name" TEXT NOT NULL,
+      "currency" TEXT,
+      "campaignFilter" TEXT,
+      "isActive" BOOLEAN NOT NULL DEFAULT TRUE,
+      "connectedById" TEXT,
+      "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "updatedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ClientAdAccount_clientId_adAccountId_key" ON "ClientAdAccount"("clientId", "adAccountId");`);
+  console.log('[Social publishing] publishTime column, ClientSocialAccount, SocialPublication and ClientAdAccount tables ready (several accounts per client).');
 } catch (error) {
   console.error('[Social publishing] Failed to ensure the social publishing schema:', error.message);
   process.exitCode = 1;

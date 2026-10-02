@@ -15,6 +15,8 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { createEvidenceExtractionHandler, createEvidenceWorkflowHandlers, REPORT_EVIDENCE_PIPELINE_VERSION } from './reportEvidenceRoutes.js';
 import { buildMetricReportHtml, renderMetricReportPdf } from '../../services/metricReportPdf.js';
+import { metaReportService } from '../../services/metaReportService.js';
+import reportMetaRouter from './reportMetaRoutes.js';
 import { sanitizeNarrativeForReport } from '../../lib/reportPresentation.js';
 import { isSafeStoragePath } from '../../config/security.js';
 import {
@@ -76,7 +78,8 @@ router.get('/image-proxy', async (req, res) => {
         // Use extension as fallback or add a metadata helper to storageService if needed.
         // For now, we trust extension or default to jpeg.
         const ext = decodedPath.split('.').pop().toLowerCase();
-        const contentType = ext === 'png' ? 'image/png' : 'image/jpeg';
+        // El comprobante de una fuente de Meta es la respuesta de Meta, no una imagen.
+        const contentType = ext === 'png' ? 'image/png' : ext === 'json' ? 'application/json; charset=utf-8' : 'image/jpeg';
 
         res.setHeader('Content-Type', contentType);
         res.setHeader('Cache-Control', 'private, max-age=300');
@@ -239,8 +242,12 @@ router.post('/generate', upload.any(), async (req, res) => {
 
 router.post('/extract-metrics', upload.any(), createEvidenceExtractionHandler({
     prisma, uploadClientFile, extractMetrics: extractMetricsWithOpenAI,
-    cleanExtraction: validateAndCleanSourceExtraction
+    cleanExtraction: validateAndCleanSourceExtraction,
+    fetchMetaSources: metaReportService.fetchSources
 }));
+
+// Cifras de Meta: qué puede traer un cliente y cuál es su cuenta publicitaria. Antes de `/:reportId`.
+router.use('/meta', reportMetaRouter);
 
 const evidenceHandlers = createEvidenceWorkflowHandlers({
     prisma, buildHtml: buildMetricReportHtml, renderPdf: renderMetricReportPdf
