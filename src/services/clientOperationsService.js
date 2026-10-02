@@ -4,6 +4,7 @@
  * las tareas; nada de eso se escribe a mano. Lo único que este servicio guarda es lo que la plataforma no
  * puede saber sola: la ficha operativa, el contrato y que el informe de un mes se entregó.
  */
+import { Prisma } from '@prisma/client';
 import prisma from '../lib/prisma.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import {
@@ -47,7 +48,7 @@ const clientSelect = (window) => ({
         where: { deletedAt: null },
         select: {
           id: true, status: true, publishDate: true, format: true, objective: true, copyText: true, captionText: true,
-          finalAssetKey: true, _count: { select: { finalAssets: true } }, publications: { select: { status: true } },
+          finalAssetKey: true, _count: { select: { finalAssets: true } }, publications: { select: { status: true } }, manualPublish: true,
         },
       },
     },
@@ -84,6 +85,8 @@ function pieceFacts(planId, item) {
     copyText: item.copyText, captionText: item.captionText,
     hasFinalAsset: Boolean(item.finalAssetKey) || (item._count?.finalAssets || 0) > 0,
     hasActivePublication: (item.publications || []).some((p) => ACTIVE_PUBLICATION.has(p.status)),
+    // Marcada a mano con «Ya se publicó»: se puede deshacer mientras siga publicada.
+    markedByHand: item.status === 'PUBLICADO' && Boolean(item.manualPublish?.previousStatus),
   };
 }
 
@@ -225,15 +228,41 @@ export const createClientOperationsService = ({ db = prisma, now = () => new Dat
     return { clientId: client.id, year: y, month: m, delivered: Boolean(delivered), label: cycleOf(y, m).label };
   };
 
+  const findClientPiece = (clientId, itemId) => db.contentItem.findFirst({
+    where: { id: String(itemId || ''), deletedAt: null, plan: { clientId: String(clientId || ''), deletedAt: null } },
+    select: { id: true, status: true, manualPublish: true, plan: { select: { id: true, status: true } } },
+  });
+
   // Una pieza que salió por fuera de la plataforma: se marca publicada para que la operación diga la verdad.
-  const markPiecePublished = async ({ clientId, itemId }) => {
-    const item = await db.contentItem.findFirst({
-      where: { id: String(itemId || ''), deletedAt: null, plan: { clientId: String(clientId || ''), deletedAt: null } },
-      select: { id: true, status: true },
-    });
+  // Se anota cómo estaban la pieza y su parrilla, para poder deshacerlo si el clic fue un error.
+  const markPiecePublished = async ({ clientId, itemId, actorUserId }) => {
+    const item = await findClientPiece(clientId, itemId);
     if (!item) throw httpError(404, 'Esa pieza no pertenece a este cliente.');
-    if (item.status !== 'PUBLICADO') await updateItem(item.id, { status: 'PUBLICADO' });
+    if (item.status !== 'PUBLICADO') {
+      await updateItem(item.id, {
+        status: 'PUBLICADO',
+        manualPublish: { previousStatus: item.status, previousPlanStatus: item.plan?.status || null, at: now().toISOString(), by: actorUserId || null },
+      });
+    }
     return { id: item.id, status: 'PUBLICADO' };
+  };
+
+  // Deshacer «Ya se publicó» (Rodny, 2 de octubre de 2026: «me equivoqué … debería poder hacerlo»): la pieza
+  // vuelve al estado que tenía y, si ese clic había cerrado la parrilla, la parrilla vuelve a como estaba.
+  // Solo se deshace lo que se marcó a mano; lo que publicó Meta no se toca desde aquí.
+  const undoPiecePublished = async ({ clientId, itemId }) => {
+    const item = await findClientPiece(clientId, itemId);
+    if (!item) throw httpError(404, 'Esa pieza no pertenece a este cliente.');
+    const previousStatus = item.manualPublish?.previousStatus;
+    if (item.status !== 'PUBLICADO' || !previousStatus) {
+      throw httpError(409, 'Esta pieza no se marcó a mano como publicada, así que no hay nada que deshacer aquí.');
+    }
+    await updateItem(item.id, { status: previousStatus, manualPublish: Prisma.DbNull });
+    const previousPlanStatus = item.manualPublish.previousPlanStatus;
+    if (item.plan?.status === 'FINALIZADO' && previousPlanStatus && previousPlanStatus !== 'FINALIZADO') {
+      await db.contentPlan.update({ where: { id: item.plan.id }, data: { status: previousPlanStatus } });
+    }
+    return { id: item.id, status: previousStatus };
   };
 
   const addObservation = async ({ clientId, text, actorUserId }) => {
@@ -263,7 +292,7 @@ export const createClientOperationsService = ({ db = prisma, now = () => new Dat
     return db.teamMember.update({ where: { id: member.id }, data: { highlightedAction: value } });
   };
 
-  return { listOperations, getOperation, saveProfile, setMonthlyReport, markPiecePublished, addObservation, deleteObservation, setTeamHighlight };
+  return { listOperations, getOperation, saveProfile, setMonthlyReport, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
 };
 
 export const clientOperationsService = createClientOperationsService();

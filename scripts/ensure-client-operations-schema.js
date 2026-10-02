@@ -62,6 +62,8 @@ try {
   `);
   await client.query(`CREATE INDEX IF NOT EXISTS "ClientObservation_clientId_createdAt_idx" ON "ClientObservation"("clientId", "createdAt");`);
   await client.query(`ALTER TABLE "TeamMember" ADD COLUMN IF NOT EXISTS "highlightedAction" TEXT;`);
+  // «Ya se publicó» guarda aquí el estado anterior para poder deshacerlo.
+  await client.query(`ALTER TABLE "ContentItem" ADD COLUMN IF NOT EXISTS "manualPublish" JSONB;`);
   console.log('[Client operations] profile columns, ClientContract, ClientMonthlyReport, ClientObservation and TeamMember.highlightedAction ready.');
 } catch (error) {
   console.error('[Client operations] Failed to ensure the client operations schema:', error.message);

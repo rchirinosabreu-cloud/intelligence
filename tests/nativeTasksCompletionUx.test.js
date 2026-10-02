@@ -32,7 +32,7 @@ test('completion confetti runs only after a successful backend response', async 
 test('cerrar una tarea desde el panel o el modal tampoco celebra antes de tiempo', async () => {
   // Regla 1 de AGENTS: la celebración es consecuencia de la respuesta del servidor, nunca del clic.
   // Los dos disparaban confeti **antes** del `fetch`, así que un guardado fallido celebraba igual.
-  for (const file of ['TaskSidePanel', 'TaskEditModal']) {
+  for (const file of ['TaskSidePanel']) {
     const source = await readFile(new URL(`../src/components/modules/${file}.jsx`, import.meta.url), 'utf8');
     // El import es `{ triggerConfetti }`, sin paréntesis: todo lo que casa aquí es una llamada.
     const llamadas = [...source.matchAll(/triggerConfetti\(/g)].map(m => m.index);

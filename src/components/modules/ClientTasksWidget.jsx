@@ -24,16 +24,17 @@ import {
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { useToast } from '@/components/ui/use-toast';
-import TaskCreateModal from './TaskCreateModal';
-import TaskEditModal from './TaskEditModal';
+import { useNavigate } from 'react-router-dom';
+import TaskSidePanel from './TaskSidePanel';
 
 const ClientTasksWidget = ({ clientId }) => {
     const queryClient = useQueryClient();
     const { toast } = useToast();
+    const navigate = useNavigate();
 
-    // Modal states
+    // Un solo creador de tareas en toda la plataforma (Rodny, 2 de octubre de 2026): el panel de Gestión.
+    // Abrir una tarea la lleva a Gestión, donde vive con sus comentarios, adjuntos, tiempos y bloqueos.
     const [isCreating, setIsCreating] = useState(false);
-    const [editingTask, setEditingTask] = useState(null);
     const [deletingTask, setDeletingTask] = useState(null);
     const [deleteReason, setDeleteReason] = useState('');
     const [isSubmittingDelete, setIsSubmittingDelete] = useState(false);
@@ -214,7 +215,7 @@ const ClientTasksWidget = ({ clientId }) => {
                         return (
                             <div
                                 key={task.id}
-                                onClick={() => setEditingTask(task)}
+                                onClick={() => navigate(`/gestion?taskId=${task.id}`)}
                                 className={cn(
                                     "flex items-start gap-3 p-3 rounded-xl border transition-all cursor-pointer group select-none relative",
                                     isDone
@@ -248,7 +249,7 @@ const ClientTasksWidget = ({ clientId }) => {
                                                 isDone
                                                     ? "bg-zinc-100 text-zinc-400 border-zinc-200"
                                                     : overdue
-                                                        ? "bg-red-50 text-red-600 border-red-200 dark:bg-red-900/20 dark:border-red-900/30 dark:text-red-400"
+                                                        ? "bg-destructive/10 text-destructive border-destructive/20 dark:bg-destructive/10 dark:border-destructive/30"
                                                         : "bg-zinc-50 text-zinc-500 border-zinc-200 dark:bg-zinc-800 dark:border-zinc-700 dark:text-zinc-400"
                                             )}>
                                                 <Calendar className="w-3 h-3" />
@@ -289,28 +290,16 @@ const ClientTasksWidget = ({ clientId }) => {
             </div>
 
             {/* Modals */}
-            <TaskCreateModal
+            <TaskSidePanel
                 isOpen={isCreating}
                 onClose={() => setIsCreating(false)}
                 onSuccess={() => {
-                    queryClient.invalidateQueries({ queryKey: ['nativeTasks', clientId] });
+                    queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
                     queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
                     queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
                 }}
                 clientsList={clientsList}
                 defaultClientId={clientId}
-            />
-
-            <TaskEditModal
-                isOpen={!!editingTask}
-                onClose={() => setEditingTask(null)}
-                onSuccess={() => {
-                    queryClient.invalidateQueries({ queryKey: ['nativeTasks', clientId] });
-                    queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
-                    queryClient.invalidateQueries({ queryKey: ['quality-streak'] });
-                }}
-                clientsList={clientsList}
-                taskData={editingTask}
             />
 
             {/* Hard Delete with Audit Log Modal */}

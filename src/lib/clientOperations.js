@@ -236,7 +236,7 @@ export function summarizeCycle(cycle, items, { quota, today }) {
   const day = Math.min(length, Math.max(0, daysBetween(cycle.start, today) + 1));
   return {
     ...cycle, quota, created: sorted.length, reached, overdueItems, longestGap, sameDay, day, length,
-    pieces: sorted.map((item) => ({ id: item.id, date: item.date, format: item.format, title: item.title, status: item.status, planId: item.planId })),
+    pieces: sorted.map((item) => ({ id: item.id, date: item.date, format: item.format, title: item.title, status: item.status, planId: item.planId, markedByHand: Boolean(item.markedByHand) })),
   };
 }
 

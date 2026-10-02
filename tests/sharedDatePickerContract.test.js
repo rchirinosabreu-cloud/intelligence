@@ -62,8 +62,6 @@ const MODULES_WITH_RAW_PICKER = [
   'src/components/modules/Activity/CalendarDateTimePicker.jsx',
   'src/components/modules/Activity/OperationalCalendar.jsx',
   'src/components/modules/ContentPlanDetail.jsx',
-  'src/components/modules/TaskCreateModal.jsx',
-  'src/components/modules/TaskEditModal.jsx',
   'src/components/modules/financial/ReceivablePaymentDialog.jsx'
 ];
 

@@ -5,11 +5,12 @@ import { toast } from 'react-hot-toast';
 import { Loader2 } from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import TaskCreateModal from '../../TaskCreateModal';
+import TaskSidePanel from '../../TaskSidePanel';
 import ClientOperationPage from './ClientOperationPage';
 import ClientOperationDialog from './ClientOperationDialog';
 import {
   useAddObservation, useClientOperation, useDeleteObservation, useMarkPiecePublished, useSaveOperationProfile, useSetMonthlyReport,
+  useUndoPiecePublished,
 } from './clientOperationsApi';
 import { bogotaDate } from '@/lib/colombiaBusinessDays';
 
@@ -37,6 +38,7 @@ export default function ClientOperationRoute() {
   const saveProfile = useSaveOperationProfile();
   const setReport = useSetMonthlyReport();
   const markPublished = useMarkPiecePublished();
+  const undoPublished = useUndoPiecePublished();
   const addObservation = useAddObservation();
   const deleteObservation = useDeleteObservation();
   const [editing, setEditing] = useState(false);
@@ -97,7 +99,17 @@ export default function ClientOperationRoute() {
         }}
         onOpenPlan={() => navigate(planId ? `/parrillas/${planId}` : '/parrillas')}
         onNewTask={() => setCreatingTask(true)}
-        onOpenWorkspace={() => navigate(`/cliente/${client.slug}`)} />
+        onOpenWorkspace={() => navigate(`/cliente/${client.slug}`)}
+        onOpenTask={(task) => navigate(`/gestion?taskId=${task.id}`)}
+        onUndoPublished={async (piece) => {
+          try {
+            await undoPublished.mutateAsync({ clientId: client.id, itemId: piece.id });
+            await refetch();
+            toast.success(`«${piece.title}» volvió a su estado anterior.`);
+          } catch (failure) {
+            toast.error(failure.message);
+          }
+        }} />
 
       {editing && (
         <ClientOperationDialog client={client} team={team} onClose={() => setEditing(false)}
@@ -108,9 +120,10 @@ export default function ClientOperationRoute() {
           }} />
       )}
 
-      <TaskCreateModal isOpen={creatingTask} onClose={() => setCreatingTask(false)}
+      {/* El mismo creador de tareas de Gestión, con el cliente ya elegido: es el único de la plataforma. */}
+      <TaskSidePanel isOpen={creatingTask} onClose={() => setCreatingTask(false)}
         onSuccess={() => { refetch(); }}
-        clientsList={[{ id: client.id, name: client.name }]} defaultClientId={client.id} />
+        clientsList={[{ id: client.id, name: client.name, slug: client.slug }]} defaultClientId={client.id} />
     </>
   );
 }
