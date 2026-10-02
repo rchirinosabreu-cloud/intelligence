@@ -28,8 +28,9 @@ export function createEvidenceExtractionHandler({ prisma, uploadClientFile, extr
       const files = incoming.filter(file => file.fieldname !== 'logo');
       const logos = incoming.filter(file => file.fieldname === 'logo');
       const instagramAccountId = String(req.body?.metaInstagramAccountId || '').trim() || null;
+      const facebookAccountId = String(req.body?.metaFacebookAccountId || '').trim() || null;
       const adAccountLinkId = String(req.body?.metaAdAccountId || '').trim() || null;
-      const wantsMeta = Boolean(instagramAccountId || adAccountLinkId);
+      const wantsMeta = Boolean(instagramAccountId || facebookAccountId || adAccountLinkId);
       if ((!files.length && !wantsMeta) || files.length > 14 || logos.length > 1) throw reportWorkflowError('Carga entre una y catorce capturas o elige las cifras de Meta, y un solo logo opcional.');
       if (wantsMeta && typeof fetchMetaSources !== 'function') throw reportWorkflowError('Las cifras de Meta no están disponibles en este servidor.', 503);
       if (logos.some(file => file.buffer.length > 1024 * 1024)) throw reportWorkflowError('El logo debe pesar como máximo 1 MB para incluirlo en el informe.');
@@ -70,7 +71,7 @@ export function createEvidenceExtractionHandler({ prisma, uploadClientFile, extr
       const metaNotes = [];
       const readMeta = async () => {
         if (!wantsMeta) return;
-        for (const entry of await fetchMetaSources({ clientId, period: reportPeriod, instagramAccountId, adAccountLinkId })) {
+        for (const entry of await fetchMetaSources({ clientId, period: reportPeriod, instagramAccountId, facebookAccountId, adAccountLinkId })) {
           const declaredCategory = entry.kind === 'ADS' ? 'ADS' : 'SOCIAL';
           const failed = error => metaResults.push({ sourceId: randomUUID(), origin: 'META_API', originalName: entry.label, declaredCategory, outcome: 'FAILED', usable: false, error, observations: [], panels: [] });
           if (entry.note) metaNotes.push(entry.note);

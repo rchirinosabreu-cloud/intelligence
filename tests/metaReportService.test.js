@@ -49,6 +49,11 @@ const fakeInsights = (overrides = {}) => {
       calls.push(['instagram', input]);
       return { account: { id: input.igUserId, username: input.username }, period: input.period, fetchedAt: NOW.toISOString(), reachIsExact: true, totals: { views: 4489, reach: 886 }, previousTotals: null, previousPeriod: null, follows: null, followerTotal: 2231, formats: {}, media: [{ id: 'm1', caption: 'Reel', media_type: 'VIDEO', media_product_type: 'REELS', timestamp: '2026-09-29T15:00:00+0000', insights: { views: 292, reach: 147 } }] };
     }),
+    getPageToken: overrides.getPageToken || (async (input) => { calls.push(['pageToken', input]); return 'fresh-page-token'; }),
+    fetchFacebookPageReport: overrides.fetchFacebookPageReport || (async (input) => {
+      calls.push(['facebook', input]);
+      return { account: { id: input.pageId, name: input.pageName }, period: input.period, fetchedAt: NOW.toISOString(), totals: { page_media_view: 5120, page_post_engagements: 96 }, previousTotals: null, previousPeriod: null, followerTotal: 363, followerDay: '2026-09-30', posts: [{ id: 'p1_1', message: 'Foto', created_time: '2026-09-09T17:51:33+0000', status_type: 'added_photos', reactions: { summary: { total_count: 4 } }, comments: { summary: { total_count: 2 } }, insights: null }] };
+    }),
     fetchAdsReport: overrides.fetchAdsReport || (async (input) => {
       calls.push(['ads', input]);
       return { account: { id: '123', name: 'Francisco Villa', currency: 'COP' }, campaignFilter: input.campaignFilter || null, period: input.period, fetchedAt: NOW.toISOString(), totals: { spend: '377045', impressions: '114028', reach: '57460' }, previousTotals: null, previousPeriod: null, campaigns: [{ campaign_id: 'c1', campaign_name: 'TITANES', spend: '377045', impressions: '114028' }], ads: [] };
@@ -69,8 +74,36 @@ test('what a client can bring from Meta: its live Instagram accounts and its ad 
   const sources = await service.listClientSources('c1');
   assert.equal(sources.configured, true);
   assert.deepEqual(sources.instagram, [{ id: 's-ig', displayName: '@titanes', pageId: 'p1' }], 'only Instagram, only what is connected, only of this client');
+  assert.deepEqual(sources.facebook, [{ id: 's-fb', displayName: 'Titanes', pageId: 'p1' }]);
   assert.deepEqual(sources.adAccounts, [{ id: 'ad-1', adAccountId: '123', name: 'Francisco Villa', currency: 'COP', campaignFilter: 'Titanes' }]);
   assert.equal(JSON.stringify(sources).includes('token'), false);
+});
+
+// Facebook (2 October 2026). The page key kept when the page was connected was issued with that day's
+// permissions; the statistics need one granted later, so the key is asked of Meta at the moment.
+test('the Facebook page of the client is read with a key asked of Meta at the moment', async () => {
+  const { insights, service } = build();
+  const [facebook] = await service.fetchSources({ clientId: 'c1', period: PERIOD, facebookAccountId: 's-fb' });
+  assert.equal(facebook.kind, 'FACEBOOK');
+  assert.equal(facebook.label, 'Facebook «Titanes» · cifras de Meta');
+  assert.deepEqual(facebook.sources.map((source) => source.screenType), ['META_API_FACEBOOK_PAGE', 'META_API_FACEBOOK_CONTENT']);
+  assert.equal(facebook.raw.kind, 'FACEBOOK');
+  assert.equal(facebook.raw.response.totals.page_media_view, 5120);
+  const call = (name) => insights.calls.find(([kind]) => kind === name)[1];
+  assert.deepEqual(call('pageToken'), { pageId: 'p1', token: 'user-token' });
+  assert.deepEqual({ pageId: call('facebook').pageId, pageName: call('facebook').pageName, token: call('facebook').token }, { pageId: 'p1', pageName: 'Titanes', token: 'fresh-page-token' });
+  assert.equal(/page-token|user-token|enc:/.test(JSON.stringify(facebook)), false);
+  // An Instagram account is not a Facebook page, and the page of another client is never read.
+  await assert.rejects(service.fetchSources({ clientId: 'c1', period: PERIOD, facebookAccountId: 's-ig' }), (error) => error.status === 422);
+  await assert.rejects(service.fetchSources({ clientId: 'c2', period: PERIOD, facebookAccountId: 's-fb' }), (error) => error.status === 422);
+});
+
+test('a page Meta gives nothing for says why in its own words, and the rest of the report still comes', async () => {
+  const empty = Object.assign(new Error('Meta no entregó estadísticas de esta página de Facebook. Suele ser porque a la llave de la agencia le falta el permiso de estadísticas de páginas (read_insights).'), { code: 'META_PAGE_INSIGHTS_EMPTY' });
+  const { service } = build(undefined, { fetchFacebookPageReport: async () => { throw empty; } });
+  const [instagram, facebook] = await service.fetchSources({ clientId: 'c1', period: PERIOD, instagramAccountId: 's-ig', facebookAccountId: 's-fb' });
+  assert.equal(instagram.sources.length, 2);
+  assert.equal(facebook.error, empty.message, 'said as written, without «No se pudieron traer las cifras:» in front');
 });
 
 test('an ad account is linked once per client, with the words that tell its campaigns apart', async () => {

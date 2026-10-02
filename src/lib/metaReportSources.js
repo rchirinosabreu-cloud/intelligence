@@ -40,6 +40,34 @@ export const insightWindows = (start, end) => {
 
 const shiftDay = (day, days) => new Date(Date.parse(`${day}T00:00:00Z`) + days * DAY_SECONDS * 1000).toISOString().slice(0, 10);
 
+/**
+ * Las estadísticas de una página de Facebook: «Only 90 days of insights can be viewed at one time when
+ * using the since and until parameters». Se piden tramos de 88 días de datos con dos días de margen al
+ * final (89 de punta a punta), y de lo que llega solo se cuentan los días del período (`pageValueDay`):
+ * así no importa si Meta incluye o no el último día pedido.
+ */
+export const META_PAGE_WINDOW_DAYS = 88;
+export const pageInsightWindows = (start, end) => {
+  if (!isDay(start) || !isDay(end) || start > end) return [];
+  const windows = [];
+  for (let first = start; first <= end;) {
+    const candidate = shiftDay(first, META_PAGE_WINDOW_DAYS - 1);
+    const last = candidate < end ? candidate : end;
+    windows.push({ since: first, until: shiftDay(last, 2), first, last });
+    first = shiftDay(last, 1);
+  }
+  return windows;
+};
+
+/**
+ * A qué día pertenece un valor diario de una página. Meta marca cada valor con el **final** de su día
+ * (`end_time`, medianoche del Pacífico: «2026-09-02T07:00:00+0000» es el 1 de septiembre).
+ */
+export const pageValueDay = (endTime) => {
+  const time = Date.parse(endTime);
+  return Number.isNaN(time) ? null : new Date(time - DAY_SECONDS * 1000).toISOString().slice(0, 10);
+};
+
 /** El período de comparación: los mismos días, justo antes, como compara Meta Business Suite. */
 export const previousPeriod = ({ start, end } = {}) => {
   if (!isDay(start) || !isDay(end) || start > end) return null;
@@ -77,8 +105,8 @@ export const filterAdAccounts = (accounts, search = '') => {
  * Qué hace el botón del informe según lo elegido: leer capturas, traer cifras de Meta o las dos cosas.
  * Sin capturas ni cuenta de Meta no hay nada que leer y el botón se apaga.
  */
-export const reportSourcePlan = ({ screenshots = 0, instagramAccountId = null, adAccountId = null } = {}) => {
-  const meta = Boolean(instagramAccountId || adAccountId);
+export const reportSourcePlan = ({ screenshots = 0, instagramAccountId = null, facebookAccountId = null, adAccountId = null } = {}) => {
+  const meta = Boolean(instagramAccountId || facebookAccountId || adAccountId);
   const files = Number(screenshots) > 0;
   if (meta && files) return { ready: true, label: 'Leer capturas y traer cifras', busyLabel: 'Leyendo capturas y consultando Meta…' };
   if (meta) return { ready: true, label: 'Traer cifras de Meta', busyLabel: 'Consultando Meta…' };
@@ -254,6 +282,113 @@ export const buildInstagramSources = ({
   return [accountSource, {
     sourceId: sourceIds.content || `meta-instagram-${account?.id || 'cuenta'}-content`, origin: META_API_ORIGIN, platform: 'INSTAGRAM', screenType: 'META_API_INSTAGRAM_CONTENT',
     originalName: `Publicaciones de ${handle} · cifras de Meta`, declaredCategory: 'SOCIAL', period, contextKey: 'published_content', confidence: 1, fetchedAt, warnings: [], observations: contentObservations, panels: []
+  }];
+};
+
+/**
+ * Las cifras de una página de Facebook: cómo se llaman en Meta (referencia de Page Insights v26, leída
+ * el 2 de octubre de 2026) y cómo en el informe. Las «impresiones» de página ya no existen: Meta las
+ * retiró y dejó las visualizaciones (`page_media_view`).
+ */
+const FACEBOOK_PAGE_METRICS = [
+  ['page_media_view', 'views', 'Visualizaciones', 'account_content', ''],
+  ['page_post_engagements', 'interactions', 'Interacciones con el contenido', 'account_content', ' · Meta no cuenta aquí las interacciones en reels'],
+  ['page_video_views', 'videoViews', 'Reproducciones de video', 'account_content', ' · reproducciones de al menos 3 segundos'],
+  ['page_views_total', 'profileVisits', 'Visitas al perfil', 'account_content', ''],
+  ['page_total_actions', 'pageActions', 'Clics en el contacto y el botón de la página', 'account_content', ''],
+  ['page_daily_follows_unique', 'follows', 'Nuevos seguidores', 'account_audience', ' · estimación de Meta'],
+  ['page_daily_unfollows_unique', 'unfollows', 'Dejaron de seguir', 'account_audience', ' · estimación de Meta']
+];
+const FACEBOOK_POST_KINDS = { added_video: 'Video', added_photos: 'Foto', shared_story: 'Enlace', mobile_status_update: 'Publicación', created_event: 'Evento' };
+export const FACEBOOK_VIEWERS_NOTE = 'Facebook: Meta no entregó los espectadores de la página (personas distintas) para este período, así que el informe sale sin ellos. Sumar los de cada día contaría dos veces a la misma persona.';
+
+/**
+ * Los espectadores de la página para el período exacto se piden con `period=total_over_range`, y ahí
+ * `until` es **exclusivo** (comprobado el 2 de octubre de 2026: 1→2 de septiembre devolvió el día 1).
+ */
+export const pageTotalRange = (start, end) => (isDay(start) && isDay(end) && start <= end ? { since: start, until: shiftDay(end, 1) } : null);
+
+/**
+ * Una página de Facebook como fuentes del informe: la página (resumen y seguidores) y sus publicaciones.
+ *
+ * Los seguidores son los del **último día del período** que Meta tiene (`followerDay`), no los de hoy.
+ * Las reacciones, comentarios y compartidos de una publicación vienen de la publicación misma; sus
+ * visualizaciones y espectadores, de sus estadísticas, y si Meta no las da la fila sale sin ellas.
+ */
+export const buildFacebookSources = ({
+  account, period, fetchedAt = new Date().toISOString(), totals = {}, previousTotals = null, previousPeriod: comparison = null,
+  followerTotal = null, followerDay = null, uniqueViewers = null, previousUniqueViewers = null, posts = [], sourceIds = {}
+} = {}) => {
+  const name = account?.name || 'Facebook';
+  const asked = longDay(fetchedAt);
+  const base = { platform: 'FACEBOOK', unit: 'count', precision: 'EXACT', confidence: 1, period, periodProvenance: 'SOURCE_VISIBLE' };
+  const observations = [];
+  const warnings = [];
+
+  // Espectadores: personas distintas en el período exacto, que Meta sí da para una página (a
+  // diferencia de Instagram, donde el alcance se corta a 30 días).
+  const viewers = number(uniqueViewers);
+  if (viewers !== null) {
+    const change = changePct(viewers, previousUniqueViewers);
+    observations.push({
+      ...base, id: 'page-viewers', key: 'viewers', label: 'Espectadores', value: viewers, scope: 'TOTAL', entityLevel: 'ACCOUNT', contextKey: 'account_content',
+      evidence: `Meta · personas distintas que vieron contenido de la página «${name}» en el período · consultado el ${asked}`,
+      ...(change !== null && comparison ? { changePct: change, comparisonPeriod: comparison } : {})
+    });
+  } else warnings.push(FACEBOOK_VIEWERS_NOTE);
+
+  for (const [metaKey, key, label, contextKey, note] of FACEBOOK_PAGE_METRICS) {
+    const value = number(totals?.[metaKey]);
+    if (value === null) continue;
+    const change = previousTotals && ['views', 'interactions'].includes(key) ? changePct(value, previousTotals[metaKey]) : null;
+    observations.push({
+      ...base, id: `page-${key}`, key, label, value, scope: 'TOTAL', entityLevel: 'ACCOUNT', contextKey,
+      evidence: `Meta · estadísticas de la página de Facebook «${name}»${note} · consultado el ${asked}`,
+      ...(change !== null && comparison ? { changePct: change, comparisonPeriod: comparison } : {})
+    });
+  }
+  const followers = number(followerTotal);
+  if (followers !== null) {
+    observations.push({
+      ...base, id: 'page-followerTotal', key: 'followerTotal', label: 'Seguidores', value: followers, scope: 'TOTAL', entityLevel: 'ACCOUNT', contextKey: 'account_audience',
+      evidence: `Meta · seguidores de la página «${name}»${isDay(followerDay) ? ` al cierre del ${longDay(`${followerDay}T12:00:00Z`)}` : ''} · consultado el ${asked}`
+    });
+  }
+  const published = (Array.isArray(posts) ? posts : []).filter((post) => post && post.id);
+  observations.push({ ...base, id: 'page-contentCount', key: 'contentCount', label: 'Contenido publicado', value: published.length, scope: 'ORGANIC', entityLevel: 'ACCOUNT', contextKey: 'account_content', evidence: `Meta · publicaciones de la página «${name}» en el período · consultado el ${asked}` });
+
+  const accountSource = {
+    sourceId: sourceIds.account || `meta-facebook-${account?.id || 'pagina'}-account`, origin: META_API_ORIGIN, platform: 'FACEBOOK', screenType: 'META_API_FACEBOOK_PAGE',
+    originalName: `Facebook «${name}» · cifras de Meta`, declaredCategory: 'SOCIAL', period, contextKey: 'account_content', confidence: 1, fetchedAt,
+    warnings, observations, panels: []
+  };
+
+  const contentObservations = [];
+  for (const post of published) {
+    const label = [shortDay(post.created_time), FACEBOOK_POST_KINDS[post.status_type] || 'Publicación', firstLine(post.message)].filter(Boolean).join(' · ');
+    const evidence = `Meta · publicación del ${shortDay(post.created_time)} en la página «${name}» · acumulado desde que salió hasta el ${asked}${post.permalink_url ? ` · ${post.permalink_url}` : ''}`;
+    const figures = [
+      ['views', 'Visualizaciones', post.insights?.post_media_view],
+      ['viewers', 'Espectadores', post.insights?.post_total_media_view_unique],
+      ['reactions', 'Reacciones', post.reactions?.summary?.total_count],
+      ['comments', 'Comentarios', post.comments?.summary?.total_count],
+      // Meta omite `shares` cuando nadie compartió: visto en las publicaciones de la agencia.
+      ['shares', 'Compartidos', post.shares?.count ?? 0],
+      ['clicks', 'Clics', post.insights?.post_clicks]
+    ];
+    for (const [key, metricLabel, raw] of figures) {
+      const value = number(raw);
+      if (value === null) continue;
+      contentObservations.push({
+        ...base, id: `post-${post.id}-${key}`, key, label: metricLabel, value, scope: 'ORGANIC', entityLevel: 'CONTENT', entityId: String(post.id), entityName: label,
+        contextKey: 'published_content', contextLabel: 'Publicaciones del período, acumulado a la fecha de consulta', contextProvenance: 'SOURCE_VISIBLE', evidence
+      });
+    }
+  }
+  if (!contentObservations.length) return [accountSource];
+  return [accountSource, {
+    sourceId: sourceIds.content || `meta-facebook-${account?.id || 'pagina'}-content`, origin: META_API_ORIGIN, platform: 'FACEBOOK', screenType: 'META_API_FACEBOOK_CONTENT',
+    originalName: `Publicaciones de «${name}» en Facebook · cifras de Meta`, declaredCategory: 'SOCIAL', period, contextKey: 'published_content', confidence: 1, fetchedAt, warnings: [], observations: contentObservations, panels: []
   }];
 };
 

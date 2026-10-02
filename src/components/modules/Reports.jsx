@@ -998,6 +998,7 @@ const Reports = () => {
   // Cifras de Meta (2 de octubre de 2026): qué cuenta de Instagram y qué cuenta publicitaria trae este
   // informe. Nada viene marcado, y lo elegido es de un cliente: al cambiar de cliente se suelta.
   const [metaInstagramId, setMetaInstagramId] = useState('');
+  const [metaFacebookId, setMetaFacebookId] = useState('');
   const [metaAdAccountId, setMetaAdAccountId] = useState('');
 
   const [organicPreviews, setOrganicPreviews] = useState([]);
@@ -1157,7 +1158,7 @@ const Reports = () => {
     }
   };
 
-  const sourcePlan = reportSourcePlan({ screenshots: organicFiles.length + adsFiles.length, instagramAccountId: metaInstagramId, adAccountId: metaAdAccountId });
+  const sourcePlan = reportSourcePlan({ screenshots: organicFiles.length + adsFiles.length, instagramAccountId: metaInstagramId, facebookAccountId: metaFacebookId, adAccountId: metaAdAccountId });
   const canManageMeta = ['ADMIN', 'PROJECT_MANAGER'].includes(String(currentUser?.role || '').toUpperCase());
 
   const generateReport = async () => {
@@ -1194,6 +1195,7 @@ const Reports = () => {
     organicFiles.forEach(file => formData.append('organicFiles', file));
     if (logoFile) formData.append('logo', logoFile);
     if (metaInstagramId) formData.append('metaInstagramAccountId', metaInstagramId);
+    if (metaFacebookId) formData.append('metaFacebookAccountId', metaFacebookId);
     if (metaAdAccountId) formData.append('metaAdAccountId', metaAdAccountId);
 
     try {
@@ -1557,7 +1559,7 @@ const Reports = () => {
                 disabled={isGenerating}
                 className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-3 outline-none focus:ring-2 focus:ring-primary/20 text-sm font-medium"
                 value={selectedClientId}
-                onChange={(e) => { setSelectedClientId(e.target.value); setMetaInstagramId(''); setMetaAdAccountId(''); }}
+                onChange={(e) => { setSelectedClientId(e.target.value); setMetaInstagramId(''); setMetaFacebookId(''); setMetaAdAccountId(''); }}
               >
                 <option value="">Marca...</option>
                 {clients.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1640,6 +1642,8 @@ const Reports = () => {
            disabled={isGenerating}
            period={{ start: startDate, end: endDate }}
            instagramAccountId={metaInstagramId}
+           facebookAccountId={metaFacebookId}
+           onFacebookChange={setMetaFacebookId}
            adAccountId={metaAdAccountId}
            onInstagramChange={setMetaInstagramId}
            onAdAccountChange={setMetaAdAccountId}

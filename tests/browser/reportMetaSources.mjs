@@ -75,6 +75,20 @@ const insights = {
       media
     };
   },
+  getPageToken: async () => 'fresh-page-token',
+  fetchFacebookPageReport: async ({ pageId, pageName, period }) => {
+    metaCalls.push(['facebook', pageId, period]);
+    return {
+      account: { id: pageId, name: pageName }, period, fetchedAt: '2026-10-02T15:00:00.000Z',
+      totals: { page_media_view: 9120, page_post_engagements: 296, page_video_views: 1410, page_views_total: 233, page_total_actions: 17, page_daily_follows_unique: 29, page_daily_unfollows_unique: 4 },
+      previousTotals: { page_media_view: 8000, page_post_engagements: 310 }, previousPeriod: { start: '2026-08-02', end: '2026-08-31' },
+      followerTotal: 3363, followerDay: '2026-09-30', uniqueViewers: 6420, previousUniqueViewers: 5000,
+      posts: [
+        { id: 'p_2', message: 'Detrás de cámaras del rodaje', created_time: '2026-09-29T22:42:48+0000', permalink_url: 'https://www.facebook.com/p/2', status_type: 'added_video', reactions: { summary: { total_count: 31 } }, comments: { summary: { total_count: 4 } }, shares: { count: 6 }, insights: { post_media_view: 2240, post_total_media_view_unique: 1180, post_clicks: 52 } },
+        { id: 'p_1', message: 'Así se ve un mes bien planeado', created_time: '2026-09-09T17:51:33+0000', permalink_url: 'https://www.facebook.com/p/1', status_type: 'added_photos', reactions: { summary: { total_count: 12 } }, comments: { summary: { total_count: 1 } }, insights: { post_media_view: 910, post_total_media_view_unique: 640, post_clicks: 18 } }
+      ]
+    };
+  },
   fetchAdsReport: async ({ adAccountId, period, campaignFilter }) => {
     metaCalls.push(['ads', adAccountId, period, campaignFilter]);
     return {
@@ -214,6 +228,9 @@ try {
 
     // 3. Se marca lo que se quiere traer y el botón dice lo que va a hacer.
     await page.locator('[data-report-meta-instagram]').click();
+    assert.equal(await page.locator('[data-report-meta-facebook]').getAttribute('aria-pressed'), 'false', 'Facebook tampoco viene marcado');
+    await page.locator('[data-report-meta-facebook]').click();
+    await page.locator('[data-report-meta-facebook-note]').waitFor();
     await page.locator('[data-report-meta-ad-account]').click();
     assert.equal(await mainButton(page).innerText(), 'Traer cifras de Meta');
     assert.equal(await mainButton(page).isEnabled(), true);
@@ -231,17 +248,22 @@ try {
     await page.getByRole('heading', { name: 'Informe de resultados' }).waitFor();
     assert.equal(saved.length, before + 1);
     const report = saved.at(-1);
-    assert.deepEqual(report.normalizedMetrics.processingSummary, { totalFiles: 0, metaSources: 3, successfulFiles: 3, partialFiles: 0, failedFiles: 0 });
+    assert.deepEqual(report.normalizedMetrics.processingSummary, { totalFiles: 0, metaSources: 5, successfulFiles: 5, partialFiles: 0, failedFiles: 0 });
     assert.deepEqual(report.normalizedMetrics.issues.filter((issue) => issue.blocking), [], 'nada que una persona tenga que desenredar');
     assert.equal(report.normalizedMetrics.reportPeriod.start, '2026-09-01');
     assert.equal(report.normalizedMetrics.reportPeriod.end, '2026-09-30');
-    assert.deepEqual(metaCalls.at(-1).slice(0, 2), ['ads', '1001']);
-    assert.equal(metaCalls.at(-1)[3], 'Muestra', 'solo las campañas del cliente');
-    assert.equal(uploads.filter((name) => name.endsWith('-cifras-de-meta.json')).length, (before + 1) * 2, 'un comprobante por cuenta consultada');
+    const adsCall = metaCalls.findLast(([kind]) => kind === 'ads');
+    assert.deepEqual(adsCall.slice(0, 2), ['ads', '1001']);
+    assert.equal(adsCall[3], 'Muestra', 'solo las campañas del cliente');
+    assert.equal(uploads.filter((name) => name.endsWith('-cifras-de-meta.json')).length, (before + 1) * 3, 'un comprobante por cuenta consultada');
+    assert.ok(metaCalls.some(([kind, id]) => kind === 'facebook' && id === 'p1'), 'la página del cliente');
     const workspace = page.locator('section[aria-label="Revisión del informe"]');
     const text = await workspace.innerText();
-    assert.match(text, /3 fuentes de Meta · Resultados por red y pauta/);
-    for (const title of ['Resumen de Instagram', 'Rendimiento por formato · Instagram', 'Publicaciones del período · Instagram', 'Resultados por campaña', 'Resultados por anuncio']) assert.ok(text.includes(title), title);
+    assert.match(text, /5 fuentes de Meta · Resultados por red y pauta/);
+    for (const title of ['Resumen de Instagram', 'Rendimiento por formato · Instagram', 'Publicaciones del período · Instagram', 'Resumen de Facebook', 'Publicaciones del período · Facebook', 'Resultados por campaña', 'Resultados por anuncio']) assert.ok(text.includes(title), title);
+    assert.match(text, /9\.120/, 'las visualizaciones de la página');
+    assert.match(text, /3\.363/, 'los seguidores de la página');
+    assert.doesNotMatch(text, /pageActions|profileVisits|videoViews|\breactions\b|\bviewers\b/, 'ningún nombre técnico de Facebook a la vista');
     assert.doesNotMatch(text, /\bsaves\b|\bshares\b|\bAD\b|IGTV/, 'ningún nombre técnico a la vista');
     assert.match(text, /18\.489/);
     assert.match(text, /377\.045/);
@@ -251,7 +273,7 @@ try {
     await page.locator('[data-report-audit] > summary').click();
     const audit = page.locator('[data-report-audit]');
     await audit.locator('details > summary', { hasText: 'Instagram @clientedemuestra · cifras de Meta' }).click();
-    assert.equal(await audit.locator('[data-report-meta-source]').first().isVisible(), true);
+    assert.equal(await audit.locator('details[open] > [data-report-meta-source]').first().isVisible(), true);
     assert.equal(await audit.getByRole('button', { name: 'Ver captura original' }).count(), 0);
     assert.match(await audit.innerText(), /Meta · estadísticas de la cuenta de Instagram @clientedemuestra · consultado el 2 de octubre de 2026/);
     await audit.scrollIntoViewIfNeeded();
