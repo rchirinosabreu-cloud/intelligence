@@ -75,6 +75,11 @@ const insights = {
       media
     };
   },
+  listRecentCampaigns: async () => [
+    { id: 'k1', name: 'MUESTRA - SEPTIEMBRE 2026', spend: 350000 },
+    { id: 'k2', name: 'Muestra · interacción', spend: 27045 },
+    { id: 'k3', name: 'OTRO CLIENTE - SEPTIEMBRE 2026', spend: 249962 }
+  ],
   getPageToken: async () => 'fresh-page-token',
   fetchFacebookPageReport: async ({ pageId, pageName, period }) => {
     metaCalls.push(['facebook', pageId, period]);
@@ -215,7 +220,13 @@ try {
       assert.equal(await page.locator('input[name="report-ad-account"]').count(), 1, 'la búsqueda deja una');
       assert.equal(await page.getByRole('button', { name: 'Vincular', exact: true }).isDisabled(), true, 'sin elegir no se vincula');
       await page.locator('input[name="report-ad-account"]').check();
+      // Antes de vincular se ve qué campañas lleva la palabra y cuáles quedan fuera.
+      await page.waitForFunction(() => /Sin palabra entran/.test(document.querySelector('[data-report-campaign-preview]')?.innerText || ''));
+      await page.locator('[data-report-campaign-filter]').fill('Nadie');
+      await page.waitForFunction(() => /Ninguna de las 3 campañas/.test(document.querySelector('[data-report-campaign-preview]')?.innerText || ''));
       await page.locator('[data-report-campaign-filter]').fill('Muestra');
+      await page.waitForFunction(() => /Entran 2 de 3/.test(document.querySelector('[data-report-campaign-preview]')?.innerText || ''));
+      assert.match(await page.locator('[data-report-campaign-preview]').innerText(), /Quedan fuera: «OTRO CLIENTE - SEPTIEMBRE 2026»/);
       await page.waitForTimeout(250);
       await shot(page, `reportes-meta-2-vincular-pauta-${theme}`, '[role="dialog"]');
       await page.getByRole('button', { name: 'Vincular', exact: true }).click();

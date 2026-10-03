@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Facebook, Instagram, Loader2, Megaphone, Plus, Search, X } from '@/components/ui/icons';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { filterAdAccounts, insightWindows } from '@/lib/metaReportSources';
+import { filterAdAccounts, insightWindows, splitCampaigns } from '@/lib/metaReportSources';
 
 /**
  * Cifras de Meta para un informe (Rodny, 2 de octubre de 2026: «¿no podríamos hacer eso consultando
@@ -61,6 +61,17 @@ const LinkAdAccountDialog = ({ clientId, open, onClose, onLinked }) => {
   // Solo se vincula una cuenta que está a la vista: si la búsqueda la esconde, «Vincular» se apaga.
   const visible = filterAdAccounts(accounts, search);
   const chosenId = visible.some((account) => account.id === accountId) ? accountId : '';
+  // Las campañas de la cuenta elegida (últimos 90 días), una sola vez por cuenta; la palabra se compara
+  // aquí mismo con la misma regla del servidor, así lo que se ve es lo que entraría al informe.
+  const campaignsQuery = useQuery({
+    queryKey: ['report-meta-campaigns', chosenId],
+    enabled: open && Boolean(chosenId),
+    staleTime: 60_000,
+    queryFn: async () => (await axios.get(`${getApiBaseUrl()}/api/reports/meta/ad-accounts/${encodeURIComponent(chosenId)}/campaigns`, { headers: authHeaders() })).data
+  });
+  const campaigns = [...(campaignsQuery.data?.matching || []), ...(campaignsQuery.data?.others || [])];
+  const preview = splitCampaigns(campaigns, campaignFilter);
+  const names = (rows, max = 6) => `${rows.slice(0, max).map((row) => `«${row.name}»`).join(', ')}${rows.length > max ? ` y ${rows.length - max} más` : ''}`;
 
   return (
     <Dialog open={open} onOpenChange={(next) => { if (!next) close(); }}>
@@ -120,6 +131,26 @@ const LinkAdAccountDialog = ({ clientId, open, onClose, onLinked }) => {
               />
               <span className="block text-xs leading-relaxed text-slate-500 dark:text-slate-400">Si en esta cuenta corren campañas de varios clientes, escribe la palabra que distingue las de este. Vacío cuenta la cuenta entera.</span>
             </label>
+            {chosenId && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs leading-relaxed text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300" aria-live="polite" data-report-campaign-preview>
+                {campaignsQuery.isLoading ? (
+                  <span className="flex items-center gap-2"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Consultando las campañas de los últimos 90 días…</span>
+                ) : campaignsQuery.error ? (
+                  <span className="text-destructive">{campaignsQuery.error.response?.data?.error || 'No se pudieron consultar las campañas de esta cuenta.'}</span>
+                ) : campaigns.length === 0 ? (
+                  <span>Esta cuenta no tuvo campañas con actividad en los últimos 90 días.</span>
+                ) : !campaignFilter.trim() ? (
+                  <span>Sin palabra entran las <strong>{campaigns.length}</strong> campañas de los últimos 90 días: {names(campaigns)}.</span>
+                ) : preview.matching.length === 0 ? (
+                  <span className="text-destructive">Ninguna de las {campaigns.length} campañas de los últimos 90 días lleva «{campaignFilter.trim()}»: con esa palabra el informe saldría sin pauta. Están: {names(preview.others)}.</span>
+                ) : (
+                  <span>
+                    Entran <strong>{preview.matching.length}</strong> de {campaigns.length}: {names(preview.matching)}.
+                    {preview.others.length > 0 && <> Quedan fuera: {names(preview.others)}.</>}
+                  </span>
+                )}
+              </div>
+            )}
           </div>
         )}
         <div className="mt-4 flex justify-end gap-2">

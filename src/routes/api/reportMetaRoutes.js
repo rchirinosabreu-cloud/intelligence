@@ -43,6 +43,15 @@ export const createReportMetaRouter = ({ meta = metaReportService, logger = cons
     }
   });
 
+  // Qué campañas entrarían con la palabra del cliente, antes de vincular (2 de octubre de 2026).
+  router.get('/ad-accounts/:adAccountId/campaigns', requireManager, async (req, res) => {
+    try {
+      return res.json(await meta.previewCampaigns({ adAccountId: req.params.adAccountId, campaignFilter: String(req.query.filter || '') }));
+    } catch (error) {
+      return reply(res, error, logger);
+    }
+  });
+
   router.post('/ad-accounts', requireManager, async (req, res) => {
     try {
       const clientId = String(req.body?.clientId || '').trim();

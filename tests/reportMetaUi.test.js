@@ -73,6 +73,20 @@ test('the panel says where each thing is connected and what Meta does not give',
   assert.match(panel, /err\.response\?\.data/);
 });
 
+test('the word of the client is checked against the real campaigns before linking', async () => {
+  const { campaignMatches, splitCampaigns } = await import('../src/lib/metaReportSources.js');
+  assert.equal(campaignMatches('Pauta Titánes interacción', 'titanes'), true);
+  assert.equal(campaignMatches('NEW PUEBLITO', 'titanes'), false);
+  assert.equal(campaignMatches('cualquiera', ''), true, 'without a word everything counts');
+  const campaigns = [{ id: 'k1', name: 'TITANES - SEPTIEMBRE' }, { id: 'k2', name: 'NEW PUEBLITO' }, { id: 'k3', name: null }];
+  assert.deepEqual(splitCampaigns(campaigns, 'Titanes'), { matching: [campaigns[0]], others: [campaigns[1]] });
+  assert.deepEqual(splitCampaigns(null, 'x'), { matching: [], others: [] });
+  // The dialog shows both lists as the word is typed, with the same rule the server applies.
+  assert.match(panel, /splitCampaigns\(campaigns, campaignFilter\)/);
+  assert.match(panel, /data-report-campaign-preview/);
+  assert.match(panel, /\/api\/reports\/meta\/ad-accounts\/\$\{encodeURIComponent\(chosenId\)\}\/campaigns/);
+});
+
 test('the ad accounts are searched by name or number, the live ones first', () => {
   const accounts = [{ id: '9', name: 'Vieja', isActive: false }, { id: '123', name: 'Francisco Villa', isActive: true }, { id: '77', name: 'Ácido Estudio', isActive: true }];
   assert.deepEqual(filterAdAccounts(accounts).map((account) => account.id), ['77', '123', '9']);

@@ -14,7 +14,7 @@
  * en registros y la llave no. La conversión a fuentes del informe es de `lib/metaReportSources.js`.
  */
 import { META_GRAPH_ORIGIN, META_GRAPH_VERSION, MetaGraphError } from './metaGraphService.js';
-import { insightWindows, pageInsightWindows, pageTotalRange, pageValueDay, previousPeriod } from '../lib/metaReportSources.js';
+import { campaignMatches, insightWindows, pageInsightWindows, pageTotalRange, pageValueDay, previousPeriod } from '../lib/metaReportSources.js';
 
 const DEFAULT_TIMEOUT_MS = 30 * 1000;
 /** Con el alcance: solo cuando el período cabe en un tramo. */
@@ -228,7 +228,21 @@ export const createMetaInsightsService = ({
 
   const adAccountPath = (adAccountId) => `act_${String(adAccountId).replace(/^act_/, '')}`;
 
-  const plain = (value) => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
+  /**
+   * Las campañas con actividad en los últimos días, para ver antes de vincular cuáles lleva la palabra
+   * del cliente. Mismo criterio que el filtro del informe (`campaignMatches`), así lo que se ve es lo que entra.
+   */
+  const listRecentCampaigns = async ({ adAccountId, token, days = 90 }) => {
+    const path = adAccountPath(adAccountId);
+    const end = now();
+    const start = new Date(end.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
+    const day = (date) => date.toISOString().slice(0, 10);
+    const payload = await get(`${path}/insights`, { level: 'campaign', time_range: JSON.stringify({ since: day(start), until: day(end) }), fields: 'campaign_id,campaign_name,spend', limit: 500 }, token);
+    return (payload?.data || [])
+      .filter((row) => row?.campaign_id)
+      .map((row) => ({ id: String(row.campaign_id), name: String(row.campaign_name || row.campaign_id), spend: Number(row.spend) || 0 }))
+      .sort((a, b) => b.spend - a.spend || a.name.localeCompare(b.name, 'es'));
+  };
 
   /**
    * La pauta de un período: totales, comparación, campañas y anuncios de una cuenta publicitaria.
@@ -245,11 +259,11 @@ export const createMetaInsightsService = ({
     const path = adAccountPath(adAccountId);
     if (!period?.start || !period?.end) throw Object.assign(new Error('El período del informe no es válido.'), { status: 422 });
     const range = (target) => JSON.stringify({ since: target.start, until: target.end });
-    const needle = plain(campaignFilter);
+    const needle = String(campaignFilter || '').trim();
     const info = await get(path, { fields: 'name,account_id,currency' }, token);
     const campaignsOf = async (target) => {
       const rows = (await get(`${path}/insights`, { level: 'campaign', time_range: range(target), fields: `campaign_id,campaign_name,${ADS_ROW_FIELDS}`, limit: 500 }, token))?.data || [];
-      return needle ? rows.filter((row) => plain(row.campaign_name).includes(needle)) : rows;
+      return needle ? rows.filter((row) => campaignMatches(row.campaign_name, needle)) : rows;
     };
     const filteringFor = (rows) => (needle ? JSON.stringify([{ field: 'campaign.id', operator: 'IN', value: rows.map((row) => String(row.campaign_id)) }]) : undefined);
     const totalsOfRange = async (target, rows) => {
@@ -266,7 +280,7 @@ export const createMetaInsightsService = ({
       : [];
     return {
       account: { id: String(info.account_id || path.replace(/^act_/, '')), name: info.name || '', currency: info.currency || null },
-      campaignFilter: needle ? String(campaignFilter).trim() : null,
+      campaignFilter: needle || null,
       period, fetchedAt: now().toISOString(), totals, previousTotals, previousPeriod: comparison, campaigns, ads
     };
   };
@@ -287,7 +301,7 @@ export const createMetaInsightsService = ({
     return accounts;
   };
 
-  return { fetchInstagramReport, fetchFacebookPageReport, getPageToken, fetchAdsReport, listAdAccounts };
+  return { fetchInstagramReport, fetchFacebookPageReport, getPageToken, fetchAdsReport, listAdAccounts, listRecentCampaigns };
 };
 
 export const metaInsightsService = createMetaInsightsService();
