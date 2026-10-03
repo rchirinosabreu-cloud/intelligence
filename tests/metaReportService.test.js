@@ -49,6 +49,7 @@ const fakeInsights = (overrides = {}) => {
       calls.push(['instagram', input]);
       return { account: { id: input.igUserId, username: input.username }, period: input.period, fetchedAt: NOW.toISOString(), reachIsExact: true, totals: { views: 4489, reach: 886 }, previousTotals: null, previousPeriod: null, follows: null, followerTotal: 2231, formats: {}, media: [{ id: 'm1', caption: 'Reel', media_type: 'VIDEO', media_product_type: 'REELS', timestamp: '2026-09-29T15:00:00+0000', insights: { views: 292, reach: 147 } }] };
     }),
+    listRecentCampaigns: async (input) => { calls.push(['campaigns', input]); return [{ id: 'k1', name: 'TITANES - SEPTIEMBRE 2026', spend: 350000 }, { id: 'k2', name: 'Pauta Titánes interacción', spend: 27045 }, { id: 'k3', name: 'NEW PUEBLITO SEPTIEMBRE 2026', spend: 249962 }]; },
     getPageToken: overrides.getPageToken || (async (input) => { calls.push(['pageToken', input]); return 'fresh-page-token'; }),
     fetchFacebookPageReport: overrides.fetchFacebookPageReport || (async (input) => {
       calls.push(['facebook', input]);
@@ -104,6 +105,22 @@ test('a page Meta gives nothing for says why in its own words, and the rest of t
   const [instagram, facebook] = await service.fetchSources({ clientId: 'c1', period: PERIOD, instagramAccountId: 's-ig', facebookAccountId: 's-fb' });
   assert.equal(instagram.sources.length, 2);
   assert.equal(facebook.error, empty.message, 'said as written, without «No se pudieron traer las cifras:» in front');
+});
+
+// Rodny, 2 October 2026: «muchos clientes no tienen cuenta publicitaria, así que se usa la cuenta de
+// Francisco Villa». The word is all that separates one client from another: it is shown before linking.
+test('before linking, the word shows which campaigns of the account would enter and which would stay out', async () => {
+  const { insights, service } = build();
+  const preview = await service.previewCampaigns({ adAccountId: 'act_123', campaignFilter: ' titanes ' });
+  assert.deepEqual(preview.account, { id: '123', name: 'Francisco Villa', currency: 'COP' });
+  assert.equal(preview.campaignFilter, 'titanes');
+  assert.deepEqual(preview.matching.map((row) => row.id), ['k1', 'k2'], 'accents and capitals do not matter');
+  assert.deepEqual(preview.others.map((row) => row.id), ['k3']);
+  assert.equal(insights.calls.find(([kind]) => kind === 'campaigns')[1].token, 'user-token');
+  const whole = await service.previewCampaigns({ adAccountId: '123' });
+  assert.equal(whole.campaignFilter, null);
+  assert.equal(whole.matching.length, 3, 'without a word the whole account counts');
+  await assert.rejects(service.previewCampaigns({ adAccountId: '555' }), (error) => error.status === 404);
 });
 
 test('an ad account is linked once per client, with the words that tell its campaigns apart', async () => {

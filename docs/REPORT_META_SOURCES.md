@@ -90,6 +90,14 @@ Comprobado con datos reales el 2 de octubre de 2026 (septiembre, campañas con �
 Meta devolvió inversión 377.045 y alcance **57.460** para el conjunto; la suma de los alcances de sus dos
 campañas daba 62.790. En la cuenta entera, 66.982 frente a 73.982 sumando filas.
 
+**Muchos clientes no tienen cuenta propia y se usa la de Francisco Villa** (Rodny, 2 de octubre de 2026):
+se vincula esa misma cuenta a cada cliente con su palabra. Para no adivinar, el diálogo muestra, al
+escribir la palabra, qué campañas de los últimos 90 días entrarían y cuáles quedarían fuera
+(`GET /api/reports/meta/ad-accounts/:id/campaigns`, `splitCampaigns`: la misma regla del informe,
+sin tildes ni mayúsculas). Comprobado con la cuenta real: 13 campañas, «Titanes» entra 2, «pueblito» 3
+(también «BRAIN_NEWPUEBLITO_…»), «Endova» ninguna. **Las campañas deben llevar el nombre del cliente**:
+una sin él queda fuera; una de otro cliente que lo lleve entraría.
+
 Cada cifra filtrada lo dice en su evidencia («solo las campañas cuyo nombre contiene «…»»), para que un
 total parcial nunca pase por el de la cuenta entera. Si ninguna campaña coincide o no hubo inversión, el
 informe sale sin pauta de Meta y lo avisa; no pone una fila de ceros.

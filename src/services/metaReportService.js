@@ -16,7 +16,7 @@ import prisma from '../lib/prisma.js';
 import { decrypt as decryptSecret } from '../utils/encryption.js';
 import { META_GRAPH_VERSION } from './metaGraphService.js';
 import { metaInsightsService } from './metaInsightsService.js';
-import { buildFacebookSources, buildInstagramSources, buildMetaAdsSource, humanizeMetaReadError } from '../lib/metaReportSources.js';
+import { buildFacebookSources, buildInstagramSources, buildMetaAdsSource, humanizeMetaReadError, splitCampaigns } from '../lib/metaReportSources.js';
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { status, ...extra });
 export const CAMPAIGN_FILTER_MAX = 80;
@@ -74,6 +74,20 @@ export const createMetaReportService = ({
       ? await db.clientAdAccount.update({ where: { id: current.id }, data })
       : await db.clientAdAccount.create({ data: { clientId, adAccountId: account.id, ...data } });
     return publicAdAccount(row);
+  };
+
+  /**
+   * Qué campañas de la cuenta entrarían con esa palabra y cuáles no, para verlo antes de vincular.
+   * Solo cuentas que la llave ve; las campañas son las de los últimos 90 días con actividad.
+   */
+  const previewCampaigns = async ({ adAccountId, campaignFilter = '' }) => {
+    const token = requireToken();
+    const wanted = String(adAccountId || '').replace(/^act_/, '').trim();
+    const account = (await insights.listAdAccounts(token)).find((candidate) => candidate.id === wanted);
+    if (!account) throw httpError(404, 'La llave de Meta de la agencia no ve esa cuenta publicitaria.');
+    const campaigns = await insights.listRecentCampaigns({ adAccountId: account.id, token });
+    const { matching, others } = splitCampaigns(campaigns, campaignFilter);
+    return { account: { id: account.id, name: account.name, currency: account.currency || null }, days: 90, campaignFilter: String(campaignFilter || '').trim() || null, matching, others };
   };
 
   /** Quitar el vínculo lo apaga; la fila queda como historial de qué cuenta se usó. */
@@ -154,7 +168,7 @@ export const createMetaReportService = ({
     return Promise.all(work);
   };
 
-  return { isConfigured, listClientSources, listAvailableAdAccounts, linkAdAccount, unlinkAdAccount, fetchSources };
+  return { isConfigured, listClientSources, listAvailableAdAccounts, previewCampaigns, linkAdAccount, unlinkAdAccount, fetchSources };
 };
 
 export const metaReportService = createMetaReportService();

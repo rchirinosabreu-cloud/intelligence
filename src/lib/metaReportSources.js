@@ -93,6 +93,23 @@ export const changePct = (current, previous) => {
 
 const plainText = (value) => String(value || '').normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase().trim();
 
+/** Una campaña «es del cliente» si su nombre contiene la palabra elegida, sin distinguir mayúsculas ni tildes. */
+export const campaignMatches = (name, filter) => {
+  const needle = plainText(filter);
+  return !needle || plainText(name).includes(needle);
+};
+
+/**
+ * Qué campañas entrarían al informe con esa palabra y cuáles quedarían fuera (Rodny, 2 de octubre de
+ * 2026: muchos clientes no tienen cuenta propia y se usa la de Francisco Villa, así que la palabra es lo
+ * único que separa a un cliente de otro; mejor verla antes de vincular que adivinar).
+ */
+export const splitCampaigns = (campaigns, filter = '') => {
+  const rows = (Array.isArray(campaigns) ? campaigns : []).filter((row) => row && row.name);
+  const matching = rows.filter((row) => campaignMatches(row.name, filter));
+  return { matching, others: rows.filter((row) => !matching.includes(row)) };
+};
+
 /** Las cuentas publicitarias que ve la llave son más de una docena: se buscan por nombre o número, activas primero. */
 export const filterAdAccounts = (accounts, search = '') => {
   const needle = plainText(search);

@@ -216,6 +216,16 @@ test('one ad account carries several clients: only the campaigns named for this 
   assert.deepEqual(none.ads, []);
 });
 
+test('the campaigns of the last 90 days are listed by investment, for seeing which carry the word of the client', async () => {
+  const { calls, service } = fakeMeta((call) => (call.path === 'act_123/insights' && call.query.level === 'campaign'
+    ? ok({ data: [{ campaign_id: 'c3', campaign_name: 'NEW PUEBLITO', spend: '249962' }, { campaign_id: 'c1', campaign_name: 'TITANES', spend: '350000' }, { campaign_id: 'c9', campaign_name: 'Sin gasto' }] })
+    : adsHandler(call)));
+  const campaigns = await service.listRecentCampaigns({ adAccountId: 'act_123', token: 'user-token' });
+  assert.deepEqual(campaigns, [{ id: 'c1', name: 'TITANES', spend: 350000 }, { id: 'c3', name: 'NEW PUEBLITO', spend: 249962 }, { id: 'c9', name: 'Sin gasto', spend: 0 }]);
+  const call = calls.find((item) => item.path === 'act_123/insights');
+  assert.deepEqual(JSON.parse(call.query.time_range), { since: '2026-07-05', until: '2026-10-02' }, '90 days ending today');
+});
+
 test('the ad accounts the key can see are listed without anything that is not needed', async () => {
   const { service } = fakeMeta(adsHandler);
   assert.deepEqual(await service.listAdAccounts('user-token'), [

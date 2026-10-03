@@ -9,12 +9,13 @@ import { createReportMetaRouter } from '../src/routes/api/reportMetaRoutes.js';
 
 const buildApp = ({ role = 'ADMIN' } = {}) => {
   const calls = [];
-  const meta = Object.fromEntries(['listClientSources', 'listAvailableAdAccounts', 'linkAdAccount', 'unlinkAdAccount'].map((name) => [name, async (args) => {
+  const meta = Object.fromEntries(['listClientSources', 'listAvailableAdAccounts', 'previewCampaigns', 'linkAdAccount', 'unlinkAdAccount'].map((name) => [name, async (args) => {
     calls.push([name, args]);
     if (name === 'listAvailableAdAccounts' && role === 'NOTOKEN') throw Object.assign(new Error('falta META_SYSTEM_USER_TOKEN'), { status: 503, code: 'META_NOT_CONFIGURED' });
     if (args === 'boom') throw new Error('postgres://secret');
     if (name === 'listClientSources') return { configured: true, instagram: [{ id: 's-ig', displayName: '@cliente', pageId: 'p1' }], adAccounts: [] };
     if (name === 'listAvailableAdAccounts') return [{ id: '123', name: 'Francisco Villa', currency: 'COP', isActive: true }];
+    if (name === 'previewCampaigns') return { matching: [{ id: 'k1', name: 'TITANES' }], others: [] };
     return { id: 'ad-1', adAccountId: '123', name: 'Francisco Villa', currency: 'COP', campaignFilter: args?.campaignFilter || null };
   }]));
   const app = express();
@@ -50,12 +51,16 @@ test('choosing the ad account of a client is for administrators and project mana
     assert.equal((await fetch(`${base}/ad-accounts/available`)).status, 403);
     assert.equal((await fetch(`${base}/ad-accounts`, json('POST', { clientId: 'c1', adAccountId: '123' }))).status, 403);
     assert.equal((await fetch(`${base}/ad-accounts/ad-1`, { method: 'DELETE' })).status, 403);
+    assert.equal((await fetch(`${base}/ad-accounts/123/campaigns?filter=titanes`)).status, 403);
     assert.equal(editor.calls.length, 0);
   });
   const admin = buildApp({ role: 'ADMIN' });
   await withServer(admin.app, async (base) => {
     const available = await fetch(`${base}/ad-accounts/available`);
     assert.deepEqual(await available.json(), { accounts: [{ id: '123', name: 'Francisco Villa', currency: 'COP', isActive: true }] });
+    const preview = await fetch(`${base}/ad-accounts/act_123/campaigns?filter=titanes`);
+    assert.equal(preview.status, 200);
+    assert.deepEqual(admin.calls.at(-1), ['previewCampaigns', { adAccountId: 'act_123', campaignFilter: 'titanes' }]);
     const linked = await fetch(`${base}/ad-accounts`, json('POST', { clientId: 'c1', adAccountId: '123', campaignFilter: 'Titanes', actorUserId: 'spoofed' }));
     assert.equal(linked.status, 201);
     assert.deepEqual(admin.calls.at(-1), ['linkAdAccount', { clientId: 'c1', adAccountId: '123', campaignFilter: 'Titanes', actorUserId: 'actual-actor' }]);
