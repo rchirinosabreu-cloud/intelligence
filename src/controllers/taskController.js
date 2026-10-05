@@ -18,6 +18,7 @@ import { recordTaskListSync } from '../services/operationalTraceService.js';
 import { traceTaskOpenHandler } from './operationalTraceController.js';
 import { canDeleteTask, canUpdateTask, isManagerRole, pickAllowedTaskUpdates, validateUploadFile } from '../config/security.js';
 import { canChangeTaskPrivacy, canCreatePrivateTask } from '../lib/taskPrivacy.js';
+import { collaboratorMoveProblem } from '../lib/taskCollaborators.js';
 import { commentFilesValidationMessage, MAX_COMMENT_FILE_BYTES } from '../lib/taskCommentAttachments.js';
 import { listTaskWorkHistory } from '../services/taskWorkSessionService.js';
 export { getMyExcessiveTaskAlertsHandler as getMyExcessiveTaskAlerts } from './excessiveTaskAlertController.js';
@@ -183,12 +184,22 @@ export const updateExistingTask = async (req, res) => {
             where: { id: req.params.taskId },
             select: {
                 creatorId: true,
-                assignee: { select: { userId: true } }
+                status: true,
+                assignee: { select: { userId: true } },
+                collaborators: { select: { member: { select: { userId: true } } } }
             }
         });
         if (!task) return res.status(404).json({ error: 'Task not found' });
         if (!canUpdateTask(req.user, task)) {
-            return res.status(403).json({ error: 'No tienes permisos para actualizar esta tarea' });
+            // Colaboradores (5 de octubre de 2026): mueven la tarea entre «Pendiente» y «En proceso»
+            // y nada más; cerrarla y cambiar sus datos sigue siendo del responsable.
+            const actorUserId = req.user?.userId || req.user?.id;
+            const isCollaborator = Boolean(actorUserId) && (task.collaborators || []).some((row) => row.member?.userId === actorUserId);
+            if (!isCollaborator) {
+                return res.status(403).json({ error: 'No tienes permisos para actualizar esta tarea' });
+            }
+            const problem = collaboratorMoveProblem({ currentStatus: task.status, payload: req.body });
+            if (problem) return res.status(403).json({ error: problem });
         }
         // La privacidad solo la cambia quien creó la tarea, y solo si dirige: ni otro
         // admin ni el responsable pueden abrir al equipo algo que otro reservó.

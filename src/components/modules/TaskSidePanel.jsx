@@ -22,6 +22,9 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { useAuth } from '@/context/AuthContext';
 import { canChangeTaskPrivacy, canCreatePrivateTask } from '@/lib/taskPrivacy';
 import TaskShareControl from '@/components/tasks/TaskShareControl';
+import TaskCollaboratorsPicker from '@/components/tasks/TaskCollaboratorsPicker';
+import TaskTeamTime from '@/components/tasks/TaskTeamTime';
+import { normalizeCollaboratorIds } from '@/lib/taskCollaborators';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 import LinkDropdown from '@/components/ui/LinkDropdown';
 import { linkify, cleanSystemMessage } from '@/utils/chatUtils.jsx';
@@ -294,6 +297,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         title: '',
         clientId: defaultClientId || '',
         assigneeId: '',
+        collaboratorIds: [],
         dueDate: '',
         focusTime: '',
         comments: '',
@@ -520,6 +524,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 title: formData.title,
                 clientId: formData.clientId,
                 assigneeId: formData.assigneeId,
+                collaboratorIds: formData.collaboratorIds,
                 dueDate: formData.dueDate,
                 isPriority: formData.isPriority,
                 priority: formData.priority,
@@ -665,6 +670,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     title: taskData.contentItem?.objective || taskData.title || '',
                     clientId: cId,
                     assigneeId: taskData.assigneeId || '',
+                    // Del servidor llegan como `{ memberId }`; del tablero, ya mapeados como `{ id }`.
+                    collaboratorIds: (taskData.collaborators || []).map((row) => row.memberId || row.id).filter(Boolean),
                     status: taskData.status || 'PENDIENTE',
                     originalStatus: taskData.status,
                     dueDate: formattedDate,
@@ -712,6 +719,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             title: parsed.title || '',
                             clientId: parsed.clientId || defaultClientId || '',
                             assigneeId: parsed.assigneeId || '',
+                            collaboratorIds: Array.isArray(parsed.collaboratorIds) ? parsed.collaboratorIds : [],
                             dueDate: parsed.dueDate || '',
                             isPriority: parsed.isPriority || false,
                             priority: parsed.priority || null,
@@ -827,6 +835,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     ...prev,
                     title: updatedTask.contentItem?.objective || updatedTask.title || prev.title,
                     assigneeId: updatedTask.assigneeId || '',
+                    collaboratorIds: Array.isArray(updatedTask.collaborators)
+                        ? updatedTask.collaborators.map((row) => row.memberId)
+                        : prev.collaboratorIds,
                     status: updatedTask.status || 'PENDIENTE',
                     priority: updatedTask.priority || null,
                     isPriority: updatedTask.isPriority || false,
@@ -882,6 +893,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     : { title: formData.title }),
                 clientId: formData.clientId,
                 assigneeId: formData.assigneeId || null,
+                // La lista que llega es la que queda (5 de octubre de 2026); sin responsable, ninguna.
+                collaboratorIds: formData.assigneeId ? normalizeCollaboratorIds(formData.collaboratorIds, formData.assigneeId) : [],
                 dueDate: isoDate,
                 // Compromiso con hora: only managers may send it; a normal deadline sends null to clear any previous hour.
                 focusDeadlineAt: canSetFocusDeadline ? focusDeadlineIso(formData.dueDate, formData.focusTime) : undefined,
@@ -2166,17 +2179,29 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 </Select>
                             </div>
 
-                            {/* Responsable */}
+                            {/* Responsable y co-responsables (Rodny, 5 de octubre de 2026): el «+» al lado añade
+                                personas con su propio reloj; el responsable sigue siendo uno y es quien cierra. */}
                             <div className="col-span-2 space-y-1.5 sm:col-span-3 sm:space-y-1">
                                 <label className={taskComposerLabelClass}>Responsable</label>
-                                <Select
-                                    value={formData.assigneeId || ''}
-                                    onChange={e => setFormData({...formData, assigneeId: e.target.value})}
-                                    className={`${taskComposerFieldClass} h-12 sm:h-[38px] cursor-pointer`}
+                                <TaskCollaboratorsPicker
+                                    members={teamMembers}
+                                    assigneeId={formData.assigneeId}
+                                    value={formData.collaboratorIds}
+                                    onChange={(ids) => setFormData(prev => ({ ...prev, collaboratorIds: normalizeCollaboratorIds(ids, prev.assigneeId) }))}
                                 >
-                                    <option value="">Sin asignar</option>
-                                    {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                </Select>
+                                    <Select
+                                        value={formData.assigneeId || ''}
+                                        onChange={e => setFormData({
+                                            ...formData,
+                                            assigneeId: e.target.value,
+                                            collaboratorIds: e.target.value ? normalizeCollaboratorIds(formData.collaboratorIds, e.target.value) : []
+                                        })}
+                                        className={`${taskComposerFieldClass} h-12 sm:h-[38px] cursor-pointer`}
+                                    >
+                                        <option value="">Sin asignar</option>
+                                        {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                    </Select>
+                                </TaskCollaboratorsPicker>
                             </div>
 
                             {/* Deadline / Fecha Entrega */}
@@ -2345,6 +2370,17 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                         </div>
+
+                        {/* Equipo de la tarea (5 de octubre de 2026): solo si tiene colaboradores. */}
+                        {isEdition && (
+                            <TaskTeamTime
+                                taskId={formData.id}
+                                currentUserId={currentUser?.id || currentUser?.userId}
+                                hasCollaborators={(taskData?.collaborators || []).length > 0}
+                                status={formData.originalStatus}
+                                onChange={onSuccess}
+                            />
+                        )}
 
                         {/* Attachments Section (Interactive Insumos & Referencias) */}
                         {isEdition ? (

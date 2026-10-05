@@ -16,7 +16,8 @@ test('the optimistic completed task remains visible while the server confirms it
 
 test('completion confetti runs only after a successful backend response', async () => {
   const source = await readNativeTasks();
-  const responseGuard = source.indexOf('if (!response.ok) throw new Error("Failed to update status in backend")');
+  // Desde el 5 de octubre de 2026 el rechazo lleva el motivo del servidor, pero sigue cortando antes del confeti.
+  const responseGuard = source.indexOf('throw Object.assign(new Error("Failed to update status in backend")');
   const confetti = source.indexOf('triggerConfetti(', responseGuard);
   const catchBlock = source.indexOf('} catch (err)', responseGuard);
 

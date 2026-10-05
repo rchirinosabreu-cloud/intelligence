@@ -77,6 +77,16 @@ export const getNotificationDisplayParts = (notification = {}) => {
         if (parsed) return parsed;
     }
 
+    // Colaboradores (5 de octubre de 2026): el título dice qué pasó y el cuerpo, en qué tarea.
+    if (type === 'TASK_COLLABORATOR_ADDED') {
+        const taskTitle = String(message || '').match(/«([^»]+)»/)?.[1];
+        return {
+            title: 'Te sumaron como colaborador',
+            context: '',
+            body: taskTitle ? cleanNotificationPreview(taskTitle, 120) : cleanNotificationPreview(message, 140)
+        };
+    }
+
     if (type === 'TASK_ASSIGNED' || type === 'TASK_UPDATED') {
         const parsed = parseColonMessage(message);
         if (parsed) return parsed;

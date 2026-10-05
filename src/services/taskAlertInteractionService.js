@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import prisma from '../lib/prisma.js';
 import { hasModulePermission } from '../config/security.js';
 import { getTaskElapsedMs } from '../lib/taskTiming.js';
-import { EXCESSIVE_TASK_THRESHOLD_MS } from './excessiveTaskAlertService.js';
+import { EXCESSIVE_TASK_THRESHOLD_MS, collaboratorWorkOnTask } from './excessiveTaskAlertService.js';
 import { RETURNED_TASK_THRESHOLD_MS } from './returnedTaskAlertService.js';
 
 const failure = (message, statusCode) => Object.assign(new Error(message), { statusCode });
@@ -30,13 +30,27 @@ export async function recordTaskAlertInteraction({ userId, taskId, noticeId, kin
     if (action !== 'SHOWN' && (!shown || at.getTime() - new Date(shown.occurredAt).getTime() > 86400000)) {
       throw failure('No encontramos un aviso reciente para esta acción.', 409);
     }
-    const task = await tx.task.findUnique({ where: { id: taskId }, include: { assignee: { select: { userId: true, isActive: true } } } });
-    const owned = kind === 'RETURNED' ? task?.creatorId === userId : task?.assignee?.isActive && task?.assignee?.userId === userId;
+    const task = await tx.task.findUnique({ where: { id: taskId }, include: {
+      assignee: { select: { userId: true, isActive: true } },
+      collaborators: { select: { memberId: true, member: { select: { userId: true, isActive: true } } } },
+    } });
+    const isAssignee = Boolean(task?.assignee?.isActive && task?.assignee?.userId === userId);
+    // Colaboradores (5 de octubre de 2026): la alerta de 15 horas también les llega con su propio tiempo.
+    const collaboration = kind === 'EXCESSIVE' && !isAssignee
+      ? (task?.collaborators || []).find((row) => row.member?.isActive && row.member?.userId === userId)
+      : null;
+    const owned = kind === 'RETURNED' ? task?.creatorId === userId : isAssignee || Boolean(collaboration);
     if (!task || !owned) throw failure('La tarea no te corresponde.', 403);
     if (action === 'SHOWN') {
-      const eligible = kind === 'RETURNED'
-        ? task.status === 'DEVUELTA' && task.returnedAt && at.getTime() - new Date(task.returnedAt).getTime() >= RETURNED_TASK_THRESHOLD_MS
-        : task.status === 'EN_CURSO' && getTaskElapsedMs(task, at) >= EXCESSIVE_TASK_THRESHOLD_MS;
+      let eligible;
+      if (kind === 'RETURNED') {
+        eligible = task.status === 'DEVUELTA' && task.returnedAt && at.getTime() - new Date(task.returnedAt).getTime() >= RETURNED_TASK_THRESHOLD_MS;
+      } else if (collaboration) {
+        const own = await collaboratorWorkOnTask(tx, { taskId, memberId: collaboration.memberId, at });
+        eligible = ['PENDIENTE', 'EN_CURSO'].includes(task.status) && own.working && own.elapsedMs >= EXCESSIVE_TASK_THRESHOLD_MS;
+      } else {
+        eligible = task.status === 'EN_CURSO' && getTaskElapsedMs(task, at) >= EXCESSIVE_TASK_THRESHOLD_MS;
+      }
       if (!eligible) throw failure('La tarea ya no requiere este aviso.', 409);
     }
     const id = action === 'SHOWN' ? noticeId : createHash('sha256').update(`${noticeId}:${action}`).digest('hex');

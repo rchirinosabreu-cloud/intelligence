@@ -36,6 +36,8 @@ export const canOpenTask = (task, viewerUserId) => {
     if (!viewerUserId) return false;
     return task.creatorId === viewerUserId
         || task.assignee?.userId === viewerUserId
+        // Un colaborador trabaja en la tarea: la abre como el responsable (5 de octubre de 2026).
+        || (task.collaborators || []).some((row) => row?.member?.userId === viewerUserId)
         || (task.viewers || []).some((viewer) => viewer?.userId === viewerUserId);
 };
 
@@ -89,5 +91,6 @@ export const TASK_PRIVACY_SELECT = Object.freeze({
     isPrivate: true,
     creatorId: true,
     assignee: { select: { userId: true } },
+    collaborators: { select: { member: { select: { userId: true } } } },
     viewers: { select: { userId: true } }
 });

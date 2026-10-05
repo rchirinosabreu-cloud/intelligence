@@ -1,5 +1,15 @@
 const asDate = (value) => value instanceof Date ? value : new Date(value);
 
+// Colaboradores (Rodny, 5 de octubre de 2026): una tarea tiene dos clases de reloj. El del
+// responsable sigue atado al estado de la tarea (`isCollaborator: false`, como todas las sesiones
+// anteriores a este cambio); cada colaborador abre y pausa el suyo (`isCollaborator: true`). Las
+// búsquedas siempre dicen de cuál hablan: pausar al responsable no puede cerrar la sesión de otro.
+const sessionScope = ({ workerId, isCollaborator }) => (isCollaborator
+  ? { workerId, isCollaborator: true }
+  : { isCollaborator: false });
+
+const durationUntil = (session, endedAt) => Math.max(0, endedAt.getTime() - asDate(session.startedAt).getTime());
+
 export const ensureTaskWorkCycle = async (tx, {
   taskId,
   actorId = null,
@@ -36,17 +46,19 @@ export const openTaskWorkSession = async (tx, {
   cycleId,
   actorId = null,
   at = new Date(),
+  workerId = task?.assigneeId || null,
+  isCollaborator = false,
 } = {}) => {
   const existing = await tx.taskWorkSession.findFirst({
-    where: { taskId: task.id, endedAt: null },
+    where: { taskId: task.id, endedAt: null, ...sessionScope({ workerId, isCollaborator }) },
     orderBy: { startedAt: 'desc' },
   });
   if (existing) return existing;
 
-  const overlapping = task.assigneeId
+  const overlapping = workerId
     ? await tx.taskWorkSession.findFirst({
         where: {
-          workerId: task.assigneeId,
+          workerId,
           endedAt: null,
           taskId: { not: task.id },
         },
@@ -58,7 +70,8 @@ export const openTaskWorkSession = async (tx, {
     data: {
       taskId: task.id,
       cycleId,
-      workerId: task.assigneeId || null,
+      workerId: workerId || null,
+      isCollaborator: Boolean(isCollaborator),
       startedById: actorId,
       startedAt: asDate(at),
       isOverlapping: Boolean(overlapping),
@@ -71,19 +84,39 @@ export const closeActiveTaskWorkSession = async (tx, {
   actorId = null,
   at = new Date(),
   closeReason,
+  workerId = null,
+  isCollaborator = false,
 } = {}) => {
   const activeSession = await tx.taskWorkSession.findFirst({
-    where: { taskId, endedAt: null },
+    where: { taskId, endedAt: null, ...sessionScope({ workerId, isCollaborator }) },
     orderBy: { startedAt: 'desc' },
   });
   if (!activeSession) return null;
 
   const endedAt = asDate(at);
-  const durationMs = Math.max(0, endedAt.getTime() - asDate(activeSession.startedAt).getTime());
   return tx.taskWorkSession.update({
     where: { id: activeSession.id },
-    data: { endedAt, durationMs, closeReason, endedById: actorId },
+    data: { endedAt, durationMs: durationUntil(activeSession, endedAt), closeReason, endedById: actorId },
   });
+};
+
+/** Al cerrar o devolver la tarea se paran todos los relojes: el del responsable y los de los colaboradores. */
+export const closeAllOpenTaskWorkSessions = async (tx, {
+  taskId,
+  actorId = null,
+  at = new Date(),
+  closeReason,
+} = {}) => {
+  const open = await tx.taskWorkSession.findMany({ where: { taskId, endedAt: null } });
+  const endedAt = asDate(at);
+  const closed = [];
+  for (const session of open) {
+    closed.push(await tx.taskWorkSession.update({
+      where: { id: session.id },
+      data: { endedAt, durationMs: durationUntil(session, endedAt), closeReason, endedById: actorId },
+    }));
+  }
+  return closed;
 };
 
 export const closeActiveTaskWorkCycle = async (tx, {
@@ -116,8 +149,12 @@ export const listTaskWorkHistory = async (prismaClient, taskId) => {
     }),
   ]);
   if (!task) return null;
+  // `accumulatedWorkMs` es el reloj del responsable: lo que pusieron los colaboradores no entra en
+  // esta cuenta, o la base histórica saldría negativa y se recortaría a cero.
   const recordedSessionMs = cycles.reduce((cycleTotal, cycle) => cycleTotal
-    + cycle.sessions.reduce((sessionTotal, session) => sessionTotal + Number(session.durationMs || 0), 0), 0);
+    + cycle.sessions
+      .filter((session) => !session.isCollaborator)
+      .reduce((sessionTotal, session) => sessionTotal + Number(session.durationMs || 0), 0), 0);
   const historicalBaselineMs = Math.max(0, Number(task.accumulatedWorkMs || 0) - recordedSessionMs);
   return { task, cycles, recordedSessionMs, historicalBaselineMs };
 };

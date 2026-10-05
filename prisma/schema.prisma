@@ -1116,6 +1116,7 @@ model TeamMember {
   contentPlans       ContentPlan[]
   flowMessages       FlowMessage[]
   nativeTasks        Task[]
+  collaboratingTasks TaskCollaborator[]
   responsibleClients Client[]      @relation("ClientResponsible")
   managedClients     Client[]      @relation("ClientProjectManager")
   crmLeads           CrmLead[]     @relation("CrmLeadOwner")
@@ -1266,6 +1267,9 @@ model Task {
   // del equipo ve el titulo pero no lo abre: ver `src/lib/taskPrivacy.js`.
   isPrivate         Boolean           @default(false)
   viewers           TaskViewer[]
+  // Colaboradores (Rodny, 5 de octubre de 2026): cada uno registra su tiempo por separado;
+  // el responsable sigue siendo uno y es quien cierra. Ver `src/lib/taskCollaborators.js`.
+  collaborators     TaskCollaborator[]
   referenceUrl      String?
   specialType       String?
   contentItemId     String?
@@ -1320,6 +1324,9 @@ model TaskWorkSession {
   taskId           String
   cycleId          String
   workerId         String?
+  // Colaboradores (5 de octubre de 2026): `true` es el reloj propio de un colaborador; `false`, el del
+  // responsable, atado al estado de la tarea (todas las sesiones anteriores a este cambio).
+  isCollaborator   Boolean       @default(false)
   startedById      String?
   endedById        String?
   startedAt        DateTime      @default(now())
@@ -1369,6 +1376,22 @@ model TaskAttachment {
 // `TaskFollower`, que hoy no lo usa nadie: «seguir» una tarea para enterarse y «poder
 // abrirla» son cosas distintas, y mezclarlas deja un cable cruzado para el dia que
 // los seguidores sirvan de verdad.
+// Colaboradores de una tarea (5 de octubre de 2026). Son `TeamMember`, como el responsable y
+// como el `workerId` de las sesiones. Tabla: scripts/ensure-task-collaborators-schema.js.
+model TaskCollaborator {
+  id        String   @id @default(uuid())
+  taskId    String
+  memberId  String
+  addedById String?
+  createdAt DateTime @default(now())
+
+  task   Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  member TeamMember @relation(fields: [memberId], references: [id], onDelete: Cascade)
+
+  @@unique([taskId, memberId])
+  @@index([memberId])
+}
+
 model TaskViewer {
   id        String   @id @default(uuid())
   taskId    String
