@@ -856,6 +856,10 @@ model ContentItem {
   /// A qué cuentas del cliente va la pieza (el `pageId` de cada una). Vacío = ninguna elegida: con
   /// varias cuentas no va a ninguna; con una sola va a esa (Rodny, 2 de octubre de 2026).
   socialPageIds      String[]            @default([])
+  /// «Le pedimos al cliente que la vea otra vez». Se pone solo cuando llega material a una pieza ya
+  /// aprobada —aprobó el texto, no la imagen— y a mano desde el editor; se borra en cuanto el cliente
+  /// vuelve a decidir, apruebe o pida un cambio (Rodny, 5 de octubre de 2026).
+  revisionRequestedAt DateTime?
   publications       SocialPublication[]
   /// «Ya se publicó» marcado a mano desde Operación de clientes (2 de octubre de 2026): estado anterior de la
   /// pieza y de su parrilla, quién y cuándo. Permite deshacerlo; se vacía al deshacer.

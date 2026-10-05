@@ -13,6 +13,8 @@ import {
   deleteContentItem,
   sendItemToKanban,
   generateShareToken,
+  requestContentItemRevision,
+  requestContentPlanRevision,
   uploadContentItemFinalAsset,
   uploadContentItemFinalAssets,
   getContentItemFinalAsset,
@@ -216,6 +218,28 @@ router.post('/plans/:id/share-token', async (req, res) => {
   } catch (error) {
     console.error('[API] Error generating share token:', error);
     return res.status(500).json({ error: 'Failed to generate share token' });
+  }
+});
+
+// «Pedir nueva revisión»: la pieza sigue aprobada en nuestro lado, pero el cliente vuelve a tener la
+// palabra porque lo que aprobó ya no es lo que hay (Rodny, 5 de octubre de 2026).
+router.post('/plans/:id/request-revision', async (req, res) => {
+  try {
+    const result = await requestContentPlanRevision(req.params.id);
+    return res.json(result);
+  } catch (error) {
+    console.error('[API] Error requesting plan revision:', error);
+    return res.status(error.status || 500).json({ error: error.message || 'No se pudo pedir la revisión' });
+  }
+});
+
+router.post('/items/:id/request-revision', async (req, res) => {
+  try {
+    const item = await requestContentItemRevision(req.params.id);
+    return res.json(item);
+  } catch (error) {
+    console.error('[API] Error requesting item revision:', error);
+    return res.status(error.status || 500).json({ error: error.message || 'No se pudo pedir la revisión' });
   }
 });
 
