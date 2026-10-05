@@ -1,103 +1,42 @@
-import { useState, useEffect } from "react"
+import { createElement } from 'react';
+import hotToast from 'react-hot-toast';
 
-const TOAST_LIMIT = 1
+/**
+ * Avisos con la forma `toast({ title, description, variant })` (4 de octubre de 2026).
+ *
+ * Siete pantallas —Kanban, panel de la tarea, Perfil, historial de logros y otras— avisan así, pero
+ * el `<Toaster/>` propio de este hook nunca se montó en la aplicación: ningún aviso suyo aparecía,
+ * tampoco los de error («No se pudo reintegrar la tarea»). La aplicación monta un solo visor de
+ * avisos, el de react-hot-toast en `App.jsx`, así que `toast()` le entrega el aviso a ese y todos
+ * los avisos de la plataforma se ven igual. Las pantallas no cambian.
+ */
 
-let count = 0
-function generateId() {
-  count = (count + 1) % Number.MAX_VALUE
-  return count.toString()
-}
+const ERROR_DURATION_MS = 6000;
+const DEFAULT_DURATION_MS = 4000;
 
-const toastStore = {
-  state: {
-    toasts: [],
-  },
-  listeners: [],
-  
-  getState: () => toastStore.state,
-  
-  setState: (nextState) => {
-    if (typeof nextState === 'function') {
-      toastStore.state = nextState(toastStore.state)
-    } else {
-      toastStore.state = { ...toastStore.state, ...nextState }
-    }
-    
-    toastStore.listeners.forEach(listener => listener(toastStore.state))
-  },
-  
-  subscribe: (listener) => {
-    toastStore.listeners.push(listener)
-    return () => {
-      toastStore.listeners = toastStore.listeners.filter(l => l !== listener)
-    }
-  }
-}
+const content = (title, description) => createElement(
+  'span',
+  { className: 'block min-w-0' },
+  title ? createElement('span', { className: 'block font-semibold' }, title) : null,
+  description ? createElement('span', { className: 'mt-0.5 block text-sm opacity-80' }, description) : null
+);
 
-export const toast = ({ ...props }) => {
-  const id = generateId()
-
-  const update = (props) =>
-    toastStore.setState((state) => ({
-      ...state,
-      toasts: state.toasts.map((t) =>
-        t.id === id ? { ...t, ...props } : t
-      ),
-    }))
-
-  const dismiss = () => toastStore.setState((state) => ({
-    ...state,
-    toasts: state.toasts.filter((t) => t.id !== id),
-  }))
-
-  toastStore.setState((state) => ({
-    ...state,
-    toasts: [
-      { ...props, id, dismiss },
-      ...state.toasts,
-    ].slice(0, TOAST_LIMIT),
-  }))
-
+export const createToastBridge = (hot) => ({ title, description, variant, duration } = {}) => {
+  const isError = variant === 'destructive';
+  const show = isError ? hot.error : hot.success;
+  const id = show(content(title, description), {
+    duration: duration ?? (isError ? ERROR_DURATION_MS : DEFAULT_DURATION_MS)
+  });
   return {
     id,
-    dismiss,
-    update,
-  }
-}
+    dismiss: () => hot.dismiss(id),
+    // Nadie lo usa hoy; se conserva la forma de antes cambiando el contenido del mismo aviso.
+    update: (next = {}) => show(content(next.title ?? title, next.description ?? description), { id })
+  };
+};
+
+export const toast = createToastBridge(hotToast);
 
 export function useToast() {
-  const [state, setState] = useState(toastStore.getState())
-  
-  useEffect(() => {
-    const unsubscribe = toastStore.subscribe((state) => {
-      setState(state)
-    })
-    
-    return unsubscribe
-  }, [])
-  
-  useEffect(() => {
-    const timeouts = []
-
-    state.toasts.forEach((toast) => {
-      if (toast.duration === Infinity) {
-        return
-      }
-
-      const timeout = setTimeout(() => {
-        toast.dismiss()
-      }, toast.duration || 5000)
-
-      timeouts.push(timeout)
-    })
-
-    return () => {
-      timeouts.forEach((timeout) => clearTimeout(timeout))
-    }
-  }, [state.toasts])
-
-  return {
-    toast,
-    toasts: state.toasts,
-  }
+  return { toast, dismiss: (id) => hotToast.dismiss(id), toasts: [] };
 }
