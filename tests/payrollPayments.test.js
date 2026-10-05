@@ -286,7 +286,7 @@ test('el comprobante se revisa antes de subirlo', () => {
 
 test('la Nómina ofrece pagar por partes, desglosar con documentos de respaldo, revertir y subir comprobantes', () => {
     const source = fs.readFileSync(new URL('../src/components/modules/financial/PayrollPayments.jsx', import.meta.url), 'utf8');
-    for (const text of ['Desglosar pago', 'Aplicar desglose', 'Documento de respaldo', 'Revertir', 'Subir comprobante', 'Aplicar un egreso ya registrado', '/payroll-payments/', '/payment-candidates', '/documents']) {
+    for (const text of ['Desglosar pago', 'Aplicar desglose', 'Documento de respaldo', 'Revertir', 'Subir comprobante', 'Aplicar un egreso ya registrado', '/payroll-payments/', '/payment-candidates', '<RecordDocumentsInline']) {
         assert.ok(source.includes(text), `falta «${text}»`);
     }
     const dashboard = fs.readFileSync(new URL('../src/components/modules/FinancialDashboard.jsx', import.meta.url), 'utf8');

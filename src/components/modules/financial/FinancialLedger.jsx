@@ -9,6 +9,7 @@ import MoneyInput from '@/components/ui/MoneyInput';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import FinancialDocumentGallery, { DocumentCard, ROW_DOCUMENT_LIMIT } from '@/components/modules/financial/FinancialDocumentGallery';
 import { PayrollPaymentPanel } from '@/components/modules/financial/PayrollPayments';
+import ReceivablePaymentPanel from '@/components/modules/financial/ReceivablePaymentPanel';
 import { payrollPaymentFromRecord } from '@/lib/payrollPayments';
 import {
     Dialog,
@@ -158,6 +159,8 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
     const [documentGallery, setDocumentGallery] = useState(null);
     // El pago de nómina cuyas acciones están abiertas desde Movimientos (1 de octubre de 2026).
     const [payrollPanelPayment, setPayrollPanelPayment] = useState(null);
+    // El ingreso de un abono cuyos comprobantes están abiertos desde Movimientos (5 de octubre de 2026).
+    const [receivablePanelRecord, setReceivablePanelRecord] = useState(null);
     const documentInputRef = useRef(null);
     const [isAccountEditorOpen, setIsAccountEditorOpen] = useState(false);
     const [accountForm, setAccountForm] = useState(() => emptyAccountForm(selectedYear));
@@ -796,6 +799,23 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                                             }
                                             const locked = lockReason(record);
                                             const explain = () => toast(locked, { duration: 9000 });
+                                            // El ingreso de un abono: el lápiz abre sus comprobantes (Elisa, 5 de octubre
+                                            // de 2026); anular sigue explicando que se revierte desde Cartera.
+                                            if (record.receivablePayment && record.status !== 'VOIDED') {
+                                                return (
+                                                    <div className="flex justify-end gap-1">
+                                                        <button type="button" title="Ver o subir comprobantes" aria-label="Comprobantes del abono de cartera"
+                                                            onClick={() => setReceivablePanelRecord(record)}
+                                                            className="grid h-8 w-8 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-primary dark:hover:bg-white/10">
+                                                            <Edit className="h-4 w-4" />
+                                                        </button>
+                                                        <button type="button" title={locked} aria-label={`No se puede anular aquí. ${locked}`} onClick={explain}
+                                                            className="grid h-8 w-8 place-items-center rounded-md text-zinc-300 hover:bg-zinc-100 dark:text-zinc-600 dark:hover:bg-white/10">
+                                                            <StopCircle className="h-4 w-4" />
+                                                        </button>
+                                                    </div>
+                                                );
+                                            }
                                             return (
                                                 // Sin `disabled` ni `aria-disabled`: el botón sí hace algo, explica por qué
                                                 // no se puede aquí y a dónde ir. Marcarlo como deshabilitado lo escondería
@@ -998,6 +1018,13 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                 <PayrollPaymentPanel payment={payrollPanelPayment} accounts={accounts} formatCurrency={formatCurrency}
                     canApprove={canApprove} canWrite={canWrite}
                     onClose={() => setPayrollPanelPayment(null)}
+                    onChanged={async (message) => { await refreshFinancialData(); toast.success(message); }}
+                    onError={(message) => toast.error(message)} />
+            )}
+
+            {receivablePanelRecord && (
+                <ReceivablePaymentPanel record={receivablePanelRecord} formatCurrency={formatCurrency} canWrite={canWrite}
+                    onClose={() => setReceivablePanelRecord(null)}
                     onChanged={async (message) => { await refreshFinancialData(); toast.success(message); }}
                     onError={(message) => toast.error(message)} />
             )}

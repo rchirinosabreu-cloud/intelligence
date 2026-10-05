@@ -6,7 +6,8 @@ import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { FileText, Loader2, MoreHorizontal, Paperclip, Plus, Trash2, X } from '@/components/ui/icons';
-import ChatFilePreview from '@/components/chat/ChatFilePreview';
+import RecordDocumentsInline from '@/components/modules/financial/RecordDocumentsInline';
+import { uploadRecordDocument } from '@/lib/financialDocumentsClient';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { activePayrollPayments, initialSplitParts, payrollDocumentProblem, reversedPayrollPayments, splitBalance } from '@/lib/payrollPayments';
 import { cn } from '@/lib/utils';
@@ -23,11 +24,8 @@ const api = (path) => `${getApiBaseUrl()}/api/financials${path}`;
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString('es-CO', { timeZone: 'UTC', day: 'numeric', month: 'short', year: 'numeric' }) : '');
 const messageOf = (error, fallback) => error?.response?.data?.message || fallback;
 
-const uploadPaymentDocument = async (recordId, file) => {
-    const body = new FormData();
-    body.append('file', file, file.name);
-    await axios.post(api(`/records/${recordId}/documents`), body, { headers: authHeaders() });
-};
+// Los comprobantes van por la pieza compartida de Financiero (5 de octubre de 2026).
+const uploadPaymentDocument = uploadRecordDocument;
 
 function AccountSelect({ accounts, value, onChange, label, required = true }) {
     return (
@@ -383,53 +381,9 @@ function EditDialog({ payment, onClose, onSaved }) {
 export function PayrollPaymentList({ transaction, accounts = [], formatCurrency, canApprove, canWrite, onChanged, onError, inlineActions = false }) {
     const [dialog, setDialog] = useState(null);
     const [showReversed, setShowReversed] = useState(false);
-    const [uploadingFor, setUploadingFor] = useState('');
-    const [preview, setPreview] = useState(null);
-    const fileInputs = useRef({});
     const active = activePayrollPayments(transaction);
     const reversed = reversedPayrollPayments(transaction);
     if (!active.length && !reversed.length) return null;
-
-    const closePreview = () => setPreview((current) => { if (current?.url) URL.revokeObjectURL(current.url); return null; });
-    const openDocument = async (payment, document, download = false) => {
-        try {
-            const response = await axios.get(api(`/records/${payment.financialRecordId}/documents/${document.id}/file`), { headers: authHeaders(), responseType: 'blob' });
-            const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: document.mimeType });
-            const url = URL.createObjectURL(blob);
-            if (download) {
-                const anchor = window.document.createElement('a');
-                anchor.href = url;
-                anchor.download = document.name;
-                window.document.body.appendChild(anchor);
-                anchor.click();
-                anchor.remove();
-                window.setTimeout(() => URL.revokeObjectURL(url), 60000);
-                return;
-            }
-            // El visor recibe los bytes de un PDF: la política de la página no le deja leer un `blob:`.
-            const data = document.mimeType === 'application/pdf' ? await blob.arrayBuffer() : undefined;
-            closePreview();
-            setPreview({ file: { id: document.id, name: document.name, mimeType: document.mimeType, size: Number(document.size) }, url, data, payment, document });
-        } catch (requestError) {
-            console.error('Error opening payroll payment document:', requestError.response?.data || requestError);
-            onError?.(messageOf(requestError, 'No fue posible abrir el comprobante.'));
-        }
-    };
-
-    const uploadFor = async (payment, file) => {
-        const problem = payrollDocumentProblem(file);
-        if (problem) { onError?.(problem); return; }
-        setUploadingFor(payment.id);
-        try {
-            await uploadPaymentDocument(payment.financialRecordId, file);
-            await onChanged('Comprobante guardado.');
-        } catch (requestError) {
-            console.error('Error uploading payroll payment document:', requestError.response?.data || requestError);
-            onError?.(messageOf(requestError, 'No fue posible subir el comprobante.'));
-        } finally {
-            setUploadingFor('');
-        }
-    };
 
     const saved = async (message) => {
         setDialog(null);
@@ -450,25 +404,8 @@ export function PayrollPaymentList({ transaction, accounts = [], formatCurrency,
                             <span className="min-w-0 max-w-[12rem] truncate text-zinc-500">{payment.accountName || 'Sin cuenta'}</span>
                             <span className="min-w-[8rem] flex-1 truncate text-zinc-600 dark:text-zinc-300">{payment.reference || <span className="text-zinc-400">Sin referencia</span>}</span>
                         </div>
-                        <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                            {(payment.documents || []).map((document) => (
-                                <button key={document.id} type="button" onClick={() => openDocument(payment, document)} title={`Ver ${document.name}`}
-                                    className="inline-flex max-w-[14rem] items-center gap-1 rounded-md border border-zinc-200 px-2 py-1 text-[11px] text-zinc-600 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-300 dark:hover:bg-white/5">
-                                    <FileText className="h-3.5 w-3.5 shrink-0" /><span className="truncate">{document.name}</span>
-                                </button>
-                            ))}
-                            {canWrite && payment.financialRecordId && (
-                                <>
-                                    <input type="file" className="sr-only" accept=".pdf,.jpg,.jpeg,.png,application/pdf,image/jpeg,image/png"
-                                        ref={(node) => { fileInputs.current[payment.id] = node; }}
-                                        onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) uploadFor(payment, file); }} />
-                                    <button type="button" disabled={uploadingFor === payment.id} onClick={() => fileInputs.current[payment.id]?.click()}
-                                        className="inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50">
-                                        {uploadingFor === payment.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}Subir comprobante
-                                    </button>
-                                </>
-                            )}
-                        </div>
+                        <RecordDocumentsInline recordId={payment.financialRecordId} documents={payment.documents || []}
+                            canWrite={canWrite} onChanged={onChanged} onError={onError} />
                         {/* Desde Movimientos las acciones van a la vista, no escondidas en «⋯»:
                             la persona llegó justo a hacer una de ellas. */}
                         {inlineActions && (canWrite || canApprove) && (
@@ -515,10 +452,6 @@ export function PayrollPaymentList({ transaction, accounts = [], formatCurrency,
             {dialog?.kind === 'split' && <DesgloseDialog payment={dialog.payment} accounts={accounts} formatCurrency={formatCurrency} onClose={() => setDialog(null)} onSaved={saved} />}
             {dialog?.kind === 'reverse' && <ReverseDialog payment={dialog.payment} formatCurrency={formatCurrency} onClose={() => setDialog(null)} onSaved={saved} />}
             {dialog?.kind === 'edit' && <EditDialog payment={dialog.payment} onClose={() => setDialog(null)} onSaved={saved} />}
-            {preview && (
-                <ChatFilePreview file={preview.file} url={preview.url} data={preview.data} onClose={closePreview}
-                    onDownload={() => openDocument(preview.payment, preview.document, true)} />
-            )}
         </div>
     );
 }

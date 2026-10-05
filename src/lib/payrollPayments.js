@@ -2,8 +2,9 @@
 // se paga por partes, un pago se parte y cada parte lleva su comprobante. El servidor vuelve a
 // comprobar todo; esto solo evita ofrecer un botón que va a ser rechazado.
 
-export const PAYROLL_DOCUMENT_MAX_BYTES = 25 * 1024 * 1024;
-const DOCUMENT_EXTENSIONS = /\.(pdf|jpe?g|png)$/i;
+import { FINANCIAL_DOCUMENT_MAX_BYTES, financialDocumentProblem } from './financialDocumentsClient.js';
+
+export const PAYROLL_DOCUMENT_MAX_BYTES = FINANCIAL_DOCUMENT_MAX_BYTES;
 
 const toCents = (value) => {
     const number = Number(value);
@@ -64,10 +65,5 @@ export const payrollPaymentFromRecord = (record) => {
 };
 
 /** El aviso que se da antes de subir un comprobante que el servidor va a rechazar. */
-export const payrollDocumentProblem = (file) => {
-    if (!file) return null;
-    if (!DOCUMENT_EXTENSIONS.test(file.name || '')) return `${file.name}: solo se admiten PDF, JPG o PNG.`;
-    if (file.size === 0) return `${file.name}: el archivo está vacío.`;
-    if (file.size > PAYROLL_DOCUMENT_MAX_BYTES) return `${file.name}: supera el máximo de 25 MB.`;
-    return null;
-};
+// La misma regla que en Cartera y Movimientos (5 de octubre de 2026): una sola, no una copia.
+export const payrollDocumentProblem = financialDocumentProblem;

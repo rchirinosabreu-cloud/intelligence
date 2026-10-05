@@ -123,7 +123,10 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
             notes: null,
             account: { id: 'account-1', name: 'Bancolombia' },
             reversedAt: null,
-            reversalReason: null
+            reversalReason: null,
+            // Comprobantes del abono (5 de octubre de 2026): este no tiene ingreso enlazado.
+            financialRecordId: null,
+            documents: []
         }]
     }]);
     assert.equal(res.payload.totals.DEBE, 4000000);
