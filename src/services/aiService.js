@@ -63,38 +63,9 @@ export const BrainstudioAI = {
             };
             return null;
         }
-    },
-
-    /**
-     * Safe wrapper to generate content with structured config and error handling.
-     */
-    async generateStructuredContent(prompt, systemInstruction, schema) {
-        if (!this.isReady && !aiClient) {
-            const initialized = await this.initialize();
-            if (!initialized) throw new Error("IA_DESACTIVADA: Service not ready.");
-        }
-
-        try {
-            // SDK v2.7.0 Unified Signature - systemInstruction inside config
-            const result = await aiClient.models.generateContent({
-                model: aiConfig.modelName,
-                contents: [{ role: 'user', parts: [{ text: prompt }] }],
-                config: {
-                    systemInstruction: systemInstruction,
-                    responseMimeType: "application/json",
-                    responseSchema: schema
-                }
-            });
-            return result;
-        } catch (error) {
-            console.error("[BrainstudioAI] Content generation failed:", error.message);
-            throw error;
-        }
     }
 };
 
-// Legacy compatibility exports (mapped to the new adapter)
-export const isInitialized = () => BrainstudioAI.isReady;
 export const initialize = () => BrainstudioAI.initialize();
 export const getAIHealth = () => ({ ...aiHealth });
 
@@ -153,43 +124,6 @@ export const parseJsonResponse = (text) => {
         console.error("[AiService] JSON Parse Error. Raw text snippet:", text.substring(0, 100));
         throw new Error(`Failed to parse AI response as JSON: ${e.message}`);
     }
-};
-
-export const extractModelText = (result) => {
-    if (!result) throw new Error("Null result provided to text extractor");
-
-    try {
-        // Contrato normalizado: texto directo o función text().
-        if (typeof result.text === 'function') {
-            const text = result.text();
-            if (text && String(text).trim()) return text;
-        }
-
-        // Direct property access as fallback
-        if (result.text && typeof result.text === 'string' && result.text.trim()) {
-            return result.text;
-        }
-
-        // Fallback logic for safety across SDK versions
-        const directText = typeof result?.response?.text === 'function'
-            ? result.response.text()
-            : result?.response?.text;
-
-        if (directText && String(directText).trim()) return directText;
-
-        const candidates = result?.response?.candidates || result?.candidates || [];
-        const firstCandidate = candidates[0];
-        const parts = firstCandidate?.content?.parts || firstCandidate?.parts || [];
-        const firstPart = parts[0];
-
-        if (firstPart?.text && String(firstPart.text).trim()) return firstPart.text;
-        if (firstPart?.functionCall?.args) return JSON.stringify(firstPart.functionCall.args);
-
-    } catch (e) {
-        console.error("[AiService] Model text extraction failed:", e.message);
-    }
-
-    throw new Error('Empty or malformed AI response');
 };
 
 export const getAIInstance = () => aiClient;

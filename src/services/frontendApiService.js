@@ -181,42 +181,6 @@ const frontendApiService = {
       throw new Error(error.response?.data?.message || error.message || "Failed to fetch data from Fireflies");
     }
   },
-  checkFirefliesConnection: async () => {
-    const query = `
-      query FirefliesHealth($limit: Int, $skip: Int) {
-        transcripts(limit: $limit, skip: $skip) {
-          id
-        }
-      }
-    `;
-
-    try {
-      const response = await fetch(getFirefliesUrl(), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, variables: { limit: 1, skip: 0 } })
-      });
-
-      if (!response.ok) return false;
-      const data = await response.json();
-      if (data.errors) return false;
-
-      return true;
-    } catch (error) {
-      console.warn("Fireflies Health Check Error:", error);
-      return false;
-    }
-  },
-  checkOpenAiConnection: async () => {
-    try {
-      const response = await fetch(`${getBaseUrl()}/api/openai/v1/models`);
-      return response.ok;
-    } catch (error) {
-      console.warn("OpenAI Health Check Error:", error);
-      return false;
-    }
-  },
-
   // Specific Fireflies Queries
   getTranscripts: async (limit = 50, skip = 0) => {
     const query = `

@@ -12,7 +12,6 @@ export const originLabel = value => labelOf(CRM_ORIGINS, value);
 export const priorityLabel = value => labelOf(CRM_PRIORITIES, value);
 export const activityLabel = value => labelOf(CRM_ACTIVITY_TYPES, value);
 export const trafficLightLabel = value => labelOf(CRM_TRAFFIC_LIGHTS, value);
-export const bucketLabel = value => labelOf(CRM_FOLLOW_UP_BUCKETS, value, value === 'FUTURO' ? 'Más adelante' : '—');
 export { stageLabel, CRM_STAGES, CRM_ORIGINS, CRM_PRIORITIES, CRM_ACTIVITY_TYPES, CRM_TRAFFIC_LIGHTS, CRM_FOLLOW_UP_BUCKETS };
 
 // ---- formatters -----------------------------------------------------------------------------------
@@ -59,9 +58,6 @@ export const relativeDays = (value, now = new Date()) => {
   if (days === -1) return 'ayer';
   return days < 0 ? `hace ${Math.abs(days)} d` : `en ${days} d`;
 };
-
-/** Today's local date input value ('YYYY-MM-DD') in Bogotá. */
-export const todayKey = () => bogotaDateKey(new Date());
 
 // ---- badges ----------------------------------------------------------------------------------------
 

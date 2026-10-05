@@ -32,8 +32,6 @@ export const crmKeys = {
   metrics: filters => ['crm', 'metrics', activeCrmFilters(filters)]
 };
 
-export const useCrmCatalogs = () => useQuery({ queryKey: crmKeys.catalogs, queryFn: () => crmRequest('/catalogs'), staleTime: Infinity });
-
 export const useCrmTeam = () => useQuery({
   queryKey: crmKeys.team,
   queryFn: async () => {

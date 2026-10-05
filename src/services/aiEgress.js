@@ -16,8 +16,6 @@ export const createGovernedFetch = ({ fetchImpl, governance, usageLog, clock = (
     provider = 'openai'; model = body.model;
   } else if (target.origin === 'https://api.fireflies.ai' && target.pathname === '/graphql') {
     provider = 'fireflies'; model = 'graphql';
-  } else if (target.origin === 'https://generativelanguage.googleapis.com' && /^\/v1beta\/models\/[^/]+:streamGenerateContent$/.test(target.pathname)) {
-    provider = 'google'; model = target.pathname.split('/').pop().split(':')[0];
   } else {
     throw governanceError('Destino de IA no inventariado.', 403, 'AI_DESTINATION_INVALID');
   }

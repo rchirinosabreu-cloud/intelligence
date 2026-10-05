@@ -29,8 +29,6 @@ export const normalizeReceivableCurrency = (value) => {
     return byCode.has(code) ? code : null;
 };
 
-export const isForeignCurrency = (currency) => normalizeReceivableCurrency(currency) === 'USD';
-
 /** «MIL DOSCIENTOS DÓLARES», «UN MILLÓN DE PESOS», «UN DÓLAR». */
 export const receivableAmountInWords = (amount, currency = DEFAULT_RECEIVABLE_CURRENCY, options = {}) => {
     const words = (byCode.get(normalizeReceivableCurrency(currency)) || byCode.get(DEFAULT_RECEIVABLE_CURRENCY)).words;

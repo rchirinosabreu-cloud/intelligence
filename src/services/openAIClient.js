@@ -88,7 +88,9 @@ const toMessageContent = (parts = []) => {
   return content;
 };
 
-const convertGeminiContents = (contents = []) => {
+// Traduce el formato de mensajes por partes ({ role, parts }) que usan los llamadores
+// de generateContent a la entrada de la Responses API de OpenAI.
+const toResponsesInput = (contents = []) => {
   const input = [];
   const callIdsByName = new Map();
 
@@ -248,7 +250,7 @@ export const createOpenAIClient = ({
   const generateContent = async ({ model, contents = [], config = {}, governanceContext }) => {
     const generationConfig = config.generationConfig || config;
     const result = await generate({
-      input: convertGeminiContents(contents),
+      input: toResponsesInput(contents),
       governanceContext,
       instructions: config.systemInstruction,
       model: model || selectedModels.chat,
@@ -283,26 +285,10 @@ export const createOpenAIClient = ({
     return payload?.data?.[0]?.embedding || null;
   };
 
-  const generateContentStream = async (payload) => {
-    const result = await generateContent(payload);
-    async function* stream() {
-      if (result.text) yield { text: result.text };
-    }
-    return { stream: stream(), response: Promise.resolve(result) };
-  };
-
-  const embedContent = async ({ contents }) => {
-    const text = (contents || []).flatMap((item) => item.parts || []).map((part) => part.text || '').join('\n');
-    const embedding = await embed(text);
-    return { embedding: { values: embedding }, embeddings: [{ values: embedding }] };
-  };
-
   return {
     models: {
       ...selectedModels,
-      generateContent,
-      generateContentStream,
-      embedContent
+      generateContent
     },
     generate,
     embed,
@@ -323,10 +309,8 @@ export const createOpenAIClient = ({
         latencyMs: Date.now() - startedAt
       };
     },
-    generateContent,
-    generateContentStream,
-    embedContent
+    generateContent
   };
 };
 
-export { DEFAULT_MODELS, convertGeminiContents, extractResponseText, normalizeTools };
+export { DEFAULT_MODELS, toResponsesInput, extractResponseText, normalizeTools };

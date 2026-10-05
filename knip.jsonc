@@ -1,0 +1,41 @@
+// Auditoría de código muerto. Cómo funciona y cómo excluir algo a propósito:
+// docs/AUDITORIA_CODIGO.md. Toda excepción lleva su motivo al lado.
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  // El «!» marca lo que es producción: el service worker
+  // y los scripts de operación. Las pruebas son entradas, pero no cuentan como uso
+  // real en `npm run audit:dead-code:production`. La aplicación (index.html ->
+  // src/main.jsx) la aporta el plugin de Vite de knip y el servidor (server.js), el
+  // script «start» de package.json.
+  "entry": [
+    "public/*.js!",
+    "scripts/**/*.{js,mjs,cjs}!",
+    "tests/**/*.{js,mjs,jsx}"
+  ],
+  "project": ["**/*.{js,jsx,mjs,cjs,ts,tsx}!"],
+  "ignoreFiles": [
+    // Pendiente de decisión (octubre de 2026): siete pantallas llaman a `useToast()`
+    // (src/components/ui/use-toast.js), pero <Toaster /> no está montado en App.jsx,
+    // así que esos avisos no se ven. Estos dos archivos son el arreglo natural; no se
+    // borran hasta decidir si se montan o si esas pantallas pasan a react-hot-toast.
+    "src/components/ui/toast.jsx",
+    "src/components/ui/toaster.jsx"
+  ],
+  "ignoreDependencies": [
+    // Las pruebas de compilación la cargan por nombre en `presets: ['@babel/preset-react']`;
+    // knip no ve un import.
+    "@babel/preset-react"
+  ],
+  // Archivos, dependencias, imports sin resolver y binarios fallan la auditoría.
+  // Las exportaciones sin uso solo avisan: hay ~90 (sobre todo constantes y helpers que
+  // se usan dentro del propio archivo) y limpiarlas de golpe tocaría decenas de archivos
+  // sin cambiar lo que hace la aplicación. Ver docs/AUDITORIA_CODIGO.md.
+  "rules": {
+    "exports": "warn",
+    "nsExports": "warn",
+    "types": "warn",
+    "nsTypes": "warn",
+    "enumMembers": "warn",
+    "duplicates": "warn"
+  }
+}

@@ -60,15 +60,6 @@ export const bogotaTimeOf = (value) => {
   }
 };
 
-export const bogotaDateKeyOf = (value) => {
-  if (!value) return '';
-  try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: BOGOTA, year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(value));
-  } catch {
-    return '';
-  }
-};
-
 /** 'YYYY-MM-DD' + 'HH:mm' en hora de Bogotá → instante ISO. Sin hora no hay compromiso. */
 export const focusDeadlineIso = (dateKey, time) => {
   if (!dateKey || !time || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey) || !/^\d{2}:\d{2}$/.test(time)) return null;

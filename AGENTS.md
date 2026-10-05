@@ -109,7 +109,7 @@ Este archivo contiene las reglas y el contexto inmutable del proyecto para evita
 
 1. **Backend y Lógica Crítica (TDD Obligatorio):** Para cualquier nueva ruta de API, integraciones con terceros (OpenAI, Fireflies), parseo de datos (JSON) o lógica de autenticación/base de datos, **DEBES utilizar un enfoque TDD**. Escribe primero las pruebas (usando Jest o la herramienta configurada), asegúrate de que fallen, y luego escribe el código para que pasen.
 
-2. **Manejo de Respuestas de IA:** Todas las funciones que procesen respuestas de LLMs (OpenAI, Gemini) deben incluir una prueba específica que simule la recepción del string envuelto en bloques de código markdown (ej. \`\`\`json ... \`\`\`) para garantizar que el sistema lo limpie y parsee correctamente sin lanzar `SyntaxError`.
+2. **Manejo de Respuestas de IA:** Todas las funciones que procesen respuestas de LLMs (OpenAI, el único proveedor de IA de la plataforma) deben incluir una prueba específica que simule la recepción del string envuelto en bloques de código markdown (ej. \`\`\`json ... \`\`\`) para garantizar que el sistema lo limpie y parsee correctamente sin lanzar `SyntaxError`.
 
 3. **Test-Driven Development (TDD) Obligatorio en Frontend:** El enfoque TDD ya no es exclusivo del backend. Todo componente nuevo, lógica de estado o refactorización visual profunda debe tener sus pruebas escritas (ej. React Testing Library / Jest) ANTES de la implementación. Las pruebas deben pasar antes de considerar el código listo.
 

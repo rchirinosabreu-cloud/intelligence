@@ -56,7 +56,7 @@ Criterio de avance: expediente completo y validado, pruebas satisfactorias, resp
 | Indexación y búsqueda de memoria | `briaMemoryService.js`, `openAIClient.js` | Embeddings bloqueados preventivamente bajo la misma condición; no elimina índices existentes ni bloquea lecturas locales |
 | Reportes y visión | `reportVisionService.js`, `routes/api/reports.js`, `aiEgress.js` | Llamadas directas y adaptador común protegidos; autorización individual pendiente. No bloquea cargas previas al almacenamiento |
 | Chat, Manager, aprendizajes editoriales, triage de correo y Radar de Mérito | `openAIClient.js` | Solicitudes sin alcance seguro bloqueadas mientras haya una empresa protegida, incluso si la tarea parece interna |
-| Proxies OpenAI/Fireflies y proveedores heredados | `proxyController.js`, `lib/ai/providers.ts` | Transporte protegido, sin aceptar un clientId del navegador como autorización |
+| Proxies OpenAI/Fireflies | `proxyController.js` | Transporte protegido, sin aceptar un clientId del navegador como autorización |
 | Búsqueda externa Discovery Engine | `discoveryService.js` | Valida antes de la búsqueda y cada alternativa; no detiene ingestión externa configurada en el proveedor |
 | Invitaciones al bot Fireflies | `googleCalendarWriteReliability.js` | Valida antes de insertar/modificar un evento con asistentes del dominio fireflies.ai. Permite quitar al bot. Reuniones ya enviadas y otros bots requieren revisión manual |
 | Herramientas de empleados fuera de la plataforma | Inventario por entrevista y cuentas corporativas | No inspeccionadas; requieren control organizacional y gestión de dispositivos/cuentas |

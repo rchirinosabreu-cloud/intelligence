@@ -38,6 +38,13 @@ test('destinos no inventariados se rechazan sin red', async () => {
   const send = module.createGovernedFetch({ governance: { assertEgress: async () => {} }, fetchImpl: async () => { throw new Error('network must not happen'); } });
   await assert.rejects(send('https://api.openai.com.attacker.invalid/v1/responses', { body: '{}' }), e => e.code === 'AI_DESTINATION_INVALID');
 });
+test('Gemini ya no es un destino permitido: la plataforma solo usa OpenAI y Fireflies', async () => {
+  const send = module.createGovernedFetch({ governance: { assertEgress: async () => {} }, fetchImpl: async () => { throw new Error('network must not happen'); } });
+  await assert.rejects(
+    send('https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:streamGenerateContent', { body: '{}' }),
+    e => e.code === 'AI_DESTINATION_INVALID'
+  );
+});
 
 test('el servicio rechaza el alcance desconocido si hay cualquier empresa protegida', async () => {
   const service = createGovernanceService({ pool: { query: async () => ({ rows: [{ enabled: true }] }) } });
@@ -59,7 +66,7 @@ test('Fireflies no solicita transcripciones sin permiso', async () => {
   assert.equal(sent, 0);
 });
 test('las salidas directas inventariadas usan el transporte protegido', () => {
-  for (const file of ['src/controllers/proxyController.js', 'src/services/reportVisionService.js', 'src/routes/api/reports.js', 'lib/ai/providers.ts']) {
+  for (const file of ['src/controllers/proxyController.js', 'src/services/reportVisionService.js', 'src/routes/api/reports.js']) {
     assert.match(readFileSync(file, 'utf8'), /import \{ governedFetch as fetch \} from .*aiEgress.js/, file);
   }
 });

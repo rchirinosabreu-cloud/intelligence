@@ -218,7 +218,6 @@ test('shared danger primitives do not fall back to red or rose utility palettes'
   for (const file of [
     'src/components/ui/Badge.jsx',
     'src/components/ui/toast.jsx',
-    'src/components/modules/Minutes/ui/toast.jsx',
   ]) {
     const source = readFileSync(file, 'utf8');
     assert.doesNotMatch(source, /(?:text|bg|border|ring|shadow)-(?:red|rose)-/, file);

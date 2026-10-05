@@ -79,6 +79,12 @@ jobs:
       - name: Lint Code
         run: npm run lint
 
+      # Fails on unused files, unused or unlisted dependencies, unresolved imports and
+      # files that only tests reach. Unused exports are reported separately
+      # (npm run audit:dead-code:exports) and do not fail. See docs/AUDITORIA_CODIGO.md.
+      - name: Audit Dead Code
+        run: npm run audit:dead-code
+
       - name: Verify Build
         run: npm run build
 
@@ -86,7 +92,6 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://recognition_test@127.0.0.1:55448/recognition_test
           JWT_SECRET: test-secret-with-at-least-32-characters
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: npm run test:ci
 
       - name: Verify AI governance persistence and egress

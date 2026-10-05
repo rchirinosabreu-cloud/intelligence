@@ -16,16 +16,3 @@ export const downloadHTML = (htmlContent, filename) => {
   URL.revokeObjectURL(url);
 };
 
-/**
- * Utility to trigger PDF download
- * Note: If using jsPDF's doc.save(), this might be redundant, but provided for consistency
- * @param {object} pdfDoc - The jsPDF document instance
- * @param {string} filename - The name of the file
- */
-export const downloadPDF = (pdfDoc, filename) => {
-  if (pdfDoc && typeof pdfDoc.save === 'function') {
-    pdfDoc.save(filename);
-  } else {
-    console.error('Invalid PDF document provided');
-  }
-};
