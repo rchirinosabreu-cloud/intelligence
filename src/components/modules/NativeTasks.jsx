@@ -773,7 +773,7 @@ const NativeTasks = () => {
                 toast({
                     variant: "destructive",
                     title: "Acceso denegado",
-                    description: "Solo los Project Managers o Administradores pueden reorganizar la prioridad de las tareas."
+                    description: "Solo PM y administradores pueden reordenar la prioridad."
                 });
                 return;
             }

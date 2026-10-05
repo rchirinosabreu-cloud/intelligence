@@ -7,7 +7,8 @@ import ForcePasswordChange from './components/ForcePasswordChange';
 import ForceMfaEnrollment from './components/ForceMfaEnrollment';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
-import { Toaster, toast } from 'react-hot-toast';
+import { toast } from 'react-hot-toast';
+import BrainToaster from '@/components/ui/BrainToaster';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 const Dashboard = lazy(() => import('./components/modules/Dashboard'));
@@ -119,12 +120,7 @@ function AppContent() {
             <Route path="*" element={<Navigate to="/cambiar-password" replace />} />
           </Routes>
           </Suspense>
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              className: 'dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-800 border',
-            }}
-          />
+          <BrainToaster />
         </Router>
       </ThemeProvider>
     );
@@ -140,12 +136,7 @@ function AppContent() {
             <Route path="*" element={<Navigate to="/activar-verificacion" replace />} />
           </Routes>
           </Suspense>
-          <Toaster
-            position="top-right"
-            toastOptions={{
-              className: 'dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-800 border',
-            }}
-          />
+          <BrainToaster />
         </Router>
       </ThemeProvider>
     );
@@ -385,12 +376,7 @@ function AppContent() {
           )}
         </Routes>
         </Suspense>
-        <Toaster
-          position="top-right"
-          toastOptions={{
-            className: 'dark:bg-zinc-900 dark:text-zinc-100 dark:border-zinc-800 border',
-          }}
-        />
+        <BrainToaster />
       </Router>
     </ThemeProvider>
   );

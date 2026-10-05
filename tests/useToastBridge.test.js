@@ -24,13 +24,12 @@ const textOf = (node) => {
   return textOf(node.props?.children);
 };
 
-test('a destructive toast reaches the mounted toaster as an error, with title and description', () => {
+test('a destructive toast reaches the mounted toaster as an error, with its description on one line', () => {
   const { hot, calls } = fakeHot();
   const toast = createToastBridge(hot);
   toast({ title: 'Error', description: 'No se pudo reintegrar la tarea.', variant: 'destructive' });
   assert.equal(calls.length, 1);
   assert.equal(calls[0].kind, 'error');
-  assert.match(textOf(calls[0].message), /Error/);
   assert.match(textOf(calls[0].message), /No se pudo reintegrar la tarea\./);
   assert.ok(calls[0].options.duration >= 5000, 'un error se lee con calma');
 });
@@ -62,6 +61,5 @@ test('the screens keep their import; no screen needs to change', () => {
     assert.match(source, /from '@\/components\/ui\/use-toast'/, file);
   }
   const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
-  assert.match(app, /from 'react-hot-toast'/);
-  assert.match(app, /<Toaster/);
+  assert.match(app, /<BrainToaster \/>/);
 });

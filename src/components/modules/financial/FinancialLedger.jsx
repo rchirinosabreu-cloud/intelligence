@@ -331,7 +331,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
         if (storedDraft.mode === 'create') { openCreate(); return; }
         const record = records.find((candidate) => candidate.id === storedDraft.recordId);
         if (record) openEdit(record);
-        else toast.error(`El movimiento «${storedDraft.recordLabel || 'sin descripción'}» no está en esta página. Búscalo y ábrelo para seguir con los cambios.`);
+        else toast.error(`«${storedDraft.recordLabel || 'Sin descripción'}» no está en esta página: búscalo para seguir.`);
     };
 
     const refreshFinancialData = () => invalidateFinancialQueries(queryClient);
@@ -445,7 +445,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
     const saveRecord = async (event) => {
         event.preventDefault();
         if (formAllocationMismatch) {
-            toast.error('Los ítems del desglose no suman el valor del movimiento. Ajusta el desglose antes de guardar.');
+            toast.error('El desglose no suma el valor del movimiento; ajústalo para guardar.');
             return;
         }
         setIsSaving(true);
@@ -795,7 +795,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                                                 );
                                             }
                                             const locked = lockReason(record);
-                                            const explain = () => toast(locked, { duration: 9000, icon: '🔒' });
+                                            const explain = () => toast(locked, { duration: 9000 });
                                             return (
                                                 // Sin `disabled` ni `aria-disabled`: el botón sí hace algo, explica por qué
                                                 // no se puede aquí y a dónde ir. Marcarlo como deshabilitado lo escondería

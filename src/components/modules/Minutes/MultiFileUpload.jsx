@@ -55,7 +55,7 @@ const MultiFileUpload = ({ onFilesAdded }) => {
 
     if (processedFiles.length > 0) {
       onFilesAdded(processedFiles);
-      toast.success(`✅ ${processedFiles.length} archivos procesados correctamente`);
+      toast.success(`${processedFiles.length} archivos procesados.`);
     }
 
     if (errors > 0 && processedFiles.length === 0) {
