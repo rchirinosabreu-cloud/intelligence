@@ -22,6 +22,8 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { useAuth } from '@/context/AuthContext';
 import { canChangeTaskPrivacy, canCreatePrivateTask } from '@/lib/taskPrivacy';
 import TaskShareControl from '@/components/tasks/TaskShareControl';
+import TaskCollaboratorsPicker from '@/components/tasks/TaskCollaboratorsPicker';
+import { normalizeCollaboratorIds } from '@/lib/taskCollaborators';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 import LinkDropdown from '@/components/ui/LinkDropdown';
 import { linkify, cleanSystemMessage } from '@/utils/chatUtils.jsx';
@@ -294,6 +296,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
         title: '',
         clientId: defaultClientId || '',
         assigneeId: '',
+        collaboratorIds: [],
         dueDate: '',
         focusTime: '',
         comments: '',
@@ -2166,17 +2169,29 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 </Select>
                             </div>
 
-                            {/* Responsable */}
+                            {/* Responsable y co-responsables (Rodny, 5 de octubre de 2026): el «+» al lado añade
+                                personas con su propio reloj; el responsable sigue siendo uno y es quien cierra. */}
                             <div className="col-span-2 space-y-1.5 sm:col-span-3 sm:space-y-1">
                                 <label className={taskComposerLabelClass}>Responsable</label>
-                                <Select
-                                    value={formData.assigneeId || ''}
-                                    onChange={e => setFormData({...formData, assigneeId: e.target.value})}
-                                    className={`${taskComposerFieldClass} h-12 sm:h-[38px] cursor-pointer`}
+                                <TaskCollaboratorsPicker
+                                    members={teamMembers}
+                                    assigneeId={formData.assigneeId}
+                                    value={formData.collaboratorIds}
+                                    onChange={(ids) => setFormData(prev => ({ ...prev, collaboratorIds: normalizeCollaboratorIds(ids, prev.assigneeId) }))}
                                 >
-                                    <option value="">Sin asignar</option>
-                                    {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
-                                </Select>
+                                    <Select
+                                        value={formData.assigneeId || ''}
+                                        onChange={e => setFormData({
+                                            ...formData,
+                                            assigneeId: e.target.value,
+                                            collaboratorIds: e.target.value ? normalizeCollaboratorIds(formData.collaboratorIds, e.target.value) : []
+                                        })}
+                                        className={`${taskComposerFieldClass} h-12 sm:h-[38px] cursor-pointer`}
+                                    >
+                                        <option value="">Sin asignar</option>
+                                        {teamMembers.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                    </Select>
+                                </TaskCollaboratorsPicker>
                             </div>
 
                             {/* Deadline / Fecha Entrega */}

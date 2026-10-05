@@ -11,6 +11,25 @@
 // quién está trabajando ahora y en qué estado se ve la tarjeta. Así, que Melissa pulse
 // empezar abre *su* sesión y no arrastra el reloj de nadie más.
 
+const normalizeText = (value) => String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/**
+ * Los co-responsables que se guardan (Rodny, 5 de octubre de 2026): sin repetidos, sin vacíos y
+ * nunca el responsable, que ya está en la tarea por su propio campo. Si el responsable cambia a
+ * alguien que estaba de co-responsable, sale de esta lista.
+ */
+export const normalizeCollaboratorIds = (ids, assigneeId) => [...new Set(
+    (Array.isArray(ids) ? ids : []).map((id) => (id == null ? '' : String(id))).filter(Boolean)
+)].filter((id) => id !== String(assigneeId || ''));
+
+/** A quién se puede añadir: el equipo sin el responsable, filtrado por nombre o cargo. */
+export const collaboratorCandidates = (members, assigneeId, query = '') => {
+    const needle = normalizeText(query.trim());
+    return (Array.isArray(members) ? members : [])
+        .filter((member) => member?.id != null && String(member.id) !== String(assigneeId || ''))
+        .filter((member) => !needle || normalizeText(`${member.name} ${member.role || ''}`).includes(needle));
+};
+
 export const TASK_WORKER_STATE = Object.freeze({
     WORKING: 'WORKING',
     PAUSED: 'PAUSED',
