@@ -57,7 +57,7 @@ IMPORTANTE: Respeta exactamente los nombres de campos y la estructura JSON solic
       const reportedDuration = getReportedMeetingDuration(files);
       setSummaryData(reportedDuration ? { ...result, meeting_duration: reportedDuration } : result);
 
-      toast.success("✅ Resumen unificado listo");
+      toast.success("Resumen unificado listo.");
 
     } catch (err) {
       setError(err.message);

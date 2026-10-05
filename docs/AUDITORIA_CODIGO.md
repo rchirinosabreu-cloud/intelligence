@@ -38,7 +38,7 @@ A veces algo no se usa todavía, o se queda por una decisión pendiente. En ese 
 ```jsonc
 "ignoreFiles": [
   // Pendiente de decisión (octubre de 2026): <qué falta decidir y quién>.
-  "src/components/ui/toaster.jsx"
+  "src/ruta/del/archivo.jsx"
 ]
 ```
 
@@ -48,7 +48,6 @@ Una exclusión sin motivo no se acepta en revisión. Cuando la decisión se toma
 
 | Qué | Por qué |
 | --- | --- |
-| `src/components/ui/toast.jsx`, `src/components/ui/toaster.jsx` | Siete pantallas usan `useToast()` (`src/components/ui/use-toast.js`), pero `<Toaster />` no está montado en `App.jsx`, así que esos avisos no se ven. Estos archivos son el arreglo natural. Se borran cuando se decida si se monta el `<Toaster />` o si esas pantallas pasan a `react-hot-toast`, que es el que sí está montado. |
 | `@babel/preset-react` | Las pruebas de compilación lo cargan por nombre dentro de `presets`. |
 
 ## Contratos relacionados

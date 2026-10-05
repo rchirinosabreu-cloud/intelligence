@@ -13,14 +13,6 @@
     "tests/**/*.{js,mjs,jsx}"
   ],
   "project": ["**/*.{js,jsx,mjs,cjs,ts,tsx}!"],
-  "ignoreFiles": [
-    // Pendiente de decisión (octubre de 2026): siete pantallas llaman a `useToast()`
-    // (src/components/ui/use-toast.js), pero <Toaster /> no está montado en App.jsx,
-    // así que esos avisos no se ven. Estos dos archivos son el arreglo natural; no se
-    // borran hasta decidir si se montan o si esas pantallas pasan a react-hot-toast.
-    "src/components/ui/toast.jsx",
-    "src/components/ui/toaster.jsx"
-  ],
   "ignoreDependencies": [
     // Las pruebas de compilación la cargan por nombre en `presets: ['@babel/preset-react']`;
     // knip no ve un import.

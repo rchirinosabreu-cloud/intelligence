@@ -217,7 +217,8 @@ test('rendered alert icons inherit the semantic destructive color', () => {
 test('shared danger primitives do not fall back to red or rose utility palettes', () => {
   for (const file of [
     'src/components/ui/Badge.jsx',
-    'src/components/ui/toast.jsx',
+    // El visor de avisos que reemplazó a ui/toast.jsx (4 de octubre de 2026).
+    'src/components/ui/BrainToaster.jsx',
   ]) {
     const source = readFileSync(file, 'utf8');
     assert.doesNotMatch(source, /(?:text|bg|border|ring|shadow)-(?:red|rose)-/, file);

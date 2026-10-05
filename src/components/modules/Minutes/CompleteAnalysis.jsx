@@ -52,7 +52,7 @@ IMPORTANTE: Respeta exactamente los nombres de campos y la estructura JSON solic
       const result = parseJsonFromAiResponse(resultString);
       setAnalysisData(result);
 
-      toast.success("✅ Análisis unificado listo");
+      toast.success("Análisis unificado listo.");
 
     } catch (err) {
       setError(err.message);

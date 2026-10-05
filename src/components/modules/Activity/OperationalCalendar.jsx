@@ -404,10 +404,10 @@ const OperationalCalendar = () => {
       queryClient.invalidateQueries({ queryKey: ['operational-events'] });
       queryClient.invalidateQueries({ queryKey: ['google-calendar-status'] });
       if (summary.failed) {
-        toast.error(`Sincronización incompleta: ${summary.failed} fallo(s). Revisa el estado de las cuentas.`);
+        toast.error(`Sincronización incompleta: ${summary.failed} fallo(s). Revisa las cuentas.`);
         return;
       }
-      toast.success(`Sincronización lista: ${summary.imported} nuevos y ${summary.updated} actualizados`);
+      toast.success(`Sincronizado: ${summary.imported} nuevos y ${summary.updated} actualizados.`);
     },
     onError: error => {
       console.error('Google Calendar manual sync error:', error);

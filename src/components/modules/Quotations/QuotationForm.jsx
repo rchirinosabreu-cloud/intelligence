@@ -221,7 +221,7 @@ const QuotationForm = () => {
     const handleCurrencyChange = async (nextCurrency) => {
         if (nextCurrency === currency) return;
         if (proposalDetails?.paymentPlans?.some(plan => plan.mode === 'FIXED')) {
-            toast.error('Antes de cambiar la moneda, convierte las cuotas a porcentajes o retira el plan de importes exactos.');
+            toast.error('Para cambiar la moneda, pasa las cuotas a porcentajes o quita el plan.');
             return;
         }
         let usableRate = Number(exchangeRate);

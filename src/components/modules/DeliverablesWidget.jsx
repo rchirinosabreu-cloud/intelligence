@@ -59,7 +59,7 @@ const DeliverablesWidget = ({ clientId }) => {
         );
 
         if (hasForbidden) {
-            toast.error("Por seguridad, no se permiten archivos ejecutables (.exe, .js, .sh, etc.)");
+            toast.error("Por seguridad no se permiten archivos ejecutables (.exe, .sh…).");
             return;
         }
 
