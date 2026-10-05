@@ -22,6 +22,23 @@ export const collaboratorCandidates = (members, assigneeId, query = '') => {
         .filter((member) => !needle || normalizeText(`${member.name} ${member.role || ''}`).includes(needle));
 };
 
+/**
+ * Qué puede hacer un colaborador con la tarea (Rodny, 5 de octubre de 2026: «cualquier colaborador
+ * debería poder moverla»): llevarla entre «Pendiente» y «En proceso». Cerrarla, devolverla,
+ * reabrirla o cambiar cualquier otro dato sigue siendo del responsable. Devuelve el motivo del
+ * rechazo en español, o `null` si el cambio vale.
+ */
+export const COLLABORATOR_MOVABLE_STATUSES = Object.freeze(['PENDIENTE', 'EN_CURSO']);
+export const collaboratorMoveProblem = ({ currentStatus, payload }) => {
+    const keys = Object.keys(payload || {}).filter((key) => payload[key] !== undefined);
+    const onlyStatus = keys.length > 0 && keys.every((key) => key === 'status');
+    const next = String(payload?.status || '').toUpperCase();
+    if (!onlyStatus || !COLLABORATOR_MOVABLE_STATUSES.includes(next) || !COLLABORATOR_MOVABLE_STATUSES.includes(String(currentStatus || '').toUpperCase())) {
+        return 'Como colaborador puedes mover la tarea entre «Pendiente» y «En proceso». Cerrarla y cambiar sus datos le toca al responsable.';
+    }
+    return null;
+};
+
 /** El filtro por persona del tablero: la tarea es suya si es responsable o colaboradora. */
 export const isTaskOfPerson = (task, personName) => {
     if (!personName || personName === 'Todos') return true;

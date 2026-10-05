@@ -96,18 +96,18 @@ test('new collaborators get one notification each, never the person who added th
 
 const workDb = ({ task, member = { id: 'm-melissa' }, openSessions = [] }) => {
   const tx = fakeTx({ openSessions });
-  tx.task = { findUnique: async () => task };
+  tx.task = { findUnique: async () => task, update: async ({ data }) => { tx.calls.taskUpdates = [...(tx.calls.taskUpdates || []), data]; return data; } };
   tx.teamMember.findFirst = async () => member;
   return { db: {}, tx, transaction: (work) => work(tx) };
 };
 
-test('a collaborator starts and pauses only their own clock, without touching the task status', async () => {
-  const task = { id: 't-1', status: 'PENDIENTE', assigneeId: 'm-rodny', collaborators: [{ memberId: 'm-melissa' }] };
+test('a collaborator starts and pauses only their own clock, without touching the task', async () => {
+  const task = { id: 't-1', status: 'EN_CURSO', assigneeId: 'm-rodny', startedAt: null, accumulatedWorkMs: 0, collaborators: [{ memberId: 'm-melissa' }] };
   const { tx, ...deps } = workDb({ task });
   await startCollaboratorWork({ ...deps, taskId: 't-1', userId: 'u-melissa', at });
   assert.equal(tx.calls.opened.length, 1);
   assert.deepEqual({ workerId: tx.calls.opened[0].workerId, isCollaborator: tx.calls.opened[0].isCollaborator }, { workerId: 'm-melissa', isCollaborator: true });
-  assert.equal(tx.task.update, undefined, 'el estado de la tarea es del responsable');
+  assert.equal(tx.calls.taskUpdates, undefined, 'el reloj de un colaborador no toca la tarea');
 
   const running = workDb({ task, openSessions: [{ id: 's-mel', taskId: 't-1', workerId: 'm-melissa', isCollaborator: true, startedAt: new Date(at.getTime() - 20 * MIN) }] });
   await pauseCollaboratorWork({ db: running.db, transaction: running.transaction, taskId: 't-1', userId: 'u-melissa', at });
@@ -115,14 +115,46 @@ test('a collaborator starts and pauses only their own clock, without touching th
   assert.equal(running.tx.calls.closed[0].closeReason, 'PAUSED');
 });
 
-test('someone who is not a collaborator, or a closed task, cannot start a clock', async () => {
-  const task = { id: 't-1', status: 'PENDIENTE', assigneeId: 'm-rodny', collaborators: [{ memberId: 'm-melissa' }] };
+test('someone outside the team, or a task that is not in progress, cannot start a clock', async () => {
+  const task = { id: 't-1', status: 'EN_CURSO', assigneeId: 'm-rodny', collaborators: [{ memberId: 'm-melissa' }] };
   await assert.rejects(
     startCollaboratorWork({ ...workDb({ task, member: { id: 'm-bruno' } }), taskId: 't-1', userId: 'u-bruno', at }),
     (error) => error.statusCode === 403
   );
+  for (const status of ['PENDIENTE', 'REALIZADA', 'DEVUELTA']) {
+    await assert.rejects(
+      startCollaboratorWork({ ...workDb({ task: { ...task, status } }), taskId: 't-1', userId: 'u-melissa', at }),
+      (error) => error.statusCode === 409 && /En proceso/.test(error.message),
+      status
+    );
+  }
+});
+
+// Una sola regla para todos (Rodny, 5 de octubre de 2026): en una tarea con colaboradores el
+// responsable tampoco arranca solo; su «Empezar mi reloj» mueve el reloj de la tarea.
+test('in a team task the assignee starts and pauses the task clock by hand', async () => {
+  const task = { id: 't-1', status: 'EN_CURSO', assigneeId: 'm-rodny', startedAt: null, accumulatedWorkMs: 10 * MIN, collaborators: [{ memberId: 'm-melissa' }] };
+  const started = workDb({ task, member: { id: 'm-rodny' } });
+  await startCollaboratorWork({ db: started.db, transaction: started.transaction, taskId: 't-1', userId: 'u-rodny', at });
+  assert.deepEqual(started.tx.calls.taskUpdates, [{ startedAt: at }]);
+  assert.deepEqual({ workerId: started.tx.calls.opened[0].workerId, isCollaborator: started.tx.calls.opened[0].isCollaborator }, { workerId: 'm-rodny', isCollaborator: false });
+
+  const running = workDb({
+    task: { ...task, startedAt: new Date(at.getTime() - 30 * MIN) },
+    member: { id: 'm-rodny' },
+    openSessions: [{ id: 's-r', taskId: 't-1', workerId: 'm-rodny', isCollaborator: false, startedAt: new Date(at.getTime() - 30 * MIN) }]
+  });
+  // El cierre del responsable no filtra por persona: es la sesión del reloj de la tarea.
+  running.tx.taskWorkSession.findFirst = async ({ where }) => (where.isCollaborator === false ? { id: 's-r', startedAt: new Date(at.getTime() - 30 * MIN) } : null);
+  await pauseCollaboratorWork({ db: running.db, transaction: running.transaction, taskId: 't-1', userId: 'u-rodny', at });
+  assert.deepEqual(running.tx.calls.taskUpdates, [{ startedAt: null, accumulatedWorkMs: 40 * MIN }]);
+  assert.equal(running.tx.calls.closed[0].durationMs, 30 * MIN);
+});
+
+test('in a one-person task the clock still runs with the column, not with a button', async () => {
+  const task = { id: 't-1', status: 'EN_CURSO', assigneeId: 'm-rodny', collaborators: [] };
   await assert.rejects(
-    startCollaboratorWork({ ...workDb({ task: { ...task, status: 'REALIZADA' } }), taskId: 't-1', userId: 'u-melissa', at }),
+    startCollaboratorWork({ ...workDb({ task, member: { id: 'm-rodny' } }), taskId: 't-1', userId: 'u-rodny', at }),
     (error) => error.statusCode === 409
   );
 });

@@ -18,7 +18,9 @@ const authHeaders = () => {
   return token ? { Authorization: `Bearer ${token}` } : {};
 };
 
-export default function TaskTeamTime({ taskId, currentUserId, hasCollaborators, closed = false, onChange }) {
+export default function TaskTeamTime({ taskId, currentUserId, hasCollaborators, status, onChange }) {
+  const closed = ['REALIZADA', 'DEVUELTA'].includes(String(status));
+  const inProgress = String(status) === 'EN_CURSO';
   const [rows, setRows] = useState([]);
   const [loadedAt, setLoadedAt] = useState(0);
   const [tick, setTick] = useState(0);
@@ -97,7 +99,9 @@ export default function TaskTeamTime({ taskId, currentUserId, hasCollaborators, 
       <ul className="mt-3 space-y-2">
         {rows.map((row) => {
           const mine = Boolean(currentUserId) && row.userId === currentUserId;
-          const canToggle = mine && row.role === 'COLLABORATOR' && !closed;
+          // Una regla para todos: el responsable también pone en marcha su reloj con el botón, y los
+          // relojes solo corren con la tarea en «En proceso».
+          const canToggle = mine && !closed && (row.working || inProgress);
           return (
             <li
               key={row.memberId}
@@ -125,7 +129,7 @@ export default function TaskTeamTime({ taskId, currentUserId, hasCollaborators, 
                 </p>
                 <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">
                   {row.working ? 'Trabajando ahora' : row.elapsedMs > 0 ? 'En pausa' : 'No ha empezado'}
-                  {row.role === 'ASSIGNEE' && ' · su tiempo corre con «En proceso»'}
+                  {mine && !closed && !inProgress && !row.working && ' · pasa la tarea a «En proceso» para empezar'}
                 </p>
               </div>
               </div>

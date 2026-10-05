@@ -27,6 +27,32 @@ test('la lista para elegir deja fuera al responsable y busca sin importar tildes
     assert.deepEqual(collaboratorCandidates(null, 'm-rodny'), []);
 });
 
+test('un colaborador mueve la tarea entre Pendiente y En proceso, y nada más', async () => {
+    const { collaboratorMoveProblem } = await import('../src/lib/taskCollaborators.js');
+    assert.equal(collaboratorMoveProblem({ currentStatus: 'PENDIENTE', payload: { status: 'EN_CURSO' } }), null);
+    assert.equal(collaboratorMoveProblem({ currentStatus: 'EN_CURSO', payload: { status: 'PENDIENTE' } }), null);
+    assert.match(collaboratorMoveProblem({ currentStatus: 'EN_CURSO', payload: { status: 'REALIZADA' } }), /responsable/);
+    assert.ok(collaboratorMoveProblem({ currentStatus: 'DEVUELTA', payload: { status: 'PENDIENTE' } }), 'reintegrar es del responsable');
+    assert.ok(collaboratorMoveProblem({ currentStatus: 'REALIZADA', payload: { status: 'PENDIENTE' } }), 'reabrir es del responsable');
+    assert.ok(collaboratorMoveProblem({ currentStatus: 'PENDIENTE', payload: { status: 'EN_CURSO', title: 'Otro título' } }), 'solo el estado');
+    assert.ok(collaboratorMoveProblem({ currentStatus: 'PENDIENTE', payload: {} }));
+});
+
+test('al pasar a En proceso una tarea con equipo: aviso con dos botones, sin abrirla ni arrancar relojes', () => {
+    const notice = readFileSync(new URL('../src/components/tasks/TeamTaskStartNotice.jsx', import.meta.url), 'utf8');
+    const board = readFileSync(new URL('../src/components/modules/NativeTasks.jsx', import.meta.url), 'utf8');
+    // Texto de Rodny, 5 de octubre de 2026.
+    assert.match(notice, /En este tipo de tareas, el cronómetro no se activa de forma automática, recuerda poner en marcha tu reloj de forma manual\./);
+    assert.match(notice, />\s*Abrir tarea\s*</);
+    assert.match(notice, /Empezar mi reloj/);
+    assert.match(notice, /\/work\/start/);
+    // El éxito se anuncia después de la respuesta del servidor.
+    assert.ok(notice.indexOf('await fetch') < notice.indexOf("toast.success"));
+    // En el tablero: sin reloj optimista para tareas con equipo y el aviso solo tras confirmar el servidor.
+    assert.match(board, /newStatusEnum === 'EN_CURSO' && sourceColumnId !== 'en-proceso' && !isTeamTask/);
+    assert.ok(board.indexOf('setTeamStartTask(movedTask)') > board.indexOf('throw Object.assign(new Error("Failed to update status in backend")'));
+});
+
 test('el filtro por persona del tablero incluye las tareas donde colabora', async () => {
     const { isTaskOfPerson, workingMemberIds } = await import('../src/lib/taskCollaborators.js');
     const tarea = {

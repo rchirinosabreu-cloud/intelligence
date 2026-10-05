@@ -696,6 +696,12 @@ export const updateTask = async (id, data, updaterId = null) => {
             const oldStatus = currentTask.status;
             const isReopened = oldStatus === 'REALIZADA' && newStatus === 'PENDIENTE';
             const transitionAt = new Date();
+            // Tareas con colaboradores (Rodny, 5 de octubre de 2026): una sola regla para todos. Moverla
+            // a «En proceso» no arranca ningún reloj —cada quien pone en marcha el suyo— y sacarla de
+            // «En proceso» los para todos: los relojes solo corren con la tarea en proceso.
+            const isTeamTask = (collaboratorChange
+                ? collaboratorChange.ids.length
+                : await tx.taskCollaborator.count({ where: { taskId: id } })) > 0;
 
             if (oldStatus === 'EN_CURSO' && newStatus !== 'EN_CURSO') {
                 updateData.accumulatedWorkMs = closeTaskWorkSession(currentTask, transitionAt);
@@ -709,6 +715,9 @@ export const updateTask = async (id, data, updaterId = null) => {
                     at: transitionAt,
                     closeReason
                 });
+                if (isTeamTask) {
+                    await closeAllOpenTaskWorkSessions(tx, { taskId: id, actorId: updaterId, at: transitionAt, closeReason });
+                }
             }
 
             if (isReopened) {
@@ -760,7 +769,6 @@ export const updateTask = async (id, data, updaterId = null) => {
 
             // Radar de Mérito: Initial startedAt logic
             if (newStatus === 'EN_CURSO' && oldStatus !== 'EN_CURSO') {
-                updateData.startedAt = transitionAt;
                 const cycle = await ensureTaskWorkCycle(tx, {
                     taskId: id,
                     actorId: updaterId,
@@ -768,12 +776,18 @@ export const updateTask = async (id, data, updaterId = null) => {
                     kind: oldStatus === 'DEVUELTA' ? 'REWORK' : 'INITIAL',
                     reason: oldStatus === 'DEVUELTA' ? 'RETURNED' : null
                 });
-                await openTaskWorkSession(tx, {
-                    task: { ...currentTask, id },
-                    cycleId: cycle.id,
-                    actorId: updaterId,
-                    at: transitionAt
-                });
+                if (isTeamTask) {
+                    // Nadie arranca solo: el responsable también usa «Empezar mi reloj».
+                    updateData.startedAt = null;
+                } else {
+                    updateData.startedAt = transitionAt;
+                    await openTaskWorkSession(tx, {
+                        task: { ...currentTask, id },
+                        cycleId: cycle.id,
+                        actorId: updaterId,
+                        at: transitionAt
+                    });
+                }
             }
 
             if (newStatus === 'REALIZADA' || newStatus === 'DEVUELTA') {

@@ -38,6 +38,7 @@ import { PRIVATE_TASK_HINT, nextPrivateAttempt } from '@/lib/taskPrivacy';
 import { isTaskOfPerson, workingMemberIds } from '@/lib/taskCollaborators';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 import FocusCommitmentNotice from '@/components/tasks/FocusCommitmentNotice';
+import TeamTaskStartNotice from '@/components/tasks/TeamTaskStartNotice';
 import { cn } from '@/lib/utils';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -707,6 +708,9 @@ const NativeTasks = () => {
         setShakingTaskId(key);
     };
 
+    // Tarea con colaboradores recién pasada a «En proceso»: su aviso de reloj manual.
+    const [teamStartTask, setTeamStartTask] = useState(null);
+
     const openTaskFromBoard = (task) => {
         if (task.isLocked) {
             onPrivateAttempt(task);
@@ -762,7 +766,10 @@ const NativeTasks = () => {
             return;
         }
 
-        if (!result.timingConflictConfirmed && destinationColumnId === 'en-proceso') {
+        // Tareas con colaboradores (5 de octubre de 2026): ningún reloj arranca solo al moverla, así
+        // que no hay «otra tarea en curso» que advertir.
+        const isTeamTask = (targetTask?.collaborators || []).length > 0;
+        if (!result.timingConflictConfirmed && destinationColumnId === 'en-proceso' && !isTeamTask) {
             const conflict = findConflictingActiveTask(tasks, targetTask);
             if (conflict) {
                 setConflictingMove({ result, conflict, targetTask });
@@ -852,7 +859,7 @@ const NativeTasks = () => {
             movedTask.accumulatedWorkMs = closeTaskWorkSession(movedTask);
             movedTask.startedAt = null;
         }
-        if (newStatusEnum === 'EN_CURSO' && sourceColumnId !== 'en-proceso') {
+        if (newStatusEnum === 'EN_CURSO' && sourceColumnId !== 'en-proceso' && !isTeamTask) {
             movedTask.startedAt = new Date().toISOString();
         }
         if (newStatusEnum === 'PENDIENTE' && sourceColumnId === 'devuelto') {
@@ -904,13 +911,29 @@ const NativeTasks = () => {
                 },
                 body: JSON.stringify(payload)
             });
-            if (!response.ok) throw new Error("Failed to update status in backend");
+            if (!response.ok) {
+                const failure = await response.json().catch(() => null);
+                console.error('[NativeTasks] El servidor rechazó el movimiento:', failure);
+                // Un motivo del servidor (por ejemplo, un colaborador que intenta cerrar la tarea) se
+                // dice tal cual; si no lo hay, el aviso de siempre.
+                throw Object.assign(new Error("Failed to update status in backend"), { userMessage: response.status === 403 ? failure?.error : null });
+            }
             // El confeti sale de la columna «Realizado», donde acaba de caer la tarjeta (Rodny, 30 de
             // septiembre de 2026). Se apunta a la columna y no a la tarjeta porque la tarjeta puede
             // no estar todavía repintada en su sitio cuando el servidor contesta rápido, y entonces
             // el disparo salía de la columna de la que venía.
             if (sourceColumnId !== 'realizado' && destinationColumnId === 'realizado') {
                 triggerConfetti(document.querySelector('[data-rfd-droppable-id="realizado"]'));
+            }
+            // Ya confirmado por el servidor: el aviso de que aquí cada quien pone en marcha su reloj,
+            // solo para quien está en el equipo de la tarea (es quien puede usar «Empezar mi reloj»).
+            const viewerInTeam = Boolean(currentUser?.id) && (
+                targetTask?.assigneeUserId === currentUser.id
+                || (targetTask?.collaborators || []).some((collaborator) => collaborator.userId === currentUser.id)
+            );
+            if (isTeamTask && viewerInTeam && destinationColumnId === 'en-proceso' && sourceColumnId !== 'en-proceso') {
+                // La tarea ya movida: si se abre desde el aviso, el panel tiene que verla «En proceso».
+                setTeamStartTask(movedTask);
             }
             await queryClient.invalidateQueries({ queryKey: ['nativeTasks'] });
             queryClient.invalidateQueries({ queryKey: ['dashboardMetrics'] });
@@ -920,7 +943,7 @@ const NativeTasks = () => {
             queryClient.setQueryData(['nativeTasks'], previousTasks);
             toast({
                 title: "Error de sincronización",
-                description: "Se revirtió el movimiento porque no se pudo actualizar el estado.",
+                description: err?.userMessage || "Se revirtió el movimiento porque no se pudo actualizar el estado.",
                 variant: "destructive"
             });
         }
@@ -1265,6 +1288,14 @@ const NativeTasks = () => {
             </Dialog>
 
             <FocusCommitmentNotice task={focusNoticeTask} open={!!focusNoticeTask} onClose={closeFocusNotice} />
+
+            <TeamTaskStartNotice
+                task={teamStartTask}
+                open={!!teamStartTask}
+                onClose={() => setTeamStartTask(null)}
+                onOpenTask={openTaskFromBoard}
+                onStarted={() => queryClient.invalidateQueries({ queryKey: ['nativeTasks'] })}
+            />
 
             <FocusExtensionDialog
                 task={extensionTask}

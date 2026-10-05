@@ -40,7 +40,7 @@ const sessions = [
   { taskId: 't1', workerId: 'm-melissa', isCollaborator: true, startedAt: new Date(start - 200 * MIN), endedAt: new Date(start - 170 * MIN), durationMs: 30 * MIN },
   { taskId: 't1', workerId: 'm-bruno', isCollaborator: true, startedAt: new Date(start - 25 * MIN), endedAt: null, durationMs: null }
 ];
-const collaborators = { t1: ['melissa', 'bruno'] };
+const collaborators = { t1: ['melissa', 'bruno'], t3: ['melissa'] };
 
 const baseTasks = [
   {
@@ -55,6 +55,13 @@ const baseTasks = [
     assigneeId: members.bruno.id, assignee: members.bruno, comments: 'Cinco láminas con los testimonios.', priority: 'NORMAL',
     aiCategory: 'CREATIVO & DISEÑO', aiComplexity: 'MEDIA', dueDate: venceHoy, createdAt: '2026-10-02T12:00:00.000Z',
     taskAttachments: [], taskComments: [], viewers: [], sortOrder: 1
+  },
+  {
+    id: 't3', title: 'Reel de aniversario', status: 'PENDIENTE', creatorId: 'u-rodny', clientId: client.id, client,
+    assigneeId: members.rodny.id, assignee: members.rodny, startedAt: null, accumulatedWorkMs: 0,
+    comments: 'Rodny graba; Melissa escribe el texto de la publicación.', priority: 'URGENTE',
+    aiCategory: 'PRODUCCIÓN AUDIOVISUAL', aiComplexity: 'MEDIA', dueDate: venceHoy, createdAt: '2026-10-03T12:00:00.000Z',
+    taskAttachments: [], taskComments: [], viewers: [], sortOrder: 2
   }
 ];
 
@@ -73,7 +80,7 @@ const teamTime = (taskId) => {
   const rows = [{
     memberId: task.assignee.id, userId: task.assignee.userId, name: task.assignee.name, avatarUrl: null, role: 'ASSIGNEE',
     elapsedMs: task.accumulatedWorkMs + (task.status === 'EN_CURSO' && task.startedAt ? now - new Date(task.startedAt).getTime() : 0),
-    working: task.status === 'EN_CURSO'
+    working: task.status === 'EN_CURSO' && Boolean(task.startedAt)
   }];
   for (const key of collaborators[taskId] || []) {
     const member = members[key];
@@ -95,13 +102,35 @@ window.fetch = async (input, init = {}) => {
   if (work) {
     const [, taskId, action] = work;
     const me = Object.values(members).find((m) => m.userId === viewer.id);
+    const task = baseTasks.find((t) => t.id === taskId);
     if (action !== 'team') {
-      if (!(collaborators[taskId] || []).some((key) => members[key].id === me?.id)) return json({ error: 'Solo los colaboradores de la tarea registran tiempo aquí.' }, 403);
-      const open = sessions.find((s) => s.taskId === taskId && s.workerId === me.id && !s.endedAt);
-      if (action === 'start' && !open) sessions.push({ taskId, workerId: me.id, isCollaborator: true, startedAt: new Date(), endedAt: null, durationMs: null });
-      if (action === 'pause' && open) { open.endedAt = new Date(); open.durationMs = open.endedAt - open.startedAt; }
+      const isAssignee = task.assigneeId === me?.id;
+      if (!isAssignee && !(collaborators[taskId] || []).some((key) => members[key].id === me?.id)) return json({ error: 'Solo el equipo de la tarea registra tiempo aquí.' }, 403);
+      if (action === 'start' && task.status !== 'EN_CURSO') return json({ error: 'Pasa la tarea a «En proceso» para registrar tu tiempo.' }, 409);
+      if (isAssignee) {
+        // El reloj del responsable es el de la tarea, como en el servidor.
+        if (action === 'start' && !task.startedAt) task.startedAt = new Date().toISOString();
+        if (action === 'pause' && task.startedAt) { task.accumulatedWorkMs += Date.now() - new Date(task.startedAt).getTime(); task.startedAt = null; }
+      } else {
+        const open = sessions.find((s) => s.taskId === taskId && s.workerId === me.id && !s.endedAt);
+        if (action === 'start' && !open) sessions.push({ taskId, workerId: me.id, isCollaborator: true, startedAt: new Date(), endedAt: null, durationMs: null });
+        if (action === 'pause' && open) { open.endedAt = new Date(); open.durationMs = open.endedAt - open.startedAt; }
+      }
     }
     return json(teamTime(taskId));
+  }
+  const patch = method === 'PATCH' && url.match(/\/api\/tasks\/([^/?]+)$/);
+  if (patch) {
+    // Mover la tarjeta: en las tareas con equipo no arranca ningún reloj; sacarla de «En proceso» los para.
+    const task = baseTasks.find((t) => t.id === patch[1]);
+    const next = JSON.parse(init.body || '{}').status;
+    if (task.status === 'EN_CURSO' && next !== 'EN_CURSO') {
+      if (task.startedAt) task.accumulatedWorkMs += Date.now() - new Date(task.startedAt).getTime();
+      task.startedAt = null;
+      sessions.filter((s) => s.taskId === task.id && !s.endedAt).forEach((s) => { s.endedAt = new Date(); s.durationMs = s.endedAt - s.startedAt; });
+    }
+    task.status = next;
+    return json(withCollaborators(task));
   }
   if (url.includes('/api/tasks') && method === 'GET' && !/\/api\/tasks\/[^/?]+\//.test(url)) return json(baseTasks.map(withCollaborators));
   if (url.includes('/api/team')) return json(Object.values(members));

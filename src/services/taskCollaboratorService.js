@@ -3,7 +3,7 @@ import { assertActiveTeamMembers } from './teamRosterService.js';
 import { recognitionTransaction } from './recognitionService.js';
 import { createNotification } from './notificationService.js';
 import { normalizeCollaboratorIds } from '../lib/taskCollaborators.js';
-import { getTaskElapsedMs } from '../lib/taskTiming.js';
+import { closeTaskWorkSession, getTaskElapsedMs } from '../lib/taskTiming.js';
 import { closeActiveTaskWorkSession, ensureTaskWorkCycle, openTaskWorkSession } from './taskWorkSessionService.js';
 
 /**
@@ -82,28 +82,45 @@ export const notifyCollaboratorsAdded = async ({ task, memberIds, actorUserId = 
   }
 };
 
+/**
+ * Quién pide el reloj y en qué tarea. En una tarea con colaboradores **todos** usan su botón,
+ * también el responsable (Rodny, 5 de octubre de 2026: «una regla para todos»). En una tarea de
+ * una sola persona el reloj sigue corriendo con la columna, como siempre, y aquí no hay nada que hacer.
+ */
 const loadWorkContext = async (tx, { taskId, userId }) => {
   const [task, member] = await Promise.all([
-    tx.task.findUnique({ where: { id: taskId }, select: { id: true, status: true, assigneeId: true, collaborators: { select: { memberId: true } } } }),
+    tx.task.findUnique({
+      where: { id: taskId },
+      select: { id: true, status: true, assigneeId: true, startedAt: true, accumulatedWorkMs: true, collaborators: { select: { memberId: true } } }
+    }),
     tx.teamMember.findFirst({ where: { userId, isActive: true }, select: { id: true } })
   ]);
   if (!task) throw httpError(404, 'La tarea ya no existe.', 'TASK_NOT_FOUND');
-  if (!member || !task.collaborators.some((row) => row.memberId === member.id)) {
-    throw httpError(403, 'Solo los colaboradores de la tarea registran tiempo aquí. El responsable lo hace moviendo la tarea.', 'TASK_NOT_COLLABORATOR');
+  const isAssignee = Boolean(member) && task.assigneeId === member.id;
+  const isCollaborator = Boolean(member) && task.collaborators.some((row) => row.memberId === member.id);
+  if (!isAssignee && !isCollaborator) {
+    throw httpError(403, 'Solo el equipo de la tarea registra tiempo aquí.', 'TASK_NOT_COLLABORATOR');
   }
-  return { task, member };
+  if (isAssignee && !task.collaborators.length) {
+    throw httpError(409, 'En una tarea de una sola persona el tiempo corre al pasarla a «En proceso».', 'TASK_NOT_TEAM');
+  }
+  return { task, member, isAssignee };
 };
-
-const WORKABLE_STATUSES = new Set(['PENDIENTE', 'EN_CURSO']);
 
 export const startCollaboratorWork = async ({ taskId, userId, at = new Date(), db = prisma, transaction = null }) => {
   const execute = transaction || ((work) => recognitionTransaction(db, work));
   return execute(async (tx) => {
-    const { task, member } = await loadWorkContext(tx, { taskId, userId });
-    if (!WORKABLE_STATUSES.has(String(task.status))) {
-      throw httpError(409, 'Esta tarea ya está cerrada o devuelta: su tiempo no se puede seguir registrando.', 'TASK_NOT_WORKABLE');
+    const { task, member, isAssignee } = await loadWorkContext(tx, { taskId, userId });
+    // Los relojes solo corren con la tarea en proceso: así sacarla de ahí los para a todos.
+    if (String(task.status) !== 'EN_CURSO') {
+      throw httpError(409, 'Pasa la tarea a «En proceso» para registrar tu tiempo.', 'TASK_NOT_IN_PROGRESS');
     }
     const cycle = await ensureTaskWorkCycle(tx, { taskId, actorId: userId, at });
+    if (isAssignee) {
+      // El reloj del responsable es el de la tarea: lo mueve su botón, no la columna.
+      if (!task.startedAt) await tx.task.update({ where: { id: taskId }, data: { startedAt: at } });
+      return openTaskWorkSession(tx, { task, cycleId: cycle.id, actorId: userId, at, workerId: member.id, isCollaborator: false });
+    }
     return openTaskWorkSession(tx, { task, cycleId: cycle.id, actorId: userId, at, workerId: member.id, isCollaborator: true });
   });
 };
@@ -111,7 +128,13 @@ export const startCollaboratorWork = async ({ taskId, userId, at = new Date(), d
 export const pauseCollaboratorWork = async ({ taskId, userId, at = new Date(), db = prisma, transaction = null }) => {
   const execute = transaction || ((work) => recognitionTransaction(db, work));
   return execute(async (tx) => {
-    const { member } = await loadWorkContext(tx, { taskId, userId });
+    const { task, member, isAssignee } = await loadWorkContext(tx, { taskId, userId });
+    if (isAssignee) {
+      if (task.startedAt) {
+        await tx.task.update({ where: { id: taskId }, data: { startedAt: null, accumulatedWorkMs: closeTaskWorkSession(task, at) } });
+      }
+      return closeActiveTaskWorkSession(tx, { taskId, actorId: userId, at, closeReason: 'PAUSED' });
+    }
     return closeActiveTaskWorkSession(tx, { taskId, actorId: userId, at, closeReason: 'PAUSED', workerId: member.id, isCollaborator: true });
   });
 };

@@ -2377,7 +2377,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 taskId={formData.id}
                                 currentUserId={currentUser?.id || currentUser?.userId}
                                 hasCollaborators={(taskData?.collaborators || []).length > 0}
-                                closed={['REALIZADA', 'DEVUELTA'].includes(formData.originalStatus)}
+                                status={formData.originalStatus}
                                 onChange={onSuccess}
                             />
                         )}
