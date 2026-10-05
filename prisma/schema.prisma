@@ -131,6 +131,21 @@ model AiGovernanceEvent {
   @@index([actorId])
 }
 
+// Semáforo de servicios (4 de octubre de 2026): una fila por comprobación de un servicio externo.
+// Se purga a los 30 días desde el propio servicio. Tabla: scripts/ensure-service-health-schema.js.
+model ServiceHealthCheck {
+  id        String   @id
+  serviceId String
+  checkedAt DateTime @default(now())
+  status    String
+  critical  Boolean  @default(false)
+  latencyMs Int?
+  message   String?
+  errorCode String?
+  @@index([checkedAt])
+  @@index([serviceId, checkedAt])
+}
+
 // Registro central de uso de IA (27 de septiembre de 2026). Sin relaciones a propósito: la fila
 // sobrevive a la persona o al cliente y no guarda contenido. Tabla: scripts/ensure-ai-usage-schema.js.
 model AiUsageEvent {
