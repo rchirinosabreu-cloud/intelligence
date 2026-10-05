@@ -33,6 +33,7 @@ const memoryDb = (rows = []) => {
       async findMany({ where }) {
         return store
           .filter((row) => row.checkedAt >= where.checkedAt.gte)
+          .filter((row) => !where.serviceId?.in || where.serviceId.in.includes(row.serviceId))
           .sort((a, b) => b.checkedAt - a.checkedAt);
       },
       async deleteMany({ where }) {
@@ -78,6 +79,77 @@ test('only the services whose interval passed are checked, and every check is st
 
   await service.runDueChecks({ force: true });
   assert.deepEqual(calls, ['database', 'database', 'email']);
+});
+
+// Avisos del semáforo (Rodny, 5 de octubre de 2026): a los administradores les llega un aviso cuando un
+// servicio cae y otro cuando vuelve; entre uno y otro, nada, para no llenar la campana.
+const alertingService = ({ rows, outcome }) => {
+  const db = memoryDb(rows);
+  const sent = [];
+  const service = createServiceHealthService({
+    db, catalog: [catalog[0]], now: () => NOW,
+    probes: { database: async () => outcome },
+    notifyAdmins: async (alert) => { sent.push(alert); }
+  });
+  return { service, sent };
+};
+
+test('a service that goes red sends one alert to the administrators', async () => {
+  const { service, sent } = alertingService({
+    rows: [row('database', 'FAIL', 5, { message: 'No respondió a tiempo.' }), row('database', 'OK', 10)],
+    outcome: { status: 'FAIL', message: 'No respondió a tiempo.' }
+  });
+  await service.runDueChecks();
+  assert.deepEqual(sent.map((alert) => [alert.kind, alert.serviceId, alert.label]), [['DOWN', 'database', 'Base de datos']]);
+  assert.equal(sent[0].reason, 'No respondió a tiempo.');
+});
+
+test('staying red, or a first stumble that is only yellow, sends nothing', async () => {
+  const stillRed = alertingService({
+    rows: [row('database', 'FAIL', 5), row('database', 'FAIL', 10)],
+    outcome: { status: 'FAIL', message: 'Sigue caído.' }
+  });
+  await stillRed.service.runDueChecks();
+  assert.deepEqual(stillRed.sent, []);
+
+  const firstStumble = alertingService({ rows: [row('database', 'OK', 5)], outcome: { status: 'FAIL', message: 'Tropiezo.' } });
+  await firstStumble.service.runDueChecks();
+  assert.deepEqual(firstStumble.sent, []);
+});
+
+test('a critical failure is red at once and alerts at once', async () => {
+  const { service, sent } = alertingService({ rows: [row('database', 'OK', 5)], outcome: { status: 'FAIL', critical: true, message: 'Clave rechazada.' } });
+  await service.runDueChecks();
+  assert.deepEqual(sent.map((alert) => alert.kind), ['DOWN']);
+});
+
+test('a service that comes back sends the recovery alert', async () => {
+  const { service, sent } = alertingService({
+    rows: [row('database', 'FAIL', 5), row('database', 'FAIL', 10)],
+    outcome: { status: 'OK', message: 'Responde.' }
+  });
+  await service.runDueChecks();
+  assert.deepEqual(sent.map((alert) => [alert.kind, alert.serviceId]), [['RECOVERED', 'database']]);
+});
+
+test('an alert that fails to send never breaks the checks', async () => {
+  const db = memoryDb([row('database', 'FAIL', 5), row('database', 'OK', 10)]);
+  const service = createServiceHealthService({
+    db, catalog: [catalog[0]], now: () => NOW, logger: { error() {} },
+    probes: { database: async () => ({ status: 'FAIL', message: 'x' }) },
+    notifyAdmins: async () => { throw new Error('push caído'); }
+  });
+  const ran = await service.runDueChecks();
+  assert.equal(ran.length, 1);
+  assert.equal(db.store.length, 3);
+});
+
+test('the summary for the header dot says the overall light and what is wrong', async () => {
+  const db = memoryDb([row('database', 'FAIL', 1, { message: 'No responde.' }), row('database', 'FAIL', 6), row('email', 'OK', 3)]);
+  const service = createServiceHealthService({ db, catalog, now: () => NOW, probes: {} });
+  const summary = await service.getSummary();
+  assert.equal(summary.overall, LIGHTS.RED);
+  assert.deepEqual(summary.troubled, [{ id: 'database', label: 'Base de datos', light: LIGHTS.RED, reason: 'No responde.' }]);
 });
 
 test('a probe that is missing or throws is stored as a failure, never lost', async () => {
@@ -132,9 +204,10 @@ const buildApp = ({ role = 'ADMIN', service }) => {
 };
 
 test('only administrators read the board or force a check', async () => {
-  const service = { getBoard: async () => ({ overall: 'GREEN' }), runDueChecks: async () => [] };
+  const service = { getBoard: async () => ({ overall: 'GREEN' }), getSummary: async () => ({ overall: 'GREEN', troubled: [] }), runDueChecks: async () => [] };
   await withServer(buildApp({ role: 'EDITOR', service }), async (base) => {
     assert.equal((await fetch(base)).status, 403);
+    assert.equal((await fetch(`${base}/summary`)).status, 403);
     assert.equal((await fetch(`${base}/run`, { method: 'POST' })).status, 403);
   });
   await withServer(buildApp({ role: 'ADMIN', service }), async (base) => {
@@ -142,6 +215,7 @@ test('only administrators read the board or force a check', async () => {
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'no-store');
     assert.deepEqual(await response.json(), { overall: 'GREEN' });
+    assert.deepEqual(await (await fetch(`${base}/summary`)).json(), { overall: 'GREEN', troubled: [] });
   });
 });
 

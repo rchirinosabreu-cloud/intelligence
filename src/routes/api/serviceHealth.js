@@ -28,6 +28,17 @@ export const createServiceHealthRouter = ({ service = null, logger = console, cl
     }
   });
 
+  // El punto de color de la barra superior (5 de octubre de 2026): solo el color y lo que falla.
+  router.get('/summary', async (_req, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store');
+      return res.json(await resolve().getSummary());
+    } catch (error) {
+      logger.error('[ServiceHealth] No se pudo leer el resumen:', error.message);
+      return res.status(500).json({ error: 'No fue posible leer el estado de los servicios.' });
+    }
+  });
+
   router.post('/run', async (_req, res) => {
     if (clock() - lastManualRunAt < MANUAL_RUN_COOLDOWN_MS) {
       return res.status(429).json({ error: 'Se acaba de comprobar: espera unos segundos antes de volver a intentarlo.' });

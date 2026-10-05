@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import TeamChat from '@/components/chat/TeamChat';
 import Sidebar from './Sidebar';
-import { Menu, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye, Clock, Users } from '@/components/ui/icons';
+import ServiceHealthDot from './ServiceHealthDot';
+import { Menu, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye, Clock, Users, Activity } from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -207,6 +208,9 @@ const AppLayout = ({ children }) => {
         // La publicación en redes abre la pieza en su parrilla (`resourceId` es la parrilla, `relatedId` la pieza).
         const target = notif.url && notif.url.startsWith('/') ? notif.url : (notif.resourceId ? `/parrillas/${notif.resourceId}?item=${notif.relatedId}` : '/parrillas');
         navigate(target);
+    } else if (notif.type === 'SERVICE_HEALTH_DOWN' || notif.type === 'SERVICE_HEALTH_RECOVERED') {
+        // Semáforo de servicios (5 de octubre de 2026): el aviso lleva al tablero de servicios.
+        navigate('/salud-operativa');
     }
   };
 
@@ -270,6 +274,7 @@ const AppLayout = ({ children }) => {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
+            <ServiceHealthDot isAdmin={currentUser?.role === 'ADMIN'} />
             <Button
                 variant="ghost"
                 size="icon"
@@ -332,6 +337,14 @@ const AppLayout = ({ children }) => {
                                 Icon = Clock;
                                 bgColor = "bg-destructive/10";
                                 iconColor = "text-destructive";
+                            } else if (notif.type === 'SERVICE_HEALTH_DOWN') {
+                                Icon = Activity;
+                                bgColor = "bg-destructive/10";
+                                iconColor = "text-destructive";
+                            } else if (notif.type === 'SERVICE_HEALTH_RECOVERED') {
+                                Icon = Activity;
+                                bgColor = "bg-status-positive/10";
+                                iconColor = "text-status-positive-fg";
                             } else if (notif.type === 'TASK_COLLABORATOR_ADDED') {
                                 Icon = Users;
                                 bgColor = "bg-brand-cyan/10";
