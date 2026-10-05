@@ -1,6 +1,8 @@
 import Select from '@/components/ui/Select';
 import MoneyInput from '@/components/ui/MoneyInput';
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { Paperclip } from '@/components/ui/icons';
+import { FINANCIAL_DOCUMENT_ACCEPT, financialDocumentProblem } from '@/lib/financialDocumentsClient';
 import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
@@ -13,6 +15,8 @@ const field = 'min-h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 p
 const money = value => Number(value).toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2 });
 export default function ReceivablePaymentDialog({ debt, form, setForm, accounts, saving, error, onClose, onSubmit }) {
   const [page, setPage] = useState(1);
+  const [fileProblem, setFileProblem] = useState('');
+  const fileInput = useRef(null);
   const existing = form.source === 'EXISTING';
   const { data, isLoading, error: candidatesError } = useQuery({
     queryKey: ['financial-payment-candidates', debt?.clientId, page],
@@ -46,6 +50,18 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
       <div className="grid gap-4 sm:grid-cols-2"><label className="flex min-w-0 flex-col gap-1.5 text-sm">Fecha<DatePicker {...brainDatePickerProps} required disabled={existing} wrapperClassName="block w-full" className={field} selected={form.paidAt ? new Date(`${form.paidAt}T12:00:00`) : null} dateFormat="dd/MM/yyyy" onChange={date => setForm(current => ({ ...current, paidAt: date ? format(date, 'yyyy-MM-dd') : '' }))}/></label><label className="flex min-w-0 flex-col gap-1.5 text-sm">Cuenta<Select required disabled={existing} className={field} value={form.accountId} onChange={event => setForm(current => ({ ...current, accountId: event.target.value }))}><option value="">Seleccionar…</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</Select></label></div>
       <label className="block space-y-1.5 text-sm">Referencia<input readOnly={existing} className={field} value={form.reference} onChange={event => setForm(current => ({ ...current, reference: event.target.value }))}/></label>
       <label className="block space-y-1.5 text-sm">Notas<textarea className={field} rows={2} value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))}/></label>
+      {/* El soporte del pago (Elisa, 5 de octubre de 2026: «no se puede adjuntar el comprobante»).
+          Se sube al ingreso del abono después de que el servidor lo confirme. */}
+      <div className="space-y-1.5 text-sm">
+        <span className="block">Comprobante <span className="text-zinc-400">(opcional)</span></span>
+        <input ref={fileInput} type="file" className="sr-only" accept={FINANCIAL_DOCUMENT_ACCEPT}
+          onChange={event => { const file = event.target.files?.[0]; event.target.value = ''; const problem = financialDocumentProblem(file); setFileProblem(problem || ''); if (!problem) setForm(current => ({ ...current, file: file || null })); }} />
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
+          <button type="button" onClick={() => fileInput.current?.click()} className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-zinc-200 px-3 text-sm dark:border-white/10"><Paperclip className="h-4 w-4" />{form.file ? 'Cambiar archivo' : 'Subir comprobante'}</button>
+          {form.file && <span className="min-w-0 truncate text-xs text-zinc-500">{form.file.name}</span>}
+        </div>
+        {fileProblem && <p role="alert" className="text-xs text-destructive brain-destructive-text">{fileProblem}</p>}
+      </div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
       <DialogFooter><button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose}>Cancelar</button><button type="submit" disabled={saving || (existing && !form.financialRecordId)} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Guardando…' : 'Guardar pago'}</button></DialogFooter>
     </fieldset></form>

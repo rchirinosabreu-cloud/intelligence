@@ -33,7 +33,7 @@ records[2] = { ...records[2], attachmentUrl: 'javascript:alert(1)' };
 if (new URLSearchParams(location.search).has('payrollRecord')) {
   records.unshift({ id: 'rec-payroll-legacy', date: '2026-09-30T12:00:00Z', year: 2026, month: 9, amount: 4808300, type: 'EXPENSE', category: 'NOMINA', status: 'POSTED', scenario: 'ACTUAL', origin: 'SYSTEM', description: 'Pago de nomina: Rodny Chirinos', accountId: account.id, account, reference: null, documents: [], payrollPayment: { id: 'payroll-payment-legacy:tx-rodny' } });
 }
-if (!debt.balanceReviewRequired) debt.payments = [{ id: 'historical-payment', amount: 400000, paidAt: '2026-09-01T05:00:00Z', reference: 'ABONO-01', notes: 'Pagó la mitad; el resto queda para el 15 de octubre.', account, financialRecord: records[1] }];
+if (!debt.balanceReviewRequired) debt.payments = [{ id: 'historical-payment', amount: 400000, paidAt: '2026-09-01T05:00:00Z', reference: 'ABONO-01', notes: 'Pagó la mitad; el resto queda para el 15 de octubre.', account, financialRecord: records[1], financialRecordId: records[1].id, documents: [] }];
 // Un PDF de una página, válido de verdad: el visor de la plataforma lo renderiza con
 // pdf.js, así que unos bytes inventados no probarían nada.
 const samplePdf = (text) => {
@@ -163,6 +163,11 @@ axios.defaults.adapter = async config => {
     const file = body.get('file');
     const document = { id: `doc-${++payrollCounter}`, name: file.name, mimeType: file.type || 'application/pdf', size: file.size };
     payment?.documents.push(document);
+    // Comprobantes de un abono de cartera (5 de octubre de 2026): van al ingreso del abono.
+    const receivablePayment = (debt.payments || []).find((item) => item.financialRecordId && path.includes(`/records/${item.financialRecordId}/`));
+    if (receivablePayment) receivablePayment.documents = [...(receivablePayment.documents || []), document];
+    const record = records.find((item) => path.includes(`/records/${item.id}/`));
+    if (record) record.documents = [...(record.documents || []), document];
     window.__payrollUploads = [...(window.__payrollUploads || []), document];
     data = { message: 'Documento guardado correctamente.', document };
   }
@@ -245,8 +250,12 @@ axios.defaults.adapter = async config => {
   } else if (path.endsWith('/payments')) {
     if (new URLSearchParams(location.search).has('paymentError')) throw Object.assign(new Error('Pago no guardado (simulado)'), { response: { data: { message: 'Pago no guardado (simulado)' } } });
     debt = { ...debt, outstanding: debt.outstanding - Number(body.amount), paidAmount: debt.paidAmount + Number(body.amount), status: debt.outstanding === Number(body.amount) ? 'PAGADO' : debt.status };
-    if (!body.financialRecordId) records = [{ ...records[0], id: 'demo-new', amount: body.amount, category: body.category }, ...records];
-    data = { outstanding: debt.outstanding, payment: { id: 'demo-payment' } };
+    if (!body.financialRecordId) records = [{ ...records[0], id: 'demo-new', amount: body.amount, category: body.category, origin: 'SYSTEM', receivablePayment: { id: 'demo-payment' }, documents: [] }, ...records];
+    // Como el servidor: el abono queda con su ingreso, y la respuesta trae ese ingreso.
+    const recordId = body.financialRecordId || 'demo-new';
+    debt = { ...debt, payments: [{ id: 'demo-payment', amount: Number(body.amount), paidAt: `${body.paidAt}T12:00:00Z`, reference: body.reference || null, notes: body.notes || null, account, financialRecordId: recordId, documents: [] }, ...(debt.payments || [])] };
+    window.__receivablePaymentBody = body;
+    data = { outstanding: debt.outstanding, payment: { id: 'demo-payment' }, financialRecord: { id: recordId } };
   } else if (path.endsWith('/bank-reconciliation')) data = { transactions: Array.from({ length: 90 }, (_, i) => ({ id: `bank-${i}`, description: `Movimiento bancario ${i + 1}`, postedAt: '2026-09-07', amount: 10000, account, status: i === 0 ? 'MATCHED' : 'UNMATCHED', matches: i === 0 ? [{ id: 'match', status: 'APPROVED' }] : [] })), continuityGaps: [], statements: [] };
   else if (path.endsWith('/periods')) data = { periods: [] };
   else if (path.includes('/receivables/') && config.method === 'delete') {

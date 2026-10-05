@@ -43,6 +43,8 @@ import MoneyInput from '@/components/ui/MoneyInput';
 import FinancialClientsDirectory from '@/components/modules/financial/FinancialClientsDirectory';
 import UsdToPesosFields from '@/components/modules/financial/UsdToPesosFields';
 import { PayrollPaymentDialog, PayrollPaymentList } from '@/components/modules/financial/PayrollPayments';
+import RecordDocumentsInline from '@/components/modules/financial/RecordDocumentsInline';
+import { uploadRecordDocument } from '@/lib/financialDocumentsClient';
 import { payrollStatus } from '@/lib/payrollPayments';
 import ClientProfileFields from '@/components/modules/Clients/ClientProfileFields';
 import { emptyClientProfile, normalizeClientProfile } from '@/lib/clientProfile';
@@ -454,13 +456,26 @@ const FinancialDashboard = () => {
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
-            await axios.post(`${baseUrl}/api/financials/receivables/${paymentDebt.id}/payments`, {
-                ...paymentForm,
+            const { file, ...paymentPayload } = paymentForm;
+            const { data: result } = await axios.post(`${baseUrl}/api/financials/receivables/${paymentDebt.id}/payments`, {
+                ...paymentPayload,
                 amount: Number(paymentForm.amount)
             }, { headers: { Authorization: `Bearer ${token}` } });
+            // El comprobante va al ingreso que el servidor acaba de confirmar (Elisa, 5 de octubre de
+            // 2026). Si falla, el pago ya quedó guardado: se dice y se sube desde el abono en Cartera.
+            let message = 'Pago de cartera registrado.';
+            if (file) {
+                try {
+                    await uploadRecordDocument(result?.financialRecord?.id, file);
+                    message = 'Pago de cartera registrado con su comprobante.';
+                } catch (uploadError) {
+                    console.error('Error uploading receivable payment document:', uploadError.response?.data || uploadError);
+                    message = 'Pago registrado, pero el comprobante no se subió. Súbelo desde el abono.';
+                }
+            }
             await invalidateFinancialQueries(queryClient);
             setPaymentDebt(null);
-            setImportSuccess('Pago de cartera registrado.');
+            setImportSuccess(message);
         } catch (error) {
             console.error('Error registering receivable payment:', error.response?.data || error);
             setImportError(error.response?.data?.message || 'No fue posible registrar el pago de cartera.');
@@ -1577,6 +1592,13 @@ await invalidateFinancialQueries(queryClient);
                                                                                         {/* Lo que se escribió en «Notas» al registrar el pago: es el seguimiento del cobro. */}
                                                                                         {payment.notes && <p data-receivable-payment-note className="mt-1 whitespace-pre-line text-xs text-zinc-600 dark:text-zinc-300">{payment.notes}</p>}
                                                                                         {payment.reversedAt && <p className="text-[10px] text-destructive">Revertido: {payment.reversalReason || 'sin motivo registrado'}</p>}
+                                                                                        {/* Los comprobantes del abono, en su ingreso (Elisa, 5 de octubre de 2026). */}
+                                                                                        {!payment.reversedAt && payment.financialRecordId && (
+                                                                                            <RecordDocumentsInline className="mt-1.5" recordId={payment.financialRecordId} documents={payment.documents || []}
+                                                                                                canWrite={canWriteFinancials}
+                                                                                                onChanged={async (message) => { setImportError(''); await invalidateFinancialQueries(queryClient); setImportSuccess(message); }}
+                                                                                                onError={(message) => { setImportSuccess(''); setImportError(message); }} />
+                                                                                        )}
                                                                                     </div>
                                                                                     {canWriteFinancials && !payment.reversedAt && (
                                                                                         <button type="button" onClick={() => openPaymentReversal(debt, payment)}

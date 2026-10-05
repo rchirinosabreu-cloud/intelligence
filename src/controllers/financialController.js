@@ -132,7 +132,16 @@ const serializeReceivable = (receivable) => {
         notes: payment.notes,
         account: payment.account || null,
         reversedAt: payment.reversedAt instanceof Date ? payment.reversedAt.toISOString() : (payment.reversedAt || null),
-        reversalReason: payment.reversalReason || null
+        reversalReason: payment.reversalReason || null,
+        // El ingreso del abono y sus comprobantes, para verlos y subirlos desde Cartera (Elisa,
+        // 5 de octubre de 2026). Un abono revertido ya no tiene ingreso.
+        financialRecordId: payment.financialRecordId || null,
+        documents: (payment.financialRecord?.documents || []).map((document) => ({
+            id: document.id,
+            name: document.name,
+            mimeType: document.mimeType,
+            size: document.size
+        }))
     }));
     const paidAmount = roundFloat(payments.reduce((sum, payment) => sum + (payment.reversedAt ? 0 : payment.amount), 0));
     const balanceReviewRequired = receivable.status === 'PAGADO' && roundFloat(amount - paidAmount) > 0;
@@ -474,7 +483,13 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
                 },
                 payments: {
                     include: {
-                        account: { select: { id: true, name: true } }
+                        account: { select: { id: true, name: true } },
+                        financialRecord: {
+                            select: {
+                                id: true,
+                                documents: { where: { voidedAt: null }, orderBy: { uploadedAt: 'asc' }, select: { id: true, name: true, mimeType: true, size: true } }
+                            }
+                        }
                     },
                     orderBy: { paidAt: 'desc' }
                 },
