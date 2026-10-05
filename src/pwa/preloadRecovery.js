@@ -1,3 +1,7 @@
+import { lazy } from 'react';
+import { isChunkLoadError } from '../lib/appErrors.js';
+import { reportClientError } from '../lib/clientErrorReporter.js';
+
 export const PRELOAD_RECOVERY_KEY = 'brainstudio:preload-recovery';
 
 const getBuildVersion = () => (
@@ -8,12 +12,24 @@ const createRecoveryMarker = ({ buildVersion, location }) => (
   `${buildVersion}:${location?.pathname || '/'}${location?.search || ''}`
 );
 
-export const createVitePreloadErrorHandler = ({
-  buildVersion,
-  storage,
-  location,
-  reload
-}) => (event) => {
+const browserDefaults = () => {
+  const windowRef = typeof window === 'undefined' ? null : window;
+  let storage = null;
+  try { storage = windowRef?.sessionStorage || null; } catch { storage = null; }
+  return {
+    storage,
+    buildVersion: getBuildVersion(),
+    location: windowRef?.location,
+    reload: () => windowRef?.location.reload()
+  };
+};
+
+/**
+ * Recarga la página una sola vez por versión y pantalla cuando falta un archivo de la app.
+ * Devuelve `true` si pidió la recarga, y `false` si esa misma versión y pantalla ya se
+ * intentaron: entonces el error sube y la persona ve la pantalla de versión, sin bucle.
+ */
+export const attemptVersionRecovery = ({ storage, buildVersion, location, reload, onRecover } = {}) => {
   const marker = createRecoveryMarker({ buildVersion, location });
   let previousMarker = null;
 
@@ -25,9 +41,7 @@ export const createVitePreloadErrorHandler = ({
 
   // If the same build and route already failed after a refresh, let React's
   // error boundary render a useful fallback instead of creating a reload loop.
-  if (previousMarker === marker) return;
-
-  event?.preventDefault?.();
+  if (previousMarker === marker) return false;
 
   try {
     storage?.setItem(PRELOAD_RECOVERY_KEY, marker);
@@ -35,8 +49,53 @@ export const createVitePreloadErrorHandler = ({
     console.error('[PreloadRecovery] No fue posible guardar el estado de recuperación.', error);
   }
 
+  try { onRecover?.(); } catch { /* registrar nunca impide recuperar */ }
   reload();
+  return true;
 };
+
+/** La misma recuperación con lo que da el navegador; la usa la pantalla de error. */
+export const attemptBrowserVersionRecovery = (onRecover) => attemptVersionRecovery({ ...browserDefaults(), onRecover });
+
+export const createVitePreloadErrorHandler = ({
+  buildVersion,
+  storage,
+  location,
+  reload,
+  onRecover
+}) => (event) => {
+  if (attemptVersionRecovery({ storage, buildVersion, location, reload, onRecover })) {
+    event?.preventDefault?.();
+  }
+};
+
+// Mientras la página se recarga, la importación queda pendiente: Suspense sigue mostrando
+// «cargando» y la pantalla de error nunca llega a pintarse (Rodny, 5 de octubre de 2026: a
+// Elisa le salía «No pudimos cargar esta sección» cada vez que entraba tras un despliegue).
+const untilReload = () => new Promise(() => {});
+
+const reportVersionReload = (error) => reportClientError({
+  kind: 'version-reload',
+  error: error || new Error('Failed to fetch dynamically imported module (recuperación automática)')
+});
+
+/** Carga un módulo; si es de una versión anterior, recarga una vez en vez de fallar. */
+export const loadWithRecovery = async (factory, options = {}) => {
+  const recovery = { ...browserDefaults(), ...options };
+  try {
+    const module = await factory();
+    // Vite ya atendió el fallo (`vite:preloadError`) y pidió la recarga: la importación llega vacía.
+    if (module) return module;
+  } catch (error) {
+    if (!isChunkLoadError(error)) throw error;
+    const recovering = attemptVersionRecovery({ ...recovery, onRecover: options.onRecover ?? (() => reportVersionReload(error)) });
+    if (!recovering) throw error;
+  }
+  return untilReload();
+};
+
+/** `React.lazy` con la recuperación de versión. Todo módulo de `App.jsx` se carga así. */
+export const lazyWithRecovery = (factory) => lazy(() => loadWithRecovery(factory));
 
 export const installVitePreloadRecovery = ({
   windowRef = typeof window === 'undefined' ? null : window,
@@ -50,7 +109,8 @@ export const installVitePreloadRecovery = ({
     buildVersion,
     storage,
     location: windowRef.location,
-    reload: () => windowRef.location.reload()
+    reload: () => windowRef.location.reload(),
+    onRecover: () => reportVersionReload()
   });
 
   windowRef.addEventListener('vite:preloadError', handler);

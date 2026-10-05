@@ -83,8 +83,10 @@ test('the application installs global navigation recovery before rendering', asy
   assert.match(main, /installVitePreloadRecovery\(\)/);
   assert.match(main, /<ApplicationErrorBoundary>/);
   assert.match(boundary, /componentDidCatch/);
-  assert.match(boundary, /No pudimos cargar esta secci\S*n/);
-  assert.match(boundary, /Actualizar aplicaci\S*n/);
+  // Desde el 5 de octubre de 2026 la versión nueva y el error real se dicen distinto.
+  assert.match(boundary, /Hay una versi\S*n nueva de la plataforma/);
+  assert.match(boundary, /Algo fall\S* en esta pantalla/);
+  assert.match(boundary, />\s*Actualizar\s*</);
   assert.match(boundary, /dark:/);
   assert.match(boundary, /min-h-11/);
   assert.match(server, /app\.get\('\/assets\/\*'/);

@@ -1,5 +1,8 @@
 
-import React, { lazy, Suspense } from 'react';
+import React, { Suspense } from 'react';
+// Todo módulo se carga con la recuperación de versión: tras un despliegue, un archivo viejo
+// recarga la página en silencio en vez de mostrar la pantalla de error (5 de octubre de 2026).
+import { lazyWithRecovery } from '@/pwa/preloadRecovery';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import AppLayout from './components/layout/AppLayout';
 import Login from './components/Login';
@@ -11,38 +14,38 @@ import { toast } from 'react-hot-toast';
 import BrainToaster from '@/components/ui/BrainToaster';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
-const Dashboard = lazy(() => import('./components/modules/Dashboard'));
-const NativeTasks = lazy(() => import('./components/modules/NativeTasks'));
-const Clients = lazy(() => import('./components/modules/Clients'));
-const ClientDetailWrapper = lazy(() => import('./components/modules/ClientDetailWrapper'));
-const ClientOperationRoute = lazy(() => import('./components/modules/Clients/operations/ClientOperationRoute'));
-const Team = lazy(() => import('./components/modules/Team'));
-const Profile = lazy(() => import('./components/modules/Profile'));
-const ContentGrids = lazy(() => import('./components/modules/ContentGrids'));
-const ContentPlanDetail = lazy(() => import('./components/modules/ContentPlanDetail'));
-const FinancialDashboard = lazy(() => import('./components/modules/FinancialDashboard'));
-const TalentRadar = lazy(() => import('./components/modules/TalentRadar'));
-const ManagerTaskAnalytics = lazy(() => import('./components/modules/ManagerTaskAnalytics'));
-const Activity = lazy(() => import('./components/modules/Activity'));
-const GoogleCalendarCallback = lazy(() => import('./components/modules/Activity/GoogleCalendarCallback'));
-const Reports = lazy(() => import('./components/modules/Reports'));
-const MoodboardDashboard = lazy(() => import('./components/modules/Moodboard/MoodboardDashboard'));
-const MoodboardCanvas = lazy(() => import('./components/modules/Moodboard/MoodboardCanvas'));
-const PrivacyPolicy = lazy(() => import('./components/public/PrivacyPolicy'));
-const TermsOfService = lazy(() => import('./components/public/TermsOfService'));
-const AiGovernancePolicy = lazy(() => import('./components/public/AiGovernancePolicy'));
-const HelpCenter = lazy(() => import('./components/public/HelpCenter'));
-const GovernanceCenter = lazy(() => import('./components/modules/Governance/GovernanceCenter'));
-const SharedContentPlan = lazy(() => import('./components/public/SharedContentPlan'));
-const QuotationForm = lazy(() => import('./components/modules/Quotations/QuotationForm'));
-const QuotationsLayout = lazy(() => import('./components/modules/Quotations/QuotationsLayout'));
-const PublicQuotation = lazy(() => import('./components/public/Quotations/PublicQuotation'));
-const MinutesLayout = lazy(() => import('./components/modules/Minutes/MinutesLayout'));
-const DriveLayout = lazy(() => import('./components/modules/Drive/DriveLayout'));
-const OperationalHealth = lazy(() => import('./components/modules/OperationalHealth'));
-const CrmLayout = lazy(() => import('./components/modules/Crm/CrmLayout'));
-const CrmLeadDetail = lazy(() => import('./components/modules/Crm/CrmLeadDetail'));
-const CommercialRequestPage = lazy(() => import('./components/public/CommercialRequest/CommercialRequestPage'));
+const Dashboard = lazyWithRecovery(() => import('./components/modules/Dashboard'));
+const NativeTasks = lazyWithRecovery(() => import('./components/modules/NativeTasks'));
+const Clients = lazyWithRecovery(() => import('./components/modules/Clients'));
+const ClientDetailWrapper = lazyWithRecovery(() => import('./components/modules/ClientDetailWrapper'));
+const ClientOperationRoute = lazyWithRecovery(() => import('./components/modules/Clients/operations/ClientOperationRoute'));
+const Team = lazyWithRecovery(() => import('./components/modules/Team'));
+const Profile = lazyWithRecovery(() => import('./components/modules/Profile'));
+const ContentGrids = lazyWithRecovery(() => import('./components/modules/ContentGrids'));
+const ContentPlanDetail = lazyWithRecovery(() => import('./components/modules/ContentPlanDetail'));
+const FinancialDashboard = lazyWithRecovery(() => import('./components/modules/FinancialDashboard'));
+const TalentRadar = lazyWithRecovery(() => import('./components/modules/TalentRadar'));
+const ManagerTaskAnalytics = lazyWithRecovery(() => import('./components/modules/ManagerTaskAnalytics'));
+const Activity = lazyWithRecovery(() => import('./components/modules/Activity'));
+const GoogleCalendarCallback = lazyWithRecovery(() => import('./components/modules/Activity/GoogleCalendarCallback'));
+const Reports = lazyWithRecovery(() => import('./components/modules/Reports'));
+const MoodboardDashboard = lazyWithRecovery(() => import('./components/modules/Moodboard/MoodboardDashboard'));
+const MoodboardCanvas = lazyWithRecovery(() => import('./components/modules/Moodboard/MoodboardCanvas'));
+const PrivacyPolicy = lazyWithRecovery(() => import('./components/public/PrivacyPolicy'));
+const TermsOfService = lazyWithRecovery(() => import('./components/public/TermsOfService'));
+const AiGovernancePolicy = lazyWithRecovery(() => import('./components/public/AiGovernancePolicy'));
+const HelpCenter = lazyWithRecovery(() => import('./components/public/HelpCenter'));
+const GovernanceCenter = lazyWithRecovery(() => import('./components/modules/Governance/GovernanceCenter'));
+const SharedContentPlan = lazyWithRecovery(() => import('./components/public/SharedContentPlan'));
+const QuotationForm = lazyWithRecovery(() => import('./components/modules/Quotations/QuotationForm'));
+const QuotationsLayout = lazyWithRecovery(() => import('./components/modules/Quotations/QuotationsLayout'));
+const PublicQuotation = lazyWithRecovery(() => import('./components/public/Quotations/PublicQuotation'));
+const MinutesLayout = lazyWithRecovery(() => import('./components/modules/Minutes/MinutesLayout'));
+const DriveLayout = lazyWithRecovery(() => import('./components/modules/Drive/DriveLayout'));
+const OperationalHealth = lazyWithRecovery(() => import('./components/modules/OperationalHealth'));
+const CrmLayout = lazyWithRecovery(() => import('./components/modules/Crm/CrmLayout'));
+const CrmLeadDetail = lazyWithRecovery(() => import('./components/modules/Crm/CrmLeadDetail'));
+const CommercialRequestPage = lazyWithRecovery(() => import('./components/public/CommercialRequest/CommercialRequestPage'));
 
 const AppLoader = () => (
   <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-600 dark:text-zinc-300 flex items-center justify-center text-sm font-medium">

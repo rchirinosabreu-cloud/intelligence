@@ -7,7 +7,7 @@ const readApp = () => readFile('src/App.jsx', 'utf8');
 
 test('Manager route replaces BrainCore with the descriptive task panel', async () => {
   const [app, panel] = await Promise.all([readApp(), readPanel()]);
-  assert.match(app, /lazy\(\(\) => import\('\.\/components\/modules\/ManagerTaskAnalytics'\)\)/);
+  assert.match(app, /lazyWithRecovery\(\(\) => import\('\.\/components\/modules\/ManagerTaskAnalytics'\)\)/);
   assert.match(app, /path="\/manager"[\s\S]*?<ManagerTaskAnalytics \/>/);
   assert.match(panel, /data-manager-task-analytics/);
 });

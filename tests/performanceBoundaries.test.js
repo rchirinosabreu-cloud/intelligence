@@ -6,9 +6,11 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
 test('application routes are code split behind React lazy and Suspense', async () => {
   const app = await read('src/App.jsx');
-  assert.match(app, /import React, \{[^}]*lazy[^}]*Suspense[^}]*\} from 'react'/);
-  assert.match(app, /const Reports = lazy\(/);
-  assert.match(app, /const FinancialDashboard = lazy\(/);
+  // React.lazy con la recuperación de versión (5 de octubre de 2026): lazyWithRecovery lo envuelve.
+  assert.match(app, /import React, \{[^}]*Suspense[^}]*\} from 'react'/);
+  assert.match(app, /import \{ lazyWithRecovery \} from '@\/pwa\/preloadRecovery'/);
+  assert.match(app, /const Reports = lazyWithRecovery\(/);
+  assert.match(app, /const FinancialDashboard = lazyWithRecovery\(/);
   assert.match(app, /<Suspense fallback=/);
 });
 
