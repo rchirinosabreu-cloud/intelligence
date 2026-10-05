@@ -16,6 +16,7 @@ import { initBriaContentPlanReviewScheduler } from './src/services/briaContentPl
 import { initSocialPublishingScheduler } from './src/services/socialPublishingScheduler.js';
 import { initServiceHealthScheduler } from './src/services/serviceHealthScheduler.js';
 import { getAIHealth } from './src/services/aiService.js';
+import { createReadinessHandler } from './src/routes/healthReadiness.js';
 import { configureS3Cors } from './src/services/s3Service.js';
 import { loggerMiddleware } from './src/middlewares/logger.js';
 import { operationalAuditMiddleware } from './src/middlewares/operationalAuditMiddleware.js';
@@ -66,6 +67,8 @@ app.get('/api/health', (_req, res) => res.json({
   timestamp: new Date().toISOString(),
   ai: getAIHealth()
 }));
+// La que mira el vigilante externo: pregunta de verdad a la base de datos (5 de octubre de 2026).
+app.get('/api/health/ready', createReadinessHandler({ check: () => prisma.$queryRaw`SELECT 1` }));
 app.get('/api/health/ai', (_req, res) => {
   const health = getAIHealth();
   res.status(health.status === 'healthy' ? 200 : 503).json(health);
