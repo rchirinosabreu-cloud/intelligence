@@ -6,7 +6,6 @@ for (const file of [
   'src/components/layout/ChaosMeter.jsx',
   'src/components/layout/SidebarProfile.jsx',
   'src/components/layout/Sidebar.jsx',
-  'src/components/modules/QualityStreakWidget.jsx',
   'src/components/modules/Dashboard.jsx',
   'src/components/modules/DashboardAnnouncements.jsx',
   'src/components/modules/dashboard/DashboardUpcomingTasks.jsx',

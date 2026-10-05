@@ -8,7 +8,6 @@ for (const file of [
   'src/components/modules/Activity/CalendarDateTimePicker.jsx',
   'src/components/modules/Activity/GoogleCalendarCallback.jsx',
   'src/components/modules/Activity/MemberActivityCard.jsx',
-  'src/components/modules/Activity/EventActivityCard.jsx',
   'src/components/modules/Minutes/GeneralSummary.jsx',
   'src/components/modules/Minutes/CompleteAnalysis.jsx'
 ]) {

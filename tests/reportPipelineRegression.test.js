@@ -278,7 +278,7 @@ test('report pipeline regressions', async (t) => {
     assert.equal(validateSectionNarratives([{ sectionId: 'one', narrativeComment: repeated }, { sectionId: 'two', narrativeComment: repeated }], sections, 'Cliente Demo').valid, false);
     assert.equal(validateSectionNarratives([{ sectionId: 'one', narrativeComment: 'Facebook: 10 y 20 marcaron el periodo.\n\nPara el negocio, conviene revisar.' }], [sections[0]], 'Cliente Demo').valid, false);
   });
-  await t.test('publishable narrative generation repairs broken Gemini JSON before technical fallback', async () => {
+  await t.test('publishable narrative generation repairs broken JSON before technical fallback', async () => {
     const { generatePublishableNarrative } = await import('../src/services/reportVisionService.js');
     const calls = [];
     const result = await generatePublishableNarrative({}, [{ sectionId: 'one', platform: 'Instagram', dataset: [{ label: 'Vistas', value: 100 }, { label: 'Clics', value: 5 }] }], 'Cliente Demo', {
@@ -391,7 +391,7 @@ test('narrative failure update keeps Prisma status in REVIEW and flags regenerat
   assert.notEqual(update.status, 'NARRATIVE_FAILED');
 });
 
-test('narrative parse errors preserve raw Gemini content', async () => {
+test('narrative parse errors preserve raw model content', async () => {
   const { parseNarrativeResponse } = await import('../src/services/reportVisionService.js');
   const rawContent = '{ "\n],\n"keyAchievements": "roto" }';
   assert.throws(() => parseNarrativeResponse(rawContent, [], 'Cliente Demo'), (error) => {
@@ -439,7 +439,7 @@ test('technical fallback is not published into final sections after narrative fa
   assert.equal(update.narrative.technicalDraft.sections[0].narrativeComment, result.technicalDraft.sections[0].narrativeComment);
 });
 
-test('AI narrative provider uses OpenAI first when OPENAI_API_KEY is configured', async () => {
+test('AI narrative provider uses OpenAI when OPENAI_API_KEY is configured', async () => {
   const { generateNarrativeWithAIProvider } = await import('../src/services/reportVisionService.js');
   const calls = [];
   const result = await generateNarrativeWithAIProvider({}, [], 'Cliente Demo', {
@@ -447,11 +447,7 @@ test('AI narrative provider uses OpenAI first when OPENAI_API_KEY is configured'
       calls.push('openai');
       return { headline: 'openai', summaryPoints: [], keyAchievements: '', actionPlan: [], logrosYAvances: [], contenidoTopAnalisis: '', oportunidadesYAprendizajes: [], recomendacionesEstrategicas: [], sections: [], granularNarratives: [] };
     },
-    geminiGenerator: async () => {
-      calls.push('gemini');
-      return { headline: 'gemini' };
-    },
-    env: { OPENAI_API_KEY: 'openai-key', GEMINI_API_KEY: 'gemini-key' }
+    env: { OPENAI_API_KEY: 'openai-key' }
   });
 
   assert.equal(result.headline, 'openai');
@@ -466,7 +462,7 @@ test('report creation stores the selected reporting period for narrative generat
   assert.equal(result.facts[0].periodProvenance, 'REPORT_DECLARED');
 });
 
-test('AI narrative provider reports the OpenAI failure without silently falling back to Gemini', async () => {
+test('AI narrative provider reports the OpenAI failure without a silent fallback', async () => {
   const { generateNarrativeWithAIProvider } = await import('../src/services/reportVisionService.js');
   const calls = [];
   await assert.rejects(
@@ -475,19 +471,18 @@ test('AI narrative provider reports the OpenAI failure without silently falling 
         calls.push('openai');
         throw new Error('openai unavailable');
       },
-      geminiGenerator: async () => calls.push('gemini'),
-      env: { OPENAI_API_KEY: 'openai-key', GEMINI_API_KEY: 'gemini-key' }
+      env: { OPENAI_API_KEY: 'openai-key' }
     }),
     /openai unavailable/
   );
   assert.deepEqual(calls, ['openai']);
 });
 
-test('AI narrative provider requires OpenAI configuration even when Gemini is configured', async () => {
+test('AI narrative provider requires OpenAI configuration', async () => {
   const { generateNarrativeWithAIProvider } = await import('../src/services/reportVisionService.js');
   await assert.rejects(
     () => generateNarrativeWithAIProvider({}, [], 'Cliente Demo', {
-      env: { GEMINI_API_KEY: 'gemini-key' }
+      env: {}
     }),
     /Missing OPENAI_API_KEY/
   );

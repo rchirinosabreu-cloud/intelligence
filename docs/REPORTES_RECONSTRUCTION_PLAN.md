@@ -1,5 +1,7 @@
 # Plan de reconstrucción del módulo Reportes
 
+> **Nota (octubre de 2026):** Gemini se retiró por completo; OpenAI es el único proveedor de IA de Reportes y de toda la plataforma. Las menciones a Gemini de este plan describen el estado de entonces.
+
 ## Decisión ejecutiva
 
 El módulo no debe pedirle a una IA que «dibuje HTML» ni conservar la captura como

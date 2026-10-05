@@ -1,5 +1,5 @@
 import express from 'express';
-import { getClientByIdentifier, getClients } from '../../services/clientService.js';
+import { getClientByIdentifier } from '../../services/clientService.js';
 
 const router = express.Router();
 
@@ -15,18 +15,7 @@ router.get('/clients/:id', async (req, res) => {
     }
 });
 
-// Get all clients
-router.get('/clients', async (req, res) => {
-    try {
-        const filters = {
-            isArchived: req.query.isArchived,
-            responsibleId: req.query.responsibleId
-        };
-        const clients = await getClients(filters);
-        return res.json(clients);
-    } catch (error) {
-        return res.status(500).json({ error: error.message });
-    }
-});
+// La lista (GET /api/db/clients) la atiende clientController.listClients, registrada
+// en src/routes/index.js antes de este router: un manejador aquí nunca se alcanzaría.
 
 export default router;

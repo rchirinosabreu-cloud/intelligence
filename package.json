@@ -33,7 +33,9 @@
     "storage:retention-report": "node scripts/report-task-attachment-retention.js",
     "financial:cartera-report": "node scripts/report-receivable-cleanup.js",
     "clients:footprint": "node scripts/report-client-footprint.js",
-    "storage:retention-sweep": "node scripts/run-task-attachment-retention.js"
+    "storage:retention-sweep": "node scripts/run-task-attachment-retention.js",
+    "audit:dead-code": "knip --no-progress --no-config-hints --include files,dependencies,optionalPeerDependencies,unlisted,unresolved,binaries && knip --production --include files --no-progress --no-config-hints",
+    "audit:dead-code:exports": "knip --no-progress --include exports,nsExports,types,duplicates"
   },
   "prisma": {
     "seed": "node scripts/sync_service_catalog.js"
@@ -71,13 +73,10 @@
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cors": "^2.8.6",
-    "csv-parser": "^3.2.0",
     "date-fns": "^4.1.0",
     "dotenv": "^17.3.1",
     "express": "^4.22.1",
     "framer-motion": "^11.15.0",
-    "google-auth-library": "^10.5.0",
-    "google-spreadsheet": "^5.2.0",
     "googleapis": "^171.4.0",
     "isomorphic-dompurify": "^3.19.0",
     "jsonwebtoken": "^9.0.3",
@@ -115,10 +114,13 @@
     "@types/react-dom": "^18.3.5",
     "@vitejs/plugin-react": "^4.3.4",
     "autoprefixer": "^10.4.20",
+    "esbuild": "^0.18.20",
     "eslint": "^8.57.1",
     "eslint-plugin-react": "^7.37.3",
     "eslint-plugin-react-hooks": "^5.1.0",
     "globals": "^15.14.0",
+    "jsdom": "^29.1.1",
+    "knip": "^6.39.0",
     "postcss": "^8.4.49",
     "prisma": "^6.19.3",
     "tailwindcss": "^3.4.17",

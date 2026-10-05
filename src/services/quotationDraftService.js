@@ -7,7 +7,7 @@ import { buildContractTermsText, resolveSuggestedContractTermIds, termsWithPropo
 import { normalizeProposalDetails, plainTextToProposalHtml } from './quotationProposalDetails.js';
 import { catalogServiceHtml } from './serviceCatalogDescription.js';
 import { answerLabel, selectedServices, SERVICE_CATEGORIES } from '../lib/commercialRequestForm.js';
-import { formatLeadCode, stageOrder, stageGroup } from '../lib/crmRules.js';
+import { stageOrder, stageGroup } from '../lib/crmRules.js';
 import { changeStage } from './crmService.js';
 import { isProviderUnavailable } from '../lib/aiAvailability.js';
 import { buildQuotationDraftRequest, applyModelDraft, generateQuotationDraft } from './quotationDraftAi.js';
@@ -352,4 +352,3 @@ export const syncLeadStageFromQuotation = async (db, quotation, event, { now = n
   return changeStage(db, lead.id, { stage: target, note: event === 'ISSUED' ? `Cotización ${code} emitida al cliente.` : `El cliente aceptó la cotización ${code}.` }, {}, now);
 };
 
-export const leadCodeOf = lead => formatLeadCode(lead?.consecutive);

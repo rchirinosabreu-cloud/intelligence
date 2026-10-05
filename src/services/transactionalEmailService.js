@@ -11,8 +11,6 @@ const smtpConfig = () => {
   return { host: process.env.SMTP_HOST || 'smtp.gmail.com', port, secure: port === 465, auth: { user, pass }, from: process.env.CRM_REQUEST_FROM || process.env.SMTP_FROM || user };
 };
 
-export const isTransactionalEmailConfigured = () => Boolean(smtpConfig());
-
 export const sendPlainEmail = async ({ to, subject, text }, { transporterFactory = null } = {}) => {
   const config = smtpConfig();
   if (!config || !to) return { sent: false, reason: config ? 'no-recipient' : 'smtp-not-configured' };

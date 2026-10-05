@@ -2,8 +2,6 @@
  * Configuración central de IA. OpenAI es el único proveedor de ejecución.
  * Cada modelo conserva un rol separado para controlar costo y latencia.
  */
-export const AI_PROVIDER = 'openai';
-
 export const AI_MODELS = Object.freeze({
     chat: process.env.OPENAI_MODEL_CHAT || process.env.OPENAI_MODEL || 'gpt-5.6-terra',
     fast: process.env.OPENAI_MODEL_FAST || process.env.OPENAI_MODEL || 'gpt-5.6-luna',

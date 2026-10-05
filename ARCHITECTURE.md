@@ -13,7 +13,7 @@ El repositorio contiene frontend y backend en una sola base de codigo:
 - Base de datos: PostgreSQL via Prisma.
 - Produccion: Railway conectado a GitHub.
 - Archivos: Google Cloud Storage como storage principal y S3 compatible para algunos flujos.
-- IA: Gemini como proveedor principal, con proxies para OpenAI y Fireflies.
+- IA: OpenAI es el único proveedor (Responses API, siempre a través de `src/services/aiEgress.js`); Fireflies para transcripciones de reuniones. Gemini se retiró por completo.
 
 ## Diagrama
 
@@ -25,8 +25,7 @@ flowchart TD
     Prisma --> Postgres["PostgreSQL Railway"]
 
     Backend -->|uploads, downloads, image proxy| GCS["Google Cloud Storage"]
-    Backend -->|generacion y analisis IA| Gemini["Google Gemini"]
-    Backend -->|proxy compatible OpenAI| OpenAI["OpenAI API"]
+    Backend -->|generacion y analisis IA + proxy de Minutas| OpenAI["OpenAI API"]
     Backend -->|proxy GraphQL| Fireflies["Fireflies"]
     Backend -->|adjuntos/evidencias legacy| S3["AWS S3 compatible / T3"]
     Backend -->|Calendar, Sheets, Discovery| GoogleWorkspace["Google Workspace / Discovery Engine"]
@@ -104,7 +103,6 @@ Responsabilidades:
 - Configurar CORS.
 - Parsear JSON y formularios.
 - Registrar requests.
-- Montar `/api/gemini`.
 - Montar el router principal `/api`.
 - Servir `dist`.
 - Conectar Prisma a PostgreSQL.
@@ -145,8 +143,8 @@ Variables backend criticas:
 
 - `DATABASE_URL`: conexion PostgreSQL.
 - `JWT_SECRET`: firma/verificacion de tokens.
-- `GEMINI_API_KEY`: acceso a Gemini.
-- `MODEL_NAME` o `GEMINI_MODEL`: modelo IA.
+- `OPENAI_API_KEY`: acceso a OpenAI, el único proveedor de IA.
+- `OPENAI_MODEL` y sus variantes por rol (`OPENAI_MODEL_CHAT`, `OPENAI_MODEL_FAST`, `OPENAI_MODEL_VISION`, `OPENAI_MODEL_NARRATIVE`, `OPENAI_MODEL_REPORT_VISION`): modelos IA (ver `src/config/aiConfig.js`).
 - `GOOGLE_APPLICATION_CREDENTIALS_JSON`: service account Google en JSON.
 - `GOOGLE_CLOUD_PROJECT`: proyecto GCP.
 - `GCS_BUCKET_NAME`: bucket GCS, por defecto `brainstudio-unstructured-v2`.
@@ -158,7 +156,6 @@ Variables backend criticas:
 
 Variables externas adicionales:
 
-- `OPENAI_API_KEY`
 - `FIREFLIES_API_KEY`
 - `AWS_ENDPOINT_URL`
 - `AWS_ACCESS_KEY_ID`
@@ -177,7 +174,7 @@ Variable frontend critica:
 - Frontend depende del backend para datos protegidos.
 - Backend depende de PostgreSQL para casi todo el estado de aplicacion.
 - Backend depende de GCS para archivos, avatares, imagenes de reportes y moodboards.
-- Reportes y Brain Core dependen de Gemini.
+- Reportes, parrillas (Bria), minutas y cotizaciones dependen de OpenAI.
 - Fireflies y OpenAI solo funcionan si sus API keys existen.
 - Algunos scripts financieros/evidencias dependen de S3 compatible.
 - Google Calendar y Sheets dependen del service account de Google.
@@ -270,16 +267,13 @@ Los avatares se sirven mediante proxy backend:
 
 Advertencia operativa: actualmente el servicio intenta configurar CORS del bucket al cargar el modulo si hay credenciales. Esto puede tocar infraestructura al arrancar local o produccion. Debe tratarse con cuidado y preferiblemente moverse a un script manual explicito.
 
-## Gemini, OpenAI Y Fireflies
-
-Gemini:
-
-- Usado para clasificacion, Brain Core, reportes, insights y analisis.
-- Configurado con `GEMINI_API_KEY` y modelo por `MODEL_NAME` o `GEMINI_MODEL`.
+## OpenAI Y Fireflies
 
 OpenAI:
 
-- Proxy compatible en `/api/openai/v1/chat/completions`.
+- Único proveedor de IA: reportes, insights, revisiones de Bria, minutas y borradores de cotización. La clasificación de tareas es determinista y no usa IA.
+- Toda llamada sale por `governedFetch` (`src/services/aiEgress.js`), que solo admite los destinos de OpenAI y Fireflies y deja registro en `AiUsageEvent`.
+- Proxy compatible en `/api/openai/v1/chat/completions` (lo usa Minutas).
 - Usa `OPENAI_API_KEY`.
 
 Fireflies:
