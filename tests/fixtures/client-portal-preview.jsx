@@ -19,6 +19,8 @@ const piece = (id, objective, format, day, status, opts = {}) => ({
   publishDate: `2026-09-${String(day).padStart(2, '0')}T12:00:00.000Z`,
   mediaUrl: opts.mediaUrl || [],
   status,
+  // «Le pedimos otra vuelta»: aprobó el texto y después le cargamos la pieza terminada.
+  revisionRequestedAt: opts.revisionRequestedAt || null,
   comments: opts.comments || null,
   finalAsset: null,
   finalAssets: opts.assets || []
@@ -63,9 +65,12 @@ const items = [
       openUrl: 'https://drive.google.com/file/d/1AbC_defGHIjklMNOpqrSTUvwx234567/view'
     }]
   }),
+  // El caso de Rodny (5 de octubre de 2026): la aprobó cuando era solo texto y después le cargamos
+  // la pieza terminada, así que vuelve a estar en sus manos aunque el estado siga siendo APROBADO.
   piece('i4', 'Qué llevar el día de tu consulta', 'Post', 22, 'APROBADO', {
     caption: 'Documento, orden médica y tus exámenes previos. Nada más.',
-    assets: [asset('a5', 'pieza-cuadrada.svg', 'Post · checklist')]
+    assets: [asset('a5', 'pieza-cuadrada.svg', 'Post · checklist')],
+    revisionRequestedAt: '2026-10-05T14:00:00.000Z'
   }),
   piece('i5', 'La sala de espera que no parece una sala de espera', 'Reel', 18, 'BORRADOR', {
     caption: 'Un lugar pensado para que la espera no se sienta como una espera.'

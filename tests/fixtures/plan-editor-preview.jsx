@@ -65,6 +65,8 @@ const piece = (id, objective, format, day, status, extra = {}) => ({
   internalNotes: extra.internalNotes || null,
   comments: extra.comments || null,
   status,
+  // «Le pedimos otra vuelta al cliente»: aprobó el texto y el material llegó después.
+  revisionRequestedAt: extra.revisionRequestedAt || null,
   tasks: [],
   finalAssets: extra.finalAssets || []
 });
@@ -207,6 +209,19 @@ axios.defaults.adapter = async (config) => {
   if (patchItem) {
     const item = items.find((candidate) => candidate.id === patchItem[1]);
     if (item) Object.assign(item, JSON.parse(config.data || '{}'));
+    return ok(item || {});
+  }
+  // «Pedir nueva revisión»: la pieza sigue aprobada pero vuelve a manos del cliente.
+  const planRevision = /\/api\/content\/plans\/([^/?]+)\/request-revision$/.test(url);
+  if (planRevision) {
+    const pending = items.filter((item) => ['APROBADO', 'REALIZADO', 'PUBLICADO'].includes(item.status) && !item.revisionRequestedAt);
+    pending.forEach((item) => { item.revisionRequestedAt = new Date().toISOString(); });
+    return ok({ requested: pending.length });
+  }
+  const itemRevision = /\/api\/content\/items\/([^/?]+)\/request-revision$/.exec(url);
+  if (itemRevision) {
+    const item = items.find((candidate) => candidate.id === itemRevision[1]);
+    if (item) item.revisionRequestedAt = new Date().toISOString();
     return ok(item || {});
   }
   if (url.includes('/api/content/plans')) return ok(plan);

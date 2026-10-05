@@ -71,6 +71,9 @@ export const getPublicPlan = async (req, res) => {
           };
         }),
         status: item.status,
+        // Si le pedimos otra vuelta —porque después de aprobarla le cargamos la pieza final— el
+        // portal tiene que dejarle decidir otra vez (Rodny, 5 de octubre de 2026).
+        revisionRequestedAt: item.revisionRequestedAt,
         comments: item.comments
       }))
     };

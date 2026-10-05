@@ -4,10 +4,11 @@ import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { formatContentPlanDate, getContentPlanMonthName } from '@/lib/contentPlanPeriod';
 import { driveEmbedAspect } from '@/lib/finalAssetShape';
+import { APPROVAL_STATES, approvalState, isSettled } from '@/lib/contentApproval';
 import {
   CheckCircle2, Clock, AlertCircle, Loader2, Calendar,
   Video, Image as ImageIcon, MessageSquare, Check, X, Send,
-  ExternalLink, ChevronLeft, ChevronRight
+  ExternalLink, ChevronLeft, ChevronRight, Sparkles
 } from '@/components/ui/icons';
 import { toast } from 'react-hot-toast';
 import ClientAvatar from '@/components/ui/ClientAvatar';
@@ -33,8 +34,10 @@ const getPublicAssetUrl = (asset) => {
   return `${path}?${params.toString()}`;
 };
 
-const APPROVED_STATUSES = ['APROBADO', 'REALIZADO', 'PUBLICADO'];
-const isApproved = (item) => APPROVED_STATUSES.includes(item?.status);
+// Una aprobación es de lo que el cliente vio. Si después le cargamos la pieza final, lo que aprobó
+// era el texto y le toca otra vuelta: `isApproved` es «ya está cerrada», no «el estado es APROBADO».
+const isApproved = (item) => isSettled(item);
+const hasNewMaterial = (item) => approvalState(item) === APPROVAL_STATES.MATERIAL_NUEVO;
 
 const assetsOf = (item) => (item?.finalAssets?.length ? item.finalAssets : (item?.finalAsset ? [item.finalAsset] : []));
 
@@ -71,6 +74,11 @@ const StatusChip = ({ item }) => (
   isApproved(item) ? (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-green-soft px-3 py-1.5 text-[11px] font-bold text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green">
       <CheckCircle2 className="h-3.5 w-3.5" /> Aprobada
+    </span>
+  ) : hasNewMaterial(item) ? (
+    // Ya la había aprobado, pero entonces era solo el texto: ahora está la pieza terminada.
+    <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-magenta-soft px-3 py-1.5 text-[11px] font-bold text-brand-magenta-deep dark:bg-brand-magenta/15 dark:text-brand-magenta">
+      <Sparkles className="h-3.5 w-3.5" /> Material nuevo
     </span>
   ) : (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-yellow-soft px-3 py-1.5 text-[11px] font-bold text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow">
@@ -193,7 +201,7 @@ const PieceCard = ({ item, index, onOpen }) => (
         className="absolute right-3 top-3 flex h-4 w-4 items-center justify-center rounded-full bg-black/35 backdrop-blur-sm"
         aria-hidden="true"
       >
-        <span className={`h-1.5 w-1.5 rounded-full ${isApproved(item) ? 'bg-brand-green' : 'bg-brand-yellow'}`} />
+        <span className={`h-1.5 w-1.5 rounded-full ${isApproved(item) ? 'bg-brand-green' : hasNewMaterial(item) ? 'bg-brand-magenta' : 'bg-brand-yellow'}`} />
       </span>
     </div>
     <div className="flex flex-col gap-1.5 p-4">
@@ -204,8 +212,8 @@ const PieceCard = ({ item, index, onOpen }) => (
           {item.publishDate ? formatContentPlanDate(item.publishDate) : 'Sin fecha'}
         </span>
         <span className="text-zinc-300 dark:text-zinc-600">·</span>
-        <span className={`text-xs font-bold ${isApproved(item) ? 'text-brand-green-deep dark:text-brand-green' : 'text-brand-yellow-deep dark:text-brand-yellow'}`}>
-          {isApproved(item) ? 'Aprobada' : 'Por revisar'}
+        <span className={`text-xs font-bold ${isApproved(item) ? 'text-brand-green-deep dark:text-brand-green' : hasNewMaterial(item) ? 'text-brand-magenta-deep dark:text-brand-magenta' : 'text-brand-yellow-deep dark:text-brand-yellow'}`}>
+          {isApproved(item) ? 'Aprobada' : hasNewMaterial(item) ? 'Material nuevo' : 'Por revisar'}
         </span>
       </div>
     </div>
@@ -221,6 +229,7 @@ const PieceDetail = ({
 }) => {
   const { body, tags } = splitCaption(item.captionText);
   const approved = isApproved(item);
+  const materialNuevo = hasNewMaterial(item);
 
   return (
     <div className="space-y-6">
@@ -305,16 +314,45 @@ const PieceDetail = ({
             <div className="flex-grow" />
 
             <div className="space-y-3 border-t border-zinc-100 pt-5 dark:border-white/5">
-              {approved ? (
-                <div className="flex items-center gap-3 rounded-2xl border border-brand-green/25 bg-brand-green-soft px-5 py-4 dark:bg-brand-green/10">
-                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-green text-white">
-                    <Check className="h-5 w-5" />
+              {/* Antes aprobaste el texto; ahora ya está la pieza terminada. Se dice en una frase,
+                  porque si no el cliente ve una pieza en verde y no entiende qué se espera de él. */}
+              {materialNuevo && (
+                <div className="flex items-start gap-3 rounded-2xl border border-brand-magenta/25 bg-brand-magenta-soft px-5 py-4 dark:bg-brand-magenta/10">
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-magenta text-white">
+                    <Sparkles className="h-5 w-5" />
                   </span>
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-brand-green-deep dark:text-brand-green">Pieza aprobada</p>
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400">Ya pasó a producción.</p>
+                    <p className="text-sm font-bold text-brand-magenta-deep dark:text-brand-magenta">Ya está la pieza terminada</p>
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                      Habías aprobado el texto. Ahora puedes ver la imagen o el video: dinos si así queda o qué ajustamos.
+                    </p>
                   </div>
                 </div>
+              )}
+
+              {approved ? (
+                <>
+                  <div className="flex items-center gap-3 rounded-2xl border border-brand-green/25 bg-brand-green-soft px-5 py-4 dark:bg-brand-green/10">
+                    <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand-green text-white">
+                      <Check className="h-5 w-5" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-bold text-brand-green-deep dark:text-brand-green">Pieza aprobada</p>
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400">Ya pasó a producción.</p>
+                    </div>
+                  </div>
+                  {/* Aprobada no es un callejón sin salida: si se le ocurre algo después, lo dice aquí
+                      y la pieza vuelve a nuestras manos (Rodny, 5 de octubre de 2026). */}
+                  {!isCommenting && (
+                    <button
+                      type="button"
+                      onClick={() => onStartComment(item.id)}
+                      className="inline-flex items-center gap-2 text-sm font-bold text-zinc-500 underline-offset-4 transition hover:text-brand-cyan-deep hover:underline dark:text-zinc-400 dark:hover:text-brand-cyan"
+                    >
+                      <MessageSquare className="h-4 w-4" /> ¿Quieres pedir un cambio?
+                    </button>
+                  )}
+                </>
               ) : (
                 <div className="flex flex-col gap-2.5 sm:flex-row">
                   <button
@@ -323,7 +361,9 @@ const PieceDetail = ({
                     className="inline-flex flex-grow items-center justify-center gap-2 rounded-2xl bg-brand-cyan-deep px-6 py-4 text-sm font-bold text-white transition hover:brightness-110"
                   >
                     <Check className="h-4 w-4" />
-                    {index === total - 1 ? 'Aprobar esta pieza' : 'Aprobar y ver la siguiente'}
+                    {materialNuevo
+                      ? 'Aprobar la pieza'
+                      : index === total - 1 ? 'Aprobar esta pieza' : 'Aprobar y ver la siguiente'}
                   </button>
                   <button
                     type="button"

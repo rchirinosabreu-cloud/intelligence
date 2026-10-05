@@ -15,6 +15,7 @@ import { fileContentProblem } from '../lib/fileSignature.js';
 import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from './briaContentPlanReviewState.js';
 import { resyncItemPublications } from './socialPublishingService.js';
 import { splitPublishTime } from '../lib/socialPublishing.js';
+import { itemsNeedingRevisionRequest, shouldRequestRevisionOnNewAsset } from '../lib/contentApproval.js';
 
 /** Lo que la pantalla ve de una publicación programada: nunca el token, que ni siquiera vive en esa fila. */
 const publicationSelect = {
@@ -116,6 +117,7 @@ const contentItemBaseSelect = {
   internalNotes: true,
   comments: true,
   deletedAt: true,
+  revisionRequestedAt: true,
   publications: publicationSelect
 };
 
@@ -587,6 +589,13 @@ export const updateContentItem = async (id, data) => {
   const scheduleChanged = Object.prototype.hasOwnProperty.call(normalizedData, 'publishDate')
     || Object.prototype.hasOwnProperty.call(normalizedData, 'publishTime');
 
+  // Cambiar el estado es una decisión nueva sobre la pieza —la aprueba el cliente, o la movemos
+  // nosotros—, así que cierra la ronda que estuviera pedida. Editar el caption o la fecha no la
+  // cierra: ahí el cliente sigue debiendo su respuesta (Rodny, 5 de octubre de 2026).
+  if (Object.prototype.hasOwnProperty.call(normalizedData, 'status')) {
+    normalizedData.revisionRequestedAt = null;
+  }
+
   const safeData = await filterContentItemData(normalizedData);
   const itemSelect = await getContentItemSelect();
   const updatedItem = await recognitionTransaction(prisma, async (tx) => {
@@ -729,6 +738,7 @@ export const uploadContentItemFinalAsset = async (itemId, file) => {
     finalAssetMimeType: upload.mimeType,
     finalAssetSize: upload.size
   });
+  await requestRevisionIfApproved(itemId);
 
   if (previousAssetKey && previousAssetKey !== upload.key) {
     deleteFromS3(previousAssetKey).catch(error => {
@@ -816,6 +826,7 @@ export const uploadContentItemFinalAssets = async (itemId, files = []) => {
     throw error;
   }
 
+  await requestRevisionIfApproved(item.id);
   return listFinalAssets(item.id);
 };
 
@@ -852,6 +863,69 @@ const listFinalAssets = (itemId) => prisma.contentItemFinalAsset.findMany({
   where: { contentItemId: itemId },
   orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
 });
+
+/**
+ * El cliente aprobó lo que tenía delante. Si después le ponemos material a esa pieza —la foto, el
+ * video— aprobó otra cosa, así que se le pide otra vuelta (Rodny, 5 de octubre de 2026). Lo llaman
+ * los tres caminos que añaden material: el formulario, la subida directa y el enlace de Drive.
+ *
+ * Nunca falla hacia fuera: marcar la revisión no puede tumbar una subida que sí funcionó.
+ */
+const requestRevisionIfApproved = async (itemId) => {
+  try {
+    const item = await prisma.contentItem.findUnique({
+      where: { id: itemId },
+      select: { id: true, status: true, revisionRequestedAt: true }
+    });
+    if (!item || !shouldRequestRevisionOnNewAsset(item) || item.revisionRequestedAt) return;
+    await prisma.contentItem.update({
+      where: { id: itemId },
+      data: { revisionRequestedAt: new Date() }
+    });
+  } catch (error) {
+    console.error('[Service] No se pudo marcar la pieza para una revisión nueva:', error.message);
+  }
+};
+
+/** «Pedir nueva revisión» a mano, desde el editor. Solo tiene sentido en una pieza ya aprobada. */
+export const requestContentItemRevision = async (itemId) => {
+  const item = await prisma.contentItem.findUnique({
+    where: { id: itemId },
+    select: { id: true, status: true, deletedAt: true }
+  });
+  if (!item || item.deletedAt) throw Object.assign(new Error('Pieza no encontrada'), { status: 404 });
+  if (!shouldRequestRevisionOnNewAsset(item)) {
+    throw Object.assign(
+      new Error('Esa pieza todavía está en manos del cliente: ya la tiene por revisar.'),
+      { status: 409 }
+    );
+  }
+  const updated = await prisma.contentItem.update({
+    where: { id: itemId },
+    data: { revisionRequestedAt: new Date() },
+    select: await getContentItemSelect()
+  });
+  return normalizeContentItem(updated);
+};
+
+/**
+ * Lo mismo para el mes entero, que es como se trabaja: se cargan las piezas finales de toda la
+ * parrilla y se reenvía un solo enlace. Devuelve cuántas quedaron pendientes de que las vea.
+ */
+export const requestContentPlanRevision = async (planId) => {
+  const items = await prisma.contentItem.findMany({
+    where: { planId, deletedAt: null },
+    select: { id: true, status: true, revisionRequestedAt: true }
+  });
+  const pending = itemsNeedingRevisionRequest(items);
+  if (pending.length === 0) return { requested: 0 };
+
+  await prisma.contentItem.updateMany({
+    where: { id: { in: pending.map(item => item.id) } },
+    data: { revisionRequestedAt: new Date() }
+  });
+  return { requested: pending.length };
+};
 
 const storageKeyFor = (basePath, name) => {
   const sanitized = String(name || 'pieza-final').replace(/\s+/g, '_').replace(/[^a-zA-Z0-9._-]/g, '');
@@ -891,6 +965,7 @@ export const addContentItemDriveAsset = async (itemId, { url, name } = {}) => {
   if (shapeProblem) throw new Error(shapeProblem);
 
   await prisma.contentItemFinalAsset.create({ data });
+  await requestRevisionIfApproved(item.id);
   return listFinalAssets(item.id);
 };
 
@@ -970,6 +1045,7 @@ export const confirmContentItemFinalAssets = async (itemId, uploads = []) => {
     throw error;
   }
 
+  await requestRevisionIfApproved(item.id);
   return listFinalAssets(item.id);
 };
 
@@ -1008,7 +1084,9 @@ export const addClientComment = async (itemId, comment) => {
       where: { id: itemId },
       data: {
         comments: updatedComments,
-        status: 'DEVUELTO'
+        status: 'DEVUELTO',
+        // El cliente ya respondió: la ronda que le pedimos queda cerrada.
+        revisionRequestedAt: null
       }
     });
     await recordPlanRecognition(tx, updated.planId, new Date(), { allowAward: false });

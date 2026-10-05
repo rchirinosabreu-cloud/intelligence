@@ -10,6 +10,7 @@ import { driveLinkProblem } from '@/lib/driveLinks';
 import { driveAssetUrls, driveEmbedAspect } from '@/lib/finalAssetShape';
 import { finalAssetOrderProblem, moveAssetId, moveAssetToIndex } from '@/lib/finalAssetOrder';
 import { WEEKDAY_LABELS, buildMonthGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
+import { APPROVAL_STATES, approvalState, itemsNeedingRevisionRequest } from '@/lib/contentApproval';
 import {
   ChevronLeft, ChevronRight, Plus, Send, ExternalLink, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
@@ -629,7 +630,12 @@ const PlanPieceRail = ({ items, selectedId, onSelect, onAdd, accounts = [] }) =>
               isSelected ? 'bg-zinc-100 dark:bg-white/10' : 'hover:bg-zinc-50 dark:hover:bg-white/5'
             }`}
           >
-            <span className={`h-9 w-1 shrink-0 rounded-full ${PIECE_STATUS_BAR[item.status] || 'bg-zinc-200 dark:bg-white/15'}`} />
+            {/* Aprobada pero con una revisión pedida no es verde: el cliente todavía debe su respuesta. */}
+            <span className={`h-9 w-1 shrink-0 rounded-full ${
+              approvalState(item) === APPROVAL_STATES.MATERIAL_NUEVO
+                ? 'bg-brand-magenta'
+                : PIECE_STATUS_BAR[item.status] || 'bg-zinc-200 dark:bg-white/15'
+            }`} />
             <span className="min-w-0 flex-grow">
               <span className={`block truncate text-[13px] leading-tight ${isSelected ? 'font-bold text-zinc-900 dark:text-zinc-50' : 'font-medium text-zinc-700 dark:text-zinc-300'}`}>
                 {item.objective || `Pieza ${index + 1}`}
@@ -837,10 +843,12 @@ const ContentItemCard = ({
   onReopenPublication,
   onChangeSocialPages,
   isPublicationBusy = false,
-  publicationProblems = []
+  publicationProblems = [],
+  onRequestRevision
 }) => {
   const [showFeedback, setShowFeedback] = useState(false);
   const finalAssets = item.finalAssets || [];
+  const pieceApproval = approvalState(item);
   const isRealizado = item.status === 'REALIZADO' || item.status === 'PUBLICADO';
   const isDevuelto = item.status === 'DEVUELTO';
   const latestTask = item.tasks?.[0];
@@ -996,6 +1004,23 @@ const ContentItemCard = ({
               <option value="REALIZADO">Realizado</option>
               <option value="PUBLICADO">Publicado</option>
             </Select>
+            {/* El cliente aprobó lo que tenía delante. Si lo que hay ahora es otra cosa, aquí se le
+                devuelve la palabra sin fingir que nunca aprobó (Rodny, 5 de octubre de 2026). */}
+            {pieceApproval === APPROVAL_STATES.APROBADA && (
+              <button
+                type="button"
+                onClick={() => onRequestRevision(item.id)}
+                className="flex items-center gap-1.5 text-left text-[11px] font-semibold text-zinc-500 underline-offset-2 transition-colors hover:text-brand-magenta-deep hover:underline dark:text-zinc-400 dark:hover:text-brand-magenta"
+                title="El cliente la ve otra vez en el portal, con lo que haya ahora"
+              >
+                <Sparkles className="h-3 w-3 shrink-0" /> Pedir nueva revisión
+              </button>
+            )}
+            {pieceApproval === APPROVAL_STATES.MATERIAL_NUEVO && (
+              <span className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-magenta-deep dark:text-brand-magenta">
+                <Sparkles className="h-3 w-3 shrink-0" /> El cliente la tiene por revisar
+              </span>
+            )}
           </div>
 
         </div>
@@ -1472,6 +1497,45 @@ const ContentPlanDetail = () => {
   // quitó por decisión de Rodny (25 de septiembre de 2026); `rotate` sigue existiendo en el servicio
   // y en la ruta como salida de emergencia, pero ninguna pantalla lo ofrece.
 
+  // El cliente aprobó el texto; el material llegó después. Una pieza a la que le cargamos la pieza
+  // final ya se marca sola, pero esto cubre el resto: las que aprobó antes de que existiera la regla
+  // y las que cambiaron por otro motivo (Rodny, 5 de octubre de 2026).
+  const requestRevisionMutation = useMutation({
+    mutationFn: async () => {
+      const response = await axios.post(`${getApiBaseUrl()}/api/content/plans/${currentPlanId}/request-revision`, {}, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      return response.data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+      toast.success(data?.requested === 1
+        ? 'Una pieza vuelve a quedar por revisar para el cliente'
+        : `${data?.requested || 0} piezas vuelven a quedar por revisar para el cliente`);
+    },
+    onError: (error) => {
+      console.error('Error requesting a new revision:', error.response?.data || error);
+      toast.error(error.response?.data?.error || 'No se pudo pedir la revisión');
+    }
+  });
+
+  const requestItemRevisionMutation = useMutation({
+    mutationFn: async (itemId) => {
+      const response = await axios.post(`${getApiBaseUrl()}/api/content/items/${itemId}/request-revision`, {}, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      return response.data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+      toast.success('El cliente la verá otra vez en el portal');
+    },
+    onError: (error) => {
+      console.error('Error requesting a new revision:', error.response?.data || error);
+      toast.error(error.response?.data?.error || 'No se pudo pedir la revisión');
+    }
+  });
+
   const createItemMutation = useMutation({
     mutationFn: async (data) => {
       const response = await axios.post(`${getApiBaseUrl()}/api/content/items`, { ...data, planId: currentPlanId }, {
@@ -1812,6 +1876,9 @@ const ContentPlanDetail = () => {
     || orderedPlanItems[0]
     || null;
 
+  // Las que el cliente ya aprobó y todavía no le hemos devuelto para que mire el material.
+  const piecesToReview = itemsNeedingRevisionRequest(plan.items || []);
+
   return (
     <div className="space-y-8 pb-20 animate-in fade-in duration-500">
       <PageHeader
@@ -1847,6 +1914,23 @@ const ContentPlanDetail = () => {
               {generateShareTokenMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Share2 className="w-3 h-3" />}
               {plan.shareToken ? 'Copiar link' : 'Compartir'}
             </button>
+
+            {/* Solo aparece si hay algo que pedir: con todas las piezas ya en manos del cliente, un
+                botón que no hace nada sobra. */}
+            {piecesToReview.length > 0 && (
+              <>
+                <div className="w-px h-4 bg-zinc-200 dark:bg-white/10" />
+                <button
+                  onClick={() => requestRevisionMutation.mutate()}
+                  disabled={requestRevisionMutation.isPending}
+                  className="flex items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-[10px] font-bold uppercase tracking-widest text-zinc-500 transition-all hover:text-brand-magenta-deep dark:hover:text-brand-magenta"
+                  title={`Devolver al cliente ${piecesToReview.length} pieza(s) que ya había aprobado, para que revise el material`}
+                >
+                  {requestRevisionMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <Sparkles className="w-3 h-3" />}
+                  Pedir revisión ({piecesToReview.length})
+                </button>
+              </>
+            )}
           </div>
 
           <Button
@@ -2041,6 +2125,7 @@ const ContentPlanDetail = () => {
                 onEditToggle={() => setEditingItemId(editingItemId === selectedItem.id ? null : selectedItem.id)}
                 onUpdate={updateItemMutation.mutate}
                 onDelete={handleDeleteItem}
+                onRequestRevision={(itemId) => requestItemRevisionMutation.mutate(itemId)}
                 onDispatch={() => setDispatchItemId(selectedItem.id)}
                 navigate={navigate}
                 onFinalAssetUpload={handleFinalAssetUpload}
