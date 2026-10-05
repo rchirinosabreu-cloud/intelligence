@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { RouteErrorBoundary } from '@/components/errors/ApplicationErrorBoundary';
 import TeamChat from '@/components/chat/TeamChat';
 import Sidebar from './Sidebar';
 import ServiceHealthDot from './ServiceHealthDot';
@@ -494,7 +495,13 @@ const AppLayout = ({ children }) => {
         {/* A short entrance, not a 700ms wash: the page should look loaded, not fading in (Rodny, 21 September 2026). */}
         <div className="mx-auto min-w-0 max-w-7xl space-y-8 animate-in fade-in duration-200">
           {recognitionExperience?.controls}
-          {children}
+          {/* Un error de una pantalla se queda en esa pantalla: el menú y el header siguen en
+              pie (5 de octubre de 2026). Y mientras un módulo carga, se espera aquí dentro. */}
+          <RouteErrorBoundary>
+            <Suspense fallback={<p className="py-16 text-center text-sm font-medium text-zinc-500 dark:text-zinc-400">Cargando...</p>}>
+              {children}
+            </Suspense>
+          </RouteErrorBoundary>
         </div>
       </main>
       {currentUser?.id && <TeamChat key={currentUser.id} currentUser={displayUser} onDockWidthChange={setChatDockWidth}

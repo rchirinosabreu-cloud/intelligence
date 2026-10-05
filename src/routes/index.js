@@ -20,8 +20,15 @@ import { aiRequestContextMiddleware, runWithAiContext } from '../lib/aiRequestCo
 // rutas —comentarios, adjuntos y la propia tarea— tampoco se lo dan a quien no puede
 // abrirla. Contrato que vigila que no se olvide ninguna: tests/taskPrivacyRoutes.test.js
 import { requireTaskAccess } from '../middlewares/taskPrivacyMiddleware.js';
+import { reportClientErrorHandler } from '../controllers/clientErrorController.js';
+import { createRateLimiter } from '../config/security.js';
 
 const guardTask = requireTaskAccess();
+const clientErrorRateLimiter = createRateLimiter({
+    windowMs: 15 * 60 * 1000,
+    max: 30,
+    keyGenerator: (req) => `client-errors:${req.user?.userId || req.user?.id || req.ip}`
+});
 import prisma from '../lib/prisma.js';
 import multer from 'multer';
 import { MAX_COMMENT_FILES, MAX_COMMENT_FILE_BYTES } from '../lib/taskCommentAttachments.js';
@@ -120,6 +127,9 @@ router.use(authenticateToken);
 // Quién y desde qué módulo, para el registro de uso de IA del control de salida.
 router.use(aiRequestContextMiddleware);
 router.use('/team-chat', createTeamChatRouter());
+// Lo que vio la persona cuando una pantalla falló (5 de octubre de 2026). Con tope por persona:
+// una pantalla que falla en bucle no puede inundar el registro.
+router.post('/client-errors', clientErrorRateLimiter, reportClientErrorHandler);
 
 router.get('/auth/me', async (req, res) => {
     try {

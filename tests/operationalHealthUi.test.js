@@ -12,7 +12,7 @@ test('operational health is an admin-only lazy route and navigation item', async
     read('src/routes/api/dashboard.js')
   ]);
 
-  assert.match(app, /const OperationalHealth = lazy\(/);
+  assert.match(app, /const OperationalHealth = lazyWithRecovery\(/);
   assert.match(app, /path="\/salud-operativa"/);
   assert.match(app, /AdminGuard/);
   assert.match(sidebar, /Salud Operativa/);
