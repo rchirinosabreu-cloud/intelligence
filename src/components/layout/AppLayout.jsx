@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import TeamChat from '@/components/chat/TeamChat';
 import Sidebar from './Sidebar';
-import { Menu, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye, Clock } from '@/components/ui/icons';
+import { Menu, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye, Clock, Users } from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
 import { useNavigate, useLocation } from 'react-router-dom';
@@ -199,7 +199,8 @@ const AppLayout = ({ children }) => {
     } else if (notif.type === 'TASK_RETURNED') {
         navigate(`/gestion?showReturned=true&taskId=${notif.relatedId}`);
     } else if (notif.type === 'TASK_CORRECTED' || notif.type === 'TASK_UPDATED' || notif.type === 'TASK_ASSIGNED' || notif.type === 'TASK_MENTION' || notif.type === 'TASK_COMMENT' || notif.type === 'TASK_COMMENT_REPLY'
-        || notif.type === 'TASK_FOCUS_SET' || notif.type === 'TASK_FOCUS_OVERDUE' || notif.type === 'TASK_FOCUS_EXTENSION') {
+        || notif.type === 'TASK_FOCUS_SET' || notif.type === 'TASK_FOCUS_OVERDUE' || notif.type === 'TASK_FOCUS_EXTENSION'
+        || notif.type === 'TASK_COLLABORATOR_ADDED') {
         // Compromiso con hora: the notice opens the task (the manager adjusts the hour there with the clock).
         navigate(`/gestion?taskId=${notif.taskId || notif.relatedId}`);
     } else if (notif.type === 'SOCIAL_PUBLICATION_PUBLISHED' || notif.type === 'SOCIAL_PUBLICATION_FAILED') {
@@ -331,6 +332,10 @@ const AppLayout = ({ children }) => {
                                 Icon = Clock;
                                 bgColor = "bg-destructive/10";
                                 iconColor = "text-destructive";
+                            } else if (notif.type === 'TASK_COLLABORATOR_ADDED') {
+                                Icon = Users;
+                                bgColor = "bg-brand-cyan/10";
+                                iconColor = "text-brand-cyan-deep dark:text-brand-cyan";
                             } else if (notif.type === 'TASK_FOCUS_SET' || notif.type === 'TASK_FOCUS_EXTENSION') {
                                 Icon = Clock;
                                 bgColor = "bg-brand-cyan/10";

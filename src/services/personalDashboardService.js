@@ -338,7 +338,15 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
       .filter((task) => getBogotaWeekContext(task.createdAt)?.weekKey === currentWeek)
     : [];
   const assignedClients = buildAssignedClientSummaries(member?.responsibleClients || [], now);
-  const assignedActiveTasks = tasks.filter((task) => ['PENDIENTE', 'EN_CURSO'].includes(task.status));
+  // Colaboradores (5 de octubre de 2026): lo que la persona hace como colaboradora también es su
+  // trabajo pendiente y cuenta en su carga. Los logros siguen siendo de quien cierra la tarea.
+  const collaboratingActiveTasks = (Array.isArray(member?.collaboratingTasks) ? member.collaboratingTasks : [])
+    .map((row) => (row?.task ? { ...row.task, isCollaboration: true } : null))
+    .filter((task) => task && ['PENDIENTE', 'EN_CURSO'].includes(task.status));
+  const assignedActiveTasks = Array.from(new Map(
+    [...tasks.filter((task) => ['PENDIENTE', 'EN_CURSO'].includes(task.status)), ...collaboratingActiveTasks]
+      .map((task) => [task.id, task])
+  ).values());
   const activeTasks = Array.from(new Map(
     [...assignedActiveTasks, ...returnedTasks].map((task) => [task.id, task])
   ).values());
@@ -667,6 +675,10 @@ export const getPersonalDashboard = async ({ requester, targetUserId }) => {
           { dueDate: 'asc' },
           { updatedAt: 'desc' }
         ]
+      },
+      collaboratingTasks: {
+        where: { task: { status: { in: ['PENDIENTE', 'EN_CURSO'] } } },
+        select: { task: { include: dashboardTaskInclude } }
       }
     }
   });

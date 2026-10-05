@@ -30,10 +30,12 @@ import {
     Paperclip,
     RefreshCw,
     Tag,
-    Lock
+    Lock,
+    Users
 } from '@/components/ui/icons';
 import { bogotaTimeOf, findFocusTaskFor, focusLockMessage, getTaskLock, hasSeenFocusNotice, isActiveFocusTask, isFocusOverdue, markFocusNoticeSeen, nextLockReaction } from '@/lib/taskFocus';
 import { PRIVATE_TASK_HINT, nextPrivateAttempt } from '@/lib/taskPrivacy';
+import { isTaskOfPerson, workingMemberIds } from '@/lib/taskCollaborators';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 import FocusCommitmentNotice from '@/components/tasks/FocusCommitmentNotice';
 import { cn } from '@/lib/utils';
@@ -362,6 +364,14 @@ const NativeTasks = () => {
                 assigneeAvatar: task.assignee?.avatarUrl || null,
                 assigneeRole: task.assignee?.role || 'Colaborador',
                 assigneeStatus: task.assignee?.statusMessage || '',
+                // Colaboradores (5 de octubre de 2026) y quién tiene su reloj corriendo ahora.
+                collaborators: (task.collaborators || []).map((row) => ({
+                    id: row.memberId,
+                    name: row.member?.name || 'Colaborador',
+                    avatarUrl: row.member?.avatarUrl || null,
+                    userId: row.member?.userId || null
+                })),
+                openSessions: task.workSessions || [],
                 creatorId: task.creatorId,
                 creator: task.creator,
                 creatorName: task.creator?.name || 'Sistema',
@@ -414,7 +424,7 @@ const NativeTasks = () => {
 
     useEffect(() => {
         if (filters.responsibleInitialized || !currentUser?.name || tasks.length === 0) return;
-        const currentUserHasTasks = tasks.some(task => task.assigneeName === currentUser.name);
+        const currentUserHasTasks = tasks.some(task => isTaskOfPerson(task, currentUser.name));
         updateFilters({ responsibleFilter: currentUserHasTasks ? currentUser.name : 'Todos', responsibleInitialized: true });
     }, [currentUser?.name, tasks, filters.responsibleInitialized, updateFilters]);
 
@@ -590,7 +600,11 @@ const NativeTasks = () => {
     };
 
     const responsibles = useMemo(() => {
-        const unique = [...new Set([...tasks.map(t => t.assigneeName || "Desconocido"), responsibleFilter])].filter(value => value && value !== 'Todos').sort();
+        const unique = [...new Set([
+            ...tasks.map(t => t.assigneeName || "Desconocido"),
+            ...tasks.flatMap(t => (t.collaborators || []).map(collaborator => collaborator.name)),
+            responsibleFilter
+        ])].filter(value => value && value !== 'Todos').sort();
         return ['Todos', ...unique];
     }, [tasks, responsibleFilter]);
 
@@ -615,7 +629,8 @@ const NativeTasks = () => {
                                       completedDate.getFullYear() === now.getFullYear();
                 if (!isCurrentMonth) return false;
             }
-            if (responsibleFilter !== 'Todos' && (task.assigneeName || "Desconocido") !== responsibleFilter) return false;
+            // Colaboradores (5 de octubre de 2026): la tarea también es de quien colabora en ella.
+            if (!isTaskOfPerson(task, responsibleFilter)) return false;
             if (clientFilter !== 'Todos' && (task.clientName || "Desconocido") !== clientFilter) return false;
 
             if (dateFilter === 'Todos') return true;
@@ -847,7 +862,7 @@ const NativeTasks = () => {
             if (getColumnId(task.status) !== destinationColumnId) return false;
             const normalizedSearch = searchQuery.trim().toLowerCase();
             if (normalizedSearch !== '') return matchesTaskSearch(task, normalizedSearch);
-            if (responsibleFilter !== 'Todos' && (task.assigneeName || "Desconocido") !== responsibleFilter) return false;
+            if (!isTaskOfPerson(task, responsibleFilter)) return false;
             if (clientFilter !== 'Todos' && (task.clientName || "Desconocido") !== clientFilter) return false;
             if (dateFilter === 'Hoy + Vencidos' && !isTodayOrOverdue(task.dueDateFormatted)) return false;
             if (dateFilter === 'Solo Vencidos' && !isOverdue(task.dueDateFormatted)) return false;
@@ -1561,7 +1576,11 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
     const isRunning = String(task.status || '').toUpperCase() === 'EN_CURSO';
     // La fila de distintivos solo existe si tiene algo que decir: vacía dejaba un hueco
     // encima del cliente y la tarjeta arrancaba descolgada (Rodny, 30 de septiembre de 2026).
-    const hasStatusChips = isFocusTask || isReturned || isRunning;
+    // Colaboradores (5 de octubre de 2026): quién está trabajando ahora se lee sin abrir la tarea.
+    const collaborators = Array.isArray(task.collaborators) ? task.collaborators : [];
+    const workingIds = collaborators.length ? workingMemberIds(task) : [];
+    const workingNames = workingIds.map((id) => (id === task.assigneeId ? task.assigneeName : collaborators.find((c) => c.id === id)?.name)).filter(Boolean);
+    const hasStatusChips = isFocusTask || isReturned || isRunning || workingIds.length > 0;
     const attachmentCount = Array.isArray(task.taskAttachments) ? task.taskAttachments.length : 0;
     const commentCount = Array.isArray(task.taskComments) ? task.taskComments.length : 0;
     // Un pendiente privado ajeno tampoco se arrastra: mover su estado es cambiarlo, y el
@@ -1667,6 +1686,15 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                                             <TaskReturnIcon className="w-2.5 h-2.5" /> Devuelto
                                         </span>
                                     )}
+                                    {workingIds.length > 0 && (
+                                        <span
+                                            data-task-working-chip
+                                            title={`Trabajando ahora: ${workingNames.join(', ')}`}
+                                            className="inline-flex items-center gap-1 rounded-lg border border-brand-cyan/30 bg-brand-cyan/10 px-1.5 py-0.5 text-[10px] font-bold text-brand-cyan-deep dark:text-brand-cyan"
+                                        >
+                                            <Users className="h-3 w-3" /> {workingIds.length} trabajando
+                                        </span>
+                                    )}
                                     {isRunning && <TaskTimerBadge task={task} />}
                                 </div>
                             )}
@@ -1725,7 +1753,13 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
 
                             {/* Responsable + fecha */}
                             <div className="flex items-center justify-between gap-3 text-xs">
-                                <div data-task-assignee className="flex min-w-0 items-center gap-2" title={`Asignada a ${task.assigneeName} · Creado por ${task.creatorName}`}>
+                                <div
+                                    data-task-assignee
+                                    className="flex min-w-0 items-center gap-2"
+                                    title={collaborators.length
+                                        ? `Responsable ${task.assigneeName} · con ${collaborators.map((c) => c.name).join(', ')}`
+                                        : `Asignada a ${task.assigneeName} · Creado por ${task.creatorName}`}
+                                >
                                     <UserAvatarPopover user={{
                                         name: task.assigneeName,
                                         avatarUrl: task.assigneeAvatar,
@@ -1735,10 +1769,31 @@ const TaskCardSurface = ({ task, provided, snapshot, highlightedTaskId, onClick,
                                         <TeamAvatar
                                             member={{ name: task.assigneeName, avatarUrl: task.assigneeAvatar }}
                                             showTitle={false}
-                                            className="h-5 w-5 shrink-0"
+                                            className={cn(
+                                                "h-5 w-5 shrink-0",
+                                                workingIds.includes(task.assigneeId) && "ring-2 ring-brand-cyan"
+                                            )}
                                         />
                                     </UserAvatarPopover>
-                                    <span className="truncate font-medium text-zinc-700 dark:text-zinc-200">{task.assigneeName}</span>
+                                    {/* Colaboradores: sus avatares al lado del responsable; el de quien trabaja ahora, con anillo cian. */}
+                                    {collaborators.length > 0 && (
+                                        <span data-task-collaborators className="-ml-1 flex shrink-0 -space-x-1.5">
+                                            {collaborators.slice(0, 3).map((collaborator) => (
+                                                <TeamAvatar
+                                                    key={collaborator.id}
+                                                    member={{ name: collaborator.name, avatarUrl: collaborator.avatarUrl }}
+                                                    showTitle={false}
+                                                    className={cn(
+                                                        "h-5 w-5 shrink-0 ring-2",
+                                                        workingIds.includes(collaborator.id) ? "ring-brand-cyan" : "ring-white dark:ring-zinc-900"
+                                                    )}
+                                                />
+                                            ))}
+                                        </span>
+                                    )}
+                                    <span className="truncate font-medium text-zinc-700 dark:text-zinc-200">
+                                        {collaborators.length ? `${String(task.assigneeName).split(' ')[0]} +${collaborators.length}` : task.assigneeName}
+                                    </span>
                                 </div>
                                 <div
                                     title={task.dueDateFormatted || "Sin fecha"}

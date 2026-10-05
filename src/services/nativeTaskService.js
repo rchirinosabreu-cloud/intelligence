@@ -19,9 +19,16 @@ import {
 import {
     closeActiveTaskWorkCycle,
     closeActiveTaskWorkSession,
+    closeAllOpenTaskWorkSessions,
     ensureTaskWorkCycle,
     openTaskWorkSession
 } from './taskWorkSessionService.js';
+import {
+    notifyCollaboratorsAdded,
+    replaceTaskCollaborators,
+    taskCollaboratorsSelect,
+    taskOpenSessionsSelect
+} from './taskCollaboratorService.js';
 
 const taskContentPlanSelect = {
     id: true,
@@ -49,6 +56,9 @@ const taskListInclude = {
     // seguiría estando en la respuesta a la vista de cualquiera.
     viewers: { select: { userId: true } },
     assignee: true,
+    // Colaboradores y quién tiene el reloj corriendo ahora: el tablero lo muestra sin abrir la tarea.
+    collaborators: taskCollaboratorsSelect,
+    workSessions: taskOpenSessionsSelect,
     creator: {
         select: { id: true, name: true, avatarUrl: true, email: true, role: true }
     },
@@ -170,7 +180,7 @@ const statusMapper = {
 export const createTask = async ({
     title, dueDate, focusDeadlineAt = null, assigneeId, creatorId, comments, status, clientId,
     isPriority = false, priority = null, isSpecial = false, isPrivate = false, viewerIds = [], referenceUrl = null,
-    contentItemId = null, followOnCreate = false,
+    contentItemId = null, followOnCreate = false, collaboratorIds = [],
     initial_references = [], initial_inputs = [], initial_insumos = [], initial_comments = [],
     tempAttachments = []
 }) => {
@@ -187,6 +197,7 @@ export const createTask = async ({
                 .reduce((total, items) => total + (Array.isArray(items) ? items.length : 0), 0)
         });
 
+        let createdCollaborators = [];
         // Use a Prisma transaction to ensure atomicity
         const newTask = await recognitionTransaction(prisma, async (tx) => {
             await assertActiveTeamMembers(tx, [assigneeId]);
@@ -220,6 +231,14 @@ export const createTask = async ({
                     startedAt: mappedStatus === 'REALIZADA' ? new Date() : null
                 }
             });
+
+            // Colaboradores (5 de octubre de 2026): cada uno registra su tiempo por separado.
+            createdCollaborators = (await replaceTaskCollaborators(tx, {
+                taskId: task.id,
+                assigneeId: assigneeId || null,
+                collaboratorIds,
+                actorUserId: creatorId || null
+            })).added;
 
             await prepareTaskRecognition(tx, task.id);
             if (mappedStatus === 'DEVUELTA') {
@@ -333,6 +352,7 @@ export const createTask = async ({
                         select: { name: true, logoUrl: true, slug: true }
                     },
                     assignee: true,
+                    collaborators: taskCollaboratorsSelect,
                     creator: {
                         select: { id: true, name: true, avatarUrl: true, email: true, role: true }
                     },
@@ -372,6 +392,11 @@ export const createTask = async ({
         Promise.all(taskTraceEvents).catch((error) => {
             console.error('[nativeTaskService] Creation trace failed:', error?.message || error);
         });
+        if (createdCollaborators.length) {
+            notifyCollaboratorsAdded({ task: newTask, memberIds: createdCollaborators, actorUserId: creatorId }).catch((error) => {
+                console.error('[nativeTaskService] Collaborator notification failed:', error?.message || error);
+            });
+        }
 
         for (const initialComment of initial_comments) {
             processMentionsAndNotifications(newTask.id, initialComment.content || '', creatorId).catch((error) => {
@@ -516,6 +541,26 @@ export const updateTask = async (id, data, updaterId = null) => {
 
         const updateData = pickAllowedTaskUpdates(data);
         await assertActiveTeamMembers(tx, [updateData.assigneeId], [currentTask.assigneeId]);
+
+        // Colaboradores (5 de octubre de 2026): tabla propia, fuera de `updateData`. Se revisa
+        // también cuando cambia el responsable, porque nunca puede quedar como su propio colaborador,
+        // y sin responsable la tarea no conserva colaboradores.
+        const requestedCollaborators = 'collaboratorIds' in updateData ? updateData.collaboratorIds : undefined;
+        delete updateData.collaboratorIds;
+        const nextAssigneeId = 'assigneeId' in updateData ? (updateData.assigneeId || null) : currentTask.assigneeId;
+        let collaboratorChange = null;
+        if (requestedCollaborators !== undefined || nextAssigneeId !== currentTask.assigneeId) {
+            const keep = requestedCollaborators !== undefined
+                ? requestedCollaborators
+                : (await tx.taskCollaborator.findMany({ where: { taskId: id }, select: { memberId: true } })).map((row) => row.memberId);
+            collaboratorChange = await replaceTaskCollaborators(tx, {
+                taskId: id,
+                assigneeId: nextAssigneeId,
+                collaboratorIds: nextAssigneeId ? keep : [],
+                actorUserId: updaterId,
+                at: new Date()
+            });
+        }
 
         // Extract and isolate returnReason and reintegrateReason
         const { returnReason, returnNote, reintegrateReason, reopenReason, reopenNote } = updateData;
@@ -732,6 +777,13 @@ export const updateTask = async (id, data, updaterId = null) => {
             }
 
             if (newStatus === 'REALIZADA' || newStatus === 'DEVUELTA') {
+                // Cerrar o devolver la tarea para también el reloj de los colaboradores.
+                await closeAllOpenTaskWorkSessions(tx, {
+                    taskId: id,
+                    actorId: updaterId,
+                    at: transitionAt,
+                    closeReason: newStatus === 'REALIZADA' ? 'COMPLETED' : 'RETURNED'
+                });
                 await closeActiveTaskWorkCycle(tx, {
                     taskId: id,
                     actorId: updaterId,
@@ -904,6 +956,7 @@ export const updateTask = async (id, data, updaterId = null) => {
                     select: { name: true, logoUrl: true, slug: true }
                 },
                 assignee: true,
+                collaborators: taskCollaboratorsSelect,
                 creator: {
                     select: { id: true, name: true, avatarUrl: true, email: true, role: true }
                 },
@@ -928,10 +981,16 @@ export const updateTask = async (id, data, updaterId = null) => {
         const recognitionAt = recognitionBefore?.task.status !== 'REALIZADA' && updatedTask.status === 'REALIZADA' ? updatedTask.completedAt : new Date();
         await finishTaskRecognition(tx, recognitionBefore, updatedTask, recognitionAt);
         if (updatedTask.contentItem) await recordPlanRecognition(tx, updatedTask.contentItem.planId, recognitionAt, { allowAward: false });
-        return { currentTask, updatedTask, isCorrected, isReturned };
+        return { currentTask, updatedTask, isCorrected, isReturned, collaboratorChange };
         });
 
-        const { currentTask, updatedTask, isCorrected, isReturned } = transition;
+        const { currentTask, updatedTask, isCorrected, isReturned, collaboratorChange } = transition;
+
+        if (collaboratorChange?.added?.length) {
+            notifyCollaboratorsAdded({ task: updatedTask, memberIds: collaboratorChange.added, actorUserId: updaterId }).catch((error) => {
+                console.error('[nativeTaskService] Collaborator notification failed:', error?.message || error);
+            });
+        }
 
         recordOperationalTrace({
             eventType: 'TASK_UPDATED',

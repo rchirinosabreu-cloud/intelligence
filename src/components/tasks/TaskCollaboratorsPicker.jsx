@@ -94,10 +94,10 @@ export default function TaskCollaboratorsPicker({ members, assigneeId, value, on
                     data-task-collaborators-trigger
                     onClick={() => (open ? close() : setOpen(true))}
                     disabled={disabled}
-                    aria-label="Añadir co-responsables"
+                    aria-label="Añadir colaboradores"
                     aria-haspopup="menu"
                     aria-expanded={open}
-                    title={disabled ? 'Elige primero el responsable' : 'Añadir co-responsables'}
+                    title={disabled ? 'Elige primero el responsable' : 'Añadir colaboradores'}
                     className={cn(
                         'inline-flex w-11 shrink-0 items-center justify-center rounded-lg border border-zinc-200/70 text-zinc-500 transition-colors hover:border-brand-cyan/50 hover:text-brand-cyan-deep disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-zinc-200/70 disabled:hover:text-zinc-500 dark:border-zinc-800/70 dark:text-zinc-300 dark:hover:text-brand-cyan sm:w-10',
                         open && 'border-brand-cyan/50 text-brand-cyan-deep dark:text-brand-cyan'
@@ -107,12 +107,12 @@ export default function TaskCollaboratorsPicker({ members, assigneeId, value, on
                 </button>
             </div>
 
-            {selected.length > 0 && (
-                <ul data-task-collaborators className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Co-responsables">
+            {/* Solo se pinta «Con» si hay a quién nombrar: mientras carga el equipo no queda un rótulo suelto. */}
+            {selected.some((id) => memberById.has(id)) && (
+                <ul data-task-collaborators className="mt-2 flex flex-wrap items-center gap-1.5" aria-label="Colaboradores">
                     <li className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400">Con</li>
-                    {selected.map((id) => {
+                    {selected.filter((id) => memberById.has(id)).map((id) => {
                         const member = memberById.get(id);
-                        if (!member) return null;
                         return (
                             <li key={id} className="inline-flex h-7 items-center gap-1.5 rounded-full border border-zinc-200/80 bg-white pl-1 pr-0.5 text-xs font-medium text-zinc-700 dark:border-zinc-700 dark:bg-zinc-900 dark:text-zinc-200">
                                 <TeamAvatar member={member} size={20} showTitle={false} className="h-5 w-5" />
@@ -135,7 +135,7 @@ export default function TaskCollaboratorsPicker({ members, assigneeId, value, on
                 <div
                     ref={menuRef}
                     role="menu"
-                    aria-label="Co-responsables"
+                    aria-label="Colaboradores"
                     onKeyDown={(event) => { if (event.key === 'Escape') { event.stopPropagation(); close(); } }}
                     style={{ top: position.top, bottom: position.bottom, right: position.right, maxHeight: position.maxHeight }}
                     className={cn(
@@ -144,7 +144,7 @@ export default function TaskCollaboratorsPicker({ members, assigneeId, value, on
                     )}
                 >
                     <p className="px-2 pb-2 pt-1 text-xs leading-4 text-zinc-500 dark:text-zinc-400">
-                        Cada co-responsable lleva su propio reloj. Solo el responsable cierra la tarea.
+                        Cada colaborador registra su tiempo por separado. Solo el responsable cierra la tarea.
                     </p>
                     <label className="relative block">
                         <span className="sr-only">Buscar en el equipo</span>

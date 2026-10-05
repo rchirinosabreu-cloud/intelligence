@@ -3,8 +3,28 @@ import assert from 'node:assert/strict';
 
 import {
   EXCESSIVE_TASK_THRESHOLD_MS,
+  buildCollaboratorTaskAlerts,
   buildExcessiveTaskAlerts,
 } from '../src/services/excessiveTaskAlertService.js';
+
+// Colaboradores (Rodny, 5 de octubre de 2026): sus horas cuentan en su carga, así que la alerta de
+// 15 horas les llega con su propio tiempo, mientras su reloj esté corriendo.
+test('a collaborator gets the 15-hour alert from their own sessions, only while working', () => {
+  const now = new Date('2026-10-05T15:00:00.000Z');
+  const H = 60 * 60 * 1000;
+  const rows = [
+    { task: { id: 'working', title: 'Parrilla', client: { name: 'Villa' }, workSessions: [
+      { durationMs: 14 * H, endedAt: new Date('2026-10-04T00:00:00.000Z'), startedAt: new Date('2026-10-03T10:00:00.000Z') },
+      { durationMs: null, endedAt: null, startedAt: new Date(now.getTime() - 2 * H) },
+    ] } },
+    { task: { id: 'paused', title: 'Pausada', workSessions: [{ durationMs: 40 * H, endedAt: new Date('2026-10-04T00:00:00.000Z'), startedAt: new Date('2026-10-02T00:00:00.000Z') }] } },
+    { task: { id: 'short', title: 'Corta', workSessions: [{ durationMs: null, endedAt: null, startedAt: new Date(now.getTime() - H) }] } },
+  ];
+  const alerts = buildCollaboratorTaskAlerts(rows, { now });
+  assert.deepEqual(alerts.map((alert) => [alert.id, alert.elapsedMs, alert.isCollaboration]), [['working', 16 * H, true]]);
+  assert.equal(buildCollaboratorTaskAlerts(rows, { now, confirmedTaskIds: new Set(['working']) }).length, 0);
+  assert.ok(EXCESSIVE_TASK_THRESHOLD_MS === 15 * H);
+});
 
 test('returns only in-progress tasks assigned to the authenticated user at or above 15 hours', () => {
   const now = new Date('2026-08-28T15:00:00.000Z');

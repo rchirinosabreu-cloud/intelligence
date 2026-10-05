@@ -119,6 +119,9 @@ const TASK_UPDATE_FIELDS = new Set([
   'dueDate',
   'focusDeadlineAt',
   'assigneeId',
+  // Colaboradores (5 de octubre de 2026): los cambia quien puede cambiar el responsable
+  // (`canUpdateTask`); un colaborador no edita la tarea, solo registra su tiempo.
+  'collaboratorIds',
   'comments',
   'clientId',
   'status',

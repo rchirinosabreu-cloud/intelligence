@@ -27,11 +27,28 @@ test('la lista para elegir deja fuera al responsable y busca sin importar tildes
     assert.deepEqual(collaboratorCandidates(null, 'm-rodny'), []);
 });
 
+test('el filtro por persona del tablero incluye las tareas donde colabora', async () => {
+    const { isTaskOfPerson, workingMemberIds } = await import('../src/lib/taskCollaborators.js');
+    const tarea = {
+        assigneeName: 'Rodny Chirinos',
+        collaborators: [{ id: 'm-melissa', name: 'Melissa Ortega' }],
+        openSessions: [{ workerId: 'm-melissa' }, { workerId: 'm-rodny' }, { workerId: 'm-melissa' }]
+    };
+    assert.equal(isTaskOfPerson(tarea, 'Melissa Ortega'), true);
+    assert.equal(isTaskOfPerson(tarea, 'Rodny Chirinos'), true);
+    assert.equal(isTaskOfPerson(tarea, 'Bruno Salas'), false);
+    assert.equal(isTaskOfPerson(tarea, 'Todos'), true);
+    assert.equal(isTaskOfPerson({ assigneeName: null }, 'Desconocido'), true);
+    assert.deepEqual(workingMemberIds(tarea), ['m-melissa', 'm-rodny']);
+});
+
 test('el panel de la tarea pone el «+» junto al responsable y no deja añadir sin responsable', () => {
     const picker = readFileSync(new URL('../src/components/tasks/TaskCollaboratorsPicker.jsx', import.meta.url), 'utf8');
     const panel = readFileSync(new URL('../src/components/modules/TaskSidePanel.jsx', import.meta.url), 'utf8');
     assert.match(panel, /<TaskCollaboratorsPicker/);
-    assert.match(picker, /aria-label="Añadir co-responsables"/);
+    assert.match(picker, /aria-label="Añadir colaboradores"/);
+    // Texto de Rodny, 5 de octubre de 2026.
+    assert.match(picker, /Cada colaborador registra su tiempo por separado\. Solo el responsable cierra la tarea\./);
     assert.match(picker, /Elige primero el responsable/);
     assert.match(picker, /role="menuitemcheckbox"/);
     assert.match(picker, /aria-checked/);

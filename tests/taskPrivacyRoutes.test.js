@@ -125,6 +125,9 @@ test('todas las rutas del contenido de una tarea llevan el guardián', () => {
         "get('/tasks/:taskId/attachments/:attachmentId/file'",
         "get('/tasks/:taskId/attachments/:attachmentId/download'",
         "get('/tasks/:taskId/work-history'",
+        "get('/tasks/:taskId/work/team'",
+        "post('/tasks/:taskId/work/start'",
+        "post('/tasks/:taskId/work/pause'",
         "patch('/tasks/:taskId'",
         "delete('/tasks/:taskId'"
     ];

@@ -124,6 +124,7 @@ export const buildManagerTaskAnalytics = ({
   tasks = [],
   cycles = [],
   sessions = [],
+  members = [],
   periodDays = 30,
   now = new Date(),
 } = {}) => {
@@ -131,6 +132,11 @@ export const buildManagerTaskAnalytics = ({
   const nowMs = asDateMs(now) ?? Date.now();
   const cutoffMs = nowMs - safePeriodDays * DAY_MS;
   const tasksById = new Map(tasks.map((task) => [task.id, task]));
+  // Colaboradores (5 de octubre de 2026): el tiempo de un colaborador es suyo, no del responsable.
+  const memberNames = new Map(members.map((member) => [member.id, member.name]));
+  const workerNameFor = (task, session) => (session?.isCollaborator
+    ? memberNames.get(session.workerId) || 'Colaborador'
+    : task?.assignee?.name || 'Sin responsable');
   const cyclesById = new Map(cycles.map((cycle) => [cycle.id, cycle]));
   const periodSessions = sessions.filter((session) => {
     const startedAt = asDateMs(session.startedAt);
@@ -173,7 +179,7 @@ export const buildManagerTaskAnalytics = ({
         taskId: session.taskId,
         taskTitle: task?.title || 'Tarea sin título',
         clientName: task?.client?.name || 'Sin cliente',
-        workerName: task?.assignee?.name || 'Sin responsable',
+        workerName: workerNameFor(task, session),
         startedAt: session.startedAt,
         endedAt: session.endedAt,
         durationMs: durationBySession.get(session.id) || 0,
@@ -233,7 +239,7 @@ export const buildManagerTaskAnalytics = ({
       sessions: periodSessions,
       tasksById,
       durationBySession,
-      labelFor: (task) => task?.assignee?.name || 'Sin responsable',
+      labelFor: workerNameFor,
     }),
     dataQuality,
     observer: buildObserverSnapshot({ overview, dataQuality }),
@@ -244,7 +250,7 @@ export const buildManagerTaskAnalytics = ({
 export const getManagerTaskAnalytics = async ({ periodDays = 30, now = new Date(), prismaClient = prisma } = {}) => {
   const safePeriodDays = [7, 30, 90].includes(Number(periodDays)) ? Number(periodDays) : 30;
   const cutoff = new Date(now.getTime() - safePeriodDays * DAY_MS);
-  const [tasks, cycles, sessions] = await Promise.all([
+  const [tasks, cycles, sessions, members] = await Promise.all([
     prismaClient.task.findMany({
       select: {
         id: true,
@@ -274,8 +280,10 @@ export const getManagerTaskAnalytics = async ({ periodDays = 30, now = new Date(
         durationMs: true,
         closeReason: true,
         isOverlapping: true,
+        isCollaborator: true,
       },
     }),
+    prismaClient.teamMember.findMany({ select: { id: true, name: true } }),
   ]);
-  return buildManagerTaskAnalytics({ tasks, cycles, sessions, periodDays: safePeriodDays, now });
+  return buildManagerTaskAnalytics({ tasks, cycles, sessions, members, periodDays: safePeriodDays, now });
 };

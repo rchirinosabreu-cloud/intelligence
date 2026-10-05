@@ -29,7 +29,8 @@ test('management global search is evaluated before every board filter', async ()
   const searchIndex = filterBlock.indexOf("if (normalizedSearch !== '')");
   assert.notEqual(searchIndex, -1, 'Management must expose the global-search branch.');
   assert.ok(searchIndex < filterBlock.indexOf("columnId === 'realizado'"));
-  assert.ok(searchIndex < filterBlock.indexOf("responsibleFilter !== 'Todos'"));
+  // El filtro por persona incluye a los colaboradores (5 de octubre de 2026).
+  assert.ok(searchIndex < filterBlock.indexOf('isTaskOfPerson(task, responsibleFilter)'));
   assert.ok(searchIndex < filterBlock.indexOf("clientFilter !== 'Todos'"));
   assert.ok(searchIndex < filterBlock.indexOf("dateFilter === 'Todos'"));
   assert.match(filterBlock, /return matchesTaskSearch\(task,\s*normalizedSearch\)/);

@@ -23,6 +23,7 @@ import { useAuth } from '@/context/AuthContext';
 import { canChangeTaskPrivacy, canCreatePrivateTask } from '@/lib/taskPrivacy';
 import TaskShareControl from '@/components/tasks/TaskShareControl';
 import TaskCollaboratorsPicker from '@/components/tasks/TaskCollaboratorsPicker';
+import TaskTeamTime from '@/components/tasks/TaskTeamTime';
 import { normalizeCollaboratorIds } from '@/lib/taskCollaborators';
 import UserAvatarPopover from '@/components/ui/UserAvatarPopover';
 import LinkDropdown from '@/components/ui/LinkDropdown';
@@ -523,6 +524,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 title: formData.title,
                 clientId: formData.clientId,
                 assigneeId: formData.assigneeId,
+                collaboratorIds: formData.collaboratorIds,
                 dueDate: formData.dueDate,
                 isPriority: formData.isPriority,
                 priority: formData.priority,
@@ -668,6 +670,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     title: taskData.contentItem?.objective || taskData.title || '',
                     clientId: cId,
                     assigneeId: taskData.assigneeId || '',
+                    // Del servidor llegan como `{ memberId }`; del tablero, ya mapeados como `{ id }`.
+                    collaboratorIds: (taskData.collaborators || []).map((row) => row.memberId || row.id).filter(Boolean),
                     status: taskData.status || 'PENDIENTE',
                     originalStatus: taskData.status,
                     dueDate: formattedDate,
@@ -715,6 +719,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             title: parsed.title || '',
                             clientId: parsed.clientId || defaultClientId || '',
                             assigneeId: parsed.assigneeId || '',
+                            collaboratorIds: Array.isArray(parsed.collaboratorIds) ? parsed.collaboratorIds : [],
                             dueDate: parsed.dueDate || '',
                             isPriority: parsed.isPriority || false,
                             priority: parsed.priority || null,
@@ -830,6 +835,9 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     ...prev,
                     title: updatedTask.contentItem?.objective || updatedTask.title || prev.title,
                     assigneeId: updatedTask.assigneeId || '',
+                    collaboratorIds: Array.isArray(updatedTask.collaborators)
+                        ? updatedTask.collaborators.map((row) => row.memberId)
+                        : prev.collaboratorIds,
                     status: updatedTask.status || 'PENDIENTE',
                     priority: updatedTask.priority || null,
                     isPriority: updatedTask.isPriority || false,
@@ -885,6 +893,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     : { title: formData.title }),
                 clientId: formData.clientId,
                 assigneeId: formData.assigneeId || null,
+                // La lista que llega es la que queda (5 de octubre de 2026); sin responsable, ninguna.
+                collaboratorIds: formData.assigneeId ? normalizeCollaboratorIds(formData.collaboratorIds, formData.assigneeId) : [],
                 dueDate: isoDate,
                 // Compromiso con hora: only managers may send it; a normal deadline sends null to clear any previous hour.
                 focusDeadlineAt: canSetFocusDeadline ? focusDeadlineIso(formData.dueDate, formData.focusTime) : undefined,
@@ -2360,6 +2370,17 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                         </div>
+
+                        {/* Equipo de la tarea (5 de octubre de 2026): solo si tiene colaboradores. */}
+                        {isEdition && (
+                            <TaskTeamTime
+                                taskId={formData.id}
+                                currentUserId={currentUser?.id || currentUser?.userId}
+                                hasCollaborators={(taskData?.collaborators || []).length > 0}
+                                closed={['REALIZADA', 'DEVUELTA'].includes(formData.originalStatus)}
+                                onChange={onSuccess}
+                            />
+                        )}
 
                         {/* Attachments Section (Interactive Insumos & Referencias) */}
                         {isEdition ? (

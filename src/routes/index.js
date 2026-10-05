@@ -1,6 +1,7 @@
 import express from 'express';
 import * as authController from '../controllers/authController.js';
 import * as taskController from '../controllers/taskController.js';
+import { taskCollaboratorController } from '../controllers/taskCollaboratorController.js';
 import * as clientController from '../controllers/clientController.js';
 import * as notificationController from '../controllers/notificationController.js';
 import * as pushNotificationController from '../controllers/pushNotificationController.js';
@@ -222,6 +223,10 @@ router.post('/tasks/:taskId/toggle-follow', taskController.toggleFollow);
 router.get('/tasks/:taskId/follow-status', taskController.getFollowStatus);
 router.post('/tasks/:taskId/trace-open', taskController.traceTaskOpen);
 router.get('/tasks/:taskId/work-history', guardTask, taskController.getTaskWorkHistory);
+// Colaboradores (5 de octubre de 2026): el tiempo del equipo y el reloj propio de cada colaborador.
+router.get('/tasks/:taskId/work/team', guardTask, taskCollaboratorController.getTeamTime);
+router.post('/tasks/:taskId/work/start', guardTask, taskCollaboratorController.startWork);
+router.post('/tasks/:taskId/work/pause', guardTask, taskCollaboratorController.pauseWork);
 router.get('/tasks/:taskId/attachments/:attachmentId/file', guardTask, taskController.getTaskAttachmentFileProxy);
 router.get('/tasks/:taskId/attachments/:attachmentId/download', guardTask, taskController.getTaskAttachmentDownloadProxy);
 router.get('/tasks/:taskId/comments', guardTask, taskController.getTaskComments);
