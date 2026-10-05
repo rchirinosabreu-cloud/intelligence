@@ -95,6 +95,18 @@ test('the history keeps the worst status of each hour for the last 24 hours', ()
   assert.equal(history[0].status, null);
 });
 
+test('only going red and leaving red are worth an alert', async () => {
+  const { lightTransition } = await import('../src/lib/serviceHealth.js');
+  assert.equal(lightTransition(LIGHTS.GREEN, LIGHTS.RED), 'DOWN');
+  assert.equal(lightTransition(LIGHTS.YELLOW, LIGHTS.RED), 'DOWN');
+  assert.equal(lightTransition(LIGHTS.GRAY, LIGHTS.RED), 'DOWN');
+  assert.equal(lightTransition(LIGHTS.RED, LIGHTS.GREEN), 'RECOVERED');
+  assert.equal(lightTransition(LIGHTS.RED, LIGHTS.YELLOW), 'RECOVERED');
+  assert.equal(lightTransition(LIGHTS.RED, LIGHTS.RED), null);
+  assert.equal(lightTransition(LIGHTS.GREEN, LIGHTS.YELLOW), null);
+  assert.equal(lightTransition(LIGHTS.RED, LIGHTS.GRAY), null);
+});
+
 test('HTTP failures are explained in plain Spanish and marked critical when they will not heal', () => {
   assert.deepEqual(classifyHttpFailure(401), { critical: true, errorCode: 'HTTP_401', message: 'La clave fue rechazada: hay que revisar la credencial.' });
   assert.equal(classifyHttpFailure(403).critical, true);

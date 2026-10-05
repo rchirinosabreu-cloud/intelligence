@@ -67,6 +67,14 @@ export const getNotificationDisplayParts = (notification = {}) => {
         };
     }
 
+    // Semáforo de servicios (5 de octubre de 2026): el título dice si cayó o volvió; el cuerpo, el detalle.
+    if (type === 'SERVICE_HEALTH_DOWN') {
+        return { title: 'Un servicio está caído', context: '', body: cleanNotificationPreview(message, 160) };
+    }
+    if (type === 'SERVICE_HEALTH_RECOVERED') {
+        return { title: 'Un servicio volvió a funcionar', context: '', body: cleanNotificationPreview(message, 140) };
+    }
+
     if (type === 'TASK_COMMENT_REPLY') {
         const parsed = parseQuotedTaskMessage(message, 'Nuevo mensaje en el hilo de la tarea');
         if (parsed) return parsed;

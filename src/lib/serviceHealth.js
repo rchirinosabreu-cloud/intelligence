@@ -157,6 +157,16 @@ export const isServiceDue = (service, lastCheckedAt, now = new Date()) => {
 
 const STATUS_WEIGHT = { NOT_CONFIGURED: 0, OK: 1, WARN: 2, FAIL: 3 };
 
+/**
+ * Cuándo se avisa (Rodny, 5 de octubre de 2026): al pasar a rojo y al salir de rojo, nada más. Un
+ * amarillo no avisa —puede ser un tropiezo de red— y pasar a «sin configurar» no es una recuperación.
+ */
+export const lightTransition = (before, after) => {
+  if (after === LIGHTS.RED && before !== LIGHTS.RED) return 'DOWN';
+  if (before === LIGHTS.RED && (after === LIGHTS.GREEN || after === LIGHTS.YELLOW)) return 'RECOVERED';
+  return null;
+};
+
 /** Veinticuatro casillas, una por hora, con el peor estado de esa hora; `null` si no hubo comprobación. */
 export const hourlyHistory = (checks = [], { now = new Date(), hours = 24 } = {}) => {
   const end = time(now);

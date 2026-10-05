@@ -36,3 +36,24 @@ test('both themes are covered', () => {
   assert.match(panel, /dark:bg-zinc-900/);
   assert.match(panel, /dark:text-zinc-400/);
 });
+
+// Avisos y punto en la barra (Rodny, 5 de octubre de 2026).
+test('the header dot is for administrators, uses the status tokens and leads to the board', () => {
+  const dot = readFileSync(new URL('../src/components/layout/ServiceHealthDot.jsx', import.meta.url), 'utf8');
+  const layout = readFileSync(new URL('../src/components/layout/AppLayout.jsx', import.meta.url), 'utf8');
+  assert.match(layout, /<ServiceHealthDot isAdmin=\{currentUser\?\.role === 'ADMIN'\} \/>/);
+  assert.match(dot, /if \(!isAdmin \|\| !data\) return null/);
+  assert.match(dot, /\/api\/service-health\/summary/);
+  assert.match(dot, /navigate\('\/salud-operativa'\)/);
+  assert.match(dot, /aria-label=/);
+  for (const token of ['bg-status-positive', 'bg-status-attention', 'bg-destructive']) assert.match(dot, new RegExp(token));
+  assert.doesNotMatch(dot, /\b(?:bg|text|ring)-(?:red|rose|green|emerald|amber)-/);
+});
+
+test('the service alerts open the board and read as plain Spanish', async () => {
+  const layout = readFileSync(new URL('../src/components/layout/AppLayout.jsx', import.meta.url), 'utf8');
+  assert.match(layout, /notif\.type === 'SERVICE_HEALTH_DOWN' \|\| notif\.type === 'SERVICE_HEALTH_RECOVERED'\) \{[\s\S]*?navigate\('\/salud-operativa'\)/);
+  const { getNotificationDisplayParts } = await import('../src/utils/notificationUtils.js');
+  assert.equal(getNotificationDisplayParts({ type: 'SERVICE_HEALTH_DOWN', message: 'OpenAI está caído: Se acabó el crédito.' }).title, 'Un servicio está caído');
+  assert.equal(getNotificationDisplayParts({ type: 'SERVICE_HEALTH_RECOVERED', message: 'OpenAI volvió a funcionar.' }).title, 'Un servicio volvió a funcionar');
+});

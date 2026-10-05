@@ -8,9 +8,11 @@ import {
   overallLight,
   isServiceDue,
   hourlyHistory,
-  classifyNetworkFailure
+  classifyNetworkFailure,
+  lightTransition
 } from '../lib/serviceHealth.js';
 import { createServiceHealthProbes } from './serviceHealthProbes.js';
+import { createNotification } from './notificationService.js';
 
 /**
  * Semáforo de servicios (4 de octubre de 2026): corre las comprobaciones que tocan, guarda cada una
@@ -37,10 +39,24 @@ export const createServiceHealthService = ({
   catalog = SERVICE_CATALOG,
   probes = null,
   now = () => new Date(),
-  logger = console
+  logger = console,
+  notifyAdmins = null
 } = {}) => {
   let lastPurgeAt = 0;
   const resolveProbes = () => probes || createServiceHealthProbes({ db });
+  const sendAlert = notifyAdmins || ((alert) => notifyServiceAlertToAdmins({ db, alert }));
+
+  /** Las comprobaciones recientes de unos servicios, la más nueva primero, agrupadas por servicio. */
+  const recentChecksBy = async (serviceIds) => {
+    const rows = await db.serviceHealthCheck.findMany({
+      where: { serviceId: { in: serviceIds }, checkedAt: { gte: new Date(now().getTime() - 24 * HOUR) } },
+      orderBy: { checkedAt: 'desc' },
+      select: { serviceId: true, status: true, critical: true, message: true, checkedAt: true }
+    });
+    const grouped = new Map();
+    for (const item of rows) grouped.set(item.serviceId, [...(grouped.get(item.serviceId) || []), item]);
+    return grouped;
+  };
 
   const latestCheckTimes = async () => {
     const rows = await db.serviceHealthCheck.groupBy({ by: ['serviceId'], _max: { checkedAt: true } });
@@ -71,7 +87,25 @@ export const createServiceHealthService = ({
       return { id: randomUUID(), serviceId: service.id, checkedAt: now(), ...normalizeOutcome(outcome) };
     }));
 
+    // El color de antes se lee antes de guardar la ronda nueva: así el aviso sale una sola vez, en el
+    // cambio, y un reinicio del servidor no lo repite porque el historial queda guardado.
+    const before = await recentChecksBy(due.map((service) => service.id)).catch(() => null);
     await db.serviceHealthCheck.createMany({ data: outcomes });
+    if (before) {
+      for (const outcome of outcomes) {
+        const service = due.find((item) => item.id === outcome.serviceId);
+        const previous = before.get(outcome.serviceId) || [];
+        const kind = lightTransition(
+          resolveServiceLight(previous, { now: now() }).light,
+          resolveServiceLight([outcome, ...previous], { now: now() }).light
+        );
+        if (!kind) continue;
+        const { reason } = resolveServiceLight([outcome, ...previous], { now: now() });
+        await Promise.resolve()
+          .then(() => sendAlert({ kind, serviceId: service.id, label: service.label, reason, impact: service.impact }))
+          .catch((error) => logger.error('[ServiceHealth] No se pudo avisar a los administradores:', error?.message || error));
+      }
+    }
     if (now().getTime() - lastPurgeAt > HOUR) {
       await purgeOldChecks().catch((error) => logger.error('[ServiceHealth] No se pudo purgar el historial:', error.message));
     }
@@ -122,7 +156,43 @@ export const createServiceHealthService = ({
     };
   };
 
-  return { runDueChecks, getBoard, purgeOldChecks };
+  /** Lo justo para el punto de la barra superior: el color general y qué está fallando. */
+  const getSummary = async () => {
+    const board = await getBoard();
+    return {
+      overall: board.overall,
+      lastCheckedAt: board.lastCheckedAt,
+      troubled: board.services
+        .filter((service) => service.light === LIGHTS.RED || service.light === LIGHTS.YELLOW)
+        .map(({ id, label, light, reason }) => ({ id, label, light, reason }))
+    };
+  };
+
+  return { runDueChecks, getBoard, getSummary, purgeOldChecks };
+};
+
+const ALERT_COPY = {
+  DOWN: { type: 'SERVICE_HEALTH_DOWN', message: (alert) => `${alert.label} está caído: ${alert.reason}` },
+  RECOVERED: { type: 'SERVICE_HEALTH_RECOVERED', message: (alert) => `${alert.label} volvió a funcionar.` }
+};
+
+/**
+ * Avisa del cambio a cada administrador activo, en la campana y en el celular. `createNotification`
+ * ya descarta a quien no está en el equipo vigente.
+ */
+export const notifyServiceAlertToAdmins = async ({ db = prisma, alert, notify = createNotification }) => {
+  const copy = ALERT_COPY[alert.kind];
+  if (!copy) return;
+  const admins = await db.user.findMany({ where: { role: 'ADMIN', isActive: true }, select: { id: true } });
+  for (const admin of admins) {
+    await notify({
+      userId: admin.id,
+      type: copy.type,
+      message: copy.message(alert),
+      relatedId: alert.serviceId,
+      url: '/salud-operativa'
+    }).catch((error) => console.error('[ServiceHealth] Aviso no entregado:', error?.message || error));
+  }
 };
 
 let defaultService;
