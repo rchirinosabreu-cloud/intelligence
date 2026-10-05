@@ -14,6 +14,7 @@ import { initBriaMemoryScheduler } from './src/services/briaMemoryScheduler.js';
 import { initBriaObserverScheduler } from './src/services/briaObserverScheduler.js';
 import { initBriaContentPlanReviewScheduler } from './src/services/briaContentPlanReviewScheduler.js';
 import { initSocialPublishingScheduler } from './src/services/socialPublishingScheduler.js';
+import { initServiceHealthScheduler } from './src/services/serviceHealthScheduler.js';
 import { getAIHealth } from './src/services/aiService.js';
 import { configureS3Cors } from './src/services/s3Service.js';
 import { loggerMiddleware } from './src/middlewares/logger.js';
@@ -204,6 +205,7 @@ async function bootstrap() {
         initBriaObserverScheduler();
         initBriaContentPlanReviewScheduler();
         initSocialPublishingScheduler();
+        initServiceHealthScheduler();
         startTaskAttachmentRetention();
         console.log("[Service: Cron] Tareas en segundo plano inicializadas.");
     } catch (cronError) {
