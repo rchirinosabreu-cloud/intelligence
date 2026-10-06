@@ -1155,7 +1155,10 @@ export async function updateOperationalEvent(id, data, {
 }
 
 async function updateOperationalEventUnlocked(id, data, { db, syncToGoogle }) {
-  const current = await db.operationalEvent.findUnique({ where: { id } });
+  // Se trae la cuenta de origen con el evento: hace falta para saber si la reunión tiene
+  // que invitar además al calendario que vigila Fireflies, y una consulta aparte obligaría
+  // a cada doble de pruebas a conocer esa tabla.
+  const current = await db.operationalEvent.findUnique({ where: { id }, include: { googleConnection: { select: { email: true } } } });
   if (!current) throw createOperationalEventError('EVENT_NOT_FOUND', 'El evento ya no existe.');
   if ((data.googleConnectionId !== undefined && data.googleConnectionId !== (current.googleConnectionId || '')) ||
       (data.googleCalendarId !== undefined && data.googleCalendarId !== current.googleCalendarId)) {
@@ -1172,13 +1175,8 @@ async function updateOperationalEventUnlocked(id, data, { db, syncToGoogle }) {
   // Al editar vale la misma regla: si sigue siendo una reunión, Fred sigue invitado; si
   // deja de serlo, se le quita de la lista.
   const captureWithFireflies = shouldInviteFireflies(validated.type);
-  // La cuenta de origen no se puede cambiar al editar (arriba se rechaza), así que se lee
-  // la del evento para saber si hace falta invitar al calendario que vigila Fireflies.
-  const origen = current.googleConnectionId
-    ? await db.googleCalendarConnection.findUnique({ where: { id: current.googleConnectionId }, select: { email: true } })
-    : null;
   const externalEmails = withFirefliesInvite(validated.type, data.attendeeEmails ?? current?.attendeeEmails ?? [], {
-    organizerEmail: origen?.email || null,
+    organizerEmail: current.googleConnection?.email || null,
     watchedEmail: firefliesWatchedCalendar()
   });
   const attendeeEmails = await normalizeAttendeeEmails(memberIds, externalEmails, db);
