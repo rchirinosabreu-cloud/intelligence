@@ -444,17 +444,19 @@ test('external guest tags stay in one horizontal row without changing field heig
   assert.doesNotMatch(calendar, /data-operational-external-guests="tags"[\s\S]{0,500}flex-wrap/);
 });
 
-test('calendar events can invite Fireflies automatically and preserve the choice reciprocally', async () => {
+// Antes esta prueba exigía la casilla «Invitar a Fireflies» y que su elección viajara de
+// ida y vuelta. Rodny la retiró el 6 de octubre de 2026: toda reunión lleva a Fireflies y
+// ya no se pregunta. Lo que sigue vigente es que la columna existe y que el bot acaba en
+// la lista de invitados que se sincroniza con Google. El resto vive en
+// `tests/firefliesAutoJoin.test.js`.
+test('calendar meetings always carry the Fireflies guest into Google', async () => {
   const schema = await readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
   const service = await readFile(new URL('../src/services/operationalEventService.js', import.meta.url), 'utf8');
-  const calendar = await readFile(new URL('../src/components/modules/Activity/OperationalCalendar.jsx', import.meta.url), 'utf8');
 
   assert.match(schema, /captureWithFireflies\s+Boolean\s+@default\(false\)/);
-  assert.match(service, /FIREFLIES_BOT_EMAIL\s*=\s*'fred@fireflies\.ai'/);
-  assert.match(service, /captureWithFireflies/);
-  assert.match(calendar, /Invitar a Fireflies/);
-  assert.match(calendar, /formData\.captureWithFireflies/);
-  assert.match(calendar, /captureWithFireflies:\s*formData\.captureWithFireflies/);
+  assert.match(service, /FIREFLIES_BOT_EMAIL/);
+  assert.match(service, /withFirefliesInvite\(validated\.type/);
+  assert.match(service, /captureWithFireflies: shouldInviteFireflies\(validated\.type\)/);
 });
 
 test('production startup restores calendar invitation schema idempotently', async () => {
