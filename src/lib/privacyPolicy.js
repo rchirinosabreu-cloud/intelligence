@@ -7,4 +7,8 @@
 // 2.3 (2 de octubre de 2026): la plataforma consulta en Meta las estadísticas agregadas de las
 // cuentas y campañas que el cliente autoriza, para sus reportes. La sección 11 decía que no se
 // conectaba a esas cuentas, y desde la 2.2 ya no era cierto.
-export const PRIVACY_POLICY_VERSION = '2.3 · 2026-10-02';
+// 2.4 (6 de octubre de 2026): Fireflies deja de grabar «las reuniones en las que se activa» y pasa
+// a grabar todas. La plataforma invita a Fred en toda reunión que crea, y la cuenta de Fireflies
+// está en «grabar todos los eventos de calendario con enlace». El texto anterior describía una
+// decisión reunión por reunión que ya no existe.
+export const PRIVACY_POLICY_VERSION = '2.4 · 2026-10-06';
