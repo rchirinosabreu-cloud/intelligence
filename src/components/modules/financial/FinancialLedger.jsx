@@ -11,6 +11,7 @@ import FinancialDocumentGallery, { DocumentCard, ROW_DOCUMENT_LIMIT } from '@/co
 import { PayrollPaymentPanel } from '@/components/modules/financial/PayrollPayments';
 import ReceivablePaymentPanel from '@/components/modules/financial/ReceivablePaymentPanel';
 import { payrollPaymentFromRecord } from '@/lib/payrollPayments';
+import { documentRecordId } from '@/lib/financialDocumentsClient';
 import {
     Dialog,
     DialogContent,
@@ -882,16 +883,21 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                             </div>
                             {formDocuments.length > 0 && (
                                 <div className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-3 md:grid-cols-4">
-                                    {formDocuments.map((item) => (
-                                        <DocumentCard
-                                            key={item.id}
-                                            item={item}
-                                            fetchBlob={(target) => fetchDocumentBlob(editingRecord.id, target)}
-                                            onOpen={() => openDocument(editingRecord.id, item, false, formDocuments.filter((candidate) => !candidate.voidedAt))}
-                                            onDownload={() => openDocument(editingRecord.id, item, true)}
-                                            onVoid={() => { setDocumentToVoid(item); setDocumentVoidReason(''); }}
-                                        />
-                                    ))}
+                                    {formDocuments.map((item) => {
+                                        // El número sale del documento: un movimiento recién creado aún no está
+                                        // en el formulario (Elisa, 6 de octubre de 2026, referencia E-X88NJ2).
+                                        const recordId = documentRecordId(item, editingRecord);
+                                        return (
+                                            <DocumentCard
+                                                key={item.id}
+                                                item={item}
+                                                fetchBlob={recordId ? (target) => fetchDocumentBlob(recordId, target) : null}
+                                                onOpen={() => recordId && openDocument(recordId, item, false, formDocuments.filter((candidate) => !candidate.voidedAt))}
+                                                onDownload={() => recordId && openDocument(recordId, item, true)}
+                                                onVoid={editingRecord ? () => { setDocumentToVoid(item); setDocumentVoidReason(''); } : undefined}
+                                            />
+                                        );
+                                    })}
                                 </div>
                             )}
                             {pendingFiles.length > 0 && (
