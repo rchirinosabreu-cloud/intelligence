@@ -14,7 +14,8 @@ import rrule from 'rrule';
 import { withCalendarSyncLock, assertCalendarSyncLock, googleCalendarRequestOptions } from './calendarSyncLock.js';
 import { googleEventIdFor, googleStatus, insertGoogleEventReliably, patchGoogleEventReliably, isRetryableGoogleWriteError, nextGoogleRetryAt } from './googleCalendarWriteReliability.js';
 
-const FIREFLIES_BOT_EMAIL = 'fred@fireflies.ai';
+import { FIREFLIES_BOT_EMAIL, shouldInviteFireflies, withFirefliesInvite } from '../lib/firefliesAutoJoin.js';
+
 const OPERATIONAL_EVENT_TYPES = new Set(['PRODUCTION', 'PROJECT', 'MEETING', 'ABSENCE', 'BREAK']);
 const OPERATIONAL_RECURRENCES = new Set(['NONE', 'WEEKLY', 'GOOGLE']);
 
@@ -1105,8 +1106,9 @@ export async function createOperationalEvent(data, createdById = null, {
   }
   const target = await resolveCreationTarget(auth);
   const range = { startAt: validated.startAt, endAt: validated.endAt };
-  const externalEmails = (data.attendeeEmails || []).filter(email => email?.toLowerCase() !== FIREFLIES_BOT_EMAIL);
-  if (data.captureWithFireflies) externalEmails.push(FIREFLIES_BOT_EMAIL);
+  // Toda reunión lleva a Fireflies y la pantalla ya no lo pregunta: lo decide el servidor,
+  // así que una pestaña sin recargar tampoco puede crear una reunión sin Fred.
+  const externalEmails = withFirefliesInvite(validated.type, data.attendeeEmails);
   const attendeeEmails = await normalizeAttendeeEmails(data.memberIds || [], externalEmails, db);
   validateOperationalEventSchedule(data, null, now());
   return await createSyncedOperationalEvent({
@@ -1119,7 +1121,7 @@ export async function createOperationalEvent(data, createdById = null, {
         startAt: range.startAt,
         endAt: range.endAt,
         isAllDay: Boolean(data.isAllDay),
-        captureWithFireflies: Boolean(data.captureWithFireflies),
+        captureWithFireflies: shouldInviteFireflies(validated.type),
         memberIds: data.memberIds || [],
         attendeeEmails,
         attendeeResponses: {},
@@ -1164,9 +1166,10 @@ async function updateOperationalEventUnlocked(id, data, { db, syncToGoogle }) {
   validateOperationalEventSchedule(data, current);
   const range = { startAt: validated.startAt, endAt: validated.endAt };
   const memberIds = data.memberIds ?? current?.memberIds ?? [];
-  const captureWithFireflies = data.captureWithFireflies ?? current?.captureWithFireflies ?? false;
-  const externalEmails = (data.attendeeEmails ?? current?.attendeeEmails ?? []).filter(email => email?.toLowerCase() !== FIREFLIES_BOT_EMAIL);
-  if (captureWithFireflies) externalEmails.push(FIREFLIES_BOT_EMAIL);
+  // Al editar vale la misma regla: si sigue siendo una reunión, Fred sigue invitado; si
+  // deja de serlo, se le quita de la lista.
+  const captureWithFireflies = shouldInviteFireflies(validated.type);
+  const externalEmails = withFirefliesInvite(validated.type, data.attendeeEmails ?? current?.attendeeEmails ?? []);
   const attendeeEmails = await normalizeAttendeeEmails(memberIds, externalEmails, db);
   validateOperationalEventSchedule(data, current);
   return await updateSyncedOperationalEvent({

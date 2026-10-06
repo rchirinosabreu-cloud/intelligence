@@ -30,7 +30,7 @@ test('la política de datos cumple el contenido mínimo del Decreto 1074 de 2015
     ]) {
         assert.ok(page.includes(expected), `Falta en la política: ${expected}`);
     }
-    assert.match(PRIVACY_POLICY_VERSION, /^2\.3 · 2026-10-02$/);
+    assert.match(PRIVACY_POLICY_VERSION, /^2\.4 · 2026-10-06$/);
 });
 
 // Contrastado con el texto oficial (Función Pública, 28 de septiembre de 2026): el art. 25 de la

@@ -28,7 +28,7 @@ const PROCESSORS = [
   ['Railway Corp.', 'Alojamiento de la plataforma, base de datos y almacenamiento de archivos', 'Estados Unidos'],
   ['OpenAI, L.L.C.', 'Modelos de inteligencia artificial (análisis, resúmenes, revisión de contenidos, lectura de capturas de métricas, búsqueda en documentos)', 'Estados Unidos'],
   ['Google LLC', 'Correo, calendario, Meet, Drive y hojas de cálculo corporativos (Google Workspace); envío de correos transaccionales; almacenamiento y búsqueda de documentos (Google Cloud); tipografías web', 'Estados Unidos'],
-  ['Fireflies.ai Corp.', 'Grabación y transcripción de las reuniones en las que se activa', 'Estados Unidos'],
+  ['Fireflies.ai Corp.', 'Grabación y transcripción de las reuniones de trabajo de la agencia: su asistente se suma como participante visible a los eventos de calendario que tienen enlace de videollamada', 'Estados Unidos'],
   ['Meta Platforms, Inc.', 'Publicación de las piezas aprobadas en las cuentas de Instagram y Facebook de los clientes que las conectan (texto de la publicación y archivo de la pieza) y consulta de las estadísticas agregadas de esas cuentas y de sus campañas publicitarias para los reportes', 'Estados Unidos'],
   ['Servicios de notificación del navegador (Google, Mozilla, Apple)', 'Entrega de notificaciones push a quien las activa', 'Según el navegador']
 ];
