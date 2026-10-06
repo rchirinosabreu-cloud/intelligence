@@ -14,7 +14,7 @@ import rrule from 'rrule';
 import { withCalendarSyncLock, assertCalendarSyncLock, googleCalendarRequestOptions } from './calendarSyncLock.js';
 import { googleEventIdFor, googleStatus, insertGoogleEventReliably, patchGoogleEventReliably, isRetryableGoogleWriteError, nextGoogleRetryAt } from './googleCalendarWriteReliability.js';
 
-import { FIREFLIES_BOT_EMAIL, shouldInviteFireflies, withFirefliesInvite } from '../lib/firefliesAutoJoin.js';
+import { FIREFLIES_BOT_EMAIL, firefliesWatchedCalendar, shouldInviteFireflies, withFirefliesInvite } from '../lib/firefliesAutoJoin.js';
 
 const OPERATIONAL_EVENT_TYPES = new Set(['PRODUCTION', 'PROJECT', 'MEETING', 'ABSENCE', 'BREAK']);
 const OPERATIONAL_RECURRENCES = new Set(['NONE', 'WEEKLY', 'GOOGLE']);
@@ -1108,7 +1108,10 @@ export async function createOperationalEvent(data, createdById = null, {
   const range = { startAt: validated.startAt, endAt: validated.endAt };
   // Toda reunión lleva a Fireflies y la pantalla ya no lo pregunta: lo decide el servidor,
   // así que una pestaña sin recargar tampoco puede crear una reunión sin Fred.
-  const externalEmails = withFirefliesInvite(validated.type, data.attendeeEmails);
+  const externalEmails = withFirefliesInvite(validated.type, data.attendeeEmails, {
+    organizerEmail: auth.connection.email,
+    watchedEmail: firefliesWatchedCalendar()
+  });
   const attendeeEmails = await normalizeAttendeeEmails(data.memberIds || [], externalEmails, db);
   validateOperationalEventSchedule(data, null, now());
   return await createSyncedOperationalEvent({
@@ -1152,7 +1155,10 @@ export async function updateOperationalEvent(id, data, {
 }
 
 async function updateOperationalEventUnlocked(id, data, { db, syncToGoogle }) {
-  const current = await db.operationalEvent.findUnique({ where: { id } });
+  // Se trae la cuenta de origen con el evento: hace falta para saber si la reunión tiene
+  // que invitar además al calendario que vigila Fireflies, y una consulta aparte obligaría
+  // a cada doble de pruebas a conocer esa tabla.
+  const current = await db.operationalEvent.findUnique({ where: { id }, include: { googleConnection: { select: { email: true } } } });
   if (!current) throw createOperationalEventError('EVENT_NOT_FOUND', 'El evento ya no existe.');
   if ((data.googleConnectionId !== undefined && data.googleConnectionId !== (current.googleConnectionId || '')) ||
       (data.googleCalendarId !== undefined && data.googleCalendarId !== current.googleCalendarId)) {
@@ -1169,7 +1175,10 @@ async function updateOperationalEventUnlocked(id, data, { db, syncToGoogle }) {
   // Al editar vale la misma regla: si sigue siendo una reunión, Fred sigue invitado; si
   // deja de serlo, se le quita de la lista.
   const captureWithFireflies = shouldInviteFireflies(validated.type);
-  const externalEmails = withFirefliesInvite(validated.type, data.attendeeEmails ?? current?.attendeeEmails ?? []);
+  const externalEmails = withFirefliesInvite(validated.type, data.attendeeEmails ?? current?.attendeeEmails ?? [], {
+    organizerEmail: current.googleConnection?.email || null,
+    watchedEmail: firefliesWatchedCalendar()
+  });
   const attendeeEmails = await normalizeAttendeeEmails(memberIds, externalEmails, db);
   validateOperationalEventSchedule(data, current);
   return await updateSyncedOperationalEvent({

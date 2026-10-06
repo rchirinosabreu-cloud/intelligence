@@ -15,7 +15,22 @@
 
 export const FIREFLIES_BOT_EMAIL = 'fred@fireflies.ai';
 
-const isBot = (email) => String(email || '').trim().toLowerCase() === FIREFLIES_BOT_EMAIL;
+const normal = (email) => String(email || '').trim().toLowerCase();
+const isBot = (email) => normal(email) === FIREFLIES_BOT_EMAIL;
+
+/**
+ * La cuenta cuyo calendario vigila Fireflies, en `FIREFLIES_CALENDAR_EMAIL`.
+ *
+ * Fireflies solo mira los calendarios conectados a él y la agencia tiene **un solo
+ * asiento**: `coordinador`. Una reunión creada en `social.brain` se quedaba sin
+ * transcribir aunque se invitara a Fred, porque Fireflies ni se enteraba de que existía.
+ * En vez de pagar otro asiento, se invita también a la cuenta vigilada: el evento cae en
+ * su calendario y Fred entra por ahí.
+ *
+ * Sin configurar devuelve null y nada cambia: ninguna instalación hereda un correo
+ * nuestro escrito en el código.
+ */
+export const firefliesWatchedCalendar = (env = process.env) => normal(env?.FIREFLIES_CALENDAR_EMAIL) || null;
 
 /**
  * Una reunión siempre lleva a Fred. Lo que no es una reunión —una ausencia, un bloque de
@@ -28,9 +43,20 @@ export const shouldInviteFireflies = (type) => String(type || '').toUpperCase() 
  * Devuelve la lista de invitados externos que corresponde al tipo de evento. Quita
  * cualquier forma del bot antes de decidir, para que no se duplique si alguien ya lo
  * escribió a mano (y para que un evento que deja de ser reunión lo pierda).
+ *
+ * `organizerEmail` es la cuenta de Google en cuyo calendario se crea el evento y
+ * `watchedEmail` la que vigila Fireflies. Si no son la misma, la vigilada se añade como
+ * invitada para que la reunión aparezca también en su calendario.
  */
-export const withFirefliesInvite = (type, emails = []) => {
-    const limpias = (Array.isArray(emails) ? emails : [])
-        .filter(email => email && !isBot(email));
-    return shouldInviteFireflies(type) ? [...limpias, FIREFLIES_BOT_EMAIL] : limpias;
+export const withFirefliesInvite = (type, emails = [], { organizerEmail = null, watchedEmail = null } = {}) => {
+    const limpias = (Array.isArray(emails) ? emails : []).filter(email => email && !isBot(email));
+    if (!shouldInviteFireflies(type)) return limpias;
+
+    const vigilada = normal(watchedEmail);
+    const organizadora = normal(organizerEmail);
+    const yaInvitada = limpias.some(email => normal(email) === vigilada);
+    // En su propio calendario no hace falta invitarse, y no se repite si ya estaba.
+    const faltaVigilada = vigilada && vigilada !== organizadora && !yaInvitada;
+
+    return [...limpias, ...(faltaVigilada ? [vigilada] : []), FIREFLIES_BOT_EMAIL];
 };
