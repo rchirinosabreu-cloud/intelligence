@@ -50,6 +50,14 @@ La notificación viene de fuera y se trata como dato, nunca como instrucción: l
 
 Tampoco cambia el tiempo de transcripción, que es de Fireflies. Y el aviso solo cubre las reuniones de la cuenta dueña de la clave: según el diagnóstico, 50 de 52 minutas pertenecen a `coordinadorbrainstudio@gmail.com`, así que cubriría el 96 %; el resto lo recoge el sondeo.
 
+## Un solo asiento para dos calendarios (6 de octubre de 2026)
+
+La agencia tiene **un asiento** en Fireflies, el de `coordinadorbrainstudio@gmail.com`, y Fireflies **solo mira los calendarios conectados a él**. La plataforma, en cambio, agenda en dos cuentas: coordinador y `social.brainstudio@gmail.com`. Una reunión creada en social.brain se quedaba sin transcribir **aunque se invitara a Fred**, porque Fireflies ni se enteraba de que existía. No era una sospecha: en 180 días hubo 14 reuniones de la plataforma en esa cuenta y en 11 el equipo había marcado la casilla.
+
+La salida no es pagar otro asiento: es **invitar también a la cuenta vigilada**. El evento aparece entonces en el calendario de coordinador, y con su ajuste en «grabar todos los eventos de calendario con enlace», Fred entra por ahí. La cuenta va en `FIREFLIES_CALENDAR_EMAIL`; sin esa variable nada cambia, para que ninguna instalación herede un correo nuestro escrito en el código. En su propio calendario no se invita a sí misma, y si ya estaba invitada no se repite.
+
+**De qué depende, y por eso conviene no olvidarlo:** de que el ajuste de Fireflies siga en «todos los eventos de calendario con enlace». Si alguien lo cambia a «solo las reuniones que organizo», esto deja de funcionar **en silencio**, porque coordinador es invitada y no anfitriona. Regla y pruebas: `src/lib/firefliesAutoJoin.js`, `tests/firefliesAutoJoin.test.js`.
+
 ## Puesta en marcha
 
 En Fireflies: Integrations → Webhook → Configure.

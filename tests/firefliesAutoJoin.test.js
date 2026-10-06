@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import {
     FIREFLIES_BOT_EMAIL,
+    firefliesWatchedCalendar,
     shouldInviteFireflies,
     withFirefliesInvite
 } from '../src/lib/firefliesAutoJoin.js';
@@ -41,6 +42,57 @@ test('una reunión que deja de serlo pierde el bot', () => {
 test('una lista nula o con huecos no revienta', () => {
     assert.deepEqual(withFirefliesInvite('MEETING', null), [FIREFLIES_BOT_EMAIL]);
     assert.deepEqual(withFirefliesInvite('MEETING', ['', null, 'a@b.test']), ['a@b.test', FIREFLIES_BOT_EMAIL]);
+});
+
+// El calendario que Fireflies vigila (Rodny, 6 de octubre de 2026: «soluciona eso»).
+// Fireflies solo mira los calendarios conectados a él, y solo hay un asiento:
+// coordinador. Una reunión creada en social.brain se queda sin transcribir aunque Fred
+// esté invitado. En vez de pagar un segundo asiento, se invita también a la cuenta que
+// Fireflies sí vigila: el evento aparece en su calendario y Fred entra por ahí.
+
+test('el calendario vigilado sale de la configuración, no del código', () => {
+    assert.equal(firefliesWatchedCalendar({ FIREFLIES_CALENDAR_EMAIL: 'Coordinador@Ejemplo.test ' }), 'coordinador@ejemplo.test');
+    assert.equal(firefliesWatchedCalendar({}), null, 'sin configurar, nada cambia');
+    assert.equal(firefliesWatchedCalendar({ FIREFLIES_CALENDAR_EMAIL: '   ' }), null);
+});
+
+test('una reunión en otra cuenta invita además al calendario vigilado', () => {
+    const invitados = withFirefliesInvite('MEETING', ['cliente@ejemplo.test'], {
+        organizerEmail: 'social@ejemplo.test',
+        watchedEmail: 'coordinador@ejemplo.test'
+    });
+    assert.deepEqual(invitados, ['cliente@ejemplo.test', 'coordinador@ejemplo.test', FIREFLIES_BOT_EMAIL]);
+});
+
+// En el calendario que Fireflies ya vigila no hace falta invitarse a sí mismo.
+test('la cuenta vigilada no se invita a su propia reunión', () => {
+    const invitados = withFirefliesInvite('MEETING', ['cliente@ejemplo.test'], {
+        organizerEmail: 'Coordinador@Ejemplo.test',
+        watchedEmail: 'coordinador@ejemplo.test'
+    });
+    assert.deepEqual(invitados, ['cliente@ejemplo.test', FIREFLIES_BOT_EMAIL]);
+});
+
+test('si ya estaba invitada no se repite', () => {
+    const invitados = withFirefliesInvite('MEETING', ['COORDINADOR@ejemplo.test'], {
+        organizerEmail: 'social@ejemplo.test',
+        watchedEmail: 'coordinador@ejemplo.test'
+    });
+    assert.equal(invitados.filter(e => e.toLowerCase() === 'coordinador@ejemplo.test').length, 1);
+});
+
+test('sin cuenta vigilada configurada, la lista no cambia', () => {
+    const invitados = withFirefliesInvite('MEETING', ['cliente@ejemplo.test'], { organizerEmail: 'social@ejemplo.test' });
+    assert.deepEqual(invitados, ['cliente@ejemplo.test', FIREFLIES_BOT_EMAIL]);
+});
+
+// Un bloque de producción no se graba, así que tampoco arrastra a nadie a su calendario.
+test('lo que no es reunión no arrastra al calendario vigilado', () => {
+    const invitados = withFirefliesInvite('ABSENCE', ['cliente@ejemplo.test'], {
+        organizerEmail: 'social@ejemplo.test',
+        watchedEmail: 'coordinador@ejemplo.test'
+    });
+    assert.deepEqual(invitados, ['cliente@ejemplo.test']);
 });
 
 // El servidor es quien decide: si dependiera de lo que mande la pantalla, cualquier
