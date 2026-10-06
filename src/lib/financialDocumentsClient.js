@@ -12,6 +12,14 @@ export const FINANCIAL_DOCUMENT_ACCEPT = '.pdf,.jpg,.jpeg,.png,application/pdf,i
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('authToken')}` });
 const recordUrl = (recordId, path = '') => `${getApiBaseUrl()}/api/financials/records/${recordId}/documents${path}`;
 
+/**
+ * El movimiento al que pertenece un documento. Manda el del propio documento: un movimiento
+ * recién creado todavía no está en el formulario (Elisa, 6 de octubre de 2026: la pantalla se
+ * caía al añadir un movimiento con fotos, porque se leía `editingRecord.id` con el formulario
+ * aún en modo «nuevo»). Sin número no se pide nada.
+ */
+export const documentRecordId = (document, editingRecord) => document?.recordId || editingRecord?.id || null;
+
 /** El aviso que se da antes de subir un comprobante que el servidor va a rechazar. */
 export const financialDocumentProblem = (file) => {
     if (!file) return null;

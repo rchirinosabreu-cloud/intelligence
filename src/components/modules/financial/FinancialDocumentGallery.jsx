@@ -18,7 +18,9 @@ export function DocumentThumbnail({ item, fetchBlob, className }) {
         if (!isImage || !fetchBlob) return undefined;
         let active = true;
         let objectUrl;
-        fetchBlob(item).then((blob) => {
+        // Un fallo al pedir la imagen —incluso uno síncrono— se registra y deja el icono; nunca
+        // tumba la pantalla (Elisa, 6 de octubre de 2026, referencia E-X88NJ2).
+        Promise.resolve().then(() => fetchBlob(item)).then((blob) => {
             if (!active) return;
             objectUrl = URL.createObjectURL(blob);
             setSrc(objectUrl);

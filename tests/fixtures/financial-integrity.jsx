@@ -161,7 +161,9 @@ axios.defaults.adapter = async config => {
   else if (path.includes('/records/') && path.endsWith('/documents') && config.method === 'post') {
     const payment = payrollPayments.find((item) => path.includes(`/records/${item.financialRecordId}/`));
     const file = body.get('file');
-    const document = { id: `doc-${++payrollCounter}`, name: file.name, mimeType: file.type || 'application/pdf', size: file.size };
+    // Como el servidor (documentPublicFields): el documento dice a qué movimiento pertenece.
+    const recordIdOfPath = path.split('/records/')[1]?.split('/')[0] || null;
+    const document = { id: `doc-${++payrollCounter}`, recordId: recordIdOfPath, name: file.name, mimeType: file.type || 'application/pdf', size: file.size };
     payment?.documents.push(document);
     // Comprobantes de un abono de cartera (5 de octubre de 2026): van al ingreso del abono.
     const receivablePayment = (debt.payments || []).find((item) => item.financialRecordId && path.includes(`/records/${item.financialRecordId}/`));
@@ -197,6 +199,11 @@ axios.defaults.adapter = async config => {
     const section = url.searchParams.get('section'), offset = Number(url.searchParams.get('cursor') || 0);
     const items = section === 'income' ? records : [{ ...debt, currency: 'COP' }];
     data = { client, scope: { year: 2026, section }, items: items.slice(offset, offset + 25), nextCursor: offset + 25 < items.length ? String(offset + 25) : null };
+  } else if (path.endsWith('/records') && config.method === 'post') {
+    // Como el servidor: registrar un movimiento devuelve el movimiento creado (6 de octubre de 2026).
+    const created = { ...body, id: `rec-new-${++payrollCounter}`, account, documents: [], status: 'POSTED', origin: 'MANUAL', year: 2026, month: 10 };
+    records = [created, ...records];
+    data = { message: 'Movimiento registrado correctamente.', record: created };
   } else if (path.endsWith('/records')) {
     const page = Number(url.searchParams.get('page') || 1), pageSize = Number(url.searchParams.get('pageSize') || 50);
     const category = url.searchParams.get('category'), accountId = url.searchParams.get('accountId');
