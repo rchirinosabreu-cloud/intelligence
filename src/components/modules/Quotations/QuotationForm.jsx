@@ -1,5 +1,6 @@
 import Select from '@/components/ui/Select';
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { quotationSaveTarget } from '@/lib/quotationSaveTarget';
 import { useQuery } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Search, Plus, Trash2, Copy, Check, DollarSign, FileText, Globe, Building2, User as UserIcon, ArrowLeft, Loader2, RefreshCw } from '@/components/ui/icons';
@@ -41,6 +42,9 @@ const QuotationForm = () => {
     const [proposalDetails, setProposalDetails] = useState(null);
     const [searchTerm, setSearchText] = useState('');
     const [isSaving, setIsSaving] = useState(false);
+    // La cotización que este formulario creó en su primer guardado: desde ahí se actualiza.
+    const [savedQuotationId, setSavedQuotationId] = useState(null);
+    const savingRef = useRef(false);
     const [generatedLink, setGeneratedLink] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
@@ -374,11 +378,18 @@ const QuotationForm = () => {
             return;
         }
 
+        // Dos toques rápidos no pueden mandar dos guardados: el estado tarda un repintado en llegar.
+        if (savingRef.current) return;
+        savingRef.current = true;
         setIsSaving(true);
+        // Crea la primera vez; desde que existe —por la dirección o porque este formulario ya la
+        // creó— actualiza la misma (Elisa, 6 de octubre de 2026: borrador y emisión quedaban en dos).
+        const target = quotationSaveTarget(id, savedQuotationId);
+        const wasExisting = target.method === 'PUT';
         try {
             const normalizedDetails = normalizeProposalDetails(proposalDetails, { issue: targetStatus === 'ACTIVA', totalsByScenario: proposalTotals });
-            const url = isEditing ? `${getApiBaseUrl()}/api/quotations/${id}` : `${getApiBaseUrl()}/api/quotations`;
-            const method = isEditing ? 'PUT' : 'POST';
+            const url = `${getApiBaseUrl()}${target.path}`;
+            const method = target.method;
 
             const res = await fetch(url, {
                 method: method,
@@ -425,6 +436,7 @@ const QuotationForm = () => {
 
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || "Error al guardar la cotización");
+            if (!wasExisting && data.id) setSavedQuotationId(data.id);
 
             const shouldShare = targetStatus === 'ACTIVA';
             if (shouldShare) {
@@ -453,6 +465,7 @@ const QuotationForm = () => {
             console.error("[QuotationForm] Save failed:", error);
             toast.error(error.message || "Fallo al guardar la cotización");
         } finally {
+            savingRef.current = false;
             setIsSaving(false);
         }
     };

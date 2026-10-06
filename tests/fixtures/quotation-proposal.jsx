@@ -23,8 +23,12 @@ async function downloadPdf() {
   } catch (error) { console.error('[Demo PDF]', error); const { toast } = await import('react-hot-toast'); toast.error(error.message); }
 }
 window.__quotationDemo = () => structuredClone(saved);
+// Cada guardado queda anotado: «Nueva propuesta» debe crear una vez y después actualizar la misma.
+const saveCalls = [];
+window.__quotationDemoCalls = () => saveCalls.slice();
 window.fetch = async (input, config = {}) => {
   const path = new URL(String(input), location.origin).pathname;
+  if (['POST', 'PUT'].includes(config.method) && path.includes('/quotations')) saveCalls.push(`${config.method} ${path.replace(/^.*\/api/, '/api')}`);
   let data = saved, status = 200;
   try {
     if (path.endsWith('/catalog')) data = [];
@@ -44,12 +48,12 @@ window.fetch = async (input, config = {}) => {
   return new Response(JSON.stringify(data), { status, headers: { 'Content-Type': 'application/json' } });
 };
 const query = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 0 } } });
-createRoot(document.getElementById('root')).render(<QueryClientProvider client={query}><ConfirmDialogProvider><MemoryRouter initialEntries={[new URLSearchParams(location.search).get('view') === 'public' ? '/p/local-sunpartners' : '/cotizaciones/local-sunpartners']}>
+createRoot(document.getElementById('root')).render(<QueryClientProvider client={query}><ConfirmDialogProvider><MemoryRouter initialEntries={[{ public: '/p/local-sunpartners', new: '/cotizaciones/nueva' }[new URLSearchParams(location.search).get('view')] || '/cotizaciones/local-sunpartners']}>
   <div className="border-b border-zinc-200 bg-white px-6 py-3 text-sm text-zinc-700 dark:border-zinc-800 dark:bg-zinc-900 dark:text-zinc-200">
     <p className="font-semibold">Laboratorio local · datos de muestra, sin conexión productiva</p>
     <nav className="mt-2 flex flex-wrap items-center gap-5"><Link to="/cotizaciones/local-sunpartners">Editar propuesta</Link><Link to="/p/local-sunpartners" onClick={() => query.invalidateQueries()}>Vista del cliente</Link><button onClick={downloadPdf}>PDF guardado</button><button onClick={() => document.documentElement.classList.toggle('dark')}>Cambiar tema</button><button onClick={() => { sessionStorage.removeItem('quotation-proposal-demo'); location.reload(); }}>Restablecer ejemplo</button></nav>
     <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Guarda el borrador para actualizar la vista del cliente y el PDF. Los cambios duran solo en esta pestaña.</p>
   </div>
-  <Routes><Route path="/cotizaciones/:id" element={<div className="mx-auto max-w-7xl px-5 py-8"><QuotationForm /></div>} /><Route path="/p/:slug" element={<PublicQuotation />} /><Route path="*" element={<Link to="/cotizaciones/local-sunpartners">Volver al ejemplo</Link>} /></Routes>
+  <Routes><Route path="/cotizaciones/nueva" element={<div className="mx-auto max-w-7xl px-5 py-8"><QuotationForm /></div>} /><Route path="/cotizaciones/:id" element={<div className="mx-auto max-w-7xl px-5 py-8"><QuotationForm /></div>} /><Route path="/p/:slug" element={<PublicQuotation />} /><Route path="*" element={<Link to="/cotizaciones/local-sunpartners">Volver al ejemplo</Link>} /></Routes>
   <Toaster />
 </MemoryRouter></ConfirmDialogProvider></QueryClientProvider>);
