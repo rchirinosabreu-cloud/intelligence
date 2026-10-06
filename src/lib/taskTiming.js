@@ -86,6 +86,33 @@ export function parseReopenEventContent(content = '') {
   return { reasonValue, reasonLabel: reason?.label || 'Otro motivo', note };
 }
 
+// Lo único que puede venir en el cuerpo de una reapertura. La puerta es estrecha a propósito:
+// con `assigneeId` o `isPrivate` dentro, cualquiera podría cambiar de dueño una tarea ajena
+// escondiéndolo detrás de una reapertura.
+export const REOPEN_PAYLOAD_KEYS = ['status', 'reopenReason', 'reopenNote'];
+
+/**
+ * ¿Este envío es exactamente «reabrir una tarea cerrada»? (Rodny, 6 de octubre de 2026:
+ * «necesito que cualquiera pueda reabrir tarea»).
+ *
+ * El trabajo se reabre donde se detecta el error, y hasta ahora el servidor solo lo permitía a
+ * administradores, project managers, quien la creó y quien la ejecuta: a los demás les respondía
+ * 403 **después** de haber escrito el motivo y la nota en el diálogo. La regla vive aquí y no en
+ * el controlador porque también la miran las pruebas y, el día que haga falta, la pantalla.
+ *
+ * Exige las tres cosas: que la tarea esté cerrada, que el cuerpo la devuelva a «Pendiente» con su
+ * motivo, y que no traiga **nada más**.
+ */
+export function isTaskReopenRequest({ currentStatus, payload } = {}) {
+  if (getTaskLifecycleAction(currentStatus) !== 'reintegrate') return false;
+
+  const body = payload && typeof payload === 'object' ? payload : {};
+  if (String(body.status || '').trim().toUpperCase() !== 'PENDIENTE') return false;
+  if (!String(body.reopenReason || '').trim()) return false;
+
+  return Object.keys(body).every(key => REOPEN_PAYLOAD_KEYS.includes(key));
+}
+
 export function getTaskLifecycleAction(status) {
   const normalizedStatus = String(status || '').trim().toUpperCase();
   if (normalizedStatus === 'REALIZADA' || normalizedStatus === 'REALIZADO') return 'reintegrate';

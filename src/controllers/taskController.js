@@ -19,6 +19,7 @@ import { traceTaskOpenHandler } from './operationalTraceController.js';
 import { canDeleteTask, canUpdateTask, isManagerRole, pickAllowedTaskUpdates, validateUploadFile } from '../config/security.js';
 import { canChangeTaskPrivacy, canCreatePrivateTask } from '../lib/taskPrivacy.js';
 import { collaboratorMoveProblem } from '../lib/taskCollaborators.js';
+import { isTaskReopenRequest } from '../lib/taskTiming.js';
 import { commentFilesValidationMessage, MAX_COMMENT_FILE_BYTES } from '../lib/taskCommentAttachments.js';
 import { listTaskWorkHistory } from '../services/taskWorkSessionService.js';
 export { getMyExcessiveTaskAlertsHandler as getMyExcessiveTaskAlerts } from './excessiveTaskAlertController.js';
@@ -190,7 +191,13 @@ export const updateExistingTask = async (req, res) => {
             }
         });
         if (!task) return res.status(404).json({ error: 'Task not found' });
-        if (!canUpdateTask(req.user, task)) {
+        // Reabrir una tarea cerrada es de **cualquiera** del equipo (Rodny, 6 de octubre de 2026):
+        // el error se detecta donde se detecta, y mandar a buscar al responsable solo retrasa la
+        // corrección. Es la única excepción a `canUpdateTask`, y solo cubre el envío que reabre y
+        // nada más (`isTaskReopenRequest`): editar la tarea sigue siendo de quien puede editarla.
+        // Un pendiente privado que esta persona no puede abrir ya lo frenó `requireTaskAccess`.
+        const esReapertura = isTaskReopenRequest({ currentStatus: task.status, payload: req.body });
+        if (!esReapertura && !canUpdateTask(req.user, task)) {
             // Colaboradores (5 de octubre de 2026): mueven la tarea entre «Pendiente» y «En proceso»
             // y nada más; cerrarla y cambiar sus datos sigue siendo del responsable.
             const actorUserId = req.user?.userId || req.user?.id;
