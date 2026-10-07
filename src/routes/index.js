@@ -16,6 +16,7 @@ import * as commercialRequestController from '../controllers/commercialRequestCo
 import { authenticateToken, requireManagerRole, requireModulePermission } from '../middlewares/authMiddleware.js';
 import { isMfaRequiredForRole } from '../lib/mfaPolicy.js';
 import { aiRequestContextMiddleware, runWithAiContext } from '../lib/aiRequestContext.js';
+import { createBriaAssistantRouter } from './api/briaAssistant.js';
 // La cerradura de un pendiente privado: el tablero ya no manda su contenido, y estas
 // rutas —comentarios, adjuntos y la propia tarea— tampoco se lo dan a quien no puede
 // abrirla. Contrato que vigila que no se olvide ninguna: tests/taskPrivacyRoutes.test.js
@@ -127,6 +128,8 @@ router.use(authenticateToken);
 // Quién y desde qué módulo, para el registro de uso de IA del control de salida.
 router.use(aiRequestContextMiddleware);
 router.use('/team-chat', createTeamChatRouter());
+// Bria a la que se le pregunta (6 de octubre de 2026): los permisos van en cada herramienta, no aquí.
+router.use('/bria', createBriaAssistantRouter());
 // Lo que vio la persona cuando una pantalla falló (5 de octubre de 2026). Con tope por persona:
 // una pantalla que falla en bucle no puede inundar el registro.
 router.post('/client-errors', clientErrorRateLimiter, reportClientErrorHandler);

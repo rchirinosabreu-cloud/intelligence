@@ -3,6 +3,7 @@ import { RouteErrorBoundary } from '@/components/errors/ApplicationErrorBoundary
 import TeamChat from '@/components/chat/TeamChat';
 import Sidebar from './Sidebar';
 import ServiceHealthDot from './ServiceHealthDot';
+import BriaAssistant from '@/components/bria/BriaAssistant';
 import { Menu, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye, Clock, Users, Activity } from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -275,6 +276,7 @@ const AppLayout = ({ children }) => {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
+            <BriaAssistant currentUser={currentUser} />
             <ServiceHealthDot isAdmin={currentUser?.role === 'ADMIN'} />
             <Button
                 variant="ghost"
