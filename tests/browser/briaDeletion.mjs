@@ -25,6 +25,10 @@ try {
   const titleBox = await dialog.getByRole('heading').boundingBox();
   const descriptionBox = await dialog.locator('[id][class*="leading-6"]').boundingBox();
   assert.ok(Math.abs(titleBox.x - descriptionBox.x) < 1, 'title and description share the same left edge');
+  const cancelBox = await dialog.getByRole('button', { name: 'Cancelar', exact: true }).boundingBox();
+  const confirmBox = await dialog.getByRole('button', { name: 'Borrar definitivamente', exact: true }).boundingBox();
+  assert.ok(Math.abs(cancelBox.x - titleBox.x) < 1, 'Cancel starts at the left content edge');
+  assert.ok(Math.abs(confirmBox.x + confirmBox.width - titleBox.x - titleBox.width) < 1, 'Delete ends at the right content edge');
   await page.screenshot({ path: path.join(output, 'bria-borrar-claro.png') });
   await dialog.screenshot({ path: path.join(output, 'bria-popup-sin-icono.png') });
   await page.setViewportSize({ width: 390, height: 844 });

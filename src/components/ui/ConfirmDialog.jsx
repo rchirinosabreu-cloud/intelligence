@@ -21,6 +21,7 @@ export const ConfirmDialogProvider = ({ children }) => {
       cancelLabel: normalized.cancelLabel || 'Cancelar',
       tone: normalized.tone || 'danger',
       showIcon: normalized.showIcon !== false,
+      spreadActions: normalized.spreadActions === true,
       layer: normalized.layer || 100,
       resolve
     });
@@ -61,7 +62,7 @@ export const ConfirmDialogProvider = ({ children }) => {
                 </AlertDialog.Description>
               </div>
             </div>
-            <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+            <div className={`mt-6 flex flex-col-reverse gap-2 sm:flex-row ${request?.spreadActions ? 'sm:justify-between' : 'sm:justify-end'}`}>
               <AlertDialog.Cancel asChild>
                 <button
                   type="button"
