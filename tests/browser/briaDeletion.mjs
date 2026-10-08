@@ -21,7 +21,17 @@ try {
   await remove.click({ timeout: 10000 });
   const dialog = page.getByRole('alertdialog');
   await dialog.waitFor(); assert.match(await dialog.textContent(), /Lo que Bria aprendió se conserva/);
+  assert.equal(await dialog.locator('svg').count(), 0, 'the Bria delete popup has no decorative icon');
+  const titleBox = await dialog.getByRole('heading').boundingBox();
+  const descriptionBox = await dialog.locator('[id][class*="leading-6"]').boundingBox();
+  assert.ok(Math.abs(titleBox.x - descriptionBox.x) < 1, 'title and description share the same left edge');
   await page.screenshot({ path: path.join(output, 'bria-borrar-claro.png') });
+  await dialog.screenshot({ path: path.join(output, 'bria-popup-sin-icono.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  const mobileBox = await dialog.boundingBox();
+  assert.ok(mobileBox.x >= 15 && mobileBox.x + mobileBox.width <= 375, 'the popup stays inside the mobile viewport');
+  await page.screenshot({ path: path.join(output, 'bria-borrar-movil.png') });
+  await page.setViewportSize({ width: 1440, height: 900 });
   await page.getByRole('button', { name: 'Cancelar', exact: true }).click();
   assert.equal(await remove.count(), 1); assert.equal(await page.locator('[data-conversation-turn]').count(), 2);
   await panel.locator('button[aria-label="Nueva conversación"]').click(); await ready();
