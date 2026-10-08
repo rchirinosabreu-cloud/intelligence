@@ -2,7 +2,7 @@ import { normalizeQuestion, MAX_QUESTION_LENGTH } from '../lib/briaAssistant.js'
 import { knowledgeError } from '../lib/briaKnowledge.js';
 import { validateAttachmentSelection, BRIA_AUDIO_MAX_BYTES } from '../lib/briaAttachments.js';
 import { readBriaAttachment, attachmentModelPart } from './briaAttachmentReader.js';
-import { taskDraftReply, taskDraftStage, isTaskConfirmation, isTaskCancellation, materialDeclined } from '../lib/briaTaskDraft.js';
+import { taskDraftReply, taskDraftStage, taskCreationIntent, isTaskConfirmation, isTaskCancellation, materialDeclined } from '../lib/briaTaskDraft.js';
 export const createBriaConversationService = ({ repository, resolveActor, assistant, ai, taskDrafts, prepareAttachment = readBriaAttachment, authorizeTurn = async () => true }) => {
   const pending = new Set();
   const authorizeInput = async user => { const actor = await resolveActor(user); if (!['ADMIN', 'PROJECT_MANAGER'].includes(actor.role)) throw knowledgeError('Solo Admin y Project Manager pueden adjuntar o dictar.', 403); return actor; };
@@ -59,7 +59,10 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         let availableText = 60000;
         const attachments = relevant.map(file => { const content = String(file.text || '').slice(0, availableText); availableText -= content.length; return { id: file.id, name: file.name, text: content, status: file.status, warning: content.length < String(file.text || '').length ? `${file.warning || ''} Contexto parcial del adjunto en esta respuesta.` : file.warning, modelPart: attachmentModelPart(file) }; });
         const revalidateConversation = async () => { if (!await repository.get(await resolveActor(user), id)) throw knowledgeError('La conversación fue eliminada.', 404); };
-        const taskDraft = [...chat.turns].reverse().find(turn => turn.role === 'assistant' && turn.taskDraft)?.taskDraft;
+        let taskDraft = [...chat.turns].reverse().find(turn => turn.role === 'assistant' && turn.taskDraft)?.taskDraft;
+        if (taskDrafts && (!taskDraft || ['CREATED','CANCELLED'].includes(taskDraft.status)) && taskCreationIntent(text) && !isTaskConfirmation(text)) {
+          taskDraft = await taskDrafts.prepare({ user, question: text, attachments: prepared });
+        }
         const stage = taskDraftStage(taskDraft);
         const revalidateTask = async () => {
           await resolveActor(user);

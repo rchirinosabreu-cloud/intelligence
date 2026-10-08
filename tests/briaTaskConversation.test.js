@@ -33,3 +33,8 @@ test('a deleted or revoked conversation cannot confirm a pending write', async (
   await assert.rejects(() => fixture.service.send({ user, id: 'chat', question: 'Crear pendiente' }), { status: 404 });
   assert.equal(fixture.writes, 0);
 });
+test('the create-pending starter establishes server draft state before a natural follow-up', async () => {
+  const fixture = setup(); fixture.stored = { id: 'chat', revision: 0, turns: [] };
+  await fixture.service.send({ user, id: 'chat', question: 'Crear un pendiente' });
+  assert.equal(fixture.writes, 0); assert.ok(fixture.stored.turns.at(-1).taskDraft);
+});
