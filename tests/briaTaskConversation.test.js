@@ -10,7 +10,7 @@ const setup = () => {
     locked = true; const reply = typeof result === 'function' ? await result() : result; locked = false;
     stored = { ...stored, revision: revision + 1, turns: [...stored.turns, { role: 'user', text: question }, { role: 'assistant', text: reply.answer, ...reply }] }; return stored;
   } };
-  const taskDrafts = { confirm: async () => { assert.equal(locked, true); writes++; return { taskId: 'task' }; }, prepare: async ({ previous, question }) => ({ ...previous, priority: question.toUpperCase() }) };
+  const taskDrafts = { createConfirmedTask: async () => { assert.equal(locked, true); writes++; return { taskId: 'task' }; }, prepare: async ({ previous, question }) => ({ ...previous, priority: question.toUpperCase() }) };
   const service = createBriaConversationService({ repository, taskDrafts, resolveActor: async () => ({ ref: 'owner', role: 'ADMIN' }), assistant: { ask: async request => { aiCalls++; assert.ok(request.taskDraft); return { answer: 'Respuesta', sources: [] }; } } });
   return { service, get stored() { return stored; }, set stored(value) { stored = value; }, get writes() { return writes; }, get aiCalls() { return aiCalls; } };
 };

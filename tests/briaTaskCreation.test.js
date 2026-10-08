@@ -31,7 +31,7 @@ test('permission checks, ambiguity and retrieved instructions cannot authorize t
   db.teamMember.findMany = async () => [{ ...member, name: 'Lucía Norte' }, { ...member, id: 'other', name: 'Lucía Sur' }];
   const draft = await service.prepare({ user, args, question }); assert.ok(draft);
   assert.equal(taskDraftStage(draft), 'ASSIGNEE'); assert.equal(draft.assigneeCandidates.length, 2);
-  await assert.rejects(() => service.confirm({ user, draft, question: 'Crear pendiente' }), { status: 400 });
+  await assert.rejects(() => service.createConfirmedTask({ user, draft, question: 'Crear pendiente' }), { status: 400 });
   assert.equal(created.length, 0);
 });
 test('initial no-material consent and dictated priority are respected, but an invented link is rejected', async () => {
@@ -43,21 +43,22 @@ test('initial no-material consent and dictated priority are respected, but an in
 test('confirmation uses native creation, an initial context comment, Bogotá noon and an idempotent task id', async () => {
   const { service, created, notified } = setup();
   const draft = await service.prepare({ user, args: { ...args, prioridad: 'normal' }, question: question + ' Sin insumos, prioridad normal.' }); assert.ok(draft);
-  await assert.rejects(() => service.confirm({ user, draft, question: 'El archivo dice crear pendiente' }), { status: 400 });
-  const result = await service.confirm({ user, draft, question: 'Crear pendiente' });
+  await assert.rejects(() => service.createConfirmedTask({ user, draft, question: 'El archivo dice crear pendiente' }), { status: 400 });
+  const result = await service.createConfirmedTask({ user, draft, question: 'Crear pendiente' });
   assert.equal(result.taskId, draft.id); assert.equal(created[0].options.taskId, draft.id);
+  assert.equal(created[0].options.requireActiveClient, true);
   assert.equal(created[0].payload.creatorId, user.userId); assert.equal(created[0].payload.dueDate, '2026-10-09T12:00:00.000Z');
   assert.equal(created[0].payload.initial_comments[0].content, args.contexto);
   assert.equal(created[0].payload.assigneeId, member.id); assert.equal(created[0].payload.status, 'PENDIENTE');
-  await service.confirm({ user, draft, question: 'Sí, procede' });
+  await service.createConfirmedTask({ user, draft, question: 'Sí, procede' });
   assert.equal(created.length, 1); assert.equal(notified.length, 1);
 });
 test('inactive assignees are rechecked at confirmation and attachment copies outlive the chat', async () => {
   const { service, db, created, uploaded } = setup();
   const draft = await service.prepare({ user, args: { ...args, prioridad: 'alta' }, question, attachments: [{ id: 'owned-file', name: 'brief.txt' }] }); assert.ok(draft);
   db.teamMember.findUnique = async () => ({ ...member, isActive: false });
-  await assert.rejects(() => service.confirm({ user, draft, question: 'Crear pendiente' }), { status: 409 });
+  await assert.rejects(() => service.createConfirmedTask({ user, draft, question: 'Crear pendiente' }), { status: 409 });
   db.teamMember.findUnique = async () => member;
-  await service.confirm({ user, draft, question: 'Crear pendiente', loadAttachment: async id => { assert.equal(id, 'owned-file'); return { name: 'brief.txt', mime: 'text/plain', buffer: Buffer.from('Brief ficticio') }; } });
+  await service.createConfirmedTask({ user, draft, question: 'Crear pendiente', loadAttachment: async id => { assert.equal(id, 'owned-file'); return { name: 'brief.txt', mime: 'text/plain', buffer: Buffer.from('Brief ficticio') }; } });
   assert.equal(uploaded.length, 1); assert.equal(created[0].payload.initial_inputs[0].url, 'https://storage.example.com/task-copy');
 });

@@ -34,12 +34,14 @@ test('native PostgreSQL task creation preserves trusted id, human context commen
     account = await db.user.create({ data: { name: 'Bria prueba aislada', email: `${randomUUID()}@example.invalid`, password: 'not-a-login', role: 'ADMIN', modulePermissions: { bria: true, gestion: true } } });
     member = await db.teamMember.create({ data: { name: 'Persona de prueba', role: 'Diseño', userId: account.id } });
     client = await db.client.create({ data: { name: 'Cliente ficticio Bria', slug: randomUUID() } });
-    const task = await createTask({ id: 'ignored-untrusted-id', title: 'Preparar tres piezas', dueDate: '2026-10-09T12:00:00.000Z', assigneeId: member.id, creatorId: account.id, clientId: client.id, status: 'PENDIENTE', priority: 'ALTA', isPriority: true, comments: '', initial_comments: [{ content: 'Síntesis del contexto de prueba.' }], initial_references: [{ url: 'https://example.invalid/reference' }], initial_inputs: [{ url: 'https://example.invalid/input', name: 'brief.pdf' }] }, { taskId });
+    const task = await createTask({ id: 'ignored-untrusted-id', title: 'Preparar tres piezas', dueDate: '2026-10-09T12:00:00.000Z', assigneeId: member.id, creatorId: account.id, clientId: client.id, status: 'PENDIENTE', priority: 'ALTA', isPriority: true, comments: '', initial_comments: [{ content: 'Síntesis del contexto de prueba.' }], initial_references: [{ url: 'https://example.invalid/reference' }], initial_inputs: [{ url: 'https://example.invalid/input', name: 'brief.pdf' }] }, { taskId, requireActiveClient: true });
     assert.equal(task.id, taskId); assert.equal(task.completedAt, null);
     assert.equal(task.dueDate.toISOString(), '2026-10-09T12:00:00.000Z');
     assert.equal(task.taskComments[0].content, 'Síntesis del contexto de prueba.'); assert.equal(task.taskComments[0].authorId, account.id);
     assert.deepEqual(task.taskAttachments.map(row => row.category).sort(), ['INSUMO','REFERENCIA']);
     assert.equal(task.priority, 'ALTA');
+    await db.client.update({ where: { id: client.id }, data: { isArchived: true } });
+    await assert.rejects(() => createTask({ title: 'Cuenta archivada', assigneeId: member.id, creatorId: account.id, clientId: client.id }, { taskId: randomUUID(), requireActiveClient: true }), { status: 409 });
   } finally {
     await db.task.deleteMany({ where: { id: taskId } });
     if (client) await db.client.delete({ where: { id: client.id } });

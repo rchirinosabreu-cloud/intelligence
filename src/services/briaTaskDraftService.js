@@ -55,7 +55,7 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
     if (draft.references.length || draft.inputs.length || draft.files.length) draft.withoutMaterials = false;
     return draft;
   },
-  async confirm({ user, draft, question, loadAttachment, revalidate }) {
+  async createConfirmedTask({ user, draft, question, loadAttachment, revalidate }) {
     authorize(user);
     if (readOnly) throw knowledgeError('Esta vista de investigación solo prepara borradores. Crea el pendiente desde la plataforma.', 403);
     if (!draft || draft.ownerId !== (user.userId || user.id) || taskDraftStage(draft) !== 'READY' || !isTaskConfirmation(question)) throw knowledgeError('Primero revisa el resumen completo y confirma crear el pendiente.');
@@ -76,7 +76,7 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
         copies.push(stored);
       }
       await revalidate?.(); authorize(user);
-      const task = await createTask({ title: draft.title, clientId: client.id, assigneeId: member.id, creatorId: user.userId || user.id, dueDate: `${draft.dueDate}T12:00:00.000Z`, status: 'PENDIENTE', priority: draft.priority, isPriority: draft.priority !== 'NORMAL', comments: '', initial_comments: [{ content: draft.context }], initial_references: draft.references || [], initial_inputs: [...(draft.inputs || []), ...copies.map(({ url, name }) => ({ url, name }))] }, { taskId: draft.id });
+      const task = await createTask({ title: draft.title, clientId: client.id, assigneeId: member.id, creatorId: user.userId || user.id, dueDate: `${draft.dueDate}T12:00:00.000Z`, status: 'PENDIENTE', priority: draft.priority, isPriority: draft.priority !== 'NORMAL', comments: '', initial_comments: [{ content: draft.context }], initial_references: draft.references || [], initial_inputs: [...(draft.inputs || []), ...copies.map(({ url, name }) => ({ url, name }))] }, { taskId: draft.id, requireActiveClient: true });
       if (member.userId && member.userId !== (user.userId || user.id) && notify) {
         try { await notify({ userId: member.userId, type: 'TASK_ASSIGNED', relatedId: task.id, message: `Se te asignó un pendiente: ${draft.title}` }); }
         catch (failure) { console.error('[BriaTask] Assignment notification failed:', failure?.message || failure); }

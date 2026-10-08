@@ -76,7 +76,7 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           // Run the write inside append, after its owned parent lock and revision check.
           result = async () => {
             await revalidateTask();
-            const receipt = await taskDrafts.confirm({ user, draft: taskDraft, question: text, revalidate: revalidateTask, loadAttachment: async fileId => repository.attachment(await resolveActor(user), id, fileId) });
+            const receipt = await taskDrafts.createConfirmedTask({ user, draft: taskDraft, question: text, revalidate: revalidateTask, loadAttachment: async fileId => repository.attachment(await resolveActor(user), id, fileId) });
             return { answer: `${receipt.alreadyCreated ? 'El pendiente ya estaba creado' : 'Pendiente creado'} para ${taskDraft.assignee.name}. Guardé el contexto como comentario${taskDraft.files?.length ? ' y los archivos como insumos' : ''}.\n\n[Abrir en Gestión](/gestion?taskId=${encodeURIComponent(receipt.taskId)})`, sources: [{ kind: 'tarea', id: receipt.taskId }], failures: [], toolsUsed: ['crear_pendiente'], taskDraft: { ...taskDraft, status: 'CREATED', taskId: receipt.taskId } };
           };
         } else if (taskDrafts && taskDraft && !['CREATED','CANCELLED'].includes(stage) && ((stage === 'PRIORITY' && /^(normal|alta|urgente)$/i.test(text)) || (stage === 'DATE' && /^(hoy|mañana|pasado mañana)$/i.test(text)) || (stage === 'MATERIAL' && materialDeclined(text, stage)))) {
