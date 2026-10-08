@@ -15,6 +15,8 @@ export const ASSISTANT_USE_CASE = 'bria.assistant';
 export const MAX_QUESTION_LENGTH = 12000;
 export const MAX_HISTORY_TURNS = 10;
 export const MAX_HISTORY_TURN_LENGTH = 2000;
+import { normalizeAiUsage, summarizeAiCalls } from './aiUsage.js';
+
 export const MAX_TOOL_ROUNDS = 6;
 export const MAX_ANSWER_TOKENS = 2400;
 
@@ -111,6 +113,7 @@ export const runAssistant = async ({
   const failures = [];
   const learningProposals = [];
   let rounds = 0;
+  const modelCalls = [];
 
   const execute = async (call) => {
     const tool = byName.get(call.name);
@@ -138,6 +141,7 @@ export const runAssistant = async ({
   while (true) {
     await context.revalidate?.();
     const lastRound = rounds >= maxRounds;
+    const startedAt = Date.now();
     const result = await ai.generate({
       // Una copia por llamada: lo que se añade después (llamadas y resultados) no cambia lo ya enviado.
       input: [...input],
@@ -146,6 +150,7 @@ export const runAssistant = async ({
       governanceContext,
       maxOutputTokens: MAX_ANSWER_TOKENS
     });
+    modelCalls.push({ model: result?.model, latencyMs: Date.now() - startedAt, usage: normalizeAiUsage(result?.usage) });
     const calls = lastRound ? [] : (result?.functionCalls || []);
     if (!calls.length) {
       return {
@@ -154,7 +159,8 @@ export const runAssistant = async ({
         toolsUsed,
         failures,
         ...(learningProposals.length ? { learningProposals } : {}),
-        rounds
+        rounds,
+        usage: summarizeAiCalls(modelCalls)
       };
     }
     rounds += 1;

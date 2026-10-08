@@ -78,6 +78,13 @@ export const SERVICE_CATALOG = Object.freeze([
     intervalMs: 5 * MIN
   },
   {
+    id: 'storage-bria',
+    label: 'Archivos de Bria',
+    purpose: 'Adjuntos privados de las conversaciones con Bria.',
+    impact: 'Si cae, los adjuntos no se pueden leer y su borrado queda pendiente.',
+    intervalMs: 5 * MIN
+  },
+  {
     id: 'storage-financial',
     label: 'Soportes financieros',
     purpose: 'Facturas, soportes de movimientos y PDF de cuentas de cobro.',

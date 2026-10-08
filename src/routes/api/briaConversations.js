@@ -7,13 +7,14 @@ const uuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]
 export const createBriaConversationRouter = ({ service } = {}) => {
   const router = express.Router();
   const resolve = async () => service || (await import('../../services/briaConversationApplication.js')).getApplicationConversationService();
+  router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
   router.use((req, res, next) => canUseBria(req.user) ? next() : res.status(403).json({ message: 'Bria no está activada para tu cuenta.' }));
   router.use(createRateLimiter({ windowMs: 60000, max: 40, keyGenerator: req => req.user?.userId || req.user?.id || req.ip }));
   const handle = work => async (req, res) => {
     try {
       const result = await work(req, await resolve());
       // Preserve provenance in the service for fresh authorization, never expose its catalogue in chat.
-      res.json(result?.turns ? { ...result, turns: result.turns.map(({ sources: _sources, ...turn }) => turn) } : result);
+      res.status(result?.filesPending ? 202 : 200).json(result?.turns ? { ...result, turns: result.turns.map(({ sources: _sources, ...turn }) => turn) } : result);
     }
     catch (failure) { const status = Number.isInteger(failure.status) ? failure.status : 500; if (status === 500) console.error('[BriaConversation]', failure.code || failure.name); res.status(status).json({ message: status === 500 ? 'No se pudo abrir o continuar la conversación.' : failure.message }); }
   };
@@ -43,5 +44,6 @@ export const createBriaConversationRouter = ({ service } = {}) => {
   router.get('/', handle((req, instance) => instance.list(req.user)));
   router.post('/', handle((req, instance) => instance.create(req.user)));
   router.get('/:id', handle((req, instance) => instance.read(req.user, req.params.id)));
+  router.delete('/:id', handle((req, instance) => instance.remove(req.user, req.params.id, req.body?.expectedRevision)));
   return router;
 };

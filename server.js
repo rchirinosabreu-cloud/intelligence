@@ -216,6 +216,9 @@ async function bootstrap() {
     // Va aquí y no en la cadena de `npm start`: un almacenamiento caído no puede impedir que el
     // servidor levante. `configureS3Cors` registra su propio fallo y no lanza.
     configureS3Cors();
+    // Resume durable file deletion even when nobody opens Bria after a restart.
+    const { getApplicationConversationService } = await import('./src/services/briaConversationApplication.js');
+    getApplicationConversationService();
 
     // 5. Start Express Server
     const PORT = process.env.PORT || 3000;

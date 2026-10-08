@@ -8,6 +8,8 @@ import { requestKnowledge } from '@/lib/briaKnowledgeRequest';
 import BriaComposer from './BriaComposer';
 import { cn } from '@/lib/utils';
 import { validateAttachmentSelection } from '@/lib/briaAttachments';
+import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import toast from 'react-hot-toast';
 
 const safeSource = url => {
   if (typeof url !== 'string') return null;
@@ -31,6 +33,7 @@ function Remembered({ onBack }) {
 }
 
 export default function BriaConversation({ userId = 'local-research-owner', userName = 'Rodny', userRole = 'VIEWER', fullScreen = false, visible = true, onFullScreen, onClose, onOpenSource, request = requestBriaChat, downloadBriaAttachment: downloadAttachment = downloadBriaAttachment }) {
+  const confirm = useConfirmDialog();
   const isAdmin = userRole === 'ADMIN', allowAttachments = ['ADMIN', 'PROJECT_MANAGER'].includes(userRole);
   const [files, setFiles] = useState([]), [voiceBusy, setVoiceBusy] = useState(false);
   const [draggingFiles, setDraggingFiles] = useState(false), dragDepth = useRef(0);
@@ -96,12 +99,25 @@ export default function BriaConversation({ userId = 'local-research-owner', user
     } catch (failure) { console.error('[BriaConversation]', failure.message); setError(failure.message); setQuestion(value); setChat(liveChat.current); }
     finally { setBusy(false); lock.current = false; input.current?.focus({ preventScroll: true }); }
   };
+  const removeChat = async row => {
+    if (lock.current || loading || voiceBusy) return;
+    const accepted = await confirm({ title: 'Borrar conversación', description: 'Se borrarán definitivamente el chat y sus archivos. Lo que Bria aprendió se conserva.', confirmLabel: 'Borrar definitivamente', layer: 300 });
+    if (!accepted || lock.current || loading || voiceBusy) return;
+    lock.current = true; setBusy(true); setError('');
+    try {
+      const result = await request(`/${row.id}`, { method: 'DELETE', body: { expectedRevision: row.revision } });
+      setHistory(current => current.filter(item => item.id !== row.id));
+      if (liveChat.current?.id === row.id) { liveChat.current = null; setChat(null); sessionStorage.removeItem(key); setQuestion(''); setFiles([]); setView('chat'); }
+      toast.success(result.filesPending ? 'Chat eliminado; sus archivos se están borrando.' : 'Conversación y archivos eliminados.');
+    } catch (failure) { setError(failure.message); }
+    finally { setBusy(false); lock.current = false; }
+  };
   const sourceClick = (event, source) => {
     const url = safeSource(source.url);
     if (source.kind === 'aprendizaje') { event.preventDefault(); if (isAdmin) setView('memory'); }
     else if (url?.startsWith('/') && onOpenSource) { event.preventDefault(); onOpenSource(source); }
   };
-  const conversationList = <div className="flex min-h-0 flex-1 flex-col p-3"><button type="button" onClick={newChat} disabled={busy || loading || voiceBusy} className="flex min-h-11 items-center gap-2 rounded-xl bg-brand-cyan-soft px-3 text-left text-sm text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan"><Edit className="h-4 w-4" />Nueva conversación</button><h2 className="mt-6 px-3 text-xs font-medium text-zinc-500 dark:text-zinc-400">Conversaciones</h2><ul className="mt-2 min-h-0 flex-1 overflow-y-auto">{history.map(row => <li key={row.id}><button type="button" disabled={busy || loading || voiceBusy} onClick={() => openChat(row.id)} aria-current={chat?.id === row.id ? 'true' : undefined} className={cn('min-h-11 w-full truncate rounded-xl px-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800', chat?.id === row.id && 'bg-zinc-100 dark:bg-zinc-800')}>{row.title}</button></li>)}</ul>{isAdmin && <button type="button" onClick={() => setView('memory')} className="mt-3 flex min-h-11 items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><Brain className="h-4 w-4" />Registro</button>}</div>;
+  const conversationList = <div className="flex min-h-0 flex-1 flex-col p-3"><button type="button" onClick={newChat} disabled={busy || loading || voiceBusy} className="flex min-h-11 items-center gap-2 rounded-xl bg-brand-cyan-soft px-3 text-left text-sm text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan"><Edit className="h-4 w-4" />Nueva conversación</button><h2 className="mt-6 px-3 text-xs font-medium text-zinc-500 dark:text-zinc-400">Conversaciones</h2><ul className="mt-2 min-h-0 flex-1 overflow-y-auto">{history.map(row => <li key={row.id} className="flex items-center gap-1"><button type="button" disabled={busy || loading || voiceBusy} onClick={() => openChat(row.id)} aria-current={chat?.id === row.id ? 'true' : undefined} className={cn('min-h-11 min-w-0 flex-1 truncate rounded-xl px-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800', chat?.id === row.id && 'bg-zinc-100 dark:bg-zinc-800')}>{row.title}</button><button type="button" aria-label={`Borrar conversación: ${row.title}`} title="Borrar conversación" disabled={busy || loading || voiceBusy} onClick={() => removeChat(row)} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-zinc-500 hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-destructive disabled:opacity-40 dark:text-zinc-400 dark:hover:text-destructive"><Trash2 className="h-4 w-4" /></button></li>)}</ul>{isAdmin && <button type="button" onClick={() => setView('memory')} className="mt-3 flex min-h-11 items-center gap-2 rounded-xl px-3 text-left text-sm hover:bg-zinc-100 dark:hover:bg-zinc-800"><Brain className="h-4 w-4" />Registro</button>}</div>;
   return <section aria-label="Conversación con Bria" onDragEnter={dragEnter} onDragLeave={dragLeave} onDragOver={dragOver} onDrop={dropFiles} className="relative flex h-full min-h-0 flex-col overflow-hidden bg-white text-zinc-900 dark:bg-zinc-950 dark:text-zinc-100">
     {draggingFiles && <div role="status" className="pointer-events-none absolute inset-x-3 bottom-3 top-20 z-10 flex items-center justify-center rounded-2xl border-2 border-dashed border-brand-cyan bg-white/95 p-6 text-center text-sm font-medium text-brand-cyan-deep dark:bg-zinc-950/95 dark:text-brand-cyan">Suelta los archivos para adjuntarlos</div>}
     <header className="brain-ai-header flex h-16 shrink-0 items-center gap-1 px-3 text-white">

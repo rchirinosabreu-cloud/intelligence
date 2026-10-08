@@ -61,6 +61,12 @@ export async function createBriaPreview({ port = 3720 } = {}) {
   const media = multer({ storage: multer.memoryStorage() });
   api.post('/api/bria/conversations/dictation', media.single('audio'), (_req, res) => res.json({ text: 'Este es un dictado de prueba.' }));
   api.get('/api/bria/conversations/:id', (req, res) => chats.has(req.params.id) ? res.json(chats.get(req.params.id)) : res.status(404).json({ message: 'Conversación no encontrada.' }));
+  api.delete('/api/bria/conversations/:id', (req, res) => {
+    const row = chats.get(req.params.id);
+    if (!row) return res.status(404).json({ message: 'Conversación no encontrada.' });
+    if (row.revision !== req.body?.expectedRevision) return res.status(409).json({ message: 'La conversación cambió.' });
+    chats.delete(row.id); return res.json({ deleted: true, filesPending: false });
+  });
   api.post('/api/bria/conversations/:id/messages', media.array('files', 5), async (req, res) => {
     const row = chats.get(req.params.id);
     if (!row) return res.status(404).json({ message: 'Conversación no encontrada.' });

@@ -1,3 +1,4 @@
+import { ConfirmDialogProvider } from '../../src/components/ui/ConfirmDialog.jsx';
 import React, { useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Link, useLocation } from 'react-router-dom';
@@ -31,4 +32,4 @@ function Preview() {
     </main>
   </div>;
 }
-createRoot(document.getElementById('root')).render(<BrowserRouter><BrainToaster /><Preview /></BrowserRouter>);
+createRoot(document.getElementById('root')).render(<ConfirmDialogProvider><BrowserRouter><BrainToaster /><Preview /></BrowserRouter></ConfirmDialogProvider>);

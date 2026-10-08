@@ -68,7 +68,7 @@ export const createServiceHealthProbes = ({
   clock = () => Date.now(),
   createS3Client = (config) => new S3Client({
     endpoint: config.endpoint,
-    region: 'us-east-1',
+    region: config.region || 'us-east-1',
     forcePathStyle: true,
     credentials: { accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey }
   }),
@@ -111,9 +111,9 @@ export const createServiceHealthProbes = ({
     ? result('WARN', `Responde, pero lento (${(latencyMs / 1000).toFixed(1)} s).`, { latencyMs })
     : result('OK', okMessage, { latencyMs }));
 
-  const s3Probe = async ({ endpoint, accessKeyId, secretAccessKey, bucket }) => {
+  const s3Probe = async ({ endpoint, accessKeyId, secretAccessKey, bucket, region }) => {
     if (!accessKeyId || !secretAccessKey || !bucket) return null;
-    const client = createS3Client({ endpoint, accessKeyId, secretAccessKey });
+    const client = createS3Client({ endpoint, accessKeyId, secretAccessKey, ...(region ? { region } : {}) });
     try {
       const { latencyMs } = await timed(() => withTimeout(client.send(new HeadBucketCommand({ Bucket: bucket }))));
       return slowOrOk(latencyMs, SLOW.http, `El bucket «${bucket}» responde.`);
@@ -139,6 +139,14 @@ export const createServiceHealthProbes = ({
         const body = await readJson(response);
         if (response.status === 404) return fail({ critical: true, errorCode: 'HTTP_404', message: `El modelo «${model}» no existe o la cuenta no tiene acceso.` });
         return fail(classifyHttpFailure(response.status, { code: body?.error?.code }));
+      }
+      if (env.BRIA_CHAT_MODEL && env.BRIA_CHAT_MODEL !== model) {
+        const chatResponse = await get(`https://api.openai.com/v1/models/${encodeURIComponent(env.BRIA_CHAT_MODEL)}`, { Authorization: `Bearer ${env.OPENAI_API_KEY}` });
+        if (!chatResponse.ok) {
+          const body = await readJson(chatResponse);
+          if (chatResponse.status === 404) return fail({ critical: true, errorCode: 'HTTP_404', message: `El modelo de Bria «${env.BRIA_CHAT_MODEL}» no está disponible.` });
+          return fail(classifyHttpFailure(chatResponse.status, { code: body?.error?.code }));
+        }
       }
       const [errorRate, waitingMinutes] = await Promise.all([
         recentErrorRate('openai'),
@@ -244,6 +252,11 @@ export const createServiceHealthProbes = ({
         bucket: env.AWS_S3_BUCKET_NAME || 'chat-evidence'
       });
       return outcome || notConfigured('Faltan las credenciales del almacenamiento.');
+    },
+
+    async 'storage-bria'() {
+      const outcome = await s3Probe({ endpoint: env.BRIA_CHAT_STORAGE_ENDPOINT, bucket: env.BRIA_CHAT_STORAGE_BUCKET, accessKeyId: env.BRIA_CHAT_STORAGE_ACCESS_KEY_ID, secretAccessKey: env.BRIA_CHAT_STORAGE_SECRET_ACCESS_KEY, region: env.BRIA_CHAT_STORAGE_REGION || 'auto' });
+      return outcome || notConfigured('Faltan las credenciales de los archivos de Bria.');
     },
 
     async 'storage-memory'() {

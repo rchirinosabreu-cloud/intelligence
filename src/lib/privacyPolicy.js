@@ -14,4 +14,6 @@
 // 2.5 (7 de octubre de 2026): historial de conversaciones de Bria y recuerdos que la persona
 // enseña explícitamente, separados del estado operativo y del entrenamiento del proveedor.
 // 2.6 (7 de octubre de 2026): dictado voluntario y adjuntos privados de la conversación.
-export const PRIVACY_POLICY_VERSION = '2.6 · 2026-10-07';
+// 2.7 (7 de octubre de 2026): borrado definitivo de chats, almacenamiento dedicado
+// y conservación independiente de los recuerdos explícitos.
+export const PRIVACY_POLICY_VERSION = '2.7 · 2026-10-07';

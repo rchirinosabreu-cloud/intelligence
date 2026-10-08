@@ -23,6 +23,9 @@ import { briaAssistantTools } from '../src/services/briaAssistantTools.js';
 import { createBriaConversationRepository } from '../src/services/briaConversationRepository.js';
 import { createBriaConversationService } from '../src/services/briaConversationService.js';
 import { createBriaConversationRouter } from '../src/routes/api/briaConversations.js';
+import { createBriaModelRuntime } from '../src/services/briaModelRuntime.js';
+import { getBriaChatStorage } from '../src/services/briaChatStorage.js';
+import { startBriaChatPurgeWorker } from '../src/services/briaChatPurge.js';
 
 const directory = process.env.BRIA_RESEARCH_DIRECTORY;
 if (!directory) throw new Error('Indica BRIA_RESEARCH_DIRECTORY con la carpeta privada de lectura.');
@@ -48,8 +51,7 @@ const governance = createGovernanceService({ pool: createResearchGovernancePool(
 const ai = createOpenAIClient({ apiKey: config.OPENAI_API_KEY, models: { chat: config.OPENAI_MODEL_CHAT || config.OPENAI_MODEL || 'gpt-5.6-terra' }, governance, usageLog: { record } });
 const knowledgePool = new pg.Pool({ connectionString: config.DATABASE_URL, max: 3, connectionTimeoutMillis: 5000, idleTimeoutMillis: 10000 });
 if (!(await knowledgePool.query("SELECT to_regclass('bria_memory.learnings') IS NOT NULL AS ready")).rows[0].ready) await knowledgePool.query(await readFile(new URL('./sql/bria-knowledge.sql', import.meta.url), 'utf8'));
-if (!(await knowledgePool.query("SELECT to_regclass('bria_memory.conversations') IS NOT NULL AS ready")).rows[0].ready) await knowledgePool.query(await readFile(new URL('./sql/bria-conversations.sql', import.meta.url), 'utf8'));
-if (!(await knowledgePool.query("SELECT to_regclass('bria_memory.conversation_attachments') IS NOT NULL AS ready")).rows[0].ready) await knowledgePool.query(await readFile(new URL('./sql/bria-conversations.sql', import.meta.url), 'utf8'));
+await knowledgePool.query(await readFile(new URL('./sql/bria-conversations.sql', import.meta.url), 'utf8'));
 const persisted = createBriaKnowledgeRepository({ pool: knowledgePool, workspace: 'research:social.brainstudio@gmail.com' });
 const resolveOwner = async user => {
   if (!canUseBria(user)) throw Object.assign(new Error('Bria no está activada.'), { status: 403 });
@@ -58,8 +60,11 @@ const resolveOwner = async user => {
 const knowledge = createBriaKnowledgeService({ repository: persisted, resolveActor: resolveOwner });
 const documents = { ...repo, search: async (...args) => (await persisted.status()).latestImport?.status === 'COMPLETED' ? persisted.search(...args) : repo.search(...args), read: async (...args) => (await persisted.status()).latestImport?.status === 'COMPLETED' ? persisted.read(...args) : repo.read(...args), overview: async user => ({ ...await repo.overview(user), database: await persisted.status() }) };
 const platform = { tools: briaAssistantTools.filter(tool => ['buscar_cliente','parrilla_de_cliente','leer_piezas_de_parrilla'].includes(tool.name)), context: { db: createResearchPlatformReadAdapter({ pool: policyPool }) } };
-const chat = createBriaResearchChatService({ repository: documents, ai, knowledge, platform });
-const conversations = createBriaConversationService({ repository: createBriaConversationRepository({ pool: knowledgePool, workspace: persisted.workspace }), resolveActor: resolveOwner, assistant: chat, ai });
+// A fresh bounded runtime per turn; an idle preview must not inherit an expired deadline.
+const chat = createBriaResearchChatService({ repository: documents, ai: user => createBriaModelRuntime({ ai, env: { ...config, ...process.env }, user }), knowledge, platform });
+const storage = getBriaChatStorage({ ...config, ...process.env });
+startBriaChatPurgeWorker({ pool: knowledgePool, storage });
+const conversations = createBriaConversationService({ repository: createBriaConversationRepository({ pool: knowledgePool, storage, workspace: persisted.workspace }), resolveActor: resolveOwner, assistant: chat, ai });
 app.use('/api', (req, res, next) => {
   if (!String(req.headers.cookie || '').split(';').some((part) => part.trim() === `bria_preview=${session}`)) return res.sendStatus(401);
   req.user = { id: 'local-research-owner', role: 'ADMIN', isActive: true, modulePermissions: { bria: true, parrillas: true } };
