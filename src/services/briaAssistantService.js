@@ -9,6 +9,10 @@ import { clientOperationsService } from './clientOperationsService.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { normalizeHistory, normalizeQuestion, runAssistant } from '../lib/briaAssistant.js';
 import { briaAssistantTools } from './briaAssistantTools.js';
+import { canUseBria } from '../lib/briaLivingMemory.js';
+import { getApplicationKnowledgeService } from './briaKnowledgeApplication.js';
+import { createKnowledgeTools } from './briaKnowledgeTools.js';
+import { searchAgencyMemory, readAgencyMemory } from './briaLivingService.js';
 
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
 
@@ -16,6 +20,7 @@ export const createBriaAssistantService = ({
   db = prisma,
   ai = getAIInstance,
   tools = briaAssistantTools,
+  knowledge = getApplicationKnowledgeService,
   now = () => new Date(),
   logger = console,
   context = {}
@@ -23,9 +28,14 @@ export const createBriaAssistantService = ({
   const loadPerson = async (user) => {
     const row = await db.user.findUnique({
       where: { id: user?.userId || user?.id || '' },
-      select: { id: true, name: true, role: true, teamMember: { select: { id: true, name: true, role: true } } }
+      select: { id: true, name: true, role: true, isActive: true, modulePermissions: true, sessionVersion: true, teamMember: { select: { id: true, name: true, role: true, isActive: true } } }
     });
     if (!row) throw httpError(401, 'No encontramos tu cuenta.', 'USER_NOT_FOUND');
+    if (!canUseBria(row) || !row.teamMember?.isActive) throw httpError(403, 'Bria no está activada para tu cuenta.', 'BRIA_DISABLED');
+    if (row.sessionVersion !== (user.sessionVersion ?? 0)) throw httpError(401, 'Tu sesión ya no está activa.', 'TOKEN_REVOKED');
+    if (user.exp && user.exp * 1000 <= Date.now()) throw httpError(401, 'Tu sesión ya no está activa.', 'TOKEN_REVOKED');
+    // Refresh module permissions before the next tool; a revoked permission cannot survive in an old token.
+    Object.assign(user, { role: row.role, modulePermissions: row.modulePermissions });
     return {
       userId: row.id,
       name: row.teamMember?.name || row.name || 'colega',
@@ -36,24 +46,28 @@ export const createBriaAssistantService = ({
   };
 
   return {
-    async ask({ user, question, history } = {}) {
+    async ask({ user, question, history, attachments = [] } = {}) {
+      if (!canUseBria(user)) throw httpError(403, 'Bria no está activada para tu cuenta.', 'BRIA_DISABLED');
       const text = normalizeQuestion(question);
       if (!text) throw httpError(400, 'Escribe una pregunta.', 'BRIA_QUESTION_REQUIRED');
       const client = typeof ai === 'function' ? ai() : ai;
       if (!client) throw httpError(503, 'Bria no está disponible en este momento.', 'OPENAI_NOT_AVAILABLE');
       const person = await loadPerson(user);
+      const revalidate = async () => { await loadPerson(user); };
       const result = await runAssistant({
         question: text,
         history: normalizeHistory(history),
+        attachments,
         user,
         person,
-        tools,
+        tools: [...tools, ...createKnowledgeTools(typeof knowledge === 'function' ? knowledge() : knowledge)],
         ai: client,
         today: bogotaDate(now()),
         logger,
-        context: { db, getTasks, searchMemory: searchBriaMemory, operations: clientOperationsService, now, ...context }
+        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, now, ...context, revalidate }
       });
       // El motivo técnico de un fallo se queda en el registro del servidor; al navegador solo va qué falló.
+      await revalidate();
       return { ...result, failures: result.failures.map(({ tool }) => ({ tool })) };
     }
   };

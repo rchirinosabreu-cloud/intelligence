@@ -34,6 +34,7 @@ export default function Team() {
   const [systemRole, setSystemRole] = useState('VIEWER');
   const [financialRole, setFinancialRole] = useState('NONE');
   const [modulePermissions, setModulePermissions] = useState({
+    bria: false,
     manager: false,
     gestion: false,
     actividad: false,
@@ -118,7 +119,7 @@ export default function Team() {
       };
     }
 
-    setModulePermissions(presets);
+    setModulePermissions({ ...presets, bria: false });
   };
 
   const fetchTeam = async () => {
@@ -153,6 +154,7 @@ export default function Team() {
       const userRole = member.user?.role || 'VIEWER';
       const rawPerms = member.user?.modulePermissions || {};
       const userPerms = {
+        bria: rawPerms.bria === true,
         manager: !!(rawPerms.manager || rawPerms.Manager),
         gestion: !!(rawPerms.gestion || rawPerms.Tareas),
         actividad: !!(rawPerms.actividad || rawPerms.Actividad),
@@ -300,7 +302,7 @@ export default function Team() {
               key={member.id}
               className={cn(
                 "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-2xl p-6 relative group transition-all",
-                member.isActive ? "" : "border-red-300 dark:border-red-800 opacity-60 grayscale"
+                member.isActive ? "" : "border-destructive/30 opacity-60 grayscale"
               )}
             >
               {/* Dropdown Menu Toggle (Hover Actions for now to keep it simple without full Radix Dropdown) */}
@@ -327,7 +329,7 @@ export default function Team() {
                     className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400"
                     title={member.isActive ? "Desactivar" : "Reactivar"}
                   >
-                    {member.isActive ? <UserX size={16} className="text-red-400 hover:text-red-600 dark:hover:text-red-400" /> : <UserCheck size={16} className="text-green-400 hover:text-green-600 dark:hover:text-green-400" />}
+                    {member.isActive ? <UserX size={16} className="text-destructive hover:text-destructive/80" /> : <UserCheck size={16} className="text-status-positive hover:text-status-positive/80" />}
                   </button>
                 </div>
               )}
@@ -350,7 +352,7 @@ export default function Team() {
                     {member.role}
                   </span>
                   {!member.isActive && (
-                    <span className="text-xs text-red-500 dark:text-red-400 block mt-2 font-medium uppercase tracking-wider">
+                    <span className="text-xs text-destructive block mt-2 font-medium uppercase tracking-wider">
                       Inactivo
                     </span>
                   )}
@@ -423,8 +425,9 @@ export default function Team() {
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">URL de avatar (opcional)</label>
+              <label htmlFor="team-avatar-url" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">URL de avatar (opcional)</label>
               <input
+                id="team-avatar-url"
                 type="text"
                 value={avatarUrl}
                 onChange={(e) => setAvatarUrl(e.target.value)}
@@ -437,8 +440,9 @@ export default function Team() {
             {email && email.trim() !== '' && (
               <div className="space-y-4 p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
                 <div>
-                  <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Rol de Permisos del Sistema</label>
+                  <label htmlFor="team-system-role" className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Rol de Permisos del Sistema</label>
                   <Select
+                    id="team-system-role"
                     value={systemRole}
                     onChange={(e) => handleRolePresetChange(e.target.value)}
                     className="w-full bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-xs font-bold focus:ring-2 ring-primary/50 text-zinc-900 dark:text-white"
@@ -453,7 +457,7 @@ export default function Team() {
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Permisos por Módulo</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {Object.keys(modulePermissions).map((module) => {
+                    {Object.keys(modulePermissions).filter((module) => module !== 'bria').map((module) => {
                       const displayNames = {
                         manager: "Manager",
                         gestion: "Gestión (Tareas)",
@@ -493,6 +497,7 @@ export default function Team() {
                       );
                     })}
                   </div>
+                  {['ADMIN', 'PROJECT_MANAGER'].includes(systemRole) && <label className="mt-3 flex min-h-11 items-center gap-3 rounded-xl border border-brand-cyan/30 bg-brand-cyan/5 p-3 text-sm text-zinc-700 dark:text-zinc-200"><input type="checkbox" checked={modulePermissions.bria === true} onChange={(event) => setModulePermissions((prev) => ({ ...prev, bria: event.target.checked }))} className="h-4 w-4 text-primary focus:ring-primary" /><span>Activar Bria para esta persona</span></label>}
                 </div>
                 {(systemRole === 'ADMIN' || modulePermissions.financiero) && (
                   <div>

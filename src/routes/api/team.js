@@ -34,6 +34,7 @@ router.get('/', async (req, res) => {
 });
 
 const defaultPermissions = {
+    bria: false,
     dashboard: true,
     manager: false,
     gestion: false,
@@ -60,7 +61,7 @@ const sanitizePermissions = (perms) => {
         if (lowerKey === 'tareas') targetKey = 'gestion';
 
         if (targetKey in defaultPermissions) {
-            sanitized[targetKey] = !!perms[key];
+            sanitized[targetKey] = targetKey === 'bria' ? perms[key] === true : !!perms[key];
         }
     });
     sanitized.dashboard = true;
@@ -97,6 +98,7 @@ router.post('/', async (req, res) => {
     }
 
     const sanitizedPerms = sanitizePermissions(modulePermissions);
+    if (!isManagerRole(systemRole || 'VIEWER')) sanitizedPerms.bria = false;
     const hasFinancialAccess = resolveFinancialAccessFlag(systemRole || 'VIEWER', sanitizedPerms);
     const resolvedFinancialRole = resolveFinancialRole(systemRole || 'VIEWER', financialRole, sanitizedPerms);
     const credential = email?.trim() ? await createInitialCredential() : null;
@@ -208,6 +210,7 @@ router.put('/:id', async (req, res) => {
             const nextPermissions = modulePermissions === undefined
                 ? (currentMember.user?.modulePermissions || defaultPermissions)
                 : sanitizePermissions(modulePermissions);
+            if (!isManagerRole(nextSystemRole)) nextPermissions.bria = false;
             const hasFinancialAccess = resolveFinancialAccessFlag(nextSystemRole, nextPermissions);
             const resolvedFinancialRole = resolveFinancialRole(
                 nextSystemRole,

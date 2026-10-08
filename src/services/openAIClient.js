@@ -6,7 +6,8 @@ const DEFAULT_MODELS = Object.freeze({
   fast: 'gpt-5.6-luna',
   vision: 'gpt-5.6-terra',
   embedding: 'text-embedding-3-large',
-  memoryEmbedding: 'text-embedding-3-small'
+  memoryEmbedding: 'text-embedding-3-small',
+  transcription: 'gpt-4o-mini-transcribe'
 });
 
 const normalizeSchema = (value) => {
@@ -162,11 +163,12 @@ export const createOpenAIClient = ({
   apiKey = process.env.OPENAI_API_KEY,
   fetchImpl = globalThis.fetch,
   governance,
+  usageLog,
   models = {},
   requestTimeoutMs = 90000
 } = {}) => {
   const selectedModels = { ...DEFAULT_MODELS, ...models };
-  const send = createGovernedFetch({ fetchImpl, governance });
+  const send = createGovernedFetch({ fetchImpl, governance, usageLog });
 
   const request = async (path, body, signal, governanceContext, technicalProbe = false) => {
     if (!apiKey) throw new OpenAIRequestError('OPENAI_API_KEY no está configurada.', { code: 'OPENAI_NOT_CONFIGURED' });
@@ -179,11 +181,11 @@ export const createOpenAIClient = ({
       const response = await (technicalProbe ? fetchImpl : send)(`${OPENAI_API_BASE_URL}${path}`, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          ...(!(body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}),
           Authorization: `Bearer ${apiKey}`,
           'User-Agent': 'BrainStudioIntelligence/3.0'
         },
-        body: JSON.stringify(body),
+        body: body instanceof FormData ? body : JSON.stringify(body),
         signal: requestSignal,
         redirect: 'error',
         ...(!technicalProbe ? { governanceContext } : {})
@@ -292,6 +294,16 @@ export const createOpenAIClient = ({
     },
     generate,
     embed,
+    async transcribe({ buffer, mime = 'audio/webm', name = 'dictado.webm', signal }) {
+      const form = new FormData();
+      form.set('model', selectedModels.transcription);
+      form.set('language', 'es');
+      form.set('response_format', 'json');
+      form.set('file', new Blob([buffer], { type: mime }), name);
+      const { payload } = await request('/audio/transcriptions', form, signal, { useCase: 'bria.dictation' });
+      if (typeof payload.text !== 'string' || !payload.text.trim()) throw new OpenAIRequestError('No se detectó voz. Intenta grabar de nuevo.', { status: 422, code: 'NO_SPEECH' });
+      return payload.text.trim();
+    },
     async healthCheck() {
       const startedAt = Date.now();
       // The only ungoverned probe has fixed content, with no caller-controlled input.

@@ -11,4 +11,7 @@
 // a grabar todas. La plataforma invita a Fred en toda reunión que crea, y la cuenta de Fireflies
 // está en «grabar todos los eventos de calendario con enlace». El texto anterior describía una
 // decisión reunión por reunión que ya no existe.
-export const PRIVACY_POLICY_VERSION = '2.4 · 2026-10-06';
+// 2.5 (7 de octubre de 2026): historial de conversaciones de Bria y recuerdos que la persona
+// enseña explícitamente, separados del estado operativo y del entrenamiento del proveedor.
+// 2.6 (7 de octubre de 2026): dictado voluntario y adjuntos privados de la conversación.
+export const PRIVACY_POLICY_VERSION = '2.6 · 2026-10-07';

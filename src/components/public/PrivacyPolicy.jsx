@@ -26,7 +26,7 @@ const Row = ({ cells, head = false }) => (
 
 const PROCESSORS = [
   ['Railway Corp.', 'Alojamiento de la plataforma, base de datos y almacenamiento de archivos', 'Estados Unidos'],
-  ['OpenAI, L.L.C.', 'Modelos de inteligencia artificial (análisis, resúmenes, revisión de contenidos, lectura de capturas de métricas, búsqueda en documentos)', 'Estados Unidos'],
+  ['OpenAI, L.L.C.', 'Modelos de inteligencia artificial (análisis, resúmenes, revisión de contenidos, lectura de capturas y archivos adjuntos, búsqueda en documentos y transcripción de dictados voluntarios)', 'Estados Unidos'],
   ['Google LLC', 'Correo, calendario, Meet, Drive y hojas de cálculo corporativos (Google Workspace); envío de correos transaccionales; almacenamiento y búsqueda de documentos (Google Cloud); tipografías web', 'Estados Unidos'],
   ['Fireflies.ai Corp.', 'Grabación y transcripción de las reuniones de trabajo de la agencia: su asistente se suma como participante visible a los eventos de calendario que tienen enlace de videollamada', 'Estados Unidos'],
   ['Meta Platforms, Inc.', 'Publicación de las piezas aprobadas en las cuentas de Instagram y Facebook de los clientes que las conectan (texto de la publicación y archivo de la pieza) y consulta de las estadísticas agregadas de esas cuentas y de sus campañas publicitarias para los reportes', 'Estados Unidos'],
@@ -68,7 +68,7 @@ const PrivacyPolicy = () => (
 
       <H3>Colaboradores y contratistas de Brainstudio</H3>
       <p>
-        <strong>Datos:</strong> identificación, datos de contacto, fotografía de perfil, cuenta de acceso, cargo y rol, tareas y tiempos de trabajo registrados, ausencias, retroalimentación y evaluación de desempeño, reconocimientos, conversaciones internas en la plataforma, y datos de pago (salario o honorarios, aportes, deducciones y cuenta bancaria).
+        <strong>Datos:</strong> identificación, datos de contacto, fotografía de perfil, cuenta de acceso, cargo y rol, tareas y tiempos de trabajo registrados, ausencias, retroalimentación y evaluación de desempeño, reconocimientos, conversaciones internas en la plataforma, conversaciones con Bria y decisiones o correcciones compartidas explícitamente para su memoria, y datos de pago (salario o honorarios, aportes, deducciones y cuenta bancaria).
         {' '}<strong>Finalidades:</strong> gestionar la relación laboral o contractual, organizar el trabajo, pagar la nómina o los honorarios, acompañar el desarrollo profesional, garantizar la seguridad del acceso y cumplir obligaciones legales.
       </p>
 
@@ -95,8 +95,11 @@ const PrivacyPolicy = () => (
         <li>convertir la transcripción de las reuniones en minutas con decisiones y compromisos;</li>
         <li>leer capturas de métricas de redes sociales y publicidad para elaborar reportes;</li>
         <li>buscar y resumir información en los documentos, minutas y correos corporativos de la agencia, a pedido de un integrante del equipo;</li>
+        <li>acompañar el trabajo mediante conversaciones con Bria, consultar registros actuales según los permisos de la persona y recordar las decisiones o correcciones que esta le enseñe explícitamente.</li>
         <li>proponer análisis de carga de trabajo y desempeño del equipo a partir de las tareas registradas.</li>
       </List>
+      <p>Las conversaciones con Bria se guardan para que su autor pueda retomarlas y consultar su historial. Los recuerdos conservan autor, fecha, alcance y cambios; una persona autorizada puede retirar un recuerdo para que deje de usarse. Esta memoria no entrena el modelo del proveedor ni modifica por sí sola una tarea o una parrilla. Para responder, se envía la pregunta, una parte acotada del diálogo y los fragmentos necesarios de las fuentes disponibles para esa persona.</p>
+      <p>El dictado se graba únicamente cuando la persona pulsa el micrófono y concede acceso en su navegador. El audio se envía a OpenAI para transcribirlo; la plataforma no conserva la grabación en su base de datos. El texto queda editable y solo se incorpora al historial cuando la persona lo envía. Los archivos adjuntos que Admin o Project Manager envían se conservan junto con su conversación, con acceso limitado a su autor mientras tenga Bria activada. Para analizarlos se envía el texto extraído y, cuando corresponde, una imagen adaptada o el PDF al proveedor. Se informa cuando la lectura es parcial o un formato no puede interpretarse; adjuntar un archivo no lo convierte automáticamente en conocimiento compartido.</p>
       <p>Garantías que aplicamos:</p>
       <List>
         <li>Bajo las condiciones del servicio por API, <strong>el proveedor no usa la información enviada para entrenar sus modelos</strong>.</li>

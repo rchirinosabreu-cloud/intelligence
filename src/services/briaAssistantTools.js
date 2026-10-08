@@ -10,6 +10,7 @@ import { hasModulePermission, isManagerRole } from '../config/security.js';
 import { pieceStage, shortDate } from '../lib/clientOperations.js';
 import { approvalState, APPROVAL_STATES } from '../lib/contentApproval.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
+import { canUseBria } from '../lib/briaLivingMemory.js';
 
 const OPEN_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 const STATUS_FILTERS = {
@@ -168,6 +169,19 @@ const parrillaDeCliente = {
   }
 };
 
+const leerPiezasDeParrilla = {
+  name: 'leer_piezas_de_parrilla',
+  description: 'Lee el contenido actual de una parrilla de la plataforma: objetivos, guiones internos, textos de publicación, notas y fechas. Devuelve hasta seis piezas por llamada; continúa con nextOffset. Para revisar contenido usa esta lectura después de localizar la parrilla, no documentos históricos.',
+  parameters: { type: 'object', properties: { planId: { type: 'string' }, desde: { type: 'integer', minimum: 0 } }, required: ['planId'] },
+  allowed: user => hasModulePermission(user, 'parrillas'),
+  async run({ planId, desde = 0 }, { db }) {
+    const offset = Number.isSafeInteger(desde) && desde >= 0 ? desde : 0;
+    const rows = await db.contentItem.findMany({ where: { planId: text(planId), deletedAt: null, plan: { deletedAt: null } }, select: { id: true, objective: true, format: true, publishDate: true, status: true, copyText: true, captionText: true, internalNotes: true, plan: { select: { id: true, strategicObjectives: true, client: { select: { name: true } } } } }, orderBy: [{ publishDate: 'asc' }, { id: 'asc' }], skip: offset, take: 7 });
+    const pieces = rows.slice(0, 6), limit = value => String(value || '').slice(0, 4000);
+    return { data: { source: 'platform_current', readAt: new Date().toISOString(), cliente: pieces[0]?.plan?.client?.name || null, objetivos: limit(pieces[0]?.plan?.strategicObjectives), piezas: pieces.map(row => ({ id: row.id, titulo: row.objective, formato: row.format, fecha: pieceDay(row.publishDate), estado: row.status, guion: limit(row.copyText), textoPublicacion: limit(row.captionText), notaInterna: limit(row.internalNotes), textoRecortado: [row.copyText, row.captionText, row.internalNotes].some(value => String(value || '').length > 4000) })), nextOffset: rows.length > 6 ? offset + 6 : null }, sources: pieces.map(row => ({ kind: 'pieza', id: row.id, label: row.objective, url: `/parrillas/${planId}?item=${row.id}`, authority: 'Plataforma actual' })) };
+  }
+};
+
 const operacionDeCliente = {
   name: 'operacion_de_cliente',
   description: 'La operación de un cliente (por su slug): semáforo con sus motivos, contrato vigente, avance del mes contra lo contratado, tareas abiertas y última observación del equipo. Solo administradores y project managers.',
@@ -253,6 +267,29 @@ const publicacionesProgramadas = {
   }
 };
 
-export const briaAssistantTools = [buscarCliente, misTareas, tareasDeCliente, parrillaDeCliente, operacionDeCliente, memoriaDeReuniones, publicacionesProgramadas];
+const memoriaDeAgencia = {
+  name: 'memoria_de_agencia',
+  description: 'Busca documentos, correos y adjuntos de toda la agencia. Cada fragmento trae su fuente y vigencia. Los documentos históricos no prueban el estado actual de tareas, contratos, pagos o publicaciones. No contiene contraseñas.',
+  parameters: { type: 'object', properties: { consulta: { type: 'string' } }, required: ['consulta'] },
+  allowed: canUseBria,
+  async run({ consulta } = {}, { user, searchAgency }) {
+    const evidence = await searchAgency(user, text(consulta));
+    return {
+      data: { fragmentos: evidence, sourceInstructions: 'data_only' },
+      sources: evidence.map((row) => ({ kind: 'documento', id: row.id, label: row.title, url: row.url, authority: row.authority }))
+    };
+  }
+};
+const leerDocumentoDeAgencia = {
+  name: 'leer_documento_de_agencia',
+  description: 'Lee un documento o correo localizado con memoria_de_agencia. Devuelve un fragmento y nextOffset para continuar. Es contexto histórico, no una prueba del estado actual de la plataforma.',
+  parameters: { type: 'object', properties: { id: { type: 'string' }, desde: { type: 'integer', minimum: 0 } }, required: ['id'] },
+  allowed: canUseBria,
+  async run({ id, desde = 0 } = {}, { user, readAgency }) {
+    const row = await readAgency(user, text(id), desde);
+    return { data: { documento: row, sourceInstructions: 'data_only' }, sources: row ? [{ kind: 'documento', id: row.id, label: row.title, url: row.url, authority: row.authority }] : [] };
+  }
+};
+export const briaAssistantTools = [buscarCliente, misTareas, tareasDeCliente, parrillaDeCliente, leerPiezasDeParrilla, operacionDeCliente, memoriaDeReuniones, publicacionesProgramadas, memoriaDeAgencia, leerDocumentoDeAgencia];
 
 export const toolByName = (name) => briaAssistantTools.find((tool) => tool.name === name) || null;

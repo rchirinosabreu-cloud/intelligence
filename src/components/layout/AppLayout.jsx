@@ -35,6 +35,7 @@ const AppLayout = ({ children }) => {
     return next;
   });
   const [chatDockWidth, setChatDockWidth] = useState(0);
+  const [briaDockWidth, setBriaDockWidth] = useState(0);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isReturnedTaskAlertBlocking, setIsReturnedTaskAlertBlocking] = useState(true);
   const [isOnboardingBlocking, setIsOnboardingBlocking] = useState(true);
@@ -276,7 +277,7 @@ const AppLayout = ({ children }) => {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
-            <BriaAssistant currentUser={currentUser} />
+            <BriaAssistant key={currentUser?.id} currentUser={currentUser} onDockWidthChange={setBriaDockWidth} />
             <ServiceHealthDot isAdmin={currentUser?.role === 'ADMIN'} />
             <Button
                 variant="ghost"
@@ -493,7 +494,7 @@ const AppLayout = ({ children }) => {
       )}
 
       {/* Main Content Area - z-0 (above background) */}
-      <main className={cn("relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8", isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64')} style={{ marginRight: chatDockWidth }}>
+      <main className={cn("relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8", isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64')} style={{ marginRight: Math.max(chatDockWidth, briaDockWidth) }}>
         {/* A short entrance, not a 700ms wash: the page should look loaded, not fading in (Rodny, 21 September 2026). */}
         <div className="mx-auto min-w-0 max-w-7xl space-y-8 animate-in fade-in duration-200">
           {recognitionExperience?.controls}

@@ -19,10 +19,10 @@ const allowedFor = (who) => briaAssistantTools.filter((tool) => tool.allowed(who
 
 test('each tool opens with the permission of its screen', () => {
   assert.deepEqual(allowedFor(editor), ['buscar_cliente', 'mis_tareas']);
-  assert.deepEqual(allowedFor(editorWithModules), ['buscar_cliente', 'mis_tareas', 'parrilla_de_cliente', 'publicaciones_programadas', 'tareas_de_cliente']);
+  assert.deepEqual(allowedFor(editorWithModules), ['buscar_cliente', 'leer_piezas_de_parrilla', 'mis_tareas', 'parrilla_de_cliente', 'publicaciones_programadas', 'tareas_de_cliente']);
   assert.deepEqual(allowedFor(pmWithoutManager), ['buscar_cliente', 'mis_tareas', 'operacion_de_cliente']);
   assert.deepEqual(allowedFor(pm), ['buscar_cliente', 'memoria_de_reuniones', 'mis_tareas', 'operacion_de_cliente']);
-  assert.deepEqual(allowedFor({ role: 'ADMIN' }), ['buscar_cliente', 'memoria_de_reuniones', 'mis_tareas', 'operacion_de_cliente', 'parrilla_de_cliente', 'publicaciones_programadas', 'tareas_de_cliente']);
+  assert.deepEqual(allowedFor({ role: 'ADMIN' }), ['buscar_cliente', 'leer_piezas_de_parrilla', 'memoria_de_reuniones', 'mis_tareas', 'operacion_de_cliente', 'parrilla_de_cliente', 'publicaciones_programadas', 'tareas_de_cliente']);
   for (const tool of briaAssistantTools) {
     assert.equal(tool.parameters.type, 'object', `${tool.name} declara sus parámetros`);
     assert.ok(tool.description.length > 20, `${tool.name} explica para qué sirve`);

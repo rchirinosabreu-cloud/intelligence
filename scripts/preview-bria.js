@@ -1,6 +1,8 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import express from 'express';
+import multer from 'multer';
+import { randomUUID } from 'node:crypto';
 import { createServer } from 'vite';
 
 // Muestra local de «Preguntarle a Bria» (6 de octubre de 2026): el componente real contra una API
@@ -48,6 +50,30 @@ const DEFAULT_ANSWER = { answer: 'No tengo esa información en la plataforma. Pu
 export async function createBriaPreview({ port = 3720 } = {}) {
   const api = express();
   api.use(express.json());
+  // Fictitious preview state only. Production uses the authenticated PostgreSQL repository.
+  const chats = new Map();
+  const rowSummary = ({ id, title, revision, updatedAt }) => ({ id, title, revision, updatedAt });
+  api.get('/api/bria/conversations', (_req, res) => res.json([...chats.values()].reverse().map(rowSummary)));
+  api.post('/api/bria/conversations', (_req, res) => {
+    const row = { id: randomUUID(), title: 'Nueva conversación', revision: 0, turns: [], updatedAt: new Date().toISOString() };
+    chats.set(row.id, row); res.status(201).json(row);
+  });
+  const media = multer({ storage: multer.memoryStorage() });
+  api.post('/api/bria/conversations/dictation', media.single('audio'), (_req, res) => res.json({ text: 'Este es un dictado de prueba.' }));
+  api.get('/api/bria/conversations/:id', (req, res) => chats.has(req.params.id) ? res.json(chats.get(req.params.id)) : res.status(404).json({ message: 'Conversación no encontrada.' }));
+  api.post('/api/bria/conversations/:id/messages', media.array('files', 5), async (req, res) => {
+    const row = chats.get(req.params.id);
+    if (!row) return res.status(404).json({ message: 'Conversación no encontrada.' });
+    const question = String(req.body?.question || '');
+    await wait(700);
+    if (/error/i.test(question)) return res.status(500).json({ message: 'Bria no pudo responder. Intenta de nuevo en un momento.' });
+    if (/bloque/i.test(question)) return res.status(403).json({ message: 'Uso de IA bloqueado: hay una empresa protegida. Revisa Gobierno de IA.' });
+    const found = ANSWERS.find(entry => entry.match.test(question)) || DEFAULT_ANSWER;
+    row.turns.push({ id: `${row.id}:${row.revision * 2}`, role: 'user', text: question, attachments: (req.files || []).map(file => ({ id: randomUUID(), name: file.originalname, size: file.size, status: 'READ' })) }, { id: `${row.id}:${row.revision * 2 + 1}`, role: 'assistant', text: found.answer, sources: found.sources || [], failures: found.failures || [] });
+    if (!row.revision) row.title = question.slice(0, 90);
+    row.revision++; row.updatedAt = new Date().toISOString(); res.json(row);
+  });
+  api.get('/api/bria/knowledge', (_req, res) => res.json([]));
   api.post('/api/bria/ask', async (req, res) => {
     const question = String(req.body?.question || '');
     await wait(700);
