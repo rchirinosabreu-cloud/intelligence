@@ -12,7 +12,7 @@ try {
   });
   await page.goto(`${preview.origin}/?abierta`);
   await page.getByLabel('Mensaje para Bria').fill('Prueba de formato');
-  await page.getByRole('button', { name: 'Enviar mensaje' }).click();
+  await page.getByLabel('Mensaje para Bria').press('Enter');
   const answer = page.locator('[data-conversation-turn="assistant"]').last();
   await answer.locator('table code').waitFor();
   for (const dark of [false, true]) {

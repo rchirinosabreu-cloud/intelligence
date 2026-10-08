@@ -20,6 +20,10 @@ El micrófono graba al pulsarlo y conceder permiso en el navegador. Se puede ter
 
 Solo Admin/Project Manager activados adjuntan: cinco archivos, 20 MB por archivo y 30 MB por envío. Originales y extractos se guardan de forma atómica con el turno en `bria_memory.conversation_attachments`, limitados a autor, workspace y sesión vigente. Los archivos sobreviven a la recarga, con descarga autenticada, y el envío fallido conserva el borrador.
 
+El botón superior de Bria alterna apertura/cierre sin borrar la conversación. Al abrirla, el menú de módulos se contrae al carril de iconos y foto, también al recuperar un panel abierto tras recargar. El micrófono circular ocupa la derecha del compositor; no hay botón de enviar. Enter envía y Shift+Enter crea una línea nueva. Los adjuntos se pueden elegir o arrastrar directamente al chat, con la misma validación y sin envío automático; un lote inválido no sustituye los adjuntos anteriores.
+
+La lista «Fuentes» se retiró. La API de conversaciones omite `turn.sources` en envío e historial sin modificar la procedencia interna que comprueba los permisos. Las respuestas pueden incluir enlaces operativos a tareas, piezas y parrillas autorizadas; el prompt evita ofrecer catálogos de correos y documentos de forma automática.
+
 Se leen texto, DOCX, XLS/XLSX/CSV/TSV/ODS y texto/notas de PPTX; PDF e imágenes compatibles usan también lectura visual. Los formatos sin lector, incluidos DOC/PPT antiguos, se conservan con aviso para convertirlos. Límites: 2.000 filas por hoja, 40.000 caracteres por archivo y 60.000 de contexto por respuesta. Se comprueba el tamaño de Office expandido y los píxeles de imágenes. Se utilizan los cinco adjuntos más recientes, priorizando los actuales; no equivale a leer toda una colección en cada consulta. Los adjuntos son evidencia, nunca permiso para guardar aprendizajes. La política de tratamiento sube a 2.6.
 
 ## Almacenamiento y permisos
@@ -39,7 +43,8 @@ La configuración verificada de producción usa `OPENAI_MODEL_CHAT=gpt-5.6-luna`
 ## Verificación
 
 - Recorrido real `tests/browser/briaConversation.mjs`: lectura de las doce piezas actuales, navegación conservando el panel, X/reapertura, recarga con historial PostgreSQL, pantalla completa, enseñanza PERSONAL ficticia por chat y recuperación en una conversación nueva, consulta de recuerdos, modos oscuro/móvil y recuperación del mensaje ante fallo. El recuerdo ficticio se retira al terminar.
-- Recorrido simulado sin DB/modelo `tests/browser/briaAssistant.mjs`: fuente/navegación, reapertura/recarga, pantalla completa, conversación nueva, errores y tema/móvil.
+- Recorrido simulado sin DB/modelo `tests/browser/briaAssistant.mjs`: alternancia del panel, enlaces operativos, ausencia de Fuentes, micrófono a la derecha, reapertura/recarga, pantalla completa, conversación nueva, errores y tema/móvil.
+- `tests/browser/briaLayout.mjs`: AppLayout y Sidebar reales, contracción a 80 px y borrador conservado al navegar y cerrar/reabrir; APIs simuladas, sin sesión productiva.
 - 96 pruebas actuales de lógica, permisos, UI y contratos compartidos; compilación Vite aprobada. Advertencias de dependencias y tamaño de bundles preexistentes siguen presentes.
 - `tests/browser/briaMedia.mjs`: API/micrófono simulados; menú por rol, geometría estable, adjuntos multipart, borrador conservado, dictado editable y liberación del micrófono al terminar, cancelar o cerrar con permiso pendiente.
 - `tests/browser/briaMediaLive.mjs`: API real; cinco formatos ficticios, visión de PDF/imagen, guardado tras recarga, descarga byte a byte, rechazo anónimo, contexto de archivos previos y temas/móvil. Dos llamadas al modelo y una transcripción real de voz sintética. No se grabó el micrófono del usuario.

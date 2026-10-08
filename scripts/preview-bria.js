@@ -13,7 +13,7 @@ const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const ANSWERS = [
   {
     match: /pendiente|tareas|tengo/i,
-    answer: 'Tienes tres tareas sin cerrar:\n- **Subir los videos de Nattal**, venció el 2 de octubre.\n- Guion del reel de Mimas, en proceso, con compromiso a las 15:00.\n- Carrusel de Endova, pendiente para el 9 de octubre.\n\nLa primera ya está vencida; conviene atenderla hoy.',
+    answer: 'Tienes tres tareas sin cerrar:\n- [**Subir los videos de Nattal**](/gestion?taskId=t1), venció el 2 de octubre.\n- Guion del reel de Mimas, en proceso, con compromiso a las 15:00.\n- Carrusel de Endova, pendiente para el 9 de octubre.\n\nLa primera ya está vencida; conviene atenderla hoy.',
     sources: [
       { kind: 'tarea', id: 't1', label: 'Subir los videos de Nattal', url: '/gestion?taskId=t1' },
       { kind: 'tarea', id: 't2', label: 'Guion del reel de Mimas', url: '/gestion?taskId=t2' },

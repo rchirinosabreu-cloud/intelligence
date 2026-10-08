@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense } from 'react';
+import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { RouteErrorBoundary } from '@/components/errors/ApplicationErrorBoundary';
 import TeamChat from '@/components/chat/TeamChat';
 import Sidebar from './Sidebar';
@@ -36,6 +36,9 @@ const AppLayout = ({ children }) => {
   });
   const [chatDockWidth, setChatDockWidth] = useState(0);
   const [briaDockWidth, setBriaDockWidth] = useState(0);
+  const onBriaOpenChange = useCallback(open => {
+    if (open) { setIsSidebarCollapsed(true); setIsSidebarOpen(false); }
+  }, []);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
   const [isReturnedTaskAlertBlocking, setIsReturnedTaskAlertBlocking] = useState(true);
   const [isOnboardingBlocking, setIsOnboardingBlocking] = useState(true);
@@ -277,7 +280,7 @@ const AppLayout = ({ children }) => {
           </div>
 
           <div className="flex items-center gap-2 lg:gap-4">
-            <BriaAssistant key={currentUser?.id} currentUser={currentUser} onDockWidthChange={setBriaDockWidth} />
+            <BriaAssistant key={currentUser?.id} currentUser={currentUser} onDockWidthChange={setBriaDockWidth} onOpenChange={onBriaOpenChange} />
             <ServiceHealthDot isAdmin={currentUser?.role === 'ADMIN'} />
             <Button
                 variant="ghost"

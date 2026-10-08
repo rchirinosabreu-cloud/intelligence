@@ -28,6 +28,23 @@ try {
   await panel.getByRole('heading', { name: 'Registro', exact: true }).waitFor();
   await page.getByRole('button', { name: 'Volver a la conversación' }).click();
   const input = page.getByLabel('Mensaje para Bria');
+  const drop = async names => {
+    const transfer = await page.evaluateHandle(names => { const data = new DataTransfer(); names.forEach(name => data.items.add(new File(['Contenido de prueba'], name, { type: 'text/plain' }))); return data; }, names);
+    await panel.dispatchEvent('dragenter', { dataTransfer: transfer });
+    await panel.dispatchEvent('dragover', { dataTransfer: transfer });
+    await panel.dispatchEvent('drop', { dataTransfer: transfer });
+    await transfer.dispose();
+  };
+  await input.fill('Un borrador que debe conservarse.');
+  await drop(['arrastrado.txt']);
+  assert.equal(await panel.getByRole('button', { name: 'Quitar arrastrado.txt' }).count(), 1, 'dropping a file attaches it without sending');
+  assert.equal(await input.inputValue(), 'Un borrador que debe conservarse.');
+  assert.equal(await page.locator('[data-conversation-turn]').count(), 0);
+  await drop(['1.txt', '2.txt', '3.txt', '4.txt', '5.txt']);
+  await page.getByRole('alert').waitFor();
+  assert.match(await page.getByRole('alert').textContent(), /hasta 5/);
+  assert.equal(await panel.getByRole('list', { name: 'Archivos por enviar' }).locator('li').count(), 1, 'invalid drop preserves prior attachments');
+  await panel.getByRole('button', { name: 'Quitar arrastrado.txt' }).click();
   await page.locator('input[type=file]').setInputFiles({ name: 'brief.txt', mimeType: 'text/plain', buffer: Buffer.from('Fecha de prueba: jueves. No son datos de un cliente.') });
   await panel.getByRole('button', { name: 'Quitar brief.txt' }).waitFor();
   await input.fill('esto da error'); await input.press('Enter'); await ready();
@@ -66,6 +83,8 @@ try {
   assert.deepEqual(await page.getByRole('menuitem').allTextContents(), ['Chat', 'Historial']);
   await page.keyboard.press('Escape');
   assert.equal(await page.getByRole('button', { name: 'Adjuntar archivos', exact: true }).count(), 1, 'PM may attach');
+  await drop(['pm.txt']);
+  assert.equal(await panel.getByRole('button', { name: 'Quitar pm.txt' }).count(), 1, 'PM may drop');
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ passed: true, simulatedApi: true, checks: ['Admin menu', 'PM registry hidden', 'Stable geometry', 'Multipart attachments', 'Failed draft preserved', 'Editable dictation', 'Microphone released'] }));
+  console.log(JSON.stringify({ passed: true, simulatedApi: true, checks: ['Admin menu', 'PM registry hidden', 'Stable geometry', 'Drag-and-drop for admin/PM', 'Invalid drop preserves draft', 'Multipart attachments', 'Failed draft preserved', 'Editable dictation', 'Microphone released'] }));
 } finally { await browser.close(); await preview.close(); }

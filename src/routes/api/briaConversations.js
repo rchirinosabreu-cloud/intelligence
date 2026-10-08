@@ -10,7 +10,11 @@ export const createBriaConversationRouter = ({ service } = {}) => {
   router.use((req, res, next) => canUseBria(req.user) ? next() : res.status(403).json({ message: 'Bria no está activada para tu cuenta.' }));
   router.use(createRateLimiter({ windowMs: 60000, max: 40, keyGenerator: req => req.user?.userId || req.user?.id || req.ip }));
   const handle = work => async (req, res) => {
-    try { res.json(await work(req, await resolve())); }
+    try {
+      const result = await work(req, await resolve());
+      // Preserve provenance in the service for fresh authorization, never expose its catalogue in chat.
+      res.json(result?.turns ? { ...result, turns: result.turns.map(({ sources: _sources, ...turn }) => turn) } : result);
+    }
     catch (failure) { const status = Number.isInteger(failure.status) ? failure.status : 500; if (status === 500) console.error('[BriaConversation]', failure.code || failure.name); res.status(status).json({ message: status === 500 ? 'No se pudo abrir o continuar la conversación.' : failure.message }); }
   };
   const receive = middleware => (req, res, next) => middleware(req, res, error => {
