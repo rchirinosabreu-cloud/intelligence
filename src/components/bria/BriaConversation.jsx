@@ -101,7 +101,7 @@ export default function BriaConversation({ userId = 'local-research-owner', user
   };
   const removeChat = async row => {
     if (lock.current || loading || voiceBusy) return;
-    const accepted = await confirm({ title: 'Borrar conversación', description: 'Se borrarán definitivamente el chat y sus archivos.\nLo que Bria aprendió se conserva.', confirmLabel: 'Borrar definitivamente', showIcon: false, layer: 300 });
+    const accepted = await confirm({ title: 'Borrar conversación', description: 'Se borrarán definitivamente el chat y sus archivos.\nLo que Bria aprendió se conserva.', confirmLabel: 'Borrar definitivamente', showIcon: false, spreadActions: true, layer: 300 });
     if (!accepted || lock.current || loading || voiceBusy) return;
     lock.current = true; setBusy(true); setError('');
     try {
