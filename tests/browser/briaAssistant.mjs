@@ -21,10 +21,18 @@ try {
   await page.getByRole('button', { name: 'Preguntarle a Bria' }).click();
   await panel.waitFor({ timeout: 120000 }); await ready();
   assert.match(await panel.textContent(), /Hola, Kamila/);
+  await page.getByRole('button', { name: 'Preguntarle a Bria' }).click();
+  assert.equal(await panel.isVisible(), false, 'the header button toggles Bria closed');
+  await page.getByRole('button', { name: 'Preguntarle a Bria' }).click();
+  await panel.waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Enviar mensaje' }).count(), 0);
+  const microphone = await page.getByRole('button', { name: 'Grabar dictado' }).boundingBox();
+  const composer = await panel.locator('form').boundingBox();
+  assert.ok(composer.x + composer.width - microphone.x - microphone.width < 20, 'dictation is at the right edge');
   await ask('¿Qué tengo pendiente hoy?');
   assert.match(await panel.textContent(), /Subir los videos de Nattal/);
-  const sourceList = panel.locator('details'); await sourceList.locator('summary').click();
-  await sourceList.getByRole('link', { name: 'Subir los videos de Nattal' }).click();
+  assert.equal(await panel.locator('details').count(), 0, 'no source disclosure is exposed');
+  await panel.getByRole('link', { name: 'Subir los videos de Nattal' }).click();
   await page.waitForFunction(() => document.querySelector('[data-preview-location]')?.textContent.includes('/gestion?taskId=t1'));
   assert.equal(await panel.isVisible(), true, 'source navigation keeps Bria open');
   await page.getByRole('button', { name: 'Cerrar Bria' }).click();
@@ -50,5 +58,5 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 0);
   await page.screenshot({ path: path.join(outDir, 'bria-panel-movil-simulado.png') });
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ passed: true, simulatedApi: true, checks: ['Sources preserve dock', 'Close/reopen and reload preserve chat', 'Full screen/history', 'New conversation', 'Failed message preserved', 'Dark/mobile'] }));
+  console.log(JSON.stringify({ passed: true, simulatedApi: true, checks: ['Toggle preserves chat', 'Right-side dictation without send button', 'No sources disclosure', 'Operational links preserve dock', 'Close/reopen and reload preserve chat', 'Full screen/history', 'New conversation', 'Failed message preserved', 'Dark/mobile'] }));
 } finally { await browser.close(); await preview.close(); }

@@ -30,7 +30,7 @@ createRoot(document.getElementById('root')).render(
     </header>
     <main className="mx-auto max-w-3xl px-4 pt-24">
       <h1 className="text-2xl font-bold text-zinc-950 dark:text-white">Cualquier pantalla</h1>
-      <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">El botón de Bria está arriba a la derecha. Las respuestas de esta muestra son simuladas; las fuentes navegan dentro de esta misma página.</p>
+      <p className="mt-2 text-sm leading-6 text-zinc-600 dark:text-zinc-300">El botón de Bria está arriba a la derecha. Las respuestas de esta muestra son simuladas; los enlaces abren el módulo indicado.</p>
       <Routes><Route path="*" element={<Where />} /></Routes>
     </main>
     <BrainToaster />

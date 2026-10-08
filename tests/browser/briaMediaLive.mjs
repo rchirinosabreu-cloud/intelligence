@@ -31,7 +31,7 @@ try {
   await page.locator('input[type=file]').setInputFiles(files.map(([name]) => path.join(fixtures, name)));
   await page.getByLabel('Mensaje para Bria').fill('PRUEBA FICTICIA DE ADJUNTOS. Resume los datos de estos cinco archivos: fecha, cantidad, responsable, canal y color. Revisa también la imagen. Son datos inventados de demostración; no consultes clientes reales ni los guardes como aprendizaje.');
   const response = page.waitForResponse(res => /\/conversations\/[^/]+\/messages$/.test(res.url()) && res.request().method() === 'POST', { timeout: 180000 });
-  await page.getByRole('button', { name: 'Enviar mensaje' }).click();
+  await page.getByLabel('Mensaje para Bria').press('Enter');
   const received = await response; assert.equal(received.status(), 200, await received.text());
   const chat = await received.json(), answer = chat.turns.at(-1).text;
   assert.equal(chat.turns[0].attachments.length, 5);
@@ -52,7 +52,7 @@ try {
     await writeFile(path.join(output, 'dictado-prueba-resultado.json'), JSON.stringify({ syntheticAudio: true, transcript: result.text }, null, 2));
   }
   await page.getByLabel('Mensaje para Bria').fill('PRUEBA FICTICIA: dime de nuevo la fecha y el responsable que estaban en mis archivos anteriores. No es conocimiento de clientes reales.');
-  const followup = page.waitForResponse(res => /\/conversations\/[^/]+\/messages$/.test(res.url()) && res.request().method() === 'POST', { timeout: 180000 }); await page.getByRole('button', { name: 'Enviar mensaje' }).click();
+  const followup = page.waitForResponse(res => /\/conversations\/[^/]+\/messages$/.test(res.url()) && res.request().method() === 'POST', { timeout: 180000 }); await page.getByLabel('Mensaje para Bria').press('Enter');
   const follow = await followup; assert.equal(follow.status(), 200, await follow.text()); const remembered = await follow.json(); assert.match(remembered.turns.at(-1).text, /Persona Demo/); assert.match(remembered.turns.at(-1).text, /22|jueves/i); await ready();
   await page.getByRole('button', { name: 'Modo oscuro' }).click(); await page.screenshot({ path: path.join(output, 'bria-dictado-adjuntos-oscuro.jpg'), type: 'jpeg', quality: 88 });
   await page.setViewportSize({ width: 390, height: 844 }); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 0); await page.screenshot({ path: path.join(output, 'bria-dictado-adjuntos-movil.jpg'), type: 'jpeg', quality: 88 });

@@ -18,7 +18,7 @@ const newChat = async () => {
 const ask = async text => {
   await page.getByLabel('Mensaje para Bria', { exact: true }).fill(text);
   const response = page.waitForResponse(res => /\/api\/bria\/conversations\/[^/]+\/messages$/.test(res.url()) && res.request().method() === 'POST', { timeout: 180000 });
-  await page.getByRole('button', { name: 'Enviar mensaje', exact: true }).click();
+  await page.getByLabel('Mensaje para Bria').press('Enter');
   const returned = await response;
   assert.equal(returned.status(), 200, await returned.text());
   const chat = await returned.json();
@@ -35,7 +35,7 @@ try {
   assert.match(answer.text, /Aristea|octubre/i);
   assert.ok(answer.toolsUsed.includes('parrilla_de_cliente'));
   assert.ok(answer.toolsUsed.includes('leer_piezas_de_parrilla'));
-  assert.equal(answer.sources.filter(source => source.kind === 'pieza').length, 12);
+  assert.equal(Object.hasOwn(answer, 'sources'), false, 'the chat API does not expose its internal provenance');
   await page.screenshot({ path: path.join(output, 'bria-panel-aristea.jpg'), type: 'jpeg', quality: 85 });
   await page.getByRole('link', { name: 'Clientes', exact: true }).first().click();
   assert.equal(await page.locator('[data-bria-assistant-panel]').isVisible(), true);
@@ -60,7 +60,7 @@ try {
   await newChat();
   const recalled = await ask('PRUEBA PERSONAL: ¿Qué código de demostración te pedí recordar? Consulta tu memoria.');
   assert.match(recalled.turns.at(-1).text, new RegExp(code));
-  assert.ok(recalled.turns.at(-1).sources.some(source => source.kind === 'aprendizaje' && source.id === learning.id));
+  assert.equal(Object.hasOwn(recalled.turns.at(-1), 'sources'), false);
   await page.getByRole('button', { name: 'Menú de Bria' }).click();
   await page.getByRole('menuitem', { name: 'Registro', exact: true }).click();
   await page.getByText(learning.text, { exact: true }).waitFor();
@@ -77,7 +77,7 @@ try {
   await page.screenshot({ path: path.join(output, 'bria-panel-movil.jpg'), type: 'jpeg', quality: 85 });
   await page.route('**/api/bria/conversations/*/messages', route => route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Conexión no disponible temporalmente.' }) }));
   await page.getByLabel('Mensaje para Bria').fill('Pregunta conservada al fallar');
-  await page.getByRole('button', { name: 'Enviar mensaje' }).click();
+  await page.getByLabel('Mensaje para Bria').press('Enter');
   await page.getByRole('alert').waitFor();
   assert.equal(await page.getByLabel('Mensaje para Bria').inputValue(), 'Pregunta conservada al fallar');
   assert.deepEqual(errors, []); assert.deepEqual(external, []);
