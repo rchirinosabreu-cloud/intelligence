@@ -1,0 +1,54 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
+import { chromium } from 'playwright-core';
+import { createBriaPreview } from '../../scripts/preview-bria.js';
+
+// Shared real component against an explicitly simulated API; no DB or model calls.
+const outDir = path.resolve(process.env.SCREENSHOT_DIR || 'output/bria-asistente');
+await mkdir(outDir, { recursive: true });
+const preview = await createBriaPreview({ port: Number(process.env.BRIA_PREVIEW_PORT || 3721) });
+const browser = await chromium.launch({ executablePath: process.env.CHROME_PATH || 'C:/Program Files/Google/Chrome/Application/chrome.exe' });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const errors = [];
+page.on('pageerror', error => errors.push(error.message));
+const panel = page.getByRole('region', { name: 'Conversación con Bria' });
+const input = page.getByLabel('Mensaje para Bria');
+const ready = () => page.waitForFunction(() => !document.querySelector('[aria-label="Nueva conversación"]')?.disabled);
+const ask = async question => { await ready(); await input.fill(question); await input.press('Enter'); await ready(); };
+try {
+  await page.goto(preview.origin);
+  await page.getByRole('button', { name: 'Preguntarle a Bria' }).click();
+  await panel.waitFor({ timeout: 120000 }); await ready();
+  assert.match(await panel.textContent(), /Hola, Kamila/);
+  await ask('¿Qué tengo pendiente hoy?');
+  assert.match(await panel.textContent(), /Subir los videos de Nattal/);
+  const sourceList = panel.locator('details'); await sourceList.locator('summary').click();
+  await sourceList.getByRole('link', { name: 'Subir los videos de Nattal' }).click();
+  await page.waitForFunction(() => document.querySelector('[data-preview-location]')?.textContent.includes('/gestion?taskId=t1'));
+  assert.equal(await panel.isVisible(), true, 'source navigation keeps Bria open');
+  await page.getByRole('button', { name: 'Cerrar Bria' }).click();
+  await page.getByRole('button', { name: 'Preguntarle a Bria' }).click();
+  assert.match(await panel.textContent(), /Subir los videos de Nattal/);
+  await page.reload(); await panel.waitFor(); await ready();
+  assert.match(await panel.textContent(), /Subir los videos de Nattal/, 'server chat survives reload');
+  await page.getByRole('button', { name: 'Pantalla completa' }).click();
+  await page.getByRole('complementary', { name: 'Historial de conversaciones' }).waitFor();
+  await page.screenshot({ path: path.join(outDir, 'bria-pantalla-completa-simulada.png') });
+  await page.getByRole('button', { name: 'Volver al panel lateral' }).click();
+  await page.getByRole('button', { name: 'Nueva conversación', exact: true }).click(); await ready();
+  assert.equal(await page.locator('[data-conversation-turn]').count(), 0, 'new is a distinct empty chat');
+  await ask('esto da error');
+  await page.getByRole('alert').waitFor();
+  assert.equal(await input.inputValue(), 'esto da error');
+  assert.equal(await page.locator('[data-conversation-turn]').count(), 0, 'failed pair is not persisted');
+  await ask('¿Cómo va la parrilla de Endova?');
+  assert.match(await panel.textContent(), /Una parte de la consulta falló/);
+  await page.evaluate(() => document.documentElement.classList.add('dark'));
+  await page.screenshot({ path: path.join(outDir, 'bria-panel-oscuro-simulado.png') });
+  await page.setViewportSize({ width: 390, height: 844 });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth), 0);
+  await page.screenshot({ path: path.join(outDir, 'bria-panel-movil-simulado.png') });
+  assert.deepEqual(errors, []);
+  console.log(JSON.stringify({ passed: true, simulatedApi: true, checks: ['Sources preserve dock', 'Close/reopen and reload preserve chat', 'Full screen/history', 'New conversation', 'Failed message preserved', 'Dark/mobile'] }));
+} finally { await browser.close(); await preview.close(); }

@@ -19,6 +19,7 @@ export default {
     './components/**/*.{js,jsx}',
     './app/**/*.{js,jsx}',
     './src/**/*.{js,jsx}',
+    './tests/fixtures/bria-living.jsx',
     './index.html',
   ],
   prefix: "",

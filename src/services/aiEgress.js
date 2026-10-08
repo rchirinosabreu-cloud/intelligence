@@ -11,8 +11,9 @@ export const createGovernedFetch = ({ fetchImpl, governance, usageLog, clock = (
   const target = new URL(url);
   const { governanceContext, ...outgoing } = options;
   let provider, model;
-  const body = JSON.parse(options.body || '{}');
-  if (target.origin === 'https://api.openai.com' && ['/v1/responses', '/v1/embeddings', '/v1/chat/completions'].includes(target.pathname)) {
+  const multipart = options.body instanceof FormData;
+  const body = multipart ? { model: options.body.get('model') } : JSON.parse(options.body || '{}');
+  if (target.origin === 'https://api.openai.com' && ['/v1/responses', '/v1/embeddings', '/v1/chat/completions', '/v1/audio/transcriptions'].includes(target.pathname) && (!multipart || target.pathname === '/v1/audio/transcriptions')) {
     provider = 'openai'; model = body.model;
   } else if (target.origin === 'https://api.fireflies.ai' && target.pathname === '/graphql') {
     provider = 'fireflies'; model = 'graphql';
