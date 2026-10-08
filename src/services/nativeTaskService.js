@@ -183,7 +183,7 @@ export const createTask = async ({
     contentItemId = null, followOnCreate = false, collaboratorIds = [],
     initial_references = [], initial_inputs = [], initial_insumos = [], initial_comments = [],
     tempAttachments = []
-}) => {
+}, { taskId, requireActiveClient = false } = {}) => {
     try {
         const mappedStatus = statusMapper[status] || 'PENDIENTE';
         const taskClassification = classifyTaskDeterministically({
@@ -200,10 +200,15 @@ export const createTask = async ({
         let createdCollaborators = [];
         // Use a Prisma transaction to ensure atomicity
         const newTask = await recognitionTransaction(prisma, async (tx) => {
+            if (requireActiveClient) {
+                const currentClient = await tx.client.findUnique({ where: { id: clientId }, select: { id: true, isArchived: true } });
+                if (!currentClient || currentClient.isArchived) throw Object.assign(new Error('La cuenta cambió. Ajusta el pendiente antes de crearlo.'), { status: 409 });
+            }
             await assertActiveTeamMembers(tx, [assigneeId]);
             // 1. Create the task
             const task = await tx.task.create({
                 data: {
+                    ...(taskId ? { id: taskId } : {}),
                     title,
                     dueDate: dueDate ? new Date(dueDate) : null,
                     focusDeadlineAt: focusDeadlineAt ? new Date(focusDeadlineAt) : null,

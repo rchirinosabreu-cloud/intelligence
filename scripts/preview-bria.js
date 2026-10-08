@@ -4,6 +4,7 @@ import express from 'express';
 import multer from 'multer';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'vite';
+import { createBriaConversationRouter } from '../src/routes/api/briaConversations.js';
 
 // Muestra local de «Preguntarle a Bria» (6 de octubre de 2026): el componente real contra una API
 // simulada que responde según la pregunta. No hay dotenv, ni base de datos, ni llamada a OpenAI.
@@ -47,9 +48,10 @@ const ANSWERS = [
 
 const DEFAULT_ANSWER = { answer: 'No tengo esa información en la plataforma. Puedo contarte de tus tareas, de un cliente, de su parrilla o de lo que sale en redes.', sources: [] };
 
-export async function createBriaPreview({ port = 3720 } = {}) {
+export async function createBriaPreview({ port = 3720, conversationService } = {}) {
   const api = express();
   api.use(express.json());
+  if (conversationService) api.use('/api/bria/conversations', (req, _res, next) => { req.user = { userId: 'owner', role: 'ADMIN', isActive: true, modulePermissions: { bria: true, gestion: true } }; next(); }, createBriaConversationRouter({ service: conversationService }));
   // Fictitious preview state only. Production uses the authenticated PostgreSQL repository.
   const chats = new Map();
   const rowSummary = ({ id, title, revision, updatedAt }) => ({ id, title, revision, updatedAt });

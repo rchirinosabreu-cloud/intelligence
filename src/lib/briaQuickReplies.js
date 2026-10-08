@@ -1,0 +1,1 @@
+export const normalizeQuickReplies = replies => [...new Set((Array.isArray(replies) ? replies : []).filter(value => typeof value === 'string').map(value => value.replace(/[\x00-\x1f\x7f]/g, ' ').trim()).filter(value => value && value.length <= 100))].slice(0, 6);

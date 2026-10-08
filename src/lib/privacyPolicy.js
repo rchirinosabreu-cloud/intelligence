@@ -16,4 +16,6 @@
 // 2.6 (7 de octubre de 2026): dictado voluntario y adjuntos privados de la conversación.
 // 2.7 (7 de octubre de 2026): borrado definitivo de chats, almacenamiento dedicado
 // y conservación independiente de los recuerdos explícitos.
-export const PRIVACY_POLICY_VERSION = '2.7 · 2026-10-07';
+// 2.8 (8 de octubre de 2026): preparación conversacional y creación confirmada de
+// pendientes, con contexto como comentario y copias independientes de los insumos.
+export const PRIVACY_POLICY_VERSION = '2.8 · 2026-10-08';

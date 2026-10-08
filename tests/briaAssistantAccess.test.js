@@ -30,6 +30,6 @@ test('a revoked module is refreshed and no longer offered as a tool', async () =
   });
   const answer = await service.ask({ user, question: 'consulta' });
   assert.equal(offered.some(tool => tool.name === 'task'), false);
-  assert.deepEqual(offered.map(tool => tool.name), ['consultar_aprendizajes', 'recordar_aprendizaje', 'retirar_recuerdo']);
+  assert.deepEqual(offered.map(tool => tool.name), ['ofrecer_opciones', 'consultar_aprendizajes', 'recordar_aprendizaje', 'retirar_recuerdo']);
   assert.deepEqual(answer.sources, []);
 });

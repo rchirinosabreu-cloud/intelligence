@@ -1,0 +1,40 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
+import { chromium } from 'playwright-core';
+import { createBriaPreview } from '../../scripts/preview-bria.js';
+const output = process.env.SCREENSHOT_DIR || 'output/bria-choices';
+await mkdir(output, { recursive: true });
+const preview = await createBriaPreview({ port: 3740 });
+const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe' });
+const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+const sent = [], errors = [];
+page.on('pageerror', error => errors.push(error.message));
+page.on('request', request => { if (request.url().endsWith('/messages')) sent.push(JSON.parse(request.postData()).question); });
+try {
+  await page.goto(`${preview.origin}/?abierta&role=admin`);
+  const panel = page.getByRole('region', { name: 'Conversación con Bria' });
+  await panel.waitFor();
+  await page.waitForFunction(() => !document.querySelector('[aria-label="Nueva conversación"]')?.disabled);
+  await page.getByRole('button', { name: 'Ayúdame a revisar una parrilla', exact: true }).click();
+  await page.waitForFunction(() => document.querySelector('[data-conversation-turn="assistant"]'));
+  assert.deepEqual(sent, ['Ayúdame a revisar una parrilla']);
+  assert.equal(await page.getByLabel('Mensaje para Bria').inputValue(), '');
+  await page.route('**/api/bria/conversations/*/messages', async route => {
+    const question = route.request().postDataJSON().question;
+    const response = await route.fetch(), chat = await response.json();
+    chat.turns.at(-1).text = question === 'Normal' ? 'Listo: el pendiente tendrá prioridad normal.' : '¿Qué prioridad le damos al pendiente?';
+    chat.turns.at(-1).quickReplies = question === 'Normal' ? [] : ['Normal', 'Alta', 'Urgente'];
+    await route.fulfill({ response, json: chat });
+  });
+  await page.getByLabel('Mensaje para Bria').fill('Prepara el pendiente'); await page.getByLabel('Mensaje para Bria').press('Enter');
+  const normal = panel.getByRole('button', { name: 'Normal', exact: true }); await normal.waitFor();
+  await page.screenshot({ path: path.join(output, 'bria-opciones.png') });
+  await normal.click();
+  await page.getByText('Listo: el pendiente tendrá prioridad normal.', { exact: true }).waitFor();
+  assert.deepEqual(sent, ['Ayúdame a revisar una parrilla', 'Prepara el pendiente', 'Normal']);
+  assert.equal(await panel.locator('[data-conversation-turn="user"]').last().innerText(), 'Normal');
+  assert.equal(await page.getByLabel('Mensaje para Bria').inputValue(), '');
+  assert.deepEqual(errors, []);
+  console.log(JSON.stringify({ passed: true, simulatedApi: true, starterSentImmediately: true, priorityChoiceSentAsMessage: true }));
+} finally { await browser.close(); await preview.close(); }
