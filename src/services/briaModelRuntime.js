@@ -14,7 +14,8 @@ export const createBriaModelRuntime = ({ ai, user, env = process.env }) => {
       const signal = request.signal ? AbortSignal.any([deadline, request.signal]) : deadline;
       const params = { ...request, ...(model ? { model } : {}), ...(effort ? { reasoningEffort: effort } : {}),
         maxOutputTokens: model?.startsWith('gpt-6') ? Math.max(request.maxOutputTokens || 0, 4800) : request.maxOutputTokens,
-        promptCacheKey: `bria:v1:${hash({ id: user?.userId || user?.id, role: user?.role, permissions: Object.entries(user?.modulePermissions || {}).sort() })}`,
+        // Responses caps the whole cache key at 64 characters, including its prefix.
+        promptCacheKey: `bria:v1:${hash({ id: user?.userId || user?.id, role: user?.role, permissions: Object.entries(user?.modulePermissions || {}).sort() }).slice(0, 56)}`,
         safetyIdentifier: hash({ id: user?.userId || user?.id }), signal };
       for (let attempt = 0; attempt < 2; attempt++) {
         signal.throwIfAborted();

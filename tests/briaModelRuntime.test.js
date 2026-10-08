@@ -12,6 +12,8 @@ test('Bria isolates its model and opaque cache partitions from editorial configu
   assert.equal(requests[0].model, 'gpt-6-luna'); assert.equal(requests[0].reasoningEffort, 'low');
   assert.doesNotMatch(requests[0].promptCacheKey, /private-owner/);
   assert.notEqual(requests[0].promptCacheKey, requests[1].promptCacheKey);
+  assert.ok(requests[0].promptCacheKey.length <= 64, 'Responses accepts cache keys up to 64 characters');
+  assert.ok(requests[0].safetyIdentifier.length <= 64);
   assert.ok(requests[0].signal instanceof AbortSignal);
 });
 
