@@ -2,7 +2,8 @@ import { normalizeQuestion, MAX_QUESTION_LENGTH } from '../lib/briaAssistant.js'
 import { knowledgeError } from '../lib/briaKnowledge.js';
 import { validateAttachmentSelection, BRIA_AUDIO_MAX_BYTES } from '../lib/briaAttachments.js';
 import { readBriaAttachment, attachmentModelPart } from './briaAttachmentReader.js';
-export const createBriaConversationService = ({ repository, resolveActor, assistant, ai, prepareAttachment = readBriaAttachment, authorizeTurn = async () => true }) => {
+import { taskDraftReply, taskDraftStage, isTaskConfirmation, isTaskCancellation, materialDeclined } from '../lib/briaTaskDraft.js';
+export const createBriaConversationService = ({ repository, resolveActor, assistant, ai, taskDrafts, prepareAttachment = readBriaAttachment, authorizeTurn = async () => true }) => {
   const pending = new Set();
   const authorizeInput = async user => { const actor = await resolveActor(user); if (!['ADMIN', 'PROJECT_MANAGER'].includes(actor.role)) throw knowledgeError('Solo Admin y Project Manager pueden adjuntar o dictar.', 403); return actor; };
   const permitted = async (user, turn) => !turn.permissionChanged && await authorizeTurn(user, turn);
@@ -58,9 +59,34 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         let availableText = 60000;
         const attachments = relevant.map(file => { const content = String(file.text || '').slice(0, availableText); availableText -= content.length; return { id: file.id, name: file.name, text: content, status: file.status, warning: content.length < String(file.text || '').length ? `${file.warning || ''} Contexto parcial del adjunto en esta respuesta.` : file.warning, modelPart: attachmentModelPart(file) }; });
         const revalidateConversation = async () => { if (!await repository.get(await resolveActor(user), id)) throw knowledgeError('La conversación fue eliminada.', 404); };
-        const result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, revalidateConversation });
+        const taskDraft = [...chat.turns].reverse().find(turn => turn.role === 'assistant' && turn.taskDraft)?.taskDraft;
+        const stage = taskDraftStage(taskDraft);
+        const revalidateTask = async () => {
+          await resolveActor(user);
+          if (!await authorizeTurn(user, { taskDraft })) throw knowledgeError('Tu acceso al pendiente cambió.', 403);
+        };
+        const taskResult = draft => ({ ...taskDraftReply(draft), sources: [], failures: [], toolsUsed: ['preparar_pendiente'], taskDraft: draft });
+        let result;
+        if (taskDrafts && taskDraft && isTaskCancellation(text) && !['CREATED','CANCELLED'].includes(stage)) {
+          await revalidateTask(); result = taskResult({ ...taskDraft, status: 'CANCELLED' });
+        } else if (taskDrafts && stage === 'CREATED' && isTaskConfirmation(text)) {
+          await revalidateTask(); result = { answer: `Este pendiente ya está creado. [Abrir en Gestión](/gestion?taskId=${encodeURIComponent(taskDraft.taskId)})`, taskDraft, sources: [{ kind: 'tarea', id: taskDraft.taskId }], failures: [] };
+        } else if (taskDrafts && stage === 'READY' && isTaskConfirmation(text) && !files.length) {
+          await revalidateTask();
+          // Run the write inside append, after its owned parent lock and revision check.
+          result = async () => {
+            await revalidateTask();
+            const receipt = await taskDrafts.confirm({ user, draft: taskDraft, question: text, revalidate: revalidateTask, loadAttachment: async fileId => repository.attachment(await resolveActor(user), id, fileId) });
+            return { answer: `${receipt.alreadyCreated ? 'El pendiente ya estaba creado' : 'Pendiente creado'} para ${taskDraft.assignee.name}. Guardé el contexto como comentario${taskDraft.files?.length ? ' y los archivos como insumos' : ''}.\n\n[Abrir en Gestión](/gestion?taskId=${encodeURIComponent(receipt.taskId)})`, sources: [{ kind: 'tarea', id: receipt.taskId }], failures: [], toolsUsed: ['crear_pendiente'], taskDraft: { ...taskDraft, status: 'CREATED', taskId: receipt.taskId } };
+          };
+        } else if (taskDrafts && taskDraft && !['CREATED','CANCELLED'].includes(stage) && ((stage === 'PRIORITY' && /^(normal|alta|urgente)$/i.test(text)) || (stage === 'DATE' && /^(hoy|mañana|pasado mañana)$/i.test(text)) || (stage === 'MATERIAL' && materialDeclined(text, stage)))) {
+          await revalidateTask(); result = taskResult(await taskDrafts.prepare({ user, previous: taskDraft, question: text, attachments: prepared }));
+        } else {
+          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, taskDraft, taskAttachments: prepared, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation });
+          if (!result.taskDraft && taskDraft) result.taskDraft = taskDraft;
+        }
         const fresh = await resolveActor(user);
-        if (!(await Promise.all([...chat.turns.filter(turn => turn.role === 'assistant'), { role: 'assistant', ...result }].map(turn => authorizeTurn(user, turn)))).every(Boolean)) throw knowledgeError('Tu acceso a las fuentes cambió durante la consulta.', 403);
+        if (!(await Promise.all([...chat.turns.filter(turn => turn.role === 'assistant'), { role: 'assistant', ...(typeof result === 'function' ? { taskDraft } : result) }].map(turn => authorizeTurn(user, turn)))).every(Boolean)) throw knowledgeError('Tu acceso a las fuentes cambió durante la consulta.', 403);
         const saved = await repository.append(fresh, id, chat.revision, text, result, prepared);
         return sanitize(user, saved);
       } finally { pending.delete(key); }

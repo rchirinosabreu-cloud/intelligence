@@ -183,7 +183,7 @@ export const createTask = async ({
     contentItemId = null, followOnCreate = false, collaboratorIds = [],
     initial_references = [], initial_inputs = [], initial_insumos = [], initial_comments = [],
     tempAttachments = []
-}) => {
+}, { taskId } = {}) => {
     try {
         const mappedStatus = statusMapper[status] || 'PENDIENTE';
         const taskClassification = classifyTaskDeterministically({
@@ -204,6 +204,7 @@ export const createTask = async ({
             // 1. Create the task
             const task = await tx.task.create({
                 data: {
+                    ...(taskId ? { id: taskId } : {}),
                     title,
                     dueDate: dueDate ? new Date(dueDate) : null,
                     focusDeadlineAt: focusDeadlineAt ? new Date(focusDeadlineAt) : null,

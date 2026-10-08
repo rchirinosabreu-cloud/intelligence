@@ -26,6 +26,7 @@ import { createBriaConversationRouter } from '../src/routes/api/briaConversation
 import { createBriaModelRuntime } from '../src/services/briaModelRuntime.js';
 import { getBriaChatStorage } from '../src/services/briaChatStorage.js';
 import { startBriaChatPurgeWorker } from '../src/services/briaChatPurge.js';
+import { createBriaTaskDraftService } from '../src/services/briaTaskDraftService.js';
 
 const directory = process.env.BRIA_RESEARCH_DIRECTORY;
 if (!directory) throw new Error('Indica BRIA_RESEARCH_DIRECTORY con la carpeta privada de lectura.');
@@ -60,14 +61,15 @@ const resolveOwner = async user => {
 const knowledge = createBriaKnowledgeService({ repository: persisted, resolveActor: resolveOwner });
 const documents = { ...repo, search: async (...args) => (await persisted.status()).latestImport?.status === 'COMPLETED' ? persisted.search(...args) : repo.search(...args), read: async (...args) => (await persisted.status()).latestImport?.status === 'COMPLETED' ? persisted.read(...args) : repo.read(...args), overview: async user => ({ ...await repo.overview(user), database: await persisted.status() }) };
 const platform = { tools: briaAssistantTools.filter(tool => ['buscar_cliente','parrilla_de_cliente','leer_piezas_de_parrilla'].includes(tool.name)), context: { db: createResearchPlatformReadAdapter({ pool: policyPool }) } };
+const taskDrafts = createBriaTaskDraftService({ db: platform.context.db, readOnly: true });
 // A fresh bounded runtime per turn; an idle preview must not inherit an expired deadline.
-const chat = createBriaResearchChatService({ repository: documents, ai: user => createBriaModelRuntime({ ai, env: { ...config, ...process.env }, user }), knowledge, platform });
+const chat = createBriaResearchChatService({ repository: documents, ai: user => createBriaModelRuntime({ ai, env: { ...config, ...process.env }, user }), knowledge, platform, taskDrafts });
 const storage = getBriaChatStorage({ ...config, ...process.env });
 startBriaChatPurgeWorker({ pool: knowledgePool, storage });
-const conversations = createBriaConversationService({ repository: createBriaConversationRepository({ pool: knowledgePool, storage, workspace: persisted.workspace }), resolveActor: resolveOwner, assistant: chat, ai });
+const conversations = createBriaConversationService({ repository: createBriaConversationRepository({ pool: knowledgePool, storage, workspace: persisted.workspace }), resolveActor: resolveOwner, assistant: chat, ai, taskDrafts });
 app.use('/api', (req, res, next) => {
   if (!String(req.headers.cookie || '').split(';').some((part) => part.trim() === `bria_preview=${session}`)) return res.sendStatus(401);
-  req.user = { id: 'local-research-owner', role: 'ADMIN', isActive: true, modulePermissions: { bria: true, parrillas: true } };
+  req.user = { id: 'local-research-owner', role: 'ADMIN', isActive: true, modulePermissions: { bria: true, parrillas: true, gestion: true } };
   next();
 });
 app.use('/api/bria/living', createBriaLivingRouter({ repository: documents }));

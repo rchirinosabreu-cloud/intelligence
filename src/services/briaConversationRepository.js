@@ -23,9 +23,9 @@ export const createBriaConversationRepository = ({ pool, workspace, storage, req
     }));
   },
   async attachment(actor, id, fileId) {
-    const row = (await pool.query('SELECT a.name,a.original_bytes,a.storage_key,a.original_sha256 FROM bria_memory.conversation_attachments a JOIN bria_memory.conversations c ON c.id=a.conversation_id WHERE c.workspace=$1 AND c.actor_ref=$2 AND c.id=$3 AND a.id=$4', [workspace, actor.ref, id, fileId])).rows[0];
+    const row = (await pool.query('SELECT a.name,a.mime,a.original_bytes,a.storage_key,a.original_sha256 FROM bria_memory.conversation_attachments a JOIN bria_memory.conversations c ON c.id=a.conversation_id WHERE c.workspace=$1 AND c.actor_ref=$2 AND c.id=$3 AND a.id=$4', [workspace, actor.ref, id, fileId])).rows[0];
     if (row?.storage_key && !storage) throw knowledgeError('Los adjuntos no están disponibles ahora.', 503);
-    return row ? { name: row.name, buffer: row.original_bytes || await storage.read(workspace, actor, id, row.storage_key, row.original_sha256) } : null;
+    return row ? { name: row.name, mime: row.mime, buffer: row.original_bytes || await storage.read(workspace, actor, id, row.storage_key, row.original_sha256) } : null;
   },
   async remove(actor, id, expectedRevision) {
     const db = await pool.connect();
@@ -55,7 +55,9 @@ export const createBriaConversationRepository = ({ pool, workspace, storage, req
       if (!row) throw knowledgeError('No encontramos esa conversación.', 404);
       if (row.revision !== expectedRevision) throw knowledgeError('La conversación cambió en otra ventana. Recárgala.', 409);
       if (files.length && requireStorage && !storage) throw knowledgeError('El almacenamiento de Bria no está disponible ahora.', 503);
-      const metadata = { sources: result.sources || [], failures: result.failures || [], toolsUsed: result.toolsUsed || [], ...(result.usage ? { usage: result.usage } : {}), accessFingerprint: fingerprint(actor) };
+      // Business writes run only after the owned parent lock and revision check.
+      if (typeof result === 'function') result = await result();
+      const metadata = { sources: result.sources || [], failures: result.failures || [], toolsUsed: result.toolsUsed || [], ...(result.taskDraft ? { taskDraft: result.taskDraft } : {}), ...(result.quickReplies ? { quickReplies: result.quickReplies } : {}), ...(result.usage ? { usage: result.usage } : {}), accessFingerprint: fingerprint(actor) };
       const userMetadata = { attachments: files.map(({ id: fileId, name, size, status, warning }) => ({ id: fileId, name, size, status, warning })) };
       await db.query('INSERT INTO bria_memory.conversation_turns(conversation_id,position,role,content,metadata) VALUES($1,$2,\'user\',$3,$7),($1,$4,\'assistant\',$5,$6)', [id, row.revision * 2, question, row.revision * 2 + 1, result.answer, metadata, userMetadata]);
       // Upload while holding the parent lock: deletion cannot purge and then race a late upload.
