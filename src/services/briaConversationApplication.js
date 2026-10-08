@@ -8,6 +8,8 @@ import { hasModulePermission, isManagerRole } from '../config/security.js';
 import { canOpenTask, TASK_PRIVACY_SELECT } from '../lib/taskPrivacy.js';
 import { getAIInstance } from './aiService.js';
 import { canReadAgencyMemory } from './briaLivingService.js';
+import { getBriaChatStorage } from './briaChatStorage.js';
+import { startBriaChatPurgeWorker } from './briaChatPurge.js';
 let instance;
 const authorizeTurn = async (user, turn) => {
   for (const source of turn.sources || []) {
@@ -22,4 +24,10 @@ const authorizeTurn = async (user, turn) => {
   }
   return true;
 };
-export const getApplicationConversationService = () => instance ||= createBriaConversationService({ repository: createBriaConversationRepository({ pool: new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 3, connectionTimeoutMillis: 5000 }), workspace: 'application' }), resolveActor: resolveKnowledgeActor, assistant: briaAssistantService, ai: getAIInstance, authorizeTurn });
+export const getApplicationConversationService = () => {
+  if (instance) return instance;
+  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 3, connectionTimeoutMillis: 5000 });
+  const storage = getBriaChatStorage();
+  startBriaChatPurgeWorker({ pool, storage });
+  return instance = createBriaConversationService({ repository: createBriaConversationRepository({ pool, storage, requireStorage: process.env.NODE_ENV === 'production', workspace: 'application' }), resolveActor: resolveKnowledgeActor, assistant: briaAssistantService, ai: getAIInstance, authorizeTurn });
+};

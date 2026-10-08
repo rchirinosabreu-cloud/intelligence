@@ -20,6 +20,7 @@ export const ConfirmDialogProvider = ({ children }) => {
       confirmLabel: normalized.confirmLabel || 'Eliminar',
       cancelLabel: normalized.cancelLabel || 'Cancelar',
       tone: normalized.tone || 'danger',
+      layer: normalized.layer || 100,
       resolve
     });
   }), []);
@@ -44,10 +45,10 @@ export const ConfirmDialogProvider = ({ children }) => {
         }}
       >
         <AlertDialog.Portal>
-          <AlertDialog.Overlay className="fixed inset-0 z-[100] bg-slate-950/45 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:fade-in" />
-          <AlertDialog.Content className="fixed left-1/2 top-1/2 z-[101] w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border border-slate-200 bg-white p-6 shadow-2xl outline-none dark:border-slate-700 dark:bg-slate-900">
+          <AlertDialog.Overlay style={{ zIndex: request?.layer || 100 }} className="fixed inset-0 bg-slate-950/45 backdrop-blur-[2px] data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out data-[state=open]:fade-in" />
+          <AlertDialog.Content style={{ zIndex: (request?.layer || 100) + 1 }} className="brain-popover-surface fixed left-1/2 top-1/2 w-[calc(100%-2rem)] max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg p-6 outline-none">
             <div className="flex items-start gap-4">
-              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${request?.tone === 'danger' ? 'bg-destructive/10 text-destructive' : 'bg-violet-50 text-violet-600 dark:bg-violet-500/10 dark:text-violet-300'}`}>
+              <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full ${request?.tone === 'danger' ? 'bg-destructive/10 text-destructive' : 'bg-brand-cyan-soft text-brand-cyan-deep dark:bg-brand-cyan/10 dark:text-brand-cyan'}`}>
                 <DialogIcon className="h-5 w-5" aria-hidden="true" />
               </div>
               <div className="min-w-0 flex-1">
@@ -63,7 +64,7 @@ export const ConfirmDialogProvider = ({ children }) => {
               <AlertDialog.Cancel asChild>
                 <button
                   type="button"
-                  className="min-h-11 rounded-md border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
+                  className="min-h-11 rounded-md border border-slate-200 bg-white px-4 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                   onClick={() => closeDialog(false)}
                 >
                   {request?.cancelLabel}
@@ -72,7 +73,7 @@ export const ConfirmDialogProvider = ({ children }) => {
               <AlertDialog.Action asChild>
                 <button
                   type="button"
-                  className={`min-h-11 rounded-md px-4 text-sm font-semibold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${request?.tone === 'danger' ? 'bg-destructive hover:bg-destructive/90 focus-visible:ring-destructive' : 'bg-[#009EB9] hover:bg-[#008CA4] focus-visible:ring-[#009EB9]'}`}
+                  className={`min-h-11 rounded-md px-4 text-sm font-semibold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${request?.tone === 'danger' ? 'bg-destructive hover:bg-destructive/90 focus-visible:ring-destructive' : 'bg-primary hover:bg-primary/90 focus-visible:ring-primary'}`}
                   onClick={() => closeDialog(true)}
                 >
                   {request?.confirmLabel}

@@ -221,6 +221,8 @@ export const createOpenAIClient = ({
     responseSchema,
     strictSchema = false,
     reasoningEffort,
+    promptCacheKey,
+    safetyIdentifier,
     json = false,
     maxOutputTokens,
     signal,
@@ -228,9 +230,13 @@ export const createOpenAIClient = ({
   }) => {
     const body = {
       model,
+      store: false,
+      ...(/^gpt-[56](?:\.|-)/.test(model) ? { include: ['reasoning.encrypted_content'] } : {}),
       input: input || prompt,
       ...(instructions ? { instructions } : {}),
-      ...(/^gpt-5(?:\.|-)/.test(model) ? { reasoning: { effort: reasoningEffort || 'none' } } : {}),
+      ...(/^gpt-[56](?:\.|-)/.test(model) ? { reasoning: { effort: reasoningEffort || (model.startsWith('gpt-6') ? 'low' : 'none') } } : {}),
+      ...(promptCacheKey ? { prompt_cache_key: promptCacheKey } : {}),
+      ...(safetyIdentifier ? { safety_identifier: safetyIdentifier } : {}),
       ...(tools.length ? { tools: normalizeTools(tools) } : {}),
       ...((responseSchema || json) ? { text: { format: buildTextFormat(responseSchema, strictSchema) } } : {}),
       ...(maxOutputTokens ? { max_output_tokens: maxOutputTokens } : {})

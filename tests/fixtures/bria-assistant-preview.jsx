@@ -1,4 +1,5 @@
 import React from 'react';
+import { ConfirmDialogProvider } from '@/components/ui/ConfirmDialog';
 import { createRoot } from 'react-dom/client';
 import { MemoryRouter, Routes, Route, useLocation } from 'react-router-dom';
 import BrainToaster from '@/components/ui/BrainToaster';
@@ -21,7 +22,7 @@ function Where() {
 }
 
 createRoot(document.getElementById('root')).render(
-  <MemoryRouter initialEntries={['/']}>
+  <ConfirmDialogProvider><MemoryRouter initialEntries={['/']}>
     <header className="fixed left-0 right-0 top-0 z-50 flex h-16 items-center justify-between border-b border-zinc-200 bg-white/80 px-4 backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/80">
       <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Brainstudio Intelligence · muestra local</span>
       <div className="flex items-center gap-2">
@@ -34,5 +35,5 @@ createRoot(document.getElementById('root')).render(
       <Routes><Route path="*" element={<Where />} /></Routes>
     </main>
     <BrainToaster />
-  </MemoryRouter>
+  </MemoryRouter></ConfirmDialogProvider>
 );

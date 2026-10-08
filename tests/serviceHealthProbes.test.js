@@ -6,6 +6,20 @@ import { createServiceHealthProbes } from '../src/services/serviceHealthProbes.j
 
 const jsonResponse = (status, body) => new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } });
 
+test('Bria attachments have a dedicated read-only storage probe without shared credentials', async () => {
+  let input;
+  const probes = createServiceHealthProbes({ env: { BRIA_CHAT_STORAGE_ENDPOINT: 'https://example.test', BRIA_CHAT_STORAGE_BUCKET: 'bria-chat-files', BRIA_CHAT_STORAGE_ACCESS_KEY_ID: 'bria', BRIA_CHAT_STORAGE_SECRET_ACCESS_KEY: 'fixture' }, createS3Client: config => ({ send: async command => { input = { config, command: command.constructor.name, bucket: command.input.Bucket }; return {}; } }) });
+  assert.equal((await probes['storage-bria']()).status, 'OK');
+  assert.equal(input.bucket, 'bria-chat-files'); assert.equal(input.command, 'HeadBucketCommand'); assert.equal(input.config.accessKeyId, 'bria');
+});
+
+test('OpenAI health also checks the independently configured Bria model without generating content', async () => {
+  const { probes, requests } = build({ env: { ...baseEnv, BRIA_CHAT_MODEL: 'gpt-6-luna' } });
+  assert.equal((await probes.openai()).status, 'OK');
+  assert.ok(requests.some(row => row.url === 'https://api.openai.com/v1/models/gpt-6-luna'));
+  assert.ok(requests.every(row => row.options?.method === 'GET'));
+});
+
 const baseEnv = {
   OPENAI_API_KEY: 'sk-test',
   FIREFLIES_API_KEY: 'ff-test',

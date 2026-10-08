@@ -13,6 +13,7 @@ import { canUseBria } from '../lib/briaLivingMemory.js';
 import { getApplicationKnowledgeService } from './briaKnowledgeApplication.js';
 import { createKnowledgeTools } from './briaKnowledgeTools.js';
 import { searchAgencyMemory, readAgencyMemory } from './briaLivingService.js';
+import { createBriaModelRuntime } from './briaModelRuntime.js';
 
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
 
@@ -46,14 +47,14 @@ export const createBriaAssistantService = ({
   };
 
   return {
-    async ask({ user, question, history, attachments = [] } = {}) {
+    async ask({ user, question, history, attachments = [], revalidateConversation } = {}) {
       if (!canUseBria(user)) throw httpError(403, 'Bria no está activada para tu cuenta.', 'BRIA_DISABLED');
       const text = normalizeQuestion(question);
       if (!text) throw httpError(400, 'Escribe una pregunta.', 'BRIA_QUESTION_REQUIRED');
       const client = typeof ai === 'function' ? ai() : ai;
       if (!client) throw httpError(503, 'Bria no está disponible en este momento.', 'OPENAI_NOT_AVAILABLE');
       const person = await loadPerson(user);
-      const revalidate = async () => { await loadPerson(user); };
+      const revalidate = async () => { await loadPerson(user); await revalidateConversation?.(); };
       const result = await runAssistant({
         question: text,
         history: normalizeHistory(history),
@@ -61,7 +62,7 @@ export const createBriaAssistantService = ({
         user,
         person,
         tools: [...tools, ...createKnowledgeTools(typeof knowledge === 'function' ? knowledge() : knowledge)],
-        ai: client,
+        ai: createBriaModelRuntime({ ai: client, user }),
         today: bogotaDate(now()),
         logger,
         context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, now, ...context, revalidate }

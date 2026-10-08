@@ -17,6 +17,10 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
     async list(user) { const rows = await repository.list(await resolveActor(user)); await resolveActor(user); return rows; },
     async create(user) { return repository.create(await resolveActor(user)); },
     read,
+    async remove(user, id, expectedRevision) {
+      if (!Number.isInteger(expectedRevision) || expectedRevision < 0) throw knowledgeError('Recarga la conversación antes de borrarla.');
+      return repository.remove(await resolveActor(user), id, expectedRevision);
+    },
     authorizeInput,
     async transcribe(user, file) {
       await authorizeInput(user);
@@ -53,7 +57,8 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         const relevant = [...prepared, ...previous].slice(0, 5);
         let availableText = 60000;
         const attachments = relevant.map(file => { const content = String(file.text || '').slice(0, availableText); availableText -= content.length; return { id: file.id, name: file.name, text: content, status: file.status, warning: content.length < String(file.text || '').length ? `${file.warning || ''} Contexto parcial del adjunto en esta respuesta.` : file.warning, modelPart: attachmentModelPart(file) }; });
-        const result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments });
+        const revalidateConversation = async () => { if (!await repository.get(await resolveActor(user), id)) throw knowledgeError('La conversación fue eliminada.', 404); };
+        const result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, revalidateConversation });
         const fresh = await resolveActor(user);
         if (!(await Promise.all([...chat.turns.filter(turn => turn.role === 'assistant'), { role: 'assistant', ...result }].map(turn => authorizeTurn(user, turn)))).every(Boolean)) throw knowledgeError('Tu acceso a las fuentes cambió durante la consulta.', 403);
         const saved = await repository.append(fresh, id, chat.revision, text, result, prepared);

@@ -18,6 +18,7 @@ export const normalizeAiUsage = raw => {
     outputTokens: output,
     totalTokens: number(raw.totalTokens ?? raw.total_tokens) ?? input + output,
     cachedTokens: number(raw.cachedTokens ?? raw.input_tokens_details?.cached_tokens) ?? 0,
+    ...(number(raw.cacheWriteTokens ?? raw.input_tokens_details?.cache_write_tokens) !== null ? { cacheWriteTokens: number(raw.cacheWriteTokens ?? raw.input_tokens_details?.cache_write_tokens) } : {}),
     reasoningTokens: number(raw.reasoningTokens ?? raw.output_tokens_details?.reasoning_tokens) ?? 0
   };
 };
@@ -31,6 +32,7 @@ export const summarizeAiCalls = (calls = []) => {
   const known = list.filter(call => call.usage && typeof call.usage === 'object');
   const summary = { calls: list.length, callsWithUsage: known.length };
   for (const field of counters) summary[field] = known.reduce((sum, call) => sum + (number(call.usage[field]) ?? 0), 0);
+  if (known.some(call => number(call.usage.cacheWriteTokens) !== null)) summary.cacheWriteTokens = known.reduce((sum, call) => sum + (number(call.usage.cacheWriteTokens) ?? 0), 0);
   summary.latencyMs = list.reduce((sum, call) => sum + (number(call.latencyMs) ?? 0), 0);
   summary.models = [...new Set(list.map(call => call.model).filter(Boolean))].sort();
   return summary;

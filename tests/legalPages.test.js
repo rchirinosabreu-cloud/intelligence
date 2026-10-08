@@ -30,7 +30,7 @@ test('la política de datos cumple el contenido mínimo del Decreto 1074 de 2015
     ]) {
         assert.ok(page.includes(expected), `Falta en la política: ${expected}`);
     }
-    assert.match(PRIVACY_POLICY_VERSION, /^2\.6 · 2026-10-07$/);
+    assert.match(PRIVACY_POLICY_VERSION, /^2\.7 · 2026-10-07$/);
     assert.match(page, /dictado/);
     assert.match(page, /archivos adjuntos/);
 });
@@ -38,6 +38,7 @@ test('la política de datos cumple el contenido mínimo del Decreto 1074 de 2015
 test('la política explica el historial y la memoria conversacional de Bria', async () => {
     const page = await read('src/components/public/PrivacyPolicy.jsx');
     for (const detail of ['conversaciones con Bria', 'correcciones', 'historial', 'retirar', 'no entrena']) assert.ok(page.includes(detail), detail);
+    for (const detail of ['sin papelera', 'pendientes de eliminación', 'se conservan por separado', 'almacenamiento privado dedicado']) assert.ok(page.includes(detail), detail);
 });
 
 // Contrastado con el texto oficial (Función Pública, 28 de septiembre de 2026): el art. 25 de la

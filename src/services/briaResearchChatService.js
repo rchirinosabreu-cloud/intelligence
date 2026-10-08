@@ -7,12 +7,13 @@ const error = (message, status, code) => Object.assign(new Error(message), { sta
 const citation = source => ({ kind: 'documento', id: source.id, label: source.title, url: source.url });
 const schema = properties => ({ type: 'object', properties, required: Object.keys(properties), additionalProperties: false });
 export const createBriaResearchChatService = ({ repository, ai, knowledge, platform, now = () => new Date() }) => ({
-  async ask({ user, question, history = [], attachments = [] }) {
-    const revalidate = () => { if (!canUseBria(user)) throw error('Bria no está activada para tu cuenta.', 403, 'BRIA_DISABLED'); };
-    revalidate();
+  async ask({ user, question, history = [], attachments = [], revalidateConversation }) {
+    const revalidate = async () => { if (!canUseBria(user)) throw error('Bria no está activada para tu cuenta.', 403, 'BRIA_DISABLED'); await revalidateConversation?.(); };
+    await revalidate();
     const text = normalizeQuestion(question);
     if (!text) throw error('Escribe una pregunta para Bria.', 400, 'QUESTION_REQUIRED');
     if (!ai) throw error('La conexión con OpenAI aún no está disponible.', 503, 'AI_NOT_READY');
+    const client = typeof ai === 'function' ? ai(user) : ai;
     const tools = [
       { name: 'memoria_de_agencia', description: 'Busca correos y documentos de la agencia por cuenta, tema o acuerdo. Devuelve extractos con procedencia y vigencia por confirmar.', parameters: schema({ consulta: { type: 'string' } }), allowed: canUseBria, async run({ consulta }) {
         const rows = await repository.search(user, consulta);
@@ -31,7 +32,7 @@ export const createBriaResearchChatService = ({ repository, ai, knowledge, platf
     if (knowledge) tools.push(...createKnowledgeTools(knowledge));
     if (platform) tools.push(...platform.tools);
     const safeAi = { async generate(request) {
-      try { return await ai.generate(request); }
+      try { return await client.generate(request); }
       catch (failure) {
         if (['AI_SCOPE_REQUIRED', 'AI_AUTHORIZATION_REQUIRED', 'AI_DESTINATION_INVALID'].includes(failure.code)) throw failure;
         throw error(failure.code === 'invalid_api_key' ? 'La conexión de OpenAI necesita revisar su configuración.' : failure.status === 429 ? 'OpenAI no tiene capacidad disponible ahora. Intenta en un momento.' : 'Bria no pudo completar la consulta al modelo. Intenta nuevamente.', 503, 'BRIA_MODEL_UNAVAILABLE');
@@ -44,7 +45,7 @@ export const createBriaResearchChatService = ({ repository, ai, knowledge, platf
       'Responde como una colega que acompaña y entiende la pregunta. Puedes preparar ideas, borradores y planes, marcados como propuestas. Las herramientas operativas solo leen; los recuerdos conversacionales sí se guardan cuando la persona lo indica explícitamente.',
       'Distingue quién participa en revisión de quién tiene autoridad de aprobación final. Una propuesta no equivale a contrato firmado. Si falta confirmación, dilo.'
     ].join('\n') });
-    revalidate();
+    await revalidate();
     return result;
   }
 });
