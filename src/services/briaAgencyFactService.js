@@ -2,7 +2,7 @@
 // consulta (rol, Bria activada, permisos de módulo, nivel financiero, sesión y pertenencia al equipo), así
 // que un permiso retirado no sobrevive en un token viejo.
 
-import pg from 'pg';
+import { getSidecarPool } from '../lib/sidecarPool.js';
 import prisma from '../lib/prisma.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { factAccess, factError, presentFact } from '../lib/briaAgencyFacts.js';
@@ -60,7 +60,7 @@ export const createBriaAgencyFactService = ({ repository, db = prisma }) => {
 let instance;
 export const getAgencyFactService = () => instance ||= createBriaAgencyFactService({
   repository: createBriaAgencyFactRepository({
-    pool: new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2, connectionTimeoutMillis: 5000, idleTimeoutMillis: 30000 }),
+    pool: getSidecarPool(),
     workspace: 'application'
   })
 });

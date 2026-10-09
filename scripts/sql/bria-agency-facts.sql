@@ -47,3 +47,17 @@ CREATE TABLE IF NOT EXISTS bria_memory.agency_questions (
 );
 CREATE INDEX IF NOT EXISTS bria_agency_questions_entity ON bria_memory.agency_questions(workspace, status, entity_key);
 CREATE INDEX IF NOT EXISTS bria_agency_questions_client ON bria_memory.agency_questions(workspace, status, client_id);
+-- Vínculo formal con la ficha del cliente (9 de octubre de 2026). Antes de crear la llave, lo que apunte a
+-- una ficha inexistente queda sin cliente, para que el arranque nunca falle por un dato viejo. Si una ficha
+-- se borra, el hecho o la duda se conservan sin cliente (se siguen encontrando por su nombre).
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'agency_facts_client_fk') THEN
+    UPDATE bria_memory.agency_facts f SET client_id = NULL WHERE client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public."Client" c WHERE c.id = f.client_id);
+    ALTER TABLE bria_memory.agency_facts ADD CONSTRAINT agency_facts_client_fk FOREIGN KEY (client_id) REFERENCES public."Client"(id) ON DELETE SET NULL;
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'agency_questions_client_fk') THEN
+    UPDATE bria_memory.agency_questions q SET client_id = NULL WHERE client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public."Client" c WHERE c.id = q.client_id);
+    ALTER TABLE bria_memory.agency_questions ADD CONSTRAINT agency_questions_client_fk FOREIGN KEY (client_id) REFERENCES public."Client"(id) ON DELETE SET NULL;
+  END IF;
+END $$;

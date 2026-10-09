@@ -1,4 +1,4 @@
-import pg from 'pg';
+import { getSidecarPool } from '../lib/sidecarPool.js';
 import prisma from '../lib/prisma.js';
 import { resolveKnowledgeActor, getApplicationKnowledgeService } from './briaKnowledgeApplication.js';
 import { createBriaConversationRepository } from './briaConversationRepository.js';
@@ -32,7 +32,7 @@ const authorizeTurn = async (user, turn) => {
 };
 export const getApplicationConversationService = () => {
   if (instance) return instance;
-  const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 3, connectionTimeoutMillis: 5000 });
+  const pool = getSidecarPool();
   const storage = getBriaChatStorage();
   startBriaChatPurgeWorker({ pool, storage });
   return instance = createBriaConversationService({ repository: createBriaConversationRepository({ pool, storage, requireStorage: process.env.NODE_ENV === 'production', workspace: 'application' }), resolveActor: resolveKnowledgeActor, assistant: briaAssistantService, taskDrafts: briaTaskDrafts, dispatchDrafts: briaDispatchDrafts, ai: getAIInstance, authorizeTurn });

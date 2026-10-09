@@ -228,6 +228,11 @@ Todo bloque catch en llamadas a la API debe hacer un console.error del mensaje r
   - **El modelo nunca recibe un valor de la bóveda** y `preparar_acceso` no tiene campo para la contraseña. **Nunca** pasar un usuario, una contraseña o unas notas de la bóveda al modelo, a la memoria de la agencia ni a un registro, y nunca pedir una clave en un mensaje del chat.
   - **La carga desde el Drive** (`lectura-del-negocio/herramientas/importar-boveda.mjs`) guarda bloques idempotentes. Lo que mezcla clientes queda solo para administradores.
   - **Contratos:** `tests/vaultCore.test.js`, `tests/vaultRoutes.test.js`, `tests/vaultBriaTools.test.js` y `tests/vaultPostgres.test.js`. Detalle: `docs/BOVEDA_DE_ACCESOS.md`.
+- **Base de datos lateral (Rodny, 9 de octubre de 2026: «lo que propones para que todo esté bien organizado, hazlo»):** Prisma administra **solo** el esquema `public`. `bria_memory` y `vault` se crean con SQL aditivo e idempotente al arrancar, y **no se modelan en Prisma a propósito**: activar el modo de varios esquemas haría que `prisma db push` quisiera borrar lo no modelado.
+  - **Cada tabla lateral** se anuncia en el encabezado de `schema.prisma` y se describe en `docs/BASE_DE_DATOS_LATERAL.md`. `tests/sidecarSchemaRegistry.test.js` falla si falta alguna o si alguien activa varios esquemas.
+  - **Vínculo con el cliente.** Hechos, dudas y accesos apuntan a `public."Client"(id)` con `ON DELETE SET NULL`: un acceso sin cliente es de la agencia, solo para administradores. El arranque deja sin cliente lo huérfano antes de crear cada llave.
+  - **Conexiones.** Memoria, conversaciones, aprendizajes y bóveda comparten una sola reserva (`src/lib/sidecarPool.js`). No abrir otra `new pg.Pool` para ellas.
+  - **Contratos:** `tests/sidecarSchemaRegistry.test.js` y `tests/sidecarClientLinks.test.js`.
 
 ## 8. Integridad financiera
 
