@@ -11,6 +11,7 @@ import { canReadAgencyMemory } from './briaLivingService.js';
 import { getBriaChatStorage } from './briaChatStorage.js';
 import { startBriaChatPurgeWorker } from './briaChatPurge.js';
 import { briaTaskDrafts, briaDispatchDrafts } from './briaTaskApplication.js';
+import { canUseVault } from '../lib/vaultAccess.js';
 let instance;
 const authorizeTurn = async (user, turn) => {
   for (const source of turn.sources || []) {
@@ -25,6 +26,8 @@ const authorizeTurn = async (user, turn) => {
   }
   if (turn.taskDraft && !hasModulePermission(user, 'gestion')) return false;
   if (turn.dispatchDraft && !(hasModulePermission(user, 'gestion') && hasModulePermission(user, 'parrillas'))) return false;
+  // Las tarjetas de la bóveda llevan solo nombres; el valor lo vuelve a autorizar la bóveda al mostrarlo.
+  if (turn.accessCards?.length && !canUseVault(user)) return false;
   return true;
 };
 export const getApplicationConversationService = () => {

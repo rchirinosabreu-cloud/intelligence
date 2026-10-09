@@ -216,6 +216,14 @@ Todo bloque catch en llamadas a la API debe hacer un console.error del mensaje r
   - **La carga** es `scripts/import-bria-agency-facts.js`: simula por defecto, escribe con `--confirmar IMPORTAR` y es idempotente. Contra producción la corre Rodny.
   - **La base de la lectura es confidencial y no se versiona.**
   - **Contratos:** `tests/briaAgencyFacts.test.js`, `tests/briaAgencyFactTools.test.js` y `tests/briaAgencyFactsPostgres.test.js`. Detalle: `docs/BRIA_MEMORIA_DE_LA_AGENCIA.md`.
+- **Bóveda de accesos (Rodny, 9 de octubre de 2026: que Bria «pueda darme contraseñas»):** los accesos viven cifrados con AES-256-GCM en el esquema aditivo `vault` (`scripts/sql/vault.sql`, aplicado por `ensure-vault-schema.js`, encadenado en `start`).
+  - **Cifrado.** Cada valor va atado a su registro y campo (`src/lib/vaultCrypto.js`). La clave se deriva con HKDF de `VAULT_ENCRYPTION_KEY` o de `ENCRYPTION_KEY`.
+  - **Quién ve qué** (`src/lib/vaultAccess.js`, aplicado en la consulta SQL): un administrador ve todos; un PM, los de sus clientes (`Client.projectManagerId`) y los que un administrador le comparta. Compartir y ver quién leyó un acceso es solo de administración.
+  - **Ver deja registro primero** (`reveal_events`): sin registro no hay valor. Está limitado por persona y va sin caché.
+  - **Nada se borra:** retirar es `RETIRED`.
+  - **Bria (`buscar_acceso`) recibe solo nombre, plataforma y cliente**; el valor lo muestra la plataforma con «Ver acceso» (`BriaAccessCards`). **Nunca** pasar un usuario, una contraseña o unas notas de la bóveda al modelo, a la memoria de la agencia ni a un registro.
+  - **La carga desde el Drive** (`lectura-del-negocio/herramientas/importar-boveda.mjs`) guarda bloques idempotentes. Lo que mezcla clientes queda solo para administradores.
+  - **Contratos:** `tests/vaultCore.test.js`, `tests/vaultRoutes.test.js` y `tests/vaultPostgres.test.js`. Detalle: `docs/BOVEDA_DE_ACCESOS.md`.
 
 ## 8. Integridad financiera
 

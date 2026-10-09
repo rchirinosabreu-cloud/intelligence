@@ -22,4 +22,6 @@
 // cada corrección y acceso por área; sin datos de contacto ni de desempeño.
 // 2.10 (9 de octubre de 2026): Bria lee los cambios que el cliente pide en el portal y prepara
 // despachos a producción que la plataforma ejecuta solo con confirmación.
-export const PRIVACY_POLICY_VERSION = '2.10 · 2026-10-09';
+// 2.11 (9 de octubre de 2026): bóveda cifrada de accesos, con registro de cada lectura; las
+// contraseñas no viajan al proveedor de IA.
+export const PRIVACY_POLICY_VERSION = '2.11 · 2026-10-09';

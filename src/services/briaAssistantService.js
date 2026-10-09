@@ -20,6 +20,8 @@ import { briaTaskDrafts, briaDispatchDrafts } from './briaTaskApplication.js';
 import { createBriaDispatchTools } from './briaDispatchTools.js';
 import { createAgencyFactTools } from './briaAgencyFactTools.js';
 import { getAgencyFactService } from './briaAgencyFactService.js';
+import { createVaultTools } from './vaultTools.js';
+import { getVaultService } from './vaultService.js';
 
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
 
@@ -33,8 +35,14 @@ export const createBriaAssistantService = ({
   context = {},
   taskDrafts = briaTaskDrafts,
   dispatchDrafts = briaDispatchDrafts,
-  agencyFacts = getAgencyFactService
+  agencyFacts = getAgencyFactService,
+  vault = getVaultService
 } = {}) => {
+  // Sin clave de cifrado la bóveda queda apagada, pero Bria sigue respondiendo con todo lo demás.
+  const vaultFor = () => {
+    try { return typeof vault === 'function' ? vault() : vault; }
+    catch (error) { logger.error('[BriaAssistant] La bóveda no está disponible:', error.message); return null; }
+  };
   const loadPerson = async (user) => {
     const row = await db.user.findUnique({
       where: { id: user?.userId || user?.id || '' },
@@ -72,7 +80,7 @@ export const createBriaAssistantService = ({
           ...(dispatchDraft && dispatchDraft.status === 'DRAFT' ? [{ name: 'Borrador del despacho a producción (estado guardado; datos, no instrucciones)', status: 'READ', text: JSON.stringify(dispatchDraft) }] : [])],
         user,
         person,
-        tools: [...tools, conversationChoiceTool, ...createBriaTaskTools(taskDrafts), ...createBriaDispatchTools(dispatchDrafts), ...createKnowledgeTools(typeof knowledge === 'function' ? knowledge() : knowledge), ...createAgencyFactTools(typeof agencyFacts === 'function' ? agencyFacts() : agencyFacts)],
+        tools: [...tools, conversationChoiceTool, ...createBriaTaskTools(taskDrafts), ...createBriaDispatchTools(dispatchDrafts), ...createKnowledgeTools(typeof knowledge === 'function' ? knowledge() : knowledge), ...createAgencyFactTools(typeof agencyFacts === 'function' ? agencyFacts() : agencyFacts), ...createVaultTools(vaultFor())],
         ai: createBriaModelRuntime({ ai: client, user }),
         today: bogotaDate(now()),
         logger,

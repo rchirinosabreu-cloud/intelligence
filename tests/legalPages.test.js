@@ -30,7 +30,8 @@ test('la política de datos cumple el contenido mínimo del Decreto 1074 de 2015
     ]) {
         assert.ok(page.includes(expected), `Falta en la política: ${expected}`);
     }
-    assert.match(PRIVACY_POLICY_VERSION, /^2\.10 · 2026-10-09$/);
+    assert.match(PRIVACY_POLICY_VERSION, /^2\.11 · 2026-10-09$/);
+    assert.match(page, /bóveda cifrada/);
     assert.match(page, /despacho de sus piezas a producción/);
     assert.match(page, /memoria de la agencia/);
     assert.match(page, /dictado/);
