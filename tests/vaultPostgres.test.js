@@ -67,10 +67,16 @@ test('real PostgreSQL: secrets are stored encrypted, each person sees only what 
     const capcutQuery = async (query) => (await repo.list(admin, { query })).some((r) => r.id === dup.credential.id);
     assert.equal(await capcutQuery('capcut'), false);
     assert.equal(await repo.indexPlatforms(admin, 'test-import-1', ['CapCut', 'Canva', 'CapCut']), true);
+    const facebookBlock = await repo.create(admin, { clientId: null, platform: 'Bloque', secret: 'texto' }, { importKey: 'test-import-2', kind: 'BLOQUE', source: 'IMPORT' });
+    created.push(facebookBlock.credential.id);
+    await repo.indexPlatforms(admin, 'test-import-2', ['Facebook']);
+    assert.equal((await repo.list(admin, { query: 'me recuerdas la clave de capcut, por fa' })).some((r) => r.id === facebookBlock.credential.id), false, '«fa» is too short to mean Facebook');
     assert.equal(await capcutQuery('capcut'), true, 'the platforms inside a block are searchable');
     assert.equal(await capcutQuery('CapCut brainstudio'), true, 'an agency access answers to the agency name, written together or not');
     assert.equal(await capcutQuery('la clave de capcut de la agencia'), true, 'words about the request are not required to match');
     assert.equal(await capcutQuery('capcut aristea'), false, 'a client name still narrows the search');
+    assert.equal(await capcutQuery('me recuerdas la clave de capcut, por fa'), true, 'words that match no access at all are ignored');
+    assert.equal((await repo.list(admin, { query: 'zzqqxx' })).length, 0, 'a search where nothing matches finds nothing, never everything');
     assert.equal((await repo.list(admin, { query: 'capcut' })).find((r) => r.id === dup.credential.id).platforms.includes('CapCut'), true);
     await assert.rejects(() => repo.indexPlatforms(pm, 'test-import-1', ['CapCut']), { status: 403 });
     assert.equal(JSON.stringify((await pool.query('SELECT platforms FROM vault.credentials WHERE import_key=$1', ['test-import-1'])).rows).includes('texto'), false);

@@ -54,10 +54,21 @@ export const createVaultRepository = ({ pool, key }) => {
       const args = [...scope(actor)];
       const filters = ["c.status = 'ACTIVE'", VISIBLE];
       if (clientId) { args.push(clientId); filters.push(`c.client_id = $${args.length}`); }
-      const words = (String(query || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().match(/[\p{L}\p{N}]{2,}/gu) || []).filter((word) => !STOPWORDS.has(word)).slice(0, 6);
+      const asked = (String(query || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []).filter((word) => !STOPWORDS.has(word)).slice(0, 8); // «fa» de «por fa» coincidía con «Facebook».
+      const matches = (n) => `(${HAYSTACK} LIKE $${n} OR replace(${HAYSTACK}, ' ', '') LIKE $${n})`;
+      let words = asked;
+      if (asked.length > 1) {
+        // Una frase entera («me recuerdas la clave de capcut, por fa») trae palabras que no están en ningún
+        // acceso. Esas se ignoran; las que sí aparecen en alguno siguen acotando todas juntas, así que
+        // «capcut aristea» no mezcla el CapCut de la agencia con el Instagram de Aristea.
+        const probe = [...args, ...asked.map((word) => `%${word}%`)];
+        const hits = (await pool.query(`SELECT ARRAY[${asked.map((_, i) => `coalesce(bool_or(${matches(args.length + i + 1)}), false)`).join(', ')}] AS hits FROM vault.credentials c LEFT JOIN public."Client" cl ON cl.id = c.client_id WHERE ${filters.join(' AND ')}`, probe)).rows[0].hits;
+        words = asked.filter((_, i) => hits[i]);
+        if (!words.length) return [];
+      }
       for (const word of words) {
         args.push(`%${word}%`);
-        filters.push(`(${HAYSTACK} LIKE $${args.length} OR replace(${HAYSTACK}, ' ', '') LIKE $${args.length})`);
+        filters.push(matches(args.length));
       }
       args.push(Math.min(Math.max(Number(limit) || 200, 1), 500));
       const sql = `${SELECT} WHERE ${filters.join(' AND ')} ORDER BY cl.name NULLS FIRST, c.platform, c.label LIMIT $${args.length}`;
