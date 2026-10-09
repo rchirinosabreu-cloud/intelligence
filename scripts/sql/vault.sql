@@ -35,3 +35,12 @@ CREATE TABLE IF NOT EXISTS vault.reveal_events (
   actor_ref TEXT NOT NULL, actor_name TEXT NOT NULL, recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS vault_reveals_credential ON vault.reveal_events(credential_id, recorded_at DESC);
+-- Vínculo formal con la ficha del cliente (9 de octubre de 2026). Si una ficha se borra, sus accesos quedan
+-- sin cliente: pasan a ser de la agencia, visibles solo para administradores, nunca para otro PM.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'vault_credentials_client_fk') THEN
+    UPDATE vault.credentials v SET client_id = NULL WHERE client_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM public."Client" c WHERE c.id = v.client_id);
+    ALTER TABLE vault.credentials ADD CONSTRAINT vault_credentials_client_fk FOREIGN KEY (client_id) REFERENCES public."Client"(id) ON DELETE SET NULL;
+  END IF;
+END $$;

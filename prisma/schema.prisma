@@ -7,6 +7,15 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// Base lateral (9 de octubre de 2026): Prisma administra solo el esquema `public`. Bria y la bóveda viven en
+// esquemas aparte, creados con SQL aditivo al arrancar; no se modelan aquí a propósito, porque activar el modo
+// de varios esquemas haría que `prisma db push` quisiera borrar lo que no esté modelado. Detalle y tablas en
+// docs/BASE_DE_DATOS_LATERAL.md (la prueba tests/sidecarSchemaRegistry.test.js vigila esta lista).
+//   bria_memory: learnings, learning_events, sources, source_versions, source_search, import_runs,
+//                conversations, conversation_turns, conversation_attachments, conversation_purges,
+//                agency_facts, agency_fact_events, agency_questions, sync_state
+//   vault:       credentials, credential_events, reveal_events
+
 enum SystemRole {
   ADMIN
   PROJECT_MANAGER

@@ -2,7 +2,7 @@
 // al equipo) y los clientes que lleva hoy como PM, así que un cambio de responsable o una baja se aplican en
 // el acto, sin esperar a que venza la sesión.
 
-import pg from 'pg';
+import { getSidecarPool } from '../lib/sidecarPool.js';
 import prisma from '../lib/prisma.js';
 import { canUseVault } from '../lib/vaultAccess.js';
 import { vaultKey } from '../lib/vaultCrypto.js';
@@ -38,7 +38,7 @@ export const createVaultService = ({ repository, db = prisma }) => {
 let instance;
 export const getVaultService = () => instance ||= createVaultService({
   repository: createVaultRepository({
-    pool: new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 2, connectionTimeoutMillis: 5000, idleTimeoutMillis: 30000 }),
+    pool: getSidecarPool(),
     key: vaultKey()
   })
 });

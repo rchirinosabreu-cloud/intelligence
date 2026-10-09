@@ -19,6 +19,8 @@ test('real PostgreSQL: the reading imports once, the team corrects without delet
   const reader = { ref: 'lectura-del-negocio', name: 'Lectura del negocio' };
   try {
     await pool.query(await readFile(new URL('../scripts/sql/bria-agency-facts.sql', import.meta.url), 'utf8'));
+    // Los hechos se ligan a una ficha real: la llave foránea no admite clientes inventados.
+    await pool.query(`INSERT INTO "Client"(id, name, slug) VALUES('client-1', 'Cuenta ficticia', 'cuenta-ficticia-${workspace}') ON CONFLICT (id) DO NOTHING`);
     const repo = createBriaAgencyFactRepository({ pool, workspace });
     const links = new Map([['Cuenta ficticia', { clientId: 'client-1' }]]);
     const reading = [fact('ficticia-001'), fact('ficticia-002', { proposito: 'financiero', sensibilidad: 'restringida', tema: 'cobro', afirmacion: 'La cuenta ficticia debe 1.000.000 desde agosto.' }), fact('ficticia-003', { proposito: 'direccion', tema: 'riesgo', afirmacion: 'Riesgo ficticio de dirección.' })];
@@ -66,6 +68,7 @@ test('real PostgreSQL: the reading imports once, the team corrects without delet
     await pool.query('DELETE FROM bria_memory.agency_fact_events WHERE workspace=$1', [workspace]);
     await pool.query('DELETE FROM bria_memory.agency_facts WHERE workspace=$1', [workspace]);
     await pool.query('DELETE FROM bria_memory.agency_questions WHERE workspace=$1', [workspace]);
+    await pool.query(`DELETE FROM "Client" WHERE id='client-1'`);
     await pool.end();
   }
 });

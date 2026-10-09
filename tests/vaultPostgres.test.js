@@ -17,6 +17,8 @@ test('real PostgreSQL: secrets are stored encrypted, each person sees only what 
   const created = [];
   try {
     await pool.query(await readFile(new URL('../scripts/sql/vault.sql', import.meta.url), 'utf8'));
+    // Los accesos se ligan a fichas reales: la llave foránea no admite clientes inventados.
+    for (const id of ['c-aristea-test', 'c-otro-test']) await pool.query('INSERT INTO "Client"(id, name, slug) VALUES($1, $1, $1) ON CONFLICT (id) DO NOTHING', [id]);
     const repo = createVaultRepository({ pool, key });
     const insta = await repo.create(pm, { clientId: 'c-aristea-test', platform: 'Instagram', label: 'Cuenta principal', username: 'aristea.test', secret: 'Clave-ficticia-1', notes: 'Doble factor al celular de la PM' });
     created.push(insta.credential.id);
@@ -68,6 +70,7 @@ test('real PostgreSQL: secrets are stored encrypted, each person sees only what 
     await pool.query('DELETE FROM vault.reveal_events WHERE credential_id = ANY($1::uuid[])', [created]);
     await pool.query('DELETE FROM vault.credential_events WHERE credential_id = ANY($1::uuid[])', [created]);
     await pool.query('DELETE FROM vault.credentials WHERE id = ANY($1::uuid[])', [created]);
+    await pool.query(`DELETE FROM "Client" WHERE id IN ('c-aristea-test', 'c-otro-test')`);
     await pool.end();
   }
 });

@@ -1,4 +1,4 @@
-import pg from 'pg';
+import { getSidecarPool } from '../lib/sidecarPool.js';
 import prisma from '../lib/prisma.js';
 import { hasModulePermission } from '../config/security.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
@@ -14,4 +14,4 @@ export const resolveKnowledgeActor = async (user, db = prisma) => {
   Object.assign(user, { role: row.role, modulePermissions: row.modulePermissions });
   return { ref: row.id, name: row.name, role: row.role, accountIds, permissions: row.modulePermissions };
 };
-export const getApplicationKnowledgeService = () => instance ||= createBriaKnowledgeService({ repository: createBriaKnowledgeRepository({ pool: new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 3, connectionTimeoutMillis: 5000, idleTimeoutMillis: 30000 }), workspace: 'application' }), resolveActor: resolveKnowledgeActor });
+export const getApplicationKnowledgeService = () => instance ||= createBriaKnowledgeService({ repository: createBriaKnowledgeRepository({ pool: getSidecarPool(), workspace: 'application' }), resolveActor: resolveKnowledgeActor });
