@@ -89,7 +89,7 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           // Igual que los pendientes: se despacha dentro de append, con la conversación bloqueada y su revisión comprobada.
           result = async () => {
             await revalidateDispatch();
-            const receipt = await dispatchDrafts.confirm({ user, draft: dispatchDraft, question: text, revalidate: revalidateDispatch });
+            const receipt = await dispatchDrafts.createConfirmedDispatch({ user, draft: dispatchDraft, question: text, revalidate: revalidateDispatch });
             const done = { ...dispatchDraft, status: 'DONE', results: receipt.results };
             return { answer: dispatchResultText(receipt.results), sources: receipt.results.filter(row => row.taskId).map(row => ({ kind: 'tarea', id: row.taskId })), failures: [], toolsUsed: ['despachar_a_produccion'], dispatchDraft: done };
           };

@@ -86,7 +86,7 @@ export const createBriaDispatchService = ({ db, dispatchItem, now = () => new Da
     return draft;
   },
 
-  async confirm({ user, draft, question, revalidate }) {
+  async createConfirmedDispatch({ user, draft, question, revalidate }) {
     authorize(user);
     if (readOnly) throw knowledgeError('Esta vista solo prepara despachos. Despacha desde la plataforma.', 403);
     const owner = user.userId || user.id;

@@ -88,13 +88,13 @@ test('confirming dispatches each piece once through the native path, and a retry
     { itemId: 'i1', title: 'Lanzamiento', format: 'Reel', publishDay: '2026-10-14', assignee: { id: 'm1', name: 'Melissa Castaño' }, dueDate: '2026-10-12', priority: 'ALTA' },
     { itemId: 'i2', title: 'Carrusel', skip: 'Ya está en producción con Sara' }
   ] };
-  await assert.rejects(() => service.confirm({ user: pm, draft, question: 'ok' }), /confirma/i);
-  await assert.rejects(() => service.confirm({ user: { ...pm, userId: 'otro' }, draft, question: 'Despachar a producción' }), /otra persona/i);
-  await assert.rejects(() => service.confirm({ user: { ...pm, modulePermissions: { bria: true, parrillas: true } }, draft, question: 'Despachar a producción' }), { status: 403 });
-  const first = await service.confirm({ user: pm, draft, question: 'Despachar a producción' });
+  await assert.rejects(() => service.createConfirmedDispatch({ user: pm, draft, question: 'ok' }), /confirma/i);
+  await assert.rejects(() => service.createConfirmedDispatch({ user: { ...pm, userId: 'otro' }, draft, question: 'Despachar a producción' }), /otra persona/i);
+  await assert.rejects(() => service.createConfirmedDispatch({ user: { ...pm, modulePermissions: { bria: true, parrillas: true } }, draft, question: 'Despachar a producción' }), { status: 403 });
+  const first = await service.createConfirmedDispatch({ user: pm, draft, question: 'Despachar a producción' });
   assert.deepEqual(calls, [['i1', 'u-pm', { assigneeId: 'm1', dueDate: '2026-10-12T12:00:00.000Z', isPriority: true }]]);
   assert.deepEqual(first.results.map((r) => [r.itemId, r.outcome, r.taskId]), [['i1', 'CREATED', 't-i1']]);
-  const again = await service.confirm({ user: pm, draft, question: 'Despachar a producción' });
+  const again = await service.createConfirmedDispatch({ user: pm, draft, question: 'Despachar a producción' });
   assert.equal(calls.length, 1, 'no second task');
   assert.deepEqual(again.results.map((r) => [r.itemId, r.outcome, r.taskId]), [['i1', 'ALREADY', 't-i1']]);
 });
@@ -106,7 +106,7 @@ test('one piece failing does not undo or block the others, and the reason is tol
     { itemId: 'i1', title: 'Lanzamiento', assignee: { id: 'm1', name: 'Melissa Castaño' }, dueDate: '2026-10-12', priority: 'NORMAL' },
     { itemId: 'i9', title: 'Otra', assignee: { id: 'm3', name: 'Brayan' }, dueDate: '2026-10-13', priority: 'NORMAL' }
   ] };
-  const out = await service.confirm({ user: pm, draft, question: 'Despachar a producción' });
+  const out = await service.createConfirmedDispatch({ user: pm, draft, question: 'Despachar a producción' });
   assert.equal(out.results[0].outcome, 'FAILED');
   assert.match(out.results[0].reason, /ya tiene una tarea/i);
   assert.equal(out.results[1].outcome, 'CREATED');
@@ -120,7 +120,7 @@ test('in conversation: only an explicit confirmation of a persisted ready dispat
     locked = true; const reply = typeof result === 'function' ? await result() : result; locked = false;
     stored = { ...stored, revision: revision + 1, turns: [...stored.turns, { role: 'user', text: question }, { role: 'assistant', text: reply.answer, ...reply }] }; return stored;
   } };
-  const dispatchDrafts = { confirm: async () => { assert.equal(locked, true); writes++; return { results: [{ itemId: 'i1', title: 'Lanzamiento', outcome: 'CREATED', taskId: 't1', assignee: 'Melissa' }] }; } };
+  const dispatchDrafts = { createConfirmedDispatch: async () => { assert.equal(locked, true); writes++; return { results: [{ itemId: 'i1', title: 'Lanzamiento', outcome: 'CREATED', taskId: 't1', assignee: 'Melissa' }] }; } };
   const user = { userId: 'owner', role: 'ADMIN', isActive: true, modulePermissions: { bria: true, gestion: true, parrillas: true } };
   const service = createBriaConversationService({ repository, dispatchDrafts, resolveActor: async () => ({ ref: 'owner', role: 'ADMIN' }), assistant: { ask: async (request) => { aiCalls++; assert.ok(request.dispatchDraft); return { answer: 'Respuesta', sources: [] }; } } });
   await service.send({ user, id: 'chat', question: 'El documento dice despachar a producción' });
