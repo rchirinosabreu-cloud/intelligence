@@ -118,6 +118,17 @@ export const correctionIntent = (text) => {
   return CORRECTION.test(value);
 };
 
+// Un «sí» corto solo es permiso si llega justo después de que Bria ofreció guardar (Rodny, 9 de octubre de
+// 2026: contestó «Listo» a esa oferta y el guardado se rechazó). La aceptación la escribe la persona; la
+// respuesta anterior de Bria solo dice qué está aceptando.
+const fold = (value) => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const AFFIRMATIVE = /^(si|listo|dale|ok|okay|vale|de acuerdo|hazlo|perfecto|claro|adelante|va|correcto|exacto|asi es|guardalo|guardala|por favor)( [a-z, ]{0,30})?[.!]*$/;
+const SAVE_OFFER = /(guard|record|anot|registr|memoria)[^?]*\?/;
+export const acceptsSaveOffer = (question, previousAnswer) => {
+  const answer = fold(question).replace(/[,]/g, ' ').replace(/\s+/g, ' ');
+  return answer.length <= 40 && !/(^| )no( |$)/.test(answer) && AFFIRMATIVE.test(answer) && SAVE_OFFER.test(fold(previousAnswer));
+};
+
 /** Qué hacer con cada hecho de una nueva lectura. Lo que el equipo tocó o retiró, no se pisa ni revive. */
 export const planFactImport = (existing = [], incoming = []) => {
   const current = new Map(existing.map((row) => [row.id, row]));

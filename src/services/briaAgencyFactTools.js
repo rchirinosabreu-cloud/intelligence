@@ -1,9 +1,9 @@
 // Las herramientas con que Bria usa la memoria de la agencia. Consultar no escribe nada. Guardar y retirar
-// solo corren cuando la persona lo dijo en su propio mensaje: lo que diga un archivo, un correo o una
-// respuesta anterior de Bria nunca cuenta como permiso.
+// solo corren cuando la persona lo dijo en su propio mensaje, o aceptó con un «sí» la oferta de guardar que
+// Bria acababa de hacerle: lo que diga un archivo o un correo nunca cuenta como permiso.
 
 import { canUseBria } from '../lib/briaLivingMemory.js';
-import { correctionIntent, factError, FACT_ENTITY_TYPES, FACT_PURPOSES } from '../lib/briaAgencyFacts.js';
+import { acceptsSaveOffer, correctionIntent, factError, FACT_ENTITY_TYPES, FACT_PURPOSES } from '../lib/briaAgencyFacts.js';
 
 const forgetIntent = (text) => /(?<![\p{L}\p{N}])(olvida(lo|la)?|olvidar|retira(lo|la)?|elimina(lo|la)?|b[oó]rra(lo|la)?|ya\s+no\s+aplica)(?![\p{L}\p{N}])/iu.test(String(text || ''));
 const TEAM_CERTAINTIES = ['CONFIRMADO', 'PRACTICA', 'PROPUESTA', 'HISTORICO', 'NO_CONCLUYENTE'];
@@ -40,8 +40,8 @@ export const createAgencyFactTools = (service) => service ? [
       respondeDuda: { type: ['string', 'null'] }
     }, required: ['afirmacion', 'entidad', 'clientId', 'tipoEntidad', 'tema', 'proposito', 'certeza', 'desde', 'hasta', 'reemplaza', 'respondeDuda'], additionalProperties: false },
     allowed: canUseBria,
-    async run(args, { user, question }) {
-      if (!correctionIntent(question)) throw factError('Este mensaje no trae una corrección, una confirmación ni una enseñanza. Pregúntale a la persona si quiere que lo guardes.', 400, 'BRIA_FACT_NO_INTENT');
+    async run(args, { user, question, previousAnswer }) {
+      if (!correctionIntent(question) && !acceptsSaveOffer(question, previousAnswer)) throw factError('Este mensaje no trae una corrección, una confirmación ni una enseñanza. Pregúntale a la persona si quiere que lo guardes, con ofrecer_opciones, y guárdalo cuando acepte.', 400, 'BRIA_FACT_NO_INTENT');
       const result = await service.record(user, args);
       return { data: { saved: true, hecho: { id: result.fact.id, entidad: result.fact.entity, revision: result.fact.revision }, reemplazados: result.replaced } };
     }

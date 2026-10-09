@@ -121,6 +121,24 @@ test('a tool runs with the identity of the person who asks and its sources come 
   assert.ok(ai.calls[1].input.some((item) => item.type === 'function_call' && item.name === 'mis_tareas'));
 });
 
+test('a refusal meant for the person reaches the model in words, is not a failure, and tools see the previous answer', async () => {
+  const seen = [];
+  const warnings = [];
+  const tools = [tool('guardar_en_memoria', { run: async (_args, ctx) => { seen.push(ctx.previousAnswer); throw Object.assign(new Error('Pregúntale a la persona si quiere que lo guardes.'), { status: 400, code: 'BRIA_FACT_NO_INTENT' }); } })];
+  const ai = scriptedAi([
+    reply({ calls: [{ id: 'c1', name: 'guardar_en_memoria', args: {} }] }),
+    reply({ text: '¿Quieres que lo guarde?' })
+  ]);
+  const history = [{ role: 'user', text: 'Hola' }, { role: 'assistant', text: '¿Quieres que guarde esto en la memoria de Aristea?' }];
+  const result = await runAssistant({ question: 'Listo', history, user, person, tools, ai, today: TODAY, logger: { error: () => assert.fail('no es un error del servidor'), warn: (...args) => warnings.push(args) } });
+  const [output] = outputsOf(ai.calls[1]);
+  assert.equal(output.error, 'Pregúntale a la persona si quiere que lo guardes.');
+  assert.equal(output.code, 'BRIA_FACT_NO_INTENT');
+  assert.deepEqual(result.failures, []);
+  assert.deepEqual(seen, ['¿Quieres que guarde esto en la memoria de Aristea?']);
+  assert.equal(warnings.length, 1);
+});
+
 test('a tool that fails does not bring the answer down: the model is told and the failure is recorded', async () => {
   const errors = [];
   const tools = [tool('parrilla_de_cliente', { run: async () => { throw new Error('postgres://secreto'); } })];
