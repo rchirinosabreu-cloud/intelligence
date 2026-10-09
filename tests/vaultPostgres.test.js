@@ -62,6 +62,19 @@ test('real PostgreSQL: secrets are stored encrypted, each person sees only what 
     created.push(dup.credential.id);
     assert.equal((await repo.create(admin, { clientId: null, platform: 'Bloque', secret: 'texto' }, { importKey: 'test-import-1', kind: 'BLOQUE', source: 'IMPORT' })).duplicate, true, 'import is idempotent');
 
+    // Un bloque importado guarda todo cifrado; sin el índice de plataformas «CapCut» no se encontraba
+    // (Rodny, 9 de octubre de 2026: «me recuerdas la clave de capcut» → «No encuentro un acceso de CapCut»).
+    const capcutQuery = async (query) => (await repo.list(admin, { query })).some((r) => r.id === dup.credential.id);
+    assert.equal(await capcutQuery('capcut'), false);
+    assert.equal(await repo.indexPlatforms(admin, 'test-import-1', ['CapCut', 'Canva', 'CapCut']), true);
+    assert.equal(await capcutQuery('capcut'), true, 'the platforms inside a block are searchable');
+    assert.equal(await capcutQuery('CapCut brainstudio'), true, 'an agency access answers to the agency name, written together or not');
+    assert.equal(await capcutQuery('la clave de capcut de la agencia'), true, 'words about the request are not required to match');
+    assert.equal(await capcutQuery('capcut aristea'), false, 'a client name still narrows the search');
+    assert.equal((await repo.list(admin, { query: 'capcut' })).find((r) => r.id === dup.credential.id).platforms.includes('CapCut'), true);
+    await assert.rejects(() => repo.indexPlatforms(pm, 'test-import-1', ['CapCut']), { status: 403 });
+    assert.equal(JSON.stringify((await pool.query('SELECT platforms FROM vault.credentials WHERE import_key=$1', ['test-import-1'])).rows).includes('texto'), false);
+
     await repo.retire(pm, insta.credential.id, 2, 'La cuenta se cerró');
     assert.equal((await repo.list(pm)).some((r) => r.id === insta.credential.id), false);
     await assert.rejects(() => repo.reveal(pm, insta.credential.id), { status: 404 });

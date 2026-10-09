@@ -32,10 +32,10 @@ export const createVaultTools = (service) => service ? [
       const accessCards = rows.map(card);
       return {
         data: {
-          accesos: rows.map((row) => ({ id: row.id, ...card(row), version: row.revision })),
+          accesos: rows.map((row) => ({ id: row.id, ...card(row), version: row.revision, ...(row.platforms?.length ? { contiene: row.platforms.slice(0, 15) } : {}) })),
           instruccion: accessCards.length
-            ? 'El acceso aparece bajo tu respuesta en una tarjeta; si es uno solo, ya se muestra. Nunca escribas ni inventes usuarios o contraseñas.'
-            : 'No hay accesos que esta persona pueda ver con esa búsqueda. Si quiere guardarlo, usa preparar_acceso; si es de otro cliente, lo ve su PM o un administrador.'
+            ? 'El acceso aparece bajo tu respuesta en una tarjeta; si es uno solo, ya se muestra. Un acceso con «contiene» es un bloque traído del Drive con varias cuentas: di en qué bloque está lo que pidió. Nunca escribas ni inventes usuarios o contraseñas.'
+            : 'No hay accesos que esta persona pueda ver con esa búsqueda. Antes de darlo por perdido, busca otra vez solo con el nombre de la plataforma (por ejemplo «capcut»). Si sigue sin aparecer y quiere guardarlo, usa preparar_acceso; si es de otro cliente, lo ve su PM o un administrador.'
         },
         accessCards
       };
