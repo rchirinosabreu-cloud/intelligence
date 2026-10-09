@@ -5,6 +5,7 @@ const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 1, c
 try {
   await pool.query(await readFile(new URL('./sql/bria-knowledge.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('./sql/bria-conversations.sql', import.meta.url), 'utf8'));
-  console.log('[Bria] Memoria y conversaciones disponibles.');
+  await pool.query(await readFile(new URL('./sql/bria-agency-facts.sql', import.meta.url), 'utf8'));
+  console.log('[Bria] Memoria, conversaciones y memoria de la agencia disponibles.');
 }
 finally { await pool.end(); }

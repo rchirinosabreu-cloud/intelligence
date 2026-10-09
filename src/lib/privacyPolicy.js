@@ -18,4 +18,6 @@
 // y conservación independiente de los recuerdos explícitos.
 // 2.8 (8 de octubre de 2026): preparación conversacional y creación confirmada de
 // pendientes, con contexto como comentario y copias independientes de los insumos.
-export const PRIVACY_POLICY_VERSION = '2.8 · 2026-10-08';
+// 2.9 (9 de octubre de 2026): memoria de la agencia de Bria, con fuente, vigencia, autor de
+// cada corrección y acceso por área; sin datos de contacto ni de desempeño.
+export const PRIVACY_POLICY_VERSION = '2.9 · 2026-10-09';
