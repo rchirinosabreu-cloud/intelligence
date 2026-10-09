@@ -47,6 +47,19 @@ test('saving needs a correction, confirmation or teaching in the human message i
   assert.equal(service.calls[0][0], 'record');
 });
 
+test('a short yes counts only right after Bria offered to save (Rodny, 9 de octubre de 2026: «Listo» no se guardó)', async () => {
+  const service = fakeService();
+  const save = byName(createAgencyFactTools(service), 'guardar_en_memoria');
+  const args = { afirmacion: 'Aristea no confirmará el contrato de octubre por falta de flujo de caja.', entidad: 'Aristea', clientId: 'c1', tema: 'acuerdo', tipoEntidad: 'cliente', proposito: 'operacion', certeza: 'CONFIRMADO', desde: '2026-10-09', hasta: null, reemplaza: [], respondeDuda: null };
+  const offer = 'Lo dejo así en la memoria de Aristea: el contrato de octubre no se confirmará. ¿Quieres que lo guarde?';
+  for (const yes of ['Listo', 'Sí', 'si, dale', 'Ok', 'De acuerdo', 'Hazlo', 'Sí, guárdalo', 'Perfecto']) {
+    assert.equal((await save.run(args, { user: pm, question: yes, previousAnswer: offer })).data.saved, true, yes);
+  }
+  await assert.rejects(() => save.run(args, { user: pm, question: 'Listo', previousAnswer: 'Aristea está en rojo por dos frentes.' }), /pregúntale/i);
+  await assert.rejects(() => save.run(args, { user: pm, question: 'Listo' }), /pregúntale/i);
+  await assert.rejects(() => save.run(args, { user: pm, question: 'No, mejor no', previousAnswer: offer }), /pregúntale/i);
+});
+
 test('forgetting needs an explicit request to forget', async () => {
   const service = fakeService();
   const retire = byName(createAgencyFactTools(service), 'retirar_de_memoria');
