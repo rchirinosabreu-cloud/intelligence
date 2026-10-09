@@ -43,7 +43,6 @@ const PublicQuotation = lazyWithRecovery(() => import('./components/public/Quota
 const MinutesLayout = lazyWithRecovery(() => import('./components/modules/Minutes/MinutesLayout'));
 const DriveLayout = lazyWithRecovery(() => import('./components/modules/Drive/DriveLayout'));
 const OperationalHealth = lazyWithRecovery(() => import('./components/modules/OperationalHealth'));
-const VaultPage = lazyWithRecovery(() => import('./components/modules/Vault/VaultPage'));
 const CrmLayout = lazyWithRecovery(() => import('./components/modules/Crm/CrmLayout'));
 const CrmLeadDetail = lazyWithRecovery(() => import('./components/modules/Crm/CrmLeadDetail'));
 const CommercialRequestPage = lazyWithRecovery(() => import('./components/public/CommercialRequest/CommercialRequestPage'));
@@ -83,12 +82,6 @@ function ModuleGuard({ module, children }) {
 function AdminGuard({ children }) {
   const { currentUser } = useAuth();
   return currentUser?.role === 'ADMIN' ? children : <Navigate to="/" replace />;
-}
-
-// Administradores y project managers (la bóveda): la regla fina de qué acceso ve cada uno vive en el servidor.
-function ManagerGuard({ children }) {
-  const { currentUser } = useAuth();
-  return ['ADMIN', 'PROJECT_MANAGER'].includes(currentUser?.role) ? children : <Navigate to="/" replace />;
 }
 
 function AppContent() {
@@ -180,7 +173,6 @@ function AppContent() {
                     <Route path="/inicio" element={<Navigate to="/" replace />} />
                     <Route path="/dashboard" element={<Navigate to="/" replace />} />
                     <Route path="/gobierno-ia" element={<AdminGuard><GovernanceCenter /></AdminGuard>} />
-                    <Route path="/boveda" element={<ManagerGuard><VaultPage /></ManagerGuard>} />
                     <Route
                       path="/salud-operativa"
                       element={

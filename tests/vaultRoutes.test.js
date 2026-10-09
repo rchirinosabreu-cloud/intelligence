@@ -74,7 +74,17 @@ test('Bria finds accesses but never receives a password: the platform shows it b
   const out = await tool.run({ clientId: 'c1', consulta: 'instagram' }, { user: { userId: 'u-pm' } });
   assert.deepEqual(out.accessCards, [{ id: 'a1', cliente: 'Aristea', plataforma: 'Instagram', nombre: 'Cuenta principal' }]);
   assert.equal(JSON.stringify(out).includes('secret'), false);
-  assert.match(out.data.instruccion, /botón/i);
+  assert.match(out.data.instruccion, /tarjeta/i);
+});
+
+test('there is no separate vault page: everything goes through Bria (Rodny, 9 de octubre de 2026)', () => {
+  const sidebar = readFileSync(new URL('../src/components/layout/Sidebar.jsx', import.meta.url), 'utf8');
+  const app = readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
+  assert.equal(sidebar.includes('/boveda'), false);
+  assert.equal(app.includes('/boveda'), false);
+  const chat = readFileSync(new URL('../src/components/bria/BriaConversation.jsx', import.meta.url), 'utf8');
+  assert.match(chat, /BriaAccessCards/);
+  assert.match(chat, /BriaAccessCapture/);
 });
 
 test('the vault route is mounted behind authentication and for managers only', () => {

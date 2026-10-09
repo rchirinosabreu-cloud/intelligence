@@ -27,7 +27,7 @@ const authorizeTurn = async (user, turn) => {
   if (turn.taskDraft && !hasModulePermission(user, 'gestion')) return false;
   if (turn.dispatchDraft && !(hasModulePermission(user, 'gestion') && hasModulePermission(user, 'parrillas'))) return false;
   // Las tarjetas de la bóveda llevan solo nombres; el valor lo vuelve a autorizar la bóveda al mostrarlo.
-  if (turn.accessCards?.length && !canUseVault(user)) return false;
+  if ((turn.accessCards?.length || turn.accessCapture) && !canUseVault(user)) return false;
   return true;
 };
 export const getApplicationConversationService = () => {

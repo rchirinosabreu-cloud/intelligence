@@ -221,9 +221,13 @@ Todo bloque catch en llamadas a la API debe hacer un console.error del mensaje r
   - **Quién ve qué** (`src/lib/vaultAccess.js`, aplicado en la consulta SQL): un administrador ve todos; un PM, los de sus clientes (`Client.projectManagerId`) y los que un administrador le comparta. Compartir y ver quién leyó un acceso es solo de administración.
   - **Ver deja registro primero** (`reveal_events`): sin registro no hay valor. Está limitado por persona y va sin caché.
   - **Nada se borra:** retirar es `RETIRED`.
-  - **Bria (`buscar_acceso`) recibe solo nombre, plataforma y cliente**; el valor lo muestra la plataforma con «Ver acceso» (`BriaAccessCards`). **Nunca** pasar un usuario, una contraseña o unas notas de la bóveda al modelo, a la memoria de la agencia ni a un registro.
+  - **Sin módulo aparte** (Rodny: «eso me lo puede dar la misma Bria … si quiero guardar una contraseña se lo digo a Bria»): todo se hace conversando con Bria. No crear una página de bóveda.
+    - **Pedir:** `buscar_acceso` + la tarjeta `BriaAccessCards`, que se abre sola si la respuesta es nueva y trae un solo acceso.
+    - **Guardar o cambiar:** `preparar_acceso` reúne los datos conversando y la clave se escribe en el campo protegido `BriaAccessCapture`, que la guarda directo en la bóveda.
+    - **Retirar** solo con pedido explícito. **Compartir y «quién la vio»** son de administradores.
+  - **El modelo nunca recibe un valor de la bóveda** y `preparar_acceso` no tiene campo para la contraseña. **Nunca** pasar un usuario, una contraseña o unas notas de la bóveda al modelo, a la memoria de la agencia ni a un registro, y nunca pedir una clave en un mensaje del chat.
   - **La carga desde el Drive** (`lectura-del-negocio/herramientas/importar-boveda.mjs`) guarda bloques idempotentes. Lo que mezcla clientes queda solo para administradores.
-  - **Contratos:** `tests/vaultCore.test.js`, `tests/vaultRoutes.test.js` y `tests/vaultPostgres.test.js`. Detalle: `docs/BOVEDA_DE_ACCESOS.md`.
+  - **Contratos:** `tests/vaultCore.test.js`, `tests/vaultRoutes.test.js`, `tests/vaultBriaTools.test.js` y `tests/vaultPostgres.test.js`. Detalle: `docs/BOVEDA_DE_ACCESOS.md`.
 
 ## 8. Integridad financiera
 

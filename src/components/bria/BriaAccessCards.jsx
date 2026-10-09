@@ -4,11 +4,11 @@ import { requestVault, VAULT_REVEAL_MS } from '@/lib/vaultRequest';
 import RevealedAccess from '@/components/vault/RevealedAccess';
 
 // Las tarjetas de acceso que Bria deja bajo su respuesta (9 de octubre de 2026). Bria solo conoce el nombre;
-// el valor lo pide la persona con «Ver acceso», la plataforma comprueba su permiso, registra la lectura y lo
-// muestra durante un minuto.
-function AccessCard({ card, request }) {
+// el valor lo trae la plataforma, que comprueba el permiso, registra la lectura y lo muestra durante un
+// minuto. Si la respuesta es nueva y trae un solo acceso, se muestra de una vez.
+function AccessCard({ card, request, autoReveal }) {
   const [shown, setShown] = useState(null), [busy, setBusy] = useState(false), [error, setError] = useState('');
-  const timer = useRef(null);
+  const timer = useRef(null), started = useRef(false);
   useEffect(() => () => clearTimeout(timer.current), []);
   const hide = () => { clearTimeout(timer.current); setShown(null); };
   const reveal = async () => {
@@ -21,6 +21,11 @@ function AccessCard({ card, request }) {
     } catch (failure) { setError(failure.message); }
     finally { setBusy(false); }
   };
+  // Cuando la persona acaba de pedir un acceso y hay uno solo, Bria se lo da en la misma respuesta. Al volver
+  // a abrir la conversación ya no se muestra solo: hay que pedirlo, y cada lectura queda registrada.
+  useEffect(() => {
+    if (autoReveal && !started.current) { started.current = true; reveal(); }
+  }, [autoReveal]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
     <li className="rounded-xl border border-zinc-200 bg-white p-3 dark:border-zinc-700 dark:bg-zinc-900" data-access-card={card.id}>
       <div className="flex items-center gap-3">
@@ -39,7 +44,7 @@ function AccessCard({ card, request }) {
   );
 }
 
-export default function BriaAccessCards({ cards = [], request = requestVault }) {
+export default function BriaAccessCards({ cards = [], request = requestVault, fresh = false }) {
   if (!cards.length) return null;
-  return <ul aria-label="Accesos" className="mt-3 space-y-2">{cards.map((card) => <AccessCard key={card.id} card={card} request={request} />)}</ul>;
+  return <ul aria-label="Accesos" className="mt-3 space-y-2">{cards.map((card) => <AccessCard key={card.id} card={card} request={request} autoReveal={fresh && cards.length === 1} />)}</ul>;
 }
