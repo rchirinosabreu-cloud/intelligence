@@ -3,7 +3,8 @@ import { knowledgeError } from '../lib/briaKnowledge.js';
 import { validateAttachmentSelection, BRIA_AUDIO_MAX_BYTES } from '../lib/briaAttachments.js';
 import { readBriaAttachment, attachmentModelPart } from './briaAttachmentReader.js';
 import { taskDraftReply, taskDraftStage, taskCreationIntent, isTaskConfirmation, isTaskCancellation, materialDeclined } from '../lib/briaTaskDraft.js';
-export const createBriaConversationService = ({ repository, resolveActor, assistant, ai, taskDrafts, prepareAttachment = readBriaAttachment, authorizeTurn = async () => true }) => {
+import { dispatchReply, dispatchStage, isDispatchConfirmation, isDispatchCancellation, dispatchResultText } from '../lib/briaDispatchDraft.js';
+export const createBriaConversationService = ({ repository, resolveActor, assistant, ai, taskDrafts, dispatchDrafts, prepareAttachment = readBriaAttachment, authorizeTurn = async () => true }) => {
   const pending = new Set();
   const authorizeInput = async user => { const actor = await resolveActor(user); if (!['ADMIN', 'PROJECT_MANAGER'].includes(actor.role)) throw knowledgeError('Solo Admin y Project Manager pueden adjuntar o dictar.', 403); return actor; };
   const permitted = async (user, turn) => !turn.permissionChanged && await authorizeTurn(user, turn);
@@ -69,8 +70,30 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           if (!await authorizeTurn(user, { taskDraft })) throw knowledgeError('Tu acceso al pendiente cambió.', 403);
         };
         const taskResult = draft => ({ ...taskDraftReply(draft), sources: [], failures: [], toolsUsed: ['preparar_pendiente'], taskDraft: draft });
+        const dispatchDraft = [...chat.turns].reverse().find(turn => turn.role === 'assistant' && turn.dispatchDraft)?.dispatchDraft;
+        const dispatchState = dispatchStage(dispatchDraft);
+        const revalidateDispatch = async () => {
+          await resolveActor(user);
+          if (!await authorizeTurn(user, { dispatchDraft })) throw knowledgeError('Tu acceso para despachar cambió.', 403);
+        };
         let result;
-        if (taskDrafts && taskDraft && isTaskCancellation(text) && !['CREATED','CANCELLED'].includes(stage)) {
+        if (dispatchDrafts && dispatchDraft && isDispatchCancellation(text) && !['DONE', 'CANCELLED'].includes(dispatchState)) {
+          await revalidateDispatch();
+          const cancelled = { ...dispatchDraft, status: 'CANCELLED' };
+          result = { ...dispatchReply(cancelled), sources: [], failures: [], toolsUsed: ['preparar_despacho'], dispatchDraft: cancelled };
+        } else if (dispatchDrafts && dispatchState === 'DONE' && isDispatchConfirmation(text)) {
+          await revalidateDispatch();
+          result = { answer: `Ese despacho ya se hizo.\n\n${dispatchResultText(dispatchDraft.results)}`, sources: [], failures: [], dispatchDraft };
+        } else if (dispatchDrafts && dispatchState === 'READY' && isDispatchConfirmation(text) && !files.length) {
+          await revalidateDispatch();
+          // Igual que los pendientes: se despacha dentro de append, con la conversación bloqueada y su revisión comprobada.
+          result = async () => {
+            await revalidateDispatch();
+            const receipt = await dispatchDrafts.createConfirmedDispatch({ user, draft: dispatchDraft, question: text, revalidate: revalidateDispatch });
+            const done = { ...dispatchDraft, status: 'DONE', results: receipt.results };
+            return { answer: dispatchResultText(receipt.results), sources: receipt.results.filter(row => row.taskId).map(row => ({ kind: 'tarea', id: row.taskId })), failures: [], toolsUsed: ['despachar_a_produccion'], dispatchDraft: done };
+          };
+        } else if (taskDrafts && taskDraft && isTaskCancellation(text) && !['CREATED','CANCELLED'].includes(stage)) {
           await revalidateTask(); result = taskResult({ ...taskDraft, status: 'CANCELLED' });
         } else if (taskDrafts && stage === 'CREATED' && isTaskConfirmation(text)) {
           await revalidateTask(); result = { answer: `Este pendiente ya está creado. [Abrir en Gestión](/gestion?taskId=${encodeURIComponent(taskDraft.taskId)})`, taskDraft, sources: [{ kind: 'tarea', id: taskDraft.taskId }], failures: [] };
@@ -85,11 +108,12 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         } else if (taskDrafts && taskDraft && !['CREATED','CANCELLED'].includes(stage) && ((stage === 'PRIORITY' && /^(normal|alta|urgente)$/i.test(text)) || (stage === 'DATE' && /^(hoy|mañana|pasado mañana)$/i.test(text)) || (stage === 'MATERIAL' && materialDeclined(text, stage)))) {
           await revalidateTask(); result = taskResult(await taskDrafts.prepare({ user, previous: taskDraft, question: text, attachments: prepared }));
         } else {
-          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, taskDraft, taskAttachments: prepared, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation });
+          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, taskDraft, dispatchDraft, taskAttachments: prepared, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation });
           if (!result.taskDraft && taskDraft) result.taskDraft = taskDraft;
+          if (!result.dispatchDraft && dispatchDraft) result.dispatchDraft = dispatchDraft;
         }
         const fresh = await resolveActor(user);
-        if (!(await Promise.all([...chat.turns.filter(turn => turn.role === 'assistant'), { role: 'assistant', ...(typeof result === 'function' ? { taskDraft } : result) }].map(turn => authorizeTurn(user, turn)))).every(Boolean)) throw knowledgeError('Tu acceso a las fuentes cambió durante la consulta.', 403);
+        if (!(await Promise.all([...chat.turns.filter(turn => turn.role === 'assistant'), { role: 'assistant', ...(typeof result === 'function' ? { taskDraft, dispatchDraft } : result) }].map(turn => authorizeTurn(user, turn)))).every(Boolean)) throw knowledgeError('Tu acceso a las fuentes cambió durante la consulta.', 403);
         const saved = await repository.append(fresh, id, chat.revision, text, result, prepared);
         return sanitize(user, saved);
       } finally { pending.delete(key); }

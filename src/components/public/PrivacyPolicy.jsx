@@ -97,6 +97,7 @@ const PrivacyPolicy = () => (
         <li>buscar y resumir información en los documentos, minutas y correos corporativos de la agencia, a pedido de un integrante del equipo;</li>
         <li>acompañar el trabajo mediante conversaciones con Bria, consultar registros actuales según los permisos de la persona y recordar las decisiones o correcciones que esta le enseñe explícitamente.</li>
         <li>preparar y crear pendientes a petición de Admin o Project Manager con acceso a Gestión, sintetizando el contexto para su revisión.</li>
+        <li>revisar el avance de una cuenta frente a lo contratado, incluidos los cambios que el cliente pidió en el portal de aprobación, y preparar el despacho de sus piezas a producción, que la plataforma ejecuta solo cuando Admin o Project Manager con acceso a Gestión y Parrillas lo confirma.</li>
         <li>proponer análisis de carga de trabajo y desempeño del equipo a partir de las tareas registradas.</li>
       </List>
       <p>Las conversaciones con Bria se guardan para que su autor pueda retomarlas y consultar su historial. Los recuerdos conservan autor, fecha, alcance y cambios; una persona autorizada puede retirar un recuerdo para que deje de usarse. Esta memoria no entrena el modelo del proveedor ni modifica por sí sola una tarea o una parrilla. Para responder, se envía la pregunta, una parte acotada del diálogo y los fragmentos necesarios de las fuentes disponibles para esa persona.</p>

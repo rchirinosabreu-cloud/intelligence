@@ -19,10 +19,10 @@ const allowedFor = (who) => briaAssistantTools.filter((tool) => tool.allowed(who
 
 test('each tool opens with the permission of its screen', () => {
   assert.deepEqual(allowedFor(editor), ['buscar_cliente', 'mis_tareas']);
-  assert.deepEqual(allowedFor(editorWithModules), ['buscar_cliente', 'leer_piezas_de_parrilla', 'mis_tareas', 'parrilla_de_cliente', 'publicaciones_programadas', 'tareas_de_cliente']);
-  assert.deepEqual(allowedFor(pmWithoutManager), ['buscar_cliente', 'mis_tareas', 'operacion_de_cliente']);
-  assert.deepEqual(allowedFor(pm), ['buscar_cliente', 'memoria_de_reuniones', 'mis_tareas', 'operacion_de_cliente']);
-  assert.deepEqual(allowedFor({ role: 'ADMIN' }), ['buscar_cliente', 'leer_piezas_de_parrilla', 'memoria_de_reuniones', 'mis_tareas', 'operacion_de_cliente', 'parrilla_de_cliente', 'publicaciones_programadas', 'tareas_de_cliente']);
+  assert.deepEqual(allowedFor(editorWithModules), ['buscar_cliente', 'criterios_y_hallazgos', 'leer_piezas_de_parrilla', 'mis_tareas', 'parrilla_de_cliente', 'publicaciones_programadas', 'tareas_de_cliente']);
+  assert.deepEqual(allowedFor(pmWithoutManager), ['buscar_cliente', 'cartera_de_operacion', 'mis_tareas', 'operacion_de_cliente']);
+  assert.deepEqual(allowedFor(pm), ['buscar_cliente', 'cartera_de_operacion', 'memoria_de_reuniones', 'mis_tareas', 'operacion_de_cliente']);
+  assert.deepEqual(allowedFor({ role: 'ADMIN' }), ['buscar_cliente', 'cartera_de_operacion', 'criterios_y_hallazgos', 'leer_piezas_de_parrilla', 'memoria_de_reuniones', 'mis_tareas', 'operacion_de_cliente', 'parrilla_de_cliente', 'publicaciones_programadas', 'tareas_de_cliente']);
   for (const tool of briaAssistantTools) {
     assert.equal(tool.parameters.type, 'object', `${tool.name} declara sus parámetros`);
     assert.ok(tool.description.length > 20, `${tool.name} explica para qué sirve`);
@@ -101,8 +101,8 @@ test('parrilla_de_cliente reads the month of the question, computes the stage of
     ['i3', 'aprobada', 'MATERIAL_NUEVO'],
     ['i2', 'sin texto', 'POR_REVISAR']
   ]);
-  assert.deepEqual(result.data.parrilla.piezas[0], { id: 'i1', titulo: 'Lanzamiento', formato: 'Reel', fecha: '2026-10-03', hora: '09:00', estado: 'APROBADO', etapa: 'programada', aprobacion: 'APROBADA', tieneTexto: true, tieneMaterial: true });
-  assert.deepEqual(result.data.parrilla.resumen, { piezas: 3, sinTexto: 1, sinMaterial: 1, porAprobar: 2, vencidas: 1 });
+  assert.deepEqual(result.data.parrilla.piezas[0], { id: 'i1', titulo: 'Lanzamiento', formato: 'Reel', fecha: '2026-10-03', hora: '09:00', estado: 'APROBADO', etapa: 'programada', aprobacion: 'APROBADA', tieneTexto: true, tieneMaterial: true, pedidoDelCliente: null, enProduccion: null, referencias: 0 });
+  assert.deepEqual(result.data.parrilla.resumen, { piezas: 3, porFormato: { Reel: 1, Carrusel: 1, Post: 1 }, sinTexto: 1, sinMaterial: 1, porAprobar: 2, devueltas: 0, enProduccion: 0, vencidas: 1 });
   assert.deepEqual(result.sources[0], { kind: 'pieza', id: 'i1', label: 'Lanzamiento (3 oct)', url: '/parrillas/p-oct?item=i1' });
   assert.equal(JSON.stringify(result).includes('ESCENA 1'), false, 'el guion no viaja al modelo');
 
@@ -125,10 +125,11 @@ test('operacion_de_cliente compacts the traffic light with its reasons, for mana
   assert.deepEqual(result.data.operacion, {
     cliente: 'Nattal', slug: 'nattal', agencia: 'BRAIN', complejidad: 'MEDIA', projectManager: 'Kamila', communityManager: 'Jarlan',
     semaforo: 'amarillo', motivos: ['1 tarea vencida en Gestión.'],
-    contrato: { tipo: 'PARRILLA', estado: 'ACTIVO', inicio: '2026-01-01', fin: null, diaDeCorte: 1, piezasPorMes: 4, informeMensual: true },
+    contrato: { tipo: 'PARRILLA', estado: 'ACTIVO', inicio: '2026-01-01', fin: null, diaDeCorte: 1, piezasPorMes: 4, entregablesPorFormato: [{ formato: 'Post', cantidad: 4 }], historiasPorSemana: 0, jornadasPorMes: 0, notas: null, informeMensual: true },
     mesActual: { nombre: 'Octubre 2026', dia: 6, de: 31, piezasContratadas: 4, piezasCreadas: 3, redactadas: 2, disenadas: 1, aprobadas: 1, programadas: 1, publicadas: 0, vencidas: 0, informeEntregado: false },
     tareasAbiertas: 2, tareasVencidas: 1,
-    ultimaObservacion: 'El cliente pide mover el reel. (Kamila, 2026-10-01)'
+    ultimaObservacion: 'El cliente pide mover el reel. (Kamila, 2026-10-01)',
+    observacionesRecientes: []
   });
   assert.deepEqual(result.sources, [{ kind: 'cliente', id: 'c1', label: 'Nattal', url: '/clientes/operacion/nattal' }]);
 });

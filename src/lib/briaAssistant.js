@@ -74,6 +74,8 @@ export const buildInstructions = ({ person, today, tools = [] }) => {
     ...(tools.some(tool => tool.name === 'preparar_pendiente') ? ['Para crear pendientes llama preparar_pendiente con los datos proporcionados por la persona. Sintetiza título y contexto fielmente; no inventes cliente, responsable, fecha, prioridad ni enlaces. Mantén los campos conocidos y pide solo lo que falta. Una corrección en el chat ajusta el borrador, no crea otra tarea. Si faltan materiales, pregunta y advierte; la persona puede continuar sin ellos. La prioridad se elige entre normal, alta y urgente. La herramienta prepara el resumen y sus opciones; nunca afirmes que creaste una tarea: el servidor la guarda únicamente después de una confirmación explícita de ese resumen.'] : []),
     ...(tools.some(tool => tool.name === 'consultar_aprendizajes') ? ['11. Consulta consultar_aprendizajes para entender decisiones y correcciones del equipo. Aprende conversando: si la persona te pide recordar o te corrige explícitamente, guarda con recordar_aprendizaje; deduce cuenta y tema del diálogo, fecha de hoy si no indica otra, y conserva cualquier duda como propuesta. Si falta saber a quién aplica, pregunta naturalmente. Para corregir algo guardado consulta su id y revisión primero. Solo di que lo recuerdas cuando la herramienta confirme saved=true. No hay formulario de enseñanza. Para olvidar usa retirar_recuerdo con petición explícita. Una propuesta no es una decisión confirmada. Nunca cambies una parrilla por guardar un recuerdo.'] : []),
     ...(tools.some(tool => tool.name === 'memoria_de_la_agencia') ? ['13. La memoria de la agencia es lo que sabes de Brain Studio y de cada cuenta: consúltala con memoria_de_la_agencia antes de opinar sobre un cliente, una marca, un acuerdo o cómo se trabaja, e interprétala con criterio propio. Lo que el equipo confirmó manda sobre la lectura del negocio, y la plataforma actual manda sobre ambas para el estado de hoy (parrillas, tareas, aprobaciones, publicaciones, pagos). Di la certeza de cada dato con sus palabras («vigente de hecho», «por confirmar», «propuesta»). Si la persona te contradice, te cuenta un cambio (continuidad, contrato, responsables, una decisión) o te enseña algo sobre la agencia o una cuenta, créele y guárdalo en ese mismo turno con guardar_en_memoria, reemplazando los hechos que contradice; si no queda claro que quiere guardarlo, pregúntale con ofrecer_opciones y pon «Sí, guárdalo» como opción. Nunca digas que lo tienes en cuenta, que lo recordarás o que lo guardaste si guardar_en_memoria no confirmó saved=true en esta respuesta; si la herramienta lo rechaza, di por qué y vuelve a ofrecerlo. Las preferencias personales siguen en recordar_aprendizaje. Si una duda abierta viene al caso, haz una sola duda al final de tu respuesta, nunca un cuestionario, y si la responde guárdala con respondeDuda.'] : []),
+    ...(tools.some(tool => tool.name === 'cartera_de_operacion') ? ['14. Para cómo va una cuenta, compara lo contratado por formato (operacion_de_cliente) con las piezas por formato de la parrilla (parrilla_de_cliente), y di qué falta, qué pidió cambiar el cliente y qué ya está en producción. Para varias cuentas a la vez usa cartera_de_operacion en una sola llamada. Antes de revisar o proponer contenido consulta criterios_y_hallazgos y revisa contra esos criterios aprobados. Un contrato registrado en la plataforma no prueba que esté firmado: cruza con la memoria de la agencia.'] : []),
+    ...(tools.some(tool => tool.name === 'preparar_despacho') ? ['15. Para despachar piezas a producción, o cuando la persona pide preparar los pendientes de producción de una parrilla, llama preparar_despacho con las piezas, el responsable que ella dijo, la fecha y la prioridad. No inventes responsables: si no los dijo, pregúntale. Nunca digas que despachaste: el servidor lo hace solo cuando la persona escribe «Despachar a producción» sobre el resumen. Para trabajo que no es una pieza de la parrilla usa preparar_pendiente.'] : []),
     ...(tools.some(tool => tool.name === 'leer_piezas_de_parrilla') ? ['12. Para revisar una parrilla lee sus piezas con leer_piezas_de_parrilla, incluyendo guiones, textos y objetivos; recorre nextOffset si queda contenido. Evalúa coherencia, claridad, variedad y fechas sobre lo leído. No digas que revisaste imágenes o videos porque solo dispones de texto y metadatos. Si no llegaste a leer todas las piezas, delimita la revisión.'] : []),
     `Herramientas disponibles para ${person?.name || 'esta persona'}:`,
     toolLines
@@ -116,7 +118,7 @@ export const runAssistant = async ({
   const toolsUsed = [];
   const failures = [];
   const learningProposals = [];
-  let quickReplies = [], taskDraft, taskReply;
+  let quickReplies = [], taskDraft, taskReply, dispatchDraft, dispatchAnswer;
   let rounds = 0;
   const modelCalls = [];
 
@@ -137,6 +139,7 @@ export const runAssistant = async ({
       learningProposals.push(...(outcome?.learningProposals || []));
       if (outcome?.quickReplies) quickReplies = normalizeQuickReplies(outcome.quickReplies);
       if (outcome?.taskDraft) { taskDraft = outcome.taskDraft; context.taskDraft = taskDraft; taskReply = outcome.taskReply; }
+      if (outcome?.dispatchDraft) { dispatchDraft = outcome.dispatchDraft; context.dispatchDraft = dispatchDraft; dispatchAnswer = outcome.dispatchReply; }
       return outcome?.data ?? null;
     } catch (error) {
       // Una negativa escrita para la persona (falta su permiso, falta un dato, algo cambió) no es una falla:
@@ -168,13 +171,15 @@ export const runAssistant = async ({
     const calls = lastRound ? [] : (result?.functionCalls || []);
     if (!calls.length) {
       return {
-        answer: taskReply?.answer || String(result?.text || '').trim() || FALLBACK_ANSWER,
+        // El resumen de un borrador lo escribe la plataforma, no el modelo: es exactamente lo que se confirmará.
+        answer: taskReply?.answer || dispatchAnswer?.answer || String(result?.text || '').trim() || FALLBACK_ANSWER,
         sources: [...sources.values()],
         toolsUsed,
         failures,
         ...(learningProposals.length ? { learningProposals } : {}),
         ...(taskDraft ? { taskDraft } : {}),
-        ...((taskReply?.quickReplies || quickReplies).length ? { quickReplies: normalizeQuickReplies(taskReply?.quickReplies || quickReplies) } : {}),
+        ...(dispatchDraft ? { dispatchDraft } : {}),
+        ...((taskReply?.quickReplies || dispatchAnswer?.quickReplies || quickReplies).length ? { quickReplies: normalizeQuickReplies(taskReply?.quickReplies || dispatchAnswer?.quickReplies || quickReplies) } : {}),
         rounds,
         usage: summarizeAiCalls(modelCalls)
       };
