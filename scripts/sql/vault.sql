@@ -35,6 +35,16 @@ CREATE TABLE IF NOT EXISTS vault.reveal_events (
   actor_ref TEXT NOT NULL, actor_name TEXT NOT NULL, recorded_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS vault_reveals_credential ON vault.reveal_events(credential_id, recorded_at DESC);
+-- Índice de plataformas de un bloque importado (9 de octubre de 2026): el bloque guarda cifrado todo su texto,
+-- así que «CapCut» no se podía buscar. Aquí van solo los NOMBRES de las plataformas que contiene, nunca un
+-- usuario ni una clave.
+ALTER TABLE vault.credentials ADD COLUMN IF NOT EXISTS platforms TEXT[] NOT NULL DEFAULT '{}';
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'vault_credentials_platforms_size') THEN
+    ALTER TABLE vault.credentials ADD CONSTRAINT vault_credentials_platforms_size CHECK (cardinality(platforms) <= 60);
+  END IF;
+END $$;
 -- Vínculo formal con la ficha del cliente (9 de octubre de 2026). Si una ficha se borra, sus accesos quedan
 -- sin cliente: pasan a ser de la agencia, visibles solo para administradores, nunca para otro PM.
 DO $$

@@ -31,6 +31,7 @@ Decisión de Rodny: un administrador ve todos los accesos. Un project manager ve
 - **Solo para administradores:** la hoja «Formato», porque mezcla clientes, y las cuentas de la agencia.
 - **Sin cortes:** los bloques largos se parten, nunca se cortan.
 - **Idempotente**, nunca imprime un valor, y simula salvo con `--confirmar IMPORTAR`.
+- **Índice de plataformas** (9 de octubre de 2026): cada bloque va cifrado entero, así que «me recuerdas la clave de CapCut» no encontraba nada aunque CapCut estuviera dentro. La columna `platforms` guarda en claro **solo los nombres** de las plataformas de un bloque, sacados de un diccionario cerrado (`--indexar INDEXAR`, simula sin la palabra). Se probó tomar la primera celda de cada tabla y se descartó: algunos usuarios se colaban como plataforma. La búsqueda mira plataforma, nombre, `platforms` y cliente; ignora las palabras de la petición («clave», «de») y los espacios, y un acceso sin cliente responde a «agencia» o «Brain Studio».
 - **Clave de cifrado:** se comprobó por huella, sin mostrarla, que la `ENCRYPTION_KEY` local es la misma de Railway.
 
 **Lo que queda en manos del equipo:**
