@@ -20,4 +20,6 @@
 // pendientes, con contexto como comentario y copias independientes de los insumos.
 // 2.9 (9 de octubre de 2026): memoria de la agencia de Bria, con fuente, vigencia, autor de
 // cada corrección y acceso por área; sin datos de contacto ni de desempeño.
-export const PRIVACY_POLICY_VERSION = '2.9 · 2026-10-09';
+// 2.10 (9 de octubre de 2026): Bria lee los cambios que el cliente pide en el portal y prepara
+// despachos a producción que la plataforma ejecuta solo con confirmación.
+export const PRIVACY_POLICY_VERSION = '2.10 · 2026-10-09';

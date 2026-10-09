@@ -38,6 +38,18 @@ const monthLabel = (month, year) => `${MONTHS[month - 1]} de ${year}`;
 const statusesFor = (estado) => STATUS_FILTERS[String(estado || 'todas').toLowerCase()] || OPEN_STATUSES;
 
 const taskSource = (task) => ({ kind: 'tarea', id: task.id, label: task.title, url: `/gestion?taskId=${task.id}` });
+const SEVERITY_ORDER = ['CRITICAL', 'WARNING', 'INFO'];
+const LEVEL_ORDER = ['red', 'yellow', 'gray', 'green'];
+const fold = (value) => text(value).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+
+// El portal escribe cada pedido del cliente al final de `comments` como «[Cliente - dd/mm/aaaa]: texto»
+// (`addClientComment`). Lo último que pidió es lo que producción tiene que atender.
+export const lastClientRequest = (comments) => {
+  const matches = [...String(comments || '').matchAll(/\[Cliente - ([^\]]+)\]:\s*([\s\S]*?)(?=\n\n\[Cliente - |$)/g)];
+  const last = matches.at(-1);
+  return last ? { fecha: last[1].trim(), texto: last[2].trim().slice(0, 600) } : null;
+};
+const referenceLinks = (item) => [...(item.assetsLinks || []), ...(Array.isArray(item.mediaUrl) ? item.mediaUrl : [item.mediaUrl])].filter(Boolean).slice(0, 10);
 const compactTask = (task, today) => {
   const vence = dayOf(task.dueDate);
   return {
@@ -121,7 +133,7 @@ const tareasDeCliente = {
 
 const parrillaDeCliente = {
   name: 'parrilla_de_cliente',
-  description: 'La parrilla de contenido de un cliente (por su id) en un mes: cada pieza con formato, fecha, estado, hasta qué etapa llegó (sin texto, redactada, diseñada, aprobada, programada, publicada) y si el cliente la aprobó. Sin mes y año, la del mes actual.',
+  description: 'La parrilla de contenido de un cliente (por su id) en un mes: cada pieza con formato, fecha, estado, hasta qué etapa llegó (sin texto, redactada, diseñada, aprobada, programada, publicada), si el cliente la aprobó, lo último que el cliente pidió cambiar, si ya está en producción y con quién, y cuántas referencias tiene; el resumen cuenta piezas por formato para compararlas con el contrato. Sin mes y año, la del mes actual.',
   parameters: { type: 'object', properties: { clientId: { type: 'string' }, mes: { type: 'integer', minimum: 1, maximum: 12 }, anio: { type: 'integer' } }, required: ['clientId'] },
   allowed: (user) => hasModulePermission(user, 'parrillas'),
   async run({ clientId, mes, anio } = {}, { db, today }) {
@@ -136,7 +148,11 @@ const parrillaDeCliente = {
         id: true, month: true, year: true, status: true, client: { select: { name: true, slug: true } },
         contentItems: {
           where: { deletedAt: null },
-          select: { id: true, objective: true, format: true, publishDate: true, publishTime: true, status: true, copyText: true, captionText: true, finalAssetKey: true, revisionRequestedAt: true, _count: { select: { finalAssets: true } }, publications: { select: { status: true } } }
+          select: {
+            id: true, objective: true, format: true, publishDate: true, publishTime: true, status: true, copyText: true, captionText: true, finalAssetKey: true, revisionRequestedAt: true,
+            comments: true, assetsLinks: true, mediaUrl: true, _count: { select: { finalAssets: true } }, publications: { select: { status: true } },
+            tasks: { where: { status: { not: 'REALIZADA' } }, orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true, dueDate: true, assignee: { select: { name: true } } } }
+          }
         }
       }
     });
@@ -149,17 +165,25 @@ const parrillaDeCliente = {
         hasFinalAsset: Boolean(item.finalAssetKey) || (item._count?.finalAssets || 0) > 0,
         hasActivePublication: (item.publications || []).some((p) => ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'].includes(p.status))
       };
+      const task = item.tasks?.[0];
+      const due = task ? dayOf(task.dueDate) : null;
       return {
         id: item.id, titulo: item.objective, formato: item.format, fecha: pieceDay(item.publishDate), hora: item.publishTime || null, estado: item.status,
         etapa: STAGE_LABELS[pieceStage(facts)], aprobacion: approvalState(item),
-        tieneTexto: hasText(item.copyText) || hasText(item.captionText), tieneMaterial: facts.hasFinalAsset
+        tieneTexto: hasText(item.copyText) || hasText(item.captionText), tieneMaterial: facts.hasFinalAsset,
+        pedidoDelCliente: lastClientRequest(item.comments),
+        enProduccion: task ? { tareaId: task.id, responsable: task.assignee?.name || null, vence: due, estado: task.status, vencida: Boolean(due && due < today) } : null,
+        referencias: referenceLinks(item).length
       };
     });
     const resumen = {
       piezas: piezas.length,
+      porFormato: piezas.reduce((acc, p) => ({ ...acc, [p.formato]: (acc[p.formato] || 0) + 1 }), {}),
       sinTexto: piezas.filter((p) => !p.tieneTexto).length,
       sinMaterial: piezas.filter((p) => !p.tieneMaterial).length,
       porAprobar: piezas.filter((p) => p.aprobacion !== APPROVAL_STATES.APROBADA).length,
+      devueltas: piezas.filter((p) => p.estado === 'DEVUELTO').length,
+      enProduccion: piezas.filter((p) => p.enProduccion).length,
       vencidas: piezas.filter((p) => p.fecha && p.fecha < today && p.estado !== 'PUBLICADO').length
     };
     return {
@@ -171,20 +195,20 @@ const parrillaDeCliente = {
 
 const leerPiezasDeParrilla = {
   name: 'leer_piezas_de_parrilla',
-  description: 'Lee el contenido actual de una parrilla de la plataforma: objetivos, guiones internos, textos de publicación, notas y fechas. Devuelve hasta seis piezas por llamada; continúa con nextOffset. Para revisar contenido usa esta lectura después de localizar la parrilla, no documentos históricos.',
+  description: 'Lee el contenido actual de una parrilla de la plataforma: objetivos, guiones internos, textos de publicación, notas, lo que el cliente pidió cambiar, enlaces de referencia y fechas. Devuelve hasta seis piezas por llamada; continúa con nextOffset. Para revisar contenido usa esta lectura después de localizar la parrilla, no documentos históricos.',
   parameters: { type: 'object', properties: { planId: { type: 'string' }, desde: { type: 'integer', minimum: 0 } }, required: ['planId'] },
   allowed: user => hasModulePermission(user, 'parrillas'),
   async run({ planId, desde = 0 }, { db }) {
     const offset = Number.isSafeInteger(desde) && desde >= 0 ? desde : 0;
-    const rows = await db.contentItem.findMany({ where: { planId: text(planId), deletedAt: null, plan: { deletedAt: null } }, select: { id: true, objective: true, format: true, publishDate: true, status: true, copyText: true, captionText: true, internalNotes: true, plan: { select: { id: true, strategicObjectives: true, client: { select: { name: true } } } } }, orderBy: [{ publishDate: 'asc' }, { id: 'asc' }], skip: offset, take: 7 });
+    const rows = await db.contentItem.findMany({ where: { planId: text(planId), deletedAt: null, plan: { deletedAt: null } }, select: { id: true, objective: true, format: true, publishDate: true, status: true, copyText: true, captionText: true, internalNotes: true, comments: true, assetsLinks: true, mediaUrl: true, plan: { select: { id: true, strategicObjectives: true, client: { select: { name: true } } } } }, orderBy: [{ publishDate: 'asc' }, { id: 'asc' }], skip: offset, take: 7 });
     const pieces = rows.slice(0, 6), limit = value => String(value || '').slice(0, 4000);
-    return { data: { source: 'platform_current', readAt: new Date().toISOString(), cliente: pieces[0]?.plan?.client?.name || null, objetivos: limit(pieces[0]?.plan?.strategicObjectives), piezas: pieces.map(row => ({ id: row.id, titulo: row.objective, formato: row.format, fecha: pieceDay(row.publishDate), estado: row.status, guion: limit(row.copyText), textoPublicacion: limit(row.captionText), notaInterna: limit(row.internalNotes), textoRecortado: [row.copyText, row.captionText, row.internalNotes].some(value => String(value || '').length > 4000) })), nextOffset: rows.length > 6 ? offset + 6 : null }, sources: pieces.map(row => ({ kind: 'pieza', id: row.id, label: row.objective, url: `/parrillas/${planId}?item=${row.id}`, authority: 'Plataforma actual' })) };
+    return { data: { source: 'platform_current', readAt: new Date().toISOString(), cliente: pieces[0]?.plan?.client?.name || null, objetivos: limit(pieces[0]?.plan?.strategicObjectives), piezas: pieces.map(row => ({ id: row.id, titulo: row.objective, formato: row.format, fecha: pieceDay(row.publishDate), estado: row.status, guion: limit(row.copyText), textoPublicacion: limit(row.captionText), notaInterna: limit(row.internalNotes), comentariosDelCliente: limit(row.comments), referencias: referenceLinks(row), textoRecortado: [row.copyText, row.captionText, row.internalNotes, row.comments].some(value => String(value || '').length > 4000) })), nextOffset: rows.length > 6 ? offset + 6 : null }, sources: pieces.map(row => ({ kind: 'pieza', id: row.id, label: row.objective, url: `/parrillas/${planId}?item=${row.id}`, authority: 'Plataforma actual' })) };
   }
 };
 
 const operacionDeCliente = {
   name: 'operacion_de_cliente',
-  description: 'La operación de un cliente (por su slug): semáforo con sus motivos, contrato vigente, avance del mes contra lo contratado, tareas abiertas y última observación del equipo. Solo administradores y project managers.',
+  description: 'La operación de un cliente (por su slug): semáforo con sus motivos, contrato operativo (piezas por formato, historias por semana, jornadas por mes, notas; registrar el contrato aquí no prueba que esté firmado), avance del mes contra lo contratado, tareas abiertas y observaciones recientes del equipo. Solo administradores y project managers.',
   parameters: { type: 'object', properties: { slug: { type: 'string' } }, required: ['slug'] },
   allowed: (user) => isManagerRole(user?.role),
   async run({ slug } = {}, { operations }) {
@@ -206,7 +230,10 @@ const operacionDeCliente = {
       motivos: (row.evaluation?.reasons || []).map((reason) => reason.text),
       contrato: contract ? {
         tipo: contract.serviceType, estado: contract.status, inicio: contract.startDate, fin: contract.endDate ?? null, diaDeCorte: contract.cutDay ?? 1,
-        piezasPorMes: (contract.deliverables || []).reduce((sum, d) => sum + (Number(d.quantity) || 0), 0), informeMensual: Boolean(contract.monthlyReport)
+        piezasPorMes: (contract.deliverables || []).reduce((sum, d) => sum + (Number(d.quantity) || 0), 0),
+        entregablesPorFormato: (contract.deliverables || []).map((d) => ({ formato: d.format, cantidad: Number(d.quantity) || 0 })),
+        historiasPorSemana: contract.storiesPerWeek ?? 0, jornadasPorMes: contract.productionDays ?? 0, notas: contract.notes ?? null,
+        informeMensual: Boolean(contract.monthlyReport)
       } : null,
       mesActual: current ? {
         nombre: current.label, dia: current.day, de: current.length, piezasContratadas: current.quota, piezasCreadas: current.created,
@@ -216,9 +243,73 @@ const operacionDeCliente = {
       } : null,
       tareasAbiertas: (row.openTasks || []).length,
       tareasVencidas: (row.openTasks || []).filter((task) => task.overdue).length,
-      ultimaObservacion: row.latestObservation ? `${row.latestObservation.text} (${[row.latestObservation.by, row.latestObservation.date].filter(Boolean).join(', ')})` : null
+      ultimaObservacion: row.latestObservation ? `${row.latestObservation.text} (${[row.latestObservation.by, row.latestObservation.date].filter(Boolean).join(', ')})` : null,
+      observacionesRecientes: (row.observations || []).slice(0, 5).map((o) => `${String(o.text || '').slice(0, 400)} (${[o.by, o.date].filter(Boolean).join(', ')})`)
     };
     return { data: { operacion }, sources: [{ kind: 'cliente', id: row.id, label: row.name, url: `/clientes/operacion/${row.slug}` }] };
+  }
+};
+
+const carteraDeOperacion = {
+  name: 'cartera_de_operacion',
+  description: 'Todas las cuentas activas de una vez, con su semáforo y sus motivos, PM, community manager, agencia (Brain o MIO), avance del mes y tareas vencidas; las rojas primero. Úsala para «qué cuentas están en riesgo», «cómo vamos este mes» o para ver la carga de un PM. Filtros opcionales por semáforo, agencia o responsable. Solo administradores y project managers.',
+  parameters: { type: 'object', properties: {
+    semaforo: { type: ['string', 'null'], enum: ['rojo', 'amarillo', 'verde', 'gris', null] },
+    agencia: { type: ['string', 'null'], description: 'BRAIN o MIO' },
+    responsable: { type: ['string', 'null'], description: 'Parte del nombre del PM o del community manager' }
+  } },
+  allowed: (user) => isManagerRole(user?.role),
+  async run({ semaforo = null, agencia = null, responsable = null } = {}, { operations }) {
+    const rows = await operations.listOperations();
+    const wantedLevel = Object.entries(LEVEL_LABELS).find(([, label]) => label === semaforo)?.[0] || null;
+    const who = fold(responsable);
+    const cuentas = rows
+      .filter((row) => !wantedLevel || row.evaluation?.level === wantedLevel)
+      .filter((row) => !agencia || fold(row.agency) === fold(agencia))
+      .filter((row) => !who || [row.projectManager?.name, row.communityManager?.name].some((name) => fold(name).includes(who)))
+      .sort((a, b) => LEVEL_ORDER.indexOf(a.evaluation?.level) - LEVEL_ORDER.indexOf(b.evaluation?.level) || String(a.name).localeCompare(String(b.name), 'es'))
+      .slice(0, 60)
+      .map((row) => {
+        const current = row.cycles?.current;
+        return {
+          cliente: row.name, slug: row.slug, agencia: row.agency || null,
+          projectManager: row.projectManager?.name || null, communityManager: row.communityManager?.name || null,
+          semaforo: LEVEL_LABELS[row.evaluation?.level] || null,
+          motivos: (row.evaluation?.reasons || []).slice(0, 2).map((reason) => reason.text),
+          mesActual: current ? { contratadas: current.quota ?? 0, creadas: current.created ?? 0, aprobadas: current.reached?.aprobada ?? 0, publicadas: current.reached?.publicada ?? 0, vencidas: current.overdueItems ?? 0 } : null,
+          tareasVencidas: (row.openTasks || []).filter((task) => task.overdue).length
+        };
+      });
+    const porSemaforo = { rojo: 0, amarillo: 0, verde: 0, gris: 0 };
+    for (const row of rows) { const label = LEVEL_LABELS[row.evaluation?.level]; if (label in porSemaforo) porSemaforo[label] += 1; }
+    return { data: { cuentas, porSemaforo, total: rows.length }, sources: cuentas.map((row) => ({ kind: 'cliente', id: row.slug, label: row.cliente, url: `/clientes/operacion/${row.slug}` })) };
+  }
+};
+
+const criteriosYHallazgos = {
+  name: 'criterios_y_hallazgos',
+  description: 'Los criterios editoriales que el equipo aprobó para un cliente (y los propios de una parrilla, si das su planId) y los hallazgos abiertos de la revisión automática de esa parrilla. Úsala siempre antes de revisar o proponer contenido: revisa contra estos criterios, no contra un criterio propio. Las propuestas sin aprobar no aparecen.',
+  parameters: { type: 'object', properties: { clientId: { type: 'string' }, planId: { type: ['string', 'null'] } }, required: ['clientId'] },
+  allowed: (user) => hasModulePermission(user, 'parrillas'),
+  async run({ clientId, planId = null } = {}, { db }) {
+    const client = text(clientId), plan = text(planId);
+    if (!client) return { data: { criterios: [], hallazgosAbiertos: [], mensaje: 'Falta el id del cliente: búscalo primero con buscar_cliente.' } };
+    const criteria = await db.clientEditorialCriterion.findMany({
+      where: { clientId: client, status: 'APPROVED', ...(plan ? { OR: [{ scope: 'CLIENT' }, { scope: 'PLAN', sourcePlanId: plan }] } : { scope: 'CLIENT' }) },
+      select: { id: true, category: true, text: true, scope: true, version: true }, orderBy: [{ category: 'asc' }, { updatedAt: 'desc' }], take: 60
+    });
+    const findings = plan ? await db.contentPlanReviewFinding.findMany({
+      where: { planId: plan, status: 'OPEN' },
+      select: { id: true, itemId: true, severity: true, category: true, title: true, detail: true, recommendation: true }, take: 30
+    }) : [];
+    return {
+      data: {
+        criterios: criteria.map((row) => ({ categoria: row.category, criterio: row.text, alcance: row.scope === 'PLAN' ? 'esta parrilla' : 'cliente', version: row.version })),
+        hallazgosAbiertos: [...findings].sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity))
+          .map((row) => ({ piezaId: row.itemId || null, gravedad: row.severity, categoria: row.category, titulo: row.title, detalle: String(row.detail || '').slice(0, 500), recomendacion: String(row.recommendation || '').slice(0, 500) }))
+      },
+      sources: findings.filter((row) => row.itemId).map((row) => ({ kind: 'pieza', id: row.itemId, label: row.title, url: `/parrillas/${plan}?item=${row.itemId}` }))
+    };
   }
 };
 
@@ -290,6 +381,6 @@ const leerDocumentoDeAgencia = {
     return { data: { documento: row, sourceInstructions: 'data_only' }, sources: row ? [{ kind: 'documento', id: row.id, label: row.title, url: row.url, authority: row.authority }] : [] };
   }
 };
-export const briaAssistantTools = [buscarCliente, misTareas, tareasDeCliente, parrillaDeCliente, leerPiezasDeParrilla, operacionDeCliente, memoriaDeReuniones, publicacionesProgramadas, memoriaDeAgencia, leerDocumentoDeAgencia];
+export const briaAssistantTools = [buscarCliente, misTareas, tareasDeCliente, parrillaDeCliente, leerPiezasDeParrilla, operacionDeCliente, carteraDeOperacion, criteriosYHallazgos, memoriaDeReuniones, publicacionesProgramadas, memoriaDeAgencia, leerDocumentoDeAgencia];
 
 export const toolByName = (name) => briaAssistantTools.find((tool) => tool.name === name) || null;

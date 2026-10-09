@@ -10,7 +10,7 @@ import { getAIInstance } from './aiService.js';
 import { canReadAgencyMemory } from './briaLivingService.js';
 import { getBriaChatStorage } from './briaChatStorage.js';
 import { startBriaChatPurgeWorker } from './briaChatPurge.js';
-import { briaTaskDrafts } from './briaTaskApplication.js';
+import { briaTaskDrafts, briaDispatchDrafts } from './briaTaskApplication.js';
 let instance;
 const authorizeTurn = async (user, turn) => {
   for (const source of turn.sources || []) {
@@ -24,6 +24,7 @@ const authorizeTurn = async (user, turn) => {
     if (source.kind === 'aprendizaje' && !(await getApplicationKnowledgeService().list(user)).some(row => row.id === source.id)) return false;
   }
   if (turn.taskDraft && !hasModulePermission(user, 'gestion')) return false;
+  if (turn.dispatchDraft && !(hasModulePermission(user, 'gestion') && hasModulePermission(user, 'parrillas'))) return false;
   return true;
 };
 export const getApplicationConversationService = () => {
@@ -31,5 +32,5 @@ export const getApplicationConversationService = () => {
   const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL, max: 3, connectionTimeoutMillis: 5000 });
   const storage = getBriaChatStorage();
   startBriaChatPurgeWorker({ pool, storage });
-  return instance = createBriaConversationService({ repository: createBriaConversationRepository({ pool, storage, requireStorage: process.env.NODE_ENV === 'production', workspace: 'application' }), resolveActor: resolveKnowledgeActor, assistant: briaAssistantService, taskDrafts: briaTaskDrafts, ai: getAIInstance, authorizeTurn });
+  return instance = createBriaConversationService({ repository: createBriaConversationRepository({ pool, storage, requireStorage: process.env.NODE_ENV === 'production', workspace: 'application' }), resolveActor: resolveKnowledgeActor, assistant: briaAssistantService, taskDrafts: briaTaskDrafts, dispatchDrafts: briaDispatchDrafts, ai: getAIInstance, authorizeTurn });
 };
