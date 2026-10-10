@@ -32,7 +32,7 @@ function AccessCard({ card, request, autoReveal }) {
         <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-brand-cyan-soft text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan"><Key className="h-4 w-4" /></span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium text-zinc-900 dark:text-zinc-100">{card.nombre}</p>
-          <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{card.plataforma} · {card.cliente}</p>
+          <p className="truncate text-xs text-zinc-500 dark:text-zinc-400">{card.nombre === card.plataforma ? card.cliente : `${card.plataforma} · ${card.cliente}`}</p>
         </div>
         <button type="button" disabled={busy} onClick={shown ? hide : reveal} className="min-h-11 shrink-0 rounded-xl border border-zinc-200 px-3 text-sm text-zinc-700 transition-colors hover:border-primary hover:text-brand-cyan-deep disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-200 dark:hover:text-brand-cyan">
           {busy ? 'Abriendo…' : shown ? 'Ocultar' : 'Ver acceso'}
