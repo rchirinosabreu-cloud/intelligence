@@ -41,7 +41,7 @@ test('nothing described is also excluded, and nothing described points to a rout
 });
 
 test('what Bria must never touch stays excluded even if someone describes it later', () => {
-  for (const key of ['POST /users', 'PUT /team/:id', 'DELETE /team/:id', 'POST /user/mfa/reset/:userId', 'PUT /user/password', 'GET /vault/credentials', 'POST /vault/credentials/:id/reveal', 'DELETE /content/plans/:id', 'POST /feedback', 'POST /drive/upload', 'POST /login']) {
+  for (const key of ['POST /users', 'PUT /team/:id', 'DELETE /team/:id', 'POST /user/mfa/reset/:userId', 'PUT /user/password', 'GET /vault/credentials', 'POST /vault/credentials/:id/reveal', 'DELETE /content/plans/:id', 'POST /feedback', 'POST /drive/upload', 'POST /login', 'GET /talent-radar/summary', 'GET /financials/payroll-ledger', 'POST /financials/payroll-transactions/:id/pay']) {
     assert.ok(isExcludedOperation(key), `${key} debería estar excluida`);
     assert.equal(PLATFORM_OPERATIONS[key], undefined, `${key} no debe estar descrita`);
   }

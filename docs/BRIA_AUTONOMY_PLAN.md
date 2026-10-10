@@ -238,3 +238,12 @@ Pendiente de la siguiente corrida: `findings_open_by_age` (cuántos abiertos lle
 Aclarado el 20 de septiembre: Fireflies entra solo a las reuniones a las que el equipo lo invita, desde la plataforma o a mano en el calendario; las demás reuniones del calendario no se graban a propósito. La expectativa de Rodny es que cada reunión grabada tenga resumen, análisis y transcripción en cuanto Fireflies termine.
 
 Resueltas el 20 de septiembre: réplicas (una) y cadencia de minutas (sección 2).
+
+## 8. Decisión del 10 de octubre de 2026: las manos de Bria en toda la plataforma
+
+Rodny: «quiero que Bria tenga permiso para todo en la plataforma, ella vive ahí, no necesariamente hay que darle desde aquí configuraciones o permisos; como todo se crea manual, ella lo puede hacer también, si se lo pide un admin o project y según los módulos a los que ese usuario tiene acceso».
+
+- **Nivel de autonomía:** sigue siendo **nivel 1** (la persona confirma cada acción por escrito sobre un resumen que escribe la plataforma), pero el **alcance** pasa de seis acciones cableadas a cualquier operación de la API que la persona pueda hacer en una pantalla.
+- **Cómo:** Bria llama a la API con **el token de la persona** (nunca con una sesión propia), por los mismos guardianes de cada ruta; el mapa `src/lib/platformCatalog.js` describe cada operación y excluye lo que no se hace ni confirmando. Detalle en `docs/BRIA_ACCIONES.md`.
+- **Riesgos aceptados y sus mitigaciones:** el modelo arma el cuerpo de la petición (el resumen muestra cada campo y avisa cuando hay dinero o un borrado; la validación final es la de cada ruta); lo que Bria lee entra al modelo (solo lo que la persona ve; **radar de mérito, nómina y retroalimentación quedan fuera del mapa**, ni para leer ni para escribir); inyección por contenido (nada se ejecuta sin «Confirmar»).
+- **Lo que no cambia:** cuentas, roles y permisos de personas, contraseñas y verificación en dos pasos, la bóveda, borrar parrillas y archivos siguen siendo de la pantalla.

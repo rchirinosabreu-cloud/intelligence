@@ -24,7 +24,10 @@ export const PLATFORM_EXCLUDED = [
   { match: /^\w+ \/user\/(avatar|mfa|password|onboarding)(\/|$)/, reason: 'contraseñas, verificación en dos pasos, foto y bienvenida se manejan en la pantalla de la persona' },
   { match: /^(POST|PUT|DELETE) \/team(\/|$)/, reason: 'cuentas, roles y permisos de personas: solo desde Equipo' },
   { match: /^\w+ \/feedback(\/|$)/, reason: 'retroalimentación de personas: zona privada' },
-  { match: /^\w+ \/talent-radar\/member\/:memberId\/(avatar|avatar-image|ai-insights)$/, reason: 'foto y análisis de personas' },
+  // Datos de personas (Rodny, 10 de octubre de 2026, al revisar las políticas): el radar y la nómina no pasan por el
+  // modelo, ni para leer ni para escribir. La nómina se lleva en la pantalla de Financiero.
+  { match: /^\w+ \/talent-radar(\/|$)/, reason: 'datos de personas: el Radar de Mérito se mira en su pantalla' },
+  { match: /^\w+ \/financials\/payroll(-|\/)/, reason: 'nómina: datos de salario de personas, nunca pasan por el modelo' },
   { match: /^\w+ \/(drive\/upload|tasks\/upload-temp|drive\/managed-files)/, reason: 'subir o descargar archivos' },
   { match: /^\w+ \/tasks\/:taskId\/(trace-open|alert-interaction|work-confirmation|returned-reminder\/snooze)$/, reason: 'señales de la pantalla' },
   { match: /^GET \/tasks\/:taskId\/(attachments|comments)\/[^/]+\/(file|download)$/, reason: 'descarga de archivos' },
@@ -207,9 +210,6 @@ export const PLATFORM_OPERATIONS = {
   'GET /social/accounts/available': { que: 'Las páginas de Meta que se pueden conectar.' },
   'POST /social/accounts/link': { que: 'Conecta una página de Meta a un cliente.', campos: 'clientId, pageId' },
   'DELETE /social/accounts/:accountId': { que: 'Desconecta una cuenta de redes.' },
-  // Equipo y radar
-  'GET /talent-radar/summary': { que: 'El resumen del Radar de Mérito.' },
-  'GET /talent-radar/member/:memberId': { que: 'El radar de una persona.' },
   // Actividad y calendario
   'GET /activity/status': { que: 'El estado del módulo de Actividad.' },
   'GET /activity/events': { que: 'Los eventos de Actividad en un rango.', campos: 'from, to (consulta)' },
@@ -282,16 +282,6 @@ export const PLATFORM_OPERATIONS = {
   'GET /financials/exchange-rate': { que: 'La TRM del día.' },
   'POST /financials/receivables/:id/payments': { que: 'Registra un abono a una cuenta por cobrar.', campos: 'amount, date, accountId, notes, concept, requestId' },
   'POST /financials/receivable-payments/:paymentId/reverse': { que: 'Revierte un abono con motivo.', campos: 'reason' },
-  'GET /financials/payroll-ledger': { que: 'La nómina: contratos y liquidaciones.' },
-  'POST /financials/payroll-contracts': { que: 'Crea un contrato de nómina.', campos: 'memberId, amount, frequency, startDate' },
-  'PATCH /financials/payroll-contracts/:id': { que: 'Edita un contrato de nómina.', campos: 'amount, endDate, status' },
-  'POST /financials/payroll/periods': { que: 'Genera las liquidaciones de un periodo.', campos: 'year, month' },
-  'POST /financials/payroll-transactions/:id/approve': { que: 'Aprueba una liquidación.' },
-  'POST /financials/payroll-transactions/:id/pay': { que: 'Registra el pago de una liquidación.', campos: 'amount, date, accountId, reference, financialRecordId' },
-  'GET /financials/payroll-transactions/:id/payment-candidates': { que: 'Egresos ya registrados que podrían ser el pago de una liquidación.' },
-  'POST /financials/payroll-payments/:paymentId/split': { que: 'Desglosa un pago de nómina en varios.', campos: 'parts[{amount, date, accountId, reference}]' },
-  'POST /financials/payroll-payments/:paymentId/reverse': { que: 'Revierte un pago de nómina.', campos: 'reason' },
-  'PATCH /financials/payroll-payments/:paymentId': { que: 'Corrige referencia o nota de un pago de nómina.', campos: 'reference, notes' },
   'GET /financials/bank-reconciliation': { que: 'La conciliación bancaria.' },
   'POST /financials/bank-reconciliation/rebuild': { que: 'Recalcula las propuestas de conciliación.' },
   'POST /financials/bank-reconciliation/matches/:id/approve': { que: 'Aprueba un cruce de conciliación.' },

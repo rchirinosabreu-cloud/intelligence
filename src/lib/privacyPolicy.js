@@ -24,4 +24,7 @@
 // despachos a producción que la plataforma ejecuta solo con confirmación.
 // 2.11 (9 de octubre de 2026): bóveda cifrada de accesos, con registro de cada lectura; las
 // contraseñas no viajan al proveedor de IA.
-export const PRIVACY_POLICY_VERSION = '2.11 · 2026-10-09';
+// 2.12 (10 de octubre de 2026): Bria consulta y prepara operaciones de la plataforma con la sesión y los
+// permisos de la persona; cada cambio se ejecuta solo con su confirmación; radar, nómina, retroalimentación,
+// contraseñas, cuentas y archivos quedan fuera.
+export const PRIVACY_POLICY_VERSION = '2.12 · 2026-10-10';
