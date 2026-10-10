@@ -13,10 +13,12 @@ export const createServiceHealthRouter = ({ service = null, logger = console, cl
   const resolve = () => service || serviceHealthService();
   let lastManualRunAt = 0;
 
-  router.use((req, res, next) => {
+  const adminsOnly = (req, res, next) => {
     if (!isAdmin(req.user)) return res.status(403).json({ error: 'El estado de los servicios está disponible solo para administradores.' });
     return next();
-  });
+  };
+  adminsOnly.permission = { role: 'ADMIN' }; // Lo lee el mapa de la plataforma de Bria.
+  router.use(adminsOnly);
 
   router.get('/', async (_req, res) => {
     try {

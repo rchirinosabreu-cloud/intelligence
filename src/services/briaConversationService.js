@@ -46,7 +46,9 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
       await resolveActor(user); if (!file) throw knowledgeError('No encontramos ese adjunto.', 404);
       return file;
     },
-    async send({ user, id, question, files = [], onEvent }) {
+    // `session` trae el token con el que la persona abrió el chat: Bria lo usa para hablar con la API como ella
+    // (10 de octubre de 2026). Vive en esta petición y nunca se guarda en la conversación.
+    async send({ user, id, question, files = [], onEvent, session = null }) {
       if (String(question || '').length > MAX_QUESTION_LENGTH) throw knowledgeError('Divide el mensaje en partes de hasta 12.000 caracteres.');
       const text = normalizeQuestion(question) || (files.length ? 'Analiza los archivos adjuntos.' : ''); if (!text) throw knowledgeError('Escribe un mensaje.');
       const actor = await resolveActor(user), key = `${actor.ref}:${id}`;
@@ -104,7 +106,7 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           await revalidateAction();
           result = async () => {
             await revalidateAction();
-            const outcome = await actions.execute({ user, action: pendingAction, revalidate: revalidateAction });
+            const outcome = await actions.execute({ user, action: pendingAction, revalidate: revalidateAction, session });
             const done = { ...pendingAction, status: 'DONE', result: outcome.text };
             return { answer: outcome.text, sources: outcome.sources || [], failures: [], toolsUsed: [`accion:${pendingAction.type}`], pendingAction: done };
           };
@@ -155,7 +157,7 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         } else if (taskDrafts && taskDraft && !['CREATED','CANCELLED'].includes(stage) && ((stage === 'PRIORITY' && /^(normal|alta|urgente)$/i.test(text)) || (stage === 'DATE' && /^(hoy|mañana|pasado mañana)$/i.test(text)) || (stage === 'MATERIAL' && materialDeclined(text, stage)))) {
           await revalidateTask(); result = taskResult(await taskDrafts.prepare({ user, previous: taskDraft, question: text, attachments: prepared }));
         } else {
-          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, taskDraft, dispatchDraft, deleteDraft, pendingAction: ['MISSING', 'READY'].includes(actionState) ? pendingAction : null, taskAttachments: prepared, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
+          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, taskDraft, dispatchDraft, deleteDraft, pendingAction: ['MISSING', 'READY'].includes(actionState) ? pendingAction : null, session, taskAttachments: prepared, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
           if (!result.taskDraft && taskDraft) result.taskDraft = taskDraft;
           if (!result.dispatchDraft && dispatchDraft) result.dispatchDraft = dispatchDraft;
           if (!result.deleteDraft && deleteDraft) result.deleteDraft = deleteDraft;
