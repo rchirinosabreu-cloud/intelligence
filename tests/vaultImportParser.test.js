@@ -73,6 +73,19 @@ test('«Aplicación» is a platform column; a one-character password is not an a
   assert.equal(leftover, '');
 });
 
+// 10 de octubre de 2026: en el Drive una celda estrecha partía el correo («…@gmail.co» y «m» en la línea
+// siguiente); el usuario quedaba cortado y la «m» como nota.
+test('an email cut across two lines is joined back, in a flattened table and in free notes', () => {
+  const table = ['Plataforma', '|Usuario / correo', '|Contraseña', '|Observaciones', '|CapCut', '|coordinador@ficticio.co', 'm', '|Clave-Falsa-20', '|', '|Instagram', '|equipo@ficticio.com', 'viejo', '|Clave-Falsa-21', '|'].join('\n');
+  const { entries } = parseAccessText(table);
+  assert.deepEqual(entries.map((e) => [e.platform, e.username, e.secret, e.notes]), [
+    ['CapCut', 'coordinador@ficticio.com', 'Clave-Falsa-20', null],
+    ['Instagram', 'equipo@ficticio.com', 'Clave-Falsa-21', 'viejo']
+  ], 'a tail that completes the ending joins; a word after a whole email is still a note');
+  const free = parseAccessText(['CapCut', 'coordinador@ficticio.co', 'm', 'Contraseña: Clave-Falsa-22'].join('\n'));
+  assert.deepEqual(free.entries.map((e) => [e.platform, e.username, e.secret]), [['CapCut', 'coordinador@ficticio.com', 'Clave-Falsa-22']]);
+});
+
 test('the fingerprint finds the same account across documents, regardless of case and spacing', () => {
   assert.equal(accessFingerprint({ platform: 'Capcut', username: 'Uno@Ficticio.com ', secret: 'X1' }), accessFingerprint({ platform: 'CapCut', username: 'uno@ficticio.com', secret: 'X1' }));
   assert.notEqual(accessFingerprint({ platform: 'CapCut', username: 'uno@ficticio.com', secret: 'X1' }), accessFingerprint({ platform: 'CapCut', username: 'uno@ficticio.com', secret: 'X2' }));

@@ -12,6 +12,7 @@
 // Es lógica pura y nunca registra nada: recibe y devuelve secretos, así que no imprime ni lanza con valores.
 
 import { createHash } from 'node:crypto';
+import { joinWrappedEmail } from './vaultWrappedUsername.js';
 
 const fold = (value) => String(value ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const PLACEHOLDER = /^(?:[-—–_.*\s]*|n\/?a|no aplica|sin dato)$/i;
@@ -114,7 +115,15 @@ export const parseAccessText = (text) => {
       const line = lines[j];
       if (prefixed(line)) cells.push({ value: clean(prefixValue(line)), extra: [] });
       else if (!line.trim()) break;
-      else if (cells.length) { const more = clean(line); if (more) cells.at(-1).extra.push(more); }
+      else if (cells.length) {
+        // Una línea sin prefijo continúa la celda. Si es la cola de un correo partido («gmail.co» + «m»),
+        // completa el valor; si no, es una nota (10 de octubre de 2026).
+        const more = clean(line);
+        const cell = cells.at(-1);
+        const joined = more && !cell.extra.length ? joinWrappedEmail(cell.value, more) : null;
+        if (joined) cell.value = joined;
+        else if (more) cell.extra.push(more);
+      }
       else break;
     }
     const width = roles.length;
@@ -197,6 +206,11 @@ export const parseAccessText = (text) => {
       if (prefix && !LABELS.username.test(`${prefix}:`) && !roleOf(prefix)) record.title ||= prefix;
       if (!record.username) add('username', email); else { record.notes.push(trimmed); record.raw.push(trimmed); }
       continue;
+    }
+    // La cola de un correo partido en dos líneas completa el usuario, nunca pasa por contraseña ni por nota.
+    if (record.username && !record.secret) {
+      const joined = joinWrappedEmail(record.username, trimmed);
+      if (joined) { record.username = joined; record.raw.push(trimmed); continue; }
     }
     // Texto suelto: un nombre de plataforma o un título abre cuenta; tras el usuario, una palabra sin espacios
     // es la contraseña que nadie rotuló.
