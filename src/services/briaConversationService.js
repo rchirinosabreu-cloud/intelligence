@@ -5,7 +5,8 @@ import { readBriaAttachment, attachmentModelPart } from './briaAttachmentReader.
 import { taskDraftReply, taskDraftStage, taskCreationIntent, isTaskConfirmation, isTaskCancellation, materialDeclined } from '../lib/briaTaskDraft.js';
 import { dispatchReply, dispatchStage, isDispatchConfirmation, isDispatchCancellation, dispatchResultText } from '../lib/briaDispatchDraft.js';
 import { deleteReply, deleteStage, isDeleteConfirmation, isDeleteCancellation, deleteResultText, DELETE_REASON_OPTIONS } from '../lib/briaDeleteDraft.js';
-export const createBriaConversationService = ({ repository, resolveActor, assistant, ai, taskDrafts, dispatchDrafts, deleteDrafts, prepareAttachment = readBriaAttachment, authorizeTurn = async () => true }) => {
+import { actionReply, actionStage, isActionConfirmation, isActionCancellation, pendingActionOf } from '../lib/briaActions.js';
+export const createBriaConversationService = ({ repository, resolveActor, assistant, ai, taskDrafts, dispatchDrafts, deleteDrafts, actions, prepareAttachment = readBriaAttachment, authorizeTurn = async () => true }) => {
   const pending = new Set();
   const authorizeInput = async user => { const actor = await resolveActor(user); if (!['ADMIN', 'PROJECT_MANAGER'].includes(actor.role)) throw knowledgeError('Solo Admin y Project Manager pueden adjuntar o dictar.', 403); return actor; };
   const permitted = async (user, turn) => !turn.permissionChanged && await authorizeTurn(user, turn);
@@ -86,8 +87,28 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           if (!await authorizeTurn(user, { deleteDraft })) throw knowledgeError('Tu acceso para eliminar cambió.', 403);
         };
         const deleteResult = draft => ({ ...deleteReply(draft), sources: [], failures: [], toolsUsed: ['preparar_eliminacion'], deleteDraft: draft });
+        // Acciones de Bria en la plataforma (10 de octubre de 2026): solo la de la respuesta inmediatamente anterior se
+        // puede confirmar o cancelar, y se ejecuta dentro de append, con la conversación bloqueada y su revisión comprobada.
+        const pendingAction = pendingActionOf(chat.turns);
+        const actionState = actionStage(pendingAction);
+        const revalidateAction = async () => {
+          await resolveActor(user);
+          if (!await authorizeTurn(user, { pendingAction })) throw knowledgeError('Tu acceso para esta acción cambió.', 403);
+        };
         let result;
-        if (deleteDrafts && deleteDraft && isDeleteCancellation(text) && !['DONE', 'CANCELLED'].includes(deleteState)) {
+        if (actions && pendingAction && isActionCancellation(text) && !['DONE', 'CANCELLED'].includes(actionState)) {
+          await revalidateAction();
+          const cancelled = { ...pendingAction, status: 'CANCELLED' };
+          result = { ...actionReply(cancelled), sources: [], failures: [], toolsUsed: [], pendingAction: cancelled };
+        } else if (actions && actionState === 'READY' && isActionConfirmation(text) && !files.length) {
+          await revalidateAction();
+          result = async () => {
+            await revalidateAction();
+            const outcome = await actions.execute({ user, action: pendingAction, revalidate: revalidateAction });
+            const done = { ...pendingAction, status: 'DONE', result: outcome.text };
+            return { answer: outcome.text, sources: outcome.sources || [], failures: [], toolsUsed: [`accion:${pendingAction.type}`], pendingAction: done };
+          };
+        } else if (deleteDrafts && deleteDraft && isDeleteCancellation(text) && !['DONE', 'CANCELLED'].includes(deleteState)) {
           await revalidateDelete();
           result = deleteResult({ ...deleteDraft, status: 'CANCELLED' });
         } else if (deleteDrafts && deleteState === 'DONE' && isDeleteConfirmation(text)) {
@@ -134,13 +155,13 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         } else if (taskDrafts && taskDraft && !['CREATED','CANCELLED'].includes(stage) && ((stage === 'PRIORITY' && /^(normal|alta|urgente)$/i.test(text)) || (stage === 'DATE' && /^(hoy|mañana|pasado mañana)$/i.test(text)) || (stage === 'MATERIAL' && materialDeclined(text, stage)))) {
           await revalidateTask(); result = taskResult(await taskDrafts.prepare({ user, previous: taskDraft, question: text, attachments: prepared }));
         } else {
-          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, taskDraft, dispatchDraft, deleteDraft, taskAttachments: prepared, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
+          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, taskDraft, dispatchDraft, deleteDraft, pendingAction: ['MISSING', 'READY'].includes(actionState) ? pendingAction : null, taskAttachments: prepared, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
           if (!result.taskDraft && taskDraft) result.taskDraft = taskDraft;
           if (!result.dispatchDraft && dispatchDraft) result.dispatchDraft = dispatchDraft;
           if (!result.deleteDraft && deleteDraft) result.deleteDraft = deleteDraft;
         }
         const fresh = await resolveActor(user);
-        if (!(await Promise.all([...chat.turns.filter(turn => turn.role === 'assistant'), { role: 'assistant', ...(typeof result === 'function' ? { taskDraft, dispatchDraft, deleteDraft } : result) }].map(turn => authorizeTurn(user, turn)))).every(Boolean)) throw knowledgeError('Tu acceso a las fuentes cambió durante la consulta.', 403);
+        if (!(await Promise.all([...chat.turns.filter(turn => turn.role === 'assistant'), { role: 'assistant', ...(typeof result === 'function' ? { taskDraft, dispatchDraft, deleteDraft, pendingAction } : result) }].map(turn => authorizeTurn(user, turn)))).every(Boolean)) throw knowledgeError('Tu acceso a las fuentes cambió durante la consulta.', 403);
         const saved = await repository.append(fresh, id, chat.revision, text, result, prepared);
         return sanitize(user, saved);
       } finally { pending.delete(key); }

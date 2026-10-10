@@ -115,10 +115,13 @@ test('the schema, the start chain, the allowed fields and the controller carry t
   assert.ok(pkg.scripts.start.includes('node scripts/ensure-task-focus-schema.js &&'));
   assert.ok(pkg.scripts.start.indexOf('ensure-task-focus-schema.js') < pkg.scripts.start.indexOf('npx prisma generate'));
   assert.match(security, /'dueDate',\s*'focusDeadlineAt',/, 'the PATCH accepts the field');
-  assert.match(controller, /'focusDeadlineAt' in req\.body && !isManagerRole\(req\.user\?\.role\)/, 'only managers set or clear the hour on update');
-  assert.match(controller, /status\(403\)\.json\(\{ error: 'Solo administradores y project managers pueden fijar o quitar un compromiso con hora\.' \}\)/);
-  assert.match(controller, /assertTaskNotLocked\(prisma, \{ user: req\.user, taskId: req\.params\.taskId \}\)/, 'the lock is enforced server-side');
-  assert.match(controller, /status\(423\)/, 'locked changes answer 423 with the commitment');
+  // Desde el 9 de octubre de 2026 la puerta de actualización vive en taskUpdateGate.js, compartida con Bria.
+  const gate = readFileSync('src/services/taskUpdateGate.js', 'utf8');
+  assert.match(controller, /checkTaskUpdate\(\{ db: prisma, user: req\.user, taskId: req\.params\.taskId, payload: req\.body \}\)/, 'the PATCH goes through the gate');
+  assert.match(gate, /'focusDeadlineAt' in payload && !isManagerRole\(user\?\.role\)/, 'only managers set or clear the hour on update');
+  assert.match(gate, /gateError\(403, 'Solo administradores y project managers pueden fijar o quitar un compromiso con hora\.'\)/);
+  assert.match(gate, /assertTaskNotLocked\(db, \{ user, taskId \}\)/, 'the lock is enforced server-side');
+  assert.match(gate, /gateError\(423, lockError\.message, \{ focusTask: lockError\.focusTask \}\)/, 'locked changes answer 423 with the commitment');
   assert.match(controller, /focusDeadlineAt[\s\S]*createNewTask|createNewTask[\s\S]*focusDeadlineAt/, 'creation also guards the field');
   assert.match(service, /focusDeadlineAt: focusDeadlineAt \? new Date\(focusDeadlineAt\) : null/, 'creation stores the hour');
   assert.match(service, /'focusDeadlineAt' in updateData/, 'update normalizes the hour and allows clearing it');

@@ -13,15 +13,14 @@ import { getQualityStreak, getCompletedTasks, getTasks, createTask, updateTask, 
 import { uploadToS3, getFromS3Stream, deleteFromS3 } from '../services/s3Service.js';
 import { resolveTaskCommentFile } from '../services/taskCommentFileService.js';
 import { createNotification, processMentionsAndNotifications } from '../services/notificationService.js';
-import { assertTaskNotLocked, requestFocusExtension } from '../services/taskFocusService.js';
+import { requestFocusExtension } from '../services/taskFocusService.js';
 import { recordTaskListSync } from '../services/operationalTraceService.js';
 import { traceTaskOpenHandler } from './operationalTraceController.js';
-import { canDeleteTask, canUpdateTask, isManagerRole, pickAllowedTaskUpdates, validateUploadFile } from '../config/security.js';
-import { canChangeTaskPrivacy, canCreatePrivateTask } from '../lib/taskPrivacy.js';
-import { collaboratorMoveProblem } from '../lib/taskCollaborators.js';
-import { isTaskReopenRequest } from '../lib/taskTiming.js';
+import { canDeleteTask, isManagerRole, pickAllowedTaskUpdates, validateUploadFile } from '../config/security.js';
+import { canCreatePrivateTask } from '../lib/taskPrivacy.js';
 import { commentFilesValidationMessage, MAX_COMMENT_FILE_BYTES } from '../lib/taskCommentAttachments.js';
 import { listTaskWorkHistory } from '../services/taskWorkSessionService.js';
+import { checkTaskUpdate } from '../services/taskUpdateGate.js';
 import { needsDeclaredTime, declareTaskTime } from '../services/declaredTimeService.js';
 export { getMyExcessiveTaskAlertsHandler as getMyExcessiveTaskAlerts } from './excessiveTaskAlertController.js';
 export { confirmExcessiveTaskWorkHandler as confirmExcessiveTaskWork } from './excessiveTaskAlertController.js';
@@ -166,53 +165,13 @@ export const createNewTask = async (req, res) => {
 
 export const updateExistingTask = async (req, res) => {
     try {
-        if ('sortOrder' in req.body) {
-            const role = req.user?.role;
-            if (role !== 'ADMIN' && role !== 'PROJECT_MANAGER' && role !== 'PM') {
-                return res.status(403).json({ error: "No tienes permisos de Project Manager o Administrador para reordenar tareas" });
-            }
-        }
-        if ('focusDeadlineAt' in req.body && !isManagerRole(req.user?.role)) {
-            return res.status(403).json({ error: 'Solo administradores y project managers pueden fijar o quitar un compromiso con hora.' });
-        }
-        // Compromiso con hora: while the person has a task with an hour, their other tasks stay locked.
+        // La puerta (reordenar, compromiso con hora, reapertura de cualquiera, colaboradores, privacidad) vive en
+        // `checkTaskUpdate`, que comparte con Bria (10 de octubre de 2026): las mismas reglas, las mismas respuestas.
         try {
-            await assertTaskNotLocked(prisma, { user: req.user, taskId: req.params.taskId });
-        } catch (lockError) {
-            if (lockError.statusCode === 423) return res.status(423).json({ error: lockError.message, focusTask: lockError.focusTask });
-            throw lockError;
-        }
-        const task = await prisma.task.findUnique({
-            where: { id: req.params.taskId },
-            select: {
-                creatorId: true,
-                status: true,
-                assignee: { select: { userId: true } },
-                collaborators: { select: { member: { select: { userId: true } } } }
-            }
-        });
-        if (!task) return res.status(404).json({ error: 'Task not found' });
-        // Reabrir una tarea cerrada es de **cualquiera** del equipo (Rodny, 6 de octubre de 2026):
-        // el error se detecta donde se detecta, y mandar a buscar al responsable solo retrasa la
-        // corrección. Es la única excepción a `canUpdateTask`, y solo cubre el envío que reabre y
-        // nada más (`isTaskReopenRequest`): editar la tarea sigue siendo de quien puede editarla.
-        // Un pendiente privado que esta persona no puede abrir ya lo frenó `requireTaskAccess`.
-        const esReapertura = isTaskReopenRequest({ currentStatus: task.status, payload: req.body });
-        if (!esReapertura && !canUpdateTask(req.user, task)) {
-            // Colaboradores (5 de octubre de 2026): mueven la tarea entre «Pendiente» y «En proceso»
-            // y nada más; cerrarla y cambiar sus datos sigue siendo del responsable.
-            const actorUserId = req.user?.userId || req.user?.id;
-            const isCollaborator = Boolean(actorUserId) && (task.collaborators || []).some((row) => row.member?.userId === actorUserId);
-            if (!isCollaborator) {
-                return res.status(403).json({ error: 'No tienes permisos para actualizar esta tarea' });
-            }
-            const problem = collaboratorMoveProblem({ currentStatus: task.status, payload: req.body });
-            if (problem) return res.status(403).json({ error: problem });
-        }
-        // La privacidad solo la cambia quien creó la tarea, y solo si dirige: ni otro
-        // admin ni el responsable pueden abrir al equipo algo que otro reservó.
-        if (('isPrivate' in req.body || 'viewerIds' in req.body) && !canChangeTaskPrivacy(task, req.user)) {
-            return res.status(403).json({ error: 'Solo quien creó este pendiente puede cambiar con quién se comparte.' });
+            await checkTaskUpdate({ db: prisma, user: req.user, taskId: req.params.taskId, payload: req.body });
+        } catch (gate) {
+            if (gate.gateStatus) return res.status(gate.gateStatus).json({ error: gate.message, ...(gate.focusTask ? { focusTask: gate.focusTask } : {}) });
+            throw gate;
         }
 
         const updateData = pickAllowedTaskUpdates(req.body);

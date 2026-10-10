@@ -84,20 +84,23 @@ test('quien no es manager, ni creador, ni responsable, ya puede reabrir — y so
 });
 
 test('el controlador deja pasar la reapertura antes de negar por permisos', async () => {
+  // Desde el 9 de octubre de 2026 la puerta vive en taskUpdateGate.js, compartida con Bria.
   const controller = await read('src/controllers/taskController.js');
+  const gate = await read('src/services/taskUpdateGate.js');
 
-  assert.match(controller, /import \{ isTaskReopenRequest \} from '\.\.\/lib\/taskTiming\.js';/);
+  assert.match(controller, /checkTaskUpdate\(\{ db: prisma, user: req\.user, taskId: req\.params\.taskId, payload: req\.body \}\)/);
+  assert.match(gate, /import \{ isTaskReopenRequest \} from '\.\.\/lib\/taskTiming\.js';/);
   assert.match(
-    controller,
-    /const esReapertura = isTaskReopenRequest\(\{ currentStatus: task\.status, payload: req\.body \}\);\s*\n\s*if \(!esReapertura && !canUpdateTask\(req\.user, task\)\) \{/,
+    gate,
+    /if \(!isTaskReopenRequest\(\{ currentStatus: task\.status, payload \}\) && !canUpdateTask\(user, task\)\) \{/,
     'la excepción se evalúa en el mismo `if` que niega, no después'
   );
 
   // Lo que **no** cambia: editar sigue siendo de quien puede, y un pendiente privado que esta
   // persona no puede abrir lo frena el guardián antes de llegar aquí.
-  assert.match(controller, /return res\.status\(403\)\.json\(\{ error: 'No tienes permisos para actualizar esta tarea' \}\)/);
-  assert.match(controller, /canChangeTaskPrivacy\(task, req\.user\)/, 'la privacidad sigue siendo de quien creó la tarea');
-  assert.match(controller, /collaboratorMoveProblem\(\{ currentStatus: task\.status, payload: req\.body \}\)/, 'la regla de los colaboradores se conserva');
+  assert.match(gate, /gateError\(403, 'No tienes permisos para actualizar esta tarea'\)/);
+  assert.match(gate, /canChangeTaskPrivacy\(task, user\)/, 'la privacidad sigue siendo de quien creó la tarea');
+  assert.match(gate, /collaboratorMoveProblem\(\{ currentStatus: task\.status, payload \}\)/, 'la regla de los colaboradores se conserva');
 
   const rutas = await read('src/routes/index.js');
   assert.match(rutas, /requireTaskAccess/, 'el guardián de los pendientes privados sigue montado');
