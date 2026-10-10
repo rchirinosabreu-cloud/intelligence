@@ -2,7 +2,7 @@
 // los datos de esta prueba son inventados.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseAccessText, accessFingerprint } from '../src/lib/vaultImportParser.js';
+import { parseAccessText, accessFingerprint } from '../scripts/lib/vaultImportParser.js';
 
 const pick = (entries) => entries.map(({ platform, username, secret, url, notes }) => ({ platform, username, secret, url: url || null, notes: notes || null }));
 
