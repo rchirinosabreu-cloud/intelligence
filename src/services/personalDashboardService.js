@@ -526,7 +526,11 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
       name: member.name,
       role: member.role,
       avatarUrl: member.avatarUrl || null,
-      isCommunityManager
+      isCommunityManager,
+      // Para armar sus recordatorios cuando otra persona mira este dashboard (9 de octubre de 2026): solo el rol y
+      // los módulos encendidos, nada más de la cuenta.
+      accountRole: member.user?.role || null,
+      modulePermissions: Object.fromEntries(Object.entries(member.user?.modulePermissions || {}).filter(([, enabled]) => enabled === true))
     },
     stats: {
       active: activeTasks.length,

@@ -38,6 +38,14 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
           const demoUser = asEditor ? { ...dashboardDemoUser, role: 'EDITOR' } : dashboardDemoUser;
           const taskCommentsMatch = pathname.match(/^\/api\/tasks\/([^/]+)\/comments$/);
           if (taskCommentsMatch) { res.end(JSON.stringify(dashboardDemoTaskComments(taskCommentsMatch[1]))); return; }
+          // El dashboard de otra persona del equipo de ejemplo (9 de octubre de 2026): sus recordatorios con sus permisos.
+          const otherDashboard = pathname.match(/^\/api\/dashboard\/personal\/([^/]+)$/);
+          if (otherDashboard && otherDashboard[1] !== dashboardDemoUser.id) {
+            const person = (Array.isArray(dashboardDemoTeam) ? dashboardDemoTeam : []).find((row) => (row.userId || row.user?.id) === otherDashboard[1]);
+            const base = dashboardDemoDashboard();
+            res.end(JSON.stringify({ ...base, crmAttention: { enabled: false, counts: {}, items: [] }, member: { ...base.member, id: person?.id || 'member-other', userId: otherDashboard[1], name: person?.name || 'Persona del equipo', accountRole: 'EDITOR', modulePermissions: { gestion: true, minutas: true } } }));
+            return;
+          }
           const routes = {
             '/api/auth/me': demoUser,
             '/api/user/profile': demoUser,

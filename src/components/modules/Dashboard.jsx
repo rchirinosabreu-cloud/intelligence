@@ -163,8 +163,6 @@ const Dashboard = () => {
   const isViewingAnotherMember = Boolean(selectedMember?.userId && currentUser?.id && selectedMember.userId !== currentUser.id);
   const firstName = firstNameOf(currentUser?.name);
   const todayLabel = useMemo(() => formatTodayLabel(), []);
-  // Reminders and tips are only personal when the person looks at their own dashboard.
-  const tipUser = isViewingAnotherMember ? null : currentUser;
 
   const completedFeed = useMemo(() => {
     const bogotaFormatter = new Intl.DateTimeFormat('en-CA', {
@@ -329,7 +327,8 @@ const Dashboard = () => {
 
             {/* Beside the announcements, always at the same height: everything that asks for this person's attention today. */}
             <motion.div variants={item} className="flex min-w-0">
-              <DashboardReminders dashboard={dashboard} user={tipUser} className={cn(topDashboardPanelClass, 'flex-1')} />
+              {/* Quien mira: el panel decide si es su propio dashboard o el de otra persona (9 de octubre de 2026). */}
+              <DashboardReminders dashboard={dashboard} user={currentUser} className={cn(topDashboardPanelClass, 'flex-1')} />
             </motion.div>
 
             {/* Row 2: recent achievements | upcoming work | cited meetings, all stretched to the same height. */}
