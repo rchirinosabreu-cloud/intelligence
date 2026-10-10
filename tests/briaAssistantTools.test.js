@@ -38,11 +38,19 @@ test('carga_del_equipo tells who is loaded and who has room, by person if asked,
     { personId: 'h', personName: 'Helen Hernández', weekMs: H, overdue: { count: 2, ms: H, taskIds: ['o4', 'o5'] }, undated: { count: 0 }, cells: [{ day: '2026-10-09', ms: H, count: 1, level: 'libre', tasks: [{ id: 'o6', title: 'Post Alpina', clientName: null, ms: H, source: 'supuesto' }] }, { day: '2026-10-13', ms: 0, count: 0, level: 'libre', tasks: [] }] }
   ], signals: [{ kind: 'DIA_EXCEDIDO', personId: 'b', message: 'Brayan Torres tiene 12 h estimadas el 13 de octubre en 3 tareas.' }, { kind: 'CON_ESPACIO', personId: 'h', message: 'Helen Hernández tiene 1 h comprometida.' }] }) };
   const all = await toolByName('carga_del_equipo').run({}, { load, user: pm, person, today: TODAY });
-  assert.deepEqual([all.data.hoy, all.data.diasHabiles, all.data.jornada], ['9 de octubre', 2, '8 h']);
-  assert.deepEqual(all.data.personas[0].dias[0], { dia: '13 de octubre', horas: '12 h', nivel: 'excedida', tareas: ['Video Nutresa (Nutresa) · 4 h'] });
+  assert.deepEqual([all.data.hoy, all.data.diasHabiles, all.data.jornada, all.data.capacidadDelPeriodo], ['viernes 9 de octubre', 2, '8 h', '16 h']);
+  // Rodny, 10 de octubre de 2026: 11 h en 10 días hábiles se leyó como «la mayor carga». La herramienta dice qué
+  // parte del tiempo está comprometida y lee al equipo antes de nombrar a nadie.
+  assert.deepEqual(all.data.equipo, { personas: 2, ocupacionMaxima: '75 %', lectura: 'Hay personas con buena parte de su tiempo comprometido.', tareasVencidas: 2, tareasSinFecha: 1 });
+  assert.deepEqual([all.data.personas[0].ocupacion, all.data.personas[1].ocupacion], ['75 %', '6 %']);
+  assert.deepEqual(all.data.personas[0].dias[0], { dia: 'martes 13 de octubre', horas: '12 h', nivel: 'excedida', tareas: ['Video Nutresa (Nutresa) · 4 h'] });
   assert.deepEqual(all.data.personas[1].dias[0].tareas, ['Post Alpina · 1 h supuesto']);
   assert.equal(all.data.senales.length, 2);
   assert.match(all.data.instruccion, /nunca de desempeño/);
+  assert.match(all.data.instruccion, /si nadie pasa de la mitad de su tiempo, dilo antes de nombrar a nadie/);
+  assert.match(all.data.instruccion, /no «la herramienta»/);
+  const quiet = await toolByName('carga_del_equipo').run({}, { load: { get: async () => ({ ...(await load.get()), people: (await load.get()).people.map((p) => ({ ...p, weekMs: H })) }) }, user: pm, person, today: TODAY });
+  assert.equal(quiet.data.equipo.lectura, 'Nadie pasa de la mitad de su tiempo: el equipo tiene espacio.');
   assert.deepEqual(all.sources, [{ kind: 'ritmo', id: 'carga-2026-10-09', label: 'Mapa de carga', url: '/manager?tab=ritmo' }]);
   const one = await toolByName('carga_del_equipo').run({ persona: 'helen' }, { load, user: pm, person, today: TODAY });
   assert.deepEqual(one.data.personas.map((p) => p.nombre), ['Helen Hernández']);

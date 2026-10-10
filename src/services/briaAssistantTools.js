@@ -25,6 +25,7 @@ const STATUS_FILTERS = {
 const STAGE_LABELS = ['sin texto', 'redactada', 'diseñada', 'aprobada', 'programada', 'publicada'];
 const LEVEL_LABELS = { red: 'rojo', yellow: 'amarillo', green: 'verde', gray: 'gris' };
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
 const MAX_PUBLICATION_DAYS = 30;
 const DAY_MS = 86_400_000;
 
@@ -384,22 +385,37 @@ const cargaDelEquipo = {
     const map = await load.get();
     const wanted = fold(persona).split(/\s+/).filter(Boolean);
     const people = wanted.length ? map.people.filter((p) => wanted.every((word) => fold(p.personName).includes(word))) : map.people;
-    const dayName = (day) => { const [y, m, d] = day.split('-').map(Number); return `${d} de ${MONTHS[m - 1]}${y !== Number(map.today.slice(0, 4)) ? ` de ${y}` : ''}`; };
+    // Con el día de la semana: «el 19 de octubre» a secas se leyó como si fuera hoy (Rodny, 10 de octubre de 2026).
+    const dayName = (day) => { const date = new Date(`${day}T12:00:00Z`); const [y, m, d] = day.split('-').map(Number); return `${WEEKDAYS[date.getUTCDay()]} ${d} de ${MONTHS[m - 1]}${y !== Number(map.today.slice(0, 4)) ? ` de ${y}` : ''}`; };
+    // Sin la capacidad del periodo, 11 h en 10 días hábiles se leyó como «la mayor carga». Cada persona dice
+    // qué parte de su tiempo tiene comprometida, y el equipo dice cuánto quedó fuera por no tener fecha.
+    const periodMs = map.capacityMs * map.days.length;
+    const pct = (ms) => `${Math.round((ms / periodMs) * 100)} %`;
+    const busiest = Math.max(0, ...map.people.map((p) => p.weekMs / periodMs));
     return {
       data: {
         hoy: dayName(map.today),
         diasHabiles: map.days.length,
         jornada: formatDuration(map.capacityMs),
+        capacidadDelPeriodo: formatDuration(periodMs),
+        equipo: {
+          personas: map.people.length,
+          ocupacionMaxima: pct(busiest * periodMs),
+          lectura: busiest < 0.5 ? 'Nadie pasa de la mitad de su tiempo: el equipo tiene espacio.' : busiest <= 1 ? 'Hay personas con buena parte de su tiempo comprometido.' : 'Hay personas con más trabajo del que cabe en el periodo.',
+          tareasVencidas: map.people.reduce((n, p) => n + p.overdue.count, 0),
+          tareasSinFecha: map.people.reduce((n, p) => n + p.undated.count, 0)
+        },
         personas: people.slice(0, wanted.length ? 3 : 20).map((p) => ({
           nombre: p.personName,
           horasComprometidas: formatDuration(p.weekMs),
+          ocupacion: pct(p.weekMs),
           vencidas: p.overdue.count, sinFecha: p.undated.count,
           dias: p.cells.filter((c) => c.count > 0).map((c) => ({
             dia: dayName(c.day), horas: formatDuration(c.ms), nivel: c.level, tareas: c.tasks.slice(0, 6).map((t) => `${t.title}${t.clientName ? ` (${t.clientName})` : ''} · ${formatDuration(t.ms)}${t.source === 'supuesto' ? ' supuesto' : ''}`)
           }))
         })),
         senales: map.signals.filter((s) => !wanted.length || people.some((p) => p.personId === s.personId)).map((s) => s.message),
-        instruccion: 'Las horas son estimaciones: la mediana de lo que esa persona tardó en ese tipo de trabajo, o la del equipo, o una hora si no hay historial («supuesto»). Un día «excedida» pasa de un día y cuarto de trabajo; «alta» es un día completo. Habla de carga y de repartir trabajo, nunca de desempeño. Si nadie coincide con el nombre, dilo.'
+        instruccion: 'Empieza por la lectura del equipo: si nadie pasa de la mitad de su tiempo, dilo antes de nombrar a nadie; «la mayor carga» solo se dice de alguien que de verdad tenga el periodo lleno. Las horas son estimaciones: la mediana de lo que esa persona tardó en ese tipo de trabajo, o la del equipo, o una hora si no hay historial («supuesto»). Las tareas sin fecha no entran en el mapa: si son muchas, di que el mapa está incompleto. Un día «excedida» pasa de un día y cuarto de trabajo; «alta» es un día completo. Habla de carga y de repartir trabajo, nunca de desempeño, y di qué miraste con palabras («las tareas abiertas con fecha en los próximos días hábiles»), no «la herramienta». Si nadie coincide con el nombre, dilo.'
       },
       sources: [{ kind: 'ritmo', id: `carga-${map.today}`, label: 'Mapa de carga', url: '/manager?tab=ritmo' }]
     };
