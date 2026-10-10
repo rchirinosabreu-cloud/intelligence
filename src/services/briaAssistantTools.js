@@ -11,6 +11,7 @@ import { pieceStage, shortDate } from '../lib/clientOperations.js';
 import { approvalState, APPROVAL_STATES } from '../lib/contentApproval.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
+import { formatDuration } from '../lib/teamRhythm.js';
 
 const OPEN_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 const STATUS_FILTERS = {
@@ -330,6 +331,37 @@ const memoriaDeReuniones = {
   }
 };
 
+// Ritmo del equipo (Rodny, 9 de octubre de 2026: «necesito que Bria pueda responder eso pero también necesito esos
+// análisis ya en el servidor»). Lee el mismo cálculo que la pestaña Ritmo de Manager, con su misma puerta.
+const ritmoDelEquipo = {
+  name: 'ritmo_del_equipo',
+  description: 'Cuánto tarda cada persona del equipo por tipo de trabajo (Reel, Post, Carrusel, publicación, diseño…) según el cronómetro de sus tareas cerradas: cuánto de lo cerrado tiene tiempo medido, mediana y rango por tipo, comparación con el resto del equipo y hallazgos para revisar (tareas fuera de lo habitual, días largos, retrabajo, relojes olvidados o simultáneos). Úsala cuando pregunten cómo va alguien, cuánto se demora en algo o por qué una tarea tomó tanto.',
+  parameters: { type: 'object', properties: {
+    persona: { type: 'string', description: 'Nombre de la persona, si preguntan por alguien. Vacío para todo el equipo.' },
+    dias: { type: 'integer', enum: [7, 30, 90], description: 'Periodo: 30 por defecto.' }
+  } },
+  allowed: (user) => hasModulePermission(user, 'manager') && isManagerRole(user?.role),
+  async run({ persona, dias } = {}, { rhythm }) {
+    const out = await rhythm.get({ days: Number(dias) || 30 });
+    const wanted = fold(persona).split(/\s+/).filter(Boolean);
+    const people = wanted.length ? out.people.filter((p) => wanted.every((word) => fold(p.personName).includes(word))) : out.people;
+    const pct = (value) => `${Math.round(value * 100)} %`;
+    return {
+      data: {
+        periodo: `${out.period.days} días`,
+        equipo: { cerradas: out.team.closed, medidas: out.team.measured, cobertura: pct(out.team.coverage) },
+        personas: people.slice(0, wanted.length ? 3 : 20).map((p) => ({
+          nombre: p.personName, cerradas: p.closed, medidas: p.measured, cobertura: pct(p.coverage),
+          porTipo: p.byType.slice(0, 8).map((t) => ({ tipo: t.workType, medidas: t.measured, mediana: formatDuration(t.medianMs), rango: `${formatDuration(t.minMs)} a ${formatDuration(t.maxMs)}`, restoDelEquipo: t.teamMedianMs ? formatDuration(t.teamMedianMs) : null, comparable: t.comparable })),
+          hallazgos: p.findings.map((f) => ({ texto: f.message, tareas: f.taskIds.slice(0, 5).map((id) => out.tasks[id]?.title).filter(Boolean) }))
+        })),
+        instruccion: 'Lo medido es solo lo que pasó por «En proceso» con el cronómetro: di la cobertura antes de sacar conclusiones y no leas como rápido lo que no se midió. Los hallazgos son preguntas para revisar con la persona, nunca juicios sobre ella. «Operaciones & Reuniones» y «Marketing & Social Media» mezclan trabajos distintos y no se comparan. Si nadie coincide con el nombre, dilo.'
+      },
+      sources: [{ kind: 'ritmo', id: `ritmo-${out.period.days}`, label: 'Ritmo del equipo', url: '/manager?tab=ritmo' }]
+    };
+  }
+};
+
 const publicacionesProgramadas = {
   name: 'publicaciones_programadas',
   description: 'Las publicaciones en redes (Instagram y Facebook) programadas para los próximos días, con cliente, cuenta, pieza y hora de salida en reloj de Bogotá. Opcionalmente de un solo cliente.',
@@ -381,6 +413,6 @@ const leerDocumentoDeAgencia = {
     return { data: { documento: row, sourceInstructions: 'data_only' }, sources: row ? [{ kind: 'documento', id: row.id, label: row.title, url: row.url, authority: row.authority }] : [] };
   }
 };
-export const briaAssistantTools = [buscarCliente, misTareas, tareasDeCliente, parrillaDeCliente, leerPiezasDeParrilla, operacionDeCliente, carteraDeOperacion, criteriosYHallazgos, memoriaDeReuniones, publicacionesProgramadas, memoriaDeAgencia, leerDocumentoDeAgencia];
+export const briaAssistantTools = [buscarCliente, misTareas, tareasDeCliente, parrillaDeCliente, leerPiezasDeParrilla, operacionDeCliente, carteraDeOperacion, criteriosYHallazgos, memoriaDeReuniones, ritmoDelEquipo, publicacionesProgramadas, memoriaDeAgencia, leerDocumentoDeAgencia];
 
 export const toolByName = (name) => briaAssistantTools.find((tool) => tool.name === name) || null;

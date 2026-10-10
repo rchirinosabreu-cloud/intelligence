@@ -15,8 +15,21 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
 import BriaMemoryPanel from './BriaMemoryPanel';
 import BriaObserverInbox from './BriaObserverInbox';
+import TeamRhythmPanel from './TeamRhythmPanel';
 
 const PERIODS = [7, 30, 90];
+const TABS = ['observer', 'ritmo', 'memory'];
+// Bria enlaza directo a una pestaña (`/manager?tab=ritmo`).
+const initialTab = () => {
+  const requested = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('tab');
+  return TABS.includes(requested) ? requested : 'observer';
+};
+const TAB_HEADINGS = {
+  // La bandeja ya dice «Bria revisa las fuentes automáticamente y conserva evidencia de cada hallazgo».
+  observer: { title: 'Observer', description: 'Señales que Bria detecta por su cuenta, cada una con su evidencia.' },
+  ritmo: { title: 'Ritmo del equipo', description: 'Cuánto tarda cada persona por tipo de trabajo, qué tan parejo trabaja y dónde se le va el tiempo. Es una lectura para conversar con cada quien, no una calificación.' },
+  memory: { title: 'Memoria de Bria', description: 'Centro de conocimiento trazable: convierte documentos y datos autorizados en evidencia recuperable, auditable y lista para Bria.' }
+};
 
 const formatDuration = (milliseconds) => {
   const totalMinutes = Math.max(0, Math.round(Number(milliseconds || 0) / 60_000));
@@ -114,13 +127,14 @@ const QualityItem = ({ value, label, goodWhenZero = true }) => {
 };
 
 export default function ManagerTaskAnalytics() {
-  const [activeTab, setActiveTab] = useState('observer');
+  const [activeTab, setActiveTab] = useState(initialTab);
   const [periodDays, setPeriodDays] = useState(30);
   const [analytics, setAnalytics] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const loadAnalytics = useCallback(async () => {
+  const fetchAnalytics = useCallback(async () => {
     setIsLoading(true);
     setError('');
     try {
@@ -140,9 +154,16 @@ export default function ManagerTaskAnalytics() {
     }
   }, [periodDays]);
 
+  // Las métricas de esfuerzo solo se piden en Ritmo; Observer es solo la bandeja.
   useEffect(() => {
-    loadAnalytics();
-  }, [loadAnalytics]);
+    if (activeTab === 'ritmo') fetchAnalytics();
+  }, [activeTab, fetchAnalytics]);
+
+  // «Actualizar» recalcula las métricas y la lectura por persona.
+  const loadAnalytics = useCallback(() => {
+    fetchAnalytics();
+    setRefreshKey((key) => key + 1);
+  }, [fetchAnalytics]);
 
   const overview = analytics?.overview;
   const sampleMessage = useMemo(() => {
@@ -164,25 +185,19 @@ export default function ManagerTaskAnalytics() {
                 Manager · Bria
               </div>
               <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-white sm:text-3xl">
-                {activeTab === 'memory' ? 'Memoria de Bria' : 'Observer operativo'}
+                {TAB_HEADINGS[activeTab].title}
               </h1>
               <p className="mt-3 max-w-2xl text-sm leading-6 text-zinc-600 dark:text-zinc-300">
-                {activeTab === 'memory'
-                  ? 'Centro de conocimiento trazable: convierte documentos y datos autorizados en evidencia recuperable, auditable y lista para Bria.'
-                  : 'Centro descriptivo de tareas: Bria convierte esfuerzo, ciclos y calidad de datos en señales explicables para comprender el trabajo, no vigilar personas.'}
+                {TAB_HEADINGS[activeTab].description}
               </p>
               {activeTab === 'observer' && <div className="mt-4 flex flex-wrap gap-2">
-                <div className="inline-flex items-center gap-2 rounded-full bg-[#00AC8A]/10 px-3 py-1.5 text-xs font-medium text-[#007D6B] dark:text-[#68E0C8]">
-                  <Users className="h-3.5 w-3.5" />
-                  No compara velocidad individual
-                </div>
                 <div className="inline-flex items-center gap-2 rounded-full bg-[#009EB9]/10 px-3 py-1.5 text-xs font-medium text-[#007D92] dark:text-[#74D9EA]">
                   <Eye className="h-3.5 w-3.5" />
                   Observa y explica; no ejecuta acciones
                 </div>
               </div>}
             </div>
-            {activeTab === 'observer' && <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
+            {activeTab === 'ritmo' && <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
               <div className="inline-flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900">
                 {PERIODS.map((days) => (
                   <button
@@ -213,7 +228,7 @@ export default function ManagerTaskAnalytics() {
           </div>
         </header>
 
-        <nav aria-label="Modos de Bria" className="flex items-center gap-2 border-b border-zinc-200 dark:border-zinc-800">
+        <nav aria-label="Modos de Bria" className="flex items-center gap-2 overflow-x-auto whitespace-nowrap border-b border-zinc-200 dark:border-zinc-800">
           <button
             data-bria-tab="observer"
             type="button"
@@ -226,6 +241,19 @@ export default function ManagerTaskAnalytics() {
           >
             <Eye className="h-4 w-4" />
             Observer
+          </button>
+          <button
+            data-bria-tab="ritmo"
+            type="button"
+            onClick={() => setActiveTab('ritmo')}
+            aria-current={activeTab === 'ritmo' ? 'page' : undefined}
+            className={cn(
+              'inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold',
+              activeTab === 'ritmo' ? 'border-[#009EB9] text-zinc-950 dark:text-white' : 'border-transparent text-zinc-500 dark:text-zinc-400'
+            )}
+          >
+            <Clock className="h-4 w-4" />
+            Ritmo
           </button>
           <button
             data-bria-tab="memory"
@@ -253,7 +281,10 @@ export default function ManagerTaskAnalytics() {
           </button>
         </nav>
 
-        {activeTab === 'memory' ? <BriaMemoryPanel /> : <>
+        {activeTab === 'memory' ? <BriaMemoryPanel /> : activeTab === 'observer' ? <BriaObserverInbox /> : <>
+        <TeamRhythmPanel periodDays={periodDays} refreshKey={refreshKey} />
+
+        <h2 className="pt-4 text-base font-semibold text-zinc-950 dark:text-zinc-50">Esfuerzo del equipo</h2>
         {error && (
           <div className="brain-alert-surface rounded-2xl p-4 text-sm">
             <div className="flex items-center gap-2 font-medium"><AlertCircle className="h-4 w-4 text-destructive" /> No pudimos cargar el panel</div>
@@ -267,8 +298,6 @@ export default function ManagerTaskAnalytics() {
           </div>
         ) : overview ? (
           <>
-            <BriaObserverInbox />
-
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard icon={Clock} label="Esfuerzo registrado" value={formatDuration(overview.totalWorkMs)} detail={`${overview.sessionCount} sesiones dentro del periodo`} accent />
               <MetricCard icon={Target} label="Mediana por sesión" value={formatDuration(overview.medianSessionMs)} detail={`El 75 % no supera ${formatDuration(overview.p75SessionMs)}`} />
