@@ -55,6 +55,19 @@ test('streaming: a failure arrives as words, and an unexpected one never shows i
   } finally { console.error = original; }
 });
 
+// Las manos de Bria (10 de octubre de 2026) operan con el token de la persona: la ruta lo toma de la cabecera y lo
+// pasa como `session` en los dos caminos; sin cabecera no inventa ninguno.
+test('the person’s own token travels as `session` with each message, streamed or not, and never a made-up one', async () => {
+  const seen = [];
+  const app = await serve({ read: async () => ({}), authorizeInput: async () => {}, send: async ({ session }) => { seen.push(session); return saved; } });
+  try {
+    await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-de-rodny' }, body: JSON.stringify({ question: 'hola' }) });
+    await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-de-rodny', Accept: 'text/event-stream' }, body: JSON.stringify({ question: 'hola' }) });
+    await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: 'hola' }) });
+    assert.deepEqual(seen, [{ token: 'token-de-rodny' }, { token: 'token-de-rodny' }, null]);
+  } finally { await app.close(); }
+});
+
 test('without the header the answer is the same single JSON as before', async () => {
   const app = await serve({ read: async () => ({}), authorizeInput: async () => {}, send: async ({ onEvent }) => { assert.equal(onEvent, undefined); return saved; } });
   try {

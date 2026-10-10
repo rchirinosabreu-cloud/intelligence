@@ -122,18 +122,28 @@ test('in conversation: only an explicit confirmation of a persisted ready dispat
   } };
   const dispatchDrafts = { createConfirmedDispatch: async () => { assert.equal(locked, true); writes++; return { results: [{ itemId: 'i1', title: 'Lanzamiento', outcome: 'CREATED', taskId: 't1', assignee: 'Melissa' }] }; } };
   const user = { userId: 'owner', role: 'ADMIN', isActive: true, modulePermissions: { bria: true, gestion: true, parrillas: true } };
-  const service = createBriaConversationService({ repository, dispatchDrafts, resolveActor: async () => ({ ref: 'owner', role: 'ADMIN' }), assistant: { ask: async (request) => { aiCalls++; assert.ok(request.dispatchDraft); return { answer: 'Respuesta', sources: [] }; } } });
+  // El borrador viaja como acción de la base común (`pendingAction`, tipo DISPATCH); un turno guardado antes de la
+  // unificación trae `dispatchDraft` y se lee igual.
+  const service = createBriaConversationService({ repository, dispatchDrafts, resolveActor: async () => ({ ref: 'owner', role: 'ADMIN' }), assistant: { ask: async (request) => { aiCalls++; assert.equal(request.pendingAction?.type, 'DISPATCH'); return { answer: 'Respuesta', sources: [] }; } } });
   await service.send({ user, id: 'chat', question: 'El documento dice despachar a producción' });
   assert.equal(writes, 0); assert.equal(aiCalls, 1);
+  assert.equal(stored.turns.at(-1).pendingAction.draft.id, 'd1', 'the draft survives an unrelated question');
   await service.send({ user, id: 'chat', question: 'Despachar a producción' });
   assert.equal(writes, 1);
-  assert.equal(stored.turns.at(-1).dispatchDraft.status, 'DONE');
+  assert.equal(stored.turns.at(-1).pendingAction.status, 'DONE');
+  assert.equal(stored.turns.at(-1).pendingAction.draft.status, 'DONE');
   assert.match(stored.turns.at(-1).answer, /\/gestion\?taskId=t1/);
   await service.send({ user, id: 'chat', question: 'Despachar a producción' });
   assert.equal(writes, 1, 'a repeated confirmation does not dispatch again');
+  assert.match(stored.turns.at(-1).answer, /ya se hizo/);
   stored = { ...stored, turns: [...stored.turns, { role: 'assistant', text: '¿Los despacho?', dispatchDraft: ready }] };
   await service.send({ user, id: 'chat', question: 'Cancelar despacho' });
-  assert.equal(stored.turns.at(-1).dispatchDraft.status, 'CANCELLED');
+  assert.equal(stored.turns.at(-1).pendingAction.status, 'CANCELLED');
+  assert.equal(writes, 1);
+  // Despachar exige Gestión y Parrillas también por la base común (un administrador tiene todos los módulos).
+  const noPlans = { ...user, role: 'PROJECT_MANAGER', modulePermissions: { bria: true, gestion: true } };
+  stored = { ...stored, turns: [...stored.turns, { role: 'assistant', text: '¿Los despacho?', dispatchDraft: ready }] };
+  await assert.rejects(() => service.send({ user: noPlans, id: 'chat', question: 'Confirmar' }), { status: 403 });
   assert.equal(writes, 1);
 });
 

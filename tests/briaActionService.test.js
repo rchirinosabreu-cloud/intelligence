@@ -132,7 +132,8 @@ test('creating a grid asks for the owner and the strategic objective, proposing 
 test('the tools only prepare, open with the module of their screen, and Bria is told never to claim the change', async () => {
   const tools = createBriaActionTools({ prepare: async ({ type, args }) => ({ id: 'a', ownerId: 'u-pm', type, status: 'DRAFT', title: 'x', summary: [], warnings: [], missing: args.estado ? [] : [{ field: 'estado', question: '¿Qué cambio?' }] }) });
   assert.deepEqual(tools.map((t) => t.name), ['cambiar_pendiente', 'crear_parrilla', 'cambiar_pendientes', 'crear_pieza', 'mover_pieza', 'registrar_observacion']);
-  assert.deepEqual(ACTION_PERMISSION, { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes' });
+  // Las tres acciones que nacieron con flujo propio (crear pendiente, despachar, eliminar) viajan por la misma base.
+  assert.deepEqual(ACTION_PERMISSION, { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion' });
   assert.equal(tools[5].allowed({ ...pm, modulePermissions: { bria: true, clientes: true } }), true);
   assert.equal(tools[5].allowed(pm), false, 'an observation needs the Clientes module');
   assert.equal(tools[0].allowed({ ...pm, modulePermissions: { bria: true, parrillas: true } }), false);

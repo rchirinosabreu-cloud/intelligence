@@ -11,7 +11,7 @@ import { canReadAgencyMemory } from './briaLivingService.js';
 import { getBriaChatStorage } from './briaChatStorage.js';
 import { startBriaChatPurgeWorker } from './briaChatPurge.js';
 import { briaTaskDrafts, briaDispatchDrafts, briaDeleteDrafts, briaActions } from './briaTaskApplication.js';
-import { ACTION_PERMISSION } from './briaActionService.js';
+import { actionModules } from './briaActionService.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { canUseVault } from '../lib/vaultAccess.js';
 let instance;
@@ -26,6 +26,7 @@ const authorizeTurn = async (user, turn) => {
     }
     if (source.kind === 'aprendizaje' && !(await getApplicationKnowledgeService().list(user)).some(row => row.id === source.id)) return false;
   }
+  // Turnos guardados antes de la base común (hasta el 10 de octubre de 2026) traen el borrador con su clave vieja.
   if (turn.taskDraft && !hasModulePermission(user, 'gestion')) return false;
   if (turn.dispatchDraft && !(hasModulePermission(user, 'gestion') && hasModulePermission(user, 'parrillas'))) return false;
   if (turn.deleteDraft && !hasModulePermission(user, 'gestion')) return false;
@@ -37,7 +38,7 @@ const authorizeTurn = async (user, turn) => {
       if (!canUseBria(user)) return false;
       if ((needs.modules || []).some((module) => !hasModulePermission(user, module))) return false;
       if ((needs.roles || []).some((role) => role === 'MANAGER' ? !isManagerRole(user.role) : String(user.role || '').toUpperCase() !== role)) return false;
-    } else if (!hasModulePermission(user, ACTION_PERMISSION[turn.pendingAction.type] || 'gestion')) return false;
+    } else if (!(actionModules(turn.pendingAction.type).length ? actionModules(turn.pendingAction.type) : ['gestion']).every((module) => hasModulePermission(user, module))) return false;
   }
   // Las tarjetas de la bóveda llevan solo nombres; el valor lo vuelve a autorizar la bóveda al mostrarlo.
   if ((turn.accessCards?.length || turn.accessCapture) && !canUseVault(user)) return false;

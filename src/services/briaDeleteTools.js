@@ -1,5 +1,6 @@
 import { canDeleteWithBria } from './briaDeleteService.js';
-import { deleteReply, deleteStage } from '../lib/briaDeleteDraft.js';
+import { deleteStage } from '../lib/briaDeleteDraft.js';
+import { wrapLegacyAction, actionReply } from '../lib/briaActions.js';
 
 // La herramienta solo prepara: el modelo no tiene forma de eliminar. El servidor elimina cuando la persona
 // escribe «Eliminar pendiente» sobre el resumen guardado (ver briaConversationService).
@@ -13,8 +14,10 @@ export const createBriaDeleteTools = (service) => service ? [{
     nuevo: { type: 'boolean', description: 'Solo si la persona pide otra eliminación distinta.' }
   }, required: ['tareas', 'motivo'], additionalProperties: false },
   async run(args, ctx) {
-    const draft = await service.prepare({ user: ctx.user, args, question: ctx.question, previous: ctx.deleteDraft });
-    const reply = deleteReply(draft);
-    return { data: { stage: deleteStage(draft), draft, message: reply.answer, deleted: false }, deleteDraft: draft, deleteReply: reply, quickReplies: reply.quickReplies };
+    const previous = ctx.pendingAction?.type === 'TASK_DELETE' ? ctx.pendingAction.draft : ctx.deleteDraft;
+    const draft = await service.prepare({ user: ctx.user, args, question: ctx.question, previous });
+    const action = wrapLegacyAction('TASK_DELETE', draft, { title: 'Eliminar pendientes' });
+    const reply = actionReply(action);
+    return { data: { stage: deleteStage(draft), draft, message: reply.answer, deleted: false }, pendingAction: action, actionReply: reply, quickReplies: reply.quickReplies };
   }
 }] : [];

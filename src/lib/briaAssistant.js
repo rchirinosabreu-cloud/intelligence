@@ -173,8 +173,8 @@ export const runAssistant = async ({
   const toolsUsed = [];
   const failures = [];
   const learningProposals = [];
-  let quickReplies = [], taskDraft, taskReply, dispatchDraft, dispatchAnswer, deleteDraft, deleteAnswer;
-  let pendingAction = null, actionAnswer = null; // Acción de la plataforma preparada en esta respuesta.
+  let quickReplies = [];
+  let pendingAction = null, actionAnswer = null; // Acción de la plataforma preparada en esta respuesta (una sola base).
   const accessCards = new Map(); // Tarjetas de la bóveda: solo ids y nombres; el valor lo muestra la plataforma.
   let accessCapture = null; // Campo protegido para escribir una contraseña: la plataforma la guarda, el modelo no la ve.
   let rounds = 0;
@@ -197,9 +197,6 @@ export const runAssistant = async ({
       }
       learningProposals.push(...(outcome?.learningProposals || []));
       if (outcome?.quickReplies) quickReplies = normalizeQuickReplies(outcome.quickReplies);
-      if (outcome?.taskDraft) { taskDraft = outcome.taskDraft; context.taskDraft = taskDraft; taskReply = outcome.taskReply; }
-      if (outcome?.dispatchDraft) { dispatchDraft = outcome.dispatchDraft; context.dispatchDraft = dispatchDraft; dispatchAnswer = outcome.dispatchReply; }
-      if (outcome?.deleteDraft) { deleteDraft = outcome.deleteDraft; context.deleteDraft = deleteDraft; deleteAnswer = outcome.deleteReply; }
       if (outcome?.pendingAction) { pendingAction = outcome.pendingAction; context.pendingAction = pendingAction; actionAnswer = outcome.actionReply; }
       for (const card of outcome?.accessCards || []) if (card?.id) accessCards.set(card.id, { id: card.id, cliente: card.cliente, plataforma: card.plataforma, nombre: card.nombre });
       if (outcome?.accessCapture) accessCapture = outcome.accessCapture;
@@ -243,18 +240,15 @@ export const runAssistant = async ({
     if (!calls.length) {
       return {
         // El resumen de un borrador lo escribe la plataforma, no el modelo: es exactamente lo que se confirmará.
-        answer: taskReply?.answer || dispatchAnswer?.answer || deleteAnswer?.answer || actionAnswer?.answer || String(result?.text || '').trim() || FALLBACK_ANSWER,
+        answer: actionAnswer?.answer || String(result?.text || '').trim() || FALLBACK_ANSWER,
         sources: [...sources.values()],
         toolsUsed,
         failures,
         ...(learningProposals.length ? { learningProposals } : {}),
-        ...(taskDraft ? { taskDraft } : {}),
-        ...(dispatchDraft ? { dispatchDraft } : {}),
-        ...(deleteDraft ? { deleteDraft } : {}),
         ...(pendingAction ? { pendingAction } : {}),
         ...(accessCards.size ? { accessCards: [...accessCards.values()].slice(0, 8) } : {}),
         ...(accessCapture ? { accessCapture } : {}),
-        ...((taskReply?.quickReplies || dispatchAnswer?.quickReplies || deleteAnswer?.quickReplies || actionAnswer?.quickReplies || quickReplies).length ? { quickReplies: normalizeQuickReplies(taskReply?.quickReplies || dispatchAnswer?.quickReplies || deleteAnswer?.quickReplies || actionAnswer?.quickReplies || quickReplies) } : {}),
+        ...((actionAnswer?.quickReplies || quickReplies).length ? { quickReplies: normalizeQuickReplies(actionAnswer?.quickReplies || quickReplies) } : {}),
         rounds,
         usage: summarizeAiCalls(modelCalls)
       };

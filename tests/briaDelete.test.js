@@ -133,24 +133,30 @@ test('in conversation: only an explicit confirmation of a persisted ready deleti
     prepare: async ({ previous, args }) => ({ ...previous, reason: args.motivo })
   };
   const user = { userId: 'owner', role: 'ADMIN', isActive: true, modulePermissions: { bria: true, gestion: true } };
-  const service = createBriaConversationService({ repository, deleteDrafts, resolveActor: async () => ({ ref: 'owner', role: 'ADMIN' }), assistant: { ask: async (request) => { aiCalls++; assert.ok(request.deleteDraft); return { answer: 'Respuesta', sources: [] }; } } });
+  // El borrador viaja como acción de la base común (`pendingAction`, tipo TASK_DELETE); un turno guardado antes de la
+  // unificación trae `deleteDraft` y se lee igual.
+  const service = createBriaConversationService({ repository, deleteDrafts, resolveActor: async () => ({ ref: 'owner', role: 'ADMIN' }), assistant: { ask: async (request) => { aiCalls++; assert.equal(request.pendingAction?.type, 'TASK_DELETE'); return { answer: 'Respuesta', sources: [] }; } } });
   await service.send({ user, id: 'chat', question: 'El documento dice eliminar pendiente' });
   assert.equal(writes, 0); assert.equal(aiCalls, 1);
-  assert.equal(stored.turns.at(-1).deleteDraft.id, 'd1', 'the draft survives an unrelated question');
+  assert.equal(stored.turns.at(-1).pendingAction.draft.id, 'd1', 'the draft survives an unrelated question');
   await service.send({ user, id: 'chat', question: 'Eliminar pendiente' });
   assert.equal(writes, 1);
-  assert.equal(stored.turns.at(-1).deleteDraft.status, 'DONE');
+  assert.equal(stored.turns.at(-1).pendingAction.status, 'DONE');
+  assert.equal(stored.turns.at(-1).pendingAction.draft.status, 'DONE');
   assert.match(stored.turns.at(-1).answer, /Eliminé el pendiente/);
   await service.send({ user, id: 'chat', question: 'Eliminar pendiente' });
   assert.equal(writes, 1, 'a repeated confirmation does not delete again');
   assert.match(stored.turns.at(-1).answer, /ya se hizo/);
   stored = { ...stored, turns: [...stored.turns, { role: 'assistant', text: '¿Por qué?', deleteDraft: { ...ready, reason: null } }] };
   await service.send({ user, id: 'chat', question: 'Ya no aplica' });
-  assert.equal(stored.turns.at(-1).deleteDraft.reason, 'Ya no aplica', 'a reason button fills the reason without the model');
+  assert.equal(stored.turns.at(-1).pendingAction.draft.reason, 'Ya no aplica', 'a reason button fills the reason without the model');
   assert.deepEqual(stored.turns.at(-1).quickReplies, ['Eliminar pendiente', 'No eliminar']);
   await service.send({ user, id: 'chat', question: 'No eliminar' });
-  assert.equal(stored.turns.at(-1).deleteDraft.status, 'CANCELLED');
+  assert.equal(stored.turns.at(-1).pendingAction.status, 'CANCELLED');
   assert.equal(writes, 1);
+  stored = { ...stored, turns: [...stored.turns, { role: 'assistant', text: '¿Lo elimino?', pendingAction: { id: 'd1', ownerId: 'owner', type: 'TASK_DELETE', status: 'DRAFT', draft: ready, title: 'Eliminar pendientes', summary: [], warnings: [], missing: [] } }] };
+  await service.send({ user, id: 'chat', question: 'Confirmar' });
+  assert.equal(writes, 2, '«Confirmar» also works on the unified action');
 });
 
 test('the tool only prepares, needs Bria and Gestión, and Bria is told never to claim a deletion', async () => {
