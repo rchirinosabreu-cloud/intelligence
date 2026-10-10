@@ -65,7 +65,7 @@ export const createBriaAssistantService = ({
   };
 
   return {
-    async ask({ user, question, history, attachments = [], revalidateConversation, taskDraft, dispatchDraft, taskAttachments = [], taskEvidence } = {}) {
+    async ask({ user, question, history, attachments = [], revalidateConversation, taskDraft, dispatchDraft, taskAttachments = [], taskEvidence, onEvent } = {}) {
       if (!canUseBria(user)) throw httpError(403, 'Bria no está activada para tu cuenta.', 'BRIA_DISABLED');
       const text = normalizeQuestion(question);
       if (!text) throw httpError(400, 'Escribe una pregunta.', 'BRIA_QUESTION_REQUIRED');
@@ -85,6 +85,7 @@ export const createBriaAssistantService = ({
         ai: createBriaModelRuntime({ ai: client, user }),
         today: bogotaDate(now()),
         logger,
+        onEvent,
         context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, now, ...context, taskDraft, dispatchDraft, taskAttachments, taskEvidence, revalidate }
       });
       // El motivo técnico de un fallo se queda en el registro del servidor; al navegador solo va qué falló.

@@ -9,7 +9,7 @@ import { buildUsageEvent, extractUsage, getAiUsageLog } from './aiUsageLog.js';
 // 2026), without the content; a failing log never breaks the AI call.
 export const createGovernedFetch = ({ fetchImpl, governance, usageLog, clock = () => Date.now() } = {}) => async (url, options = {}) => {
   const target = new URL(url);
-  const { governanceContext, ...outgoing } = options;
+  const { governanceContext, reportsStreamUsage, ...outgoing } = options;
   let provider, model;
   const multipart = options.body instanceof FormData;
   const body = multipart ? { model: options.body.get('model') } : JSON.parse(options.body || '{}');
@@ -55,7 +55,18 @@ export const createGovernedFetch = ({ fetchImpl, governance, usageLog, clock = (
 
   const outcome = response.ok ? 'ALLOWED' : 'ERROR';
   const isJson = (response.headers.get('content-type') || '').includes('application/json');
-  // Tokens come from a clone of JSON answers only; a stream is never read here.
+  // A stream is never read here. When the caller promises to report how it ended (`reportsStreamUsage`), the row
+  // waits for that report and keeps the tokens of the final event; it is still exactly one row (9 October 2026).
+  if (response.ok && body.stream === true && reportsStreamUsage === true) {
+    let reported = false;
+    response.reportStreamUsage = ({ payload = null, failed = false } = {}) => {
+      if (reported) return;
+      reported = true;
+      log({ outcome: failed ? 'ERROR' : outcome, statusCode: response.status, ...(payload ? { usage: extractUsage(payload) } : {}), errorCode: failed ? 'STREAM_FAILED' : null });
+    };
+    return response;
+  }
+  // Tokens come from a clone of JSON answers only.
   if (response.ok && isJson && body.stream !== true) {
     response.clone().json()
       .then((json) => log({ outcome, statusCode: response.status, usage: extractUsage(json) }))

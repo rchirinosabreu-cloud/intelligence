@@ -10,13 +10,32 @@ export const createBriaConversationRouter = ({ service } = {}) => {
   router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
   router.use((req, res, next) => canUseBria(req.user) ? next() : res.status(403).json({ message: 'Bria no está activada para tu cuenta.' }));
   router.use(createRateLimiter({ windowMs: 60000, max: 40, keyGenerator: req => req.user?.userId || req.user?.id || req.ip }));
+  // Preserve provenance in the service for fresh authorization, never expose its catalogue in chat.
+  const strip = result => (result?.turns ? { ...result, turns: result.turns.map(({ sources: _sources, ...turn }) => turn) } : result);
+  const failureOf = failure => { const status = Number.isInteger(failure.status) ? failure.status : 500; if (status === 500) console.error('[BriaConversation]', failure.code || failure.name); return { status, message: status === 500 ? 'No se pudo abrir o continuar la conversación.' : failure.message }; };
   const handle = work => async (req, res) => {
     try {
       const result = await work(req, await resolve());
-      // Preserve provenance in the service for fresh authorization, never expose its catalogue in chat.
-      res.status(result?.filesPending ? 202 : 200).json(result?.turns ? { ...result, turns: result.turns.map(({ sources: _sources, ...turn }) => turn) } : result);
+      res.status(result?.filesPending ? 202 : 200).json(strip(result));
     }
-    catch (failure) { const status = Number.isInteger(failure.status) ? failure.status : 500; if (status === 500) console.error('[BriaConversation]', failure.code || failure.name); res.status(status).json({ message: status === 500 ? 'No se pudo abrir o continuar la conversación.' : failure.message }); }
+    catch (failure) { const { status, message } = failureOf(failure); res.status(status).json({ message }); }
+  };
+  // Respuesta en vivo (9 de octubre de 2026): con `Accept: text/event-stream` se mandan los avances a medida que
+  // pasan (qué está haciendo Bria, el texto que va escribiendo, «borra lo escrito») y al final el chat guardado, que
+  // es el que manda. Un error que llega después de abrir el flujo va como evento, en palabras.
+  const wantsStream = req => String(req.headers.accept || '').includes('text/event-stream');
+  const stream = async (req, res, send) => {
+    res.status(200);
+    res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+    res.setHeader('Cache-Control', 'no-store, no-transform');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders?.();
+    let open = true;
+    res.once('close', () => { open = false; });
+    const write = event => { if (open) res.write(`data: ${JSON.stringify(event)}\n\n`); };
+    try { write({ type: 'done', chat: strip(await send(write)) }); }
+    catch (failure) { write({ type: 'error', ...failureOf(failure) }); }
+    res.end();
   };
   const receive = middleware => (req, res, next) => middleware(req, res, error => {
     if (error) return res.status(400).json({ message: error.code === 'LIMIT_FILE_SIZE' ? 'Cada archivo puede pesar hasta 20 MB.' : 'Puedes adjuntar hasta 5 archivos por mensaje.' });
@@ -31,7 +50,11 @@ export const createBriaConversationRouter = ({ service } = {}) => {
   router.post('/:id/messages', authorizeInput, async (req, res, next) => {
     try { await (await resolve()).read(req.user, req.params.id); next(); }
     catch (failure) { res.status(failure.status || 500).json({ message: failure.status ? failure.message : 'No se pudo abrir la conversación.' }); }
-  }, receive(files.array('files', BRIA_FILES_MAX_COUNT)), handle((req, instance) => instance.send({ user: req.user, id: req.params.id, question: req.body?.question, files: req.files || [] })));
+  }, receive(files.array('files', BRIA_FILES_MAX_COUNT)), async (req, res, next) => {
+    if (!wantsStream(req)) return next();
+    const instance = await resolve();
+    return stream(req, res, onEvent => instance.send({ user: req.user, id: req.params.id, question: req.body?.question, files: req.files || [], onEvent }));
+  }, handle((req, instance) => instance.send({ user: req.user, id: req.params.id, question: req.body?.question, files: req.files || [] })));
   router.get('/:id/attachments/:fileId', async (req, res) => {
     try {
       if (!uuid(req.params.fileId)) return res.status(400).json({ message: 'Adjunto no válido.' });

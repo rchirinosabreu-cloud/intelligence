@@ -212,6 +212,68 @@ export const createOpenAIClient = ({
     }
   };
 
+  // Respuesta por partes (Responses API con `stream: true`). Entrega cada trozo de texto a `onTextDelta` y devuelve
+  // la respuesta final completa, la misma que daría la petición normal. El reloj de espera cubre toda la lectura y
+  // el registro de uso se escribe al final, con los tokens del evento `response.completed`.
+  const requestStream = async (path, body, signal, governanceContext, onTextDelta) => {
+    if (!apiKey) throw new OpenAIRequestError('OPENAI_API_KEY no está configurada.', { code: 'OPENAI_NOT_CONFIGURED' });
+    const timeout = new AbortController();
+    const requestSignal = signal ? AbortSignal.any([signal, timeout.signal]) : timeout.signal;
+    const timer = setTimeout(() => timeout.abort(), requestTimeoutMs);
+    let response;
+    let finalPayload = null;
+    try {
+      response = await send(`${OPENAI_API_BASE_URL}${path}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream', Authorization: `Bearer ${apiKey}`, 'User-Agent': 'BrainStudioIntelligence/3.0' },
+        body: JSON.stringify({ ...body, stream: true }),
+        signal: requestSignal,
+        redirect: 'error',
+        governanceContext,
+        reportsStreamUsage: true
+      });
+      const requestId = response.headers?.get?.('x-request-id') || undefined;
+      if (!response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        throw new OpenAIRequestError(payload?.error?.message || `OpenAI respondió HTTP ${response.status}`, { status: response.status, requestId, code: payload?.error?.code || payload?.error?.type });
+      }
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      const handle = (block) => {
+        const data = block.split('\n').filter((line) => line.startsWith('data:')).map((line) => line.slice(5).trimStart()).join('\n');
+        if (!data || data === '[DONE]') return;
+        let event;
+        try { event = JSON.parse(data); } catch { return; }
+        if (event.type === 'response.output_text.delta' && typeof event.delta === 'string') onTextDelta(event.delta);
+        else if (event.type === 'response.completed' || event.type === 'response.incomplete') finalPayload = event.response;
+        else if (event.type === 'response.failed' || event.type === 'error') {
+          const failure = event.response?.error || event.error || event;
+          throw new OpenAIRequestError(failure?.message || 'OpenAI no pudo completar la respuesta.', { status: 502, requestId, code: failure?.code || 'OPENAI_STREAM_FAILED' });
+        }
+      };
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let cut;
+        while ((cut = buffer.indexOf('\n\n')) >= 0) { handle(buffer.slice(0, cut)); buffer = buffer.slice(cut + 2); }
+      }
+      if (buffer.trim()) handle(buffer);
+      requestSignal.throwIfAborted();
+      if (!finalPayload) throw new OpenAIRequestError('La respuesta de OpenAI se cortó antes de terminar.', { status: 502, requestId, code: 'OPENAI_STREAM_INCOMPLETE' });
+      response.reportStreamUsage?.({ payload: finalPayload });
+      return { payload: finalPayload, requestId };
+    } catch (error) {
+      response?.reportStreamUsage?.({ payload: finalPayload, failed: true });
+      if (signal?.aborted) throw signal.reason;
+      if (timeout.signal.aborted) throw new OpenAIRequestError('OpenAI superó el tiempo máximo de respuesta.', { code: 'OPENAI_TIMEOUT', status: 504 });
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   const generate = async ({
     prompt,
     input,
@@ -226,7 +288,8 @@ export const createOpenAIClient = ({
     json = false,
     maxOutputTokens,
     signal,
-    governanceContext
+    governanceContext,
+    onTextDelta
   }) => {
     const body = {
       model,
@@ -242,7 +305,9 @@ export const createOpenAIClient = ({
       ...(maxOutputTokens ? { max_output_tokens: maxOutputTokens } : {})
     };
 
-    const { payload, requestId } = await request('/responses', body, signal, governanceContext);
+    const { payload, requestId } = typeof onTextDelta === 'function'
+      ? await requestStream('/responses', body, signal, governanceContext, onTextDelta)
+      : await request('/responses', body, signal, governanceContext);
     return {
       id: payload.id,
       model: payload.model || model,

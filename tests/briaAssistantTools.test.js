@@ -45,6 +45,24 @@ test('buscar_cliente finds by part of the name, without accents mattering to the
   assert.deepEqual((await toolByName('buscar_cliente').run({ nombre: '' }, { db, user: editor, person, today: TODAY })).data, { clientes: [] });
 });
 
+// Rodny, 9 de octubre de 2026: «que entiende si uno dice una palabra mal». Sin coincidencia exacta, se compara
+// contra todos los clientes tolerando letras cambiadas, y Bria sabe que fue una aproximación.
+test('buscar_cliente understands a misspelled name, and says it was an approximation', async () => {
+  const all = [
+    { id: 'c1', name: 'Aristea', slug: 'aristea', status: 'ACTIVO', isArchived: false, responsible: null, projectManager: null },
+    { id: 'c2', name: 'Abitat Insurance', slug: 'abitat', status: 'ACTIVO', isArchived: false, responsible: null, projectManager: null },
+    { id: 'c3', name: 'Aristea Vieja', slug: 'aristea-vieja', status: 'ACTIVO', isArchived: true, responsible: null, projectManager: null }
+  ];
+  const db = { client: { findMany: async (args) => (args.where?.name?.contains ? [] : all) } };
+  const result = await toolByName('buscar_cliente').run({ nombre: 'aristia' }, { db, user: editor, person, today: TODAY });
+  assert.equal(result.data.clientes[0].nombre, 'Aristea');
+  assert.equal(result.data.aproximado, true);
+  assert.match(result.data.instruccion, /parecido/);
+  assert.equal(result.data.clientes.some((c) => c.nombre === 'Abitat Insurance'), false, 'only names that look alike');
+  const none = await toolByName('buscar_cliente').run({ nombre: 'zzqqxx' }, { db, user: editor, person, today: TODAY });
+  assert.deepEqual(none.data.clientes, []);
+});
+
 test('mis_tareas returns only what the person is responsible for or collaborates in, without the body', async () => {
   const queries = [];
   const db = { task: { findMany: async (args) => { queries.push(args); return [

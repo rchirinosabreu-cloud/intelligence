@@ -55,8 +55,9 @@ export const buildInstructions = ({ person, today, tools = [] }) => {
     ? tools.map((tool) => `- ${tool.name}: ${tool.description}`).join('\n')
     : '- (ninguna: esta persona no tiene permisos para consultar datos; responde solo con lo que ella misma te cuente y dile qué pantallas podría pedir que le habiliten)';
   return [
+    // Lo fijo va primero y lo que cambia por día o por persona al final (9 de octubre de 2026): OpenAI reutiliza el
+    // principio idéntico entre preguntas (caché de prompt) y la respuesta empieza antes.
     'Eres Bria, la asistente de Brainstudio Intelligence, la plataforma interna de la agencia Brain Studio.',
-    `Hoy es ${humanDate(today)} (hora de Bogotá). Hablas con ${who}.`,
     'Reglas:',
     '1. Escribe en español de Latinoamérica: trata de tú y, en plural, de ustedes. Nunca uses la forma peninsular de la segunda persona del plural.',
     '2. Conversa como una colega estratégica, analítica y propositiva. Responde directamente y con el detalle que requiere el trabajo: una revisión necesita observaciones concretas, razones y propuestas. Usa negritas, listas o tablas cuando ayuden a leer, sin títulos de relleno ni tecnicismos sobre las herramientas.',
@@ -78,8 +79,9 @@ export const buildInstructions = ({ person, today, tools = [] }) => {
     ...(tools.some(tool => tool.name === 'preparar_despacho') ? ['15. Para despachar piezas a producción, o cuando la persona pide preparar los pendientes de producción de una parrilla, llama preparar_despacho con las piezas, el responsable que ella dijo, la fecha y la prioridad. No inventes responsables: si no los dijo, pregúntale. Nunca digas que despachaste: el servidor lo hace solo cuando la persona escribe «Despachar a producción» sobre el resumen. Para trabajo que no es una pieza de la parrilla usa preparar_pendiente.'] : []),
     ...(tools.some(tool => tool.name === 'buscar_acceso') ? ['16. Eres la bóveda de la agencia. Cuando pidan un usuario o una contraseña, usa buscar_acceso: la plataforma la muestra en la tarjeta bajo tu respuesta. Cuando pidan guardar o cambiar una, reúne conversando cliente, plataforma, nombre y usuario, y llama preparar_acceso: bajo tu respuesta aparece un campo protegido para escribir la contraseña. Tú nunca ves, escribes, repites ni inventas una contraseña, y nunca pides que la escriban en el chat. Si la persona ya la escribió en un mensaje, no la repitas: dile que la escriba en el campo protegido y que conviene cambiarla, porque quedó en la conversación. Retira, comparte o di quién vio un acceso solo cuando te lo pidan.'] : []),
     ...(tools.some(tool => tool.name === 'leer_piezas_de_parrilla') ? ['12. Para revisar una parrilla lee sus piezas con leer_piezas_de_parrilla, incluyendo guiones, textos y objetivos; recorre nextOffset si queda contenido. Evalúa coherencia, claridad, variedad y fechas sobre lo leído. No digas que revisaste imágenes o videos porque solo dispones de texto y metadatos. Si no llegaste a leer todas las piezas, delimita la revisión.'] : []),
-    `Herramientas disponibles para ${person?.name || 'esta persona'}:`,
-    toolLines
+    'Herramientas disponibles para esta persona:',
+    toolLines,
+    `Hoy es ${humanDate(today)} (hora de Bogotá). Hablas con ${who}.`
   ].join('\n');
 };
 
@@ -95,6 +97,33 @@ const describeError = (error) => (error && typeof error.message === 'string' ? e
  * sin herramientas para que siempre haya respuesta). Devuelve la respuesta, las fuentes que la sostienen,
  * qué herramientas se usaron y cuáles fallaron.
  */
+// Lo que Bria dice mientras trabaja, una frase por herramienta (9 de octubre de 2026).
+const TOOL_PROGRESS = {
+  buscar_cliente: 'Buscando el cliente…',
+  mis_tareas: 'Revisando tus tareas…',
+  tareas_de_cliente: 'Revisando las tareas del cliente…',
+  parrilla_de_cliente: 'Leyendo la parrilla…',
+  leer_piezas_de_parrilla: 'Leyendo las piezas de la parrilla…',
+  operacion_de_cliente: 'Revisando la operación del cliente…',
+  cartera_de_operacion: 'Revisando la cartera…',
+  criterios_y_hallazgos: 'Revisando criterios y hallazgos…',
+  memoria_de_reuniones: 'Buscando en las reuniones…',
+  publicaciones_programadas: 'Revisando lo programado en redes…',
+  memoria_de_agencia: 'Buscando en los documentos de la agencia…',
+  leer_documento_de_agencia: 'Leyendo el documento…',
+  memoria_de_la_agencia: 'Consultando lo que sé de la agencia…',
+  guardar_en_memoria: 'Guardándolo en la memoria…',
+  retirar_de_memoria: 'Actualizando la memoria…',
+  consultar_aprendizajes: 'Recordando lo aprendido…',
+  buscar_acceso: 'Buscando en la bóveda…',
+  mostrar_acceso: 'Abriendo el acceso…',
+  preparar_acceso: 'Preparando el acceso…',
+  preparar_pendiente: 'Preparando el pendiente…',
+  preparar_despacho: 'Preparando el despacho…',
+  ritmo_del_equipo: 'Leyendo el ritmo del equipo…'
+};
+export const toolProgressLabel = (name) => TOOL_PROGRESS[name] || 'Revisando la plataforma…';
+
 export const runAssistant = async ({
   question,
   history = [],
@@ -107,8 +136,15 @@ export const runAssistant = async ({
   maxRounds = MAX_TOOL_ROUNDS,
   context = {},
   extraInstructions = '',
-  logger = console
+  logger = console,
+  onEvent
 }) => {
+  // Respuesta en vivo (9 de octubre de 2026): trozos de texto, «borra lo escrito» y qué está haciendo Bria. Un
+  // aviso que no llega (la pestaña se cerró) nunca tumba la respuesta: se guarda igual.
+  const emit = (event) => {
+    if (!onEvent) return;
+    try { onEvent(event); } catch (error) { logger.error('[BriaAssistant] No se pudo avisar el avance:', error?.message || error); }
+  };
   const offered = visibleTools(tools, user);
   const byName = new Map(offered.map((tool) => [tool.name, tool]));
   const declarations = toolDeclarations(offered);
@@ -132,6 +168,7 @@ export const runAssistant = async ({
     }
     await context.revalidate?.();
     if (!tool.allowed(user)) return { error: 'Esta información ya no está disponible para esta persona.' };
+    emit({ type: 'status', label: toolProgressLabel(call.name) });
     try {
       const previousAnswer = [...history].reverse().find((turn) => turn.role === 'assistant')?.text || null;
       const outcome = await tool.run(call.args || {}, { user, person, today, ...context, question, previousAnswer });
@@ -164,16 +201,24 @@ export const runAssistant = async ({
     await context.revalidate?.();
     const lastRound = rounds >= maxRounds;
     const startedAt = Date.now();
+    let streamed = false;
     const result = await ai.generate({
       // Una copia por llamada: lo que se añade después (llamadas y resultados) no cambia lo ya enviado.
       input: [...input],
       instructions,
       tools: lastRound ? [] : declarations,
       governanceContext,
-      maxOutputTokens: MAX_ANSWER_TOKENS
+      maxOutputTokens: MAX_ANSWER_TOKENS,
+      ...(onEvent ? {
+        onTextDelta: (text) => { streamed = true; emit({ type: 'delta', text }); },
+        // Un reintento empieza de cero: lo que alcanzó a verse se borra.
+        onRetry: () => { if (streamed) { streamed = false; emit({ type: 'reset' }); } }
+      } : {})
     });
     modelCalls.push({ model: result?.model, latencyMs: Date.now() - startedAt, usage: normalizeAiUsage(result?.usage) });
     const calls = lastRound ? [] : (result?.functionCalls || []);
+    // Lo que el modelo escribió antes de pedir una herramienta no es la respuesta: se borra de la pantalla.
+    if (calls.length && streamed) emit({ type: 'reset' });
     if (!calls.length) {
       return {
         // El resumen de un borrador lo escribe la plataforma, no el modelo: es exactamente lo que se confirmará.
