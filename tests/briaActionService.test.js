@@ -24,7 +24,7 @@ const fakeDb = () => {
   const plans = [{ id: 'p-sep', clientId: 'c1', month: 9, year: 2026, deletedAt: null, strategicObjectives: 'Posicionar la nueva línea de vinos' }];
   return {
     tasks, plans,
-    task: { findUnique: async ({ where }) => tasks.find((t) => t.id === where.id) || null, findFirst: async () => null },
+    task: { findUnique: async ({ where }) => tasks.find((t) => t.id === where.id) || null, findMany: async ({ where }) => tasks.filter((t) => where.id.in.includes(t.id)), findFirst: async () => null },
     teamMember: { findMany: async ({ where }) => members.filter((m) => where.OR.some((c) => (c.name && m.name.toLowerCase().includes(c.name.contains.toLowerCase())) || (c.email && m.email === c.email.equals))) },
     client: { findUnique: async ({ where }) => where.id === 'c1' ? { id: 'c1', name: 'Aristea', slug: 'aristea', isArchived: false, responsible: { id: 'm1', name: 'Melissa Castaño' }, projectManager: { id: 'm2', name: 'Brayan' } } : where.id === 'c9' ? { id: 'c9', name: 'Viejo', slug: 'viejo', isArchived: true, responsible: null, projectManager: null } : null },
     contentPlan: { findFirst: async ({ where }) => {
@@ -131,8 +131,10 @@ test('creating a grid asks for the owner and the strategic objective, proposing 
 
 test('the tools only prepare, open with the module of their screen, and Bria is told never to claim the change', async () => {
   const tools = createBriaActionTools({ prepare: async ({ type, args }) => ({ id: 'a', ownerId: 'u-pm', type, status: 'DRAFT', title: 'x', summary: [], warnings: [], missing: args.estado ? [] : [{ field: 'estado', question: '¿Qué cambio?' }] }) });
-  assert.deepEqual(tools.map((t) => t.name), ['cambiar_pendiente', 'crear_parrilla']);
-  assert.deepEqual(ACTION_PERMISSION, { TASK_UPDATE: 'gestion', CREATE_PLAN: 'parrillas' });
+  assert.deepEqual(tools.map((t) => t.name), ['cambiar_pendiente', 'crear_parrilla', 'cambiar_pendientes', 'crear_pieza', 'mover_pieza', 'registrar_observacion']);
+  assert.deepEqual(ACTION_PERMISSION, { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes' });
+  assert.equal(tools[5].allowed({ ...pm, modulePermissions: { bria: true, clientes: true } }), true);
+  assert.equal(tools[5].allowed(pm), false, 'an observation needs the Clientes module');
   assert.equal(tools[0].allowed({ ...pm, modulePermissions: { bria: true, parrillas: true } }), false);
   assert.equal(tools[1].allowed({ ...pm, modulePermissions: { bria: true, parrillas: true } }), true);
   assert.equal(tools[0].allowed({ ...pm, role: 'EDITOR' }), false, 'Bria is for admins and project managers');
@@ -144,4 +146,104 @@ test('the tools only prepare, open with the module of their screen, and Bria is 
   const text = buildInstructions({ person: { name: 'Kamila', jobTitle: 'PM' }, today: '2026-10-10', tools });
   assert.match(text, /Nunca digas que cambiaste o creaste algo/);
   assert.match(text, /«Confirmar» sobre el resumen/);
+  assert.match(text, /cambiar_pendientes para varias a la vez/);
+});
+
+// Las cuatro acciones que siguieron (10 de octubre de 2026, «sigue con las acciones que vienen, todas»).
+const planDb = () => {
+  const db = fakeDb();
+  const plan = { id: 'p-oct', clientId: 'c1', month: 10, year: 2026, status: 'ACTIVO', deletedAt: null, client: { id: 'c1', name: 'Aristea', isArchived: false }, contentItems: [{ id: 'i1', objective: 'Lanzamiento', format: 'Reel', publishDate: noon('2026-10-14') }] };
+  const items = [
+    { id: 'i1', objective: 'Lanzamiento', format: 'Reel', status: 'APROBADO', publishDate: noon('2026-10-14'), publishTime: '18:00', planId: 'p-oct', plan: { month: 10, year: 2026, status: 'ACTIVO', client: { name: 'Aristea', isArchived: false } }, publications: [{ status: 'SCHEDULED' }], deletedAt: null },
+    { id: 'i2', objective: 'Ya salió', format: 'Post', status: 'PUBLICADO', publishDate: noon('2026-10-02'), publishTime: null, planId: 'p-oct', plan: { month: 10, year: 2026, status: 'ACTIVO', client: { name: 'Aristea', isArchived: false } }, publications: [], deletedAt: null }
+  ];
+  db.contentPlan.findFirst = async ({ where }) => {
+    if (where.id) return where.id === 'p-oct' ? plan : null;
+    if (where.month) return where.clientId === 'c1' && where.month === 10 && where.year === 2026 ? plan : null;
+    return null;
+  };
+  db.contentItem = { findFirst: async ({ where }) => items.find((i) => i.id === where.id) || null };
+  return db;
+};
+
+test('several tasks at once: the same gate per task, what cannot change is said, and each one goes through updateTask', async () => {
+  const db = fakeDb();
+  const calls = [];
+  const service = createBriaActionService({ db, updateTask: async (id, data) => { calls.push([id, data]); }, now: NOW });
+  const asked = await service.prepare({ user: pm, type: 'TASKS_STATUS', args: { tareas: ['t1', 't2'] } });
+  assert.deepEqual(asked.missing[0].options, ['En proceso', 'Realizada', 'Pendiente']);
+  const action = await service.prepare({ user: pm, type: 'TASKS_STATUS', args: { tareas: ['t3', 't4', 'nada'], estado: 'realizada' }, previous: asked });
+  assert.equal(action.id, asked.id);
+  assert.deepEqual(action.payload.items.map((i) => i.taskId), ['t1', 't2'], 'closed, private and missing tasks are left out');
+  assert.match(action.warnings[0], /Informe cerrado \(Ya está realizada\.\)/);
+  assert.match(action.warnings[0], /Reservado \(Es un pendiente privado/);
+  assert.match(action.warnings[0], /Pendiente \(Ya no existe\.\)/);
+  assert.match(action.warnings[1], /2 de ellas no pasaron por «En proceso»/);
+  assert.equal(actionStage(action), 'READY');
+  await assert.rejects(() => service.prepare({ user: pm, type: 'TASKS_STATUS', args: { tareas: ['t1'], estado: 'devuelta' } }), /de a una/);
+  await assert.rejects(() => service.prepare({ user: pm, type: 'TASKS_STATUS', args: { tareas: ['t3'], estado: 'realizada' } }), /No queda ninguna tarea/);
+  const out = await service.execute({ user: pm, action });
+  assert.deepEqual(calls, [['t1', { status: 'REALIZADA' }], ['t2', { status: 'REALIZADA' }]]);
+  assert.match(out.text, /2 tareas pasaron a Realizada/);
+  assert.equal(out.sources.length, 2);
+});
+
+test('a new piece asks for objective, format and day, warns about a crowded day, and is created in draft at noon UTC', async () => {
+  const db = planDb();
+  const created = [];
+  const service = createBriaActionService({ db, createContentItem: async (data) => { created.push(data); return { id: 'i-new', ...data }; }, now: NOW });
+  const first = await service.prepare({ user: pm, type: 'CREATE_ITEM', args: { clientId: 'c1', mes: 'octubre' } });
+  assert.equal(first.target.planId, 'p-oct');
+  assert.deepEqual(first.missing.map((m) => m.field), ['objetivo', 'formato', 'fecha']);
+  assert.deepEqual(first.missing[1].options, ['Reel', 'Carrusel', 'Post', 'Video', 'Historia']);
+  const placeholder = await service.prepare({ user: pm, type: 'CREATE_ITEM', args: { planId: 'p-oct', objetivo: 'Nuevo Objetivo', formato: 'reel', fecha: '14 de octubre' }, previous: first });
+  assert.equal(placeholder.missing[0].field, 'objetivo', '«Nuevo Objetivo» is not an objective');
+  assert.match(placeholder.warnings[0], /Ese día ya hay una pieza \(Lanzamiento\)/);
+  const ready = await service.prepare({ user: pm, type: 'CREATE_ITEM', args: { planId: 'p-oct', objetivo: 'Mostrar la cava en 15 segundos', hora: '18:30' }, previous: placeholder });
+  assert.equal(actionStage(ready), 'READY');
+  assert.deepEqual(ready.payload, { planId: 'p-oct', objective: 'Mostrar la cava en 15 segundos', format: 'Reel', day: '2026-10-14', publishTime: '18:30' });
+  const out = await service.execute({ user: pm, action: ready });
+  assert.deepEqual(created[0], { planId: 'p-oct', objective: 'Mostrar la cava en 15 segundos', format: 'Reel', copyText: '', captionText: '', publishDate: noon('2026-10-14'), status: 'BORRADOR', publishTime: '18:30' });
+  assert.match(out.text, /\/parrillas\/p-oct\?item=i-new/);
+  const outside = await service.prepare({ user: pm, type: 'CREATE_ITEM', args: { planId: 'p-oct', objetivo: 'Cierre de mes', formato: 'Post', fecha: '2026-11-02' } });
+  assert.match(outside.warnings[0], /fuera de octubre/);
+  await assert.rejects(() => service.prepare({ user: pm, type: 'CREATE_ITEM', args: { clientId: 'c1', mes: 'diciembre', objetivo: 'x' } }), /no tiene parrilla de diciembre/);
+});
+
+test('moving a piece: never a published one, warns about scheduled posts, past dates and approved pieces, and goes through updateContentItem', async () => {
+  const db = planDb();
+  const updates = [];
+  const service = createBriaActionService({ db, updateContentItem: async (id, data) => { updates.push([id, data]); }, now: NOW });
+  await assert.rejects(() => service.prepare({ user: pm, type: 'MOVE_ITEM', args: { pieza: 'i2', fecha: 'lunes' } }), /ya se publicó/);
+  await assert.rejects(() => service.prepare({ user: pm, type: 'MOVE_ITEM', args: { pieza: 'i1', fecha: '14 de octubre' } }), /nada que mover/);
+  const asked = await service.prepare({ user: pm, type: 'MOVE_ITEM', args: { pieza: 'i1' } });
+  assert.equal(asked.missing[0].field, 'fecha');
+  const action = await service.prepare({ user: pm, type: 'MOVE_ITEM', args: { pieza: 'i1', fecha: '2026-10-07' }, previous: asked });
+  assert.deepEqual(action.payload, { itemId: 'i1', day: '2026-10-07' });
+  assert.match(action.summary[1], /se conserva la hora 18:00/);
+  assert.match(action.warnings.join('\n'), /fecha pasada/);
+  assert.match(action.warnings.join('\n'), /publicación programada en redes/);
+  assert.match(action.warnings.join('\n'), /El cliente ya la aprobó/);
+  const out = await service.execute({ user: pm, action });
+  assert.deepEqual(updates, [['i1', { publishDate: '2026-10-07' }]]);
+  assert.match(out.text, /sale ahora el .*7 de octubre/);
+  const withHour = await service.prepare({ user: pm, type: 'MOVE_ITEM', args: { pieza: 'i1', fecha: '2026-10-21', hora: '09:00' } });
+  assert.deepEqual(withHour.payload, { itemId: 'i1', day: '2026-10-21', publishTime: '09:00' });
+});
+
+test('a client observation asks for the text, keeps it short and is saved with the author', async () => {
+  const db = planDb();
+  const saved = [];
+  const manager = { ...pm, modulePermissions: { bria: true, clientes: true } };
+  const service = createBriaActionService({ db, addObservation: async (input) => { saved.push(input); return { id: 'o1' }; }, now: NOW });
+  const asked = await service.prepare({ user: manager, type: 'CLIENT_NOTE', args: { clientId: 'c1' } });
+  assert.match(asked.missing[0].question, /Qué observación dejo anotada en la ficha de Aristea/);
+  const ready = await service.prepare({ user: manager, type: 'CLIENT_NOTE', args: { clientId: 'c1', texto: '  El cliente prefiere que todo pase por Laura, no por el gerente.  ' }, previous: asked });
+  assert.equal(actionStage(ready), 'READY');
+  assert.match(ready.summary[1], /«El cliente prefiere que todo pase por Laura, no por el gerente\.»/);
+  await assert.rejects(() => service.prepare({ user: manager, type: 'CLIENT_NOTE', args: { clientId: 'c1', texto: 'x'.repeat(2001) } }), /pártela en dos/);
+  await assert.rejects(() => service.prepare({ user: pm, type: 'CLIENT_NOTE', args: { clientId: 'c1', texto: 'hola' } }), { status: 403 });
+  const out = await service.execute({ user: manager, action: ready });
+  assert.deepEqual(saved, [{ clientId: 'c1', text: 'El cliente prefiere que todo pase por Laura, no por el gerente.', actorUserId: 'u-pm' }]);
+  assert.match(out.text, /\/clientes\/operacion\/aristea/);
 });
