@@ -4,6 +4,11 @@
 
 @layer base {
   :root {
+    /* La tipografía del negocio (Rodny, 10 de octubre de 2026). Vive aquí **una sola vez**: lo
+       normal es heredarla del `font-sans` de Tailwind, que la toma de este mismo sitio, y este
+       token es para los pocos rincones que no pueden (una librería que pinta fuera del árbol). */
+    --brain-font-sans: 'Roboto Condensed', 'Roboto', system-ui, sans-serif;
+
     /* Light Mode (Zinc Scale) */
     --background: 0 0% 100%;
     --foreground: 240 10% 3.9%;
@@ -404,7 +409,7 @@
   background: rgba(255, 255, 255, 0.98) !important;
   box-shadow: 0 18px 45px rgba(24, 24, 27, 0.14), 0 2px 8px rgba(24, 24, 27, 0.06) !important;
   color: rgb(39 39 42) !important;
-  font-family: "DM Sans", sans-serif !important;
+  font-family: var(--brain-font-sans) !important;
 }
 
 .brain-datepicker .react-datepicker__header {

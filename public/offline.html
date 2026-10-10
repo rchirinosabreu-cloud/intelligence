@@ -6,7 +6,9 @@
     <meta name="theme-color" content="#009EB9" />
     <title>Brainstudio sin conexión</title>
     <style>
-      :root { color-scheme: light dark; font-family: "DM Sans", system-ui, sans-serif; }
+      /* Sin conexión no se puede descargar una fuente web: se nombra la de la marca por si el
+         navegador ya la tiene en caché, y detrás los respaldos del sistema. */
+      :root { color-scheme: light dark; font-family: 'Roboto Condensed', 'Roboto', system-ui, sans-serif; }
       * { box-sizing: border-box; }
       body { min-height: 100dvh; margin: 0; display: grid; place-items: center; padding: 24px; background: #fafafa; color: #18181b; }
       main { width: min(100%, 420px); text-align: center; }

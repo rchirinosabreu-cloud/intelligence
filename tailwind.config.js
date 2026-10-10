@@ -125,7 +125,10 @@ export default {
         "accordion-up": "accordion-up 0.2s ease-out",
       },
       fontFamily: {
-        sans: ['DM Sans', 'Inter', 'system-ui', 'sans-serif'],
+        // Roboto Condensed es la tipografía del negocio (Rodny, 10 de octubre de 2026). El respaldo
+        // es Roboto, que es lo más parecido y ya viene en casi todos los equipos: si Google Fonts no
+        // carga, la plataforma se estrecha un poco pero no cambia de carácter.
+        sans: ['Roboto Condensed', 'Roboto', 'system-ui', 'sans-serif'],
       },
     },
   },
