@@ -79,6 +79,7 @@ export const buildInstructions = ({ person, today, tools = [] }) => {
     ...(tools.some(tool => tool.name === 'memoria_de_la_agencia') ? ['13. La memoria de la agencia es lo que sabes de Brain Studio y de cada cuenta: consúltala con memoria_de_la_agencia antes de opinar sobre un cliente, una marca, un acuerdo o cómo se trabaja, e interprétala con criterio propio. Lo que el equipo confirmó manda sobre la lectura del negocio, y la plataforma actual manda sobre ambas para el estado de hoy (parrillas, tareas, aprobaciones, publicaciones, pagos). Di la certeza de cada dato con sus palabras («vigente de hecho», «por confirmar», «propuesta»). Si la persona te contradice, te cuenta un cambio (continuidad, contrato, responsables, una decisión) o te enseña algo sobre la agencia o una cuenta, créele y guárdalo en ese mismo turno con guardar_en_memoria, reemplazando los hechos que contradice; si no queda claro que quiere guardarlo, pregúntale con ofrecer_opciones y pon «Sí, guárdalo» como opción. Nunca digas que lo tienes en cuenta, que lo recordarás o que lo guardaste si guardar_en_memoria no confirmó saved=true en esta respuesta; si la herramienta lo rechaza, di por qué y vuelve a ofrecerlo. Las preferencias personales siguen en recordar_aprendizaje. Si una duda abierta viene al caso, haz una sola duda al final de tu respuesta, nunca un cuestionario, y si la responde guárdala con respondeDuda.'] : []),
     ...(tools.some(tool => tool.name === 'cartera_de_operacion') ? ['14. Para cómo va una cuenta, compara lo contratado por formato (operacion_de_cliente) con las piezas por formato de la parrilla (parrilla_de_cliente), y di qué falta, qué pidió cambiar el cliente y qué ya está en producción. Para varias cuentas a la vez usa cartera_de_operacion en una sola llamada. Antes de revisar o proponer contenido consulta criterios_y_hallazgos y revisa contra esos criterios aprobados. Un contrato registrado en la plataforma no prueba que esté firmado: cruza con la memoria de la agencia.'] : []),
     ...(tools.some(tool => tool.name === 'preparar_despacho') ? ['15. Para despachar piezas a producción, o cuando la persona pide preparar los pendientes de producción de una parrilla, llama preparar_despacho con las piezas, el responsable que ella dijo, la fecha y la prioridad. No inventes responsables: si no los dijo, pregúntale. Nunca digas que despachaste: el servidor lo hace solo cuando la persona escribe «Despachar a producción» sobre el resumen. Para trabajo que no es una pieza de la parrilla usa preparar_pendiente.'] : []),
+    ...(tools.some(tool => tool.name === 'preparar_eliminacion') ? ['17. Para eliminar un pendiente llama preparar_eliminacion con el id de la tarea (de mis_tareas o tareas_de_cliente) y el motivo que dio la persona; si no dijo cuál tarea o hay varias parecidas, pregunta; si no dio motivo, pásalo en null y la herramienta lo pide. Nunca digas que eliminaste: el servidor lo hace solo cuando la persona escribe «Eliminar pendiente» sobre el resumen. Si la herramienta dice que un pendiente no se puede eliminar, di por qué con sus palabras. Cerrar, devolver o reasignar una tarea no es eliminarla: eso se hace en Gestión.'] : []),
     ...(tools.some(tool => tool.name === 'buscar_acceso') ? ['16. Eres la bóveda de la agencia. Cuando pidan un usuario o una contraseña, usa buscar_acceso: la plataforma la muestra en la tarjeta bajo tu respuesta. Cuando pidan guardar o cambiar una, reúne conversando cliente, plataforma, nombre y usuario, y llama preparar_acceso: bajo tu respuesta aparece un campo protegido para escribir la contraseña. Tú nunca ves, escribes, repites ni inventas una contraseña, y nunca pides que la escriban en el chat. Si la persona ya la escribió en un mensaje, no la repitas: dile que la escriba en el campo protegido y que conviene cambiarla, porque quedó en la conversación. Retira, comparte o di quién vio un acceso solo cuando te lo pidan.'] : []),
     ...(tools.some(tool => tool.name === 'leer_piezas_de_parrilla') ? ['12. Para revisar una parrilla lee sus piezas con leer_piezas_de_parrilla, incluyendo guiones, textos y objetivos; recorre nextOffset si queda contenido. Evalúa coherencia, claridad, variedad y fechas sobre lo leído. No digas que revisaste imágenes o videos porque solo dispones de texto y metadatos. Si no llegaste a leer todas las piezas, delimita la revisión.'] : []),
     'Herramientas disponibles para esta persona:',
@@ -122,6 +123,7 @@ const TOOL_PROGRESS = {
   preparar_acceso: 'Preparando el acceso…',
   preparar_pendiente: 'Preparando el pendiente…',
   preparar_despacho: 'Preparando el despacho…',
+  preparar_eliminacion: 'Revisando qué se va a eliminar…',
   ritmo_del_equipo: 'Leyendo el ritmo del equipo…',
   carga_del_equipo: 'Mirando la carga del equipo…'
 };
@@ -158,7 +160,7 @@ export const runAssistant = async ({
   const toolsUsed = [];
   const failures = [];
   const learningProposals = [];
-  let quickReplies = [], taskDraft, taskReply, dispatchDraft, dispatchAnswer;
+  let quickReplies = [], taskDraft, taskReply, dispatchDraft, dispatchAnswer, deleteDraft, deleteAnswer;
   const accessCards = new Map(); // Tarjetas de la bóveda: solo ids y nombres; el valor lo muestra la plataforma.
   let accessCapture = null; // Campo protegido para escribir una contraseña: la plataforma la guarda, el modelo no la ve.
   let rounds = 0;
@@ -183,6 +185,7 @@ export const runAssistant = async ({
       if (outcome?.quickReplies) quickReplies = normalizeQuickReplies(outcome.quickReplies);
       if (outcome?.taskDraft) { taskDraft = outcome.taskDraft; context.taskDraft = taskDraft; taskReply = outcome.taskReply; }
       if (outcome?.dispatchDraft) { dispatchDraft = outcome.dispatchDraft; context.dispatchDraft = dispatchDraft; dispatchAnswer = outcome.dispatchReply; }
+      if (outcome?.deleteDraft) { deleteDraft = outcome.deleteDraft; context.deleteDraft = deleteDraft; deleteAnswer = outcome.deleteReply; }
       for (const card of outcome?.accessCards || []) if (card?.id) accessCards.set(card.id, { id: card.id, cliente: card.cliente, plataforma: card.plataforma, nombre: card.nombre });
       if (outcome?.accessCapture) accessCapture = outcome.accessCapture;
       return outcome?.data ?? null;
@@ -225,16 +228,17 @@ export const runAssistant = async ({
     if (!calls.length) {
       return {
         // El resumen de un borrador lo escribe la plataforma, no el modelo: es exactamente lo que se confirmará.
-        answer: taskReply?.answer || dispatchAnswer?.answer || String(result?.text || '').trim() || FALLBACK_ANSWER,
+        answer: taskReply?.answer || dispatchAnswer?.answer || deleteAnswer?.answer || String(result?.text || '').trim() || FALLBACK_ANSWER,
         sources: [...sources.values()],
         toolsUsed,
         failures,
         ...(learningProposals.length ? { learningProposals } : {}),
         ...(taskDraft ? { taskDraft } : {}),
         ...(dispatchDraft ? { dispatchDraft } : {}),
+        ...(deleteDraft ? { deleteDraft } : {}),
         ...(accessCards.size ? { accessCards: [...accessCards.values()].slice(0, 8) } : {}),
         ...(accessCapture ? { accessCapture } : {}),
-        ...((taskReply?.quickReplies || dispatchAnswer?.quickReplies || quickReplies).length ? { quickReplies: normalizeQuickReplies(taskReply?.quickReplies || dispatchAnswer?.quickReplies || quickReplies) } : {}),
+        ...((taskReply?.quickReplies || dispatchAnswer?.quickReplies || deleteAnswer?.quickReplies || quickReplies).length ? { quickReplies: normalizeQuickReplies(taskReply?.quickReplies || dispatchAnswer?.quickReplies || deleteAnswer?.quickReplies || quickReplies) } : {}),
         rounds,
         usage: summarizeAiCalls(modelCalls)
       };
