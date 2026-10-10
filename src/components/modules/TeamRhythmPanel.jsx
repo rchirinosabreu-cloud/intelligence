@@ -3,6 +3,8 @@ import { AlertCircle, ChevronDown, Clock, Eye, Users } from '@/components/ui/ico
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
+import WeeklyReadingCard from './WeeklyReadingCard';
+import TeamLoadMap from './TeamLoadMap';
 
 // Ritmo del equipo (Rodny, 9 de octubre de 2026): cuánto tarda cada persona por tipo de trabajo, qué tan parejo
 // trabaja y dónde se le va el tiempo. El orden de la pantalla es deliberado: primero cuánto de lo cerrado está
@@ -139,6 +141,11 @@ export default function TeamRhythmPanel({ periodDays = 30, refreshKey = 0 }) {
 
   return (
     <section className="space-y-5" aria-labelledby="rhythm-title">
+      {/* Fase A (10 de octubre de 2026): primero qué decidir esta semana, después dónde hay espacio, y al final
+          la lectura por persona del cronómetro, que es de donde salen las dos anteriores. */}
+      <WeeklyReadingCard refreshKey={refreshKey} />
+      <TeamLoadMap refreshKey={refreshKey} />
+
       <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950" data-rhythm-coverage>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="max-w-2xl">

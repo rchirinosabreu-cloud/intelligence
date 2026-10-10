@@ -13,7 +13,7 @@ datasource db {
 // docs/BASE_DE_DATOS_LATERAL.md (la prueba tests/sidecarSchemaRegistry.test.js vigila esta lista).
 //   bria_memory: learnings, learning_events, sources, source_versions, source_search, import_runs,
 //                conversations, conversation_turns, conversation_attachments, conversation_purges,
-//                agency_facts, agency_fact_events, agency_questions, sync_state
+//                agency_facts, agency_fact_events, agency_questions, sync_state, rhythm_readings
 //   vault:       credentials, credential_events, reveal_events
 
 enum SystemRole {

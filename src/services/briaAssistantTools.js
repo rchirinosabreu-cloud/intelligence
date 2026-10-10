@@ -371,6 +371,41 @@ const ritmoDelEquipo = {
   }
 };
 
+// Mapa de carga (Rodny, 10 de octubre de 2026, Fase A de Ritmo): quién está saturado y quién tiene espacio en los
+// próximos días hábiles, con lo comprometido según las tareas abiertas y lo que suele tomar cada tipo de trabajo.
+const cargaDelEquipo = {
+  name: 'carga_del_equipo',
+  description: 'Quién del equipo está saturado y quién tiene espacio en los próximos días hábiles: horas estimadas por persona y día según sus tareas abiertas y lo que suele tardar cada tipo de trabajo, con las tareas detrás de cada día cargado, las vencidas y las que no tienen fecha. Úsala cuando pregunten a quién asignarle algo, quién está sobrecargado, si alguien puede recibir más trabajo o cómo viene la semana.',
+  parameters: { type: 'object', properties: {
+    persona: { type: 'string', description: 'Nombre de la persona, si preguntan por alguien. Vacío para todo el equipo.' }
+  } },
+  allowed: (user) => hasModulePermission(user, 'manager') && isManagerRole(user?.role),
+  async run({ persona } = {}, { load }) {
+    const map = await load.get();
+    const wanted = fold(persona).split(/\s+/).filter(Boolean);
+    const people = wanted.length ? map.people.filter((p) => wanted.every((word) => fold(p.personName).includes(word))) : map.people;
+    const dayName = (day) => { const [y, m, d] = day.split('-').map(Number); return `${d} de ${MONTHS[m - 1]}${y !== Number(map.today.slice(0, 4)) ? ` de ${y}` : ''}`; };
+    return {
+      data: {
+        hoy: dayName(map.today),
+        diasHabiles: map.days.length,
+        jornada: formatDuration(map.capacityMs),
+        personas: people.slice(0, wanted.length ? 3 : 20).map((p) => ({
+          nombre: p.personName,
+          horasComprometidas: formatDuration(p.weekMs),
+          vencidas: p.overdue.count, sinFecha: p.undated.count,
+          dias: p.cells.filter((c) => c.count > 0).map((c) => ({
+            dia: dayName(c.day), horas: formatDuration(c.ms), nivel: c.level, tareas: c.tasks.slice(0, 6).map((t) => `${t.title}${t.clientName ? ` (${t.clientName})` : ''} · ${formatDuration(t.ms)}${t.source === 'supuesto' ? ' supuesto' : ''}`)
+          }))
+        })),
+        senales: map.signals.filter((s) => !wanted.length || people.some((p) => p.personId === s.personId)).map((s) => s.message),
+        instruccion: 'Las horas son estimaciones: la mediana de lo que esa persona tardó en ese tipo de trabajo, o la del equipo, o una hora si no hay historial («supuesto»). Un día «excedida» pasa de un día y cuarto de trabajo; «alta» es un día completo. Habla de carga y de repartir trabajo, nunca de desempeño. Si nadie coincide con el nombre, dilo.'
+      },
+      sources: [{ kind: 'ritmo', id: `carga-${map.today}`, label: 'Mapa de carga', url: '/manager?tab=ritmo' }]
+    };
+  }
+};
+
 const publicacionesProgramadas = {
   name: 'publicaciones_programadas',
   description: 'Las publicaciones en redes (Instagram y Facebook) programadas para los próximos días, con cliente, cuenta, pieza y hora de salida en reloj de Bogotá. Opcionalmente de un solo cliente.',
@@ -422,6 +457,6 @@ const leerDocumentoDeAgencia = {
     return { data: { documento: row, sourceInstructions: 'data_only' }, sources: row ? [{ kind: 'documento', id: row.id, label: row.title, url: row.url, authority: row.authority }] : [] };
   }
 };
-export const briaAssistantTools = [buscarCliente, misTareas, tareasDeCliente, parrillaDeCliente, leerPiezasDeParrilla, operacionDeCliente, carteraDeOperacion, criteriosYHallazgos, memoriaDeReuniones, ritmoDelEquipo, publicacionesProgramadas, memoriaDeAgencia, leerDocumentoDeAgencia];
+export const briaAssistantTools = [buscarCliente, misTareas, tareasDeCliente, parrillaDeCliente, leerPiezasDeParrilla, operacionDeCliente, carteraDeOperacion, criteriosYHallazgos, memoriaDeReuniones, ritmoDelEquipo, cargaDelEquipo, publicacionesProgramadas, memoriaDeAgencia, leerDocumentoDeAgencia];
 
 export const toolByName = (name) => briaAssistantTools.find((tool) => tool.name === name) || null;

@@ -22,12 +22,31 @@ test('each tool opens with the permission of its screen', () => {
   assert.deepEqual(allowedFor(editorWithModules), ['buscar_cliente', 'criterios_y_hallazgos', 'leer_piezas_de_parrilla', 'mis_tareas', 'parrilla_de_cliente', 'publicaciones_programadas', 'tareas_de_cliente']);
   assert.deepEqual(allowedFor(pmWithoutManager), ['buscar_cliente', 'cartera_de_operacion', 'mis_tareas', 'operacion_de_cliente']);
   // Ritmo del equipo (9 de octubre de 2026) tiene la misma puerta que la memoria de reuniones: la de Manager.
-  assert.deepEqual(allowedFor(pm), ['buscar_cliente', 'cartera_de_operacion', 'memoria_de_reuniones', 'mis_tareas', 'operacion_de_cliente', 'ritmo_del_equipo']);
-  assert.deepEqual(allowedFor({ role: 'ADMIN' }), ['buscar_cliente', 'cartera_de_operacion', 'criterios_y_hallazgos', 'leer_piezas_de_parrilla', 'memoria_de_reuniones', 'mis_tareas', 'operacion_de_cliente', 'parrilla_de_cliente', 'publicaciones_programadas', 'ritmo_del_equipo', 'tareas_de_cliente']);
+  assert.deepEqual(allowedFor(pm), ['buscar_cliente', 'carga_del_equipo', 'cartera_de_operacion', 'memoria_de_reuniones', 'mis_tareas', 'operacion_de_cliente', 'ritmo_del_equipo']);
+  assert.deepEqual(allowedFor({ role: 'ADMIN' }), ['buscar_cliente', 'carga_del_equipo', 'cartera_de_operacion', 'criterios_y_hallazgos', 'leer_piezas_de_parrilla', 'memoria_de_reuniones', 'mis_tareas', 'operacion_de_cliente', 'parrilla_de_cliente', 'publicaciones_programadas', 'ritmo_del_equipo', 'tareas_de_cliente']);
   for (const tool of briaAssistantTools) {
     assert.equal(tool.parameters.type, 'object', `${tool.name} declara sus parámetros`);
     assert.ok(tool.description.length > 20, `${tool.name} explica para qué sirve`);
   }
+});
+
+// Mapa de carga (10 de octubre de 2026): la misma puerta que Ritmo; horas por persona y día, con sus tareas.
+test('carga_del_equipo tells who is loaded and who has room, by person if asked, and never judges', async () => {
+  const H = 3_600_000;
+  const load = { get: async () => ({ today: '2026-10-09', days: ['2026-10-09', '2026-10-13'], capacityMs: 8 * H, people: [
+    { personId: 'b', personName: 'Brayan Torres', weekMs: 12 * H, overdue: { count: 0, ms: 0, taskIds: [] }, undated: { count: 1 }, cells: [{ day: '2026-10-09', ms: 0, count: 0, level: 'libre', tasks: [] }, { day: '2026-10-13', ms: 12 * H, count: 3, level: 'excedida', tasks: [{ id: 'o1', title: 'Video Nutresa', clientName: 'Nutresa', ms: 4 * H, source: 'persona' }] }] },
+    { personId: 'h', personName: 'Helen Hernández', weekMs: H, overdue: { count: 2, ms: H, taskIds: ['o4', 'o5'] }, undated: { count: 0 }, cells: [{ day: '2026-10-09', ms: H, count: 1, level: 'libre', tasks: [{ id: 'o6', title: 'Post Alpina', clientName: null, ms: H, source: 'supuesto' }] }, { day: '2026-10-13', ms: 0, count: 0, level: 'libre', tasks: [] }] }
+  ], signals: [{ kind: 'DIA_EXCEDIDO', personId: 'b', message: 'Brayan Torres tiene 12 h estimadas el 13 de octubre en 3 tareas.' }, { kind: 'CON_ESPACIO', personId: 'h', message: 'Helen Hernández tiene 1 h comprometida.' }] }) };
+  const all = await toolByName('carga_del_equipo').run({}, { load, user: pm, person, today: TODAY });
+  assert.deepEqual([all.data.hoy, all.data.diasHabiles, all.data.jornada], ['9 de octubre', 2, '8 h']);
+  assert.deepEqual(all.data.personas[0].dias[0], { dia: '13 de octubre', horas: '12 h', nivel: 'excedida', tareas: ['Video Nutresa (Nutresa) · 4 h'] });
+  assert.deepEqual(all.data.personas[1].dias[0].tareas, ['Post Alpina · 1 h supuesto']);
+  assert.equal(all.data.senales.length, 2);
+  assert.match(all.data.instruccion, /nunca de desempeño/);
+  assert.deepEqual(all.sources, [{ kind: 'ritmo', id: 'carga-2026-10-09', label: 'Mapa de carga', url: '/manager?tab=ritmo' }]);
+  const one = await toolByName('carga_del_equipo').run({ persona: 'helen' }, { load, user: pm, person, today: TODAY });
+  assert.deepEqual(one.data.personas.map((p) => p.nombre), ['Helen Hernández']);
+  assert.deepEqual(one.data.senales, ['Helen Hernández tiene 1 h comprometida.']);
 });
 
 test('buscar_cliente finds by part of the name, without accents mattering to the search, and never archived first', async () => {

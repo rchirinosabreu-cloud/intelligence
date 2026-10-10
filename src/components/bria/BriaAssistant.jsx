@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { canUseBria } from '@/lib/briaLivingMemory';
+import { onBriaAsk } from '@/lib/briaAsk';
 import { cn } from '@/lib/utils';
 import BriaConversation from './BriaConversation';
 
@@ -19,6 +20,8 @@ export default function BriaAssistant({ currentUser, initialOpen = false, onDock
   useEffect(() => { onDockWidthChange?.(available && open && !fullScreen && desktop ? 452 : 0); return () => onDockWidthChange?.(0); }, [available, open, fullScreen, desktop, onDockWidthChange]);
   useEffect(() => { sessionStorage.setItem(key, open ? 'open' : 'closed'); }, [key, open]);
   useEffect(() => { onOpenChange?.(available && open); }, [available, open, onOpenChange]);
+  // Otra pantalla le pide algo a Bria (Ritmo, 10 de octubre de 2026): el panel se abre con el mensaje listo.
+  useEffect(() => onBriaAsk(() => { setOpen(true); setFullScreen(false); }), []);
   useEffect(() => {
     if (!open || !fullScreen || !available) return;
     const before = document.body.style.overflow; document.body.style.overflow = 'hidden';

@@ -36,7 +36,26 @@ Por persona y por tipo de trabajo, sobre las tareas cerradas del periodo (`src/l
 - La cobertura del equipo es del 56 %, con personas por debajo del 15 %. Mientras eso no suba, los tiempos de esas personas no se pueden leer.
 - Hay relojes que nadie pausa (sesiones de más de 8 h) y tiempo duplicado por relojes simultáneos.
 
+## Fase A (10 de octubre de 2026): la lectura de la semana y el mapa de carga
+
+Rodny: «no quiero mirar tablas, quiero que Bria me diga qué decidir». Ritmo abre ahora con dos piezas encima de la lectura por persona.
+
+### La lectura de la semana
+- **Qué es.** Bria lee Ritmo (30 días) y el mapa de carga y escribe de **3 a 5 decisiones** para la dirección, de la más urgente a la menos, cada una con su **evidencia** (cifras de los datos), su **por qué** y una **acción**. Y dos frases de resumen.
+- **Cuándo.** Sola **los lunes desde las 7 de la mañana** (reloj de Bogotá), una vez por semana aunque el servidor se reinicie (`initWeeklyReadingScheduler`, revisa cada 30 minutos; la clave es la semana ISO de Bogotá, `weekKeyOf`). Al escribirla avisa a administradores y project managers con acceso a Manager (`RITMO_LECTURA_SEMANAL`, lleva a `/manager?tab=ritmo`). Y **a mano** cuando se quiera, con «Pedir la lectura» / «Volver a leer» (`POST /api/manager/rhythm/reading`).
+- **El modelo propone, el código manda** (`src/lib/weeklyReading.js`). Esquema estricto, cliente gobernado de OpenAI (`manager.weekly-reading`). `validateReading` conserva solo lo que el resumen de datos respalda: una tarea que no estaba entre los ids mostrados o una persona que no aparece se descartan y la acción pasa a «ninguna»; una decisión sin evidencia no entra; la urgencia es `alta`, `media` o `baja`; máximo cinco. Los nombres se comparan sin tildes ni mayúsculas.
+- **Las acciones nunca actúan solas.** `REVISAR_TAREA` y `REASIGNAR` abren la tarea en Gestión (`/gestion?taskId=`). `CONVERSAR` y `CREAR_PENDIENTE` llevan un `suggestedMessage` que **se deja escrito en el chat de Bria** (`askBria`, evento `bria:ask`; el panel se abre y la pregunta queda en el cuadro): la persona lo lee y lo envía, o no. Nada se manda ni se crea por tocar el botón.
+- **Dónde se guarda.** `bria_memory.rhythm_readings` (una fila por generación, con el resumen de datos que vio el modelo y su coste; `scripts/sql/bria-rhythm-readings.sql`, aplicado al arrancar por `ensure-bria-knowledge-schema.js`). Única capa de acceso: `weeklyReadingRepository.js`. Nada se borra.
+- **El tono es de Rodny para el equipo:** habla de carga y de tiempos, nunca de desempeño; si la cobertura de alguien es baja, la decisión es medir, no juzgar. Español latinoamericano.
+
+### El mapa de carga
+- **Qué es.** Quién está saturado y quién tiene espacio en los **próximos 10 días hábiles** de Colombia (festivos incluidos; `nextWorkingDays`). Una fila por persona activa, una celda por día con las **horas estimadas** de sus tareas abiertas (`PENDIENTE`, `EN_CURSO`, `DEVUELTA`) que vencen ese día; tocar una celda muestra las tareas y abre cada una en Gestión. Las vencidas van en una columna aparte y las que no tienen fecha se cuentan junto al nombre. Una tarea que vence un fin de semana o festivo cuenta en el siguiente día hábil.
+- **De dónde salen las horas** (`estimateFor`): la mediana de **esa persona** en ese tipo de trabajo (Ritmo, 90 días); si no la tiene, la **del equipo**; si no hay nada, **una hora** y se marca «supuesto». La pantalla dice siempre que son estimaciones para repartir mejor, no un registro.
+- **Los colores** (`levelOf`, jornada de 8 h): **con espacio** por debajo de media jornada, **al día** hasta casi una jornada, **día completo** (amarillo) desde el 90 % hasta un día y cuarto —Rodny: «dos videos de 4 horas en un día, eso hay que revisarlo»— y **más de lo que cabe** (coral) por encima. No subir los umbrales sin que lo pida.
+- **Señales** (`loadSignals`), como en Ritmo, preguntas con sus tareas: día excedido, tareas vencidas, persona con espacio (menos del 30 % de la capacidad del horizonte y ningún día por encima de «con espacio»).
+- **Servidor y Bria.** `GET /api/manager/rhythm/load` (`teamLoadService.js`) y la herramienta `carga_del_equipo`, con la misma puerta de Manager. Bria la usa cuando preguntan a quién asignarle algo o quién está sobrecargado.
+
 ## Pruebas y muestra
 
-- Contratos: `tests/teamRhythm.test.js`, `tests/teamRhythmService.test.js`, `tests/teamRhythmAccess.test.js`, `tests/teamRhythmUi.test.js`.
-- Muestra local con personas inventadas: `tests/fixtures/team-rhythm-preview.html` (`?tab=ritmo`, `?tab=observer`, `&dark`).
+- Contratos: `tests/teamRhythm.test.js`, `tests/teamRhythmService.test.js`, `tests/teamRhythmAccess.test.js`, `tests/teamRhythmUi.test.js`; Fase A: `tests/teamLoad.test.js`, `tests/weeklyReading.test.js`, `tests/weeklyReadingService.test.js`, `tests/teamRhythmFaseA.test.js`, `tests/briaAsk.test.js`, y `carga_del_equipo` en `tests/briaAssistantTools.test.js`.
+- Muestra local con personas inventadas: `tests/fixtures/team-rhythm-preview.html` (`?tab=ritmo`, `?tab=observer`, `&dark`, `&sinlectura` para la semana sin lectura).

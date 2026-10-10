@@ -19,6 +19,7 @@ Lo que sí se exige:
 | `conversations`, `conversation_turns`, `conversation_attachments`, `conversation_purges` | Conversaciones con Bria, sus adjuntos y el borrado pendiente de archivos | `scripts/sql/bria-conversations.sql` | `briaConversationRepository.js` |
 | `agency_facts`, `agency_fact_events`, `agency_questions` | Memoria de la agencia: hechos con certeza y fuente, su historial y las dudas abiertas | `scripts/sql/bria-agency-facts.sql` | `briaAgencyFactRepository.js` |
 | `sync_state` | Prototipo de sincronización continua de Drive y correo. **No se aplica todavía.** | `scripts/sql/bria-source-sync.sql` | ninguno |
+| `rhythm_readings` | Lecturas de la semana que Bria escribe para la dirección desde Ritmo y el mapa de carga, con su resumen de datos y su modelo; una fila por generación | `scripts/sql/bria-rhythm-readings.sql` | `weeklyReadingRepository.js` |
 
 ### `vault` (bóveda de accesos)
 | Tabla | Qué guarda | Archivo | Acceso |

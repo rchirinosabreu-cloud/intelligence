@@ -23,6 +23,7 @@ import { getAgencyFactService } from './briaAgencyFactService.js';
 import { createVaultTools } from './vaultTools.js';
 import { getVaultService } from './vaultService.js';
 import { teamRhythmService } from './teamRhythmService.js';
+import { teamLoadService } from './teamLoadService.js';
 
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
 
@@ -86,7 +87,7 @@ export const createBriaAssistantService = ({
         today: bogotaDate(now()),
         logger,
         onEvent,
-        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, now, ...context, taskDraft, dispatchDraft, taskAttachments, taskEvidence, revalidate }
+        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, ...context, taskDraft, dispatchDraft, taskAttachments, taskEvidence, revalidate }
       });
       // El motivo técnico de un fallo se queda en el registro del servidor; al navegador solo va qué falló.
       await revalidate();

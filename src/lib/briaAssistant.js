@@ -120,7 +120,8 @@ const TOOL_PROGRESS = {
   preparar_acceso: 'Preparando el acceso…',
   preparar_pendiente: 'Preparando el pendiente…',
   preparar_despacho: 'Preparando el despacho…',
-  ritmo_del_equipo: 'Leyendo el ritmo del equipo…'
+  ritmo_del_equipo: 'Leyendo el ritmo del equipo…',
+  carga_del_equipo: 'Mirando la carga del equipo…'
 };
 export const toolProgressLabel = (name) => TOOL_PROGRESS[name] || 'Revisando la plataforma…';
 
