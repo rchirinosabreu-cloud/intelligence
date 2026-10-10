@@ -1,5 +1,6 @@
 import { canDispatch } from './briaDispatchService.js';
-import { dispatchReply, dispatchStage } from '../lib/briaDispatchDraft.js';
+import { dispatchStage } from '../lib/briaDispatchDraft.js';
+import { wrapLegacyAction, actionReply } from '../lib/briaActions.js';
 
 // La herramienta solo prepara: el modelo no tiene forma de despachar. El servidor despacha cuando la persona
 // escribe «Despachar a producción» sobre el resumen guardado (ver briaConversationService).
@@ -18,8 +19,10 @@ export const createBriaDispatchTools = (service) => service ? [{
     nuevo: { type: 'boolean', description: 'Solo si la persona pide otro despacho distinto.' }
   }, required: ['planId', 'piezas'], additionalProperties: false },
   async run(args, ctx) {
-    const draft = await service.prepare({ user: ctx.user, args, question: ctx.question, previous: ctx.dispatchDraft });
-    const reply = dispatchReply(draft);
-    return { data: { stage: dispatchStage(draft), draft, message: reply.answer, created: false }, dispatchDraft: draft, dispatchReply: reply, quickReplies: reply.quickReplies };
+    const previous = ctx.pendingAction?.type === 'DISPATCH' ? ctx.pendingAction.draft : ctx.dispatchDraft;
+    const draft = await service.prepare({ user: ctx.user, args, question: ctx.question, previous });
+    const action = wrapLegacyAction('DISPATCH', draft, { title: `Despacho a producción de ${draft.client?.name || 'la cuenta'}` });
+    const reply = actionReply(action);
+    return { data: { stage: dispatchStage(draft), draft, message: reply.answer, created: false }, pendingAction: action, actionReply: reply, quickReplies: reply.quickReplies };
   }
 }] : [];

@@ -15,4 +15,5 @@ export const briaDispatchDrafts = createBriaDispatchService({ db: prisma, dispat
 // Eliminar desde el chat (10 de octubre de 2026): la misma vía que el botón de Gestión, con su registro.
 export const briaDeleteDrafts = createBriaDeleteService({ db: prisma, deleteTask: auditAndDeleteTask });
 // Acciones en la plataforma (10 de octubre de 2026): pendientes, parrillas, piezas y observaciones, por las vías de siempre.
-export const briaActions = createBriaActionService({ db: prisma, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation: (input) => clientOperationsService.addObservation(input), platform: getBriaPlatformClient(), routePermissions: getRoutePermission });
+// Crear pendiente, despachar y eliminar se ejecutan por esta misma base (una sola base, 10 de octubre de 2026).
+export const briaActions = createBriaActionService({ db: prisma, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation: (input) => clientOperationsService.addObservation(input), taskDrafts: briaTaskDrafts, dispatchDrafts: briaDispatchDrafts, deleteDrafts: briaDeleteDrafts, platform: getBriaPlatformClient(), routePermissions: getRoutePermission });

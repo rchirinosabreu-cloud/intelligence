@@ -22,11 +22,14 @@ for (const item of [
 ]) {
   const started = Date.now();
   const result = await runWithAiContext({ actorId: user.userId, module: 'bria', route: 'MAINTENANCE FICTIONAL TASK DRAFT EVALUATION' }, () => runAssistant({ question: item.question, user, person: { name: 'Evaluador' }, today: '2026-10-08', tools: createBriaTaskTools(drafts), ai }));
-  assert.equal(taskDraftStage(result.taskDraft), item.expected); assert.equal(result.taskDraft.dueDate, '2026-10-09');
-  assert.equal(result.taskDraft.assignee.id, member.id); assert.equal(result.taskDraft.client.id, client.id);
-  assert.match(result.taskDraft.context, /tres|3/);
-  results.push({ id: item.id, latencyMs: Date.now() - started, stage: taskDraftStage(result.taskDraft), result });
-  console.log(JSON.stringify({ id: item.id, stage: taskDraftStage(result.taskDraft), passed: true }));
+  // El borrador viaja dentro de la acción común (`pendingAction.draft`, 10 de octubre de 2026).
+  const draft = result.pendingAction?.draft;
+  assert.equal(result.pendingAction?.type, 'TASK_CREATE');
+  assert.equal(taskDraftStage(draft), item.expected); assert.equal(draft.dueDate, '2026-10-09');
+  assert.equal(draft.assignee.id, member.id); assert.equal(draft.client.id, client.id);
+  assert.match(draft.context, /tres|3/);
+  results.push({ id: item.id, latencyMs: Date.now() - started, stage: taskDraftStage(draft), result });
+  console.log(JSON.stringify({ id: item.id, stage: taskDraftStage(draft), passed: true }));
 }
 await writeFile(process.env.BRIA_EVALUATION_OUTPUT, JSON.stringify({ fictional: true, model: 'gpt-6-luna', operationalWrites: 0, results }, null, 2));
 setTimeout(() => process.exit(0), 1500).unref();

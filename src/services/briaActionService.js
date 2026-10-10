@@ -20,6 +20,9 @@ import { checkTaskUpdate } from './taskUpdateGate.js';
 import { ACTIVE_PUBLICATION_STATUSES } from '../lib/socialPublishing.js';
 import { isManagerRole } from '../config/security.js';
 import { matchOperation, isExcludedOperation } from '../lib/platformCatalog.js';
+import { LEGACY_ACTIONS } from '../lib/briaActions.js';
+import { dispatchResultText } from '../lib/briaDispatchDraft.js';
+import { deleteResultText } from '../lib/briaDeleteDraft.js';
 
 const tidy = (value) => String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
 const fold = (value) => tidy(value).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -30,15 +33,19 @@ const STATUS_LABEL = { PENDIENTE: 'Pendiente', EN_CURSO: 'En proceso', REALIZADA
 const PRIORITY = { normal: 'NORMAL', alta: 'ALTA', urgente: 'URGENTE', NORMAL: 'NORMAL', ALTA: 'ALTA', URGENTE: 'URGENTE' };
 const PRIORITY_LABEL = { NORMAL: 'normal', ALTA: 'alta', URGENTE: 'urgente' };
 
-export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes' };
+// Módulos que exige cada acción. Las tres que nacieron con flujo propio (crear pendiente, despachar a producción,
+// eliminar pendientes) viajan por esta misma base desde el 10 de octubre de 2026; el despacho exige dos módulos.
+export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion' };
+export const actionModules = (type) => [].concat(ACTION_PERMISSION[type] || []);
 const MODULE_LABEL = { gestion: 'Gestión', parrillas: 'Parrillas', clientes: 'Clientes' };
 export const ITEM_FORMATS = ['Reel', 'Carrusel', 'Post', 'Video', 'Historia'];
 const BULK_MAX = 10;
-export const canRunActions = (user) => canUseBria(user) && Object.values(ACTION_PERMISSION).some((module) => hasModulePermission(user, module));
+export const canRunActions = (user) => canUseBria(user) && Object.keys(ACTION_PERMISSION).some((type) => actionModules(type).every((module) => hasModulePermission(user, module)));
 const authorize = (user, type) => {
-  const module = ACTION_PERMISSION[type];
-  if (!module) throw knowledgeError('Esa acción no existe.', 400, 'BRIA_ACTION_UNKNOWN');
-  if (!canUseBria(user) || !hasModulePermission(user, module)) throw knowledgeError(`Necesitas acceso a ${MODULE_LABEL[module] || module} para hacer eso con Bria.`, 403, 'BRIA_ACTION_FORBIDDEN');
+  const modules = actionModules(type);
+  if (!modules.length) throw knowledgeError('Esa acción no existe.', 400, 'BRIA_ACTION_UNKNOWN');
+  const missing = modules.find((module) => !hasModulePermission(user, module));
+  if (!canUseBria(user) || missing) throw knowledgeError(`Necesitas acceso a ${MODULE_LABEL[missing || modules[0]] || missing || modules[0]} para hacer eso con Bria.`, 403, 'BRIA_ACTION_FORBIDDEN');
 };
 
 // El mismo criterio que los pendientes y los despachos: con una sola coincidencia se elige; con varias, solo la exacta.
@@ -442,6 +449,37 @@ const executeClientNote = async ({ user, action, addObservation }) => {
   return { text: `Listo: anoté la observación en la ficha de **${action.target.clientName}**.\n\n[Abrir la operación del cliente](${link})`, sources: [] };
 };
 
+/* ---------------------------------------------------------------- Los tres flujos que nacieron aparte */
+
+// Crear pendiente, despachar a producción y eliminar pendientes conservan su servicio (preparación, textos y
+// escritura); aquí solo se ejecutan por la base común. Sus servicios exigen su propia frase de confirmación, así
+// que se les pasa la canónica: la persona ya confirmó sobre el resumen, con «Confirmar» o con la frase de siempre.
+const legacyPrepare = () => { throw knowledgeError('Esa acción se prepara con su propia herramienta.', 400, 'BRIA_ACTION_LEGACY'); };
+const executeTaskCreate = async ({ user, action, taskDrafts, loadAttachment, revalidate }) => {
+  if (!taskDrafts) throw knowledgeError('Crear pendientes no está disponible en esta vista.', 403);
+  const draft = action.draft;
+  const receipt = await taskDrafts.createConfirmedTask({ user, draft, question: LEGACY_ACTIONS.TASK_CREATE.confirmPhrase, revalidate, loadAttachment });
+  const link = `/gestion?taskId=${encodeURIComponent(receipt.taskId)}`;
+  return {
+    text: `${receipt.alreadyCreated ? 'El pendiente ya estaba creado' : 'Pendiente creado'} para ${draft.assignee.name}. Guardé el contexto como comentario${draft.files?.length ? ' y los archivos como insumos' : ''}.\n\n[Abrir en Gestión](${link})`,
+    sources: [{ kind: 'tarea', id: receipt.taskId }], toolsUsed: ['crear_pendiente'],
+    patch: { draft: { ...draft, status: 'CREATED', taskId: receipt.taskId } }
+  };
+};
+const executeDispatch = async ({ user, action, dispatchDrafts, revalidate }) => {
+  if (!dispatchDrafts) throw knowledgeError('Despachar no está disponible en esta vista.', 403);
+  const receipt = await dispatchDrafts.createConfirmedDispatch({ user, draft: action.draft, question: LEGACY_ACTIONS.DISPATCH.confirmPhrase, revalidate });
+  return {
+    text: dispatchResultText(receipt.results), sources: receipt.results.filter((row) => row.taskId).map((row) => ({ kind: 'tarea', id: row.taskId })), toolsUsed: ['despachar_a_produccion'],
+    patch: { draft: { ...action.draft, status: 'DONE', results: receipt.results } }
+  };
+};
+const executeTaskDelete = async ({ user, action, deleteDrafts, revalidate }) => {
+  if (!deleteDrafts) throw knowledgeError('Eliminar no está disponible en esta vista.', 403);
+  const receipt = await deleteDrafts.createConfirmedDelete({ user, draft: action.draft, question: LEGACY_ACTIONS.TASK_DELETE.confirmPhrase, revalidate });
+  return { text: deleteResultText(receipt.results), sources: [], toolsUsed: ['eliminar_pendiente'], patch: { draft: { ...action.draft, status: 'DONE', results: receipt.results } } };
+};
+
 /* ---------------------------------------------------------------- Servicio */
 
 const TYPES = {
@@ -450,7 +488,10 @@ const TYPES = {
   CREATE_PLAN: { prepare: preparePlan, execute: executePlan },
   CREATE_ITEM: { prepare: prepareItem, execute: executeItem },
   MOVE_ITEM: { prepare: prepareMoveItem, execute: executeMoveItem },
-  CLIENT_NOTE: { prepare: prepareClientNote, execute: executeClientNote }
+  CLIENT_NOTE: { prepare: prepareClientNote, execute: executeClientNote },
+  TASK_CREATE: { prepare: legacyPrepare, execute: executeTaskCreate },
+  DISPATCH: { prepare: legacyPrepare, execute: executeDispatch },
+  TASK_DELETE: { prepare: legacyPrepare, execute: executeTaskDelete }
 };
 
 /* ---------------------------------------------------------------- Cualquier operación del mapa de la plataforma */
@@ -508,7 +549,7 @@ const executePlatform = async ({ user, action, platform, session, routePermissio
   return { text: `Listo: ${action.title}.${detail ? `\n\nLo que respondió la plataforma (datos): ${detail}` : ''}`, sources: [] };
 };
 
-export const createBriaActionService = ({ db, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, platform = null, routePermissions = null, now = () => new Date(), readOnly = false } = {}) => ({
+export const createBriaActionService = ({ db, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, now = () => new Date(), readOnly = false } = {}) => ({
   async prepare({ user, type, args = {}, previous }) {
     if (type === 'PLATFORM') {
       if (!canUseBria(user)) throw knowledgeError('Bria no está activada para tu cuenta.', 403, 'BRIA_ACTION_FORBIDDEN');
@@ -521,7 +562,8 @@ export const createBriaActionService = ({ db, updateTask, createContentPlan, upd
     return TYPES[type].prepare({ db, user, args, previous: ongoing, today: bogotaDate(now()) });
   },
 
-  async execute({ user, action, revalidate, session = null }) {
+  // `loadAttachment` solo lo usa crear pendiente (los archivos del chat pasan a insumos de la tarea).
+  async execute({ user, action, revalidate, session = null, loadAttachment = null }) {
     const isPlatform = action?.type === 'PLATFORM';
     if (!action?.type || (!TYPES[action.type] && !isPlatform)) throw knowledgeError('Esa acción no existe.', 400, 'BRIA_ACTION_UNKNOWN');
     if (isPlatform) { if (!canUseBria(user)) throw knowledgeError('Bria no está activada para tu cuenta.', 403, 'BRIA_ACTION_FORBIDDEN'); } else authorize(user, action.type);
@@ -534,6 +576,6 @@ export const createBriaActionService = ({ db, updateTask, createContentPlan, upd
       return executePlatform({ user, action, platform, session, routePermissions });
     }
     authorize(user, action.type);
-    return TYPES[action.type].execute({ db, user, action, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation });
+    return TYPES[action.type].execute({ db, user, action, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts, dispatchDrafts, deleteDrafts, loadAttachment, revalidate });
   }
 });
