@@ -26,6 +26,18 @@ Estado (pendiente, en proceso, realizada, devuelta), responsable, fecha de entre
 ### `crear_parrilla` (permiso de Parrillas)
 La parrilla de un cliente para un mes. **Nace con responsable y con objetivo estratégico:** si la persona no los dijo, Bria los pregunta, proponiendo al community manager y al project manager de la ficha como responsable, y el objetivo del mes anterior como opción. Un mes ya pasado este año se entiende del año que viene. Si la parrilla ya existe, no crea otra: enlaza la que hay. Ejecuta con `createContentPlan` y `updateContentPlan` (para el responsable).
 
+### `cambiar_pendientes` (permiso de Gestión)
+El mismo cambio de estado para hasta 10 tareas a la vez: en proceso, realizada o pendiente. Cada tarea pasa por `checkTaskUpdate` por separado; las que no pueden (privadas que no se abren, ya cerradas, bloqueadas por un compromiso con hora, de otra persona sin permiso) se dicen con su motivo y las demás siguen. Devolver y reabrir piden motivo y nota por tarea: eso se hace de a una con `cambiar_pendiente`. Al ejecutar, cada tarea se vuelve a mirar: lo que ya estaba en ese estado no falla, y una falla no frena a las demás.
+
+### `crear_pieza` (permiso de Parrillas)
+Una pieza nueva en una parrilla (por su id o por cliente y mes). **Nace con un objetivo que diga algo** («Nuevo Objetivo» no vale), un formato (Reel, Carrusel, Post, Video, Historia) y un día; la hora es opcional. Avisa si ese día ya hay otra pieza (dos el mismo día es señal amarilla en la operación) y si la fecha cae fuera del mes. Se crea en borrador, sin guion ni texto, con la fecha al mediodía UTC como hace la pantalla, por `createContentItem`.
+
+### `mover_pieza` (permiso de Parrillas)
+La fecha y la hora de publicación de una pieza. Una pieza ya publicada no se mueve. Avisa si tiene una publicación programada en redes (se mueve con ella, porque `updateContentItem` resincroniza la cola), si la fecha es pasada (lo programado se cancela) y si el cliente ya la aprobó (no le pide otra aprobación, pero conviene avisarle). La fecha viaja como `YYYY-MM-DD`, igual que desde el editor.
+
+### `registrar_observacion` (módulo Clientes)
+Una observación en la ficha del cliente (Operación de clientes): contexto que el equipo tiene que leer, no un pendiente. Pide el texto si no lo dieron, respeta el tope de 2.000 caracteres y la guarda con el autor por `addObservation`, la misma función de la ruta.
+
 ## Cómo se usa Bria (`uso_de_bria`, solo administradores)
 
 Cifras de los últimos 7 o 30 días leídas de las conversaciones guardadas (`src/services/briaUsageService.js`): cuántas personas preguntaron y cuántas veces cada una, preguntas por día, qué herramientas se usaron, cuántas respuestas quedaron **sin respuesta** (el texto de respaldo) o **con una herramienta fallida**, y cuántas llamadas y tokens costó. **Nunca el contenido** de ninguna conversación. La instrucción le dice a Bria que son cifras para pulirla, no para evaluar a nadie.
