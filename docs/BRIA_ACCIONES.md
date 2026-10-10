@@ -38,13 +38,24 @@ La fecha y la hora de publicación de una pieza. Una pieza ya publicada no se mu
 ### `registrar_observacion` (módulo Clientes)
 Una observación en la ficha del cliente (Operación de clientes): contexto que el equipo tiene que leer, no un pendiente. Pide el texto si no lo dieron, respeta el tope de 2.000 caracteres y la guarda con el autor por `addObservation`, la misma función de la ruta.
 
+## Las manos de Bria en toda la plataforma
+
+Rodny, 10 de octubre de 2026: «quiero que Bria tenga permiso para todo en la plataforma, ella vive ahí, no necesariamente hay que darle desde aquí configuraciones o permisos; como todo se crea manual, ella lo puede hacer también, si se lo pide un admin o project y según los módulos a los que ese usuario tiene acceso».
+
+**La idea en una frase:** lo que la persona puede hacer en una pantalla, Bria lo puede hacer por ella, con su misma sesión y sus mismos permisos. No hay una segunda tabla de permisos ni acciones cableadas una por una.
+
+- **Cómo entra.** `src/lib/briaPlatformClient.js` llama a la API **con el mismo token** con el que la persona abrió el chat (la ruta de conversaciones lo toma de la cabecera y lo pasa como `session`; vive en la petición, nunca se guarda en un turno). La llamada pasa por `authenticateToken`, el módulo, el rol y los guardianes de cada ruta: la API responde lo que le respondería a la persona. Si su sesión vence, Bria se queda sin manos en el acto. Lleva la marca `x-brain-via: bria` y queda en la auditoría operativa con el nombre de la persona.
+- **Qué sabe que existe.** `src/lib/platformCatalog.js` es el mapa: una frase en español por cada ruta de la API, con sus campos cuando se conocen, y `PLATFORM_EXCLUDED`, lo que Bria no hace ni confirmando: cuentas, roles y permisos de personas; contraseñas y verificación en dos pasos; la bóveda (tiene su propio camino y nunca pasa valores por el modelo); borrar una parrilla entera; archivos (subir, bajar, PDF); proxies y lo interno. Los **permisos no están en el mapa**: `src/lib/platformRoutes.js` los lee del router real (cada guardián lleva una etiqueta `permission`: `requireModulePermission`, `requireManagerRole`, `requireRole`, `requireFinancialPermission` y los guardianes propios de Operación de clientes, Meta y Salud operativa) y `src/lib/platformPermissions.js` arma el índice. `tests/platformCatalog.test.js` exige que **toda ruta real esté descrita o excluida**: una ruta nueva sin su frase rompe CI, así Bria crece con la plataforma.
+- **Tres herramientas** (`src/services/briaPlatformTools.js`): `mapa_de_plataforma` busca por palabras qué operación hace lo que piden; `consultar_plataforma` lee cualquier GET del mapa de una vez (leer no cambia nada), con la sesión de la persona, y recorta respuestas largas; `operar_en_plataforma` prepara cualquier POST, PUT, PATCH o DELETE del mapa como una acción `PLATFORM` del mismo contrato: resumen con lo que va a pasar (`que_hace` en palabras de la persona, la operación y cada campo), avisos (borrados, dinero, cuerpo vacío), permiso de la ruta comprobado de entrada y otra vez al ejecutar, y solo «Confirmar» la ejecuta.
+- **Orden de preferencia** (regla 20 de Bria): las herramientas propias (pendiente, cambios, parrilla, pieza, despacho, eliminación, observación) van primero porque preguntan y avisan mejor; el mapa es para todo lo demás. Nunca dice que hizo un cambio; si la plataforma responde que falta un dato o que no hay permiso, lo dice con sus palabras.
+
 ## Cómo se usa Bria (`uso_de_bria`, solo administradores)
 
 Cifras de los últimos 7 o 30 días leídas de las conversaciones guardadas (`src/services/briaUsageService.js`): cuántas personas preguntaron y cuántas veces cada una, preguntas por día, qué herramientas se usaron, cuántas respuestas quedaron **sin respuesta** (el texto de respaldo) o **con una herramienta fallida**, y cuántas llamadas y tokens costó. **Nunca el contenido** de ninguna conversación. La instrucción le dice a Bria que son cifras para pulirla, no para evaluar a nadie.
 
 ## Dónde se conecta
 - `briaTaskApplication.js` arma `briaActions` con Prisma y las funciones reales; `briaAssistantService.js` monta las herramientas; `briaConversationService.js` resuelve «Confirmar» y «Cancelar»; `briaConversationRepository.js` guarda `pendingAction` en los metadatos del turno; `briaConversationApplication.js` exige el módulo de cada acción para ver o confirmar el turno.
-- Reglas 18 y 19 de `buildInstructions`.
+- Reglas 18, 19 y 20 de `buildInstructions`.
 
 ## Pruebas
-`tests/briaActions.test.js`, `tests/briaActionService.test.js`, `tests/briaActionConversation.test.js`, `tests/taskUpdateGate.test.js`, `tests/briaUsage.test.js`. Las pruebas que leían las comprobaciones dentro del controlador (`taskFocusDeadline`, `taskPrivacyRoutes`, `taskReopenAnyone`) ahora las leen en la puerta compartida.
+`tests/briaActions.test.js`, `tests/briaActionService.test.js`, `tests/briaActionConversation.test.js`, `tests/taskUpdateGate.test.js`, `tests/briaUsage.test.js`, `tests/platformCatalog.test.js` (toda ruta real descrita o excluida) y `tests/briaPlatform.test.js` (cliente, preparación, ejecución, herramientas y sesión en la conversación). Las pruebas que leían las comprobaciones dentro del controlador (`taskFocusDeadline`, `taskPrivacyRoutes`, `taskReopenAnyone`) ahora las leen en la puerta compartida.

@@ -30,6 +30,9 @@ test('a revoked module is refreshed and no longer offered as a tool', async () =
   });
   const answer = await service.ask({ user, question: 'consulta' });
   assert.equal(offered.some(tool => tool.name === 'task'), false);
-  assert.deepEqual(offered.map(tool => tool.name), ['ofrecer_opciones', 'consultar_aprendizajes', 'recordar_aprendizaje', 'retirar_recuerdo', 'memoria_de_la_agencia', 'guardar_en_memoria', 'retirar_de_memoria']);
+  // Las manos en la plataforma (10 de octubre de 2026) se ofrecen a toda persona con Bria: sus permisos por módulo los
+  // hace valer la propia API en cada operación, no la lista de herramientas.
+  // La bóveda solo aparece donde hay clave de cifrado (en local sí, en CI no): no entra en la comparación.
+  assert.deepEqual(offered.map(tool => tool.name).filter(name => !/_acceso$/.test(name)), ['ofrecer_opciones', 'mapa_de_plataforma', 'consultar_plataforma', 'operar_en_plataforma', 'consultar_aprendizajes', 'recordar_aprendizaje', 'retirar_recuerdo', 'memoria_de_la_agencia', 'guardar_en_memoria', 'retirar_de_memoria']);
   assert.deepEqual(answer.sources, []);
 });

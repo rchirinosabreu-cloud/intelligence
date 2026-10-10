@@ -116,7 +116,7 @@ export const authenticateToken = async (req, res, next) => {
   }
 };
 export const requireRole = (role) => {
-  return (req, res, next) => {
+  const middleware = (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized", message: "Usuario no autenticado" });
     }
@@ -133,6 +133,9 @@ export const requireRole = (role) => {
 
     next();
   };
+  // Etiqueta que lee el mapa de la plataforma de Bria (10 de octubre de 2026): la ruta nace con su permiso descrito.
+  middleware.permission = { role: String(role || '').toUpperCase() };
+  return middleware;
 };
 export const requireManagerRole = (req, res, next) => {
   if (!req.user) {
@@ -143,9 +146,10 @@ export const requireManagerRole = (req, res, next) => {
   }
   return next();
 };
+requireManagerRole.permission = { role: 'MANAGER' };
 
 export const requireFinancialPermission = (permission = 'read') => {
-  return async (req, res, next) => {
+  const middleware = async (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized", message: "Usuario no autenticado" });
     }
@@ -174,6 +178,8 @@ export const requireFinancialPermission = (permission = 'read') => {
       return res.status(500).json({ error: "Failed to validate financial access permissions" });
     }
   };
+  middleware.permission = { financial: permission };
+  return middleware;
 };
 
 export const requireFinancialAccess = requireFinancialPermission('read');
@@ -182,7 +188,7 @@ export const requireFinancialApproval = requireFinancialPermission('approve');
 export const requireFinancialAdmin = requireFinancialPermission('admin');
 
 export const requireModulePermission = (moduleName) => {
-  return (req, res, next) => {
+  const middleware = (req, res, next) => {
     if (!req.user) {
       return res.status(401).json({ error: "Unauthorized", message: "Usuario no autenticado" });
     }
@@ -194,4 +200,6 @@ export const requireModulePermission = (moduleName) => {
     }
     return next();
   };
+  middleware.permission = { module: moduleName };
+  return middleware;
 };

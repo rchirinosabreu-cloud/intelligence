@@ -12,6 +12,7 @@ const requireManager = (req, res, next) => {
   if (!isManagerRole(req.user.role)) return res.status(403).json({ error: 'La operación de clientes es de administradores y project managers.' });
   return next();
 };
+requireManager.permission = { role: 'MANAGER' }; // Lo lee el mapa de la plataforma de Bria.
 
 const reply = (res, error, logger) => {
   const status = Number(error?.status) || 500;

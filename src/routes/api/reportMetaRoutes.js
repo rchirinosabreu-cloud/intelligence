@@ -11,6 +11,7 @@ const requireManager = (req, res, next) => {
   if (!isManagerRole(req.user.role)) return res.status(403).json({ error: 'Solo administradores y project managers eligen la cuenta publicitaria de un cliente.' });
   return next();
 };
+requireManager.permission = { role: 'MANAGER' }; // Lo lee el mapa de la plataforma de Bria.
 
 const reply = (res, error, logger) => {
   const status = Number(error?.status) || 500;

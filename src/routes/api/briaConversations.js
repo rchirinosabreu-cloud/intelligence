@@ -4,6 +4,7 @@ import { BRIA_FILE_MAX_BYTES, BRIA_FILES_MAX_COUNT, BRIA_AUDIO_MAX_BYTES } from 
 import { canUseBria } from '../../lib/briaLivingMemory.js';
 import { createRateLimiter } from '../../config/security.js';
 const uuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value || '');
+const sessionOf = req => { const token = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim(); return token ? { token } : null; };
 export const createBriaConversationRouter = ({ service } = {}) => {
   const router = express.Router();
   const resolve = async () => service || (await import('../../services/briaConversationApplication.js')).getApplicationConversationService();

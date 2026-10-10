@@ -18,6 +18,8 @@ import { RETURN_REASONS, REOPEN_REASONS } from '../lib/taskTiming.js';
 import { humanDate } from '../lib/briaAssistant.js';
 import { checkTaskUpdate } from './taskUpdateGate.js';
 import { ACTIVE_PUBLICATION_STATUSES } from '../lib/socialPublishing.js';
+import { isManagerRole } from '../config/security.js';
+import { matchOperation, isExcludedOperation } from '../lib/platformCatalog.js';
 
 const tidy = (value) => String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
 const fold = (value) => tidy(value).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -451,8 +453,67 @@ const TYPES = {
   CLIENT_NOTE: { prepare: prepareClientNote, execute: executeClientNote }
 };
 
-export const createBriaActionService = ({ db, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, now = () => new Date(), readOnly = false } = {}) => ({
+/* ---------------------------------------------------------------- Cualquier operación del mapa de la plataforma */
+
+// Rodny, 10 de octubre de 2026: «quiero que Bria tenga permiso para todo en la plataforma, ella vive ahí». Lo que
+// no tiene herramienta propia se hace por la API, con la sesión de la persona. Aquí solo se arma el resumen y se
+// comprueba, de entrada, lo que la ruta pide (módulo, rol); la API vuelve a comprobarlo al ejecutar.
+const renderValue = (value) => Array.isArray(value) ? value.map(renderValue).join(', ') : value && typeof value === 'object' ? JSON.stringify(value) : String(value);
+const platformPermissionProblem = (user, permission) => {
+  if (!permission) return null;
+  const module = (permission.modules || []).find((name) => !hasModulePermission(user, name));
+  if (module) return `Necesitas el módulo ${MODULE_LABEL[module] || module} para eso.`;
+  const role = (permission.roles || []).find((name) => name === 'MANAGER' ? !isManagerRole(user.role) : String(user.role || '').toUpperCase() !== name);
+  if (role) return role === 'MANAGER' ? 'Eso es de administradores y project managers.' : `Eso es solo de ${role === 'ADMIN' ? 'administradores' : role}.`;
+  return null;
+};
+
+const preparePlatform = async ({ user, args, previous, routePermissions }) => {
+  const method = tidy(args.metodo || args.method).toUpperCase();
+  const path = tidy(args.ruta || args.path);
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) throw knowledgeError('Para leer usa consultar_plataforma; operar_en_plataforma es para POST, PUT, PATCH o DELETE.', 400, 'BRIA_PLATFORM_METHOD');
+  const key = `${method} ${path.split('?')[0]}`;
+  const excluded = isExcludedOperation(`${method} ${matchOperation(method, path)?.path || path.split('?')[0]}`);
+  const operation = matchOperation(method, path);
+  if (!operation) {
+    if (excluded) throw knowledgeError(`Eso no se hace desde el chat (${excluded.reason}): se hace en la pantalla.`, 403, 'BRIA_PLATFORM_EXCLUDED');
+    throw knowledgeError(`No encuentro «${key}» en el mapa de la plataforma. Búscala con mapa_de_plataforma; si no existe, no se puede hacer desde aquí.`, 404, 'BRIA_PLATFORM_UNKNOWN');
+  }
+  const permission = (await routePermissions?.(operation.key)) || null;
+  const problem = platformPermissionProblem(user, permission);
+  if (problem) throw knowledgeError(problem, 403, 'BRIA_PLATFORM_FORBIDDEN');
+  const body = args.cuerpo && typeof args.cuerpo === 'object' && !Array.isArray(args.cuerpo) ? args.cuerpo : (args.body && typeof args.body === 'object' ? args.body : null);
+  const intent = tidy(args.que_hace || args.intent).slice(0, 200);
+  if (!intent) throw knowledgeError('Dime en una frase qué va a hacer esta operación, con las palabras de la persona (que_hace).', 400, 'BRIA_PLATFORM_INTENT');
+  const summary = [intent, `Operación: ${operation.que}`, ...Object.entries(operation.params || {}).map(([name, value]) => `${name}: ${value}`), ...Object.entries(body || {}).map(([name, value]) => `${name}: ${renderValue(value)}`)];
+  const warnings = [];
+  if (method === 'DELETE') warnings.push('Es un borrado: si la plataforma no lo deja deshacer, no se deshace.');
+  if (operation.key.startsWith('POST /financials') || operation.key.startsWith('PUT /financials') || operation.key.startsWith('PATCH /financials')) warnings.push('Es dinero: revisa el importe y la fecha antes de confirmar.');
+  if (operation.campos && !body && ['POST', 'PUT', 'PATCH'].includes(method)) warnings.push(`Va sin cuerpo; esta operación suele llevar: ${operation.campos}.`);
+  return {
+    id: previous?.id || randomUUID(), ownerId: user.userId || user.id, type: 'PLATFORM', status: 'DRAFT',
+    title: intent, target: { key: operation.key, path: path.split('?')[0] }, wanted: {}, permission,
+    payload: { method, path: path.split('?')[0], body }, summary, warnings, missing: []
+  };
+};
+
+const executePlatform = async ({ user, action, platform, session, routePermissions }) => {
+  const operation = matchOperation(action.payload.method, action.payload.path);
+  if (!operation) throw knowledgeError('Esa operación ya no está en el mapa de la plataforma.', 404, 'BRIA_PLATFORM_UNKNOWN');
+  const problem = platformPermissionProblem(user, (await routePermissions?.(operation.key)) || action.permission);
+  if (problem) throw knowledgeError(problem, 403, 'BRIA_PLATFORM_FORBIDDEN');
+  const result = await platform.call({ token: session?.token, method: action.payload.method, path: action.payload.path, body: action.payload.body ?? undefined });
+  if (!result.ok) throw knowledgeError(`La plataforma no lo aceptó: ${result.error}`, result.status >= 400 && result.status < 500 ? result.status : 502, 'BRIA_PLATFORM_REJECTED');
+  const detail = result.data && typeof result.data === 'object' ? result.text.slice(0, 1500) : '';
+  return { text: `Listo: ${action.title}.${detail ? `\n\nLo que respondió la plataforma (datos): ${detail}` : ''}`, sources: [] };
+};
+
+export const createBriaActionService = ({ db, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, platform = null, routePermissions = null, now = () => new Date(), readOnly = false } = {}) => ({
   async prepare({ user, type, args = {}, previous }) {
+    if (type === 'PLATFORM') {
+      if (!canUseBria(user)) throw knowledgeError('Bria no está activada para tu cuenta.', 403, 'BRIA_ACTION_FORBIDDEN');
+      return preparePlatform({ user, args, previous, routePermissions });
+    }
     authorize(user, type);
     const owner = user.userId || user.id;
     // Solo se continúa una acción del mismo tipo, de la misma persona y sin cerrar; lo demás arranca de cero.
@@ -460,13 +521,18 @@ export const createBriaActionService = ({ db, updateTask, createContentPlan, upd
     return TYPES[type].prepare({ db, user, args, previous: ongoing, today: bogotaDate(now()) });
   },
 
-  async execute({ user, action, revalidate }) {
-    if (!action?.type || !TYPES[action.type]) throw knowledgeError('Esa acción no existe.', 400, 'BRIA_ACTION_UNKNOWN');
-    authorize(user, action.type);
+  async execute({ user, action, revalidate, session = null }) {
+    const isPlatform = action?.type === 'PLATFORM';
+    if (!action?.type || (!TYPES[action.type] && !isPlatform)) throw knowledgeError('Esa acción no existe.', 400, 'BRIA_ACTION_UNKNOWN');
+    if (isPlatform) { if (!canUseBria(user)) throw knowledgeError('Bria no está activada para tu cuenta.', 403, 'BRIA_ACTION_FORBIDDEN'); } else authorize(user, action.type);
     if (readOnly) throw knowledgeError('Esta vista solo prepara acciones. Hazlo desde la plataforma.', 403);
     if (action.ownerId !== (user.userId || user.id)) throw knowledgeError('Esta acción la preparó otra persona.', 403, 'BRIA_ACTION_OWNER');
     if (action.status !== 'DRAFT' || action.missing?.length) throw knowledgeError('Primero completa la acción y confírmala sobre su resumen.', 400, 'BRIA_ACTION_NOT_READY');
     await revalidate?.();
+    if (isPlatform) {
+      if (!platform) throw knowledgeError('Esta vista no puede operar en la plataforma.', 403);
+      return executePlatform({ user, action, platform, session, routePermissions });
+    }
     authorize(user, action.type);
     return TYPES[action.type].execute({ db, user, action, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation });
   }
