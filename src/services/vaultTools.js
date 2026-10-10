@@ -28,17 +28,39 @@ export const createVaultTools = (service) => service ? [
     }, required: ['clientId', 'consulta'], additionalProperties: false },
     allowed: (user) => canUseBria(user) && canUseVault(user),
     async run({ clientId = null, consulta = '' } = {}, { user }) {
-      const rows = (await service.list(user, { clientId: clientId || null, query: consulta })).slice(0, 8);
-      const accessCards = rows.map(card);
+      const rows = (await service.list(user, { clientId: clientId || null, query: consulta })).slice(0, 12);
+      const accesos = rows.map((row) => ({ id: row.id, ...card(row), version: row.revision, ...(row.platforms?.length ? { contiene: row.platforms.slice(0, 15) } : {}) }));
+      // Una sola coincidencia se muestra de una vez. Con varias, Bria razona cuál pidió la persona y la muestra
+      // con mostrar_acceso (Rodny, 9 de octubre de 2026: «solo hay un CapCut … que haya un razonamiento detrás»).
+      if (rows.length === 1) {
+        return { data: { accesos, instruccion: 'El acceso ya se muestra en una tarjeta bajo tu respuesta. Nunca escribas ni inventes usuarios o contraseñas.' }, accessCards: rows.map(card) };
+      }
       return {
         data: {
-          accesos: rows.map((row) => ({ id: row.id, ...card(row), version: row.revision, ...(row.platforms?.length ? { contiene: row.platforms.slice(0, 15) } : {}) })),
-          instruccion: accessCards.length
-            ? 'El acceso aparece bajo tu respuesta en una tarjeta; si es uno solo, ya se muestra. Un acceso con «contiene» es un bloque traído del Drive con varias cuentas: di en qué bloque está lo que pidió. Nunca escribas ni inventes usuarios o contraseñas.'
+          accesos,
+          instruccion: rows.length
+            ? 'Hay varias coincidencias y todavía no se muestra ninguna. Razona cuál pidió la persona por lo que dijo y por la conversación («de Brain Studio» o «de la agencia» es el acceso sin cliente; un cliente nombrado es el suyo) y muéstrala con mostrar_acceso. Si de verdad no se puede saber, pregunta cuál con opciones cortas (por ejemplo «Instagram de Aristea»), sin mostrar ninguna todavía. Nunca escribas ni inventes usuarios o contraseñas.'
             : 'No hay accesos que esta persona pueda ver con esa búsqueda. Antes de darlo por perdido, busca otra vez solo con el nombre de la plataforma (por ejemplo «capcut»). Si sigue sin aparecer y quiere guardarlo, usa preparar_acceso; si es de otro cliente, lo ve su PM o un administrador.'
-        },
-        accessCards
+        }
       };
+    }
+  },
+  {
+    name: 'mostrar_acceso',
+    description: 'Muestra en tarjeta el acceso (o hasta tres) que la persona pidió, elegido de los que devolvió buscar_acceso. Úsala después de razonar cuál es; no muestres todos por si acaso.',
+    parameters: { type: 'object', properties: {
+      accesos: { type: 'array', minItems: 1, maxItems: 3, items: { type: 'string' }, description: 'Ids de buscar_acceso.' }
+    }, required: ['accesos'], additionalProperties: false },
+    allowed: (user) => canUseBria(user) && canUseVault(user),
+    async run({ accesos = [] } = {}, { user }) {
+      const ids = [...new Set((Array.isArray(accesos) ? accesos : []).map(String))].slice(0, 3);
+      const rows = [];
+      for (const id of ids) {
+        const row = await service.get(user, id);
+        if (!row || (row.status && row.status !== 'ACTIVE')) throw toolError('Ese acceso no está disponible para esta persona. Búscalo otra vez con buscar_acceso.', 404, 'VAULT_NOT_FOUND');
+        rows.push(row);
+      }
+      return { data: { mostrados: rows.map(card), instruccion: 'Ya se muestra en una tarjeta bajo tu respuesta. Nunca escribas ni inventes usuarios o contraseñas.' }, accessCards: rows.map(card) };
     }
   },
   {

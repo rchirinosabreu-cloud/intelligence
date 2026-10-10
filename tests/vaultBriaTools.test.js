@@ -38,6 +38,28 @@ test('saving a password: Bria gathers the account conversing and the platform sh
   assert.equal(agency.accessCapture.clientName, 'Brain Studio');
 });
 
+// Rodny, 9 de octubre de 2026: «solo hay un CapCut … la idea es que haya un razonamiento detrás». Con varias
+// coincidencias, Bria elige cuál mostrar; no pone todas las tarjetas delante.
+test('with one match the card shows at once; with several, Bria picks which one to show', async () => {
+  const rows = [
+    { id: 'a1', clientName: null, platform: 'CapCut', label: 'CapCut', revision: 1 },
+    { id: 'a2', clientName: 'SunPartners', platform: 'Instagram', label: 'Instagram', revision: 1 },
+    { id: 'a3', clientName: 'Aristea', platform: 'Instagram', label: 'Instagram', revision: 2 }
+  ];
+  const service = { list: async (_u, { query }) => rows.filter((row) => row.platform.toLowerCase().includes(query)), get: async (_u, id) => rows.find((row) => row.id === id) || null };
+  const one = await tool(service, 'buscar_acceso').run({ clientId: null, consulta: 'capcut' }, { user: admin });
+  assert.deepEqual(one.accessCards.map((card) => card.id), ['a1']);
+  const many = await tool(service, 'buscar_acceso').run({ clientId: null, consulta: 'instagram' }, { user: admin });
+  assert.equal(many.accessCards, undefined, 'several matches never become a pile of cards');
+  assert.deepEqual(many.data.accesos.map((row) => row.id), ['a2', 'a3']);
+  assert.match(many.data.instruccion, /mostrar_acceso/);
+  const show = tool(service, 'mostrar_acceso');
+  const chosen = await show.run({ accesos: ['a3'] }, { user: admin });
+  assert.deepEqual(chosen.accessCards.map((card) => [card.id, card.cliente]), [['a3', 'Aristea']]);
+  await assert.rejects(() => show.run({ accesos: ['nada'] }, { user: admin }), { status: 404 }, 'only accesses this person can see');
+  assert.equal(show.parameters.properties.accesos.maxItems, 3);
+});
+
 test('changing a password keeps the account and its version', async () => {
   const service = { resolve: async () => pmActor, get: async (_u, id) => (id === 'a1' ? { id: 'a1', clientId: 'c-sun', clientName: 'SunPartners', platform: 'Gmail', label: 'Correo de soporte', revision: 4 } : null) };
   const out = await tool(service, 'preparar_acceso').run({ accesoId: 'a1', clientId: null, plataforma: null, nombre: null, usuario: null, enlace: null, notas: null }, { user: pm, db });

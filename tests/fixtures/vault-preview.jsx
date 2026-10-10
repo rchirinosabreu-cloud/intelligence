@@ -18,6 +18,7 @@ const realFetch = window.fetch.bind(window);
 window.fetch = (input, init = {}) => {
   const url = new URL(typeof input === 'string' ? input : input.url, location.origin);
   if (url.pathname === '/api/vault/credentials' && init.method === 'POST') { saved.push(JSON.parse(init.body).platform); return json({ created: true }); }
+  if (/^\/api\/vault\/credentials\/capcut\/reveal$/.test(url.pathname)) return json({ username: 'equipo@ejemplo.test', secret: 'Clave-de-ejemplo-456', url: 'https://www.capcut.com/login', notes: 'Otro usuario anotado en «Accesos Brain»: diseno@ejemplo.test', kind: 'ACCESO' });
   if (/^\/api\/vault\/credentials\/\w+\/reveal$/.test(url.pathname)) return json({ username: 'soporte@ejemplo.test', secret: 'Clave-de-ejemplo-123', notes: 'El código de verificación llega al celular de la PM.', kind: 'ACCESO' });
   return realFetch(input, init);
 };
@@ -34,6 +35,10 @@ function Preview() {
         <div><Answer><p>Listo. Lo guardo como <strong>Correo de soporte</strong> (Gmail) de Cliente de ejemplo, con el usuario soporte@ejemplo.test. Escribe la contraseña en el campo protegido de abajo: va directo a la bóveda y yo no la veo.</p></Answer>
           <BriaAccessCapture active={!sent} onSaved={setSent} capture={{ captureId: 'k1', mode: 'NEW', clientId: 'c1', clientName: 'Cliente de ejemplo', platform: 'Gmail', label: 'Correo de soporte', username: 'soporte@ejemplo.test' }} /></div>
         {sent && <Bubble>{sent}</Bubble>}
+      </> : params.has('capcut') ? <>
+        <Bubble>Dame la contraseña del capcut, por fa</Bubble>
+        <div><Answer><p>Aquí está el acceso de <strong>CapCut</strong> de Brain Studio. Se oculta en un minuto.</p></Answer>
+          <BriaAccessCards fresh cards={[{ id: 'capcut', cliente: 'Brain Studio', plataforma: 'CapCut', nombre: 'CapCut' }]} /></div>
       </> : <>
         <Bubble>Dame la contraseña del correo de soporte de Cliente de ejemplo</Bubble>
         <div><Answer><p>Aquí está el acceso del <strong>Correo de soporte</strong> de Cliente de ejemplo. Se oculta en un minuto.</p></Answer>

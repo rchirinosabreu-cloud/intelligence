@@ -29,6 +29,7 @@ export default function RevealedAccess({ access }) {
   return (
     <div className="space-y-2" data-vault-revealed="true">
       <Field label="Usuario" value={access.username} />
+      <Field label="Enlace" value={access.url} />
       <Field label={block ? 'Accesos' : 'Contraseña'} value={access.secret} mono={!block} block={block} />
       <Field label="Notas" value={access.notes} block />
     </div>
