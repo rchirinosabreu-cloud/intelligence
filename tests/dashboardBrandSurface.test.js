@@ -97,10 +97,12 @@ test('the streak meter in the sidebar speaks the brand palette', async () => {
   assert.match(meter, /Authorization|getAuthHeaders/, 'the streak request carries the session token');
 });
 
-test('the dashboard header dropped its duplicated account menu but kept notifications and theme', async () => {
+test('the dashboard header keeps notifications while the sidebar owns the theme toggle', async () => {
   const layout = await read('src/components/layout/AppLayout.jsx');
+  const sidebar = await read('src/components/layout/Sidebar.jsx');
 
   assert.doesNotMatch(layout, /Mi Cuenta/);
   assert.match(layout, /aria-label="Abrir notificaciones"/);
-  assert.match(layout, /aria-label="Cambiar tema"/);
+  assert.doesNotMatch(layout, /aria-label="Cambiar tema"/);
+  assert.match(sidebar, /aria-label="Cambiar tema"/);
 });
