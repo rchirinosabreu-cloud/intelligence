@@ -98,6 +98,29 @@ const contextualTips = ({ dashboard, user }) => {
   return tips.filter((tip) => canUse(user, tip.moduleKey));
 };
 
+// Mirando el dashboard de otra persona (9 de octubre de 2026): el mismo hecho, contado en tercera persona, y sin el
+// consejo escrito para ella.
+const aboutSomeoneElse = (tip, name) => {
+  const title = tip.title
+    .replace(/^Tienes /, `${name} tiene `)
+    .replace(/^Hoy tienes /, `Hoy ${name} tiene `)
+    .replace(/^Hoy vencen (\d+) tareas$/, `Hoy vencen $1 tareas de ${name}`)
+    .replace(/^Buen ritmo: (\d+) logros hoy$/, `Buen ritmo: ${name} lleva $1 logros hoy`);
+  const actionLabel = { 'Ver mis tareas': 'Ver en Gestión', 'Corregir ahora': 'Ver devueltas' }[tip.actionLabel] || tip.actionLabel;
+  return { ...tip, title, body: null, actionLabel };
+};
+
+/** Quién es la persona del dashboard que se está mirando y con qué permisos se arman sus recordatorios. */
+export const reminderSubject = ({ dashboard, currentUser }) => {
+  const member = dashboard?.member;
+  if (!member?.userId || !currentUser?.id || member.userId === currentUser.id) return { user: currentUser || null, isSelf: true, name: null };
+  return {
+    user: { id: member.userId, role: member.accountRole || null, modulePermissions: member.modulePermissions || {} },
+    isSelf: false,
+    name: String(member.name || '').trim().split(/\s+/)[0] || 'esta persona'
+  };
+};
+
 /** Consejos de plataforma, para días tranquilos. */
 export const PLATFORM_TIPS = Object.freeze([
   { id: 'mentions', kind: 'tip', title: 'Menciona con @ en los comentarios', body: 'Escribir @ y el nombre en cualquier comentario avisa a esa persona al momento, sin salir de la tarea.', actionLabel: null, actionUrl: null, moduleKey: 'gestion' },
@@ -117,16 +140,16 @@ export const PLATFORM_TIPS = Object.freeze([
  * tres días, un consejo de plataforma al final. Puede devolver una lista vacía: el widget se queda
  * a su altura igualmente.
  */
-export const listDashboardReminders = ({ dashboard, user, now = new Date(), dismissedIds = [], includePlatformTip = true } = {}) => {
+export const listDashboardReminders = ({ dashboard, user, now = new Date(), dismissedIds = [], includePlatformTip = true, subjectName = null } = {}) => {
   const dayKey = bogotaDayKey(now);
   if (!dayKey) return [];
   const seed = hashText(`${user?.id || user?.userId || 'anon'}:${dayKey}`);
   const day = dayNumber(dayKey);
   const items = contextualTips({ dashboard, user })
     .filter((tip) => !dismissedIds.includes(tip.id))
-    .map((tip) => ({ ...tip, dayKey }));
+    .map((tip) => ({ ...(subjectName ? aboutSomeoneElse(tip, subjectName) : tip), dayKey }));
 
-  if (includePlatformTip && day % 3 !== 0) {
+  if (includePlatformTip && !subjectName && day % 3 !== 0) {
     const generic = PLATFORM_TIPS.filter((tip) => canUse(user, tip.moduleKey) && !dismissedIds.includes(tip.id));
     if (generic.length > 0) items.push({ ...generic[seed % generic.length], dayKey });
   }

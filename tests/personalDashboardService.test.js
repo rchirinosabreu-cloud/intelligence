@@ -254,6 +254,15 @@ test('only admins and project managers can edit and delete dashboard announcemen
   });
 });
 
+// Para armar los recordatorios de otra persona hace falta saber qué puede ver ella (9 de octubre de 2026). Solo
+// viajan los permisos encendidos, nunca correo ni nada más de la cuenta.
+test('the dashboard carries the account role and the modules the person can open', () => {
+  const dashboard = buildPersonalDashboard({ now: fixedNow, member: { id: 'm1', userId: 'u1', name: 'Brayan', role: 'Editor', nativeTasks: [], user: { email: 'secreto@ejemplo.test', role: 'EDITOR', modulePermissions: { gestion: true, crm: false, minutas: true } } } });
+  assert.equal(dashboard.member.accountRole, 'EDITOR');
+  assert.deepEqual(dashboard.member.modulePermissions, { gestion: true, minutas: true });
+  assert.equal(JSON.stringify(dashboard.member).includes('secreto@'), false);
+});
+
 test('buildPersonalDashboard returns actionable focus cards for overdue and returned work', () => {
   const dashboard = buildPersonalDashboard({
     now: fixedNow,

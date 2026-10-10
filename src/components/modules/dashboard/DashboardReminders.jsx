@@ -1,11 +1,13 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { ArrowUpRight, Sparkles, Target, X } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
-import { bogotaDayKey, listDashboardReminders } from '@/lib/dashboardTips';
+import { bogotaDayKey, listDashboardReminders, reminderSubject } from '@/lib/dashboardTips';
 
 const storageKey = (userId, dayKey) => `brain:dashboard-tip:${userId || 'anon'}:${dayKey}`;
 
-const readDismissed = (userId, dayKey) => {
+// Lo oculto es de cada persona en su propio dashboard; quien mira el de otra no ve sus ocultaciones.
+const readDismissed = (userId, dayKey, isSelf = true) => {
+  if (!isSelf) return [];
   try {
     const raw = localStorage.getItem(storageKey(userId, dayKey));
     const parsed = raw ? JSON.parse(raw) : [];
@@ -61,16 +63,20 @@ const KIND_LABEL = { reminder: 'Recordatorio', tip: 'Consejo', crm: 'CRM' };
  * Sin efectos: el reloj se fija una vez por montaje y las ocultaciones se leen en el estado inicial.
  * (Un efecto que dependía de `new Date()` congeló la plataforma el 18 de septiembre de 2026.)
  */
-const DashboardReminders = ({ dashboard, user, className, now }) => {
+const DashboardReminders = ({ dashboard, user: currentUser, className, now }) => {
   const nowRef = useRef(now || new Date());
+  // Mirando el dashboard de otra persona (9 de octubre de 2026): sus recordatorios, con sus permisos y contados en
+  // tercera persona. Antes quedaba vacío y decía «Todo al día» (Rodny: «¿por qué solo a Rodny y a Francys?»).
+  const subject = reminderSubject({ dashboard, currentUser });
+  const user = subject.user;
   const userId = user?.id || user?.userId;
   const dayKey = bogotaDayKey(nowRef.current);
-  const [dismissedIds, setDismissedIds] = useState(() => readDismissed(userId, dayKey));
+  const [dismissedIds, setDismissedIds] = useState(() => readDismissed(userId, dayKey, subject.isSelf));
 
   const items = useMemo(() => [
-    ...(user ? listDashboardReminders({ dashboard, user, now: nowRef.current, dismissedIds }) : []),
+    ...(user ? listDashboardReminders({ dashboard, user, now: nowRef.current, dismissedIds, subjectName: subject.isSelf ? null : subject.name }) : []),
     ...crmReminders(dashboard?.crmAttention)
-  ], [dashboard, user, dismissedIds]);
+  ], [dashboard, user, dismissedIds, subject.isSelf, subject.name]);
 
   const dismiss = (tip) => {
     const next = [...dismissedIds, tip.id];
@@ -79,9 +85,10 @@ const DashboardReminders = ({ dashboard, user, className, now }) => {
   };
 
   const crmCount = items.filter((item) => item.kind === 'crm').length;
+  const whose = subject.isSelf ? 'tu gestión' : `la gestión de ${subject.name}`;
   const subtitle = items.length === 0
-    ? 'Sobre tu gestión de hoy'
-    : `${items.length} ${items.length === 1 ? 'punto' : 'puntos'} sobre tu gestión${crmCount ? ` · ${crmCount} del CRM` : ''}`;
+    ? `Sobre ${whose} de hoy`
+    : `${items.length} ${items.length === 1 ? 'punto' : 'puntos'} sobre ${whose}${crmCount ? ` · ${crmCount} del CRM` : ''}`;
 
   return (
     <section className={cn('brain-glass flex min-w-0 flex-col overflow-hidden p-0', className)} aria-labelledby="dashboard-reminders-title">
@@ -100,7 +107,7 @@ const DashboardReminders = ({ dashboard, user, className, now }) => {
           <div className="flex h-full min-h-[200px] flex-col items-center justify-center px-6 text-center">
             <Sparkles className="mb-3 h-8 w-8 text-zinc-300 dark:text-zinc-600" />
             <p className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">Todo al día</p>
-            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Cuando algo de tu gestión pida atención, aparecerá aquí.</p>
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Cuando algo de {whose} pida atención, aparecerá aquí.</p>
           </div>
         ) : (
           <ul className="divide-y divide-zinc-200/70 dark:divide-white/10">
@@ -128,7 +135,8 @@ const DashboardReminders = ({ dashboard, user, className, now }) => {
                       </a>
                     )}
                   </div>
-                  {kind !== 'crm' && (
+                  {/* Ocultar por hoy es de cada persona en su dashboard: quien mira el de otro no se lo esconde. */}
+                  {kind !== 'crm' && subject.isSelf && (
                     <button
                       type="button"
                       onClick={() => dismiss(item)}

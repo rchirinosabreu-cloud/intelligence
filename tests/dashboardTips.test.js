@@ -1,12 +1,30 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { PLATFORM_TIPS, bogotaDayKey, listDashboardReminders, pickDashboardTip } from '../src/lib/dashboardTips.js';
+import { PLATFORM_TIPS, bogotaDayKey, listDashboardReminders, pickDashboardTip, reminderSubject } from '../src/lib/dashboardTips.js';
 
 const admin = { id: 'user-rodny', role: 'ADMIN' };
 const editor = { id: 'user-helen', role: 'EDITOR', modulePermissions: { dashboard: true, gestion: true } };
 const quiet = { stats: { active: 3, dueToday: 1, overdue: 0, returned: 0, completedToday: 0 }, meetings: [], crmAttention: { enabled: false, counts: {}, items: [] } };
 const noon = (dayKey) => new Date(`${dayKey}T17:00:00.000Z`);
+
+// Rodny, 9 de octubre de 2026: «¿por qué solo a Rodny y a Francys les aparecen recordatorios?». Al mirar el
+// dashboard de otra persona el panel no armaba sus recordatorios y decía «Todo al día»; solo los del CRM (Francys)
+// se colaban. Ahora se arman con los permisos de esa persona y hablan de ella.
+test('looking at someone else’s dashboard shows their real reminders, about them, without advice or platform tips', () => {
+  const dashboard = { ...quiet, stats: { ...quiet.stats, overdue: 2, dueToday: 3 }, meetings: [{ isToday: true, title: 'Comité', startAt: '2026-10-09T15:00:00.000Z' }], member: { userId: 'user-brayan', name: 'Brayan Torres', accountRole: 'EDITOR', modulePermissions: { gestion: true, minutas: true } } };
+  const subject = reminderSubject({ dashboard, currentUser: admin });
+  assert.equal(subject.isSelf, false);
+  assert.equal(subject.name, 'Brayan');
+  assert.deepEqual(subject.user, { id: 'user-brayan', role: 'EDITOR', modulePermissions: { gestion: true, minutas: true } });
+  const items = listDashboardReminders({ dashboard, user: subject.user, subjectName: subject.name, now: noon('2026-10-09') });
+  assert.deepEqual(items.map((item) => item.title), ['Brayan tiene 2 tareas vencidas', 'Hoy Brayan tiene «Comité» a las 10:00', 'Hoy vencen 3 tareas de Brayan']);
+  assert.ok(items.every((item) => item.body === null), 'advice written for the person is not shown to whoever looks');
+  assert.equal(items.find((item) => item.id === 'due-today').actionLabel, 'Ver en Gestión', 'buttons speak to whoever looks');
+  assert.equal(items.some((item) => PLATFORM_TIPS.some((tip) => tip.id === item.id)), false);
+  const own = reminderSubject({ dashboard: { ...dashboard, member: { ...dashboard.member, userId: 'user-rodny' } }, currentUser: admin });
+  assert.deepEqual([own.isSelf, own.user], [true, admin]);
+});
 
 test('a real situation always produces a reminder, chosen deterministically per person and day', () => {
   const dashboard = { ...quiet, stats: { ...quiet.stats, overdue: 2, returned: 1 } };
