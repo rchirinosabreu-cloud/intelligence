@@ -4,7 +4,8 @@ import { validateAttachmentSelection, BRIA_AUDIO_MAX_BYTES } from '../lib/briaAt
 import { readBriaAttachment, attachmentModelPart } from './briaAttachmentReader.js';
 import { taskDraftReply, taskDraftStage, taskCreationIntent, isTaskConfirmation, isTaskCancellation, materialDeclined } from '../lib/briaTaskDraft.js';
 import { dispatchReply, dispatchStage, isDispatchConfirmation, isDispatchCancellation, dispatchResultText } from '../lib/briaDispatchDraft.js';
-export const createBriaConversationService = ({ repository, resolveActor, assistant, ai, taskDrafts, dispatchDrafts, prepareAttachment = readBriaAttachment, authorizeTurn = async () => true }) => {
+import { deleteReply, deleteStage, isDeleteConfirmation, isDeleteCancellation, deleteResultText, DELETE_REASON_OPTIONS } from '../lib/briaDeleteDraft.js';
+export const createBriaConversationService = ({ repository, resolveActor, assistant, ai, taskDrafts, dispatchDrafts, deleteDrafts, prepareAttachment = readBriaAttachment, authorizeTurn = async () => true }) => {
   const pending = new Set();
   const authorizeInput = async user => { const actor = await resolveActor(user); if (!['ADMIN', 'PROJECT_MANAGER'].includes(actor.role)) throw knowledgeError('Solo Admin y Project Manager pueden adjuntar o dictar.', 403); return actor; };
   const permitted = async (user, turn) => !turn.permissionChanged && await authorizeTurn(user, turn);
@@ -76,8 +77,33 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           await resolveActor(user);
           if (!await authorizeTurn(user, { dispatchDraft })) throw knowledgeError('Tu acceso para despachar cambió.', 403);
         };
+        // Eliminar pendientes (10 de octubre de 2026): mismo contrato que el despacho. Bria prepara; solo la frase
+        // «Eliminar pendiente» de la persona, sobre un resumen guardado y listo, elimina, dentro de append.
+        const deleteDraft = [...chat.turns].reverse().find(turn => turn.role === 'assistant' && turn.deleteDraft)?.deleteDraft;
+        const deleteState = deleteStage(deleteDraft);
+        const revalidateDelete = async () => {
+          await resolveActor(user);
+          if (!await authorizeTurn(user, { deleteDraft })) throw knowledgeError('Tu acceso para eliminar cambió.', 403);
+        };
+        const deleteResult = draft => ({ ...deleteReply(draft), sources: [], failures: [], toolsUsed: ['preparar_eliminacion'], deleteDraft: draft });
         let result;
-        if (dispatchDrafts && dispatchDraft && isDispatchCancellation(text) && !['DONE', 'CANCELLED'].includes(dispatchState)) {
+        if (deleteDrafts && deleteDraft && isDeleteCancellation(text) && !['DONE', 'CANCELLED'].includes(deleteState)) {
+          await revalidateDelete();
+          result = deleteResult({ ...deleteDraft, status: 'CANCELLED' });
+        } else if (deleteDrafts && deleteState === 'DONE' && isDeleteConfirmation(text)) {
+          await revalidateDelete();
+          result = { answer: `Esa eliminación ya se hizo.\n\n${deleteResultText(deleteDraft.results)}`, sources: [], failures: [], deleteDraft };
+        } else if (deleteDrafts && deleteState === 'READY' && isDeleteConfirmation(text) && !files.length) {
+          await revalidateDelete();
+          result = async () => {
+            await revalidateDelete();
+            const receipt = await deleteDrafts.createConfirmedDelete({ user, draft: deleteDraft, question: text, revalidate: revalidateDelete });
+            return { answer: deleteResultText(receipt.results), sources: [], failures: [], toolsUsed: ['eliminar_pendiente'], deleteDraft: { ...deleteDraft, status: 'DONE', results: receipt.results } };
+          };
+        } else if (deleteDrafts && deleteState === 'REASON' && DELETE_REASON_OPTIONS.some(option => option.toLowerCase() === text.toLowerCase())) {
+          await revalidateDelete();
+          result = deleteResult(await deleteDrafts.prepare({ user, previous: deleteDraft, question: text, args: { tareas: [], motivo: text } }));
+        } else if (dispatchDrafts && dispatchDraft && isDispatchCancellation(text) && !['DONE', 'CANCELLED'].includes(dispatchState)) {
           await revalidateDispatch();
           const cancelled = { ...dispatchDraft, status: 'CANCELLED' };
           result = { ...dispatchReply(cancelled), sources: [], failures: [], toolsUsed: ['preparar_despacho'], dispatchDraft: cancelled };
@@ -108,12 +134,13 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         } else if (taskDrafts && taskDraft && !['CREATED','CANCELLED'].includes(stage) && ((stage === 'PRIORITY' && /^(normal|alta|urgente)$/i.test(text)) || (stage === 'DATE' && /^(hoy|mañana|pasado mañana)$/i.test(text)) || (stage === 'MATERIAL' && materialDeclined(text, stage)))) {
           await revalidateTask(); result = taskResult(await taskDrafts.prepare({ user, previous: taskDraft, question: text, attachments: prepared }));
         } else {
-          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, taskDraft, dispatchDraft, taskAttachments: prepared, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
+          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, taskDraft, dispatchDraft, deleteDraft, taskAttachments: prepared, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
           if (!result.taskDraft && taskDraft) result.taskDraft = taskDraft;
           if (!result.dispatchDraft && dispatchDraft) result.dispatchDraft = dispatchDraft;
+          if (!result.deleteDraft && deleteDraft) result.deleteDraft = deleteDraft;
         }
         const fresh = await resolveActor(user);
-        if (!(await Promise.all([...chat.turns.filter(turn => turn.role === 'assistant'), { role: 'assistant', ...(typeof result === 'function' ? { taskDraft, dispatchDraft } : result) }].map(turn => authorizeTurn(user, turn)))).every(Boolean)) throw knowledgeError('Tu acceso a las fuentes cambió durante la consulta.', 403);
+        if (!(await Promise.all([...chat.turns.filter(turn => turn.role === 'assistant'), { role: 'assistant', ...(typeof result === 'function' ? { taskDraft, dispatchDraft, deleteDraft } : result) }].map(turn => authorizeTurn(user, turn)))).every(Boolean)) throw knowledgeError('Tu acceso a las fuentes cambió durante la consulta.', 403);
         const saved = await repository.append(fresh, id, chat.revision, text, result, prepared);
         return sanitize(user, saved);
       } finally { pending.delete(key); }
