@@ -16,6 +16,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { getNotificationDisplayParts } from '@/utils/notificationUtils';
 import PushNotificationControl from '@/components/notifications/PushNotificationControl';
 import ExcessiveTaskAlertDialog from '@/components/tasks/ExcessiveTaskAlertDialog';
+import DeclaredTimeDialog from '@/components/tasks/DeclaredTimeDialog';
 import ReturnedTaskAlertDialog from '@/components/tasks/ReturnedTaskAlertDialog';
 import { useRecognitionExperience } from '@/components/recognitions/RecognitionContext';
 import RecognitionRuntime from '@/components/recognitions/RecognitionRuntime';
@@ -234,6 +235,7 @@ const AppLayout = ({ children }) => {
         previewTasks={returnedTaskAlertPreview}
         onBlockingChange={setIsReturnedTaskAlertBlocking}
       />
+      {canUseTaskManagement && <DeclaredTimeDialog />}
       <ExcessiveTaskAlertDialog
         userId={displayUser?.id}
         userName={displayUser?.name}

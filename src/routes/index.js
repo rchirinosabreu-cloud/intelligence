@@ -248,6 +248,7 @@ router.post('/tasks/:taskId/work-confirmation', taskController.confirmExcessiveT
 router.post('/tasks/:taskId/alert-interaction', taskController.taskAlertInteractionHandler);
 router.post('/tasks/:taskId/returned-reminder/snooze', taskController.snoozeReturnedTaskReminder);
 router.post('/tasks/:taskId/focus-extension', taskController.requestTaskFocusExtension);
+router.post('/tasks/:taskId/declared-time', guardTask, taskController.declareTaskTimeHandler);
 router.patch('/tasks/:taskId', guardTask, taskController.updateExistingTask);
 router.delete('/tasks/:taskId', guardTask, taskController.deleteExistingTask);
 router.post('/tasks/:taskId/toggle-follow', taskController.toggleFollow);

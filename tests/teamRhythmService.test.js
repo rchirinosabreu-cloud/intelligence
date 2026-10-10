@@ -47,6 +47,13 @@ test('a clock running at the same time as another one is not counted twice', () 
   assert.deepEqual(records.map((r) => [r.taskId, r.measuredMs, r.overlappedMs]), [['t1', 4.8 * H, 0], ['t2', 0, 4.8 * H], ['t3', 0, 4.8 * H]]);
 });
 
+test('time declared on closing counts as measured, is told apart, and a long one is not a forgotten clock', () => {
+  const tasks = [{ id: 't1', title: 'Post', completedAt: at('2026-10-09T20:00:00Z'), assigneeId: 'm-m', assignee: { id: 'm-m', name: 'Melissa' }, accumulatedWorkMs: 8 * H }];
+  const sessions = [{ taskId: 't1', workerId: 'm-m', isCollaborator: false, isOverlapping: false, closeReason: 'DECLARED', durationMs: 8 * H, cycle: { kind: 'INITIAL' } }];
+  const [record] = buildRhythmRecords({ tasks, sessions, members: [{ id: 'm-m', name: 'Melissa' }] });
+  assert.deepEqual([record.measuredMs, record.declaredMs, record.longestSessionMs], [8 * H, 8 * H, 0]);
+});
+
 test('the service reads one period, answers with people, types and the tasks behind every finding', async () => {
   const calls = [];
   const db = {
@@ -65,7 +72,7 @@ test('the service reads one period, answers with people, types and the tasks beh
   assert.equal(calls[0].where.status, 'REALIZADA');
   assert.equal(calls[0].where.completedAt.gte.toISOString(), '2026-09-09T15:00:00.000Z');
   assert.equal(out.period.days, 30);
-  assert.deepEqual(out.team, { closed: 2, measured: 2, coverage: 1 });
+  assert.deepEqual(out.team, { closed: 2, measured: 2, declared: 0, coverage: 1 });
   const heavy = out.people[0].findings.find((f) => f.kind === 'HEAVY_DAY');
   assert.ok(heavy);
   assert.deepEqual(heavy.taskIds.map((id) => out.tasks[id].title).sort(), ['[Producción] Video: A', '[Producción] Video: B']);

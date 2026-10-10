@@ -37,7 +37,7 @@ function PersonCard({ person, tasks }) {
         <TeamAvatar member={{ name: person.personName, avatarUrl: person.avatarUrl }} size={40} className="h-10 w-10 shrink-0" />
         <div className="min-w-0 flex-1">
           <h3 className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-50">{person.personName}</h3>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400">{person.measured} de {person.closed} tareas con tiempo medido · {formatDuration(person.measuredMs)}</p>
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">{person.measured} de {person.closed} tareas con tiempo medido{person.declared ? ` (${person.declared} ${person.declared === 1 ? 'declarada' : 'declaradas'})` : ''} · {formatDuration(person.measuredMs)}</p>
         </div>
         <span className="shrink-0 whitespace-nowrap text-sm font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{percent(person.coverage)}</span>
       </header>
@@ -147,7 +147,7 @@ export default function TeamRhythmPanel({ periodDays = 30, refreshKey = 0 }) {
               <h2 id="rhythm-title" className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Cuánto de lo cerrado está medido</h2>
             </div>
             <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
-              {data.team.measured} de {data.team.closed} tareas cerradas en {data.period.days} días tienen tiempo medido. Las demás pasaron a Realizada sin pasar por En proceso: no son rápidas, simplemente no se midieron.
+              {data.team.measured} de {data.team.closed} tareas cerradas en {data.period.days} días tienen tiempo medido{data.team.declared ? `, ${data.team.declared} de ellas con un tiempo que la persona declaró al cerrar` : ''}. Las demás pasaron a Realizada sin pasar por En proceso: no son rápidas, simplemente no se midieron.
             </p>
           </div>
           <span className="shrink-0 whitespace-nowrap text-3xl font-semibold tabular-nums text-zinc-950 dark:text-white">{percent(data.team.coverage)}</span>

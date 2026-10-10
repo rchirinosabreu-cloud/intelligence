@@ -42,10 +42,14 @@ export const buildRhythmRecords = ({ tasks = [], sessions = [], members = [] }) 
       // a la vez) repite el mismo tiempo: no se suma, se cuenta aparte.
       const rows = all.filter((row) => !row.isOverlapping);
       const durations = rows.map(sessionMs);
+      // Tiempo declarado al cerrar sin reloj (9 de octubre de 2026): cuenta como medido, pero se dice aparte y no
+      // es una sesión que alguien dejó corriendo.
+      const declaredMs = rows.filter((row) => row.closeReason === 'DECLARED').reduce((sum, row) => sum + sessionMs(row), 0);
       records.push({ ...base, personId: workerId, personName: names.get(workerId) || (workerId === task.assigneeId ? task.assignee?.name : null) || 'Sin nombre',
         measuredMs: durations.reduce((sum, ms) => sum + ms, 0),
+        declaredMs,
         reworkMs: rows.filter((row) => row.cycle?.kind && row.cycle.kind !== 'INITIAL').reduce((sum, row) => sum + sessionMs(row), 0),
-        longestSessionMs: Math.max(0, ...durations),
+        longestSessionMs: Math.max(0, ...rows.filter((row) => row.closeReason !== 'DECLARED').map(sessionMs)),
         overlappedMs: all.filter((row) => row.isOverlapping).reduce((sum, row) => sum + sessionMs(row), 0) });
     }
     // Quien la cerró sin cronómetro cuenta como cerrada sin medir; las tareas anteriores a las sesiones conservan
@@ -72,7 +76,7 @@ export const createTeamRhythmService = ({ db = prisma, now = () => new Date() } 
     const ids = tasks.map((task) => task.id);
     const sessions = ids.length ? await db.taskWorkSession.findMany({
       where: { taskId: { in: ids } },
-      select: { taskId: true, workerId: true, isCollaborator: true, isOverlapping: true, durationMs: true, startedAt: true, endedAt: true, cycle: { select: { kind: true } } }
+      select: { taskId: true, workerId: true, isCollaborator: true, isOverlapping: true, closeReason: true, durationMs: true, startedAt: true, endedAt: true, cycle: { select: { kind: true } } }
     }) : [];
     const workerIds = [...new Set([...sessions.map((s) => s.workerId), ...tasks.map((t) => t.assigneeId)].filter(Boolean))];
     const members = workerIds.length ? await db.teamMember.findMany({ where: { id: { in: workerIds } }, select: { id: true, name: true, avatarUrl: true } }) : [];
@@ -83,6 +87,7 @@ export const createTeamRhythmService = ({ db = prisma, now = () => new Date() } 
     const { types } = analysis;
     const closed = people.reduce((sum, person) => sum + person.closed, 0);
     const measured = people.reduce((sum, person) => sum + person.measured, 0);
+    const declared = people.reduce((sum, person) => sum + (person.declared || 0), 0);
     // Lo que respalda cada hallazgo, para que la pantalla y Bria nombren las tareas.
     const wanted = new Set(people.flatMap((person) => person.findings.flatMap((finding) => finding.taskIds)));
     const taskMap = {};
@@ -90,7 +95,7 @@ export const createTeamRhythmService = ({ db = prisma, now = () => new Date() } 
       if (!wanted.has(record.taskId) || taskMap[record.taskId]) continue;
       taskMap[record.taskId] = { title: record.title, workType: record.workType, day: record.completedDay, personName: record.personName, measuredMs: record.measuredMs };
     }
-    return { period: { days: period, from: from.toISOString(), to: to.toISOString() }, team: { closed, measured, coverage: closed ? measured / closed : 0 }, people, types, tasks: taskMap };
+    return { period: { days: period, from: from.toISOString(), to: to.toISOString() }, team: { closed, measured, declared, coverage: closed ? measured / closed : 0 }, people, types, tasks: taskMap };
   }
 });
 

@@ -125,7 +125,9 @@ const eventDescription = (event, task) => {
   const subject = event.subjectUser?.name;
   const title = task?.title || event.metadata?.taskTitle;
   const taskName = title ? `“${title}”` : 'una tarea';
-  const alertName = event.metadata?.kind === 'RETURNED' ? 'tarea devuelta' : 'más de 15 horas';
+  // Cada aviso dice el umbral con el que salió: 15 h hasta el 9 de octubre de 2026, 10 h desde entonces.
+  const hours = Number(event.metadata?.thresholdHours) || 15;
+  const alertName = event.metadata?.kind === 'RETURNED' ? 'tarea devuelta' : `más de ${hours} horas`;
   switch (event.eventType) {
     case 'TASK_CREATED': return `${actor} creó ${taskName}.`;
     case 'TASK_ASSIGNED': return `${taskName} fue asignada a ${subject || 'un miembro del equipo'}.`;
@@ -135,10 +137,10 @@ const eventDescription = (event, task) => {
     case 'RECOGNITION_GRANTED': return `${subject || actor} recibió el reconocimiento “${recognitionLabels[event.metadata?.kind] || 'Reconocimiento del equipo'}”.`;
     case 'TASK_ALERT_SHOWN': return event.metadata?.kind === 'RETURNED'
       ? `Se le mostró a ${subject || actor} un recordatorio para revisar ${taskName}, que lleva más de una hora devuelta.`
-      : `Se le mostró a ${subject || actor} un aviso porque ${taskName} superó las 15 horas de trabajo.`;
+      : `Se le mostró a ${subject || actor} un aviso porque ${taskName} superó las ${hours} horas de trabajo.`;
     case 'TASK_ALERT_REVIEWED': return `${actor} seleccionó “Revisar tarea” en el aviso de ${alertName} de ${taskName}.`;
     case 'TASK_ALERT_DISMISSED': return `${actor} cerró el aviso de ${alertName} de ${taskName}.`;
-    case 'TASK_EXCESSIVE_WORK_CONFIRMED': return `${actor} seleccionó “Sigo trabajando” en el aviso de más de 15 horas de ${taskName}.`;
+    case 'TASK_EXCESSIVE_WORK_CONFIRMED': return `${actor} seleccionó “Sigo trabajando” en el aviso de más de ${hours} horas de ${taskName}.`;
     case 'TASK_RETURNED_REMINDER_SNOOZED': return `${actor} seleccionó “Recordarme más tarde” en el aviso de tarea devuelta de ${taskName}.`;
     case 'SESSION_STARTED': return `${actor} inició sesión en la plataforma.`;
     case 'PLATFORM_MUTATION': return presentPlatformMutation(event.metadata, actor).description;

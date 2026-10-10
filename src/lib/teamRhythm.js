@@ -164,7 +164,9 @@ export const analyzeTeamRhythm = ({ tasks = [] } = {}) => {
         message: `${rework.length === 1 ? 'En' : `En ${rework.length} tareas el retrabajo pesa; en`} ${quote(top.title)}, ${share} después de una devolución.` });
     }
 
-    return { personId, personName, closed, measured: ok.length, coverage, measuredMs: ok.reduce((s, t) => s + t.measuredMs, 0), byType, findings };
+    // Cuántas de las medidas son estimaciones que la persona dio al cerrar sin reloj (9 de octubre de 2026).
+    const declared = ok.filter((t) => (t.declaredMs || 0) > 0 && t.declaredMs >= t.measuredMs / 2).length;
+    return { personId, personName, closed, measured: ok.length, declared, coverage, measuredMs: ok.reduce((s, t) => s + t.measuredMs, 0), byType, findings };
   }).sort((a, b) => a.personName.localeCompare(b.personName, 'es'));
 
   return { people, types };

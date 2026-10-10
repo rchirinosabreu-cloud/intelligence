@@ -58,6 +58,7 @@ import { readManagementFilters, writeManagementFilters } from '@/lib/managementF
 import ClientAvatar from "../../components/ui/ClientAvatar";
 import TaskSidePanel from './TaskSidePanel';
 import { triggerConfetti } from '@/utils/confetti';
+import { askDeclaredTimeIfNeeded } from '@/lib/declaredTime';
 import TaskTimerBadge from './TaskTimerBadge';
 import TaskLifecycleDialog from './TaskLifecycleDialog';
 import {
@@ -924,6 +925,8 @@ const NativeTasks = () => {
             // el disparo salía de la columna de la que venía.
             if (sourceColumnId !== 'realizado' && destinationColumnId === 'realizado') {
                 triggerConfetti(document.querySelector('[data-rfd-droppable-id="realizado"]'));
+                // Cerrada sin cronómetro por quien la hizo: el servidor pide preguntarle cuánto le tomó.
+                askDeclaredTimeIfNeeded(await response.json().catch(() => null));
             }
             // Ya confirmado por el servidor: el aviso de que aquí cada quien pone en marcha su reloj,
             // solo para quien está en el equipo de la tarea (es quien puede usar «Empezar mi reloj»).

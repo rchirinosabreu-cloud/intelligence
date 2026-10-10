@@ -23,7 +23,8 @@ test('a collaborator gets the 15-hour alert from their own sessions, only while 
   const alerts = buildCollaboratorTaskAlerts(rows, { now });
   assert.deepEqual(alerts.map((alert) => [alert.id, alert.elapsedMs, alert.isCollaboration]), [['working', 16 * H, true]]);
   assert.equal(buildCollaboratorTaskAlerts(rows, { now, confirmedTaskIds: new Set(['working']) }).length, 0);
-  assert.ok(EXCESSIVE_TASK_THRESHOLD_MS === 15 * H);
+  // Rodny, 9 de octubre de 2026: el aviso salta a las 10 horas (antes 15).
+  assert.ok(EXCESSIVE_TASK_THRESHOLD_MS === 10 * H);
 });
 
 test('returns only in-progress tasks assigned to the authenticated user at or above 15 hours', () => {

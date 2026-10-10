@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import useTaskAlertTrace from '@/hooks/useTaskAlertTrace';
+import { EXCESSIVE_TASK_THRESHOLD_HOURS } from '@/lib/taskWorkAlerts';
 
 const formatElapsed = (elapsedMs) => {
   const totalMinutes = Math.max(0, Math.floor(Number(elapsedMs || 0) / 60_000));
@@ -138,7 +139,7 @@ export default function ExcessiveTaskAlertDialog({ userId, userName, enabled = t
           {confirmationError && <p role="alert" className="text-xs font-medium text-destructive">{confirmationError}</p>}
           <div className="flex gap-2.5 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs leading-relaxed text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
             <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-            <p><strong>Referencia operativa:</strong> {tasks.length === 1 ? 'esta tarea superó' : 'estas tareas superaron'} las 15 horas registradas. Esto no es una evaluación de tu desempeño; es una señal para revisar el flujo de trabajo.</p>
+            <p><strong>Referencia operativa:</strong> {tasks.length === 1 ? 'esta tarea superó' : 'estas tareas superaron'} las {EXCESSIVE_TASK_THRESHOLD_HOURS} horas registradas. Esto no es una evaluación de tu desempeño; es una señal para revisar el flujo de trabajo.</p>
           </div>
         </div>
 
