@@ -41,7 +41,7 @@ test('the notice looks like the other tutorials and says what a commitment means
   const notice = readFileSync('src/components/tasks/FocusCommitmentNotice.jsx', 'utf8');
 
   assert.match(notice, /bg-gradient-to-br from-\[#00AC8A\] to-\[#009EB9\]/, 'same header as the timing tutorial');
-  assert.match(notice, /brainstudio-mascot-tip\.png/, 'with the mascot');
+  assert.match(notice, /BriaPortrait/, 'with the mascot');
   assert.match(notice, /overlayClassName="z-\[190\]"[\s\S]*?className="z-\[200\]/, 'and the same layer, above the board');
   assert.match(notice, /Tienes un compromiso\{time \? ` hasta las \$\{time\}` : ''\}/, 'the title carries the hour');
   assert.match(notice, /Es lo único que trabajas/, 'what it means');

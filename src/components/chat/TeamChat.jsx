@@ -70,6 +70,7 @@ export default function TeamChat({
   currentUser,
   blocked = false,
   onDockWidthChange,
+  triggerContainer,
   client: providedClient,
 }) {
   const client = useMemo(
@@ -876,19 +877,25 @@ export default function TeamChat({
       }),
     );
   };
-  if (blocked) return null;
+  if (blocked && !triggerContainer) return null;
   return createPortal(
     <>
-      {!shown && (
+      {(triggerContainer || !shown) && createPortal(
         <button
           ref={bubble}
           type="button"
-          aria-label={`Abrir chat${unread ? `, ${unread} mensajes sin leer` : ""}`}
-          className="fixed z-[49] flex h-14 w-14 touch-none items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
-          style={{ left: position.x, top: position.y }}
-          onPointerDown={(e) => beginDrag(e, "bubble")}
-          onPointerMove={moveDrag}
-          onPointerUp={endDrag}
+          aria-label={`${shown ? 'Cerrar' : 'Abrir'} chat${unread ? `, ${unread} mensajes sin leer` : ""}`}
+          title={shown ? 'Cerrar chat del equipo' : 'Abrir chat del equipo'}
+          aria-expanded={shown}
+          aria-controls="team-chat-panel"
+          disabled={blocked}
+          className={triggerContainer
+            ? "relative flex h-11 w-11 items-center justify-center rounded-full text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+            : "fixed z-[49] flex h-14 w-14 touch-none items-center justify-center rounded-full bg-primary text-primary-foreground shadow-md focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"}
+          style={triggerContainer ? undefined : { left: position.x, top: position.y }}
+          onPointerDown={triggerContainer ? undefined : (e) => beginDrag(e, "bubble")}
+          onPointerMove={triggerContainer ? undefined : moveDrag}
+          onPointerUp={triggerContainer ? undefined : endDrag}
           onPointerCancel={() => {
             drag.current = null;
             setDockTarget(false);
@@ -898,10 +905,11 @@ export default function TeamChat({
               skipClick.current = false;
               return;
             }
-            setOpen(true);
+            if (shown) close();
+            else setOpen(true);
           }}
           onKeyDown={(e) => {
-            if (e.altKey && e.key.startsWith("Arrow")) {
+            if (!triggerContainer && e.altKey && e.key.startsWith("Arrow")) {
               e.preventDefault();
               setPosition((p) =>
                 clampChatPosition(
@@ -928,13 +936,13 @@ export default function TeamChat({
             }
           }}
         >
-          <MessageCircle className="h-6 w-6" />
+          <MessageCircle className={triggerContainer ? 'h-4 w-4' : 'h-6 w-6'} />
           {unread > 0 && (
             <span className="absolute -right-1 -top-1 rounded-full border-2 border-background bg-primary px-1.5 text-[10px] text-primary-foreground">
               {unread > 99 ? "99+" : unread}
             </span>
           )}
-        </button>
+        </button>, triggerContainer || document.body
       )}
       {dockTarget && (
         <div className="pointer-events-none fixed bottom-4 right-2 top-20 z-[80] flex w-80 items-center justify-center rounded-xl border border-border bg-muted/90 text-sm font-medium">
@@ -943,6 +951,7 @@ export default function TeamChat({
       )}
       {shown && (
         <section
+          id="team-chat-panel"
           ref={pane}
           role={mobile ? "dialog" : "region"}
           aria-modal={mobile || undefined}

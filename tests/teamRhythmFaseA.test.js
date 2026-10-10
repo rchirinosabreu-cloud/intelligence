@@ -19,7 +19,7 @@ test('Ritmo shows the weekly reading first, then the load map, then coverage and
 
 test('the reading is a Bria surface: gradient header with the mascot, decisions with evidence, server-first toasts', () => {
   assert.match(reading, /brain-ai-header/);
-  assert.match(reading, /brainstudio-mascot-tip\.png/);
+  assert.match(reading, /BriaPortrait/);
   assert.match(reading, /\/api\/manager\/rhythm\/reading/);
   assert.match(reading, /method: 'POST'/);
   assert.match(reading, /data-weekly-reading-decisions/);
