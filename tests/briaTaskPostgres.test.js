@@ -13,9 +13,10 @@ test('PostgreSQL rejects stale/deleted confirmation before writes and durably pe
   try {
     await pool.query(await readFile(new URL('../scripts/sql/bria-conversations.sql', import.meta.url), 'utf8'));
     const repository = createBriaConversationRepository({ pool, workspace }), chat = await repository.create(actor);
-    await repository.append(actor, chat.id, 0, 'Borrador', { answer: 'Prioridad', taskDraft: { id: 'draft', status: 'DRAFT' }, quickReplies: ['Normal','Alta','Urgente'] });
+    // Desde la base común (10 de octubre de 2026) el borrador se guarda solo como `pendingAction`.
+    await repository.append(actor, chat.id, 0, 'Borrador', { answer: 'Prioridad', pendingAction: { id: 'draft', type: 'TASK_CREATE', status: 'DRAFT', draft: { id: 'draft', status: 'DRAFT' } }, taskDraft: { id: 'draft', status: 'DRAFT' }, quickReplies: ['Normal','Alta','Urgente'] });
     const saved = await repository.get(actor, chat.id);
-    assert.equal(saved.turns.at(-1).taskDraft.id, 'draft'); assert.deepEqual(saved.turns.at(-1).quickReplies, ['Normal','Alta','Urgente']);
+    assert.equal(saved.turns.at(-1).pendingAction.draft.id, 'draft'); assert.equal(saved.turns.at(-1).taskDraft, undefined); assert.deepEqual(saved.turns.at(-1).quickReplies, ['Normal','Alta','Urgente']);
     const write = async () => { calls++; return { answer: 'Creado' }; };
     await assert.rejects(() => repository.append(actor, chat.id, 0, 'Confirmo', write), { status: 409 });
     await assert.rejects(() => repository.append({ ...actor, ref: 'other' }, chat.id, 1, 'Confirmo', write), { status: 404 });

@@ -1,5 +1,6 @@
 import { canCreateBriaTask } from './briaTaskDraftService.js';
-import { taskDraftReply, taskDraftStage } from '../lib/briaTaskDraft.js';
+import { taskDraftStage } from '../lib/briaTaskDraft.js';
+import { wrapLegacyAction, actionReply } from '../lib/briaActions.js';
 export const createBriaTaskTools = service => service ? [{
   name: 'preparar_pendiente',
   description: 'Prepara o ajusta un borrador de pendiente usando nombres vigentes de cliente y responsable. NO crea una tarea: pide materiales, prioridad y confirmación en el chat. Solo ante una solicitud explícita de crear pendiente o una continuación de su borrador.',
@@ -15,8 +16,10 @@ export const createBriaTaskTools = service => service ? [{
     nuevo: { type: 'boolean', description: 'Solo si la persona pide otro pendiente distinto.' }
   }, additionalProperties: false },
   async run(args, ctx) {
-    const draft = await service.prepare({ user: ctx.user, args, question: ctx.question, previous: ctx.taskDraft, attachments: ctx.taskAttachments, evidence: ctx.taskEvidence });
-    const reply = taskDraftReply(draft);
-    return { data: { stage: taskDraftStage(draft), draft, message: reply.answer, created: false }, taskDraft: draft, taskReply: reply, quickReplies: reply.quickReplies };
+    const previous = ctx.pendingAction?.type === 'TASK_CREATE' ? ctx.pendingAction.draft : ctx.taskDraft;
+    const draft = await service.prepare({ user: ctx.user, args, question: ctx.question, previous, attachments: ctx.taskAttachments, evidence: ctx.taskEvidence });
+    const action = wrapLegacyAction('TASK_CREATE', draft);
+    const reply = actionReply(action);
+    return { data: { stage: taskDraftStage(draft), draft, message: reply.answer, created: false }, pendingAction: action, actionReply: reply, quickReplies: reply.quickReplies };
   }
 }] : [];

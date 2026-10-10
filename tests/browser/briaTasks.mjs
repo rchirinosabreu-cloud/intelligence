@@ -18,9 +18,9 @@ const repository = {
 };
 const assistant = { ask: async request => {
   let called = false;
-  return runAssistant({ ...request, tools: createBriaTaskTools(taskDrafts), today: '2026-10-08', person: { name: 'Kamila' }, context: { taskDraft: request.taskDraft, taskAttachments: request.taskAttachments, taskEvidence: request.taskEvidence }, ai: { generate: async () => {
+  return runAssistant({ ...request, tools: createBriaTaskTools(taskDrafts), today: '2026-10-08', person: { name: 'Kamila' }, context: { pendingAction: request.pendingAction, taskAttachments: request.taskAttachments, taskEvidence: request.taskEvidence }, ai: { generate: async () => {
     if (called) return { text: 'El borrador está preparado.' }; called = true;
-    const args = request.taskDraft?.client ? { contexto: 'Preparar tres piezas del lanzamiento; adaptar el diseño al brief actualizado.', prioridad: 'urgente' } : { titulo: 'Preparar piezas del lanzamiento', contexto: 'Preparar tres piezas para revisión interna.', cliente: 'Empresa demo', responsable: 'Lucía', fecha: 'mañana' };
+    const args = request.pendingAction?.draft?.client ? { contexto: 'Preparar tres piezas del lanzamiento; adaptar el diseño al brief actualizado.', prioridad: 'urgente' } : { titulo: 'Preparar piezas del lanzamiento', contexto: 'Preparar tres piezas para revisión interna.', cliente: 'Empresa demo', responsable: 'Lucía', fecha: 'mañana' };
     return { functionCalls: [{ id: 'prepare', name: 'preparar_pendiente', args }], output: [{ type: 'function_call', call_id: 'prepare', name: 'preparar_pendiente', arguments: JSON.stringify(args) }] };
   } } });
 } };

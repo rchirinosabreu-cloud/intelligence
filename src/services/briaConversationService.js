@@ -2,11 +2,14 @@ import { normalizeQuestion, MAX_QUESTION_LENGTH } from '../lib/briaAssistant.js'
 import { knowledgeError } from '../lib/briaKnowledge.js';
 import { validateAttachmentSelection, BRIA_AUDIO_MAX_BYTES } from '../lib/briaAttachments.js';
 import { readBriaAttachment, attachmentModelPart } from './briaAttachmentReader.js';
-import { taskDraftReply, taskDraftStage, taskCreationIntent, isTaskConfirmation, isTaskCancellation, materialDeclined } from '../lib/briaTaskDraft.js';
-import { dispatchReply, dispatchStage, isDispatchConfirmation, isDispatchCancellation, dispatchResultText } from '../lib/briaDispatchDraft.js';
-import { deleteReply, deleteStage, isDeleteConfirmation, isDeleteCancellation, deleteResultText, DELETE_REASON_OPTIONS } from '../lib/briaDeleteDraft.js';
-import { actionReply, actionStage, isActionConfirmation, isActionCancellation, pendingActionOf } from '../lib/briaActions.js';
-export const createBriaConversationService = ({ repository, resolveActor, assistant, ai, taskDrafts, dispatchDrafts, deleteDrafts, actions, prepareAttachment = readBriaAttachment, authorizeTurn = async () => true }) => {
+import { taskCreationIntent, isTaskConfirmation, materialDeclined } from '../lib/briaTaskDraft.js';
+import { DELETE_REASON_OPTIONS } from '../lib/briaDeleteDraft.js';
+import { actionReply, actionStage, confirmsAction, cancelsAction, alreadyDoneReply, pendingActionOf, wrapLegacyAction, isLegacyAction, LEGACY_ACTIONS } from '../lib/briaActions.js';
+import { createBriaActionService } from './briaActionService.js';
+// Una sola base (10 de octubre de 2026): crear pendiente, despachar y eliminar se resuelven aquí como cualquier otra
+// acción. Sin `actions` propio, la base se arma con los tres servicios que lleguen (las vistas de prueba y de muestra).
+const LEGACY_TOOL = { TASK_CREATE: 'preparar_pendiente', DISPATCH: 'preparar_despacho', TASK_DELETE: 'preparar_eliminacion' };
+export const createBriaConversationService = ({ repository, resolveActor, assistant, ai, taskDrafts, dispatchDrafts, deleteDrafts, actions = createBriaActionService({ taskDrafts, dispatchDrafts, deleteDrafts }), prepareAttachment = readBriaAttachment, authorizeTurn = async () => true }) => {
   const pending = new Set();
   const authorizeInput = async user => { const actor = await resolveActor(user); if (!['ADMIN', 'PROJECT_MANAGER'].includes(actor.role)) throw knowledgeError('Solo Admin y Project Manager pueden adjuntar o dictar.', 403); return actor; };
   const permitted = async (user, turn) => !turn.permissionChanged && await authorizeTurn(user, turn);
@@ -64,106 +67,56 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         let availableText = 60000;
         const attachments = relevant.map(file => { const content = String(file.text || '').slice(0, availableText); availableText -= content.length; return { id: file.id, name: file.name, text: content, status: file.status, warning: content.length < String(file.text || '').length ? `${file.warning || ''} Contexto parcial del adjunto en esta respuesta.` : file.warning, modelPart: attachmentModelPart(file) }; });
         const revalidateConversation = async () => { if (!await repository.get(await resolveActor(user), id)) throw knowledgeError('La conversación fue eliminada.', 404); };
-        let taskDraft = [...chat.turns].reverse().find(turn => turn.role === 'assistant' && turn.taskDraft)?.taskDraft;
-        if (taskDrafts && (!taskDraft || ['CREATED','CANCELLED'].includes(taskDraft.status)) && taskCreationIntent(text) && !isTaskConfirmation(text)) {
-          taskDraft = await taskDrafts.prepare({ user, question: text, attachments: prepared });
-        }
-        const stage = taskDraftStage(taskDraft);
-        const revalidateTask = async () => {
-          await resolveActor(user);
-          if (!await authorizeTurn(user, { taskDraft })) throw knowledgeError('Tu acceso al pendiente cambió.', 403);
-        };
-        const taskResult = draft => ({ ...taskDraftReply(draft), sources: [], failures: [], toolsUsed: ['preparar_pendiente'], taskDraft: draft });
-        const dispatchDraft = [...chat.turns].reverse().find(turn => turn.role === 'assistant' && turn.dispatchDraft)?.dispatchDraft;
-        const dispatchState = dispatchStage(dispatchDraft);
-        const revalidateDispatch = async () => {
-          await resolveActor(user);
-          if (!await authorizeTurn(user, { dispatchDraft })) throw knowledgeError('Tu acceso para despachar cambió.', 403);
-        };
-        // Eliminar pendientes (10 de octubre de 2026): mismo contrato que el despacho. Bria prepara; solo la frase
-        // «Eliminar pendiente» de la persona, sobre un resumen guardado y listo, elimina, dentro de append.
-        const deleteDraft = [...chat.turns].reverse().find(turn => turn.role === 'assistant' && turn.deleteDraft)?.deleteDraft;
-        const deleteState = deleteStage(deleteDraft);
-        const revalidateDelete = async () => {
-          await resolveActor(user);
-          if (!await authorizeTurn(user, { deleteDraft })) throw knowledgeError('Tu acceso para eliminar cambió.', 403);
-        };
-        const deleteResult = draft => ({ ...deleteReply(draft), sources: [], failures: [], toolsUsed: ['preparar_eliminacion'], deleteDraft: draft });
         // Acciones de Bria en la plataforma (10 de octubre de 2026): solo la de la respuesta inmediatamente anterior se
         // puede confirmar o cancelar, y se ejecuta dentro de append, con la conversación bloqueada y su revisión comprobada.
-        const pendingAction = pendingActionOf(chat.turns);
+        // Crear pendiente, despachar y eliminar viajan por esta misma base: conservan sus frases («Crear pendiente»,
+        // «Despachar a producción», «Eliminar pendiente»), sus atajos y su borrador, y además aceptan «Confirmar».
+        let pendingAction = pendingActionOf(chat.turns);
+        const open = action => action && !['DONE', 'CANCELLED'].includes(action.status);
+        // «Crear un pendiente» arranca el borrador sin pasar por el modelo, como siempre.
+        if (taskDrafts && !(open(pendingAction) && pendingAction.type === 'TASK_CREATE') && taskCreationIntent(text) && !isTaskConfirmation(text)) {
+          pendingAction = wrapLegacyAction('TASK_CREATE', await taskDrafts.prepare({ user, question: text, attachments: prepared }));
+        }
         const actionState = actionStage(pendingAction);
+        const legacyStage = isLegacyAction(pendingAction) && open(pendingAction) ? LEGACY_ACTIONS[pendingAction.type].stage(pendingAction.draft) : null;
         const revalidateAction = async () => {
           await resolveActor(user);
           if (!await authorizeTurn(user, { pendingAction })) throw knowledgeError('Tu acceso para esta acción cambió.', 403);
         };
+        const closeAction = (action, status) => ({ ...action, status, ...(action.draft ? { draft: { ...action.draft, status } } : {}) });
+        const prepared_ = action => ({ ...actionReply(action), sources: [], failures: [], toolsUsed: [LEGACY_TOOL[action.type] || `accion:${action.type}`], pendingAction: action });
         let result;
-        if (actions && pendingAction && isActionCancellation(text) && !['DONE', 'CANCELLED'].includes(actionState)) {
+        if (pendingAction && cancelsAction(pendingAction, text) && open(pendingAction)) {
           await revalidateAction();
-          const cancelled = { ...pendingAction, status: 'CANCELLED' };
+          const cancelled = closeAction(pendingAction, 'CANCELLED');
           result = { ...actionReply(cancelled), sources: [], failures: [], toolsUsed: [], pendingAction: cancelled };
-        } else if (actions && actionState === 'READY' && isActionConfirmation(text) && !files.length) {
+        } else if (actionState === 'DONE' && confirmsAction(pendingAction, text)) {
           await revalidateAction();
+          result = { answer: alreadyDoneReply(pendingAction), sources: pendingAction.type === 'TASK_CREATE' && pendingAction.draft?.taskId ? [{ kind: 'tarea', id: pendingAction.draft.taskId }] : [], failures: [], pendingAction };
+        } else if (actionState === 'READY' && confirmsAction(pendingAction, text) && !files.length) {
+          await revalidateAction();
+          // La escritura corre dentro de append, después del bloqueo de la conversación y de comprobar su revisión.
           result = async () => {
             await revalidateAction();
-            const outcome = await actions.execute({ user, action: pendingAction, revalidate: revalidateAction, session });
-            const done = { ...pendingAction, status: 'DONE', result: outcome.text };
-            return { answer: outcome.text, sources: outcome.sources || [], failures: [], toolsUsed: [`accion:${pendingAction.type}`], pendingAction: done };
+            const outcome = await actions.execute({ user, action: pendingAction, revalidate: revalidateAction, session, loadAttachment: async fileId => repository.attachment(await resolveActor(user), id, fileId) });
+            const done = { ...pendingAction, status: 'DONE', result: outcome.text, ...(outcome.patch || {}) };
+            return { answer: outcome.text, sources: outcome.sources || [], failures: [], toolsUsed: outcome.toolsUsed || [`accion:${pendingAction.type}`], pendingAction: done };
           };
-        } else if (deleteDrafts && deleteDraft && isDeleteCancellation(text) && !['DONE', 'CANCELLED'].includes(deleteState)) {
-          await revalidateDelete();
-          result = deleteResult({ ...deleteDraft, status: 'CANCELLED' });
-        } else if (deleteDrafts && deleteState === 'DONE' && isDeleteConfirmation(text)) {
-          await revalidateDelete();
-          result = { answer: `Esa eliminación ya se hizo.\n\n${deleteResultText(deleteDraft.results)}`, sources: [], failures: [], deleteDraft };
-        } else if (deleteDrafts && deleteState === 'READY' && isDeleteConfirmation(text) && !files.length) {
-          await revalidateDelete();
-          result = async () => {
-            await revalidateDelete();
-            const receipt = await deleteDrafts.createConfirmedDelete({ user, draft: deleteDraft, question: text, revalidate: revalidateDelete });
-            return { answer: deleteResultText(receipt.results), sources: [], failures: [], toolsUsed: ['eliminar_pendiente'], deleteDraft: { ...deleteDraft, status: 'DONE', results: receipt.results } };
-          };
-        } else if (deleteDrafts && deleteState === 'REASON' && DELETE_REASON_OPTIONS.some(option => option.toLowerCase() === text.toLowerCase())) {
-          await revalidateDelete();
-          result = deleteResult(await deleteDrafts.prepare({ user, previous: deleteDraft, question: text, args: { tareas: [], motivo: text } }));
-        } else if (dispatchDrafts && dispatchDraft && isDispatchCancellation(text) && !['DONE', 'CANCELLED'].includes(dispatchState)) {
-          await revalidateDispatch();
-          const cancelled = { ...dispatchDraft, status: 'CANCELLED' };
-          result = { ...dispatchReply(cancelled), sources: [], failures: [], toolsUsed: ['preparar_despacho'], dispatchDraft: cancelled };
-        } else if (dispatchDrafts && dispatchState === 'DONE' && isDispatchConfirmation(text)) {
-          await revalidateDispatch();
-          result = { answer: `Ese despacho ya se hizo.\n\n${dispatchResultText(dispatchDraft.results)}`, sources: [], failures: [], dispatchDraft };
-        } else if (dispatchDrafts && dispatchState === 'READY' && isDispatchConfirmation(text) && !files.length) {
-          await revalidateDispatch();
-          // Igual que los pendientes: se despacha dentro de append, con la conversación bloqueada y su revisión comprobada.
-          result = async () => {
-            await revalidateDispatch();
-            const receipt = await dispatchDrafts.createConfirmedDispatch({ user, draft: dispatchDraft, question: text, revalidate: revalidateDispatch });
-            const done = { ...dispatchDraft, status: 'DONE', results: receipt.results };
-            return { answer: dispatchResultText(receipt.results), sources: receipt.results.filter(row => row.taskId).map(row => ({ kind: 'tarea', id: row.taskId })), failures: [], toolsUsed: ['despachar_a_produccion'], dispatchDraft: done };
-          };
-        } else if (taskDrafts && taskDraft && isTaskCancellation(text) && !['CREATED','CANCELLED'].includes(stage)) {
-          await revalidateTask(); result = taskResult({ ...taskDraft, status: 'CANCELLED' });
-        } else if (taskDrafts && stage === 'CREATED' && isTaskConfirmation(text)) {
-          await revalidateTask(); result = { answer: `Este pendiente ya está creado. [Abrir en Gestión](/gestion?taskId=${encodeURIComponent(taskDraft.taskId)})`, taskDraft, sources: [{ kind: 'tarea', id: taskDraft.taskId }], failures: [] };
-        } else if (taskDrafts && stage === 'READY' && isTaskConfirmation(text) && !files.length) {
-          await revalidateTask();
-          // Run the write inside append, after its owned parent lock and revision check.
-          result = async () => {
-            await revalidateTask();
-            const receipt = await taskDrafts.createConfirmedTask({ user, draft: taskDraft, question: text, revalidate: revalidateTask, loadAttachment: async fileId => repository.attachment(await resolveActor(user), id, fileId) });
-            return { answer: `${receipt.alreadyCreated ? 'El pendiente ya estaba creado' : 'Pendiente creado'} para ${taskDraft.assignee.name}. Guardé el contexto como comentario${taskDraft.files?.length ? ' y los archivos como insumos' : ''}.\n\n[Abrir en Gestión](/gestion?taskId=${encodeURIComponent(receipt.taskId)})`, sources: [{ kind: 'tarea', id: receipt.taskId }], failures: [], toolsUsed: ['crear_pendiente'], taskDraft: { ...taskDraft, status: 'CREATED', taskId: receipt.taskId } };
-          };
-        } else if (taskDrafts && taskDraft && !['CREATED','CANCELLED'].includes(stage) && ((stage === 'PRIORITY' && /^(normal|alta|urgente)$/i.test(text)) || (stage === 'DATE' && /^(hoy|mañana|pasado mañana)$/i.test(text)) || (stage === 'MATERIAL' && materialDeclined(text, stage)))) {
-          await revalidateTask(); result = taskResult(await taskDrafts.prepare({ user, previous: taskDraft, question: text, attachments: prepared }));
+        } else if (taskDrafts && legacyStage && pendingAction.type === 'TASK_CREATE' && ((legacyStage === 'PRIORITY' && /^(normal|alta|urgente)$/i.test(text)) || (legacyStage === 'DATE' && /^(hoy|mañana|pasado mañana)$/i.test(text)) || (legacyStage === 'MATERIAL' && materialDeclined(text, legacyStage)))) {
+          // Los botones del borrador se responden sin pasar por el modelo.
+          await revalidateAction();
+          result = prepared_(wrapLegacyAction('TASK_CREATE', await taskDrafts.prepare({ user, previous: pendingAction.draft, question: text, attachments: prepared })));
+        } else if (deleteDrafts && legacyStage === 'REASON' && pendingAction.type === 'TASK_DELETE' && DELETE_REASON_OPTIONS.some(option => option.toLowerCase() === text.toLowerCase())) {
+          await revalidateAction();
+          result = prepared_(wrapLegacyAction('TASK_DELETE', await deleteDrafts.prepare({ user, previous: pendingAction.draft, question: text, args: { tareas: [], motivo: text } }), { title: pendingAction.title }));
         } else {
-          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, taskDraft, dispatchDraft, deleteDraft, pendingAction: ['MISSING', 'READY'].includes(actionState) ? pendingAction : null, session, taskAttachments: prepared, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
-          if (!result.taskDraft && taskDraft) result.taskDraft = taskDraft;
-          if (!result.dispatchDraft && dispatchDraft) result.dispatchDraft = dispatchDraft;
-          if (!result.deleteDraft && deleteDraft) result.deleteDraft = deleteDraft;
+          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, pendingAction: open(pendingAction) ? pendingAction : null, session, taskAttachments: prepared, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
+          // Un borrador de pendiente, despacho o eliminación sobrevive a una pregunta suelta, como siempre; las demás
+          // acciones solo valen sobre la respuesta inmediatamente anterior.
+          if (!result.pendingAction && open(pendingAction) && isLegacyAction(pendingAction)) result.pendingAction = pendingAction;
         }
         const fresh = await resolveActor(user);
-        if (!(await Promise.all([...chat.turns.filter(turn => turn.role === 'assistant'), { role: 'assistant', ...(typeof result === 'function' ? { taskDraft, dispatchDraft, deleteDraft, pendingAction } : result) }].map(turn => authorizeTurn(user, turn)))).every(Boolean)) throw knowledgeError('Tu acceso a las fuentes cambió durante la consulta.', 403);
+        if (!(await Promise.all([...chat.turns.filter(turn => turn.role === 'assistant'), { role: 'assistant', ...(typeof result === 'function' ? { pendingAction } : result) }].map(turn => authorizeTurn(user, turn)))).every(Boolean)) throw knowledgeError('Tu acceso a las fuentes cambió durante la consulta.', 403);
         const saved = await repository.append(fresh, id, chat.revision, text, result, prepared);
         return sanitize(user, saved);
       } finally { pending.delete(key); }
