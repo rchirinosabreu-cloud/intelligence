@@ -29,7 +29,7 @@ test('returned-task popup uses the approved reminder copy and offers review or s
   assert.match(source, /previewReturnedAlert=0/);
   assert.doesNotMatch(source, /pospone este aviso/);
   assert.match(source, /from-\[#00AC8A\].*to-\[#009EB9\]/s);
-  assert.match(source, /brainstudio-mascot-tip\.png/);
+  assert.match(source, /BriaPortrait/);
   assert.match(source, /onBlockingChange/);
   assert.match(source, /isLoading \|\| isOpen \|\| hasPendingDialog/);
   assert.match(source, /previewTasks/);

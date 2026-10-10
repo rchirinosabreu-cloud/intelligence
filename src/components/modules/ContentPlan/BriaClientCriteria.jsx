@@ -1,3 +1,4 @@
+import BriaPortrait from '@/components/bria/BriaPortrait';
 import Select from '@/components/ui/Select';
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import axios from 'axios';
@@ -105,7 +106,7 @@ export default function BriaClientCriteria({ planId, onChanged }) {
       <DialogContent overlayClassName="z-[70] motion-reduce:animate-none" className="z-[71] block gap-0 rounded-2xl border-zinc-200 bg-white p-0 text-zinc-900 motion-reduce:animate-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100 sm:max-w-2xl">
         <div data-bria-header className="brain-ai-header px-[24px] py-[24px] pr-[56px] text-white">
           <DialogHeader className="flex-row items-center gap-[12px] space-y-0 text-left">
-            <span className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-xl bg-white dark:bg-white"><img src="/brainstudio-mascot-tip.png" alt="" className="h-[40px] w-[40px] object-contain" /></span>
+            <span className="flex h-[44px] w-[44px] shrink-0 items-center justify-center rounded-xl bg-white dark:bg-white"><BriaPortrait  alt="" className="h-[40px] w-[40px] object-contain" /></span>
             <div className="min-w-0 space-y-2 break-words">
               <DialogTitle className="leading-snug text-white">{form ? proposing ? 'Proponer un criterio' : actions[form.action][0] : 'Lo que Bria debe recordar'}</DialogTitle>
               <DialogDescription className="text-white/95">{data?.clientName || 'Criterios del cliente'} · memoria editorial validada</DialogDescription>

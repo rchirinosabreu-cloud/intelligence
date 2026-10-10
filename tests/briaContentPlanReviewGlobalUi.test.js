@@ -18,7 +18,7 @@ test('content-plan review API exposes shared read, rerun and finding lifecycle r
 test('shared Bria panel uses the AI gradient and navigates findings three cards at a time', async () => {
   const panel = await read('src/components/modules/ContentPlan/BriaContentPlanReview.jsx');
 
-  assert.match(panel, /brainstudio-mascot-tip\.png/);
+  assert.match(panel, /BriaPortrait/);
   assert.match(panel, /aria-label="Revisión de Bria"/);
   assert.match(panel, /h-10 w-10 object-contain/);
   assert.doesNotMatch(panel, /absolute -bottom-3 right-3 h-24 w-24/);
@@ -59,7 +59,7 @@ test('an existing Bria review exposes rerun as a compact icon button with an acc
 test('Bria header keeps compact controls aligned and the disclosure action at the far right', async () => {
   const panel = await read('src/components/modules/ContentPlan/BriaContentPlanReview.jsx');
 
-  assert.match(panel, /rounded-2xl bg-white[\s\S]*brainstudio-mascot-tip\.png/);
+  assert.match(panel, /rounded-2xl bg-white[\s\S]*BriaPortrait/);
   assert.match(panel, /\{result\.review\.score \?\? 0\}\/100/);
   assert.doesNotMatch(panel, />de 100</);
   assert.match(panel, /aria-label="Revisar nuevamente"[\s\S]*aria-label=\{isExpanded \? 'Cerrar' : 'Ver más'\}/);

@@ -1,3 +1,4 @@
+import BriaPortrait from '@/components/bria/BriaPortrait';
 import React, { useRef } from 'react';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -19,7 +20,7 @@ export default function WelcomeDialog({ user, open, onOpenChange, returnFocusRef
       <div className="brain-ai-header relative shrink-0 px-5 py-5 pr-14 text-white sm:px-6 sm:pr-14">
         <DialogHeader className="flex-row items-center gap-3 space-y-0 text-left">
           <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white dark:bg-white" aria-hidden="true">
-            <img src="/brainstudio-mascot-tip.png" alt="" className="h-11 w-11 object-contain" />
+            <BriaPortrait  alt="" className="h-11 w-11 object-contain" />
           </span>
           <div className="min-w-0 space-y-1.5">
             <DialogTitle ref={titleRef} tabIndex={-1} className="text-lg leading-6 text-white outline-none">¡Qué bueno tenerte aquí, {welcomeName(user?.name)}!</DialogTitle>

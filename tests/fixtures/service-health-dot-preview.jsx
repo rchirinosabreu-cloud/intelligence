@@ -2,12 +2,12 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
-import ServiceHealthDot from '@/components/layout/ServiceHealthDot';
+import ServiceHealthIcon from '@/components/layout/ServiceHealthIcon';
 import { Bell, Moon } from '@/components/ui/icons';
 import { getNotificationDisplayParts } from '@/utils/notificationUtils';
 import '@/index.css';
 
-// Muestra local del punto del semáforo en la barra superior y de sus avisos (5 de octubre de 2026).
+// Muestra local del icono de Salud Operativa y de sus avisos (10 de octubre de 2026).
 // Cada barra consulta un resumen distinto; nada toca un servidor. `?dark` para el modo oscuro.
 const dark = new URLSearchParams(location.search).has('dark');
 document.documentElement.classList.toggle('dark', dark);
@@ -27,7 +27,7 @@ const Bar = ({ light }) => {
       <div className="flex h-16 items-center justify-between border-b border-zinc-200 bg-white/50 px-6 backdrop-blur-md dark:border-white/5 dark:bg-zinc-950/50">
         <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">{light === 'GREEN' ? 'Todo bien' : light === 'YELLOW' ? 'Con problemas' : 'Caído'}</span>
         <div className="flex items-center gap-4 text-zinc-600 dark:text-zinc-300">
-          <ServiceHealthDot isAdmin />
+          <a href="/salud-operativa" className="flex items-center gap-3 text-sm"><ServiceHealthIcon isAdmin />Salud Operativa</a>
           <span className="flex h-11 w-11 items-center justify-center"><Moon className="h-4 w-4" /></span>
           <span className="flex h-11 w-11 items-center justify-center"><Bell className="h-4 w-4" /></span>
           <span className="h-8 w-8 rounded-full bg-zinc-200 dark:bg-zinc-800" />

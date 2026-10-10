@@ -1,3 +1,4 @@
+import BriaPortrait from '@/components/bria/BriaPortrait';
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
@@ -27,7 +28,7 @@ function DecisionAction({ action }) {
     return <Link to={`/gestion?taskId=${encodeURIComponent(action.taskId)}`} className={button} data-reading-action={action.kind}>{label}<ArrowRight className="h-3.5 w-3.5" /></Link>;
   }
   if (action.suggestedMessage) {
-    return <button type="button" onClick={() => askBria(action.suggestedMessage)} className={button} data-reading-action={action.kind} title="Deja el mensaje escrito en el chat de Bria para que lo revises y lo envíes"><img src="/brainstudio-mascot-tip.png" alt="" className="h-4 w-4 object-contain" />{label}</button>;
+    return <button type="button" onClick={() => askBria(action.suggestedMessage)} className={button} data-reading-action={action.kind} title="Deja el mensaje escrito en el chat de Bria para que lo revises y lo envíes"><BriaPortrait  alt="" className="h-4 w-4 object-contain" />{label}</button>;
   }
   return null;
 }
@@ -72,7 +73,7 @@ export default function WeeklyReadingCard({ refreshKey = 0 }) {
   return (
     <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950" aria-labelledby="weekly-reading-title" data-weekly-reading>
       <div className="brain-ai-header flex items-center gap-3 px-5 py-4 text-white">
-        <img src="/brainstudio-mascot-tip.png" alt="" className="h-9 w-9 shrink-0 object-contain" />
+        <BriaPortrait  alt="" className="h-9 w-9 shrink-0 object-contain" />
         <div className="min-w-0 flex-1">
           <h2 id="weekly-reading-title" className="text-sm font-semibold">Lectura de la semana</h2>
           <p className="truncate text-xs text-white/85">

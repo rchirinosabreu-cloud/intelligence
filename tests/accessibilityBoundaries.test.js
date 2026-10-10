@@ -4,11 +4,13 @@ import { readFile } from 'node:fs/promises';
 
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 
-test('authenticated header icon controls have accessible names and touch targets', async () => {
+test('authenticated header and sidebar icon controls have accessible names and touch targets', async () => {
   const source = await read('src/components/layout/AppLayout.jsx');
+  const sidebar = await read('src/components/layout/Sidebar.jsx');
 
   assert.match(source, /aria-label="Buscar en Brainstudio"/);
-  assert.match(source, /aria-label="Cambiar tema"/);
+  assert.match(sidebar, /aria-label="Cambiar tema"/);
+  assert.match(sidebar, /h-11 w-11/);
   assert.match(source, /aria-label="Abrir notificaciones"/);
   assert.doesNotMatch(source, /aria-label="Abrir menú de cuenta"/, 'the account menu moved to the sidebar profile block');
   assert.match(source, /group-focus-within\/item:opacity-100/);

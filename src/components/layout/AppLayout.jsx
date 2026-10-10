@@ -2,11 +2,9 @@ import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { RouteErrorBoundary } from '@/components/errors/ApplicationErrorBoundary';
 import TeamChat from '@/components/chat/TeamChat';
 import Sidebar from './Sidebar';
-import ServiceHealthDot from './ServiceHealthDot';
 import BriaAssistant from '@/components/bria/BriaAssistant';
-import { Menu, Bell, Search, Sun, Moon, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye, Clock, Users, Activity } from '@/components/ui/icons';
+import { Menu, Bell, Search, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye, Clock, Users, Activity } from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
-import { useTheme } from '@/context/ThemeContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
@@ -36,6 +34,7 @@ const AppLayout = ({ children }) => {
     return next;
   });
   const [chatDockWidth, setChatDockWidth] = useState(0);
+  const [chatTriggerContainer, setChatTriggerContainer] = useState(null);
   const [briaDockWidth, setBriaDockWidth] = useState(0);
   const onBriaOpenChange = useCallback(open => {
     if (open) { setIsSidebarCollapsed(true); setIsSidebarOpen(false); }
@@ -44,7 +43,6 @@ const AppLayout = ({ children }) => {
   const [isReturnedTaskAlertBlocking, setIsReturnedTaskAlertBlocking] = useState(true);
   const [isOnboardingBlocking, setIsOnboardingBlocking] = useState(true);
   const { currentUser } = useAuth();
-  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const queryClient = useQueryClient();
@@ -283,17 +281,7 @@ const AppLayout = ({ children }) => {
 
           <div className="flex items-center gap-2 lg:gap-4">
             <BriaAssistant key={currentUser?.id} currentUser={currentUser} onDockWidthChange={setBriaDockWidth} onOpenChange={onBriaOpenChange} />
-            <ServiceHealthDot isAdmin={currentUser?.role === 'ADMIN'} />
-            <Button
-                variant="ghost"
-                size="icon"
-                onClick={toggleTheme}
-                className="rounded-full h-11 w-11"
-                aria-label="Cambiar tema"
-            >
-                {theme === 'dark' ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-            </Button>
-
+            <div ref={setChatTriggerContainer} data-team-chat-header className="flex h-11 w-11 shrink-0 items-center justify-center" />
             <DropdownMenu open={isNotificationsOpen} onOpenChange={async (open) => {
                 setIsNotificationsOpen(open);
                 if (open) {
@@ -512,7 +500,7 @@ const AppLayout = ({ children }) => {
           </RouteErrorBoundary>
         </div>
       </main>
-      {currentUser?.id && <TeamChat key={currentUser.id} currentUser={displayUser} onDockWidthChange={setChatDockWidth}
+      {currentUser?.id && <TeamChat key={currentUser.id} currentUser={displayUser} onDockWidthChange={setChatDockWidth} triggerContainer={chatTriggerContainer}
         blocked={isSidebarOpen || isNotificationsOpen || isOnboardingBlocking || isReturnedTaskAlertBlocking} />}
     </div>
     </OnboardingProvider>

@@ -38,15 +38,17 @@ test('both themes are covered', () => {
 });
 
 // Avisos y punto en la barra (Rodny, 5 de octubre de 2026).
-test('the header dot is for administrators, uses the status tokens and leads to the board', () => {
-  const dot = readFileSync(new URL('../src/components/layout/ServiceHealthDot.jsx', import.meta.url), 'utf8');
+test('service status lives only in the admin-only operational health navigation icon', () => {
+  const dot = readFileSync(new URL('../src/components/layout/ServiceHealthIcon.jsx', import.meta.url), 'utf8');
+  const sidebar = readFileSync(new URL('../src/components/layout/Sidebar.jsx', import.meta.url), 'utf8');
   const layout = readFileSync(new URL('../src/components/layout/AppLayout.jsx', import.meta.url), 'utf8');
-  assert.match(layout, /<ServiceHealthDot isAdmin=\{currentUser\?\.role === 'ADMIN'\} \/>/);
-  assert.match(dot, /if \(!isAdmin \|\| !data\) return null/);
+  assert.doesNotMatch(layout, /ServiceHealthDot/);
+  assert.match(sidebar, /<ServiceHealthIcon isAdmin=\{currentUser\?\.role === 'ADMIN'\} \/>/);
+  assert.match(dot, /if \(!isAdmin\) return null/);
   assert.match(dot, /\/api\/service-health\/summary/);
-  assert.match(dot, /navigate\('\/salud-operativa'\)/);
+  assert.match(sidebar, /path: '\/salud-operativa', roles: \['ADMIN'\]/);
   assert.match(dot, /aria-label=/);
-  for (const token of ['bg-status-positive', 'bg-status-attention', 'bg-destructive']) assert.match(dot, new RegExp(token));
+  for (const token of ['text-status-positive-fg', 'text-status-attention-fg', 'text-destructive']) assert.match(dot, new RegExp(token));
   assert.doesNotMatch(dot, /\b(?:bg|text|ring)-(?:red|rose|green|emerald|amber)-/);
 });
 

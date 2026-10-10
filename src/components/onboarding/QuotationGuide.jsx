@@ -1,3 +1,4 @@
+import BriaPortrait from '@/components/bria/BriaPortrait';
 import React, { useEffect, useRef, useState } from 'react';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -52,7 +53,7 @@ export default function QuotationGuide({ open, onDismiss, returnFocusRef, previe
       onCloseAutoFocus={event => { event.preventDefault(); returnFocusRef.current?.focus(); }}
       onInteractOutside={event => event.preventDefault()}>
       <div className="brain-ai-header relative flex shrink-0 items-center gap-3 px-5 py-5 pr-14 text-white sm:px-6 sm:pr-14">
-        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white dark:bg-white" aria-hidden="true"><img src="/brainstudio-mascot-tip.png" alt="" className="h-11 w-11 object-contain" /></span>
+        <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white dark:bg-white" aria-hidden="true"><BriaPortrait  alt="" className="h-11 w-11 object-contain" /></span>
         <div className="space-y-1.5">
           <DialogTitle className="text-lg leading-6 text-white">Cotizaciones, paso a paso</DialogTitle>
           <DialogDescription className="text-sm leading-5 text-white/95">Con Bria · 4 pasos para empezar</DialogDescription>

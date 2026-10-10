@@ -1,12 +1,15 @@
 
 import React from 'react';
-import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, FolderOpen, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign, Target, ShieldCheck } from '@/components/ui/icons';
+import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, FolderOpen, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign, Target, ShieldCheck, Sun, Moon } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
+import { useTheme } from '@/context/ThemeContext';
+import { Button } from '@/components/ui/button';
 import { NavLink } from 'react-router-dom';
 import ChaosMeter from './ChaosMeter';
 import SidebarProfile from './SidebarProfile';
+import ServiceHealthIcon from './ServiceHealthIcon';
 
 /**
  * Menú lateral. En escritorio se puede **recoger a una franja estrecha** (`collapsed`): la barra no desaparece,
@@ -16,6 +19,7 @@ import SidebarProfile from './SidebarProfile';
  */
 const Sidebar = ({ isOpen, onClose, collapsed = false }) => {
   const { currentUser } = useAuth();
+  const { theme, toggleTheme } = useTheme();
 
   const menuItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard, path: '/', moduleKey: 'dashboard' },
@@ -65,8 +69,8 @@ const Sidebar = ({ isOpen, onClose, collapsed = false }) => {
       "dark:border-white/10 dark:bg-zinc-950 dark:shadow-[4px_0_24px_-12px_rgba(0,0,0,0.5)] lg:dark:bg-zinc-900/60 lg:dark:backdrop-blur-xl"
     )}>
       {/* Header */}
-      <div className={cn("flex shrink-0 items-center justify-between px-5 py-4 sm:px-6 sm:py-5", collapsed && "lg:justify-center lg:px-0")}>
-        <div className="flex items-center gap-3">
+      <div className={cn("flex shrink-0 items-center justify-between gap-1 px-4 py-3 sm:px-5 sm:py-4", collapsed && "lg:justify-center lg:px-0")}>
+        <div className="flex min-w-0 items-center gap-2">
           <img src="/brainstudio-logo.png" alt="Brainstudio" className="w-8 h-8 object-contain" />
           <span className={cn(
             "text-xl font-bold tracking-tighter text-zinc-900 dark:text-zinc-100 drop-shadow-sm transition-colors",
@@ -75,6 +79,10 @@ const Sidebar = ({ isOpen, onClose, collapsed = false }) => {
             Brainstudio
           </span>
         </div>
+        <div className={cn("flex shrink-0 items-center", collapsed && "lg:hidden")}>
+          <Button type="button" variant="ghost" size="icon" onClick={toggleTheme} aria-label="Cambiar tema" title={theme === 'dark' ? 'Cambiar a modo claro' : 'Cambiar a modo oscuro'} data-sidebar-theme-toggle className="h-11 w-11 rounded-full text-zinc-600 dark:text-zinc-300">
+            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+          </Button>
         <button
           onClick={onClose}
           aria-label="Cerrar menú"
@@ -82,6 +90,7 @@ const Sidebar = ({ isOpen, onClose, collapsed = false }) => {
         >
           <X className="w-5 h-5" />
         </button>
+        </div>
       </div>
 
       {/* Person: photo, name and account menu, always visible above the navigation */}
@@ -123,12 +132,12 @@ const Sidebar = ({ isOpen, onClose, collapsed = false }) => {
                   )}
 
                   <span className={cn("relative z-10 flex items-center gap-3 w-full", collapsed && "lg:w-auto lg:gap-0")}>
-                    <Icon className={cn(
+                    {item.id === 'operational-health' ? <ServiceHealthIcon isAdmin={currentUser?.role === 'ADMIN'} /> : <Icon className={cn(
                       "w-5 h-5 shrink-0 transition-colors duration-300",
                       isActive
                         ? "text-primary dark:text-primary-foreground drop-shadow-sm"
                         : "text-zinc-400 group-hover:text-zinc-600 dark:text-zinc-500 dark:group-hover:text-zinc-300"
-                    )} />
+                    )} />}
                     <span className={cn(collapsed && "lg:sr-only")}>{item.label}</span>
                   </span>
 
