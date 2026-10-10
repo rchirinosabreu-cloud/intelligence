@@ -11,6 +11,7 @@ import { pieceStage, shortDate } from '../lib/clientOperations.js';
 import { approvalState, APPROVAL_STATES } from '../lib/contentApproval.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
+import { rankByName } from '../lib/fuzzyMatch.js';
 import { formatDuration } from '../lib/teamRhythm.js';
 
 const OPEN_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
@@ -73,18 +74,26 @@ const buscarCliente = {
   async run({ nombre } = {}, { db }) {
     const term = text(nombre);
     if (!term) return { data: { clientes: [] } };
-    const rows = await db.client.findMany({
+    const select = { id: true, name: true, slug: true, status: true, isArchived: true, responsible: { select: { name: true } }, projectManager: { select: { name: true } } };
+    let rows = await db.client.findMany({
       where: { name: { contains: term, mode: 'insensitive' } },
-      select: { id: true, name: true, slug: true, status: true, isArchived: true, responsible: { select: { name: true } }, projectManager: { select: { name: true } } },
+      select,
       orderBy: [{ isArchived: 'asc' }, { name: 'asc' }],
       take: 8
     });
+    // Sin coincidencia exacta, se busca lo que se le parece: «aristia» es Aristea (Rodny, 9 de octubre de 2026).
+    const approximate = rows.length === 0;
+    if (approximate) {
+      const all = await db.client.findMany({ select, take: 2000 });
+      rows = rankByName(all, term, (row) => row.name).sort((a, b) => Number(a.isArchived) - Number(b.isArchived) || b.score - a.score);
+    }
     return {
       data: {
         clientes: rows.map((row) => ({
           id: row.id, nombre: row.name, slug: row.slug, estado: row.status, archivado: Boolean(row.isArchived),
           communityManager: row.responsible?.name || null, projectManager: row.projectManager?.name || null
-        }))
+        })),
+        ...(approximate && rows.length ? { aproximado: true, instruccion: 'No había un cliente con ese nombre exacto; estos son los de nombre más parecido. Si el primero es claramente lo que la persona quiso decir, úsalo sin preguntar; si hay dudas entre varios, pregunta cuál.' } : {})
       }
     };
   }

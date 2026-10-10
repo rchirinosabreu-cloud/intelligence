@@ -44,7 +44,7 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
       await resolveActor(user); if (!file) throw knowledgeError('No encontramos ese adjunto.', 404);
       return file;
     },
-    async send({ user, id, question, files = [] }) {
+    async send({ user, id, question, files = [], onEvent }) {
       if (String(question || '').length > MAX_QUESTION_LENGTH) throw knowledgeError('Divide el mensaje en partes de hasta 12.000 caracteres.');
       const text = normalizeQuestion(question) || (files.length ? 'Analiza los archivos adjuntos.' : ''); if (!text) throw knowledgeError('Escribe un mensaje.');
       const actor = await resolveActor(user), key = `${actor.ref}:${id}`;
@@ -108,7 +108,7 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         } else if (taskDrafts && taskDraft && !['CREATED','CANCELLED'].includes(stage) && ((stage === 'PRIORITY' && /^(normal|alta|urgente)$/i.test(text)) || (stage === 'DATE' && /^(hoy|mañana|pasado mañana)$/i.test(text)) || (stage === 'MATERIAL' && materialDeclined(text, stage)))) {
           await revalidateTask(); result = taskResult(await taskDrafts.prepare({ user, previous: taskDraft, question: text, attachments: prepared }));
         } else {
-          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, taskDraft, dispatchDraft, taskAttachments: prepared, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation });
+          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, taskDraft, dispatchDraft, taskAttachments: prepared, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
           if (!result.taskDraft && taskDraft) result.taskDraft = taskDraft;
           if (!result.dispatchDraft && dispatchDraft) result.dispatchDraft = dispatchDraft;
         }

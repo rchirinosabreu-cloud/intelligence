@@ -26,6 +26,7 @@ export const createBriaModelRuntime = ({ ai, user, env = process.env }) => {
         } catch (failure) {
           if (attempt || signal.aborted || failure.code === 'BRIA_INCOMPLETE' || !(failure.status === 429 || failure.status >= 500 || failure.code === 'OPENAI_TIMEOUT')) throw failure;
           // Retry generation only. Tools run once outside this adapter, after a complete response.
+          request.onRetry?.(); // Lo que alcanzó a escribirse en vivo se borra antes de volver a empezar.
           await new Promise(resolve => setTimeout(resolve, 300));
         }
       }
