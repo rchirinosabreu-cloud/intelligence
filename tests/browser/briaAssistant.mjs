@@ -21,8 +21,8 @@ try {
   await page.getByRole('button', { name: 'Preguntarle a Bria' }).click();
   await panel.waitFor({ timeout: 120000 }); await ready();
   assert.match(await panel.textContent(), /Hola, Kamila/);
-  await page.getByRole('button', { name: 'Preguntarle a Bria' }).click();
-  assert.equal(await panel.isVisible(), false, 'the header button toggles Bria closed');
+  await page.getByRole('button', { name: 'Cerrar Bria' }).click();
+  assert.equal(await panel.isVisible(), false, 'closing the panel restores the pet trigger');
   await page.getByRole('button', { name: 'Preguntarle a Bria' }).click();
   await panel.waitFor();
   assert.equal(await page.getByRole('button', { name: 'Enviar mensaje' }).count(), 0);

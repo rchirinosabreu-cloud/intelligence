@@ -21,7 +21,7 @@ test('popup uses the authenticated endpoint, explains the threshold and links to
   assert.match(source, /h-8 gap-1\.5 rounded-lg/);
   assert.match(source, /DialogContent/);
   assert.match(source, /from-\[#00AC8A\].*to-\[#009EB9\]/s);
-  assert.match(source, /brainstudio-mascot-tip\.png/);
+  assert.match(source, /BriaPortrait/);
   assert.match(source, /const firstName = String\(userName/);
   assert.match(source, /Hola\{firstName/);
   assert.match(source, /sm:whitespace-nowrap/);

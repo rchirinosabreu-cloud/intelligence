@@ -1,0 +1,24 @@
+# Bria Chispa · referencia corregida · 10 de octubre de 2026
+
+Arte editado con la herramienta integrada `image_gen`, con fondo transparente real. Modo: edición a partir de imagen de referencia; no se utilizó la API ni un generador por CLI.
+
+La identidad aprobada es la de la imagen «4 · Bria Chispa» facilitada por Rodny: cuerpo turquesa/cian/verde, pliegues de cerebro redondeados, ojos oscuros directamente en el rostro y una chispa amarilla de cuatro puntas flotando encima. La interpretación anterior con visor y punta de llama se descartó.
+
+- `reference.png`: imagen aportada por Rodny, conservada para futuras iteraciones.
+- `poses.png`: atlas transparente de 2172 × 724 px. Reposo serio, trabajo sentada con portátil y celebración.
+- `idle.png`: reposo independiente de 1254 × 1254 px. `BriaPortrait` importa este único recurso para todas las cabeceras, paneles, bienvenida y el fallback de la mascota animada. Vite genera una URL con huella del contenido al compilar, evitando que una imagen antigua en caché reaparezca. La copia pública heredada se conserva por compatibilidad, pero ningún módulo de la plataforma la utiliza.
+- Los originales permanecen en la carpeta de imágenes generadas de Codex.
+
+El renderer pinta las poses completas con interpolación de alta calidad en un canvas de 288 × 288. El botón conserva 96 × 96 en escritorio y 80 × 80 en móvil. Se oculta al abrir el chat y vuelve al cerrarlo. Respiración discreta y un salto breve, sin caminar ni deformación.
+
+## Prompt del atlas — referencia original
+
+Edit the supplied Bria Chispa character reference into a production mascot pose atlas, preserving its exact identity. The character is a soft polished 3D cyan/turquoise/green rounded teardrop brain creature, with thick organically rounded brain folds curling on the upper-left forehead and side, dark navy oval eyes directly on the body with white catchlights, little rounded turquoise arms and feet, and a separate floating four-point golden-yellow sparkle above its head. This is NOT a flame, NOT a robot, NOT a screen/visor face. Preserve the reference's rounded brain silhouette, smooth toy-like finish and colors. Create exactly THREE full-body versions arranged horizontally in three equal-width cells, on a true transparent background, centered within their cells, at the SAME physical character scale and baseline. LEFT: standing still, serious but gentle and tranquil, relaxed arms, eyes open, small neutral closed mouth, no excited expression. CENTER: sitting down with short feet in front, working with a small simple cyan laptop on its lap, concentrated open eyes, paws resting at the keyboard; keep the face and brain folds visible. RIGHT: celebrating like the right-hand reference, raised arms, closed happy eyes, broad open smile, one foot slightly raised, yellow sparkle above. The floating sparkle must be included in all three poses, separated from the head. Leave generous transparent gutters between characters and safe padding around all extremities. No text, labels, heading, cream background, stage, floor, cast shadow, border, pixel art or extra characters. High-quality smooth 3D illustration, faithful to the supplied reference, not a redesign.
+
+## Ajuste del reposo — referencia del atlas generado
+
+Make a very targeted edit to this transparent Bria Chispa three-pose atlas. Preserve EXACTLY the three characters, scale, positions, brain folds, turquoise/cyan/green colors, separate floating golden stars, laptop, eyes, limbs, and smooth 3D identity. Only change the LEFT character's curved smiling mouth to a tiny neutral almost-straight closed mouth so it looks serious, calm and quietly attentive, not cheerful. Also make the CENTER laptop-working character's mouth similarly neutral and focused. Keep the RIGHT celebration cheerful with its existing joyful open smile and closed eyes. Do not make eyes squint or look angry. Preserve transparent alpha background, same canvas, every pose and padding. No other redesign or added elements.
+
+## Imagen independiente — referencia del atlas corregido
+
+Extract ONLY the LEFT standing character from the supplied transparent three-pose Bria Chispa atlas as a single isolated mascot asset. Preserve that exact character identity and serious calm neutral straight mouth, dark oval open eyes with highlights directly in the body, rounded organic brain folds, turquoise/cyan/green finish, short arms and feet, and the separate floating four-point golden-yellow sparkle above the head. Remove the other two poses and laptop completely. Center the full standing character INCLUDING its floating sparkle on a square transparent canvas with about 8 percent padding. No added shadow, ground, text, labels, background, border, visor, flame tip or redesign. True transparent alpha, clean smooth edges. Match the atlas exactly for consistent Bria identity in platform headers and panels.

@@ -1,3 +1,4 @@
+import BriaPortrait from '@/components/bria/BriaPortrait';
 import Select from '@/components/ui/Select';
 import React, { useState, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -2076,8 +2077,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             >
                                 <div className="flex items-center justify-between gap-5 p-5">
                                     <div className="flex min-w-0 gap-3.5">
-                                        <img
-                                            src="/brainstudio-mascot-tip.png"
+                                        <BriaPortrait
                                             alt="Mascota de Brainstudio"
                                             className="h-12 w-12 shrink-0 object-contain"
                                         />

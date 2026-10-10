@@ -1,17 +1,18 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
 import { canUseBria } from '@/lib/briaLivingMemory';
 import { onBriaAsk } from '@/lib/briaAsk';
 import { cn } from '@/lib/utils';
 import BriaConversation from './BriaConversation';
+import BriaMascot from './BriaMascot';
 
 // Mounted once in AppLayout: navigating modules never resets the conversation.
 export default function BriaAssistant({ currentUser, initialOpen = false, onDockWidthChange, onOpenChange }) {
   const navigate = useNavigate(), trigger = useRef(null);
   const available = !!currentUser?.id && canUseBria(currentUser), key = `bria:panel:${currentUser?.id}`;
   const [open, setOpen] = useState(() => initialOpen || sessionStorage.getItem(key) === 'open');
+  const [mascotActivity, setMascotActivity] = useState({ working: false, completionId: null });
   const [fullScreen, setFullScreen] = useState(false), [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
   useEffect(() => {
     const media = window.matchMedia('(min-width: 1024px)'), changed = event => setDesktop(event.matches);
@@ -28,11 +29,13 @@ export default function BriaAssistant({ currentUser, initialOpen = false, onDock
     return () => { document.body.style.overflow = before; };
   }, [open, fullScreen, available]);
   if (!available) return null;
-  const close = () => { setOpen(false); trigger.current?.focus(); };
-  return <>
-    <Button ref={trigger} variant="ghost" size="icon" aria-label="Preguntarle a Bria" title="Preguntarle a Bria" aria-expanded={open} aria-controls="bria-assistant-panel" data-bria-assistant-trigger onClick={() => setOpen(value => !value)} className="h-11 w-11 rounded-full"><img src="/brainstudio-mascot-tip.png" alt="" className="h-7 w-7 object-contain" /></Button>
-    {createPortal(<aside id="bria-assistant-panel" aria-label="Asistente Bria" data-bria-assistant-panel data-bria-mode={fullScreen ? 'fullscreen' : 'docked'} className={cn('fixed z-[230] overflow-hidden border border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100', !open && 'hidden', fullScreen ? 'inset-0' : 'bottom-3 right-3 top-20 w-[min(440px,calc(100vw-24px))] rounded-3xl')}>
-      <BriaConversation key={currentUser.id} userId={currentUser.id} userName={currentUser.name} userRole={currentUser.role} fullScreen={fullScreen} visible={open} onFullScreen={() => setFullScreen(value => !value)} onClose={close} onOpenSource={source => { setFullScreen(false); navigate(source.url); }} />
-    </aside>, document.body)}
-  </>;
+  const close = () => { setOpen(false); requestAnimationFrame(() => trigger.current?.focus()); };
+  // Portal avoids the fixed header's backdrop-filter containing block. The pet
+  // occupies the bottom-right corner; the team chat now opens from the header.
+  return createPortal(<>
+    <button ref={trigger} type="button" aria-label="Preguntarle a Bria" title="Preguntarle a Bria" aria-expanded={open} aria-controls="bria-assistant-panel" aria-hidden={open || undefined} tabIndex={open ? -1 : undefined} data-bria-assistant-trigger onClick={() => setOpen(true)} className={cn('fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-[49] flex h-20 w-20 items-center justify-center rounded-xl bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan sm:h-24 sm:w-24', open && 'hidden')}><BriaMascot {...mascotActivity} className="h-20 w-20 sm:h-24 sm:w-24" /></button>
+    <aside id="bria-assistant-panel" aria-label="Asistente Bria" data-bria-assistant-panel data-bria-mode={fullScreen ? 'fullscreen' : 'docked'} className={cn('fixed z-[230] overflow-hidden border border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100', !open && 'hidden', fullScreen ? 'inset-0' : 'bottom-3 right-3 top-20 w-[min(440px,calc(100vw-24px))] rounded-3xl')}>
+      <BriaConversation key={currentUser.id} userId={currentUser.id} userName={currentUser.name} userRole={currentUser.role} fullScreen={fullScreen} visible={open} onActivityChange={setMascotActivity} onFullScreen={() => setFullScreen(value => !value)} onClose={close} onOpenSource={source => { setFullScreen(false); navigate(source.url); }} />
+    </aside>
+  </>, document.body);
 }

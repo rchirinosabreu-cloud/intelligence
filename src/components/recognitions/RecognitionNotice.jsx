@@ -1,3 +1,4 @@
+import BriaPortrait from '@/components/bria/BriaPortrait';
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
@@ -55,7 +56,7 @@ function Notice({ event, style, onDismiss, durationMs }) {
       <div className="brain-ai-header relative flex items-center gap-3 px-5 py-4 pr-12 text-white">
         <motion.span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-white" aria-hidden="true"
           initial={false} animate={animation.duration ? { rotate: [0, -7, 5, 0] } : { rotate: 0 }} transition={{ duration: animation.duration ? 0.55 : 0 }}>
-          <img src="/brainstudio-mascot-tip.png" alt="" className="h-11 w-11 object-contain" />
+          <BriaPortrait  alt="" className="h-11 w-11 object-contain" />
         </motion.span>
         <p className="min-w-0 text-base font-semibold leading-6">{title}</p>
         <button type="button" onClick={onDismiss} aria-label="Cerrar reconocimiento" className="absolute right-1 top-1 flex h-11 w-11 items-center justify-center rounded-lg text-white hover:bg-white/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-white"><X className="h-4 w-4" aria-hidden="true" /></button>

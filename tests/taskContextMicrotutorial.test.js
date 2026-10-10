@@ -9,7 +9,7 @@ test('new task panel teaches the minimum context needed to start without questio
   const source = await readTaskPanel();
 
   assert.match(source, /data-task-context-tutorial/);
-  assert.match(source, /src="\/brainstudio-mascot-tip\.png"/);
+  assert.match(source, /<BriaPortrait\b/);
   assert.match(source, /alt="Mascota de Brainstudio"/);
   assert.match(source, /Una buena tarea evita una conversación adicional/);
   assert.match(source, /Información suficiente/);
