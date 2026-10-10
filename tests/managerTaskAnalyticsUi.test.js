@@ -12,11 +12,14 @@ test('Manager route replaces BrainCore with the descriptive task panel', async (
   assert.match(panel, /data-manager-task-analytics/);
 });
 
-test('descriptive panel explains its purpose and avoids individual rankings', async () => {
+// Rodny, 9 de octubre de 2026: «necesito analizar los tiempos, leer al miembro del equipo … eso va para todos».
+// Lo que antes era «no compara velocidad individual» pasó a ser la pestaña Ritmo, que lee a cada persona como
+// una conversación pendiente, no como una calificación; Observer se queda con su bandeja.
+test('each tab explains its purpose; Ritmo reads people without grading them', async () => {
   const panel = await readPanel();
-  assert.match(panel, /Centro descriptivo de tareas/);
-  assert.match(panel, /comprender el trabajo, no vigilar personas/i);
-  assert.match(panel, /No compara velocidad individual/i);
+  assert.match(panel, /Señales que Bria detecta por su cuenta, cada una con su evidencia/);
+  assert.match(panel, /Es una lectura para conversar con cada quien, no una calificación/);
+  assert.doesNotMatch(panel, /No compara velocidad individual/i);
 });
 
 test('descriptive panel exposes periods, core metrics and data quality', async () => {

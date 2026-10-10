@@ -10,6 +10,7 @@ import * as flowController from '../controllers/flowController.js';
 import * as proxyController from '../controllers/proxyController.js';
 import * as publicController from '../controllers/publicController.js';
 import * as managerTaskAnalyticsController from '../controllers/managerTaskAnalyticsController.js';
+import * as teamRhythmController from '../controllers/teamRhythmController.js';
 import * as briaMemoryController from '../controllers/briaMemoryController.js';
 import * as briaObserverController from '../controllers/briaObserverController.js';
 import * as commercialRequestController from '../controllers/commercialRequestController.js';
@@ -188,6 +189,13 @@ router.get(
     requireModulePermission('manager'),
     requireManagerRole,
     managerTaskAnalyticsController.getTaskAnalytics
+);
+// Ritmo: cuánto tarda cada persona por tipo de trabajo (9 de octubre de 2026). Misma puerta que el resto de Manager.
+router.get(
+    '/manager/rhythm',
+    requireModulePermission('manager'),
+    requireManagerRole,
+    teamRhythmController.getTeamRhythm
 );
 router.get(
     '/manager/bria-memory',

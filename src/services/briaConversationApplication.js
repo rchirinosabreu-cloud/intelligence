@@ -17,7 +17,7 @@ const authorizeTurn = async (user, turn) => {
   for (const source of turn.sources || []) {
     if (source.kind === 'documento' && !await canReadAgencyMemory(user)) return false;
     if (['pieza','parrilla'].includes(source.kind) && !hasModulePermission(user, 'parrillas')) return false;
-    if (source.kind === 'minuta' && (!hasModulePermission(user, 'manager') || !isManagerRole(user.role))) return false;
+    if (['minuta', 'ritmo'].includes(source.kind) && (!hasModulePermission(user, 'manager') || !isManagerRole(user.role))) return false;
     if (source.kind === 'tarea') {
       const task = await prisma.task.findUnique({ where: { id: source.id }, select: TASK_PRIVACY_SELECT });
       if (!task || !canOpenTask(task, user.userId || user.id)) return false;
