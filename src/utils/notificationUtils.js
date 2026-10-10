@@ -74,6 +74,10 @@ export const getNotificationDisplayParts = (notification = {}) => {
     if (type === 'SERVICE_HEALTH_RECOVERED') {
         return { title: 'Un servicio volvió a funcionar', context: '', body: cleanNotificationPreview(message, 140) };
     }
+    // El foco de la semana (10 de octubre de 2026): Bria lo dejó en un chat; el aviso lo abre.
+    if (type === 'BRIA_FOCO_SEMANAL') {
+        return { title: 'Tu foco de la semana está listo', context: '', body: cleanNotificationPreview(message, 140) };
+    }
 
     if (type === 'TASK_COMMENT_REPLY') {
         const parsed = parseQuotedTaskMessage(message, 'Nuevo mensaje en el hilo de la tarea');

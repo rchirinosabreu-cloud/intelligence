@@ -82,6 +82,16 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
     row.revision++; row.updatedAt = new Date().toISOString(); res.json(row);
   });
   api.get('/api/bria/knowledge', (_req, res) => res.json([]));
+  // «Bria se adelanta» (10 de octubre de 2026): dos avisos simulados y el foco de la semana ya dejado en un chat.
+  const focusChat = { id: 'f0c0f0c0-0000-4000-8000-000000000001', title: 'Foco de la semana · 12 de octubre', revision: 1, updatedAt: new Date().toISOString(), turns: [{ id: 'f0c0f0c0-0000-4000-8000-000000000001:1', role: 'assistant', text: 'Hola, Kamila. Este es tu foco de la semana del 12 de octubre al 18 de octubre.\n\n**Vencidas (1)** — conviene decidir hoy si siguen vigentes o se mueve la fecha.\n\n- [Subir los videos de Nattal](/gestion?taskId=t1) · Nattal · venció el 9 de octubre\n\n**Esta semana (2)**\n\n_Martes 13 de octubre (hoy)_\n\n- [Carrusel de Endova](/gestion?taskId=t3) · Endova\n\n_Viernes 16 de octubre_\n\n- [Informe mensual de Foobespain](/gestion?taskId=t4) · Foobespain\n\n**El equipo**\n\n- Brayan Torres tiene 9 h estimadas el 14 de octubre en 3 tareas: más de lo que cabe en un día. ¿Se mueve algo o se reparte?\n\nSi quieres, dime por dónde empezar y lo organizamos juntos.', sources: [], failures: [] }] };
+  chats.set(focusChat.id, focusChat);
+  let nudges = [
+    { key: 'FOCO_SEMANAL:2026-W42', kind: 'FOCO_SEMANAL', title: 'Bria dejó tu foco de la semana.', body: 'Lo que vence, lo que está en proceso y cómo viene el equipo, en un solo lugar.', ask: null, url: null, conversationId: focusChat.id, taskIds: [] },
+    { key: 'SIN_PROCESO:m-mel', kind: 'SIN_PROCESO', personId: 'm-mel', personName: 'Melissa Castaño', title: 'Melissa lleva 35 minutos sin una tarea en proceso.', body: 'Tiene 3 pendientes por empezar. Puede ser un buen momento para preguntarle en qué está.', ask: 'Ayúdame a escribirle a Melissa para preguntarle, con amabilidad, en qué está trabajando ahora y si necesita algo para avanzar.', url: '/gestion', taskIds: [] },
+    { key: 'VENCE_HOY:m-bra', kind: 'VENCE_HOY', personId: 'm-bra', personName: 'Brayan Torres', title: 'A Brayan le vence hoy una tarea que todavía no está en proceso.', body: '«Portada de octubre». Vale la pena confirmar si sale hoy o si hay que mover la fecha.', ask: 'Ayúdame a revisar con Brayan lo que le vence hoy y todavía no está en proceso: «Portada de octubre».', url: '/gestion?taskId=t9', taskIds: ['t9'] }
+  ];
+  api.get('/api/bria/nudges', (_req, res) => res.json({ nudges }));
+  api.post('/api/bria/nudges/dismiss', (req, res) => { nudges = nudges.filter((row) => row.key !== req.body?.key); res.json({ key: req.body?.key, untilAt: new Date().toISOString() }); });
   api.post('/api/bria/ask', async (req, res) => {
     const question = String(req.body?.question || '');
     await wait(700);

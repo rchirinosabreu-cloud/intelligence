@@ -21,6 +21,7 @@ import { createBriaAssistantRouter } from './api/briaAssistant.js';
 import { createBriaLivingRouter } from './api/briaLiving.js';
 import { createBriaKnowledgeRouter } from './api/briaKnowledge.js';
 import { createBriaConversationRouter } from './api/briaConversations.js';
+import { createBriaNudgeRouter } from './api/briaNudges.js';
 import { createVaultRouter } from './api/vault.js';
 // La cerradura de un pendiente privado: el tablero ya no manda su contenido, y estas
 // rutas —comentarios, adjuntos y la propia tarea— tampoco se lo dan a quien no puede
@@ -138,6 +139,8 @@ router.use('/bria', createBriaAssistantRouter());
 router.use('/bria/living', createBriaLivingRouter());
 router.use('/bria/knowledge', createBriaKnowledgeRouter());
 router.use('/bria/conversations', createBriaConversationRouter());
+// «Bria se adelanta» (10 de octubre de 2026): avisos discretos para quien dirige, encima del botón de Bria.
+router.use('/bria/nudges', createBriaNudgeRouter());
 // Bóveda de accesos (9 de octubre de 2026): administradores y project managers; quién ve cada acceso lo
 // decide el servicio en cada llamada.
 router.use('/vault', requireManagerRole, createVaultRouter());
