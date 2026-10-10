@@ -9,10 +9,12 @@ test('authenticated layout mounts a personal excessive-time popup', async () => 
   assert.match(layout, /ExcessiveTaskAlertDialog/);
 });
 
-test('popup uses the authenticated endpoint, explains the 15-hour threshold and links to tasks', async () => {
+test('popup uses the authenticated endpoint, explains the threshold and links to tasks', async () => {
   const source = await read('src/components/tasks/ExcessiveTaskAlertDialog.jsx');
   assert.match(source, /api\/tasks\/work-alerts/);
-  assert.match(source, /15 horas/);
+  // Un solo número para servidor y pantalla (10 h desde el 9 de octubre de 2026).
+  assert.match(source, /las \{EXCESSIVE_TASK_THRESHOLD_HOURS\} horas registradas/);
+  assert.match(await read('src/lib/taskWorkAlerts.js'), /EXCESSIVE_TASK_THRESHOLD_HOURS = 10;/);
   assert.match(source, /\/gestion\?taskId=/);
   assert.match(source, /sessionStorage/);
   assert.match(source, /excessive-task-alert:v6/);

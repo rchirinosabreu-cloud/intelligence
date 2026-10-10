@@ -15,6 +15,7 @@ import { commentFileUrls, commentFilesValidationMessage, commentDownloadFilename
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { triggerConfetti } from '@/utils/confetti';
+import { askDeclaredTimeIfNeeded } from '@/lib/declaredTime';
 import BrainDatePicker, { BrainTimePicker } from '@/components/ui/BrainDatePicker';
 import { QUARTER_HOURS } from '@/lib/brainDatePicker';
 import { FOCUS_EXTENSION_EVENT_TYPE, FOCUS_OVERDUE_EVENT_TYPE, focusDeadlineIso, focusTimeFromIso } from '@/lib/taskFocus';
@@ -821,6 +822,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 // La celebración va después de la respuesta del servidor, nunca al pulsar: si el
                 // guardado falla, salía confeti por una tarea que seguía abierta (regla 1 de AGENTS).
                 if (cierraLaTarea) triggerConfetti();
+                // Cerrada sin cronómetro por quien la hizo: se le pregunta cuánto le tomó (9 de octubre de 2026).
+                if (cierraLaTarea) askDeclaredTimeIfNeeded(updatedTask);
                 toast({ title: 'Campo actualizado', description: 'La propiedad se guardó correctamente en caliente.' });
 
                 // Update local state with fresh data
@@ -929,6 +932,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
             if (res.ok) {
                 // Igual que arriba: la celebración es consecuencia de la respuesta, no del clic.
                 if (cierraLaTarea) triggerConfetti();
+                if (cierraLaTarea && isEdition) askDeclaredTimeIfNeeded(await res.json().catch(() => null));
                 toast({ title: isEdition ? 'Tarea actualizada' : 'Tarea creada', description: 'Los cambios se guardaron correctamente.' });
 
                 // Clear sessionStorage draft on successful task creation

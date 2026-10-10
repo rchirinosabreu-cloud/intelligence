@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import prisma from '../lib/prisma.js';
 import { hasModulePermission } from '../config/security.js';
 import { getTaskElapsedMs } from '../lib/taskTiming.js';
-import { EXCESSIVE_TASK_THRESHOLD_MS, collaboratorWorkOnTask } from './excessiveTaskAlertService.js';
+import { EXCESSIVE_TASK_THRESHOLD_HOURS, EXCESSIVE_TASK_THRESHOLD_MS, collaboratorWorkOnTask } from './excessiveTaskAlertService.js';
 import { RETURNED_TASK_THRESHOLD_MS } from './returnedTaskAlertService.js';
 
 const failure = (message, statusCode) => Object.assign(new Error(message), { statusCode });
@@ -57,7 +57,7 @@ export async function recordTaskAlertInteraction({ userId, taskId, noticeId, kin
     const stored = await tx.operationalTraceEvent.upsert({ where: { id }, update: {}, create: {
       id, eventType: eventTypes[action], actorId: action === 'SHOWN' ? null : userId,
       subjectUserId: userId, taskId, occurredAt: at,
-      metadata: { kind, noticeId, taskTitle: task.title, source: 'TASK_ALERT' },
+      metadata: { kind, noticeId, taskTitle: task.title, source: 'TASK_ALERT', ...(kind === 'RETURNED' ? {} : { thresholdHours: EXCESSIVE_TASK_THRESHOLD_HOURS }) },
     } });
     if (stored.subjectUserId !== userId || stored.taskId !== taskId || stored.metadata?.kind !== kind) {
       throw failure('El aviso no corresponde a esta tarea o persona.', 403);

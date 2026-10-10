@@ -22,6 +22,7 @@ import { collaboratorMoveProblem } from '../lib/taskCollaborators.js';
 import { isTaskReopenRequest } from '../lib/taskTiming.js';
 import { commentFilesValidationMessage, MAX_COMMENT_FILE_BYTES } from '../lib/taskCommentAttachments.js';
 import { listTaskWorkHistory } from '../services/taskWorkSessionService.js';
+import { needsDeclaredTime, declareTaskTime } from '../services/declaredTimeService.js';
 export { getMyExcessiveTaskAlertsHandler as getMyExcessiveTaskAlerts } from './excessiveTaskAlertController.js';
 export { confirmExcessiveTaskWorkHandler as confirmExcessiveTaskWork } from './excessiveTaskAlertController.js';
 export { getMyReturnedTaskAlertsHandler as getMyReturnedTaskAlerts } from './returnedTaskAlertController.js';
@@ -216,11 +217,29 @@ export const updateExistingTask = async (req, res) => {
 
         const updateData = pickAllowedTaskUpdates(req.body);
         const updatedTask = await updateTask(req.params.taskId, updateData, req.user?.userId);
-        res.json(updatedTask);
+        // Cerrada sin cronómetro por quien la hizo: la pantalla le pregunta cuánto le tomó (9 de octubre de 2026).
+        // Si esta comprobación falla, el cierre ya está hecho y no se tumba por ella.
+        let askDeclaredTime = false;
+        if (updateData.status === 'REALIZADA') {
+            askDeclaredTime = await needsDeclaredTime({ db: prisma, user: req.user, taskId: req.params.taskId })
+                .catch((error) => { console.error('[TaskController] No se pudo revisar el tiempo medido:', error?.message || error); return false; });
+        }
+        res.json(askDeclaredTime ? { ...updatedTask, needsDeclaredTime: true } : updatedTask);
     } catch (error) {
         console.error('[TaskController] Failed to update task:', error.response?.data || error);
         if (error.statusCode === 400) return res.status(400).json({ error: error.message });
         res.status(500).json({ error: "Failed to update task", details: error.message });
+    }
+};
+
+// Tiempo declarado: quien cerró su tarea sin cronómetro dice cuánto le tomó (9 de octubre de 2026).
+export const declareTaskTimeHandler = async (req, res) => {
+    try {
+        res.json(await declareTaskTime({ db: prisma, user: req.user, taskId: req.params.taskId, minutes: req.body?.minutes }));
+    } catch (error) {
+        if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+        console.error('[TaskController] No se pudo guardar el tiempo declarado:', error?.message || error);
+        res.status(500).json({ error: 'No se pudo guardar el tiempo. Intenta de nuevo.' });
     }
 };
 

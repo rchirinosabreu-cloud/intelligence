@@ -1,7 +1,9 @@
 import prisma from '../lib/prisma.js';
 import { getTaskElapsedMs } from '../lib/taskTiming.js';
+import { EXCESSIVE_TASK_THRESHOLD_HOURS, EXCESSIVE_TASK_THRESHOLD_MS } from '../lib/taskWorkAlerts.js';
 
-export const EXCESSIVE_TASK_THRESHOLD_MS = 15 * 60 * 60 * 1000;
+// El umbral vive en src/lib/taskWorkAlerts.js (10 h desde el 9 de octubre de 2026; antes 15 h).
+export { EXCESSIVE_TASK_THRESHOLD_HOURS, EXCESSIVE_TASK_THRESHOLD_MS };
 export const WORK_CONFIRMATION_WINDOW_MS = 4 * 60 * 60 * 1000;
 
 export function buildExcessiveTaskAlerts(tasks, {
@@ -154,7 +156,7 @@ export async function confirmExcessiveTaskWork(userId, taskId, at = new Date(), 
       subjectUserId: userId,
       taskId,
       occurredAt: at,
-      metadata: { source: 'EXCESSIVE_TIME_POPUP', taskTitle: task.title },
+      metadata: { source: 'EXCESSIVE_TIME_POPUP', taskTitle: task.title, thresholdHours: EXCESSIVE_TASK_THRESHOLD_HOURS },
     },
   });
 
