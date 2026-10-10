@@ -54,8 +54,9 @@ export const createBriaConversationRouter = ({ service } = {}) => {
   }, receive(files.array('files', BRIA_FILES_MAX_COUNT)), async (req, res, next) => {
     if (!wantsStream(req)) return next();
     const instance = await resolve();
-    return stream(req, res, onEvent => instance.send({ user: req.user, id: req.params.id, question: req.body?.question, files: req.files || [], onEvent }));
-  }, handle((req, instance) => instance.send({ user: req.user, id: req.params.id, question: req.body?.question, files: req.files || [] })));
+    // La sesión de la persona viaja con cada mensaje: con ella Bria opera en la plataforma como ella (manos de Bria).
+    return stream(req, res, onEvent => instance.send({ user: req.user, id: req.params.id, question: req.body?.question, files: req.files || [], onEvent, session: sessionOf(req) }));
+  }, handle((req, instance) => instance.send({ user: req.user, id: req.params.id, question: req.body?.question, files: req.files || [], session: sessionOf(req) })));
   router.get('/:id/attachments/:fileId', async (req, res) => {
     try {
       if (!uuid(req.params.fileId)) return res.status(400).json({ message: 'Adjunto no válido.' });
