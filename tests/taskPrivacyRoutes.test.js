@@ -98,9 +98,10 @@ test('el servidor rechaza crear un privado a quien no dirige, y cambiarlo a quie
         /taskData\.isPrivate && !canCreatePrivateTask\(req\.user\)/,
         'crear un pendiente privado tiene que comprobar el rol'
     );
+    // Desde el 9 de octubre de 2026 la puerta de actualización vive en taskUpdateGate.js, compartida con Bria.
     assert.match(
-        controller,
-        /\('isPrivate' in req\.body \|\| 'viewerIds' in req\.body\) && !canChangeTaskPrivacy\(task, req\.user\)/,
+        readFileSync(new URL('../src/services/taskUpdateGate.js', import.meta.url), 'utf8'),
+        /\('isPrivate' in payload \|\| 'viewerIds' in payload\) && !canChangeTaskPrivacy\(task, user\)/,
         'cambiar la privacidad tiene que comprobar que quien pide es quien la creó'
     );
 

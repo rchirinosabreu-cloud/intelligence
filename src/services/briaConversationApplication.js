@@ -10,7 +10,8 @@ import { getAIInstance } from './aiService.js';
 import { canReadAgencyMemory } from './briaLivingService.js';
 import { getBriaChatStorage } from './briaChatStorage.js';
 import { startBriaChatPurgeWorker } from './briaChatPurge.js';
-import { briaTaskDrafts, briaDispatchDrafts, briaDeleteDrafts } from './briaTaskApplication.js';
+import { briaTaskDrafts, briaDispatchDrafts, briaDeleteDrafts, briaActions } from './briaTaskApplication.js';
+import { ACTION_PERMISSION } from './briaActionService.js';
 import { canUseVault } from '../lib/vaultAccess.js';
 let instance;
 const authorizeTurn = async (user, turn) => {
@@ -27,6 +28,8 @@ const authorizeTurn = async (user, turn) => {
   if (turn.taskDraft && !hasModulePermission(user, 'gestion')) return false;
   if (turn.dispatchDraft && !(hasModulePermission(user, 'gestion') && hasModulePermission(user, 'parrillas'))) return false;
   if (turn.deleteDraft && !hasModulePermission(user, 'gestion')) return false;
+  // Una acción preparada exige el módulo de su pantalla: sin él, ni se ve ni se confirma.
+  if (turn.pendingAction && !hasModulePermission(user, ACTION_PERMISSION[turn.pendingAction.type] || 'gestion')) return false;
   // Las tarjetas de la bóveda llevan solo nombres; el valor lo vuelve a autorizar la bóveda al mostrarlo.
   if ((turn.accessCards?.length || turn.accessCapture) && !canUseVault(user)) return false;
   return true;
@@ -36,5 +39,5 @@ export const getApplicationConversationService = () => {
   const pool = getSidecarPool();
   const storage = getBriaChatStorage();
   startBriaChatPurgeWorker({ pool, storage });
-  return instance = createBriaConversationService({ repository: createBriaConversationRepository({ pool, storage, requireStorage: process.env.NODE_ENV === 'production', workspace: 'application' }), resolveActor: resolveKnowledgeActor, assistant: briaAssistantService, taskDrafts: briaTaskDrafts, dispatchDrafts: briaDispatchDrafts, deleteDrafts: briaDeleteDrafts, ai: getAIInstance, authorizeTurn });
+  return instance = createBriaConversationService({ repository: createBriaConversationRepository({ pool, storage, requireStorage: process.env.NODE_ENV === 'production', workspace: 'application' }), resolveActor: resolveKnowledgeActor, assistant: briaAssistantService, taskDrafts: briaTaskDrafts, dispatchDrafts: briaDispatchDrafts, deleteDrafts: briaDeleteDrafts, actions: briaActions, ai: getAIInstance, authorizeTurn });
 };
