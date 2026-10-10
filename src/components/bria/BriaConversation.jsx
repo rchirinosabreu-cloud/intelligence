@@ -10,6 +10,7 @@ import BriaAccessCards from './BriaAccessCards';
 import BriaAccessCapture from './BriaAccessCapture';
 import { cn } from '@/lib/utils';
 import { validateAttachmentSelection } from '@/lib/briaAttachments';
+import { onBriaAsk } from '@/lib/briaAsk';
 import { normalizeQuickReplies } from '@/lib/briaQuickReplies';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import toast from 'react-hot-toast';
@@ -88,6 +89,8 @@ export default function BriaConversation({ userId = 'local-research-owner', user
   useEffect(() => () => clearTimeout(liveFrame.current), []);
   useEffect(() => { if (!isAdmin && view === 'memory') setView('chat'); }, [isAdmin, view]);
   useEffect(() => { if (visible && view === 'chat') input.current?.focus({ preventScroll: true }); }, [visible, view, loading]);
+  // Un mensaje que llega de otra pantalla queda escrito, no enviado: la persona lo lee y decide.
+  useEffect(() => onBriaAsk(message => { setQuestion(message); setView('chat'); setTimeout(() => input.current?.focus({ preventScroll: true }), 0); }), []);
   useEffect(() => { dragDepth.current = 0; setDraggingFiles(false); }, [visible, view, allowAttachments, busy, loading, voiceBusy]);
   const canAddFiles = visible && view === 'chat' && allowAttachments && !busy && !loading && !voiceBusy;
   const addFiles = additions => {
