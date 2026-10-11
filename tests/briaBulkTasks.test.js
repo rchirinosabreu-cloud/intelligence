@@ -151,7 +151,8 @@ test('«todos los de Jarlan, pónselos a Kamila»: the lot is resolved on the se
   assert.match(warnings, /Ajena de Jarlan \(No tienes permisos para actualizar esta tarea\)/, 'what the gate refuses is said, with its reason');
   assert.match(warnings, /Tiene compromiso con hora: «Carrusel en marcha»/);
   assert.match(warnings, /Es un pendiente privado: «Reservada mía»/);
-  assert.match(warnings, /Está en proceso con su responsable actual[^\n]*«Carrusel en marcha»/);
+  // Reasignar una tarea en proceso (Rodny, 11 de octubre de 2026): la plataforma la devuelve a Pendiente y cierra el reloj anterior.
+  assert.match(warnings, /Está en proceso: al cambiar de responsable vuelve a Pendiente y el reloj de quien la trabajaba se cierra[^\n]*«Carrusel en marcha»/);
   assert.deepEqual(actionReply(action).quickReplies, ['Confirmar', 'Cancelar']);
   assert.equal(calls.length, 0, 'preparing never writes');
   const out = await actions.execute({ user: pm, action });

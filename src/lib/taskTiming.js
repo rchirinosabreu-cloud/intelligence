@@ -228,6 +228,20 @@ export function closeTaskWorkSession(task, endedAt = new Date()) {
   return accumulated + Math.max(0, endedAtMs - startedAt);
 }
 
+// Reasignar una tarea en proceso (Rodny, 11 de octubre de 2026, «me voy por la primera también»): el reloj del
+// responsable anterior se cierra y la tarea vuelve a Pendiente, para que el nuevo la arranque cuando la tome; el
+// tiempo medido queda a nombre de quien trabajó (Ritmo: el tiempo es de quien trabajó). Si quien reasigna pide
+// además «En proceso», la tarea no vuelve a Pendiente: el reloj anterior se cierra igual y el nuevo responsable
+// arranca el suyo en el acto (`handover`). Cerrarla o devolverla ya para el reloj por su propio camino.
+export function reassignmentEffect(currentTask, { assigneeChanged = false, assigneeId = null, status = null } = {}) {
+  if (!assigneeChanged) return null;
+  if (String(currentTask?.status || '').toUpperCase() !== 'EN_CURSO') return null;
+  if ((currentTask?.assigneeId || null) === (assigneeId || null)) return null;
+  const requested = status ? String(status).toUpperCase() : null;
+  if (requested && requested !== 'EN_CURSO') return null;
+  return requested === 'EN_CURSO' ? { status: 'EN_CURSO', handover: true } : { status: 'PENDIENTE', handover: false };
+}
+
 export function findConflictingActiveTask(tasks, targetTask) {
   if (!targetTask?.assigneeId) return null;
   return (tasks || []).find(task =>

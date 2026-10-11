@@ -122,7 +122,12 @@ const prepareTaskUpdate = async ({ db, user, args, previous, today, gate }) => {
     if (!chosen) {
       if (people.length) missing.push({ field: 'responsable', question: `¿Cuál ${wanted.responsable}?`, options: people.map((row) => row.name) });
       else throw knowledgeError(`No encontré a nadie activo en el equipo que se llame «${wanted.responsable}».`, 404, 'BRIA_ACTION_PERSON');
-    } else if (chosen.id !== task.assignee?.id) { payload.assigneeId = chosen.id; changes.push(`Responsable: ${task.assignee?.name || 'sin responsable'} → ${chosen.name}`); options.assignee = chosen; }
+    } else if (chosen.id !== task.assignee?.id) {
+      payload.assigneeId = chosen.id; changes.push(`Responsable: ${task.assignee?.name || 'sin responsable'} → ${chosen.name}`); options.assignee = chosen;
+      // Reasignar una tarea en proceso (Rodny, 11 de octubre de 2026): la plataforma cierra el reloj anterior.
+      if (task.status === 'EN_CURSO' && !payload.status) warnings.push(`Está en proceso: al cambiar de responsable vuelve a Pendiente y el reloj de ${task.assignee?.name || 'quien la trabajaba'} se cierra; su tiempo queda a su nombre y ${chosen.name} la arranca cuando la tome.`);
+      else if (task.status === 'EN_CURSO' && payload.status === 'EN_CURSO') warnings.push(`Está en proceso: el reloj de ${task.assignee?.name || 'quien la trabajaba'} se cierra con su tiempo a su nombre y el reloj pasa a ${chosen.name} en el acto.`);
+    }
   }
   if (wanted.fecha) {
     const day = resolveTaskDate(wanted.fecha, today);
@@ -368,7 +373,11 @@ const prepareTasksStatus = async ({ db, user, args, previous, today, gate }) => 
   const privates = active.filter((item) => item.private).map((item) => item.title);
   if (privates.length) warnings.push(`${privates.length === 1 ? 'Es un pendiente privado' : 'Son pendientes privados'}: ${quoteTitles(privates)}.`);
   const inProgress = active.filter((item) => item.inProgress).map((item) => item.title);
-  if (inProgress.length) warnings.push(`${inProgress.length === 1 ? 'Está en proceso con su responsable actual y al reasignarla quien la trabaja la pierde' : 'Están en proceso con su responsable actual y al reasignarlas quien las trabaja las pierde'}: ${quoteTitles(inProgress)}.`);
+  // Reasignar una tarea en proceso (Rodny, 11 de octubre de 2026): la plataforma cierra el reloj anterior; con
+  // «en proceso» pedido, el reloj pasa al nuevo responsable en el acto.
+  if (inProgress.length) warnings.push(change.status === 'EN_CURSO'
+    ? `${inProgress.length === 1 ? 'Está en proceso: su reloj actual se cierra con el tiempo a nombre de quien la trabajaba y el reloj pasa a' : 'Están en proceso: cada reloj actual se cierra con el tiempo a nombre de quien la trabajaba y el reloj pasa a'} ${change.assigneeName} en el acto: ${quoteTitles(inProgress)}.`
+    : `${inProgress.length === 1 ? 'Está en proceso: al cambiar de responsable vuelve a Pendiente y el reloj de quien la trabajaba se cierra' : 'Están en proceso: al cambiar de responsable vuelven a Pendiente y el reloj de quien las trabajaba se cierra'} (su tiempo queda a su nombre): ${quoteTitles(inProgress)}.`);
 
   const title = statusOnly ? `Pasar ${count === 1 ? 'una tarea' : `${count} tareas`} a ${STATUS_LABEL[status]}` : anyChange ? `Cambiar ${count === 1 ? 'una tarea' : `${count} tareas`}` : 'Cambiar varias tareas';
   return {
