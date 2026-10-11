@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { canUseBria } from '@/lib/briaLivingMemory';
-import { onBriaAsk, onBriaOpen } from '@/lib/briaAsk';
+import { onBriaAsk, onBriaOpen, onBriaQuickAsk } from '@/lib/briaAsk';
 import { cn } from '@/lib/utils';
 import BriaConversation from './BriaConversation';
 import BriaMascot from './BriaMascot';
@@ -26,6 +26,8 @@ export default function BriaAssistant({ currentUser, initialOpen = false, onDock
   useEffect(() => onBriaAsk(() => { setOpen(true); setFullScreen(false); }), []);
   // Abrir una conversación concreta (el foco de la semana): el panel se abre y el chat la carga.
   useEffect(() => onBriaOpen(() => { setOpen(true); setFullScreen(false); }), []);
+  // La consulta rápida escrita encima de la mascota: el panel se abre y el chat la envía.
+  useEffect(() => onBriaQuickAsk(() => { setOpen(true); setFullScreen(false); }), []);
   useEffect(() => {
     if (!open || !fullScreen || !available) return;
     const before = document.body.style.overflow; document.body.style.overflow = 'hidden';

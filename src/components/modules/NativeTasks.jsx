@@ -431,6 +431,18 @@ const NativeTasks = () => {
         updateFilters({ responsibleFilter: currentUserHasTasks ? currentUser.name : 'Todos', responsibleInitialized: true });
     }, [currentUser?.name, tasks, filters.responsibleInitialized, updateFilters]);
 
+    // `/gestion?responsable=Nombre` (Bria se adelanta, 10 de octubre de 2026): llegar con el tablero ya filtrado por
+    // esa persona; el parámetro se consume y se limpia, el filtro queda en la sesión como si se hubiera elegido a mano.
+    useEffect(() => {
+        const params = new URLSearchParams(location.search);
+        const responsable = String(params.get('responsable') || '').trim();
+        if (!responsable) return;
+        setResponsibleFilter(responsable);
+        params.delete('responsable');
+        const rest = params.toString();
+        navigate(`${location.pathname}${rest ? `?${rest}` : ''}`, { replace: true });
+    }, [location.search]); // eslint-disable-line react-hooks/exhaustive-deps
+
     useEffect(() => {
         const params = new URLSearchParams(location.search);
         const showReturned = params.get('showReturned') === 'true';

@@ -35,20 +35,37 @@ try {
   await card.getByRole('button', { name: 'Ocultar por hoy' }).click();
   await page.waitForFunction(() => document.querySelector('[data-bria-nudge]')?.getAttribute('data-bria-nudge') === 'SIN_PROCESO');
   assert.ok(sent.includes('POST /api/bria/nudges/dismiss'));
-  await page.getByText('Melissa lleva 35 minutos', { exact: false }).waitFor();
+  await page.getByText('Melissa no tiene una tarea en proceso desde las 9:55', { exact: false }).waitFor();
+  assert.equal(await card.getByRole('link', { name: 'Ver sus pendientes' }).getAttribute('href'), '/gestion?responsable=Melissa%20Casta%C3%B1o', 'the board link lands on her tasks');
   await page.screenshot({ path: path.join(output, 'bria-adelanta-sin-proceso.png') });
-  // «Pedírselo a Bria» deja el mensaje escrito, nunca lo manda.
-  await card.getByRole('button', { name: 'Pedírselo a Bria' }).click();
+  // «Que Bria me resuma lo que tiene» deja el mensaje escrito, nunca lo manda.
+  await card.getByRole('button', { name: 'Que Bria me resuma lo que tiene' }).click();
   await page.locator('[data-bria-assistant-panel]').waitFor({ state: 'visible' });
   const composer = page.getByLabel('Mensaje para Bria');
-  assert.match(await composer.inputValue(), /escribirle a Melissa/);
+  assert.match(await composer.inputValue(), /Resúmeme qué tiene pendiente Melissa/);
   assert.equal(sent.some(line => line.endsWith('/messages')), false, 'nothing was sent');
   await page.screenshot({ path: path.join(output, 'bria-adelanta-mensaje-listo.png') });
+  // La consulta rápida: lo que la persona escribe en «Haz tu consulta» sí se envía, al chat abierto.
+  await page.getByRole('button', { name: 'Cerrar' }).first().click().catch(() => page.keyboard.press('Escape'));
+  await card.waitFor();
+  const quick = card.getByLabel('Haz tu consulta a Bria');
+  await quick.fill('¿Qué tengo pendiente hoy?'); await quick.press('Enter');
+  await page.locator('[data-bria-assistant-panel]').waitFor({ state: 'visible' });
+  await page.getByText('Tienes tres tareas sin cerrar', { exact: false }).waitFor();
+  assert.ok(sent.some(line => line.endsWith('/messages')), 'the quick question was sent');
+  await page.screenshot({ path: path.join(output, 'bria-adelanta-consulta-rapida.png') });
   // Oscuro y móvil, con el panel cerrado (el estado abierto se recuerda por sesión).
   await page.evaluate(() => sessionStorage.clear());
   await page.goto(`${preview.origin}/?dark`);
   await card.waitFor();
   await page.screenshot({ path: path.join(output, 'bria-adelanta-oscuro.png') });
+  // Sin avisos, la tarjeta es solo la caja con el recordatorio de Bria.
+  await page.evaluate(() => sessionStorage.clear());
+  await page.goto(`${preview.origin}/?sinavisos`);
+  await card.waitFor();
+  assert.equal(await card.getAttribute('data-bria-nudge'), 'CONSULTA');
+  await card.locator('[data-bria-quick-reminder]').waitFor();
+  await page.screenshot({ path: path.join(output, 'bria-adelanta-solo-consulta.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => sessionStorage.clear());
   await page.goto(`${preview.origin}/`);
@@ -57,5 +74,5 @@ try {
   assert.ok(mobile.x >= 8 && mobile.x + mobile.width <= 390 - 8, 'the card fits a phone width');
   await page.screenshot({ path: path.join(output, 'bria-adelanta-movil.png') });
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ passed: true, simulatedApi: true, realComponents: true, screenshots: 6, nudgeAboveMascot: true, nothingSentByItself: true }));
+  console.log(JSON.stringify({ passed: true, simulatedApi: true, realComponents: true, screenshots: 8, nudgeAboveMascot: true, nothingSentByItself: true, quickQuestionSent: true }));
 } finally { await browser.close(); await preview.close(); }

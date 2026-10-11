@@ -13,6 +13,7 @@ import { getSidecarPool } from '../lib/sidecarPool.js';
 import { createBriaProactiveRepository } from './briaProactiveRepository.js';
 
 const OPEN = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
+export const PULSE_LIVE_WINDOW_MS = 2 * 60 * 60 * 1000;
 export const canSeeNudges = (user) => canUseBria(user) && isManagerRole(user?.role);
 
 export const createBriaNudgeService = ({ db = prisma, repository, now = () => new Date() } = {}) => {
@@ -48,18 +49,34 @@ export const createBriaNudgeService = ({ db = prisma, repository, now = () => ne
         }));
     },
 
+    /**
+     * Lo que ve la persona encima de la mascota. Con el pulso vivo (corrió en las últimas dos horas), manda lo que
+     * Bria decidió (`pulse_messages`); si el pulso no ha corrido —recién desplegado, proveedor caído—, las reglas de
+     * siempre, para que la tarjeta nunca dependa de una sola pieza. El foco de la semana va primero en los dos casos.
+     */
     async list(user) {
       if (!canSeeNudges(user)) return { nudges: [] };
       const at = now(), userRef = userIdOf(user);
-      const [people, dismissed, focus] = await Promise.all([this.readPeople(at), repo.dismissedKeys(userRef, at), repo.focusDelivery(weekKeyOf(at), userRef)]);
+      const [dismissed, focus, pulseLive] = await Promise.all([repo.dismissedKeys(userRef, at), repo.focusDelivery(weekKeyOf(at), userRef), typeof repo.hasRecentRun === 'function' ? repo.hasRecentRun(at, PULSE_LIVE_WINDOW_MS).catch(() => false) : false]);
+      const weeklyFocus = focus ? { conversationId: focus.conversationId, weekKey: focus.weekKey } : null;
+      if (pulseLive) {
+        const messages = await repo.activeMessages(userRef, at);
+        const focusNudges = buildNudges({ people: [], now: at, dismissedKeys: dismissed, weeklyFocus });
+        return { nudges: [...focusNudges, ...messages.map((row) => ({ key: `PULSO:${row.id}`, kind: row.kinds?.[0] || 'PULSO', kinds: row.kinds, title: row.title, body: row.body, url: row.url, taskIds: row.taskIds || [], urgency: row.urgency, actions: row.actions || [], createdAt: row.createdAt }))], source: 'pulso' };
+      }
+      const people = await this.readPeople(at);
       const viewer = people.find((person) => person.userId === userRef) || (await db.teamMember.findFirst({ where: { userId: userRef }, select: { id: true } }).then((row) => row ? { personId: row.id } : null));
-      return { nudges: buildNudges({ people, now: at, dismissedKeys: dismissed, viewerPersonId: viewer?.personId || null, weeklyFocus: focus ? { conversationId: focus.conversationId, weekKey: focus.weekKey } : null }) };
+      return { nudges: buildNudges({ people, now: at, dismissedKeys: dismissed, viewerPersonId: viewer?.personId || null, weeklyFocus }), source: 'reglas' };
     },
 
     async dismiss(user, key) {
       if (!canSeeNudges(user)) throw knowledgeError('Bria no está activada para tu cuenta.', 403, 'BRIA_DISABLED');
       if (!isValidNudgeKey(key)) throw knowledgeError('Ese aviso no existe.', 400, 'BRIA_NUDGE_KEY');
       const at = now();
+      if (String(key).startsWith('PULSO:')) {
+        if (!await repo.dismissMessage(userIdOf(user), key.slice('PULSO:'.length), at)) throw knowledgeError('Ese aviso ya no está.', 404, 'BRIA_NUDGE_KEY');
+        return { key, untilAt: null };
+      }
       return repo.dismiss(userIdOf(user), key, dismissUntil(key, at));
     }
   };

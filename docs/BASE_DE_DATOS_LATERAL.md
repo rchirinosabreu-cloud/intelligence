@@ -22,6 +22,7 @@ Lo que sí se exige:
 | `rhythm_readings` | Lecturas de la semana que Bria escribe para la dirección desde Ritmo y el mapa de carga, con su resumen de datos y su modelo; una fila por generación | `scripts/sql/bria-rhythm-readings.sql` | `weeklyReadingRepository.js` |
 | `nudge_dismissals` | Avisos de «Bria se adelanta» que una persona ocultó, con su clave y hasta cuándo | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
 | `weekly_focus_deliveries` | El foco de la semana que Bria dejó en el chat de cada persona: semana, persona y conversación | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
+| `pulse_runs`, `pulse_messages` | El pulso de Bria: qué horas ya leyó y qué le dijo a cada persona (hechos, texto, origen, si lo ocultó) | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
 
 ### `vault` (bóveda de accesos)
 | Tabla | Qué guarda | Archivo | Acceso |

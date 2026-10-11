@@ -5,31 +5,24 @@
 export const BRIA_ASK_EVENT = 'bria:ask';
 // Abrir una conversación concreta (el foco de la semana, 10 de octubre de 2026): el panel se abre en ese chat.
 export const BRIA_OPEN_EVENT = 'bria:open';
+// La consulta rápida (Rodny, 10 de octubre de 2026: «hacerle una pregunta rápida a Bria, no necesariamente abriendo un
+// chat nuevo»): lo que la persona escribió con sus propias manos en la caja «Haz tu consulta» sí se envía, al chat
+// que tenga abierto. Es la única vía que envía: la escribió ella.
+export const BRIA_QUICK_ASK_EVENT = 'bria:quick-ask';
 
-export const askBria = (message) => {
-  const text = String(message || '').trim();
-  if (!text || typeof window === 'undefined') return false;
-  window.dispatchEvent(new CustomEvent(BRIA_ASK_EVENT, { detail: { message: text } }));
-  return true;
-};
-
-export const onBriaAsk = (handler) => {
+const dispatch = (type, detail) => { if (typeof window === 'undefined') return false; window.dispatchEvent(new CustomEvent(type, { detail })); return true; };
+const listen = (type, pick, handler) => {
   if (typeof window === 'undefined') return () => {};
-  const listener = (event) => { const message = String(event?.detail?.message || '').trim(); if (message) handler(message); };
-  window.addEventListener(BRIA_ASK_EVENT, listener);
-  return () => window.removeEventListener(BRIA_ASK_EVENT, listener);
+  const listener = (event) => { const value = pick(event?.detail || {}); if (value) handler(value); };
+  window.addEventListener(type, listener);
+  return () => window.removeEventListener(type, listener);
 };
 
-export const openBriaConversation = (conversationId) => {
-  const id = String(conversationId || '').trim();
-  if (!id || typeof window === 'undefined') return false;
-  window.dispatchEvent(new CustomEvent(BRIA_OPEN_EVENT, { detail: { conversationId: id } }));
-  return true;
-};
+export const askBria = (message) => { const text = String(message || '').trim(); return text ? dispatch(BRIA_ASK_EVENT, { message: text }) : false; };
+export const onBriaAsk = (handler) => listen(BRIA_ASK_EVENT, (d) => String(d.message || '').trim(), handler);
 
-export const onBriaOpen = (handler) => {
-  if (typeof window === 'undefined') return () => {};
-  const listener = (event) => { const id = String(event?.detail?.conversationId || '').trim(); if (id) handler(id); };
-  window.addEventListener(BRIA_OPEN_EVENT, listener);
-  return () => window.removeEventListener(BRIA_OPEN_EVENT, listener);
-};
+export const openBriaConversation = (conversationId) => { const id = String(conversationId || '').trim(); return id ? dispatch(BRIA_OPEN_EVENT, { conversationId: id }) : false; };
+export const onBriaOpen = (handler) => listen(BRIA_OPEN_EVENT, (d) => String(d.conversationId || '').trim(), handler);
+
+export const quickAskBria = (question) => { const text = String(question || '').trim(); return text ? dispatch(BRIA_QUICK_ASK_EVENT, { question: text }) : false; };
+export const onBriaQuickAsk = (handler) => listen(BRIA_QUICK_ASK_EVENT, (d) => String(d.question || '').trim(), handler);

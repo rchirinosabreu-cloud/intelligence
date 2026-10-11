@@ -18,16 +18,37 @@ test('the nudge sits above the mascot, on the shared popover surface, with the m
   assert.match(nudge, /brain-popover-surface fixed right-4 z-\[49\]/);
   assert.match(nudge, /bottom-\[calc\(1rem\+env\(safe-area-inset-bottom\)\+5\.75rem\)\]/);
   assert.match(nudge, /<BriaPortrait className="h-9 w-9 shrink-0" \/>/);
-  assert.match(nudge, /if \(hidden \|\| !nudge\) return null;/);
-  assert.match(nudge, /role="status" aria-label="Aviso de Bria" data-bria-nudge=\{nudge\.kind\}/);
+  assert.match(nudge, /if \(hidden\) return null;/);
+  assert.match(nudge, /role="status" aria-label="Aviso de Bria" data-bria-nudge=\{nudge\?\.kind \|\| 'CONSULTA'\}/);
   assert.match(nudge, /Bria se adelanta/);
   assert.match(nudge, /data-bria-nudge-count>1 de \{nudges\.length\}/);
 });
 
-test('the actions leave the message written in Bria or open Gestión; nothing is sent by itself and the X hides on the server', () => {
-  assert.match(nudge, /onClick=\{\(\) => askBria\(nudge\.ask\)\}>Pedírselo a Bria/);
-  assert.match(nudge, /onClick=\{\(\) => openBriaConversation\(nudge\.conversationId\)\}>Leer en Bria/);
-  assert.match(nudge, /<Link to=\{nudge\.url\}[^>]*>Ver en Gestión/);
+// La consulta rápida (Rodny, 10 de octubre de 2026): «Haz tu consulta» con el icono de pulso, siempre a mano; sin aviso,
+// Bria recuerda que se le puede preguntar. Lo escrito ahí sí se envía: lo escribió la persona.
+test('the quick question box is always there, says «Haz tu consulta» with the pulse icon, and what the person types is sent to the open chat', () => {
+  assert.match(nudge, /placeholder="Haz tu consulta"/);
+  assert.match(nudge, /aria-label="Haz tu consulta a Bria"/);
+  assert.match(nudge, /<Activity className="h-\[18px\] w-\[18px\]" \/>/);
+  assert.match(nudge, /data-bria-quick-ask/);
+  assert.match(nudge, /if \(quickAskBria\(question\)\) setQuestion\(''\)/);
+  assert.match(nudge, /data-bria-quick-reminder/);
+  assert.match(nudge, /Recuerda que puedes consultarme algo de la plataforma\./);
+  assert.doesNotMatch(nudge, /Iniciar nuevo chat|nuevo chat/i);
+  assert.match(assistant, /onBriaQuickAsk\(\(\) => \{ setOpen\(true\)/);
+  assert.match(conversation, /onBriaQuickAsk\(text => \{ setView\('chat'\); sendRef\.current\?\.\(text\); \}\)/);
+  assert.match(conversation, /useEffect\(\(\) => \{ sendRef\.current = send; \}\);/);
+});
+
+// Los botones los decide la plataforma según el hecho (Rodny, 10 de octubre de 2026: «¿cuál sería la lógica de ir al
+// kanban en un anuncio así?»): un enlace al sitio exacto, algo que pedirle a Bria (queda escrito) o abrir un chat.
+test('the actions come with each nudge by kind: a link to the exact place, something to ask Bria (left written) or a chat to open; nothing is sent by itself and the X hides on the server', () => {
+  assert.match(nudge, /data-bria-nudge-actions/);
+  assert.match(nudge, /\(nudge\.actions \|\| \[\]\)\.map\(/);
+  assert.match(nudge, /onClick=\{\(\) => askBria\(item\.ask\)\}>\{item\.label\}/);
+  assert.match(nudge, /onClick=\{\(\) => openBriaConversation\(item\.conversationId\)\}>\{item\.label\}/);
+  assert.match(nudge, /<Link key=\{item\.label\} to=\{item\.to\}/);
+  assert.doesNotMatch(nudge, /Pedírselo a Bria|Ver en Gestión/, 'no generic labels: each kind names its own');
   assert.doesNotMatch(nudge, /\/messages/, 'the nudge never talks to the chat endpoint');
   assert.match(nudge, /aria-label="Ocultar por hoy"/);
   assert.match(nudge, /request\('\/dismiss', \{ method: 'POST', body: \{ key: nudge\.key \} \}\)/);

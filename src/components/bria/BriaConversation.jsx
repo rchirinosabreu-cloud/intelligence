@@ -11,7 +11,7 @@ import BriaAccessCards from './BriaAccessCards';
 import BriaAccessCapture from './BriaAccessCapture';
 import { cn } from '@/lib/utils';
 import { validateAttachmentSelection } from '@/lib/briaAttachments';
-import { onBriaAsk, onBriaOpen } from '@/lib/briaAsk';
+import { onBriaAsk, onBriaOpen, onBriaQuickAsk } from '@/lib/briaAsk';
 import { normalizeQuickReplies } from '@/lib/briaQuickReplies';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import toast from 'react-hot-toast';
@@ -99,6 +99,10 @@ export default function BriaConversation({ userId = 'local-research-owner', user
   // refresca la lista, porque la dejó Bria sola y todavía no estaba en el historial.
   const openChatRef = useRef(null);
   useEffect(() => onBriaOpen(async id => { await openChatRef.current?.(id); loadHistory().catch(failure => console.error('[BriaConversation]', failure.message)); }), []); // eslint-disable-line react-hooks/exhaustive-deps
+  // La consulta rápida (10 de octubre de 2026) la escribió la persona con sus manos: se envía al chat abierto (o a
+  // uno nuevo si no hay ninguno), sin obligarla a «iniciar un nuevo chat».
+  const sendRef = useRef(null);
+  useEffect(() => onBriaQuickAsk(text => { setView('chat'); sendRef.current?.(text); }), []);
   useEffect(() => { dragDepth.current = 0; setDraggingFiles(false); }, [visible, view, allowAttachments, busy, loading, voiceBusy]);
   const canAddFiles = visible && view === 'chat' && allowAttachments && !busy && !loading && !voiceBusy;
   const addFiles = additions => {
@@ -119,6 +123,7 @@ export default function BriaConversation({ userId = 'local-research-owner', user
     finally { setLoading(false); }
   };
   openChatRef.current = openChat;
+  useEffect(() => { sendRef.current = send; });
   const newChat = async () => {
     if (lock.current || voiceBusy) return;
     setLoading(true); setError('');
