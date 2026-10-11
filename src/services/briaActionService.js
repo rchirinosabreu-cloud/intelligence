@@ -23,6 +23,7 @@ import { matchOperation, isExcludedOperation } from '../lib/platformCatalog.js';
 import { LEGACY_ACTIONS } from '../lib/briaActions.js';
 import { dispatchResultText } from '../lib/briaDispatchDraft.js';
 import { deleteResultText } from '../lib/briaDeleteDraft.js';
+import { searchTasks, TASK_SEARCH_MAX } from './taskSearch.js';
 
 const tidy = (value) => String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
 const fold = (value) => tidy(value).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -39,7 +40,8 @@ export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestio
 export const actionModules = (type) => [].concat(ACTION_PERMISSION[type] || []);
 const MODULE_LABEL = { gestion: 'Gestión', parrillas: 'Parrillas', clientes: 'Clientes' };
 export const ITEM_FORMATS = ['Reel', 'Carrusel', 'Post', 'Video', 'Historia'];
-const BULK_MAX = 10;
+// Hasta 50 tareas por lote (Rodny, 11 de octubre de 2026: «Todos los pendientes de Jarlan, pónselos a Kamila»).
+export const BULK_MAX = TASK_SEARCH_MAX;
 export const canRunActions = (user) => canUseBria(user) && Object.keys(ACTION_PERMISSION).some((type) => actionModules(type).every((module) => hasModulePermission(user, module)));
 const authorize = (user, type) => {
   const modules = actionModules(type);
@@ -65,7 +67,7 @@ const reasonFrom = (catalog, value) => {
 };
 
 const TASK_SELECT = {
-  id: true, title: true, status: true, dueDate: true, priority: true, isPriority: true, creatorId: true, isPrivate: true,
+  id: true, title: true, status: true, dueDate: true, focusDeadlineAt: true, priority: true, isPriority: true, creatorId: true, isPrivate: true,
   client: { select: { name: true } }, assignee: { select: { id: true, name: true, userId: true } },
   collaborators: { select: { member: { select: { userId: true, name: true } } } }, viewers: { select: { userId: true } }
 };
@@ -74,7 +76,7 @@ const gateAsError = (gate) => knowledgeError(gate.message, gate.gateStatus, 'BRI
 
 /* ---------------------------------------------------------------- Cambiar un pendiente */
 
-const prepareTaskUpdate = async ({ db, user, args, previous, today }) => {
+const prepareTaskUpdate = async ({ db, user, args, previous, today, gate }) => {
   const taskId = tidy(args.tarea) || previous?.target?.taskId;
   if (!taskId) throw knowledgeError('Falta la tarea: búscala primero con mis_tareas o tareas_de_cliente y pásame su id.', 400, 'BRIA_ACTION_TARGET');
   const task = await db.task.findUnique({ where: { id: taskId }, select: TASK_SELECT });
@@ -136,8 +138,8 @@ const prepareTaskUpdate = async ({ db, user, args, previous, today }) => {
 
   // La misma puerta que la pantalla, antes de prometer nada: si no se puede, se dice ahora y con sus palabras.
   if (Object.keys(payload).length) {
-    try { await checkTaskUpdate({ db, user, taskId, payload }); }
-    catch (gate) { if (gate.gateStatus) throw gateAsError(gate); throw gate; }
+    try { await gate({ db, user, taskId, payload }); }
+    catch (refusal) { if (refusal.gateStatus) throw gateAsError(refusal); throw refusal; }
   }
   return {
     id: previous?.id || randomUUID(), ownerId: user.userId || user.id, type: 'TASK_UPDATE', status: 'DRAFT',
@@ -146,10 +148,10 @@ const prepareTaskUpdate = async ({ db, user, args, previous, today }) => {
   };
 };
 
-const executeTaskUpdate = async ({ db, user, action, updateTask }) => {
+const executeTaskUpdate = async ({ db, user, action, updateTask, gate }) => {
   const { taskId } = action.target;
-  try { await checkTaskUpdate({ db, user, taskId, payload: action.payload }); }
-  catch (gate) { if (gate.gateStatus) throw gateAsError(gate); throw gate; }
+  try { await gate({ db, user, taskId, payload: action.payload }); }
+  catch (refusal) { if (refusal.gateStatus) throw gateAsError(refusal); throw refusal; }
   await updateTask(taskId, action.payload, user.userId || user.id);
   const link = `/gestion?taskId=${encodeURIComponent(taskId)}`;
   return { text: `Listo: cambié «${action.target.title}».\n${action.summary.slice(1).map((line) => `- ${line}`).join('\n')}\n\n[Abrir en Gestión](${link})`, sources: [{ kind: 'tarea', id: taskId, label: action.target.title, url: link }] };
@@ -228,64 +230,169 @@ const executePlan = async ({ db, user, action, createContentPlan, updateContentP
 
 /* ---------------------------------------------------------------- Varios pendientes de una vez */
 
-// Solo cambios de estado sin nota (pendiente, en proceso, realizada). Devolver y reabrir piden motivo y nota
-// por tarea: eso se hace de a una con cambiar_pendiente.
-const prepareTasksStatus = async ({ db, user, args, previous }) => {
+// El mismo cambio para hasta 50 tareas: estado (pendiente, en proceso, realizada), responsable y fecha de
+// entrega, juntos o por separado. Las tareas se nombran por id o se resuelven en el servidor con un filtro (la
+// misma búsqueda de buscar_pendientes): «todos los pendientes de Jarlan, pónselos a Kamila» (Rodny, 11 de octubre
+// de 2026). Devolver y reabrir piden motivo y nota por tarea: eso se hace de a una con cambiar_pendiente.
+const FILTER_KEYS = ['responsable', 'sinResponsable', 'cliente', 'estado', 'vencidas'];
+const tidyFilter = (value) => {
+  if (!value || typeof value !== 'object') return null;
+  const filter = {};
+  for (const key of FILTER_KEYS) {
+    if (value[key] == null) continue;
+    if (key === 'sinResponsable' || key === 'vencidas') { if (value[key] === true) filter[key] = true; }
+    else if (tidy(value[key])) filter[key] = tidy(value[key]);
+  }
+  return Object.keys(filter).length ? filter : null;
+};
+const quoteTitles = (titles) => {
+  const shown = titles.slice(0, 5).map((title) => `«${title}»`);
+  const rest = titles.length - shown.length;
+  return `${shown.join(', ')}${rest > 0 ? ` y ${rest} más` : ''}`;
+};
+// Lo que le falta a cada tarea para quedar como se pidió: lo que ya está así no se vuelve a escribir.
+const bulkChangesFor = (task, { status, assigneeId, dueDate }) => {
+  const payload = {};
+  if (status && task.status !== status) payload.status = status;
+  if (assigneeId && task.assignee?.id !== assigneeId) payload.assigneeId = assigneeId;
+  if (dueDate && dayOf(task.dueDate) !== dueDate.slice(0, 10)) payload.dueDate = dueDate;
+  return payload;
+};
+const bulkChangeLines = ({ status, assigneeName, dueDate }) => [
+  ...(status ? [`Estado → ${STATUS_LABEL[status]}`] : []),
+  ...(assigneeName ? [`Responsable → ${assigneeName}`] : []),
+  ...(dueDate ? [`Entrega → ${humanDate(dueDate.slice(0, 10))}`] : [])
+];
+
+const prepareTasksStatus = async ({ db, user, args, previous, today, gate }) => {
+  const viewer = user.userId || user.id;
   const wanted = { ...(previous?.wanted || {}) };
-  if (args.estado != null && tidy(args.estado)) wanted.estado = tidy(args.estado);
-  const ids = [...new Set([...(previous?.target?.taskIds || []), ...(Array.isArray(args.tareas) ? args.tareas : []).map(tidy).filter(Boolean)])].slice(0, BULK_MAX);
-  if (!ids.length) throw knowledgeError('Faltan las tareas: búscalas primero con mis_tareas o tareas_de_cliente y pásame sus ids.', 400, 'BRIA_ACTION_TARGET');
+  for (const key of ['estado', 'responsable', 'fecha']) if (args[key] != null && tidy(args[key])) wanted[key] = tidy(args[key]);
+  const newFilter = tidyFilter(args.filtro);
+  if (newFilter) wanted.filtro = newFilter;
+  const missing = [], warnings = [];
+
+  // Qué tareas: las nombradas por id, o las que resuelve el filtro en el servidor. Un filtro nuevo reemplaza el
+  // lote; sin filtro nuevo se conserva el que ya se había resuelto.
+  let ids = [...new Set([...(previous?.target?.taskIds || []), ...(Array.isArray(args.tareas) ? args.tareas : []).map(tidy).filter(Boolean)])];
+  let found = null;
+  const filter = newFilter || (!ids.length ? wanted.filtro : null);
+  if (filter) {
+    try {
+      found = await searchTasks({ db, filters: filter, today, select: TASK_SELECT, take: BULK_MAX });
+      ids = found.rows.map((row) => row.id);
+    } catch (error) {
+      if (error?.code !== 'BRIA_SEARCH_AMBIGUOUS') throw error;
+      missing.push({ field: `filtro.${error.field}`, question: error.field === 'cliente' ? `¿Los pendientes de cuál cliente «${filter.cliente}»?` : `¿Los pendientes de cuál ${filter.responsable}?`, options: error.options });
+      ids = [];
+    }
+    if (found && found.total > BULK_MAX) warnings.push(`Son ${found.total} en total; preparo ${BULK_MAX}, las de fecha más próxima. Cuando confirmes, pídeme el resto.`);
+    if (found && !found.total) throw knowledgeError(`No hay ${found.descripcion.replace(/^0 /, '')}: no hay nada que cambiar.`, 404, 'BRIA_ACTION_TARGET');
+  }
+  if (ids.length > BULK_MAX) { ids = ids.slice(0, BULK_MAX); warnings.push(`Son más de ${BULK_MAX}: preparo las primeras ${BULK_MAX}. Cuando confirmes, pídeme el resto.`); }
+  if (!ids.length && !missing.length) throw knowledgeError('Faltan las tareas: pásame sus ids (de mis_tareas, tareas_de_cliente o buscar_pendientes) o un filtro (responsable, sin responsable, cliente, estado, vencidas).', 400, 'BRIA_ACTION_TARGET');
+  const descripcion = found?.descripcion || previous?.target?.descripcion || null;
+
+  // Qué cambio.
   const status = wanted.estado ? (STATUS[fold(wanted.estado)] || STATUS[wanted.estado]) : null;
   if (wanted.estado && !status) throw knowledgeError(`No entendí el estado «${wanted.estado}». Para varias a la vez puede ser pendiente, en proceso o realizada.`, 400, 'BRIA_ACTION_STATUS');
   if (status === 'DEVUELTA') throw knowledgeError('Devolver pide motivo y nota para cada tarea: hazlo de a una con cambiar_pendiente.', 400, 'BRIA_ACTION_STATUS');
-  const rows = await db.task.findMany({ where: { id: { in: ids } }, select: TASK_SELECT });
+  let assignee = null;
+  if (wanted.responsable) {
+    const people = await findPeople(db, wanted.responsable.slice(0, 160));
+    assignee = pickPerson(people, wanted.responsable);
+    if (!assignee) {
+      if (people.length) missing.push({ field: 'responsable', question: `¿Cuál ${wanted.responsable} será el responsable?`, options: people.map((row) => row.name).sort((a, b) => a.localeCompare(b, 'es')) });
+      else throw knowledgeError(`No encontré a nadie activo en el equipo que se llame «${wanted.responsable}».`, 404, 'BRIA_ACTION_PERSON');
+    }
+  }
+  let dueDate = null;
+  if (wanted.fecha) {
+    const day = resolveTaskDate(wanted.fecha, today);
+    if (!day) missing.push({ field: 'fecha', question: `No entendí la fecha «${wanted.fecha}». Dime un día concreto, como «viernes» o «15 de octubre».` });
+    else dueDate = `${day}T12:00:00.000Z`;
+  }
+  const change = { status, assigneeId: assignee?.id || null, assigneeName: assignee?.name || null, dueDate };
+  const anyChange = Boolean(status || wanted.responsable || wanted.fecha);
+  if (!anyChange) missing.push({ field: 'estado', question: `¿A qué estado paso ${ids.length === 1 ? 'esta tarea' : `estas ${ids.length} tareas`}?`, options: ['En proceso', 'Realizada', 'Pendiente'] });
+  const statusOnly = Boolean(status) && !wanted.responsable && !wanted.fecha;
+
+  // Cada tarea por la misma puerta que la pantalla; lo que no puede se dice y no frena a las demás.
+  const rows = found ? found.rows : (ids.length ? await db.task.findMany({ where: { id: { in: ids } }, select: TASK_SELECT }) : []);
   const byId = new Map(rows.map((row) => [row.id, row]));
   const items = [];
   for (const taskId of ids) {
     const task = byId.get(taskId);
     const item = { taskId, title: task?.title || 'Pendiente', client: task?.client?.name || null, assignee: task?.assignee?.name || null, status: task?.status || null };
     if (!task) item.skip = 'Ya no existe.';
-    else if (!canOpenTask(task, user.userId || user.id)) item.skip = 'Es un pendiente privado que no puedes abrir.';
-    else if (status && task.status === status) item.skip = `Ya está ${STATUS_LABEL[status].toLowerCase()}.`;
+    else if (!canOpenTask(task, viewer)) item.skip = 'Es un pendiente privado que no puedes abrir.';
     else if (status && task.status === 'REALIZADA' && status === 'PENDIENTE') item.skip = 'Reabrir una cerrada pide motivo y nota: hazlo de a una.';
-    else if (status) {
-      try { await checkTaskUpdate({ db, user, taskId, payload: { status } }); }
-      catch (gate) { if (gate.gateStatus) item.skip = gate.message; else throw gate; }
+    else if (anyChange && !missing.length) {
+      const payload = bulkChangesFor(task, change);
+      if (!Object.keys(payload).length) item.skip = statusOnly ? `Ya está ${STATUS_LABEL[status].toLowerCase()}.` : 'Ya está así.';
+      else {
+        try { await gate({ db, user, taskId, payload }); }
+        catch (refusal) { if (refusal.gateStatus) item.skip = refusal.message; else throw refusal; }
+        if (!item.skip) {
+          if (payload.status === 'REALIZADA' && task.status !== 'EN_CURSO') item.unmeasured = true;
+          if (task.focusDeadlineAt) item.focus = true;
+          if (task.isPrivate) item.private = true;
+          if (payload.assigneeId && task.status === 'EN_CURSO') item.inProgress = true;
+        }
+      }
     }
-    if (!item.skip && status === 'REALIZADA' && task.status !== 'EN_CURSO') item.unmeasured = true;
     items.push(item);
   }
   const active = items.filter((item) => !item.skip);
-  const missing = status ? [] : [{ field: 'estado', question: `¿A qué estado paso ${ids.length === 1 ? 'esta tarea' : `estas ${ids.length} tareas`}?`, options: ['En proceso', 'Realizada', 'Pendiente'] }];
-  if (status && !active.length) throw knowledgeError(`No queda ninguna tarea que pueda pasar a ${STATUS_LABEL[status].toLowerCase()}:\n${items.map((item) => `- ${item.title}: ${item.skip}`).join('\n')}`, 400, 'BRIA_ACTION_NOOP');
-  const summary = [
-    ...(status ? [`${active.length === 1 ? 'Una tarea pasa' : `${active.length} tareas pasan`} a **${STATUS_LABEL[status]}**:`] : [`${ids.length === 1 ? 'Una tarea' : `${ids.length} tareas`}:`]),
-    ...active.map((item) => `${item.title}${item.client ? ` · ${item.client}` : ''}${item.assignee ? ` · ${item.assignee}` : ''}${item.status ? ` (hoy ${STATUS_LABEL[item.status] || item.status})` : ''}`)
+  if (anyChange && !missing.length && !active.length) throw knowledgeError(`No queda ninguna tarea que ${statusOnly ? `pueda pasar a ${STATUS_LABEL[status].toLowerCase()}` : 'cambiar'}:\n${items.map((item) => `- ${item.title}: ${item.skip}`).join('\n')}`, 400, 'BRIA_ACTION_NOOP');
+
+  const count = anyChange && !missing.length ? active.length : ids.length;
+  const changes = bulkChangeLines(change);
+  const headline = statusOnly
+    ? `${count === 1 ? 'Una tarea pasa' : `${count} tareas pasan`} a **${STATUS_LABEL[status]}**:`
+    : anyChange ? `${count === 1 ? 'Una tarea cambia' : `${count} tareas cambian`}:` : `${count === 1 ? 'Una tarea' : `${count} tareas`}:`;
+  // Sin lote todavía (el filtro preguntó cuál persona o cliente) no hay nada que resumir: solo la pregunta.
+  const summary = !ids.length ? [] : [
+    ...(descripcion ? [`Lote: ${descripcion}${found && found.approximate ? ' (nombre aproximado)' : ''}`] : []),
+    headline,
+    ...(statusOnly ? [] : changes),
+    ...(anyChange && !missing.length ? active : items).map((item) => `${item.title}${item.client ? ` · ${item.client}` : ''}${item.assignee ? ` · ${item.assignee}` : ''}${item.status ? ` (hoy ${STATUS_LABEL[item.status] || item.status})` : ''}`)
   ];
   const skipped = items.filter((item) => item.skip);
-  const warnings = [];
   if (skipped.length) warnings.push(`No se tocan: ${skipped.map((item) => `${item.title} (${item.skip})`).join('; ')}`);
   const unmeasured = active.filter((item) => item.unmeasured).length;
   if (unmeasured) warnings.push(`${unmeasured === 1 ? 'Una de ellas no pasó' : `${unmeasured} de ellas no pasaron`} por «En proceso»: quedarán cerradas sin tiempo medido.`);
+  // Lo que conviene mirar antes de confirmar: compromiso con hora, pendientes privados y relojes en marcha.
+  const focused = active.filter((item) => item.focus).map((item) => item.title);
+  if (focused.length) warnings.push(`${focused.length === 1 ? 'Tiene' : 'Tienen'} compromiso con hora: ${quoteTitles(focused)}.`);
+  const privates = active.filter((item) => item.private).map((item) => item.title);
+  if (privates.length) warnings.push(`${privates.length === 1 ? 'Es un pendiente privado' : 'Son pendientes privados'}: ${quoteTitles(privates)}.`);
+  const inProgress = active.filter((item) => item.inProgress).map((item) => item.title);
+  if (inProgress.length) warnings.push(`${inProgress.length === 1 ? 'Está en proceso con su responsable actual y al reasignarla quien la trabaja la pierde' : 'Están en proceso con su responsable actual y al reasignarlas quien las trabaja las pierde'}: ${quoteTitles(inProgress)}.`);
+
+  const title = statusOnly ? `Pasar ${count === 1 ? 'una tarea' : `${count} tareas`} a ${STATUS_LABEL[status]}` : anyChange ? `Cambiar ${count === 1 ? 'una tarea' : `${count} tareas`}` : 'Cambiar varias tareas';
   return {
-    id: previous?.id || randomUUID(), ownerId: user.userId || user.id, type: 'TASKS_STATUS', status: 'DRAFT',
-    title: status ? `Pasar ${active.length === 1 ? 'una tarea' : `${active.length} tareas`} a ${STATUS_LABEL[status]}` : 'Cambiar varias tareas',
-    target: { taskIds: ids }, wanted, payload: { status, items: active.map(({ taskId, title }) => ({ taskId, title })) },
+    id: previous?.id || randomUUID(), ownerId: viewer, type: 'TASKS_STATUS', status: 'DRAFT',
+    title, target: { taskIds: ids, ...(descripcion ? { descripcion } : {}), ...(wanted.filtro ? { filtro: wanted.filtro } : {}) }, wanted,
+    payload: { status, assigneeId: change.assigneeId, assigneeName: change.assigneeName, dueDate, items: active.map(({ taskId, title: taskTitle }) => ({ taskId, title: taskTitle })) },
     summary, warnings, missing
   };
 };
 
-const executeTasksStatus = async ({ db, user, action, updateTask }) => {
+const executeTasksStatus = async ({ db, user, action, updateTask, gate }) => {
   const { status, items } = action.payload;
+  const statusOnly = Boolean(status) && !action.payload.assigneeId && !action.payload.dueDate;
   const done = [], failed = [];
   for (const item of items) {
     try {
       // Se vuelve a mirar cada tarea justo antes: un permiso que cambió se respeta y lo ya cambiado no falla.
       const task = await db.task.findUnique({ where: { id: item.taskId }, select: TASK_SELECT });
       if (!task) { failed.push({ ...item, reason: 'Ya no existe.' }); continue; }
-      if (task.status === status) { done.push({ ...item, already: true }); continue; }
-      await checkTaskUpdate({ db, user, taskId: item.taskId, payload: { status } });
-      await updateTask(item.taskId, { status }, user.userId || user.id);
+      const payload = bulkChangesFor(task, action.payload);
+      if (!Object.keys(payload).length) { done.push({ ...item, already: true }); continue; }
+      await gate({ db, user, taskId: item.taskId, payload });
+      // Una por una, por la misma función que el botón: ella pone completedAt, cierra relojes, notifica y audita.
+      await updateTask(item.taskId, payload, user.userId || user.id);
       done.push(item);
     } catch (failure) {
       if (!failure.gateStatus) console.error('[BriaActions] No se pudo cambiar una tarea del lote:', failure?.response?.data || failure?.message || failure);
@@ -293,7 +400,10 @@ const executeTasksStatus = async ({ db, user, action, updateTask }) => {
     }
   }
   const parts = [];
-  if (done.length) parts.push(`${done.length === 1 ? 'Una tarea pasó' : `${done.length} tareas pasaron`} a ${STATUS_LABEL[status]}:\n${done.map((item) => `- ${item.title}${item.already ? ' (ya estaba)' : ''}: [abrir](/gestion?taskId=${encodeURIComponent(item.taskId)})`).join('\n')}`);
+  const head = statusOnly
+    ? `${done.length === 1 ? 'Una tarea pasó' : `${done.length} tareas pasaron`} a ${STATUS_LABEL[status]}`
+    : `${done.length === 1 ? 'Una tarea cambió' : `${done.length} tareas cambiaron`} (${bulkChangeLines(action.payload).join('; ')})`;
+  if (done.length) parts.push(`${head}:\n${done.map((item) => `- ${item.title}${item.already ? ' (ya estaba)' : ''}: [abrir](/gestion?taskId=${encodeURIComponent(item.taskId)})`).join('\n')}`);
   if (failed.length) parts.push(`**No cambiaron**\n${failed.map((item) => `- ${item.title}: ${item.reason}`).join('\n')}`);
   return { text: parts.join('\n\n') || 'No cambió ninguna tarea.', sources: done.map((item) => ({ kind: 'tarea', id: item.taskId, label: item.title, url: `/gestion?taskId=${item.taskId}` })) };
 };
@@ -549,7 +659,8 @@ const executePlatform = async ({ user, action, platform, session, routePermissio
   return { text: `Listo: ${action.title}.${detail ? `\n\nLo que respondió la plataforma (datos): ${detail}` : ''}`, sources: [] };
 };
 
-export const createBriaActionService = ({ db, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, now = () => new Date(), readOnly = false } = {}) => ({
+// `gate` es la puerta de actualizar una tarea (`checkTaskUpdate`); se inyecta solo para probar sus negativas.
+export const createBriaActionService = ({ db, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, gate = checkTaskUpdate, now = () => new Date(), readOnly = false } = {}) => ({
   async prepare({ user, type, args = {}, previous }) {
     if (type === 'PLATFORM') {
       if (!canUseBria(user)) throw knowledgeError('Bria no está activada para tu cuenta.', 403, 'BRIA_ACTION_FORBIDDEN');
@@ -559,7 +670,7 @@ export const createBriaActionService = ({ db, updateTask, createContentPlan, upd
     const owner = user.userId || user.id;
     // Solo se continúa una acción del mismo tipo, de la misma persona y sin cerrar; lo demás arranca de cero.
     const ongoing = previous && previous.status === 'DRAFT' && previous.type === type && previous.ownerId === owner && args.nuevo !== true ? previous : null;
-    return TYPES[type].prepare({ db, user, args, previous: ongoing, today: bogotaDate(now()) });
+    return TYPES[type].prepare({ db, user, args, previous: ongoing, today: bogotaDate(now()), gate });
   },
 
   // `loadAttachment` solo lo usa crear pendiente (los archivos del chat pasan a insumos de la tarea).
@@ -576,6 +687,6 @@ export const createBriaActionService = ({ db, updateTask, createContentPlan, upd
       return executePlatform({ user, action, platform, session, routePermissions });
     }
     authorize(user, action.type);
-    return TYPES[action.type].execute({ db, user, action, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts, dispatchDrafts, deleteDrafts, loadAttachment, revalidate });
+    return TYPES[action.type].execute({ db, user, action, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts, dispatchDrafts, deleteDrafts, loadAttachment, revalidate, gate });
   }
 });

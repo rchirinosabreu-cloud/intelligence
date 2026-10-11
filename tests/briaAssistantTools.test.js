@@ -19,11 +19,12 @@ const allowedFor = (who) => briaAssistantTools.filter((tool) => tool.allowed(who
 
 test('each tool opens with the permission of its screen', () => {
   assert.deepEqual(allowedFor(editor), ['buscar_cliente', 'mis_tareas']);
-  assert.deepEqual(allowedFor(editorWithModules), ['buscar_cliente', 'criterios_y_hallazgos', 'leer_piezas_de_parrilla', 'mis_tareas', 'parrilla_de_cliente', 'publicaciones_programadas', 'tareas_de_cliente']);
+  // buscar_pendientes (11 de octubre de 2026) abre con Gestión, como el tablero que muestra esas tareas.
+  assert.deepEqual(allowedFor(editorWithModules), ['buscar_cliente', 'buscar_pendientes', 'criterios_y_hallazgos', 'leer_piezas_de_parrilla', 'mis_tareas', 'parrilla_de_cliente', 'publicaciones_programadas', 'tareas_de_cliente']);
   assert.deepEqual(allowedFor(pmWithoutManager), ['buscar_cliente', 'cartera_de_operacion', 'mis_tareas', 'operacion_de_cliente']);
   // Ritmo del equipo (9 de octubre de 2026) tiene la misma puerta que la memoria de reuniones: la de Manager.
   assert.deepEqual(allowedFor(pm), ['buscar_cliente', 'carga_del_equipo', 'cartera_de_operacion', 'memoria_de_reuniones', 'mis_tareas', 'operacion_de_cliente', 'ritmo_del_equipo']);
-  assert.deepEqual(allowedFor({ role: 'ADMIN' }), ['buscar_cliente', 'carga_del_equipo', 'cartera_de_operacion', 'criterios_y_hallazgos', 'leer_piezas_de_parrilla', 'memoria_de_reuniones', 'mis_tareas', 'operacion_de_cliente', 'parrilla_de_cliente', 'publicaciones_programadas', 'ritmo_del_equipo', 'tareas_de_cliente']);
+  assert.deepEqual(allowedFor({ role: 'ADMIN' }), ['buscar_cliente', 'buscar_pendientes', 'carga_del_equipo', 'cartera_de_operacion', 'criterios_y_hallazgos', 'leer_piezas_de_parrilla', 'memoria_de_reuniones', 'mis_tareas', 'operacion_de_cliente', 'parrilla_de_cliente', 'publicaciones_programadas', 'ritmo_del_equipo', 'tareas_de_cliente']);
   for (const tool of briaAssistantTools) {
     assert.equal(tool.parameters.type, 'object', `${tool.name} declara sus parámetros`);
     assert.ok(tool.description.length > 20, `${tool.name} explica para qué sirve`);

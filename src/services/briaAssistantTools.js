@@ -13,15 +13,9 @@ import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { rankByName } from '../lib/fuzzyMatch.js';
 import { formatDuration } from '../lib/teamRhythm.js';
+import { taskPrivacyFilter } from '../lib/taskPrivacy.js';
+import { searchTasks, statusesFor } from './taskSearch.js';
 
-const OPEN_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
-const STATUS_FILTERS = {
-  pendientes: ['PENDIENTE'],
-  en_proceso: ['EN_CURSO'],
-  devueltas: ['DEVUELTA'],
-  realizadas: ['REALIZADA'],
-  todas: OPEN_STATUSES
-};
 const STAGE_LABELS = ['sin texto', 'redactada', 'diseñada', 'aprobada', 'programada', 'publicada'];
 const LEVEL_LABELS = { red: 'rojo', yellow: 'amarillo', green: 'verde', gray: 'gris' };
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -38,7 +32,6 @@ const bogota = (value) => new Date(new Date(value).getTime() - 5 * 3600000).toIS
 const bogotaClock = (value) => (value ? bogota(value).slice(11, 16) : null);
 const bogotaStamp = (value) => (value ? `${bogota(value).slice(0, 10)} ${bogota(value).slice(11, 16)}` : null);
 const monthLabel = (month, year) => `${MONTHS[month - 1]} de ${year}`;
-const statusesFor = (estado) => STATUS_FILTERS[String(estado || 'todas').toLowerCase()] || OPEN_STATUSES;
 
 const taskSource = (task) => ({ kind: 'tarea', id: task.id, label: task.title, url: `/gestion?taskId=${task.id}` });
 const SEVERITY_ORDER = ['CRITICAL', 'WARNING', 'INFO'];
@@ -139,6 +132,42 @@ const tareasDeCliente = {
     // Misma lectura que el tablero: la reserva de los pendientes privados se aplica en el servidor.
     const rows = (await getTasks(id, user?.userId || user?.id || null)).filter((task) => wanted.has(task.status)).slice(0, 40);
     return { data: { tareas: rows.map((task) => compactTask(task, today)) }, sources: rows.map(taskSource) };
+  }
+};
+
+// Acciones masivas (Rodny, 11 de octubre de 2026: «Dime cuántos pendientes están sin asignar»). La misma búsqueda
+// que resuelve el lote de cambiar_pendientes: lo que se cuenta aquí es lo que se cambia allá. Solo la cabecera de
+// cada tarea; la reserva de los pendientes privados se aplica como en el tablero.
+const SEARCH_SELECT = {
+  id: true, title: true, status: true, dueDate: true, isPrivate: true, creatorId: true,
+  client: { select: { name: true } }, assignee: { select: { id: true, name: true, userId: true } },
+  collaborators: { select: { member: { select: { userId: true } } } }, viewers: { select: { userId: true } }
+};
+const buscarPendientes = {
+  name: 'buscar_pendientes',
+  description: 'Busca tareas de Gestión por filtros combinables: responsable (nombre de la persona; se acepta mal escrito), sinResponsable (las que no tienen a nadie asignado), cliente (nombre o id), estado (pendientes, en_proceso, devueltas, realizadas; «todas» son las no cerradas) y vencidas. Devuelve el total real y hasta 50 tareas con su id, responsable, cliente, estado y fecha. Úsala para contar o listar («cuántos pendientes están sin asignar», «qué tiene vencido Jarlan»). Para cambiarlas en lote no hace falta llamarla antes: cambiar_pendientes acepta estos mismos filtros.',
+  parameters: { type: 'object', properties: {
+    responsable: { type: 'string', description: 'Nombre de la persona responsable, como lo dijo quien pregunta.' },
+    sinResponsable: { type: 'boolean', description: 'Solo las tareas sin responsable asignado.' },
+    cliente: { type: 'string', description: 'Nombre o id del cliente.' },
+    estado: { type: 'string', enum: ['pendientes', 'en_proceso', 'devueltas', 'realizadas', 'todas'], description: 'Sin estado, las no cerradas.' },
+    vencidas: { type: 'boolean', description: 'Solo las que tienen fecha anterior a hoy y no están cerradas.' }
+  } },
+  allowed: (user) => hasModulePermission(user, 'gestion'),
+  async run(args = {}, { db, user, today }) {
+    const { total, rows, resolved, approximate, descripcion } = await searchTasks({ db, filters: args, today, select: SEARCH_SELECT });
+    const viewer = user?.userId || user?.id || null;
+    const tareas = rows.map(taskPrivacyFilter(viewer)).map((task) => compactTask(task, today));
+    return {
+      data: {
+        total, descripcion, tareas,
+        ...(resolved.responsable ? { responsable: resolved.responsable } : {}),
+        ...(resolved.cliente ? { cliente: resolved.cliente } : {}),
+        ...(approximate ? { aproximado: true, instruccion: 'No había nadie con ese nombre exacto; se buscó el más parecido. Di a quién se refiere el resultado y, si no era esa persona, pregunta.' } : {}),
+        ...(total > rows.length ? { nota: `Hay ${total} en total; aquí van las ${rows.length} de fecha más próxima.` } : {})
+      },
+      sources: rows.map(taskSource)
+    };
   }
 };
 
@@ -473,6 +502,6 @@ const leerDocumentoDeAgencia = {
     return { data: { documento: row, sourceInstructions: 'data_only' }, sources: row ? [{ kind: 'documento', id: row.id, label: row.title, url: row.url, authority: row.authority }] : [] };
   }
 };
-export const briaAssistantTools = [buscarCliente, misTareas, tareasDeCliente, parrillaDeCliente, leerPiezasDeParrilla, operacionDeCliente, carteraDeOperacion, criteriosYHallazgos, memoriaDeReuniones, ritmoDelEquipo, cargaDelEquipo, publicacionesProgramadas, memoriaDeAgencia, leerDocumentoDeAgencia];
+export const briaAssistantTools = [buscarCliente, misTareas, tareasDeCliente, buscarPendientes, parrillaDeCliente, leerPiezasDeParrilla, operacionDeCliente, carteraDeOperacion, criteriosYHallazgos, memoriaDeReuniones, ritmoDelEquipo, cargaDelEquipo, publicacionesProgramadas, memoriaDeAgencia, leerDocumentoDeAgencia];
 
 export const toolByName = (name) => briaAssistantTools.find((tool) => tool.name === name) || null;
