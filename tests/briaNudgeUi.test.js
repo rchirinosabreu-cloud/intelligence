@@ -1,6 +1,7 @@
 // «Bria se adelanta» en pantalla (10 de octubre de 2026): un aviso discreto encima de la mascota, con la superficie
 // de los popovers, que nunca abre el chat solo ni manda nada; la X oculta por hoy en el servidor; el foco de la
-// semana se abre en su conversación. Contratos de código fuente.
+// semana se abre en su conversación. Desde el 11 de octubre la tarjeta existe solo con aviso: la consulta rápida
+// vive detrás de la mascota (`tests/briaMascotGesture.test.js`). Contratos de código fuente.
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -13,28 +14,22 @@ const layout = readFileSync('src/components/layout/AppLayout.jsx', 'utf8');
 const routes = readFileSync('src/routes/index.js', 'utf8');
 const server = readFileSync('server.js', 'utf8');
 
-test('the nudge sits above the mascot, on the shared popover surface, with the mascot portrait and only when the panel is closed', () => {
-  assert.match(assistant, /<BriaNudge userId=\{currentUser\.id\} hidden=\{open\} \/>/);
+test('the nudge sits above the mascot, on the shared popover surface, with the mascot portrait, only when the panel is closed and only when there is something to say', () => {
+  assert.match(assistant, /<BriaNudge userId=\{currentUser\.id\} hidden=\{open \|\| Boolean\(quickAsk\)\} \/>/);
   assert.match(nudge, /brain-popover-surface fixed right-4 z-\[49\]/);
   assert.match(nudge, /bottom-\[calc\(1rem\+env\(safe-area-inset-bottom\)\+5\.75rem\)\]/);
   assert.match(nudge, /<BriaPortrait className="h-9 w-9 shrink-0" \/>/);
-  assert.match(nudge, /if \(hidden\) return null;/);
-  assert.match(nudge, /role="status" aria-label="Aviso de Bria" data-bria-nudge=\{nudge\?\.kind \|\| 'CONSULTA'\}/);
+  assert.match(nudge, /if \(hidden \|\| !nudge\) return null;/, 'no permanent card (Rodny, 11 October 2026: «estorba»)');
+  assert.match(nudge, /role="status" aria-label="Aviso de Bria" data-bria-nudge=\{nudge\.kind\}/);
   assert.match(nudge, /Bria se adelanta/);
   assert.match(nudge, /data-bria-nudge-count>1 de \{nudges\.length\}/);
+  assert.doesNotMatch(nudge, /Haz tu consulta|data-bria-quick-ask|QUICK_ASK_REMINDERS|quickAskBria/, 'the quick question moved behind the mascot');
 });
 
-// La consulta rápida (Rodny, 10 de octubre de 2026): «Haz tu consulta» con el icono de pulso, siempre a mano; sin aviso,
-// Bria recuerda que se le puede preguntar. Lo escrito ahí sí se envía: lo escribió la persona.
-test('the quick question box is always there, says «Haz tu consulta» with the pulse icon, and what the person types is sent to the open chat', () => {
-  assert.match(nudge, /placeholder="Haz tu consulta"/);
-  assert.match(nudge, /aria-label="Haz tu consulta a Bria"/);
-  assert.match(nudge, /<Activity className="h-\[18px\] w-\[18px\]" \/>/);
-  assert.match(nudge, /data-bria-quick-ask/);
-  assert.match(nudge, /if \(quickAskBria\(question\)\) setQuestion\(''\)/);
-  assert.match(nudge, /data-bria-quick-reminder/);
-  assert.match(nudge, /Recuerda que puedes consultarme algo de la plataforma\./);
-  assert.doesNotMatch(nudge, /Iniciar nuevo chat|nuevo chat/i);
+// La consulta rápida (Rodny, 10 de octubre de 2026): lo escrito ahí sí se envía, al chat abierto. Desde el 11 de
+// octubre se abre desde el lápiz o el micrófono junto a la mascota; el envío sigue siendo el mismo evento.
+test('what the person types in the quick question is sent to the open chat, and nothing says «nuevo chat»', () => {
+  assert.doesNotMatch(nudge + assistant, /Iniciar nuevo chat|nuevo chat/i);
   assert.match(assistant, /onBriaQuickAsk\(\(\) => \{ setOpen\(true\)/);
   assert.match(conversation, /onBriaQuickAsk\(text => \{ setView\('chat'\); sendRef\.current\?\.\(text\); \}\)/);
   assert.match(conversation, /useEffect\(\(\) => \{ sendRef\.current = send; \}\);/);

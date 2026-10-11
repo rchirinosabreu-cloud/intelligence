@@ -87,6 +87,8 @@ try {
   await teamPanel.getByRole('button', { name: 'Cerrar chat', exact: true }).click();
   await page.getByRole('button', { name: 'Preguntarle a Bria' }).click(); await ready();
   assert.equal(await trigger.isVisible(), false, 'opening Bria chat hides the mascot');
+  // La muestra ya trae el foco de la semana como último chat (10 de octubre de 2026), así que la bienvenida se ve en uno nuevo.
+  await panel.getByRole('button', { name: 'Nueva conversación' }).click(); await ready();
   const portraits = panel.locator('[data-bria-portrait]');
   assert.equal(await portraits.count(), 1, 'the welcome retains Bria Chispa while the chat header shows only controls');
   await page.waitForFunction(() => [...document.querySelectorAll('[data-bria-assistant-panel] [data-bria-portrait]')].every(el => el.complete && el.naturalWidth > 0));

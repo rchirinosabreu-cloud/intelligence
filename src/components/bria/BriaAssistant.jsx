@@ -1,12 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
+import { Edit2, Mic } from '@/components/ui/icons';
 import { canUseBria } from '@/lib/briaLivingMemory';
 import { onBriaAsk, onBriaOpen, onBriaQuickAsk } from '@/lib/briaAsk';
+import { briaGesture } from '@/lib/briaMascotGesture';
 import { cn } from '@/lib/utils';
 import BriaConversation from './BriaConversation';
 import BriaMascot from './BriaMascot';
 import BriaNudge from './BriaNudge';
+import BriaQuickAsk from './BriaQuickAsk';
 
 // Mounted once in AppLayout: navigating modules never resets the conversation.
 export default function BriaAssistant({ currentUser, initialOpen = false, onDockWidthChange, onOpenChange }) {
@@ -15,6 +18,10 @@ export default function BriaAssistant({ currentUser, initialOpen = false, onDock
   const [open, setOpen] = useState(() => initialOpen || sessionStorage.getItem(key) === 'open');
   const [mascotActivity, setMascotActivity] = useState({ working: false, completionId: null });
   const [fullScreen, setFullScreen] = useState(false), [desktop, setDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches);
+  // La consulta rápida detrás de la mascota (Rodny, 11 de octubre de 2026): al pasar el cursor aparecen el lápiz y
+  // el micrófono; cualquiera abre la misma caja («write» o «dictate»), ninguno un chat nuevo. Y los gestos: la
+  // mascota se levanta al pasar el cursor, se inclina mientras se escribe y se mece mientras escucha.
+  const [quickAsk, setQuickAsk] = useState(null), [hovered, setHovered] = useState(false), [typing, setTyping] = useState(false), [listening, setListening] = useState(false);
   useEffect(() => {
     const media = window.matchMedia('(min-width: 1024px)'), changed = event => setDesktop(event.matches);
     media.addEventListener('change', changed); return () => media.removeEventListener('change', changed);
@@ -22,11 +29,13 @@ export default function BriaAssistant({ currentUser, initialOpen = false, onDock
   useEffect(() => { onDockWidthChange?.(available && open && !fullScreen && desktop ? 452 : 0); return () => onDockWidthChange?.(0); }, [available, open, fullScreen, desktop, onDockWidthChange]);
   useEffect(() => { sessionStorage.setItem(key, open ? 'open' : 'closed'); }, [key, open]);
   useEffect(() => { onOpenChange?.(available && open); }, [available, open, onOpenChange]);
+  // Con el panel abierto no hay mascota ni consulta rápida.
+  useEffect(() => { if (open) setQuickAsk(null); }, [open]);
   // Otra pantalla le pide algo a Bria (Ritmo, 10 de octubre de 2026): el panel se abre con el mensaje listo.
   useEffect(() => onBriaAsk(() => { setOpen(true); setFullScreen(false); }), []);
   // Abrir una conversación concreta (el foco de la semana): el panel se abre y el chat la carga.
   useEffect(() => onBriaOpen(() => { setOpen(true); setFullScreen(false); }), []);
-  // La consulta rápida escrita encima de la mascota: el panel se abre y el chat la envía.
+  // La consulta rápida escrita o dictada junto a la mascota: el panel se abre y el chat la envía.
   useEffect(() => onBriaQuickAsk(() => { setOpen(true); setFullScreen(false); }), []);
   useEffect(() => {
     if (!open || !fullScreen || !available) return;
@@ -35,12 +44,22 @@ export default function BriaAssistant({ currentUser, initialOpen = false, onDock
   }, [open, fullScreen, available]);
   if (!available) return null;
   const close = () => { setOpen(false); requestAnimationFrame(() => trigger.current?.focus()); };
+  const closeQuickAsk = () => { setQuickAsk(null); requestAnimationFrame(() => trigger.current?.focus()); };
+  const gesture = briaGesture({ hovered, typing, listening, busy: mascotActivity.working });
+  const tool = 'flex h-10 w-10 items-center justify-center rounded-full text-zinc-600 transition-colors hover:bg-brand-cyan/10 hover:text-brand-cyan-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:text-zinc-300 dark:hover:text-brand-cyan';
   // Portal avoids the fixed header's backdrop-filter containing block. The pet
   // occupies the bottom-right corner; the team chat now opens from the header.
   return createPortal(<>
-    {/* «Bria se adelanta» (10 de octubre de 2026): un aviso discreto encima de la mascota, solo con el panel cerrado. */}
-    <BriaNudge userId={currentUser.id} hidden={open} />
-    <button ref={trigger} type="button" aria-label="Preguntarle a Bria" title="Preguntarle a Bria" aria-expanded={open} aria-controls="bria-assistant-panel" aria-hidden={open || undefined} tabIndex={open ? -1 : undefined} data-bria-assistant-trigger onClick={() => setOpen(true)} className={cn('fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-[49] flex h-20 w-20 items-center justify-center rounded-xl bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan sm:h-24 sm:w-24', open && 'hidden')}><BriaMascot {...mascotActivity} className="h-20 w-20 sm:h-24 sm:w-24" /></button>
+    {/* «Bria se adelanta» (10 de octubre de 2026): un aviso discreto encima de la mascota, solo con el panel cerrado y sin consulta abierta. */}
+    <BriaNudge userId={currentUser.id} hidden={open || Boolean(quickAsk)} />
+    {quickAsk && !open && <BriaQuickAsk userId={currentUser.id} mode={quickAsk} onClose={closeQuickAsk} onTyping={setTyping} onListening={setListening} />}
+    <div data-bria-dock data-bria-dock-open={quickAsk ? 'true' : undefined} onMouseEnter={() => setHovered(true)} onMouseLeave={() => setHovered(false)} className={cn('bria-dock fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-[49] flex items-center gap-1', open && 'hidden')}>
+      <div className="bria-dock-tools brain-popover-surface flex items-center gap-0.5 rounded-full p-1" data-bria-dock-tools>
+        <button type="button" aria-label="Escribir una consulta" title="Escribir una consulta" tabIndex={open ? -1 : undefined} onClick={() => setQuickAsk('write')} className={tool}><Edit2 className="h-[18px] w-[18px]" /></button>
+        <button type="button" aria-label="Dictar una consulta" title="Dictar una consulta" tabIndex={open ? -1 : undefined} onClick={() => setQuickAsk('dictate')} className={tool}><Mic className="h-[18px] w-[18px]" /></button>
+      </div>
+      <button ref={trigger} type="button" aria-label="Preguntarle a Bria" title="Preguntarle a Bria" aria-expanded={open} aria-controls="bria-assistant-panel" aria-hidden={open || undefined} tabIndex={open ? -1 : undefined} data-bria-assistant-trigger onClick={() => setOpen(true)} className="flex h-20 w-20 items-center justify-center rounded-xl bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan sm:h-24 sm:w-24"><BriaMascot {...mascotActivity} gesture={gesture} className="h-20 w-20 sm:h-24 sm:w-24" /></button>
+    </div>
     <aside id="bria-assistant-panel" aria-label="Asistente Bria" data-bria-assistant-panel data-bria-mode={fullScreen ? 'fullscreen' : 'docked'} className={cn('fixed z-[230] overflow-hidden border border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100', !open && 'hidden', fullScreen ? 'inset-0' : 'bottom-3 right-3 top-20 w-[min(440px,calc(100vw-24px))] rounded-3xl')}>
       <BriaConversation key={currentUser.id} userId={currentUser.id} userName={currentUser.name} userRole={currentUser.role} fullScreen={fullScreen} visible={open} onActivityChange={setMascotActivity} onFullScreen={() => setFullScreen(value => !value)} onClose={close} onOpenSource={source => { setFullScreen(false); navigate(source.url); }} />
     </aside>
