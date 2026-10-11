@@ -23,6 +23,7 @@ Lo que sí se exige:
 | `nudge_dismissals` | Avisos de «Bria se adelanta» que una persona ocultó, con su clave y hasta cuándo | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
 | `weekly_focus_deliveries` | El foco de la semana que Bria dejó en el chat de cada persona: semana, persona y conversación | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
 | `pulse_runs`, `pulse_messages` | El pulso de Bria: qué horas ya leyó y qué le dijo a cada persona (hechos, texto, origen, si lo ocultó) | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
+| `mail_accounts`, `mail_seen` | Buzones compartidos conectados por un administrador (contraseña de aplicación sellada con la llave de la bóveda) y lo ya visto en cada uno: remitente, asunto, fecha y decisión, nunca el cuerpo | `scripts/sql/bria-mail.sql` | `mailAccountRepository.js` |
 
 ### `vault` (bóveda de accesos)
 | Tabla | Qué guarda | Archivo | Acceso |

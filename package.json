@@ -42,7 +42,6 @@
     "seed": "node scripts/sync_service_catalog.js"
   },
   "dependencies": {
-    "fflate": "^0.8.2",
     "@aws-sdk/client-s3": "^3.1086.0",
     "@aws-sdk/s3-request-presigner": "^3.1140.0",
     "@floating-ui/react": "^0.27.19",
@@ -77,11 +76,14 @@
     "date-fns": "^4.1.0",
     "dotenv": "^17.3.1",
     "express": "^4.22.1",
+    "fflate": "^0.8.2",
     "framer-motion": "^11.15.0",
     "googleapis": "^171.4.0",
+    "imapflow": "^2.4.0",
     "isomorphic-dompurify": "^3.19.0",
     "jsonwebtoken": "^9.0.3",
     "jspdf": "^4.2.1",
+    "mailparser": "^3.9.38",
     "mammoth": "^1.11.0",
     "multer": "^1.4.5-lts.1",
     "nodemailer": "^9.0.5",

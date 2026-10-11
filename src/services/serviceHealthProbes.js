@@ -6,6 +6,7 @@ import { AI_MODELS } from '../config/aiConfig.js';
 import { META_GRAPH_ORIGIN, META_GRAPH_VERSION } from './metaGraphService.js';
 import { fetchOfficialUsdCopRate } from './exchangeRateService.js';
 import { classifyHttpFailure, classifyNetworkFailure } from '../lib/serviceHealth.js';
+import { isWorkingTime } from '../lib/briaNudges.js';
 
 /**
  * Las comprobaciones del semáforo de servicios (4 de octubre de 2026).
@@ -26,7 +27,15 @@ const MIN_CALLS_FOR_ERROR_RATE = 5;
 const ERROR_RATE_WARN = 0.3;
 const SLOW = { database: 2000, http: 5000 };
 const CALENDAR_STALE_MS = 30 * 60 * 1000;
+const MAIL_STALE_MS = 45 * 60 * 1000;
 const TRM_STALE_DAYS = 5;
+
+// Los buzones de Bria viven en la base lateral; aquí solo se leen sus columnas públicas, nunca la contraseña.
+const defaultReadMailAccounts = async () => {
+  const { getSidecarPool } = await import('../lib/sidecarPool.js');
+  const { rows } = await getSidecarPool().query('SELECT email, is_active, last_read_at, last_error FROM bria_memory.mail_accounts');
+  return rows.map((row) => ({ email: row.email, isActive: row.is_active, lastReadAt: row.last_read_at, lastError: row.last_error }));
+};
 
 const result = (status, message, extra = {}) => ({ status, message, critical: false, errorCode: null, ...extra });
 const notConfigured = (message) => result('NOT_CONFIGURED', message);
@@ -74,7 +83,8 @@ export const createServiceHealthProbes = ({
   }),
   createGcsClient = ({ projectId, credentials }) => new Storage({ projectId, credentials }),
   createMailTransport = (config) => nodemailer.createTransport(config),
-  fetchTrm = () => fetchOfficialUsdCopRate()
+  fetchTrm = () => fetchOfficialUsdCopRate(),
+  readMailAccounts = defaultReadMailAccounts
 } = {}) => {
   const safe = async (read) => {
     try {
@@ -306,6 +316,21 @@ export const createServiceHealthProbes = ({
       } finally {
         transport.close?.();
       }
+    },
+
+    async mailboxes() {
+      if (!(env.VAULT_ENCRYPTION_KEY || env.ENCRYPTION_KEY)) return notConfigured('Falta la llave de cifrado de los buzones.');
+      // El pulso lee cada 15 minutos y anota el resultado; mirar eso dice lo mismo que entrar al buzón otra vez.
+      const accounts = await readMailAccounts();
+      if (!accounts.length) return notConfigured('No hay ningún buzón conectado.');
+      const disabled = accounts.filter((account) => !account.isActive);
+      if (disabled.length === accounts.length) return fail({ critical: true, errorCode: 'EAUTH', message: `Gmail rechazó la contraseña de ${disabled.map((a) => a.email).join(', ')}: hay que volver a conectar.` });
+      if (disabled.length) return result('WARN', `Pide volver a conectarse: ${disabled.map((a) => a.email).join(', ')}.`);
+      const failing = accounts.filter((account) => account.lastError);
+      if (failing.length) return result('WARN', `${failing.map((a) => `${a.email}: ${a.lastError}`).join(' · ')}`);
+      const stale = accounts.filter((account) => !account.lastReadAt || now().getTime() - new Date(account.lastReadAt).getTime() > MAIL_STALE_MS);
+      if (stale.length && isWorkingTime(now())) return result('WARN', `Bria no ha leído ${stale.map((a) => a.email).join(', ')} en los últimos 45 minutos.`);
+      return result('OK', `${plural(accounts.length, 'buzón leyéndose', 'buzones leyéndose')} con normalidad.`);
     },
 
     async push() {

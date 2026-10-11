@@ -93,6 +93,22 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
   // `?sinavisos` en la página deja la tarjeta solo con la consulta rápida (la muestra lo lee del referer).
   api.get('/api/bria/nudges', (req, res) => res.json({ nudges: /sinavisos/.test(String(req.headers.referer || '')) ? [] : nudges }));
   api.post('/api/bria/nudges/dismiss', (req, res) => { nudges = nudges.filter((row) => row.key !== req.body?.key); res.json({ key: req.body?.key, untilAt: new Date().toISOString() }); });
+  // Buzones que lee Bria (11 de octubre de 2026): la contraseña «mala…» se rechaza como lo haría Gmail.
+  let mailAccounts = [{ id: 'acc-social', email: 'social.brainstudio@gmail.com', label: 'Social', host: 'imap.gmail.com', port: 993, username: 'social.brainstudio@gmail.com', isActive: true, connectedBy: 'Rodny Chirinos', connectedAt: new Date().toISOString(), lastReadAt: new Date(Date.now() - 8 * 60_000).toISOString(), lastError: null, lastErrorAt: null }];
+  api.get('/api/bria/mail/accounts', (_req, res) => res.json({ accounts: mailAccounts }));
+  api.post('/api/bria/mail/accounts', async (req, res) => {
+    await wait(500);
+    const secret = String(req.body?.appPassword || '').replace(/\s+/g, '');
+    if (secret.length < 12) return res.status(400).json({ message: 'Pega la contraseña de aplicación completa (16 caracteres, con o sin espacios).', code: 'MAIL_SECRET' });
+    if (/^mala/.test(secret)) return res.status(400).json({ message: 'Gmail rechazó la contraseña de aplicación. Genera una nueva en la cuenta (Seguridad → Contraseñas de aplicaciones) y vuelve a conectarla.', code: 'MAIL_CONNECT' });
+    const email = String(req.body?.email || '').toLowerCase();
+    const existing = mailAccounts.find((row) => row.email === email);
+    if (existing) { Object.assign(existing, { isActive: true, lastError: null }); return res.json({ ...existing, replaced: true }); }
+    const row = { id: randomUUID(), email, label: req.body?.label || null, host: 'imap.gmail.com', port: 993, username: email, isActive: true, connectedBy: 'Rodny Chirinos', connectedAt: new Date().toISOString(), lastReadAt: null, lastError: null, lastErrorAt: null };
+    mailAccounts.push(row); return res.json(row);
+  });
+  api.post('/api/bria/mail/accounts/:id/test', async (req, res) => { await wait(300); const row = mailAccounts.find((r) => r.id === req.params.id); if (!row) return res.status(404).json({ message: 'Ese buzón no existe.' }); row.lastReadAt = new Date().toISOString(); return res.json({ ok: true, mailbox: 'INBOX', exists: 42 }); });
+  api.delete('/api/bria/mail/accounts/:id', (req, res) => { mailAccounts = mailAccounts.filter((r) => r.id !== req.params.id); res.json({ removed: true }); });
   api.post('/api/bria/ask', async (req, res) => {
     const question = String(req.body?.question || '');
     await wait(700);
@@ -120,7 +136,8 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
       vite.middlewares.use((req, res, next) => {
         const pathname = new URL(req.url, 'http://localhost').pathname;
         if (pathname.startsWith('/api/')) return api(req, res, next);
-        if (req.headers.accept?.includes('text/html') && !pathname.includes('.')) req.url = '/tests/fixtures/bria-assistant-preview.html';
+        if (req.headers.accept?.includes('text/html') && pathname.startsWith('/buzones')) req.url = '/tests/fixtures/mailbox-connections-preview.html';
+        else if (req.headers.accept?.includes('text/html') && !pathname.includes('.')) req.url = '/tests/fixtures/bria-assistant-preview.html';
         return next();
       });
     } }]

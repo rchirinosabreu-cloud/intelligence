@@ -26,7 +26,9 @@ test('a revoked module is refreshed and no longer offered as a tool', async () =
   const service = createBriaAssistantService({
     db: { user: { findUnique: async () => ({ ...row(), modulePermissions: { bria: true, gestion: false } }) } },
     tools: [{ name: 'task', allowed: (person) => person.modulePermissions.gestion === true, run: async () => { throw new Error('No debe ejecutarse'); } }],
-    ai: { generate: async (request) => { offered = request.tools; return { text: 'Sin datos de tareas.' }; } }
+    ai: { generate: async (request) => { offered = request.tools; return { text: 'Sin datos de tareas.' }; } },
+    // Los buzones (11 de octubre de 2026) dependen de la misma llave que la bóveda: fuera de esta comparación.
+    mail: null
   });
   const answer = await service.ask({ user, question: 'consulta' });
   assert.equal(offered.some(tool => tool.name === 'task'), false);

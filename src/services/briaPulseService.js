@@ -17,6 +17,7 @@ import { teamLoadService } from './teamLoadService.js';
 import { clientOperationsService } from './clientOperationsService.js';
 import { createOpenAIClient } from './openAIClient.js';
 import { listBriaPeople } from './weeklyFocusService.js';
+import { getMailboxService } from './mailboxService.js';
 
 export const PULSE_CHECK_MS = 5 * 60 * 1000;
 const H = 3_600_000;
@@ -29,17 +30,19 @@ const defaultGenerate = async (request) => {
 
 export const createBriaPulseService = ({
   db = prisma, repository, nudges, load = teamLoadService, operations = clientOperationsService, generate = defaultGenerate,
-  now = () => new Date(), listPeople = listBriaPeople, limits = PULSE_LIMITS, logger = console
+  mail = null, now = () => new Date(), listPeople = listBriaPeople, limits = PULSE_LIMITS, logger = console
 } = {}) => {
   const repo = repository || createBriaProactiveRepository({ pool: getSidecarPool() });
   const people = () => nudges || getBriaNudgeService();
+  // Los buzones compartidos (11 de octubre de 2026): sin llave de cifrado no hay buzones, y Bria sigue con lo demás.
+  const mailbox = () => { if (mail) return mail; try { return getMailboxService(); } catch (error) { logger.error('[BriaPulse] Buzones no disponibles:', error?.message || error); return null; } };
 
   return {
     /** Los hechos de este momento, leídos una sola vez para todas las personas. Cada lectura que falle se deja fuera y se anota. */
     async collect(at = now()) {
       const today = bogotaDate(at);
       const safe = async (label, work, fallback) => { try { return await work(); } catch (error) { logger.error(`[BriaPulse] Sin ${label} esta vez:`, error?.message || error); return fallback; } };
-      const [team, loadMap, ops, pieces, returned] = await Promise.all([
+      const [team, loadMap, ops, pieces, returned, mails] = await Promise.all([
         safe('personas', () => people().readPeople(at), []),
         safe('mapa de carga', () => load.get(), null),
         safe('operación de clientes', () => operations.listOperations(), []),
@@ -52,9 +55,10 @@ export const createBriaPulseService = ({
           const before = new Date(at.getTime() - RETURNED_AFTER_MS);
           const rows = await db.task.findMany({ where: { status: 'DEVUELTA', returnedAt: { lte: before }, updatedAt: { lte: before } }, select: { id: true, title: true, returnedAt: true, assignee: { select: { id: true, name: true } }, client: { select: { name: true } } }, take: 100 });
           return rows.map((row) => ({ id: row.id, title: row.title, returnedDay: bogotaDate(row.returnedAt), personId: row.assignee?.id || null, assigneeName: row.assignee?.name || null, clientName: row.client?.name || null }));
-        }, [])
+        }, []),
+        safe('correo', async () => { const service = mailbox(); return service ? service.readImportant({ at }) : []; }, [])
       ]);
-      const facts = collectFacts({ nudges: buildNudges({ people: team, now: at }), load: loadMap, operations: ops, pieces, returned, today });
+      const facts = collectFacts({ nudges: buildNudges({ people: team, now: at }), load: loadMap, operations: ops, pieces, returned, mails, today });
       return { facts, people: team };
     },
 

@@ -8,6 +8,7 @@ try {
   await pool.query(await readFile(new URL('./sql/bria-agency-facts.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('./sql/bria-rhythm-readings.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('./sql/bria-proactive.sql', import.meta.url), 'utf8'));
-  console.log('[Bria] Memoria, conversaciones, memoria de la agencia, lecturas de la semana y avisos disponibles.');
+  await pool.query(await readFile(new URL('./sql/bria-mail.sql', import.meta.url), 'utf8'));
+  console.log('[Bria] Memoria, conversaciones, memoria de la agencia, lecturas de la semana, avisos y buzones disponibles.');
 }
 finally { await pool.end(); }
