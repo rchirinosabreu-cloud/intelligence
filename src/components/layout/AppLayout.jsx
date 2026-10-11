@@ -11,6 +11,7 @@ import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuIte
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { openBriaConversation } from '@/lib/briaAsk';
 import { getNotificationDisplayParts } from '@/utils/notificationUtils';
 import PushNotificationControl from '@/components/notifications/PushNotificationControl';
 import ExcessiveTaskAlertDialog from '@/components/tasks/ExcessiveTaskAlertDialog';
@@ -216,6 +217,9 @@ const AppLayout = ({ children }) => {
     } else if (notif.type === 'SERVICE_HEALTH_DOWN' || notif.type === 'SERVICE_HEALTH_RECOVERED') {
         // Semáforo de servicios (5 de octubre de 2026): el aviso lleva al tablero de servicios.
         navigate('/salud-operativa');
+    } else if (notif.type === 'BRIA_FOCO_SEMANAL') {
+        // El foco de la semana (10 de octubre de 2026): abre el chat donde Bria lo dejó.
+        openBriaConversation(notif.relatedId);
     }
   };
 

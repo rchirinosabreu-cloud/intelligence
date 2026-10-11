@@ -2,10 +2,11 @@ import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { canUseBria } from '@/lib/briaLivingMemory';
-import { onBriaAsk } from '@/lib/briaAsk';
+import { onBriaAsk, onBriaOpen } from '@/lib/briaAsk';
 import { cn } from '@/lib/utils';
 import BriaConversation from './BriaConversation';
 import BriaMascot from './BriaMascot';
+import BriaNudge from './BriaNudge';
 
 // Mounted once in AppLayout: navigating modules never resets the conversation.
 export default function BriaAssistant({ currentUser, initialOpen = false, onDockWidthChange, onOpenChange }) {
@@ -23,6 +24,8 @@ export default function BriaAssistant({ currentUser, initialOpen = false, onDock
   useEffect(() => { onOpenChange?.(available && open); }, [available, open, onOpenChange]);
   // Otra pantalla le pide algo a Bria (Ritmo, 10 de octubre de 2026): el panel se abre con el mensaje listo.
   useEffect(() => onBriaAsk(() => { setOpen(true); setFullScreen(false); }), []);
+  // Abrir una conversación concreta (el foco de la semana): el panel se abre y el chat la carga.
+  useEffect(() => onBriaOpen(() => { setOpen(true); setFullScreen(false); }), []);
   useEffect(() => {
     if (!open || !fullScreen || !available) return;
     const before = document.body.style.overflow; document.body.style.overflow = 'hidden';
@@ -33,6 +36,8 @@ export default function BriaAssistant({ currentUser, initialOpen = false, onDock
   // Portal avoids the fixed header's backdrop-filter containing block. The pet
   // occupies the bottom-right corner; the team chat now opens from the header.
   return createPortal(<>
+    {/* «Bria se adelanta» (10 de octubre de 2026): un aviso discreto encima de la mascota, solo con el panel cerrado. */}
+    <BriaNudge userId={currentUser.id} hidden={open} />
     <button ref={trigger} type="button" aria-label="Preguntarle a Bria" title="Preguntarle a Bria" aria-expanded={open} aria-controls="bria-assistant-panel" aria-hidden={open || undefined} tabIndex={open ? -1 : undefined} data-bria-assistant-trigger onClick={() => setOpen(true)} className={cn('fixed bottom-[calc(1rem+env(safe-area-inset-bottom))] right-4 z-[49] flex h-20 w-20 items-center justify-center rounded-xl bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan sm:h-24 sm:w-24', open && 'hidden')}><BriaMascot {...mascotActivity} className="h-20 w-20 sm:h-24 sm:w-24" /></button>
     <aside id="bria-assistant-panel" aria-label="Asistente Bria" data-bria-assistant-panel data-bria-mode={fullScreen ? 'fullscreen' : 'docked'} className={cn('fixed z-[230] overflow-hidden border border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100', !open && 'hidden', fullScreen ? 'inset-0' : 'bottom-3 right-3 top-20 w-[min(440px,calc(100vw-24px))] rounded-3xl')}>
       <BriaConversation key={currentUser.id} userId={currentUser.id} userName={currentUser.name} userRole={currentUser.role} fullScreen={fullScreen} visible={open} onActivityChange={setMascotActivity} onFullScreen={() => setFullScreen(value => !value)} onClose={close} onOpenSource={source => { setFullScreen(false); navigate(source.url); }} />

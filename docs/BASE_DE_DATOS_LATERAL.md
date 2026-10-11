@@ -20,6 +20,8 @@ Lo que sí se exige:
 | `agency_facts`, `agency_fact_events`, `agency_questions` | Memoria de la agencia: hechos con certeza y fuente, su historial y las dudas abiertas | `scripts/sql/bria-agency-facts.sql` | `briaAgencyFactRepository.js` |
 | `sync_state` | Prototipo de sincronización continua de Drive y correo. **No se aplica todavía.** | `scripts/sql/bria-source-sync.sql` | ninguno |
 | `rhythm_readings` | Lecturas de la semana que Bria escribe para la dirección desde Ritmo y el mapa de carga, con su resumen de datos y su modelo; una fila por generación | `scripts/sql/bria-rhythm-readings.sql` | `weeklyReadingRepository.js` |
+| `nudge_dismissals` | Avisos de «Bria se adelanta» que una persona ocultó, con su clave y hasta cuándo | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
+| `weekly_focus_deliveries` | El foco de la semana que Bria dejó en el chat de cada persona: semana, persona y conversación | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
 
 ### `vault` (bóveda de accesos)
 | Tabla | Qué guarda | Archivo | Acceso |

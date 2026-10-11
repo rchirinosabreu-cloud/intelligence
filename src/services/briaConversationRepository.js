@@ -47,6 +47,22 @@ export const createBriaConversationRepository = ({ pool, workspace, storage, req
     }
     return { deleted: true, filesPending: bucketPending };
   },
+  /**
+   * Una nota que Bria deja sola en un chat nuevo de la persona (el foco de la semana, 10 de octubre de 2026). Es el
+   * único turno de Bria sin pregunta: abre la conversación con revisión 1 y la respuesta en la posición 1, así el
+   * primer mensaje de la persona cae en las posiciones 2 y 3 como cualquier otro.
+   */
+  async postAssistantNote(actor, { title, text, metadata = {} }) {
+    const id = randomUUID();
+    const db = await pool.connect();
+    try {
+      await db.query('BEGIN');
+      await db.query('INSERT INTO bria_memory.conversations(id,workspace,actor_ref,title,revision) VALUES($1,$2,$3,$4,1)', [id, workspace, actor.ref, String(title || 'Nota de Bria').slice(0, 90)]);
+      await db.query('INSERT INTO bria_memory.conversation_turns(conversation_id,position,role,content,metadata) VALUES($1,1,\'assistant\',$2,$3)', [id, String(text || ''), { sources: [], failures: [], toolsUsed: [], ...metadata, accessFingerprint: fingerprint(actor) }]);
+      await db.query('COMMIT');
+    } catch (failure) { await db.query('ROLLBACK'); throw failure; } finally { db.release(); }
+    return this.get(actor, id);
+  },
   async append(actor, id, expectedRevision, question, result, files = []) {
     const db = await pool.connect();
     try {

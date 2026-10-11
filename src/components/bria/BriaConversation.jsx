@@ -11,7 +11,7 @@ import BriaAccessCards from './BriaAccessCards';
 import BriaAccessCapture from './BriaAccessCapture';
 import { cn } from '@/lib/utils';
 import { validateAttachmentSelection } from '@/lib/briaAttachments';
-import { onBriaAsk } from '@/lib/briaAsk';
+import { onBriaAsk, onBriaOpen } from '@/lib/briaAsk';
 import { normalizeQuickReplies } from '@/lib/briaQuickReplies';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import toast from 'react-hot-toast';
@@ -95,6 +95,10 @@ export default function BriaConversation({ userId = 'local-research-owner', user
   useEffect(() => { if (visible && view === 'chat') input.current?.focus({ preventScroll: true }); }, [visible, view, loading]);
   // Un mensaje que llega de otra pantalla queda escrito, no enviado: la persona lo lee y decide.
   useEffect(() => onBriaAsk(message => { setQuestion(message); setView('chat'); setTimeout(() => input.current?.focus({ preventScroll: true }), 0); }), []);
+  // Otra pantalla pide abrir una conversación concreta (el foco de la semana, 10 de octubre de 2026): se carga y se
+  // refresca la lista, porque la dejó Bria sola y todavía no estaba en el historial.
+  const openChatRef = useRef(null);
+  useEffect(() => onBriaOpen(async id => { await openChatRef.current?.(id); loadHistory().catch(failure => console.error('[BriaConversation]', failure.message)); }), []); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { dragDepth.current = 0; setDraggingFiles(false); }, [visible, view, allowAttachments, busy, loading, voiceBusy]);
   const canAddFiles = visible && view === 'chat' && allowAttachments && !busy && !loading && !voiceBusy;
   const addFiles = additions => {
@@ -114,6 +118,7 @@ export default function BriaConversation({ userId = 'local-research-owner', user
     catch (failure) { setError(failure.message); }
     finally { setLoading(false); }
   };
+  openChatRef.current = openChat;
   const newChat = async () => {
     if (lock.current || voiceBusy) return;
     setLoading(true); setError('');
