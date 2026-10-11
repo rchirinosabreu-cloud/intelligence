@@ -42,13 +42,22 @@ export const createBriaActionTools = (service) => service ? [{
   run: run(service, 'CREATE_PLAN')
 }, {
   name: 'cambiar_pendientes',
-  description: 'Prepara el mismo cambio de estado para varias tareas de Gestión a la vez (hasta 10): pasarlas a en proceso, realizada o pendiente. NO cambia nada: muestra cuáles sí y cuáles no, y la persona confirma. Úsala cuando pidan cerrar, arrancar o devolver a pendiente varias tareas juntas («cierra las tres de Aristea»). Antes localízalas con mis_tareas o tareas_de_cliente y usa sus ids. Devolver o reabrir piden motivo por tarea: para eso usa cambiar_pendiente de a una.',
+  description: 'Prepara el mismo cambio para varias tareas de Gestión a la vez (hasta 50): estado (en proceso, realizada o pendiente), responsable y/o fecha de entrega. NO cambia nada: muestra cuáles sí y cuáles no, avisa de lo que conviene mirar (compromisos con hora, pendientes privados, tareas en proceso con otra persona) y la persona confirma. Las tareas se dan por sus ids (de mis_tareas, tareas_de_cliente o buscar_pendientes) o, mejor, con «filtro» y «tareas» vacío cuando el pedido es por persona, cliente, sin responsable o vencidas («todos los pendientes de Jarlan, pónselos a Kamila», «los que no tienen asignación, a Francisco»): el servidor resuelve el lote. Devolver o reabrir piden motivo por tarea: para eso usa cambiar_pendiente de a una.',
   allowed: allowedFor('TASKS_STATUS'),
   parameters: { type: 'object', properties: {
-    tareas: { type: 'array', maxItems: 10, items: { type: 'string' }, description: 'Ids de las tareas.' },
+    tareas: { type: 'array', maxItems: 50, items: { type: 'string' }, description: 'Ids de las tareas; vacío si se usa filtro.' },
+    filtro: { type: ['object', 'null'], description: 'Qué tareas, resueltas en el servidor: responsable (nombre), sinResponsable, cliente (nombre o id), estado (pendientes, en_proceso, devueltas, realizadas, todas = no cerradas) y vencidas; combinables.', properties: {
+      responsable: { type: ['string', 'null'] },
+      sinResponsable: { type: ['boolean', 'null'] },
+      cliente: { type: ['string', 'null'] },
+      estado: { type: ['string', 'null'], enum: ['pendientes', 'en_proceso', 'devueltas', 'realizadas', 'todas', null] },
+      vencidas: { type: ['boolean', 'null'] }
+    }, additionalProperties: false },
     estado: { type: ['string', 'null'], enum: ['pendiente', 'en proceso', 'realizada', null] },
+    responsable: { type: ['string', 'null'], description: 'Nuevo responsable: el nombre que dio la persona; no lo inventes.' },
+    fecha: { type: ['string', 'null'], description: 'Nueva entrega: mañana, viernes, 15 de octubre o YYYY-MM-DD.' },
     nuevo: { type: 'boolean' }
-  }, required: ['tareas', 'estado'], additionalProperties: false },
+  }, required: ['tareas', 'filtro', 'estado', 'responsable', 'fecha'], additionalProperties: false },
   run: run(service, 'TASKS_STATUS')
 }, {
   name: 'crear_pieza',
