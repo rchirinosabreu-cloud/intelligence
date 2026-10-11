@@ -58,9 +58,11 @@ export const nudgeActions = ({ kind, personName = null, clientName = null, title
   const name = firstName(personName);
   const summary = { label: 'Que Bria me resuma lo que tiene', ask: `Resúmeme qué tiene pendiente ${name} hoy y qué le vence pronto.` };
   switch (kind) {
-    // Correo importante (11 de octubre de 2026): el enlace abre el mensaje en Gmail (sitio externo); Bria lo resume y
-    // propone la respuesta, que la persona envía desde su correo. Bria nunca manda correos.
-    case 'CORREO_IMPORTANTE': return [...(url ? [{ label: 'Abrir el correo', to: url, external: true }] : []), { label: 'Que Bria me lo resuma y proponga respuesta', ask: `Resume el correo «${title || 'sin asunto'}»${personName ? ` de ${personName}` : ''}${clientName ? ` (${clientName})` : ''} (id ${messageId || 'desconocido'}) y propón una respuesta breve y amable que yo pueda enviar.` }];
+    // Correo importante (11 de octubre de 2026). Sin enlace al correo (Rodny: «no siempre la plataforma está abierta
+    // desde el navegador de social o de contacto, entonces el link no llevaría a ese correo»): lo que importa es el
+    // aviso, que ya lo pone en el radar. Bria sí puede resumirlo, porque lo lee por IMAP y no por el navegador; propone
+    // la respuesta y la persona la envía desde su correo. Bria nunca manda correos.
+    case 'CORREO_IMPORTANTE': return [{ label: 'Que Bria me lo resuma y proponga respuesta', ask: `Resume el correo «${title || 'sin asunto'}»${personName ? ` de ${personName}` : ''}${clientName ? ` (${clientName})` : ''} (id ${messageId || 'desconocido'}) y propón una respuesta breve y amable que yo pueda enviar.` }];
     case 'SIN_PROCESO': return [{ label: 'Ver sus pendientes', to: personBoardUrl(personName) }, summary];
     case 'VENCE_HOY': return [taskIds.length === 1 && url ? { label: 'Abrir la tarea', to: url } : { label: 'Ver sus pendientes', to: personBoardUrl(personName) }, summary];
     case 'CARGA_MANANA': return [{ label: 'Abrir el mapa de carga', to: '/manager?tab=ritmo' }, { label: 'Pedirle a Bria qué se mueve', ask: `Revisa la carga de ${personName || name} para ${day ? `el ${day}` : 'mañana'} y propón qué tarea se mueve o se reparte.` }];

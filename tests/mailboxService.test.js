@@ -87,11 +87,13 @@ test('reading keeps only metadata and the decision, skips what was already seen,
   assert.equal(await service.readMessage('<nadie@x>'), null);
 });
 
-test('the pulse turns an important mail into a fact with its own actions: open in Gmail (external) and ask Bria for a summary and a reply', () => {
+// Sin enlace al correo (Rodny, 11 de octubre de 2026): el navegador no suele estar entrado en social ni en contacto,
+// así que el link no llevaría al correo; el aviso en sí ya lo pone en el radar. Bria sí lo resume, porque lee por IMAP.
+test('the pulse turns an important mail into a fact with one action: ask Bria for a summary and a reply, never a link the browser cannot open', () => {
   const [factRow] = collectFacts({ mails: [{ accountId: 'acc-1', accountLabel: 'Social', messageId: '<a@aristea>', from: 'maria@aristea.co', fromName: 'María Pérez', subject: 'Cambios al reel', clientName: 'Aristea', severity: 3, text: 'Correo en Social de Aristea de María Pérez (maria@aristea.co): «Cambios al reel» — de un cliente, pide cambios o se queja.', url: 'https://mail.google.com/mail/u/0/#search/rfc822msgid%3Aa%40aristea' }], today: '2026-10-13' });
   assert.deepEqual([factRow.id, factRow.kind, factRow.severity, factRow.messageId], ['CORREO_IMPORTANTE:acc-1:<a@aristea>', 'CORREO_IMPORTANTE', 3, '<a@aristea>']);
-  assert.deepEqual(factRow.actions.map((a) => [a.label, a.external || false]), [['Abrir el correo', true], ['Que Bria me lo resuma y proponga respuesta', false]]);
-  assert.match(factRow.actions[1].ask, /Resume el correo «Cambios al reel» de María Pérez \(Aristea\) \(id <a@aristea>\) y propón una respuesta breve/);
+  assert.deepEqual(factRow.actions.map((a) => [a.label, a.to || null]), [['Que Bria me lo resuma y proponga respuesta', null]]);
+  assert.match(factRow.actions[0].ask, /Resume el correo «Cambios al reel» de María Pérez \(Aristea\) \(id <a@aristea>\) y propón una respuesta breve/);
 });
 
 test('the route: managers list, only admins connect, test and remove; the password never comes back; the tools list and read for managers', async () => {
