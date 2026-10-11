@@ -35,13 +35,14 @@ try {
   await card.getByRole('button', { name: 'Ocultar por hoy' }).click();
   await page.waitForFunction(() => document.querySelector('[data-bria-nudge]')?.getAttribute('data-bria-nudge') === 'SIN_PROCESO');
   assert.ok(sent.includes('POST /api/bria/nudges/dismiss'));
-  await page.getByText('Melissa lleva 35 minutos', { exact: false }).waitFor();
+  await page.getByText('Melissa no tiene una tarea en proceso desde las 9:55', { exact: false }).waitFor();
+  assert.equal(await card.getByRole('link', { name: 'Ver sus pendientes' }).getAttribute('href'), '/gestion?responsable=Melissa%20Casta%C3%B1o', 'the board link lands on her tasks');
   await page.screenshot({ path: path.join(output, 'bria-adelanta-sin-proceso.png') });
-  // «Pedírselo a Bria» deja el mensaje escrito, nunca lo manda.
-  await card.getByRole('button', { name: 'Pedírselo a Bria' }).click();
+  // «Que Bria me resuma lo que tiene» deja el mensaje escrito, nunca lo manda.
+  await card.getByRole('button', { name: 'Que Bria me resuma lo que tiene' }).click();
   await page.locator('[data-bria-assistant-panel]').waitFor({ state: 'visible' });
   const composer = page.getByLabel('Mensaje para Bria');
-  assert.match(await composer.inputValue(), /escribirle a Melissa/);
+  assert.match(await composer.inputValue(), /Resúmeme qué tiene pendiente Melissa/);
   assert.equal(sent.some(line => line.endsWith('/messages')), false, 'nothing was sent');
   await page.screenshot({ path: path.join(output, 'bria-adelanta-mensaje-listo.png') });
   // La consulta rápida: lo que la persona escribe en «Haz tu consulta» sí se envía, al chat abierto.

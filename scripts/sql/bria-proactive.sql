@@ -36,6 +36,8 @@ CREATE TABLE IF NOT EXISTS bria_memory.pulse_messages (
   dismissed_at TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS pulse_messages_user ON bria_memory.pulse_messages(user_ref, created_at DESC);
+-- Los botones de cada aviso los decide la plataforma según el hecho (enlace, o algo que pedirle a Bria).
+ALTER TABLE bria_memory.pulse_messages ADD COLUMN IF NOT EXISTS actions JSONB NOT NULL DEFAULT '[]';
 -- El foco de la semana que Bria dejó en el chat de cada persona: una fila por semana y persona, con su conversación.
 CREATE TABLE IF NOT EXISTS bria_memory.weekly_focus_deliveries (
   week_key TEXT NOT NULL CHECK (week_key ~ '^[0-9]{4}-W[0-9]{2}$'),

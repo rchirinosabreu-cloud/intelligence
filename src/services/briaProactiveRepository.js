@@ -57,15 +57,15 @@ export const createBriaProactiveRepository = ({ pool }) => ({
     const saved = [];
     for (const row of rows) {
       const id = randomUUID();
-      await pool.query('INSERT INTO bria_memory.pulse_messages(id,user_ref,kinds,fact_ids,fingerprints,title,body,ask,url,task_ids,urgency,source,model,usage,expires_at,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)',
-        [id, userRef, row.kinds, row.factIds, row.fingerprints, row.title, row.body || '', row.ask || null, row.url || null, row.taskIds || [], row.urgency, row.source, row.source === 'MODELO' ? model : null, row.source === 'MODELO' ? usage : null, expiresAt, createdAt]);
+      await pool.query('INSERT INTO bria_memory.pulse_messages(id,user_ref,kinds,fact_ids,fingerprints,title,body,ask,url,task_ids,urgency,source,model,usage,expires_at,created_at,actions) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)',
+        [id, userRef, row.kinds, row.factIds, row.fingerprints, row.title, row.body || '', row.ask || null, row.url || null, row.taskIds || [], row.urgency, row.source, row.source === 'MODELO' ? model : null, row.source === 'MODELO' ? usage : null, expiresAt, createdAt, JSON.stringify(row.actions || [])]);
       saved.push({ id, ...row });
     }
     return saved;
   },
   async activeMessages(userRef, now = new Date()) {
-    const { rows } = await pool.query('SELECT id, kinds, title, body, ask, url, task_ids, urgency, created_at FROM bria_memory.pulse_messages WHERE user_ref=$1 AND dismissed_at IS NULL AND expires_at > $2 ORDER BY created_at DESC', [userRef, now]);
-    return rows.map((row) => ({ id: row.id, kinds: row.kinds, title: row.title, body: row.body, ask: row.ask, url: row.url, taskIds: row.task_ids, urgency: row.urgency, createdAt: row.created_at }));
+    const { rows } = await pool.query('SELECT id, kinds, title, body, ask, url, task_ids, urgency, actions, created_at FROM bria_memory.pulse_messages WHERE user_ref=$1 AND dismissed_at IS NULL AND expires_at > $2 ORDER BY created_at DESC', [userRef, now]);
+    return rows.map((row) => ({ id: row.id, kinds: row.kinds, title: row.title, body: row.body, ask: row.ask, url: row.url, taskIds: row.task_ids, urgency: row.urgency, actions: Array.isArray(row.actions) ? row.actions : [], createdAt: row.created_at }));
   },
   async dismissMessage(userRef, id, now = new Date()) {
     const { rowCount } = await pool.query('UPDATE bria_memory.pulse_messages SET dismissed_at=$3 WHERE user_ref=$1 AND id=$2 AND dismissed_at IS NULL', [userRef, id, now]);

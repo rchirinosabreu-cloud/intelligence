@@ -7,8 +7,8 @@ import { requestBriaNudges } from '@/lib/briaNudgeRequest';
 import { cn } from '@/lib/utils';
 
 // «Bria se adelanta» (Rodny, 10 de octubre de 2026): un aviso discreto encima del botón de Bria, sin abrir el chat.
-// Un hecho de la plataforma y una sugerencia; «Pedírselo a Bria» deja el mensaje escrito en el chat y la persona
-// decide si lo manda. Se oculta por hoy con la X. Se refresca cada cinco minutos con la pestaña visible.
+// Un hecho de la plataforma y sus acciones según el tipo (a dónde ir, qué pedirle a Bria: queda escrito y la persona
+// decide si lo manda). Se oculta por hoy con la X. Se refresca cada cinco minutos con la pestaña visible.
 // Y la consulta rápida (Rodny, el mismo día: «hacerle una pregunta rápida a Bria, no necesariamente abriendo un chat
 // nuevo … “Haz tu consulta” y el icono de pulso»): una caja de una línea siempre a mano; lo que la persona escribe ahí
 // sí se envía, al chat que tenga abierto. Sin aviso, la tarjeta es solo esa caja con un recordatorio de Bria.
@@ -60,10 +60,13 @@ export default function BriaNudge({ userId, hidden = false, request = requestBri
             </p>
             <h3 className="mt-1 text-sm font-semibold leading-5 text-zinc-950 dark:text-white">{nudge.title}</h3>
             {nudge.body && <p className="mt-1 text-sm leading-5 text-zinc-600 dark:text-zinc-300">{nudge.body}</p>}
-            <div className="mt-2 -ml-2 flex flex-wrap items-center gap-x-1">
-              {nudge.conversationId && <button type="button" className={action} onClick={() => openBriaConversation(nudge.conversationId)}>Leer en Bria<ArrowUpRight className="h-3.5 w-3.5" /></button>}
-              {nudge.ask && <button type="button" className={action} onClick={() => askBria(nudge.ask)}>Pedírselo a Bria<ArrowUpRight className="h-3.5 w-3.5" /></button>}
-              {nudge.url && <Link to={nudge.url} className={action}>Ver en Gestión<ArrowUpRight className="h-3.5 w-3.5" /></Link>}
+            {/* Los botones los decide la plataforma según el hecho: a dónde ir y qué pedirle a Bria (queda escrito, la persona lo envía). */}
+            <div className="mt-2 -ml-2 flex flex-wrap items-center gap-x-1" data-bria-nudge-actions>
+              {(nudge.actions || []).map((item) => item.conversationId
+                ? <button key={item.label} type="button" className={action} onClick={() => openBriaConversation(item.conversationId)}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></button>
+                : item.ask
+                  ? <button key={item.label} type="button" className={action} onClick={() => askBria(item.ask)}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></button>
+                  : item.to ? <Link key={item.label} to={item.to} className={action}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></Link> : null)}
             </div>
           </div>
           <button type="button" onClick={dismiss} disabled={busy} aria-label="Ocultar por hoy" title="Ocultar por hoy" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-200/60 hover:text-zinc-700 disabled:opacity-50 dark:hover:bg-white/10 dark:hover:text-zinc-200">

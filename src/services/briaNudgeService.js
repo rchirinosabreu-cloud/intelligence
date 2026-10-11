@@ -62,7 +62,7 @@ export const createBriaNudgeService = ({ db = prisma, repository, now = () => ne
       if (pulseLive) {
         const messages = await repo.activeMessages(userRef, at);
         const focusNudges = buildNudges({ people: [], now: at, dismissedKeys: dismissed, weeklyFocus });
-        return { nudges: [...focusNudges, ...messages.map((row) => ({ key: `PULSO:${row.id}`, kind: row.kinds?.[0] || 'PULSO', kinds: row.kinds, title: row.title, body: row.body, ask: row.ask, url: row.url, taskIds: row.taskIds || [], urgency: row.urgency, createdAt: row.createdAt }))], source: 'pulso' };
+        return { nudges: [...focusNudges, ...messages.map((row) => ({ key: `PULSO:${row.id}`, kind: row.kinds?.[0] || 'PULSO', kinds: row.kinds, title: row.title, body: row.body, url: row.url, taskIds: row.taskIds || [], urgency: row.urgency, actions: row.actions || [], createdAt: row.createdAt }))], source: 'pulso' };
       }
       const people = await this.readPeople(at);
       const viewer = people.find((person) => person.userId === userRef) || (await db.teamMember.findFirst({ where: { userId: userRef }, select: { id: true } }).then((row) => row ? { personId: row.id } : null));

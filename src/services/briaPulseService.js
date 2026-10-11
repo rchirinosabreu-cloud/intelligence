@@ -1,6 +1,6 @@
 // El pulso de Bria en el servidor (Rodny, 10 de octubre de 2026: «quiero que viva en la plataforma desde ahora
-// mismo»). Cada hora hábil: el código reúne los hechos de toda la plataforma una sola vez, y para cada persona con
-// Bria el modelo decide si dice algo, qué y cómo, dentro de los topes. Lo dicho queda en `pulse_messages`, que es lo
+// mismo»). Cada 15 minutos en horario hábil: el código reúne los hechos de toda la plataforma una sola vez, y para
+// cada persona con Bria el modelo decide si dice algo, qué y cómo, dentro de los topes (una vez por hora y persona). Lo dicho queda en `pulse_messages`, que es lo
 // que la tarjeta encima de la mascota muestra. Si el modelo no está, Bria dice el hecho más importante con las
 // palabras de la plataforma (`REGLA`): nunca se queda muda por una caída del proveedor.
 
@@ -9,7 +9,7 @@ import { AI_MODELS } from '../config/aiConfig.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { needsClientReview } from '../lib/contentApproval.js';
 import { buildNudges, bogotaDayEnd } from '../lib/briaNudges.js';
-import { collectFacts, pulseBudget, mutedKinds, eligibleFacts, buildPulseDigest, buildPulseRequest, parsePulse, validatePulse, fallbackPulse, workdayBounds, hourKeyOf, isWorkingTime, PULSE_LIMITS } from '../lib/briaPulse.js';
+import { collectFacts, pulseBudget, mutedKinds, eligibleFacts, buildPulseDigest, buildPulseRequest, parsePulse, validatePulse, fallbackPulse, workdayBounds, slotKeyOf, isWorkingTime, PULSE_LIMITS } from '../lib/briaPulse.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { createBriaProactiveRepository } from './briaProactiveRepository.js';
 import { getBriaNudgeService } from './briaNudgeService.js';
@@ -82,12 +82,12 @@ export const createBriaPulseService = ({
       return { saved };
     },
 
-    /** Una vez por hora hábil, para todas las personas con Bria. */
-    async runHourly() {
+    /** Cada tramo de 15 minutos en horario hábil, para todas las personas con Bria; a cada una le habla como máximo una vez por hora. */
+    async run() {
       const at = now();
       if (!isWorkingTime(at)) return { skipped: 'fuera de horario' };
-      const hourKey = hourKeyOf(at);
-      if (!await repo.claimRun(hourKey)) return { skipped: 'esta hora ya corrió', hourKey };
+      const slotKey = slotKeyOf(at);
+      if (!await repo.claimRun(slotKey)) return { skipped: 'este tramo ya corrió', slotKey };
       const { facts } = await this.collect(at);
       let spoke = 0, quiet = 0, failed = 0;
       if (facts.length) {
@@ -96,7 +96,7 @@ export const createBriaPulseService = ({
           catch (error) { failed += 1; logger.error('[BriaPulse] No se pudo decidir para una persona:', error?.message || error); }
         }
       }
-      return { hourKey, facts: facts.length, spoke, quiet, failed };
+      return { slotKey, facts: facts.length, spoke, quiet, failed };
     }
   };
 };
@@ -109,12 +109,12 @@ export const initBriaPulseScheduler = ({ service = getBriaPulseService, setInter
   const tick = async () => {
     if (running) return;
     running = true;
-    try { await (typeof service === 'function' ? service() : service).runHourly(); }
+    try { await (typeof service === 'function' ? service() : service).run(); }
     catch (error) { logger.error('[BriaPulse] El pulso falló:', error?.message || error); }
     finally { running = false; }
   };
   setTimeoutFn(tick, 3 * 60 * 1000)?.unref?.();
   setIntervalFn(tick, PULSE_CHECK_MS)?.unref?.();
-  logger.log('[BriaPulse] Pulso de Bria programado (cada hora hábil, Bogotá).');
+  logger.log('[BriaPulse] Pulso de Bria programado (cada 15 minutos en horario hábil, Bogotá).');
   return tick;
 };

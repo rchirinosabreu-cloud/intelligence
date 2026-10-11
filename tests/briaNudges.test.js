@@ -2,7 +2,7 @@
 // juicios. La regla es pura y solo habla en horario laboral de Bogotá.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildNudges, isWorkingTime, bogotaClock, bogotaDayEnd, workdayStart, dismissUntil, isValidNudgeKey, formatIdle, IDLE_MINUTES } from '../src/lib/briaNudges.js';
+import { buildNudges, nudgeActions, bogotaTime, isWorkingTime, bogotaClock, bogotaDayEnd, workdayStart, dismissUntil, isValidNudgeKey, formatIdle, IDLE_MINUTES } from '../src/lib/briaNudges.js';
 
 const MIN = 60_000;
 const tuesday1030 = new Date('2026-10-13T15:30:00Z'); // martes 13 de octubre, 10:30 de Bogotá
@@ -21,15 +21,17 @@ test('the Bogotá clock, the working window and the day end are read at UTC−5 
   assert.equal(formatIdle(125 * MIN), '2 h 5 min');
 });
 
-test('someone with pending work and nothing in progress for 30 minutes gets a sober, friendly nudge with a message ready for Bria', () => {
+test('someone with pending work and nothing in progress for 30 minutes gets a sober, friendly nudge that names the hour and her own actions', () => {
   const [nudge] = buildNudges({ people: [melissa], now: tuesday1030 });
   assert.equal(nudge.kind, 'SIN_PROCESO');
   assert.equal(nudge.key, 'SIN_PROCESO:m-mel');
-  assert.equal(nudge.title, 'Melissa lleva 35 minutos sin una tarea en proceso.');
+  // La hora y no los minutos (Rodny: la tarjeta se lee más tarde y «lleva 35 minutos» envejece).
+  assert.equal(nudge.title, 'Melissa no tiene una tarea en proceso desde las 9:55.');
   assert.match(nudge.body, /Tiene 3 pendientes por empezar\. Puede ser un buen momento para preguntarle en qué está\./);
-  assert.match(nudge.ask, /escribirle a Melissa para preguntarle, con amabilidad, en qué está trabajando/);
-  assert.equal(nudge.url, '/gestion');
-  for (const word of ['lento', 'floj', 'mal', 'perezos']) assert.doesNotMatch(`${nudge.title} ${nudge.body} ${nudge.ask}`, new RegExp(word, 'i'));
+  assert.equal(nudge.url, '/gestion?responsable=Melissa%20Casta%C3%B1o', 'the board link lands on her tasks, never on the bare Kanban');
+  assert.deepEqual(nudge.actions.map((a) => [a.label, a.to || null]), [['Ver sus pendientes', '/gestion?responsable=Melissa%20Casta%C3%B1o'], ['Que Bria me resuma lo que tiene', null]]);
+  assert.equal(nudge.actions[1].ask, 'Resúmeme qué tiene pendiente Melissa hoy y qué le vence pronto.');
+  for (const word of ['lento', 'floj', 'mal', 'perezos']) assert.doesNotMatch(`${nudge.title} ${nudge.body} ${nudge.actions[1].ask}`, new RegExp(word, 'i'));
   assert.equal(buildNudges({ people: [{ ...melissa, lastActivityAt: new Date(tuesday1030.getTime() - (IDLE_MINUTES - 1) * MIN) }], now: tuesday1030 }).length, 0, 'under 30 minutes nothing is said');
   assert.equal(buildNudges({ people: [{ ...melissa, inProgress: [{ id: 't1', title: 'Reel' }] }], now: tuesday1030 }).length, 0, 'with a task in progress nothing is said');
   assert.equal(buildNudges({ people: [{ ...melissa, pendingCount: 0 }], now: tuesday1030 }).length, 0, 'without pending work there is nothing to ask');
@@ -55,10 +57,23 @@ test('in the afternoon, tasks due today that have not started are flagged with t
   assert.deepEqual([nudge.kind, nudge.key, nudge.taskIds, nudge.url], ['VENCE_HOY', 'VENCE_HOY:m-bra', ['t1'], '/gestion?taskId=t1']);
   assert.equal(nudge.title, 'A Brayan le vence hoy una tarea que todavía no está en proceso.');
   assert.match(nudge.body, /«Portada de octubre»\. Vale la pena confirmar/);
+  assert.deepEqual(nudge.actions.map((a) => a.label), ['Abrir la tarea', 'Que Bria me resuma lo que tiene']);
   const many = buildNudges({ people: [{ ...brayan, dueToday: Array.from({ length: 5 }, (_, i) => ({ id: `d${i}`, title: `Tarea ${i}`, status: 'PENDIENTE' })) }], now: new Date('2026-10-13T19:05:00Z') })[0];
   assert.match(many.title, /vencen hoy 5 tareas/);
   assert.match(many.body, /y 2 más/);
-  assert.equal(many.url, '/gestion');
+  assert.equal(many.url, '/gestion?responsable=Brayan%20Torres');
+  assert.deepEqual(many.actions.map((a) => a.label), ['Ver sus pendientes', 'Que Bria me resuma lo que tiene']);
+});
+
+test('each kind of fact names its own actions: where to go and what to ask Bria; the weekly focus opens its chat', () => {
+  assert.deepEqual(nudgeActions({ kind: 'OPERACION_ROJA', clientName: 'Aristea', url: '/clientes/operacion/aristea' }).map((a) => a.label), ['Abrir operación', 'Pedirle a Bria qué falta']);
+  assert.deepEqual(nudgeActions({ kind: 'PIEZA_SIN_APROBAR', clientName: 'Foobespain', title: 'Reel', day: '14 de octubre', url: '/parrillas/p?item=i' })[1], { label: 'Redactar recordatorio al cliente', ask: 'Redacta un recordatorio breve y amable para Foobespain: «Reel» sale el 14 de octubre y todavía falta su aprobación.' });
+  assert.deepEqual(nudgeActions({ kind: 'DEVUELTO_SIN_TOCAR', title: 'Portada', url: '/gestion?taskId=t' }).map((a) => a.label), ['Abrir la tarea', 'Ver qué pidió el cliente']);
+  assert.deepEqual(nudgeActions({ kind: 'CARGA_MANANA', personName: 'Brayan Torres', day: '14 de octubre' }).map((a) => a.label), ['Abrir el mapa de carga', 'Pedirle a Bria qué se mueve']);
+  assert.deepEqual(nudgeActions({ kind: 'FOCO_SEMANAL', conversationId: 'c-1' }), [{ label: 'Leer en Bria', conversationId: 'c-1' }]);
+  const [focus] = buildNudges({ people: [], now: tuesday1030, weeklyFocus: { conversationId: 'c-1', weekKey: '2026-W42' } });
+  assert.deepEqual(focus.actions, [{ label: 'Leer en Bria', conversationId: 'c-1' }]);
+  assert.equal(bogotaTime(new Date('2026-10-13T14:05:00Z')), '9:05');
 });
 
 test('the weekly focus comes first, longer idleness before shorter, at most five, and hidden keys expire by kind', () => {

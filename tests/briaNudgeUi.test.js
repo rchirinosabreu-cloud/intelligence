@@ -40,10 +40,15 @@ test('the quick question box is always there, says «Haz tu consulta» with the 
   assert.match(conversation, /useEffect\(\(\) => \{ sendRef\.current = send; \}\);/);
 });
 
-test('the actions leave the message written in Bria or open Gestión; nothing is sent by itself and the X hides on the server', () => {
-  assert.match(nudge, /onClick=\{\(\) => askBria\(nudge\.ask\)\}>Pedírselo a Bria/);
-  assert.match(nudge, /onClick=\{\(\) => openBriaConversation\(nudge\.conversationId\)\}>Leer en Bria/);
-  assert.match(nudge, /<Link to=\{nudge\.url\}[^>]*>Ver en Gestión/);
+// Los botones los decide la plataforma según el hecho (Rodny, 10 de octubre de 2026: «¿cuál sería la lógica de ir al
+// kanban en un anuncio así?»): un enlace al sitio exacto, algo que pedirle a Bria (queda escrito) o abrir un chat.
+test('the actions come with each nudge by kind: a link to the exact place, something to ask Bria (left written) or a chat to open; nothing is sent by itself and the X hides on the server', () => {
+  assert.match(nudge, /data-bria-nudge-actions/);
+  assert.match(nudge, /\(nudge\.actions \|\| \[\]\)\.map\(/);
+  assert.match(nudge, /onClick=\{\(\) => askBria\(item\.ask\)\}>\{item\.label\}/);
+  assert.match(nudge, /onClick=\{\(\) => openBriaConversation\(item\.conversationId\)\}>\{item\.label\}/);
+  assert.match(nudge, /<Link key=\{item\.label\} to=\{item\.to\}/);
+  assert.doesNotMatch(nudge, /Pedírselo a Bria|Ver en Gestión/, 'no generic labels: each kind names its own');
   assert.doesNotMatch(nudge, /\/messages/, 'the nudge never talks to the chat endpoint');
   assert.match(nudge, /aria-label="Ocultar por hoy"/);
   assert.match(nudge, /request\('\/dismiss', \{ method: 'POST', body: \{ key: nudge\.key \} \}\)/);

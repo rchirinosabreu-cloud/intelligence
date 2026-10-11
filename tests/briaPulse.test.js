@@ -3,13 +3,13 @@
 // en la jornada, sin juicios; si el modelo falla, Bria dice el hecho más importante con las palabras de la plataforma.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { collectFacts, pulseBudget, mutedKinds, eligibleFacts, buildPulseDigest, buildPulseRequest, parsePulse, validatePulse, fallbackPulse, workdayBounds, hourKeyOf, PULSE_LIMITS, fingerprintOf } from '../src/lib/briaPulse.js';
+import { collectFacts, pulseBudget, mutedKinds, eligibleFacts, buildPulseDigest, buildPulseRequest, parsePulse, validatePulse, fallbackPulse, workdayBounds, slotKeyOf, PULSE_LIMITS, fingerprintOf } from '../src/lib/briaPulse.js';
 import { createBriaPulseService, initBriaPulseScheduler } from '../src/services/briaPulseService.js';
 import { createBriaNudgeService } from '../src/services/briaNudgeService.js';
 
 const H = 3_600_000;
 const tuesday1030 = new Date('2026-10-13T15:30:00Z'); // martes 13 de octubre, 10:30 de Bogotá
-const nudges = [{ key: 'SIN_PROCESO:m-mel', kind: 'SIN_PROCESO', personId: 'm-mel', personName: 'Melissa Castaño', title: 'Melissa lleva 35 minutos sin una tarea en proceso.', body: 'Tiene 3 pendientes por empezar.', ask: 'Ayúdame a escribirle a Melissa.', url: '/gestion', taskIds: [] }, { key: 'FOCO_SEMANAL:x', kind: 'FOCO_SEMANAL', title: 'foco' }];
+const nudges = [{ key: 'SIN_PROCESO:m-mel', kind: 'SIN_PROCESO', personId: 'm-mel', personName: 'Melissa Castaño', title: 'Melissa no tiene una tarea en proceso desde las 9:55.', body: 'Tiene 3 pendientes por empezar.', url: '/gestion?responsable=Melissa%20Casta%C3%B1o', taskIds: [] }, { key: 'FOCO_SEMANAL:x', kind: 'FOCO_SEMANAL', title: 'foco' }];
 const load = { days: ['2026-10-13', '2026-10-14'], people: [{ personId: 'm-bra', personName: 'Brayan Torres', cells: [{ day: '2026-10-14', level: 'excedida', ms: 9 * H, count: 3, tasks: [{ id: 'o1' }, { id: 'o2' }] }] }] };
 const operations = [{ id: 'c1', name: 'Aristea', slug: 'aristea', evaluation: { level: 'red', reasons: [{ level: 'red', text: 'Van 2 publicadas; a esta fecha deberían ir 5.' }, { level: 'yellow', text: 'Falta el informe.' }] } }, { id: 'c2', name: 'Endova', slug: 'endova', evaluation: { level: 'yellow', reasons: [] } }];
 const pieces = [{ id: 'i1', title: 'Reel de vendimia', planId: 'p1', clientName: 'Foobespain', day: '2026-10-14' }, { id: 'i9', title: 'Lejana', planId: 'p1', clientName: 'Foobespain', day: '2026-10-20' }];
@@ -25,7 +25,16 @@ test('facts come from what the platform already computes, most serious first, ea
   assert.deepEqual(facts[2].taskIds, ['o1', 'o2']);
   assert.match(facts[3].text, /«Reel de vendimia» de Foobespain sale el 14 de octubre y el cliente todavía no la ha aprobado\./);
   assert.equal(facts[3].url, '/parrillas/p1?item=i1');
-  assert.equal(facts[4].ask, 'Ayúdame a escribirle a Melissa.');
+  // Las acciones vienen con el hecho, según su tipo: a dónde ir y qué pedirle a Bria.
+  assert.deepEqual(facts[0].actions.map((a) => [a.label, a.to || null]), [['Abrir operación', '/clientes/operacion/aristea'], ['Pedirle a Bria qué falta', null]]);
+  assert.match(facts[0].actions[1].ask, /Qué le falta a Aristea para salir del rojo/);
+  assert.deepEqual(facts[1].actions.map((a) => a.label), ['Abrir la tarea', 'Ver qué pidió el cliente']);
+  assert.match(facts[1].actions[1].ask, /qué pidió corregir el cliente en «Portada»/);
+  assert.deepEqual(facts[2].actions.map((a) => a.label), ['Abrir el mapa de carga', 'Pedirle a Bria qué se mueve']);
+  assert.match(facts[2].actions[1].ask, /carga de Brayan Torres para el 14 de octubre/);
+  assert.deepEqual(facts[3].actions.map((a) => a.label), ['Abrir la pieza', 'Redactar recordatorio al cliente']);
+  assert.match(facts[3].actions[1].ask, /para Foobespain: «Reel de vendimia» sale el 14 de octubre/);
+  assert.deepEqual(facts[4].actions.map((a) => [a.label, a.to || null]), [['Ver sus pendientes', '/gestion?responsable=Melissa%20Casta%C3%B1o'], ['Que Bria me resuma lo que tiene', null]]);
   assert.equal(facts[0].fingerprint, fingerprintOf(facts[0]));
   assert.notEqual(facts[0].fingerprint, fingerprintOf({ ...facts[0], text: 'otra cosa' }), 'a changed fact is a new fingerprint');
 });
@@ -40,7 +49,9 @@ test('the budget is 3 per workday and 1 per hour; muted kinds, said facts and th
   const left = eligibleFacts({ facts, saidFingerprints: new Set([facts[0].fingerprint]), muted: new Set(), viewerPersonId: 'm-mel' });
   assert.deepEqual(left, [], 'Brayan was said this workday and Melissa is the viewer');
   assert.deepEqual(workdayBounds(tuesday1030), { day: '2026-10-13', start: new Date('2026-10-13T13:00:00.000Z'), end: new Date('2026-10-13T23:00:00.000Z') });
-  assert.equal(hourKeyOf(tuesday1030), '2026-10-13T10');
+  assert.equal(slotKeyOf(tuesday1030), '2026-10-13T10:30');
+  assert.equal(slotKeyOf(new Date('2026-10-13T15:44:00Z')), '2026-10-13T10:30', 'the same 15-minute slot');
+  assert.equal(slotKeyOf(new Date('2026-10-13T15:45:00Z')), '2026-10-13T10:45');
   assert.equal(PULSE_LIMITS.perDay, 3);
 });
 
@@ -72,6 +83,7 @@ test('validation keeps only real facts, drops judgments, respects the budget, an
   assert.deepEqual(out[0].kinds, ['OPERACION_ROJA', 'PIEZA_SIN_APROBAR']);
   assert.equal(out[0].url, '/clientes/operacion/aristea');
   assert.equal(out[0].source, 'MODELO');
+  assert.deepEqual(out[0].actions.map((a) => a.label), ['Abrir operación', 'Pedirle a Bria qué falta', 'Abrir la pieza'], 'the main fact’s actions plus the second fact’s link');
   assert.match(out[1].title, /35 minutos/, 'the judgment («lenta») was dropped, the factual one kept');
   assert.deepEqual(validatePulse({ speak: false, messages: [{ factIds: ['SIN_PROCESO:m-mel'], title: 'x', body: '', ask: null, urgency: 'alta' }] }, { facts, budget: 1 }), [], 'speak:false means silence');
   assert.deepEqual(validatePulse(raw, { facts, budget: 0 }), []);
@@ -116,30 +128,34 @@ const build = ({ repository = memoryRepo(), nowIso = '2026-10-13T15:30:00Z', gen
   })
 });
 
-test('each working hour runs once: facts are read once, the model is asked per person, and what Bria said is stored with its source', async () => {
+test('each 15-minute slot runs once: facts are read once, the model is asked per person, and what Bria said is stored with its source and actions', async () => {
   const { service, repository, calls } = build();
-  const first = await service.runHourly();
-  assert.deepEqual([first.hourKey, first.facts, first.spoke, first.quiet, first.failed], ['2026-10-13T10', 3, 2, 0, 0], 'Melissa idle, Brayan overloaded tomorrow, Aristea red');
+  const first = await service.run();
+  assert.deepEqual([first.slotKey, first.facts, first.spoke, first.quiet, first.failed], ['2026-10-13T10:30', 3, 2, 0, 0], 'Melissa idle, Brayan overloaded tomorrow, Aristea red');
   assert.equal(calls.length, 2, 'one decision per person');
   assert.match(calls[0].prompt, /Kamila/);
   assert.doesNotMatch(calls[1].prompt, /SIN_PROCESO:m-mel/, 'Melissa never hears about herself');
   assert.deepEqual(repository.messages.map((m) => [m.userRef, m.source, m.model, m.title]), [['u-kam', 'MODELO', 'gpt-test', 'Aristea va en rojo: 2 de 5 publicadas.'], ['u-mel-pm', 'MODELO', 'gpt-test', 'Aristea va en rojo: 2 de 5 publicadas.']]);
   assert.equal(repository.messages[0].expiresAt.toISOString(), '2026-10-13T23:00:00.000Z', 'a message lives until the workday ends');
-  assert.deepEqual(await service.runHourly(), { skipped: 'esta hora ya corrió', hourKey: '2026-10-13T10' });
-  assert.deepEqual(await build({ nowIso: '2026-10-13T23:30:00Z' }).service.runHourly(), { skipped: 'fuera de horario' });
-  assert.deepEqual(await build({ nowIso: '2026-10-17T15:30:00Z' }).service.runHourly(), { skipped: 'fuera de horario' }, 'Saturday');
+  assert.deepEqual(repository.messages[0].actions.map((a) => a.label), ['Abrir operación', 'Pedirle a Bria qué falta']);
+  assert.deepEqual(await service.run(), { skipped: 'este tramo ya corrió', slotKey: '2026-10-13T10:30' });
+  assert.deepEqual(await build({ nowIso: '2026-10-13T23:30:00Z' }).service.run(), { skipped: 'fuera de horario' });
+  assert.deepEqual(await build({ nowIso: '2026-10-17T15:30:00Z' }).service.run(), { skipped: 'fuera de horario' }, 'Saturday');
+  // El siguiente tramo de la misma hora lee de nuevo, pero a quien ya le habló esta hora no le dice más.
+  const next = await build({ repository, nowIso: '2026-10-13T15:46:00Z' }).service.run();
+  assert.deepEqual([next.slotKey, next.spoke, next.quiet], ['2026-10-13T10:45', 0, 2]);
 });
 
 test('the next hour does not repeat a fact already said this workday, respects the daily cap, and the model may stay silent', async () => {
   const repository = memoryRepo(), calls = [];
-  await build({ repository, calls }).service.runHourly();
+  await build({ repository, calls }).service.run();
   const eleven = build({ repository, calls, nowIso: '2026-10-13T16:30:00Z', generate: async (request) => { calls.push(request); assert.doesNotMatch(request.prompt, /\[OPERACION_ROJA:aristea\]/, 'Aristea was already said'); return { text: JSON.stringify({ speak: false, messages: [] }), model: 'gpt-test' }; } });
-  const second = await eleven.service.runHourly();
+  const second = await eleven.service.run();
   assert.deepEqual([second.spoke, second.quiet], [0, 2]);
   assert.equal(repository.messages.length, 2);
   for (const iso of ['2026-10-13T17:30:00Z', '2026-10-13T18:30:00Z', '2026-10-13T19:30:00Z']) {
     // El modelo insiste cada hora con los mismos dos hechos: solo entra uno por hora y ninguno dos veces.
-    await build({ repository, nowIso: iso, generate: async () => ({ text: JSON.stringify({ speak: true, messages: [{ factIds: ['CARGA_MANANA:m-bra'], title: `Carga ${iso}`, body: '', ask: null, urgency: 'media' }, { factIds: ['SIN_PROCESO:m-mel'], title: `Melissa ${iso}`, body: '', ask: null, urgency: 'media' }] }), model: 'gpt-test' }) }).service.runHourly();
+    await build({ repository, nowIso: iso, generate: async () => ({ text: JSON.stringify({ speak: true, messages: [{ factIds: ['CARGA_MANANA:m-bra'], title: `Carga ${iso}`, body: '', urgency: 'media' }, { factIds: ['SIN_PROCESO:m-mel'], title: `Melissa ${iso}`, body: '', urgency: 'media' }] }), model: 'gpt-test' }) }).service.run();
   }
   const kamila = repository.messages.filter((m) => m.userRef === 'u-kam');
   assert.deepEqual(kamila.map((m) => m.factIds), [['OPERACION_ROJA:aristea'], ['CARGA_MANANA:m-bra'], ['SIN_PROCESO:m-mel']], 'three per workday, one per hour, none repeated: the fourth hour stays quiet');
@@ -148,13 +164,13 @@ test('the next hour does not repeat a fact already said this workday, respects t
 test('when the model fails Bria still says the most important fact, marked as a rule; a kind hidden three times is muted', async () => {
   const repository = memoryRepo();
   const broken = build({ repository, generate: async () => { throw new Error('OpenAI 503'); } });
-  const result = await broken.service.runHourly();
+  const result = await broken.service.run();
   assert.equal(result.spoke, 2);
   assert.deepEqual([repository.messages[0].source, repository.messages[0].model, repository.messages[0].factIds], ['REGLA', null, ['OPERACION_ROJA:aristea']]);
   for (const m of repository.messages) m.dismissedAt = new Date('2026-10-13T16:00:00Z');
   repository.messages.push(...[1, 2].map((i) => ({ id: `old-${i}`, userRef: 'u-kam', kinds: ['OPERACION_ROJA'], fingerprints: [`fp${i}`], title: 'x', createdAt: new Date('2026-10-12T15:00:00Z'), expiresAt: new Date('2026-10-12T23:00:00Z'), dismissedAt: new Date('2026-10-12T16:00:00Z') })));
   const calls = [];
-  await build({ repository, calls, nowIso: '2026-10-13T16:30:00Z' }).service.runHourly();
+  await build({ repository, calls, nowIso: '2026-10-13T16:30:00Z' }).service.run();
   const kamilaPrompt = calls.find((c) => /Kamila/.test(c.prompt));
   assert.doesNotMatch(kamilaPrompt.prompt, /OPERACION_ROJA/, 'Kamila hid that kind three times this week: Bria stops bringing it up');
 });
@@ -166,14 +182,15 @@ test('the card reads the pulse when it is alive and the X marks the message; wit
   const nudgeService = createBriaNudgeService({ db, repository, now: () => tuesday1030 });
   const before = await nudgeService.list(pm);
   assert.deepEqual([before.source, before.nudges[0].kind], ['reglas', 'SIN_PROCESO']);
-  await build({ repository }).service.runHourly();
+  await build({ repository }).service.run();
   const after = await nudgeService.list(pm);
-  assert.deepEqual([after.source, after.nudges.length, after.nudges[0].key, after.nudges[0].kind, after.nudges[0].urgency], ['pulso', 1, 'msg-1', 'OPERACION_ROJA', 'alta'].map((v, i) => i === 2 ? `PULSO:${v}` : v));
+  assert.deepEqual([after.source, after.nudges.length, after.nudges[0].key, after.nudges[0].kind, after.nudges[0].urgency], ['pulso', 1, 'PULSO:msg-1', 'OPERACION_ROJA', 'alta']);
+  assert.deepEqual(after.nudges[0].actions.map((a) => a.label), ['Abrir operación', 'Pedirle a Bria qué falta']);
   assert.deepEqual(await nudgeService.dismiss(pm, 'PULSO:msg-1'), { key: 'PULSO:msg-1', untilAt: null });
   assert.equal((await nudgeService.list(pm)).nudges.length, 0);
   await assert.rejects(() => nudgeService.dismiss(pm, 'PULSO:msg-1'), { status: 404 });
   const timers = [];
-  const tick = initBriaPulseScheduler({ service: { runHourly: async () => ({ skipped: 'x' }) }, setIntervalFn: (fn, ms) => { timers.push(['interval', ms]); return { unref() {} }; }, setTimeoutFn: (fn, ms) => { timers.push(['timeout', ms]); return { unref() {} }; }, logger: { log: () => {}, error: () => {} } });
+  const tick = initBriaPulseScheduler({ service: { run: async () => ({ skipped: 'x' }) }, setIntervalFn: (fn, ms) => { timers.push(['interval', ms]); return { unref() {} }; }, setTimeoutFn: (fn, ms) => { timers.push(['timeout', ms]); return { unref() {} }; }, logger: { log: () => {}, error: () => {} } });
   assert.deepEqual(timers, [['timeout', 180_000], ['interval', 5 * 60_000]]);
   await tick();
 });
