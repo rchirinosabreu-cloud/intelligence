@@ -26,7 +26,7 @@ const check = (status, minutesAgo, extra = {}) => ({
 test('the catalog names every service once, in Spanish, with what breaks when it falls', () => {
   const ids = SERVICE_CATALOG.map((service) => service.id);
   assert.equal(new Set(ids).size, ids.length);
-  for (const id of ['database', 'openai', 'fireflies', 'google-calendar', 'google-storage', 'meta', 'storage-chat', 'storage-memory', 'storage-financial', 'email', 'push', 'trm']) {
+  for (const id of ['database', 'openai', 'fireflies', 'google-calendar', 'google-storage', 'meta', 'storage-chat', 'storage-memory', 'storage-financial', 'email', 'mailboxes', 'push', 'trm']) {
     assert.ok(ids.includes(id), `falta ${id}`);
   }
   for (const service of SERVICE_CATALOG) {

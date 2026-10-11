@@ -18,7 +18,7 @@ const H = 3_600_000;
 export const PULSE_USE_CASE = 'bria.pulse';
 export const PULSE_PROMPT_VERSION = 1;
 export const PULSE_LIMITS = Object.freeze({ perDay: 3, perHour: 1, muteAfterDismissals: 3, muteDays: 7, maxFacts: 40 });
-export const FACT_KINDS = Object.freeze(['SIN_PROCESO', 'VENCE_HOY', 'CARGA_MANANA', 'OPERACION_ROJA', 'PIEZA_SIN_APROBAR', 'DEVUELTO_SIN_TOCAR']);
+export const FACT_KINDS = Object.freeze(['SIN_PROCESO', 'VENCE_HOY', 'CARGA_MANANA', 'OPERACION_ROJA', 'PIEZA_SIN_APROBAR', 'DEVUELTO_SIN_TOCAR', 'CORREO_IMPORTANTE']);
 export const URGENCIES = ['alta', 'media', 'baja'];
 // Bria habla de trabajo, nunca de personas: una frase con un juicio no sale.
 export const JUDGMENT_WORDS = /\b(lent[oa]s?|floj[oa]s?|perezos[oa]s?|vag[oa]s?|irresponsables?|incompetentes?|descuidad[oa]s?|mal trabajo|desempeño|rendimiento)\b/i;
@@ -45,8 +45,14 @@ export const slotKeyOf = (now, slotMinutes = PULSE_SLOT_MINUTES) => { const { da
  * Reúne hechos de lo que ya calcula la plataforma. Cada hecho: { id, kind, subject, personId?, personName?, text, ask?,
  * url?, taskIds, severity (3 alto … 1 bajo), fingerprint }. Nunca una opinión: solo lo que dicen los datos.
  */
-export const collectFacts = ({ nudges = [], load = null, operations = [], pieces = [], returned = [], today } = {}) => {
+export const collectFacts = ({ nudges = [], load = null, operations = [], pieces = [], returned = [], mails = [], today } = {}) => {
   const facts = [];
+  // Correos importantes de los buzones compartidos (11 de octubre de 2026): el texto lo arma `describeMail`, sin cuerpo.
+  for (const mail of mails) {
+    if (!mail?.messageId || !mail.text) continue;
+    const subject = `${mail.accountId || mail.accountEmail}:${mail.messageId}`;
+    facts.push(fact('CORREO_IMPORTANTE', subject, { clientName: mail.clientName || null, text: mail.text, url: mail.url || null, taskIds: [], severity: mail.severity || 2, messageId: mail.messageId, actions: nudgeActions({ kind: 'CORREO_IMPORTANTE', clientName: mail.clientName, title: mail.subject, url: mail.url, messageId: mail.messageId, personName: mail.fromName || mail.from }) }));
+  }
   // Cada hecho lleva sus acciones (`nudgeActions`): a dónde ir y qué pedirle a Bria, según el tipo.
   for (const nudge of nudges) {
     if (!['SIN_PROCESO', 'VENCE_HOY'].includes(nudge.kind)) continue;

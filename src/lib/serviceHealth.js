@@ -100,6 +100,14 @@ export const SERVICE_CATALOG = Object.freeze([
     intervalMs: 30 * MIN
   },
   {
+    id: 'mailboxes',
+    label: 'Buzones de Bria',
+    purpose: 'Los buzones compartidos (social y contacto) que Bria lee para avisar de correos importantes.',
+    impact: 'Si cae, Bria deja de avisar de correos; el correo en sí sigue llegando a Gmail.',
+    // Se lee el estado que deja el pulso (última lectura, último error), sin entrar al buzón otra vez.
+    intervalMs: 15 * MIN
+  },
+  {
     id: 'push',
     label: 'Notificaciones push',
     purpose: 'Avisos en el celular y en el navegador.',

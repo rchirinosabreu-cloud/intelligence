@@ -27,4 +27,7 @@
 // 2.12 (10 de octubre de 2026): Bria consulta y prepara operaciones de la plataforma con la sesión y los
 // permisos de la persona; cada cambio se ejecuta solo con su confirmación; radar, nómina, retroalimentación,
 // contraseñas, cuentas y archivos quedan fuera.
-export const PRIVACY_POLICY_VERSION = '2.12 · 2026-10-10';
+// 2.13 (11 de octubre de 2026): Bria lee los buzones compartidos de la agencia (social y contacto) que un
+// administrador conecta, para avisar de correos importantes y resumirlos a pedido; no envía correos, no guarda
+// el cuerpo de los mensajes y la contraseña de aplicación se guarda cifrada.
+export const PRIVACY_POLICY_VERSION = '2.13 · 2026-10-11';
