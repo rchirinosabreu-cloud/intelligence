@@ -9,7 +9,9 @@ const loadImages = () => imagePromise ||= Promise.all(Object.entries({ chispa: c
   const image = new Image(); image.onload = () => resolve([name, image]); image.onerror = () => reject(new Error(`No se pudo cargar ${name}`)); image.src = url;
 }))).then(Object.fromEntries).catch(error => { imagePromise = null; throw error; });
 
-export default function BriaMascot({ working = false, completionId = null, className = 'h-10 w-10' }) {
+// `gesture` (hover, typing, listening; `src/lib/briaMascotGesture.js`) es un movimiento suave de CSS sobre el lienzo
+// entero, aparte de la pose que dibuja el atlas: la ilustración no cambia, la mascota se levanta, se inclina o se mece.
+export default function BriaMascot({ working = false, completionId = null, gesture = null, className = 'h-10 w-10' }) {
   const canvas = useRef(null), activity = useRef(null);
   const [failed, setFailed] = useState(false);
   useEffect(() => {
@@ -53,5 +55,5 @@ export default function BriaMascot({ working = false, completionId = null, class
     return () => { disposed = true; cancelAnimationFrame(frame); clearTimeout(settle); observer.disconnect(); media.removeEventListener('change', sync); document.removeEventListener('visibilitychange', sync); };
   }, [working, completionId, failed]);
   if (failed) return <BriaPortrait  alt="" className={`object-contain ${className}`} />;
-  return <canvas ref={canvas} width="288" height="288" data-bria-mascot data-bria-design="chispa" aria-hidden="true" className={`pointer-events-none shrink-0 ${className}`} />;
+  return <canvas ref={canvas} width="288" height="288" data-bria-mascot data-bria-design="chispa" data-bria-gesture={gesture || undefined} aria-hidden="true" className={`pointer-events-none shrink-0 ${className}`} />;
 }
