@@ -6,7 +6,7 @@ import { createNotification, processMentionsAndNotifications } from './notificat
 import { recordOperationalTrace } from './operationalTraceService.js';
 import { classifyTaskDeterministically } from './deterministicTaskClassifier.js';
 import { pickAllowedTaskUpdates } from '../config/security.js';
-import { closeTaskWorkSession, formatTaskReturnEventContent } from '../lib/taskTiming.js';
+import { closeTaskWorkSession, formatTaskReturnEventContent, reassignmentEffect } from '../lib/taskTiming.js';
 import { bogotaTimeOf } from '../lib/taskFocus.js';
 import { taskPrivacyFilter } from '../lib/taskPrivacy.js';
 import {
@@ -567,6 +567,14 @@ export const updateTask = async (id, data, updaterId = null) => {
             });
         }
 
+        // Reasignar una tarea en proceso (Rodny, 11 de octubre de 2026): el reloj de quien la trabajaba se cierra
+        // y la tarea vuelve a Pendiente para que el nuevo responsable la arranque cuando la tome; si quien reasigna
+        // pide además «En proceso», el reloj pasa al nuevo en el acto (`handover`). La regla es pura
+        // (`reassignmentEffect`) y decide el estado antes del bloque de transición, que es el que cierra el reloj.
+        const requestedStatus = 'status' in updateData ? (statusMapper[updateData.status] || updateData.status) : null;
+        const reassignment = reassignmentEffect(currentTask, { assigneeChanged: 'assigneeId' in updateData, assigneeId: nextAssigneeId, status: requestedStatus });
+        if (reassignment) updateData.status = reassignment.status;
+
         // Extract and isolate returnReason and reintegrateReason
         const { returnReason, returnNote, reintegrateReason, reopenReason, reopenNote } = updateData;
         delete updateData.returnReason;
@@ -722,6 +730,23 @@ export const updateTask = async (id, data, updaterId = null) => {
                 });
                 if (isTeamTask) {
                     await closeAllOpenTaskWorkSessions(tx, { taskId: id, actorId: updaterId, at: transitionAt, closeReason });
+                }
+            } else if (reassignment?.handover) {
+                // Relevo en caliente: se cierra la sesión de quien trabajaba (su tiempo queda a su nombre) y arranca
+                // la del nuevo responsable; con colaboradores nadie arranca solo.
+                updateData.accumulatedWorkMs = closeTaskWorkSession(currentTask, transitionAt);
+                await closeActiveTaskWorkSession(tx, { taskId: id, actorId: updaterId, at: transitionAt, closeReason: 'PAUSED' });
+                if (isTeamTask) {
+                    updateData.startedAt = null;
+                } else {
+                    updateData.startedAt = transitionAt;
+                    const cycle = await ensureTaskWorkCycle(tx, { taskId: id, actorId: updaterId, at: transitionAt });
+                    await openTaskWorkSession(tx, {
+                        task: { ...currentTask, id, assigneeId: nextAssigneeId },
+                        cycleId: cycle.id,
+                        actorId: updaterId,
+                        at: transitionAt
+                    });
                 }
             }
 
