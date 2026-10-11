@@ -1,6 +1,21 @@
-# Bria se adelanta y el foco de la semana
+# Bria se adelanta, el pulso y el foco de la semana
 
-10 de octubre de 2026. Rodny: «me gustaría que se adelante … por ejemplo, “Melissa no tiene nada en proceso desde hace 30 minutos, pregúntale en qué está”; la idea es que guíe a los projects y, claro, con un lenguaje más sobrio, corporativo y amigable». Y sobre el foco: «podría tener un resumen listo cada lunes para cada persona y dejarlo ahí en uno de sus chats para leer».
+10 de octubre de 2026. Rodny: «me gustaría que se adelante … por ejemplo, “Melissa no tiene nada en proceso desde hace 30 minutos, pregúntale en qué está”; la idea es que guíe a los projects y, claro, con un lenguaje más sobrio, corporativo y amigable». Y sobre el foco: «podría tener un resumen listo cada lunes para cada persona y dejarlo ahí en uno de sus chats para leer». Esa misma tarde: «quiero que viva en la plataforma desde ahora mismo».
+
+## El pulso: cómo «vive» Bria en la plataforma
+
+Las reglas de la primera versión eran avisos programados. El pulso (`src/lib/briaPulse.js`, `src/services/briaPulseService.js`) es lo que los convierte en algo que Bria decide:
+
+1. **El código detecta.** Cada hora hábil (8 a 18 de Bogotá, días hábiles de Colombia) se reúnen una sola vez los hechos de la plataforma: quién no tiene nada en proceso y qué vence hoy (las reglas de abajo), quién tiene mañana más de lo que cabe en un día (mapa de carga), qué cliente está en rojo en Operación, qué pieza sale en los próximos dos días sin aprobación del cliente y qué tarea lleva un día devuelta sin cambios. Cada hecho tiene un id estable y una huella de su texto.
+2. **Bria decide y habla.** Para cada persona con Bria, el modelo rápido recibe los hechos de ahora, lo que ya le dijo hoy y quién es, y responde si vale la pena interrumpir (`speak`), con qué avisos (puede juntar dos hechos relacionados en uno), en qué orden y con qué palabras. Tono sobrio, corporativo y amable; nunca un juicio.
+3. **El código manda.** `validatePulse` conserva solo lo respaldado por hechos reales, tira cualquier frase con un juicio («lento», «flojo», «mal»…), y aplica los topes de Rodny: **3 avisos nuevos por persona y jornada, 1 por hora, ningún hecho repetido dentro de la jornada salvo que cambie** (misma huella = no se repite), **silencio fuera de 8 a 18 y en días no hábiles**, y **un tipo de aviso que la persona ocultó tres veces en la semana deja de darse**. La jornada es de 8 a 18: ahí se cuenta todo, no en 24 horas.
+4. **Si el modelo no está, Bria no se calla:** dice el hecho más importante con las palabras de la plataforma, marcado `REGLA`.
+
+Lo dicho queda en `bria_memory.pulse_messages` (hechos, texto, origen, modelo, si se ocultó) y vive hasta el final de la jornada; `pulse_runs` reclama cada hora para que un reinicio o una segunda réplica no la repita. La tarjeta encima de la mascota lee el pulso mientras esté vivo (corrió en las últimas dos horas); si no ha corrido —recién desplegado, proveedor caído— vuelve a las reglas de siempre, para que la tarjeta nunca dependa de una sola pieza. Costo: una llamada al modelo rápido por persona y hora hábil, y solo cuando hay hechos nuevos y presupuesto.
+
+## La consulta rápida
+
+Rodny, el mismo día: «hacerle una pregunta rápida a Bria, no necesariamente abriendo un chat nuevo … “Haz tu consulta” y el icono de pulso … que ella misma diga “recuerda que puedes consultarme algo”». La tarjeta lleva siempre una caja de una línea, «Haz tu consulta», con el icono de pulso; lo que la persona escribe ahí **sí se envía**, al chat que tenga abierto (o a uno nuevo si no hay ninguno), porque lo escribió ella (`quickAskBria` / `onBriaQuickAsk` en `briaAsk.js`). Sin aviso que dar, la tarjeta es solo esa caja con un recordatorio corto de Bria. Es la única vía que envía algo: «Pedírselo a Bria» sigue dejando el mensaje escrito.
 
 ## Qué es
 

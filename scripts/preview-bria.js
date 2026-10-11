@@ -90,7 +90,8 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
     { key: 'SIN_PROCESO:m-mel', kind: 'SIN_PROCESO', personId: 'm-mel', personName: 'Melissa Castaño', title: 'Melissa lleva 35 minutos sin una tarea en proceso.', body: 'Tiene 3 pendientes por empezar. Puede ser un buen momento para preguntarle en qué está.', ask: 'Ayúdame a escribirle a Melissa para preguntarle, con amabilidad, en qué está trabajando ahora y si necesita algo para avanzar.', url: '/gestion', taskIds: [] },
     { key: 'VENCE_HOY:m-bra', kind: 'VENCE_HOY', personId: 'm-bra', personName: 'Brayan Torres', title: 'A Brayan le vence hoy una tarea que todavía no está en proceso.', body: '«Portada de octubre». Vale la pena confirmar si sale hoy o si hay que mover la fecha.', ask: 'Ayúdame a revisar con Brayan lo que le vence hoy y todavía no está en proceso: «Portada de octubre».', url: '/gestion?taskId=t9', taskIds: ['t9'] }
   ];
-  api.get('/api/bria/nudges', (_req, res) => res.json({ nudges }));
+  // `?sinavisos` en la página deja la tarjeta solo con la consulta rápida (la muestra lo lee del referer).
+  api.get('/api/bria/nudges', (req, res) => res.json({ nudges: /sinavisos/.test(String(req.headers.referer || '')) ? [] : nudges }));
   api.post('/api/bria/nudges/dismiss', (req, res) => { nudges = nudges.filter((row) => row.key !== req.body?.key); res.json({ key: req.body?.key, untilAt: new Date().toISOString() }); });
   api.post('/api/bria/ask', async (req, res) => {
     const question = String(req.body?.question || '');

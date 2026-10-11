@@ -176,8 +176,10 @@ test('Quality Streak Backend Calculation Integration Tests', { skip: !testDataba
 
         const streakResult = await getQualityStreak();
 
-        // Should update maxStreak to 15
-        assert.strictEqual(streakResult.currentStreak, 15);
-        assert.strictEqual(streakResult.maxStreak, 15);
+        // Quince días completos antes de hoy; hoy cuenta también si su jornada (8 a 18 de Bogotá) ya terminó.
+        const bogotaHour = Number(new Intl.DateTimeFormat('en-US', { timeZone: 'America/Bogota', hour: 'numeric', hour12: false }).format(new Date()));
+        const expected = 15 + (bogotaHour >= 18 ? 1 : 0);
+        assert.strictEqual(streakResult.currentStreak, expected);
+        assert.strictEqual(streakResult.maxStreak, expected);
     });
 });

@@ -44,11 +44,27 @@ try {
   assert.match(await composer.inputValue(), /escribirle a Melissa/);
   assert.equal(sent.some(line => line.endsWith('/messages')), false, 'nothing was sent');
   await page.screenshot({ path: path.join(output, 'bria-adelanta-mensaje-listo.png') });
+  // La consulta rápida: lo que la persona escribe en «Haz tu consulta» sí se envía, al chat abierto.
+  await page.getByRole('button', { name: 'Cerrar' }).first().click().catch(() => page.keyboard.press('Escape'));
+  await card.waitFor();
+  const quick = card.getByLabel('Haz tu consulta a Bria');
+  await quick.fill('¿Qué tengo pendiente hoy?'); await quick.press('Enter');
+  await page.locator('[data-bria-assistant-panel]').waitFor({ state: 'visible' });
+  await page.getByText('Tienes tres tareas sin cerrar', { exact: false }).waitFor();
+  assert.ok(sent.some(line => line.endsWith('/messages')), 'the quick question was sent');
+  await page.screenshot({ path: path.join(output, 'bria-adelanta-consulta-rapida.png') });
   // Oscuro y móvil, con el panel cerrado (el estado abierto se recuerda por sesión).
   await page.evaluate(() => sessionStorage.clear());
   await page.goto(`${preview.origin}/?dark`);
   await card.waitFor();
   await page.screenshot({ path: path.join(output, 'bria-adelanta-oscuro.png') });
+  // Sin avisos, la tarjeta es solo la caja con el recordatorio de Bria.
+  await page.evaluate(() => sessionStorage.clear());
+  await page.goto(`${preview.origin}/?sinavisos`);
+  await card.waitFor();
+  assert.equal(await card.getAttribute('data-bria-nudge'), 'CONSULTA');
+  await card.locator('[data-bria-quick-reminder]').waitFor();
+  await page.screenshot({ path: path.join(output, 'bria-adelanta-solo-consulta.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => sessionStorage.clear());
   await page.goto(`${preview.origin}/`);
@@ -57,5 +73,5 @@ try {
   assert.ok(mobile.x >= 8 && mobile.x + mobile.width <= 390 - 8, 'the card fits a phone width');
   await page.screenshot({ path: path.join(output, 'bria-adelanta-movil.png') });
   assert.deepEqual(errors, []);
-  console.log(JSON.stringify({ passed: true, simulatedApi: true, realComponents: true, screenshots: 6, nudgeAboveMascot: true, nothingSentByItself: true }));
+  console.log(JSON.stringify({ passed: true, simulatedApi: true, realComponents: true, screenshots: 8, nudgeAboveMascot: true, nothingSentByItself: true, quickQuestionSent: true }));
 } finally { await browser.close(); await preview.close(); }

@@ -2,17 +2,28 @@ import prisma from '../lib/prisma.js';
 import { recognitionTransaction } from './recognitionService.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+const H = 60 * 60 * 1000;
 const bogotaDate = new Intl.DateTimeFormat('en-CA', {
   timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit',
 });
 
-function completedCleanDays(since, at) {
+// La jornada que cuenta (Rodny, 10 de octubre de 2026: «la racha de devueltas debe cubrir todo, desde las 8am hasta
+// las 6pm»): un día suma cuando su franja de 8:00 a 18:00 de Bogotá pasó entera sin devueltas. Antes se contaba de
+// medianoche a medianoche, así que un día limpio solo se veía al día siguiente y una devolución a las 7 de la mañana,
+// corregida antes de las 8, costaba el día completo.
+export const STREAK_WORKDAY = Object.freeze({ start: 8, end: 18 });
+const midnight = (value) => new Date(`${bogotaDate.format(new Date(value))}T00:00:00-05:00`).getTime();
+
+export function completedCleanDays(since, at) {
   if (!since) return 0;
-  const start = new Date(since);
-  const startMidnight = new Date(`${bogotaDate.format(start)}T00:00:00-05:00`).getTime();
-  const firstFullDay = startMidnight + (start.getTime() > startMidnight ? DAY_MS : 0);
-  const today = new Date(`${bogotaDate.format(at)}T00:00:00-05:00`).getTime();
-  return Math.max(0, Math.floor((today - firstFullDay) / DAY_MS));
+  const start = new Date(since).getTime();
+  const startMidnight = midnight(start);
+  // Si el periodo limpio empezó antes de las 8, el día de hoy cuenta; si no, el primero es mañana.
+  const firstDay = start <= startMidnight + STREAK_WORKDAY.start * H ? startMidnight : startMidnight + DAY_MS;
+  const now = new Date(at).getTime();
+  let count = 0;
+  for (let day = firstDay; day + STREAK_WORKDAY.end * H <= now; day += DAY_MS) count += 1;
+  return count;
 }
 
 // Use the same lock as task writes, so a reader cannot overwrite a concurrent return/deletion.

@@ -51,10 +51,14 @@ test('legacy accumulated days are not treated as verified clean days', async t =
   assert.equal(state.row().trackingStartedAt.toISOString(), '2026-09-14T18:00:00.000Z');
 });
 
+// La franja que cuenta es la jornada de 8 a 18 de Bogotá (Rodny, 10 de octubre de 2026): un periodo limpio que
+// empieza el 14 a las 13:00 suma su primer día cuando el 15 pasa de las 18:00 (23:00Z), no a medianoche.
 for (const [instant, expected] of [
   ['2026-09-14T23:59:59Z', 0],
   ['2026-09-15T05:00:00Z', 0],
-  ['2026-09-16T04:59:59Z', 0],
+  ['2026-09-15T22:59:59Z', 0],
+  ['2026-09-15T23:00:00Z', 1],
+  ['2026-09-16T04:59:59Z', 1],
   ['2026-09-16T05:00:00Z', 1],
   ['2026-09-18T05:00:00Z', 3],
 ]) {
@@ -68,11 +72,18 @@ for (const [instant, expected] of [
   });
 }
 
-test('a full day starting at Bogota midnight earns one day at the next midnight', async t => {
-  freeze(t, '2026-09-15T05:00:00Z');
-  const state = database({ currentStreak: 0, cleanSinceAt: new Date('2026-09-14T05:00:00Z') });
-  await processSystemStreakDailyIncrement(state.db);
-  assert.equal(state.row().currentStreak, 1);
+test('a clean period that starts before 8:00 counts that same day once 18:00 passes; one that starts at 9:00 waits for tomorrow', async t => {
+  freeze(t, '2026-09-14T23:00:00Z'); // 18:00 de Bogotá del 14
+  const early = database({ currentStreak: 0, cleanSinceAt: new Date('2026-09-14T12:59:00Z') }); // 7:59
+  await processSystemStreakDailyIncrement(early.db);
+  assert.equal(early.row().currentStreak, 1);
+  const late = database({ currentStreak: 0, cleanSinceAt: new Date('2026-09-14T14:00:00Z') }); // 9:00
+  await processSystemStreakDailyIncrement(late.db);
+  assert.equal(late.row().currentStreak, 0);
+  t.mock.timers.setTime(new Date('2026-09-15T05:00:00Z').getTime());
+  const midnightStart = database({ currentStreak: 0, cleanSinceAt: new Date('2026-09-14T05:00:00Z') });
+  await processSystemStreakDailyIncrement(midnightStart.db);
+  assert.equal(midnightStart.row().currentStreak, 1);
 });
 
 test('a return breaks the clean period and keeps the previous historical record', async t => {

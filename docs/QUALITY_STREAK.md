@@ -10,7 +10,7 @@ El cálculo anterior incrementaba `SystemStreak.currentStreak` sin consultar las
 
 - Con alguna tarea `DEVUELTA`, la racha persistida es cero y `cleanSinceAt` queda vacío.
 - Borrar, completar o reintegrar la última devuelta inicia el periodo limpio en ese momento, con cero días. No recupera días anteriores.
-- Se cuentan días calendario **completos** en `America/Bogota`, incluidos fines de semana. Si el periodo comienza el lunes a las 13:00, el martes todavía marca cero y el miércoles a las 00:00 marca uno. La preferencia de ocultar fines de semana en el calendario no cambia esta métrica.
+- Se cuentan días **cuya jornada de 8:00 a 18:00 de Bogotá pasó entera sin devueltas** (Rodny, 10 de octubre de 2026: «la racha de devueltas debe cubrir todo, desde las 8am hasta las 6pm»), incluidos fines de semana. Si el periodo comienza el lunes a las 13:00, el lunes no cuenta, el martes marca uno en cuanto pasan las 18:00 y el miércoles dos a esa misma hora. Si comienza antes de las 8:00, ese mismo día cuenta al pasar las 18:00. Antes se contaba de medianoche a medianoche, así que un día limpio solo se veía al día siguiente. `completedCleanDays` y `STREAK_WORKDAY` en `qualityStreakService.js`. La preferencia de ocultar fines de semana en el calendario no cambia esta métrica.
 - Los días se calculan desde el inicio del periodo; varias consultas, reinicios o ejecuciones de cron no suman el mismo día dos veces.
 - Una edición sin cambio de estado o la eliminación de una tarea no devuelta no reinicia el periodo.
 - Mutación de tarea, actualización de racha y auditoría comparten transacción. Las lecturas y el cron usan el mismo bloqueo y reintentos serializables. Un error de persistencia aborta la operación; nunca se devuelve un éxito con el contador anterior.

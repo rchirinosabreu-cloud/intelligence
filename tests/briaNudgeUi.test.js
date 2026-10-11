@@ -18,10 +18,26 @@ test('the nudge sits above the mascot, on the shared popover surface, with the m
   assert.match(nudge, /brain-popover-surface fixed right-4 z-\[49\]/);
   assert.match(nudge, /bottom-\[calc\(1rem\+env\(safe-area-inset-bottom\)\+5\.75rem\)\]/);
   assert.match(nudge, /<BriaPortrait className="h-9 w-9 shrink-0" \/>/);
-  assert.match(nudge, /if \(hidden \|\| !nudge\) return null;/);
-  assert.match(nudge, /role="status" aria-label="Aviso de Bria" data-bria-nudge=\{nudge\.kind\}/);
+  assert.match(nudge, /if \(hidden\) return null;/);
+  assert.match(nudge, /role="status" aria-label="Aviso de Bria" data-bria-nudge=\{nudge\?\.kind \|\| 'CONSULTA'\}/);
   assert.match(nudge, /Bria se adelanta/);
   assert.match(nudge, /data-bria-nudge-count>1 de \{nudges\.length\}/);
+});
+
+// La consulta rápida (Rodny, 10 de octubre de 2026): «Haz tu consulta» con el icono de pulso, siempre a mano; sin aviso,
+// Bria recuerda que se le puede preguntar. Lo escrito ahí sí se envía: lo escribió la persona.
+test('the quick question box is always there, says «Haz tu consulta» with the pulse icon, and what the person types is sent to the open chat', () => {
+  assert.match(nudge, /placeholder="Haz tu consulta"/);
+  assert.match(nudge, /aria-label="Haz tu consulta a Bria"/);
+  assert.match(nudge, /<Activity className="h-\[18px\] w-\[18px\]" \/>/);
+  assert.match(nudge, /data-bria-quick-ask/);
+  assert.match(nudge, /if \(quickAskBria\(question\)\) setQuestion\(''\)/);
+  assert.match(nudge, /data-bria-quick-reminder/);
+  assert.match(nudge, /Recuerda que puedes consultarme algo de la plataforma\./);
+  assert.doesNotMatch(nudge, /Iniciar nuevo chat|nuevo chat/i);
+  assert.match(assistant, /onBriaQuickAsk\(\(\) => \{ setOpen\(true\)/);
+  assert.match(conversation, /onBriaQuickAsk\(text => \{ setView\('chat'\); sendRef\.current\?\.\(text\); \}\)/);
+  assert.match(conversation, /useEffect\(\(\) => \{ sendRef\.current = send; \}\);/);
 });
 
 test('the actions leave the message written in Bria or open Gestión; nothing is sent by itself and the X hides on the server', () => {
