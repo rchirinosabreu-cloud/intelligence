@@ -74,6 +74,10 @@ export const getNotificationDisplayParts = (notification = {}) => {
     if (type === 'SERVICE_HEALTH_RECOVERED') {
         return { title: 'Un servicio volvió a funcionar', context: '', body: cleanNotificationPreview(message, 140) };
     }
+    // Reporte de incidente del equipo (12 de octubre de 2026): el aviso nombra a quien reportó, nunca el contenido.
+    if (type === 'SECURITY_INCIDENT_REPORTED') {
+        return { title: 'Reportaron un incidente de seguridad', context: '', body: cleanNotificationPreview(message, 140) };
+    }
     // El foco de la semana (10 de octubre de 2026): Bria lo dejó en un chat; el aviso lo abre.
     if (type === 'BRIA_FOCO_SEMANAL') {
         return { title: 'Tu foco de la semana está listo', context: '', body: cleanNotificationPreview(message, 140) };

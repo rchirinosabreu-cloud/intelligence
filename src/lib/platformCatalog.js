@@ -21,6 +21,7 @@ export const PLATFORM_EXCLUDED = [
   { match: /^\w+ \/vault(\/|$)/, reason: 'la bóveda tiene su propio camino conversacional y nunca pasa valores por el modelo' },
   { match: /^\w+ \/(client-errors|auth\/me|openai|fireflies|report-pdf)(\/|$)/, reason: 'interno de la plataforma' },
   { match: /^\w+ \/push(\/|$)/, reason: 'suscripciones del dispositivo' },
+  { match: /^\w+ \/incident-reports(\/|$)/, reason: 'un reporte de incidente de seguridad se escribe en su diálogo y nunca pasa por un proveedor de IA' },
   { match: /^\w+ \/user\/(avatar|mfa|password|onboarding)(\/|$)/, reason: 'contraseñas, verificación en dos pasos, foto y bienvenida se manejan en la pantalla de la persona' },
   { match: /^(POST|PUT|DELETE) \/team(\/|$)/, reason: 'cuentas, roles y permisos de personas: solo desde Equipo' },
   { match: /^\w+ \/feedback(\/|$)/, reason: 'retroalimentación de personas: zona privada' },

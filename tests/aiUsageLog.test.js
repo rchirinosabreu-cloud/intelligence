@@ -80,6 +80,58 @@ test('una llamada bloqueada por el gobierno de IA se registra y el bloqueo se ma
     assert.equal(log.events[0].clientId, 'c1');
 });
 
+test('un destino no autorizado se rechaza y queda registrado, solo con host y ruta', async () => {
+    const log = recorder();
+    let called = false;
+    const governed = createGovernedFetch({ fetchImpl: async () => { called = true; return jsonResponse({}); }, governance: allowAll, usageLog: log });
+
+    await runWithAiContext({ actorId: 'u-ana', module: 'reports' }, () => assert.rejects(
+        governed('https://user:pw@exfiltra.example.com/v1/chat?key=sk-secreta#x', { method: 'POST', body: JSON.stringify({ model: 'gpt-x', input: 'Acta confidencial' }), governanceContext: { clientId: 'c1', useCase: 'reports.narrative' } }),
+        (error) => error.code === 'AI_DESTINATION_INVALID' && error.status === 403
+    ));
+    await settle();
+    assert.equal(called, false, 'nada sale hacia el destino');
+    assert.equal(log.events.length, 1);
+    const [event] = log.events;
+    assert.equal(event.outcome, 'BLOCKED');
+    assert.equal(event.errorCode, 'AI_DESTINATION_INVALID');
+    assert.equal(event.endpoint, 'exfiltra.example.com/v1/chat');
+    assert.equal(event.actorId, 'u-ana');
+    assert.equal(event.clientId, 'c1');
+    assert.equal(event.flow, 'reports.narrative');
+    assert.doesNotMatch(JSON.stringify(event), /sk-secreta|pw@|user:|Acta confidencial|gpt-x/, 'ni secretos de la dirección ni contenido');
+});
+
+test('una ruta no inventariada de un proveedor conocido también se rechaza y se registra', async () => {
+    const log = recorder();
+    const governed = createGovernedFetch({ fetchImpl: async () => jsonResponse({}), governance: allowAll, usageLog: log });
+    await assert.rejects(governed('https://api.openai.com/v1/files?purpose=x', { method: 'POST', body: '{}' }), (error) => error.code === 'AI_DESTINATION_INVALID');
+    await assert.rejects(governed('no es una dirección', {}), (error) => error.code === 'AI_DESTINATION_INVALID');
+    await settle();
+    assert.deepEqual(log.events.map((e) => [e.outcome, e.errorCode, e.endpoint]), [
+        ['BLOCKED', 'AI_DESTINATION_INVALID', 'api.openai.com/v1/files'],
+        ['BLOCKED', 'AI_DESTINATION_INVALID', 'dirección no válida']
+    ]);
+});
+
+test('una llamada sin modelo identificado se rechaza y queda registrada', async () => {
+    const log = recorder();
+    const governed = createGovernedFetch({ fetchImpl: async () => jsonResponse({}), governance: allowAll, usageLog: log });
+    await assert.rejects(governed(OPENAI, { method: 'POST', body: JSON.stringify({ input: 'hola' }) }), (error) => error.code === 'AI_SCOPE_REQUIRED');
+    await assert.rejects(governed(OPENAI, { method: 'POST', body: 'no es json' }), (error) => error.code === 'AI_SCOPE_REQUIRED');
+    await settle();
+    assert.deepEqual(log.events.map((e) => [e.outcome, e.errorCode, e.provider, e.endpoint]), [
+        ['BLOCKED', 'AI_SCOPE_REQUIRED', 'openai', '/v1/responses'],
+        ['BLOCKED', 'AI_SCOPE_REQUIRED', 'openai', '/v1/responses']
+    ]);
+});
+
+test('si el registro falla, el rechazo de un destino sigue siendo el mismo', async () => {
+    const governed = createGovernedFetch({ fetchImpl: async () => jsonResponse({}), governance: allowAll, usageLog: { record: async () => { throw new Error('base caída'); } } });
+    await assert.rejects(governed('https://otro.example.com/x', { method: 'POST', body: '{}' }), (error) => error.code === 'AI_DESTINATION_INVALID');
+    await settle();
+});
+
 test('un fallo de red o del proveedor también queda registrado', async () => {
     const log = recorder();
     const down = createGovernedFetch({ fetchImpl: async () => { throw new Error('ECONNRESET'); }, governance: allowAll, usageLog: log });
@@ -137,16 +189,14 @@ test('el CSV escapa comillas, comas y fórmulas', () => {
 const fakePool = ({ admins = ['u-admin'] } = {}) => {
     const rows = [];
     const queries = [];
-    return {
-        rows, queries,
-        query: async (sql, params = []) => {
-            queries.push(sql);
-            if (sql.includes('FROM "User" u JOIN "TeamMember"')) return { rows: admins.includes(params[0]) ? [{ id: params[0] }] : [] };
-            if (sql.startsWith('INSERT INTO "AiUsageEvent"')) { rows.push(params); return { rows: [] }; }
-            if (sql.startsWith('DELETE FROM "AiUsageEvent"')) return { rowCount: 0, rows: [] };
-            return { rows: [] };
-        }
+    const query = async (sql, params = []) => {
+        queries.push(sql);
+        if (sql.includes('FROM "User" u JOIN "TeamMember"')) return { rows: admins.includes(params[0]) ? [{ id: params[0] }] : [] };
+        if (sql.startsWith('INSERT INTO "AiUsageEvent"')) { rows.push(params); return { rows: [] }; }
+        if (sql.startsWith('DELETE FROM "AiUsageEvent"')) return { rowCount: 0, rows: [] };
+        return { rows: [] };
     };
+    return { rows, queries, query, connect: async () => ({ query, release: () => {} }) };
 };
 
 test('solo administradores activos consultan el registro, y se purga lo de más de un año', async () => {
@@ -154,7 +204,10 @@ test('solo administradores activos consultan el registro, y se purga lo de más 
     const log = createAiUsageLog({ pool, clock: () => new Date('2026-09-27T12:00:00Z') });
     await log.record(buildUsageEvent({ provider: 'openai', model: 'm', target: new URL(OPENAI), outcome: 'ALLOWED', context: { actorId: 'u1', module: 'chat' } }));
     assert.equal(pool.rows.length, 1);
-    assert.ok(pool.queries.some((sql) => sql.startsWith('DELETE FROM "AiUsageEvent"')), 'purga con retención');
+    const purge = pool.queries.findIndex((sql) => sql.startsWith('DELETE FROM "AiUsageEvent"'));
+    assert.ok(purge > 0, 'purga con retención');
+    // La base rechaza borrar el registro salvo dentro de una transacción marcada como purga (AGENTS.md §22).
+    assert.deepEqual(pool.queries.slice(purge - 2, purge + 2), ['BEGIN', "SET LOCAL brainstudio.audit_purge = 'on'", pool.queries[purge], 'COMMIT']);
     assert.equal(USAGE_RETENTION_DAYS, 365);
 
     await assert.rejects(log.list('u-editor', {}), (error) => error.status === 403);

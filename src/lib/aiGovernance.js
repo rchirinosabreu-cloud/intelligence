@@ -10,7 +10,19 @@ export const GOVERNANCE_DOCUMENTS = [
   { id: '05-autorizacion', title: 'Declaración y autorización de la empresa' },
   { id: '06-operacion', title: 'Guía del módulo y puesta en producción' }
 ];
-const field = (key, label, type = 'text', required = false, options) => ({ key, label, type, required, options });
+const field = (key, label, type = 'text', required = false, options, onlyIf) => ({ key, label, type, required, options, ...(onlyIf ? { onlyIf } : {}) });
+// Registro único de incidentes de seguridad (12 de octubre de 2026): no solo de IA y no siempre con un
+// cliente afectado. El correo contractual, el aviso de 24 horas y su evidencia solo aplican si afecta a uno.
+export const INCIDENT_TYPES = ['AI_USE', 'DEVICE_LOSS', 'SOCIAL_ENGINEERING', 'UNAUTHORIZED_ACCESS', 'MISDIRECTED_SEND', 'SERVICE_OUTAGE', 'MALWARE', 'OTHER'];
+export const INCIDENT_TYPE_LABELS = {
+  AI_USE: 'Uso de IA', DEVICE_LOSS: 'Pérdida o robo de equipo', SOCIAL_ENGINEERING: 'Ingeniería social', UNAUTHORIZED_ACCESS: 'Acceso indebido',
+  MISDIRECTED_SEND: 'Envío a destinatario equivocado', SERVICE_OUTAGE: 'Caída de servicio', MALWARE: 'Malware', OTHER: 'Otro'
+};
+const CLIENT_NOTICE = ['affectsClient', 'SI'];
+// Lo que escribe el servidor al recibir un reporte del equipo. Nunca llega desde un formulario.
+export const INCIDENT_REPORT_KEYS = ['reportedById', 'reportedByName', 'reportedAt', 'reportSource'];
+export const INCIDENT_REPORT_LIMITS = Object.freeze({ description: 4000 });
+export const INCIDENT_REPORT_CLIENT_ANSWERS = ['SI', 'NO', 'NO_SE'];
 export const GOVERNANCE_FORMS = {
   systems: { label: 'Sistemas de IA', model: 'aiGovernanceSystem', statuses: ['DRAFT', 'APPROVED', 'SUSPENDED'], fields: [
     field('provider', 'Proveedor', 'text', true), field('model', 'Modelo o producto exacto', 'text', true),
@@ -37,11 +49,13 @@ export const GOVERNANCE_FORMS = {
   ] },
   incidents: { label: 'Incidentes', model: 'aiGovernanceIncident', statuses: ['OPEN', 'CONTAINED', 'RECOVERED', 'CLOSED'], fields: [
     field('description', 'Qué ocurrió y qué información afecta', 'textarea', true), field('ownerId', 'Responsable', 'person', true),
+    field('incidentType', 'Tipo', 'select', true, INCIDENT_TYPES),
     field('severity', 'Severidad', 'select', true, ['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']),
     field('occurredAt', 'Ocurrencia, si se conoce (Bogotá)', 'datetime'), field('detectedAt', 'Conocimiento del incidente (Bogotá)', 'datetime', true),
     field('impact', 'Impacto en confidencialidad, integridad y disponibilidad', 'textarea', true),
-    field('recipientEmail', 'Correo contractual de la empresa', 'email', true),
-    field('notifiedAt', 'Aviso enviado (Bogotá)', 'datetime'), field('notificationEvidence', 'Referencia del correo enviado', 'textarea'),
+    field('affectsClient', '¿Afecta a un cliente?', 'select', true, ['SI', 'NO']),
+    field('recipientEmail', 'Correo contractual de la empresa', 'email', false, undefined, CLIENT_NOTICE),
+    field('notifiedAt', 'Aviso enviado (Bogotá)', 'datetime', false, undefined, CLIENT_NOTICE), field('notificationEvidence', 'Referencia del correo enviado', 'textarea', false, undefined, CLIENT_NOTICE),
     // Ley 1581 / Circular Única SIC (27 de septiembre de 2026): reporte a la SIC en 15 días hábiles.
     field('personalData', '¿Compromete datos personales?', 'select', false, ['SI', 'NO']),
     field('sicReportedAt', 'Reporte a la SIC radicado (Bogotá)', 'datetime'), field('sicReportEvidence', 'Radicado o referencia del reporte a la SIC', 'textarea'),
@@ -82,6 +96,40 @@ export function sicReportStatus(data, now = new Date()) {
   const daysLeft = reportedOn ? null : businessDaysUntil(dueOn, bogotaDate(now));
   return { required: true, dueOn, daysLeft, overdue: daysLeft !== null && daysLeft < 0, reportedLate: Boolean(reportedOn && reportedOn > dueOn) };
 }
+// Incidentes registrados antes del 12 de octubre de 2026: el correo contractual era obligatorio y el
+// registro era solo de IA. Sin los campos nuevos y con correo, se entienden «afecta a un cliente» y «Uso de IA».
+function withLegacyIncidentDefaults(data) {
+  const blank = key => data[key] == null || data[key] === '';
+  if (!blank('affectsClient') || !blank('incidentType') || blank('recipientEmail')) return data;
+  return { ...data, affectsClient: 'SI', incidentType: 'AI_USE' };
+}
+// El aviso de 24 horas al cliente aplica salvo que se sepa que no afecta a ninguno. «No sé» (reporte del
+// equipo aún sin revisar) y las filas sin respuesta se tratan como el caso más exigente.
+export function incidentNoticeRequired(data) {
+  return (data?.affectsClient ?? null) !== 'NO';
+}
+// Reporte de cualquier persona del equipo: lo mínimo para dejar constancia inmediata. La hora de
+// conocimiento, la identidad y el estado los pone el servidor, nunca el navegador.
+export function validateIncidentReport(input, { now = new Date() } = {}) {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) throw governanceError('Datos no válidos.');
+  for (const key of Object.keys(input)) if (!['description', 'occurredAt', 'affectsClient', 'clientId'].includes(key)) throw governanceError(`Campo no permitido: ${key}`);
+  const description = typeof input.description === 'string' ? input.description.trim() : '';
+  if (!description) throw governanceError('Cuéntanos qué pasó.');
+  if (description.length > INCIDENT_REPORT_LIMITS.description) throw governanceError(`Escribe hasta ${INCIDENT_REPORT_LIMITS.description} caracteres.`);
+  if (!INCIDENT_REPORT_CLIENT_ANSWERS.includes(input.affectsClient)) throw governanceError('Dinos si tiene que ver con un cliente: sí, no o no sé.');
+  let occurredAt = null;
+  if (input.occurredAt != null && input.occurredAt !== '') {
+    const when = parseGovernanceDate(input.occurredAt);
+    if (+when > +now) throw governanceError('La fecha de lo que pasó no puede ser futura.');
+    occurredAt = when.toISOString();
+  }
+  let clientId = null;
+  if (input.clientId != null && input.clientId !== '') {
+    if (typeof input.clientId !== 'string' || input.clientId.length > 64) throw governanceError('Selecciona un cliente válido.');
+    clientId = input.clientId;
+  }
+  return { description, occurredAt, affectsClient: input.affectsClient, clientId };
+}
 export function riskScore({ probability, impact }) {
   for (const n of [probability, impact]) if (!['string', 'number'].includes(typeof n) || !Number.isInteger(Number(n)) || Number(n) < 1 || Number(n) > 5) throw governanceError('Probabilidad e impacto deben ser enteros de 1 a 5.');
   return Number(probability) * Number(impact);
@@ -100,9 +148,10 @@ export function validateRecord(kind, input, { now = new Date() } = {}) {
   if (!input.data || typeof input.data !== 'object' || Array.isArray(input.data)) throw governanceError('Datos no válidos.');
   const allowed = new Set(form.fields.map(f => f.key));
   for (const key of Object.keys(input.data)) if (!allowed.has(key)) throw governanceError(`Campo no permitido: ${key}`);
+  const source = kind === 'incidents' ? withLegacyIncidentDefaults(input.data) : input.data;
   for (const f of form.fields) {
-    const value = input.data[f.key];
-    if (value == null || value === '') { if (f.required) throw governanceError(`Completa ${f.label}.`); continue; }
+    const value = source[f.key];
+    if (value == null || value === '') { if (f.required) throw governanceError(f.label.startsWith('¿') ? `Responde «${f.label}».` : `Completa ${f.label}.`); continue; }
     if (f.type === 'classes') {
       if (!Array.isArray(value) || !value.length || value.some(v => !DATA_CLASSES.includes(v))) throw governanceError('Categorías de datos inválidas.');
       data[f.key] = [...new Set(value)]; continue;
@@ -125,6 +174,8 @@ export function validateRecord(kind, input, { now = new Date() } = {}) {
     }
   }
   if (kind === 'incidents') {
+    if (data.affectsClient === 'NO') for (const f of form.fields) if (f.onlyIf?.[0] === 'affectsClient') delete data[f.key];
+    if (data.affectsClient === 'SI') need(data, ['recipientEmail']);
     if (+parseGovernanceDate(data.detectedAt) > +now || (data.occurredAt && +parseGovernanceDate(data.occurredAt) > +parseGovernanceDate(data.detectedAt))) throw governanceError('Revisa las fechas de ocurrencia y conocimiento.');
     if (data.notifiedAt) {
       need(data, ['notificationEvidence']);
@@ -137,7 +188,7 @@ export function validateRecord(kind, input, { now = new Date() } = {}) {
     if (status !== 'OPEN') need(data, ['containment']);
     if (['RECOVERED', 'CLOSED'].includes(status)) need(data, ['recovery']);
     if (status === 'CLOSED') {
-      need(data, ['notifiedAt', 'notificationEvidence', 'rootCause', 'remediation', 'finalReportEvidence', 'lessons']);
+      need(data, [...(incidentNoticeRequired(data) ? ['notifiedAt', 'notificationEvidence'] : []), 'rootCause', 'remediation', 'finalReportEvidence', 'lessons']);
       if (!data.personalData) throw governanceError('Para cerrar indica si el incidente comprometió datos personales.');
       if (data.personalData === 'SI' && !data.sicReportedAt) throw governanceError('Para cerrar un incidente con datos personales registra el reporte a la SIC y su radicado.');
     }
