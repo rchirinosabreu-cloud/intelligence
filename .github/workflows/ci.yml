@@ -76,6 +76,17 @@ jobs:
       - name: Prepare scratch directories
         run: mkdir -p output
 
+      # Fails on any high or critical advisory in production dependencies unless it is
+      # listed, with its reason and a review date, in scripts/security-audit-exceptions.json.
+      # An expired exception fails again. See AGENTS.md, section 21.
+      - name: Audit Production Vulnerabilities
+        run: npm run audit:security
+
+      # Fails if a production dependency has a license outside the permissive allowlist
+      # in scripts/license-policy.json. Inventory: docs/INVENTARIO_DE_LICENCIAS.md.
+      - name: Check Dependency Licenses
+        run: npm run licenses:check
+
       - name: Lint Code
         run: npm run lint
 
