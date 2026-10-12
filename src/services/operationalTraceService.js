@@ -2,6 +2,7 @@ import prisma from '../lib/prisma.js';
 import { activeTeamUserWhere } from './teamRosterService.js';
 import { presentPlatformMutation, humanMutationWhere } from '../lib/operationalMutationLabels.js';
 import { recognitionLabels } from '../lib/recognitionPresentation.js';
+import { purgeAuditRowsWithPrisma } from '../lib/auditImmutability.js';
 
 export const TRACE_RETENTION_DAYS = 365;
 
@@ -68,12 +69,14 @@ const assertAdmin = (requester) => {
   }
 };
 
+// La base solo deja borrar la traza dentro de una transacción marcada como purga (AGENTS.md §21). Se purga
+// únicamente desde el cliente raíz: dentro de la transacción de otro, la marca quedaría puesta hasta su final.
 const maybePruneExpiredTrace = async ({ now, db }) => {
-  if (typeof db.operationalTraceEvent?.deleteMany !== 'function') return;
+  if (typeof db.operationalTraceEvent?.deleteMany !== 'function' || typeof db.$transaction !== 'function') return;
   if (now.getTime() - lastPruneAt < 24 * 60 * 60 * 1000) return;
   lastPruneAt = now.getTime();
   const cutoff = new Date(now.getTime() - TRACE_RETENTION_DAYS * 24 * 60 * 60 * 1000);
-  await db.operationalTraceEvent.deleteMany({ where: { occurredAt: { lt: cutoff } } });
+  await purgeAuditRowsWithPrisma(db, (tx) => tx.operationalTraceEvent.deleteMany({ where: { occurredAt: { lt: cutoff } } }));
 };
 
 export const recordOperationalTrace = async ({

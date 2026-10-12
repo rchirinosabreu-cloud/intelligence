@@ -1,6 +1,7 @@
 import pg from 'pg';
 import { randomUUID } from 'node:crypto';
 import { governanceError } from '../lib/aiGovernance.js';
+import { purgeAuditRows } from '../lib/auditImmutability.js';
 
 // Registro central de uso de IA (27 de septiembre de 2026). Cada salida hacia un proveedor
 // de IA deja una fila: quién, desde qué flujo, proveedor, modelo, cliente, resultado, tokens
@@ -21,13 +22,14 @@ export const extractUsage = (json) => {
     };
 };
 
-export const buildUsageEvent = ({ provider, model, target, context, governanceContext, outcome, statusCode = null, durationMs = null, usage = {}, errorCode = null }) => ({
+// `endpoint` es la ruta; para un destino rechazado, host y ruta (nunca la consulta ni credenciales de la dirección).
+export const buildUsageEvent = ({ provider, model, target, endpoint, context, governanceContext, outcome, statusCode = null, durationMs = null, usage = {}, errorCode = null }) => ({
     id: randomUUID(),
     actorId: context?.actorId || null,
     clientId: governanceContext?.clientId || null,
     provider: String(provider || 'desconocido').slice(0, 40),
     model: String(model || 'desconocido').slice(0, 120),
-    endpoint: String(target?.pathname || '').slice(0, 200),
+    endpoint: String(endpoint || target?.pathname || '').slice(0, 200),
     flow: String(governanceContext?.useCase || context?.module || 'automatico').slice(0, 80),
     route: context?.route ? String(context.route).slice(0, 220) : null,
     outcome: OUTCOMES.has(outcome) ? outcome : 'ERROR',
@@ -71,7 +73,8 @@ export const createAiUsageLog = ({ pool, clock = () => new Date() }) => {
         const now = clock().getTime();
         if (now - lastPruneAt < 24 * 3600 * 1000) return;
         lastPruneAt = now;
-        await pool.query(`DELETE FROM "AiUsageEvent" WHERE "occurredAt" < $1`, [new Date(now - USAGE_RETENTION_DAYS * 24 * 3600 * 1000)]);
+        // La base solo deja borrar este registro dentro de una transacción marcada como purga (AGENTS.md §21).
+        await purgeAuditRows(pool, `DELETE FROM "AiUsageEvent" WHERE "occurredAt" < $1`, [new Date(now - USAGE_RETENTION_DAYS * 24 * 3600 * 1000)]);
     };
 
     const record = async (event) => {

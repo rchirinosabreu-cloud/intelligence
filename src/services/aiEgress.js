@@ -7,29 +7,37 @@ import { buildUsageEvent, extractUsage, getAiUsageLog } from './aiUsageLog.js';
 // never from an arbitrary clientId supplied in a proxy request.
 // Every exit (allowed, blocked or failed) leaves a row in the AI usage log (27 September
 // 2026), without the content; a failing log never breaks the AI call.
+// A destination outside the inventory is rejected and also leaves its BLOCKED row (12 October 2026): only host
+// and path are kept, never the query, credentials in the URL or the body.
 export const createGovernedFetch = ({ fetchImpl, governance, usageLog, clock = () => Date.now() } = {}) => async (url, options = {}) => {
-  const target = new URL(url);
   const { governanceContext, reportsStreamUsage, ...outgoing } = options;
-  let provider, model;
-  const multipart = options.body instanceof FormData;
-  const body = multipart ? { model: options.body.get('model') } : JSON.parse(options.body || '{}');
-  if (target.origin === 'https://api.openai.com' && ['/v1/responses', '/v1/embeddings', '/v1/chat/completions', '/v1/audio/transcriptions'].includes(target.pathname) && (!multipart || target.pathname === '/v1/audio/transcriptions')) {
-    provider = 'openai'; model = body.model;
-  } else if (target.origin === 'https://api.fireflies.ai' && target.pathname === '/graphql') {
-    provider = 'fireflies'; model = 'graphql';
-  } else {
-    throw governanceError('Destino de IA no inventariado.', 403, 'AI_DESTINATION_INVALID');
-  }
-  if (typeof model !== 'string' || !model.trim()) throw governanceError('Modelo de IA no identificado.', 403, 'AI_SCOPE_REQUIRED');
-
   const context = currentAiContext();
   const startedAt = clock();
+  let target, provider, model;
   const log = (fields) => {
     const event = buildUsageEvent({ provider, model, target, context, governanceContext, durationMs: clock() - startedAt, ...fields });
     Promise.resolve()
       .then(() => (usageLog || getAiUsageLog()).record(event))
       .catch((error) => console.error('[AI usage] No se pudo registrar el uso:', error?.message || error));
   };
+  const reject = (message, code, endpoint) => {
+    log({ outcome: 'BLOCKED', errorCode: code, ...(endpoint ? { endpoint } : {}) });
+    throw governanceError(message, 403, code);
+  };
+
+  try { target = new URL(url); } catch { reject('Destino de IA no inventariado.', 'AI_DESTINATION_INVALID', 'dirección no válida'); }
+  const multipart = options.body instanceof FormData;
+  if (target.origin === 'https://api.openai.com' && ['/v1/responses', '/v1/embeddings', '/v1/chat/completions', '/v1/audio/transcriptions'].includes(target.pathname) && (!multipart || target.pathname === '/v1/audio/transcriptions')) {
+    provider = 'openai';
+  } else if (target.origin === 'https://api.fireflies.ai' && target.pathname === '/graphql') {
+    provider = 'fireflies'; model = 'graphql';
+  } else {
+    reject('Destino de IA no inventariado.', 'AI_DESTINATION_INVALID', `${target.host}${target.pathname}`);
+  }
+  let body = {};
+  try { body = multipart ? { model: options.body.get('model') } : JSON.parse(options.body || '{}') || {}; } catch { body = {}; }
+  if (provider === 'openai') model = body.model;
+  if (typeof model !== 'string' || !model.trim()) { model = undefined; reject('Modelo de IA no identificado.', 'AI_SCOPE_REQUIRED'); }
 
   try {
     await (governance || getGovernanceService()).assertEgress({

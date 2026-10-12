@@ -19,3 +19,7 @@
 - Pruebas de interfaz: `node --test --test-concurrency=1 tests/browser/taskAlertTrace.mjs tests/browser/operationalTrace.mjs tests/browser/taskRefreshOrigin.mjs`. Incluyen pestaña oculta, reintentos, cierre, navegación, ambos avisos, modo oscuro y móvil táctil.
 - PostgreSQL real: `tests/recognitionPostgres.integration.mjs` comprueba el filtrado antes del límite, peticiones simultáneas, rollback de reconocimiento/historial y entrega autenticada. Solo permite `TEST_DATABASE_URL` en `127.0.0.1:55448/recognition_test`, con usuario `recognition_test`; valida el destino antes de importar servicios con cliente compartido. No usar `.env` productivo ni otro clúster para estas pruebas.
 - No requiere cambios de esquema. Verificación local no equivale a despliegue productivo; nuevos eventos de concesión/visibilidad empiezan al publicar esta versión.
+
+## Inmutabilidad en la base de datos (12 de octubre de 2026)
+
+- `OperationalTraceEvent` está protegida por un trigger (`scripts/ensure-audit-immutability.js`, AGENTS.md §21): la base rechaza editar o borrar una entrada. La purga de 365 días sigue igual, pero corre en su propia transacción marcada con `SET LOCAL brainstudio.audit_purge = 'on'` (`purgeAuditRowsWithPrisma`) y la base solo le deja borrar lo vencido. Borrar a una persona sigue dejando sus entradas sin autor (`SetNull`), sin tocar nada más de la fila.
