@@ -6,7 +6,7 @@ import { createBriaKnowledgeService } from '../src/services/briaKnowledgeService
 import { createOpenAIClient } from '../src/services/openAIClient.js';
 import { runAssistant } from '../src/lib/briaAssistant.js';
 import { zipSync, strToU8 } from 'fflate';
-import XLSX from 'xlsx';
+import XLSX from '../src/lib/xlsx.js';
 import sharp from 'sharp';
 import { jsPDF } from 'jspdf';
 test('PDF and images reach vision, while Office archives and credentials are bounded', async () => {

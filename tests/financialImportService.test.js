@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import XLSX from 'xlsx';
+import XLSX from '../src/lib/xlsx.js';
 import {
     buildFinancialImportPersistencePlan,
     parseFinancialImportWorkbook

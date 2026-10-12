@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import XLSX from 'xlsx';
+import XLSX from '../src/lib/xlsx.js';
 import {
   calculateCatalogFinalPrice,
   isVariablePriceService,

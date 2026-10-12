@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import XLSX from 'xlsx';
+import XLSX from '../src/lib/xlsx.js';
 import { parseFinancialImportWorkbook } from '../src/services/financialImportService.js';
 import { normalizeFinancialRecordInput, updateFinancialRecord } from '../src/services/financialRecordService.js';
 

@@ -1,6 +1,6 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
-import XLSX from 'xlsx';
+import XLSX from '../src/lib/xlsx.js';
 import { normalizeCompanyKey } from '../src/services/crmService.js';
 import { isValidStage, isClosedStage, stageOrder } from '../src/lib/crmRules.js';
 

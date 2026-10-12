@@ -3,7 +3,7 @@ import assert from 'node:assert';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import xlsx from 'xlsx';
+import xlsx from '../src/lib/xlsx.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);

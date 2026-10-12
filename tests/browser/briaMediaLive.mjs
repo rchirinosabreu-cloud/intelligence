@@ -3,7 +3,7 @@ import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { zipSync, strToU8 } from 'fflate';
-import XLSX from 'xlsx';
+import XLSX from '../../src/lib/xlsx.js';
 import { jsPDF } from 'jspdf';
 import sharp from 'sharp';
 const output = process.env.BRIA_BROWSER_OUTPUT;

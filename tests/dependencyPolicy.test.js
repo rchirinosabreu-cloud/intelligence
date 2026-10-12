@@ -42,6 +42,31 @@ test('el inventario cuenta producción y opcionales, nunca lo de desarrollo', ()
   assert.equal(packages.find((pkg) => pkg.name === 'sin-licencia').license, 'DESCONOCIDA');
 });
 
+test('un paquete instalado desde un .tgz fuera del registro (SheetJS en su CDN) se cuenta con su nombre, versión y licencia', () => {
+  const lock = {
+    packages: {
+      '': { name: 'raiz', dependencies: { xlsx: 'https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz' } },
+      'node_modules/xlsx': {
+        version: '0.20.3',
+        resolved: 'https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz',
+        integrity: 'sha512-oLDq3jw7AcLqKWH2AhCpVTZl8mf6X2YReP+Neh0SJUzV/BdZYjth94tG5toiMB1PPrYtxOCfaoUCkvtuH+3AJA==',
+        license: 'Apache-2.0',
+      },
+      // Si el lockfile no anotara la licencia, se lee del package.json instalado.
+      'node_modules/otro-tgz': { version: '1.0.0', resolved: 'https://example.invalid/otro-tgz-1.0.0.tgz' },
+    },
+  };
+  const packages = productionPackages(lock, {
+    readManifest: (lockPath) => (lockPath === 'node_modules/otro-tgz' ? { license: 'MIT' } : null),
+  });
+  assert.deepEqual(packages.map((pkg) => `${pkg.name}@${pkg.version} ${pkg.license}`), [
+    'otro-tgz@1.0.0 MIT',
+    'xlsx@0.20.3 Apache-2.0',
+  ]);
+  const [, xlsx] = classifyPackages(packages, { permitidas: ALLOWED });
+  assert.equal(xlsx.status, 'permitida');
+});
+
 test('una licencia fuera de la lista se rechaza salvo que esté anotada, y solo con esa misma licencia', () => {
   const policy = {
     permitidas: ALLOWED,
