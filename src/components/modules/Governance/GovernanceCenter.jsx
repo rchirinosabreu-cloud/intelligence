@@ -4,7 +4,7 @@ import Select from '@/components/ui/Select';
 import { BrainDateTimePicker } from '@/components/ui/BrainDatePicker';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { DATA_CLASSES, GOVERNANCE_FORMS, STATUS_LABELS } from '@/lib/aiGovernance';
+import { DATA_CLASSES, GOVERNANCE_FORMS, INCIDENT_TYPE_LABELS, STATUS_LABELS } from '@/lib/aiGovernance';
 import GovernanceRecords, { displayDate } from './GovernanceRecords';
 import GovernanceDocuments from './GovernanceDocuments';
 import GovernanceUsage from './GovernanceUsage';
@@ -12,7 +12,14 @@ import GovernanceDataRequests from './GovernanceDataRequests';
 
 const inputStyle = 'w-full rounded-lg border border-input bg-background px-3 py-2 text-foreground';
 const buttonStyle = 'min-h-11 rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-muted disabled:opacity-50';
-const labels = { PUBLIC: 'Públicos', INTERNAL: 'Internos', CONFIDENTIAL: 'Confidenciales', RESTRICTED: 'Restringidos / sensibles', GENERATIVE: 'IA generativa', ML: 'Aprendizaje automático', NEURAL: 'Red neuronal', LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta', CRITICAL: 'Crítica', SI: 'Sí', NO: 'No' };
+const labels = { PUBLIC: 'Públicos', INTERNAL: 'Internos', CONFIDENTIAL: 'Confidenciales', RESTRICTED: 'Restringidos / sensibles', GENERATIVE: 'IA generativa', ML: 'Aprendizaje automático', NEURAL: 'Red neuronal', LOW: 'Baja', MEDIUM: 'Media', HIGH: 'Alta', CRITICAL: 'Crítica', SI: 'Sí', NO: 'No', ...INCIDENT_TYPE_LABELS };
+// Un reporte del equipo puede traer «No sé» en «¿Afecta a un cliente?»: administración tiene que decidir sí o no.
+const formValue = (f, value) => (f.key === 'affectsClient' && value && !f.options.includes(value) ? '' : value);
+const initialTab = () => {
+  // El aviso de un reporte del equipo llega con ?tab=incidents.
+  try { const tab = new URLSearchParams(window.location.search).get('tab'); return tab && GOVERNANCE_FORMS[tab] ? tab : 'systems'; }
+  catch { return 'systems'; }
+};
 const localDate = value => value ? new Date(+new Date(value) - 5 * 3600000).toISOString().slice(0, 16) : '';
 async function request(path, { method = 'GET', body, download = false, text = false, signal } = {}) {
   const response = await fetch(`${getApiBaseUrl()}/api/ai-governance${path}`, {
@@ -33,7 +40,7 @@ function RecordForm({ kind, record, options, onSaved, onClose }) {
   const [body, setBody] = useState(() => ({
     name: record?.name || '', status: revoking ? 'REVOKED' : record?.status || form.statuses[0],
     clientId: record?.clientId || '', systemId: record?.systemId || '', riskId: record?.riskId || '',
-    data: Object.fromEntries(form.fields.map(f => [f.key, f.type === 'datetime' ? localDate(record?.data[f.key]) : record?.data[f.key] ?? (f.type === 'classes' ? [] : f.key === 'useCase' ? 'parrillas.review' : '')])),
+    data: Object.fromEntries(form.fields.map(f => [f.key, f.type === 'datetime' ? localDate(record?.data[f.key]) : formValue(f, record?.data[f.key]) ?? (f.type === 'classes' ? [] : f.key === 'useCase' ? 'parrillas.review' : '')])),
     reason: '', expectedVersion: record?.version
   }));
   const [saving, setSaving] = useState(false); const [error, setError] = useState('');
@@ -57,17 +64,22 @@ function RecordForm({ kind, record, options, onSaved, onClose }) {
           {['risks', 'authorizations'].includes(kind) && chooser('systemId', 'Sistema de IA', options.systems)}
           {kind === 'authorizations' && chooser('riskId', 'Evaluación de riesgos', options.risks.filter(r => r.clientId === body.clientId && r.systemId === body.systemId))}
         </div>
+        {record?.data?.reportedByName && <p className="rounded-lg border border-border p-3 text-sm text-muted-foreground">Reportado por {record.data.reportedByName} el {displayDate(record.data.reportedAt)} desde la plataforma. Revisa tipo, severidad, impacto y si afecta a un cliente.</p>}
         <div className="grid gap-4 sm:grid-cols-2">{form.fields.map(f => {
+          // El correo contractual y el aviso al cliente solo aparecen si el incidente afecta a un cliente.
+          if (f.onlyIf && body.data[f.onlyIf[0]] !== f.onlyIf[1]) return null;
+          const required = f.required || f.key === 'recipientEmail';
           const id = `gov-${f.key}`, value = body.data[f.key];
           if (f.type === 'classes') return <fieldset key={f.key} className="rounded-lg border p-3 sm:col-span-2"><legend className="px-1 text-sm font-medium">{f.label} *</legend><div className="flex flex-wrap gap-4">{DATA_CLASSES.map(c => <label key={c} className="flex min-h-11 items-center gap-2 text-sm"><input type="checkbox" checked={value.includes(c)} onChange={e => dataUpdate(f.key, e.target.checked ? [...value, c] : value.filter(x => x !== c))} />{labels[c]}</label>)}</div></fieldset>;
-          return <label key={f.key} htmlFor={id} className={`block space-y-2 ${f.type === 'textarea' ? 'sm:col-span-2' : ''}`}><span className="block text-sm font-medium">{f.label}{f.required ? ' *' : ''}</span>
+          return <label key={f.key} htmlFor={id} className={`block space-y-2 ${f.type === 'textarea' ? 'sm:col-span-2' : ''}`}><span className="block text-sm font-medium">{f.label}{required ? ' *' : ''}</span>
             {f.type === 'datetime' ? <BrainDateTimePicker id={id} value={value} onChange={v => dataUpdate(f.key, v)} ariaLabel={f.label} className={inputStyle} />
-              : ['person', 'select'].includes(f.type) ? <Select id={id} value={value} required={f.required} onChange={e => dataUpdate(f.key, e.target.value)}><option value="">Seleccionar</option>{(f.type === 'person' ? options.people : f.options.map(id => ({ id, name: labels[id] || id }))).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
-                : f.type === 'textarea' ? <textarea id={id} rows={3} className={inputStyle} required={f.required} value={value} maxLength={6000} onChange={e => dataUpdate(f.key, e.target.value)} />
-                  : <input id={id} className={inputStyle} type={f.type} value={value} required={f.required} min={f.type === 'number' ? 1 : undefined} max={f.type === 'number' ? 5 : undefined} step={f.type === 'number' ? 1 : undefined} onChange={e => dataUpdate(f.key, e.target.value)} />}
+              : ['person', 'select'].includes(f.type) ? <Select id={id} value={value} required={required} onChange={e => dataUpdate(f.key, e.target.value)}><option value="">Seleccionar</option>{(f.type === 'person' ? options.people : f.options.map(id => ({ id, name: labels[id] || id }))).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</Select>
+                : f.type === 'textarea' ? <textarea id={id} rows={3} className={inputStyle} required={required} value={value} maxLength={6000} onChange={e => dataUpdate(f.key, e.target.value)} />
+                  : <input id={id} className={inputStyle} type={f.type} value={value} required={required} min={f.type === 'number' ? 1 : undefined} max={f.type === 'number' ? 5 : undefined} step={f.type === 'number' ? 1 : undefined} onChange={e => dataUpdate(f.key, e.target.value)} />}
           </label>;
         })}</div>
       </>}
+      {kind === 'incidents' && <p className="text-sm text-muted-foreground">Aquí van todos los incidentes de seguridad, no solo los de IA. El correo contractual y el aviso de 24 horas solo aplican si afecta a un cliente.</p>}
       {kind === 'authorizations' && !revoking && <p className="text-sm text-muted-foreground">Para aprobar: sistema aprobado, riesgo mitigado con puntuación residual ≤ 4/25, evidencia escrita y un mes calendario entre aviso e inicio. Un cambio en el sistema o el riesgo exige una nueva autorización.</p>}
       <label className="block space-y-2"><span className="block text-sm font-medium">Motivo del registro o cambio{record ? ' *' : ''}</span><textarea className={inputStyle} value={body.reason} maxLength={1000} required={Boolean(record)} onChange={e => update('reason', e.target.value)} /></label>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
@@ -101,7 +113,7 @@ return <Dialog open onOpenChange={open => { if (!open) onClose(); }}><DialogCont
 }
 
 export default function GovernanceCenter() {
-  const [tab, setTab] = useState('systems'); const [page, setPage] = useState(1);
+  const [tab, setTab] = useState(initialTab); const [page, setPage] = useState(1);
   const [editing, setEditing] = useState(null); const [history, setHistory] = useState(null); const [notice, setNotice] = useState('');
   const cache = useQueryClient();
   const options = useQuery({ queryKey: ['governance', 'options'], queryFn: () => request('/options'), staleTime: 60000 });

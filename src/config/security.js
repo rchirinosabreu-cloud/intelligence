@@ -319,7 +319,7 @@ export const validateUploadFile = (file, { maxBytes = 25 * 1024 * 1024 } = {}) =
   return file;
 };
 
-export const createRateLimiter = ({ windowMs = 60_000, max = 60, maxBuckets = 10_000, now = Date.now, keyGenerator } = {}) => {
+export const createRateLimiter = ({ windowMs = 60_000, max = 60, maxBuckets = 10_000, now = Date.now, keyGenerator, onLimit } = {}) => {
   const buckets = new Map();
   const pruneBuckets = (currentTime) => {
     for (const [key, bucket] of buckets) {
@@ -350,6 +350,8 @@ export const createRateLimiter = ({ windowMs = 60_000, max = 60, maxBuckets = 10
     res.setHeader('RateLimit-Reset', String(Math.ceil(bucket.resetAt / 1000)));
     if (bucket.count > max) {
       res.setHeader('Retry-After', String(Math.ceil((bucket.resetAt - currentTime) / 1000)));
+      // A screen that people read can explain the limit in its own words.
+      if (onLimit) return onLimit(req, res);
       return res.status(429).json({ error: 'Too many requests', message: 'Intenta nuevamente más tarde' });
     }
     return next();

@@ -1,6 +1,6 @@
 import pg from 'pg';
 import { randomUUID } from 'node:crypto';
-import { validateRecord, authorizationDecision, incidentDeadline, governanceError, sicReportStatus } from '../lib/aiGovernance.js';
+import { validateRecord, authorizationDecision, incidentDeadline, governanceError, sicReportStatus, incidentNoticeRequired, validateIncidentReport, INCIDENT_REPORT_KEYS } from '../lib/aiGovernance.js';
 
 const tables = Object.freeze({ systems: 'AiGovernanceSystem', risks: 'AiGovernanceRisk', authorizations: 'AiGovernanceAuthorization', incidents: 'AiGovernanceIncident' });
 const tableFor = kind => { if (!Object.hasOwn(tables, kind)) throw governanceError('Registro desconocido.', 404); return `"${tables[kind]}"`; };
@@ -41,8 +41,11 @@ export function createGovernanceService({ pool, clock = () => new Date() }) {
       return { page: Number(page), hasMore: records.length > 25, items: records.slice(0, 25).map(raw => {
         const item = present(raw);
         if (kind === 'incidents') {
-          item.notificationOverdue = !item.data.notifiedAt && +clock() > +new Date(item.notificationDueAt);
-          item.notifiedLate = Boolean(item.data.notifiedAt && +new Date(item.data.notifiedAt) > +new Date(item.notificationDueAt));
+          // Sin cliente afectado no hay aviso de 24 horas: la columna guarda la hora, pero no se presenta como plazo.
+          item.noticeRequired = incidentNoticeRequired(item.data);
+          if (!item.noticeRequired) item.notificationDueAt = null;
+          item.notificationOverdue = item.noticeRequired && !item.data.notifiedAt && +clock() > +new Date(item.notificationDueAt);
+          item.notifiedLate = Boolean(item.noticeRequired && item.data.notifiedAt && +new Date(item.data.notifiedAt) > +new Date(item.notificationDueAt));
           item.sicReport = sicReportStatus(item.data, clock());
         }
         return item;
@@ -99,6 +102,8 @@ export function createGovernanceService({ pool, clock = () => new Date() }) {
           }
         }
         if (kind === 'incidents') {
+          // Quién reportó y cuándo los escribió el servidor al recibir el reporte; editar nunca los borra.
+          for (const key of INCIDENT_REPORT_KEYS) if (current?.data[key] !== undefined) data[key] = current.data[key];
           if (current && data.detectedAt !== current.data.detectedAt) throw governanceError('La fecha de conocimiento es inmutable; registra la aclaración en la descripción.', 409);
           const deadline = incidentDeadline(data);
           if (current && +deadline > +new Date(current.notificationDueAt)) throw governanceError('No se puede extender el plazo original de notificación.', 409);
@@ -113,6 +118,35 @@ export function createGovernanceService({ pool, clock = () => new Date() }) {
         const next = present((await db.query(query, [recordId, ...Object.values(values)])).rows[0]);
         await audit(db, { kind, id: recordId, actorId, action: id ? 'UPDATED' : 'CREATED', reason, before: current, after: next });
         return next;
+      });
+    },
+    // Reporte de cualquier persona activa del equipo (12 de octubre de 2026). Crea el incidente abierto a su
+    // nombre y con la hora del servidor; no devuelve el registro ni concede lectura del módulo. Nada de esto
+    // se envía a un proveedor de IA.
+    async report(actorId, input) {
+      return transaction(async db => {
+        const reporter = (await db.query('SELECT u.id,u.name FROM "User" u JOIN "TeamMember" t ON t."userId"=u.id WHERE u.id=$1 AND u."isActive"=true AND t."isActive"=true', [actorId])).rows[0];
+        if (!reporter) throw governanceError('Solo el equipo activo puede reportar incidentes.', 403, 'GOVERNANCE_FORBIDDEN');
+        const now = clock();
+        const report = validateIncidentReport(input, { now });
+        if (report.clientId && !(await db.query('SELECT id FROM "Client" WHERE id=$1', [report.clientId])).rows.length) throw governanceError('Selecciona un cliente válido.');
+        const reporterName = reporter.name || 'Alguien del equipo';
+        // El conocimiento va al minuto, como lo escribe el formulario de administración (que lo compara al editar);
+        // la hora exacta del reporte queda en `reportedAt`.
+        const detectedAt = new Date(Math.floor(+now / 60000) * 60000).toISOString();
+        const data = {
+          description: report.description, detectedAt, affectsClient: report.affectsClient,
+          ...(report.occurredAt ? { occurredAt: report.occurredAt } : {}),
+          reportedById: actorId, reportedByName: reporterName, reportedAt: now.toISOString(), reportSource: 'TEAM_REPORT'
+        };
+        const summary = report.description.split('\n')[0].trim();
+        const name = `Reporte de ${reporterName}: ${summary}`.slice(0, 180);
+        const id = randomUUID();
+        const values = { name, status: 'OPEN', ownerId: actorId, clientId: report.clientId, notificationDueAt: incidentDeadline(data), data };
+        const keys = Object.keys(values);
+        const next = present((await db.query(`INSERT INTO "AiGovernanceIncident" (id,${keys.map(k => `"${k}"`).join(',')}) VALUES ($1,${keys.map((_, i) => `$${i + 2}`).join(',')}) RETURNING *`, [id, ...Object.values(values)])).rows[0]);
+        await audit(db, { kind: 'incidents', id, actorId, action: 'CREATED', reason: 'Reporte del equipo desde la plataforma', after: next });
+        return { id, reportedAt: data.reportedAt, reporterName };
       });
     },
     async history(actorId, kind, id) {
