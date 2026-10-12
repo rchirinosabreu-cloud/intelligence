@@ -1,0 +1,45 @@
+{
+  "$comentario": "Política de licencias de las dependencias de producción. La lee scripts/license-inventory.mjs. Detalle en AGENTS.md, sección 21.",
+  "permitidas": [
+    "MIT",
+    "MIT-0",
+    "ISC",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "0BSD",
+    "Apache-2.0",
+    "Unlicense",
+    "CC0-1.0",
+    "CC-BY-4.0",
+    "BlueOak-1.0.0",
+    "Python-2.0",
+    "Zlib"
+  ],
+  "aclaraciones": {
+    "$comentario": "Paquetes que no declaran su licencia en formato SPDX. Cada aclaración se leyó en el archivo LICENSE del propio paquete y vale solo para esa versión.",
+    "busboy@1.6.0": { "licencia": "MIT", "fuente": "Campo «licenses» antiguo de su package.json y su LICENSE." },
+    "streamsearch@1.1.0": { "licencia": "MIT", "fuente": "Campo «licenses» antiguo de su package.json y su LICENSE." },
+    "duck@0.1.12": { "licencia": "BSD-2-Clause", "fuente": "Declara «BSD»; su LICENSE es la BSD de dos cláusulas." },
+    "url-template@2.0.8": { "licencia": "BSD-3-Clause", "fuente": "Declara «BSD»; su LICENSE es la BSD de tres cláusulas." },
+    "rgbcolor@1.0.1": { "licencia": "MIT", "fuente": "Declara «MIT OR SEE LICENSE IN FEEL-FREE.md»; se usa bajo MIT." }
+  },
+  "pendientesDeDecision": {
+    "$comentario": "Licencias fuera de la lista permitida que ya estaban en la plataforma al crear esta política (12 de octubre de 2026). No se aprueban aquí: quedan anotadas para que una persona decida. Un paquete nuevo con una licencia así rompe la verificación.",
+    "@img/sharp-libvips-*": {
+      "licencia": "LGPL-3.0-or-later",
+      "motivo": "Binarios de libvips que instala sharp (redimensionar y convertir imágenes) según el sistema operativo. Se enlazan de forma dinámica y no se modifican; la LGPL lo permite, pero no es una licencia permisiva."
+    },
+    "@img/sharp-win32-*": {
+      "licencia": "Apache-2.0 AND LGPL-3.0-or-later",
+      "motivo": "Binario de sharp para Windows (solo en equipos de desarrollo) que trae libvips dentro."
+    },
+    "@img/sharp-wasm32": {
+      "licencia": "Apache-2.0 AND LGPL-3.0-or-later AND MIT",
+      "motivo": "Versión WebAssembly de sharp con libvips dentro; opcional, no la usa Railway."
+    },
+    "web-push": {
+      "licencia": "MPL-2.0",
+      "motivo": "Envía las notificaciones push. La MPL-2.0 obliga a publicar solo los cambios que se hagan a sus propios archivos; no se modifica."
+    }
+  }
+}

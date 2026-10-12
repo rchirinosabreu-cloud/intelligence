@@ -1,0 +1,47 @@
+# Actualizaciones automáticas de dependencias (AGENTS.md, sección 21).
+#
+# Cada semana Dependabot revisa las librerías de npm y las acciones de GitHub y abre
+# pull requests. Para no llenar la bandeja, las subidas menores y de parche van juntas
+# en un solo PR por tipo (producción / desarrollo); una versión mayor llega sola,
+# porque puede romper algo y se revisa aparte. Las actualizaciones de seguridad
+# (alertas de Dependabot) no se agrupan: llegan en su propio PR en cuanto salen.
+#
+# Todo PR de Dependabot pasa por el mismo CI que cualquier otro cambio: pruebas,
+# compilación, la puerta de vulnerabilidades y la de licencias. Nada se fusiona solo.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Bogota
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(deps)"
+      prefix-development: "chore(deps-dev)"
+    groups:
+      produccion-menores:
+        applies-to: version-updates
+        dependency-type: production
+        update-types: [minor, patch]
+      desarrollo-menores:
+        applies-to: version-updates
+        dependency-type: development
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: "06:00"
+      timezone: America/Bogota
+    open-pull-requests-limit: 3
+    commit-message:
+      prefix: "ci"
+    groups:
+      acciones:
+        applies-to: version-updates
+        patterns: ["*"]
