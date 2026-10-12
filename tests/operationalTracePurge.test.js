@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { recordOperationalTrace, TRACE_RETENTION_DAYS } from '../src/services/operationalTraceService.js';
 import { AUDIT_PURGE_SQL } from '../src/lib/auditImmutability.js';
 
-// La base rechaza borrar la traza operativa salvo en una transacción marcada como purga (AGENTS.md §21).
+// La base rechaza borrar la traza operativa salvo en una transacción marcada como purga (AGENTS.md §22).
 const settle = () => new Promise((resolve) => setTimeout(resolve, 10));
 const now = new Date('2026-10-12T15:00:00Z');
 

@@ -9,7 +9,7 @@
 //     Se eligió así y no pasar esos borrados por la marca porque la persona se borra desde muchos sitios y la
 //     fila conserva todo lo demás: qué pasó, cuándo y sobre qué.
 //  3. Un UPDATE que no cambia nada (p. ej. un `upsert` con `update: {}`): no altera la evidencia.
-// Contrato: tests/auditImmutability.test.js. Instalación: scripts/ensure-audit-immutability.js. AGENTS.md §21.
+// Contrato: tests/auditImmutability.test.js. Instalación: scripts/ensure-audit-immutability.js. AGENTS.md §22.
 
 export const AUDIT_PURGE_SETTING = 'brainstudio.audit_purge';
 export const AUDIT_PURGE_SQL = `SET LOCAL ${AUDIT_PURGE_SETTING} = 'on'`;

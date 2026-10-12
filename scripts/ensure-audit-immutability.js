@@ -4,7 +4,7 @@ import { ensureAuditImmutability } from '../src/lib/auditImmutability.js';
 // Inmutabilidad de los registros de auditoría (12 de octubre de 2026): triggers aditivos e idempotentes que
 // rechazan editar o borrar cualquier fila de auditoría, salvo la purga automática por antigüedad dentro de una
 // transacción marcada y el NULL de una llave foránea al borrar a una persona. No cambia ningún dato.
-// Va al final de la cadena de `start`, después de que los demás ensure crearon sus tablas. AGENTS.md §21.
+// Va al final de la cadena de `start`, después de que los demás ensure crearon sus tablas. AGENTS.md §22.
 const { Client } = pg;
 const client = new Client({ connectionString: process.env.DATABASE_URL });
 

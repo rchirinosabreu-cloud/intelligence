@@ -73,7 +73,7 @@ export const createAiUsageLog = ({ pool, clock = () => new Date() }) => {
         const now = clock().getTime();
         if (now - lastPruneAt < 24 * 3600 * 1000) return;
         lastPruneAt = now;
-        // La base solo deja borrar este registro dentro de una transacción marcada como purga (AGENTS.md §21).
+        // La base solo deja borrar este registro dentro de una transacción marcada como purga (AGENTS.md §22).
         await purgeAuditRows(pool, `DELETE FROM "AiUsageEvent" WHERE "occurredAt" < $1`, [new Date(now - USAGE_RETENTION_DAYS * 24 * 3600 * 1000)]);
     };
 

@@ -206,7 +206,7 @@ test('solo administradores activos consultan el registro, y se purga lo de más 
     assert.equal(pool.rows.length, 1);
     const purge = pool.queries.findIndex((sql) => sql.startsWith('DELETE FROM "AiUsageEvent"'));
     assert.ok(purge > 0, 'purga con retención');
-    // La base rechaza borrar el registro salvo dentro de una transacción marcada como purga (AGENTS.md §21).
+    // La base rechaza borrar el registro salvo dentro de una transacción marcada como purga (AGENTS.md §22).
     assert.deepEqual(pool.queries.slice(purge - 2, purge + 2), ['BEGIN', "SET LOCAL brainstudio.audit_purge = 'on'", pool.queries[purge], 'COMMIT']);
     assert.equal(USAGE_RETENTION_DAYS, 365);
 

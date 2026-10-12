@@ -69,7 +69,7 @@ const assertAdmin = (requester) => {
   }
 };
 
-// La base solo deja borrar la traza dentro de una transacción marcada como purga (AGENTS.md §21). Se purga
+// La base solo deja borrar la traza dentro de una transacción marcada como purga (AGENTS.md §22). Se purga
 // únicamente desde el cliente raíz: dentro de la transacción de otro, la marca quedaría puesta hasta su final.
 const maybePruneExpiredTrace = async ({ now, db }) => {
   if (typeof db.operationalTraceEvent?.deleteMany !== 'function' || typeof db.$transaction !== 'function') return;

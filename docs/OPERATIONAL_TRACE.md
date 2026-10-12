@@ -22,4 +22,4 @@
 
 ## Inmutabilidad en la base de datos (12 de octubre de 2026)
 
-- `OperationalTraceEvent` está protegida por un trigger (`scripts/ensure-audit-immutability.js`, AGENTS.md §21): la base rechaza editar o borrar una entrada. La purga de 365 días sigue igual, pero corre en su propia transacción marcada con `SET LOCAL brainstudio.audit_purge = 'on'` (`purgeAuditRowsWithPrisma`) y la base solo le deja borrar lo vencido. Borrar a una persona sigue dejando sus entradas sin autor (`SetNull`), sin tocar nada más de la fila.
+- `OperationalTraceEvent` está protegida por un trigger (`scripts/ensure-audit-immutability.js`, AGENTS.md §22): la base rechaza editar o borrar una entrada. La purga de 365 días sigue igual, pero corre en su propia transacción marcada con `SET LOCAL brainstudio.audit_purge = 'on'` (`purgeAuditRowsWithPrisma`) y la base solo le deja borrar lo vencido. Borrar a una persona sigue dejando sus entradas sin autor (`SetNull`), sin tocar nada más de la fila.
