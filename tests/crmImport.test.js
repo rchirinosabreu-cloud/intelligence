@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import XLSX from 'xlsx';
+import XLSX from '../src/lib/xlsx.js';
 import { parseCrmWorkbook, buildImportPlan, runImport, parseExcelDate, splitDatedNotes, mapOrigin, mapStage, resolveOwnerOptions } from '../scripts/import-crm-excel.js';
 import { createCrmMemoryDb } from './fixtures/crmMemoryDb.js';
 

@@ -2,7 +2,7 @@ import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import xlsx from 'xlsx';
+import xlsx from '../src/lib/xlsx.js';
 import prisma from '../src/lib/prisma.js';
 
 const __filename = fileURLToPath(import.meta.url);

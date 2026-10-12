@@ -7,14 +7,14 @@ y la política que lo verifica está en `scripts/license-policy.json` (AGENTS.md
 Incluye los binarios opcionales que npm instala según el sistema operativo (marcados «opcional»):
 en producción (Linux) solo se instala el que corresponde.
 
-**850 paquetes.**
+**842 paquetes.**
 
 ## Resumen por licencia
 
 | Licencia | Paquetes |
 | --- | ---: |
 | MIT | 669 |
-| Apache-2.0 | 74 |
+| Apache-2.0 | 66 |
 | ISC | 45 |
 | BSD-2-Clause | 19 |
 | BSD-3-Clause | 11 |
@@ -296,7 +296,6 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | @zone-eu/mailsplit | 5.4.20 | (MIT OR EUPL-1.1+) |  |
 | abort-controller | 3.0.0 | MIT |  |
 | accepts | 1.3.8 | MIT |  |
-| adler-32 | 1.3.1 | Apache-2.0 |  |
 | agent-base | 6.0.2 | MIT |  |
 | agent-base | 7.1.4 | MIT |  |
 | ansi-regex | 5.0.1 | MIT |  |
@@ -343,7 +342,6 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | canvas-confetti | 1.9.4 | ISC |  |
 | canvg | 3.0.11 | MIT | opcional |
 | ccount | 2.0.1 | MIT |  |
-| cfb | 1.2.2 | Apache-2.0 |  |
 | character-entities | 2.0.2 | MIT |  |
 | character-entities-html4 | 2.1.0 | MIT |  |
 | character-entities-legacy | 3.0.0 | MIT |  |
@@ -354,7 +352,6 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | class-variance-authority | 0.7.1 | Apache-2.0 |  |
 | cliui | 6.0.0 | ISC |  |
 | clsx | 2.1.1 | MIT |  |
-| codepage | 1.15.0 | Apache-2.0 |  |
 | color-convert | 2.0.1 | MIT |  |
 | color-name | 1.1.4 | MIT |  |
 | combined-stream | 1.0.8 | MIT |  |
@@ -369,7 +366,6 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | core-js | 3.48.0 | MIT | opcional |
 | core-util-is | 1.0.3 | MIT |  |
 | cors | 2.8.6 | MIT |  |
-| crc-32 | 1.2.2 | Apache-2.0 |  |
 | cross-spawn | 7.0.6 | MIT |  |
 | css-box-model | 1.2.1 | MIT |  |
 | css-line-break | 2.1.0 | MIT | opcional |
@@ -464,7 +460,6 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | form-data | 4.0.6 | MIT |  |
 | formdata-polyfill | 4.0.10 | MIT |  |
 | forwarded | 0.2.0 | MIT |  |
-| frac | 1.1.2 | Apache-2.0 |  |
 | framer-motion | 11.18.2 | MIT |  |
 | fresh | 0.5.2 | MIT |  |
 | fsevents | 2.3.3 | MIT | opcional |
@@ -808,7 +803,6 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | space-separated-tokens | 2.0.2 | MIT |  |
 | split2 | 4.2.0 | ISC |  |
 | sprintf-js | 1.0.3 | BSD-3-Clause |  |
-| ssf | 0.11.2 | Apache-2.0 |  |
 | stackblur-canvas | 2.7.0 | MIT | opcional |
 | statuses | 2.0.2 | MIT |  |
 | stream-events | 1.0.5 | MIT |  |
@@ -891,13 +885,11 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | whatwg-url | 5.0.0 | MIT |  |
 | which | 2.0.2 | ISC |  |
 | which-module | 2.0.1 | ISC |  |
-| wmf | 1.0.2 | Apache-2.0 |  |
-| word | 0.3.0 | Apache-2.0 |  |
 | wrap-ansi | 6.2.0 | MIT |  |
 | wrap-ansi | 7.0.0 | MIT |  |
 | wrap-ansi | 8.1.0 | MIT |  |
 | wrappy | 1.0.2 | ISC |  |
-| xlsx | 0.18.5 | Apache-2.0 |  |
+| xlsx | 0.20.3 | Apache-2.0 |  |
 | xml-name-validator | 5.0.0 | Apache-2.0 |  |
 | xml-naming | 0.1.0 | MIT |  |
 | xmlbuilder | 10.1.1 | MIT |  |

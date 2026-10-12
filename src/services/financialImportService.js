@@ -1,5 +1,5 @@
 import crypto from 'node:crypto';
-import XLSX from 'xlsx';
+import XLSX from '../lib/xlsx.js';
 import { FinancialDomainError } from './financialRecordService.js';
 
 const MONTHS = [

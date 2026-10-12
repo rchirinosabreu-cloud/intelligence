@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { unzipSync } from 'fflate';
 import mammoth from 'mammoth';
-import XLSX from 'xlsx';
+import XLSX from '../lib/xlsx.js';
 import sharp from 'sharp';
 import { PDFParse } from 'pdf-parse';
 import { validateAttachmentSelection, attachmentError } from '../lib/briaAttachments.js';
