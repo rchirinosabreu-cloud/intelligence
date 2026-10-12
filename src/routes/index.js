@@ -64,6 +64,7 @@ import crmRouter from './api/crm.js';
 import socialPublishingRouter from './api/socialPublishing.js';
 import clientOperationsRouter from './api/clientOperations.js';
 import { createAiGovernanceRouter } from './api/aiGovernance.js';
+import { createIncidentReportRouter } from './api/incidentReports.js';
 import { createServiceHealthRouter } from './api/serviceHealth.js';
 import { createTeamChatRouter, createTeamChatMediaRouter } from './api/teamChat.js';
 import { handleGoogleCalendarWebhook } from '../services/operationalEventService.js';
@@ -343,6 +344,8 @@ router.use('/reports', requireModulePermission('reportes'), reportsRouter);
 router.use('/boards', requireModulePermission('inspiracion'), boardsRouter);
 router.use('/financials', financialsRouter);
 router.use('/crm', requireModulePermission('crm'), crmRouter);
+// Reportar un incidente de seguridad (12 de octubre de 2026): cualquier persona activa del equipo, solo escribe.
+router.use('/incident-reports', createIncidentReportRouter());
 router.use('/ai-governance', createAiGovernanceRouter());
 router.use('/service-health', createServiceHealthRouter());
 

@@ -1,7 +1,8 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ChevronDown, LogOut, Settings, User } from '@/components/ui/icons';
+import { AlertTriangle, ChevronDown, LogOut, Settings, User } from '@/components/ui/icons';
+import IncidentReportDialog from '@/components/security/IncidentReportDialog';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { useAuth } from '@/context/AuthContext';
@@ -31,6 +32,7 @@ export const displayRoleFor = (user) => {
 const SidebarProfile = ({ className, collapsed = false }) => {
   const { currentUser, logout } = useAuth();
   const navigate = useNavigate();
+  const [reportingIncident, setReportingIncident] = useState(false);
 
   // Same key as the shell so the avatar stays in sync after a profile update without a second request.
   const { data: userData } = useQuery({
@@ -93,6 +95,12 @@ const SidebarProfile = ({ className, collapsed = false }) => {
             <Settings className="mr-2 h-4 w-4" />
             <span>Ajustes</span>
           </DropdownMenuItem>
+          {/* Reportar un incidente (12 de octubre de 2026): el menú de cuenta lo ve todo el equipo desde cualquier
+              pantalla, y aquí no compite con la navegación del trabajo diario. */}
+          <DropdownMenuItem onSelect={() => setReportingIncident(true)}>
+            <AlertTriangle className="mr-2 h-4 w-4 text-destructive" />
+            <span>Reportar un incidente</span>
+          </DropdownMenuItem>
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={handleLogout} className="text-destructive brain-destructive-text focus:text-destructive">
             <LogOut className="mr-2 h-4 w-4" />
@@ -100,6 +108,7 @@ const SidebarProfile = ({ className, collapsed = false }) => {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
+      <IncidentReportDialog open={reportingIncident} onOpenChange={setReportingIncident} />
     </div>
   );
 };

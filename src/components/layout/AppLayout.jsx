@@ -3,7 +3,7 @@ import { RouteErrorBoundary } from '@/components/errors/ApplicationErrorBoundary
 import TeamChat from '@/components/chat/TeamChat';
 import Sidebar from './Sidebar';
 import BriaAssistant from '@/components/bria/BriaAssistant';
-import { Menu, Bell, Search, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye, Clock, Users, Activity } from '@/components/ui/icons';
+import { Menu, Bell, Search, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye, Clock, Users, Activity, AlertTriangle } from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -217,6 +217,9 @@ const AppLayout = ({ children }) => {
     } else if (notif.type === 'SERVICE_HEALTH_DOWN' || notif.type === 'SERVICE_HEALTH_RECOVERED') {
         // Semáforo de servicios (5 de octubre de 2026): el aviso lleva al tablero de servicios.
         navigate('/salud-operativa');
+    } else if (notif.type === 'SECURITY_INCIDENT_REPORTED') {
+        // Reporte de incidente del equipo (12 de octubre de 2026): abre los incidentes de Gobierno de IA.
+        navigate('/gobierno-ia?tab=incidents');
     } else if (notif.type === 'BRIA_FOCO_SEMANAL') {
         // El foco de la semana (10 de octubre de 2026): abre el chat donde Bria lo dejó.
         openBriaConversation(notif.relatedId);
@@ -340,6 +343,10 @@ const AppLayout = ({ children }) => {
                                 iconColor = "text-destructive";
                             } else if (notif.type === 'SERVICE_HEALTH_DOWN') {
                                 Icon = Activity;
+                                bgColor = "bg-destructive/10";
+                                iconColor = "text-destructive";
+                            } else if (notif.type === 'SECURITY_INCIDENT_REPORTED') {
+                                Icon = AlertTriangle;
                                 bgColor = "bg-destructive/10";
                                 iconColor = "text-destructive";
                             } else if (notif.type === 'SERVICE_HEALTH_RECOVERED') {

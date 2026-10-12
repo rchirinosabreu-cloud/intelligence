@@ -88,3 +88,20 @@ test('incidentes conservan plazo original al editar y exigen evidencia de comuni
   const page = await service.list(admin, 'incidents');
   assert.ok(page.items.find(r => r.id === incident.id).notificationOverdue);
 });
+test('cualquier persona del equipo reporta un incidente; administración lo completa sin perder quién lo reportó', async () => {
+  assert.ok(service, 'falta implementar el servicio');
+  const { id } = await service.report('gov-editor', { description: 'Perdí el teléfono del trabajo.', affectsClient: 'NO_SE', clientId });
+  await assert.rejects(service.list('gov-editor', 'incidents'), e => e.status === 403);
+  const created = (await service.list(admin, 'incidents')).items.find(r => r.id === id);
+  assert.equal(created.status, 'OPEN');
+  assert.equal(created.ownerId, 'gov-editor');
+  assert.equal(created.data.reportedById, 'gov-editor');
+  assert.equal(created.noticeRequired, true, '«No sé» se trata como posible aviso');
+  const local = new Date(+new Date(created.data.detectedAt) - 5 * 3600000).toISOString().slice(0, 16);
+  await service.save(admin, 'incidents', id, { name: 'Teléfono perdido', status: 'OPEN', clientId: null, expectedVersion: 1, reason: 'Revisado: sin datos de clientes', data: { description: created.data.description, ownerId: admin, severity: 'LOW', detectedAt: local, impact: 'Ninguno', incidentType: 'DEVICE_LOSS', affectsClient: 'NO' } });
+  const triaged = (await service.list(admin, 'incidents')).items.find(r => r.id === id);
+  assert.equal(triaged.data.reportedByName, 'Prueba Editor');
+  assert.equal(triaged.noticeRequired, false);
+  assert.equal(triaged.notificationDueAt, null);
+  assert.equal((await service.history(admin, 'incidents', id)).length, 2);
+});
