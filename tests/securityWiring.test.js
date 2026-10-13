@@ -17,8 +17,9 @@ test('server wires security headers, rate limits, public health, and production-
   assert.match(server, /configureSecurityHeaders\(app\)/);
   assert.match(server, /app\.use\(securityHeaders\)/);
   assert.match(server, /app\.get\('\/api\/health'/);
-  assert.match(server, /app\.use\('\/api\/login',\s*authRateLimiter\)/);
-  assert.match(server, /app\.use\('\/api\/password-reset',\s*authRateLimiter\)/);
+  // Desde el 13 de octubre de 2026 cuentan por persona y por conexión (tests/authRateLimit.test.js).
+  assert.match(server, /app\.use\('\/api\/login',\s*authRateLimiters\)/);
+  assert.match(server, /app\.use\('\/api\/password-reset',\s*authRateLimiters\)/);
   assert.match(server, /app\.use\('\/api\/public',\s*publicRateLimiter\)/);
   assert.match(server, /process\.env\.NODE_ENV\s*===\s*'production'/);
   assert.doesNotMatch(server, /message:\s*err\.message,\s*\n\s*code:\s*err\.code/);
