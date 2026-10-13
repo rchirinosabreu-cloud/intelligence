@@ -59,6 +59,24 @@ test('la pagina publica contiene controles y responsabilidades sin exponer la ho
   assert.ok(!page.includes('Inventario de herramientas, modelos, proveedores'), 'La lista interna de mejoras no debe exponerse');
 });
 
+// Controles que llegaron a producción el 12 de octubre de 2026 (#1077 a #1080) y ajustes del 13:
+// verificación en dos pasos obligatoria para todos, «Wait for CI» en Railway y protección de main.
+// La página pública los cuenta tal como funcionan, sin prometer más.
+test('la pagina publica cuenta los controles de octubre tal como funcionan', async () => {
+  const page = await read('src/components/public/AiGovernancePolicy.jsx');
+  for (const expected of [
+    'obligatoria para todas las cuentas',
+    'se rechazan y quedan registrados',
+    'la base de datos rechaza cualquier modificación',
+    'Dependencias y cambios',
+    'vulnerabilidad alta o crítica',
+    'Cualquier persona del equipo puede reportar un incidente desde la plataforma'
+  ]) {
+    assert.ok(page.includes(expected), `Falta en /seguridad: ${expected}`);
+  }
+  assert.doesNotMatch(page, /puede exigirse por rol/, 'ya no es opcional: es obligatoria para todas las cuentas');
+});
+
 test('las mejoras viven en un documento interno con prioridades y responsables', async () => {
   const roadmap = await read('docs/SEGURIDAD_IA_HOJA_DE_RUTA.md');
   const normalizedRoadmap = roadmap.toLowerCase();
