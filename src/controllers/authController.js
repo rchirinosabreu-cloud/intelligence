@@ -48,8 +48,9 @@ export const login = async (req, res) => {
           return res.status(401).json({ message: 'Credenciales incorrectas' });
       }
 
-      // Con verificación en dos pasos activa, aquí solo sale el pase para pedir el código.
-      return await mfaLogin.respondAfterPassword(user, res);
+      // Con verificación en dos pasos activa, aquí solo sale el pase para pedir el código,
+      // salvo desde un dispositivo recordado en los últimos 7 días.
+      return await mfaLogin.respondAfterPassword(user, res, { trustedDevice: req.body?.trustedDevice });
 
   } catch (error) {
       console.error('Error during login:', error);

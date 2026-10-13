@@ -1,8 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ArrowLeft, KeyRound, Lock, Mail } from '@/components/ui/icons';
+import OtpCodeInput from '@/components/ui/OtpCodeInput';
 import { getApiBaseUrl } from '../lib/apiBaseUrl';
-import { normalizeSecondFactorInput } from '../lib/mfaClient';
+import {
+  forgetTrustedDevice,
+  normalizeSecondFactorInput,
+  rememberTrustedDevice,
+  trustedDeviceFor
+} from '../lib/mfaClient';
+
+const deviceStorage = () => (typeof window === 'undefined' ? null : window.localStorage);
 
 const Login = ({ onLogin }) => {
   const [email, setEmail] = useState('');
@@ -16,6 +24,10 @@ const Login = ({ onLogin }) => {
   const [infoMsg, setInfoMsg] = useState('');
   const [challengeToken, setChallengeToken] = useState('');
   const [mfaCode, setMfaCode] = useState('');
+  const [useBackupCode, setUseBackupCode] = useState(false);
+  const [rememberDevice, setRememberDevice] = useState(true);
+  const mfaInputRef = useRef(null);
+  const verifyingRef = useRef(false);
   const location = useLocation();
 
   useEffect(() => {
@@ -37,6 +49,7 @@ const Login = ({ onLogin }) => {
     setAuthMode('login');
     setChallengeToken('');
     setMfaCode('');
+    setUseBackupCode(false);
     setResetCode('');
     setNewPassword('');
     setConfirmPassword('');
@@ -49,10 +62,12 @@ const Login = ({ onLogin }) => {
     setErrorMsg('');
 
     try {
+      // Desde un dispositivo recordado en los últimos 7 días la contraseña basta.
+      const trustedDevice = trustedDeviceFor(deviceStorage(), email);
       const response = await fetch(`${getApiBaseUrl()}/api/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email, password })
+        body: JSON.stringify({ email, password, ...(trustedDevice ? { trustedDevice: trustedDevice } : {}) })
       });
 
       const data = await response.json().catch(() => ({}));
@@ -62,8 +77,11 @@ const Login = ({ onLogin }) => {
 
       // Con verificación en dos pasos, la contraseña solo trae el pase para pedir el código.
       if (data.mfaRequired && data.challengeToken) {
+        // Si se mandó un pase y aun así pide el código, ese pase ya no vale: se olvida.
+        if (trustedDevice) forgetTrustedDevice(deviceStorage(), email);
         setChallengeToken(data.challengeToken);
         setMfaCode('');
+        setUseBackupCode(false);
         setAuthMode('mfa');
         return;
       }
@@ -79,8 +97,10 @@ const Login = ({ onLogin }) => {
     }
   };
 
-  const handleMfaSubmit = async (event) => {
-    event.preventDefault();
+  // Lo llaman el botón y la sexta casilla; el candado evita mandar el mismo código dos veces.
+  const verifyMfa = async (code) => {
+    if (verifyingRef.current || !code) return;
+    verifyingRef.current = true;
     setLoading(true);
     setErrorMsg('');
 
@@ -88,7 +108,7 @@ const Login = ({ onLogin }) => {
       const response = await fetch(`${getApiBaseUrl()}/api/login/mfa`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ challengeToken, code: mfaCode })
+        body: JSON.stringify({ challengeToken, code, rememberDevice })
       });
       const data = await response.json().catch(() => ({}));
 
@@ -100,18 +120,33 @@ const Login = ({ onLogin }) => {
       }
       if (!response.ok) {
         setMfaCode('');
+        mfaInputRef.current?.focus();
         throw new Error(data.message || 'El código no es válido.');
       }
 
       if (data.token) {
+        if (data.trustedDeviceToken) rememberTrustedDevice(deviceStorage(), email, data.trustedDeviceToken);
+        else forgetTrustedDevice(deviceStorage(), email);
         onLogin(data.token, { ...data.user, recoveryCodesRemaining: data.recoveryCodesRemaining });
       }
     } catch (error) {
       console.error('MFA login error:', error);
       setErrorMsg(error.message);
     } finally {
+      verifyingRef.current = false;
       setLoading(false);
     }
+  };
+
+  const handleMfaSubmit = (event) => {
+    event.preventDefault();
+    verifyMfa(mfaCode);
+  };
+
+  const toggleBackupCode = () => {
+    setUseBackupCode((previous) => !previous);
+    setMfaCode('');
+    setErrorMsg('');
   };
 
   const handleResetRequest = async (event) => {
@@ -217,7 +252,9 @@ const Login = ({ onLogin }) => {
                 {authMode === 'login'
                   ? 'Accede a la plataforma operativa de la agencia.'
                   : isMfa
-                    ? 'Escribe el código de seis dígitos de tu app autenticadora, o uno de tus códigos de respaldo.'
+                    ? useBackupCode
+                      ? 'Escribe uno de tus códigos de respaldo. Cada uno sirve una sola vez.'
+                      : 'Escribe el código de seis dígitos de tu app autenticadora.'
                     : 'Te enviaremos un codigo al correo registrado para crear una nueva contrasena.'}
               </p>
             </div>
@@ -237,23 +274,61 @@ const Login = ({ onLogin }) => {
                 </div>
               )}
 
-              {isMfa && (
+              {isMfa && !useBackupCode && (
                 <label className="block">
                   <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Código de verificación</span>
+                  <OtpCodeInput
+                    ref={mfaInputRef}
+                    value={mfaCode}
+                    onChange={setMfaCode}
+                    onComplete={verifyMfa}
+                    busy={loading}
+                    invalid={Boolean(errorMsg) && !mfaCode}
+                    autoFocus
+                  />
+                </label>
+              )}
+
+              {isMfa && useBackupCode && (
+                <label className="block">
+                  <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Código de respaldo</span>
                   <div className="relative">
-                    <KeyRound className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
+                    <KeyRound className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-brand-cyan-deep dark:text-brand-cyan" />
                     <input
                       type="text"
-                      autoComplete="one-time-code"
+                      autoComplete="off"
+                      autoCapitalize="none"
+                      spellCheck={false}
                       autoFocus
                       value={mfaCode}
                       onChange={(event) => setMfaCode(normalizeSecondFactorInput(event.target.value))}
-                      className="w-full rounded-2xl border border-zinc-200 bg-white py-3 pl-11 pr-4 font-mono tracking-widest text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:ring-indigo-500/20"
-                      placeholder="000000"
+                      className="w-full rounded-2xl border border-zinc-200 bg-white py-3 pl-11 pr-4 font-mono tracking-widest text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-brand-cyan focus:ring-4 focus:ring-brand-cyan/20 dark:border-white/10 dark:bg-white/5 dark:text-white"
+                      placeholder="abcde-fghjk"
                       required
                     />
                   </div>
                 </label>
+              )}
+
+              {isMfa && (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <label className="inline-flex min-h-11 cursor-pointer items-center gap-2 text-sm text-zinc-600 dark:text-zinc-300">
+                    <input
+                      type="checkbox"
+                      checked={rememberDevice}
+                      onChange={(event) => setRememberDevice(event.target.checked)}
+                      className="h-4 w-4 rounded border-zinc-300 accent-[rgb(var(--brand-cyan))] dark:border-zinc-600"
+                    />
+                    Recordar este dispositivo por 7 días
+                  </label>
+                  <button
+                    type="button"
+                    onClick={toggleBackupCode}
+                    className="min-h-11 text-xs font-semibold text-brand-cyan-deep transition-colors hover:text-brand-cyan dark:text-brand-cyan"
+                  >
+                    {useBackupCode ? 'Usar el código de la app' : 'Usar un código de respaldo'}
+                  </button>
+                </div>
               )}
 
               {!isMfa && (

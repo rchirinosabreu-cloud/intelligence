@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { KeyRound, Loader2, RefreshCw, ShieldCheck } from '@/components/ui/icons';
+import OtpCodeInput from '@/components/ui/OtpCodeInput';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { normalizeSecondFactorInput } from '@/lib/mfaClient';
 import { useAuth } from '@/context/AuthContext';
@@ -22,6 +23,9 @@ const MfaSettings = () => {
     const [freshCodes, setFreshCodes] = useState(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const [useBackupCode, setUseBackupCode] = useState(false);
+    const codeInputRef = useRef(null);
+    const submittingRef = useRef(false);
 
     const load = useCallback(async () => {
         try {
@@ -40,11 +44,14 @@ const MfaSettings = () => {
         setMode('idle');
         setCode('');
         setPassword('');
+        setUseBackupCode(false);
         setError('');
     };
 
-    const submit = async (event) => {
-        event.preventDefault();
+    // Lo llaman el botón y la sexta casilla; el candado evita mandarlo dos veces.
+    const run = async (value) => {
+        if (submittingRef.current || !value) return;
+        submittingRef.current = true;
         setLoading(true);
         setError('');
         const isDisable = mode === 'disable';
@@ -52,7 +59,7 @@ const MfaSettings = () => {
             const response = await fetch(`${getApiBaseUrl()}/api/user/mfa${isDisable ? '' : '/recovery-codes'}`, {
                 method: isDisable ? 'DELETE' : 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(isDisable ? { password, code } : { code })
+                body: JSON.stringify(isDisable ? { password, code: value } : { code: value })
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || 'No se pudo completar la acción.');
@@ -61,11 +68,25 @@ const MfaSettings = () => {
             reset();
             await load();
         } catch (err) {
+            console.error('MFA settings error:', err);
             setError(err.message);
             setCode('');
+            codeInputRef.current?.focus();
         } finally {
+            submittingRef.current = false;
             setLoading(false);
         }
+    };
+
+    const submit = (event) => {
+        event.preventDefault();
+        run(code);
+    };
+
+    // Desactivar pide además la contraseña: sin ella la sexta casilla no envía nada.
+    const completeCode = (value) => {
+        if (mode === 'disable' && !password) return;
+        run(value);
     };
 
     const finishEnrollment = async () => {
@@ -129,7 +150,7 @@ const MfaSettings = () => {
                             <form onSubmit={submit} className="space-y-4">
                                 <p className="text-sm text-zinc-600 dark:text-zinc-300">
                                     {mode === 'disable'
-                                        ? 'Para desactivarla confirma tu contraseña y un código de la app.'
+                                        ? 'Para desactivarla escribe tu contraseña y después el código de la app.'
                                         : 'Los códigos anteriores dejarán de servir. Confirma con un código de la app.'}
                                 </p>
                                 {mode === 'disable' && (
@@ -138,18 +159,41 @@ const MfaSettings = () => {
                                         <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} className={inputClass} required autoComplete="current-password" />
                                     </label>
                                 )}
-                                <label className="block space-y-2">
-                                    <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Código de la app o de respaldo</span>
-                                    <input
-                                        type="text"
-                                        autoComplete="one-time-code"
-                                        value={code}
-                                        onChange={(event) => setCode(normalizeSecondFactorInput(event.target.value))}
-                                        className={`${inputClass} font-mono tracking-widest`}
-                                        placeholder="000000"
-                                        required
-                                    />
-                                </label>
+                                {useBackupCode ? (
+                                    <label className="block space-y-2">
+                                        <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Código de respaldo</span>
+                                        <input
+                                            type="text"
+                                            autoComplete="off"
+                                            autoCapitalize="none"
+                                            spellCheck={false}
+                                            value={code}
+                                            onChange={(event) => setCode(normalizeSecondFactorInput(event.target.value))}
+                                            className={`${inputClass} font-mono tracking-widest`}
+                                            placeholder="abcde-fghjk"
+                                            required
+                                        />
+                                    </label>
+                                ) : (
+                                    <label className="block space-y-2">
+                                        <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Código de la app</span>
+                                        <OtpCodeInput
+                                            ref={codeInputRef}
+                                            value={code}
+                                            onChange={setCode}
+                                            onComplete={completeCode}
+                                            busy={loading}
+                                            invalid={Boolean(error) && !code}
+                                        />
+                                    </label>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => { setUseBackupCode((previous) => !previous); setCode(''); setError(''); }}
+                                    className="min-h-11 text-xs font-semibold text-brand-cyan-deep transition-colors hover:text-brand-cyan dark:text-brand-cyan"
+                                >
+                                    {useBackupCode ? 'Usar el código de la app' : 'Usar un código de respaldo'}
+                                </button>
                                 <ErrorNote>{error}</ErrorNote>
                                 <div className="flex flex-wrap gap-2">
                                     <button type="submit" disabled={loading || !code} className={cn(primaryButtonClass, 'sm:w-auto', mode === 'disable' && 'bg-destructive text-destructive-foreground hover:bg-destructive/90')}>

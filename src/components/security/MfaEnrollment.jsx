@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Check, Copy, KeyRound, Loader2, Smartphone } from '@/components/ui/icons';
+import OtpCodeInput from '@/components/ui/OtpCodeInput';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { formatTotpSecret, normalizeSecondFactorInput } from '@/lib/mfaClient';
+import { formatTotpSecret } from '@/lib/mfaClient';
 import MfaRecoveryCodes from './MfaRecoveryCodes';
 
 // Vincular la app autenticadora (27 de septiembre de 2026): QR, clave para escribir a mano,
@@ -22,6 +23,8 @@ const MfaEnrollment = ({ email, onDone }) => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [copied, setCopied] = useState(false);
+    const codeInputRef = useRef(null);
+    const confirmingRef = useRef(false);
 
     const start = async () => {
         setLoading(true);
@@ -38,25 +41,35 @@ const MfaEnrollment = ({ email, onDone }) => {
         }
     };
 
-    const confirm = async (event) => {
-        event.preventDefault();
+    // Lo llaman el botón y la sexta casilla; el candado evita confirmar dos veces.
+    const confirmCode = async (value) => {
+        if (confirmingRef.current || value.length !== 6) return;
+        confirmingRef.current = true;
         setLoading(true);
         setError('');
         try {
             const response = await fetch(`${getApiBaseUrl()}/api/user/mfa/confirm`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code })
+                body: JSON.stringify({ code: value })
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(data.error || 'No se pudo confirmar el código.');
             setRecoveryCodes(data.recoveryCodes);
         } catch (err) {
+            console.error('MFA enrollment error:', err);
             setError(err.message);
             setCode('');
+            codeInputRef.current?.focus();
         } finally {
+            confirmingRef.current = false;
             setLoading(false);
         }
+    };
+
+    const confirm = (event) => {
+        event.preventDefault();
+        confirmCode(code);
     };
 
     const copySecret = async () => {
@@ -111,16 +124,13 @@ const MfaEnrollment = ({ email, onDone }) => {
 
             <label className="block space-y-2">
                 <span className="block text-sm font-medium text-zinc-700 dark:text-zinc-300">Código de seis dígitos de la app</span>
-                <input
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
+                <OtpCodeInput
+                    ref={codeInputRef}
                     value={code}
-                    onChange={(event) => setCode(normalizeSecondFactorInput(event.target.value).replace(/\D/g, ''))}
-                    className={`${inputClass} font-mono tracking-[0.3em]`}
-                    placeholder="000000"
-                    required
-                    minLength={6}
+                    onChange={setCode}
+                    onComplete={confirmCode}
+                    busy={loading}
+                    invalid={Boolean(error) && !code}
                 />
             </label>
             <ErrorNote>{error}</ErrorNote>

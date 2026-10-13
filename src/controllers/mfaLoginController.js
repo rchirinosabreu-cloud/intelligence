@@ -1,6 +1,12 @@
 import jwt from 'jsonwebtoken';
 import { isActiveTeamUser } from '../services/teamRosterService.js';
-import { isMfaRequiredForRole, signMfaChallenge, verifyMfaChallenge } from '../lib/mfaPolicy.js';
+import {
+    isMfaRequiredForRole,
+    isTrustedDevice,
+    signMfaChallenge,
+    signTrustedDevice,
+    verifyMfaChallenge
+} from '../lib/mfaPolicy.js';
 import { MfaError } from '../services/mfaService.js';
 
 // Inicio de sesión en dos pasos (27 de septiembre de 2026). Con el MFA activo, la
@@ -56,8 +62,12 @@ export const createMfaLoginHandlers = ({ db, mfa, jwtSecret, expiresIn, trace, r
         return res.json({ token, user: sessionUser(user, roles()), ...extra });
     };
 
-    // Se llama cuando la contraseña ya se comprobó.
-    const respondAfterPassword = async (user, res) => {
+    // Se llama cuando la contraseña ya se comprobó. Desde un dispositivo recordado
+    // (`trustedDevice`, 7 días) la contraseña basta; desde uno nuevo se pide el código.
+    const respondAfterPassword = async (user, res, { trustedDevice } = {}) => {
+        if (user.mfaEnabledAt && isTrustedDevice(trustedDevice, user, jwtSecret)) {
+            return issueSession(user, res, { method: 'PASSWORD_TRUSTED_DEVICE', amr: ['pwd', 'device'] });
+        }
         if (user.mfaEnabledAt) {
             return res.json({
                 mfaRequired: true,
@@ -82,10 +92,13 @@ export const createMfaLoginHandlers = ({ db, mfa, jwtSecret, expiresIn, trace, r
 
         try {
             const result = await mfa.verifySecondFactor(user.id, req.body?.code);
+            const extra = result.method === 'recovery' ? { recoveryCodesRemaining: result.recoveryCodesRemaining } : {};
+            // Solo un `true` de verdad: «recordar» no se activa por un valor que parezca sí.
+            if (req.body?.rememberDevice === true) extra.trustedDeviceToken = signTrustedDevice(user, jwtSecret);
             return issueSession(user, res, {
                 method: METHOD_TRACE[result.method] || 'PASSWORD_MFA',
                 amr: ['pwd', 'otp'],
-                extra: result.method === 'recovery' ? { recoveryCodesRemaining: result.recoveryCodesRemaining } : {}
+                extra
             });
         } catch (error) {
             if (error instanceof MfaError) return res.status(error.status).json({ code: error.code, message: error.message });

@@ -72,7 +72,7 @@ export async function createMfaPreview({ port = 3113 } = {}) {
         if (!user || !(await bcrypt.compare(String(req.body?.password || ''), user.password))) {
             return res.status(401).json({ message: 'Credenciales incorrectas' });
         }
-        return login.respondAfterPassword({ ...user }, res);
+        return login.respondAfterPassword({ ...user }, res, { trustedDevice: req.body?.trustedDevice });
     });
     api.post('/api/login/mfa', (req, res) => login.verifyLogin(req, res));
     api.use('/api', async (req, res, next) => {
