@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
 import { createMfaLoginHandlers } from '../src/controllers/mfaLoginController.js';
-import { isMfaRequiredForRole, mfaEnrollmentBlock, signMfaChallenge, signTrustedDevice, TRUSTED_DEVICE_DAYS } from '../src/lib/mfaPolicy.js';
+import { isMfaEnrollmentRoute, isMfaRequiredForRole, mfaEnrollmentBlock, signMfaChallenge, signTrustedDevice, TRUSTED_DEVICE_DAYS } from '../src/lib/mfaPolicy.js';
 import { MfaError } from '../src/services/mfaService.js';
 
 // Inicio de sesión en dos pasos (27 de septiembre de 2026): con el MFA activo, la
@@ -217,6 +217,17 @@ test('MFA_REQUIRED_ROLES=* obliga a todo el equipo, también a un rol que se cre
     assert.equal(isMfaRequiredForRole('EDITOR', ''), false);
     const editor = { role: 'EDITOR', mfaEnabledAt: null };
     assert.equal(mfaEnrollmentBlock(editor, { method: 'GET', originalUrl: '/api/tasks' }, '*')?.code, 'MFA_ENROLLMENT_REQUIRED');
+});
+
+test('una cuenta nueva puede cambiar su clave temporal aunque le falte el autenticador', () => {
+    // Mariceth, 13 de octubre de 2026: el cambio de contraseña pasaba el control de «clave
+    // pendiente» y lo frenaba el de «autenticador pendiente»; la pantalla volvía al formulario.
+    const nueva = { role: 'EDITOR', mfaEnabledAt: null };
+    assert.equal(mfaEnrollmentBlock(nueva, { method: 'PUT', originalUrl: '/api/user/password' }, '*'), null);
+    assert.equal(isMfaEnrollmentRoute('PUT', '/api/user/password'), true);
+    assert.equal(isMfaEnrollmentRoute('GET', '/api/user/password'), false);
+    assert.equal(isMfaEnrollmentRoute('PUT', '/api/user/password/otra'), false);
+    assert.equal(mfaEnrollmentBlock(nueva, { method: 'PUT', originalUrl: '/api/user/profile' }, '*')?.code, 'MFA_ENROLLMENT_REQUIRED');
 });
 
 test('guardián: un rol obligado sin MFA solo puede activarlo', () => {

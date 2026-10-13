@@ -18,11 +18,15 @@ export const isMfaRequiredForRole = (role, requiredRoles = process.env.MFA_REQUI
     return roles.includes('*') || roles.includes(normalizedRole);
 };
 
-// Lo único que puede hacer alguien a quien le falta activar el MFA obligatorio.
+// Lo único que puede hacer alguien a quien le falta activar el MFA obligatorio. Incluye
+// cambiar la clave temporal: una cuenta nueva la cambia primero y activa el MFA después;
+// sin esto los dos bloqueos se cruzaban y la pantalla volvía al formulario (Mariceth, 13 de
+// octubre de 2026). Cambiar la clave exige la actual, así que no abre nada más.
 export const isMfaEnrollmentRoute = (method, url) => {
     const path = String(url || '').split('?')[0];
     const verb = String(method || '').toUpperCase();
     if (verb === 'GET' && (path === '/api/user/mfa' || path === '/api/auth/me')) return true;
+    if (verb === 'PUT' && path === '/api/user/password') return true;
     return verb === 'POST' && (path === '/api/user/mfa/setup' || path === '/api/user/mfa/confirm');
 };
 
