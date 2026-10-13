@@ -3,6 +3,8 @@
 // (vencidas, devoluciones, reunión de hoy, seguimientos del CRM...). Si no hay nada de eso, algunos
 // días muestra un consejo de plataforma; otros días, ninguno. Nunca inventa datos: solo lee el payload.
 
+import { hasModuleAccess } from './platformModules.js';
+
 const BOGOTA = 'America/Bogota';
 
 export const bogotaDayKey = (value = new Date()) => {
@@ -36,8 +38,7 @@ const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
 
 const canUse = (user, moduleKey) => {
   if (!moduleKey) return true;
-  if (String(user?.role || '').toUpperCase() === 'ADMIN') return true;
-  return user?.modulePermissions?.[moduleKey] === true;
+  return hasModuleAccess(user, moduleKey);
 };
 
 /** Consejos que dependen de lo que la persona tiene entre manos hoy. */

@@ -325,7 +325,7 @@ router.post('/openai/v1/chat/completions', requireModulePermission('manager'), p
 router.post('/fireflies/graphql', requireModulePermission('minutas'), proxyController.firefliesProxy);
 router.use('/report-pdf', requireModulePermission('minutas'), reportPdfRouter);
 router.use('/minutes', requireModulePermission('minutas'), minutesRouter);
-router.use('/drive', requireModulePermission('minutas'), driveRouter);
+router.use('/drive', requireModulePermission('drive'), driveRouter);
 
 // Re-mount existing routers
 router.use('/user', userRouter);

@@ -1,6 +1,7 @@
 import { lookup } from 'node:dns/promises';
 import net from 'node:net';
 import path from 'node:path';
+import { hasModuleAccess } from '../lib/platformModules.js';
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://labs.brainstudioagencia.com',
@@ -77,26 +78,8 @@ export const isManagerRole = (role) => ['ADMIN', 'PROJECT_MANAGER'].includes(
   String(role || '').toUpperCase()
 );
 
-const normalizePermissions = (permissions) => {
-  if (!permissions) return {};
-  if (typeof permissions === 'string') {
-    try {
-      return JSON.parse(permissions);
-    } catch {
-      return {};
-    }
-  }
-  return permissions;
-};
-
-export const hasModulePermission = (user, moduleName) => {
-  if (String(user?.role || '').toUpperCase() === 'ADMIN') return true;
-  const target = String(moduleName || '').toLowerCase();
-  const permissions = normalizePermissions(user?.modulePermissions);
-  return Object.entries(permissions).some(([key, enabled]) => (
-    key.toLowerCase() === target && enabled === true
-  ));
-};
+// La misma regla que la pantalla, desde la lista única de módulos (`platformModules.js`).
+export const hasModulePermission = (user, moduleName) => hasModuleAccess(user, moduleName);
 
 const getUserId = (user) => user?.userId || user?.id || null;
 

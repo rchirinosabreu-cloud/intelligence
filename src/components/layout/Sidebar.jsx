@@ -2,6 +2,7 @@
 import React from 'react';
 import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, FolderOpen, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign, Target, ShieldCheck, Sun, Moon } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
+import { hasModuleAccess } from '@/lib/platformModules';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/context/AuthContext';
 import { useTheme } from '@/context/ThemeContext';
@@ -30,7 +31,7 @@ const Sidebar = ({ isOpen, onClose, collapsed = false }) => {
     { id: 'moodboard', label: 'Inspiración', icon: Palette, path: '/moodboard', moduleKey: 'inspiracion' },
     { id: 'content-grids', label: 'Parrillas', icon: LayoutGrid, path: '/parrillas', moduleKey: 'parrillas' },
     { id: 'minutes', label: 'Minutas', icon: FileText, path: '/minutas', moduleKey: 'minutas' },
-    { id: 'drive', label: 'Drive', icon: FolderOpen, path: '/drive', moduleKey: 'minutas' },
+    { id: 'drive', label: 'Drive', icon: FolderOpen, path: '/drive', moduleKey: 'drive' },
     { id: 'crm', label: 'CRM', icon: Target, path: '/crm', moduleKey: 'crm' },
     { id: 'quotations', label: 'Cotizaciones', icon: DollarSign, path: '/cotizaciones', moduleKey: 'cotizaciones' },
     { id: 'financials', label: 'Financiero', icon: DollarSign, path: '/financiero', moduleKey: 'financiero' },
@@ -45,11 +46,8 @@ const Sidebar = ({ isOpen, onClose, collapsed = false }) => {
     // Admin always has access to everything
     if (currentUser?.role === 'ADMIN') return true;
 
-    // Check Module Permissions first
-    if (item.moduleKey) {
-      const perms = currentUser?.modulePermissions || {};
-      if (perms[item.moduleKey] !== true) return false;
-    }
+    // Check Module Permissions first (la lista única: src/lib/platformModules.js)
+    if (item.moduleKey && item.moduleKey !== 'dashboard' && !hasModuleAccess(currentUser, item.moduleKey)) return false;
 
     // Role-based fallbacks for items without moduleKey
     if (item.roles && !item.roles.includes(currentUser?.role)) return false;

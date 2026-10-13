@@ -3,6 +3,7 @@ import prisma from '../../lib/prisma.js';
 import { createInitialCredential, prepareInitialAccess } from '../../services/initialAccessService.js';
 import { isManagerRole } from '../../config/security.js';
 import { setLinkedAccountStatus } from '../../services/teamRosterService.js';
+import { sanitizeModulePermissions } from '../../lib/platformModules.js';
 
 const router = express.Router();
 
@@ -33,40 +34,9 @@ router.get('/', async (req, res) => {
   }
 });
 
-const defaultPermissions = {
-    bria: false,
-    dashboard: true,
-    manager: false,
-    gestion: false,
-    actividad: false,
-    reportes: false,
-    inspiracion: false,
-    parrillas: false,
-    minutas: false,
-    cotizaciones: false,
-    financiero: false,
-    radar: false,
-    clientes: false,
-    equipo: false,
-    crm: false
-};
-
-const sanitizePermissions = (perms) => {
-    const sanitized = { ...defaultPermissions };
-    if (!perms) return sanitized;
-    Object.keys(perms).forEach(key => {
-        const lowerKey = key.toLowerCase();
-        let targetKey = lowerKey;
-        if (lowerKey === 'inicio') targetKey = 'dashboard';
-        if (lowerKey === 'tareas') targetKey = 'gestion';
-
-        if (targetKey in defaultPermissions) {
-            sanitized[targetKey] = targetKey === 'bria' ? perms[key] === true : !!perms[key];
-        }
-    });
-    sanitized.dashboard = true;
-    return sanitized;
-};
+// Las casillas salen de la lista única de módulos (`src/lib/platformModules.js`). Siempre
+// una copia nueva: más abajo se le apaga Bria a quien no es manager.
+const sanitizePermissions = (perms) => sanitizeModulePermissions(perms);
 
 export const resolveFinancialAccessFlag = (systemRole, modulePermissions = {}) => {
     if (systemRole === 'ADMIN') return true;
@@ -207,9 +177,9 @@ router.put('/:id', async (req, res) => {
 
         if (member.userId) {
             const nextSystemRole = systemRole || currentMember.user?.role || 'VIEWER';
-            const nextPermissions = modulePermissions === undefined
-                ? (currentMember.user?.modulePermissions || defaultPermissions)
-                : sanitizePermissions(modulePermissions);
+            const nextPermissions = sanitizePermissions(modulePermissions === undefined
+                ? currentMember.user?.modulePermissions
+                : modulePermissions);
             if (!isManagerRole(nextSystemRole)) nextPermissions.bria = false;
             const hasFinancialAccess = resolveFinancialAccessFlag(nextSystemRole, nextPermissions);
             const resolvedFinancialRole = resolveFinancialRole(

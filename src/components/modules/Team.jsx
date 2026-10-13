@@ -9,6 +9,7 @@ import { useNavigate } from 'react-router-dom';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../ui/dialog';
 import { cn } from '../../lib/utils';
 import { effectiveFinancialRole } from '../../utils/financialPermissions';
+import { PLATFORM_MODULES, presetModulePermissions, readModulePermissions } from '../../lib/platformModules';
 import InitialAccessDialog from '@/components/team/InitialAccessDialog';
 
 export default function Team() {
@@ -33,93 +34,14 @@ export default function Team() {
 
   const [systemRole, setSystemRole] = useState('VIEWER');
   const [financialRole, setFinancialRole] = useState('NONE');
-  const [modulePermissions, setModulePermissions] = useState({
-    bria: false,
-    manager: false,
-    gestion: false,
-    actividad: false,
-    reportes: false,
-    inspiracion: false,
-    parrillas: false,
-    minutas: false,
-    cotizaciones: false,
-    financiero: false,
-    radar: false,
-    clientes: false,
-    equipo: false,
-    crm: false
-  });
+  // Las casillas salen de la lista única de módulos (src/lib/platformModules.js): un módulo
+  // nuevo aparece aquí solo, con los roles que lo traen marcado.
+  const [modulePermissions, setModulePermissions] = useState(() => ({ ...presetModulePermissions('VIEWER'), bria: false }));
 
   const handleRolePresetChange = (selectedRole) => {
     setSystemRole(selectedRole);
     setFinancialRole(selectedRole === 'ADMIN' ? 'ADMIN' : 'NONE');
-    let presets = {
-      manager: false,
-      gestion: false,
-      actividad: false,
-      reportes: false,
-      inspiracion: false,
-      parrillas: false,
-      minutas: false,
-      cotizaciones: false,
-      financiero: false,
-      radar: false,
-      clientes: false,
-      equipo: false,
-      crm: false
-    };
-
-    if (selectedRole === 'ADMIN' || selectedRole === 'PROJECT_MANAGER') {
-      presets = {
-        manager: true,
-        gestion: true,
-        actividad: true,
-        reportes: true,
-        inspiracion: true,
-        parrillas: true,
-        minutas: true,
-        cotizaciones: true,
-        financiero: true,
-        radar: true,
-        clientes: true,
-        equipo: true,
-        crm: true
-      };
-    } else if (selectedRole === 'EDITOR') {
-      presets = {
-        manager: false,
-        gestion: true,
-        actividad: true,
-        reportes: true,
-        inspiracion: true,
-        parrillas: true,
-        minutas: true,
-        cotizaciones: false,
-        financiero: false,
-        radar: false,
-        clientes: true,
-        equipo: false,
-        crm: false
-      };
-    } else if (selectedRole === 'VIEWER') {
-      presets = {
-        manager: false,
-        gestion: false,
-        actividad: false,
-        reportes: true,
-        inspiracion: true,
-        parrillas: true,
-        minutas: true,
-        cotizaciones: false,
-        financiero: false,
-        radar: false,
-        clientes: true,
-        equipo: false,
-        crm: false
-      };
-    }
-
-    setModulePermissions({ ...presets, bria: false });
+    setModulePermissions({ ...presetModulePermissions(selectedRole), bria: false });
   };
 
   const fetchTeam = async () => {
@@ -152,23 +74,7 @@ export default function Team() {
       setAvatarUrl(member.avatarUrl || '');
 
       const userRole = member.user?.role || 'VIEWER';
-      const rawPerms = member.user?.modulePermissions || {};
-      const userPerms = {
-        bria: rawPerms.bria === true,
-        manager: !!(rawPerms.manager || rawPerms.Manager),
-        gestion: !!(rawPerms.gestion || rawPerms.Tareas),
-        actividad: !!(rawPerms.actividad || rawPerms.Actividad),
-        reportes: !!rawPerms.reportes,
-        inspiracion: !!rawPerms.inspiracion,
-        parrillas: !!(rawPerms.parrillas || rawPerms.Parrillas),
-        minutas: !!rawPerms.minutas,
-        cotizaciones: !!rawPerms.cotizaciones,
-        financiero: !!rawPerms.financiero,
-        radar: !!(rawPerms.radar || rawPerms.Radar),
-        clientes: !!(rawPerms.clientes || rawPerms.Clientes),
-        equipo: !!(rawPerms.equipo || rawPerms.Equipo),
-        crm: !!rawPerms.crm
-      };
+      const userPerms = readModulePermissions(member.user?.modulePermissions);
       setSystemRole(userRole);
       setFinancialRole(effectiveFinancialRole({ ...member.user, role: userRole, modulePermissions: userPerms }));
       setModulePermissions(userPerms);
@@ -180,21 +86,7 @@ export default function Team() {
       setAvatarUrl('');
       setSystemRole('VIEWER');
       setFinancialRole('NONE');
-      setModulePermissions({
-        manager: false,
-        gestion: false,
-        actividad: false,
-        reportes: true,
-        inspiracion: true,
-        parrillas: true,
-        minutas: true,
-        cotizaciones: false,
-        financiero: false,
-        radar: false,
-        clientes: true,
-        equipo: false,
-        crm: false
-      });
+      setModulePermissions({ ...presetModulePermissions('VIEWER'), bria: false });
     }
     setIsModalOpen(true);
   };
@@ -457,22 +349,7 @@ export default function Team() {
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Permisos por Módulo</label>
                   <div className="grid grid-cols-2 gap-2">
-                    {Object.keys(modulePermissions).filter((module) => module !== 'bria').map((module) => {
-                      const displayNames = {
-                        manager: "Manager",
-                        gestion: "Gestión (Tareas)",
-                        actividad: "Actividad",
-                        reportes: "Reportes",
-                        inspiracion: "Inspiración",
-                        parrillas: "Parrillas",
-                        minutas: "Minutas",
-                        cotizaciones: "Cotizaciones",
-                        financiero: "Financiero",
-                        radar: "Radar de Mérito",
-                        clientes: "Clientes",
-                        equipo: "Equipo",
-                        crm: "CRM"
-                      };
+                    {PLATFORM_MODULES.map(({ key: module, label }) => {
                       return (
                         <label key={module} className="flex items-center gap-2 p-2 bg-white dark:bg-zinc-900 border border-zinc-150 dark:border-zinc-800/60 rounded-xl cursor-pointer hover:bg-zinc-100/50 transition-colors select-none">
                           <input
@@ -491,7 +368,7 @@ export default function Team() {
                             className="rounded text-primary focus:ring-primary h-4 w-4 cursor-pointer"
                           />
                           <span className="text-xs font-bold text-zinc-700 dark:text-zinc-300">
-                            {displayNames[module] || module}
+                            {label}
                           </span>
                         </label>
                       );
