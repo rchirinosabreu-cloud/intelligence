@@ -43,9 +43,9 @@ const memoryDb = (rows) => {
     };
 };
 
-const person = async (id, name, email, role) => ({
+const person = async (id, name, email, role, { mustChangePassword = false, password = 'MuestraBrain2026!' } = {}) => ({
     id, name, email, role, isActive: true, teamMember: { isActive: true },
-    password: await bcrypt.hash('MuestraBrain2026!', 8), sessionVersion: 0, mustChangePassword: false,
+    password: await bcrypt.hash(password, 8), sessionVersion: 0, mustChangePassword,
     hasFinancialAccess: false, financialRole: 'NONE', modulePermissions: {},
     mfaSecret: null, mfaPendingSecret: null, mfaEnabledAt: null, mfaLastUsedStep: null,
     mfaRecoveryCodes: null, mfaFailedAttempts: 0, mfaLockedUntil: null
@@ -54,7 +54,9 @@ const person = async (id, name, email, role) => ({
 export async function createMfaPreview({ port = 3113 } = {}) {
     const db = memoryDb([
         await person('u-admin', 'Rodny Muestra', 'rodny@example.test', 'ADMIN'),
-        await person('u-editor', 'Ana Muestra', 'ana@example.test', 'EDITOR')
+        await person('u-editor', 'Ana Muestra', 'ana@example.test', 'EDITOR'),
+        // Cuenta recién creada desde Equipo: clave temporal y autenticador obligatorio.
+        await person('u-nueva', 'Mariceth Muestra', 'nueva@example.test', 'ADMIN', { mustChangePassword: true, password: 'ClaveTemporal-0000' })
     ]);
     const mfa = createMfaService({
         db,
@@ -80,6 +82,11 @@ export async function createMfaPreview({ port = 3113 } = {}) {
             const payload = jwt.verify(String(req.headers.authorization || '').replace(/^Bearer /, ''), SECRET);
             const dbUser = await db.user.findUnique({ where: { id: payload.userId } });
             if (!dbUser || dbUser.sessionVersion !== payload.sessionVersion) return res.status(401).json({ code: 'TOKEN_REVOKED' });
+            // Mismo orden que authMiddleware: primero la clave temporal, después el autenticador.
+            const isPasswordChangeRoute = req.method === 'PUT' && req.originalUrl.includes('/api/user/password');
+            if (dbUser.mustChangePassword && !isPasswordChangeRoute) {
+                return res.status(428).json({ error: 'Password change required', code: 'PASSWORD_CHANGE_REQUIRED' });
+            }
             const block = mfaEnrollmentBlock(dbUser, req, REQUIRED_ROLES);
             if (block) return res.status(428).json(block);
             req.user = { ...payload, role: dbUser.role };
@@ -98,8 +105,19 @@ export async function createMfaPreview({ port = 3113 } = {}) {
     };
     api.get('/api/auth/me', handle(async (req) => {
         const user = await db.user.findUnique({ where: { id: req.user.userId } });
-        return { id: user.id, name: user.name, email: user.email, role: user.role, mfaEnabled: Boolean(user.mfaEnabledAt), mfaEnrollmentRequired: !user.mfaEnabledAt && isMfaRequiredForRole(user.role, REQUIRED_ROLES) };
+        return { id: user.id, name: user.name, email: user.email, role: user.role, mustChangePassword: user.mustChangePassword, mfaEnabled: Boolean(user.mfaEnabledAt), mfaEnrollmentRequired: !user.mfaEnabledAt && isMfaRequiredForRole(user.role, REQUIRED_ROLES) };
     }));
+    api.put('/api/user/password', async (req, res) => {
+        const user = await db.user.findUnique({ where: { id: req.user.userId } });
+        if (!(await bcrypt.compare(String(req.body?.currentPassword || ''), user.password))) {
+            return res.status(400).json({ error: 'Contraseña actual incorrecta' });
+        }
+        await db.user.update({
+            where: { id: user.id },
+            data: { password: await bcrypt.hash(String(req.body.newPassword), 8), mustChangePassword: false, sessionVersion: { increment: 1 } }
+        });
+        return res.json({ message: 'Contraseña actualizada correctamente', requiresLogin: true });
+    });
     api.get('/api/user/mfa', handle((req) => mfa.getStatus(req.user.userId)));
     api.post('/api/user/mfa/setup', handle((req) => mfa.beginEnrollment(req.user.userId)));
     api.post('/api/user/mfa/confirm', handle((req) => mfa.confirmEnrollment(req.user.userId, req.body?.code)));

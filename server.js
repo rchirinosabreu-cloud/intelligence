@@ -23,6 +23,7 @@ import { configureS3Cors } from './src/services/s3Service.js';
 import { loggerMiddleware } from './src/middlewares/logger.js';
 import { operationalAuditMiddleware } from './src/middlewares/operationalAuditMiddleware.js';
 import apiRouter from './src/routes/index.js';
+import { createAuthRateLimiters } from './src/lib/authRateLimit.js';
 import {
   configureSecurityHeaders,
   createRateLimiter,
@@ -45,7 +46,6 @@ app.use(securityHeaders);
 app.use(errorResponseSanitizer);
 
 const apiRateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 1200 });
-const authRateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 20 });
 const publicRateLimiter = createRateLimiter({ windowMs: 15 * 60 * 1000, max: 100 });
 const aiRateLimiter = createRateLimiter({ windowMs: 5 * 60 * 1000, max: 40 });
 
@@ -73,8 +73,6 @@ app.get('/api/health/ai', (_req, res) => {
   const health = getAIHealth();
   res.status(health.status === 'healthy' ? 200 : 503).json(health);
 });
-app.use('/api/login', authRateLimiter);
-app.use('/api/password-reset', authRateLimiter);
 app.use('/api/public', publicRateLimiter);
 app.use('/api/quotations/public', publicRateLimiter);
 app.use('/api/openai', aiRateLimiter);
@@ -91,6 +89,12 @@ app.use(express.json({
   }
 }));
 app.use(express.urlencoded({ limit: '5mb', extended: true }));
+
+// Intentos de ingreso: un cupo por persona y uno alto por conexión (13 de octubre de 2026).
+// Van después de leer el cuerpo porque cuentan por correo o por el pase del código.
+const authRateLimiters = createAuthRateLimiters();
+app.use('/api/login', authRateLimiters);
+app.use('/api/password-reset', authRateLimiters);
 
 // --- LOGGING ---
 app.use(loggerMiddleware);

@@ -128,6 +128,36 @@ test('un administrador activa el MFA sin pulsar botones, entra con código de re
     await page.close();
 });
 
+test('una cuenta nueva cambia su clave temporal y después activa el autenticador, sin volver al formulario', async () => {
+    // Mariceth, 13 de octubre de 2026: el cambio de clave chocaba con el autenticador pendiente.
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    page.setDefaultTimeout(8000);
+    page.setDefaultNavigationTimeout(60000);
+    await page.goto(`${preview.origin}/`);
+    await page.getByRole('heading', { name: 'Bienvenido de nuevo' }).waitFor();
+    await page.locator('input[type=email]').fill('nueva@example.test');
+    await page.locator('input[type=password]').fill('ClaveTemporal-0000');
+    await page.locator('button[type=submit]').click();
+
+    await page.getByRole('heading', { name: 'Actualiza tu contrasena' }).waitFor();
+    await page.getByLabel('Contrasena actual').fill('ClaveTemporal-0000');
+    await page.getByLabel('Tu nueva contrasena').fill('MiClaveNueva-2026');
+    await page.getByLabel('Confirmar nueva contrasena').fill('MiClaveNueva-2026');
+    await page.screenshot({ path: `${OUT}/13-cuenta-nueva-clave.png`, fullPage: true });
+    await page.getByRole('button', { name: 'Guardar nueva contrasena' }).click();
+
+    // La clave se guardó: vuelve al login con el aviso, no al formulario.
+    await page.getByText(/Contrasena actualizada/).waitFor();
+    assert.equal(preview.db.byEmail('nueva@example.test').mustChangePassword, false);
+
+    await page.locator('input[type=email]').fill('nueva@example.test');
+    await page.locator('input[type=password]').fill('MiClaveNueva-2026');
+    await page.locator('button[type=submit]').click();
+    await page.getByRole('heading', { name: 'Activa la verificación en dos pasos' }).waitFor();
+    await page.screenshot({ path: `${OUT}/14-cuenta-nueva-activar.png`, fullPage: true });
+    await page.close();
+});
+
 test('una editora activa el MFA por elección y lo puede desactivar; se ve bien en móvil oscuro', async () => {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, colorScheme: 'dark' });
     page.setDefaultTimeout(8000);

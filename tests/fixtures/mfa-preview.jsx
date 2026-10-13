@@ -4,6 +4,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AuthProvider, useAuth } from '../../src/context/AuthContext';
 import Login from '../../src/components/Login';
 import ForceMfaEnrollment from '../../src/components/ForceMfaEnrollment';
+import ForcePasswordChange from '../../src/components/ForcePasswordChange';
 import MfaSettings from '../../src/components/security/MfaSettings';
 import { ConfirmDialogProvider } from '../../src/components/ui/ConfirmDialog';
 import '../../src/index.css';
@@ -22,6 +23,15 @@ function Shell() {
     const { isAuthenticated, isLoading, currentUser, login, logout } = useAuth();
     if (isLoading) return null;
     if (!isAuthenticated) return <Login onLogin={login} />;
+    // Mismo orden que App.jsx: primero la clave temporal, después el autenticador.
+    if (currentUser?.mustChangePassword) {
+        return (
+            <Routes>
+                <Route path="/cambiar-password" element={<ForcePasswordChange />} />
+                <Route path="*" element={<Navigate to="/cambiar-password" replace />} />
+            </Routes>
+        );
+    }
     if (currentUser?.mfaEnrollmentRequired) {
         return (
             <Routes>
