@@ -10,6 +10,7 @@ import ForcePasswordChange from './components/ForcePasswordChange';
 import ForceMfaEnrollment from './components/ForceMfaEnrollment';
 import { ThemeProvider } from './context/ThemeContext';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { hasModuleAccess } from './lib/platformModules';
 import { toast } from 'react-hot-toast';
 import BrainToaster from '@/components/ui/BrainToaster';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -68,11 +69,8 @@ function ModuleGuard({ module, children }) {
 
   if (!currentUser) return <Navigate to="/login" replace />;
 
-  // ADMIN has full access bypass
-  if (currentUser.role === 'ADMIN') return children;
-
-  const permissions = currentUser.modulePermissions || {};
-  if (permissions[module] !== true) {
+  // La misma regla que el menú y el servidor (src/lib/platformModules.js); ADMIN entra a todo.
+  if (!hasModuleAccess(currentUser, module)) {
     return <Navigate to="/" replace />;
   }
 
@@ -256,7 +254,7 @@ function AppContent() {
                     <Route
                       path="/drive"
                       element={
-                        <ModuleGuard module="minutas">
+                        <ModuleGuard module="drive">
                           <DriveLayout />
                         </ModuleGuard>
                       }

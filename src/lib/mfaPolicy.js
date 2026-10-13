@@ -6,12 +6,16 @@ import jwt from 'jsonwebtoken';
 
 // MFA_REQUIRED_ROLES=ADMIN,PROJECT_MANAGER. Sin la variable no se obliga a nadie: la
 // obligación se enciende en Railway cuando las personas de ese rol ya lo activaron.
+// `*` obliga a todo el equipo, también a un rol que se cree después (Rodny, 12 de octubre
+// de 2026: «que cada miembro desde mañana tenga la obligación de acceder con autenticador»).
 export const isMfaRequiredForRole = (role, requiredRoles = process.env.MFA_REQUIRED_ROLES) => {
+    const normalizedRole = String(role || '').trim().toUpperCase();
+    if (!normalizedRole) return false;
     const roles = String(requiredRoles || '')
         .split(',')
         .map((item) => item.trim().toUpperCase())
         .filter(Boolean);
-    return roles.includes(String(role || '').toUpperCase());
+    return roles.includes('*') || roles.includes(normalizedRole);
 };
 
 // Lo único que puede hacer alguien a quien le falta activar el MFA obligatorio.

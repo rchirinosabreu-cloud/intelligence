@@ -248,7 +248,8 @@ test('Drive is wired as a protected platform module with search, filters and fil
   assert.match(app, /path="\/drive"/);
   assert.match(app, /<DriveLayout\s*\/>/);
   assert.match(sidebar, /label: 'Drive'/);
-  assert.match(routes, /router\.use\('\/drive',\s*requireModulePermission\('minutas'\),\s*driveRouter\)/);
+  // Drive tiene su propia casilla desde el 12 de octubre de 2026 (antes iba con Minutas).
+  assert.match(routes, /router\.use\('\/drive',\s*requireModulePermission\('drive'\),\s*driveRouter\)/);
   assert.match(apiRoutes, /router\.get\('\/files'/);
   assert.match(apiRoutes, /router\.get\('\/files\/:meetingId\/:kind'/);
   assert.match(apiRoutes, /router\.get\('\/contents'/);

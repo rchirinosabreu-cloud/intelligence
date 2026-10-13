@@ -30,8 +30,9 @@ const ForceMfaEnrollment = () => {
                     Activa la verificación en dos pasos
                 </h1>
                 <p className="mb-8 mt-3 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-                    Tu rol tiene acceso a información sensible de la agencia y de los clientes. Desde ahora, además de tu
-                    contraseña, al entrar te pediremos un código de tu teléfono.
+                    Para proteger la información de la agencia y de los clientes, desde ahora, además de tu contraseña,
+                    al entrar te pediremos un código de tu teléfono. En cada computador o celular lo pedimos una vez
+                    por semana.
                 </p>
                 <div className="rounded-2xl border border-zinc-200 p-6 dark:border-zinc-800">
                     <MfaEnrollment email={currentUser?.email} onDone={handleDone} />

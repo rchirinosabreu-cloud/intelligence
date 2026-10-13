@@ -1,4 +1,7 @@
+import { hasModuleAccess } from './platformModules.js';
+
 // Shared explanatory catalog. Permissions come from the authenticated server profile.
+// Todo módulo de `platformModules.js` tiene aquí su presentación (lo exige la prueba global).
 export const welcomeCatalog = [
   { id: 'dashboard', title: 'Dashboard', description: 'Tu punto de partida: prioridades, anuncios y los últimos logros del equipo.', icon: 'LayoutDashboard' },
   { id: 'manager', title: 'Manager', description: 'Consulta el seguimiento del trabajo y las señales que necesitan atención.', icon: 'Brain' },
@@ -8,7 +11,8 @@ export const welcomeCatalog = [
   { id: 'inspiracion', title: 'Inspiración', description: 'Encuentra y organiza referencias para dar forma a nuevas ideas.', icon: 'Palette' },
   { id: 'parrillas', title: 'Parrillas', description: 'Planifica contenidos y sigue sus revisiones, aprobaciones y producción.', icon: 'LayoutGrid' },
   { id: 'minutas', title: 'Minutas', description: 'Retoma lo conversado en las reuniones y consulta sus acuerdos y pendientes.', icon: 'FileText' },
-  { id: 'drive', permission: 'minutas', title: 'Drive', description: 'Encuentra los documentos y archivos compartidos del trabajo.', icon: 'FolderOpen' },
+  { id: 'drive', title: 'Drive', description: 'Encuentra los documentos y archivos compartidos del trabajo.', icon: 'FolderOpen' },
+  { id: 'crm', title: 'CRM', description: 'Sigue las oportunidades comerciales, desde la solicitud hasta la propuesta.', icon: 'Target' },
   { id: 'cotizaciones', title: 'Cotizaciones', description: 'Consulta propuestas, servicios y condiciones comerciales en un mismo lugar.', icon: 'DollarSign' },
   { id: 'financiero', title: 'Financiero', description: 'Consulta ingresos, gastos y compromisos de pago según tus permisos.', icon: 'DollarSign' },
   { id: 'radar', title: 'Radar de Mérito', description: 'Conoce las métricas y señales de reconocimiento del trabajo del equipo.', icon: 'Zap' },
@@ -19,6 +23,8 @@ export const welcomeCatalog = [
 
 // Mirrors the visible Sidebar rules. This is explanatory UI, never authorization.
 export const getWelcomeModules = user => welcomeCatalog.filter(item =>
-  user?.role === 'ADMIN' || (!item.adminOnly && user?.modulePermissions?.[item.permission || item.id] === true)
+  user?.role === 'ADMIN' || (!item.adminOnly && (item.id === 'dashboard'
+    ? user?.modulePermissions?.dashboard === true
+    : hasModuleAccess(user, item.permission || item.id)))
 );
 export const welcomeName = name => String(name || '').trim().split(/\s+/)[0] || 'equipo';

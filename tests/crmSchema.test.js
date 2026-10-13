@@ -52,10 +52,9 @@ test('the Prisma model and the permission key exist for the CRM module', async (
   assert.match(schema, /model CrmLead \{/);
   assert.match(schema, /model CrmActivity \{/);
   assert.match(schema, /modulePermissions[^\n]*\\"crm\\": false/);
-  const team = await read('src/routes/api/team.js');
-  assert.match(team, /crm:\s*false/);
-  const teamUi = await read('src/components/modules/Team.jsx');
-  assert.match(teamUi, /crm:\s*"CRM"/);
+  // Desde el 12 de octubre de 2026 la casilla sale de la lista única de módulos.
+  const modules = await read('src/lib/platformModules.js');
+  assert.match(modules, /key: 'crm', label: 'CRM', path: '\/crm'/);
   const sidebar = await read('src/components/layout/Sidebar.jsx');
   assert.match(sidebar, /path:\s*'\/crm',\s*moduleKey:\s*'crm'/);
 });
