@@ -27,12 +27,24 @@ const signIn = async (page, email) => {
     await page.locator('button[type=submit]').click();
 };
 
-test('un administrador activa el MFA obligatorio y después entra con código de respaldo', async () => {
+// La única salida a internet permitida es la tipografía del negocio (Roboto Condensed,
+// Google Fonts, desde el 10 de octubre de 2026): todo lo demás es la API local.
+const FONT_HOSTS = /^https:\/\/fonts\.(googleapis|gstatic)\.com\//;
+
+const watchRemote = (page) => {
+    const remote = [];
+    page.on('request', (request) => {
+        const url = request.url();
+        if (!url.startsWith(preview.origin) && /^https?:/.test(url) && !FONT_HOSTS.test(url)) remote.push(url);
+    });
+    return remote;
+};
+
+test('un administrador activa el MFA sin pulsar botones, entra con código de respaldo y su dispositivo queda recordado', async () => {
     const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
     page.setDefaultTimeout(8000);
     page.setDefaultNavigationTimeout(60000);
-    const remote = [];
-    page.on('request', (request) => { if (!request.url().startsWith(preview.origin) && /^https?:/.test(request.url())) remote.push(request.url()); });
+    const remote = watchRemote(page);
 
     await page.goto(`${preview.origin}/`);
     await signIn(page, 'rodny@example.test');
@@ -44,14 +56,15 @@ test('un administrador activa el MFA obligatorio y después entra con código de
 
     await page.getByRole('button', { name: 'Vincular mi app autenticadora' }).click();
     await page.getByAltText('Código QR para vincular la app autenticadora').waitFor();
+    assert.equal(await page.locator('[data-otp-box]').count(), 6, 'seis casillas');
     await page.screenshot({ path: `${OUT}/02-qr.png`, fullPage: true });
 
+    // El sexto dígito envía solo: ningún clic en «Activar».
     const secret = (await page.locator('p.font-mono').innerText()).replace(/\s/g, '');
     await page.getByLabel('Código de seis dígitos de la app').fill('000000');
-    await page.getByRole('button', { name: 'Activar verificación en dos pasos' }).click();
     await page.getByRole('alert').waitFor();
+    assert.equal(await page.getByLabel('Código de seis dígitos de la app').inputValue(), '', 'un código fallido se vacía');
     await page.getByLabel('Código de seis dígitos de la app').fill(currentCode(secret));
-    await page.getByRole('button', { name: 'Activar verificación en dos pasos' }).click();
 
     await page.getByText('no volverás a verlos').waitFor();
     const codes = await page.locator('ul li').allInnerTexts();
@@ -68,17 +81,50 @@ test('un administrador activa el MFA obligatorio y después entra con código de
     await signIn(page, 'rodny@example.test');
     await page.getByRole('heading', { name: 'Verificación en dos pasos' }).waitFor();
     assert.equal(await page.evaluate(() => localStorage.getItem('authToken')), null, 'sin código no hay sesión');
-    await page.screenshot({ path: `${OUT}/05-login-codigo.png`, fullPage: true });
+    assert.equal(await page.getByLabel('Recordar este dispositivo por 7 días').isChecked(), true, 'recordar viene marcado');
+    await page.getByLabel('Código de verificación').pressSequentially('123');
+    await page.screenshot({ path: `${OUT}/05-login-casillas.png`, fullPage: true });
 
     await page.getByLabel('Código de verificación').fill('000000');
-    await page.getByRole('button', { name: 'Verificar y entrar' }).click();
     await page.getByText(/El código no es válido/).waitFor();
+    await page.screenshot({ path: `${OUT}/06-login-codigo-fallido.png`, fullPage: true });
 
-    await page.getByLabel('Código de verificación').fill(codes[0].toUpperCase());
+    await page.getByRole('button', { name: 'Usar un código de respaldo' }).click();
+    await page.getByLabel('Código de respaldo').fill(codes[0].toUpperCase());
     await page.getByRole('button', { name: 'Verificar y entrar' }).click();
     await page.getByText(/Te quedan 9 códigos de respaldo/).waitFor();
 
+    // Mismo navegador, otra vez: durante la semana la contraseña basta.
+    await page.getByRole('button', { name: 'Cerrar sesión' }).click();
+    await signIn(page, 'rodny@example.test');
+    await page.getByRole('heading', { name: /Mi Espacio/ }).waitFor();
+    assert.equal(await page.getByLabel('Código de verificación').count(), 0, 'no pidió el código');
+    assert.ok(await page.evaluate(() => localStorage.getItem('authToken')), 'entró con la sesión');
+    await page.screenshot({ path: `${OUT}/07-dispositivo-recordado.png`, fullPage: true });
+
+    // Un dispositivo nuevo siempre pide el código.
+    const other = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    other.setDefaultTimeout(8000);
+    const otherRemote = watchRemote(other);
+    await other.goto(`${preview.origin}/`);
+    await signIn(other, 'rodny@example.test');
+    await other.getByRole('heading', { name: 'Verificación en dos pasos' }).waitFor();
+    assert.equal(await other.evaluate(() => localStorage.getItem('authToken')), null);
+    await other.close();
+
+    // Un pase alterado no sirve: vuelve a pedir el código y el navegador lo olvida.
+    await page.getByRole('button', { name: 'Cerrar sesión' }).click();
+    await page.evaluate(() => {
+        const devices = JSON.parse(localStorage.getItem('brain:mfa-trusted-devices'));
+        devices['rodny@example.test'] = `${devices['rodny@example.test']}x`;
+        localStorage.setItem('brain:mfa-trusted-devices', JSON.stringify(devices));
+    });
+    await signIn(page, 'rodny@example.test');
+    await page.getByRole('heading', { name: 'Verificación en dos pasos' }).waitFor();
+    assert.equal(await page.evaluate(() => localStorage.getItem('brain:mfa-trusted-devices')), null);
+
     assert.deepEqual(remote, []);
+    assert.deepEqual(otherRemote, []);
     await page.close();
 });
 
@@ -91,22 +137,25 @@ test('una editora activa el MFA por elección y lo puede desactivar; se ve bien 
     await signIn(page, 'ana@example.test');
 
     await page.getByText(/Está desactivada/).waitFor();
-    await page.screenshot({ path: `${OUT}/06-movil-oscuro-desactivada.png`, fullPage: true });
+    await page.screenshot({ path: `${OUT}/10-movil-oscuro-desactivada.png`, fullPage: true });
     await page.getByRole('button', { name: 'Activar' }).click();
     await page.getByRole('button', { name: 'Vincular mi app autenticadora' }).click();
     const secret = (await page.locator('p.font-mono').innerText()).replace(/\s/g, '');
-    await page.screenshot({ path: `${OUT}/07-movil-oscuro-qr.png`, fullPage: true });
+    await page.getByLabel('Código de seis dígitos de la app').pressSequentially('12');
+    await page.screenshot({ path: `${OUT}/11-movil-oscuro-qr-casillas.png`, fullPage: true });
     await page.getByLabel('Código de seis dígitos de la app').fill(currentCode(secret));
-    await page.getByRole('button', { name: 'Activar verificación en dos pasos' }).click();
     await page.getByRole('button', { name: 'Ya los guardé, terminar' }).click();
 
     await page.getByRole('button', { name: 'Desactivar' }).click();
-    await page.getByLabel('Contraseña').fill('MuestraBrain2026!');
-    // El código ya usado al activar no vale: se espera al siguiente paso de 30 s.
+    // Sin contraseña, la sexta casilla no envía: desactivar exige las dos cosas.
     const waitMs = (TOTP_PERIOD_SECONDS * 1000) - (Date.now() % (TOTP_PERIOD_SECONDS * 1000)) + 500;
     await page.waitForTimeout(waitMs);
-    await page.getByLabel('Código de la app o de respaldo').fill(currentCode(secret));
-    await page.screenshot({ path: `${OUT}/08-movil-oscuro-desactivar.png`, fullPage: true });
+    await page.getByLabel('Código de la app').fill(currentCode(secret));
+    await page.waitForTimeout(500);
+    assert.equal(await page.getByText(/Está desactivada/).count(), 0, 'sin contraseña no se desactiva');
+
+    await page.getByLabel('Contraseña').fill('MuestraBrain2026!');
+    await page.screenshot({ path: `${OUT}/12-movil-oscuro-desactivar.png`, fullPage: true });
     await page.getByRole('button', { name: 'Desactivar' }).last().click();
     await page.getByText(/Está desactivada/).waitFor({ timeout: 10000 });
     await page.close();

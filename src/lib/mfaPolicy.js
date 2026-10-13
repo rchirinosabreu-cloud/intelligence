@@ -52,3 +52,34 @@ export const verifyMfaChallenge = (token, secret) => {
         return null;
     }
 };
+
+// Dispositivo recordado (Rodny, 12 de octubre de 2026: «una vez por semana podría ser y,
+// por supuesto, cada ingreso desde un dispositivo nuevo lo solicitaría también»). Tras un
+// código correcto, el navegador guarda este pase y lo manda con la contraseña: durante 7
+// días la contraseña basta en ese dispositivo. La contraseña se sigue pidiendo siempre.
+// El pase muere solo al cambiar la contraseña, cerrar todas las sesiones o restablecer el
+// MFA (`sessionVersion`), y al desactivar y volver a vincular la app (`mfaEnabledAt`).
+const TRUSTED_DEVICE_PURPOSE = 'mfa-trusted-device';
+export const TRUSTED_DEVICE_DAYS = 7;
+
+const trustedDeviceKey = (secret) => createHmac('sha256', secret).update(TRUSTED_DEVICE_PURPOSE).digest();
+const enabledStamp = (value) => (value ? new Date(value).getTime() : null);
+
+export const signTrustedDevice = (user, secret, { expiresIn = `${TRUSTED_DEVICE_DAYS}d` } = {}) => jwt.sign(
+    { sub: user.id, sv: user.sessionVersion ?? 0, mfa: enabledStamp(user.mfaEnabledAt), purpose: TRUSTED_DEVICE_PURPOSE },
+    trustedDeviceKey(secret),
+    { expiresIn }
+);
+
+export const isTrustedDevice = (token, user, secret) => {
+    if (!token || !user?.mfaEnabledAt) return false;
+    try {
+        const payload = jwt.verify(String(token), trustedDeviceKey(secret));
+        return payload?.purpose === TRUSTED_DEVICE_PURPOSE
+            && payload.sub === user.id
+            && payload.sv === (user.sessionVersion ?? 0)
+            && payload.mfa === enabledStamp(user.mfaEnabledAt);
+    } catch {
+        return false;
+    }
+};

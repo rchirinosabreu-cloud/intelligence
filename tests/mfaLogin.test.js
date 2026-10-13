@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import jwt from 'jsonwebtoken';
 import { createMfaLoginHandlers } from '../src/controllers/mfaLoginController.js';
-import { mfaEnrollmentBlock, signMfaChallenge } from '../src/lib/mfaPolicy.js';
+import { mfaEnrollmentBlock, signMfaChallenge, signTrustedDevice, TRUSTED_DEVICE_DAYS } from '../src/lib/mfaPolicy.js';
 import { MfaError } from '../src/services/mfaService.js';
 
 // Inicio de sesión en dos pasos (27 de septiembre de 2026): con el MFA activo, la
@@ -120,6 +120,91 @@ test('pase vencido, falso o de una sesión ya revocada: vuelve a la contraseña'
         assert.equal(res.body.code, 'MFA_CHALLENGE_INVALID');
         assert.equal(calls.length, 0, 'ni siquiera se prueba el código');
     }
+});
+
+// Dispositivo recordado (Rodny, 12 de octubre de 2026: «me parece excesivo usar el
+// autenticador cada vez que la sesión se cierra … una vez por semana podría ser y, por
+// supuesto, cada ingreso desde un dispositivo nuevo lo solicitaría también»).
+
+const ENABLED_AT = new Date('2026-09-27T15:00:00Z');
+const challengeFor = (sv = 2) => signMfaChallenge({ userId: 'u1', sessionVersion: sv }, SECRET);
+
+test('con «recordar este dispositivo» el código entrega además el pase del dispositivo, de 7 días', async () => {
+    const { h } = handlers({ dbUser: user({ mfaEnabledAt: ENABLED_AT }), verify: () => ({ method: 'totp' }) });
+    const res = response();
+    await h.verifyLogin({ body: { challengeToken: challengeFor(), code: '123456', rememberDevice: true } }, res);
+
+    assert.equal(res.statusCode, 200);
+    assert.ok(res.body.token);
+    assert.ok(res.body.trustedDeviceToken);
+    assert.equal(TRUSTED_DEVICE_DAYS, 7);
+    const { exp, iat } = jwt.decode(res.body.trustedDeviceToken);
+    assert.equal(exp - iat, 7 * 24 * 60 * 60);
+    assert.throws(() => jwt.verify(res.body.trustedDeviceToken, SECRET), 'no sirve como sesión');
+});
+
+test('sin marcar «recordar» no hay pase del dispositivo', async () => {
+    for (const rememberDevice of [undefined, false, 'true', 1]) {
+        const { h } = handlers({ dbUser: user({ mfaEnabledAt: ENABLED_AT }), verify: () => ({ method: 'totp' }) });
+        const res = response();
+        await h.verifyLogin({ body: { challengeToken: challengeFor(), code: '123456', rememberDevice } }, res);
+        assert.equal(res.body.trustedDeviceToken, undefined, String(rememberDevice));
+    }
+});
+
+test('un código equivocado nunca entrega pase del dispositivo', async () => {
+    const { h } = handlers({ dbUser: user({ mfaEnabledAt: ENABLED_AT }) });
+    const res = response();
+    await h.verifyLogin({ body: { challengeToken: challengeFor(), code: '000000', rememberDevice: true } }, res);
+    assert.equal(res.statusCode, 400);
+    assert.equal(res.body.trustedDeviceToken, undefined);
+});
+
+test('desde un dispositivo recordado la contraseña basta durante la semana', async () => {
+    const dbUser = user({ mfaEnabledAt: ENABLED_AT });
+    const trustedDevice = signTrustedDevice(dbUser, SECRET);
+    const { h, traces } = handlers({ dbUser });
+    const res = response();
+    await h.respondAfterPassword(dbUser, res, { trustedDevice });
+
+    assert.equal(res.body.mfaRequired, undefined);
+    const payload = jwt.verify(res.body.token, SECRET);
+    assert.equal(payload.userId, 'u1');
+    assert.deepEqual(payload.amr, ['pwd', 'device']);
+    assert.equal(res.body.user.mfaEnabled, true);
+    assert.equal(traces[0].metadata.method, 'PASSWORD_TRUSTED_DEVICE');
+});
+
+test('el pase del dispositivo no vale vencido, de otra persona, tras cambiar la contraseña ni tras volver a vincular la app', async () => {
+    const base = user({ mfaEnabledAt: ENABLED_AT });
+    const cases = [
+        ['sin pase', undefined, base],
+        ['basura', 'basura', base],
+        ['vencido', signTrustedDevice(base, SECRET, { expiresIn: -1 }), base],
+        ['de otra persona', signTrustedDevice({ ...base, id: 'u2' }, SECRET), base],
+        ['contraseña cambiada o sesiones cerradas', signTrustedDevice(base, SECRET), user({ mfaEnabledAt: ENABLED_AT, sessionVersion: 3 })],
+        ['app vinculada de nuevo', signTrustedDevice(base, SECRET), user({ mfaEnabledAt: new Date('2026-10-12T15:00:00Z') })],
+        ['firmado con otra clave', signTrustedDevice(base, 'z'.repeat(40)), base],
+        ['un token de sesión', jwt.sign({ userId: 'u1', sub: 'u1', sv: 2 }, SECRET), base],
+        ['el pase del código', challengeFor(), base]
+    ];
+    for (const [label, trustedDevice, dbUser] of cases) {
+        const { h } = handlers({ dbUser });
+        const res = response();
+        await h.respondAfterPassword(dbUser, res, { trustedDevice });
+        assert.equal(res.body.mfaRequired, true, label);
+        assert.equal(res.body.token, undefined, label);
+    }
+});
+
+test('sin MFA activo un pase del dispositivo no cambia nada', async () => {
+    const dbUser = user();
+    const { h, traces } = handlers({ dbUser });
+    const res = response();
+    await h.respondAfterPassword(dbUser, res, { trustedDevice: signTrustedDevice({ ...dbUser, mfaEnabledAt: ENABLED_AT }, SECRET) });
+    assert.ok(res.body.token);
+    assert.deepEqual(jwt.verify(res.body.token, SECRET).amr, ['pwd']);
+    assert.equal(traces[0].metadata.method, 'PASSWORD');
 });
 
 test('guardián: un rol obligado sin MFA solo puede activarlo', () => {
