@@ -66,10 +66,10 @@ const AiGovernancePolicy = () => (
         <h2 id="controls-title" className="border-b border-zinc-200 pb-3 text-xl font-bold dark:border-white/10">Controles implementados</h2>
         <div className="mt-5 grid gap-4 md:grid-cols-2">
           <ControlCard title="Identidad y acceso">
-            <p>La plataforma exige autenticación, verifica que la cuenta y la persona sigan activas, permite revocar sesiones y aplica permisos por rol y módulo. Las operaciones sensibles vuelven a comprobar los permisos en el servidor. Todas las cuentas pueden activar la verificación en dos pasos con app autenticadora (TOTP), con códigos de un solo uso y bloqueo tras intentos fallidos, y puede exigirse por rol.</p>
+            <p>La plataforma exige autenticación, verifica que la cuenta y la persona sigan activas, permite revocar sesiones y aplica permisos por rol y módulo. Las operaciones sensibles vuelven a comprobar los permisos en el servidor. La verificación en dos pasos con app autenticadora (TOTP) es obligatoria para todas las cuentas, con códigos de un solo uso y bloqueo tras intentos fallidos.</p>
           </ControlCard>
           <ControlCard title="Proveedores de IA y salida de datos">
-            <p>Los modelos de IA se usan por API empresarial de OpenAI, bajo condiciones en las que el proveedor no entrena sus modelos con la información enviada. Las transcripciones de reuniones provienen de Fireflies. Cada solicitud hacia un proveedor de IA pasa por un control de salida que solo permite destinos autorizados.</p>
+            <p>Los modelos de IA se usan por API empresarial de OpenAI, bajo condiciones en las que el proveedor no entrena sus modelos con la información enviada. Las transcripciones de reuniones provienen de Fireflies. Cada solicitud hacia un proveedor de IA pasa por un control de salida que solo permite destinos autorizados: los envíos a destinos no autorizados se rechazan y quedan registrados, y cada llamada hecha desde la plataforma deja un registro sin su contenido.</p>
           </ControlCard>
           <ControlCard title="Protección de datos y secretos">
             <p>Las llaves de proveedores se gestionan en el servidor. Los tokens de integraciones se almacenan cifrados y los registros ocultan parámetros sensibles. Los mensajes de error del servidor se depuran antes de llegar al navegador.</p>
@@ -87,7 +87,10 @@ const AiGovernancePolicy = () => (
             <p>Los nombres, documentos, capturas y textos proporcionados se tratan como datos, nunca como órdenes para el sistema. Los prompts prohíben obedecer instrucciones incrustadas en esas fuentes y existen casos de prueba para este riesgo.</p>
           </ControlCard>
           <ControlCard title="Evidencia y trazabilidad">
-            <p>Los procesos editoriales y de reportes conservan fuentes, versiones, huellas y decisiones. Las conclusiones deben apuntar a evidencia válida y una modificación posterior puede invalidar resultados anteriores.</p>
+            <p>Los procesos editoriales y de reportes conservan fuentes, versiones, huellas y decisiones. Las conclusiones deben apuntar a evidencia válida y una modificación posterior puede invalidar resultados anteriores. Los registros de auditoría (acciones de los usuarios, uso de IA, auditoría financiera y consultas a la bóveda de credenciales) no se pueden editar ni borrar: la base de datos rechaza cualquier modificación, salvo la depuración automática por antigüedad.</p>
+          </ControlCard>
+          <ControlCard title="Dependencias y cambios">
+            <p>Todo cambio pasa por pruebas automáticas antes de llegar a producción. Las librerías se revisan contra vulnerabilidades conocidas en cada cambio y la construcción se detiene ante una vulnerabilidad alta o crítica; sus licencias se verifican contra una lista permitida y quedan en un inventario.</p>
           </ControlCard>
           <ControlCard title="Supervisión humana">
             <p>La IA puede analizar, sugerir y detectar; las aprobaciones relevantes corresponden a responsables autorizados. Una omisión del modelo no demuestra que un hallazgo se resolvió y una prueba simulada no se presenta como validación productiva.</p>
@@ -130,6 +133,7 @@ const AiGovernancePolicy = () => (
           <li>uso de una herramienta de IA no autorizada con datos de la empresa o de clientes;</li>
           <li>resultado falso, discriminatorio, dañino o publicado sin la revisión requerida.</li>
         </ul>
+        <p className="mb-2">Cualquier persona del equipo puede reportar un incidente desde la plataforma; los administradores reciben el aviso de inmediato.</p>
         <p className="mb-2">Cada incidente se registra y sigue las fases de detección, contención, comunicación, recuperación y aprendizaje. Cuando compromete datos personales:</p>
         <ul className="mb-5">
           <li>se informa al cliente afectado sin dilación indebida;</li>
