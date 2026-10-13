@@ -1,6 +1,7 @@
 import { getContentPlanByToken, updateContentItem, addClientComment, getContentItemFinalAsset, getContentItemFinalAssetById } from '../services/contentService.js';
 import { getFromS3Stream } from '../services/s3Service.js';
 import { driveAssetUrls, isDriveAsset } from '../lib/finalAssetShape.js';
+import { clientCommentProblem, normalizeClientComment } from '../lib/clientComment.js';
 
 const getAuthorizedPublicItem = async (token, itemId) => {
   const plan = await getContentPlanByToken(token);
@@ -107,11 +108,11 @@ export const approvePublicItem = async (req, res) => {
  */
 export const commentPublicItem = async (req, res) => {
   try {
-    const { comment } = req.body;
-    const normalizedComment = typeof comment === 'string' ? comment.trim() : '';
-    if (!normalizedComment || normalizedComment.length > 2000) {
-      return res.status(400).json({ error: 'El comentario debe tener entre 1 y 2000 caracteres' });
-    }
+    const normalizedComment = normalizeClientComment(req.body?.comment);
+    // La misma regla que ya comprobó la pantalla; aquí es la cerradura, y el motivo que devuelve
+    // se le enseña al cliente tal cual (Rodny, 13 de octubre de 2026).
+    const problem = clientCommentProblem(normalizedComment);
+    if (problem) return res.status(400).json({ error: problem });
     const authorizedItem = await getAuthorizedPublicItem(req.params.token, req.params.id);
     if (!authorizedItem) return res.status(404).json({ error: 'Pieza no encontrada' });
     const updatedItem = await addClientComment(req.params.id, normalizedComment);

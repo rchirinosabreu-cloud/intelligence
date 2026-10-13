@@ -5,6 +5,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { formatContentPlanDate, getContentPlanMonthName } from '@/lib/contentPlanPeriod';
 import { driveEmbedAspect } from '@/lib/finalAssetShape';
 import { APPROVAL_STATES, approvalState, isSettled } from '@/lib/contentApproval';
+import { CLIENT_COMMENT_COUNTER_FROM, CLIENT_COMMENT_MAX_CHARS, clientCommentProblem } from '@/lib/clientComment';
 import {
   CheckCircle2, Clock, AlertCircle, Loader2, Calendar,
   Video, Image as ImageIcon, MessageSquare, Check, X, Send,
@@ -225,11 +226,17 @@ const PieceDetail = ({
   item, index, total, onBack, onPrev, onNext,
   onApprove, isCommenting, onStartComment, onCancelComment,
   clientComment, onCommentChange, onSubmitComment, isSubmitting,
-  commentFormRef, commentTextareaRef
+  commentFormRef, commentTextareaRef, commentError
 }) => {
   const { body, tags } = splitCaption(item.captionText);
   const approved = isApproved(item);
   const materialNuevo = hasNewMaterial(item);
+
+  const commentLength = clientComment.trim().length;
+  const overLimit = commentLength > CLIENT_COMMENT_MAX_CHARS;
+  const showCounter = commentLength >= CLIENT_COMMENT_COUNTER_FROM;
+  // Lo que la pantalla ya sabe mientras escribe, o lo que respondió el servidor al intentarlo.
+  const commentProblem = (overLimit ? clientCommentProblem(clientComment) : null) || commentError || null;
 
   return (
     <div className="space-y-6">
@@ -388,9 +395,33 @@ const PieceDetail = ({
                   value={clientComment}
                   onChange={(event) => onCommentChange(event.target.value)}
                   placeholder="Escribe tus sugerencias de cambio aquí..."
-                  className="min-h-[110px] w-full rounded-xl border border-zinc-200 bg-white p-4 text-sm outline-none transition-all focus:ring-4 focus:ring-brand-cyan/10 dark:border-white/10 dark:bg-zinc-900"
+                  aria-invalid={commentProblem ? 'true' : undefined}
+                  aria-describedby={commentProblem ? `comment-problem-${item.id}` : undefined}
+                  className={`min-h-[110px] w-full rounded-xl border bg-white p-4 text-sm outline-none transition-all focus:ring-4 dark:bg-zinc-900 ${
+                    commentProblem
+                      ? 'border-destructive/50 focus:ring-destructive/10'
+                      : 'border-zinc-200 focus:ring-brand-cyan/10 dark:border-white/10'
+                  }`}
                 />
-                <div className="flex justify-end">
+
+                {/* El motivo va **aquí**, donde está mirando, no en un aviso que se va solo: es lo
+                    que le faltó a la clienta que lo intentó cuatro veces y acabó mandándolo por
+                    WhatsApp (Rodny, 13 de octubre de 2026). */}
+                {commentProblem && (
+                  <p id={`comment-problem-${item.id}`} role="alert" className="flex items-start gap-2 text-sm font-semibold text-destructive">
+                    <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden="true" />
+                    <span>{commentProblem}</span>
+                  </p>
+                )}
+
+                <div className="flex items-center justify-between gap-3">
+                  {/* El contador aparece cerca del tope, para que no lo sorprenda al final. */}
+                  <span data-comment-counter className={`text-xs tabular-nums ${overLimit ? 'font-bold text-destructive' : 'text-zinc-400'}`}>
+                    {showCounter ? `${commentLength.toLocaleString('es-CO')} / ${CLIENT_COMMENT_MAX_CHARS.toLocaleString('es-CO')}` : ''}
+                  </span>
+                  {/* Sin `disabled` cuando se pasa del tope: el botón **explica** en vez de
+                      apagarse, que es la regla de la plataforma, y así sigue alcanzable con
+                      teclado y lector de pantalla justo cuando más falta hace. */}
                   <button
                     type="button"
                     onClick={() => onSubmitComment(item.id)}
@@ -431,6 +462,8 @@ const SharedContentPlan = () => {
   const [filter, setFilter] = useState('all');
   const [commentingItemId, setCommentingItemId] = useState(null);
   const [clientComment, setClientComment] = useState('');
+  // Por qué no se pudo enviar, para enseñárselo junto al campo. Se borra en cuanto vuelve a escribir.
+  const [commentError, setCommentError] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const commentFormRef = useRef(null);
   const commentTextareaRef = useRef(null);
@@ -476,6 +509,7 @@ const SharedContentPlan = () => {
   const openPiece = (itemId) => {
     setCommentingItemId(null);
     setClientComment('');
+    setCommentError(null);
     setOpenItemId(itemId);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -503,6 +537,17 @@ const SharedContentPlan = () => {
 
   const handleSubmitComment = async (itemId) => {
     if (!clientComment.trim() || isSubmitting) return;
+
+    // Se comprueba **antes** de gastar el envío: si el texto no cabe, el cliente lo ve donde está
+    // escribiendo en vez de recibir «Error al enviar el comentario» cuatro veces seguidas.
+    const problem = clientCommentProblem(clientComment);
+    if (problem) {
+      setCommentError(problem);
+      commentTextareaRef.current?.focus();
+      return;
+    }
+
+    setCommentError(null);
     setIsSubmitting(true);
     try {
       const response = await axios.post(`${getApiBaseUrl()}/api/public/parrilla/${token}/items/${itemId}/comment`, { comment: clientComment });
@@ -530,7 +575,11 @@ const SharedContentPlan = () => {
       }, 0);
     } catch (error) {
       console.error('Comment error:', error.response?.data || error);
-      toast.error('Error al enviar el comentario');
+      // El servidor dice por qué; se le enseña tal cual. Antes esto solo iba a la consola y el
+      // cliente veía una frase que no explicaba nada. El texto escrito **no se toca**: solo se
+      // borra tras el éxito, así que puede corregirlo y reenviarlo sin volver a escribirlo.
+      const motivo = error.response?.data?.error;
+      setCommentError(motivo || 'No pudimos enviar tu comentario. Inténtalo de nuevo en un momento.');
     } finally {
       setIsSubmitting(false);
     }
@@ -595,9 +644,10 @@ const SharedContentPlan = () => {
             onApprove={handleApprove}
             isCommenting={commentingItemId === openItem.id}
             onStartComment={setCommentingItemId}
-            onCancelComment={() => setCommentingItemId(null)}
+            onCancelComment={() => { setCommentingItemId(null); setCommentError(null); }}
             clientComment={clientComment}
-            onCommentChange={setClientComment}
+            commentError={commentError}
+            onCommentChange={(value) => { setClientComment(value); if (commentError) setCommentError(null); }}
             onSubmitComment={handleSubmitComment}
             isSubmitting={isSubmitting}
             commentFormRef={commentFormRef}
