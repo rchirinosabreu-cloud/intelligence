@@ -71,5 +71,7 @@ export const createBriaConversationRouter = ({ service } = {}) => {
   router.post('/', handle((req, instance) => instance.create(req.user)));
   router.get('/:id', handle((req, instance) => instance.read(req.user, req.params.id)));
   router.delete('/:id', handle((req, instance) => instance.remove(req.user, req.params.id, req.body?.expectedRevision)));
+  // Pulgar arriba o abajo sobre una respuesta de Bria (14 de octubre de 2026).
+  router.post('/:id/rating', handle((req, instance) => instance.rate({ user: req.user, id: req.params.id, turnId: req.body?.turnId, rating: req.body?.rating, note: req.body?.note })));
   return router;
 };

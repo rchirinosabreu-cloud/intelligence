@@ -86,6 +86,22 @@ Rodny, 10 de octubre de 2026: «quiero que Bria tenga permiso para todo en la pl
 
 Cifras de los últimos 7 o 30 días leídas de las conversaciones guardadas (`src/services/briaUsageService.js`): cuántas personas preguntaron y cuántas veces cada una, preguntas por día, qué herramientas se usaron, cuántas respuestas quedaron **sin respuesta** (el texto de respaldo) o **con una herramienta fallida**, y cuántas llamadas y tokens costó. **Nunca el contenido** de ninguna conversación. La instrucción le dice a Bria que son cifras para pulirla, no para evaluar a nadie.
 
+Desde el 14 de octubre de 2026 trae además la **valoración**: cuántas respuestas recibieron pulgar arriba, cuántas pulgar abajo, cuántas quedaron sin valorar, la tasa positiva y los últimos veinte motivos escritos al pulgar abajo (sin decir quién los escribió).
+
+## Que Bria se mida (14 de octubre de 2026)
+
+Rodny: «antes de crecer más, saber qué tan bien responde». Dos medidas, ninguna evalúa a personas.
+
+**Pulgar arriba o abajo en cada respuesta.** Junto al botón de copiar de cada respuesta de Bria hay dos pulgares (`src/components/bria/BriaConversation.jsx`). El pulgar abajo se registra al instante y después pregunta «¿Qué falló?» con una nota opcional de hasta 300 caracteres, que viaja aparte: si la persona no escribe nada, el pulgar queda igual. La valoración se guarda en el turno de Bria (`metadata.rating = { value: 'UP' | 'DOWN', note, at }`) por `POST /api/bria/conversations/:id/rating` (`turnId`, `rating`, `note`), que solo acepta un turno de Bria del chat de quien valora; volver a pulsar reemplaza la anterior y no cambia la revisión del chat. La regla es pura (`src/lib/briaRating.js`: `normalizeRating`, `turnPosition`); el servicio es `rate` en `briaConversationService.js` y la escritura `rateTurn` en `briaConversationRepository.js`.
+
+**El conjunto de preguntas reales.** `tests/evals/briaCases.js` tiene once preguntas del día a día del equipo con datos ficticios, cada una con `requiredTools` o `anyTools`, `mustSay`, `mustNotSay` y un `why`. `checkEvalAnswer` juzga una respuesta; `FORBIDDEN_EVERYWHERE` prohíbe en todas el español peninsular y los juicios sobre personas. Se corre a mano contra el modelo real:
+
+```bash
+BRIA_EVAL_OUTPUT=tmp/bria-casos.json npm run eval:bria-casos -- --solo accion-no-afirma --repeticiones 2
+```
+
+`scripts/eval-bria-casos.mjs` lee solo `OPENAI_API_KEY` y el modelo del archivo de entorno (`BRIA_PROJECT_ENV`, `.env` por defecto), arma herramientas ficticias con las mismas declaraciones que las reales (lecturas y acciones que solo preparan), no abre ninguna base de datos y escribe un informe JSON con cada respuesta y su veredicto; termina con código 1 si algo falló. Se corre cada vez que cambien las instrucciones de Bria (`buildInstructions`) o sus herramientas, y nunca en CI. Un caso nuevo se añade al conjunto con su `why`; `tests/briaRating.test.js` valida la forma de todos.
+
 ## Dónde se conecta
 - `briaTaskApplication.js` arma `briaActions` con Prisma y las funciones reales; `briaAssistantService.js` monta las herramientas; `briaConversationService.js` resuelve «Confirmar» y «Cancelar»; `briaConversationRepository.js` guarda `pendingAction` en los metadatos del turno; `briaConversationApplication.js` exige el módulo de cada acción para ver o confirmar el turno.
 - Reglas 18, 19 y 20 de `buildInstructions`.

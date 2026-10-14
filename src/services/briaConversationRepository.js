@@ -63,6 +63,16 @@ export const createBriaConversationRepository = ({ pool, workspace, storage, req
     } catch (failure) { await db.query('ROLLBACK'); throw failure; } finally { db.release(); }
     return this.get(actor, id);
   },
+  /**
+   * Pulgar arriba o abajo sobre una respuesta de Bria (14 de octubre de 2026). Se escribe en el turno, solo si es de
+   * Bria y el chat es de quien valora; volver a pulsar reemplaza la valoración anterior. No toca la revisión del chat,
+   * porque no cambia lo que Bria dijo.
+   */
+  async rateTurn(actor, id, position, rating) {
+    const outcome = await pool.query("UPDATE bria_memory.conversation_turns t SET metadata = metadata || jsonb_build_object('rating', $4::jsonb) WHERE t.conversation_id=$1 AND t.position=$5 AND t.role='assistant' AND EXISTS (SELECT 1 FROM bria_memory.conversations c WHERE c.id=$1 AND c.workspace=$2 AND c.actor_ref=$3)", [id, workspace, actor.ref, JSON.stringify(rating), position]);
+    if (!outcome.rowCount) throw knowledgeError('No encontramos esa respuesta de Bria.', 404);
+    return this.get(actor, id);
+  },
   async append(actor, id, expectedRevision, question, result, files = []) {
     const db = await pool.connect();
     try {

@@ -6,6 +6,7 @@ import { taskCreationIntent, isTaskConfirmation, materialDeclined } from '../lib
 import { DELETE_REASON_OPTIONS } from '../lib/briaDeleteDraft.js';
 import { actionReply, actionStage, confirmsAction, cancelsAction, alreadyDoneReply, pendingActionOf, wrapLegacyAction, isLegacyAction, LEGACY_ACTIONS } from '../lib/briaActions.js';
 import { createBriaActionService } from './briaActionService.js';
+import { normalizeRating, turnPosition } from '../lib/briaRating.js';
 // Una sola base (10 de octubre de 2026): crear pendiente, despachar y eliminar se resuelven aquí como cualquier otra
 // acción. Sin `actions` propio, la base se arma con los tres servicios que lleguen (las vistas de prueba y de muestra).
 const LEGACY_TOOL = { TASK_CREATE: 'preparar_pendiente', DISPATCH: 'preparar_despacho', TASK_DELETE: 'preparar_eliminacion' };
@@ -29,6 +30,19 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
       return repository.remove(await resolveActor(user), id, expectedRevision);
     },
     authorizeInput,
+    // Que Bria se mida (14 de octubre de 2026): la persona valora una respuesta de Bria de su propio chat. Solo un turno
+    // de Bria; la pregunta de la persona no se valora. Devuelve el chat con la valoración puesta.
+    async rate({ user, id, turnId, rating, note }) {
+      const value = normalizeRating({ rating, note });
+      const chat = await read(user, id);
+      const turn = chat.turns.find(item => item.id === turnId);
+      if (!turn) throw knowledgeError('No encontramos esa respuesta de Bria.', 404);
+      if (turn.role !== 'assistant') throw knowledgeError('Solo se valora una respuesta de Bria.');
+      const position = turnPosition(id, turnId);
+      if (position == null) throw knowledgeError('No encontramos esa respuesta de Bria.', 404);
+      const actor = await resolveActor(user);
+      return sanitize(user, await repository.rateTurn(actor, id, position, { ...value, at: new Date().toISOString() }));
+    },
     async transcribe(user, file) {
       await authorizeInput(user);
       if (!file?.buffer?.length || file.buffer.length > BRIA_AUDIO_MAX_BYTES || !/^(audio\/(webm|ogg|wav|x-wav|mpeg|mp4)|video\/(webm|mp4))(;.*)?$/.test(file.mimetype || '')) throw knowledgeError('Graba un audio compatible de hasta 20 MB.');
