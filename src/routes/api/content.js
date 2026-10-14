@@ -34,6 +34,7 @@ import {
 } from '../../services/briaContentPlanReviewService.js';
 import { runContentPlanReviewJob } from '../../services/briaContentPlanReviewScheduler.js';
 import { createClientCriteriaRouter } from './clientCriteria.js';
+import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
 import {
   FINAL_ASSET_MAX_BYTES,
   FINAL_ASSET_MAX_FILES,
@@ -46,11 +47,11 @@ import {
 const router = express.Router();
 router.use('/plans/:planId/criteria', createClientCriteriaRouter());
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: uploadMemoryStorage(),
   limits: { fileSize: FINAL_ASSET_MAX_BYTES, files: 1 }
 });
 const carouselUpload = multer({
-  storage: multer.memoryStorage(),
+  storage: uploadMemoryStorage(),
   limits: { fileSize: FINAL_ASSET_MAX_BYTES, files: FINAL_ASSET_MAX_FILES }
 });
 

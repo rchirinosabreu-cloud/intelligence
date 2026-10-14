@@ -27,7 +27,7 @@ import {
 
 const router = express.Router();
 const upload = multer({
-    storage: multer.memoryStorage(),
+    storage: uploadMemoryStorage(),
     limits: { fileSize: 20 * 1024 * 1024, files: 15 }
 });
 const REPORT_PIPELINE_VERSION = REPORT_EVIDENCE_PIPELINE_VERSION;
@@ -335,6 +335,7 @@ const withTimeout = (promise, ms, errorMessage = "Timeout exceeded") => {
 };
 
 import { buildNarrativeErrorLog } from '../../lib/reportPresentation.js';
+import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
 
 const NARRATIVE_GENERATION_TIMEOUT_MS = 270000;
 

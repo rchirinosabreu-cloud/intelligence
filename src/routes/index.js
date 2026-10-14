@@ -69,14 +69,15 @@ import { createServiceHealthRouter } from './api/serviceHealth.js';
 import { createTeamChatRouter, createTeamChatMediaRouter } from './api/teamChat.js';
 import { handleGoogleCalendarWebhook } from '../services/operationalEventService.js';
 import { handleFirefliesWebhook } from '../services/firefliesWebhookService.js';
+import { uploadMemoryStorage } from '../lib/uploadStorage.js';
 
 const router = express.Router();
 const upload = multer({
-    storage: multer.memoryStorage(),
+    storage: uploadMemoryStorage(),
     limits: { fileSize: 25 * 1024 * 1024, files: 1 }
 });
 const commentUpload = multer({
-    storage: multer.memoryStorage(),
+    storage: uploadMemoryStorage(),
     limits: { fileSize: MAX_COMMENT_FILE_BYTES, files: MAX_COMMENT_FILES }
 });
 

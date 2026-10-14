@@ -6,12 +6,13 @@ import { getOnboarding, acknowledgeOnboarding } from '../../services/onboardingS
 import { replaceProfileAvatar } from '../../services/avatarService.js';
 import { mfaService } from '../../services/mfa.js';
 import { MfaError } from '../../services/mfaService.js';
+import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
 
 const router = express.Router();
 
 // Own profile photo (any authenticated member): the image arrives already framed by the client.
 const avatarUpload = multer({
-    storage: multer.memoryStorage(),
+    storage: uploadMemoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024, files: 1 }
 });
 

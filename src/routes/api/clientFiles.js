@@ -12,12 +12,13 @@ import {
     sanitizeStorageFileName
 } from '../../services/storageService.js';
 import { isSafeStoragePath, validateUploadFile } from '../../config/security.js';
+import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
 
 const router = express.Router({ mergeParams: true });
 const MAX_CLIENT_FILE_SIZE = 50 * 1024 * 1024;
 // Memory storage for multer - keeps file in RAM before GCS upload
 const upload = multer({
-    storage: multer.memoryStorage(),
+    storage: uploadMemoryStorage(),
     limits: { fileSize: MAX_CLIENT_FILE_SIZE, files: 1 }
 });
 

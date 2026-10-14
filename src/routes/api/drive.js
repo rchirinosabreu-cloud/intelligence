@@ -1,10 +1,11 @@
 import express from 'express';
 import multer from 'multer';
 import * as driveController from '../../controllers/driveController.js';
+import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
 
 const router = express.Router();
 const upload = multer({
-  storage: multer.memoryStorage(),
+  storage: uploadMemoryStorage(),
   limits: { fileSize: 25 * 1024 * 1024, files: 1 }
 });
 const uploadOne = (req, res, next) => upload.single('file')(req, res, error => {

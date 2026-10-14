@@ -3,6 +3,7 @@ import multer from 'multer';
 import { BRIA_FILE_MAX_BYTES, BRIA_FILES_MAX_COUNT, BRIA_AUDIO_MAX_BYTES } from '../../lib/briaAttachments.js';
 import { canUseBria } from '../../lib/briaLivingMemory.js';
 import { createRateLimiter } from '../../config/security.js';
+import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
 const uuid = value => /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value || '');
 const sessionOf = req => { const token = String(req.headers?.authorization || '').replace(/^Bearer\s+/i, '').trim(); return token ? { token } : null; };
 export const createBriaConversationRouter = ({ service } = {}) => {
@@ -42,8 +43,8 @@ export const createBriaConversationRouter = ({ service } = {}) => {
     if (error) return res.status(400).json({ message: error.code === 'LIMIT_FILE_SIZE' ? 'Cada archivo puede pesar hasta 20 MB.' : 'Puedes adjuntar hasta 5 archivos por mensaje.' });
     next();
   });
-  const audio = multer({ storage: multer.memoryStorage(), limits: { fileSize: BRIA_AUDIO_MAX_BYTES, files: 1, fields: 0, parts: 2 } });
-  const files = multer({ storage: multer.memoryStorage(), limits: { fileSize: BRIA_FILE_MAX_BYTES, files: BRIA_FILES_MAX_COUNT, fields: 4, fieldSize: 48000, parts: BRIA_FILES_MAX_COUNT + 5 } });
+  const audio = multer({ storage: uploadMemoryStorage(), limits: { fileSize: BRIA_AUDIO_MAX_BYTES, files: 1, fields: 0, parts: 2 } });
+  const files = multer({ storage: uploadMemoryStorage(), limits: { fileSize: BRIA_FILE_MAX_BYTES, files: BRIA_FILES_MAX_COUNT, fields: 4, fieldSize: 48000, parts: BRIA_FILES_MAX_COUNT + 5 } });
   const authorizeInput = async (req, res, next) => { try { const instance = await resolve(); await instance.authorizeInput?.(req.user); next(); } catch (failure) { res.status(failure.status || 500).json({ message: failure.status ? failure.message : 'No se pudo verificar tu acceso.' }); } };
   router.post('/dictation', authorizeInput, receive(audio.single('audio')), handle((req, instance) => instance.transcribe(req.user, req.file)));
   router.use('/:id', (req, res, next) => uuid(req.params.id) ? next() : res.status(400).json({ message: 'Conversación no válida.' }));
