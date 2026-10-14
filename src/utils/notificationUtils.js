@@ -82,6 +82,10 @@ export const getNotificationDisplayParts = (notification = {}) => {
     if (type === 'BRIA_FOCO_SEMANAL') {
         return { title: 'Tu foco de la semana está listo', context: '', body: cleanNotificationPreview(message, 140) };
     }
+    // El cierre del día (14 de octubre de 2026): a las 5, Bria lo deja en un chat; el aviso lo abre.
+    if (type === 'BRIA_CIERRE_DEL_DIA') {
+        return { title: 'Tu cierre del día está listo', context: '', body: cleanNotificationPreview(message, 140) };
+    }
 
     if (type === 'TASK_COMMENT_REPLY') {
         const parsed = parseQuotedTaskMessage(message, 'Nuevo mensaje en el hilo de la tarea');

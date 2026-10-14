@@ -38,6 +38,12 @@ CREATE TABLE IF NOT EXISTS bria_memory.pulse_messages (
 CREATE INDEX IF NOT EXISTS pulse_messages_user ON bria_memory.pulse_messages(user_ref, created_at DESC);
 -- Los botones de cada aviso los decide la plataforma según el hecho (enlace, o algo que pedirle a Bria).
 ALTER TABLE bria_memory.pulse_messages ADD COLUMN IF NOT EXISTS actions JSONB NOT NULL DEFAULT '[]';
+-- El seguimiento de los avisos (14 de octubre de 2026): el pulso vuelve a mirar cada aviso vivo; si se resolvió escribe el
+-- desenlace (`resolution`, con la hora) y si a la hora sigue igual lo dice una sola vez (`follow_up`). No son avisos nuevos.
+ALTER TABLE bria_memory.pulse_messages ADD COLUMN IF NOT EXISTS follow_up TEXT;
+ALTER TABLE bria_memory.pulse_messages ADD COLUMN IF NOT EXISTS followed_up_at TIMESTAMPTZ;
+ALTER TABLE bria_memory.pulse_messages ADD COLUMN IF NOT EXISTS resolution TEXT;
+ALTER TABLE bria_memory.pulse_messages ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ;
 -- El foco de la semana que Bria dejó en el chat de cada persona: una fila por semana y persona, con su conversación.
 CREATE TABLE IF NOT EXISTS bria_memory.weekly_focus_deliveries (
   week_key TEXT NOT NULL CHECK (week_key ~ '^[0-9]{4}-W[0-9]{2}$'),
@@ -45,4 +51,12 @@ CREATE TABLE IF NOT EXISTS bria_memory.weekly_focus_deliveries (
   conversation_id UUID NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (week_key, user_ref)
+);
+-- El cierre del día (14 de octubre de 2026) que Bria dejó en el chat de cada persona: una fila por día hábil y persona.
+CREATE TABLE IF NOT EXISTS bria_memory.daily_close_deliveries (
+  day_key TEXT NOT NULL CHECK (day_key ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
+  user_ref TEXT NOT NULL,
+  conversation_id UUID NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (day_key, user_ref)
 );

@@ -64,11 +64,41 @@ export const createBriaProactiveRepository = ({ pool }) => ({
     return saved;
   },
   async activeMessages(userRef, now = new Date()) {
-    const { rows } = await pool.query('SELECT id, kinds, title, body, ask, url, task_ids, urgency, actions, created_at FROM bria_memory.pulse_messages WHERE user_ref=$1 AND dismissed_at IS NULL AND expires_at > $2 ORDER BY created_at DESC', [userRef, now]);
-    return rows.map((row) => ({ id: row.id, kinds: row.kinds, title: row.title, body: row.body, ask: row.ask, url: row.url, taskIds: row.task_ids, urgency: row.urgency, actions: Array.isArray(row.actions) ? row.actions : [], createdAt: row.created_at }));
+    const { rows } = await pool.query('SELECT id, kinds, title, body, ask, url, task_ids, urgency, actions, created_at, resolution, resolved_at, follow_up FROM bria_memory.pulse_messages WHERE user_ref=$1 AND dismissed_at IS NULL AND expires_at > $2 ORDER BY created_at DESC', [userRef, now]);
+    return rows.map((row) => ({ id: row.id, kinds: row.kinds, title: row.title, body: row.body, ask: row.ask, url: row.url, taskIds: row.task_ids, urgency: row.urgency, actions: Array.isArray(row.actions) ? row.actions : [], createdAt: row.created_at, resolution: row.resolution || null, resolvedAt: row.resolved_at || null, followUp: row.follow_up || null }));
   },
   async dismissMessage(userRef, id, now = new Date()) {
     const { rowCount } = await pool.query('UPDATE bria_memory.pulse_messages SET dismissed_at=$3 WHERE user_ref=$1 AND id=$2 AND dismissed_at IS NULL', [userRef, id, now]);
     return rowCount > 0;
+  },
+
+  /* ---- El seguimiento de los avisos y el cierre del día (14 de octubre de 2026) ---- */
+
+  /** Los avisos vivos de todas las personas que todavía no tienen desenlace: ni resueltos, ni ocultos, ni vencidos. */
+  async pendingFollowUps(now = new Date()) {
+    const { rows } = await pool.query('SELECT id, user_ref, kinds, fact_ids, task_ids, created_at, followed_up_at FROM bria_memory.pulse_messages WHERE resolved_at IS NULL AND dismissed_at IS NULL AND expires_at > $1 ORDER BY created_at', [now]);
+    return rows.map((row) => ({ id: row.id, userRef: row.user_ref, kinds: row.kinds, factIds: row.fact_ids, taskIds: row.task_ids, createdAt: row.created_at, followedUpAt: row.followed_up_at }));
+  },
+  async resolveMessage(id, text, now = new Date()) {
+    const { rowCount } = await pool.query('UPDATE bria_memory.pulse_messages SET resolved_at=$2, resolution=$3 WHERE id=$1 AND resolved_at IS NULL', [id, now, text]);
+    return rowCount > 0;
+  },
+  /** El recordatorio de «sigue igual» se escribe una sola vez por aviso. */
+  async markFollowedUp(id, text, now = new Date()) {
+    const { rowCount } = await pool.query('UPDATE bria_memory.pulse_messages SET followed_up_at=$2, follow_up=$3 WHERE id=$1 AND followed_up_at IS NULL', [id, now, text]);
+    return rowCount > 0;
+  },
+  /** Lo que Bria le avisó a una persona desde `dayStart`, con su desenlace, para el cierre del día. */
+  async messagesOfDay(userRef, dayStart) {
+    const { rows } = await pool.query('SELECT id, title, kinds, resolution, resolved_at, follow_up, dismissed_at, created_at FROM bria_memory.pulse_messages WHERE user_ref=$1 AND created_at >= $2 ORDER BY created_at', [userRef, dayStart]);
+    return rows.map((row) => ({ id: row.id, title: row.title, kinds: row.kinds, resolution: row.resolution || null, resolvedAt: row.resolved_at || null, followUp: row.follow_up || null, dismissedAt: row.dismissed_at || null, createdAt: row.created_at }));
+  },
+  async dailyCloseDelivery(dayKey, userRef) {
+    const { rows } = await pool.query('SELECT conversation_id, created_at FROM bria_memory.daily_close_deliveries WHERE day_key=$1 AND user_ref=$2', [dayKey, userRef]);
+    return rows[0] ? { dayKey, userRef, conversationId: rows[0].conversation_id, createdAt: rows[0].created_at } : null;
+  },
+  async recordDailyCloseDelivery(dayKey, userRef, conversationId) {
+    await pool.query('INSERT INTO bria_memory.daily_close_deliveries(day_key,user_ref,conversation_id) VALUES($1,$2,$3) ON CONFLICT (day_key,user_ref) DO NOTHING', [dayKey, userRef, conversationId]);
+    return { dayKey, userRef, conversationId };
   }
 });

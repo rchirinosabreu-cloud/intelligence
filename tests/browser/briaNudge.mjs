@@ -36,8 +36,8 @@ try {
   const card = page.getByRole('status', { name: 'Aviso de Bria' });
   await card.waitFor();
   assert.equal(await panel.isHidden(), true, 'the chat stays closed');
-  assert.equal(await card.getAttribute('data-bria-nudge'), 'FOCO_SEMANAL', 'the weekly focus comes first');
-  assert.match(await card.locator('[data-bria-nudge-count]').innerText(), /1 de 3/);
+  assert.equal(await card.getAttribute('data-bria-nudge'), 'CIERRE_DIA', 'today’s close comes first, then the weekly focus');
+  assert.match(await card.locator('[data-bria-nudge-count]').innerText(), /1 de 4/);
   const box = await card.boundingBox(), trigger = await page.locator('[data-bria-assistant-trigger]').boundingBox();
   assert.ok(box.y + box.height <= trigger.y + 4, 'the card sits above the mascot');
   assert.equal(await card.locator('input').count(), 0, 'no permanent question box inside the card');
@@ -55,12 +55,22 @@ try {
   await page.getByRole('button', { name: 'Escribir una consulta' }).waitFor({ state: 'visible' });
   await page.getByRole('button', { name: 'Dictar una consulta' }).waitFor({ state: 'visible' });
   await page.screenshot({ path: path.join(output, 'bria-cursor-encima.png'), clip: corner });
-  // «Leer en Bria» abre el panel en el chat del foco.
+  // «Leer en Bria» abre el panel en el chat del cierre del día (14 de octubre de 2026).
+  await card.getByRole('button', { name: 'Leer en Bria' }).click();
+  await panel.waitFor({ state: 'visible' });
+  await page.getByText('Así cierra el martes 13 de octubre', { exact: false }).waitFor();
+  await page.getByText('Lo que te avisé hoy', { exact: false }).waitFor();
+  await page.screenshot({ path: path.join(output, 'bria-cierre-del-dia.png') });
+  assert.equal(await card.isHidden(), true, 'with the panel open the card hides');
+  await closePanel();
+  await card.waitFor();
+  await card.getByRole('button', { name: 'Ocultar por hoy' }).click();
+  await page.waitForFunction(() => document.querySelector('[data-bria-nudge]')?.getAttribute('data-bria-nudge') === 'FOCO_SEMANAL');
+  // El foco de la semana, en su propio chat.
   await card.getByRole('button', { name: 'Leer en Bria' }).click();
   await panel.waitFor({ state: 'visible' });
   await page.getByText('Este es tu foco de la semana', { exact: false }).waitFor();
   await page.screenshot({ path: path.join(output, 'bria-adelanta-foco-abierto.png') });
-  assert.equal(await card.isHidden(), true, 'with the panel open the card hides');
   await closePanel();
   await card.waitFor();
   // La X oculta por hoy en el servidor y pasa al siguiente.
@@ -69,6 +79,8 @@ try {
   assert.ok(sent.includes('POST /api/bria/nudges/dismiss'));
   await page.getByText('Melissa no tiene una tarea en proceso desde las 9:55', { exact: false }).waitFor();
   assert.equal(await card.getByRole('link', { name: 'Ver sus pendientes' }).getAttribute('href'), '/gestion?responsable=Melissa%20Casta%C3%B1o', 'the board link lands on her tasks');
+  // El seguimiento: el desenlace del aviso se lee en la misma tarjeta.
+  assert.equal(await card.locator('[data-bria-nudge-resolution]').innerText(), 'Melissa arrancó «Reel de lanzamiento» a las 10:40.');
   await page.screenshot({ path: path.join(output, 'bria-adelanta-sin-proceso.png') });
   // «Que Bria me resuma lo que tiene» deja el mensaje escrito, nunca lo manda.
   await card.getByRole('button', { name: 'Que Bria me resuma lo que tiene' }).click();

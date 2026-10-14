@@ -220,8 +220,8 @@ const AppLayout = ({ children }) => {
     } else if (notif.type === 'SECURITY_INCIDENT_REPORTED') {
         // Reporte de incidente del equipo (12 de octubre de 2026): abre los incidentes de Gobierno de IA.
         navigate('/gobierno-ia?tab=incidents');
-    } else if (notif.type === 'BRIA_FOCO_SEMANAL') {
-        // El foco de la semana (10 de octubre de 2026): abre el chat donde Bria lo dejó.
+    } else if (notif.type === 'BRIA_FOCO_SEMANAL' || notif.type === 'BRIA_CIERRE_DEL_DIA') {
+        // El foco de la semana (10 de octubre de 2026) y el cierre del día (14 de octubre): abren el chat donde Bria lo dejó.
         openBriaConversation(notif.relatedId);
     }
   };
