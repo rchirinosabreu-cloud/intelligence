@@ -77,6 +77,7 @@ export const createFolder = async (req, res) => {
   try {
     const folder = await createDriveFolder({
       name: req.body.name,
+      subtitle: req.body.subtitle,
       parentId: req.body.parentId,
       actorId: req.user.userId
     });

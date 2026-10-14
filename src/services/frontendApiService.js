@@ -326,11 +326,11 @@ const frontendApiService = {
     return response.blob();
   },
 
-  createDriveFolder: async ({ name, parentId }) => {
+  createDriveFolder: async ({ name, subtitle, parentId }) => {
     const response = await fetch(`${getBaseUrl()}/api/drive/folders`, {
       method: 'POST',
       headers: getAuthHeaders(),
-      body: JSON.stringify({ name, parentId })
+      body: JSON.stringify({ name, subtitle, parentId })
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
