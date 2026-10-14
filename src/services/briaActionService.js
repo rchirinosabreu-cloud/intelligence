@@ -23,7 +23,10 @@ import { matchOperation, isExcludedOperation } from '../lib/platformCatalog.js';
 import { LEGACY_ACTIONS } from '../lib/briaActions.js';
 import { dispatchResultText } from '../lib/briaDispatchDraft.js';
 import { deleteResultText } from '../lib/briaDeleteDraft.js';
-import { searchTasks, TASK_SEARCH_MAX } from './taskSearch.js';
+import { searchTasks, findClientByTerm, TASK_SEARCH_MAX } from './taskSearch.js';
+import { rankByName } from '../lib/fuzzyMatch.js';
+import { dayLabel } from '../lib/teamLoad.js';
+import { minuteItems, guessClient, matchOwner, minuteLabel, minuteTaskContext } from '../lib/minuteTasks.js';
 
 const tidy = (value) => String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
 const fold = (value) => tidy(value).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -36,7 +39,7 @@ const PRIORITY_LABEL = { NORMAL: 'normal', ALTA: 'alta', URGENTE: 'urgente' };
 
 // Módulos que exige cada acción. Las tres que nacieron con flujo propio (crear pendiente, despachar a producción,
 // eliminar pendientes) viajan por esta misma base desde el 10 de octubre de 2026; el despacho exige dos módulos.
-export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion' };
+export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion', MINUTE_TASKS: ['gestion', 'minutas'] };
 export const actionModules = (type) => [].concat(ACTION_PERMISSION[type] || []);
 const MODULE_LABEL = { gestion: 'Gestión', parrillas: 'Parrillas', clientes: 'Clientes' };
 export const ITEM_FORMATS = ['Reel', 'Carrusel', 'Post', 'Video', 'Historia'];
@@ -599,9 +602,162 @@ const executeTaskDelete = async ({ user, action, deleteDrafts, revalidate }) => 
   return { text: deleteResultText(receipt.results), sources: [], toolsUsed: ['eliminar_pendiente'], patch: { draft: { ...action.draft, status: 'DONE', results: receipt.results } } };
 };
 
+/* ---------------------------------------------------------------- Los compromisos de una reunión, a pendientes */
+
+// Rodny, 14 de octubre de 2026 (segundo punto del plan «llevar a Bria a más niveles»): «cuando analiza una reunión,
+// que prepare los pendientes que salieron de ahí, con responsable y fecha propuestos, y tú confirmas». La minuta ya
+// trae los compromisos; aquí se vuelven pendientes numerados: el cliente sale del título (o se pregunta), el
+// responsable del equipo se busca por el nombre que anotó la reunión (sin adivinar: dos Melissas es una pregunta),
+// la fecha es la de la reunión o la que diga la persona. Cada compromiso recuerda su tarea (`taskId` en
+// `actionItems`): confirmar dos veces no crea dos veces.
+const MINUTE_SELECT = { id: true, title: true, meetingAt: true, status: true, actionItems: true };
+const minuteOption = (row) => `${row.title} (${dayLabel(bogotaDate(row.meetingAt))})`;
+const listNumbers = (numbers) => (numbers.length <= 1 ? numbers.join('') : `${numbers.slice(0, -1).join(', ')} y ${numbers.at(-1)}`);
+const noneOf = (value) => /^sin (cliente|fecha|responsable)$/.test(fold(value));
+
+const findMinute = async (db, term, previousId) => {
+  if (!term) return previousId ? { minute: await db.meetingMinute.findFirst({ where: { id: previousId, deletedAt: null }, select: MINUTE_SELECT }) } : { minute: null };
+  const byId = await db.meetingMinute.findFirst({ where: { id: term, deletedAt: null }, select: MINUTE_SELECT });
+  if (byId) return { minute: byId };
+  const rows = await db.meetingMinute.findMany({ where: { deletedAt: null, status: 'READY', title: { contains: term, mode: 'insensitive' } }, select: MINUTE_SELECT, orderBy: { meetingAt: 'desc' }, take: 6 });
+  let found = rows, approximate = false;
+  if (!rows.length) {
+    const recent = await db.meetingMinute.findMany({ where: { deletedAt: null, status: 'READY' }, select: MINUTE_SELECT, orderBy: { meetingAt: 'desc' }, take: 40 });
+    found = rankByName(recent, term, (row) => row.title); approximate = found.length > 0;
+  }
+  if (!found.length) return { minute: null, rows: [] };
+  if (found.length === 1) return { minute: found[0], approximate };
+  const exact = found.filter((row) => same(row.title, term));
+  if (exact.length === 1) return { minute: exact[0] };
+  return { minute: null, rows: found.slice(0, 6) };
+};
+
+const prepareMinuteTasks = async ({ db, user, args, previous, today }) => {
+  const owner = user.userId || user.id;
+  const wanted = { ...(previous?.wanted || {}), ajustes: { ...(previous?.wanted?.ajustes || {}) } };
+  for (const key of ['reunion', 'cliente', 'fecha']) if (args[key] != null && tidy(args[key])) wanted[key] = tidy(args[key]);
+  for (const adj of Array.isArray(args.ajustes) ? args.ajustes : []) {
+    const n = Number(adj?.n);
+    if (!Number.isInteger(n) || n < 1) continue;
+    const current = { ...(wanted.ajustes[n] || {}) };
+    if (adj.omitir === true) current.omitir = true;
+    if (adj.responsable != null && tidy(adj.responsable)) { current.responsable = tidy(adj.responsable); delete current.omitir; }
+    if (adj.fecha != null && tidy(adj.fecha)) current.fecha = tidy(adj.fecha);
+    wanted.ajustes[n] = current;
+  }
+  const missing = [], warnings = [];
+  const base = (extra) => ({ id: previous?.id || randomUUID(), ownerId: owner, type: 'MINUTE_TASKS', status: 'DRAFT', wanted, ...extra });
+
+  // La reunión: por id, por título o por parecido; con varias, se pregunta cuál.
+  const term = args.reunion != null && tidy(args.reunion) ? tidy(args.reunion).slice(0, 200) : null;
+  const { minute, rows = [], approximate } = await findMinute(db, term, previous?.target?.minuteId);
+  if (!minute) {
+    if (rows.length) return base({ title: 'Pendientes de una reunión', target: {}, payload: { items: [] }, summary: [], warnings, missing: [{ field: 'reunion', question: '¿Cuál reunión?', options: rows.map(minuteOption) }] });
+    if (term) throw knowledgeError(`No encontré una reunión que se llame «${term}». Búscala con memoria_de_reuniones o dime su título exacto.`, 404, 'BRIA_ACTION_MINUTE');
+    throw knowledgeError('Dime de qué reunión: su título o su id (de memoria_de_reuniones).', 400, 'BRIA_ACTION_TARGET');
+  }
+  if (minute.status !== 'READY') throw knowledgeError(`${minuteLabel(minute)} todavía no tiene minuta analizada.`, 409, 'BRIA_ACTION_MINUTE');
+  if (approximate) warnings.push(`La reunión la encontré por parecido: ${minuteLabel(minute)}.`);
+  const all = minuteItems(minute, today);
+  if (!all.length) throw knowledgeError(`La minuta de ${minuteLabel(minute)} no trae compromisos.`, 404, 'BRIA_ACTION_MINUTE');
+  const already = all.filter((item) => item.taskId);
+
+  // El cliente: el que dijo la persona, el que nombra el título, o se pregunta.
+  let client = null, clientNote = '';
+  if (wanted.cliente) {
+    if (noneOf(wanted.cliente)) client = { none: true };
+    else {
+      const found = await findClientByTerm(db, wanted.cliente.slice(0, 160));
+      if (!found.rows.length) throw knowledgeError(`No encontré un cliente que se llame «${wanted.cliente}».`, 404, 'BRIA_ACTION_CLIENT');
+      if (!found.chosen) missing.push({ field: 'cliente', question: `¿Cuál ${wanted.cliente}?`, options: [...new Set(found.rows.map((row) => row.name))] });
+      else client = found.chosen;
+    }
+  } else {
+    const guessed = guessClient(minute, await db.client.findMany({ where: { isArchived: false }, select: { id: true, name: true, slug: true }, take: 500 }));
+    if (guessed) { client = guessed; clientNote = ' (por el título de la reunión)'; }
+    else missing.push({ field: 'cliente', question: '¿De qué cliente son estos pendientes?', options: ['Sin cliente'] });
+  }
+
+  // Cada compromiso: responsable del equipo, fecha, prioridad; lo omitido y lo ya creado quedan aparte.
+  const members = await db.teamMember.findMany({ where: { isActive: true }, select: { id: true, name: true, email: true, userId: true } });
+  const rank = (rows, name) => rankByName(rows, name, (row) => row.name);
+  const items = [], omitted = [], noDate = [];
+  let badDate = null;
+  for (const item of all) {
+    if (item.taskId) continue;
+    const adj = wanted.ajustes[item.n] || {};
+    if (adj.omitir) { omitted.push(item); continue; }
+    let assignee = null, ownerProblem = null;
+    if (adj.responsable) {
+      if (noneOf(adj.responsable)) ownerProblem = 'La reunión no dice quién y pediste dejarlo sin responsable: un pendiente necesita responsable.';
+      else { assignee = matchOwner(adj.responsable, members, rank); if (!assignee) ownerProblem = `«${adj.responsable}» no está en el equipo.`; }
+    } else if (item.owner) {
+      assignee = matchOwner(item.owner, members, rank);
+      if (!assignee) ownerProblem = `«${item.owner}» no está en el equipo.`;
+      else if (!same(assignee.name, item.owner)) warnings.push(`«${item.owner}» lo entendí como ${assignee.name}.`);
+    } else ownerProblem = 'La reunión no dice quién.';
+    let dueDay = null;
+    if (adj.fecha) { dueDay = noneOf(adj.fecha) ? null : resolveTaskDate(adj.fecha, today); if (!noneOf(adj.fecha) && !dueDay) badDate = adj.fecha; }
+    else if (item.dueDay) dueDay = item.dueDay;
+    else if (wanted.fecha) { dueDay = noneOf(wanted.fecha) ? null : resolveTaskDate(wanted.fecha, today); if (!noneOf(wanted.fecha) && !dueDay) badDate = wanted.fecha; }
+    else noDate.push(item.n);
+    items.push({ ...item, assignee, ownerProblem, dueDay });
+  }
+  if (!items.length) throw knowledgeError(`No queda ningún compromiso por crear de ${minuteLabel(minute)}${already.length ? ': los demás ya son pendientes' : ''}.`, 400, 'BRIA_ACTION_NOOP');
+  if (badDate) missing.push({ field: 'fecha', question: `No entendí la fecha «${badDate}». Dime un día concreto, como «viernes» o «17 de octubre», o «sin fecha».` });
+  else if (noDate.length) missing.push({ field: 'fecha', question: `${noDate.length === 1 ? `El compromiso ${noDate[0]} no trae fecha` : `${noDate.length} compromisos no traen fecha (${listNumbers(noDate)})`}. ¿Qué fecha ${noDate.length === 1 ? 'le' : 'les'} pongo?`, options: ['Mañana', 'Viernes', 'Sin fecha'] });
+  const unassigned = items.find((item) => !item.assignee);
+  if (unassigned) missing.push({ field: 'responsable', question: `¿A quién le asigno el compromiso ${unassigned.n}, «${unassigned.title}»? ${unassigned.ownerProblem}`, options: [...members.map((row) => row.name).sort((a, b) => a.localeCompare(b, 'es')).slice(0, 6), 'Omitirlo'] });
+
+  const summary = [`Reunión: **${minuteLabel(minute)}**`, client ? (client.none ? 'Cliente: sin cliente' : `Cliente: **${client.name}**${clientNote}`) : 'Cliente: por definir'];
+  summary.push(`Pendientes que se crean (${items.length}):`, ...items.map((item) => `${item.n}. «${item.title}» → ${item.assignee?.name || 'sin responsable'}${item.dueDay ? ` · ${dayLabel(item.dueDay)}` : ' · sin fecha'}${item.priority !== 'NORMAL' ? ` · prioridad ${PRIORITY_LABEL[item.priority]}` : ''}`));
+  if (omitted.length) warnings.push(`No se crea${omitted.length > 1 ? 'n' : ''} (lo pediste): ${omitted.map((item) => `${item.n} «${item.title}»`).join(', ')}.`);
+  if (already.length) warnings.push(`Ya son pendientes: ${already.map((item) => `${item.n} [${item.title}](/gestion?taskId=${encodeURIComponent(item.taskId)})`).join(', ')}.`);
+  return base({
+    title: `Crear ${items.length === 1 ? 'un pendiente' : `${items.length} pendientes`} de la reunión`,
+    target: { minuteId: minute.id, title: minute.title },
+    payload: { minuteId: minute.id, clientId: client && !client.none ? client.id : null, items: items.map((item) => ({ n: item.n, title: item.title, owner: item.owner, assigneeId: item.assignee?.id || null, assigneeName: item.assignee?.name || null, assigneeUserId: item.assignee?.userId || null, dueDate: item.dueDay ? `${item.dueDay}T12:00:00.000Z` : null, priority: item.priority })) },
+    summary, warnings, missing
+  });
+};
+
+const executeMinuteTasks = async ({ db, user, action, createTask, notify }) => {
+  if (!createTask) throw knowledgeError('Crear pendientes no está disponible en esta vista.', 403);
+  const { minuteId, clientId, items } = action.payload;
+  const minute = await db.meetingMinute.findFirst({ where: { id: minuteId, deletedAt: null }, select: { id: true, title: true, meetingAt: true, actionItems: true } });
+  if (!minute) throw knowledgeError('Esa reunión ya no está.', 404, 'BRIA_ACTION_MINUTE');
+  const stored = Array.isArray(minute.actionItems) ? minute.actionItems.map((row) => ({ ...row })) : [];
+  const done = [], failed = [];
+  for (const item of items) {
+    const slot = stored[item.n - 1];
+    // Se vuelve a mirar cada compromiso justo antes: lo ya creado no se repite.
+    if (slot?.taskId) { done.push({ ...item, taskId: slot.taskId, already: true }); continue; }
+    try {
+      const task = await createTask({ title: item.title, clientId: clientId || null, assigneeId: item.assigneeId || null, creatorId: user.userId || user.id, dueDate: item.dueDate || null, status: 'PENDIENTE', priority: item.priority, isPriority: item.priority !== 'NORMAL', comments: '', initial_comments: [{ content: minuteTaskContext(minute, item) }] });
+      if (slot) { slot.taskId = task.id; await db.meetingMinute.update({ where: { id: minute.id }, data: { actionItems: stored } }); }
+      done.push({ ...item, taskId: task.id });
+      if (notify && item.assigneeUserId && item.assigneeUserId !== (user.userId || user.id)) {
+        try { await notify({ userId: item.assigneeUserId, type: 'TASK_ASSIGNED', relatedId: task.id, message: `Se te asignó un pendiente: ${item.title}` }); }
+        catch (failure) { console.error('[BriaActions] No se pudo avisar al responsable:', failure?.response?.data || failure?.message || failure); }
+      }
+    } catch (failure) {
+      console.error('[BriaActions] No se pudo crear un pendiente de la reunión:', failure?.response?.data || failure?.message || failure);
+      failed.push({ ...item, reason: failure?.message || 'No se pudo crear.' });
+    }
+  }
+  const created = done.filter((row) => !row.already), already = done.filter((row) => row.already);
+  const line = (row) => `- [${row.title}](/gestion?taskId=${encodeURIComponent(row.taskId)})${row.assigneeName ? ` · ${row.assigneeName}` : ''}${row.dueDate ? ` · ${dayLabel(row.dueDate.slice(0, 10))}` : ''}`;
+  const parts = [];
+  if (created.length) parts.push(`Creé ${created.length === 1 ? 'un pendiente' : `${created.length} pendientes`} de la reunión «${minute.title}»:\n${created.map(line).join('\n')}`);
+  if (already.length) parts.push(`${already.length === 1 ? 'Uno ya estaba creado' : `${already.length} ya estaban creados`}:\n${already.map(line).join('\n')}`);
+  if (failed.length) parts.push(`**No se crearon**\n${failed.map((row) => `- ${row.title}: ${row.reason}`).join('\n')}`);
+  return { text: parts.join('\n\n') || 'No se creó ningún pendiente.', sources: done.map((row) => ({ kind: 'tarea', id: row.taskId, label: row.title, url: `/gestion?taskId=${row.taskId}` })) };
+};
+
 /* ---------------------------------------------------------------- Servicio */
 
 const TYPES = {
+  MINUTE_TASKS: { prepare: prepareMinuteTasks, execute: executeMinuteTasks },
   TASK_UPDATE: { prepare: prepareTaskUpdate, execute: executeTaskUpdate },
   TASKS_STATUS: { prepare: prepareTasksStatus, execute: executeTasksStatus },
   CREATE_PLAN: { prepare: preparePlan, execute: executePlan },
@@ -669,7 +825,7 @@ const executePlatform = async ({ user, action, platform, session, routePermissio
 };
 
 // `gate` es la puerta de actualizar una tarea (`checkTaskUpdate`); se inyecta solo para probar sus negativas.
-export const createBriaActionService = ({ db, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, gate = checkTaskUpdate, now = () => new Date(), readOnly = false } = {}) => ({
+export const createBriaActionService = ({ db, updateTask, createTask = null, notify = null, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, gate = checkTaskUpdate, now = () => new Date(), readOnly = false } = {}) => ({
   async prepare({ user, type, args = {}, previous }) {
     if (type === 'PLATFORM') {
       if (!canUseBria(user)) throw knowledgeError('Bria no está activada para tu cuenta.', 403, 'BRIA_ACTION_FORBIDDEN');
@@ -696,6 +852,6 @@ export const createBriaActionService = ({ db, updateTask, createContentPlan, upd
       return executePlatform({ user, action, platform, session, routePermissions });
     }
     authorize(user, action.type);
-    return TYPES[action.type].execute({ db, user, action, updateTask, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts, dispatchDrafts, deleteDrafts, loadAttachment, revalidate, gate });
+    return TYPES[action.type].execute({ db, user, action, updateTask, createTask, notify, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts, dispatchDrafts, deleteDrafts, loadAttachment, revalidate, gate });
   }
 });
