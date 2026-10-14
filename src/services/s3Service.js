@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, PutBucketCorsCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, PutBucketCorsCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { validateUploadFile } from '../config/security.js';
 import { randomUUID } from 'node:crypto';
@@ -175,6 +175,30 @@ export const getFromS3Stream = async (key) => {
 
     const response = await s3Client.send(command);
     return response;
+};
+
+/**
+ * Lista los objetos bajo un prefijo, paginando hasta el final. Solo lee: la usa el
+ * barrido de `temp/`, que decide con la base de datos en la mano, nunca por el listado.
+ */
+export const listS3Objects = async (prefix, { maxPages = 100 } = {}) => {
+    const s3Client = getS3Client();
+    if (!s3Client) throw new Error("S3 client not initialized");
+    const bucketName = process.env.AWS_S3_BUCKET_NAME || "chat-evidence";
+
+    const objects = [];
+    let token;
+    let pages = 0;
+    do {
+        const page = await s3Client.send(new ListObjectsV2Command({
+            Bucket: bucketName, Prefix: prefix, ContinuationToken: token, MaxKeys: 1000
+        }));
+        objects.push(...(page.Contents || []));
+        token = page.IsTruncated ? page.NextContinuationToken : undefined;
+        pages += 1;
+    } while (token && pages < maxPages);
+
+    return objects;
 };
 
 export const deleteFromS3 = async (key) => {
