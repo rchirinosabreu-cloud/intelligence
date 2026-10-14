@@ -122,6 +122,10 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
     const found = ANSWERS.find((entry) => entry.match.test(question)) || DEFAULT_ANSWER;
     return res.json({ answer: found.answer, sources: found.sources || [], toolsUsed: [], failures: found.failures || [], rounds: 1 });
   });
+  // El archivo de minutas (14 de octubre de 2026): una reunión cuyos compromisos ya son pendientes en parte.
+  const minutes = [{ id: 'f1f1f1f1-0000-4000-8000-000000000003', source: 'FIREFLIES', externalId: 'ff-1', title: 'Reunión Endova octubre', meetingAt: new Date('2026-10-13T14:00:00Z').toISOString(), durationSeconds: 2700, status: 'READY', executiveSummary: 'Se revisó el lanzamiento de la nueva línea y quedaron tres compromisos para esta semana.', actionItems: [{ task: 'Enviar el guion del reel de lanzamiento', owner: 'Kamila', dueDate: '2026-10-17', priority: 'alta', taskId: 't1' }, { task: 'Revisar el logo nuevo con el cliente', owner: 'Jarlan', dueDate: null, priority: 'media' }, { task: 'Cotizar la impresión del catálogo', owner: 'Carlos (cliente)', dueDate: null, priority: null }], observerSignals: [], errorMessage: null, retryCount: 0, processedAt: new Date().toISOString(), deletedAt: null }];
+  api.get('/api/minutes', (_req, res) => res.json({ minutes }));
+  api.get('/api/minutes/trash', (_req, res) => res.json({ minutes: [] }));
   api.all('/api/*', (req, res) => res.status(404).json({ error: `Consulta no disponible en esta muestra local: ${req.path}` }));
 
   const server = await createServer({
@@ -142,6 +146,7 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
         const pathname = new URL(req.url, 'http://localhost').pathname;
         if (pathname.startsWith('/api/')) return api(req, res, next);
         if (req.headers.accept?.includes('text/html') && pathname.startsWith('/buzones')) req.url = '/tests/fixtures/mailbox-connections-preview.html';
+        else if (req.headers.accept?.includes('text/html') && pathname.startsWith('/minutas')) req.url = '/tests/fixtures/minutes-panel-preview.html';
         else if (req.headers.accept?.includes('text/html') && !pathname.includes('.')) req.url = '/tests/fixtures/bria-assistant-preview.html';
         return next();
       });

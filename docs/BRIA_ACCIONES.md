@@ -49,6 +49,19 @@ Rodny, 11 de octubre de 2026: «Todos los pendientes de Jarlan, pónselos a Kami
 
 Contrato: `tests/briaBulkTasks.test.js`.
 
+### `pendientes_de_reunion` (Gestión y Minutas)
+
+Rodny, 14 de octubre de 2026 (segundo punto del plan «llevar a Bria a más niveles»): «cuando analiza una reunión, que prepare los pendientes que salieron de ahí, con responsable y fecha propuestos, y tú confirmas». La minuta ya trae los compromisos (`MeetingMinute.actionItems`: tarea, responsable, fecha y prioridad que anotó el análisis); la acción `MINUTE_TASKS` los vuelve pendientes numerados (`src/lib/minuteTasks.js` + `prepareMinuteTasks`/`executeMinuteTasks`):
+
+- **La reunión** se encuentra por id (de `memoria_de_reuniones`), por título o por parecido; con varias, se pregunta cuál. Desde Minutas, «Preparar pendientes con Bria» deja la petición escrita en el chat con el id.
+- **El cliente** es el que dijo la persona, el que nombra el título de la reunión (si nombra exactamente uno) o se pregunta; «sin cliente» vale.
+- **El responsable** se busca en el equipo por el nombre que anotó la reunión: nombre completo, nombre de pila único o parecido claro («Jarlan Peres» → Jarlan Pérez, y se dice); dos Melissas o alguien que no está en el equipo (el contacto del cliente) es una pregunta, nunca un invento. **Un pendiente necesita responsable**: la opción es otra persona u omitirlo.
+- **La fecha** es la de la reunión; a los que no traen se les pregunta una sola vez («¿Qué fecha les pongo?» · Mañana, Viernes, Sin fecha).
+- **Ajustes por número** (`ajustes: [{ n, responsable, fecha, omitir }]`): la persona corrige un compromiso concreto sin repetir los demás.
+- **Confirmar** crea tarea por tarea con el `createTask` de Gestión (cliente, responsable, fecha al mediodía UTC, prioridad y el contexto «De la reunión … Compromiso: …» como primer comentario), avisa al responsable (`TASK_ASSIGNED`) si no es quien confirma, y **escribe el `taskId` en el compromiso de la minuta** después de cada creación: confirmar dos veces no crea dos veces, y Minutas enlaza «ya es pendiente». Lo que ya es pendiente no se vuelve a ofrecer.
+
+Contrato: `tests/briaMinuteTasks.test.js`.
+
 ### `crear_pieza` (permiso de Parrillas)
 Una pieza nueva en una parrilla (por su id o por cliente y mes). **Nace con un objetivo que diga algo** («Nuevo Objetivo» no vale), un formato (Reel, Carrusel, Post, Video, Historia) y un día; la hora es opcional. Avisa si ese día ya hay otra pieza (dos el mismo día es señal amarilla en la operación) y si la fecha cae fuera del mes. Se crea en borrador, sin guion ni texto, con la fecha al mediodía UTC como hace la pantalla, por `createContentItem`.
 

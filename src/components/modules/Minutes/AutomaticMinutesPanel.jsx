@@ -3,7 +3,9 @@ import {
   AlertCircle, CheckCircle, ChevronDown, Clock, FileText, Loader2,
   RefreshCcw, RotateCcw, Trash2
 } from '@/components/ui/icons';
+import { Link } from 'react-router-dom';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { askBria } from '@/lib/briaAsk';
 import frontendApiService from '../../../services/frontendApiService';
 import { Button } from './ui/button';
 import { toast } from 'react-hot-toast';
@@ -216,11 +218,20 @@ const AutomaticMinutesPanel = () => {
                       {minute.executiveSummary && <p>{minute.executiveSummary}</p>}
                       {minute.actionItems?.length > 0 && (
                         <div className="mt-4">
-                          <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Acciones propuestas</p>
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">Acciones propuestas</p>
+                            {/* Los compromisos a pendientes (14 de octubre de 2026): deja la petición escrita en el chat de Bria; la persona la envía y confirma. */}
+                            {minute.actionItems.some((item) => !item.taskId) && (
+                              <button type="button" onClick={() => askBria(`Prepara los pendientes de la reunión «${minute.title}» (id ${minute.id})`)} className="inline-flex h-9 items-center rounded-lg px-3 text-xs font-semibold text-brand-cyan-deep hover:bg-brand-cyan/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:text-brand-cyan">
+                                Preparar pendientes con Bria
+                              </button>
+                            )}
+                          </div>
                           <ul className="mt-2 space-y-2">
                             {minute.actionItems.map((item, index) => (
                               <li key={`${minute.id}-action-${index}`} className="rounded-lg bg-zinc-50 px-3 py-2 dark:bg-zinc-800/70">
                                 {item.task}{item.owner ? ` · ${item.owner}` : ''}
+                                {item.taskId && <> · <Link to={`/gestion?taskId=${encodeURIComponent(item.taskId)}`} className="font-semibold text-brand-cyan-deep hover:underline dark:text-brand-cyan">ya es pendiente</Link></>}
                               </li>
                             ))}
                           </ul>

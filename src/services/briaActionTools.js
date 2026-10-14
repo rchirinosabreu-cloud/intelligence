@@ -1,4 +1,4 @@
-import { ACTION_PERMISSION, ITEM_FORMATS } from './briaActionService.js';
+import { ACTION_PERMISSION, ITEM_FORMATS, actionModules } from './briaActionService.js';
 import { actionReply, actionStage } from '../lib/briaActions.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { hasModulePermission } from '../config/security.js';
@@ -96,4 +96,22 @@ export const createBriaActionTools = (service) => service ? [{
     nuevo: { type: 'boolean' }
   }, required: ['clientId', 'texto'], additionalProperties: false },
   run: run(service, 'CLIENT_NOTE')
+}, {
+  // Los compromisos de una reunión, a pendientes (Rodny, 14 de octubre de 2026).
+  name: 'pendientes_de_reunion',
+  description: 'Prepara los pendientes que salieron de una reunión: lee los compromisos de su minuta (tarea, responsable y fecha que anotó el análisis) y arma un pendiente por cada uno, con el responsable del equipo que corresponde y la fecha. NO crea nada: muestra el resumen numerado y la persona confirma. Pasa la reunión por su título (o su id, si lo tienes de memoria_de_reuniones); si la persona dijo el cliente o una fecha para los que no la tienen, pásalos; lo demás lo pregunta la herramienta de a una cosa. Para corregir un compromiso concreto usa ajustes con su número: otro responsable, otra fecha u omitirlo. Lo que ya es pendiente no se repite.',
+  allowed: (user) => canUseBria(user) && actionModules('MINUTE_TASKS').every((module) => hasModulePermission(user, module)),
+  parameters: { type: 'object', properties: {
+    reunion: { type: ['string', 'null'], description: 'Título (o id) de la reunión. Null para seguir con la misma reunión que se estaba preparando.' },
+    cliente: { type: ['string', 'null'], description: 'Cliente de los pendientes, si la persona lo dijo; «sin cliente» si dijo que no tienen.' },
+    fecha: { type: ['string', 'null'], description: 'Fecha para los compromisos que no traen una: mañana, viernes, 17 de octubre, YYYY-MM-DD o «sin fecha».' },
+    ajustes: { type: ['array', 'null'], description: 'Correcciones por número de compromiso.', items: { type: 'object', properties: {
+      n: { type: 'integer', description: 'Número del compromiso en el resumen.' },
+      responsable: { type: ['string', 'null'], description: 'Otro responsable, con el nombre que dio la persona.' },
+      fecha: { type: ['string', 'null'], description: 'Otra fecha para ese compromiso.' },
+      omitir: { type: 'boolean', description: 'true para no crear ese compromiso.' }
+    }, required: ['n', 'responsable', 'fecha', 'omitir'], additionalProperties: false } },
+    nuevo: { type: 'boolean' }
+  }, required: ['reunion', 'cliente', 'fecha', 'ajustes'], additionalProperties: false },
+  run: run(service, 'MINUTE_TASKS')
 }] : [];
