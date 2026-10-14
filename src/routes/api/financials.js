@@ -53,6 +53,7 @@ import {
     voidFinancialRecordHandler
 } from '../../controllers/financialRecordController.js';
 import { FINANCIAL_DOCUMENT_MAX_BYTES } from '../../services/financialRecordDocumentService.js';
+import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
 import {
     approveBankReconciliationMatch,
     getBankReconciliation,
@@ -69,14 +70,14 @@ import {
 
 const router = express.Router();
 const upload = multer({
-    storage: multer.memoryStorage(),
+    storage: uploadMemoryStorage(),
     limits: {
         fileSize: 10 * 1024 * 1024
     }
 });
 
 // Supporting documents: one PDF/JPG/PNG per request, kept in memory only until it reaches the evidence bucket.
-const documentUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: FINANCIAL_DOCUMENT_MAX_BYTES, files: 1 } });
+const documentUpload = multer({ storage: uploadMemoryStorage(), limits: { fileSize: FINANCIAL_DOCUMENT_MAX_BYTES, files: 1 } });
 const receiveFinancialDocument = (req, res, next) => documentUpload.single('file')(req, res, (error) => {
     if (!error) return next();
     if (error.code === 'LIMIT_FILE_SIZE') {

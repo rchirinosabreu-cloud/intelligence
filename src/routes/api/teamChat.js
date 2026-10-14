@@ -12,10 +12,13 @@ import {
 } from "../../services/teamChatMedia.js";
 import { CHAT_FILE_BYTES } from "../../lib/teamChatState.js";
 import { getJwtSecret, createRateLimiter } from "../../config/security.js";
+import { acceptUpload } from "../../lib/uploadStorage.js";
 
 const upload = multer({
   dest: tmpdir(),
   limits: { fileSize: CHAT_FILE_BYTES, files: 1, fields: 2 },
+  // Guarda en disco, no en memoria, así que el nombre se corrige aquí (ver uploadStorage).
+  fileFilter: acceptUpload,
 }).single("file");
 // A URL ticket can only open one attachment; it must not be accepted as a login token.
 const mediaSecret = () =>

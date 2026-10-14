@@ -7,12 +7,13 @@ import { requireManagerRole } from '../../middlewares/authMiddleware.js';
 import { isSafeStoragePath } from '../../config/security.js';
 import { getAIInstance } from '../../services/aiService.js';
 import { AI_MODELS } from '../../config/aiConfig.js';
+import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
 
 dotenv.config();
 
 const router = express.Router();
 const upload = multer({
-    storage: multer.memoryStorage(),
+    storage: uploadMemoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024, files: 1 }
 });
 
