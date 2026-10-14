@@ -10,6 +10,7 @@ import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { needsClientReview } from '../lib/contentApproval.js';
 import { buildNudges, bogotaDayEnd } from '../lib/briaNudges.js';
 import { collectFacts, pulseBudget, mutedKinds, eligibleFacts, buildPulseDigest, buildPulseRequest, parsePulse, validatePulse, fallbackPulse, workdayBounds, slotKeyOf, isWorkingTime, PULSE_LIMITS } from '../lib/briaPulse.js';
+import { evaluateFollowUp, followUpTargets, isFollowable, FOLLOW_UP_AFTER_MS } from '../lib/briaFollowUp.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { createBriaProactiveRepository } from './briaProactiveRepository.js';
 import { getBriaNudgeService } from './briaNudgeService.js';
@@ -86,13 +87,40 @@ export const createBriaPulseService = ({
       return { saved };
     },
 
+    /**
+     * El seguimiento (14 de octubre de 2026): cada tramo vuelve a mirar los avisos vivos que la plataforma puede comprobar.
+     * Resuelto, se escribe el desenlace con su hora; si a la hora sigue igual, se dice una sola vez. Nunca es un aviso nuevo.
+     */
+    async followUp({ people = [] } = {}, at = now()) {
+      const none = { resolved: 0, followedUp: 0 };
+      if (typeof repo.pendingFollowUps !== 'function') return none;
+      const pending = (await repo.pendingFollowUps(at)).filter(isFollowable);
+      if (!pending.length) return none;
+      const { taskIds, itemIds } = followUpTargets(pending);
+      const [tasks, items] = await Promise.all([
+        taskIds.length ? db.task.findMany({ where: { id: { in: taskIds } }, select: { id: true, title: true, status: true, updatedAt: true } }) : [],
+        itemIds.length ? db.contentItem.findMany({ where: { id: { in: itemIds } }, select: { id: true, objective: true, status: true, revisionRequestedAt: true } }) : []
+      ]);
+      const context = { people, tasksById: new Map(tasks.map((row) => [row.id, row])), itemsById: new Map(items.map((row) => [row.id, row])), now: at };
+      let resolved = 0, followedUp = 0;
+      for (const message of pending) {
+        const verdict = evaluateFollowUp(message, context);
+        if (verdict.status === 'RESOLVED') { if (await repo.resolveMessage(message.id, verdict.text, at)) resolved += 1; }
+        else if (verdict.status === 'PENDING' && !message.followedUpAt && at.getTime() - new Date(message.createdAt).getTime() >= FOLLOW_UP_AFTER_MS) { if (await repo.markFollowedUp(message.id, verdict.text, at)) followedUp += 1; }
+      }
+      return { resolved, followedUp };
+    },
+
     /** Cada tramo de 15 minutos en horario hábil, para todas las personas con Bria; a cada una le habla como máximo una vez por hora. */
     async run() {
       const at = now();
       if (!isWorkingTime(at)) return { skipped: 'fuera de horario' };
       const slotKey = slotKeyOf(at);
       if (!await repo.claimRun(slotKey)) return { skipped: 'este tramo ya corrió', slotKey };
-      const { facts } = await this.collect(at);
+      const { facts, people: team } = await this.collect(at);
+      let followed = { resolved: 0, followedUp: 0 };
+      try { followed = await this.followUp({ people: team }, at); }
+      catch (error) { logger.error('[BriaPulse] El seguimiento de los avisos falló esta vez:', error?.message || error); }
       let spoke = 0, quiet = 0, failed = 0;
       if (facts.length) {
         for (const user of await listPeople(db)) {
@@ -100,7 +128,7 @@ export const createBriaPulseService = ({
           catch (error) { failed += 1; logger.error('[BriaPulse] No se pudo decidir para una persona:', error?.message || error); }
         }
       }
-      return { slotKey, facts: facts.length, spoke, quiet, failed };
+      return { slotKey, facts: facts.length, spoke, quiet, failed, resolved: followed.resolved, followedUp: followed.followedUp };
     }
   };
 };

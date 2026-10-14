@@ -18,6 +18,7 @@ import { initServiceHealthScheduler } from './src/services/serviceHealthSchedule
 import { initWeeklyReadingScheduler } from './src/services/weeklyReadingService.js';
 import { initWeeklyFocusScheduler } from './src/services/weeklyFocusService.js';
 import { initBriaPulseScheduler } from './src/services/briaPulseService.js';
+import { initDailyCloseScheduler } from './src/services/dailyCloseService.js';
 import { getAIHealth } from './src/services/aiService.js';
 import { configureS3Cors } from './src/services/s3Service.js';
 import { loggerMiddleware } from './src/middlewares/logger.js';
@@ -216,6 +217,7 @@ async function bootstrap() {
         initWeeklyReadingScheduler();
         initWeeklyFocusScheduler();
         initBriaPulseScheduler();
+        initDailyCloseScheduler();
         startTaskAttachmentRetention();
         console.log("[Service: Cron] Tareas en segundo plano inicializadas.");
     } catch (cronError) {

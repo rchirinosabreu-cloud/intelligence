@@ -15,6 +15,28 @@ Lo dicho queda en `bria_memory.pulse_messages` (hechos, texto, acciones, origen,
 
 **Las acciones las pone la plataforma según el hecho** (`nudgeActions` en `src/lib/briaNudges.js`; Rodny: «¿cuál sería la lógica de ir al kanban en un anuncio así? ¿a ver qué?»): nunca un «Ver en Gestión» genérico. Persona sin nada en proceso → «Ver sus pendientes» (Gestión filtrada por ella, `/gestion?responsable=Nombre`) y «Que Bria me resuma lo que tiene»; vence hoy → «Abrir la tarea» (o sus pendientes) y el resumen; carga excedida mañana → «Abrir el mapa de carga» y «Pedirle a Bria qué se mueve»; cliente en rojo → «Abrir operación» y «Pedirle a Bria qué falta»; pieza sin aprobar → «Abrir la pieza» y «Redactar recordatorio al cliente»; devuelta sin tocar → «Abrir la tarea» y «Ver qué pidió el cliente»; foco de la semana → «Leer en Bria». Lo que se le pide a Bria queda escrito en el chat; la persona lo envía.
 
+## El seguimiento de los avisos
+
+Rodny, 14 de octubre de 2026 (primer punto del plan «llevar a Bria a más niveles»): «hoy Bria dice “Melissa no tiene nada en proceso” y se olvida; que a la hora mire si cambió algo y lo diga». Un aviso no termina al decirse. Cada tramo del pulso vuelve a mirar los avisos vivos que la plataforma puede comprobar sola (`src/lib/briaFollowUp.js`, `FOLLOWABLE_KINDS`: sin tarea en proceso, vence hoy, devuelta sin tocar, pieza sin aprobar):
+
+- **Si el hecho se resolvió**, se escribe el desenlace con la hora en la misma fila (`resolution`, `resolved_at`): «Melissa arrancó “Reel de lanzamiento” a las 10:40», «Melissa puso su reloj en marcha», «“Carrusel de Endova” ya salió de devuelta: está en proceso», «“Promo del mes” ya no está pendiente del cliente». La tarjeta lo muestra en verde debajo del aviso.
+- **Si a la hora sigue igual**, se dice una sola vez (`follow_up`, `followed_up_at`): «Melissa sigue sin una tarea en proceso a las 11:31». Después solo se espera el desenlace.
+- **Nada de esto es un aviso nuevo:** no gasta los topes, no abre otra tarjeta, no repite el hecho. Un aviso oculto con la X no se sigue. Sin datos para comprobar (la persona ya no está en la lectura), no se afirma nada.
+- Para seguir a una persona sin nada en proceso hace falta saber **cuándo arrancó** lo que ahora tiene en proceso: `readPeople` entrega `since` (el `startedAt` de la tarea).
+
+Operación en rojo, carga de mañana y correos no tienen seguimiento: la plataforma no puede decir sola cuándo quedaron atendidos.
+
+## El cierre del día
+
+Rodny, el mismo día: «un solo mensaje por persona: qué cerró, qué quedó en proceso, qué vence mañana. Y para ti, el resumen del equipo». A las **5 de la tarde de cada día hábil** (Bogotá), para cada persona con Bria, un chat nuevo titulado «Cierre del día · martes 13 de octubre» con un solo mensaje escrito por la plataforma (`src/lib/dailyClose.js`, sin modelo, como el foco):
+
+- **Tu día:** lo que cerraste (también donde colaboraste), lo que queda en proceso y lo vencido sin cerrar.
+- **Mañana** (o el lunes, o el día después del festivo: `nextWorkday`): lo que te vence.
+- **El equipo** (administradores y project managers, que son quienes tienen Bria): cuántas tareas se cerraron hoy y quién, cuántas quedan en proceso, qué vence mañana sin empezar y por persona, cuántas vencidas abiertas. Se cuenta a todo el equipo menos a los administradores.
+- **Lo que te avisé hoy:** cada aviso del pulso con su desenlace («→ Melissa arrancó … a las 10:40»), «→ Al cierre seguía igual» o «→ Lo ocultaste».
+
+Una sola vez por día y persona (`bria_memory.daily_close_deliveries`), aviso en la campana (`BRIA_CIERRE_DEL_DIA`, que abre el chat) y «Bria dejó tu cierre del día» como primer aviso encima de la mascota (`CIERRE_DIA`, se oculta por hoy). Servicio: `src/services/dailyCloseService.js` (`runAutomatic`, `initDailyCloseScheduler` en `server.js`, cada 10 minutos).
+
 ## La consulta rápida, detrás de la mascota
 
 Rodny, 10 de octubre: «hacerle una pregunta rápida a Bria, no necesariamente abriendo un chat nuevo … “Haz tu consulta” y el icono de pulso … que ella misma diga “recuerda que puedes consultarme algo”». La primera versión era una caja permanente dentro de la tarjeta, y al día siguiente Rodny la devolvió: «cuando entro en la plataforma siempre aparece el cuadro de la consulta, no me gusta así, estorba … cuando poso el cursor sobre ella, aparecen dos iconos … la barra de consulta escribiendo o enviando un audio, ninguno es un chat nuevo».
@@ -64,4 +86,4 @@ Administradores y project managers con Bria (`canSeeNudges`). Los avisos nunca h
 
 ## Pruebas
 
-`tests/briaNudges.test.js` (regla), `tests/briaNudgeService.test.js` (servicio y ruta), `tests/briaNudgeUi.test.js` (pantalla, eventos y arranque), `tests/briaMascotGesture.test.js` (gestos, lápiz y micrófono, dictado compartido, tarjeta solo con aviso), `tests/weeklyFocus.test.js` (texto, servicio, programador y la nota en el repositorio). Recorrido real con capturas: `node tests/browser/briaNudge.mjs` (muestra `scripts/preview-bria.js`, con avisos simulados; `?sinavisos` deja a Bria sola).
+`tests/briaNudges.test.js` (regla), `tests/briaNudgeService.test.js` (servicio y ruta), `tests/briaNudgeUi.test.js` (pantalla, eventos y arranque), `tests/briaMascotGesture.test.js` (gestos, lápiz y micrófono, dictado compartido, tarjeta solo con aviso), `tests/weeklyFocus.test.js` (texto, servicio, programador y la nota en el repositorio), `tests/briaFollowUp.test.js` (el seguimiento: regla, pulso, tarjeta y columnas), `tests/dailyClose.test.js` (el cierre del día: texto, servicio, programador, tarjeta, campana y tabla lateral). Recorrido real con capturas: `node tests/browser/briaNudge.mjs` (muestra `scripts/preview-bria.js`, con avisos simulados; `?sinavisos` deja a Bria sola).

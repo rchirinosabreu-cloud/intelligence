@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { X, ArrowUpRight } from '@/components/ui/icons';
+import { X, ArrowUpRight, CheckCircle } from '@/components/ui/icons';
 import BriaPortrait from './BriaPortrait';
 import { askBria, openBriaConversation } from '@/lib/briaAsk';
 import { requestBriaNudges } from '@/lib/briaNudgeRequest';
@@ -47,6 +47,9 @@ export default function BriaNudge({ userId, hidden = false, request = requestBri
           </p>
           <h3 className="mt-1 text-sm font-semibold leading-5 text-zinc-950 dark:text-white">{nudge.title}</h3>
           {nudge.body && <p className="mt-1 text-sm leading-5 text-zinc-600 dark:text-zinc-300">{nudge.body}</p>}
+          {/* El seguimiento (14 de octubre de 2026): el desenlace del aviso en verde, o «sigue igual» en gris, escritos por el pulso. */}
+          {nudge.resolution && <p data-bria-nudge-resolution className="mt-1.5 flex items-start gap-1.5 text-sm leading-5 text-status-positive-fg"><CheckCircle className="mt-0.5 h-4 w-4 shrink-0" />{nudge.resolution}</p>}
+          {!nudge.resolution && nudge.followUp && <p data-bria-nudge-follow-up className="mt-1.5 text-sm leading-5 text-zinc-500 dark:text-zinc-400">{nudge.followUp}</p>}
           {/* Los botones los decide la plataforma según el hecho: a dónde ir y qué pedirle a Bria (queda escrito, la persona lo envía). */}
           <div className="mt-2 -ml-2 flex flex-wrap items-center gap-x-1" data-bria-nudge-actions>
             {(nudge.actions || []).map((item) => item.conversationId
