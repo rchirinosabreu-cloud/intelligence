@@ -27,6 +27,10 @@ import { searchTasks, findClientByTerm, TASK_SEARCH_MAX } from './taskSearch.js'
 import { rankByName } from '../lib/fuzzyMatch.js';
 import { dayLabel } from '../lib/teamLoad.js';
 import { minuteItems, guessClient, matchOwner, minuteLabel, minuteTaskContext } from '../lib/minuteTasks.js';
+import { buildPlanDraftDigest, buildPlanDraftRequest, parsePlanDraft, validatePlanDraft, pieceLine, monthLabel as planMonthLabel, PLAN_DRAFT_DEFAULT_PIECES, PLAN_DRAFT_MAX_PIECES } from '../lib/planDraft.js';
+import { AI_MODELS } from '../config/aiConfig.js';
+import { createOpenAIClient } from './openAIClient.js';
+import { clientOperationsService } from './clientOperationsService.js';
 
 const tidy = (value) => String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
 const fold = (value) => tidy(value).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -39,7 +43,7 @@ const PRIORITY_LABEL = { NORMAL: 'normal', ALTA: 'alta', URGENTE: 'urgente' };
 
 // Módulos que exige cada acción. Las tres que nacieron con flujo propio (crear pendiente, despachar a producción,
 // eliminar pendientes) viajan por esta misma base desde el 10 de octubre de 2026; el despacho exige dos módulos.
-export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion', MINUTE_TASKS: ['gestion', 'minutas'] };
+export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion', MINUTE_TASKS: ['gestion', 'minutas'], PLAN_DRAFT: 'parrillas' };
 export const actionModules = (type) => [].concat(ACTION_PERMISSION[type] || []);
 const MODULE_LABEL = { gestion: 'Gestión', parrillas: 'Parrillas', clientes: 'Clientes' };
 export const ITEM_FORMATS = ['Reel', 'Carrusel', 'Post', 'Video', 'Historia'];
@@ -754,10 +758,139 @@ const executeMinuteTasks = async ({ db, user, action, createTask, notify }) => {
   return { text: parts.join('\n\n') || 'No se creó ningún pendiente.', sources: done.map((row) => ({ kind: 'tarea', id: row.taskId, label: row.title, url: `/gestion?taskId=${row.taskId}` })) };
 };
 
+/* ---------------------------------------------------------------- La parrilla del mes en borrador */
+
+// Rodny, 14 de octubre de 2026 (tercer punto del plan; opción 2): «yo podría pedirle que necesito la parrilla de tal y
+// que el cliente me comunicó que le gustaría tales énfasis … y basado en ello montarme las piezas y desde el chat
+// enviarlas a parrilla como borrador, las que yo quiera». El modelo propone (contrato, objetivo, criterios aprobados,
+// mes anterior, énfasis); el código manda (`validatePlanDraft`); la propuesta se guarda en la acción para que omitir o
+// elegir no vuelva a preguntarle al modelo; «Confirmar» envía solo las piezas elegidas, en borrador, por
+// `createContentItem`, y crea antes la parrilla si no existe (con responsable y objetivo, como `crear_parrilla`).
+const DRAFT_PLAN_SELECT = { id: true, status: true, strategicObjectives: true, ownerId: true, contentItems: { where: { deletedAt: null }, select: { id: true, objective: true, format: true, publishDate: true, status: true } } };
+const draftPiecesOf = (plan) => (plan?.contentItems || []).map((item) => ({ objective: item.objective, format: item.format, day: planDayOf(item.publishDate), status: item.status || null }));
+const numbersOf = (value) => (Array.isArray(value) ? value.map(Number).filter((n) => Number.isInteger(n) && n > 0) : []);
+
+const preparePlanDraft = async ({ db, user, args, previous, today, generate, operations }) => {
+  const owner = user.userId || user.id;
+  const clientId = tidy(args.clientId) || previous?.target?.clientId;
+  if (!clientId) throw knowledgeError('Falta el cliente: búscalo primero con buscar_cliente y pásame su id.', 400, 'BRIA_ACTION_TARGET');
+  const client = await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true, slug: true, isArchived: true, responsible: { select: { id: true, name: true } }, projectManager: { select: { id: true, name: true } } } });
+  if (!client) throw knowledgeError('Ese cliente no existe.', 404, 'BRIA_ACTION_TARGET');
+  if (client.isArchived) throw knowledgeError(`${client.name} está archivado: no se le proponen parrillas.`, 400, 'BRIA_ACTION_ARCHIVED');
+
+  const wanted = { ...(previous?.wanted || {}) };
+  for (const key of ['mes', 'anio', 'responsable', 'objetivo']) if (args[key] != null && tidy(args[key])) wanted[key] = tidy(args[key]);
+  let regenerate = args.rehacer === true || !wanted.propuesta;
+  if (args.enfasis != null && tidy(args.enfasis) && !String(wanted.enfasis || '').includes(tidy(args.enfasis))) { wanted.enfasis = [wanted.enfasis, tidy(args.enfasis)].filter(Boolean).join('\n'); regenerate = true; }
+  if (Number.isInteger(Number(args.piezas)) && Number(args.piezas) > 0 && Number(args.piezas) !== wanted.piezas) { wanted.piezas = Math.min(Number(args.piezas), PLAN_DRAFT_MAX_PIECES); regenerate = true; }
+  const month = parseMonth(wanted.mes, today) || (previous?.target?.month ?? null);
+  if (!month) throw knowledgeError('¿De qué mes es la parrilla? Dime el mes, por ejemplo «noviembre».', 400, 'BRIA_ACTION_MONTH');
+  const year = Number(wanted.anio) > 2000 ? Number(wanted.anio) : (previous?.target?.year || (month < Number(today.slice(5, 7)) ? Number(today.slice(0, 4)) + 1 : Number(today.slice(0, 4))));
+  const label = planMonthLabel(month, year);
+  const plan = await db.contentPlan.findFirst({ where: { clientId, month, year, deletedAt: null }, select: DRAFT_PLAN_SELECT });
+  if (plan?.status === 'FINALIZADO') throw knowledgeError(`La parrilla de ${client.name} de ${label} ya está finalizada: no recibe piezas nuevas.`, 400, 'BRIA_ACTION_CLOSED');
+  const missing = [], warnings = [];
+
+  // Sin parrilla, se crea al confirmar, con las mismas buenas prácticas de crear_parrilla: responsable y objetivo.
+  let planOwner = null, objective = plan?.strategicObjectives || null;
+  if (!plan) {
+    const suggested = [client.responsible, client.projectManager].filter(Boolean).filter((row, index, all) => all.findIndex((other) => other.id === row.id) === index);
+    if (wanted.responsable) {
+      const people = await findPeople(db, wanted.responsable.slice(0, 160));
+      planOwner = pickPerson(people, wanted.responsable);
+      if (!planOwner) {
+        if (people.length) missing.push({ field: 'responsable', question: `¿Cuál ${wanted.responsable}?`, options: people.map((row) => row.name) });
+        else throw knowledgeError(`No encontré a nadie activo en el equipo que se llame «${wanted.responsable}».`, 404, 'BRIA_ACTION_PERSON');
+      }
+    } else missing.push({ field: 'responsable', question: `No existe la parrilla de ${label}: la creo al confirmar. ¿Quién será la responsable?`, options: suggested.map((row) => row.name) });
+    if (wanted.objetivo) objective = /^usar el .nfasis como objetivo$/i.test(fold(wanted.objetivo).replace(/\s+/g, ' ')) || same(wanted.objetivo, 'Usar el énfasis como objetivo') ? tidy(wanted.enfasis).split('\n')[0] : wanted.objetivo;
+    else missing.push({ field: 'objetivo', question: '¿Cuál es el objetivo estratégico del mes? Es lo que guía cada pieza y lo que Bria revisa después.', options: wanted.enfasis ? ['Usar el énfasis como objetivo'] : [] });
+  }
+
+  // El contrato y los criterios aprobados: lo que el modelo tiene que respetar.
+  let contract = null, criteria = [];
+  try { contract = (await operations?.getOperation?.(client.slug))?.contract || null; } catch (error) { console.error('[BriaActions] Sin contrato para la propuesta:', error?.message || error); }
+  try { criteria = await db.clientEditorialCriterion.findMany({ where: { clientId, status: 'APPROVED', scope: 'CLIENT' }, select: { category: true, text: true }, orderBy: [{ category: 'asc' }, { updatedAt: 'desc' }], take: 40 }); } catch (error) { console.error('[BriaActions] Sin criterios para la propuesta:', error?.message || error); }
+  const quota = (contract?.deliverables || []).reduce((sum, row) => sum + (Number(row.quantity) || 0), 0);
+  const existing = draftPiecesOf(plan);
+  const count = Math.max(1, Math.min(PLAN_DRAFT_MAX_PIECES, wanted.piezas || (quota ? quota - existing.length : PLAN_DRAFT_DEFAULT_PIECES)));
+  const summary = [`Parrilla: **${client.name}**, ${label}${plan ? ` (ya tiene ${existing.length === 1 ? '1 pieza' : `${existing.length} piezas`})` : ' (nueva)'}`];
+  if (objective) summary.push(`Objetivo: ${objective}`);
+  if (wanted.enfasis) summary.push(`Énfasis: ${tidy(wanted.enfasis).slice(0, 300)}`);
+  const base = (extra) => ({ id: previous?.id || randomUUID(), ownerId: owner, type: 'PLAN_DRAFT', status: 'DRAFT', target: { clientId, clientName: client.name, slug: client.slug, month, year, planId: plan?.id || null }, wanted, ...extra });
+  if (missing.length) return base({ title: `Proponer la parrilla de ${client.name} para ${label}`, payload: { pieces: [] }, summary, warnings, missing });
+
+  // La propuesta: una vez por énfasis; omitir o elegir piezas no vuelve a preguntarle al modelo.
+  if (regenerate) {
+    const previousPlans = await db.contentPlan.findMany({ where: { clientId, deletedAt: null }, orderBy: [{ year: 'desc' }, { month: 'desc' }], take: 3, select: { id: true, month: true, year: true, strategicObjectives: true, contentItems: { where: { deletedAt: null }, select: { objective: true, format: true, publishDate: true, status: true } } } });
+    const last = previousPlans.find((row) => !(row.month === month && row.year === year)) || null;
+    const digest = buildPlanDraftDigest({ client, month, year, objective, contract, criteria, previous: last ? { month: last.month, year: last.year, strategicObjectives: last.strategicObjectives, pieces: draftPiecesOf(last) } : null, existing, emphasis: wanted.enfasis || '', count });
+    let answer;
+    try { answer = await generate(buildPlanDraftRequest({ digest, count })); }
+    catch (error) { console.error('[BriaActions] El modelo no armó la propuesta:', error?.message || error); throw knowledgeError('No pude armar la propuesta ahora: el modelo no respondió. Inténtalo en un momento.', 503, 'BRIA_ACTION_MODEL'); }
+    const { pieces, note, dropped } = validatePlanDraft(parsePlanDraft(answer.text), { month, year, count });
+    if (!pieces.length) throw knowledgeError('El modelo no propuso piezas que sirvan para ese mes. Dime más del énfasis y lo intento de nuevo.', 422, 'BRIA_ACTION_MODEL');
+    wanted.propuesta = { pieces, note, dropped: dropped.length, model: answer.model || null };
+    wanted.omitir = []; wanted.solo = null;
+  }
+  const omitted = new Set([...(wanted.omitir || []), ...numbersOf(args.omitir)]);
+  wanted.omitir = [...omitted];
+  if (numbersOf(args.solo).length) wanted.solo = numbersOf(args.solo);
+  const all = wanted.propuesta.pieces;
+  const selected = all.filter((piece) => !omitted.has(piece.n) && (!wanted.solo || wanted.solo.includes(piece.n)));
+  if (!selected.length) throw knowledgeError('No queda ninguna pieza elegida: quita alguna de las omitidas o pídeme otra propuesta (rehacer).', 400, 'BRIA_ACTION_NOOP');
+  const left = all.filter((piece) => !selected.includes(piece)).map((piece) => piece.n);
+  summary.push(`Propuesta: ${selected.length === 1 ? '1 pieza' : `${selected.length} piezas`} en borrador${left.length ? ` (${left.length === 1 ? '1 omitida' : `${left.length} omitidas`}: ${left.join(', ')})` : ''}`, ...selected.map(pieceLine));
+  if (wanted.propuesta.note) warnings.push(`Nota de Bria para el equipo: ${wanted.propuesta.note}`);
+  if (wanted.propuesta.dropped) warnings.push(`El modelo propuso ${wanted.propuesta.dropped} ${wanted.propuesta.dropped === 1 ? 'pieza que no entró' : 'piezas que no entraron'} (fuera del mes, formato que no existe o repetida).`);
+  warnings.push('Cada pieza lleva su idea para el equipo y el texto de publicación: se revisan en la parrilla antes de mandarlos al cliente.');
+  return base({
+    title: `Enviar ${selected.length === 1 ? 'una pieza' : `${selected.length} piezas`} en borrador a la parrilla de ${client.name} (${label})`,
+    payload: { clientId, month, year, planId: plan?.id || null, newPlan: plan ? null : { ownerId: planOwner?.id || null, ownerName: planOwner?.name || null, strategicObjectives: objective }, emphasis: wanted.enfasis || '', pieces: selected },
+    summary, warnings, missing
+  });
+};
+
+const executePlanDraft = async ({ db, action, createContentPlan, updateContentPlan, createContentItem }) => {
+  const { clientId, month, year, newPlan, emphasis, pieces } = action.payload;
+  const label = planMonthLabel(month, year);
+  let planId = action.payload.planId, createdPlan = false;
+  if (!planId) {
+    const existing = await db.contentPlan.findFirst({ where: { clientId, month, year, deletedAt: null }, select: { id: true } });
+    if (existing) planId = existing.id;
+    else {
+      const plan = await createContentPlan({ clientId, month, year, strategicObjectives: newPlan?.strategicObjectives || null });
+      if (newPlan?.ownerId) await updateContentPlan(plan.id, { ownerId: newPlan.ownerId });
+      planId = plan.id; createdPlan = true;
+    }
+  }
+  const done = [], failed = [];
+  for (const piece of pieces) {
+    try {
+      const item = await createContentItem({ planId, objective: piece.objective, format: piece.format, copyText: piece.idea || '', captionText: piece.caption || '', publishDate: new Date(`${piece.day}T12:00:00.000Z`), status: 'BORRADOR', internalNotes: `Propuesta de Bria para ${label}${emphasis ? ` · Énfasis: ${tidy(emphasis).slice(0, 300)}` : ''}${piece.why ? ` · ${piece.why}` : ''}` });
+      done.push({ ...piece, id: item.id });
+    } catch (failure) {
+      console.error('[BriaActions] No se pudo crear una pieza de la propuesta:', failure?.response?.data || failure?.message || failure);
+      failed.push({ ...piece, reason: failure?.message || 'No se pudo crear.' });
+    }
+  }
+  const line = (piece) => `- ${pieceLine(piece).replace(/^\d+\. /, '').split(' · «')[0]} · [${piece.objective}](/parrillas/${planId}?item=${piece.id})`;
+  const parts = [`Listo: ${createdPlan ? `creé la parrilla de **${action.target.clientName}** para ${label}${newPlan?.ownerName ? ` con ${newPlan.ownerName} como responsable` : ''} y ` : ''}envié ${done.length === 1 ? 'una pieza' : `${done.length} piezas`} en borrador${createdPlan ? '' : ` a la parrilla de **${action.target.clientName}** (${label})`}:\n${done.map(line).join('\n')}`];
+  if (failed.length) parts.push(`**No se crearon**\n${failed.map((piece) => `- ${piece.objective}: ${piece.reason}`).join('\n')}`);
+  parts.push(`[Abrir la parrilla](/parrillas/${planId})`);
+  return { text: parts.join('\n\n'), sources: [{ kind: 'parrilla', id: planId, label: `Parrilla de ${action.target.clientName}`, url: `/parrillas/${planId}` }, ...done.map((piece) => ({ kind: 'pieza', id: piece.id, label: piece.objective, url: `/parrillas/${planId}?item=${piece.id}` }))] };
+};
+
 /* ---------------------------------------------------------------- Servicio */
+
+const defaultGenerate = async (request) => {
+  const result = await createOpenAIClient({ models: AI_MODELS }).generate(request);
+  return { text: result.text, model: result.model, usage: result.usage || null };
+};
 
 const TYPES = {
   MINUTE_TASKS: { prepare: prepareMinuteTasks, execute: executeMinuteTasks },
+  PLAN_DRAFT: { prepare: preparePlanDraft, execute: executePlanDraft },
   TASK_UPDATE: { prepare: prepareTaskUpdate, execute: executeTaskUpdate },
   TASKS_STATUS: { prepare: prepareTasksStatus, execute: executeTasksStatus },
   CREATE_PLAN: { prepare: preparePlan, execute: executePlan },
@@ -825,7 +958,7 @@ const executePlatform = async ({ user, action, platform, session, routePermissio
 };
 
 // `gate` es la puerta de actualizar una tarea (`checkTaskUpdate`); se inyecta solo para probar sus negativas.
-export const createBriaActionService = ({ db, updateTask, createTask = null, notify = null, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, gate = checkTaskUpdate, now = () => new Date(), readOnly = false } = {}) => ({
+export const createBriaActionService = ({ db, updateTask, createTask = null, notify = null, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, gate = checkTaskUpdate, generate = defaultGenerate, operations = clientOperationsService, now = () => new Date(), readOnly = false } = {}) => ({
   async prepare({ user, type, args = {}, previous }) {
     if (type === 'PLATFORM') {
       if (!canUseBria(user)) throw knowledgeError('Bria no está activada para tu cuenta.', 403, 'BRIA_ACTION_FORBIDDEN');
@@ -835,7 +968,7 @@ export const createBriaActionService = ({ db, updateTask, createTask = null, not
     const owner = user.userId || user.id;
     // Solo se continúa una acción del mismo tipo, de la misma persona y sin cerrar; lo demás arranca de cero.
     const ongoing = previous && previous.status === 'DRAFT' && previous.type === type && previous.ownerId === owner && args.nuevo !== true ? previous : null;
-    return TYPES[type].prepare({ db, user, args, previous: ongoing, today: bogotaDate(now()), gate });
+    return TYPES[type].prepare({ db, user, args, previous: ongoing, today: bogotaDate(now()), gate, generate, operations });
   },
 
   // `loadAttachment` solo lo usa crear pendiente (los archivos del chat pasan a insumos de la tarea).
