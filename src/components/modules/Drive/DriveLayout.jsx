@@ -131,8 +131,12 @@ const DriveLayout = () => {
   const [uploading, setUploading] = useState(false);
   const [newFolderOpen, setNewFolderOpen] = useState(false);
   const [folderName, setFolderName] = useState('');
+  const [folderSubtitle, setFolderSubtitle] = useState('');
   const [editTarget, setEditTarget] = useState(null);
   const [editName, setEditName] = useState('');
+  const [editSubtitle, setEditSubtitle] = useState('');
+  const [draggingOver, setDraggingOver] = useState(false);
+  const dragDepth = useRef(0);
   const [previewFile, setPreviewFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [previewLoading, setPreviewLoading] = useState(false);
@@ -230,8 +234,8 @@ const DriveLayout = () => {
   const createFolder = async event => {
     event.preventDefault();
     try {
-      await frontendApiService.createDriveFolder({ name: folderName, parentId: activeFolderId });
-      setFolderName(''); setNewFolderOpen(false); await load();
+      await frontendApiService.createDriveFolder({ name: folderName, subtitle: folderSubtitle, parentId: activeFolderId });
+      setFolderName(''); setFolderSubtitle(''); setNewFolderOpen(false); await load();
       toast.success('Carpeta creada.');
     } catch (requestError) {
       console.error('[Drive] Error creando carpeta:', requestError);
@@ -239,9 +243,9 @@ const DriveLayout = () => {
     }
   };
 
-  const uploadFiles = async event => {
-    const files = [...(event.target.files || [])];
-    event.target.value = '';
+  // Subir es una sola función: el botón y el arrastre entran por aquí, así que no hay dos
+  // caminos que se puedan desincronizar.
+  const uploadMany = async files => {
     if (!files.length) return;
     setUploading(true);
     try {
@@ -256,15 +260,55 @@ const DriveLayout = () => {
     }
   };
 
+  const uploadFiles = async event => {
+    const files = [...(event.target.files || [])];
+    event.target.value = '';
+    await uploadMany(files);
+  };
+
+  // Arrastrar y soltar. No se admite en la papelera ni en la carpeta automática de Bria,
+  // que es de solo lectura: el servidor lo rechazaría y sería prometer algo que no se
+  // cumple. Se cuentan las entradas y salidas porque al pasar por encima de una tarjeta
+  // hija el navegador dispara `dragleave` del padre y la marca se apagaría sola.
+  const canDrop = !trash && !isBriaFolder;
+  const onDragEnter = event => {
+    if (!canDrop || !event.dataTransfer?.types?.includes('Files')) return;
+    event.preventDefault();
+    dragDepth.current += 1;
+    setDraggingOver(true);
+  };
+  const onDragOver = event => {
+    if (!canDrop || !event.dataTransfer?.types?.includes('Files')) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = 'copy';
+  };
+  const onDragLeave = () => {
+    if (!canDrop) return;
+    dragDepth.current = Math.max(0, dragDepth.current - 1);
+    if (dragDepth.current === 0) setDraggingOver(false);
+  };
+  const onDrop = async event => {
+    if (!canDrop) return;
+    event.preventDefault();
+    dragDepth.current = 0;
+    setDraggingOver(false);
+    // Se ignoran las carpetas arrastradas: un directorio llega sin tipo y sin tamaño, y
+    // subirlo pide leer su contenido, que es otra cosa.
+    const files = [...(event.dataTransfer?.files || [])];
+    if (!files.length) return;
+    await uploadMany(files);
+  };
+
   const beginEdit = (target, type) => {
     setEditTarget({ ...target, type });
     setEditName(target.name);
+    setEditSubtitle(target.subtitle || '');
   };
 
   const saveEdit = async event => {
     event.preventDefault();
     try {
-      if (editTarget.type === 'folder') await frontendApiService.updateDriveFolder(editTarget.id, { name: editName });
+      if (editTarget.type === 'folder') await frontendApiService.updateDriveFolder(editTarget.id, { name: editName, subtitle: editSubtitle });
       else await frontendApiService.updateDriveFile(editTarget.id, { name: editName });
       setEditTarget(null); await load(); toast.success('Nombre actualizado.');
     } catch (requestError) {
@@ -379,10 +423,29 @@ const DriveLayout = () => {
 
         {isBriaFolder && <div className="flex flex-wrap gap-2 border-b border-zinc-200 px-4 py-3 dark:border-zinc-800">{[['ALL', 'Todos'], ['SUMMARY_PDF', 'Resúmenes PDF'], ['ANALYSIS_PDF', 'Análisis PDF'], ['MINUTE', 'Datos JSON'], ['TRANSCRIPT', 'Transcripciones']].map(([value, label]) => <button key={value} type="button" onClick={() => setFilter(value)} className={`rounded-full px-3 py-1.5 text-xs font-medium ${filter === value ? 'bg-violet-600 text-white' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200 dark:bg-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-700'}`}>{label}</button>)}</div>}
 
-        <div className="min-h-[28rem] p-4 sm:p-5">
+        {/* Arrastrar y soltar archivos aquí (Rodny, 14 de octubre de 2026). La zona envuelve
+            todo el contenido, no solo el estado vacío: con archivos ya cargados también se
+            puede soltar encima. */}
+        <div
+          data-drive-dropzone={canDrop ? 'true' : undefined}
+          onDragEnter={onDragEnter}
+          onDragOver={onDragOver}
+          onDragLeave={onDragLeave}
+          onDrop={onDrop}
+          className="relative min-h-[28rem] p-4 sm:p-5"
+        >
+          {/* La capa tapa el contenido: con un tinte muy claro el texto caía encima de
+              las tarjetas y no se leía. */}
+          {draggingOver && (
+            <div className="pointer-events-none absolute inset-3 z-10 flex flex-col items-center justify-center rounded-2xl border-2 border-dashed border-brand-cyan bg-white/90 text-center backdrop-blur-sm dark:bg-zinc-950/90">
+              <Upload className="h-8 w-8 text-brand-cyan" />
+              <p className="mt-2 text-sm font-semibold text-zinc-900 dark:text-white">Suelta para subir</p>
+              <p className="mt-0.5 text-xs text-zinc-500 dark:text-zinc-400">{activeFolder ? `Se guardarán en ${activeFolder.name}` : 'Se guardarán en Mi unidad'}</p>
+            </div>
+          )}
           {error && <div className="brain-alert-surface flex items-center gap-2 rounded-xl p-4 text-sm"><AlertCircle className="h-4 w-4" /> {error}</div>}
           {loading && <div className="flex h-72 items-center justify-center gap-2 text-sm text-zinc-500"><Loader2 className="h-5 w-5 animate-spin" /> Cargando Drive...</div>}
-          {!loading && !error && contents.folders.length === 0 && visibleFiles.length === 0 && <div className="flex h-72 flex-col items-center justify-center text-center"><FolderOpen className="h-11 w-11 text-zinc-300 dark:text-zinc-700" /><p className="mt-3 font-medium text-zinc-800 dark:text-zinc-100">Esta ubicación está vacía</p><p className="mt-1 text-sm text-zinc-500">{trash ? 'La Papelera no tiene elementos.' : 'Crea una carpeta o sube el primer archivo.'}</p></div>}
+          {!loading && !error && contents.folders.length === 0 && visibleFiles.length === 0 && <div className="flex h-72 flex-col items-center justify-center text-center"><FolderOpen className="h-11 w-11 text-zinc-300 dark:text-zinc-700" /><p className="mt-3 font-medium text-zinc-800 dark:text-zinc-100">Esta ubicación está vacía</p><p className="mt-1 text-sm text-zinc-500">{trash ? 'La Papelera no tiene elementos.' : canDrop ? 'Arrastra archivos aquí, o súbelos con el botón de arriba.' : 'Crea una carpeta o sube el primer archivo.'}</p></div>}
           {!loading && !error && (contents.folders.length > 0 || visibleFiles.length > 0) && (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
               {contents.folders.map(folder => (
@@ -420,7 +483,8 @@ const DriveLayout = () => {
           <form onSubmit={createFolder}>
             <DialogTitle className="font-semibold text-zinc-950 dark:text-white">Nueva carpeta</DialogTitle>
             <DialogDescription className="sr-only">Crea una carpeta nueva en la ubicación actual.</DialogDescription>
-            <label className="mt-5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Nombre<input autoFocus value={folderName} onChange={event => setFolderName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 outline-none focus:border-violet-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" /></label>
+            <label className="mt-5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"><span className="block">Nombre</span><input autoFocus value={folderName} onChange={event => setFolderName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 outline-none focus:border-brand-cyan dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" /></label>
+            <label className="mt-4 block text-sm font-medium text-zinc-700 dark:text-zinc-300"><span className="block">Descripción <span className="font-normal text-zinc-400">(opcional)</span></span><input value={folderSubtitle} onChange={event => setFolderSubtitle(event.target.value)} maxLength={240} placeholder="Qué guarda esta carpeta" className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 outline-none focus:border-brand-cyan dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" /></label>
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setNewFolderOpen(false)} className="min-h-11 rounded-xl px-4 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900">Cancelar</button><button type="submit" className="min-h-11 rounded-xl bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700">Crear carpeta</button></div>
           </form>
         </DialogContent>
@@ -428,9 +492,10 @@ const DriveLayout = () => {
       <Dialog open={!!editTarget} onOpenChange={open => { if (!open) setEditTarget(null); }}>
         <DialogContent overlayClassName="z-[80]" className="z-[81] max-w-md rounded-2xl border-zinc-200 bg-white p-5 shadow-2xl dark:border-zinc-800 dark:bg-zinc-950">
           <form onSubmit={saveEdit}>
-            <DialogTitle className="font-semibold text-zinc-950 dark:text-white">Renombrar</DialogTitle>
+            <DialogTitle className="font-semibold text-zinc-950 dark:text-white">{editTarget?.type === 'folder' ? 'Editar carpeta' : 'Renombrar'}</DialogTitle>
             <DialogDescription className="sr-only">Cambia el nombre del archivo o carpeta seleccionado.</DialogDescription>
-            <label className="mt-5 block text-sm font-medium text-zinc-700 dark:text-zinc-300">Nombre<input autoFocus value={editName} onChange={event => setEditName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 outline-none focus:border-violet-400 dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" /></label>
+            <label className="mt-5 block text-sm font-medium text-zinc-700 dark:text-zinc-300"><span className="block">Nombre</span><input autoFocus value={editName} onChange={event => setEditName(event.target.value)} className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 outline-none focus:border-brand-cyan dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" /></label>
+            {editTarget?.type === 'folder' && <label className="mt-4 block text-sm font-medium text-zinc-700 dark:text-zinc-300"><span className="block">Descripción <span className="font-normal text-zinc-400">(opcional)</span></span><input value={editSubtitle} onChange={event => setEditSubtitle(event.target.value)} maxLength={240} placeholder="Qué guarda esta carpeta" className="mt-2 h-11 w-full rounded-xl border border-zinc-200 bg-zinc-50 px-3 text-zinc-900 outline-none focus:border-brand-cyan dark:border-zinc-800 dark:bg-zinc-900 dark:text-white" /></label>}
             <div className="mt-5 flex flex-col-reverse gap-2 sm:flex-row sm:justify-end"><button type="button" onClick={() => setEditTarget(null)} className="min-h-11 rounded-xl px-4 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900">Cancelar</button><button type="submit" className="min-h-11 rounded-xl bg-violet-600 px-4 text-sm font-medium text-white hover:bg-violet-700">Guardar</button></div>
           </form>
         </DialogContent>

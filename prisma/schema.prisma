@@ -379,6 +379,8 @@ model MeetingMinute {
 model DriveFolder {
   id          String        @id @default(uuid())
   name        String
+  // Descripción de la carpeta, la misma línea que ya mostraba la de Bria.
+  subtitle    String?
   parentId    String?
   createdById String?
   deletedAt   DateTime?

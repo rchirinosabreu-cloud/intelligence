@@ -38,6 +38,10 @@ try {
 
     CREATE UNIQUE INDEX IF NOT EXISTS "DriveFile_storageKey_key"
       ON "DriveFile"("storageKey");
+
+    -- Descripción de una carpeta (14 de octubre de 2026). Columna aditiva: las carpetas
+    -- que ya existen quedan sin descripción y la tarjeta sigue mostrando su relleno.
+    ALTER TABLE "DriveFolder" ADD COLUMN IF NOT EXISTS "subtitle" TEXT;
     CREATE INDEX IF NOT EXISTS "DriveFolder_parentId_deletedAt_name_idx"
       ON "DriveFolder"("parentId", "deletedAt", "name");
     CREATE INDEX IF NOT EXISTS "DriveFolder_deletedAt_updatedAt_idx"

@@ -172,7 +172,7 @@ export const listDriveContents = async ({ db = prisma, folderId = null, query = 
     db.driveFolder.findMany({
       where: { parentId: folderId || null, deletedAt, ...(nameFilter ? { name: nameFilter } : {}) },
       orderBy: { name: 'asc' },
-      select: { id: true, name: true, parentId: true, createdAt: true, updatedAt: true, deletedAt: true }
+      select: { id: true, name: true, subtitle: true, parentId: true, createdAt: true, updatedAt: true, deletedAt: true }
     }),
     db.driveFile.findMany({
       where: { folderId: folderId || null, deletedAt, ...(nameFilter ? { name: nameFilter } : {}) },
@@ -193,13 +193,25 @@ export const listDriveContents = async ({ db = prisma, folderId = null, query = 
   };
 };
 
-export const createDriveFolder = async ({ name, parentId = null, actorId, db = prisma }) => {
+// La descripción es opcional y se guarda vacía cuando no se escribió: nunca un texto de
+// relleno inventado, que el de la tarjeta ya lo pone la pantalla.
+const cleanSubtitle = (value) => {
+  const text = String(value ?? '').trim();
+  return text ? text.slice(0, 240) : null;
+};
+
+export const createDriveFolder = async ({ name, subtitle = null, parentId = null, actorId, db = prisma }) => {
   if (parentId === BRIA_MINUTES_FOLDER.id) {
     throw createDriveError('DRIVE_SYSTEM_FOLDER_READ_ONLY', 'La carpeta automática de Bria es de solo lectura.');
   }
   return db.driveFolder.create({
-    data: { name: cleanName(name, 'Nombre de carpeta'), parentId: parentId || null, createdById: actorId || null },
-    select: { id: true, name: true, parentId: true, createdAt: true, updatedAt: true }
+    data: {
+      name: cleanName(name, 'Nombre de carpeta'),
+      subtitle: cleanSubtitle(subtitle),
+      parentId: parentId || null,
+      createdById: actorId || null
+    },
+    select: { id: true, name: true, subtitle: true, parentId: true, createdAt: true, updatedAt: true }
   });
 };
 
@@ -239,9 +251,11 @@ export const updateDriveFile = async ({ id, name, folderId, subtitle, db = prism
   return db.driveFile.update({ where: { id }, data });
 };
 
-export const updateDriveFolder = async ({ id, name, parentId, db = prisma }) => {
+export const updateDriveFolder = async ({ id, name, subtitle, parentId, db = prisma }) => {
   const data = {};
   if (name !== undefined) data.name = cleanName(name, 'Nombre de carpeta');
+  // Mandar la descripción vacía la borra; no mandarla la deja como estaba.
+  if (subtitle !== undefined) data.subtitle = cleanSubtitle(subtitle);
   if (parentId !== undefined) {
     if (parentId === id) throw createDriveError('DRIVE_FOLDER_CYCLE', 'Una carpeta no puede contenerse a sí misma.');
     data.parentId = parentId || null;
