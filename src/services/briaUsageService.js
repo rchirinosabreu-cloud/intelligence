@@ -14,6 +14,10 @@ export const summarizeBriaUsage = (rows = [], { days = 7 } = {}) => {
   const tools = new Map();
   const perDay = new Map();
   let questions = 0, answers = 0, unanswered = 0, failed = 0, tokens = 0, cached = 0, calls = 0;
+  // Que Bria se mida (14 de octubre de 2026): los pulgares de cada respuesta y los motivos escritos al pulgar abajo,
+  // que son lo único que se lee, porque los escribió la persona para que se lean.
+  let up = 0, down = 0;
+  const downNotes = [];
   const models = new Set();
   for (const row of rows) {
     const key = row.actor_ref;
@@ -31,6 +35,8 @@ export const summarizeBriaUsage = (rows = [], { days = 7 } = {}) => {
     for (const tool of meta.toolsUsed || []) tools.set(tool, (tools.get(tool) || 0) + 1);
     if (String(row.content || '').trim() === FALLBACK_ANSWER) unanswered += 1;
     if ((meta.failures || []).length) failed += 1;
+    if (meta.rating?.value === 'UP') up += 1;
+    else if (meta.rating?.value === 'DOWN') { down += 1; if (meta.rating.note) downNotes.push(String(meta.rating.note)); }
     if (meta.usage) { tokens += Number(meta.usage.totalTokens) || 0; cached += Number(meta.usage.cachedTokens) || 0; calls += Number(meta.usage.calls) || 0; for (const model of meta.usage.models || []) models.add(model); }
   }
   return {
@@ -42,7 +48,8 @@ export const summarizeBriaUsage = (rows = [], { days = 7 } = {}) => {
     conFallaDeHerramienta: failed,
     herramientas: [...tools.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([nombre, veces]) => ({ nombre, veces })),
     porDia: [...perDay.entries()].sort().map(([dia, preguntas]) => ({ dia, preguntas })),
-    coste: { llamadasAlModelo: calls, tokens, tokensEnCache: cached, modelos: [...models].sort() }
+    coste: { llamadasAlModelo: calls, tokens, tokensEnCache: cached, modelos: [...models].sort() },
+    valoracion: { arriba: up, abajo: down, sinValorar: answers - up - down, tasaPositiva: up + down ? Math.round((up / (up + down)) * 100) : null, motivosAbajo: downNotes.slice(-20) }
   };
 };
 

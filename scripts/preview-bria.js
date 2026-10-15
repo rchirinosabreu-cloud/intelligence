@@ -82,6 +82,18 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
     if (!row.revision) row.title = question.slice(0, 90);
     row.revision++; row.updatedAt = new Date().toISOString(); res.json(row);
   });
+  // Que Bria se mida (14 de octubre de 2026): el pulgar se guarda en el turno de Bria y vuelve el chat entero.
+  api.post('/api/bria/conversations/:id/rating', async (req, res) => {
+    const row = chats.get(req.params.id);
+    if (!row) return res.status(404).json({ message: 'Conversación no encontrada.' });
+    const turn = row.turns.find((item) => item.id === req.body?.turnId);
+    if (!turn || turn.role !== 'assistant') return res.status(404).json({ message: 'No encontramos esa respuesta de Bria.' });
+    const value = String(req.body?.rating || '').toUpperCase();
+    if (!['UP', 'DOWN'].includes(value)) return res.status(400).json({ message: 'La valoración es pulgar arriba o abajo.' });
+    await wait(200);
+    turn.rating = { value, note: req.body?.note ? String(req.body.note).slice(0, 300) : null, at: new Date().toISOString() };
+    return res.json(row);
+  });
   api.get('/api/bria/knowledge', (_req, res) => res.json([]));
   // «Bria se adelanta» (10 de octubre de 2026): dos avisos simulados y el foco de la semana ya dejado en un chat.
   const focusChat = { id: 'f0c0f0c0-0000-4000-8000-000000000001', title: 'Foco de la semana · 12 de octubre', revision: 1, updatedAt: new Date().toISOString(), turns: [{ id: 'f0c0f0c0-0000-4000-8000-000000000001:1', role: 'assistant', text: 'Hola, Kamila. Este es tu foco de la semana del 12 de octubre al 18 de octubre.\n\n**Vencidas (1)** — conviene decidir hoy si siguen vigentes o se mueve la fecha.\n\n- [Subir los videos de Nattal](/gestion?taskId=t1) · Nattal · venció el 9 de octubre\n\n**Esta semana (2)**\n\n_Martes 13 de octubre (hoy)_\n\n- [Carrusel de Endova](/gestion?taskId=t3) · Endova\n\n_Viernes 16 de octubre_\n\n- [Informe mensual de Foobespain](/gestion?taskId=t4) · Foobespain\n\n**El equipo**\n\n- Brayan Torres tiene 9 h estimadas el 14 de octubre en 3 tareas: más de lo que cabe en un día. ¿Se mueve algo o se reparte?\n\nSi quieres, dime por dónde empezar y lo organizamos juntos.', sources: [], failures: [] }] };

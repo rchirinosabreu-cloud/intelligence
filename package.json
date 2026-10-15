@@ -30,6 +30,7 @@
     "storage:configure-cors": "node scripts/configure-storage-cors.js",
     "test:activity-build": "node --test tests/activityComponentsCompile.test.js",
     "eval:bria": "node scripts/eval-bria-reviews.js",
+    "eval:bria-casos": "node scripts/eval-bria-casos.mjs",
     "storage:retention-report": "node scripts/report-task-attachment-retention.js",
     "financial:cartera-report": "node scripts/report-receivable-cleanup.js",
     "clients:footprint": "node scripts/report-client-footprint.js",
