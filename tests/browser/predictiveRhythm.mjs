@@ -10,7 +10,7 @@ const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } }); page.setDefaultTimeout(12000);
 page.setDefaultNavigationTimeout(45000);
 const errors = []; page.on('pageerror', e => errors.push(e.message));
-const choose = async (label, name) => { await page.getByRole('combobox', { name: label, exact: true }).click(); await page.getByRole('option', { name, exact: true }).click(); };
+const choose = async (label, name) => { await page.getByRole('combobox', { name: label, exact: true }).click(); await page.getByRole('option', { name, exact: true }).press('Enter'); };
 try {
   await page.goto('http://127.0.0.1:3746/tests/fixtures/team-rhythm-preview.html?tab=ritmo');
   await page.getByRole('button', { name: 'Mañana', exact: true }).click();
@@ -48,35 +48,33 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'history fits mobile');
   await page.screenshot({ path: path.join(output, 'historial-contexto-movil-oscuro.png'), fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('http://127.0.0.1:3746/tests/fixtures/task-collaborators-create-preview.html?prediction');
+  await page.goto('http://127.0.0.1:3746/tests/fixtures/task-collaborators-create-preview.html');
   await page.locator('[data-task-title-input]').fill('Reel de lanzamiento');
   await choose('Cliente', 'Corporación Villa Montaña');
   await choose('Responsable', 'Bruno Salas');
-  await page.getByLabel('Deadline', { exact: true }).fill('14/10/2026');
-  await page.getByLabel('Deadline', { exact: true }).press('Tab');
-  await page.locator('[data-assignment-prediction="riesgo"]').waitFor();
-  await page.screenshot({ path: path.join(output, 'advertencia-asignacion.png'), fullPage: true });
+  for (const date of ['15/10/2026', '22/10/2026', '18/10/2026']) {
+    await page.getByLabel('Deadline', { exact: true }).fill(date);
+    await page.getByLabel('Deadline', { exact: true }).press('Tab');
+    await page.waitForTimeout(650);
+    assert.equal(await page.getByRole('region', { name: 'Previsión de entrega' }).count(), 0);
+    assert.deepEqual(await page.evaluate(() => window.__predictionRequests), [], 'creating a task never asks for a forecast, including on Sunday');
+  }
+  await page.screenshot({ path: path.join(output, 'tarea-sin-prevision-claro.png'), fullPage: true });
   await choose('Responsable', 'Rodny Chirinos');
-  await page.locator('[data-assignment-prediction="ok"]').waitFor();
-  await page.screenshot({ path: path.join(output, 'asignacion-con-margen.png'), fullPage: true });
+  await page.waitForTimeout(650);
+  assert.equal(await page.locator('[data-assignment-prediction]').count(), 0);
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.evaluate(() => document.documentElement.classList.add('dark'));
-  await page.getByRole('region', { name: 'Previsión de entrega' }).scrollIntoViewIfNeeded();
-  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'task panel fits mobile');
-  await page.screenshot({ path: path.join(output, 'asignacion-movil-oscuro.png'), fullPage: true });
-  await page.setViewportSize({ width: 1440, height: 1000 });
-  await page.goto('http://127.0.0.1:3746/tests/fixtures/task-collaborators-create-preview.html?prediction&race');
+  await page.goto('http://127.0.0.1:3746/tests/fixtures/task-collaborators-create-preview.html?dark');
   await page.locator('[data-task-title-input]').fill('Reel de lanzamiento');
   await choose('Cliente', 'Corporación Villa Montaña');
-  await choose('Responsable', 'Bruno Salas');
-  await page.getByLabel('Deadline', { exact: true }).fill('14/10/2026');
-  await page.getByLabel('Deadline', { exact: true }).press('Tab');
-  await page.waitForFunction(() => window.__predictionRequests?.includes('m-bruno'));
   await choose('Responsable', 'Rodny Chirinos');
-  await page.locator('[data-assignment-prediction="ok"]').waitFor();
-  await page.waitForTimeout(2100);
-  assert.match(await page.getByRole('region', { name: 'Previsión de entrega' }).innerText(), /Rodny Chirinos/);
-  assert.equal(await page.locator('[data-assignment-prediction="riesgo"]').count(), 0, 'an old response cannot replace the current assignee');
+  await page.getByLabel('Deadline', { exact: true }).fill('18/10/2026');
+  await page.getByLabel('Deadline', { exact: true }).press('Tab');
+  await page.waitForTimeout(650);
+  assert.equal(await page.locator('[data-assignment-prediction]').count(), 0);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'task panel fits mobile');
+  await page.screenshot({ path: path.join(output, 'tarea-sin-prevision-movil-oscuro.png'), fullPage: true });
+  assert.deepEqual(await page.evaluate(() => window.__predictionRequests), []);
   assert.deepEqual(errors, []);
-  console.log('Previsión por horizonte, contexto, horas reales y advertencia al asignar verificadas.');
+  console.log('Previsión en Ritmo e historial verificadas; tareas sin avisos ni consultas predictivas, incluso en domingo.');
 } finally { await browser.close(); await server.close(); }
