@@ -15,6 +15,18 @@ Rodny pidió que **no haya un módulo aparte**: «eso me lo puede dar la misma B
 ## Quién ve qué
 Decisión de Rodny: un administrador ve todos los accesos. Un project manager ve los de los clientes donde figura como PM (`Client.projectManagerId`), más los que un administrador le comparta. Los accesos de la propia agencia, sin cliente, son de administración. La regla vive en `src/lib/vaultAccess.js` y se aplica **en la consulta SQL**: un acceso que no te toca nunca sale de la base.
 
+## Pedir un acceso
+
+15 de octubre de 2026. Camila, project manager, preguntó por la clave de CapCut y Bria le contestó que no encontraba ninguna que pudiera ver: era el CapCut de la agencia, que solo ven los administradores. Rodny pidió que a él le llegue un aviso con «Compartir» y «Denegar», y enseguida que **no haga falta pedirlo**: «si Camila está solicitando algo a lo que Bria no le puede dar acceso por su rol, no tiene que pedírmelo directamente, me debería aparecer a mí el anuncio … y así nos adelantamos aún más».
+
+- **Pedir la contraseña ya es el pedido.** Cuando un project manager busca un acceso que no puede ver, `buscar_acceso` lo encuentra entre los que no ve (`requestable`: nombre, plataforma y cliente, nunca un valor). Con **una** coincidencia lo pide en el acto; con **varias**, Bria razona cuál quiso decir y lo pide con `pedir_acceso`, y solo pregunta si de verdad no se puede saber. Bria le dice en una frase que ese acceso existe, que lo comparte un administrador y a quién se lo pidió. Es una decisión de Rodny: confirma que el acceso existe a quien no tiene permiso.
+- **Sin insistir.** El pedido se guarda en `vault.access_requests`: uno abierto por acceso y persona, así que volver a preguntar no vuelve a avisar. Lo que un administrador **denegó en los últimos siete días** (`ACCESS_DENIAL_DAYS`) no se vuelve a pedir solo: Bria le dice quién lo denegó y le sugiere hablarlo con esa persona. Cada administrador activo recibe la notificación `VAULT_ACCESS_REQUESTED` una sola vez por pedido.
+- **Decidir.** Encima de la mascota, el administrador ve «Camila necesita la contraseña de CapCut», de qué cliente es, para qué lo pidió si lo dijo y a qué hora, con «Compartir» y «Denegar» (`POST /api/vault/requests/:id/decision`, solo administradores). Si es un **bloque** importado, el aviso dice cuántos accesos trae: compartirlo deja ver todos. Compartir añade a la persona al acceso y deja su evento en `credential_events`; todo va en una transacción que bloquea el pedido, así que dos administradores no deciden dos veces. Solo se comparte con quien sigue siendo project manager activo. La X oculta el pedido por hoy; mañana vuelve hasta que alguien decida.
+- **La respuesta.** A quien pidió le llega la notificación (`VAULT_ACCESS_SHARED` o `VAULT_ACCESS_DENIED`) y un aviso encima de Bria: «Rodny compartió contigo la contraseña de CapCut», con «Ver la contraseña», que deja escrita la petición a Bria; o «Rodny denegó tu acceso a la contraseña de CapCut». La X la da por vista.
+- **Nada de esto lleva un valor.** Ni el pedido, ni los avisos, ni las notificaciones llevan usuario o contraseña: solo el nombre del acceso y su cliente.
+
+Contrato: `tests/vaultAccessRequest.test.js`; recorrido real con capturas: `node tests/browser/briaAccessRequest.mjs`.
+
 ## Seguridad
 - **Cifrado.** Usuario, contraseña y notas van con AES-256-GCM (`src/lib/vaultCrypto.js`). Cada valor queda atado a su registro y campo, y la clave se deriva con HKDF de `VAULT_ENCRYPTION_KEY` o de `ENCRYPTION_KEY`. Las tablas del esquema aditivo `vault` nunca guardan un valor en claro.
 - **Registro antes de mostrar.** Antes de mostrar un valor, se anota quién lo vio, cuándo y desde dónde (`reveal_events`). Sin registro no hay valor.
