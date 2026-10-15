@@ -45,6 +45,22 @@ BEGIN
     ALTER TABLE vault.credentials ADD CONSTRAINT vault_credentials_platforms_size CHECK (cardinality(platforms) <= 60);
   END IF;
 END $$;
+-- Pedidos de acceso (15 de octubre de 2026): un project manager pide a los administradores un acceso que existe
+-- pero no puede ver; uno decide «Compartir» o «Denegar». Solo un pedido abierto por acceso y persona. Guarda quién
+-- pidió, para qué (si lo dijo), quién decidió y cuándo; nunca un valor de la bóveda. Compartir deja además su
+-- evento en credential_events.
+CREATE TABLE IF NOT EXISTS vault.access_requests (
+  id UUID PRIMARY KEY,
+  credential_id UUID NOT NULL REFERENCES vault.credentials(id),
+  requester_ref TEXT NOT NULL, requester_name TEXT NOT NULL,
+  note TEXT CHECK(note IS NULL OR length(note) <= 300),
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK(status IN ('PENDING','APPROVED','DENIED')),
+  decided_by_ref TEXT, decided_by_name TEXT, decided_at TIMESTAMPTZ,
+  requester_seen_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS vault_access_requests_open ON vault.access_requests(credential_id, requester_ref) WHERE status = 'PENDING';
+CREATE INDEX IF NOT EXISTS vault_access_requests_status ON vault.access_requests(status, created_at);
 -- Vínculo formal con la ficha del cliente (9 de octubre de 2026). Si una ficha se borra, sus accesos quedan
 -- sin cliente: pasan a ser de la agencia, visibles solo para administradores, nunca para otro PM.
 DO $$
