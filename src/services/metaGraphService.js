@@ -89,6 +89,24 @@ export const createMetaGraphClient = ({
     return parse(response);
   };
 
+  /**
+   * Como `post`, pero mandando un archivo. Meta pide la portada de un video de Facebook en bytes
+   * (`source`), no por URL, así que esta es la única llamada de la plataforma que va en multipart.
+   * El navegador pone el `Content-Type` con su separador: no fijarlo a mano.
+   */
+  const postFile = async (path, params, { field, buffer, filename, contentType }) => {
+    const form = new FormData();
+    for (const [key, value] of formBody(params).entries()) form.set(key, value);
+    form.set(field, new Blob([buffer], { type: contentType || 'application/octet-stream' }), filename || 'archivo');
+    const response = await fetchImpl(`${base}/${path}`, {
+      method: 'POST',
+      body: form,
+      redirect: 'error',
+      signal: AbortSignal.timeout(timeoutMs)
+    });
+    return parse(response);
+  };
+
   /** Espera hasta que el contenedor esté listo; ERROR/EXPIRED es definitivo, seguir esperando no lo arregla. */
   const waitForContainer = async ({ containerId, token }) => {
     const deadline = now() + containerWaitMs;
@@ -163,6 +181,19 @@ export const createMetaGraphClient = ({
     return { mediaId: published.id, permalink };
   };
 
+  /**
+   * La portada de un video ya publicado en Facebook (`POST /{video-id}/thumbnails`, leído en la
+   * referencia de Meta el 15 de octubre de 2026): el archivo va en `source` y `is_preferred` la deja
+   * como la que se muestra. Es una llamada **posterior** a publicar a propósito: el video ya salió, así
+   * que una portada que falle no puede convertir un éxito en un fallo. Quien llama recoge el error.
+   */
+  const setFacebookVideoThumbnail = async ({ videoId, token, buffer, filename = 'portada.jpg', contentType = 'image/jpeg' }) => {
+    const result = await postFile(`${videoId}/thumbnails`, { is_preferred: true, access_token: token }, {
+      field: 'source', buffer, filename, contentType
+    });
+    return Boolean(result?.success ?? true);
+  };
+
   const facebookPermalink = async ({ postId, token }) => {
     try {
       const post = await get(postId, { fields: 'permalink_url', access_token: token });
@@ -231,5 +262,5 @@ export const createMetaGraphClient = ({
     return { used: Number(entry.quota_usage || 0), total: Number(entry.config?.quota_total || 100) };
   };
 
-  return { publishToInstagram, publishToFacebookPage, listManagedPages, getInstagramPublishingLimit, waitForContainer };
+  return { publishToInstagram, publishToFacebookPage, setFacebookVideoThumbnail, listManagedPages, getInstagramPublishingLimit, waitForContainer };
 };

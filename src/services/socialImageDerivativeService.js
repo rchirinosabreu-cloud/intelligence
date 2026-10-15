@@ -10,6 +10,7 @@
  */
 import { getS3ObjectBuffer, headS3Object, putS3Object } from './s3Service.js';
 import { FACEBOOK_PHOTO_MAX_BYTES, META_IMAGE_MAX_BYTES, facebookImagePlan, instagramImagePlan } from '../lib/socialPublishing.js';
+import { COVER_MAX_BYTES, coverImagePlan } from '../lib/videoCover.js';
 import { fileContentProblem } from '../lib/fileSignature.js';
 
 /** De más a menos calidad: se baja solo lo necesario para caber en el tope de la red. */
@@ -118,7 +119,38 @@ export const createImageDerivativeService = ({
   const prepareForInstagram = (asset, { kind } = {}) => prepare(asset, { platform: 'INSTAGRAM', kind });
   const prepareForFacebook = (asset) => prepare(asset, { platform: 'FACEBOOK' });
 
-  return { prepareForInstagram, prepareForFacebook };
+  /**
+   * La portada de un reel, lista para Meta (15 de octubre de 2026): JPEG sRGB con margen hasta 9:16,
+   * **nunca recorte**, igual que las copias de las imágenes. Vive junto al archivo original de la
+   * portada, en `derived/`, y se reutiliza si ya está hecha.
+   *
+   * Devuelve `null` si la pieza no tiene portada: publicar sin ella es lo normal y Meta elige su propio
+   * fotograma, así que esto nunca es un error.
+   */
+  const prepareCover = async (item) => {
+    if (!item?.coverKey) return null;
+    const cover = { id: `${item.id}-cover`, name: item.coverName, mimeType: item.coverMimeType, size: item.coverSize, storageKey: item.coverKey };
+    const key = derivedKeyFor(cover, 'cover');
+    if (await headObject(key)) return { key, derived: true, cached: true };
+
+    const buffer = await readObject(item.coverKey);
+    let plan;
+    try {
+      const { width, height } = await probe(buffer);
+      plan = coverImagePlan({ mimeType: item.coverMimeType, width, height, size: item.coverSize });
+    } catch (cause) {
+      logger.error?.(`[SocialPublishing] No se pudo leer la portada de «${item.objective || item.id}»:`, cause?.message || cause);
+      throw unreadableAssetError(cover, buffer, cause);
+    }
+    if (!plan.convert) return { key: item.coverKey, derived: false };
+
+    const jpeg = await transform(buffer, plan, { maxBytes: COVER_MAX_BYTES });
+    await writeObject({ key, body: jpeg, contentType: 'image/jpeg' });
+    logger.info?.(`[SocialPublishing] Portada preparada para «${item.objective || item.id}»: ${plan.reasons.join(', ')}${plan.canvas ? ` → ${plan.canvas.width}×${plan.canvas.height}` : ''}`);
+    return { key, derived: true, cached: false, plan };
+  };
+
+  return { prepareForInstagram, prepareForFacebook, prepareCover };
 };
 
 export const imageDerivativeService = createImageDerivativeService();
