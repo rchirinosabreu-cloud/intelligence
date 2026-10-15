@@ -36,5 +36,8 @@ export const createVaultRouter = ({ service = null, logger = console, revealLimi
   router.post('/credentials/:id/retire', handle((req) => vault().retire(req.user, req.params.id, revision(req), req.body?.reason)));
   router.post('/credentials/:id/reveal', limitReveal, handle((req) => vault().reveal(req.user, req.params.id, req.body?.via === 'BRIA' ? 'BRIA' : 'BOVEDA')));
   router.get('/credentials/:id/reveals', handle((req) => vault().reveals(req.user, req.params.id)));
+  // Pedir un acceso (15 de octubre de 2026): un administrador decide «Compartir» o «Denegar» desde el aviso de Bria.
+  router.use('/requests/:id', (req, res, next) => (/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(req.params.id) ? next() : res.status(400).json({ error: 'Pedido no válido.', code: 'VAULT_REQUEST_INVALID' })));
+  router.post('/requests/:id/decision', handle((req) => vault().decideRequest(req.user, req.params.id, req.body?.decision)));
   return router;
 };

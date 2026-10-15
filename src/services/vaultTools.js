@@ -35,6 +35,17 @@ export const createVaultTools = (service) => service ? [
       if (rows.length === 1) {
         return { data: { accesos, instruccion: 'El acceso ya se muestra en una tarjeta bajo tu respuesta. Nunca escribas ni inventes usuarios o contraseñas.' }, accessCards: rows.map(card) };
       }
+      // Existe pero no lo puede ver (Rodny, 15 de octubre de 2026: «no tiene que pedírmelo directamente, me debería
+      // aparecer a mí el anuncio … y así nos adelantamos aún más»): pedirla ya es el pedido. Con una sola coincidencia
+      // se pide en el acto; con varias, Bria razona cuál y la pide con pedir_acceso. Solo nombre, plataforma y cliente.
+      if (!rows.length && !isAdmin(user) && typeof service.requestable === 'function') {
+        const hidden = await service.requestable(user, { clientId: clientId || null, query: consulta });
+        const sinPermiso = hidden.map((row) => ({ ...card(row), ...(row.kind === 'BLOQUE' ? { bloqueDe: row.platformCount } : {}) }));
+        if (hidden.length === 1) return { data: { accesos: [], sinPermiso, ...requestReply(await service.requestAccess(user, hidden[0].id, null)) } };
+        if (hidden.length > 1) {
+          return { data: { accesos: [], sinPermiso, instruccion: 'Hay varios accesos que coinciden y esta persona no puede ver ninguno: los comparte un administrador. Razona cuál pidió por lo que dijo («de Brain Studio» o «de la agencia» es el que no tiene cliente) y pídelo con pedir_acceso sin preguntarle; pregunta cuál solo si de verdad no se puede saber. Nunca muestres ni insinúes lo que guarda.' } };
+        }
+      }
       return {
         data: {
           accesos,
@@ -141,5 +152,34 @@ export const createVaultTools = (service) => service ? [
       await service.update(user, current.id, Number.isInteger(version) ? version : current.revision, { sharedUserIds: shared });
       return { data: { compartidoCon: chosen.map((m) => m.name) } };
     }
+  },
+  {
+    name: 'pedir_acceso',
+    description: 'Le pide a los administradores que compartan con esta persona un acceso de la bóveda que existe pero no puede ver (el id que vino en sinPermiso de buscar_acceso). No hace falta que ella lo pida: pedir la contraseña ya es el pedido. Úsala cuando buscar_acceso devolvió varios en sinPermiso y ya sabes cuál quiso decir. Los administradores reciben un aviso con «Compartir» y «Denegar», y a ella le llega la respuesta. Pasa en nota para qué lo necesita, solo si lo dijo.',
+    parameters: { type: 'object', properties: {
+      accesoId: { type: 'string', description: 'Id de sinPermiso en buscar_acceso.' },
+      nota: { type: ['string', 'null'], description: 'Para qué lo necesita, con sus palabras; null si no lo dijo.' }
+    }, required: ['accesoId', 'nota'], additionalProperties: false },
+    allowed: (user) => canUseBria(user) && canUseVault(user) && !isAdmin(user),
+    async run({ accesoId, nota = null } = {}, { user }) {
+      return { data: requestReply(await service.requestAccess(user, String(accesoId), nota)) };
+    }
   }
 ] : [];
+
+// Lo que Bria le dice a la persona después de pedir el acceso por ella.
+const requestReply = (out) => {
+  if (out.alreadyVisible) return { yaPuedeVerlo: true, instruccion: 'Ya tiene permiso para verlo: muéstraselo con mostrar_acceso.' };
+  if (out.deniedRecently) {
+    const who = out.request?.decidedByName || 'Un administrador';
+    return { pedido: false, denegadoPor: who, instruccion: `Ese acceso existe, pero ${who} denegó hace poco que se lo compartieran, así que no se lo volví a pedir. Díselo en una frase y sugiérele hablarlo directamente con ${who} si lo necesita.` };
+  }
+  const names = out.admins || [];
+  const who = names.length ? names.join(' y ') : 'administración';
+  return {
+    pedido: true, nuevo: Boolean(out.created), administradores: names,
+    instruccion: out.created
+      ? `Ese acceso existe, pero lo comparte un administrador. Ya se lo pediste a ${who}: díselo en una frase y que cuando decida le llega un aviso encima de Bria y en sus notificaciones. Nunca muestres ni insinúes lo que guarda.`
+      : `Ese acceso existe y ya estaba pedido; sigue esperando respuesta de ${who}. Díselo en una frase.`
+  };
+};

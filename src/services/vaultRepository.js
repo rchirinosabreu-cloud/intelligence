@@ -4,7 +4,8 @@
 
 import { randomUUID } from 'node:crypto';
 import { sealSecret, openSecret } from '../lib/vaultCrypto.js';
-import { canEditCredential, canSeeCredential, validateCredentialInput } from '../lib/vaultAccess.js';
+import { canEditCredential, canSeeCredential, validateCredentialInput, VAULT_MAX_SHARED } from '../lib/vaultAccess.js';
+import { ACCESS_DENIAL_DAYS } from '../lib/vaultAccessRequests.js';
 
 const vaultError = (message, status = 400, code = 'VAULT_INVALID') => Object.assign(new Error(message), { status, code });
 const present = (row, { admin = false } = {}) => row && ({
@@ -49,10 +50,11 @@ export const createVaultRepository = ({ pool, key }) => {
     return row;
   };
 
-  return {
-    async list(actor, { clientId = null, query = '', limit = 200 } = {}) {
+  const repo = {
+    // `hidden` busca lo contrario: los accesos que esta persona NO puede ver, para ofrecerle pedirlos.
+    async list(actor, { clientId = null, query = '', limit = 200, hidden = false } = {}) {
       const args = [...scope(actor)];
-      const filters = ["c.status = 'ACTIVE'", VISIBLE];
+      const filters = ["c.status = 'ACTIVE'", hidden ? `NOT ${VISIBLE}` : VISIBLE];
       if (clientId) { args.push(clientId); filters.push(`c.client_id = $${args.length}`); }
       const asked = (String(query || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().match(/[\p{L}\p{N}]{3,}/gu) || []).filter((word) => !STOPWORDS.has(word)).slice(0, 8); // «fa» de «por fa» coincidía con «Facebook».
       const matches = (n) => `(${HAYSTACK} LIKE $${n} OR replace(${HAYSTACK}, ' ', '') LIKE $${n})`;
@@ -169,6 +171,89 @@ export const createVaultRepository = ({ pool, key }) => {
     async reveals(actor, id) {
       if (actor.role !== 'ADMIN') throw vaultError('El historial de lecturas lo ve un administrador.', 403, 'VAULT_FORBIDDEN');
       return (await pool.query('SELECT via, actor_name AS persona, recorded_at AS fecha FROM vault.reveal_events WHERE credential_id=$1 ORDER BY recorded_at DESC LIMIT 200', [id])).rows;
+    },
+
+    // Pedir un acceso (Rodny, 15 de octubre de 2026). Quien pide nunca recibe un valor: solo nombre, plataforma y
+    // cliente del acceso, para saber qué pedir. Un administrador ve toda la bóveda y no tiene nada que pedir.
+    async requestable(actor, { clientId = null, query = '' } = {}) {
+      if (actor.role === 'ADMIN') return [];
+      const rows = await repo.list(actor, { clientId, query, limit: 5, hidden: true });
+      return rows.map((row) => ({ id: row.id, clientName: row.clientName, platform: row.platform, label: row.label, kind: row.kind, platformCount: (row.platforms || []).length }));
+    },
+
+    /** Un pedido abierto por acceso y persona: pedirlo otra vez devuelve el mismo. */
+    async requestAccess(actor, credentialId, note = null) {
+      if (actor.role === 'ADMIN') throw vaultError('Un administrador ya ve toda la bóveda.', 400, 'VAULT_REQUEST_ADMIN');
+      return transaction(async (db) => {
+        const credential = (await db.query(`${SELECT} WHERE c.id = $1 AND c.status = 'ACTIVE'`, [credentialId])).rows[0];
+        if (!credential) throw vaultError('No encontramos ese acceso.', 404, 'VAULT_NOT_FOUND');
+        if (canSeeCredential(actor, asCredential(credential))) return { alreadyVisible: true, created: false, request: null };
+        // Lo que un administrador denegó hace poco no se vuelve a pedir solo: se le dice a la persona quién y cuándo.
+        const denied = (await db.query(`SELECT * FROM vault.access_requests WHERE credential_id=$1 AND requester_ref=$2 AND status = 'DENIED' AND decided_at > now() - ($3::int * interval '1 day') ORDER BY decided_at DESC LIMIT 1`, [credentialId, actor.ref, ACCESS_DENIAL_DAYS])).rows[0];
+        if (denied) return { created: false, deniedRecently: true, request: presentRequest(denied, credential) };
+        const inserted = (await db.query(`INSERT INTO vault.access_requests(id,credential_id,requester_ref,requester_name,note) VALUES($1,$2,$3,$4,$5)
+          ON CONFLICT (credential_id, requester_ref) WHERE status = 'PENDING' DO NOTHING RETURNING *`, [randomUUID(), credentialId, actor.ref, actor.name, note])).rows[0];
+        const row = inserted || (await db.query("SELECT * FROM vault.access_requests WHERE credential_id=$1 AND requester_ref=$2 AND status = 'PENDING'", [credentialId, actor.ref])).rows[0];
+        return { created: Boolean(inserted), request: presentRequest(row, credential) };
+      });
+    },
+
+    async getRequest(id) {
+      const row = (await pool.query(`${REQUEST_SELECT} WHERE r.id = $1`, [id])).rows[0];
+      return row ? presentRequest(row, credentialOf(row)) : null;
+    },
+
+    /** Los pedidos que esperan decisión. Solo administración. */
+    async pendingRequests(actor) {
+      if (actor.role !== 'ADMIN') return [];
+      return (await pool.query(`${REQUEST_SELECT} WHERE r.status = 'PENDING' AND c.status = 'ACTIVE' ORDER BY r.created_at LIMIT 20`)).rows.map((row) => presentRequest(row, credentialOf(row)));
+    },
+
+    /**
+     * «Compartir» o «Denegar». En una transacción: el pedido y el acceso quedan bloqueados, así que dos
+     * administradores no deciden dos veces; compartir añade a la persona al acceso y deja su evento.
+     */
+    async decideRequest(actor, id, decision) {
+      if (actor.role !== 'ADMIN') throw vaultError('Un pedido de acceso lo decide un administrador.', 403, 'VAULT_FORBIDDEN');
+      if (!['APPROVE', 'DENY'].includes(decision)) throw vaultError('La decisión es compartir o denegar.', 400, 'VAULT_DECISION');
+      return transaction(async (db) => {
+        const request = (await db.query('SELECT * FROM vault.access_requests WHERE id=$1 FOR UPDATE', [id])).rows[0];
+        if (!request) throw vaultError('Ese pedido ya no existe.', 404, 'VAULT_REQUEST_NOT_FOUND');
+        const credential = (await db.query(`${SELECT} WHERE c.id = $1 FOR UPDATE OF c`, [request.credential_id])).rows[0];
+        if (request.status !== 'PENDING') return { alreadyDecided: true, request: presentRequest(request, credential) };
+        if (decision === 'APPROVE') {
+          if (!credential || credential.status !== 'ACTIVE') throw vaultError('Ese acceso fue retirado: no se puede compartir.', 409, 'VAULT_RETIRED');
+          const shared = credential.shared_user_ids || [];
+          if (!shared.includes(request.requester_ref)) {
+            if (shared.length >= VAULT_MAX_SHARED) throw vaultError(`Ese acceso ya está compartido con ${VAULT_MAX_SHARED} personas.`, 409, 'VAULT_SHARED_FULL');
+            const updated = (await db.query('UPDATE vault.credentials SET shared_user_ids = array_append(shared_user_ids, $2), revision = revision + 1, updated_by_ref = $3, updated_by_name = $4, updated_at = now() WHERE id = $1 RETURNING revision', [credential.id, request.requester_ref, actor.ref, actor.name])).rows[0];
+            await event(db, credential.id, updated.revision, 'UPDATE', ['sharedUserIds'], actor, `Pedido de acceso de ${request.requester_name}`.slice(0, 300));
+          }
+        }
+        const decided = (await db.query('UPDATE vault.access_requests SET status = $2, decided_by_ref = $3, decided_by_name = $4, decided_at = now() WHERE id = $1 RETURNING *', [id, decision === 'APPROVE' ? 'APPROVED' : 'DENIED', actor.ref, actor.name])).rows[0];
+        return { decided: true, request: presentRequest(decided, credential) };
+      });
+    },
+
+    /** Las respuestas que quien pidió todavía no vio (de la última semana). */
+    async requestAnswers(actor) {
+      return (await pool.query(`${REQUEST_SELECT} WHERE r.requester_ref = $1 AND r.status IN ('APPROVED','DENIED') AND r.requester_seen_at IS NULL AND r.decided_at > now() - interval '7 days' ORDER BY r.decided_at DESC LIMIT 5`, [actor.ref])).rows.map((row) => presentRequest(row, credentialOf(row)));
+    },
+
+    async markRequestSeen(actor, id) {
+      const { rowCount } = await pool.query("UPDATE vault.access_requests SET requester_seen_at = now() WHERE id = $1 AND requester_ref = $2 AND status IN ('APPROVED','DENIED')", [id, actor.ref]);
+      return rowCount > 0;
     }
   };
+  return repo;
 };
+
+// El pedido con lo justo de su acceso: nombre, plataforma, cliente y si es un bloque. Nunca un valor.
+const REQUEST_SELECT = 'SELECT r.*, c.platform, c.label, c.kind, c.platforms, c.status AS credential_status, cl.name AS client_name FROM vault.access_requests r JOIN vault.credentials c ON c.id = r.credential_id LEFT JOIN public."Client" cl ON cl.id = c.client_id';
+const credentialOf = (row) => ({ platform: row.platform, label: row.label, kind: row.kind, platforms: row.platforms, client_name: row.client_name });
+const presentRequest = (row, credential) => row && ({
+  id: row.id, status: row.status, credentialId: row.credential_id,
+  credential: credential ? { platform: credential.platform, label: credential.label, clientName: credential.client_name || null, kind: credential.kind, platformCount: (credential.platforms || []).length } : null,
+  requesterRef: row.requester_ref, requesterName: row.requester_name, note: row.note,
+  decidedByName: row.decided_by_name || null, decidedAt: row.decided_at || null, createdAt: row.created_at
+});
