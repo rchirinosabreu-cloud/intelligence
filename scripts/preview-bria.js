@@ -6,6 +6,7 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'vite';
 import { createBriaConversationRouter } from '../src/routes/api/briaConversations.js';
 import { requestNudge, answerNudge, decisionMessage } from '../src/lib/vaultAccessRequests.js';
+import { permissionRequestNudge, permissionAnswerNudge, permissionDecisionMessage } from '../src/lib/modulePermissionRequests.js';
 
 // Muestra local de «Preguntarle a Bria» (6 de octubre de 2026): el componente real contra una API
 // simulada que responde según la pregunta. No hay dotenv, ni base de datos, ni llamada a OpenAI.
@@ -123,10 +124,25 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
     accessDecided = { ...accessRequest, status: req.body?.decision === 'APPROVE' ? 'APPROVED' : 'DENIED', decidedByName: 'Rodny Chirinos' };
     res.json({ decided: true, request: accessDecided, message: decisionMessage(accessDecided) });
   });
+  // Pedir acceso a un módulo (15 de octubre de 2026): `?permiso=admin` muestra el pedido de Camila con «Dar acceso» y
+  // «Denegar»; `?permiso=concedido` y `?permiso=denegado`, la respuesta que le llega a ella.
+  const permissionRequest = { id: '5d1e2f30-0000-4000-8000-000000000009', status: 'PENDING', moduleKey: 'financiero', requesterRef: 'u-camila', requesterName: 'Camila del Toro', note: 'ver cuánto debe Aristea', createdAt: new Date(Date.now() - 3 * 60_000).toISOString() };
+  let permissionDecided = null;
+  const permissionNudges = (referer) => {
+    const mode = /permiso=(\w+)/.exec(referer)?.[1];
+    if (mode === 'admin') return permissionDecided ? [] : [permissionRequestNudge(permissionRequest)];
+    if (mode === 'concedido' || mode === 'denegado') return [permissionAnswerNudge({ ...permissionRequest, status: mode === 'concedido' ? 'APPROVED' : 'DENIED', decidedByName: 'Rodny Chirinos' })];
+    return null;
+  };
+  api.post('/api/bria/nudges/permission-requests/:id/decision', async (req, res) => {
+    await wait(300);
+    permissionDecided = { ...permissionRequest, status: req.body?.decision === 'APPROVE' ? 'APPROVED' : 'DENIED', decidedByName: 'Rodny Chirinos' };
+    res.json({ decided: true, request: permissionDecided, message: permissionDecisionMessage(permissionDecided) });
+  });
   // `?sinavisos` en la página deja a Bria sin tarjeta: solo la mascota, con el lápiz y el micrófono al pasar el cursor (la muestra lo lee del referer).
   api.get('/api/bria/nudges', (req, res) => {
     const referer = String(req.headers.referer || '');
-    res.json({ nudges: /sinavisos/.test(referer) ? [] : (accessNudges(referer) ?? nudges) });
+    res.json({ nudges: /sinavisos/.test(referer) ? [] : (accessNudges(referer) ?? permissionNudges(referer) ?? nudges) });
   });
   api.post('/api/bria/nudges/dismiss', (req, res) => { nudges = nudges.filter((row) => row.key !== req.body?.key); res.json({ key: req.body?.key, untilAt: new Date().toISOString() }); });
   // Buzones que lee Bria (11 de octubre de 2026): la contraseña «mala…» se rechaza como lo haría Gmail.

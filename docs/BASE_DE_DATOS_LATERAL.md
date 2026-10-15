@@ -24,6 +24,7 @@ Lo que sí se exige:
 | `weekly_focus_deliveries` | El foco de la semana que Bria dejó en el chat de cada persona: semana, persona y conversación | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
 | `daily_close_deliveries` | El cierre del día que Bria dejó en el chat de cada persona a las 5 de la tarde: día, persona y conversación | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
 | `pulse_runs`, `pulse_messages` | El pulso de Bria: qué tramos ya leyó y qué le dijo a cada persona (hechos, texto, origen, si lo ocultó, y el seguimiento: desenlace o «sigue igual») | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
+| `permission_requests` | Pedidos de acceso a un módulo que Bria hace por una persona: módulo, quién pidió, para qué en pocas palabras, quién decidió y cuándo | `scripts/sql/bria-proactive.sql` | `permissionRequestRepository.js` |
 | `mail_accounts`, `mail_seen` | Buzones compartidos conectados por un administrador (contraseña de aplicación sellada con la llave de la bóveda) y lo ya visto en cada uno: remitente, asunto, fecha y decisión, nunca el cuerpo | `scripts/sql/bria-mail.sql` | `mailAccountRepository.js` |
 
 ### `vault` (bóveda de accesos)

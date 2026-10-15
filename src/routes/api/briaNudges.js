@@ -1,12 +1,14 @@
 import express from 'express';
 import { canSeeNudges, getBriaNudgeService } from '../../services/briaNudgeService.js';
+import { getPermissionRequestService } from '../../services/permissionRequestService.js';
 
 // «Bria se adelanta» (10 de octubre de 2026): los avisos de hoy para quien dirige y «ocultar por hoy».
 // Vive bajo /api/bria, que el mapa de la plataforma excluye entero: Bria no se consulta a sí misma.
 const guard = (req, res, next) => canSeeNudges(req.user) ? next() : res.status(403).json({ message: 'Bria no está activada para tu cuenta.' });
 guard.permission = { role: 'MANAGER', modules: ['bria'] };
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export const createBriaNudgeRouter = ({ service } = {}) => {
+export const createBriaNudgeRouter = ({ service, permissions = null } = {}) => {
   const router = express.Router();
   const resolve = () => service || getBriaNudgeService();
   router.use((_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
@@ -21,5 +23,8 @@ export const createBriaNudgeRouter = ({ service } = {}) => {
   };
   router.get('/', handle((req, instance) => instance.list(req.user)));
   router.post('/dismiss', handle((req, instance) => instance.dismiss(req.user, req.body?.key)));
+  // Pedir acceso a un módulo (15 de octubre de 2026): un administrador da acceso o lo deniega desde el aviso.
+  router.post('/permission-requests/:id/decision', (req, res, next) => (UUID.test(req.params.id) ? next() : res.status(400).json({ message: 'Pedido no válido.' })),
+    handle((req) => (permissions || getPermissionRequestService()).decide(req.user, req.params.id, req.body?.decision)));
   return router;
 };

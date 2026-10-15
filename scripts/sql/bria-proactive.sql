@@ -60,3 +60,18 @@ CREATE TABLE IF NOT EXISTS bria_memory.daily_close_deliveries (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (day_key, user_ref)
 );
+-- Pedidos de acceso a un módulo (15 de octubre de 2026): cuando alguien le pide a Bria algo de un módulo que su
+-- cuenta no tiene, Bria se lo pide a los administradores sin que la persona lo pida. Uno abierto por módulo y
+-- persona; quién pidió, para qué (en pocas palabras), quién decidió y cuándo. Dar acceso escribe en la cuenta.
+CREATE TABLE IF NOT EXISTS bria_memory.permission_requests (
+  id UUID PRIMARY KEY,
+  module_key TEXT NOT NULL CHECK (length(module_key) BETWEEN 1 AND 40),
+  requester_ref TEXT NOT NULL, requester_name TEXT NOT NULL,
+  note TEXT CHECK (note IS NULL OR length(note) <= 200),
+  status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','DENIED')),
+  decided_by_ref TEXT, decided_by_name TEXT, decided_at TIMESTAMPTZ,
+  requester_seen_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS permission_requests_open ON bria_memory.permission_requests(module_key, requester_ref) WHERE status = 'PENDING';
+CREATE INDEX IF NOT EXISTS permission_requests_status ON bria_memory.permission_requests(status, created_at);
