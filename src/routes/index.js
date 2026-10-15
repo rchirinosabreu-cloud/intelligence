@@ -207,6 +207,7 @@ router.get(
 );
 // Fase A de Ritmo (10 de octubre de 2026): mapa de carga y lectura de la semana. Misma puerta.
 router.get('/manager/rhythm/load', requireModulePermission('manager'), requireManagerRole, teamRhythmController.getTeamLoad);
+router.post('/manager/rhythm/assignment-preview', requireModulePermission('manager'), requireManagerRole, teamRhythmController.previewAssignment);
 router.get('/manager/rhythm/reading', requireModulePermission('manager'), requireManagerRole, teamRhythmController.getWeeklyReading);
 router.post('/manager/rhythm/reading', requireModulePermission('manager'), requireManagerRole, teamRhythmController.generateWeeklyReading);
 router.get(

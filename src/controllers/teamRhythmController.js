@@ -14,12 +14,22 @@ export const createTeamRhythmHandler = (service = teamRhythmService) => async (r
 };
 
 // Fase A (10 de octubre de 2026): mapa de carga y lectura de la semana, misma puerta.
-export const createTeamLoadHandler = (service = teamLoadService) => async (_req, res) => {
+export const createTeamLoadHandler = (service = teamLoadService) => async (req, res) => {
   try {
-    return res.json(await service.get());
+    const window = ['today', 'tomorrow', 'week', 'next_week'].includes(req.query?.window) ? req.query.window : 'week';
+    return res.json(await service.get({ window }));
   } catch (error) {
     console.error('[TeamLoad] No se pudo armar el mapa de carga:', error?.message || error);
     return res.status(500).json({ error: 'No pudimos armar el mapa de carga. Intenta de nuevo.' });
+  }
+};
+
+export const createAssignmentPreviewHandler = (service = teamLoadService) => async (req, res) => {
+  try { return res.json(await service.preview(req.body, req.user)); }
+  catch (error) {
+    console.error('[AssignmentPrediction] No se pudo prever la asignación:', error?.message || error);
+    const status = [400, 403, 404].includes(error.status) ? error.status : 500;
+    return res.status(status).json({ error: status === 500 ? 'No pudimos prever esta entrega. Puedes continuar y revisar Ritmo.' : error.message });
   }
 };
 
@@ -46,3 +56,4 @@ export const getTeamRhythm = createTeamRhythmHandler();
 export const getTeamLoad = createTeamLoadHandler();
 export const getWeeklyReading = createWeeklyReadingReadHandler();
 export const generateWeeklyReading = createWeeklyReadingGenerateHandler();
+export const previewAssignment = createAssignmentPreviewHandler();

@@ -84,6 +84,7 @@ export const PLATFORM_OPERATIONS = {
   'GET /manager/task-analytics': { que: 'Esfuerzo del equipo: horas por categoría, cliente y persona.' },
   'GET /manager/rhythm': { que: 'Ritmo del equipo: cuánto tarda cada persona por tipo de trabajo.', campos: 'days=7|30|90 (consulta)' },
   'GET /manager/rhythm/load': { que: 'Mapa de carga: horas estimadas por persona y día hábil.' },
+  'POST /manager/rhythm/assignment-preview': { que: 'Simula una asignación y anticipa su margen de entrega; no guarda cambios.', campos: 'taskId?, title, clientId, assigneeId, dueDay, focusDeadlineAt?' },
   'GET /manager/rhythm/reading': { que: 'La lectura de la semana que escribió Bria.' },
   'POST /manager/rhythm/reading': { que: 'Pide una lectura de la semana nueva.' },
   'GET /manager/bria-memory': { que: 'La memoria indexada de Bria (documentos y minutas).' },

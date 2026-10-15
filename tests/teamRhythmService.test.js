@@ -11,7 +11,7 @@ test('the type of work comes from the piece, then the production title, then the
   assert.equal(workTypeOf({ title: '[Producción] Reel: Lanzamiento', contentItem: { format: 'reel' } }), 'Reel');
   assert.equal(workTypeOf({ title: '[Producción] Carrusel: Tips', contentItem: null }), 'Carrusel');
   assert.equal(workTypeOf({ title: '[Publicar] Reel: Lanzamiento', contentItem: { format: 'Reel' } }), 'Publicación');
-  assert.equal(workTypeOf({ title: 'Editar video institucional', aiCategory: 'Producción Audiovisual' }), 'Producción Audiovisual');
+  assert.equal(workTypeOf({ title: 'Editar video institucional', aiCategory: 'Producción Audiovisual' }), 'Video');
   assert.equal(workTypeOf({ title: 'Algo', aiCategory: null }), 'Sin clasificar');
 });
 

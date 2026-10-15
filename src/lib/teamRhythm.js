@@ -32,7 +32,7 @@ export const RHYTHM_LIMITS = Object.freeze({
 // Solo se compara trabajo homogéneo. «Operaciones & Reuniones» es la categoría de relleno del clasificador y
 // «Marketing & Social Media» mezcla redactar una parrilla con responder mensajes: compararlas entre personas
 // diría cosas falsas. Los formatos de pieza sí son el mismo trabajo.
-const COMPARABLE = new Set(['Reel', 'Carrusel', 'Post', 'Video', 'Historia', 'Publicación', 'Producción Audiovisual', 'Creativo & Diseño', 'Creación de Contenido']);
+const COMPARABLE = new Set(['Reel', 'Carrusel', 'Post', 'Video', 'Historia', 'Parrilla', 'Publicación', 'Producción Audiovisual', 'Creativo & Diseño', 'Creación de Contenido']);
 export const isComparableWork = (workType) => COMPARABLE.has(workType);
 
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -48,6 +48,7 @@ const median = (values) => {
   const sorted = [...values].sort((a, b) => a - b), mid = Math.floor(sorted.length / 2);
   return sorted.length % 2 ? sorted[mid] : Math.round((sorted[mid - 1] + sorted[mid]) / 2);
 };
+const upperQuartile = (values) => [...values].sort((a, b) => a - b)[Math.max(0, Math.ceil(values.length * 0.75) - 1)] || 0;
 const quote = (text) => `«${String(text || 'Sin título').slice(0, 50)}»`;
 
 const isForgotten = (t) => (t.longestSessionMs || 0) >= RHYTHM_LIMITS.forgottenSessionMs;
@@ -64,7 +65,7 @@ export const analyzeTeamRhythm = ({ tasks = [] } = {}) => {
 
   const types = [...new Set(measured.map((t) => t.workType))].map((workType) => {
     const rows = measured.filter((t) => t.workType === workType);
-    return { workType, measured: rows.length, people: new Set(rows.map((t) => t.personId)).size, medianMs: median(rows.map((t) => t.measuredMs)) };
+    return { workType, measured: rows.length, people: new Set(rows.map((t) => t.personId)).size, medianMs: median(rows.map((t) => t.measuredMs)), p75Ms: upperQuartile(rows.map((t) => t.measuredMs)) };
   }).sort((a, b) => b.measured - a.measured);
 
   const people = [...byPerson.values()].map(({ personId, personName, tasks: own }) => {
@@ -94,7 +95,7 @@ export const analyzeTeamRhythm = ({ tasks = [] } = {}) => {
     const byType = [...new Set(ok.map((t) => t.workType))].map((workType) => {
       const rows = ok.filter((t) => t.workType === workType).sort((a, b) => b.measuredMs - a.measuredMs);
       const values = rows.map((t) => t.measuredMs);
-      const entry = { workType, measured: rows.length, medianMs: median(values), minMs: Math.min(...values), maxMs: Math.max(...values), totalMs: values.reduce((s, v) => s + v, 0), comparable: isComparableWork(workType) };
+      const entry = { workType, measured: rows.length, medianMs: median(values), p75Ms: upperQuartile(values), minMs: Math.min(...values), maxMs: Math.max(...values), totalMs: values.reduce((s, v) => s + v, 0), comparable: isComparableWork(workType) };
       if (!entry.comparable) return entry;
 
       // Pocas tareas muy distintas entre sí (5 h y 30 min): se nombran las dos.

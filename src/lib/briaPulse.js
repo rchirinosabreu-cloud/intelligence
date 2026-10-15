@@ -18,14 +18,14 @@ const H = 3_600_000;
 export const PULSE_USE_CASE = 'bria.pulse';
 export const PULSE_PROMPT_VERSION = 1;
 export const PULSE_LIMITS = Object.freeze({ perDay: 3, perHour: 1, muteAfterDismissals: 3, muteDays: 7, maxFacts: 40 });
-export const FACT_KINDS = Object.freeze(['SIN_PROCESO', 'VENCE_HOY', 'CARGA_MANANA', 'OPERACION_ROJA', 'PIEZA_SIN_APROBAR', 'DEVUELTO_SIN_TOCAR', 'CORREO_IMPORTANTE']);
+export const FACT_KINDS = Object.freeze(['SIN_PROCESO', 'VENCE_HOY', 'CARGA_MANANA', 'ENTREGA_EN_RIESGO', 'OPERACION_ROJA', 'PIEZA_SIN_APROBAR', 'DEVUELTO_SIN_TOCAR', 'CORREO_IMPORTANTE']);
 export const URGENCIES = ['alta', 'media', 'baja'];
 // Bria habla de trabajo, nunca de personas: una frase con un juicio no sale.
 export const JUDGMENT_WORDS = /\b(lent[oa]s?|floj[oa]s?|perezos[oa]s?|vag[oa]s?|irresponsables?|incompetentes?|descuidad[oa]s?|mal trabajo|desempeño|rendimiento)\b/i;
 
 const tidy = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const plusDays = (day, amount) => { const date = new Date(`${day}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + amount); return date.toISOString().slice(0, 10); };
-export const fingerprintOf = (fact) => createHash('sha256').update(`${fact.kind}|${fact.subject}|${fact.text}`).digest('hex').slice(0, 16);
+export const fingerprintOf = (fact) => createHash('sha256').update(`${fact.kind}|${fact.subject}|${fact.evidenceKey || fact.text}`).digest('hex').slice(0, 16);
 const fact = (kind, subject, rest) => { const row = { id: `${kind}:${subject}`, kind, subject, ...rest }; return { ...row, fingerprint: fingerprintOf(row) }; };
 
 /** La jornada de Bogotá que contiene `now`: de 8:00 a 18:00; antes de las 8 es la de hoy por empezar. */
@@ -61,10 +61,28 @@ export const collectFacts = ({ nudges = [], load = null, operations = [], pieces
   if (load?.days?.length) {
     const tomorrow = load.days.find((day) => day > today);
     for (const person of load.people || []) {
+      if (load.forecast) continue;
       const cell = person.cells?.find((c) => c.day === tomorrow && c.level === 'excedida');
       if (!cell) continue;
       const day = dayLabel(cell.day);
       facts.push(fact('CARGA_MANANA', person.personId, { personId: person.personId, personName: person.personName, text: `${person.personName} tiene ${formatHours(cell.ms)} estimadas para el ${day} en ${cell.count} ${cell.count === 1 ? 'tarea' : 'tareas'}: más de lo que cabe en un día.`, url: '/manager?tab=ritmo', taskIds: cell.tasks.map((t) => t.id), severity: 2, actions: nudgeActions({ kind: 'CARGA_MANANA', personName: person.personName, day }) }));
+    }
+    if (load.forecast && !load.forecast.incomplete) for (const person of load.forecast.people || []) {
+      const tasks = (person.tasks || []).filter(t => t.risk === 'riesgo');
+      const tomorrowTasks = tasks.filter(t => t.dueDay === tomorrow && t.confidence === 'suficiente');
+      if (tomorrowTasks.length) {
+        const day = dayLabel(tomorrow);
+        facts.push(fact('CARGA_MANANA', person.personId, { personId: person.personId, personName: person.personName,
+          text: `${person.personName} tiene ${tomorrowTasks.length} entregas de mañana con margen insuficiente según el trabajo pendiente y la capacidad hasta el vencimiento. Es una estimación para revisar.`,
+          url: '/manager?tab=ritmo', taskIds: tomorrowTasks.map(t => t.id), severity: 2, actions: nudgeActions({ kind: 'CARGA_MANANA', personName: person.personName, day }) }));
+      }
+      for (const task of tasks.filter(t => t.dueDay === today && t.confidence === 'suficiente').slice(0, 3)) {
+        const url = `/gestion?taskId=${encodeURIComponent(task.id)}`;
+        facts.push(fact('ENTREGA_EN_RIESGO', task.id, { personId: person.personId, personName: person.personName,
+          evidenceKey: JSON.stringify([person.personId, task.deadlineAt || task.dueDay, task.remainingMs, task.committedToDeadlineMs, task.basis, task.sample]),
+          text: `«${task.title}» de ${person.personName} tiene ${formatHours(task.remainingMs)} estimadas pendientes; con sus compromisos anteriores suma ${formatHours(task.committedToDeadlineMs)} frente a ${formatHours(task.capacityToDeadlineMs)} nominales hasta su límite de hoy. Conviene revisar la entrega.`,
+          url, taskIds: [task.id], severity: 3, actions: nudgeActions({ kind: 'ENTREGA_EN_RIESGO', personName: person.personName, title: task.title, url }) }));
+      }
     }
   }
   for (const row of operations) {
