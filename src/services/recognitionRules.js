@@ -22,5 +22,5 @@ export function taskAwardKinds({ teamDayCount, userDayCount, userWeekCount, earl
 export function planIsApproved(items, approvedIds = []) {
   const active = items.filter(item => !item.deletedAt);
   return active.length > 0 && active.every(item => item.status === 'APROBADO'
-    || (approvedIds.includes(item.id) && ['EN_PRODUCCION', 'REALIZADO', 'PUBLICADO'].includes(item.status)));
+    || (approvedIds.includes(item.id) && ['EN_PRODUCCION', 'REALIZADO', 'PROGRAMADO', 'PUBLICADO'].includes(item.status)));
 }

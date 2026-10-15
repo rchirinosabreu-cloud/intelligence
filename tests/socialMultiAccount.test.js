@@ -103,11 +103,13 @@ const memoryDb = ({ item = baseItem(), publications = [] } = {}) => {
         return row;
       },
       update: async ({ where, data }) => { const row = state.publications.find((candidate) => candidate.id === where.id); Object.assign(row, data); return row; }
-    }
+    },
+    // El pendiente «Publicar» que se cierra solo cuando la pieza queda publicada (15 de octubre de 2026).
+    task: { findMany: async () => [] }
   };
   return { db, state };
 };
-const build = (db) => createSocialPublishingService({ db, meta: {}, now: () => NOW, decrypt: (value) => value, mediaUrlFor: async () => 'https://signed.example/x', notify: async () => {}, randomId: () => 'lease', logger: { error() {}, warn() {}, info() {} } });
+const build = (db) => createSocialPublishingService({ db, meta: {}, now: () => NOW, decrypt: (value) => value, mediaUrlFor: async () => 'https://signed.example/x', notify: async () => {}, completeTask: async () => ({}), randomId: () => 'lease', logger: { error() {}, warn() {}, info() {} } });
 
 test('scheduling creates a row per account chosen, and only for accounts the piece goes to', async () => {
   const { db, state } = memoryDb({ item: baseItem({ socialPageIds: ['200'] }) });

@@ -194,8 +194,8 @@ export function previousCycle({ year, month }, cutDay = 1) {
   return month === 1 ? cycleOf(year - 1, 12, cutDay) : cycleOf(year, month - 1, cutDay);
 }
 
-const WRITTEN_STATUSES = new Set(['EN_REVISION', 'EN_PRODUCCION', 'REALIZADO', 'APROBADO', 'PUBLICADO']);
-const DESIGNED_STATUSES = new Set(['REALIZADO', 'APROBADO', 'PUBLICADO']);
+const WRITTEN_STATUSES = new Set(['EN_REVISION', 'EN_PRODUCCION', 'REALIZADO', 'APROBADO', 'PROGRAMADO', 'PUBLICADO']);
+const DESIGNED_STATUSES = new Set(['REALIZADO', 'APROBADO', 'PROGRAMADO', 'PUBLICADO']);
 const hasText = (value) => typeof value === 'string' && value.trim().length > 0;
 
 /**
@@ -207,8 +207,9 @@ export function pieceStage(item) {
   let stage = 0;
   if (hasText(item.copyText) || hasText(item.captionText) || WRITTEN_STATUSES.has(status)) stage = 1;
   if (item.hasFinalAsset || DESIGNED_STATUSES.has(status)) stage = 2;
-  if (status === 'APROBADO' || status === 'PUBLICADO') stage = 3;
-  if (item.hasActivePublication || status === 'PUBLICADO') stage = Math.max(stage, 4);
+  if (status === 'APROBADO' || status === 'PROGRAMADO' || status === 'PUBLICADO') stage = 3;
+  // `PROGRAMADO` dice lo mismo que `hasActivePublication` desde el otro lado: la cola está armada.
+  if (item.hasActivePublication || status === 'PROGRAMADO' || status === 'PUBLICADO') stage = Math.max(stage, 4);
   if (status === 'PUBLICADO') stage = 5;
   return stage;
 }

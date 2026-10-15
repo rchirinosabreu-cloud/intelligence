@@ -11,6 +11,7 @@ import { driveAssetUrls, driveEmbedAspect } from '@/lib/finalAssetShape';
 import { finalAssetOrderProblem, moveAssetId, moveAssetToIndex } from '@/lib/finalAssetOrder';
 import { WEEKDAY_LABELS, buildMonthGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
 import { APPROVAL_STATES, approvalState, itemsNeedingRevisionRequest } from '@/lib/contentApproval';
+import { publishMomentLabel, queueOwnedStatusProblem } from '@/lib/socialPublishing';
 import {
   ChevronLeft, ChevronRight, Plus, Send, ExternalLink, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
@@ -586,6 +587,7 @@ const DriveLinkDialog = ({ itemId, onClose, onSubmit, isPending }) => {
 const PIECE_STATUS_BAR = {
   APROBADO: 'bg-brand-green',
   REALIZADO: 'bg-brand-green',
+  PROGRAMADO: 'bg-brand-magenta',
   PUBLICADO: 'bg-brand-green',
   EN_REVISION: 'bg-brand-yellow',
   EN_PRODUCCION: 'bg-brand-cyan',
@@ -665,6 +667,7 @@ const PlanPieceRail = ({ items, selectedId, onSelect, onAdd, accounts = [] }) =>
 const PIECE_CHIP = {
   APROBADO: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green',
   REALIZADO: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green',
+  PROGRAMADO: 'bg-brand-magenta-soft text-brand-magenta-deep dark:bg-brand-magenta/25 dark:text-zinc-100',
   PUBLICADO: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green',
   EN_REVISION: 'bg-brand-yellow-soft text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow',
   EN_PRODUCCION: 'bg-brand-cyan-soft text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan',
@@ -849,8 +852,11 @@ const ContentItemCard = ({
   const [showFeedback, setShowFeedback] = useState(false);
   const finalAssets = item.finalAssets || [];
   const pieceApproval = approvalState(item);
-  const isRealizado = item.status === 'REALIZADO' || item.status === 'PUBLICADO';
+  const isRealizado = item.status === 'REALIZADO' || item.status === 'PROGRAMADO' || item.status === 'PUBLICADO';
   const isDevuelto = item.status === 'DEVUELTO';
+  // Programada y esperando su hora: el estado lo lleva la cola, no el desplegable.
+  const queueStatusReason = queueOwnedStatusProblem({ item, publications: item.publications || [] });
+  const queueOwnsStatus = Boolean(queueStatusReason);
   const latestTask = item.tasks?.[0];
 
   return (
@@ -990,10 +996,18 @@ const ContentItemCard = ({
 
           <div className="flex w-44 flex-col gap-1.5">
             <span className={FIELD_LABEL}>Estado</span>
+            {/* Con una publicación esperando salir el estado es de la cola: el desplegable explica en vez
+                de escribir, porque ponerla en «Publicado» a mano mataba la publicación (15 de octubre de
+                2026). No lleva `disabled`: sí hace algo, y apagarlo lo esconde del teclado y del lector
+                de pantalla justo cuando más falta hace la explicación. */}
             <Select
               value={item.status}
-              onChange={(e) => onUpdate({ id: item.id, status: e.target.value })}
+              onChange={(e) => {
+                if (queueOwnsStatus) return toast.error('El estado lo lleva la publicación programada. Cancélala primero.');
+                onUpdate({ id: item.id, status: e.target.value });
+              }}
               aria-label="Estado de la pieza"
+              title={queueOwnsStatus ? queueStatusReason || undefined : undefined}
               className={FIELD_CLASS}
             >
               <option value="BORRADOR">Borrador</option>
@@ -1002,8 +1016,22 @@ const ContentItemCard = ({
               <option value="EN_PRODUCCION">En Producción</option>
               <option value="DEVUELTO">Devuelto</option>
               <option value="REALIZADO">Realizado</option>
+              {/* Lo pone y lo quita la cola de Meta: se ve cuando es el estado, pero no se elige. */}
+              <option value="PROGRAMADO" disabled>Programado</option>
               <option value="PUBLICADO">Publicado</option>
             </Select>
+            {/* Una línea, no el párrafo entero: la columna mide 176 px y el motivo completo ocupaba seis
+                renglones. Lo que hace falta aquí es el hecho —sale sola, y cuándo—; el resto está en el
+                `title` y lo repite el servidor si alguien lo intenta igual. */}
+            {queueStatusReason && (
+              <p
+                className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400"
+                data-piece-queue-owns-status
+                title={queueStatusReason}
+              >
+                Sale sola {publishMomentLabel(item) || 'a su hora'}: el pendiente «Publicar» se cierra solo.
+              </p>
+            )}
             {/* El cliente aprobó lo que tenía delante. Si lo que hay ahora es otra cosa, aquí se le
                 devuelve la palabra sin fingir que nunca aprobó (Rodny, 5 de octubre de 2026). */}
             {pieceApproval === APPROVAL_STATES.APROBADA && (

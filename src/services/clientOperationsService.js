@@ -145,8 +145,14 @@ function buildOperation(client, { today, reporters, detail }) {
 // «Ya se publicó» pasa por el mismo camino que el selector de estado de la parrilla, con todo lo que este
 // hace después (cerrar la parrilla cuando todo salió); nunca por una escritura paralela.
 const updateItemThroughContent = async (id, data) => (await import('./contentService.js')).updateContentItem(id, data);
+const cancelThroughPublishing = async (args) => (await import('./socialPublishingService.js')).cancelItemPublications(args);
 
-export const createClientOperationsService = ({ db = prisma, now = () => new Date(), updateItem = updateItemThroughContent } = {}) => {
+export const createClientOperationsService = ({
+  db = prisma,
+  now = () => new Date(),
+  updateItem = updateItemThroughContent,
+  cancelItemPublications = cancelThroughPublishing,
+} = {}) => {
   const todayKey = () => bogotaDate(now());
 
   const reporterNames = async (clients) => {
@@ -239,6 +245,11 @@ export const createClientOperationsService = ({ db = prisma, now = () => new Dat
     const item = await findClientPiece(clientId, itemId);
     if (!item) throw httpError(404, 'Esa pieza no pertenece a este cliente.');
     if (item.status !== 'PUBLICADO') {
+      // Si ya salió por fuera, lo que estuviera programado aquí no tiene que salir otra vez (15 de
+      // octubre de 2026). Antes la cola quedaba armada y al llegar la hora fallaba sola diciendo que la
+      // pieza ya estaba publicada, que es cierto pero no es un error de la pieza.
+      await cancelItemPublications({ itemId: item.id, reason: 'Se marcó a mano como ya publicada.' })
+        .catch((error) => { console.error('[ClientOperations] No se pudo cancelar la publicación programada:', error?.message || error); });
       await updateItem(item.id, {
         status: 'PUBLICADO',
         manualPublish: { previousStatus: item.status, previousPlanStatus: item.plan?.status || null, at: now().toISOString(), by: actorUserId || null },

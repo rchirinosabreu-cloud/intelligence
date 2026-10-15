@@ -15,9 +15,90 @@ export const SOCIAL_PLATFORM_LABELS = Object.freeze({ INSTAGRAM: 'Instagram', FA
 
 export const PUBLICATION_STATUSES = Object.freeze(['SCHEDULED', 'PUBLISHING', 'PUBLISHED', 'FAILED', 'CANCELLED']);
 export const ACTIVE_PUBLICATION_STATUSES = Object.freeze(['SCHEDULED', 'PUBLISHING']);
+/** Una red que falló también cuenta como pendiente: la pieza no está «publicada» si una de sus redes no salió. */
+export const BLOCKING_PUBLICATION_STATUSES = Object.freeze([...ACTIVE_PUBLICATION_STATUSES, 'FAILED']);
+
+/**
+ * «Programado» (Rodny, 15 de octubre de 2026): entre «Realizado» y «Publicado» faltaba decir que la
+ * pieza ya está en la cola de Meta esperando su hora. **Lo pone y lo quita la cola, nunca una persona**
+ * (ver `itemStatusForQueue`): es lo único que no se puede escribir a mano sin mentir.
+ */
+export const SCHEDULED_ITEM_STATUS = 'PROGRAMADO';
 
 /** Una pieza sale solo si el cliente ya la aprobó; producción y realizado son etapas posteriores a esa aprobación. */
-export const PUBLISHABLE_ITEM_STATUSES = Object.freeze(['APROBADO', 'EN_PRODUCCION', 'REALIZADO']);
+export const PUBLISHABLE_ITEM_STATUSES = Object.freeze(['APROBADO', 'EN_PRODUCCION', 'REALIZADO', SCHEDULED_ITEM_STATUS]);
+
+/** Hay algo esperando salir: programado, o publicándose ahora mismo. */
+export const hasArmedPublication = (publications = []) => (Array.isArray(publications) ? publications : [])
+  .some((row) => row && ACTIVE_PUBLICATION_STATUSES.includes(row.status));
+
+/**
+ * El estado que le corresponde a la pieza **por su cola**, o `null` si la cola no tiene nada que decir.
+ *
+ * Es la única regla que mueve una pieza entre «Realizado», «Programado» y «Publicado», y la llama todo
+ * lo que toca la cola: programar, cancelar, mover la pieza de día y publicar. Antes cada sitio decidía
+ * por su cuenta y solo el publicador sabía pasar a `PUBLICADO`, así que cancelar la última red dejaba
+ * la pieza colgada en el estado anterior para siempre.
+ *
+ * Una pieza que salió **a medias** —una red publicada y otra fallida— se queda en `PROGRAMADO`: ni está
+ * publicada ni está suelta, todavía le falta resolver una red. Y cuando no queda nada vivo en la cola
+ * (todo cancelado o fallido), vuelve a `REALIZADO`, que es lo que la deja otra vez en manos del equipo.
+ */
+export const itemStatusForQueue = ({ status, publications = [] }) => {
+  const rows = (Array.isArray(publications) ? publications : []).filter(Boolean);
+  const armed = hasArmedPublication(rows);
+  const failed = rows.some((row) => row.status === 'FAILED');
+  const published = rows.some((row) => row.status === 'PUBLISHED');
+  if (published && !armed && !failed) return 'PUBLICADO';
+  if (armed || published) return SCHEDULED_ITEM_STATUS;
+  return status === SCHEDULED_ITEM_STATUS ? 'REALIZADO' : null;
+};
+
+const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+
+/**
+ * «el 15 de octubre a las 10:00». Se lee del día y la hora de la pieza, que son texto plano
+ * (`YYYY-MM-DD` y `HH:mm`): no hay conversión de zona que pueda correr el día.
+ */
+export const publishMomentLabel = (item) => {
+  const dayKey = dayKeyOf(item?.publishDate);
+  const time = String(item?.publishTime || '');
+  if (!dayKey) return null;
+  const [, month, day] = dayKey.split('-').map(Number);
+  const when = month && day ? `el ${day} de ${MONTHS[month - 1]}` : null;
+  if (!when) return null;
+  return splitPublishTime(time) ? `${when} a las ${time}` : when;
+};
+
+/**
+ * Por qué no se puede cambiar a mano el estado de esta pieza: tiene una publicación esperando salir, y
+ * mientras la haya **el estado es de la cola**.
+ *
+ * De aquí salió el accidente del 15 de octubre de 2026. Alguien programó un reel a las 10:00 y seis
+ * minutos después movió su pendiente «Publicar» a realizado —con la certeza de que iba a salir—; el
+ * espejo pendiente→pieza la dejó en `PUBLICADO` y a las 10:00 el publicador, que vuelve a comprobar
+ * todo antes de salir, la encontró publicada y canceló las dos redes diciendo «Esta pieza ya está
+ * publicada». El reel no salió y el mensaje señalaba justo lo contrario de lo que había pasado.
+ *
+ * Se desbloquea solo: si Meta falla, la cola deja de estar armada y el equipo puede volver a marcar la
+ * pieza a mano, igual que con lo que se publica por fuera de la plataforma.
+ */
+export const queueOwnedStatusProblem = ({ item, publications = [] }) => {
+  if (!hasArmedPublication(publications)) return null;
+  const when = publishMomentLabel(item);
+  return `Esta pieza sale sola${when ? ` ${when}` : ''} y su estado lo lleva la publicación programada. Cuando Meta la publique se marca sola, y el pendiente «Publicar» se cierra solo. Si quieres cambiarla a mano, cancela primero la publicación.`;
+};
+
+/**
+ * Por qué no hay que cerrar a mano el pendiente «Publicar»: la pieza ya está programada y, cuando Meta
+ * la publique, el pendiente se cierra solo. Mismo motivo que `queueOwnedStatusProblem` —cerrarlo era el
+ * otro camino que dejaba la pieza en `PUBLICADO` y mataba la cola—, dicho desde el lado del pendiente.
+ */
+export const publicationTaskCloseProblem = ({ item, publications = [] }) => {
+  if (!hasArmedPublication(publications)) return null;
+  const when = publishMomentLabel(item);
+  return `Esta pieza sale sola${when ? ` ${when}` : ''}. Cuando Meta la publique, este pendiente se cierra solo: no hace falta moverlo. Si la vas a publicar por tu cuenta, cancela primero la publicación programada.`;
+};
 
 export const MAX_PUBLICATION_ATTEMPTS = 3;
 /**

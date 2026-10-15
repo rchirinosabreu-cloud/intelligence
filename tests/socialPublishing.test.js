@@ -76,7 +76,9 @@ test('Meta limits are checked before spending the publication', () => {
 test('scheduling a piece names every reason it cannot go out, in plain Spanish', () => {
   const ok = schedulingProblems({ item: approved, assets: [image], accounts: [igAccount, fbAccount], platforms: ['INSTAGRAM', 'FACEBOOK'], now });
   assert.deepEqual(ok, []);
-  assert.deepEqual(PUBLISHABLE_ITEM_STATUSES, ['APROBADO', 'EN_PRODUCCION', 'REALIZADO']);
+  // `PROGRAMADO` entró el 15 de octubre de 2026: una pieza ya programada sigue pudiendo salir, porque
+  // reintentar una red después de que otra salió no es volver a pedir la aprobación del cliente.
+  assert.deepEqual(PUBLISHABLE_ITEM_STATUSES, ['APROBADO', 'EN_PRODUCCION', 'REALIZADO', 'PROGRAMADO']);
   assert.match(schedulingProblems({ item: { ...approved, status: 'BORRADOR' }, assets: [image], accounts: [igAccount], platforms: ['INSTAGRAM'], now })[0], /aprobada/i);
   assert.match(schedulingProblems({ item: { ...approved, status: 'PUBLICADO' }, assets: [image], accounts: [igAccount], platforms: ['INSTAGRAM'], now })[0], /ya está publicada/i);
   assert.match(schedulingProblems({ item: { ...approved, publishTime: '' }, assets: [image], accounts: [igAccount], platforms: ['INSTAGRAM'], now })[0], /hora/i);

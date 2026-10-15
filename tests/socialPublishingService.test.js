@@ -18,8 +18,8 @@ const baseItem = () => ({
 });
 
 /** A tiny in-memory Prisma: enough of `where` to keep the service honest, nothing more. */
-const memoryDb = ({ item = baseItem(), publications = [] } = {}) => {
-  const state = { item, publications: publications.map((row) => ({ ...row })), log: [] };
+const memoryDb = ({ item = baseItem(), publications = [], tasks = [] } = {}) => {
+  const state = { item, publications: publications.map((row) => ({ ...row })), tasks: tasks.map((row) => ({ ...row })), log: [] };
   const matches = (row, where = {}) => Object.entries(where).every(([key, expected]) => {
     if (key === 'OR') return expected.some((clause) => matches(row, clause));
     if (key === 'AND') return expected.every((clause) => matches(row, clause));
@@ -70,6 +70,12 @@ const memoryDb = ({ item = baseItem(), publications = [] } = {}) => {
     },
     clientSocialAccount: {
       update: async ({ where, data }) => { state.log.push(['account.update', where.id, data]); return { id: where.id, ...data }; }
+    },
+    // El pendiente «Publicar» de la pieza: cuando Meta publica, se cierra solo (15 de octubre de 2026).
+    task: {
+      findMany: async ({ where = {} } = {}) => state.tasks.filter((row) => (
+        row.contentItemId === where.contentItemId && (!where.status?.not || row.status !== where.status.not)
+      ))
     }
   };
   return { db, state };
@@ -87,10 +93,12 @@ const fakeMeta = (script = {}) => {
   };
 };
 
-const build = ({ db, meta = fakeMeta().client, notifications = [] } = {}) => createSocialPublishingService({
+const build = ({ db, meta = fakeMeta().client, notifications = [], closed = [] } = {}) => createSocialPublishingService({
   db, meta, now: () => NOW, decrypt: (value) => value.replace('enc:', 'token-'),
   mediaUrlFor: async (asset) => `https://signed.example/${asset.storageKey}`,
   notify: async (data) => { notifications.push(data); return data; },
+  // El cierre del pendiente pasa por el `updateTask` de siempre; aquí solo se anota a quién se le cerró.
+  completeTask: async (taskId, data, updaterId) => { closed.push([taskId, data.status, updaterId]); return { id: taskId, ...data }; },
   randomId: () => 'lease-1', logger: { error() {}, warn() {}, info() {} }
 });
 
@@ -208,10 +216,11 @@ test('the cron claims due rows by compare-and-set, publishes with signed URLs an
   assert.equal(ig.externalMediaId, 'ig-1');
   assert.equal(ig.leaseToken, null, 'the lease is released');
   assert.equal(ig.publishedAt.toISOString(), NOW.toISOString());
-  assert.equal(state.item.status, 'APROBADO', 'the piece is not PUBLICADO while one network is still pending');
+  // Salió a medias: PROGRAMADO, que desde el 15 de octubre de 2026 es «en la cola, todavía no publicada».
+  assert.equal(state.item.status, 'PROGRAMADO', 'the piece is not PUBLICADO while one network is still pending');
   assert.equal(state.publications[1].status, 'PUBLISHED');
   // `pub-later` is still SCHEDULED, but it is a fake platform of this test; the rule counts SCHEDULED/PUBLISHING rows.
-  assert.equal(state.item.status, 'APROBADO');
+  assert.equal(state.item.status, 'PROGRAMADO');
   assert.equal(notifications.length, 2);
   assert.equal(notifications[0].userId, 'user-rodny');
   assert.equal(notifications[0].type, 'SOCIAL_PUBLICATION_PUBLISHED');
@@ -225,6 +234,42 @@ test('when the last pending network goes out, the piece becomes PUBLICADO', asyn
   const service = build({ db });
   await service.processDuePublications();
   assert.equal(state.item.status, 'PUBLICADO');
+});
+
+// Rodny, 15 de octubre de 2026: «si ya la plataforma está reconociendo que se publicó en Meta, entonces
+// eso debe publicarse automáticamente». El community manager no tiene que mover su pendiente «Publicar»
+// —que era justo lo que mataba la publicación— y el logro queda a su nombre.
+test('cuando Meta publica, el pendiente «Publicar» de la pieza se cierra solo', async () => {
+  const { db, state } = memoryDb({
+    publications: [{ id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: NOW, attempts: 0 }],
+    tasks: [
+      { id: 'task-publicar', contentItemId: 'item-1', title: '[Publicar] Post: Jean Day', status: 'PENDIENTE', assignee: { userId: 'user-sara' } },
+      { id: 'task-produccion', contentItemId: 'item-1', title: '[Producción] Post: Jean Day', status: 'PENDIENTE', assignee: { userId: 'user-diego' } }
+    ]
+  });
+  const closed = [];
+  await build({ db, closed }).processDuePublications();
+  assert.equal(state.item.status, 'PUBLICADO');
+  assert.deepEqual(closed, [['task-publicar', 'REALIZADA', 'user-sara']],
+    'solo el pendiente de publicar, y a nombre de quien lo tenía');
+});
+
+test('un fallo al cerrar el pendiente nunca deshace una publicación que sí salió', async () => {
+  const { db, state } = memoryDb({
+    publications: [{ id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: NOW, attempts: 0 }],
+    tasks: [{ id: 'task-publicar', contentItemId: 'item-1', title: '[Publicar] Post: Jean Day', status: 'PENDIENTE', assignee: { userId: 'user-sara' } }]
+  });
+  const service = createSocialPublishingService({
+    db, meta: fakeMeta().client, now: () => NOW, decrypt: (value) => value.replace('enc:', 'token-'),
+    mediaUrlFor: async (asset) => `https://signed.example/${asset.storageKey}`,
+    notify: async (data) => data,
+    completeTask: async () => { throw new Error('el tablero no responde'); },
+    randomId: () => 'lease-1', logger: { error() {} }
+  });
+  const [outcome] = await service.processDuePublications();
+  assert.equal(outcome.status, 'PUBLISHED');
+  assert.equal(state.item.status, 'PUBLICADO');
+  assert.equal(state.publications[0].status, 'PUBLISHED');
 });
 
 test('a row another replica already claimed is skipped, not published twice', async () => {
@@ -295,7 +340,7 @@ test('a network that failed keeps the piece from becoming PUBLICADO when the oth
   ] });
   await build({ db }).processDuePublications();
   assert.equal(state.publications[1].status, 'PUBLISHED');
-  assert.equal(state.item.status, 'APROBADO', 'one requested network never went out');
+  assert.equal(state.item.status, 'PROGRAMADO', 'one requested network never went out, so the piece is not PUBLICADO');
   const cancelledInstead = memoryDb({ publications: [
     { id: 'pub-facebook', contentItemId: 'item-1', socialAccountId: 'acc-fb', platform: 'FACEBOOK', status: 'CANCELLED', scheduledAt: NOW },
     { id: 'pub-instagram', contentItemId: 'item-1', socialAccountId: 'acc-ig', platform: 'INSTAGRAM', status: 'SCHEDULED', scheduledAt: NOW, attempts: 0 }
