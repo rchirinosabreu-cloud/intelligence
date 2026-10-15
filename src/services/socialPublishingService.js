@@ -250,10 +250,16 @@ export const createSocialPublishingService = ({
     if (row.status !== 'FAILED') throw httpError(409, 'Solo se reintenta una publicación que falló.');
     const current = now();
     const scheduledAt = new Date(row.scheduledAt).getTime() < current.getTime() ? current : row.scheduledAt;
-    return db.socialPublication.update({
+    const retried = await db.socialPublication.update({
       where: { id: row.id },
       data: { status: 'SCHEDULED', scheduledAt, attempts: 0, nextAttemptAt: null, error: null, leaseToken: null, leaseAt: null, publishRequestedAt: null, requestedById: actorUserId || row.requestedById }
     });
+    // Reintentar vuelve a armar la cola, así que la pieza vuelve a ser suya. Sin esto, una pieza que
+    // quedó en `PUBLICADO` por error seguía ahí y el publicador la rechazaba otra vez por el mismo
+    // motivo: el 15 de octubre de 2026 hubo que devolverle el estado a mano antes de que el reintento
+    // sirviera de algo.
+    await syncItemStatusWithQueue(row.contentItemId);
+    return retried;
   };
 
   /**

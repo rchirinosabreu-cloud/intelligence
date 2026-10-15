@@ -11,11 +11,11 @@ import { createSocialPublishingService } from '../src/services/socialPublishingS
 
 // El estado «Programado» (Rodny, 15 de octubre de 2026).
 //
-// El 15 de octubre, a las 09:12, alguien programó un reel de Pablo Hoff para las 10:00. Seis minutos
-// después movió su pendiente «Publicar» a realizado, con la certeza de que iba a salir. El espejo
-// pendiente→pieza la dejó en PUBLICADO y a las 10:00:28 el publicador, que vuelve a comprobar todo
-// antes de salir, la encontró publicada y falló las dos redes diciendo «Esta pieza ya está publicada».
-// `publishRequestedAt` quedó vacío en las dos filas: nunca se le pidió nada a Meta y el reel no salió.
+// Ese día se programó un reel de Pablo Hoff a las 09:12 y, antes de su hora, su pendiente «Publicar»
+// se movió a realizado con la certeza de que iba a salir. El espejo pendiente→pieza lo dejó en
+// PUBLICADO y a las 10:00:28 el publicador, que vuelve a comprobar todo antes de salir, lo encontró
+// publicado y falló las dos redes diciendo «Esta pieza ya está publicada». No salió a su hora: hubo
+// que notarlo, devolverle el estado a mano y reprogramarlo, y salió a las 12:01 en las dos redes.
 //
 // Faltaba un estado entre «Realizado» y «Publicado» que dijera «ya está en la cola esperando su hora»,
 // y faltaba que nadie tuviera que mover nada a mano para que eso pasara.
@@ -172,6 +172,17 @@ test('una red fallida deja de mandar: la pieza vuelve al equipo y nadie le cierr
   await service.cancelPublication({ publicationId: 'pub-1' });
   assert.equal(state.item.status, 'REALIZADO');
   assert.deepEqual(closed, [], 'una publicación cancelada no cierra el pendiente de nadie');
+});
+
+test('reintentar devuelve la pieza a la cola, aunque hubiera quedado marcada como publicada', async () => {
+  // Lo que pasó el 15 de octubre de 2026: la pieza quedó en PUBLICADO por error, las dos redes
+  // fallaron por eso y reintentar no bastaba, porque la fila se rearmaba pero la pieza seguía
+  // «publicada» y el publicador la rechazaba otra vez. Hubo que corregir el estado a mano.
+  const { db, state } = memoryDb({ status: 'PUBLICADO', publications: [{ id: 'pub-1', status: 'FAILED', error: 'Esta pieza ya está publicada.', scheduledAt: NOW }] });
+  const { service } = build({ db });
+  await service.retryPublication({ publicationId: 'pub-1', actorUserId: 'u1' });
+  assert.equal(state.publications[0].status, 'SCHEDULED');
+  assert.equal(state.item.status, 'PROGRAMADO', 'vuelve a estar en la cola, así que puede volver a salir');
 });
 
 test('«Ya se publicó» cancela lo que estuviera programado antes de marcar la pieza', async () => {
