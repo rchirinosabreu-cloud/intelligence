@@ -93,7 +93,7 @@ export const buildReadingDigest = ({ rhythm, load }) => {
       lines.push(`${p.personName}: ${formatHours(p.remainingMs)} a ${formatHours(p.upperMs)} restantes frente a ${formatHours(p.capacityMs)} de capacidad en el periodo; ${p.riskCount} entregas en riesgo, ${p.tightCount} ajustadas, ${p.overdueCount} vencidas, ${p.undatedCount} sin fecha. Historial ${p.confidence}. Puede recibir: ${p.canReceive ? 'con espacio estimado' : 'no confirmado'}.`);
       for (const task of [...p.tasks].sort((a, b) => Number(b.risk && b.risk !== 'ok') - Number(a.risk && a.risk !== 'ok')).slice(0, 6)) {
         taskIds.add(task.id);
-        lines.push(`  [${task.id}] ${task.title} · ${task.dueDay || 'sin fecha'} · ${formatHours(task.remainingMs)} a ${formatHours(task.upperMs)} por hacer · ${task.risk}`);
+        lines.push(`  [${task.id}] ${task.title} · ${task.dueDay || 'sin fecha'}${task.deadlineAt ? ` (límite ${task.deadlineAt})` : ''} · ${formatHours(task.remainingMs)} a ${formatHours(task.upperMs)} por hacer · ${task.risk} · ${task.clientName || 'sin cliente'} · complejidad ${task.complexity || 'sin clasificar'} · base ${task.basis || 'general'} · ${task.sample || 0} mediciones (${task.confidence || 'baja'}).`);
       }
     }
   }

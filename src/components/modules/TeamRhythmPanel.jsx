@@ -4,6 +4,7 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
 import TeamWeekOverview from './TeamWeekOverview';
+import WorkProfileExplorer from './WorkProfileExplorer';
 
 // La semana es la entrada; el historial se abre por elección. Antes de leer tiempos individuales siempre se
 // muestra cuánto se midió. Los hallazgos conservan sus tareas como evidencia, sin calificar a la persona.
@@ -157,6 +158,8 @@ export default function TeamRhythmPanel({ periodDays = 30, refreshKey = 0, view 
         <div className="mt-4"><CoverageBar value={data.team.coverage} /></div>
       </div>
 
+      <WorkProfileExplorer data={data} />
+      <details className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950"><summary className="cursor-pointer text-sm font-medium text-zinc-800 dark:text-zinc-200">Observaciones del cronómetro por persona</summary>
       {people.length === 0 ? (
         <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-zinc-200 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">Nadie cerró tareas en este periodo.</div>
       ) : (
@@ -164,6 +167,7 @@ export default function TeamRhythmPanel({ periodDays = 30, refreshKey = 0, view 
           {people.map((person) => <PersonCard key={person.personId} person={person} tasks={data.tasks || {}} />)}
         </div>
       )}
+      </details>
     </section>
   );
 }

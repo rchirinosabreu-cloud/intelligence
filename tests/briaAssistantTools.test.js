@@ -27,7 +27,20 @@ test('Bria reads the same weekly capacity forecast as Manager, respecting a pers
   assert.equal(out.data.prevision.personas.length, 1);
   assert.equal(out.data.prevision.personas[0].puedeRecibir, false);
   assert.equal(out.data.prevision.personas[0].trabajoRestante, '1 h a 2 h');
+  assert.doesNotMatch(out.data.equipo.lectura, /el equipo tiene espacio/);
   assert.match(out.data.instruccion, /concentración de entregas/);
+});
+
+test('Bria can read habitual time for a specific client and complexity without comparing different contexts', async () => {
+  const H = 3600000;
+  const base = { personId: 'b', personName: 'Brayan', closed: 6, measured: 6, coverage: 1, byType: [], findings: [] };
+  const out = await toolByName('ritmo_del_equipo').run({ persona: 'Brayan', cliente: 'Cliente X', tipo: 'Reel', complejidad: 'MEDIA' }, { rhythm: { get: async () => ({
+    period: { days: 30 }, team: { closed: 6, measured: 6, coverage: 1 }, people: [base], tasks: {},
+    profiles: ['MEDIA','ALTA'].map(complexity => ({ personId: 'b', personName: 'Brayan', workType: 'Reel', clientId: 'x', clientName: 'Cliente X', complexity, measured: 3, closed: 3, meanMs: (complexity === 'MEDIA' ? 4 : 6) * H, medianMs: (complexity === 'MEDIA' ? 4 : 6) * H, p75Ms: 6 * H })), hours: []
+  }) } });
+  assert.ok(Array.isArray(out.data.porContexto));
+  assert.equal(out.data.porContexto.length, 1);
+  assert.equal(out.data.porContexto[0].habitual, '4 h');
 });
 
 test('each tool opens with the permission of its screen', () => {

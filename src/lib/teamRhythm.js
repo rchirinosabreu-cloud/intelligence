@@ -32,7 +32,7 @@ export const RHYTHM_LIMITS = Object.freeze({
 // Solo se compara trabajo homogéneo. «Operaciones & Reuniones» es la categoría de relleno del clasificador y
 // «Marketing & Social Media» mezcla redactar una parrilla con responder mensajes: compararlas entre personas
 // diría cosas falsas. Los formatos de pieza sí son el mismo trabajo.
-const COMPARABLE = new Set(['Reel', 'Carrusel', 'Post', 'Video', 'Historia', 'Publicación', 'Producción Audiovisual', 'Creativo & Diseño', 'Creación de Contenido']);
+const COMPARABLE = new Set(['Reel', 'Carrusel', 'Post', 'Video', 'Historia', 'Parrilla', 'Publicación', 'Producción Audiovisual', 'Creativo & Diseño', 'Creación de Contenido']);
 export const isComparableWork = (workType) => COMPARABLE.has(workType);
 
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];

@@ -35,11 +35,12 @@ test('Bria receives the deadline forecast and cannot confuse clustered deliverie
     days: ['2026-10-09'], incomplete: false,
     people: [{ personName: 'Brayan Torres', confidence: 'suficiente', remainingMs: 4 * H, upperMs: 5 * H, capacityMs: 8 * H,
       overdueCount: 0, riskCount: 0, tightCount: 0, undatedCount: 0, canReceive: true,
-      tasks: [{ id: 'forecast-only', title: 'Video futuro', dueDay: '2026-10-09', remainingMs: 4 * H, upperMs: 5 * H, risk: 'ok' }] }]
+      tasks: [{ id: 'forecast-only', title: 'Video futuro', clientName: 'Nutresa', complexity: 'MEDIA', basis: 'persona_cliente_complejidad', sample: 8, confidence: 'suficiente', deadlineAt: '2026-10-09T23:00:00Z', dueDay: '2026-10-09', remainingMs: 4 * H, upperMs: 5 * H, risk: 'ok' }] }]
   } } });
   assert.match(digest.text, /Previsión de compromisos/);
   assert.match(digest.text, /4 h a 5 h/);
   assert.ok(digest.taskIds.has('forecast-only'));
+  assert.match(digest.text, /Nutresa.*MEDIA.*persona_cliente_complejidad.*8 mediciones/s);
   const request = buildReadingRequest({ digest, today: '2026-10-09' });
   assert.match(request.prompt, /concentración de entregas/);
 });

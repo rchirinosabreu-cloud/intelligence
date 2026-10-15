@@ -54,6 +54,8 @@ import { getTaskSystemEventPresentation } from '@/lib/taskTiming';
 import TaskWorkHistory from './TaskWorkHistory';
 import TaskLifecycleDialog from './TaskLifecycleDialog';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
+import TaskAssignmentForecast from '@/components/tasks/TaskAssignmentForecast';
+import { hasModuleAccess } from '@/lib/platformModules';
 
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
@@ -143,9 +145,9 @@ const TASK_EVENT_STYLES = {
     },
     system_reintegrate: {
         label: 'Evento: Reintegración', Icon: CheckCircle2,
-        card: 'bg-emerald-50/40 border-emerald-100 dark:bg-emerald-900/10 dark:border-emerald-900/20',
-        icon: 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900 dark:text-emerald-400',
-        title: 'text-emerald-600', badge: 'border-emerald-200 bg-emerald-100/70 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200'
+        card: 'bg-brand-green-soft/40 border-brand-green/15 dark:bg-brand-green/10 dark:border-brand-green/20',
+        icon: 'bg-brand-green/10 text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green',
+        title: 'text-brand-green-deep dark:text-brand-green', badge: 'border-brand-green/20 bg-brand-green/10 text-brand-green-deep dark:border-brand-green/30 dark:bg-brand-green/10 dark:text-brand-green'
     },
     [FOCUS_OVERDUE_EVENT_TYPE]: {
         label: 'Evento: Compromiso vencido', Icon: Clock,
@@ -1593,7 +1595,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                     <button
                         type="button"
                         onClick={() => handleDownloadImage(downloadUrl)}
-                        className="p-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:hover:bg-indigo-900/50 dark:text-indigo-400 rounded-lg shadow-sm transition-colors"
+                        className="p-2 bg-brand-cyan-soft hover:bg-brand-cyan/10 text-brand-cyan-deep dark:bg-brand-cyan/15 dark:hover:bg-brand-cyan/20 dark:text-brand-cyan rounded-lg shadow-sm transition-colors"
                         title="Descargar archivo"
                         aria-label="Descargar archivo"
                     >
@@ -1906,7 +1908,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 {/* Header Section */}
                 <div className="flex shrink-0 flex-col items-stretch gap-3 border-b border-zinc-200 bg-white px-4 py-3 pr-12 dark:border-zinc-800 dark:bg-zinc-900 sm:flex-row sm:items-center sm:justify-between sm:px-6 sm:py-4 sm:pr-12">
                     <div className="flex min-w-0 items-center gap-3">
-                        <div className="p-2 bg-indigo-50 dark:bg-indigo-900/20 rounded-xl text-primary">
+                        <div className="p-2 bg-brand-cyan-soft dark:bg-brand-cyan/15 rounded-xl text-primary">
                             {isEdition ? <ClipboardList size={20} /> : <Plus size={20} />}
                         </div>
                         <div className="min-w-0">
@@ -1956,7 +1958,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                         navigate(`/parrillas/${formData.contentPlanId}?item=${formData.contentItemId}`);
                                     }
                                 }}
-                                className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 dark:text-indigo-400 rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all border border-indigo-100 dark:border-indigo-900/30 shadow-sm"
+                                className="flex items-center gap-2 px-3 py-1.5 bg-brand-cyan-soft dark:bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan rounded-lg text-[9px] font-black uppercase tracking-wider hover:bg-brand-cyan/10 transition-all border border-brand-cyan/15 dark:border-brand-cyan/30 shadow-sm"
                             >
                                 <LayoutGrid size={11} /> Abrir Parrilla
                             </button>
@@ -1978,8 +1980,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             className={cn(
                                 "flex items-center justify-center p-1.5 rounded-lg transition-all border shadow-sm",
                                 formData.isSpecial
-                                    ? "bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800 text-purple-600 dark:text-purple-300"
-                                    : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-purple-500"
+                                    ? "bg-brand-magenta-soft dark:bg-brand-magenta/10 border-brand-magenta/20 dark:border-brand-magenta/30 text-brand-magenta-deep dark:text-brand-magenta"
+                                    : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-brand-magenta-deep dark:hover:text-brand-magenta"
                             )}
                             title={formData.isSpecial ? "Quitar especial" : "Marcar como especial"}
                         >
@@ -1992,8 +1994,8 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             className={cn(
                                 "flex items-center justify-center p-1.5 rounded-lg transition-all border shadow-sm",
                                 isFollowing
-                                    ? "bg-sky-50 dark:bg-sky-900/20 border-sky-200 dark:border-sky-800 text-sky-600 dark:text-sky-300"
-                                    : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-sky-500"
+                                    ? "bg-brand-cyan-soft dark:bg-brand-cyan/10 border-brand-cyan/20 dark:border-brand-cyan/30 text-brand-cyan-deep dark:text-brand-cyan"
+                                    : "bg-white dark:bg-zinc-900 border-zinc-200 dark:border-zinc-800 text-zinc-400 hover:bg-zinc-50 dark:hover:bg-zinc-800 hover:text-brand-cyan-deep dark:hover:text-brand-cyan"
                             )}
                             title={isFollowing ? "Dejar de seguir" : "Seguir tarea"}
                         >
@@ -2173,6 +2175,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                 <label className={taskComposerLabelClass}>Cliente</label>
                                 <Select
                                     required
+                                    aria-label="Cliente"
                                     value={formData.clientId}
                                     onChange={e => setFormData({...formData, clientId: e.target.value})}
                                     disabled={isEdition || !!defaultClientId}
@@ -2194,6 +2197,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     onChange={(ids) => setFormData(prev => ({ ...prev, collaboratorIds: normalizeCollaboratorIds(ids, prev.assigneeId) }))}
                                 >
                                     <Select
+                                        aria-label="Responsable"
                                         value={formData.assigneeId || ''}
                                         onChange={e => setFormData({
                                             ...formData,
@@ -2375,6 +2379,16 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
 
                         </div>
 
+                        {canSetFocusDeadline && hasModuleAccess(currentUser, 'manager') && formData.status !== 'REALIZADA' && <TaskAssignmentForecast
+                            enabled={isOpen}
+                            taskId={isEdition ? formData.id : undefined}
+                            title={formData.title}
+                            clientId={formData.clientId}
+                            assigneeId={formData.assigneeId}
+                            dueDay={(formData.dueDate || '').split('T')[0]}
+                            focusDeadlineAt={focusDeadlineIso((formData.dueDate || '').split('T')[0], formData.focusTime)}
+                        />}
+
                         {/* Equipo de la tarea (5 de octubre de 2026): solo si tiene colaboradores. */}
                         {isEdition && (
                             <TaskTeamTime
@@ -2444,7 +2458,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 <div className="space-y-1.5 max-h-[120px] overflow-y-auto">
                                                     {refUrls.map((item) => (
                                                         <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-1.5 bg-transparent border border-zinc-200/70 dark:border-zinc-800/70 rounded-lg text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
-                                                            <button type="button" onClick={() => handleTaskAttachmentOpen(item)} className="min-w-0 truncate hover:underline text-indigo-600 flex items-center gap-1 text-left">
+                                                            <button type="button" onClick={() => handleTaskAttachmentOpen(item)} className="min-w-0 truncate hover:underline text-brand-cyan-deep dark:text-brand-cyan flex items-center gap-1 text-left">
                                                                 <ExternalLink size={10} /> {item.name}
                                                             </button>
                                                             {item.id !== 'ref-legacy' && (
@@ -2505,7 +2519,7 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                                 <div className="space-y-1.5 max-h-[120px] overflow-y-auto">
                                                     {inpUrls.map((item) => (
                                                         <div key={item.id} className="flex items-center justify-between gap-2 px-3 py-1.5 bg-transparent border border-zinc-200/70 dark:border-zinc-800/70 rounded-lg text-[11px] font-medium text-zinc-700 dark:text-zinc-300">
-                                                            <button type="button" onClick={() => handleTaskAttachmentOpen(item)} className="min-w-0 truncate hover:underline text-indigo-600 flex items-center gap-1 text-left">
+                                                            <button type="button" onClick={() => handleTaskAttachmentOpen(item)} className="min-w-0 truncate hover:underline text-brand-cyan-deep dark:text-brand-cyan flex items-center gap-1 text-left">
                                                                 <ExternalLink size={10} /> {item.name}
                                                             </button>
                                                             <button onClick={() => item.source === 'content'

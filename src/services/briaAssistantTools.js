@@ -374,17 +374,22 @@ const memoriaDeReuniones = {
 // análisis ya en el servidor»). Lee el mismo cálculo que la pestaña Ritmo de Manager, con su misma puerta.
 const ritmoDelEquipo = {
   name: 'ritmo_del_equipo',
-  description: 'Cuánto tarda cada persona del equipo por tipo de trabajo (Reel, Post, Carrusel, publicación, diseño…) según el cronómetro de sus tareas cerradas: cuánto de lo cerrado tiene tiempo medido, mediana y rango por tipo, comparación con el resto del equipo y hallazgos para revisar (tareas fuera de lo habitual, días largos, retrabajo, relojes olvidados o simultáneos). Úsala cuando pregunten cómo va alguien, cuánto se demora en algo o por qué una tarea tomó tanto.',
+  description: 'Cuánto tarda cada persona por tipo de trabajo, cliente y complejidad: promedio, mediana, percentil 75, muestra y cobertura. También horas cronometradas y declaradas por día y semana, y hallazgos para revisar. Reel, Post, Carrusel y crear Parrilla son trabajos distintos. Úsala cuando pregunten cuánto tarda alguien para un cliente, cómo usa sus horas o por qué una tarea tomó tanto.',
   parameters: { type: 'object', properties: {
     persona: { type: 'string', description: 'Nombre de la persona, si preguntan por alguien. Vacío para todo el equipo.' },
+    cliente: { type: 'string', description: 'Cliente cuyo historial se quiere comparar. Vacío para todos.' },
+    tipo: { type: 'string', description: 'Reel, Post, Carrusel, Video, Historia, Parrilla u otro tipo de trabajo. Vacío para todos.' },
+    complejidad: { type: 'string', description: 'BAJA, MEDIA o ALTA; vacío para todas. Clasificación orientativa.' },
     dias: { type: 'integer', enum: [7, 30, 90], description: 'Periodo: 30 por defecto.' }
   } },
   allowed: (user) => hasModulePermission(user, 'manager') && isManagerRole(user?.role),
-  async run({ persona, dias } = {}, { rhythm }) {
+  async run({ persona, dias, cliente, tipo, complejidad } = {}, { rhythm }) {
     const out = await rhythm.get({ days: Number(dias) || 30 });
     const wanted = fold(persona).split(/\s+/).filter(Boolean);
     const people = wanted.length ? out.people.filter((p) => wanted.every((word) => fold(p.personName).includes(word))) : out.people;
     const pct = (value) => `${Math.round(value * 100)} %`;
+    const contexts = (out.profiles || []).filter(p => (!wanted.length || people.some(person => person.personId === p.personId)) &&
+      (!cliente || fold(p.clientName).includes(fold(cliente))) && (!tipo || fold(p.workType) === fold(tipo)) && (!complejidad || fold(p.complexity) === fold(complejidad)));
     return {
       data: {
         periodo: `${out.period.days} días`,
@@ -394,7 +399,14 @@ const ritmoDelEquipo = {
           porTipo: p.byType.slice(0, 8).map((t) => ({ tipo: t.workType, medidas: t.measured, mediana: formatDuration(t.medianMs), rango: `${formatDuration(t.minMs)} a ${formatDuration(t.maxMs)}`, restoDelEquipo: t.teamMedianMs ? formatDuration(t.teamMedianMs) : null, comparable: t.comparable })),
           hallazgos: p.findings.map((f) => ({ texto: f.message, tareas: f.taskIds.slice(0, 5).map((id) => out.tasks[id]?.title).filter(Boolean) }))
         })),
-        instruccion: 'Lo medido es solo lo que pasó por «En proceso» con el cronómetro: di la cobertura antes de sacar conclusiones y no leas como rápido lo que no se midió. Los hallazgos son preguntas para revisar con la persona, nunca juicios sobre ella. «Operaciones & Reuniones» y «Marketing & Social Media» mezclan trabajos distintos y no se comparan. Si nadie coincide con el nombre, dilo.'
+        porContexto: contexts.slice(0,30).map(p => ({ persona: p.personName, trabajo: p.workType, cliente: p.clientName, complejidad: p.complexity || 'sin clasificar', medidas: p.measured, cerradas: p.closed,
+          promedio: formatDuration(p.meanMs), habitual: formatDuration(p.medianMs), conMargen: formatDuration(p.p75Ms) })),
+        contextosRestantes: Math.max(0, contexts.length - 30),
+        horasRegistradas: (out.hours || []).filter(p => !wanted.length || people.some(person => person.personId === p.personId)).slice(0,20).map(p => ({ nombre: p.personName,
+          dias: p.days.slice(-14).map(d => ({ fecha: d.day, cronometrado: formatDuration(d.measuredMs), declarado: formatDuration(d.declaredMs) })),
+          semanas: p.weeks.slice(-13).map(w => ({ desde: w.week, cronometrado: formatDuration(w.measuredMs), declarado: formatDuration(w.declaredMs) })) })),
+        horasParciales: Boolean(out.hoursIncomplete),
+        instruccion: 'Para cuánto tarda alguien, usa porContexto: mismo tipo, cliente y complejidad cuando existan datos; no presentes una muestra general como si fuera exacta. Con menos de tres mediciones o complejidad sin clasificar, di que es orientativa. Las horas registradas son tiempo de sesiones en su fecha real, no tiempo estimado ni porcentaje terminado; el declarado va aparte. La complejidad es una clasificación orientativa. Di la cobertura antes de sacar conclusiones y no leas como rápido lo que no se midió. Los hallazgos son preguntas para revisar con la persona, nunca juicios sobre ella. «Operaciones & Reuniones» y «Marketing & Social Media» mezclan trabajos distintos y no se comparan. Si nadie coincide con el nombre, dilo.'
       },
       sources: [{ kind: 'ritmo', id: `ritmo-${out.period.days}`, label: 'Ritmo del equipo', url: '/manager?tab=ritmo' }]
     };
@@ -405,13 +417,15 @@ const ritmoDelEquipo = {
 // próximos días hábiles, con lo comprometido según las tareas abiertas y lo que suele tomar cada tipo de trabajo.
 const cargaDelEquipo = {
   name: 'carga_del_equipo',
-  description: 'Quién del equipo está saturado y quién tiene espacio en los próximos días hábiles: horas estimadas por persona y día según sus tareas abiertas y lo que suele tardar cada tipo de trabajo, con las tareas detrás de cada día cargado, las vencidas y las que no tienen fecha. Úsala cuando pregunten a quién asignarle algo, quién está sobrecargado, si alguien puede recibir más trabajo o cómo viene la semana.',
+  description: 'Previsión de cumplimiento para hoy, mañana, esta semana o la próxima: trabajo pendiente por persona y contexto frente a capacidad hasta el vencimiento y hora de publicación, con historial suficiente o débil. Incluye tareas en riesgo, vencidas y sin fecha. Úsala para anticipar entregas, decidir apoyo o revisar quién puede recibir trabajo. No ofrece probabilidades calibradas.',
   parameters: { type: 'object', properties: {
-    persona: { type: 'string', description: 'Nombre de la persona, si preguntan por alguien. Vacío para todo el equipo.' }
+    persona: { type: 'string', description: 'Nombre de la persona, si preguntan por alguien. Vacío para todo el equipo.' },
+    horizonte: { type: 'string', description: 'hoy, manana, semana o proxima_semana. Por defecto semana.' }
   } },
   allowed: (user) => hasModulePermission(user, 'manager') && isManagerRole(user?.role),
-  async run({ persona } = {}, { load }) {
-    const map = await load.get();
+  async run({ persona, horizonte } = {}, { load }) {
+    const window = { hoy: 'today', manana: 'tomorrow', semana: 'week', proxima_semana: 'next_week' }[fold(horizonte)] || 'week';
+    const map = await load.get({ window });
     const wanted = fold(persona).split(/\s+/).filter(Boolean);
     const people = wanted.length ? map.people.filter((p) => wanted.every((word) => fold(p.personName).includes(word))) : map.people;
     // Con el día de la semana: «el 19 de octubre» a secas se leyó como si fuera hoy (Rodny, 10 de octubre de 2026).
@@ -430,7 +444,7 @@ const cargaDelEquipo = {
         equipo: {
           personas: map.people.length,
           ocupacionMaxima: pct(busiest * periodMs),
-          lectura: busiest < 0.5 ? 'Nadie pasa de la mitad de su tiempo: el equipo tiene espacio.' : busiest <= 1 ? 'Hay personas con buena parte de su tiempo comprometido.' : 'Hay personas con más trabajo del que cabe en el periodo.',
+          lectura: map.forecast ? `${map.forecast.incomplete ? 'Consulta incompleta; espacio sin confirmar.' : `${map.forecast.people.filter(p => p.canReceive).length} personas con espacio estimado según los límites de entrega.`} Lee la previsión y su confianza antes de proponer asignaciones.` : busiest < 0.5 ? 'Nadie pasa de la mitad de su tiempo: el equipo tiene espacio.' : busiest <= 1 ? 'Hay personas con buena parte de su tiempo comprometido.' : 'Hay personas con más trabajo del que cabe en el periodo.',
           tareasVencidas: map.people.reduce((n, p) => n + p.overdue.count, 0),
           tareasSinFecha: map.people.reduce((n, p) => n + p.undated.count, 0)
         },
@@ -450,7 +464,9 @@ const cargaDelEquipo = {
           personas: map.forecast.people.filter(p => !wanted.length || people.some(visible => visible.personId === p.personId)).slice(0, wanted.length ? 3 : 20).map(p => ({
             nombre: p.personName, trabajoRestante: `${formatDuration(p.remainingMs)} a ${formatDuration(p.upperMs)}`, capacidad: formatDuration(p.capacityMs),
             historial: p.confidence, puedeRecibir: p.canReceive, vencidas: p.overdueCount, enRiesgo: p.riskCount, ajustadas: p.tightCount, sinFecha: p.undatedCount,
-            tareas: p.tasks.filter(t => t.risk && t.risk !== 'ok').slice(0, 6).map(t => ({ id: t.id, titulo: t.title, fecha: t.dueDay ? dayName(t.dueDay) : null, estado: t.risk, restante: formatDuration(t.remainingMs) }))
+            horasCronometradasHoy: formatDuration(p.recordedTodayMs || 0), horasCronometradasSemana: formatDuration(p.recordedWeekMs || 0),
+            tareas: p.tasks.filter(t => t.risk && t.risk !== 'ok').slice(0, 6).map(t => ({ id: t.id, titulo: t.title, fecha: t.dueDay ? dayName(t.dueDay) : null, limite: t.deadlineAt || null,
+              estado: t.risk, restante: formatDuration(t.remainingMs), muestra: t.sample, alcanceMuestra: t.basis, complejidad: t.complexity, capacidadHastaElLimite: formatDuration(t.capacityToDeadlineMs || 0) }))
           }))
         } } : {}),
         instruccion: 'Si existe prevision, empieza por ella: compara trabajo restante con capacidad hasta cada fecha, incluyendo vencidas. El mapa diario solo muestra concentración de entregas; no demuestra que todo deba hacerse ese día. No afirmes que alguien puede recibir trabajo si puedeRecibir es false, faltan datos o hay tareas sin fecha; el espacio es nominal y no descuenta reuniones ni ausencias. Si no hay previsión, empieza por la lectura del equipo: si nadie pasa de la mitad de su tiempo, dilo antes de nombrar a nadie; «la mayor carga» solo se dice de alguien que de verdad tenga el periodo lleno. Las horas son estimaciones: la mediana de lo que esa persona tardó en ese tipo de trabajo, o la del equipo, o una hora si no hay historial («supuesto»). Las tareas sin fecha no entran en el mapa: si son muchas, di que el mapa está incompleto. Un día «excedida» pasa de un día y cuarto de trabajo; «alta» es un día completo. Habla de carga y de repartir trabajo, nunca de desempeño, y di qué miraste con palabras («las tareas abiertas con fecha en los próximos días hábiles»), no «la herramienta». Si nadie coincide con el nombre, dilo.'

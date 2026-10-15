@@ -64,6 +64,7 @@ try {
   assert.ok(requests.some(url => url.includes('task-analytics')));
   await page.getByRole('button', { name: '90 días', exact: true }).click();
   await page.waitForFunction(() => document.querySelector('[data-rhythm-coverage]')?.textContent.includes('90 días'));
+  await page.getByText('Observaciones del cronómetro por persona', { exact: true }).click();
   await page.getByRole('button', { name: 'Ver todo' }).first().click();
   assert.ok(await page.locator('[data-rhythm-types]:visible').count() > 0);
   await page.screenshot({ path: path.join(output, 'historial-claro.png'), fullPage: true });

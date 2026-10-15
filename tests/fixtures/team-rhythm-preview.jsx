@@ -6,6 +6,7 @@ import ManagerTaskAnalytics from '@/components/modules/ManagerTaskAnalytics';
 import { analyzeTeamRhythm } from '@/lib/teamRhythm';
 import { buildLoadMap, loadSignals } from '@/lib/teamLoad';
 import { buildTeamForecast } from '@/lib/teamForecast';
+import { buildContextProfiles, recordedWorkHours } from '@/lib/workPrediction';
 import '@/index.css';
 
 // Muestra local de la pestaña Ritmo de Manager con personas y tareas inventadas y la API simulada en el navegador.
@@ -19,7 +20,7 @@ document.body.className = params.has('dark') ? 'bg-zinc-950' : 'bg-zinc-50';
 
 const H = 3_600_000, M = 60_000;
 let seq = 0;
-const t = (personId, personName, workType, ms, day, extra = {}) => ({ id: `t${++seq}`, title: `${workType === 'Publicación' ? '[Publicar]' : '[Producción]'} ${workType}: Pieza de ejemplo ${seq}`, personId, personName, workType, completedDay: day, measuredMs: ms, reworkMs: 0, longestSessionMs: Math.min(ms, 3 * H), overlappedMs: 0, ...extra });
+const t = (personId, personName, workType, ms, day, extra = {}) => ({ id: `t${++seq}`, title: `${workType === 'Publicación' ? '[Publicar]' : '[Producción]'} ${workType}: Pieza de ejemplo ${seq}`, personId, personName, workType, clientId: personId === 'b' ? 'alpina' : 'nutresa', clientName: personId === 'b' ? 'Alpina' : 'Nutresa', complexity: 'MEDIA', completedDay: day, measuredMs: ms, reworkMs: 0, longestSessionMs: Math.min(ms, 3 * H), overlappedMs: 0, ...extra });
 const tasks = [
   t('a', 'Andrés Ejemplo', 'Video', 4 * H, '2026-10-06'), t('a', 'Andrés Ejemplo', 'Video', 4 * H, '2026-10-06'), t('a', 'Andrés Ejemplo', 'Video', 30 * M, '2026-10-07'),
   t('a', 'Andrés Ejemplo', 'Reel', 2.6 * H, '2026-10-01'), t('a', 'Andrés Ejemplo', 'Reel', 2.8 * H, '2026-10-02'), t('a', 'Andrés Ejemplo', 'Reel', 2.4 * H, '2026-10-03'), t('a', 'Andrés Ejemplo', 'Reel', 0, '2026-10-04'),
@@ -31,16 +32,20 @@ const tasks = [
 const { people, types } = analyzeTeamRhythm({ tasks });
 const taskMap = Object.fromEntries(tasks.map((task) => [task.id, { title: task.title, workType: task.workType, day: task.completedDay, personName: task.personName, measuredMs: task.measuredMs }]));
 const closed = people.reduce((s, p) => s + p.closed, 0), measured = people.reduce((s, p) => s + p.measured, 0);
-const rhythm = { period: { days: 30 }, team: { closed, measured, coverage: measured / closed }, people, types, tasks: taskMap };
+const hours = recordedWorkHours({ from: new Date('2026-09-14T05:00:00Z'), now: new Date('2026-10-14T20:00:00Z'), sessions: ['a','b','c'].flatMap((workerId, i) => [
+  { workerId, startedAt: '2026-10-13T13:00:00Z', endedAt: '2026-10-13T17:00:00Z', durationMs: (4-i) * H },
+  { workerId, startedAt: '2026-10-14T13:00:00Z', endedAt: '2026-10-14T15:00:00Z', durationMs: (2-i*0.5) * H }
+]) }).map(row => ({ ...row, personName: people.find(p => p.personId === row.personId).personName }));
+const rhythm = { period: { days: 30 }, team: { closed, measured, coverage: measured / closed }, people, types, tasks: taskMap, profiles: buildContextProfiles(tasks), hours };
 
 // Mapa de carga: tareas abiertas inventadas sobre los próximos días hábiles a partir del viernes 9 de octubre de 2026.
 let openSeq = 0;
-const openTask = (personId, workType, dueDay, clientName, estimateMs) => ({ id: `o${++openSeq}`, title: `${workType}: ${clientName} ${openSeq}`, status: 'PENDIENTE', personId, workType, dueDay, clientName, estimateMs });
+const openTask = (personId, workType, dueDay, clientName, estimateMs) => ({ id: `o${++openSeq}`, title: `${workType}: ${clientName} ${openSeq}`, status: 'PENDIENTE', personId, workType, dueDay, clientId: clientName.toLowerCase(), complexity: 'MEDIA', clientName, estimateMs });
 const openTasks = [
   openTask('a', 'Video', '2026-10-14', 'Nutresa', 4 * H), openTask('a', 'Video', '2026-10-14', 'Alpina', 4 * H), openTask('a', 'Video', '2026-10-14', 'Colanta', 4 * H),
   openTask('a', 'Reel', '2026-10-15', 'Nutresa', 2.6 * H), openTask('a', 'Reel', '2026-10-15', 'Alpina', 2.6 * H), openTask('a', 'Reel', '2026-10-15', 'Colanta', 2.6 * H),
   openTask('a', 'Video', '2026-10-16', 'Endova', 4 * H), openTask('a', 'Reel', '2026-10-20', 'Nutresa', 2.6 * H),
-  openTask('b', 'Post', '2026-10-14', 'Alpina', 45 * M), openTask('b', 'Post', '2026-10-16', 'Alpina', 45 * M), openTask('b', 'Reel', '2026-10-15', 'Endova', 1.5 * H), openTask('c', 'Post', '2026-10-06', 'Nutresa', 45 * M), openTask('c', 'Post', '2026-10-07', 'Nutresa', 45 * M),
+  openTask('b', 'Post', '2026-10-14', 'Alpina', 45 * M), openTask('b', 'Post', '2026-10-16', 'Alpina', 45 * M), openTask('b', 'Reel', '2026-10-15', 'Alpina', 1.5 * H), openTask('c', 'Post', '2026-10-06', 'Nutresa', 45 * M), openTask('c', 'Post', '2026-10-07', 'Nutresa', 45 * M),
   openTask('c', 'Publicación', '2026-10-13', 'Colanta', 25 * M), openTask('c', 'Operaciones & Reuniones', null, 'Endova', H)
 ];
 const demoPeople = people.map((p) => ({ personId: p.personId, personName: p.personName, avatarUrl: null }));
@@ -71,7 +76,14 @@ const realFetch = window.fetch.bind(window);
 window.fetch = (input, init = {}) => {
   const url = new URL(typeof input === 'string' ? input : input.url, location.origin);
   if (url.pathname === '/api/manager/rhythm') return json({ ...rhythm, period: { days: Number(url.searchParams.get('days')) || 30 } });
-  if (url.pathname === '/api/manager/rhythm/load') return json(load);
+  if (url.pathname === '/api/manager/rhythm/assignment-preview') {
+    const draft = JSON.parse(init.body), original = openTasks.find(t => t.id === draft.taskId);
+    const candidate = { ...original, personId: draft.assigneeId, dueDay: draft.dueDay, deadlineAt: draft.focusDeadlineAt };
+    const result = buildTeamForecast({ people: demoPeople, tasks: [...openTasks.filter(t => t.id !== candidate.id), candidate], rhythm, now: new Date('2026-10-14T13:00:00Z') });
+    const person = result.people.find(p => p.personId === candidate.personId);
+    return json({ ...person.tasks.find(t => t.id === candidate.id), personName: person.personName, clientName: candidate.clientName });
+  }
+  if (url.pathname === '/api/manager/rhythm/load') return json({ ...load, forecast: buildTeamForecast({ people: demoPeople, tasks: openTasks, rhythm, now: new Date('2026-10-14T13:00:00Z'), window: url.searchParams.get('window') || 'week' }) });
   if (url.pathname === '/api/manager/rhythm/reading' && init.method === 'POST') {
     reading = { id: 'r2', weekKey: '2026-W41', trigger: 'MANUAL', periodDays: 30, reading: readingBody, model: 'gpt-local', generatedBy: 'Rodny Chirinos', generatedAt: new Date().toISOString() };
     return json(reading, 1200);

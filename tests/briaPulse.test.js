@@ -15,6 +15,36 @@ const operations = [{ id: 'c1', name: 'Aristea', slug: 'aristea', evaluation: { 
 const pieces = [{ id: 'i1', title: 'Reel de vendimia', planId: 'p1', clientName: 'Foobespain', day: '2026-10-14' }, { id: 'i9', title: 'Lejana', planId: 'p1', clientName: 'Foobespain', day: '2026-10-20' }];
 const returned = [{ id: 't7', title: 'Portada', returnedDay: '2026-10-10', personId: 'm-hel', assigneeName: 'Helen Ruiz', clientName: 'Nattal' }];
 
+test('the pulse uses deadline risk when a forecast exists, rather than assuming clustered deliveries are impossible', () => {
+  const predicted = { ...load, forecast: { people: [{ personId: 'm-bra', personName: 'Brayan Torres', tasks: [{ id: 'o1', title: 'Reel', dueDay: '2026-10-14', risk: 'ok' }] }] } };
+  assert.equal(collectFacts({ load: predicted, today: '2026-10-13' }).some(f => f.kind === 'CARGA_MANANA'), false);
+  const risky = { ...load, forecast: { people: [{ personId: 'm-bra', personName: 'Brayan Torres', tasks: [{ id: 'o1', title: 'Reel', dueDay: '2026-10-14', risk: 'riesgo', confidence: 'suficiente', remainingMs: 4 * H, capacityToDeadlineMs: 2 * H }] }] } };
+  const facts = collectFacts({ load: risky, today: '2026-10-13' });
+  assert.equal(facts[0].kind, 'CARGA_MANANA');
+  assert.deepEqual(facts[0].taskIds, ['o1']);
+  assert.match(facts[0].text, /margen|riesgo/);
+});
+
+test('Bria can warn about a comparable commitment at risk today, but never from an assumed duration', () => {
+  const make = confidence => ({ ...load, forecast: { people: [{ personId: 'm-bra', personName: 'Brayan Torres', tasks: [{ id: 'o1', title: 'Reel de X', dueDay: '2026-10-13', risk: 'riesgo', confidence, remainingMs: 4 * H, capacityToDeadlineMs: 2 * H, committedToDeadlineMs: 4 * H }] }] } });
+  const strong = collectFacts({ load: make('suficiente'), today: '2026-10-13' }).find(f => f.kind === 'ENTREGA_EN_RIESGO');
+  assert.ok(strong);
+  assert.deepEqual(strong.taskIds, ['o1']);
+  assert.equal(strong.actions[0].to, '/gestion?taskId=o1');
+  assert.equal(collectFacts({ load: make('baja'), today: '2026-10-13' }).some(f => f.kind === 'ENTREGA_EN_RIESGO'), false);
+});
+
+test('a delivery warning is not repeated just because the clock reduces capacity', () => {
+  const make = (capacity, personId = 'b') => collectFacts({ today: '2026-10-13', load: { days: ['2026-10-13','2026-10-14'], forecast: { people: [{ personId, personName: 'Brayan', tasks: [{ id: 'reel', title: 'Reel', dueDay: '2026-10-13', deadlineAt: '2026-10-13T23:00:00Z', risk: 'riesgo', confidence: 'suficiente', remainingMs: 4 * H, capacityToDeadlineMs: capacity, committedToDeadlineMs: 4 * H }] }] } } })[0];
+  assert.equal(make(2 * H).fingerprint, make(H).fingerprint);
+  assert.notEqual(make(H).fingerprint, make(H, 'r').fingerprint, 'a reassignment changes the evidence');
+});
+
+test('an assumed tomorrow duration cannot trigger a proactive capacity warning', () => {
+  const facts = collectFacts({ today: '2026-10-13', load: { ...load, forecast: { people: [{ personId: 'b', tasks: [{ id: 'reel', dueDay: '2026-10-14', risk: 'riesgo', confidence: 'baja' }] }] } } });
+  assert.equal(facts.some(f => f.kind === 'CARGA_MANANA'), false);
+});
+
 test('facts come from what the platform already computes, most serious first, each with a stable id and fingerprint', () => {
   const facts = collectFacts({ nudges, load, operations, pieces, returned, today: '2026-10-13' });
   assert.deepEqual(facts.map((f) => f.id), ['OPERACION_ROJA:aristea', 'DEVUELTO_SIN_TOCAR:t7', 'CARGA_MANANA:m-bra', 'PIEZA_SIN_APROBAR:i1', 'SIN_PROCESO:m-mel']);
