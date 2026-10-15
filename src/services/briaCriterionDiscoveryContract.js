@@ -21,7 +21,7 @@ export const collectCriterionSources = (plans, clientId) => {
     for (const item of [...(plan.contentItems || [])].filter(i => !i.deletedAt).sort((a, b) => a.id.localeCompare(b.id))) {
       add('comments', item.comments, 'CLIENT_FEEDBACK', item);
       add('internalNotes', item.internalNotes, 'INTERNAL_NOTE', item);
-      if (['APROBADO', 'PUBLICADO'].includes(item.status)) {
+      if (['APROBADO', 'PROGRAMADO', 'PUBLICADO'].includes(item.status)) {
         for (const field of ['copyText', 'captionText']) add(field, item[field], 'APPROVED_CONTENT', item);
       }
     }

@@ -9,8 +9,12 @@
 // a una pieza que ya estaba aprobada, y también a mano desde el editor; se borra cuando el cliente
 // vuelve a decidir, apruebe o pida un cambio.
 
-/** Estados en los que el cliente ya dio el visto bueno a lo que tenía delante. */
-export const APPROVED_STATUSES = ['APROBADO', 'REALIZADO', 'PUBLICADO'];
+/**
+ * Estados en los que el cliente ya dio el visto bueno a lo que tenía delante. `PROGRAMADO` está aquí
+ * desde el 15 de octubre de 2026: una pieza programada en Meta pasó por la aprobación igual que una
+ * publicada, y sin esto el portal la habría devuelto a «por revisar» el día que se programa.
+ */
+export const APPROVED_STATUSES = ['APROBADO', 'REALIZADO', 'PROGRAMADO', 'PUBLICADO'];
 
 export const isApprovedStatus = (status) => APPROVED_STATUSES.includes(status);
 

@@ -14,7 +14,7 @@ import { finalAssetShapeProblem } from '../lib/finalAssetShape.js';
 import { fileContentProblem } from '../lib/fileSignature.js';
 import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from './briaContentPlanReviewState.js';
 import { resyncItemPublications } from './socialPublishingService.js';
-import { splitPublishTime } from '../lib/socialPublishing.js';
+import { queueOwnedStatusProblem, splitPublishTime } from '../lib/socialPublishing.js';
 import { itemsNeedingRevisionRequest, shouldRequestRevisionOnNewAsset } from '../lib/contentApproval.js';
 
 /** Lo que la pantalla ve de una publicación programada: nunca el token, que ni siquiera vive en esa fila. */
@@ -594,6 +594,17 @@ export const updateContentItem = async (id, data) => {
   // cierra: ahí el cliente sigue debiendo su respuesta (Rodny, 5 de octubre de 2026).
   if (Object.prototype.hasOwnProperty.call(normalizedData, 'status')) {
     normalizedData.revisionRequestedAt = null;
+
+    // Mientras la publicación esté armada, el estado de la pieza es de la cola (15 de octubre de 2026).
+    // Este era el otro camino del accidente: el desplegable de Estado la ponía en PUBLICADO y, al llegar
+    // la hora, el publicador la encontraba publicada y cancelaba las dos redes. Quien quiera marcarla a
+    // mano cancela primero la publicación; «Ya se publicó» lo hace por su cuenta antes de llegar aquí.
+    const armedItem = await prisma.contentItem.findUnique({
+      where: { id },
+      select: { publishDate: true, publishTime: true, publications: { select: { status: true } } }
+    });
+    const queueProblem = queueOwnedStatusProblem({ item: armedItem, publications: armedItem?.publications || [] });
+    if (queueProblem) throw Object.assign(new Error(queueProblem), { status: 409, statusCode: 409 });
   }
 
   const safeData = await filterContentItemData(normalizedData);

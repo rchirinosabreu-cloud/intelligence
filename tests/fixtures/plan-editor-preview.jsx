@@ -93,10 +93,12 @@ const items = [
     socialPageIds: ['5555', '7777']
   }),
   piece('i3', 'Conoce al equipo de hemodinamia', 'Reel', 30, 'EN_REVISION', { captionText: 'Detrás de cada procedimiento hay un equipo.', socialPageIds: ['7777'] }),
-  piece('i4', 'Qué llevar el día de tu consulta', 'Post', 22, 'APROBADO', {
+  // Programada en Instagram y publicada en Facebook: una pieza a medio salir. Desde el 15 de octubre de
+  // 2026 su estado es PROGRAMADO y lo lleva la cola, así que el desplegable de Estado explica en vez de
+  // escribir: ponerla en «Publicado» a mano mataba la publicación que faltaba.
+  piece('i4', 'Qué llevar el día de tu consulta', 'Post', 22, 'PROGRAMADO', {
     captionText: 'Documento, orden médica y exámenes previos.',
     finalAssets: [{ id: 'a4', name: 'post-checklist.jpg', storageKey: 'k4', mimeType: 'image/jpeg', size: 300000, position: 0 }],
-    // Ya programada en Instagram y publicada en Facebook: cómo se ve una pieza a medio salir.
     publishTime: '09:00',
     socialPageIds: ['5555'],
     publications: [

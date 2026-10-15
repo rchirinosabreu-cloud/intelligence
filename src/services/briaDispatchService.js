@@ -65,6 +65,7 @@ export const createBriaDispatchService = ({ db, dispatchItem, now = () => new Da
       Object.assign(item, { title: row.objective, format: row.format, publishDay: pieceDay(row.publishDate) });
       if (row.plan.client.isArchived) { item.skip = 'El cliente está archivado.'; continue; }
       if (row.status === 'PUBLICADO') { item.skip = 'Ya se publicó.'; continue; }
+      if (row.status === 'PROGRAMADO') { item.skip = 'Ya está programada en Meta.'; continue; }
       if (row.tasks?.length) { item.skip = `Ya está en producción${row.tasks[0].assignee?.name ? ` con ${row.tasks[0].assignee.name}` : ''}.`; continue; }
       delete item.skip;
       if (request.responsable != null) {

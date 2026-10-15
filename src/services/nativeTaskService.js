@@ -9,6 +9,7 @@ import { pickAllowedTaskUpdates } from '../config/security.js';
 import { closeTaskWorkSession, formatTaskReturnEventContent, reassignmentEffect } from '../lib/taskTiming.js';
 import { bogotaTimeOf } from '../lib/taskFocus.js';
 import { taskPrivacyFilter } from '../lib/taskPrivacy.js';
+import { ACTIVE_PUBLICATION_STATUSES } from '../lib/socialPublishing.js';
 import {
     buildContentTaskTitle,
     buildContentItemUpdateFromTask,
@@ -933,14 +934,9 @@ export const updateTask = async (id, data, updaterId = null) => {
                             });
                         }
 
-                        // --- CLOSURE TRIGGER: Publication Task -> PUBLICADO ---
-                        if (linkedItem && currentTask.title.startsWith('[Publicar]')) {
-                            console.log(`[nativeTaskService] Publication task completed. Marking ContentItem ${linkedItem.id} as PUBLICADO.`);
-                            await tx.contentItem.update({
-                                where: { id: linkedItem.id },
-                                data: { status: 'PUBLICADO' }
-                            });
-                        }
+                        // El cierre de un pendiente «Publicar» lo escribe el espejo de más abajo, que es
+                        // el único sitio que mueve el estado de la pieza desde la tarea. Aquí había un
+                        // segundo `update` a PUBLICADO que hacía lo mismo.
                 } else {
                     // Do not touch completedAt to preserve historical data
                     delete updateData.completedAt;
@@ -961,6 +957,16 @@ export const updateTask = async (id, data, updaterId = null) => {
                         contentItemStatus = 'DEVUELTO';
                     } else if (newStatus === 'PENDIENTE' || newStatus === 'EN_CURSO') {
                         contentItemStatus = 'EN_PRODUCCION';
+                    }
+
+                    // Mientras haya una publicación esperando salir, el estado de la pieza es de la cola
+                    // (15 de octubre de 2026). El espejo la habría devuelto a EN_PRODUCCION por tomar el
+                    // pendiente «Publicar», borrando el «Programado» que acababa de ponerle Meta.
+                    if (contentItemStatus) {
+                        const armed = await tx.socialPublication.count({
+                            where: { contentItemId: currentTask.contentItemId, status: { in: [...ACTIVE_PUBLICATION_STATUSES] } }
+                        });
+                        if (armed > 0) contentItemStatus = null;
                     }
 
                     if (contentItemStatus) {

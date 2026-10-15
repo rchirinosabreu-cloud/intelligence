@@ -16,14 +16,14 @@ import { createNotification } from './notificationService.js';
 import { createMetaGraphClient } from './metaGraphService.js';
 import { createSignedDownload } from './s3Service.js';
 import { imageDerivativeService } from './socialImageDerivativeService.js';
+import { updateTask } from './nativeTaskService.js';
+import { isPublicationTask } from '../lib/contentTaskReciprocity.js';
 import {
-  ACTIVE_PUBLICATION_STATUSES, MAX_PUBLICATION_ATTEMPTS, PUBLICATION_LEASE_MS, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS,
-  CHOOSE_ACCOUNT_FIRST, describeMetaMedia, facebookMedia, humanizeMetaError, isPublishInstantTooSoon, isRetryableMetaError, nextPublicationRetryAt,
+  MAX_PUBLICATION_ATTEMPTS, PUBLICATION_LEASE_MS, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS,
+  CHOOSE_ACCOUNT_FIRST, describeMetaMedia, facebookMedia, humanizeMetaError, isPublishInstantTooSoon, isRetryableMetaError,
+  itemStatusForQueue, nextPublicationRetryAt,
   pieceNeedsAccountChoice, pieceTargetAccounts, publishAtIso, schedulingProblems, socialPagesOf
 } from '../lib/socialPublishing.js';
-
-/** Una red que falló también cuenta como pendiente: la pieza no está «publicada» si una de sus redes no salió. */
-const BLOCKING_PUBLICATION_STATUSES = Object.freeze([...ACTIVE_PUBLICATION_STATUSES, 'FAILED']);
 const AMBIGUOUS_PUBLISH_MESSAGE = 'Meta recibió la orden de publicar pero no confirmó el resultado. Revisa la cuenta antes de reintentar: si la pieza ya salió, no la vuelvas a programar.';
 
 const MAX_DIAGNOSTICS = 5;
@@ -91,6 +91,10 @@ export const createSocialPublishingService = ({
   now = () => new Date(),
   notify = createNotification,
   randomId = randomUUID,
+  // El cierre del pendiente «Publicar» pasa por el camino de siempre (reconocimientos, relojes,
+  // historial): el mismo `updateTask` del botón de Gestión, sin la puerta de permisos, que es para
+  // personas. Se inyecta para poder comprobarlo sin base de datos.
+  completeTask = updateTask,
   logger = console
 } = {}) => {
   const loadItem = async (itemId) => {
@@ -103,6 +107,49 @@ export const createSocialPublishingService = ({
 
   /** «Instagram (@endova.salud)»: con varias cuentas por cliente, la red sola ya no dice dónde. */
   const whereLabel = (account) => `${SOCIAL_PLATFORM_LABELS[account.platform] || account.platform}${account.displayName ? ` (${account.displayName})` : ''}`;
+
+  /**
+   * Meta publicó: el pendiente «Publicar» se cierra solo (Rodny, 15 de octubre de 2026: «si ya la
+   * plataforma está reconociendo que se publicó en Meta, entonces eso debe publicarse automáticamente»).
+   * Así el community manager no tiene que mover nada —que era justo lo que mataba la publicación— y el
+   * logro queda a su nombre, porque el trabajo era programarla y lo hizo.
+   *
+   * Pasa por el `updateTask` de siempre, no por un atajo: cierra los relojes abiertos, escribe
+   * `completedAt` y cuenta para los reconocimientos igual que el botón del tablero. Y **nunca tumba la
+   * publicación**: la pieza ya salió, así que un fallo al cerrar el pendiente solo se anota.
+   */
+  const closePublicationTaskFor = async (itemId) => {
+    try {
+      const open = await db.task.findMany({
+        where: { contentItemId: itemId, status: { not: 'REALIZADA' } },
+        select: { id: true, title: true, assignee: { select: { userId: true } } }
+      });
+      for (const task of open.filter((row) => isPublicationTask(row.title || ''))) {
+        await completeTask(task.id, { status: 'REALIZADA' }, task.assignee?.userId || null)
+          .catch((error) => logger.error('[SocialPublishing] No se pudo cerrar el pendiente «Publicar»:', error.response?.data || error.message || error));
+      }
+    } catch (error) {
+      logger.error('[SocialPublishing] No se pudieron leer los pendientes de la pieza:', error.response?.data || error.message || error);
+    }
+  };
+
+  /**
+   * Pone la pieza en el estado que le toca por su cola (`itemStatusForQueue`) y, si queda publicada,
+   * cierra su pendiente «Publicar». Lo llama todo lo que mueve la cola —programar, cancelar, mover la
+   * pieza de día, publicar y fallar—, para que el estado de la pieza y su cola no puedan discrepar.
+   */
+  const syncItemStatusWithQueue = async (itemId) => {
+    const item = await db.contentItem.findUnique({
+      where: { id: itemId },
+      select: { id: true, status: true, publications: { select: { status: true } } }
+    });
+    if (!item) return null;
+    const next = itemStatusForQueue({ status: item.status, publications: item.publications || [] });
+    if (!next || next === item.status) return item.status;
+    await db.contentItem.update({ where: { id: item.id }, data: { status: next } });
+    if (next === 'PUBLICADO') await closePublicationTaskFor(item.id);
+    return next;
+  };
 
   /**
    * Programar en las cuentas elegidas (`accountIds`). Solo valen las cuentas a las que va la pieza
@@ -149,6 +196,8 @@ export const createSocialPublishingService = ({
         update: { platform: account.platform, ...fresh }
       }));
     }
+    // La pieza queda «Programada»: ya no es solo «hecha», está en la cola esperando su hora.
+    if (rows.length) await syncItemStatusWithQueue(item.id);
     return rows;
   };
 
@@ -175,7 +224,24 @@ export const createSocialPublishingService = ({
     if (row.status === 'PUBLISHING') throw httpError(409, 'Esta pieza se está publicando ahora mismo; ya no se puede cancelar.');
     if (row.status !== 'SCHEDULED') throw httpError(409, 'Solo se cancela una publicación que todavía está programada.');
     // El motivo de un intento fallido anterior no es el motivo de esta cancelación: la banda lo mostraría como tal.
-    return db.socialPublication.update({ where: { id: row.id }, data: { status: 'CANCELLED', cancelledAt: now(), error: null, leaseToken: null, leaseAt: null } });
+    const cancelled = await db.socialPublication.update({ where: { id: row.id }, data: { status: 'CANCELLED', cancelledAt: now(), error: null, leaseToken: null, leaseAt: null } });
+    // Sin nada vivo en la cola la pieza vuelve a «Realizado», que es lo que la devuelve al equipo.
+    await syncItemStatusWithQueue(row.contentItemId);
+    return cancelled;
+  };
+
+  /**
+   * Cancelar lo que esta pieza tenga programado, con su motivo. Lo usa «Ya se publicó» (15 de octubre
+   * de 2026): marcar a mano una pieza como publicada dejaba la cola armada, y al llegar la hora el
+   * publicador la encontraba publicada y fallaba las dos redes. Una fila que se está publicando ahora
+   * mismo no se toca: ya está en vuelo, y quien la marque a mano se lo encontrará dicho.
+   */
+  const cancelItemPublications = async ({ itemId, reason }) => {
+    const { count } = await db.socialPublication.updateMany({
+      where: { contentItemId: itemId, status: 'SCHEDULED' },
+      data: { status: 'CANCELLED', cancelledAt: now(), error: reason, leaseToken: null, leaseAt: null }
+    });
+    return count;
   };
 
   const retryPublication = async ({ publicationId, actorUserId = null }) => {
@@ -254,6 +320,8 @@ export const createSocialPublishingService = ({
           : { scheduledAt: new Date(publishAt), nextAttemptAt: null }
       }));
     }
+    // Mover la pieza al pasado o quitarle la cuenta cancela su cola: entonces deja de estar programada.
+    if (updates.length) await syncItemStatusWithQueue(item.id);
     return updates;
   }
 
@@ -297,6 +365,9 @@ export const createSocialPublishingService = ({
     if (error.code === 190 || error.code === 102) {
       await db.clientSocialAccount.update({ where: { id: row.socialAccountId }, data: { isActive: false, lastError: humanError, lastCheckedAt: now() } }).catch(() => {});
     }
+    // Un fallo definitivo deja la cola sin nada vivo: la pieza deja de estar «Programada» y vuelve al
+    // equipo, que es lo que permite volver a marcarla a mano si la publica por su cuenta.
+    await syncItemStatusWithQueue(row.contentItemId);
     if (status === 'FAILED') {
       await notifyRequester(row, item, {
         type: 'SOCIAL_PUBLICATION_FAILED',
@@ -326,7 +397,10 @@ export const createSocialPublishingService = ({
       }
       // Se vuelve a comprobar todo en el momento de salir: la pieza pudo perder la aprobación o el archivo.
       const problems = schedulingProblems({ item, assets: item.finalAssets, accounts: account ? [account] : [], platforms: [full.platform], now: new Date(0) });
-      if (problems.length) throw Object.assign(new Error(problems[0]), { permanent: true });
+      // «Esta pieza ya está publicada» dicho a la hora de salir señalaba justo lo contrario de lo que
+      // pasaba: la pieza no había salido (15 de octubre de 2026). Lo que se dice aquí es que **no se
+      // envió**, y después el motivo.
+      if (problems.length) throw Object.assign(new Error(`No se envió a Meta: ${problems[0].charAt(0).toLowerCase()}${problems[0].slice(1)}`), { permanent: true });
 
       const described = describeMetaMedia({ format: item.format, assets: item.finalAssets });
       // Facebook recibe el carrusel sin sus videos (su API no los admite entre varias fotos).
@@ -343,11 +417,9 @@ export const createSocialPublishingService = ({
         where: { id: row.id, leaseToken },
         data: { status: 'PUBLISHED', publishedAt: now(), externalMediaId: result.mediaId || null, permalink: result.permalink || null, error: null, leaseToken: null, leaseAt: null }
       });
-      // Programadas, publicándose **o fallidas**: mientras una red pedida no haya salido, la pieza no está publicada.
-      const pending = await db.socialPublication.count({ where: { contentItemId: item.id, status: { in: [...BLOCKING_PUBLICATION_STATUSES] } } });
-      if (pending === 0 && item.status !== 'PUBLICADO') {
-        await db.contentItem.update({ where: { id: item.id }, data: { status: 'PUBLICADO' } });
-      }
+      // Programadas, publicándose **o fallidas**: mientras una red pedida no haya salido, la pieza no
+      // está publicada. Con todas fuera queda `PUBLICADO` y su pendiente «Publicar» se cierra solo.
+      await syncItemStatusWithQueue(item.id);
       await notifyRequester(full, item, {
         type: 'SOCIAL_PUBLICATION_PUBLISHED',
         message: `«${item.objective || item.format}» ya está publicado en ${account ? whereLabel(account) : (SOCIAL_PLATFORM_LABELS[full.platform] || full.platform)}.`
@@ -386,11 +458,11 @@ export const createSocialPublishingService = ({
     return outcomes;
   };
 
-  return { schedulePublications, setItemSocialPages, cancelPublication, retryPublication, reopenPublication, listPlanPublications, resyncItemPublications, processDuePublications, publishOne };
+  return { schedulePublications, setItemSocialPages, cancelPublication, cancelItemPublications, retryPublication, reopenPublication, listPlanPublications, resyncItemPublications, processDuePublications, publishOne };
 };
 
 export const socialPublishingService = createSocialPublishingService();
 export const {
-  schedulePublications, cancelPublication, retryPublication, listPlanPublications, resyncItemPublications, processDuePublications
+  schedulePublications, cancelPublication, cancelItemPublications, retryPublication, listPlanPublications, resyncItemPublications, processDuePublications
 } = socialPublishingService;
 export { MAX_PUBLICATION_ATTEMPTS };

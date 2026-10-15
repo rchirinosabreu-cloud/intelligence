@@ -106,7 +106,7 @@ export async function recordPlanRecognition(tx, planId, at = new Date(), { allow
   if (!plan || plan.deletedAt) return;
   const state = await tx.recognitionPlanState.upsert({ where: { planId }, create: { planId }, update: {} });
   const approvedIds = plan.contentItems.filter(item => item.status === 'APROBADO'
-    || (state.approvedIds.includes(item.id) && ['EN_PRODUCCION', 'REALIZADO', 'PUBLICADO'].includes(item.status))).map(item => item.id);
+    || (state.approvedIds.includes(item.id) && ['EN_PRODUCCION', 'REALIZADO', 'PROGRAMADO', 'PUBLICADO'].includes(item.status))).map(item => item.id);
   await tx.recognitionPlanState.update({ where: { planId }, data: { approvedIds } });
   if (!allowAward || state.awarded || !plan.owner?.isActive || !plan.owner.userId || !planIsApproved(plan.contentItems, approvedIds)) return;
   const user = await tx.user.findUnique({ where: { id: plan.owner.userId }, select: { isActive: true } });

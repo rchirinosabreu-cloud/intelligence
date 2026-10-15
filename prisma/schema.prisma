@@ -1720,6 +1720,9 @@ enum ContentItemStatus {
   APROBADO
   PUBLICADO
   REALIZADO
+  // Programada en Meta y esperando su hora. Va entre REALIZADO y PUBLICADO: lo pone y lo quita la
+  // cola (`itemStatusForQueue`), nunca una persona. Ver `scripts/ensure-content-scheduled-status-schema.js`.
+  PROGRAMADO
   EN_PRODUCCION
   DEVUELTO
 }

@@ -6,7 +6,9 @@
 //   3. reabrir una tarea cerrada es de cualquiera, y solo eso (isTaskReopenRequest);
 //   4. lo demás es de managers, quien la creó o quien la ejecuta; un colaborador solo la mueve entre
 //      Pendiente y En proceso;
-//   5. la privacidad solo la cambia quien la creó, y solo si dirige.
+//   5. la privacidad solo la cambia quien la creó, y solo si dirige;
+//   6. un pendiente «Publicar» cuya pieza está programada en Meta no se cierra a mano: se cierra solo
+//      cuando Meta publica (15 de octubre de 2026).
 // La reserva de un pendiente privado (poder abrirlo) se comprueba antes, con requireTaskAccess o canOpenTask.
 
 import prisma from '../lib/prisma.js';
@@ -14,6 +16,8 @@ import { canUpdateTask, isManagerRole } from '../config/security.js';
 import { canChangeTaskPrivacy } from '../lib/taskPrivacy.js';
 import { collaboratorMoveProblem } from '../lib/taskCollaborators.js';
 import { isTaskReopenRequest } from '../lib/taskTiming.js';
+import { isPublicationTask } from '../lib/contentTaskReciprocity.js';
+import { publicationTaskCloseProblem } from '../lib/socialPublishing.js';
 import { assertTaskNotLocked } from './taskFocusService.js';
 
 const gateError = (status, message, extra = {}) => Object.assign(new Error(message), { gateStatus: status, ...extra });
@@ -33,9 +37,20 @@ export const checkTaskUpdate = async ({ db = prisma, user, taskId, payload = {} 
   }
   const task = await db.task.findUnique({
     where: { id: taskId },
-    select: { creatorId: true, status: true, assignee: { select: { userId: true } }, collaborators: { select: { member: { select: { userId: true } } } } }
+    select: {
+      creatorId: true, status: true, title: true,
+      assignee: { select: { userId: true } },
+      collaborators: { select: { member: { select: { userId: true } } } },
+      contentItem: { select: { publishDate: true, publishTime: true, publications: { select: { status: true } } } }
+    }
   });
   if (!task) throw gateError(404, 'Task not found');
+  // Mientras la publicación esté armada, el estado de la pieza es de la cola: cerrar este pendiente a
+  // mano la dejaba en PUBLICADO y el publicador cancelaba las dos redes al llegar la hora.
+  if (String(payload?.status || '') === 'REALIZADA' && task.status !== 'REALIZADA' && isPublicationTask(task.title || '')) {
+    const problem = publicationTaskCloseProblem({ item: task.contentItem, publications: task.contentItem?.publications || [] });
+    if (problem) throw gateError(409, problem);
+  }
   if (!isTaskReopenRequest({ currentStatus: task.status, payload }) && !canUpdateTask(user, task)) {
     const actorUserId = user?.userId || user?.id;
     const isCollaborator = Boolean(actorUserId) && (task.collaborators || []).some((row) => row.member?.userId === actorUserId);
