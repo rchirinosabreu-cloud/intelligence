@@ -1,5 +1,48 @@
 # Ritmo del equipo
 
+## Entrada semanal y previsión (Rodny, 14 de octubre de 2026)
+
+Rodny pidió simplificar la lectura y anticipar entregas, tomando como referencia la claridad de CRM y Financiero. Esta organización sustituye el orden de la Fase A descrito más abajo; conserva sus datos, permisos y acciones.
+
+- **Esta semana** es la entrada: entregas previstas, entregas que necesitan revisión y personas que pueden recibir trabajo. Hoy, mañana (siguiente día hábil), semana actual y próxima semana comparten la misma lectura. Los indicadores filtran la lista del equipo. Una fila por persona, con horas cronometradas hoy/semana, rango estimado por hacer, fiabilidad y próximo vencimiento. Al abrirla aparecen las tareas, sus motivos, acceso a Gestión y «Simular».
+- **Bria** muestra tres decisiones inicialmente; «Por qué y evidencia» abre su explicación y se pueden ver las demás. La lectura guardada conserva fecha y autor; «Actualizar» relee los datos, «Volver a leer» genera una lectura nueva. Ninguna propuesta reasigna, crea ni envía por sí sola.
+- **Historial** contiene los periodos de 7/30/90 días, cobertura, filtros por persona/formato/cliente/complejidad, promedio, mediana, percentil 75 y muestra. Las horas por día/semana y las observaciones del cronómetro se abren por elección. Las consultas históricas se hacen al entrar allí.
+- El mapa de diez días se abre opcionalmente como **fechas de entrega**. Conserva los umbrales y el cálculo anteriores: agrupa por vencimiento y no demuestra que todo deba trabajarse ese día.
+
+### Cómo se anticipan compromisos
+
+`src/lib/teamForecast.js` calcula una sola previsión que `teamLoadService` adjunta como `forecast` a `GET /api/manager/rhythm/load`. La pantalla, la herramienta `carga_del_equipo` y el resumen que recibe Bria leen ese mismo resultado.
+
+1. Horizonte de quince días hábiles de Colombia. Una fecha sin hora no hábil se lleva al siguiente día hábil; una hora explícita de compromiso/publicación se conserva incluso en fin de semana y no añade capacidad fuera de jornada. La fecha de publicación sin hora también limita una entrega posterior, pero no se presenta como una hora conocida.
+2. `workPrediction.js` agrupa persona × tipo × cliente × complejidad. Busca primero el contexto exacto, después amplía a su complejidad, equipo/cliente/complejidad, equipo/complejidad, persona/tipo y equipo/tipo; siempre revela el alcance. Solo el contexto exacto con al menos tres mediciones comparables y 50 % de cobertura se considera suficiente. Sin historia usa una hora supuesta con confianza baja. El rango es mediana–percentil 75; el promedio se muestra aparte en Historial. No se entrenan duraciones completas con tareas privadas, colaboradores ni responsabilidad repartida entre personas.
+3. Se descuenta únicamente tiempo válido del **responsable actual en el ciclo abierto**. No se descuentan colaboradores, otros responsables, ciclos cerrados, sesiones simultáneas ni sesiones de 8 h o más. No se usa el acumulado histórico de la tarea para inferir avance. Al alcanzar el tiempo habitual se conserva al menos 25 % (mínimo 15 min) pendiente y se pide revisar cuánto falta: nunca se da por terminada una tarea con el reloj.
+4. Se acumula el trabajo por límite, empezando por las vencidas, contra la capacidad desde hoy hasta cada vencimiento y hora. Superar esa capacidad indica riesgo; superar capacidad con el extremo superior del rango o alcanzar el 90 % con el habitual indica margen ajustado. Las tareas que comparten el mismo límite reciben la misma lectura conjunta. En vistas futuras, horas pendientes y capacidad son acumuladas desde hoy hasta el cierre seleccionado; las entregas del indicador pertenecen al periodo elegido.
+5. Referencia de 8 h nominales por día. Hoy se prorratea la franja operativa 8:00–18:00 de Bogotá; no se descuentan reuniones ni ausencias. Es una estimación condicional, no una promesa ni una probabilidad calibrada. Tampoco programa el orden real de ejecución ni comprueba compatibilidad de habilidades al sugerir apoyo.
+6. «Puede recibir» requiere al menos media jornada libre incluso usando el extremo superior, sin vencidas, riesgos, fechas ajustadas, tareas sin fecha ni datos insuficientes. Una consulta que alcanza el tope de tareas se marca incompleta y nunca confirma espacio.
+
+No hay cambios de esquema. La previsión y las simulaciones son de lectura; no cambian estados, fechas ni asignaciones.
+
+### Analítica predictiva de la operación
+
+Rodny aclaró: «quiero analítica predictiva, poder anticipar lo que podría pasar». Esta entrega conecta la lectura semanal con el historial contextual y los escenarios de asignación dentro de Ritmo:
+
+- Tiempo habitual y variación por **persona × tipo de trabajo × complejidad × cliente**. Post, carrusel, reel y elaboración de parrilla son trabajos distintos. No comparar las 1 h 30 min de una persona con las 4 h de otra sin comprobar que el contexto sea comparable.
+- Horas efectivamente registradas por persona, día y semana, separadas del trabajo futuro estimado. Los tramos se reparten en las fechas en que ocurrieron; cerrar una tarea el viernes no convierte en trabajo del viernes lo realizado desde el martes.
+- Compromiso con hora: en los escenarios de Ritmo, cruzar el esfuerzo pendiente con la cola anterior y con la hora real de entrega/publicación. Ejemplo ilustrativo: asignar a las 15:00 un reel que suele tomar 4 h y debe publicarse a las 18:00 merece revisión, aunque la jornada nominal completa sea de 8 h. El límite de producción puede requerir margen para revisión y aprobación; no confundirlo automáticamente con publicar.
+- Anticipación para mañana y la próxima semana, identificando la primera fecha que se queda sin margen y las tareas que explican el riesgo.
+- Escenarios: qué cambia si se reasigna, se mueve una fecha o entra trabajo nuevo. Una simulación debe mostrar supuestos y nunca modificar asignaciones por sí sola.
+- La calibración contra resultados reales queda pendiente. Se muestran riesgo y confianza del dato; no porcentajes de probabilidad ni calificaciones personales. Tampoco se descuentan reuniones/ausencias ni se comprueba disponibilidad de habilidades.
+
+**Aviso retirado de las tareas (Rodny, 15 de octubre de 2026).** Crear o editar una tarea ya no muestra el bloque predictivo ni consulta previsiones al cambiar responsable o fecha, incluidos domingos. Rodny señaló que mezclaba trabajos de «Operaciones & Reuniones» y presentaba advertencias poco útiles para una tarea concreta. La exploración queda en Ritmo, mediante «Simular» y `TaskAssignmentForecast`; no reintroducirla automáticamente en el formulario.
+
+Los escenarios consultan `POST /api/manager/rhythm/assignment-preview`. Solo administradores/PM con Manager; la ruta exige las dos puertas y verifica acceso a una tarea existente. La simulación sustituye la tarea en la cola, sin duplicarla, y conserva el límite de publicación. El navegador no fija las horas estimadas. Respuestas antiguas se descartan al cambiar la selección. La complejidad viene de las mismas reglas locales que clasifican tareas: es orientativa, no una medida fina validada.
+
+`recordedWorkHours` distribuye sesiones por día de Bogotá y semana desde lunes, incluidas tareas abiertas; prorratea una duración corregida, separa declarado y excluye simultáneas/relojes olvidados. Horas solo se filtran por persona y periodo, como dice la pantalla. Consultas truncadas se señalan como parciales. Las tareas privadas conservan título y cliente públicos como en Gestión; el cálculo compartido no lee su clasificación ni pieza protegida y los perfiles contextuales las excluyen.
+
+Bria puede consultar contexto y horas con `ritmo_del_equipo`, y los cuatro horizontes con `carga_del_equipo`. La lectura semanal recibe el alcance y muestra de cada previsión. El pulso usa el mismo riesgo para mañana y añade entregas de hoy con historial suficiente; no alerta desde una duración supuesta ni una consulta incompleta. Conserva topes, silencios y acciones actuales. El paso del reloj solo no vuelve a anunciar el mismo riesgo.
+
+Pruebas: `tests/workPrediction.test.js`, `tests/assignmentPrediction.test.js`, `tests/predictiveRhythmUi.test.js`, `tests/teamForecast.test.js`, contratos de Ritmo, lectura semanal, pulso y herramientas de Bria. Recorridos visuales: `node tests/browser/teamRhythm.mjs` y `node tests/browser/predictiveRhythm.mjs`; capturas en `output/team-rhythm/` (datos inventados, ambos temas, móvil, escenarios y ausencia de avisos/consultas predictivas en las tareas con plazos entre semana y en domingo).
+
 Rodny, 9 de octubre de 2026: «siento que aún no hay forma de analizar los tiempos, de leer al miembro del equipo … si Brayan hace en un día dos vídeos y en cada uno se demora 4 horas, eso hay que revisarlo … si en un vídeo se demora 5 horas y en otro 30 minutos, hay que ver por qué tanta diferencia. Y eso va para todos».
 
 ## Dónde vive

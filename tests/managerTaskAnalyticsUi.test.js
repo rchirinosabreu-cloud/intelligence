@@ -18,7 +18,7 @@ test('Manager route replaces BrainCore with the descriptive task panel', async (
 test('each tab explains its purpose; Ritmo reads people without grading them', async () => {
   const panel = await readPanel();
   assert.match(panel, /Señales que Bria detecta por su cuenta, cada una con su evidencia/);
-  assert.match(panel, /Es una lectura para conversar con cada quien, no una calificación/);
+  assert.match(panel, /Anticipa las entregas de la semana y encuentra dónde repartir el trabajo/);
   assert.doesNotMatch(panel, /No compara velocidad individual/i);
 });
 

@@ -71,6 +71,19 @@ La fecha y la hora de publicación de una pieza. Una pieza ya publicada no se mu
 ### `registrar_observacion` (módulo Clientes)
 Una observación en la ficha del cliente (Operación de clientes): contexto que el equipo tiene que leer, no un pendiente. Pide el texto si no lo dieron, respeta el tope de 2.000 caracteres y la guarda con el autor por `addObservation`, la misma función de la ruta.
 
+### `proponer_parrilla` (permiso de Parrillas)
+
+Rodny, 14 de octubre de 2026 (tercer punto del plan «llevar a Bria a más niveles»; eligió la opción 2): «yo podría pedirle que necesito la parrilla de tal y que el cliente me comunicó que le gustaría tales énfasis … y basado en ello montarme las piezas y desde el chat enviarlas a parrilla como borrador, las que yo quiera». La acción `PLAN_DRAFT` (`src/lib/planDraft.js` + `preparePlanDraft`/`executePlanDraft`):
+
+- **El modelo propone** (modelo de chat, esquema estricto, uso `bria.plan-draft`): tantas piezas como falten para la cuota del contrato (o las que diga la persona, hasta 20), cada una con objetivo (el título que verán equipo y cliente), formato, día del mes, idea para el equipo, texto de publicación y a qué responde. Lee el contrato (piezas por formato, historias), el objetivo del mes, los criterios editoriales aprobados, la parrilla anterior (para no repetir), las piezas que ya existen (para no pisar sus días) y **el énfasis con las palabras de la persona, que manda sobre todo lo demás**. No inventa datos del cliente: deja huecos entre corchetes.
+- **El código manda** (`validatePlanDraft`): solo formatos de la plataforma, días dentro del mes, sin «Nuevo objetivo», sin repetir, sin juicios, dentro del tope; la respuesta con bloque ```json se parsea igual. Lo que no entra se cuenta en un aviso.
+- **La propuesta se guarda en la acción** (`wanted.propuesta`): `omitir` (por número), `solo` (quedarse con unas) o confirmar no vuelven a preguntarle al modelo; más énfasis o `rehacer` sí, y una propuesta nueva olvida las omisiones viejas.
+- **Sin parrilla**, se pregunta responsable y objetivo (como `crear_parrilla`; «Usar el énfasis como objetivo» vale) y se crea al confirmar; una parrilla finalizada o un cliente archivado se rechazan con palabras.
+- **Confirmar** envía solo las piezas elegidas, en borrador, por `createContentItem`: la idea queda como guion (solo el equipo), el texto de publicación como caption (lo que verá el cliente), la fecha al mediodía UTC y la procedencia en la nota interna («Propuesta de Bria para noviembre de 2026 · Énfasis: …»). Las piezas se revisan en la parrilla antes de mandarlas al cliente.
+- **Un modelo caído no inventa nada:** se dice («No pude armar la propuesta ahora») y se vuelve a intentar.
+
+Contrato: `tests/briaPlanDraft.test.js`.
+
 ## Las manos de Bria en toda la plataforma
 
 Rodny, 10 de octubre de 2026: «quiero que Bria tenga permiso para todo en la plataforma, ella vive ahí, no necesariamente hay que darle desde aquí configuraciones o permisos; como todo se crea manual, ella lo puede hacer también, si se lo pide un admin o project y según los módulos a los que ese usuario tiene acceso».

@@ -32,6 +32,7 @@ Lo que sí se exige:
 | `credentials` | Accesos cifrados con AES-256-GCM | `scripts/sql/vault.sql` | `vaultRepository.js` |
 | `credential_events` | Qué campos cambiaron y quién, nunca los valores | `scripts/sql/vault.sql` | `vaultRepository.js` |
 | `reveal_events` | Quién vio cada acceso, cuándo y desde dónde | `scripts/sql/vault.sql` | `vaultRepository.js` |
+| `access_requests` | Pedidos de un project manager para ver un acceso: quién pidió, para qué, quién decidió y cuándo; nunca un valor | `scripts/sql/vault.sql` | `vaultRepository.js` |
 
 ## Reglas
 - **Aditivo e idempotente.** `CREATE … IF NOT EXISTS` y bloques `DO` que comprueban antes de crear. Se aplica en cada arranque: `ensure-bria-knowledge-schema.js` y `ensure-vault-schema.js`, encadenados en `npm start`. Un cambio de columnas se escribe como `ALTER … IF NOT EXISTS` en el mismo archivo.

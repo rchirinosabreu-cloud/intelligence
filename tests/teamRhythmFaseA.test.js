@@ -11,10 +11,12 @@ const loadMap = readFileSync('src/components/modules/TeamLoadMap.jsx', 'utf8');
 const routes = readFileSync('src/routes/index.js', 'utf8');
 const server = readFileSync('server.js', 'utf8');
 
-test('Ritmo shows the weekly reading first, then the load map, then coverage and people', () => {
-  const main = panel.slice(panel.indexOf('export default function TeamRhythmPanel'));
-  assert.ok(main.indexOf('<WeeklyReadingCard') < main.indexOf('<TeamLoadMap'));
-  assert.ok(main.indexOf('<TeamLoadMap') < main.indexOf('data-rhythm-coverage'));
+test('Ritmo opens with the week; the reading is compact and the delivery-day map is optional', () => {
+  const week = readFileSync('src/components/modules/TeamWeekOverview.jsx', 'utf8');
+  assert.match(panel, /view === 'week'.*<TeamWeekOverview/);
+  assert.ok(week.indexOf('aria-label="Resumen de la semana"') < week.indexOf('<WeeklyReadingCard'));
+  assert.match(week, /<WeeklyReadingCard refreshKey=\{refreshKey\} compact/);
+  assert.match(week, /mapOpen &&[\s\S]*<TeamLoadMap/);
 });
 
 test('the reading is a Bria surface: gradient header with the mascot, decisions with evidence, server-first toasts', () => {

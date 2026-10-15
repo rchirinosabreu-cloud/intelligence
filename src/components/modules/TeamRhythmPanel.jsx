@@ -3,13 +3,11 @@ import { AlertCircle, ChevronDown, Clock, Eye, Users } from '@/components/ui/ico
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
-import WeeklyReadingCard from './WeeklyReadingCard';
-import TeamLoadMap from './TeamLoadMap';
+import TeamWeekOverview from './TeamWeekOverview';
+import WorkProfileExplorer from './WorkProfileExplorer';
 
-// Ritmo del equipo (Rodny, 9 de octubre de 2026): cuánto tarda cada persona por tipo de trabajo, qué tan parejo
-// trabaja y dónde se le va el tiempo. El orden de la pantalla es deliberado: primero cuánto de lo cerrado está
-// medido (lo que no se midió no es rápido), después los tiempos por tipo de trabajo y al final los hallazgos,
-// cada uno con las tareas que lo sustentan. Es una lectura para conversar con la persona, no una calificación.
+// La semana es la entrada; el historial se abre por elección. Antes de leer tiempos individuales siempre se
+// muestra cuánto se midió. Los hallazgos conservan sus tareas como evidencia, sin calificar a la persona.
 
 const formatDuration = (milliseconds) => {
   const totalMinutes = Math.max(0, Math.round(Number(milliseconds || 0) / 60_000));
@@ -30,8 +28,8 @@ const CoverageBar = ({ value }) => (
 
 function PersonCard({ person, tasks }) {
   const [open, setOpen] = useState(false);
-  const findings = open ? person.findings : person.findings.slice(0, 2);
-  const types = open ? person.byType : person.byType.slice(0, 3);
+  const findings = open ? person.findings : [];
+  const types = open ? person.byType : [];
   const hidden = person.findings.length - findings.length + person.byType.length - types.length;
   return (
     <article className="min-w-0 rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950" data-rhythm-person={person.personId}>
@@ -44,6 +42,7 @@ function PersonCard({ person, tasks }) {
         <span className="shrink-0 whitespace-nowrap text-sm font-semibold tabular-nums text-zinc-950 dark:text-zinc-50">{percent(person.coverage)}</span>
       </header>
       <div className="mt-3"><CoverageBar value={person.coverage} /></div>
+      {!open && <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-400">{person.byType.length} tipos de trabajo · {person.findings.length} observaciones para revisar</p>}
 
       {types.length > 0 && (
         <div className="mt-4 overflow-x-auto" data-rhythm-types>
@@ -100,7 +99,7 @@ function PersonCard({ person, tasks }) {
   );
 }
 
-export default function TeamRhythmPanel({ periodDays = 30, refreshKey = 0 }) {
+export default function TeamRhythmPanel({ periodDays = 30, refreshKey = 0, view = 'history', onHistory }) {
   const [data, setData] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
@@ -122,9 +121,11 @@ export default function TeamRhythmPanel({ periodDays = 30, refreshKey = 0 }) {
     }
   }, [periodDays]);
 
-  useEffect(() => { load(); }, [load, refreshKey]);
+  useEffect(() => { if (view === 'history') load(); }, [load, refreshKey, view]);
 
   const people = useMemo(() => [...(data?.people || [])].sort((a, b) => warningCount(b) - warningCount(a) || a.personName.localeCompare(b.personName, 'es')), [data]);
+
+  if (view === 'week') return <TeamWeekOverview refreshKey={refreshKey} onHistory={onHistory} />;
 
   if (error) {
     return (
@@ -141,11 +142,6 @@ export default function TeamRhythmPanel({ periodDays = 30, refreshKey = 0 }) {
 
   return (
     <section className="space-y-5" aria-labelledby="rhythm-title">
-      {/* Fase A (10 de octubre de 2026): primero qué decidir esta semana, después dónde hay espacio, y al final
-          la lectura por persona del cronómetro, que es de donde salen las dos anteriores. */}
-      <WeeklyReadingCard refreshKey={refreshKey} />
-      <TeamLoadMap refreshKey={refreshKey} />
-
       <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950" data-rhythm-coverage>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="max-w-2xl">
@@ -162,6 +158,8 @@ export default function TeamRhythmPanel({ periodDays = 30, refreshKey = 0 }) {
         <div className="mt-4"><CoverageBar value={data.team.coverage} /></div>
       </div>
 
+      <WorkProfileExplorer data={data} />
+      <details className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950"><summary className="cursor-pointer text-sm font-medium text-zinc-800 dark:text-zinc-200">Observaciones del cronómetro por persona</summary>
       {people.length === 0 ? (
         <div className="flex min-h-40 items-center justify-center rounded-2xl border border-dashed border-zinc-200 text-sm text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">Nadie cerró tareas en este periodo.</div>
       ) : (
@@ -169,6 +167,7 @@ export default function TeamRhythmPanel({ periodDays = 30, refreshKey = 0 }) {
           {people.map((person) => <PersonCard key={person.personId} person={person} tasks={data.tasks || {}} />)}
         </div>
       )}
+      </details>
     </section>
   );
 }

@@ -30,11 +30,13 @@ document.body.className = dark ? 'bg-zinc-950' : 'bg-zinc-50';
 
 const json = (body) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
 const realFetch = window.fetch.bind(window);
+window.__predictionRequests = [];
 window.fetch = async (input, init) => {
   const url = String(typeof input === 'string' ? input : input.url);
   if (!url.includes('/api/')) return realFetch(input, init);
   if (url.includes('/api/team')) return json(EQUIPO);
   if (url.includes('/api/auth/me') || url.includes('/api/user/profile')) return json(USUARIO);
+  if (url.includes('/api/manager/rhythm/assignment-preview')) window.__predictionRequests.push(JSON.parse(init.body));
   return json([]);
 };
 

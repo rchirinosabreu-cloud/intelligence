@@ -1,10 +1,12 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
+import BrainToaster from '@/components/ui/BrainToaster';
 import ManagerTaskAnalytics from '@/components/modules/ManagerTaskAnalytics';
 import { analyzeTeamRhythm } from '@/lib/teamRhythm';
 import { buildLoadMap, loadSignals } from '@/lib/teamLoad';
+import { buildTeamForecast } from '@/lib/teamForecast';
+import { buildContextProfiles, recordedWorkHours } from '@/lib/workPrediction';
 import '@/index.css';
 
 // Muestra local de la pestaña Ritmo de Manager con personas y tareas inventadas y la API simulada en el navegador.
@@ -18,7 +20,7 @@ document.body.className = params.has('dark') ? 'bg-zinc-950' : 'bg-zinc-50';
 
 const H = 3_600_000, M = 60_000;
 let seq = 0;
-const t = (personId, personName, workType, ms, day, extra = {}) => ({ id: `t${++seq}`, title: `${workType === 'Publicación' ? '[Publicar]' : '[Producción]'} ${workType}: Pieza de ejemplo ${seq}`, personId, personName, workType, completedDay: day, measuredMs: ms, reworkMs: 0, longestSessionMs: Math.min(ms, 3 * H), overlappedMs: 0, ...extra });
+const t = (personId, personName, workType, ms, day, extra = {}) => ({ id: `t${++seq}`, title: `${workType === 'Publicación' ? '[Publicar]' : '[Producción]'} ${workType}: Pieza de ejemplo ${seq}`, personId, personName, workType, clientId: personId === 'b' ? 'alpina' : 'nutresa', clientName: personId === 'b' ? 'Alpina' : 'Nutresa', complexity: 'MEDIA', completedDay: day, measuredMs: ms, reworkMs: 0, longestSessionMs: Math.min(ms, 3 * H), overlappedMs: 0, ...extra });
 const tasks = [
   t('a', 'Andrés Ejemplo', 'Video', 4 * H, '2026-10-06'), t('a', 'Andrés Ejemplo', 'Video', 4 * H, '2026-10-06'), t('a', 'Andrés Ejemplo', 'Video', 30 * M, '2026-10-07'),
   t('a', 'Andrés Ejemplo', 'Reel', 2.6 * H, '2026-10-01'), t('a', 'Andrés Ejemplo', 'Reel', 2.8 * H, '2026-10-02'), t('a', 'Andrés Ejemplo', 'Reel', 2.4 * H, '2026-10-03'), t('a', 'Andrés Ejemplo', 'Reel', 0, '2026-10-04'),
@@ -30,26 +32,31 @@ const tasks = [
 const { people, types } = analyzeTeamRhythm({ tasks });
 const taskMap = Object.fromEntries(tasks.map((task) => [task.id, { title: task.title, workType: task.workType, day: task.completedDay, personName: task.personName, measuredMs: task.measuredMs }]));
 const closed = people.reduce((s, p) => s + p.closed, 0), measured = people.reduce((s, p) => s + p.measured, 0);
-const rhythm = { period: { days: 30 }, team: { closed, measured, coverage: measured / closed }, people, types, tasks: taskMap };
+const hours = recordedWorkHours({ from: new Date('2026-09-14T05:00:00Z'), now: new Date('2026-10-14T20:00:00Z'), sessions: ['a','b','c'].flatMap((workerId, i) => [
+  { workerId, startedAt: '2026-10-13T13:00:00Z', endedAt: '2026-10-13T17:00:00Z', durationMs: (4-i) * H },
+  { workerId, startedAt: '2026-10-14T13:00:00Z', endedAt: '2026-10-14T15:00:00Z', durationMs: (2-i*0.5) * H }
+]) }).map(row => ({ ...row, personName: people.find(p => p.personId === row.personId).personName }));
+const rhythm = { period: { days: 30 }, team: { closed, measured, coverage: measured / closed }, people, types, tasks: taskMap, profiles: buildContextProfiles(tasks), hours };
 
 // Mapa de carga: tareas abiertas inventadas sobre los próximos días hábiles a partir del viernes 9 de octubre de 2026.
 let openSeq = 0;
-const openTask = (personId, workType, dueDay, clientName, estimateMs) => ({ id: `o${++openSeq}`, title: `${workType}: ${clientName} ${openSeq}`, status: 'PENDIENTE', personId, workType, dueDay, clientName, estimateMs });
+const openTask = (personId, workType, dueDay, clientName, estimateMs) => ({ id: `o${++openSeq}`, title: `${workType}: ${clientName} ${openSeq}`, status: 'PENDIENTE', personId, workType, dueDay, clientId: clientName.toLowerCase(), complexity: 'MEDIA', clientName, estimateMs });
 const openTasks = [
-  openTask('a', 'Video', '2026-10-13', 'Nutresa', 4 * H), openTask('a', 'Video', '2026-10-13', 'Alpina', 4 * H), openTask('a', 'Video', '2026-10-13', 'Colanta', 4 * H),
-  openTask('a', 'Reel', '2026-10-14', 'Nutresa', 2.6 * H), openTask('a', 'Reel', '2026-10-14', 'Alpina', 2.6 * H), openTask('a', 'Reel', '2026-10-14', 'Colanta', 2.6 * H),
+  openTask('a', 'Video', '2026-10-14', 'Nutresa', 4 * H), openTask('a', 'Video', '2026-10-14', 'Alpina', 4 * H), openTask('a', 'Video', '2026-10-14', 'Colanta', 4 * H),
+  openTask('a', 'Reel', '2026-10-15', 'Nutresa', 2.6 * H), openTask('a', 'Reel', '2026-10-15', 'Alpina', 2.6 * H), openTask('a', 'Reel', '2026-10-15', 'Colanta', 2.6 * H),
   openTask('a', 'Video', '2026-10-16', 'Endova', 4 * H), openTask('a', 'Reel', '2026-10-20', 'Nutresa', 2.6 * H),
-  openTask('b', 'Post', '2026-10-09', 'Alpina', 45 * M), openTask('b', 'Post', '2026-10-13', 'Alpina', 45 * M), openTask('b', 'Reel', '2026-10-15', 'Endova', 1.5 * H), openTask('b', 'Post', '2026-10-06', 'Nutresa', 45 * M), openTask('b', 'Post', '2026-10-07', 'Nutresa', 45 * M),
+  openTask('b', 'Post', '2026-10-14', 'Alpina', 45 * M), openTask('b', 'Post', '2026-10-16', 'Alpina', 45 * M), openTask('b', 'Reel', '2026-10-15', 'Alpina', 1.5 * H), openTask('c', 'Post', '2026-10-06', 'Nutresa', 45 * M), openTask('c', 'Post', '2026-10-07', 'Nutresa', 45 * M),
   openTask('c', 'Publicación', '2026-10-13', 'Colanta', 25 * M), openTask('c', 'Operaciones & Reuniones', null, 'Endova', H)
 ];
-const loadMap = buildLoadMap({ people: people.map((p) => ({ personId: p.personId, personName: p.personName, avatarUrl: null })), tasks: openTasks, estimates: { byPersonType: {}, byType: {} }, today: '2026-10-09' });
-const load = { ...loadMap, signals: loadSignals(loadMap) };
+const demoPeople = people.map((p) => ({ personId: p.personId, personName: p.personName, avatarUrl: null }));
+const loadMap = buildLoadMap({ people: demoPeople, tasks: openTasks, estimates: { byPersonType: {}, byType: {} }, today: '2026-10-14' });
+const load = { ...loadMap, signals: loadSignals(loadMap), forecast: buildTeamForecast({ people: demoPeople, tasks: openTasks, rhythm, now: new Date('2026-10-14T13:00:00Z') }) };
 
 const readingBody = {
-  summary: 'Andrés tiene el martes y el miércoles por encima de lo que cabe en un día, mientras Beatriz y Carlos tienen espacio. La mayor parte de lo cerrado por Carlos no tiene tiempo medido, así que todavía no se puede leer su ritmo.',
+  summary: 'Conviene revisar las entregas de hoy de Andrés y las vencidas de Carlos. Beatriz tiene espacio estimado para recibir trabajo; en Carlos faltan mediciones y una fecha.',
   decisions: [
-    { title: 'Repartir los videos del martes de Andrés', why: 'Tiene tres videos de cuatro horas para el mismo día, doce horas estimadas en una jornada de ocho, y el miércoles viene igual de cargado con tres reels.', evidence: ['12 h estimadas el 13 de octubre en 3 tareas', '7 h 48 min estimadas el 14 de octubre', 'Beatriz tiene 45 min comprometidos ese martes'], urgency: 'alta', action: { kind: 'REASIGNAR', label: 'Abrir Video Colanta', personName: 'Andrés Ejemplo', taskId: 'o3', suggestedMessage: null } },
-    { title: 'Mover a Beatriz las dos tareas vencidas o cerrar su fecha', why: 'Tiene dos posts con fecha pasada que siguen abiertos; si ya se hicieron, hay que cerrarlos; si no, moverles la fecha para que cuenten en la semana.', evidence: ['2 tareas vencidas que suman 1 h 30 min', 'Ambas de Nutresa, del 6 y 7 de octubre'], urgency: 'media', action: { kind: 'REVISAR_TAREA', label: 'Abrir Post Nutresa', personName: 'Beatriz Muestra', taskId: 'o12', suggestedMessage: null } },
+    { title: 'Revisar los videos de hoy de Andrés', why: 'Tiene tres videos con doce horas estimadas pendientes y ocho horas nominales hasta el vencimiento. Beatriz tiene margen estimado; confirma si puede apoyar.', evidence: ['12 h pendientes para el miércoles 14 de octubre', '8 h de capacidad nominal hasta esa fecha', 'Beatriz tiene unas 3 h pendientes en el periodo'], urgency: 'alta', action: { kind: 'REASIGNAR', label: 'Abrir Video Colanta', personName: 'Andrés Ejemplo', taskId: 'o3', suggestedMessage: null } },
+    { title: 'Revisar las fechas vencidas de Carlos', why: 'Tiene tareas con fecha pasada que siguen abiertas. Hay que confirmar si se terminaron o siguen pendientes antes de repartir más trabajo.', evidence: ['3 tareas con fecha vencida', 'Una tarea sin fecha queda fuera de la previsión'], urgency: 'media', action: { kind: 'REVISAR_TAREA', label: 'Abrir Post Nutresa', personName: 'Carlos Prueba', taskId: 'o12', suggestedMessage: null } },
     { title: 'Pedirle a Carlos que use el cronómetro', why: 'De sus siete tareas cerradas solo dos tienen tiempo medido, así que no es posible saber cuánto le toma publicar ni cuándo necesita apoyo.', evidence: ['2 de 7 cerradas con tiempo medido (29 %)', 'Una sesión de 4 h quedó simultánea con otra'], urgency: 'media', action: { kind: 'CONVERSAR', label: 'Pedírselo a Bria', personName: 'Carlos Prueba', taskId: null, suggestedMessage: 'Crea un pendiente para Carlos Prueba: poner en marcha el cronómetro en cada tarea que pase a En proceso esta semana, para poder leer su ritmo.' } },
     { title: 'Revisar el carrusel de Beatriz con retrabajo', why: 'Le tomó dos horas y una hora y media más de retrabajo; conviene saber si el brief estaba claro antes de asignarle el siguiente.', evidence: ['Carrusel del 4 de octubre: 2 h más 1 h 30 min de retrabajo'], urgency: 'baja', action: { kind: 'CONVERSAR', label: 'Pedírselo a Bria', personName: 'Beatriz Muestra', taskId: null, suggestedMessage: 'Recuérdame hablar con Beatriz Muestra sobre el carrusel del 4 de octubre: qué faltó en el brief para que hubiera hora y media de retrabajo.' } }
   ]
@@ -68,8 +75,15 @@ const json = (body, delay = 0) => new Promise((resolve) => setTimeout(() => reso
 const realFetch = window.fetch.bind(window);
 window.fetch = (input, init = {}) => {
   const url = new URL(typeof input === 'string' ? input : input.url, location.origin);
-  if (url.pathname === '/api/manager/rhythm') return json(rhythm);
-  if (url.pathname === '/api/manager/rhythm/load') return json(load);
+  if (url.pathname === '/api/manager/rhythm') return json({ ...rhythm, period: { days: Number(url.searchParams.get('days')) || 30 } });
+  if (url.pathname === '/api/manager/rhythm/assignment-preview') {
+    const draft = JSON.parse(init.body), original = openTasks.find(t => t.id === draft.taskId);
+    const candidate = { ...original, personId: draft.assigneeId, dueDay: draft.dueDay, deadlineAt: draft.focusDeadlineAt };
+    const result = buildTeamForecast({ people: demoPeople, tasks: [...openTasks.filter(t => t.id !== candidate.id), candidate], rhythm, now: new Date('2026-10-14T13:00:00Z') });
+    const person = result.people.find(p => p.personId === candidate.personId);
+    return json({ ...person.tasks.find(t => t.id === candidate.id), personName: person.personName, clientName: candidate.clientName });
+  }
+  if (url.pathname === '/api/manager/rhythm/load') return json({ ...load, forecast: buildTeamForecast({ people: demoPeople, tasks: openTasks, rhythm, now: new Date('2026-10-14T13:00:00Z'), window: url.searchParams.get('window') || 'week' }) });
   if (url.pathname === '/api/manager/rhythm/reading' && init.method === 'POST') {
     reading = { id: 'r2', weekKey: '2026-W41', trigger: 'MANUAL', periodDays: 30, reading: readingBody, model: 'gpt-local', generatedBy: 'Rodny Chirinos', generatedAt: new Date().toISOString() };
     return json(reading, 1200);
@@ -80,4 +94,4 @@ window.fetch = (input, init = {}) => {
   return realFetch(input, init);
 };
 
-createRoot(document.getElementById('root')).render(<BrowserRouter><ManagerTaskAnalytics /><Toaster /></BrowserRouter>);
+createRoot(document.getElementById('root')).render(<BrowserRouter><ManagerTaskAnalytics /><BrainToaster /></BrowserRouter>);

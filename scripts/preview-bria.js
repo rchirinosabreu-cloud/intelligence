@@ -5,6 +5,7 @@ import multer from 'multer';
 import { randomUUID } from 'node:crypto';
 import { createServer } from 'vite';
 import { createBriaConversationRouter } from '../src/routes/api/briaConversations.js';
+import { requestNudge, answerNudge, decisionMessage } from '../src/lib/vaultAccessRequests.js';
 
 // Muestra local de «Preguntarle a Bria» (6 de octubre de 2026): el componente real contra una API
 // simulada que responde según la pregunta. No hay dotenv, ni base de datos, ni llamada a OpenAI.
@@ -107,8 +108,26 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
     { key: 'SIN_PROCESO:m-mel', kind: 'SIN_PROCESO', personId: 'm-mel', personName: 'Melissa Castaño', title: 'Melissa no tiene una tarea en proceso desde las 9:55.', body: 'Tiene 3 pendientes por empezar. Puede ser un buen momento para preguntarle en qué está.', url: '/gestion?responsable=Melissa%20Casta%C3%B1o', taskIds: [], resolution: 'Melissa arrancó «Reel de lanzamiento» a las 10:40.', actions: [{ label: 'Ver sus pendientes', to: '/gestion?responsable=Melissa%20Casta%C3%B1o' }, { label: 'Que Bria me resuma lo que tiene', ask: 'Resúmeme qué tiene pendiente Melissa hoy y qué le vence pronto.' }] },
     { key: 'PULSO:demo-1', kind: 'OPERACION_ROJA', title: 'Aristea va en rojo: 2 de 5 piezas publicadas a esta fecha.', body: 'Conviene revisar hoy qué piezas faltan y si el ritmo del mes se recupera.', url: '/clientes/operacion/aristea', taskIds: [], urgency: 'alta', followUp: null, actions: [{ label: 'Abrir operación', to: '/clientes/operacion/aristea' }, { label: 'Pedirle a Bria qué falta', ask: '¿Qué le falta a Aristea para salir del rojo en Operación este mes?' }] }
   ];
+  // Pedir un acceso de la bóveda (15 de octubre de 2026): `?acceso=admin` muestra el pedido de Camila con «Compartir» y
+  // «Denegar»; `?acceso=compartido` y `?acceso=denegado`, la respuesta que le llega a ella.
+  const accessRequest = { id: 'a1c2e3f4-0000-4000-8000-000000000004', status: 'PENDING', credential: { platform: 'CapCut', label: 'CapCut', clientName: null, kind: 'ACCESO', platformCount: 0 }, requesterRef: 'u-camila', requesterName: 'Camila del Toro', note: null, createdAt: new Date(Date.now() - 4 * 60_000).toISOString() };
+  let accessDecided = null;
+  const accessNudges = (referer) => {
+    const mode = /acceso=(\w+)/.exec(referer)?.[1];
+    if (mode === 'admin') return accessDecided ? [] : [requestNudge(accessRequest)];
+    if (mode === 'compartido' || mode === 'denegado') return [answerNudge({ ...accessRequest, status: mode === 'compartido' ? 'APPROVED' : 'DENIED', decidedByName: 'Rodny Chirinos' })];
+    return null;
+  };
+  api.post('/api/vault/requests/:id/decision', async (req, res) => {
+    await wait(300);
+    accessDecided = { ...accessRequest, status: req.body?.decision === 'APPROVE' ? 'APPROVED' : 'DENIED', decidedByName: 'Rodny Chirinos' };
+    res.json({ decided: true, request: accessDecided, message: decisionMessage(accessDecided) });
+  });
   // `?sinavisos` en la página deja a Bria sin tarjeta: solo la mascota, con el lápiz y el micrófono al pasar el cursor (la muestra lo lee del referer).
-  api.get('/api/bria/nudges', (req, res) => res.json({ nudges: /sinavisos/.test(String(req.headers.referer || '')) ? [] : nudges }));
+  api.get('/api/bria/nudges', (req, res) => {
+    const referer = String(req.headers.referer || '');
+    res.json({ nudges: /sinavisos/.test(referer) ? [] : (accessNudges(referer) ?? nudges) });
+  });
   api.post('/api/bria/nudges/dismiss', (req, res) => { nudges = nudges.filter((row) => row.key !== req.body?.key); res.json({ key: req.body?.key, untilAt: new Date().toISOString() }); });
   // Buzones que lee Bria (11 de octubre de 2026): la contraseña «mala…» se rechaza como lo haría Gmail.
   let mailAccounts = [{ id: 'acc-social', email: 'social.brainstudio@gmail.com', label: 'Social', host: 'imap.gmail.com', port: 993, username: 'social.brainstudio@gmail.com', isActive: true, connectedBy: 'Rodny Chirinos', connectedAt: new Date().toISOString(), lastReadAt: new Date(Date.now() - 8 * 60_000).toISOString(), lastError: null, lastErrorAt: null }];

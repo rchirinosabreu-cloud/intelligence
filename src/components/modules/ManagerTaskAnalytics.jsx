@@ -27,7 +27,7 @@ const initialTab = () => {
 const TAB_HEADINGS = {
   // La bandeja ya dice «Bria revisa las fuentes automáticamente y conserva evidencia de cada hallazgo».
   observer: { title: 'Observer', description: 'Señales que Bria detecta por su cuenta, cada una con su evidencia.' },
-  ritmo: { title: 'Ritmo del equipo', description: 'Cuánto tarda cada persona por tipo de trabajo, qué tan parejo trabaja y dónde se le va el tiempo. Es una lectura para conversar con cada quien, no una calificación.' },
+  ritmo: { title: 'Ritmo del equipo', description: 'Anticipa las entregas de la semana y encuentra dónde repartir el trabajo.' },
   memory: { title: 'Memoria de Bria', description: 'Centro de conocimiento trazable: convierte documentos y datos autorizados en evidencia recuperable, auditable y lista para Bria.' }
 };
 
@@ -56,7 +56,7 @@ const MetricCard = ({ icon: Icon, label, value, detail, accent = false }) => (
   <article className={cn(
     'rounded-2xl border p-4 sm:p-5',
     'border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950',
-    accent && 'border-[#009EB9]/30 bg-[#009EB9]/[0.04] dark:border-[#009EB9]/35 dark:bg-[#009EB9]/[0.08]'
+    accent && 'border-brand-cyan/30 bg-brand-cyan/[0.04] dark:border-brand-cyan/35 dark:bg-brand-cyan/[0.08]'
   )}>
     <div className="flex items-start justify-between gap-3">
       <div>
@@ -65,7 +65,7 @@ const MetricCard = ({ icon: Icon, label, value, detail, accent = false }) => (
       </div>
       <span className={cn(
         'flex h-9 w-9 items-center justify-center rounded-xl',
-        accent ? 'bg-[#009EB9] text-white' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'
+        accent ? 'bg-brand-cyan text-white' : 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-300'
       )}>
         <Icon className="h-4 w-4" />
       </span>
@@ -96,7 +96,7 @@ const Distribution = ({ title, description, items = [], emptyLabel }) => {
               </div>
               <div className="h-2 overflow-hidden rounded-full bg-zinc-100 dark:bg-zinc-900">
                 <div
-                  className="h-full rounded-full bg-[#009EB9]"
+                  className="h-full rounded-full bg-brand-cyan"
                   style={{ width: `${maximum > 0 ? Math.max(4, (item.workMs / maximum) * 100) : 0}%` }}
                 />
               </div>
@@ -117,7 +117,7 @@ const QualityItem = ({ value, label, goodWhenZero = true }) => {
     <div className="flex items-center justify-between gap-4 border-b border-zinc-100 py-3 last:border-0 dark:border-zinc-900">
       <div className="flex items-center gap-2.5">
         {isGood
-          ? <CheckCircle2 className="h-4 w-4 text-[#00AC8A]" />
+          ? <CheckCircle2 className="h-4 w-4 text-brand-green" />
           : <AlertCircle className="h-4 w-4 text-destructive" />}
         <span className="text-sm text-zinc-700 dark:text-zinc-200">{label}</span>
       </div>
@@ -128,9 +128,10 @@ const QualityItem = ({ value, label, goodWhenZero = true }) => {
 
 export default function ManagerTaskAnalytics() {
   const [activeTab, setActiveTab] = useState(initialTab);
+  const [rhythmView, setRhythmView] = useState('week');
   const [periodDays, setPeriodDays] = useState(30);
   const [analytics, setAnalytics] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -156,14 +157,14 @@ export default function ManagerTaskAnalytics() {
 
   // Las métricas de esfuerzo solo se piden en Ritmo; Observer es solo la bandeja.
   useEffect(() => {
-    if (activeTab === 'ritmo') fetchAnalytics();
-  }, [activeTab, fetchAnalytics]);
+    if (activeTab === 'ritmo' && rhythmView === 'history') fetchAnalytics();
+  }, [activeTab, rhythmView, fetchAnalytics]);
 
   // «Actualizar» recalcula las métricas y la lectura por persona.
   const loadAnalytics = useCallback(() => {
-    fetchAnalytics();
+    if (rhythmView === 'history') fetchAnalytics();
     setRefreshKey((key) => key + 1);
-  }, [fetchAnalytics]);
+  }, [fetchAnalytics, rhythmView]);
 
   const overview = analytics?.overview;
   const sampleMessage = useMemo(() => {
@@ -180,7 +181,7 @@ export default function ManagerTaskAnalytics() {
         <header className="rounded-3xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950 sm:p-7">
           <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-3xl">
-              <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-[#009EB9]">
+              <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.16em] text-brand-cyan">
                 <Activity className="h-4 w-4" />
                 Manager · Bria
               </div>
@@ -191,14 +192,14 @@ export default function ManagerTaskAnalytics() {
                 {TAB_HEADINGS[activeTab].description}
               </p>
               {activeTab === 'observer' && <div className="mt-4 flex flex-wrap gap-2">
-                <div className="inline-flex items-center gap-2 rounded-full bg-[#009EB9]/10 px-3 py-1.5 text-xs font-medium text-[#007D92] dark:text-[#74D9EA]">
+                <div className="inline-flex items-center gap-2 rounded-full bg-brand-cyan/10 px-3 py-1.5 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">
                   <Eye className="h-3.5 w-3.5" />
                   Observa y explica; no ejecuta acciones
                 </div>
               </div>}
             </div>
             {activeTab === 'ritmo' && <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center">
-              <div className="inline-flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900">
+              {rhythmView === 'history' && <div className="inline-flex rounded-xl border border-zinc-200 bg-zinc-50 p-1 dark:border-zinc-800 dark:bg-zinc-900" aria-label="Periodo del historial">
                 {PERIODS.map((days) => (
                   <button
                     key={days}
@@ -214,12 +215,12 @@ export default function ManagerTaskAnalytics() {
                     {days} días
                   </button>
                 ))}
-              </div>
+              </div>}
               <button
                 type="button"
                 onClick={loadAnalytics}
                 disabled={isLoading}
-                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-[#009EB9] px-4 text-xs font-semibold text-white transition-transform active:scale-95 disabled:opacity-60"
+                className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-cyan-deep px-4 text-xs font-semibold text-white transition-transform active:scale-95 disabled:opacity-60"
               >
                 <RefreshCw className={cn('h-4 w-4', isLoading && 'animate-spin')} />
                 Actualizar
@@ -236,7 +237,7 @@ export default function ManagerTaskAnalytics() {
             aria-current={activeTab === 'observer' ? 'page' : undefined}
             className={cn(
               'inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold',
-              activeTab === 'observer' ? 'border-[#009EB9] text-zinc-950 dark:text-white' : 'border-transparent text-zinc-500 dark:text-zinc-400'
+              activeTab === 'observer' ? 'border-brand-cyan text-zinc-950 dark:text-white' : 'border-transparent text-zinc-500 dark:text-zinc-400'
             )}
           >
             <Eye className="h-4 w-4" />
@@ -249,7 +250,7 @@ export default function ManagerTaskAnalytics() {
             aria-current={activeTab === 'ritmo' ? 'page' : undefined}
             className={cn(
               'inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold',
-              activeTab === 'ritmo' ? 'border-[#009EB9] text-zinc-950 dark:text-white' : 'border-transparent text-zinc-500 dark:text-zinc-400'
+              activeTab === 'ritmo' ? 'border-brand-cyan text-zinc-950 dark:text-white' : 'border-transparent text-zinc-500 dark:text-zinc-400'
             )}
           >
             <Clock className="h-4 w-4" />
@@ -262,7 +263,7 @@ export default function ManagerTaskAnalytics() {
             aria-current={activeTab === 'memory' ? 'page' : undefined}
             className={cn(
               'inline-flex items-center gap-2 border-b-2 px-3 py-3 text-sm font-semibold',
-              activeTab === 'memory' ? 'border-[#009EB9] text-zinc-950 dark:text-white' : 'border-transparent text-zinc-500 dark:text-zinc-400'
+              activeTab === 'memory' ? 'border-brand-cyan text-zinc-950 dark:text-white' : 'border-transparent text-zinc-500 dark:text-zinc-400'
             )}
           >
             <Database className="h-4 w-4" />
@@ -282,21 +283,24 @@ export default function ManagerTaskAnalytics() {
         </nav>
 
         {activeTab === 'memory' ? <BriaMemoryPanel /> : activeTab === 'observer' ? <BriaObserverInbox /> : <>
-        <TeamRhythmPanel periodDays={periodDays} refreshKey={refreshKey} />
+        <div className="flex gap-1 rounded-xl bg-zinc-100 p-1 dark:bg-zinc-900 w-fit" aria-label="Lectura de Ritmo">
+          {[['week', 'Esta semana'], ['history', 'Historial']].map(([value, label]) => <button key={value} type="button" aria-pressed={rhythmView === value} onClick={() => setRhythmView(value)} className={cn('min-h-11 rounded-lg px-4 text-sm font-medium', rhythmView === value ? 'bg-white text-zinc-950 shadow-sm dark:bg-zinc-800 dark:text-zinc-50' : 'text-zinc-600 dark:text-zinc-400')}>{label}</button>)}
+        </div>
+        <TeamRhythmPanel periodDays={periodDays} refreshKey={refreshKey} view={rhythmView} onHistory={() => setRhythmView('history')} />
 
-        <h2 className="pt-4 text-base font-semibold text-zinc-950 dark:text-zinc-50">Esfuerzo del equipo</h2>
-        {error && (
+        {rhythmView === 'history' && <h2 className="pt-4 text-base font-semibold text-zinc-950 dark:text-zinc-50">Esfuerzo del equipo</h2>}
+        {rhythmView === 'history' && error && (
           <div className="brain-alert-surface rounded-2xl p-4 text-sm">
             <div className="flex items-center gap-2 font-medium"><AlertCircle className="h-4 w-4 text-destructive" /> No pudimos cargar el panel</div>
             <p className="mt-1 pl-6">{error}</p>
           </div>
         )}
 
-        {isLoading && !analytics ? (
+        {rhythmView === 'history' && isLoading && !analytics ? (
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             {[0, 1, 2, 3].map((item) => <div key={item} className="h-40 animate-pulse rounded-2xl bg-zinc-200/70 dark:bg-zinc-900" />)}
           </div>
-        ) : overview ? (
+        ) : rhythmView === 'history' && overview ? (
           <>
             <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <MetricCard icon={Clock} label="Esfuerzo registrado" value={formatDuration(overview.totalWorkMs)} detail={`${overview.sessionCount} sesiones dentro del periodo`} accent />
@@ -305,7 +309,7 @@ export default function ManagerTaskAnalytics() {
               <MetricCard icon={CheckCircle2} label="Tareas completadas" value={overview.completedTasks} detail={`${overview.activeTasks} en proceso · ${overview.openSessions} sesiones abiertas`} />
             </section>
 
-            <div className="rounded-2xl border border-[#009EB9]/20 bg-[#009EB9]/[0.04] px-4 py-3 text-xs leading-5 text-zinc-600 dark:border-[#009EB9]/25 dark:bg-[#009EB9]/[0.07] dark:text-zinc-300">
+            <div className="rounded-2xl border border-brand-cyan/20 bg-brand-cyan/[0.04] px-4 py-3 text-xs leading-5 text-zinc-600 dark:border-brand-cyan/25 dark:bg-brand-cyan/[0.07] dark:text-zinc-300">
               <strong className="font-semibold text-zinc-900 dark:text-zinc-100">Base descriptiva:</strong> {sampleMessage}
             </div>
 
@@ -319,7 +323,7 @@ export default function ManagerTaskAnalytics() {
             <section className="grid gap-5 xl:grid-cols-[0.8fr_1.2fr]">
               <div className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950">
                 <div className="mb-3 flex items-center gap-2">
-                  <Database className="h-4 w-4 text-[#009EB9]" />
+                  <Database className="h-4 w-4 text-brand-cyan" />
                   <h2 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Calidad del dato</h2>
                 </div>
                 <p className="mb-2 text-xs leading-5 text-zinc-500 dark:text-zinc-400">Estas alertas deben resolverse antes de convertir los datos en predicciones.</p>
@@ -344,7 +348,7 @@ export default function ManagerTaskAnalytics() {
                       <div className="flex items-center gap-3 text-xs sm:justify-end">
                         <span className="text-zinc-400 dark:text-zinc-500">{formatDateTime(session.startedAt)}</span>
                         <span className="min-w-20 text-right font-semibold tabular-nums text-zinc-700 dark:text-zinc-200">{formatDuration(session.durationMs)}</span>
-                        {!session.endedAt && <span className="h-2 w-2 animate-pulse rounded-full bg-[#00AC8A]" aria-label="Sesión activa" />}
+                        {!session.endedAt && <span className="h-2 w-2 animate-pulse rounded-full bg-brand-green" aria-label="Sesión activa" />}
                       </div>
                     </div>
                   ))}

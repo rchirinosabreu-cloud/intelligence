@@ -66,6 +66,7 @@ export const nudgeActions = ({ kind, personName = null, clientName = null, title
     case 'SIN_PROCESO': return [{ label: 'Ver sus pendientes', to: personBoardUrl(personName) }, summary];
     case 'VENCE_HOY': return [taskIds.length === 1 && url ? { label: 'Abrir la tarea', to: url } : { label: 'Ver sus pendientes', to: personBoardUrl(personName) }, summary];
     case 'CARGA_MANANA': return [{ label: 'Abrir el mapa de carga', to: '/manager?tab=ritmo' }, { label: 'Pedirle a Bria qué se mueve', ask: `Revisa la carga de ${personName || name} para ${day ? `el ${day}` : 'mañana'} y propón qué tarea se mueve o se reparte.` }];
+    case 'ENTREGA_EN_RIESGO': return [{ label: 'Abrir la tarea', to: url }, { label: 'Revisar alternativas con Bria', ask: `Revisa el margen de entrega de «${title || 'esta tarea'}» de ${personName || name}, considerando cliente, complejidad y compromisos anteriores. Propón qué mover o repartir, con la evidencia disponible.` }];
     case 'OPERACION_ROJA': return [{ label: 'Abrir operación', to: url }, { label: 'Pedirle a Bria qué falta', ask: `¿Qué le falta a ${clientName || 'este cliente'} para salir del rojo en Operación este mes?` }];
     case 'PIEZA_SIN_APROBAR': return [{ label: 'Abrir la pieza', to: url }, { label: 'Redactar recordatorio al cliente', ask: `Redacta un recordatorio breve y amable para ${clientName || 'el cliente'}: «${title || 'la pieza'}» sale ${day ? `el ${day}` : 'pronto'} y todavía falta su aprobación.` }];
     case 'DEVUELTO_SIN_TOCAR': return [{ label: 'Abrir la tarea', to: url }, { label: 'Ver qué pidió el cliente', ask: `Cuéntame qué pidió corregir el cliente en «${title || 'esa tarea'}» y qué falta para cerrarla.` }];
@@ -133,4 +134,6 @@ export const buildNudges = ({ people = [], now = new Date(), dismissedKeys = new
 /** Hasta cuándo se oculta un aviso: el día de Bogotá; el foco de la semana, siete días. */
 export const dismissUntil = (key, now = new Date()) => String(key).startsWith('FOCO_SEMANAL:') ? new Date(new Date(now).getTime() + 7 * 24 * H) : bogotaDayEnd(now);
 // `PULSO:<id>` es un aviso que decidió Bria en su pulso (`pulse_messages`); se oculta marcando la fila.
-export const isValidNudgeKey = (key) => /^(SIN_PROCESO|VENCE_HOY|FOCO_SEMANAL|CIERRE_DIA|PULSO):[\w-]{1,80}$/.test(String(key || ''));
+// `ACCESO:<id>` es un pedido de acceso de la bóveda (15 de octubre de 2026): quien lo decide lo oculta por hoy;
+// quien lo pidió, al ocultar la respuesta, la da por vista.
+export const isValidNudgeKey = (key) => /^(SIN_PROCESO|VENCE_HOY|FOCO_SEMANAL|CIERRE_DIA|PULSO|ACCESO):[\w-]{1,80}$/.test(String(key || ''));

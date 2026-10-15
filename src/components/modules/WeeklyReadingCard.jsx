@@ -33,9 +33,10 @@ function DecisionAction({ action }) {
   return null;
 }
 
-export default function WeeklyReadingCard({ refreshKey = 0 }) {
+export default function WeeklyReadingCard({ refreshKey = 0, compact = false }) {
   const [state, setState] = useState({ loading: true, error: '', weekKey: null, reading: null, isCurrentWeek: false });
   const [generating, setGenerating] = useState(false);
+  const [showAll, setShowAll] = useState(false);
 
   const load = useCallback(async () => {
     setState((current) => ({ ...current, loading: true, error: '' }));
@@ -70,6 +71,7 @@ export default function WeeklyReadingCard({ refreshKey = 0 }) {
 
   const reading = state.reading;
   const decisions = reading?.reading?.decisions || [];
+  const visibleDecisions = compact && !showAll ? decisions.slice(0, 3) : decisions;
   return (
     <section className="overflow-hidden rounded-2xl border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950" aria-labelledby="weekly-reading-title" data-weekly-reading>
       <div className="brain-ai-header flex items-center gap-3 px-5 py-4 text-white">
@@ -101,7 +103,7 @@ export default function WeeklyReadingCard({ refreshKey = 0 }) {
           <>
             <p className="text-sm leading-6 text-zinc-700 dark:text-zinc-200">{reading.reading.summary}</p>
             <ol className="mt-4 space-y-3" data-weekly-reading-decisions>
-              {decisions.map((decision, index) => {
+              {visibleDecisions.map((decision, index) => {
                 const urgency = URGENCY[decision.urgency] || URGENCY.media;
                 return (
                   <li key={`${index}-${decision.title}`} className="rounded-2xl border border-zinc-200 p-4 dark:border-zinc-800">
@@ -113,12 +115,15 @@ export default function WeeklyReadingCard({ refreshKey = 0 }) {
                           <h3 className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">{decision.title}</h3>
                           <span className={cn('rounded-full px-2 py-0.5 text-[11px] font-medium', urgency.className)}>{urgency.label}</span>
                         </div>
+                        <details className="mt-2" open={compact ? undefined : true}>
+                        <summary className="cursor-pointer text-xs font-medium text-zinc-600 dark:text-zinc-400">Por qué y evidencia</summary>
                         <p className="mt-2 text-sm leading-6 text-zinc-700 dark:text-zinc-200">{decision.why}</p>
                         {decision.evidence?.length > 0 && (
                           <ul className="mt-2 space-y-0.5 text-xs text-zinc-500 dark:text-zinc-400">
                             {decision.evidence.map((line, i) => <li key={i} className="flex gap-1.5"><span aria-hidden="true">·</span><span>{line}</span></li>)}
                           </ul>
                         )}
+                        </details>
                       </div>
                       <DecisionAction action={decision.action} />
                     </div>
@@ -126,6 +131,7 @@ export default function WeeklyReadingCard({ refreshKey = 0 }) {
                 );
               })}
             </ol>
+            {compact && decisions.length > 3 && <button type="button" onClick={() => setShowAll(!showAll)} aria-expanded={showAll} className="mt-3 min-h-11 text-xs font-medium text-brand-cyan-deep dark:text-brand-cyan">{showAll ? 'Ver las tres principales' : 'Ver todas las decisiones'}</button>}
           </>
         )}
       </div>

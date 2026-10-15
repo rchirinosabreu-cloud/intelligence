@@ -114,4 +114,23 @@ export const createBriaActionTools = (service) => service ? [{
     nuevo: { type: 'boolean' }
   }, required: ['reunion', 'cliente', 'fecha', 'ajustes'], additionalProperties: false },
   run: run(service, 'MINUTE_TASKS')
+}, {
+  // La parrilla del mes en borrador (Rodny, 14 de octubre de 2026, opción 2: propuesta en el chat y «Confirmar» envía las elegidas).
+  name: 'proponer_parrilla',
+  description: 'Propone la parrilla de un mes para un cliente: Bria lee el contrato (piezas por formato), el objetivo del mes, los criterios editoriales aprobados y la parrilla anterior, y arma las piezas (objetivo, formato, día, idea para el equipo y texto de publicación) siguiendo el énfasis que diga la persona («el cliente quiere énfasis en el lanzamiento», «nada de descuentos»). NO crea nada: muestra las piezas numeradas y la persona elige cuáles enviar a la parrilla como borrador y confirma. Antes localiza el cliente con buscar_cliente y usa su id. Para quitar piezas usa omitir con sus números; para quedarse solo con algunas, solo; para otra propuesta con más énfasis, rehacer. Si la parrilla del mes no existe, se crea al confirmar y la herramienta pide responsable y objetivo.',
+  allowed: allowedFor('PLAN_DRAFT'),
+  parameters: { type: 'object', properties: {
+    clientId: { type: 'string' },
+    mes: { type: ['string', 'null'], description: 'Mes: «noviembre», «11», «este mes» o «próximo mes».' },
+    anio: { type: ['integer', 'null'] },
+    enfasis: { type: ['string', 'null'], description: 'Lo que pidió la persona y lo que le comunicó el cliente, con sus palabras. Se acumula entre llamadas.' },
+    piezas: { type: ['integer', 'null'], description: 'Cuántas piezas proponer, solo si la persona lo dijo; si no, las del contrato.' },
+    omitir: { type: ['array', 'null'], items: { type: 'integer' }, description: 'Números de piezas de la propuesta que no se envían.' },
+    solo: { type: ['array', 'null'], items: { type: 'integer' }, description: 'Si la persona elige unas pocas: solo esos números se envían.' },
+    rehacer: { type: 'boolean', description: 'true para pedir otra propuesta al modelo (con el énfasis acumulado).' },
+    responsable: { type: ['string', 'null'], description: 'Solo si la parrilla no existe: quién será responsable.' },
+    objetivo: { type: ['string', 'null'], description: 'Solo si la parrilla no existe: el objetivo estratégico del mes, o «Usar el énfasis como objetivo».' },
+    nuevo: { type: 'boolean' }
+  }, required: ['clientId', 'mes', 'anio', 'enfasis', 'piezas', 'omitir', 'solo', 'rehacer', 'responsable', 'objetivo'], additionalProperties: false },
+  run: run(service, 'PLAN_DRAFT')
 }] : [];
