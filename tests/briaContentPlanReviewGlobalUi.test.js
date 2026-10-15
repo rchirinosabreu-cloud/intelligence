@@ -37,6 +37,12 @@ test('shared Bria panel uses the AI gradient and navigates findings three cards 
   assert.match(panel, /scrollAnimationDuration\s*=\s*420/);
   assert.match(panel, /animateFindingsScroll/);
   assert.match(panel, /prefers-reduced-motion/);
+  // El carril se mide al montarse, no solo al cambiar el número de hallazgos (Rodny, 15 de
+  // octubre de 2026): el panel abre cerrado, así que con la revisión ya cargada se medía un
+  // carril inexistente y las flechas quedaban deshabilitadas. Un `ref` de función se entera.
+  assert.match(panel, /ref=\{attachFindingsRail\}/);
+  assert.match(panel, /new ResizeObserver/);
+  assert.doesNotMatch(panel, /ref=\{findingsRailRef\}/);
   assert.match(panel, /Hallazgos anteriores/);
   assert.match(panel, /Siguientes hallazgos/);
   assert.match(panel, /\[&::-webkit-scrollbar\]:hidden/);

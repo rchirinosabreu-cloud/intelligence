@@ -74,6 +74,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
   const [canScrollPrevious, setCanScrollPrevious] = useState(false);
   const [canScrollNext, setCanScrollNext] = useState(false);
   const findingsRailRef = useRef(null);
+  const findingsRailObserverRef = useRef(null);
   const findingsAnimationRef = useRef(null);
 
   const loadReview = useCallback(async ({ silent = false } = {}) => {
@@ -115,15 +116,44 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
     setCanScrollNext(rail.scrollLeft < maxScrollLeft - 2);
   }, []);
 
+  // El carril se mide **cuando aparece**, no cuando cambian los hallazgos (Rodny, 15 de
+  // octubre de 2026: «la flecha para ver más hallazgos no me está funcionando»). Vive
+  // dentro del cuerpo del panel y el panel abre cerrado, así que en el caso normal —la
+  // revisión ya cargada y la persona abriéndolo después— se medía un carril que todavía
+  // no existía y las dos flechas se quedaban deshabilitadas para siempre. Un `ref` de
+  // función se entera del montaje; el observador, de los cambios de ancho (abrir el menú
+  // lateral, girar el móvil) sin depender de un evento de la ventana.
+  const attachFindingsRail = useCallback((rail) => {
+    findingsRailRef.current = rail;
+    findingsRailObserverRef.current?.disconnect();
+    findingsRailObserverRef.current = null;
+    if (!rail) {
+      setCanScrollPrevious(false);
+      setCanScrollNext(false);
+      return;
+    }
+    updateRailControls();
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => updateRailControls());
+    observer.observe(rail);
+    findingsRailObserverRef.current = observer;
+  }, [updateRailControls]);
+
+  // Descartar un hallazgo encoge el contenido sin cambiar el ancho del carril, así que eso
+  // no lo ve el observador: se vuelve a medir con el número de hallazgos.
   useEffect(() => {
     const frame = window.requestAnimationFrame(updateRailControls);
     window.addEventListener('resize', updateRailControls);
     return () => {
       window.cancelAnimationFrame(frame);
-      if (findingsAnimationRef.current) window.cancelAnimationFrame(findingsAnimationRef.current);
       window.removeEventListener('resize', updateRailControls);
     };
   }, [findings.length, updateRailControls]);
+
+  useEffect(() => () => {
+    if (findingsAnimationRef.current) window.cancelAnimationFrame(findingsAnimationRef.current);
+    findingsRailObserverRef.current?.disconnect();
+  }, []);
 
   const animateFindingsScroll = (rail, targetLeft) => {
     if (findingsAnimationRef.current) window.cancelAnimationFrame(findingsAnimationRef.current);
@@ -390,7 +420,7 @@ const BriaContentPlanReview = ({ planId, planUpdatedAt, onOpenItem }) => {
                     </div>
                   </div>
                   <div
-                    ref={findingsRailRef}
+                    ref={attachFindingsRail}
                     onScroll={updateRailControls}
                     aria-label="Hallazgos de Bria"
                     className="flex snap-x snap-proximity gap-3 overflow-x-auto overscroll-x-contain pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
