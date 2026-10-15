@@ -3,7 +3,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createWeeklyReadingService, initWeeklyReadingScheduler, WEEKLY_READING_NOTIFICATION } from '../src/services/weeklyReadingService.js';
-import { createTeamLoadService, estimatesFromRhythm } from '../src/services/teamLoadService.js';
+import { createTeamLoadService } from '../src/services/teamLoadService.js';
 
 const H = 3_600_000;
 const rhythm = { period: { days: 30 }, team: { closed: 4, measured: 3, declared: 0, coverage: 0.75 }, people: [{ personId: 'm-b', personName: 'Brayan Torres', closed: 4, measured: 3, coverage: 0.75, measuredMs: 9 * H, byType: [{ workType: 'Video', measured: 3, medianMs: 3 * H, minMs: 2 * H, maxMs: 4 * H, teamMedianMs: null, comparable: true }], findings: [{ kind: 'HEAVY_DAY', severity: 'warning', message: 'Brayan Torres cerró 2 tareas de Video el 6 de octubre.', taskIds: ['t1'] }] }], types: [{ workType: 'Video', measured: 3, people: 1, medianMs: 3 * H }], tasks: { t1: { title: 'Video A', workType: 'Video', day: '2026-10-06', personName: 'Brayan Torres', measuredMs: 4 * H } } };
@@ -78,10 +78,10 @@ test('the load service turns open tasks into the map with Bogotá days and rhyth
   };
   const service = createTeamLoadService({ db, rhythm: { get: async () => rhythm }, now: () => new Date('2026-10-09T15:00:00Z'), days: 3 });
   const map = await service.get();
-  assert.deepEqual(estimatesFromRhythm(rhythm), { byPersonType: { 'm-b|Video': 3 * H }, byType: { Video: 3 * H } });
+  assert.equal(map.forecast.people[0].remainingMs, null, 'a generic median does not become a contextual estimate');
   const brayan = map.people[0];
   const tuesday = brayan.cells.find((c) => c.day === '2026-10-13');
-  assert.deepEqual([tuesday.ms, tuesday.tasks[0].source, tuesday.tasks[0].clientName], [3 * H, 'persona', 'Nutresa']);
+  assert.deepEqual([tuesday.ms, tuesday.tasks[0].source, tuesday.tasks[0].clientName], [null, 'sin_estimacion', 'Nutresa']);
   assert.deepEqual([brayan.overdue.taskIds, brayan.undated.count], [['o2'], 1]);
   assert.ok(Array.isArray(map.signals));
 });

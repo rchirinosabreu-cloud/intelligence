@@ -13,6 +13,7 @@ import { createWeeklyReadingRepository } from './weeklyReadingRepository.js';
 import { teamRhythmService } from './teamRhythmService.js';
 import { teamLoadService } from './teamLoadService.js';
 import { createNotification } from './notificationService.js';
+import { RHYTHM_POLICY } from '../lib/workPrediction.js';
 
 export const WEEKLY_READING_PERIOD_DAYS = 30;
 export const WEEKLY_READING_NOTIFICATION = 'RITMO_LECTURA_SEMANAL';
@@ -41,7 +42,8 @@ export const createWeeklyReadingService = ({
     async current() {
       const latest = await repo.latest();
       const weekKey = weekKeyOf(now());
-      return { weekKey, reading: latest, isCurrentWeek: Boolean(latest && latest.weekKey === weekKey) };
+      const valid = latest?.reading?.predictionPolicy === RHYTHM_POLICY;
+      return { weekKey, reading: valid ? latest : null, needsRefresh: Boolean(latest && !valid), isCurrentWeek: Boolean(valid && latest.weekKey === weekKey) };
     },
 
     async generate({ actor = SYSTEM_ACTOR, trigger = 'MANUAL' } = {}) {
@@ -50,6 +52,7 @@ export const createWeeklyReadingService = ({
       const digest = buildReadingDigest({ rhythm: rhythmData, load: loadData });
       const answer = await generate(buildReadingRequest({ digest, today }));
       const reading = validateReading(parseReading(answer.text), digest);
+      reading.predictionPolicy = RHYTHM_POLICY;
       return repo.save({ weekKey: weekKeyOf(now()), trigger, periodDays: WEEKLY_READING_PERIOD_DAYS, reading, digest: digest.text, model: answer.model || null, usage: answer.usage || null, actor });
     },
 
@@ -58,7 +61,7 @@ export const createWeeklyReadingService = ({
       const { weekday, hour } = bogotaClock(now());
       if (weekday !== 1 || hour < 7) return { skipped: 'fuera de horario' };
       const weekKey = weekKeyOf(now());
-      if (await repo.forWeek(weekKey, { trigger: 'AUTOMATICO' })) return { skipped: 'ya generada' };
+      if ((await repo.forWeek(weekKey, { trigger: 'AUTOMATICO' }))?.reading?.predictionPolicy === RHYTHM_POLICY) return { skipped: 'ya generada' };
       const saved = await this.generate({ actor: SYSTEM_ACTOR, trigger: 'AUTOMATICO' });
       let notified = 0;
       for (const user of await listManagers()) {

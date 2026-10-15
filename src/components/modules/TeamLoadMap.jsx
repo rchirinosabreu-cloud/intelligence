@@ -14,6 +14,7 @@ const MONTHS = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', '
 const WEEKDAYS = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
 const dayHeading = (day) => { const date = new Date(`${day}T12:00:00Z`); return { weekday: WEEKDAYS[date.getUTCDay()], date: `${date.getUTCDate()} ${MONTHS[date.getUTCMonth()]}` }; };
 const formatHours = (ms) => {
+  if (ms == null) return 'Sin estimación';
   const minutes = Math.round(ms / 60_000);
   if (minutes === 0) return '';
   if (minutes < 60) return `${minutes} min`;
@@ -21,12 +22,13 @@ const formatHours = (ms) => {
   return rest ? `${hours} h ${String(rest).padStart(2, '0')}` : `${hours} h`;
 };
 const LEVELS = {
-  libre: { label: 'Con espacio', cell: 'bg-white text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400', dot: 'bg-zinc-300 dark:bg-zinc-600' },
-  ok: { label: 'Al día', cell: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green', dot: 'bg-brand-green' },
+  sin_datos: { label: 'Sin estimación completa', cell: 'bg-zinc-100 text-zinc-600 dark:bg-zinc-900 dark:text-zinc-400', dot: 'bg-zinc-400 dark:bg-zinc-500' },
+  libre: { label: 'Pocas horas fechadas', cell: 'bg-white text-zinc-500 dark:bg-zinc-950 dark:text-zinc-400', dot: 'bg-zinc-300 dark:bg-zinc-600' },
+  ok: { label: 'Horas fechadas', cell: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green', dot: 'bg-brand-green' },
   alta: { label: 'Día completo', cell: 'bg-brand-yellow-soft text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow', dot: 'bg-brand-yellow' },
   excedida: { label: 'Más de lo que cabe', cell: 'bg-brand-coral-soft text-brand-coral-deep dark:bg-brand-coral/15 dark:text-brand-coral', dot: 'bg-brand-coral' }
 };
-const SOURCE_LABEL = { persona: 'según su historial', equipo: 'según el equipo', supuesto: 'sin historial, supuesto' };
+const SOURCE_LABEL = { persona: 'historial comparable', sin_estimacion: 'sin historial comparable' };
 
 export default function TeamLoadMap({ refreshKey = 0 }) {
   const [data, setData] = useState(null);
@@ -71,7 +73,7 @@ export default function TeamLoadMap({ refreshKey = 0 }) {
     <section className="rounded-2xl border border-zinc-200 bg-white p-5 dark:border-zinc-800 dark:bg-zinc-950" aria-labelledby="load-map-title" data-load-map>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="max-w-2xl">
-          <h2 id="load-map-title" className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Quién tiene espacio y quién está lleno</h2>
+          <h2 id="load-map-title" className="text-sm font-semibold text-zinc-950 dark:text-zinc-50">Fechas de entrega y horas respaldadas</h2>
           <p className="mt-1 text-xs leading-5 text-zinc-500 dark:text-zinc-400">
             Horas estimadas por persona en los próximos {data.days.length} días hábiles, según sus tareas abiertas y lo que suele tardar cada tipo de trabajo. Son estimaciones para repartir mejor, no un registro. Una jornada son {Math.round(data.capacityMs / 3_600_000)} horas.
           </p>
@@ -102,6 +104,7 @@ export default function TeamLoadMap({ refreshKey = 0 }) {
                       <div className="min-w-0">
                         <p className="truncate text-sm font-medium text-zinc-950 dark:text-zinc-50">{person.personName}</p>
                         <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{formatHours(person.weekMs) || '0 h'} en total{person.undated.count ? ` · ${person.undated.count} sin fecha` : ''}</p>
+                        {person.nonWorking?.length > 0 && <p className="text-[11px] text-zinc-500 dark:text-zinc-400">{person.nonWorking.length} en días no hábiles; conservan su fecha en la previsión.</p>}
                       </div>
                     </div>
                   </th>

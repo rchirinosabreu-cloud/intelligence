@@ -20,13 +20,18 @@ const FORMATS = { reel: 'Reel', carrusel: 'Carrusel', post: 'Post', video: 'Vide
 export const workTypeOf = (task) => {
   const title = String(task?.title || '');
   if (/^\[Publicar\]/i.test(title)) return 'Publicación';
+  if (/^(?:revisar|corregir|ajustar|aprobar|guion|redactar\s+(?:el\s+)?guion)\b/i.test(title)) return 'Revisión o guion';
   if (/^\[Parrilla\]/i.test(title) || /\b(?:crear|elaborar|redactar|armar|planear)\s+(?:(?:la|una)\s+)?parrilla\b/i.test(title)) return 'Parrilla';
+  if (task?.contentItem && !/^\[Producci[oó]n\]|^(?:(?:crear|editar|diseñar|producir)\s+(?:(?:un|una|el|la)\s+)?)?(?:reel|carrusel|post|video|historia)\b/i.test(title)) return task.aiCategory || 'Sin clasificar';
   const format = String(task?.contentItem?.format || title.match(/^\[Producci[oó]n\]\s*([^:]+):/i)?.[1] || title.match(/^(?:(?:crear|editar|diseñar|producir)\s+(?:(?:un|una|el|la)\s+)?)?(reel|carrusel|post|video|historia)\b/i)?.[1] || '').trim();
   if (format) return FORMATS[format.toLowerCase()] || format.slice(0, 40);
   return task?.aiCategory && !/^(sin clasificar|ia_desactivada)$/i.test(task.aiCategory) ? task.aiCategory : 'Sin clasificar';
 };
 
-const sessionMs = (session) => Number(session.durationMs) || (session.endedAt && session.startedAt ? new Date(session.endedAt) - new Date(session.startedAt) : 0);
+const sessionMs = (session) => {
+  const ms = session.durationMs != null ? Number(session.durationMs) : session.endedAt && session.startedAt ? new Date(session.endedAt) - new Date(session.startedAt) : 0;
+  return Number.isFinite(ms) && ms >= 0 ? ms : 0;
+};
 
 /** Un registro por persona y tarea: tiempo medido, retrabajo y sesión más larga. */
 export const buildRhythmRecords = ({ tasks = [], sessions = [], members = [] }) => {
@@ -49,7 +54,8 @@ export const buildRhythmRecords = ({ tasks = [], sessions = [], members = [] }) 
       // es una sesión que alguien dejó corriendo.
       const declaredMs = rows.filter((row) => row.closeReason === 'DECLARED').reduce((sum, row) => sum + sessionMs(row), 0);
       records.push({ ...base, personId: workerId, personName: names.get(workerId) || (workerId === task.assigneeId ? task.assignee?.name : null) || 'Sin nombre',
-        isCollaborator: all.every(row => row.isCollaborator), partialResponsibility: new Set(own.filter(row => !row.isCollaborator).map(row => row.workerId)).size > 1,
+        timingIncomplete: rows.some(row => !row.endedAt || !row.startedAt || !Number.isFinite(new Date(row.endedAt) - new Date(row.startedAt)) || new Date(row.endedAt) <= new Date(row.startedAt) || (row.durationMs != null && (!Number.isFinite(Number(row.durationMs)) || Number(row.durationMs) < 0))),
+        isCollaborator: all.every(row => row.isCollaborator), partialResponsibility: workerId !== task.assigneeId || own.some(row => row.isCollaborator) || new Set(own.filter(row => !row.isCollaborator).map(row => row.workerId)).size > 1,
         measuredMs: durations.reduce((sum, ms) => sum + ms, 0),
         declaredMs,
         reworkMs: rows.filter((row) => row.cycle?.kind && row.cycle.kind !== 'INITIAL').reduce((sum, row) => sum + sessionMs(row), 0),
@@ -60,7 +66,7 @@ export const buildRhythmRecords = ({ tasks = [], sessions = [], members = [] }) 
     // el tiempo acumulado que ya tenían.
     if (task.assigneeId && !byWorker.has(task.assigneeId)) {
       const legacy = own.length ? 0 : Number(task.accumulatedWorkMs) || 0;
-      records.push({ ...base, personId: task.assigneeId, personName: task.assignee?.name || names.get(task.assigneeId) || 'Sin nombre', measuredMs: legacy, reworkMs: 0, longestSessionMs: 0, overlappedMs: 0 });
+      records.push({ ...base, timingIncomplete: true, personId: task.assigneeId, personName: task.assignee?.name || names.get(task.assigneeId) || 'Sin nombre', measuredMs: legacy, reworkMs: 0, longestSessionMs: 0, overlappedMs: 0 });
     }
   }
   return records;
@@ -72,7 +78,7 @@ export const createTeamRhythmService = ({ db = prisma, now = () => new Date() } 
     const to = now();
     const from = new Date(to.getTime() - period * DAY_MS);
     const tasks = await db.task.findMany({
-      where: { status: 'REALIZADA', completedAt: { gte: from } },
+      where: { status: 'REALIZADA', completedAt: { gte: from, lte: to } },
       select: { id: true, title: true, completedAt: true, assigneeId: true, accumulatedWorkMs: true, aiCategory: true, aiComplexity: true, clientId: true, isPrivate: true,
         client: { select: { name: true } }, assignee: { select: { id: true, name: true } }, contentItem: { select: { format: true } } },
       orderBy: { completedAt: 'desc' },
@@ -93,7 +99,10 @@ export const createTeamRhythmService = ({ db = prisma, now = () => new Date() } 
     const records = buildRhythmRecords({ tasks, sessions, members });
     const analysis = analyzeTeamRhythm({ tasks: records });
     const photos = new Map(members.map((member) => [member.id, member.avatarUrl || null]));
-    const people = analysis.people.map((person) => ({ ...person, avatarUrl: photos.get(person.personId) || null }));
+    // El cierre no dice cuándo se trabajó; una categoría tampoco garantiza cliente/complejidad iguales.
+    const people = analysis.people.map((person) => ({ ...person, avatarUrl: photos.get(person.personId) || null,
+      findings: person.findings.filter(f => !['HEAVY_DAY','LONG_DAY','SLOWER_THAN_TEAM','FASTER_THAN_TEAM'].includes(f.kind)),
+      byType: person.byType.map(({ teamMedianMs: _teamMedianMs, ...type }) => type) }));
     const { types } = analysis;
     const closed = people.reduce((sum, person) => sum + person.closed, 0);
     const measured = people.reduce((sum, person) => sum + person.measured, 0);

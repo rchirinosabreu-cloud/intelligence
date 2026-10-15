@@ -1,7 +1,12 @@
-import { RHYTHM_LIMITS, isComparableWork } from './teamRhythm.js';
+import { RHYTHM_LIMITS } from './teamRhythm.js';
 import { bogotaDate } from './colombiaBusinessDays.js';
 
 export const predictionComplexity = value => ['BAJA', 'MEDIA', 'ALTA'].includes(String(value || '').toUpperCase()) ? String(value).toUpperCase() : null;
+export const RHYTHM_POLICY = 'ritmo-contexto-v2';
+const PREDICTABLE_WORK = new Set(['Reel', 'Post', 'Carrusel', 'Video', 'Historia', 'Parrilla', 'Publicación']);
+export const isPredictableWork = type => PREDICTABLE_WORK.has(type);
+export const predictionReasonText = reason => ({ consulta_incompleta: 'La consulta no contiene todo el historial o los compromisos.', responsabilidad_compartida: 'El trabajo compartido no permite inferir una duración individual completa.', cronometro_no_fiable: 'El ciclo abierto tiene tiempos incompletos o no válidos.', tipo_no_comparable: 'El tipo agrupa trabajos distintos.', contexto_distinto: 'Falta historial de la misma persona, cliente y complejidad.', muestra_insuficiente: 'Faltan tres mediciones válidas y cobertura de al menos la mitad.', tiempos_dispares: 'Los tiempos varían demasiado para anticipar otra entrega.', avance_desconocido: 'Ya alcanzó su tiempo habitual: hace falta confirmar cuánto queda.', sin_historial: 'No hay historial comparable.', cola_incompleta: 'Hay compromisos anteriores sin estimación fiable.' }[reason] || 'No hay una estimación respaldada para esta tarea.');
+export const profilePredictionProblem = p => !isPredictableWork(p.workType) ? 'tipo_no_comparable' : !p.clientId || !predictionComplexity(p.complexity) ? 'contexto_distinto' : p.measured < 3 || !Number.isFinite(p.coverage) || p.coverage < 0.5 || !(p.minMs > 0) || !Number.isFinite(p.maxMs) ? 'muestra_insuficiente' : p.maxMs / p.minMs >= RHYTHM_LIMITS.unevenRatio ? 'tiempos_dispares' : null;
 const median = values => { const a = [...values].sort((x, y) => x - y), mid = Math.floor(a.length / 2); return a.length ? a.length % 2 ? a[mid] : (a[mid - 1] + a[mid]) / 2 : 0; };
 function statistics(rows) {
   const durationsMs = rows.flatMap(row => row.durationsMs || []);
@@ -9,7 +14,7 @@ function statistics(rows) {
   const closed = rows.reduce((n, r) => n + r.closed, 0);
   return { closed, measured: ordered.length, coverage: closed ? ordered.length / closed : 0, durationsMs,
     meanMs: ordered.length ? ordered.reduce((s, v) => s + v, 0) / ordered.length : 0,
-    medianMs: median(ordered), p75Ms: ordered[Math.max(0, Math.ceil(ordered.length * 0.75) - 1)] || 0 };
+    medianMs: median(ordered), minMs: ordered[0] || 0, maxMs: ordered.at(-1) || 0, p75Ms: ordered[Math.max(0, Math.ceil(ordered.length * 0.75) - 1)] || 0 };
 }
 
 /** Una muestra por persona y tarea, sin mezclar clientes o complejidades. No cuenta un reloj olvidado. */
@@ -22,9 +27,9 @@ export function buildContextProfiles(records = []) {
     if (!groups.has(key)) groups.set(key, { personId: record.personId, personName: record.personName, workType: record.workType,
       clientId: record.clientId || null, clientName: record.clientName || null, complexity, closed: 0, durationsMs: [] });
     const row = groups.get(key); row.closed++;
-    if (record.measuredMs >= RHYTHM_LIMITS.minMeasuredMs && (record.longestSessionMs || 0) < RHYTHM_LIMITS.forgottenSessionMs) row.durationsMs.push(record.measuredMs);
+    if (Number.isFinite(record.measuredMs) && record.measuredMs >= RHYTHM_LIMITS.minMeasuredMs && !record.timingIncomplete && !record.declaredMs && !record.overlappedMs && (record.longestSessionMs || 0) < RHYTHM_LIMITS.forgottenSessionMs) row.durationsMs.push(record.measuredMs);
   }
-  return [...groups.values()].map(row => ({ ...row, ...statistics([row]) }));
+  return [...groups.values()].map(row => { const p = { ...row, ...statistics([row]) }; return { ...p, predictionReason: profilePredictionProblem(p) }; });
 }
 
 /** La muestra más cercana con suficiente historia, antes de ampliar el contexto. Siempre devuelve su alcance. */
@@ -44,9 +49,9 @@ export function contextualBaseline(task, rhythm = {}) {
   ].map(([basis, match]) => ({ basis, ...statistics(profiles.filter(match)) })).filter(row => row.measured);
   const selected = choices.find(row => row.measured >= 3) || choices[0];
   if (!selected) return null;
-  return { ...selected, source: selected.basis.startsWith('persona') ? 'persona' : 'equipo',
-    confidence: selected.measured >= 3 && selected.coverage >= 0.5 && isComparableWork(task.workType) &&
-      selected.basis === 'persona_cliente_complejidad' ? 'suficiente' : 'baja' };
+  const reason = !isPredictableWork(task.workType) ? 'tipo_no_comparable' : selected.basis !== 'persona_cliente_complejidad' ? 'contexto_distinto' : profilePredictionProblem({ ...task, ...selected });
+  return { ...selected, source: selected.basis.startsWith('persona') ? 'persona' : 'equipo', reason,
+    confidence: reason ? 'baja' : 'suficiente' };
 }
 
 export function workWeekStart(day) {

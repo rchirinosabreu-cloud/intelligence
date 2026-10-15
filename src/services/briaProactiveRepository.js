@@ -64,8 +64,8 @@ export const createBriaProactiveRepository = ({ pool }) => ({
     return saved;
   },
   async activeMessages(userRef, now = new Date()) {
-    const { rows } = await pool.query('SELECT id, kinds, title, body, ask, url, task_ids, urgency, actions, created_at, resolution, resolved_at, follow_up FROM bria_memory.pulse_messages WHERE user_ref=$1 AND dismissed_at IS NULL AND expires_at > $2 ORDER BY created_at DESC', [userRef, now]);
-    return rows.map((row) => ({ id: row.id, kinds: row.kinds, title: row.title, body: row.body, ask: row.ask, url: row.url, taskIds: row.task_ids, urgency: row.urgency, actions: Array.isArray(row.actions) ? row.actions : [], createdAt: row.created_at, resolution: row.resolution || null, resolvedAt: row.resolved_at || null, followUp: row.follow_up || null }));
+    const { rows } = await pool.query('SELECT id, kinds, fingerprints, title, body, ask, url, task_ids, urgency, actions, created_at, resolution, resolved_at, follow_up FROM bria_memory.pulse_messages WHERE user_ref=$1 AND dismissed_at IS NULL AND expires_at > $2 ORDER BY created_at DESC', [userRef, now]);
+    return rows.map((row) => ({ id: row.id, kinds: row.kinds, fingerprints: row.fingerprints || [], title: row.title, body: row.body, ask: row.ask, url: row.url, taskIds: row.task_ids, urgency: row.urgency, actions: Array.isArray(row.actions) ? row.actions : [], createdAt: row.created_at, resolution: row.resolution || null, resolvedAt: row.resolved_at || null, followUp: row.follow_up || null }));
   },
   async dismissMessage(userRef, id, now = new Date()) {
     const { rowCount } = await pool.query('UPDATE bria_memory.pulse_messages SET dismissed_at=$3 WHERE user_ref=$1 AND id=$2 AND dismissed_at IS NULL', [userRef, id, now]);

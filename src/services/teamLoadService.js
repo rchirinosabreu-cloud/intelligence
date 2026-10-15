@@ -9,6 +9,7 @@ import { buildTeamForecast } from '../lib/teamForecast.js';
 import { classifyTaskDeterministically } from './deterministicTaskClassifier.js';
 import { publishAtIso } from '../lib/socialPublishing.js';
 import { canOpenTask, TASK_PRIVACY_SELECT } from '../lib/taskPrivacy.js';
+import { RHYTHM_POLICY } from '../lib/workPrediction.js';
 
 const OPEN_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 const invalid = (message, status = 400) => Object.assign(new Error(message), { status });
@@ -26,18 +27,11 @@ function loadTask(task) {
   // Un día sin hora limita el compromiso sin presentarse como una hora exacta de publicación.
   return { id: task.id, title: task.title, status: task.status, personId: task.assigneeId, clientId: task.clientId || null,
     workType: workTypeOf(task.isPrivate ? { title: task.title } : task), complexity: task.isPrivate ? null : task.aiComplexity || null,
+    sharedWork: Boolean(task.collaborators?.length),
     workSessions: task.workSessions || [], dueDay: instant ? bogotaDate(instant) : coarseDay,
     deadlineAt: instant, deadlineSource: instant ? publishAt && instant === new Date(publishAt).toISOString() ? 'publicacion' : 'compromiso' : publishDay && coarseDay === publishDay ? 'publicacion_fecha' : 'fecha',
     clientName: task.client?.name || null };
 }
-
-/** Medianas por persona y tipo, y por tipo, sacadas de Ritmo. */
-export const estimatesFromRhythm = (rhythm) => {
-  const byPersonType = {}, byType = {};
-  for (const person of rhythm?.people || []) for (const type of person.byType || []) if (type.medianMs > 0) byPersonType[`${person.personId}|${type.workType}`] = type.medianMs;
-  for (const type of rhythm?.types || []) if (type.medianMs > 0) byType[type.workType] = type.medianMs;
-  return { byPersonType, byType };
-};
 
 export const createTeamLoadService = ({ db = prisma, rhythm = teamRhythmService, now = () => new Date(), days = LOAD_DAYS } = {}) => {
   const context = async ({ includeHours = true } = {}) => {
@@ -48,7 +42,7 @@ export const createTeamLoadService = ({ db = prisma, rhythm = teamRhythmService,
       db.task.findMany({
         where: { status: { in: OPEN_STATUSES }, assigneeId: { not: null } },
         select: { id: true, title: true, status: true, dueDate: true, focusDeadlineAt: true, isPrivate: true, assigneeId: true, aiCategory: true, aiComplexity: true, clientId: true,
-          contentItem: { select: { format: true, publishDate: true, publishTime: true, status: true } }, client: { select: { name: true } },
+          contentItem: { select: { format: true, publishDate: true, publishTime: true, status: true } }, client: { select: { name: true } }, collaborators: { select: { id: true } },
           workSessions: { where: { cycle: { closedAt: null }, isOverlapping: false, isCollaborator: false }, select: { workerId: true, startedAt: true, endedAt: true, durationMs: true, isOverlapping: true, isCollaborator: true } } },
         take: 3001
       }),
@@ -61,8 +55,9 @@ export const createTeamLoadService = ({ db = prisma, rhythm = teamRhythmService,
   return {
   async get({ window = 'week' } = {}) {
     const { instant, today, people, rows, rhythmData, incomplete } = await context();
-    const map = buildLoadMap({ people, tasks: rows, estimates: estimatesFromRhythm(rhythmData), today, days });
-    return { ...map, signals: loadSignals(map), forecast: buildTeamForecast({ people, tasks: rows, rhythm: rhythmData, now: instant, incomplete, window }) };
+    const forecast = buildTeamForecast({ people, tasks: rows, rhythm: rhythmData, now: instant, incomplete, window });
+    const map = buildLoadMap({ people, tasks: rows, forecast, today, days });
+    return { ...map, signals: loadSignals(map), forecast };
   },
   async preview(draft = {}, viewer) {
     const title = typeof draft.title === 'string' ? draft.title.trim() : '';
@@ -88,12 +83,12 @@ export const createTeamLoadService = ({ db = prisma, rhythm = teamRhythmService,
     const previous = ctx.rows.find(t => t.id === draft.taskId);
     const candidate = loadTask({ id: draft.taskId || '__assignment_preview__', title, assigneeId: draft.assigneeId, clientId: draft.clientId, client,
       aiCategory: classification.category, aiComplexity: existing?.title === title ? existing.aiComplexity || classification.complexity : classification.complexity,
-      contentItem: existing?.contentItem, dueDate: new Date(`${dueDay}T12:00:00Z`), focusDeadlineAt: draft.focusDeadlineAt || null,
+      contentItem: existing?.contentItem, collaborators: existing?.collaborators, dueDate: new Date(`${dueDay}T12:00:00Z`), focusDeadlineAt: draft.focusDeadlineAt || null,
       status: previous?.status || 'PENDIENTE', workSessions: previous?.personId === draft.assigneeId ? previous.workSessions : [] });
     const rows = [...ctx.rows.filter(t => t.id !== candidate.id), candidate];
     const forecast = buildTeamForecast({ people: [person], tasks: rows, rhythm: ctx.rhythmData, now: ctx.instant, incomplete: ctx.incomplete });
     const calculation = forecast.people[0].tasks.find(t => t.id === candidate.id);
-    return { ...calculation, personName: person.personName, clientName: client.name, incomplete: ctx.incomplete,
+    return { ...calculation, policy: RHYTHM_POLICY, personName: person.personName, clientName: client.name, incomplete: ctx.incomplete,
       deadlineSource: candidate.deadlineSource, generatedAt: ctx.instant.toISOString(),
       note: 'Estimación con jornada nominal de 8 h, sin reuniones ni ausencias. La publicación todavía puede requerir revisión y aprobación.' };
   }

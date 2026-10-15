@@ -42,7 +42,7 @@ test('Bria answers about one person with coverage first and the tasks behind eac
   assert.deepEqual(out.data.personas.map((p) => p.nombre), ['Brayan Torres']);
   assert.equal(out.data.personas[0].cobertura, '75 %');
   assert.deepEqual(out.data.personas[0].hallazgos[0].tareas, ['Video A', 'Video B']);
-  assert.equal(out.data.personas[0].porTipo[0].restoDelEquipo, '1 h');
+  assert.equal(out.data.personas[0].porTipo[0].soloRegistro, true);
   assert.match(out.data.instruccion, /cobertura antes de sacar conclusiones/);
   assert.equal(out.sources[0].kind, 'ritmo');
 });

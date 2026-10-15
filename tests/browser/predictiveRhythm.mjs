@@ -29,6 +29,9 @@ try {
   await page.getByRole('button', { name: '16:00', exact: true }).click();
   await page.getByRole('button', { name: 'Hora del escenario: 16:00', exact: true }).waitFor();
   await page.locator('[data-assignment-scenario] [data-assignment-prediction]:not([data-assignment-prediction="loading"])').waitFor();
+  assert.equal(await page.locator('[data-assignment-scenario] [data-assignment-prediction="sin_datos"]').count(), 1);
+  assert.match(await page.locator('[data-assignment-scenario]').innerText(), /sin estimación comparable/);
+  assert.doesNotMatch(await page.locator('[data-assignment-scenario]').innerText(), /4 h estimadas por hacer|Supuesto de 1 h/);
   assert.match(await page.locator('[data-assignment-scenario]').innerText(), /Beatriz Muestra/);
   await page.locator('[data-assignment-scenario]').screenshot({ path: path.join(output, 'escenario-reasignacion.png') });
   await page.getByRole('button', { name: 'Historial', exact: true }).click();
@@ -75,6 +78,10 @@ try {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'task panel fits mobile');
   await page.screenshot({ path: path.join(output, 'tarea-sin-prevision-movil-oscuro.png'), fullPage: true });
   assert.deepEqual(await page.evaluate(() => window.__predictionRequests), []);
+  await page.goto('http://127.0.0.1:3746/tests/fixtures/team-rhythm-preview.html?tab=ritmo&legacy');
+  await page.getByText('La previsión anterior necesita actualizarse.', { exact: false }).waitFor();
+  assert.equal(await page.locator('[data-week-team-person]').count(), 0, 'an old server payload cannot resurrect forecasts');
+  assert.equal(await page.locator('[data-weekly-reading-decisions]').count(), 0, 'old stored advice is not displayed');
   assert.deepEqual(errors, []);
   console.log('Previsión en Ritmo e historial verificadas; tareas sin avisos ni consultas predictivas, incluso en domingo.');
 } finally { await browser.close(); await server.close(); }
