@@ -1,5 +1,42 @@
 # Ritmo del equipo
 
+## Entrada semanal y previsión (Rodny, 14 de octubre de 2026)
+
+Rodny pidió simplificar la lectura y anticipar entregas, tomando como referencia la claridad de CRM y Financiero. Esta organización sustituye el orden de la Fase A descrito más abajo; conserva sus datos, permisos y acciones.
+
+- **Esta semana** es la entrada: entregas previstas, entregas que necesitan revisión y personas que pueden recibir trabajo. Los indicadores filtran la lista del equipo. Una fila por persona, con rango estimado de horas por hacer, fiabilidad del historial y próximo vencimiento. Al abrirla aparecen las tareas y sus motivos, con acceso a Gestión.
+- **Bria** muestra tres decisiones inicialmente; «Por qué y evidencia» abre su explicación y se pueden ver las demás. La lectura guardada conserva fecha y autor; «Actualizar» relee los datos, «Volver a leer» genera una lectura nueva. Ninguna propuesta reasigna, crea ni envía por sí sola.
+- **Historial** contiene los periodos de 7/30/90 días, cobertura antes de tiempos individuales y las estadísticas de esfuerzo. Las tablas de cada persona se abren por elección. Las consultas históricas se hacen al entrar allí.
+- El mapa de diez días se abre opcionalmente como **fechas de entrega**. Conserva los umbrales y el cálculo anteriores: agrupa por vencimiento y no demuestra que todo deba trabajarse ese día.
+
+### Cómo se anticipan compromisos
+
+`src/lib/teamForecast.js` calcula una sola previsión que `teamLoadService` adjunta como `forecast` a `GET /api/manager/rhythm/load`. La pantalla, la herramienta `carga_del_equipo` y el resumen que recibe Bria leen ese mismo resultado.
+
+1. Horizonte de diez días hábiles de Colombia. El resumen usa lo que queda de esta semana; en fin de semana o si no quedan días hábiles, la próxima. Una fecha no hábil se lleva al siguiente día hábil, igual que el mapa.
+2. Duración habitual por persona y tipo, después por equipo, después una hora supuesta. El rango va de mediana a percentil 75. Para señalar historial suficiente se exigen al menos tres mediciones de trabajo comparable y, si se usa historial propio, al menos 50 % de cobertura.
+3. Se descuenta únicamente tiempo válido del **responsable actual en el ciclo abierto**. No se descuentan colaboradores, otros responsables, ciclos cerrados, sesiones simultáneas ni sesiones de 8 h o más. No se usa el acumulado histórico de la tarea para inferir avance. Al alcanzar el tiempo habitual se conserva al menos 25 % (mínimo 15 min) pendiente y se pide revisar cuánto falta: nunca se da por terminada una tarea con el reloj.
+4. Se acumula el trabajo por fecha, empezando por las vencidas, contra la capacidad desde hoy hasta cada vencimiento. Superar esa capacidad indica riesgo; superar capacidad con el extremo superior del rango o alcanzar el 90 % con el habitual indica margen ajustado. Las tareas que comparten fecha reciben la misma lectura del compromiso conjunto.
+5. Referencia de 8 h nominales por día. Hoy se prorratea la franja operativa 8:00–18:00 de Bogotá; no se descuentan reuniones ni ausencias. Es una estimación condicional, no una promesa ni una probabilidad calibrada. Tampoco programa el orden real de ejecución ni comprueba compatibilidad de habilidades al sugerir apoyo.
+6. «Puede recibir» requiere al menos media jornada libre incluso usando el extremo superior, sin vencidas, riesgos, fechas ajustadas, tareas sin fecha ni datos insuficientes. Una consulta que alcanza el tope de tareas se marca incompleta y nunca confirma espacio.
+
+No hay cambios de esquema, estados ni asignaciones. La simulación de reasignaciones y la capacidad descontando calendario/ausencias quedan para una ampliación posterior.
+
+### Dirección solicitada: analítica predictiva de la operación
+
+Rodny aclaró después: «quiero analítica predictiva, poder anticipar lo que podría pasar». La entrada semanal es la base de lectura; no completa todavía este objetivo. Debe poder leerse la agencia y tomar decisiones con estos cruces:
+
+- Tiempo habitual y variación por **persona × tipo de trabajo × complejidad × cliente**. Post, carrusel, reel y elaboración de parrilla son trabajos distintos. No comparar las 1 h 30 min de una persona con las 4 h de otra sin comprobar que el contexto sea comparable.
+- Horas efectivamente registradas por persona, día y semana, separadas del trabajo futuro estimado. Los tramos se reparten en las fechas en que ocurrieron; cerrar una tarea el viernes no convierte en trabajo del viernes lo realizado desde el martes.
+- Compromiso con hora: al asignar, cruzar el esfuerzo pendiente con la cola anterior y con la hora real de entrega/publicación. Ejemplo ilustrativo: asignar a las 15:00 un reel que suele tomar 4 h y debe publicarse a las 18:00 merece advertencia, aunque la jornada nominal completa sea de 8 h. El límite de producción puede requerir margen para revisión y aprobación; no confundirlo automáticamente con publicar.
+- Anticipación para mañana y la próxima semana, identificando la primera fecha que se queda sin margen y las tareas que explican el riesgo.
+- Escenarios: qué cambia si se reasigna, se mueve una fecha o entra trabajo nuevo. Una simulación debe mostrar supuestos y nunca modificar asignaciones por sí sola.
+- Aprender de lo que se predijo frente a lo que pasó. Hasta disponer de resultados y calibración, mostrar riesgo y confianza del dato; no inventar porcentajes de probabilidad a partir de una mediana ni calificar personalmente al trabajador.
+
+Datos que ya existen: responsable de cada sesión (`workerId`), cliente de la tarea, clasificación `aiComplexity`, fechas y tramos de trabajo, compromiso `focusDeadlineAt` y fecha/hora de publicación de una pieza. **No están todos conectados a la previsión actual**. La complejidad se asigna hoy mediante reglas locales (`taskClassificationService` / `deterministicTaskClassifier`); su consistencia debe comprobarse antes de usarla como una medida fina. La previsión actual cruza persona y tipo, con capacidad nominal hasta el día: aún no es la advertencia contextual al asignar descrita aquí.
+
+Pruebas: `tests/teamForecast.test.js`, `tests/teamRhythmOverviewUi.test.js`, contratos previos de Ritmo, lectura semanal y herramientas de Bria. Recorrido visual: `node tests/browser/teamRhythm.mjs`, capturas en `output/team-rhythm/` (datos inventados, ambos temas, móvil, historial y acciones).
+
 Rodny, 9 de octubre de 2026: «siento que aún no hay forma de analizar los tiempos, de leer al miembro del equipo … si Brayan hace en un día dos vídeos y en cada uno se demora 4 horas, eso hay que revisarlo … si en un vídeo se demora 5 horas y en otro 30 minutos, hay que ver por qué tanta diferencia. Y eso va para todos».
 
 ## Dónde vive

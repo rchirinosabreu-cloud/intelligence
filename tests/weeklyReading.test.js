@@ -30,6 +30,20 @@ test('the week key is Bogotá’s ISO week', () => {
   assert.equal(weekKeyOf(new Date('2026-10-12T06:00:00Z')), '2026-W42');
 });
 
+test('Bria receives the deadline forecast and cannot confuse clustered deliveries with an impossible deadline', () => {
+  const digest = buildReadingDigest({ rhythm, load: { ...load, forecast: {
+    days: ['2026-10-09'], incomplete: false,
+    people: [{ personName: 'Brayan Torres', confidence: 'suficiente', remainingMs: 4 * H, upperMs: 5 * H, capacityMs: 8 * H,
+      overdueCount: 0, riskCount: 0, tightCount: 0, undatedCount: 0, canReceive: true,
+      tasks: [{ id: 'forecast-only', title: 'Video futuro', dueDay: '2026-10-09', remainingMs: 4 * H, upperMs: 5 * H, risk: 'ok' }] }]
+  } } });
+  assert.match(digest.text, /Previsión de compromisos/);
+  assert.match(digest.text, /4 h a 5 h/);
+  assert.ok(digest.taskIds.has('forecast-only'));
+  const request = buildReadingRequest({ digest, today: '2026-10-09' });
+  assert.match(request.prompt, /concentración de entregas/);
+});
+
 test('the digest is compact text with every task id and person the model may name, and nothing else', () => {
   const digest = buildReadingDigest({ rhythm, load });
   assert.match(digest.text, /Cobertura del equipo: 12 de 20 tareas cerradas con tiempo medido \(60 %\)/);

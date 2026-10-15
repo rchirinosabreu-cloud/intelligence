@@ -12,9 +12,9 @@ test('Manager has an Observer tab with only the inbox and a Ritmo tab with the t
   assert.match(manager, /setActiveTab\('ritmo'\)/);
   assert.match(readFileSync('src/components/modules/BriaObserverInbox.jsx', 'utf8'), /Bria revisa las fuentes automáticamente y conserva evidencia de cada hallazgo/);
   assert.match(manager, /Señales que Bria detecta por su cuenta, cada una con su evidencia/);
-  assert.match(manager, /activeTab === 'observer' \? <BriaObserverInbox \/> : <>\s*<TeamRhythmPanel/, 'Observer is only the inbox; the times live in Ritmo');
+  assert.match(manager, /activeTab === 'observer' \? <BriaObserverInbox \/> : <>/, 'Observer is only the inbox; the times live in Ritmo');
   assert.ok(manager.indexOf('<TeamRhythmPanel') < manager.indexOf('Esfuerzo registrado'), 'effort metrics moved under Ritmo');
-  assert.match(manager, /<TeamRhythmPanel periodDays=\{periodDays\} refreshKey=\{refreshKey\} \/>/);
+  assert.match(manager, /<TeamRhythmPanel periodDays=\{periodDays\} refreshKey=\{refreshKey\} view=\{rhythmView\}/);
   assert.match(manager, /get\('tab'\)/, 'Bria links straight to the tab with /manager?tab=ritmo');
 });
 

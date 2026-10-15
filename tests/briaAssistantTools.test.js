@@ -17,6 +17,19 @@ const person = { userId: 'u-sara', name: 'Sara', memberId: 'm-sara' };
 
 const allowedFor = (who) => briaAssistantTools.filter((tool) => tool.allowed(who)).map((tool) => tool.name).sort();
 
+test('Bria reads the same weekly capacity forecast as Manager, respecting a person filter', async () => {
+  const H = 3_600_000;
+  const p = { personId: 'a', personName: 'Ana', weekMs: H, overdue: { count: 0 }, undated: { count: 1 }, cells: [] };
+  const prediction = { ...p, remainingMs: H, upperMs: 2 * H, capacityMs: 24 * H, confidence: 'baja', riskCount: 0, tightCount: 0, overdueCount: 0, undatedCount: 1, canReceive: false, tasks: [] };
+  const load = { get: async () => ({ today: '2026-10-14', days: ['2026-10-14'], capacityMs: 8 * H, people: [p], signals: [],
+    forecast: { days: ['2026-10-14', '2026-10-15', '2026-10-16'], incomplete: false, people: [prediction, { ...prediction, personId: 'b', personName: 'Beto' }] } }) };
+  const out = await toolByName('carga_del_equipo').run({ persona: 'Ana' }, { load });
+  assert.equal(out.data.prevision.personas.length, 1);
+  assert.equal(out.data.prevision.personas[0].puedeRecibir, false);
+  assert.equal(out.data.prevision.personas[0].trabajoRestante, '1 h a 2 h');
+  assert.match(out.data.instruccion, /concentración de entregas/);
+});
+
 test('each tool opens with the permission of its screen', () => {
   assert.deepEqual(allowedFor(editor), ['buscar_cliente', 'mis_tareas']);
   // buscar_pendientes (11 de octubre de 2026) abre con Gestión, como el tablero que muestra esas tareas.

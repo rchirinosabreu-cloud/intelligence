@@ -444,7 +444,16 @@ const cargaDelEquipo = {
           }))
         })),
         senales: map.signals.filter((s) => !wanted.length || people.some((p) => p.personId === s.personId)).map((s) => s.message),
-        instruccion: 'Empieza por la lectura del equipo: si nadie pasa de la mitad de su tiempo, dilo antes de nombrar a nadie; «la mayor carga» solo se dice de alguien que de verdad tenga el periodo lleno. Las horas son estimaciones: la mediana de lo que esa persona tardó en ese tipo de trabajo, o la del equipo, o una hora si no hay historial («supuesto»). Las tareas sin fecha no entran en el mapa: si son muchas, di que el mapa está incompleto. Un día «excedida» pasa de un día y cuarto de trabajo; «alta» es un día completo. Habla de carga y de repartir trabajo, nunca de desempeño, y di qué miraste con palabras («las tareas abiertas con fecha en los próximos días hábiles»), no «la herramienta». Si nadie coincide con el nombre, dilo.'
+        ...(map.forecast ? { prevision: {
+          dias: map.forecast.days.map(dayName), consultaIncompleta: map.forecast.incomplete,
+          supuesto: 'Jornada nominal de 8 h; hoy se prorratea entre 8:00 y 18:00. Sin reuniones ni ausencias descontadas. No garantiza una entrega.',
+          personas: map.forecast.people.filter(p => !wanted.length || people.some(visible => visible.personId === p.personId)).slice(0, wanted.length ? 3 : 20).map(p => ({
+            nombre: p.personName, trabajoRestante: `${formatDuration(p.remainingMs)} a ${formatDuration(p.upperMs)}`, capacidad: formatDuration(p.capacityMs),
+            historial: p.confidence, puedeRecibir: p.canReceive, vencidas: p.overdueCount, enRiesgo: p.riskCount, ajustadas: p.tightCount, sinFecha: p.undatedCount,
+            tareas: p.tasks.filter(t => t.risk && t.risk !== 'ok').slice(0, 6).map(t => ({ id: t.id, titulo: t.title, fecha: t.dueDay ? dayName(t.dueDay) : null, estado: t.risk, restante: formatDuration(t.remainingMs) }))
+          }))
+        } } : {}),
+        instruccion: 'Si existe prevision, empieza por ella: compara trabajo restante con capacidad hasta cada fecha, incluyendo vencidas. El mapa diario solo muestra concentración de entregas; no demuestra que todo deba hacerse ese día. No afirmes que alguien puede recibir trabajo si puedeRecibir es false, faltan datos o hay tareas sin fecha; el espacio es nominal y no descuenta reuniones ni ausencias. Si no hay previsión, empieza por la lectura del equipo: si nadie pasa de la mitad de su tiempo, dilo antes de nombrar a nadie; «la mayor carga» solo se dice de alguien que de verdad tenga el periodo lleno. Las horas son estimaciones: la mediana de lo que esa persona tardó en ese tipo de trabajo, o la del equipo, o una hora si no hay historial («supuesto»). Las tareas sin fecha no entran en el mapa: si son muchas, di que el mapa está incompleto. Un día «excedida» pasa de un día y cuarto de trabajo; «alta» es un día completo. Habla de carga y de repartir trabajo, nunca de desempeño, y di qué miraste con palabras («las tareas abiertas con fecha en los próximos días hábiles»), no «la herramienta». Si nadie coincide con el nombre, dilo.'
       },
       sources: [{ kind: 'ritmo', id: `carga-${map.today}`, label: 'Mapa de carga', url: '/manager?tab=ritmo' }]
     };
