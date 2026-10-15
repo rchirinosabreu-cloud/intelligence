@@ -74,7 +74,7 @@ test('the service reads one period, answers with people, types and the tasks beh
   assert.equal(out.period.days, 30);
   assert.deepEqual(out.team, { closed: 2, measured: 2, declared: 0, coverage: 1 });
   const heavy = out.people[0].findings.find((f) => f.kind === 'HEAVY_DAY');
-  assert.ok(heavy);
-  assert.deepEqual(heavy.taskIds.map((id) => out.tasks[id].title).sort(), ['[Producción] Video: A', '[Producción] Video: B']);
+  assert.equal(heavy, undefined, 'closing tasks together does not establish a heavy work day');
+  assert.equal(out.people[0].byType[0].teamMedianMs, undefined);
   assert.equal((await service.get({ days: 45 })).period.days, 30, 'only the periods the screen offers');
 });

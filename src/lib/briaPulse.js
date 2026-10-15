@@ -12,6 +12,7 @@
 import { createHash } from 'node:crypto';
 import { AI_MODELS } from '../config/aiConfig.js';
 import { dayLabel, formatHours } from './teamLoad.js';
+import { RHYTHM_POLICY } from './workPrediction.js';
 import { bogotaClock, isWorkingTime, WORK_HOURS, nudgeActions } from './briaNudges.js';
 
 const H = 3_600_000;
@@ -25,7 +26,9 @@ export const JUDGMENT_WORDS = /\b(lent[oa]s?|floj[oa]s?|perezos[oa]s?|vag[oa]s?|
 
 const tidy = (value, max) => String(value ?? '').replace(/\s+/g, ' ').trim().slice(0, max);
 const plusDays = (day, amount) => { const date = new Date(`${day}T12:00:00Z`); date.setUTCDate(date.getUTCDate() + amount); return date.toISOString().slice(0, 10); };
-export const fingerprintOf = (fact) => createHash('sha256').update(`${fact.kind}|${fact.subject}|${fact.evidenceKey || fact.text}`).digest('hex').slice(0, 16);
+const predictive = kinds => kinds.some(k => ['CARGA_MANANA', 'ENTREGA_EN_RIESGO'].includes(k));
+export const isCurrentPredictionMessage = row => !predictive(row.kinds || []) || row.fingerprints?.some(f => f.startsWith(`${RHYTHM_POLICY}:`));
+export const fingerprintOf = (fact) => `${predictive([fact.kind]) ? `${RHYTHM_POLICY}:` : ''}${createHash('sha256').update(`${fact.kind}|${fact.subject}|${fact.evidenceKey || fact.text}`).digest('hex').slice(0, 16)}`;
 const fact = (kind, subject, rest) => { const row = { id: `${kind}:${subject}`, kind, subject, ...rest }; return { ...row, fingerprint: fingerprintOf(row) }; };
 
 /** La jornada de Bogotá que contiene `now`: de 8:00 a 18:00; antes de las 8 es la de hoy por empezar. */
@@ -60,15 +63,8 @@ export const collectFacts = ({ nudges = [], load = null, operations = [], pieces
   }
   if (load?.days?.length) {
     const tomorrow = load.days.find((day) => day > today);
-    for (const person of load.people || []) {
-      if (load.forecast) continue;
-      const cell = person.cells?.find((c) => c.day === tomorrow && c.level === 'excedida');
-      if (!cell) continue;
-      const day = dayLabel(cell.day);
-      facts.push(fact('CARGA_MANANA', person.personId, { personId: person.personId, personName: person.personName, text: `${person.personName} tiene ${formatHours(cell.ms)} estimadas para el ${day} en ${cell.count} ${cell.count === 1 ? 'tarea' : 'tareas'}: más de lo que cabe en un día.`, url: '/manager?tab=ritmo', taskIds: cell.tasks.map((t) => t.id), severity: 2, actions: nudgeActions({ kind: 'CARGA_MANANA', personName: person.personName, day }) }));
-    }
-    if (load.forecast && !load.forecast.incomplete) for (const person of load.forecast.people || []) {
-      const tasks = (person.tasks || []).filter(t => t.risk === 'riesgo');
+    if (load.forecast?.policy === RHYTHM_POLICY && !load.forecast.incomplete) for (const person of load.forecast.people || []) {
+      const tasks = (person.tasks || []).filter(t => t.risk === 'riesgo' && t.queueComplete === true && t.confidence === 'suficiente');
       const tomorrowTasks = tasks.filter(t => t.dueDay === tomorrow && t.confidence === 'suficiente');
       if (tomorrowTasks.length) {
         const day = dayLabel(tomorrow);

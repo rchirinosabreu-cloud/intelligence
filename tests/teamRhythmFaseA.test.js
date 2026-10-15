@@ -46,7 +46,7 @@ test('the load map says they are estimates, one cell per working day, tasks behi
   assert.match(loadMap, /data-load-signals/);
   assert.match(loadMap, /aria-label=\{`\$\{person\.personName\}/, 'each cell reads aloud');
   assert.match(loadMap, /<TeamAvatar/);
-  assert.match(loadMap, /sin historial, supuesto/);
+  assert.match(loadMap, /sin historial comparable/);
 });
 
 test('both read in light and dark mode with the brand palette only', () => {

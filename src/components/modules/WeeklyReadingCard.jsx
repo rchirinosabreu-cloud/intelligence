@@ -6,6 +6,7 @@ import { AlertCircle, ArrowRight, RefreshCw } from '@/components/ui/icons';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { askBria } from '@/lib/briaAsk';
 import { cn } from '@/lib/utils';
+import { RHYTHM_POLICY } from '@/lib/workPrediction';
 
 // La lectura de la semana (Rodny, 10 de octubre de 2026, Fase A de Ritmo): Bria lee Ritmo y el mapa de carga y
 // propone de 3 a 5 decisiones, cada una con su evidencia y una acción. Se genera sola los lunes a las 7 y se puede
@@ -69,7 +70,7 @@ export default function WeeklyReadingCard({ refreshKey = 0, compact = false }) {
     }
   };
 
-  const reading = state.reading;
+  const reading = state.reading?.reading?.predictionPolicy === RHYTHM_POLICY ? state.reading : null;
   const decisions = reading?.reading?.decisions || [];
   const visibleDecisions = compact && !showAll ? decisions.slice(0, 3) : decisions;
   return (
@@ -97,7 +98,7 @@ export default function WeeklyReadingCard({ refreshKey = 0, compact = false }) {
         )}
         {state.loading && !reading && !state.error && <div className="h-24 animate-pulse rounded-2xl bg-zinc-200/70 dark:bg-zinc-900" />}
         {!state.loading && !reading && !state.error && (
-          <p className="text-sm leading-6 text-zinc-500 dark:text-zinc-400">Bria todavía no escribió la lectura de esta semana. Se escribe sola los lunes a las 7 de la mañana, o puedes pedirla ahora.</p>
+          <p className="text-sm leading-6 text-zinc-500 dark:text-zinc-400">{state.needsRefresh ? 'La lectura anterior usaba criterios de estimación retirados. Pide una lectura nueva con los datos revisados.' : 'Bria todavía no escribió la lectura de esta semana. Se escribe sola los lunes a las 7 de la mañana, o puedes pedirla ahora.'}</p>
         )}
         {reading && (
           <>

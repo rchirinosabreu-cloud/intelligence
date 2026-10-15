@@ -39,7 +39,7 @@ try {
   assert.equal(await page.locator('[data-week-team-person]').count(), 1);
   assert.match(await page.locator('[data-week-team-person]').innerText(), /Beatriz/);
   await page.getByRole('button', { name: /Necesitan revisión/ }).click();
-  assert.equal(await page.locator('[data-week-team-person]').count(), 2);
+  assert.equal(await page.locator('[data-week-team-person]').count(), 1);
   await page.getByRole('button', { name: 'Ver todo el equipo', exact: true }).click();
 
   await page.getByRole('button', { name: /Ver tareas de Andrés/ }).focus();
@@ -83,6 +83,13 @@ try {
   await page.getByText('Bria todavía no escribió', { exact: false }).waitFor();
   await page.getByRole('button', { name: 'Pedir la lectura', exact: true }).click();
   await page.locator('[data-weekly-reading-decisions]').waitFor();
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(url);
+  await page.getByText('Explorar las fechas de entrega · próximos 10 días hábiles', { exact: true }).click();
+  await page.locator('[data-load-grid]').waitFor();
+  await page.getByText('1 en días no hábiles; conservan su fecha en la previsión.', { exact: true }).waitFor();
+  assert.match(await page.locator('[data-load-person="c"]').innerText(), /Sin estimación/);
+  await page.screenshot({ path: path.join(output, 'mapa-fiabilidad-claro.png'), fullPage: true });
   assert.deepEqual(errors, []);
   console.log('Ritmo: semana, detalles, decisiones, historial, móvil y ambos temas verificados.');
 } finally { await browser.close(); await server.close(); }

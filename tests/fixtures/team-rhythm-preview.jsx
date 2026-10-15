@@ -6,7 +6,7 @@ import ManagerTaskAnalytics from '@/components/modules/ManagerTaskAnalytics';
 import { analyzeTeamRhythm } from '@/lib/teamRhythm';
 import { buildLoadMap, loadSignals } from '@/lib/teamLoad';
 import { buildTeamForecast } from '@/lib/teamForecast';
-import { buildContextProfiles, recordedWorkHours } from '@/lib/workPrediction';
+import { buildContextProfiles, recordedWorkHours, RHYTHM_POLICY } from '@/lib/workPrediction';
 import '@/index.css';
 
 // Muestra local de la pestaña Ritmo de Manager con personas y tareas inventadas y la API simulada en el navegador.
@@ -24,7 +24,7 @@ const t = (personId, personName, workType, ms, day, extra = {}) => ({ id: `t${++
 const tasks = [
   t('a', 'Andrés Ejemplo', 'Video', 4 * H, '2026-10-06'), t('a', 'Andrés Ejemplo', 'Video', 4 * H, '2026-10-06'), t('a', 'Andrés Ejemplo', 'Video', 30 * M, '2026-10-07'),
   t('a', 'Andrés Ejemplo', 'Reel', 2.6 * H, '2026-10-01'), t('a', 'Andrés Ejemplo', 'Reel', 2.8 * H, '2026-10-02'), t('a', 'Andrés Ejemplo', 'Reel', 2.4 * H, '2026-10-03'), t('a', 'Andrés Ejemplo', 'Reel', 0, '2026-10-04'),
-  ...[40, 35, 50, 45, 38, 42].map((min, i) => t('b', 'Beatriz Muestra', 'Post', min * M, `2026-10-0${i + 1}`)), t('b', 'Beatriz Muestra', 'Post', 3 * H, '2026-10-08'),
+  ...[40, 35, 50, 45, 38, 42].map((min, i) => t('b', 'Beatriz Muestra', 'Post', min * M, `2026-10-0${i + 1}`)), t('b', 'Beatriz Muestra', 'Post', 3 * H, '2026-10-08', { complexity: 'ALTA' }),
   t('b', 'Beatriz Muestra', 'Reel', 1.4 * H, '2026-10-02'), t('b', 'Beatriz Muestra', 'Reel', 1.6 * H, '2026-10-03'), t('b', 'Beatriz Muestra', 'Reel', 1.5 * H, '2026-10-05'),
   t('b', 'Beatriz Muestra', 'Carrusel', 2 * H, '2026-10-04', { reworkMs: 1.5 * H }),
   ...[0, 0, 0, 0, 50 * M].map((ms, i) => t('c', 'Carlos Prueba', 'Operaciones & Reuniones', ms, `2026-10-0${i + 1}`)), t('c', 'Carlos Prueba', 'Publicación', 0, '2026-10-06', { overlappedMs: 4 * H }), t('c', 'Carlos Prueba', 'Publicación', 25 * M, '2026-10-06')
@@ -46,16 +46,19 @@ const openTasks = [
   openTask('a', 'Reel', '2026-10-15', 'Nutresa', 2.6 * H), openTask('a', 'Reel', '2026-10-15', 'Alpina', 2.6 * H), openTask('a', 'Reel', '2026-10-15', 'Colanta', 2.6 * H),
   openTask('a', 'Video', '2026-10-16', 'Endova', 4 * H), openTask('a', 'Reel', '2026-10-20', 'Nutresa', 2.6 * H),
   openTask('b', 'Post', '2026-10-14', 'Alpina', 45 * M), openTask('b', 'Post', '2026-10-16', 'Alpina', 45 * M), openTask('b', 'Reel', '2026-10-15', 'Alpina', 1.5 * H), openTask('c', 'Post', '2026-10-06', 'Nutresa', 45 * M), openTask('c', 'Post', '2026-10-07', 'Nutresa', 45 * M),
-  openTask('c', 'Publicación', '2026-10-13', 'Colanta', 25 * M), openTask('c', 'Operaciones & Reuniones', null, 'Endova', H)
+  openTask('c', 'Publicación', '2026-10-13', 'Colanta', 25 * M), openTask('c', 'Operaciones & Reuniones', null, 'Endova', H),
+  openTask('c', 'Operaciones & Reuniones', '2026-10-18', 'Endova', H)
 ];
 const demoPeople = people.map((p) => ({ personId: p.personId, personName: p.personName, avatarUrl: null }));
-const loadMap = buildLoadMap({ people: demoPeople, tasks: openTasks, estimates: { byPersonType: {}, byType: {} }, today: '2026-10-14' });
+const demoForecast = buildTeamForecast({ people: demoPeople, tasks: openTasks, rhythm, now: new Date('2026-10-14T13:00:00Z') });
+const loadMap = buildLoadMap({ people: demoPeople, tasks: openTasks, forecast: demoForecast, today: '2026-10-14' });
 const load = { ...loadMap, signals: loadSignals(loadMap), forecast: buildTeamForecast({ people: demoPeople, tasks: openTasks, rhythm, now: new Date('2026-10-14T13:00:00Z') }) };
 
 const readingBody = {
-  summary: 'Conviene revisar las entregas de hoy de Andrés y las vencidas de Carlos. Beatriz tiene espacio estimado para recibir trabajo; en Carlos faltan mediciones y una fecha.',
+  predictionPolicy: params.has('legacy') ? undefined : RHYTHM_POLICY,
+  summary: 'Carlos tiene fechas vencidas. Para Andrés falta historial comparable en parte de la cola; no se puede afirmar saturación. Beatriz tiene margen nominal según el historial disponible.',
   decisions: [
-    { title: 'Revisar los videos de hoy de Andrés', why: 'Tiene tres videos con doce horas estimadas pendientes y ocho horas nominales hasta el vencimiento. Beatriz tiene margen estimado; confirma si puede apoyar.', evidence: ['12 h pendientes para el miércoles 14 de octubre', '8 h de capacidad nominal hasta esa fecha', 'Beatriz tiene unas 3 h pendientes en el periodo'], urgency: 'alta', action: { kind: 'REASIGNAR', label: 'Abrir Video Colanta', personName: 'Andrés Ejemplo', taskId: 'o3', suggestedMessage: null } },
+    { title: 'Completar los datos de los videos de Andrés', why: 'Los tiempos de Video son dispares y faltan mediciones del mismo cliente. Conviene confirmar el trabajo pendiente antes de anticipar una entrega.', evidence: ['Tres registros de Video varían entre 30 min y 4 h', 'Faltan muestras del mismo cliente y complejidad', 'Sin una previsión completa para esta cola'], urgency: 'alta', action: { kind: 'REASIGNAR', label: 'Abrir Video Colanta', personName: 'Andrés Ejemplo', taskId: 'o3', suggestedMessage: null } },
     { title: 'Revisar las fechas vencidas de Carlos', why: 'Tiene tareas con fecha pasada que siguen abiertas. Hay que confirmar si se terminaron o siguen pendientes antes de repartir más trabajo.', evidence: ['3 tareas con fecha vencida', 'Una tarea sin fecha queda fuera de la previsión'], urgency: 'media', action: { kind: 'REVISAR_TAREA', label: 'Abrir Post Nutresa', personName: 'Carlos Prueba', taskId: 'o12', suggestedMessage: null } },
     { title: 'Pedirle a Carlos que use el cronómetro', why: 'De sus siete tareas cerradas solo dos tienen tiempo medido, así que no es posible saber cuánto le toma publicar ni cuándo necesita apoyo.', evidence: ['2 de 7 cerradas con tiempo medido (29 %)', 'Una sesión de 4 h quedó simultánea con otra'], urgency: 'media', action: { kind: 'CONVERSAR', label: 'Pedírselo a Bria', personName: 'Carlos Prueba', taskId: null, suggestedMessage: 'Crea un pendiente para Carlos Prueba: poner en marcha el cronómetro en cada tarea que pase a En proceso esta semana, para poder leer su ritmo.' } },
     { title: 'Revisar el carrusel de Beatriz con retrabajo', why: 'Le tomó dos horas y una hora y media más de retrabajo; conviene saber si el brief estaba claro antes de asignarle el siguiente.', evidence: ['Carrusel del 4 de octubre: 2 h más 1 h 30 min de retrabajo'], urgency: 'baja', action: { kind: 'CONVERSAR', label: 'Pedírselo a Bria', personName: 'Beatriz Muestra', taskId: null, suggestedMessage: 'Recuérdame hablar con Beatriz Muestra sobre el carrusel del 4 de octubre: qué faltó en el brief para que hubiera hora y media de retrabajo.' } }
@@ -81,9 +84,9 @@ window.fetch = (input, init = {}) => {
     const candidate = { ...original, personId: draft.assigneeId, dueDay: draft.dueDay, deadlineAt: draft.focusDeadlineAt };
     const result = buildTeamForecast({ people: demoPeople, tasks: [...openTasks.filter(t => t.id !== candidate.id), candidate], rhythm, now: new Date('2026-10-14T13:00:00Z') });
     const person = result.people.find(p => p.personId === candidate.personId);
-    return json({ ...person.tasks.find(t => t.id === candidate.id), personName: person.personName, clientName: candidate.clientName });
+    return json({ policy: RHYTHM_POLICY, ...person.tasks.find(t => t.id === candidate.id), personName: person.personName, clientName: candidate.clientName });
   }
-  if (url.pathname === '/api/manager/rhythm/load') return json({ ...load, forecast: buildTeamForecast({ people: demoPeople, tasks: openTasks, rhythm, now: new Date('2026-10-14T13:00:00Z'), window: url.searchParams.get('window') || 'week' }) });
+  if (url.pathname === '/api/manager/rhythm/load') return json({ ...load, forecast: { ...buildTeamForecast({ people: demoPeople, tasks: openTasks, rhythm, now: new Date('2026-10-14T13:00:00Z'), window: url.searchParams.get('window') || 'week' }), ...(params.has('legacy') ? { policy: undefined } : {}) } });
   if (url.pathname === '/api/manager/rhythm/reading' && init.method === 'POST') {
     reading = { id: 'r2', weekKey: '2026-W41', trigger: 'MANUAL', periodDays: 30, reading: readingBody, model: 'gpt-local', generatedBy: 'Rodny Chirinos', generatedAt: new Date().toISOString() };
     return json(reading, 1200);

@@ -32,7 +32,7 @@ test('the week key is Bogotá’s ISO week', () => {
 
 test('Bria receives the deadline forecast and cannot confuse clustered deliveries with an impossible deadline', () => {
   const digest = buildReadingDigest({ rhythm, load: { ...load, forecast: {
-    days: ['2026-10-09'], incomplete: false,
+    policy: 'ritmo-contexto-v2', days: ['2026-10-09'], incomplete: false,
     people: [{ personName: 'Brayan Torres', confidence: 'suficiente', remainingMs: 4 * H, upperMs: 5 * H, capacityMs: 8 * H,
       overdueCount: 0, riskCount: 0, tightCount: 0, undatedCount: 0, canReceive: true,
       tasks: [{ id: 'forecast-only', title: 'Video futuro', clientName: 'Nutresa', complexity: 'MEDIA', basis: 'persona_cliente_complejidad', sample: 8, confidence: 'suficiente', deadlineAt: '2026-10-09T23:00:00Z', dueDay: '2026-10-09', remainingMs: 4 * H, upperMs: 5 * H, risk: 'ok' }] }]
@@ -48,11 +48,11 @@ test('Bria receives the deadline forecast and cannot confuse clustered deliverie
 test('the digest is compact text with every task id and person the model may name, and nothing else', () => {
   const digest = buildReadingDigest({ rhythm, load });
   assert.match(digest.text, /Cobertura del equipo: 12 de 20 tareas cerradas con tiempo medido \(60 %\)/);
-  assert.match(digest.text, /Brayan Torres[\s\S]*Video: 5 medidas, suele tardar 4 h \(resto del equipo 2 h\)/);
-  assert.match(digest.text, /\[t1\] Video A/);
-  assert.match(digest.text, /13 de octubre: 12 h estimadas en 3 tareas \(excedida\)/);
+  assert.match(digest.text, /Brayan Torres[\s\S]*Video: 5 tareas medidas/);
+  assert.doesNotMatch(digest.text, /suele tardar|resto del equipo/);
+  assert.match(digest.text, /13 de octubre: 3 tareas con fecha/);
   assert.match(digest.text, /\[o1\] Video Nutresa · Nutresa/);
-  assert.deepEqual([...digest.taskIds].sort(), ['o1', 'o2', 'o3', 'o4', 'o5', 'o6', 't1', 't2'].sort());
+  assert.deepEqual([...digest.taskIds].sort(), ['o1', 'o2', 'o3', 'o4', 'o5', 'o6'].sort());
   assert.deepEqual(digest.people, ['Brayan Torres', 'Helen Hernández']);
   assert.ok(digest.text.length < 6000);
 });

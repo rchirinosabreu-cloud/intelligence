@@ -22,7 +22,7 @@ test('Bria reads the same weekly capacity forecast as Manager, respecting a pers
   const p = { personId: 'a', personName: 'Ana', weekMs: H, overdue: { count: 0 }, undated: { count: 1 }, cells: [] };
   const prediction = { ...p, remainingMs: H, upperMs: 2 * H, capacityMs: 24 * H, confidence: 'baja', riskCount: 0, tightCount: 0, overdueCount: 0, undatedCount: 1, canReceive: false, tasks: [] };
   const load = { get: async () => ({ today: '2026-10-14', days: ['2026-10-14'], capacityMs: 8 * H, people: [p], signals: [],
-    forecast: { days: ['2026-10-14', '2026-10-15', '2026-10-16'], incomplete: false, people: [prediction, { ...prediction, personId: 'b', personName: 'Beto' }] } }) };
+    forecast: { policy: 'ritmo-contexto-v2', days: ['2026-10-14', '2026-10-15', '2026-10-16'], incomplete: false, people: [prediction, { ...prediction, personId: 'b', personName: 'Beto' }] } }) };
   const out = await toolByName('carga_del_equipo').run({ persona: 'Ana' }, { load });
   assert.equal(out.data.prevision.personas.length, 1);
   assert.equal(out.data.prevision.personas[0].puedeRecibir, false);
@@ -36,7 +36,7 @@ test('Bria can read habitual time for a specific client and complexity without c
   const base = { personId: 'b', personName: 'Brayan', closed: 6, measured: 6, coverage: 1, byType: [], findings: [] };
   const out = await toolByName('ritmo_del_equipo').run({ persona: 'Brayan', cliente: 'Cliente X', tipo: 'Reel', complejidad: 'MEDIA' }, { rhythm: { get: async () => ({
     period: { days: 30 }, team: { closed: 6, measured: 6, coverage: 1 }, people: [base], tasks: {},
-    profiles: ['MEDIA','ALTA'].map(complexity => ({ personId: 'b', personName: 'Brayan', workType: 'Reel', clientId: 'x', clientName: 'Cliente X', complexity, measured: 3, closed: 3, meanMs: (complexity === 'MEDIA' ? 4 : 6) * H, medianMs: (complexity === 'MEDIA' ? 4 : 6) * H, p75Ms: 6 * H })), hours: []
+    profiles: ['MEDIA','ALTA'].map(complexity => ({ personId: 'b', personName: 'Brayan', workType: 'Reel', clientId: 'x', clientName: 'Cliente X', complexity, measured: 3, closed: 3, coverage: 1, minMs: 4 * H, maxMs: 6 * H, meanMs: (complexity === 'MEDIA' ? 4 : 6) * H, medianMs: (complexity === 'MEDIA' ? 4 : 6) * H, p75Ms: 6 * H })), hours: []
   }) } });
   assert.ok(Array.isArray(out.data.porContexto));
   assert.equal(out.data.porContexto.length, 1);
@@ -68,20 +68,20 @@ test('carga_del_equipo tells who is loaded and who has room, by person if asked,
   assert.deepEqual([all.data.hoy, all.data.diasHabiles, all.data.jornada, all.data.capacidadDelPeriodo], ['viernes 9 de octubre', 2, '8 h', '16 h']);
   // Rodny, 10 de octubre de 2026: 11 h en 10 días hábiles se leyó como «la mayor carga». La herramienta dice qué
   // parte del tiempo está comprometida y lee al equipo antes de nombrar a nadie.
-  assert.deepEqual(all.data.equipo, { personas: 2, ocupacionMaxima: '75 %', lectura: 'Hay personas con buena parte de su tiempo comprometido.', tareasVencidas: 2, tareasSinFecha: 1 });
-  assert.deepEqual([all.data.personas[0].ocupacion, all.data.personas[1].ocupacion], ['75 %', '6 %']);
-  assert.deepEqual(all.data.personas[0].dias[0], { dia: 'martes 13 de octubre', horas: '12 h', nivel: 'excedida', tareas: ['Video Nutresa (Nutresa) · 4 h'] });
-  assert.deepEqual(all.data.personas[1].dias[0].tareas, ['Post Alpina · 1 h supuesto']);
-  assert.equal(all.data.senales.length, 2);
+  assert.equal(all.data.equipo.ocupacionMaxima, null);
+  assert.deepEqual([all.data.personas[0].ocupacion, all.data.personas[1].ocupacion], [null, null]);
+  assert.deepEqual(all.data.personas[0].dias[0], { dia: 'martes 13 de octubre', horas: null, nivel: 'sin_datos', tareas: ['Video Nutresa (Nutresa) · sin estimación comparable'] });
+  assert.deepEqual(all.data.personas[1].dias[0].tareas, ['Post Alpina · sin estimación comparable']);
+  assert.equal(all.data.senales.length, 0);
   assert.match(all.data.instruccion, /nunca de desempeño/);
-  assert.match(all.data.instruccion, /si nadie pasa de la mitad de su tiempo, dilo antes de nombrar a nadie/);
-  assert.match(all.data.instruccion, /no «la herramienta»/);
+  assert.match(all.data.instruccion, /Sin previsión/);
+  assert.match(all.data.instruccion, /nunca cero minutos/);
   const quiet = await toolByName('carga_del_equipo').run({}, { load: { get: async () => ({ ...(await load.get()), people: (await load.get()).people.map((p) => ({ ...p, weekMs: H })) }) }, user: pm, person, today: TODAY });
-  assert.equal(quiet.data.equipo.lectura, 'Nadie pasa de la mitad de su tiempo: el equipo tiene espacio.');
+  assert.equal(quiet.data.equipo.lectura, 'No hay una previsión validada: solo se pueden describir pendientes y fechas.');
   assert.deepEqual(all.sources, [{ kind: 'ritmo', id: 'carga-2026-10-09', label: 'Mapa de carga', url: '/manager?tab=ritmo' }]);
   const one = await toolByName('carga_del_equipo').run({ persona: 'helen' }, { load, user: pm, person, today: TODAY });
   assert.deepEqual(one.data.personas.map((p) => p.nombre), ['Helen Hernández']);
-  assert.deepEqual(one.data.senales, ['Helen Hernández tiene 1 h comprometida.']);
+  assert.deepEqual(one.data.senales, []);
 });
 
 test('buscar_cliente finds by part of the name, without accents mattering to the search, and never archived first', async () => {

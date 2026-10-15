@@ -1,10 +1,9 @@
 // Previsión de compromisos, no una promesa de entrega. Capacidad nominal; no descuenta reuniones ni ausencias.
 import { bogotaDate } from './colombiaBusinessDays.js';
-import { nextWorkingDays, LOAD_CAPACITY_MS, DEFAULT_ESTIMATE_MS } from './teamLoad.js';
-import { isComparableWork, RHYTHM_LIMITS } from './teamRhythm.js';
-import { contextualBaseline } from './workPrediction.js';
+import { nextWorkingDays, LOAD_CAPACITY_MS } from './teamLoad.js';
+import { RHYTHM_LIMITS } from './teamRhythm.js';
+import { contextualBaseline, RHYTHM_POLICY } from './workPrediction.js';
 
-const H = 3_600_000;
 const sum = (rows, field) => rows.reduce((total, row) => total + row[field], 0);
 const dayCapacity = (day, now, until = `${day}T18:00:00-05:00`) => {
   const start = Math.max(new Date(`${day}T08:00:00-05:00`).getTime(), new Date(now).getTime());
@@ -23,28 +22,26 @@ export function reliableSpentMs(task, now) {
   }, 0);
 }
 
-function remainingEstimate(task, rhythm, now) {
-  const person = rhythm.people?.find((p) => p.personId === task.personId);
-  const own = person?.byType?.find((t) => t.workType === task.workType);
-  const team = rhythm.types?.find((t) => t.workType === task.workType);
+function remainingEstimate(task, rhythm, now, incomplete) {
   const context = contextualBaseline(task, rhythm);
-  const contextualHistory = Array.isArray(rhythm.profiles);
-  const baseline = context || (!contextualHistory ? (own?.medianMs > 0 ? own : team?.medianMs > 0 ? team : null) : null);
-  const source = context?.source || (baseline ? own?.medianMs > 0 ? 'persona' : 'equipo' : 'supuesto');
-  const typical = baseline?.medianMs || DEFAULT_ESTIMATE_MS;
   const spentMs = reliableSpentMs(task, now);
-  // El reloj no mide porcentaje completado: al alcanzar la duración habitual aún queda trabajo por revisar.
-  const floor = Math.max(15 * 60_000, typical * 0.25);
-  const remainingMs = Math.max(floor, typical - spentMs);
-  const upperMs = Math.max(remainingMs, (baseline?.p75Ms || typical) - spentMs);
-  const confidence = (context ? context.confidence === 'suficiente' : baseline?.measured >= 3 && isComparableWork(task.workType) && (source !== 'persona' || person.coverage >= 0.5)) && spentMs < typical ? 'suficiente' : 'baja';
-  return { remainingMs, upperMs, spentMs, source, confidence, basis: context?.basis || source, complexity: task.complexity || null, sample: baseline?.measured || 0, needsReview: spentMs >= typical };
+  const clockProblem = (task.workSessions || []).some(s => !s.cycle?.closedAt && (s.workerId !== task.personId || s.isOverlapping || s.isCollaborator ||
+    (s.durationMs != null && (!Number.isFinite(Number(s.durationMs)) || Number(s.durationMs) < 0)) ||
+    (s.startedAt && (!Number.isFinite(new Date(s.startedAt).getTime()) || new Date(s.startedAt) > new Date(now) || (s.endedAt && (!Number.isFinite(new Date(s.endedAt).getTime()) || new Date(s.endedAt) < new Date(s.startedAt))))) ||
+    Number(s.durationMs ?? (s.startedAt ? new Date(s.endedAt || now) - new Date(s.startedAt) : NaN)) >= RHYTHM_LIMITS.forgottenSessionMs));
+  const qualified = context?.confidence === 'suficiente';
+  const needsReview = Boolean(qualified && spentMs >= context.medianMs);
+  const usable = qualified && !incomplete && !needsReview && !task.sharedWork && !clockProblem;
+  return { remainingMs: usable ? context.medianMs - spentMs : null, upperMs: usable ? context.p75Ms - spentMs : null,
+    spentMs, source: usable ? 'persona' : 'sin_estimacion', confidence: usable ? 'suficiente' : 'baja',
+    reason: incomplete ? 'consulta_incompleta' : task.sharedWork ? 'responsabilidad_compartida' : clockProblem ? 'cronometro_no_fiable' : needsReview ? 'avance_desconocido' : context?.reason || (qualified ? null : 'sin_historial'),
+    basis: usable ? context.basis : null, complexity: task.complexity || null, sample: context?.measured || 0, needsReview };
 }
 
 export function buildTeamForecast({ people = [], tasks = [], rhythm = {}, now = new Date(), incomplete = false, window = 'week' } = {}) {
   const today = bogotaDate(now);
   const horizon = nextWorkingDays(today, 15);
-  const first = new Date(`${horizon[0]}T12:00:00Z`);
+  const first = new Date(`${today}T12:00:00Z`);
   const sunday = new Date(first); sunday.setUTCDate(first.getUTCDate() + (7 - first.getUTCDay()) % 7);
   const currentEnd = sunday.toISOString().slice(0, 10);
   let days = horizon.filter((day) => day <= currentEnd), periodEnd = currentEnd;
@@ -63,23 +60,25 @@ export function buildTeamForecast({ people = [], tasks = [], rhythm = {}, now = 
   const rows = people.map((person) => {
     const own = tasks.filter((task) => task.personId === person.personId).map((task) => ({
       id: task.id, title: task.title, clientId: task.clientId || null, clientName: task.clientName, workType: task.workType, dueDay: task.dueDay,
-      status: task.status, scheduledDay: task.deadlineAt ? bogotaDate(task.deadlineAt) : task.dueDay ? nextWorkingDays(task.dueDay, 1)[0] : null,
+      status: task.status, scheduledDay: task.deadlineAt ? bogotaDate(task.deadlineAt) : task.dueDay || null,
       deadlineAt: task.deadlineAt ? new Date(task.deadlineAt).toISOString() : null, deadlineSource: task.deadlineSource || 'fecha',
-      ...remainingEstimate(task, rhythm, now)
+      ...remainingEstimate(task, rhythm, now, incomplete)
     })).sort((a, b) => (a.deadlineAt || `${a.scheduledDay || '9999'}T23:00:00Z`).localeCompare(b.deadlineAt || `${b.scheduledDay || '9999'}T23:00:00Z`) || a.id.localeCompare(b.id));
-    let committed = 0, upper = 0;
+    let committed = 0, upper = 0, queueComplete = !incomplete && !own.some(t => !t.dueDay);
     const dated = own.filter((task) => task.scheduledDay && task.scheduledDay <= horizon.at(-1));
     const limitOf = task => task.deadlineAt || new Date(`${task.scheduledDay}T18:00:00-05:00`).toISOString();
     for (const deadline of [...new Set(dated.map(limitOf))]) {
       const group = dated.filter(task => limitOf(task) === deadline);
       const day = group[0].scheduledDay;
+      queueComplete = queueComplete && group.every(t => t.remainingMs !== null);
       committed += sum(group, 'remainingMs'); upper += sum(group, 'upperMs');
       const capacity = horizon.filter((d) => d <= day).reduce((total, d) => total + dayCapacity(d, now, deadline), 0);
       for (const task of group) {
         task.capacityToDeadlineMs = capacity;
-        task.committedToDeadlineMs = committed;
-        task.committedUpperToDeadlineMs = upper;
-        task.risk = day < today || (task.deadlineAt && new Date(task.deadlineAt) < new Date(now)) ? 'vencida' : committed > capacity ? 'riesgo' : upper > capacity || committed >= capacity * 0.9 ? 'ajustada' : 'ok';
+        task.queueComplete = queueComplete;
+        task.committedToDeadlineMs = queueComplete ? committed : null;
+        task.committedUpperToDeadlineMs = queueComplete ? upper : null;
+        task.risk = day < today || (task.deadlineAt && new Date(task.deadlineAt) < new Date(now)) ? 'vencida' : !queueComplete ? null : committed > capacity ? 'riesgo' : upper > capacity || committed >= capacity * 0.9 ? 'ajustada' : 'ok';
       }
     }
     const week = dated.filter((task) => task.scheduledDay <= weekEnd);
@@ -87,23 +86,22 @@ export function buildTeamForecast({ people = [], tasks = [], rhythm = {}, now = 
     const overdueCount = week.filter((task) => task.risk === 'vencida').length;
     const riskCount = week.filter((task) => task.risk === 'riesgo').length;
     const tightCount = week.filter((task) => task.risk === 'ajustada').length;
-    const remainingMs = sum(week, 'remainingMs'), upperMs = sum(week, 'upperMs');
+    const unknownCount = own.filter(t => !t.dueDay || (t.scheduledDay <= weekEnd && t.remainingMs === null)).length;
+    const remainingMs = unknownCount || incomplete ? null : sum(week, 'remainingMs'), upperMs = unknownCount || incomplete ? null : sum(week, 'upperMs');
     const confidence = !incomplete && !undatedCount && week.length > 0 && week.every((task) => task.confidence === 'suficiente') ? 'suficiente' : 'baja';
-    const availableMs = Math.max(0, Math.min(capacityMs - upperMs, ...dated.filter(t => t.capacityToDeadlineMs !== undefined).map(t => t.capacityToDeadlineMs - t.committedUpperToDeadlineMs)));
+    const availableMs = !queueComplete || own.some(t => t.remainingMs === null) ? null : Math.max(0, Math.min(capacityMs - upperMs, ...dated.filter(t => t.capacityToDeadlineMs !== undefined).map(t => t.capacityToDeadlineMs - t.committedUpperToDeadlineMs)));
     const canReceive = confidence === 'suficiente' && dated.every(t => t.confidence === 'suficiente') && !overdueCount && !riskCount && !tightCount && availableMs >= LOAD_CAPACITY_MS / 2;
     const status = overdueCount || riskCount ? 'revisar' : confidence === 'baja' ? 'sin_datos' : tightCount ? 'ajustada' : canReceive ? 'con_espacio' : 'al_dia';
     const clock = rhythm.hours?.find(row => row.personId === person.personId);
     const currentWeek = new Date(`${today}T12:00:00Z`); currentWeek.setUTCDate(currentWeek.getUTCDate() - (currentWeek.getUTCDay() || 7) + 1);
-    return { ...person, tasks: own, remainingMs, upperMs, capacityMs, availableMs, canReceive, confidence, status, overdueCount, riskCount, tightCount, undatedCount,
+    return { ...person, tasks: own, remainingMs, upperMs, capacityMs, availableMs, canReceive, confidence, status, overdueCount, riskCount, tightCount, undatedCount, unknownCount,
       recordedTodayMs: clock?.days.find(d => d.day === today)?.measuredMs || 0,
       recordedWeekMs: clock?.weeks.find(w => w.week === currentWeek.toISOString().slice(0,10))?.measuredMs || 0,
       hoursIncomplete: Boolean(rhythm.hoursIncomplete),
       dueCount: week.filter((task) => task.scheduledDay >= (days[0] || today)).length, nextDueDay: dated.find((task) => task.scheduledDay >= today)?.scheduledDay || null };
   });
-  const todayDate = new Date(`${today}T12:00:00Z`);
-  todayDate.setUTCDate(todayDate.getUTCDate() + (7 - todayDate.getUTCDay()) % 7);
-  return { today, days, weekEnd, window, nextWeek: window === 'next_week' || horizon[0] > todayDate.toISOString().slice(0, 10), incomplete, capacityMs, periodCapacityMs, people: rows,
+  return { policy: RHYTHM_POLICY, today, days, weekEnd, window, nextWeek: window === 'next_week', incomplete, capacityMs, periodCapacityMs, people: rows,
     summary: { dueCount: sum(rows, 'dueCount'), overdueCount: sum(rows, 'overdueCount'), riskCount: sum(rows, 'riskCount'),
       attentionCount: rows.reduce((n, p) => n + p.overdueCount + p.riskCount + p.tightCount, 0),
-      withSpace: rows.filter((p) => p.canReceive).length, undatedCount: sum(rows, 'undatedCount') } };
+      withSpace: rows.filter((p) => p.canReceive).length, undatedCount: sum(rows, 'undatedCount'), unknownCount: sum(rows, 'unknownCount') } };
 }

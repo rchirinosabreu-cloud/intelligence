@@ -1,5 +1,19 @@
 # Ritmo del equipo
 
+## Criterio vigente de fiabilidad (15 de octubre de 2026)
+
+La revisión reprodujo referencias de categorías heterogéneas, ampliaciones a otros clientes, una hora supuesta sin historial, un 25 % de pendiente inventado al alcanzar la mediana y riesgo acumulado con tareas anteriores sin datos fiables. También se trasladaban domingos al lunes y se atribuían horas al día de cierre. Se retiran esos supuestos.
+
+`RHYTHM_POLICY = 'ritmo-contexto-v2'` exige formato concreto, misma persona/cliente/complejidad, tres mediciones válidas, cobertura mínima del 50 % y diferencia menor de cuatro veces entre el mayor y el menor tiempo (el umbral de dispersión que ya usa Ritmo). No aprende duraciones completas de declarados, simultáneas, relojes incompletos/olvidados, acumulados sin sesiones, colaboradores ni relevos parciales. Guion, revisión e insumos no se convierten en producción completa por estar vinculados a una pieza.
+
+Sin base válida devuelve `null`, muestra «sin estimación comparable» y no suma esa referencia como horas comprometidas. Una cola con trabajo anterior desconocido no autoriza riesgo ni espacio libre. Al alcanzar el tiempo histórico hace falta confirmar avance; no se presume ni terminada ni con un porcentaje fijo restante. Las fechas se conservan en fin de semana/festivos; esos días no añaden capacidad nominal.
+
+El mapa utiliza las duraciones del mismo motor, sin estimador alterno por persona/tipo/equipo. Bria recibe únicamente cifras predictivas de la política vigente; el resto es registro histórico o conteo de tareas. Los avisos guardados con huellas predictivas anteriores se ocultan de la tarjeta y las lecturas semanales antiguas requieren una lectura nueva. Se conserva la evidencia histórica, sin borrarla. Los clientes rechazan resultados antiguos durante un despliegue mixto.
+
+Las medianas y rangos del historial describen registros. No se comparan personas sin igualar contexto ni se llama «día largo» a sumar todo lo cerrado en una fecha. Las horas diarias/semanales se distribuyen por las sesiones reales. Sigue pendiente calibrar predicciones frente a resultados reales y descontar reuniones/ausencias: «historial comparable» no es una probabilidad ni una garantía.
+
+Pruebas de regresión: `tests/predictionReliability.test.js`, más los contratos de Ritmo y Bria. El resto del documento describe la evolución; este criterio sustituye los supuestos de versiones anteriores.
+
 ## Entrada semanal y previsión (Rodny, 14 de octubre de 2026)
 
 Rodny pidió simplificar la lectura y anticipar entregas, tomando como referencia la claridad de CRM y Financiero. Esta organización sustituye el orden de la Fase A descrito más abajo; conserva sus datos, permisos y acciones.
@@ -7,15 +21,15 @@ Rodny pidió simplificar la lectura y anticipar entregas, tomando como referenci
 - **Esta semana** es la entrada: entregas previstas, entregas que necesitan revisión y personas que pueden recibir trabajo. Hoy, mañana (siguiente día hábil), semana actual y próxima semana comparten la misma lectura. Los indicadores filtran la lista del equipo. Una fila por persona, con horas cronometradas hoy/semana, rango estimado por hacer, fiabilidad y próximo vencimiento. Al abrirla aparecen las tareas, sus motivos, acceso a Gestión y «Simular».
 - **Bria** muestra tres decisiones inicialmente; «Por qué y evidencia» abre su explicación y se pueden ver las demás. La lectura guardada conserva fecha y autor; «Actualizar» relee los datos, «Volver a leer» genera una lectura nueva. Ninguna propuesta reasigna, crea ni envía por sí sola.
 - **Historial** contiene los periodos de 7/30/90 días, cobertura, filtros por persona/formato/cliente/complejidad, promedio, mediana, percentil 75 y muestra. Las horas por día/semana y las observaciones del cronómetro se abren por elección. Las consultas históricas se hacen al entrar allí.
-- El mapa de diez días se abre opcionalmente como **fechas de entrega**. Conserva los umbrales y el cálculo anteriores: agrupa por vencimiento y no demuestra que todo deba trabajarse ese día.
+- El mapa de diez días se abre opcionalmente como **fechas de entrega**. Usa las horas respaldadas por la previsión común: agrupa por vencimiento y no demuestra que todo deba trabajarse ese día.
 
 ### Cómo se anticipan compromisos
 
 `src/lib/teamForecast.js` calcula una sola previsión que `teamLoadService` adjunta como `forecast` a `GET /api/manager/rhythm/load`. La pantalla, la herramienta `carga_del_equipo` y el resumen que recibe Bria leen ese mismo resultado.
 
-1. Horizonte de quince días hábiles de Colombia. Una fecha sin hora no hábil se lleva al siguiente día hábil; una hora explícita de compromiso/publicación se conserva incluso en fin de semana y no añade capacidad fuera de jornada. La fecha de publicación sin hora también limita una entrega posterior, pero no se presenta como una hora conocida.
-2. `workPrediction.js` agrupa persona × tipo × cliente × complejidad. Busca primero el contexto exacto, después amplía a su complejidad, equipo/cliente/complejidad, equipo/complejidad, persona/tipo y equipo/tipo; siempre revela el alcance. Solo el contexto exacto con al menos tres mediciones comparables y 50 % de cobertura se considera suficiente. Sin historia usa una hora supuesta con confianza baja. El rango es mediana–percentil 75; el promedio se muestra aparte en Historial. No se entrenan duraciones completas con tareas privadas, colaboradores ni responsabilidad repartida entre personas.
-3. Se descuenta únicamente tiempo válido del **responsable actual en el ciclo abierto**. No se descuentan colaboradores, otros responsables, ciclos cerrados, sesiones simultáneas ni sesiones de 8 h o más. No se usa el acumulado histórico de la tarea para inferir avance. Al alcanzar el tiempo habitual se conserva al menos 25 % (mínimo 15 min) pendiente y se pide revisar cuánto falta: nunca se da por terminada una tarea con el reloj.
+1. Horizonte de quince días hábiles de Colombia. Las fechas no hábiles se conservan; no añaden capacidad fuera de jornada. La fecha de publicación sin hora también limita una entrega posterior, pero no se presenta como una hora conocida.
+2. `workPrediction.js` agrupa persona × tipo × cliente × complejidad. Solo usa el contexto exacto con tres mediciones válidas, 50 % de cobertura y sin dispersión de cuatro veces. Las referencias ampliadas no alimentan duración ni riesgo. El rango es mediana–percentil 75; el promedio registrado se muestra aparte en Historial.
+3. Solo se descuenta tiempo válido del responsable actual en el ciclo abierto. Un ciclo con colaboradores, relevos, simultáneas o reloj olvidado no permite estimar cuánto queda. Al alcanzar el tiempo habitual se pide confirmar avance y deja de darse una duración futura; nunca se inventa un porcentaje pendiente.
 4. Se acumula el trabajo por límite, empezando por las vencidas, contra la capacidad desde hoy hasta cada vencimiento y hora. Superar esa capacidad indica riesgo; superar capacidad con el extremo superior del rango o alcanzar el 90 % con el habitual indica margen ajustado. Las tareas que comparten el mismo límite reciben la misma lectura conjunta. En vistas futuras, horas pendientes y capacidad son acumuladas desde hoy hasta el cierre seleccionado; las entregas del indicador pertenecen al periodo elegido.
 5. Referencia de 8 h nominales por día. Hoy se prorratea la franja operativa 8:00–18:00 de Bogotá; no se descuentan reuniones ni ausencias. Es una estimación condicional, no una promesa ni una probabilidad calibrada. Tampoco programa el orden real de ejecución ni comprueba compatibilidad de habilidades al sugerir apoyo.
 6. «Puede recibir» requiere al menos media jornada libre incluso usando el extremo superior, sin vencidas, riesgos, fechas ajustadas, tareas sin fecha ni datos insuficientes. Una consulta que alcanza el tope de tareas se marca incompleta y nunca confirma espacio.

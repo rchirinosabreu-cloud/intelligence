@@ -11,6 +11,7 @@ import { buildNudges, dismissUntil, isValidNudgeKey, workdayStart } from '../lib
 import { weekKeyOf } from '../lib/weeklyReading.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { createBriaProactiveRepository } from './briaProactiveRepository.js';
+import { isCurrentPredictionMessage } from '../lib/briaPulse.js';
 
 const OPEN = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 export const PULSE_LIVE_WINDOW_MS = 2 * 60 * 60 * 1000;
@@ -67,7 +68,7 @@ export const createBriaNudgeService = ({ db = prisma, repository, now = () => ne
       const weeklyFocus = focus ? { conversationId: focus.conversationId, weekKey: focus.weekKey } : null;
       const dailyClose = close ? { conversationId: close.conversationId, dayKey: close.dayKey } : null;
       if (pulseLive) {
-        const messages = await repo.activeMessages(userRef, at);
+        const messages = (await repo.activeMessages(userRef, at)).filter(isCurrentPredictionMessage);
         const fixed = buildNudges({ people: [], now: at, dismissedKeys: dismissed, weeklyFocus, dailyClose });
         // `resolution` y `followUp` son el seguimiento: el desenlace del aviso o «sigue igual», escritos por el pulso.
         return { nudges: [...fixed, ...messages.map((row) => ({ key: `PULSO:${row.id}`, kind: row.kinds?.[0] || 'PULSO', kinds: row.kinds, title: row.title, body: row.body, url: row.url, taskIds: row.taskIds || [], urgency: row.urgency, actions: row.actions || [], createdAt: row.createdAt, resolution: row.resolution || null, followUp: row.followUp || null }))], source: 'pulso' };

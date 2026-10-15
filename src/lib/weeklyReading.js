@@ -5,6 +5,7 @@
 
 import { AI_MODELS } from '../config/aiConfig.js';
 import { formatHours, dayLabel } from './teamLoad.js';
+import { RHYTHM_POLICY } from './workPrediction.js';
 
 export const WEEKLY_READING_USE_CASE = 'manager.weekly-reading';
 export const WEEKLY_READING_PROMPT_VERSION = 2;
@@ -70,30 +71,30 @@ export const buildReadingDigest = ({ rhythm, load }) => {
     lines.push('', `## ${name}`);
     if (r) {
       lines.push(`Ritmo: ${r.measured} de ${r.closed} cerradas con tiempo (${pct(r.coverage)}), ${formatHours(r.measuredMs)} medidas.`);
-      for (const type of r.byType.slice(0, 4)) lines.push(`- ${type.workType}: ${type.measured} medidas, suele tardar ${formatHours(type.medianMs)}${type.teamMedianMs ? ` (resto del equipo ${formatHours(type.teamMedianMs)})` : ''}${type.comparable === false ? ' [mezcla trabajos distintos, no comparar]' : ''}`);
-      for (const finding of r.findings.slice(0, 4)) {
+      for (const type of r.byType.slice(0, 4)) lines.push(`- Registro histórico de ${type.workType}: ${type.measured} tareas medidas. No implica duración de una tarea futura.`);
+      for (const finding of r.findings.filter(f => !['SLOWER_THAN_TEAM','FASTER_THAN_TEAM','HEAVY_DAY','LONG_DAY'].includes(f.kind)).slice(0, 4)) {
         lines.push(`- Hallazgo: ${finding.message}`);
         for (const id of finding.taskIds.slice(0, 4)) { const t = rhythm.tasks?.[id]; if (t) { taskIds.add(id); lines.push(`  [${id}] ${t.title}${t.measuredMs ? ` · ${formatHours(t.measuredMs)}` : ''}${t.day ? ` · ${dayLabel(t.day)}` : ''}`); } }
       }
     }
     if (l) {
-      lines.push(`Carga próximos ${load.days.length} días hábiles: ${formatHours(l.weekMs)} estimadas · vencidas ${l.overdue.count} (${formatHours(l.overdue.ms)}) · sin fecha ${l.undated.count}.`);
+      lines.push(`Pendientes por fecha · vencidas ${l.overdue.count} · sin fecha ${l.undated.count}. El mapa no demuestra capacidad libre ni saturación.`);
       for (const cell of l.cells.filter((c) => c.count > 0)) {
-        lines.push(`- ${dayLabel(cell.day)}: ${formatHours(cell.ms)} estimadas en ${cell.count} ${cell.count === 1 ? 'tarea' : 'tareas'} (${cell.level})`);
+        lines.push(`- ${dayLabel(cell.day)}: ${cell.count} ${cell.count === 1 ? 'tarea' : 'tareas'} con fecha.`);
         for (const t of cell.tasks.slice(0, 6)) { taskIds.add(t.id); lines.push(`  [${t.id}] ${t.title}${t.clientName ? ` · ${t.clientName}` : ''}`); }
       }
       for (const id of l.overdue.taskIds.slice(0, 6)) taskIds.add(id);
     }
   }
-  if (load?.signals?.length) { lines.push('', '## Señales de carga'); for (const s of load.signals) lines.push(`- ${s.message}`); }
-  if (load?.forecast) {
+  if (load?.forecast?.policy === RHYTHM_POLICY && load?.signals?.length) { lines.push('', '## Señales de carga'); for (const s of load.signals) lines.push(`- ${s.message}`); }
+  if (load?.forecast?.policy === RHYTHM_POLICY) {
     lines.push('', '## Previsión de compromisos', 'Capacidad nominal de 8 h por día hábil, prorrateada hoy en la franja 8–18 de Bogotá. No descuenta reuniones ni ausencias. No es una garantía de entrega.');
     if (load.forecast.incomplete) lines.push('Consulta incompleta: no afirmar que hay capacidad disponible.');
     for (const p of load.forecast.people) {
-      lines.push(`${p.personName}: ${formatHours(p.remainingMs)} a ${formatHours(p.upperMs)} restantes frente a ${formatHours(p.capacityMs)} de capacidad en el periodo; ${p.riskCount} entregas en riesgo, ${p.tightCount} ajustadas, ${p.overdueCount} vencidas, ${p.undatedCount} sin fecha. Historial ${p.confidence}. Puede recibir: ${p.canReceive ? 'con espacio estimado' : 'no confirmado'}.`);
+      lines.push(`${p.personName}: ${p.remainingMs == null ? 'sin estimación completa; no inferir saturación ni espacio libre' : `${formatHours(p.remainingMs)} a ${formatHours(p.upperMs)} restantes`} frente a ${formatHours(p.capacityMs)} de capacidad nominal en el periodo; ${p.riskCount} entregas en riesgo, ${p.tightCount} ajustadas, ${p.overdueCount} vencidas, ${p.undatedCount} sin fecha. Historial ${p.confidence}. Puede recibir: ${p.canReceive ? 'con espacio estimado' : 'no confirmado'}.`);
       for (const task of [...p.tasks].sort((a, b) => Number(b.risk && b.risk !== 'ok') - Number(a.risk && a.risk !== 'ok')).slice(0, 6)) {
         taskIds.add(task.id);
-        lines.push(`  [${task.id}] ${task.title} · ${task.dueDay || 'sin fecha'}${task.deadlineAt ? ` (límite ${task.deadlineAt})` : ''} · ${formatHours(task.remainingMs)} a ${formatHours(task.upperMs)} por hacer · ${task.risk} · ${task.clientName || 'sin cliente'} · complejidad ${task.complexity || 'sin clasificar'} · base ${task.basis || 'general'} · ${task.sample || 0} mediciones (${task.confidence || 'baja'}).`);
+        lines.push(`  [${task.id}] ${task.title} · ${task.dueDay || 'sin fecha'}${task.deadlineAt ? ` (límite ${task.deadlineAt})` : ''} · ${task.remainingMs == null ? 'sin estimación comparable' : `${formatHours(task.remainingMs)} a ${formatHours(task.upperMs)} por hacer`} · ${task.risk || 'sin previsión de cumplimiento'} · ${task.clientName || 'sin cliente'} · complejidad ${task.complexity || 'sin clasificar'} · base ${task.basis || 'no utilizable'} · ${task.sample || 0} mediciones (${task.confidence || 'baja'}).`);
       }
     }
   }
@@ -114,6 +115,7 @@ export const buildReadingRequest = ({ digest, today, signal }) => ({
     'Propón entre 3 y 5 decisiones para la dirección, de la más urgente a la menos. Cada decisión es algo que una persona puede hacer esta semana: mover o repartir tareas, conversar con alguien, pedir que se mida el tiempo, revisar una tarea concreta.',
     'Reglas: solo usa personas y tareas que aparezcan en los datos; taskId tiene que ser uno de los ids entre corchetes, y personName un nombre exactamente como aparece. Lo que no se midió no es rápido: si la cobertura de alguien es baja, la decisión es medir, no juzgar. No compares tipos marcados como «mezcla trabajos distintos».',
     'Cuando hay previsión de compromisos, úsala para decidir si alcanza la capacidad hasta el vencimiento: el mapa por fecha solo muestra concentración de entregas, no demuestra que deban trabajarse todas ese día. No llames imposible a una entrega por ese mapa. No afirmes espacio disponible con datos insuficientes, tareas sin fecha o consulta incompleta. Las horas restantes son estimaciones, no porcentaje terminado ni garantía; no descuentan reuniones ni ausencias.',
+    'Sin estimación comparable significa que no se sabe: no rellenes con otras personas, clientes, categorías amplias ni horas supuestas. Los registros históricos y las fechas de cierre no indican horas trabajadas ese día. Si falta parte de la cola, no diagnostiques saturación ni propongas reasignar por falta de capacidad. No inventes probabilidades de cumplimiento.',
     'evidence: de 1 a 3 frases cortas con las cifras de los datos que sostienen la decisión. why: una o dos frases en español claro, sin nombres de campos.',
     'action.kind: REVISAR_TAREA o REASIGNAR cuando señales una tarea concreta (con su taskId); CONVERSAR cuando lo que toca es hablar con alguien (personName); CREAR_PENDIENTE cuando haya que crear una tarea nueva; NINGUNA si no hay acción concreta. label: el texto del botón (dos a cuatro palabras). suggestedMessage: para CONVERSAR y CREAR_PENDIENTE, el mensaje listo para pedírselo a Bria en el chat, por ejemplo «Crea un pendiente para Jesús: …»; en los demás casos null.',
     'summary: dos frases para la dirección con lo más importante de la semana.',

@@ -15,6 +15,7 @@ import { rankByName } from '../lib/fuzzyMatch.js';
 import { formatDuration } from '../lib/teamRhythm.js';
 import { taskPrivacyFilter } from '../lib/taskPrivacy.js';
 import { searchTasks, statusesFor } from './taskSearch.js';
+import { profilePredictionProblem, RHYTHM_POLICY } from '../lib/workPrediction.js';
 
 const STAGE_LABELS = ['sin texto', 'redactada', 'diseñada', 'aprobada', 'programada', 'publicada'];
 const LEVEL_LABELS = { red: 'rojo', yellow: 'amarillo', green: 'verde', gray: 'gris' };
@@ -396,17 +397,18 @@ const ritmoDelEquipo = {
         equipo: { cerradas: out.team.closed, medidas: out.team.measured, cobertura: pct(out.team.coverage) },
         personas: people.slice(0, wanted.length ? 3 : 20).map((p) => ({
           nombre: p.personName, cerradas: p.closed, medidas: p.measured, cobertura: pct(p.coverage),
-          porTipo: p.byType.slice(0, 8).map((t) => ({ tipo: t.workType, medidas: t.measured, mediana: formatDuration(t.medianMs), rango: `${formatDuration(t.minMs)} a ${formatDuration(t.maxMs)}`, restoDelEquipo: t.teamMedianMs ? formatDuration(t.teamMedianMs) : null, comparable: t.comparable })),
+          porTipo: p.byType.slice(0, 8).map((t) => ({ tipo: t.workType, medidas: t.measured, medianaRegistrada: formatDuration(t.medianMs), rangoRegistrado: `${formatDuration(t.minMs)} a ${formatDuration(t.maxMs)}`, soloRegistro: true })),
           hallazgos: p.findings.map((f) => ({ texto: f.message, tareas: f.taskIds.slice(0, 5).map((id) => out.tasks[id]?.title).filter(Boolean) }))
         })),
         porContexto: contexts.slice(0,30).map(p => ({ persona: p.personName, trabajo: p.workType, cliente: p.clientName, complejidad: p.complexity || 'sin clasificar', medidas: p.measured, cerradas: p.closed,
-          promedio: formatDuration(p.meanMs), habitual: formatDuration(p.medianMs), conMargen: formatDuration(p.p75Ms) })),
+          soloRegistro: Boolean(profilePredictionProblem(p)), promedioRegistrado: p.measured ? formatDuration(p.meanMs) : null,
+          habitual: profilePredictionProblem(p) ? null : formatDuration(p.medianMs), conMargen: profilePredictionProblem(p) ? null : formatDuration(p.p75Ms) })),
         contextosRestantes: Math.max(0, contexts.length - 30),
         horasRegistradas: (out.hours || []).filter(p => !wanted.length || people.some(person => person.personId === p.personId)).slice(0,20).map(p => ({ nombre: p.personName,
           dias: p.days.slice(-14).map(d => ({ fecha: d.day, cronometrado: formatDuration(d.measuredMs), declarado: formatDuration(d.declaredMs) })),
           semanas: p.weeks.slice(-13).map(w => ({ desde: w.week, cronometrado: formatDuration(w.measuredMs), declarado: formatDuration(w.declaredMs) })) })),
         horasParciales: Boolean(out.hoursIncomplete),
-        instruccion: 'Para cuánto tarda alguien, usa porContexto: mismo tipo, cliente y complejidad cuando existan datos; no presentes una muestra general como si fuera exacta. Con menos de tres mediciones o complejidad sin clasificar, di que es orientativa. Las horas registradas son tiempo de sesiones en su fecha real, no tiempo estimado ni porcentaje terminado; el declarado va aparte. La complejidad es una clasificación orientativa. Di la cobertura antes de sacar conclusiones y no leas como rápido lo que no se midió. Los hallazgos son preguntas para revisar con la persona, nunca juicios sobre ella. «Operaciones & Reuniones» y «Marketing & Social Media» mezclan trabajos distintos y no se comparan. Si nadie coincide con el nombre, dilo.'
+        instruccion: 'Para anticipar cuánto tardaría alguien usa solo porContexto con soloRegistro=false y el mismo tipo, persona, cliente y complejidad. Los valores null no se rellenan: falta base comparable. porTipo y promedioRegistrado describen lo que ocurrió; nunca sirven para predecir una tarea nueva ni comparar personas. Las horas registradas corresponden a la fecha real de las sesiones; el declarado va aparte. La complejidad es orientativa. Di la cobertura antes de sacar conclusiones y no leas como rápido lo que no se midió. Los hallazgos son preguntas para revisar, nunca juicios. «Operaciones & Reuniones» y «Marketing & Social Media» mezclan trabajos distintos y no se comparan. Si nadie coincide con el nombre, dilo.'
       },
       sources: [{ kind: 'ritmo', id: `ritmo-${out.period.days}`, label: 'Ritmo del equipo', url: '/manager?tab=ritmo' }]
     };
@@ -426,6 +428,8 @@ const cargaDelEquipo = {
   async run({ persona, horizonte } = {}, { load }) {
     const window = { hoy: 'today', manana: 'tomorrow', semana: 'week', proxima_semana: 'next_week' }[fold(horizonte)] || 'week';
     const map = await load.get({ window });
+    const reliablePolicy = map.forecast?.policy === RHYTHM_POLICY;
+    const estimated = ms => reliablePolicy && ms != null ? formatDuration(ms) : null;
     const wanted = fold(persona).split(/\s+/).filter(Boolean);
     const people = wanted.length ? map.people.filter((p) => wanted.every((word) => fold(p.personName).includes(word))) : map.people;
     // Con el día de la semana: «el 19 de octubre» a secas se leyó como si fuera hoy (Rodny, 10 de octubre de 2026).
@@ -443,33 +447,33 @@ const cargaDelEquipo = {
         capacidadDelPeriodo: formatDuration(periodMs),
         equipo: {
           personas: map.people.length,
-          ocupacionMaxima: pct(busiest * periodMs),
-          lectura: map.forecast ? `${map.forecast.incomplete ? 'Consulta incompleta; espacio sin confirmar.' : `${map.forecast.people.filter(p => p.canReceive).length} personas con espacio estimado según los límites de entrega.`} Lee la previsión y su confianza antes de proponer asignaciones.` : busiest < 0.5 ? 'Nadie pasa de la mitad de su tiempo: el equipo tiene espacio.' : busiest <= 1 ? 'Hay personas con buena parte de su tiempo comprometido.' : 'Hay personas con más trabajo del que cabe en el periodo.',
+          ocupacionMaxima: reliablePolicy && map.people.every(p => p.weekMs != null) ? pct(busiest * periodMs) : null,
+          lectura: reliablePolicy ? `${map.forecast.incomplete ? 'Consulta incompleta; espacio sin confirmar.' : `${map.forecast.people.filter(p => p.canReceive).length} personas con espacio estimado según los límites de entrega.`} Lee la previsión y su confianza antes de proponer asignaciones.` : 'No hay una previsión validada: solo se pueden describir pendientes y fechas.',
           tareasVencidas: map.people.reduce((n, p) => n + p.overdue.count, 0),
           tareasSinFecha: map.people.reduce((n, p) => n + p.undated.count, 0)
         },
         personas: people.slice(0, wanted.length ? 3 : 20).map((p) => ({
           nombre: p.personName,
-          horasComprometidas: formatDuration(p.weekMs),
-          ocupacion: pct(p.weekMs),
+          horasComprometidas: estimated(p.weekMs),
+          ocupacion: reliablePolicy && p.weekMs != null ? pct(p.weekMs) : null,
           vencidas: p.overdue.count, sinFecha: p.undated.count,
           dias: p.cells.filter((c) => c.count > 0).map((c) => ({
-            dia: dayName(c.day), horas: formatDuration(c.ms), nivel: c.level, tareas: c.tasks.slice(0, 6).map((t) => `${t.title}${t.clientName ? ` (${t.clientName})` : ''} · ${formatDuration(t.ms)}${t.source === 'supuesto' ? ' supuesto' : ''}`)
+            dia: dayName(c.day), horas: estimated(c.ms), nivel: reliablePolicy ? c.level : 'sin_datos', tareas: c.tasks.slice(0, 6).map((t) => `${t.title}${t.clientName ? ` (${t.clientName})` : ''} · ${estimated(t.ms) || 'sin estimación comparable'}`)
           }))
         })),
-        senales: map.signals.filter((s) => !wanted.length || people.some((p) => p.personId === s.personId)).map((s) => s.message),
-        ...(map.forecast ? { prevision: {
+        senales: reliablePolicy ? map.signals.filter((s) => !wanted.length || people.some((p) => p.personId === s.personId)).map((s) => s.message) : [],
+        ...(reliablePolicy ? { prevision: {
           dias: map.forecast.days.map(dayName), consultaIncompleta: map.forecast.incomplete,
           supuesto: 'Jornada nominal de 8 h; hoy se prorratea entre 8:00 y 18:00. Sin reuniones ni ausencias descontadas. No garantiza una entrega.',
           personas: map.forecast.people.filter(p => !wanted.length || people.some(visible => visible.personId === p.personId)).slice(0, wanted.length ? 3 : 20).map(p => ({
-            nombre: p.personName, trabajoRestante: `${formatDuration(p.remainingMs)} a ${formatDuration(p.upperMs)}`, capacidad: formatDuration(p.capacityMs),
-            historial: p.confidence, puedeRecibir: p.canReceive, vencidas: p.overdueCount, enRiesgo: p.riskCount, ajustadas: p.tightCount, sinFecha: p.undatedCount,
+            nombre: p.personName, trabajoRestante: p.remainingMs == null ? null : `${formatDuration(p.remainingMs)} a ${formatDuration(p.upperMs)}`, capacidad: formatDuration(p.capacityMs),
+            historial: p.confidence, puedeRecibir: p.canReceive, vencidas: p.overdueCount, enRiesgo: p.riskCount, ajustadas: p.tightCount, sinFecha: p.undatedCount, sinEstimacion: p.unknownCount,
             horasCronometradasHoy: formatDuration(p.recordedTodayMs || 0), horasCronometradasSemana: formatDuration(p.recordedWeekMs || 0),
-            tareas: p.tasks.filter(t => t.risk && t.risk !== 'ok').slice(0, 6).map(t => ({ id: t.id, titulo: t.title, fecha: t.dueDay ? dayName(t.dueDay) : null, limite: t.deadlineAt || null,
-              estado: t.risk, restante: formatDuration(t.remainingMs), muestra: t.sample, alcanceMuestra: t.basis, complejidad: t.complexity, capacidadHastaElLimite: formatDuration(t.capacityToDeadlineMs || 0) }))
+            tareas: p.tasks.filter(t => t.risk !== 'ok').slice(0, 6).map(t => ({ id: t.id, titulo: t.title, fecha: t.dueDay ? dayName(t.dueDay) : null, limite: t.deadlineAt || null,
+              estado: t.risk || 'sin_prevision', restante: t.remainingMs == null ? null : formatDuration(t.remainingMs), muestra: t.sample, alcanceMuestra: t.basis, complejidad: t.complexity, colaCompleta: t.queueComplete, capacidadHastaElLimite: t.capacityToDeadlineMs == null ? null : formatDuration(t.capacityToDeadlineMs) }))
           }))
         } } : {}),
-        instruccion: 'Si existe prevision, empieza por ella: compara trabajo restante con capacidad hasta cada fecha, incluyendo vencidas. El mapa diario solo muestra concentración de entregas; no demuestra que todo deba hacerse ese día. No afirmes que alguien puede recibir trabajo si puedeRecibir es false, faltan datos o hay tareas sin fecha; el espacio es nominal y no descuenta reuniones ni ausencias. Si no hay previsión, empieza por la lectura del equipo: si nadie pasa de la mitad de su tiempo, dilo antes de nombrar a nadie; «la mayor carga» solo se dice de alguien que de verdad tenga el periodo lleno. Las horas son estimaciones: la mediana de lo que esa persona tardó en ese tipo de trabajo, o la del equipo, o una hora si no hay historial («supuesto»). Las tareas sin fecha no entran en el mapa: si son muchas, di que el mapa está incompleto. Un día «excedida» pasa de un día y cuarto de trabajo; «alta» es un día completo. Habla de carga y de repartir trabajo, nunca de desempeño, y di qué miraste con palabras («las tareas abiertas con fecha en los próximos días hábiles»), no «la herramienta». Si nadie coincide con el nombre, dilo.'
+        instruccion: 'Empieza por la prevision validada. Un valor null significa que no se sabe, nunca cero minutos ni una hora supuesta. No derives tiempos futuros de otros clientes, categorías generales, ni del promedio del equipo. El mapa solo muestra concentración de entregas, no demuestra saturación ni espacio libre. No afirmes que alguien puede recibir trabajo si puedeRecibir es false o falta parte de la cola. La capacidad es nominal y no descuenta reuniones ni ausencias. Sin previsión, describe únicamente tareas y fechas. Habla de trabajo, nunca de desempeño. Si nadie coincide con el nombre, dilo.'
       },
       sources: [{ kind: 'ritmo', id: `carga-${map.today}`, label: 'Mapa de carga', url: '/manager?tab=ritmo' }]
     };

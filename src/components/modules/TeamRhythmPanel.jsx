@@ -48,7 +48,7 @@ function PersonCard({ person, tasks }) {
         <div className="mt-4 overflow-x-auto" data-rhythm-types>
           <table className="w-full min-w-[420px] whitespace-nowrap text-left text-xs">
             <thead className="text-zinc-500 dark:text-zinc-400">
-              <tr><th className="pb-2 font-medium">Tipo de trabajo</th><th className="pb-2 font-medium">Medidas</th><th className="pb-2 font-medium">Suele tardar</th><th className="pb-2 font-medium">Rango</th><th className="pb-2 font-medium">Resto del equipo</th></tr>
+              <tr><th className="pb-2 font-medium">Tipo de trabajo</th><th className="pb-2 font-medium">Medidas</th><th className="pb-2 font-medium">Mediana registrada</th><th className="pb-2 font-medium">Rango registrado</th></tr>
             </thead>
             <tbody className="divide-y divide-zinc-100 dark:divide-zinc-900">
               {types.map((type) => (
@@ -57,7 +57,6 @@ function PersonCard({ person, tasks }) {
                   <td className="py-2 pr-3 tabular-nums">{type.measured}</td>
                   <td className="py-2 pr-3 tabular-nums">{formatDuration(type.medianMs)}</td>
                   <td className="py-2 pr-3 tabular-nums">{formatDuration(type.minMs)} a {formatDuration(type.maxMs)}</td>
-                  <td className="py-2 tabular-nums text-zinc-500 dark:text-zinc-400">{type.teamMedianMs ? formatDuration(type.teamMedianMs) : '—'}</td>
                 </tr>
               ))}
             </tbody>

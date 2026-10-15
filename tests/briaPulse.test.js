@@ -11,14 +11,15 @@ const H = 3_600_000;
 const tuesday1030 = new Date('2026-10-13T15:30:00Z'); // martes 13 de octubre, 10:30 de Bogotá
 const nudges = [{ key: 'SIN_PROCESO:m-mel', kind: 'SIN_PROCESO', personId: 'm-mel', personName: 'Melissa Castaño', title: 'Melissa no tiene una tarea en proceso desde las 9:55.', body: 'Tiene 3 pendientes por empezar.', url: '/gestion?responsable=Melissa%20Casta%C3%B1o', taskIds: [] }, { key: 'FOCO_SEMANAL:x', kind: 'FOCO_SEMANAL', title: 'foco' }];
 const load = { days: ['2026-10-13', '2026-10-14'], people: [{ personId: 'm-bra', personName: 'Brayan Torres', cells: [{ day: '2026-10-14', level: 'excedida', ms: 9 * H, count: 3, tasks: [{ id: 'o1' }, { id: 'o2' }] }] }] };
+load.forecast = { policy: 'ritmo-contexto-v2', people: [{ personId: 'm-bra', personName: 'Brayan Torres', tasks: ['o1','o2'].map(id => ({ id, dueDay: '2026-10-14', risk: 'riesgo', confidence: 'suficiente', queueComplete: true })) }] };
 const operations = [{ id: 'c1', name: 'Aristea', slug: 'aristea', evaluation: { level: 'red', reasons: [{ level: 'red', text: 'Van 2 publicadas; a esta fecha deberían ir 5.' }, { level: 'yellow', text: 'Falta el informe.' }] } }, { id: 'c2', name: 'Endova', slug: 'endova', evaluation: { level: 'yellow', reasons: [] } }];
 const pieces = [{ id: 'i1', title: 'Reel de vendimia', planId: 'p1', clientName: 'Foobespain', day: '2026-10-14' }, { id: 'i9', title: 'Lejana', planId: 'p1', clientName: 'Foobespain', day: '2026-10-20' }];
 const returned = [{ id: 't7', title: 'Portada', returnedDay: '2026-10-10', personId: 'm-hel', assigneeName: 'Helen Ruiz', clientName: 'Nattal' }];
 
 test('the pulse uses deadline risk when a forecast exists, rather than assuming clustered deliveries are impossible', () => {
-  const predicted = { ...load, forecast: { people: [{ personId: 'm-bra', personName: 'Brayan Torres', tasks: [{ id: 'o1', title: 'Reel', dueDay: '2026-10-14', risk: 'ok' }] }] } };
+  const predicted = { ...load, forecast: { policy: 'ritmo-contexto-v2', people: [{ personId: 'm-bra', personName: 'Brayan Torres', tasks: [{ id: 'o1', title: 'Reel', dueDay: '2026-10-14', risk: 'ok' }] }] } };
   assert.equal(collectFacts({ load: predicted, today: '2026-10-13' }).some(f => f.kind === 'CARGA_MANANA'), false);
-  const risky = { ...load, forecast: { people: [{ personId: 'm-bra', personName: 'Brayan Torres', tasks: [{ id: 'o1', title: 'Reel', dueDay: '2026-10-14', risk: 'riesgo', confidence: 'suficiente', remainingMs: 4 * H, capacityToDeadlineMs: 2 * H }] }] } };
+  const risky = { ...load, forecast: { policy: 'ritmo-contexto-v2', people: [{ personId: 'm-bra', personName: 'Brayan Torres', tasks: [{ id: 'o1', title: 'Reel', dueDay: '2026-10-14', risk: 'riesgo', queueComplete: true, confidence: 'suficiente', remainingMs: 4 * H, capacityToDeadlineMs: 2 * H }] }] } };
   const facts = collectFacts({ load: risky, today: '2026-10-13' });
   assert.equal(facts[0].kind, 'CARGA_MANANA');
   assert.deepEqual(facts[0].taskIds, ['o1']);
@@ -26,7 +27,7 @@ test('the pulse uses deadline risk when a forecast exists, rather than assuming 
 });
 
 test('Bria can warn about a comparable commitment at risk today, but never from an assumed duration', () => {
-  const make = confidence => ({ ...load, forecast: { people: [{ personId: 'm-bra', personName: 'Brayan Torres', tasks: [{ id: 'o1', title: 'Reel de X', dueDay: '2026-10-13', risk: 'riesgo', confidence, remainingMs: 4 * H, capacityToDeadlineMs: 2 * H, committedToDeadlineMs: 4 * H }] }] } });
+  const make = confidence => ({ ...load, forecast: { policy: 'ritmo-contexto-v2', people: [{ personId: 'm-bra', personName: 'Brayan Torres', tasks: [{ id: 'o1', title: 'Reel de X', dueDay: '2026-10-13', risk: 'riesgo', queueComplete: true, confidence, remainingMs: 4 * H, capacityToDeadlineMs: 2 * H, committedToDeadlineMs: 4 * H }] }] } });
   const strong = collectFacts({ load: make('suficiente'), today: '2026-10-13' }).find(f => f.kind === 'ENTREGA_EN_RIESGO');
   assert.ok(strong);
   assert.deepEqual(strong.taskIds, ['o1']);
@@ -35,13 +36,13 @@ test('Bria can warn about a comparable commitment at risk today, but never from 
 });
 
 test('a delivery warning is not repeated just because the clock reduces capacity', () => {
-  const make = (capacity, personId = 'b') => collectFacts({ today: '2026-10-13', load: { days: ['2026-10-13','2026-10-14'], forecast: { people: [{ personId, personName: 'Brayan', tasks: [{ id: 'reel', title: 'Reel', dueDay: '2026-10-13', deadlineAt: '2026-10-13T23:00:00Z', risk: 'riesgo', confidence: 'suficiente', remainingMs: 4 * H, capacityToDeadlineMs: capacity, committedToDeadlineMs: 4 * H }] }] } } })[0];
+  const make = (capacity, personId = 'b') => collectFacts({ today: '2026-10-13', load: { days: ['2026-10-13','2026-10-14'], forecast: { policy: 'ritmo-contexto-v2', people: [{ personId, personName: 'Brayan', tasks: [{ id: 'reel', title: 'Reel', dueDay: '2026-10-13', deadlineAt: '2026-10-13T23:00:00Z', risk: 'riesgo', queueComplete: true, confidence: 'suficiente', remainingMs: 4 * H, capacityToDeadlineMs: capacity, committedToDeadlineMs: 4 * H }] }] } } })[0];
   assert.equal(make(2 * H).fingerprint, make(H).fingerprint);
   assert.notEqual(make(H).fingerprint, make(H, 'r').fingerprint, 'a reassignment changes the evidence');
 });
 
 test('an assumed tomorrow duration cannot trigger a proactive capacity warning', () => {
-  const facts = collectFacts({ today: '2026-10-13', load: { ...load, forecast: { people: [{ personId: 'b', tasks: [{ id: 'reel', dueDay: '2026-10-14', risk: 'riesgo', confidence: 'baja' }] }] } } });
+  const facts = collectFacts({ today: '2026-10-13', load: { ...load, forecast: { policy: 'ritmo-contexto-v2', people: [{ personId: 'b', tasks: [{ id: 'reel', dueDay: '2026-10-14', risk: 'riesgo', queueComplete: true, confidence: 'baja' }] }] } } });
   assert.equal(facts.some(f => f.kind === 'CARGA_MANANA'), false);
 });
 
@@ -51,7 +52,7 @@ test('facts come from what the platform already computes, most serious first, ea
   assert.match(facts[0].text, /Aristea está en rojo en Operación: Van 2 publicadas/);
   assert.doesNotMatch(facts[0].text, /informe/, 'only the red reasons');
   assert.match(facts[1].text, /«Portada» \(Helen Ruiz\) lleva 3 días devuelta sin cambios\./);
-  assert.match(facts[2].text, /Brayan Torres tiene 9 h estimadas para el 14 de octubre en 3 tareas/);
+  assert.match(facts[2].text, /Brayan Torres tiene 2 entregas de mañana con margen insuficiente/);
   assert.deepEqual(facts[2].taskIds, ['o1', 'o2']);
   assert.match(facts[3].text, /«Reel de vendimia» de Foobespain sale el 14 de octubre y el cliente todavía no la ha aprobado\./);
   assert.equal(facts[3].url, '/parrillas/p1?item=i1');

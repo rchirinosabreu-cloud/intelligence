@@ -116,6 +116,6 @@ test('private task context and partial collaborator time are not used to infer a
 test('an empty contextual sample never falls back to excluded collaborator or private measurements', () => {
   const f = buildTeamForecast({ people, tasks: [forecastTask('r')], now,
     rhythm: { profiles: [], people: [{ personId: 'r', coverage: 1, byType: [{ workType: 'Reel', measured: 10, medianMs: 0.25 * H }] }], types: [] } });
-  assert.equal(f.people[0].tasks[0].source, 'supuesto');
+  assert.equal(f.people[0].tasks[0].source, 'sin_estimacion');
   assert.equal(f.people[0].tasks[0].confidence, 'baja');
 });

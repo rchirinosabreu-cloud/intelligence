@@ -2,13 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTeamLoadService } from '../src/services/teamLoadService.js';
 import { analyzeTeamRhythm } from '../src/lib/teamRhythm.js';
+import { buildContextProfiles } from '../src/lib/workPrediction.js';
 
 const H = 3_600_000;
 const member = { id: 'a', name: 'Ana', isActive: true };
-const task = (id, day, extra = {}) => ({ id, title: `Video ${id}`, status: 'PENDIENTE', assigneeId: 'a', dueDate: day && new Date(`${day}T12:00:00Z`), contentItem: { format: 'Video' }, client: { name: 'Ejemplo' }, ...extra });
+const task = (id, day, extra = {}) => ({ id, title: `Video ${id}`, status: 'PENDIENTE', assigneeId: 'a', clientId: 'x', aiComplexity: 'MEDIA', dueDate: day && new Date(`${day}T12:00:00Z`), contentItem: { format: 'Video' }, client: { name: 'Ejemplo' }, ...extra });
 const history = (hours = [4, 4, 4]) => {
   const analysis = analyzeTeamRhythm({ tasks: hours.map((h, i) => ({ id: `h${i}`, personId: 'a', personName: 'Ana', workType: 'Video', measuredMs: h * H, completedDay: '2026-10-13' })) });
-  return { ...analysis, team: { coverage: 1 } };
+  return { ...analysis, profiles: buildContextProfiles(hours.map((h,i) => ({ id: String(i), personId: 'a', workType: 'Video', clientId: 'x', complexity: 'MEDIA', measuredMs: h*H }))), team: { coverage: 1 } };
 };
 async function forecast(tasks, { rhythm = history(), clock = '2026-10-14T13:00:00Z' } = {}) {
   const service = createTeamLoadService({
@@ -45,13 +46,13 @@ test('remaining work subtracts only reliable time from the assignee in the open 
     { workerId: 'a', durationMs: 9 * H }
   ];
   const f = await forecast([task('1', '2026-10-16', { status: 'EN_CURSO', workSessions: sessions })]);
-  assert.equal(f.people[0].tasks[0].remainingMs, H);
+  assert.equal(f.people[0].tasks[0].remainingMs, null, 'a contaminated open cycle cannot certify the remaining effort');
   assert.equal(f.people[0].tasks[0].spentMs, 3 * H);
 });
 
 test('a running clock contributes reliable elapsed time, without closing the task by prediction', async () => {
   const f = await forecast([task('1', '2026-10-16', { status: 'EN_CURSO', workSessions: [{ workerId: 'a', startedAt: '2026-10-14T09:00:00Z', endedAt: null }] })]);
-  assert.ok(f.people[0].tasks[0].remainingMs > 0, 'reaching the typical duration never means finished');
+  assert.equal(f.people[0].tasks[0].remainingMs, null, 'reaching the typical duration requires confirming the remaining work');
   assert.equal(f.people[0].tasks[0].needsReview, true);
 });
 
@@ -64,9 +65,9 @@ test('an assumption and undated tasks never become a claim of spare capacity', a
 });
 
 test('the range uses historical variation and distinguishes a tight deadline from an exceeded one', async () => {
-  const f = await forecast([task('1', '2026-10-14'), task('2', '2026-10-14')], { rhythm: history([2, 4, 8]) });
+  const f = await forecast([task('1', '2026-10-14'), task('2', '2026-10-14')], { rhythm: history([3, 4, 7]) });
   assert.equal(f.people[0].remainingMs, 8 * H);
-  assert.equal(f.people[0].upperMs, 16 * H);
+  assert.equal(f.people[0].upperMs, 14 * H);
   assert.equal(f.people[0].status, 'ajustada');
   assert.equal(f.people[0].riskCount, 0);
   assert.equal(f.people[0].tightCount, 2);
@@ -87,7 +88,7 @@ test('the current day loses capacity as the Bogotá workday elapses', async () =
 
 test('a weekend deadline is evaluated on the next Colombian working day', async () => {
   const f = await forecast([task('1', '2026-10-10')], { clock: '2026-10-09T13:00:00Z' });
-  assert.equal(f.people[0].tasks[0].scheduledDay, '2026-10-13');
+  assert.equal(f.people[0].tasks[0].scheduledDay, '2026-10-10');
   assert.equal(f.people[0].tasks[0].risk, 'ok');
 });
 
