@@ -134,6 +134,16 @@ test('Bria does not turn an unknown forecast into zero minutes or legacy occupie
   assert.equal(out.data.personas[0].horasComprometidas, null);
 });
 
+test('Bria occupancy includes Sunday commitments and uses the same remaining capacity as the forecast', async () => {
+  const tasks = [task({ dueDay: '2026-10-18' })];
+  const prediction = buildTeamForecast({ people, tasks, rhythm: { profiles: profiles({}, [4*H,4*H,4*H]) }, now });
+  const map = buildLoadMap({ people, tasks, forecast: prediction, today: '2026-10-16' }); map.signals = [];
+  const out = await toolByName('carga_del_equipo').run({}, { load: { get: async () => map } });
+  assert.equal(out.data.capacidadDelPeriodo, '2 h 24 min');
+  assert.equal(out.data.personas[0].horasComprometidas, '4 h');
+  assert.equal(out.data.personas[0].ocupacion, '167 %');
+});
+
 test('the live historical service does not turn completion-day totals or different-client medians into findings', async () => {
   const tasks = [1,2,3,4].map(i => ({ id: String(i), title: 'Video', status: 'REALIZADA', completedAt: now, assigneeId: i < 3 ? 'a' : 'b', clientId: 'x', aiComplexity: 'MEDIA' }));
   const sessions = tasks.map(t => ({ taskId: t.id, workerId: t.assigneeId, durationMs: t.assigneeId === 'a' ? 6*H : H, startedAt: '2026-10-13T13:00:00Z', endedAt: '2026-10-13T19:00:00Z' }));

@@ -436,26 +436,27 @@ const cargaDelEquipo = {
     const dayName = (day) => { const date = new Date(`${day}T12:00:00Z`); const [y, m, d] = day.split('-').map(Number); return `${WEEKDAYS[date.getUTCDay()]} ${d} de ${MONTHS[m - 1]}${y !== Number(map.today.slice(0, 4)) ? ` de ${y}` : ''}`; };
     // Sin la capacidad del periodo, 11 h en 10 días hábiles se leyó como «la mayor carga». Cada persona dice
     // qué parte de su tiempo tiene comprometida, y el equipo dice cuánto quedó fuera por no tener fecha.
-    const periodMs = map.capacityMs * map.days.length;
-    const pct = (ms) => `${Math.round((ms / periodMs) * 100)} %`;
-    const busiest = Math.max(0, ...map.people.map((p) => p.weekMs / periodMs));
+    const periodMs = reliablePolicy ? map.forecast.capacityMs ?? map.forecast.people[0]?.capacityMs : null;
+    const predictionFor = personId => reliablePolicy ? map.forecast.people.find(p => p.personId === personId) : null;
+    const pct = ms => ms == null || !(periodMs > 0) ? null : `${Math.round(ms / periodMs * 100)} %`;
+    const busiest = reliablePolicy && !map.forecast.incomplete && map.forecast.people.every(p => p.remainingMs != null) ? Math.max(0, ...map.forecast.people.map(p => p.remainingMs)) : null;
     return {
       data: {
         hoy: dayName(map.today),
-        diasHabiles: map.days.length,
+        diasHabiles: reliablePolicy ? map.forecast.days.length : map.days.length,
         jornada: formatDuration(map.capacityMs),
-        capacidadDelPeriodo: formatDuration(periodMs),
+        capacidadDelPeriodo: periodMs == null ? null : formatDuration(periodMs),
         equipo: {
           personas: map.people.length,
-          ocupacionMaxima: reliablePolicy && map.people.every(p => p.weekMs != null) ? pct(busiest * periodMs) : null,
+          ocupacionMaxima: pct(busiest),
           lectura: reliablePolicy ? `${map.forecast.incomplete ? 'Consulta incompleta; espacio sin confirmar.' : `${map.forecast.people.filter(p => p.canReceive).length} personas con espacio estimado según los límites de entrega.`} Lee la previsión y su confianza antes de proponer asignaciones.` : 'No hay una previsión validada: solo se pueden describir pendientes y fechas.',
           tareasVencidas: map.people.reduce((n, p) => n + p.overdue.count, 0),
           tareasSinFecha: map.people.reduce((n, p) => n + p.undated.count, 0)
         },
         personas: people.slice(0, wanted.length ? 3 : 20).map((p) => ({
           nombre: p.personName,
-          horasComprometidas: estimated(p.weekMs),
-          ocupacion: reliablePolicy && p.weekMs != null ? pct(p.weekMs) : null,
+          horasComprometidas: estimated(predictionFor(p.personId)?.remainingMs),
+          ocupacion: pct(predictionFor(p.personId)?.remainingMs),
           vencidas: p.overdue.count, sinFecha: p.undated.count,
           dias: p.cells.filter((c) => c.count > 0).map((c) => ({
             dia: dayName(c.day), horas: estimated(c.ms), nivel: reliablePolicy ? c.level : 'sin_datos', tareas: c.tasks.slice(0, 6).map((t) => `${t.title}${t.clientName ? ` (${t.clientName})` : ''} · ${estimated(t.ms) || 'sin estimación comparable'}`)

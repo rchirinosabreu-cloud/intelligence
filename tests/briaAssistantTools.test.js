@@ -65,7 +65,7 @@ test('carga_del_equipo tells who is loaded and who has room, by person if asked,
     { personId: 'h', personName: 'Helen Hernández', weekMs: H, overdue: { count: 2, ms: H, taskIds: ['o4', 'o5'] }, undated: { count: 0 }, cells: [{ day: '2026-10-09', ms: H, count: 1, level: 'libre', tasks: [{ id: 'o6', title: 'Post Alpina', clientName: null, ms: H, source: 'supuesto' }] }, { day: '2026-10-13', ms: 0, count: 0, level: 'libre', tasks: [] }] }
   ], signals: [{ kind: 'DIA_EXCEDIDO', personId: 'b', message: 'Brayan Torres tiene 12 h estimadas el 13 de octubre en 3 tareas.' }, { kind: 'CON_ESPACIO', personId: 'h', message: 'Helen Hernández tiene 1 h comprometida.' }] }) };
   const all = await toolByName('carga_del_equipo').run({}, { load, user: pm, person, today: TODAY });
-  assert.deepEqual([all.data.hoy, all.data.diasHabiles, all.data.jornada, all.data.capacidadDelPeriodo], ['viernes 9 de octubre', 2, '8 h', '16 h']);
+  assert.deepEqual([all.data.hoy, all.data.diasHabiles, all.data.jornada, all.data.capacidadDelPeriodo], ['viernes 9 de octubre', 2, '8 h', null]);
   // Rodny, 10 de octubre de 2026: 11 h en 10 días hábiles se leyó como «la mayor carga». La herramienta dice qué
   // parte del tiempo está comprometida y lee al equipo antes de nombrar a nadie.
   assert.equal(all.data.equipo.ocupacionMaxima, null);
