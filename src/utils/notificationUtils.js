@@ -96,6 +96,16 @@ export const getNotificationDisplayParts = (notification = {}) => {
     if (type === 'VAULT_ACCESS_DENIED') {
         return { title: 'Pedido de contraseña denegado', context: '', body: cleanNotificationPreview(message, 140) };
     }
+    // Pedir acceso a un módulo (15 de octubre de 2026): Bria lo pide por la persona; se decide en su aviso.
+    if (type === 'MODULE_ACCESS_REQUESTED') {
+        return { title: 'Te piden acceso a un módulo', context: '', body: cleanNotificationPreview(message, 140) };
+    }
+    if (type === 'MODULE_ACCESS_GRANTED') {
+        return { title: 'Te dieron acceso a un módulo', context: '', body: cleanNotificationPreview(message, 140) };
+    }
+    if (type === 'MODULE_ACCESS_DENIED') {
+        return { title: 'Pedido de acceso denegado', context: '', body: cleanNotificationPreview(message, 140) };
+    }
 
     if (type === 'TASK_COMMENT_REPLY') {
         const parsed = parseQuotedTaskMessage(message, 'Nuevo mensaje en el hilo de la tarea');

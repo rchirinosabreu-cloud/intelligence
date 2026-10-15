@@ -13,23 +13,29 @@ import { getSidecarPool } from '../lib/sidecarPool.js';
 import { createBriaProactiveRepository } from './briaProactiveRepository.js';
 import { isCurrentPredictionMessage } from '../lib/briaPulse.js';
 import { getVaultService } from './vaultService.js';
+import { getPermissionRequestService } from './permissionRequestService.js';
 
 const OPEN = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 export const PULSE_LIVE_WINDOW_MS = 2 * 60 * 60 * 1000;
 export const canSeeNudges = (user) => canUseBria(user) && isManagerRole(user?.role);
 
-export const createBriaNudgeService = ({ db = prisma, repository, now = () => new Date(), vault = null, logger = console } = {}) => {
+export const createBriaNudgeService = ({ db = prisma, repository, now = () => new Date(), vault = null, permissions = null, logger = console } = {}) => {
   const repo = repository || createBriaProactiveRepository({ pool: getSidecarPool() });
   const userIdOf = (user) => user?.userId || user?.id;
-  // Con un repositorio inyectado (pruebas y muestras) la bóveda real nunca se toca: solo la que se inyecte.
+  // Con un repositorio inyectado (pruebas y muestras) la bóveda y los permisos reales nunca se tocan: solo los que se inyecten.
   const vaultOf = () => vault || (repository ? null : getVaultService());
-  // Pedidos de acceso de la bóveda (15 de octubre de 2026): esperan una decisión, así que van primero. Si la bóveda
-  // no responde, los demás avisos siguen saliendo; y quien no usa la bóveda no tiene nada que ver aquí.
-  const accessNudges = async (user, dismissed) => {
-    if (!vaultOf()) return [];
-    try { return (await vaultOf().accessNudges(user)).filter((nudge) => !dismissed.has(nudge.key)); }
+  const permissionsOf = () => permissions || (repository ? null : getPermissionRequestService());
+  // Pedidos de acceso (15 de octubre de 2026), de la bóveda y de un módulo: esperan una decisión, así que van primero.
+  // Si una fuente no responde, los demás avisos siguen saliendo; y quien no usa la bóveda no tiene nada que ver ahí.
+  const fromSource = async (source, read, dismissed) => {
+    if (!source) return [];
+    try { return (await read(source)).filter((nudge) => !dismissed.has(nudge.key)); }
     catch (failure) { if (!failure?.status || failure.status >= 500) logger.error('[BriaNudges] No se pudieron leer los pedidos de acceso:', failure?.message || failure); return []; }
   };
+  const accessNudges = async (user, dismissed) => [
+    ...await fromSource(vaultOf(), (source) => source.accessNudges(user), dismissed),
+    ...await fromSource(permissionsOf(), (source) => source.nudges(user), dismissed)
+  ];
   return {
     /** Lee a las personas del equipo como las ve la regla: qué tienen en proceso, cuántos pendientes, última actividad de hoy y lo que vence hoy. */
     async readPeople(at) {
@@ -95,6 +101,7 @@ export const createBriaNudgeService = ({ db = prisma, repository, now = () => ne
       const at = now();
       // La respuesta a un pedido de acceso se da por vista; un pedido por decidir, en cambio, se oculta solo por hoy.
       if (String(key).startsWith('ACCESO:') && vaultOf() && await vaultOf().dismissAnswer(user, key.slice('ACCESO:'.length)).catch(() => false)) return { key, untilAt: null };
+      if (String(key).startsWith('PERMISO:') && permissionsOf() && await permissionsOf().dismissAnswer(user, key.slice('PERMISO:'.length)).catch(() => false)) return { key, untilAt: null };
       if (String(key).startsWith('PULSO:')) {
         if (!await repo.dismissMessage(userIdOf(user), key.slice('PULSO:'.length), at)) throw knowledgeError('Ese aviso ya no está.', 404, 'BRIA_NUDGE_KEY');
         return { key, untilAt: null };
