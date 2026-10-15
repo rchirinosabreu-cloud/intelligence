@@ -33,6 +33,7 @@ export const PLATFORM_EXCLUDED = [
   { match: /^\w+ \/tasks\/:taskId\/(trace-open|alert-interaction|work-confirmation|returned-reminder\/snooze)$/, reason: 'señales de la pantalla' },
   { match: /^GET \/tasks\/:taskId\/(attachments|comments)\/[^/]+\/(file|download)$/, reason: 'descarga de archivos' },
   { match: /^\w+ \/content\/items\/:id\/final-assets?(\/|$)/, reason: 'subir, ordenar o bajar piezas finales se hace en el editor' },
+  { match: /^\w+ \/content\/items\/:id\/cover$/, reason: 'la portada de un video se sube en el editor' },
   { match: /^\w+ \/clients\/:\w+\/(logo-image|storage\/signed-url|files)(\/|$)/, reason: 'archivos y logos' },
   { match: /^\w+ \/boards\/(unfurl|:boardId\/storage\/signed-url)$/, reason: 'adjuntos de inspiración' },
   { match: /^\w+ \/reports\/(generate|extract-metrics|image-proxy|:reportId\/(pdf|preview))$/, reason: 'subir capturas y archivos del informe' },

@@ -23,7 +23,10 @@ import {
   deleteContentItemFinalAssetById,
   addContentItemDriveAsset,
   createFinalAssetUploadTickets,
-  confirmContentItemFinalAssets
+  confirmContentItemFinalAssets,
+  setContentItemCover,
+  getContentItemCover,
+  removeContentItemCover
 } from '../../services/contentService.js';
 import { getFromS3Stream } from '../../services/s3Service.js';
 import { reorderContentItemFinalAssets } from '../../services/finalAssetOrderService.js';
@@ -328,6 +331,45 @@ router.delete('/items/:id/final-asset', async (req, res) => {
   } catch (error) {
     console.error('[API] Error deleting final content asset:', error.response?.data || error);
     return res.status(500).json({ error: error.message || 'Failed to delete final asset', details: error.message });
+  }
+});
+
+// La portada de un video (Rodny, 15 de octubre de 2026). Una por pieza, aparte de la rejilla de
+// archivos finales, y solo tiene sentido en un reel: lo único a lo que Meta le admite portada.
+router.post('/items/:id/cover', receiveFinalAssets(upload.single('file')), async (req, res) => {
+  try {
+    return res.json(await setContentItemCover(req.params.id, req.file));
+  } catch (error) {
+    console.error('[API] Error uploading the cover:', error.response?.data || error);
+    const status = Number(error.status);
+    if (status >= 400 && status < 500) return res.status(status).json({ error: error.message });
+    return res.status(500).json({ error: 'No se pudo guardar la portada.', details: error.message });
+  }
+});
+
+router.get('/items/:id/cover', async (req, res) => {
+  try {
+    const cover = await getContentItemCover(req.params.id);
+    if (!cover) return res.status(404).json({ error: 'Esta pieza no tiene portada.' });
+    res.setHeader('Content-Type', cover.mimeType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(cover.name || 'portada')}"`);
+    res.setHeader('Cache-Control', 'private, max-age=300');
+    return res.send(cover.buffer);
+  } catch (error) {
+    console.error('[API] Error streaming the cover:', error.response?.data || error);
+    return res.status(500).json({ error: 'No se pudo cargar la portada.', details: error.message });
+  }
+});
+
+router.delete('/items/:id/cover', async (req, res) => {
+  try {
+    await removeContentItemCover(req.params.id);
+    return res.json({ cover: null });
+  } catch (error) {
+    console.error('[API] Error deleting the cover:', error.response?.data || error);
+    const status = Number(error.status);
+    if (status >= 400 && status < 500) return res.status(status).json({ error: error.message });
+    return res.status(500).json({ error: 'No se pudo quitar la portada.', details: error.message });
   }
 });
 

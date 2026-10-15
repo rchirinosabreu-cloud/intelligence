@@ -2,7 +2,9 @@ import prisma from '../lib/prisma.js';
 import { assertActiveTeamMembers } from './teamRosterService.js';
 import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, recordPlanRecognition } from './recognitionService.js';
 import { createTask } from './nativeTaskService.js';
-import { uploadToS3, deleteFromS3, createSignedUpload, headS3Object } from './s3Service.js';
+import { uploadToS3, deleteFromS3, createSignedUpload, headS3Object, getS3ObjectBuffer } from './s3Service.js';
+import { derivedKeyFor } from './socialImageDerivativeService.js';
+import { COVER_MAX_BYTES, coverFileProblem, publicCover } from '../lib/videoCover.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { buildLinkedTaskUpdates } from '../lib/contentTaskReciprocity.js';
 import {
@@ -137,8 +139,25 @@ const hasContentItemFinalAssetColumns = async () => {
   return hasColumns;
 };
 
+/** Las columnas de la portada son aditivas, así que se leen solo si el arranque ya las creó. */
+let contentItemCoverColumnsExist = null;
+const hasContentItemCoverColumns = async () => {
+  if (contentItemCoverColumnsExist !== null) return contentItemCoverColumnsExist;
+  const result = await prisma.$queryRaw`
+    SELECT COUNT(*)::int AS "count"
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'ContentItem'
+      AND column_name IN ('coverKey', 'coverName', 'coverMimeType', 'coverSize')
+  `;
+  const hasColumns = Number(result?.[0]?.count || 0) === 4;
+  if (hasColumns) contentItemCoverColumnsExist = true;
+  return hasColumns;
+};
+
 const getContentItemSelect = async (extra = {}) => {
   const hasFinalAssetColumns = await hasContentItemFinalAssetColumns();
+  const hasCoverColumns = await hasContentItemCoverColumns();
   return {
     ...contentItemBaseSelect,
     ...(hasFinalAssetColumns ? {
@@ -146,6 +165,12 @@ const getContentItemSelect = async (extra = {}) => {
       finalAssetName: true,
       finalAssetMimeType: true,
       finalAssetSize: true
+    } : {}),
+    ...(hasCoverColumns ? {
+      coverKey: true,
+      coverName: true,
+      coverMimeType: true,
+      coverSize: true
     } : {}),
     finalAssets: {
       orderBy: [{ position: 'asc' }, { createdAt: 'asc' }]
@@ -168,12 +193,16 @@ const normalizeContentItem = (item) => {
         }]
     : [];
   const finalAssets = [...legacyFinalAsset, ...(item.finalAssets || [])];
+  // La portada se entrega como `cover` (nombre, tipo y peso) y su clave de almacenamiento se queda
+  // aquí: la pantalla la pide por la API, nunca por una URL del bucket.
+  const { coverKey: _coverKey, coverName: _coverName, coverMimeType: _coverMimeType, coverSize: _coverSize, ...rest } = item;
   return {
-    ...item,
+    ...rest,
     finalAssetKey: item.finalAssetKey ?? null,
     finalAssetName: item.finalAssetName ?? null,
     finalAssetMimeType: item.finalAssetMimeType ?? null,
     finalAssetSize: item.finalAssetSize ?? null,
+    cover: publicCover(item),
     finalAssets
   };
 };
@@ -803,6 +832,66 @@ export const deleteContentItemFinalAsset = async (itemId) => {
     finalAssetMimeType: null,
     finalAssetSize: null
   });
+};
+
+/**
+ * La portada de un video (Rodny, 15 de octubre de 2026). Una por pieza y aparte de la rejilla de
+ * archivos finales, cuyo orden es el del carrusel que sale publicado.
+ *
+ * Igual que una pieza final: se comprueba lo que dicen los bytes, no la extensión, antes de gastar la
+ * subida. Y **no** pide una nueva ronda de revisión al cliente: la portada es cómo se ve el video en la
+ * cuadrícula, no un cambio de lo que el cliente aprobó.
+ */
+export const setContentItemCover = async (itemId, file) => {
+  if (!file) throw Object.assign(new Error('Selecciona una imagen para la portada.'), { status: 400 });
+  const problem = coverFileProblem({ name: file.originalname, mimeType: file.mimetype, size: file.size || file.buffer?.length });
+  if (problem) throw Object.assign(new Error(problem), { status: 400 });
+  const mismatched = fileContentProblem({ name: file.originalname, mimeType: file.mimetype, bytes: file.buffer });
+  if (mismatched) throw Object.assign(new Error(mismatched), { status: 400 });
+
+  const item = await prisma.contentItem.findUnique({
+    where: { id: itemId },
+    select: { id: true, coverKey: true, plan: { select: { month: true, year: true, client: { select: { slug: true } } } } }
+  });
+  if (!item) throw Object.assign(new Error('Content item not found'), { status: 404 });
+
+  const basePath = `content-plans/${item.plan.client.slug}/${item.plan.year}-${String(item.plan.month).padStart(2, '0')}/${item.id}/cover`;
+  const upload = await uploadToS3(file, basePath, { maxBytes: COVER_MAX_BYTES });
+  const updated = await prisma.contentItem.update({
+    where: { id: item.id },
+    data: { coverKey: upload.key, coverName: upload.name, coverMimeType: upload.mimeType, coverSize: upload.size }
+  });
+
+  // La copia preparada para Meta se hace al publicar y lleva el nombre de la clave anterior: se suelta
+  // con ella para que la portada nueva no herede la copia de la vieja.
+  if (item.coverKey && item.coverKey !== upload.key) {
+    deleteFromS3(item.coverKey).catch((error) => console.error('[Service] No se pudo borrar la portada anterior:', error.message));
+    deleteFromS3(derivedKeyFor({ id: `${item.id}-cover`, storageKey: item.coverKey }, 'cover')).catch(() => {});
+  }
+  return publicCover(updated);
+};
+
+export const removeContentItemCover = async (itemId) => {
+  const item = await prisma.contentItem.findUnique({ where: { id: itemId }, select: { id: true, coverKey: true } });
+  if (!item) throw Object.assign(new Error('Content item not found'), { status: 404 });
+  if (!item.coverKey) return null;
+  await prisma.contentItem.update({
+    where: { id: item.id },
+    data: { coverKey: null, coverName: null, coverMimeType: null, coverSize: null }
+  });
+  deleteFromS3(item.coverKey).catch((error) => console.error('[Service] No se pudo borrar la portada:', error.message));
+  deleteFromS3(derivedKeyFor({ id: `${item.id}-cover`, storageKey: item.coverKey }, 'cover')).catch(() => {});
+  return null;
+};
+
+/** Los bytes de la portada, para que la pantalla la vea por la API y no por una URL pública. */
+export const getContentItemCover = async (itemId) => {
+  const item = await prisma.contentItem.findUnique({
+    where: { id: itemId },
+    select: { coverKey: true, coverName: true, coverMimeType: true }
+  });
+  if (!item?.coverKey) return null;
+  return { buffer: await getS3ObjectBuffer(item.coverKey), name: item.coverName, mimeType: item.coverMimeType };
 };
 
 export const uploadContentItemFinalAssets = async (itemId, files = []) => {

@@ -68,6 +68,8 @@ const piece = (id, objective, format, day, status, extra = {}) => ({
   // «Le pedimos otra vuelta al cliente»: aprobó el texto y el material llegó después.
   revisionRequestedAt: extra.revisionRequestedAt || null,
   tasks: [],
+  // La portada de un reel: nombre, tipo y peso; nunca la clave del almacenamiento.
+  cover: extra.cover || null,
   finalAssets: extra.finalAssets || []
 });
 
@@ -82,6 +84,8 @@ const items = [
     finalAssets: [{ id: 'a1', name: 'reel-endova.mp4', storageKey: 'k1', mimeType: 'video/mp4', size: 31000000, position: 0 }],
     // Con hora puesta y sin programar todavía: el estado desde el que se pulsa «Programar».
     publishTime: '10:30',
+    // Un reel con su portada puesta (15 de octubre de 2026): lo único a lo que Meta le admite una.
+    cover: { name: 'portada-endova.jpg', mimeType: 'image/jpeg', size: 480000 },
     // Una pieza de Endova dentro de la parrilla de PromoGroup.
     socialPageIds: ['7777']
   }),
@@ -198,6 +202,19 @@ axios.defaults.adapter = async (config) => {
   const fail = (status, data) => Promise.reject(Object.assign(new Error(data.error || 'Error'), { response: { status, data }, config }));
 
   if (url.includes('/api/social/')) return socialApi(config, url, ok, fail) || ok([]);
+  // La portada de un reel: subir, cambiar y quitar, como en el servidor.
+  const cover = /\/api\/content\/items\/([^/?]+)\/cover(\?|$)/.exec(url);
+  if (cover) {
+    const item = items.find((candidate) => candidate.id === cover[1]);
+    const method = String(config.method || 'get').toLowerCase();
+    if (!item) return fail(404, { error: 'La pieza no existe.' });
+    if (method === 'post') {
+      item.cover = { name: 'portada-nueva.jpg', mimeType: 'image/jpeg', size: 320000 };
+      return ok(item.cover);
+    }
+    if (method === 'delete') { item.cover = null; return ok({ cover: null }); }
+    return fail(404, { error: 'Esta pieza no tiene portada.' });
+  }
   // Ordenar los archivos de una pieza: el PUT real reescribe las posiciones y devuelve la lista.
   const reorder = String(config.method || '').toLowerCase() === 'put' && /\/api\/content\/items\/([^/?]+)\/final-assets\/order$/.exec(url);
   if (reorder) {

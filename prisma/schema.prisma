@@ -863,6 +863,13 @@ model ContentItem {
   finalAssetMimeType String?
   finalAssetSize     Int?
   finalAssets        ContentItemFinalAsset[]
+  /// Portada del video (Rodny, 15 de octubre de 2026: «a veces los videos que se publican necesitan
+  /// portadas»). Una por pieza, aparte de la rejilla de archivos finales, cuyo orden es el del
+  /// carrusel. Ver `scripts/ensure-content-cover-schema.js` y `src/lib/videoCover.js`.
+  coverKey           String?
+  coverName          String?
+  coverMimeType      String?
+  coverSize          Int?
   /// Hora de publicación en reloj de Bogotá ('HH:mm'). Instagram no admite programar por la API:
   /// la plataforma publica cuando llega esta hora (Rodny, 29 de septiembre de 2026).
   publishTime        String?

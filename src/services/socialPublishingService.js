@@ -14,8 +14,9 @@ import prisma from '../lib/prisma.js';
 import { decrypt } from '../utils/encryption.js';
 import { createNotification } from './notificationService.js';
 import { createMetaGraphClient } from './metaGraphService.js';
-import { createSignedDownload } from './s3Service.js';
+import { createSignedDownload, getS3ObjectBuffer } from './s3Service.js';
 import { imageDerivativeService } from './socialImageDerivativeService.js';
+import { hasCover, kindAcceptsCover } from '../lib/videoCover.js';
 import { updateTask } from './nativeTaskService.js';
 import { isPublicationTask } from '../lib/contentTaskReciprocity.js';
 import {
@@ -95,6 +96,11 @@ export const createSocialPublishingService = ({
   // historial): el mismo `updateTask` del botón de Gestión, sin la puerta de permisos, que es para
   // personas. Se inyecta para poder comprobarlo sin base de datos.
   completeTask = updateTask,
+  // La copia de la portada lista para Meta, sus bytes para la llamada de Facebook y la firma de su URL
+  // para la de Instagram. Inyectables como `mediaUrlFor`, para poder comprobarlos sin almacenamiento.
+  imageDerivatives = imageDerivativeService,
+  readObject = getS3ObjectBuffer,
+  signDownload = createSignedDownload,
   logger = console
 } = {}) => {
   const loadItem = async (itemId) => {
@@ -383,6 +389,39 @@ export const createSocialPublishingService = ({
     return status;
   };
 
+  /**
+   * La URL firmada de la portada, ya convertida a lo que Instagram acepta. Si la portada no se puede
+   * preparar, se publica **sin ella**: Meta elige entonces su propio fotograma, que es lo que pasaba
+   * antes de que existieran las portadas. Perder la portada nunca puede costar la publicación.
+   */
+  const coverUrlFor = async (item) => {
+    if (!hasCover(item)) return null;
+    try {
+      const prepared = await imageDerivatives.prepareCover(item);
+      if (!prepared) return null;
+      const { url } = await signDownload({ key: prepared.key, expiresIn: MEDIA_URL_TTL_SECONDS });
+      return url;
+    } catch (error) {
+      logger.error('[SocialPublishing] No se pudo preparar la portada; la pieza sale sin ella:', error.message || error);
+      return null;
+    }
+  };
+
+  /** La portada de un video de Facebook, puesta sobre el video ya publicado. Nunca lanza hacia fuera. */
+  const applyFacebookCover = async ({ item, videoId, token }) => {
+    if (!hasCover(item) || !videoId) return false;
+    try {
+      const prepared = await imageDerivatives.prepareCover(item);
+      if (!prepared) return false;
+      const buffer = await readObject(prepared.key);
+      await meta.setFacebookVideoThumbnail({ videoId, token, buffer, filename: item.coverName || 'portada.jpg' });
+      return true;
+    } catch (error) {
+      logger.error('[SocialPublishing] El video salió pero no se pudo poner su portada en Facebook:', error.response?.data || error.message || error);
+      return false;
+    }
+  };
+
   const publishOne = async (row) => {
     const leaseToken = await claim(row);
     if (!leaseToken) return { id: row.id, status: 'SKIPPED' };
@@ -415,9 +454,17 @@ export const createSocialPublishingService = ({
       for (const asset of media.assets) files.push({ url: await mediaUrlFor(asset, { platform: full.platform, kind: media.kind }), isVideo: isVideoAsset(asset) });
       const token = decryptToken(account.encryptedToken);
       const caption = String(item.captionText || '');
+      // La portada solo existe para un reel: es lo único a lo que Meta le admite una (`videoCover.js`).
+      const coverUrl = full.platform === 'INSTAGRAM' && kindAcceptsCover(media.kind) ? await coverUrlFor(item) : null;
       const result = full.platform === 'INSTAGRAM'
-        ? await meta.publishToInstagram({ igUserId: account.externalId, token, kind: media.kind, caption, media: files, coverUrl: null, beforePublish })
+        ? await meta.publishToInstagram({ igUserId: account.externalId, token, kind: media.kind, caption, media: files, coverUrl, beforePublish })
         : await meta.publishToFacebookPage({ pageId: account.externalId, token, kind: media.kind, caption, media: files, beforePublish });
+
+      // Facebook pide la portada **después**, sobre el video que ya existe. Va fuera del camino del
+      // éxito: el video ya salió y una portada que no se pueda poner no lo deshace.
+      if (full.platform === 'FACEBOOK' && kindAcceptsCover(media.kind)) {
+        await applyFacebookCover({ item, videoId: result.mediaId, token });
+      }
 
       await db.socialPublication.updateMany({
         where: { id: row.id, leaseToken },

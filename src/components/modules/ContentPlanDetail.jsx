@@ -11,7 +11,8 @@ import { driveAssetUrls, driveEmbedAspect } from '@/lib/finalAssetShape';
 import { finalAssetOrderProblem, moveAssetId, moveAssetToIndex } from '@/lib/finalAssetOrder';
 import { WEEKDAY_LABELS, buildMonthGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
 import { APPROVAL_STATES, approvalState, itemsNeedingRevisionRequest } from '@/lib/contentApproval';
-import { publishMomentLabel, queueOwnedStatusProblem } from '@/lib/socialPublishing';
+import { describeMetaMedia, publishMomentLabel, queueOwnedStatusProblem } from '@/lib/socialPublishing';
+import { kindAcceptsCover } from '@/lib/videoCover';
 import {
   ChevronLeft, ChevronRight, Plus, Send, ExternalLink, Save, Trash2,
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
@@ -193,6 +194,84 @@ const uploadFinalAssetsDirect = async (itemId, files, onProgress) => {
     uploads: tickets.map(ticket => ({ key: ticket.key, name: ticket.name }))
   });
   return data;
+};
+
+/**
+ * La portada de un reel (Rodny, 15 de octubre de 2026). Solo aparece donde Meta la admite —un reel—,
+ * y solo cuando la pieza ya tiene su video: una portada sin video no tiene nada que portar.
+ *
+ * Lo que dice es lo que de verdad pasa al publicar: la imagen sale en la pestaña Reels, y como el reel
+ * se comparte al feed, en la cuadrícula del perfil Meta recorta su cuadrado central.
+ */
+const CoverField = ({ item, isEditing, onUpload, onRemove, isBusy }) => {
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const cover = item.cover || null;
+
+  useEffect(() => {
+    if (!cover) { setPreviewUrl(null); return undefined; }
+    let objectUrl;
+    let cancelled = false;
+    fetch(`${getApiBaseUrl()}/api/content/items/${item.id}/cover?v=${encodeURIComponent(cover.name || '')}`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+    })
+      .then((response) => { if (!response.ok) throw new Error(`Cover request failed with status ${response.status}`); return response.blob(); })
+      .then((blob) => { if (cancelled) return; objectUrl = URL.createObjectURL(blob); setPreviewUrl(objectUrl); })
+      .catch((error) => console.error('Cover preview failed:', error));
+    return () => { cancelled = true; if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [item.id, cover?.name, cover?.size]);
+
+  return (
+    <div className="flex flex-col gap-2" data-piece-cover>
+      <span className={FIELD_LABEL}>Portada del reel</span>
+      <div className="flex items-start gap-3">
+        {cover ? (
+          <div className="h-20 w-[45px] shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-white/10 dark:bg-zinc-950">
+            {previewUrl
+              ? <img src={previewUrl} alt={cover.name || 'Portada'} className="h-full w-full object-cover" />
+              : <div className="flex h-full w-full items-center justify-center"><Loader2 className="h-3.5 w-3.5 animate-spin text-zinc-400" /></div>}
+          </div>
+        ) : (
+          <div className="flex h-20 w-[45px] shrink-0 items-center justify-center rounded-lg border border-dashed border-zinc-300 dark:border-white/15">
+            <ImageIcon className="h-4 w-4 text-zinc-400" />
+          </div>
+        )}
+        <div className="flex min-w-0 flex-col gap-1">
+          <p className="text-[12px] leading-snug text-zinc-500 dark:text-zinc-400">
+            {cover
+              ? 'Sale en la pestaña Reels. En la cuadrícula del perfil, Meta recorta su cuadrado central.'
+              : 'Sin portada, Meta elige un fotograma del video. Vertical 9:16, JPG o PNG.'}
+          </p>
+          {isEditing && (
+            <div className="flex items-center gap-2.5">
+              <label className={`cursor-pointer text-[13px] font-bold text-brand-cyan-deep hover:underline dark:text-brand-cyan ${isBusy ? 'pointer-events-none opacity-50' : ''}`}>
+                {isBusy ? 'Guardando…' : cover ? 'Cambiar' : 'Subir portada'}
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png"
+                  className="hidden"
+                  disabled={isBusy}
+                  onChange={(event) => {
+                    const [file] = Array.from(event.target.files || []);
+                    if (file) onUpload(item.id, file);
+                    event.target.value = '';
+                  }}
+                />
+              </label>
+              {cover && (
+                <>
+                  <span className="text-zinc-300 dark:text-zinc-600">·</span>
+                  <button type="button" onClick={() => onRemove(item.id)} disabled={isBusy} className="text-[13px] font-bold text-destructive hover:underline">
+                    Quitar
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+          {!isEditing && !cover && <span className="text-[12px] text-zinc-400">Sin portada.</span>}
+        </div>
+      </div>
+    </div>
+  );
 };
 
 const FinalAssetTile = ({
@@ -837,6 +916,9 @@ const ContentItemCard = ({
   isFinalAssetUploading,
   isFinalAssetDeleting,
   onFinalAssetReorder,
+  onCoverUpload,
+  onCoverRemove,
+  isCoverBusy = false,
   onDriveLink,
   directUploadPercent,
   socialAccounts = [],
@@ -857,6 +939,8 @@ const ContentItemCard = ({
   // Programada y esperando su hora: el estado lo lleva la cola, no el desplegable.
   const queueStatusReason = queueOwnedStatusProblem({ item, publications: item.publications || [] });
   const queueOwnsStatus = Boolean(queueStatusReason);
+  // La portada solo la admite un reel, y solo tiene sentido con su video ya cargado.
+  const acceptsCover = kindAcceptsCover(describeMetaMedia({ format: item.format, assets: finalAssets }).kind);
   const latestTask = item.tasks?.[0];
 
   return (
@@ -1191,6 +1275,18 @@ const ContentItemCard = ({
               <p className="rounded-xl border border-dashed border-zinc-200 p-4 text-[13px] text-zinc-400 dark:border-white/10">
                 Sin pieza final cargada.
               </p>
+            )}
+
+            {/* Solo un reel lleva portada: es lo único a lo que Meta le admite una (`videoCover.js`).
+                Y solo con el video ya cargado, porque una portada sin video no porta nada. */}
+            {acceptsCover && (
+              <CoverField
+                item={item}
+                isEditing={isEditing}
+                onUpload={onCoverUpload}
+                onRemove={onCoverRemove}
+                isBusy={isCoverBusy}
+              />
             )}
 
             {directUploadPercent !== null && (
@@ -1635,6 +1731,39 @@ const ContentPlanDetail = () => {
     onError: (error) => {
       console.error('Error adding a Drive final asset:', error.response?.data || error);
       toast.error(error.response?.data?.error || 'No se pudo añadir el enlace');
+    }
+  });
+
+  // La portada de un reel. El aviso de éxito va después de la respuesta del servidor, como todo aquí.
+  const coverMutation = useMutation({
+    mutationFn: async ({ itemId, file }) => {
+      const data = new FormData();
+      data.append('file', file);
+      return (await axios.post(`${getApiBaseUrl()}/api/content/items/${itemId}/cover`, data, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}`, 'Content-Type': 'multipart/form-data' }
+      })).data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+      toast.success('Portada guardada');
+    },
+    onError: (error) => {
+      console.error('Error uploading the cover:', error.response?.data || error);
+      toast.error(error.response?.data?.error || 'No se pudo guardar la portada');
+    }
+  });
+
+  const coverRemoveMutation = useMutation({
+    mutationFn: async (itemId) => (await axios.delete(`${getApiBaseUrl()}/api/content/items/${itemId}/cover`, {
+      headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+    })).data,
+    onSuccess: () => {
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+      toast.success('Portada quitada');
+    },
+    onError: (error) => {
+      console.error('Error removing the cover:', error.response?.data || error);
+      toast.error(error.response?.data?.error || 'No se pudo quitar la portada');
     }
   });
 
@@ -2161,6 +2290,9 @@ const ContentPlanDetail = () => {
                 isFinalAssetUploading={finalAssetUploadMutation.isPending}
                 isFinalAssetDeleting={finalAssetDeleteMutation.isPending}
                 onFinalAssetReorder={(itemId, order) => finalAssetOrderMutation.mutateAsync({ itemId, order })}
+                onCoverUpload={(itemId, file) => coverMutation.mutate({ itemId, file })}
+                onCoverRemove={(itemId) => coverRemoveMutation.mutate(itemId)}
+                isCoverBusy={coverMutation.isPending || coverRemoveMutation.isPending}
                 onDriveLink={setDriveLinkItemId}
                 directUploadPercent={finalAssetUploadMutation.variables?.itemId === selectedItem.id ? directUploadPercent : null}
                 socialAccounts={plan?.client?.socialAccounts || []}
