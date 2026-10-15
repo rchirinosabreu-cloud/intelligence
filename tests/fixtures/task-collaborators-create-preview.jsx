@@ -30,19 +30,13 @@ document.body.className = dark ? 'bg-zinc-950' : 'bg-zinc-50';
 
 const json = (body) => new Response(JSON.stringify(body), { status: 200, headers: { 'Content-Type': 'application/json' } });
 const realFetch = window.fetch.bind(window);
+window.__predictionRequests = [];
 window.fetch = async (input, init) => {
   const url = String(typeof input === 'string' ? input : input.url);
   if (!url.includes('/api/')) return realFetch(input, init);
   if (url.includes('/api/team')) return json(EQUIPO);
   if (url.includes('/api/auth/me') || url.includes('/api/user/profile')) return json(USUARIO);
-  if (url.includes('/api/manager/rhythm/assignment-preview') && new URLSearchParams(location.search).has('prediction')) {
-    const draft = JSON.parse(init.body), slow = draft.assigneeId === 'm-bruno';
-    window.__predictionRequests = [...(window.__predictionRequests || []), draft.assigneeId];
-    if (slow && new URLSearchParams(location.search).has('race')) await new Promise(resolve => setTimeout(resolve, 2000));
-    return json({ risk: slow ? 'riesgo' : 'ok', personName: slow ? 'Bruno Salas' : 'Rodny Chirinos', clientName: 'Corporación Villa Montaña', workType: 'Reel', complexity: 'MEDIA',
-      remainingMs: (slow ? 4 : 1.5) * 3600000, upperMs: (slow ? 5 : 2) * 3600000, capacityToDeadlineMs: 2.4 * 3600000,
-      committedToDeadlineMs: (slow ? 4 : 1.5) * 3600000, deadlineAt: '2026-10-14T23:00:00.000Z', deadlineSource: 'publicacion', confidence: 'suficiente', basis: 'persona_cliente_complejidad', sample: 8 });
-  }
+  if (url.includes('/api/manager/rhythm/assignment-preview')) window.__predictionRequests.push(JSON.parse(init.body));
   return json([]);
 };
 

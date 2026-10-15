@@ -54,8 +54,6 @@ import { getTaskSystemEventPresentation } from '@/lib/taskTiming';
 import TaskWorkHistory from './TaskWorkHistory';
 import TaskLifecycleDialog from './TaskLifecycleDialog';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
-import TaskAssignmentForecast from '@/components/tasks/TaskAssignmentForecast';
-import { hasModuleAccess } from '@/lib/platformModules';
 
 // Global in-memory cache for task comments (SWR engine)
 const taskCommentsCache = {};
@@ -2378,16 +2376,6 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                             </div>
 
                         </div>
-
-                        {canSetFocusDeadline && hasModuleAccess(currentUser, 'manager') && formData.status !== 'REALIZADA' && <TaskAssignmentForecast
-                            enabled={isOpen}
-                            taskId={isEdition ? formData.id : undefined}
-                            title={formData.title}
-                            clientId={formData.clientId}
-                            assigneeId={formData.assigneeId}
-                            dueDay={(formData.dueDate || '').split('T')[0]}
-                            focusDeadlineAt={focusDeadlineIso((formData.dueDate || '').split('T')[0], formData.focusTime)}
-                        />}
 
                         {/* Equipo de la tarea (5 de octubre de 2026): solo si tiene colaboradores. */}
                         {isEdition && (

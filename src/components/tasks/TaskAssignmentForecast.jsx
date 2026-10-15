@@ -6,7 +6,7 @@ const duration = ms => { const m = Math.round(Number(ms || 0) / 60000); return m
 const moment = value => value ? new Intl.DateTimeFormat('es-CO', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', timeZone: 'America/Bogota' }).format(new Date(value)) : 'el vencimiento';
 const BASIS = { persona_cliente_complejidad: 'Misma persona, cliente y complejidad', persona_complejidad: 'Su historial con esta complejidad, en varios clientes', equipo_cliente_complejidad: 'Historial del equipo para este cliente y complejidad', equipo_complejidad: 'Historial del equipo con esta complejidad', persona_tipo: 'Su historial general de este trabajo', equipo_tipo: 'Historial general del equipo', persona: 'Su historial general', equipo: 'Historial del equipo', supuesto: 'Sin historial: una hora supuesta' };
 
-/** Aviso previo a guardar. No crea, reasigna, bloquea el formulario ni envía una acción a Bria. */
+/** Lectura de un escenario elegido en Ritmo. No crea, reasigna ni envía una acción a Bria. */
 export default function TaskAssignmentForecast({ enabled = true, taskId, title, clientId, assigneeId, dueDay, focusDeadlineAt }) {
   const key = JSON.stringify({ taskId: taskId || undefined, title: (title || '').trim(), clientId, assigneeId, dueDay, focusDeadlineAt: focusDeadlineAt || null });
   const valid = enabled && title?.trim() && clientId && assigneeId && /^\d{4}-\d{2}-\d{2}$/.test(dueDay || '');
