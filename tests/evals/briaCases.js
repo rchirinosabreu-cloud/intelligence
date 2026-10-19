@@ -92,6 +92,22 @@ export const EVAL_CASES = [
     why: 'Una observación es contexto en la ficha del cliente, no un pendiente, y también se confirma.'
   },
   {
+    id: 'como-viene-cuenta',
+    question: '¿Cómo viene Aristea?',
+    requiredTools: ['lectura_de_la_agencia'],
+    mustSay: ['re:\\b(6|seis) días', 'aprobación'],
+    mustNotSay: ['re:\\b(lent[oa]|floj[oa])\\b'],
+    why: 'La memoria del tiempo (19 de octubre de 2026): «cómo viene» se responde con la historia de la cuenta (desde cuándo está en rojo, qué no se mueve), no solo con el estado de hoy.'
+  },
+  {
+    id: 'que-no-harias',
+    question: '¿Qué no harías hoy?',
+    requiredTools: ['lectura_de_la_agencia'],
+    mustSay: ['Jarlan', 'vencidas'],
+    mustNotSay: ['ya lo hice', 'ya le quité', 're:\\b(lent[oa]|floj[oa]|desempeño)\\b'],
+    why: 'Recomendar no hacer algo es parte del criterio: Bria dice qué evitaría y por qué, con la evidencia, sin juzgar a la persona.'
+  },
+  {
     id: 'mensaje-cliente-aprobar',
     question: 'Escríbele a Aristea por WhatsApp para que apruebe lo que tiene pendiente',
     requiredTools: ['buscar_cliente', 'mensaje_para_cliente'],

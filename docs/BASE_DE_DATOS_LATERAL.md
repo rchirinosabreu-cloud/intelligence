@@ -25,6 +25,9 @@ Lo que sí se exige:
 | `daily_close_deliveries` | El cierre del día que Bria dejó en el chat de cada persona a las 5 de la tarde: día, persona y conversación | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
 | `pulse_runs`, `pulse_messages` | El pulso de Bria: qué tramos ya leyó y qué le dijo a cada persona (hechos, texto, origen, si lo ocultó, y el seguimiento: desenlace o «sigue igual») | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
 | `permission_requests` | Pedidos de acceso a un módulo que Bria hace por una persona: módulo, quién pidió, para qué en pocas palabras, quién decidió y cuándo | `scripts/sql/bria-proactive.sql` | `permissionRequestRepository.js` |
+| `agency_snapshots` | La memoria del tiempo: una foto por día de cada cuenta (color de la operación, piezas, aprobaciones que esperan, devoluciones, tareas, horas del día anterior) y de cada persona del equipo (abiertas, en proceso, vencidas, devueltas, cerradas y horas del día anterior). Números de trabajo, nunca una calificación; sin llave hacia el cliente a propósito, para que la historia sobreviva a la ficha | `scripts/sql/bria-daily-reading.sql` | `dailyReadingRepository.js` |
+| `daily_readings` | La lectura de cada día hábil: señales, lo que Bria haría y no haría con la evidencia que lo sostiene, y si la escribió el modelo o las reglas | `scripts/sql/bria-daily-reading.sql` | `dailyReadingRepository.js` |
+| `morning_brief_deliveries` | La lectura de la mañana que Bria dejó en el chat de cada persona de dirección a las 7:30: día, persona y conversación | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
 | `mail_accounts`, `mail_seen` | Buzones compartidos conectados por un administrador (contraseña de aplicación sellada con la llave de la bóveda) y lo ya visto en cada uno: remitente, asunto, fecha y decisión, nunca el cuerpo | `scripts/sql/bria-mail.sql` | `mailAccountRepository.js` |
 
 ### `vault` (bóveda de accesos)

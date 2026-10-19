@@ -75,24 +75,27 @@ export const createBriaNudgeService = ({ db = prisma, repository, now = () => ne
     async list(user) {
       if (!canSeeNudges(user)) return { nudges: [] };
       const at = now(), userRef = userIdOf(user);
-      const [dismissed, focus, close, pulseLive] = await Promise.all([
+      const [dismissed, focus, close, pulseLive, brief] = await Promise.all([
         repo.dismissedKeys(userRef, at), repo.focusDelivery(weekKeyOf(at), userRef),
         // El cierre del día (14 de octubre de 2026): si Bria ya lo dejó hoy, va primero en la tarjeta.
         typeof repo.dailyCloseDelivery === 'function' ? repo.dailyCloseDelivery(bogotaDate(at), userRef).catch(() => null) : null,
-        typeof repo.hasRecentRun === 'function' ? repo.hasRecentRun(at, PULSE_LIVE_WINDOW_MS).catch(() => false) : false
+        typeof repo.hasRecentRun === 'function' ? repo.hasRecentRun(at, PULSE_LIVE_WINDOW_MS).catch(() => false) : false,
+        // La lectura de la mañana (19 de octubre de 2026), si Bria ya la dejó hoy.
+        typeof repo.morningBriefDelivery === 'function' ? repo.morningBriefDelivery(bogotaDate(at), userRef).catch(() => null) : null
       ]);
       const weeklyFocus = focus ? { conversationId: focus.conversationId, weekKey: focus.weekKey } : null;
       const dailyClose = close ? { conversationId: close.conversationId, dayKey: close.dayKey } : null;
+      const morningBrief = brief ? { conversationId: brief.conversationId, dayKey: brief.dayKey } : null;
       const access = await accessNudges(user, dismissed);
       if (pulseLive) {
         const messages = (await repo.activeMessages(userRef, at)).filter(isCurrentPredictionMessage);
-        const fixed = buildNudges({ people: [], now: at, dismissedKeys: dismissed, weeklyFocus, dailyClose });
+        const fixed = buildNudges({ people: [], now: at, dismissedKeys: dismissed, weeklyFocus, dailyClose, morningBrief });
         // `resolution` y `followUp` son el seguimiento: el desenlace del aviso o «sigue igual», escritos por el pulso.
         return { nudges: [...access, ...fixed, ...messages.map((row) => ({ key: `PULSO:${row.id}`, kind: row.kinds?.[0] || 'PULSO', kinds: row.kinds, title: row.title, body: row.body, url: row.url, taskIds: row.taskIds || [], urgency: row.urgency, actions: row.actions || [], createdAt: row.createdAt, resolution: row.resolution || null, followUp: row.followUp || null }))], source: 'pulso' };
       }
       const people = await this.readPeople(at);
       const viewer = people.find((person) => person.userId === userRef) || (await db.teamMember.findFirst({ where: { userId: userRef }, select: { id: true } }).then((row) => row ? { personId: row.id } : null));
-      return { nudges: [...access, ...buildNudges({ people, now: at, dismissedKeys: dismissed, viewerPersonId: viewer?.personId || null, weeklyFocus, dailyClose })], source: 'reglas' };
+      return { nudges: [...access, ...buildNudges({ people, now: at, dismissedKeys: dismissed, viewerPersonId: viewer?.personId || null, weeklyFocus, dailyClose, morningBrief })], source: 'reglas' };
     },
 
     async dismiss(user, key) {

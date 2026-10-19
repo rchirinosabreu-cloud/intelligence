@@ -60,6 +60,15 @@ CREATE TABLE IF NOT EXISTS bria_memory.daily_close_deliveries (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (day_key, user_ref)
 );
+-- La lectura de la mañana (19 de octubre de 2026) que Bria dejó en el chat de cada persona de dirección: una fila por
+-- día hábil y persona.
+CREATE TABLE IF NOT EXISTS bria_memory.morning_brief_deliveries (
+  day_key TEXT NOT NULL CHECK (day_key ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
+  user_ref TEXT NOT NULL,
+  conversation_id UUID NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (day_key, user_ref)
+);
 -- Pedidos de acceso a un módulo (15 de octubre de 2026): cuando alguien le pide a Bria algo de un módulo que su
 -- cuenta no tiene, Bria se lo pide a los administradores sin que la persona lo pida. Uno abierto por módulo y
 -- persona; quién pidió, para qué (en pocas palabras), quién decidió y cuándo. Dar acceso escribe en la cuenta.

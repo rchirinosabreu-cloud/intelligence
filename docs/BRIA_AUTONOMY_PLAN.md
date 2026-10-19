@@ -6,6 +6,8 @@ Ruta aprobada por Rodny el 20 de septiembre: A0 → A1 → A2 → A3 → B → C
 
 **Regla fija, decidida por Rodny el 21 de septiembre: la decisión final siempre es humana.** Bria puede preparar borradores completos (una tarea con toda su información, un mensaje, un cambio) y una persona los acepta o los rechaza. Eso vale para cualquier decisión. Nada se ejecuta solo, ni siquiera acciones internas reversibles: el techo de autonomía de todos los flujos es «preparar», y el nivel «ejecutar» queda fuera del plan hasta que él lo pida.
 
+**19 de octubre de 2026:** el siguiente tramo —Bria como ojos y cerebro de la dirección: memoria del tiempo, lectura del día, libro de decisiones, manual de criterio y rentabilidad— vive en [BRIA_OJOS_Y_CEREBRO.md](BRIA_OJOS_Y_CEREBRO.md). Respeta la regla de arriba: Bria lee y propone; decide una persona.
+
 ## 1. Lo consultado el 20 de septiembre
 
 ### Railway (leído con la CLI autenticada, `railway status --json`)

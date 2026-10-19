@@ -100,5 +100,16 @@ export const createBriaProactiveRepository = ({ pool }) => ({
   async recordDailyCloseDelivery(dayKey, userRef, conversationId) {
     await pool.query('INSERT INTO bria_memory.daily_close_deliveries(day_key,user_ref,conversation_id) VALUES($1,$2,$3) ON CONFLICT (day_key,user_ref) DO NOTHING', [dayKey, userRef, conversationId]);
     return { dayKey, userRef, conversationId };
+  },
+
+  /* ---- La lectura de la mañana (19 de octubre de 2026) ---- */
+
+  async morningBriefDelivery(dayKey, userRef) {
+    const { rows } = await pool.query('SELECT conversation_id, created_at FROM bria_memory.morning_brief_deliveries WHERE day_key=$1 AND user_ref=$2', [dayKey, userRef]);
+    return rows[0] ? { dayKey, userRef, conversationId: rows[0].conversation_id, createdAt: rows[0].created_at } : null;
+  },
+  async recordMorningBriefDelivery(dayKey, userRef, conversationId) {
+    await pool.query('INSERT INTO bria_memory.morning_brief_deliveries(day_key,user_ref,conversation_id) VALUES($1,$2,$3) ON CONFLICT (day_key,user_ref) DO NOTHING', [dayKey, userRef, conversationId]);
+    return { dayKey, userRef, conversationId };
   }
 });
