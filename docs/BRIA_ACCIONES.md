@@ -115,6 +115,19 @@ BRIA_EVAL_OUTPUT=tmp/bria-casos.json npm run eval:bria-casos -- --solo accion-no
 
 `scripts/eval-bria-casos.mjs` lee solo `OPENAI_API_KEY` y el modelo del archivo de entorno (`BRIA_PROJECT_ENV`, `.env` por defecto), arma herramientas ficticias con las mismas declaraciones que las reales (lecturas y acciones que solo preparan), no abre ninguna base de datos y escribe un informe JSON con cada respuesta y su veredicto; termina con código 1 si algo falló. Se corre cada vez que cambien las instrucciones de Bria (`buildInstructions`) o sus herramientas, y nunca en CI. Un caso nuevo se añade al conjunto con su `why`; `tests/briaRating.test.js` valida la forma de todos.
 
+## Escribirle al cliente (19 de octubre de 2026)
+
+Rodny: «vamos a seguir fortaleciendo a Bria para que sea mi project manager y mi community manager». Es la primera pieza de ese frente. El aviso «Redactar recordatorio al cliente» ya existía, pero Bria lo escribía a ciegas: sin el enlace del portal y sin saber qué había salido ni qué esperaba la aprobación.
+
+- **`mensaje_para_cliente`** (`src/services/briaClientUpdateTools.js`, módulo Parrillas) lee la parrilla del mes **como la ve el cliente** (`buildClientUpdate`, regla pura en `src/lib/clientUpdate.js`): lo que espera su aprobación —`EN_REVISION` o con material nuevo—, lo que se está ajustando según lo que pidió —`DEVUELTO`, con su último pedido—, lo publicado en la última semana con sus enlaces de Instagram y Facebook, lo programado en las dos semanas siguientes, cuántas piezas siguen en preparación, el avance y **el enlace del portal que ya tiene** (`portalUrlOf`, `…/compartir/<token>`; sin token no se inventa uno: Bria dice que lo creen con «Compartir»).
+- **Nunca sale lo que el cliente no ve.** La consulta ni siquiera lee el guion ni las notas internas, y la instrucción prohíbe hablar del equipo, de horas o de herramientas.
+- **Saluda y firma como persona.** Saluda al contacto de la ficha por su nombre, o «equipo de» la marca si no hay contacto, y firma con el nombre de quien lo va a enviar. La primera prueba saludó «Hola, Aristea» y firmó «[Tu nombre]». Una pieza que espera aprobación «sale tal día una vez la apruebes», nunca «está programada».
+- **Canal y enfoque.** WhatsApp, corto y sin asunto, o correo, con asunto y viñetas. Resumen de la semana, recordarle aprobar o contarle lo publicado.
+- **Bria nunca lo envía.** Entrega el mensaje listo para copiar; la persona lo manda.
+- El aviso de pieza sin aprobar pide ahora el recordatorio por WhatsApp con el enlace del portal, y por eso cae en esta herramienta.
+
+Contrato: `tests/clientUpdate.test.js`. Dos casos nuevos en el conjunto de preguntas reales: `mensaje-cliente-aprobar` y `mensaje-cliente-resumen-correo`.
+
 ## Dónde se conecta
 - `briaTaskApplication.js` arma `briaActions` con Prisma y las funciones reales; `briaAssistantService.js` monta las herramientas; `briaConversationService.js` resuelve «Confirmar» y «Cancelar»; `briaConversationRepository.js` guarda `pendingAction` en los metadatos del turno; `briaConversationApplication.js` exige el módulo de cada acción para ver o confirmar el turno.
 - Reglas 18, 19 y 20 de `buildInstructions`.

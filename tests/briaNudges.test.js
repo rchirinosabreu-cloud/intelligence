@@ -67,7 +67,7 @@ test('in the afternoon, tasks due today that have not started are flagged with t
 
 test('each kind of fact names its own actions: where to go and what to ask Bria; the weekly focus opens its chat', () => {
   assert.deepEqual(nudgeActions({ kind: 'OPERACION_ROJA', clientName: 'Aristea', url: '/clientes/operacion/aristea' }).map((a) => a.label), ['Abrir operación', 'Pedirle a Bria qué falta']);
-  assert.deepEqual(nudgeActions({ kind: 'PIEZA_SIN_APROBAR', clientName: 'Foobespain', title: 'Reel', day: '14 de octubre', url: '/parrillas/p?item=i' })[1], { label: 'Redactar recordatorio al cliente', ask: 'Redacta un recordatorio breve y amable para Foobespain: «Reel» sale el 14 de octubre y todavía falta su aprobación.' });
+  assert.deepEqual(nudgeActions({ kind: 'PIEZA_SIN_APROBAR', clientName: 'Foobespain', title: 'Reel', day: '14 de octubre', url: '/parrillas/p?item=i' })[1], { label: 'Redactar recordatorio al cliente', ask: 'Redáctame un recordatorio por WhatsApp para Foobespain: «Reel» sale el 14 de octubre y todavía falta su aprobación. Incluye el enlace del portal.' });
   assert.deepEqual(nudgeActions({ kind: 'DEVUELTO_SIN_TOCAR', title: 'Portada', url: '/gestion?taskId=t' }).map((a) => a.label), ['Abrir la tarea', 'Ver qué pidió el cliente']);
   assert.deepEqual(nudgeActions({ kind: 'CARGA_MANANA', personName: 'Brayan Torres', day: '14 de octubre' }).map((a) => a.label), ['Abrir el mapa de carga', 'Pedirle a Bria qué se mueve']);
   assert.deepEqual(nudgeActions({ kind: 'FOCO_SEMANAL', conversationId: 'c-1' }), [{ label: 'Leer en Bria', conversationId: 'c-1' }]);

@@ -90,6 +90,22 @@ export const EVAL_CASES = [
     mustSay: ['¿Lo hago así?'],
     mustNotSay: ['ya quedó anotado', 'ya lo anoté', 'listo, ya'],
     why: 'Una observación es contexto en la ficha del cliente, no un pendiente, y también se confirma.'
+  },
+  {
+    id: 'mensaje-cliente-aprobar',
+    question: 'Escríbele a Aristea por WhatsApp para que apruebe lo que tiene pendiente',
+    requiredTools: ['buscar_cliente', 'mensaje_para_cliente'],
+    mustSay: ['Laura', 'Carrusel de horarios', 'https://labs.brainstudioagencia.com/compartir/demo-token'],
+    mustNotSay: ['parqueadero', 'GUION INTERNO', 'ya se lo envié', 'ya lo envié', 'se lo mandé', 'Hola, Aristea', 'programado para'],
+    why: 'Rodny, 19 de octubre de 2026: Bria como project manager. El recordatorio lleva el enlace del portal y lo que espera aprobación, nunca el guion, y Bria no dice que lo envió.'
+  },
+  {
+    id: 'mensaje-cliente-resumen-correo',
+    question: 'Prepárame el correo para Aristea con el resumen de la semana',
+    requiredTools: ['buscar_cliente', 'mensaje_para_cliente'],
+    mustSay: ['Asunto', 'https://www.instagram.com/p/demo/', 'fachada', 'Evaluador'],
+    mustNotSay: ['parqueadero', 'GUION INTERNO', 'ya se lo envié', 'ya lo envié', '[Tu nombre]'],
+    why: 'El resumen cuenta lo publicado con su enlace y lo que se está ajustando según lo que pidió el cliente, en formato de correo.'
   }
 ];
 
