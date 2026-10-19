@@ -223,6 +223,9 @@ const AppLayout = ({ children }) => {
     } else if (notif.type === 'BRIA_FOCO_SEMANAL' || notif.type === 'BRIA_CIERRE_DEL_DIA') {
         // El foco de la semana (10 de octubre de 2026) y el cierre del día (14 de octubre): abren el chat donde Bria lo dejó.
         openBriaConversation(notif.relatedId);
+    } else if (notif.type === 'MODULE_ACCESS_GRANTED' && typeof notif.url === 'string' && notif.url.startsWith('/') && !notif.url.startsWith('//')) {
+        // Acceso a un módulo recién concedido (15 de octubre de 2026): se abre recargando, para que el menú lea el permiso.
+        window.location.assign(notif.url);
     }
   };
 

@@ -135,5 +135,5 @@ export const buildNudges = ({ people = [], now = new Date(), dismissedKeys = new
 export const dismissUntil = (key, now = new Date()) => String(key).startsWith('FOCO_SEMANAL:') ? new Date(new Date(now).getTime() + 7 * 24 * H) : bogotaDayEnd(now);
 // `PULSO:<id>` es un aviso que decidió Bria en su pulso (`pulse_messages`); se oculta marcando la fila.
 // `ACCESO:<id>` es un pedido de acceso de la bóveda (15 de octubre de 2026): quien lo decide lo oculta por hoy;
-// quien lo pidió, al ocultar la respuesta, la da por vista.
-export const isValidNudgeKey = (key) => /^(SIN_PROCESO|VENCE_HOY|FOCO_SEMANAL|CIERRE_DIA|PULSO|ACCESO):[\w-]{1,80}$/.test(String(key || ''));
+// quien lo pidió, al ocultar la respuesta, la da por vista. `PERMISO:<id>` es lo mismo para un módulo de la plataforma.
+export const isValidNudgeKey = (key) => /^(SIN_PROCESO|VENCE_HOY|FOCO_SEMANAL|CIERRE_DIA|PULSO|ACCESO|PERMISO):[\w-]{1,80}$/.test(String(key || ''));

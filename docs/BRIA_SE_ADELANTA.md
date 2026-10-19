@@ -37,6 +37,19 @@ Rodny, el mismo día: «un solo mensaje por persona: qué cerró, qué quedó en
 
 Una sola vez por día y persona (`bria_memory.daily_close_deliveries`), aviso en la campana (`BRIA_CIERRE_DEL_DIA`, que abre el chat) y «Bria dejó tu cierre del día» como primer aviso encima de la mascota (`CIERRE_DIA`, se oculta por hoy). Servicio: `src/services/dailyCloseService.js` (`runAutomatic`, `initDailyCloseScheduler` en `server.js`, cada 10 minutos).
 
+## Pedir acceso a un módulo
+
+Rodny, 15 de octubre de 2026: «si Camila está solicitando algo a lo que Bria no le puede dar acceso por su rol, no tiene que pedírmelo directamente, me debería aparecer a mí el anuncio … y así nos adelantamos aún más», y después «haz también la versión general». Las contraseñas tienen su propio camino (`docs/BOVEDA_DE_ACCESOS.md`, «Pedir un acceso»); esto es lo mismo para los **módulos** de la plataforma.
+
+- **Bria sabe qué le falta a cada persona.** La última línea de sus instrucciones dice «Módulos que no tiene: Financiero, CRM…», sacada de la lista única de módulos (`missingModules`, `src/lib/modulePermissionRequests.js`). Esa línea cambia por persona y por eso va al final, para la caché de prompt.
+- **Lo pide sola.** Si la persona pregunta o quiere hacer algo de uno de esos módulos («¿cuánto nos debe Aristea?»), Bria llama `pedir_permiso` con el módulo y para qué, sin que ella lo pida, y le dice en una frase que ya se lo pidió a un administrador. No da la información ni la deduce por otro camino. Un «no tienes permiso» de la plataforma (`consultar_plataforma` con 403) apunta al mismo pedido. Lo que es solo de administración (Gobierno de IA, Salud operativa, el uso de Bria) no es un módulo y no se pide.
+- **Sin insistir.** Un pedido abierto por módulo y persona (`bria_memory.permission_requests`); lo denegado en los últimos 7 días no se vuelve a pedir solo, y Bria dice quién lo denegó.
+- **El aviso del administrador.** Notificación `MODULE_ACCESS_REQUESTED` y, primero encima de Bria, «Camila necesita acceso a Financiero», para qué lo pidió y a qué hora, con «Dar acceso» y «Denegar» (`POST /api/bria/nudges/permission-requests/:id/decision`, solo administradores).
+- **Dar acceso** marca la misma casilla que Equipo y nada más (`grantModule`), dentro de una transacción que vuelve a leer la cuenta y solo si la persona sigue activa en el equipo. **Financiero entra en solo lectura** (`VIEWER`) salvo que ya tuviera un nivel; el aviso lo dice y el nivel se cambia en Equipo. Decidir reclama el pedido con una sola escritura condicional, así que dos administradores no deciden dos veces; si dar acceso falla, el pedido vuelve a quedar pendiente. Los permisos se leen de la base en cada petición, así que valen al instante.
+- **La respuesta.** `MODULE_ACCESS_GRANTED` (que al tocarlo abre el módulo recargando la página, para que el menú lea el permiso) o `MODULE_ACCESS_DENIED`, y su aviso: «Rodny te dio acceso a Financiero», con «Abrir Financiero», o «Rodny denegó tu acceso a Financiero». Su X la da por vista.
+
+Contrato: `tests/modulePermissionRequest.test.js`; recorrido real con capturas: `node tests/browser/briaPermissionRequest.mjs`.
+
 ## La consulta rápida, detrás de la mascota
 
 Rodny, 10 de octubre: «hacerle una pregunta rápida a Bria, no necesariamente abriendo un chat nuevo … “Haz tu consulta” y el icono de pulso … que ella misma diga “recuerda que puedes consultarme algo”». La primera versión era una caja permanente dentro de la tarjeta, y al día siguiente Rodny la devolvió: «cuando entro en la plataforma siempre aparece el cuadro de la consulta, no me gusta así, estorba … cuando poso el cursor sobre ella, aparecen dos iconos … la barra de consulta escribiendo o enviando un audio, ninguno es un chat nuevo».
