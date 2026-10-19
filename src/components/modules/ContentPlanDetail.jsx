@@ -10,7 +10,7 @@ import { driveLinkProblem } from '@/lib/driveLinks';
 import { driveAssetUrls, driveEmbedAspect } from '@/lib/finalAssetShape';
 import { finalAssetOrderProblem, moveAssetId, moveAssetToIndex } from '@/lib/finalAssetOrder';
 import { WEEKDAY_LABELS, buildMonthGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
-import { APPROVAL_STATES, approvalState, itemsNeedingRevisionRequest } from '@/lib/contentApproval';
+import { APPROVAL_STATES, approvalState, canRequestRevision, itemsNeedingRevisionRequest } from '@/lib/contentApproval';
 import { describeMetaMedia, publishMomentLabel, queueOwnedStatusProblem } from '@/lib/socialPublishing';
 import { kindAcceptsCover } from '@/lib/videoCover';
 import {
@@ -1109,7 +1109,7 @@ const ContentItemCard = ({
             )}
             {/* El cliente aprobó lo que tenía delante. Si lo que hay ahora es otra cosa, aquí se le
                 devuelve la palabra sin fingir que nunca aprobó (Rodny, 5 de octubre de 2026). */}
-            {pieceApproval === APPROVAL_STATES.APROBADA && (
+            {pieceApproval === APPROVAL_STATES.APROBADA && canRequestRevision(item) && (
               <button
                 type="button"
                 onClick={() => onRequestRevision(item.id)}

@@ -87,6 +87,11 @@ const items = [
   })
 ];
 
+if (new URLSearchParams(window.location.search).get('publicada') === '1') {
+  items[0].status = 'PUBLICADO';
+  items[0].revisionRequestedAt = '2026-10-19T12:00:00.000Z';
+}
+
 const plan = {
   id: 'p1',
   month: 9,
