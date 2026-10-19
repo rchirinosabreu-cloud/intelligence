@@ -19,7 +19,12 @@ const H = 3_600_000;
 export const PULSE_USE_CASE = 'bria.pulse';
 export const PULSE_PROMPT_VERSION = 1;
 export const PULSE_LIMITS = Object.freeze({ perDay: 3, perHour: 1, muteAfterDismissals: 3, muteDays: 7, maxFacts: 40 });
-export const FACT_KINDS = Object.freeze(['SIN_PROCESO', 'VENCE_HOY', 'CARGA_MANANA', 'ENTREGA_EN_RIESGO', 'OPERACION_ROJA', 'PIEZA_SIN_APROBAR', 'DEVUELTO_SIN_TOCAR', 'CORREO_IMPORTANTE']);
+export const FACT_KINDS = Object.freeze(['SIN_PROCESO', 'VENCE_HOY', 'CARGA_MANANA', 'ENTREGA_EN_RIESGO', 'OPERACION_ROJA', 'PIEZA_SIN_APROBAR', 'APROBACIONES_PENDIENTES', 'DEVUELTO_SIN_TOCAR', 'CORREO_IMPORTANTE']);
+// Aprobaciones del cliente (Rodny, 19 de octubre de 2026: «hay piezas que no se han aprobado en la parrilla tal, ¿quieres
+// enviarle un mensaje a Aristea? Puedo ayudarte a redactarlo … una forma de pensar, de actuar de Bria»): se mira la semana.
+export const APPROVAL_LOOKAHEAD_DAYS = 7;
+const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const weekdayLabel = (day) => `${WEEKDAYS[new Date(`${day}T12:00:00Z`).getUTCDay()]} ${dayLabel(day)}`;
 export const URGENCIES = ['alta', 'media', 'baja'];
 // Bria habla de trabajo, nunca de personas: una frase con un juicio no sale.
 export const JUDGMENT_WORDS = /\b(lent[oa]s?|floj[oa]s?|perezos[oa]s?|vag[oa]s?|irresponsables?|incompetentes?|descuidad[oa]s?|mal trabajo|desempeño|rendimiento)\b/i;
@@ -87,11 +92,32 @@ export const collectFacts = ({ nudges = [], load = null, operations = [], pieces
     const url = `/clientes/operacion/${row.slug}`;
     facts.push(fact('OPERACION_ROJA', row.slug || row.id, { clientName: row.name, text: `${row.name} está en rojo en Operación: ${reasons.join(' ')}`, url, taskIds: [], severity: 3, actions: nudgeActions({ kind: 'OPERACION_ROJA', clientName: row.name, url }) }));
   }
-  const soon = plusDays(today, 2);
+  // Lo que espera la aprobación del cliente esta semana, agrupado por parrilla: un aviso por cliente que ofrece escribirle.
+  // Una sola pieza a dos días o menos conserva su aviso de siempre, que tiene seguimiento pieza por pieza.
+  const soon = plusDays(today, 2), week = plusDays(today, APPROVAL_LOOKAHEAD_DAYS);
+  const byPlan = new Map();
   for (const piece of pieces) {
-    if (!piece?.day || piece.day < today || piece.day > soon) continue;
-    const day = dayLabel(piece.day), url = `/parrillas/${piece.planId}?item=${piece.id}`;
-    facts.push(fact('PIEZA_SIN_APROBAR', piece.id, { clientName: piece.clientName, text: `«${piece.title}» de ${piece.clientName || 'un cliente'} sale el ${day}${piece.day === today ? ' (hoy)' : ''} y el cliente todavía no la ha aprobado.`, url, taskIds: [], severity: piece.day === today ? 3 : 2, actions: nudgeActions({ kind: 'PIEZA_SIN_APROBAR', clientName: piece.clientName, title: piece.title, day, url }) }));
+    if (!piece?.day || piece.day < today || piece.day > week) continue;
+    if (!byPlan.has(piece.planId)) byPlan.set(piece.planId, []);
+    byPlan.get(piece.planId).push(piece);
+  }
+  for (const [planId, group] of byPlan) {
+    group.sort((a, b) => a.day.localeCompare(b.day));
+    const [first] = group, clientName = first.clientName || 'Un cliente';
+    if (group.length === 1 && first.day <= soon) {
+      const day = dayLabel(first.day), url = `/parrillas/${planId}?item=${first.id}`;
+      facts.push(fact('PIEZA_SIN_APROBAR', first.id, { clientName: first.clientName, text: `«${first.title}» de ${first.clientName || 'un cliente'} sale el ${day}${first.day === today ? ' (hoy)' : ''} y el cliente todavía no la ha aprobado.`, url, taskIds: [], severity: first.day === today ? 3 : 2, actions: nudgeActions({ kind: 'PIEZA_SIN_APROBAR', clientName: first.clientName, title: first.title, day, url }) }));
+      continue;
+    }
+    const when = `${weekdayLabel(first.day)}${first.day === today ? ' (hoy)' : ''}`;
+    const head = group.length === 1
+      ? `${clientName} tiene 1 pieza esperando su aprobación esta semana; sale el ${when}.`
+      : `${clientName} tiene ${group.length} piezas esperando su aprobación esta semana; la primera, «${first.title}», sale el ${when}.`;
+    facts.push(fact('APROBACIONES_PENDIENTES', planId, { clientName: first.clientName,
+      evidenceKey: JSON.stringify(group.map((piece) => [piece.id, piece.day])),
+      text: `${head} Puedo redactarle el mensaje con el enlace del portal para que las revise.`,
+      url: `/parrillas/${planId}`, taskIds: [], severity: first.day === today ? 3 : first.day <= soon ? 2 : 1,
+      actions: nudgeActions({ kind: 'APROBACIONES_PENDIENTES', clientName: first.clientName, url: `/parrillas/${planId}` }) }));
   }
   for (const task of returned) {
     const days = Math.max(1, Math.floor((new Date(today).getTime() - new Date(`${task.returnedDay}T00:00:00Z`).getTime()) / (24 * H)));

@@ -9,7 +9,7 @@ import { AI_MODELS } from '../config/aiConfig.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { needsClientReview } from '../lib/contentApproval.js';
 import { buildNudges, bogotaDayEnd } from '../lib/briaNudges.js';
-import { collectFacts, pulseBudget, mutedKinds, eligibleFacts, buildPulseDigest, buildPulseRequest, parsePulse, validatePulse, fallbackPulse, workdayBounds, slotKeyOf, isWorkingTime, PULSE_LIMITS } from '../lib/briaPulse.js';
+import { collectFacts, pulseBudget, mutedKinds, eligibleFacts, buildPulseDigest, buildPulseRequest, parsePulse, validatePulse, fallbackPulse, workdayBounds, slotKeyOf, isWorkingTime, PULSE_LIMITS, APPROVAL_LOOKAHEAD_DAYS } from '../lib/briaPulse.js';
 import { evaluateFollowUp, followUpTargets, isFollowable, FOLLOW_UP_AFTER_MS } from '../lib/briaFollowUp.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { createBriaProactiveRepository } from './briaProactiveRepository.js';
@@ -48,7 +48,8 @@ export const createBriaPulseService = ({
         safe('mapa de carga', () => load.get(), null),
         safe('operación de clientes', () => operations.listOperations(), []),
         safe('piezas por aprobar', async () => {
-          const from = new Date(`${today}T00:00:00Z`), to = new Date(from.getTime() + 3 * 24 * H);
+          // La semana entera (19 de octubre de 2026): lo que espera la aprobación del cliente se avisa por cliente, no solo a dos días de salir.
+          const from = new Date(`${today}T00:00:00Z`), to = new Date(from.getTime() + (APPROVAL_LOOKAHEAD_DAYS + 1) * 24 * H);
           const rows = await db.contentItem.findMany({ where: { deletedAt: null, publishDate: { gte: from, lt: to }, status: { notIn: ['PUBLICADO'] }, plan: { deletedAt: null, status: { not: 'FINALIZADO' } } }, select: { id: true, objective: true, status: true, publishDate: true, revisionRequestedAt: true, planId: true, plan: { select: { client: { select: { name: true } } } } }, take: 200 });
           return rows.filter(needsClientReview).map((row) => ({ id: row.id, title: row.objective, planId: row.planId, clientName: row.plan?.client?.name || null, day: bogotaDate(row.publishDate) }));
         }, []),
