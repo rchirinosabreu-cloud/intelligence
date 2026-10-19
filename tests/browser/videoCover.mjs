@@ -67,7 +67,7 @@ try {
     // no la enseña.
     await field.scrollIntoViewIfNeeded();
     await page.waitForTimeout(400);
-    const material = page.locator('[data-piece-cover]').locator('xpath=ancestor::div[contains(@class,"grid")][1]');
+    const material = page.getByRole('region', { name: 'Entrega final', exact: true });
     await material.screenshot({ path: `${OUT}/${theme}-material.png` });
 
     // En edición es donde se sube, se cambia y se quita: es lo que de verdad usa el equipo.
