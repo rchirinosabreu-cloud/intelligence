@@ -9,6 +9,7 @@ import { buildClientUpdate, portalUrlOf, CLIENT_UPDATE_WINDOW } from '../src/lib
 import { briaClientUpdateTools } from '../src/services/briaClientUpdateTools.js';
 import { buildInstructions } from '../src/lib/briaAssistant.js';
 import { nudgeActions } from '../src/lib/briaNudges.js';
+import { collectFacts, fallbackPulse, FACT_KINDS, APPROVAL_LOOKAHEAD_DAYS } from '../src/lib/briaPulse.js';
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
 const today = '2026-10-19';
@@ -79,6 +80,40 @@ test('Bria’s tool reads the plan with the client-safe fields, and says to crea
   const none = await tool.run({ clientId: 'c-1' }, { db: { contentPlan: { findFirst: async () => null } }, today });
   assert.match(none.data.mensaje, /No hay parrilla de octubre de 2026/);
   await assert.rejects(() => tool.run({}, { db, today }), /buscar_cliente/);
+});
+
+// Rodny, el mismo día: «esto sería como un aviso, ¿no? Tipo “hay piezas que no se han aprobado en la parrilla tal,
+// ¿quieres enviarle un mensaje a Aristea? Puedo ayudarte a redactarlo”. No te estoy dando un texto fijo sino una forma de
+// pensar, de actuar de Bria». Antes solo avisaba pieza por pieza y a dos días de salir.
+test('Bria notices a client sitting on approvals this week and offers to write to them, one notice per client', () => {
+  assert.ok(FACT_KINDS.includes('APROBACIONES_PENDIENTES'));
+  assert.equal(APPROVAL_LOOKAHEAD_DAYS, 7);
+  const pieces = [
+    { id: 'a1', title: 'Reel de lanzamiento', planId: 'plan-a', clientName: 'Aristea', day: '2026-10-22' },
+    { id: 'a2', title: 'Carrusel de beneficios', planId: 'plan-a', clientName: 'Aristea', day: '2026-10-20' },
+    { id: 'a3', title: 'Post de horario', planId: 'plan-a', clientName: 'Aristea', day: '2026-10-24' },
+    { id: 'n1', title: 'Historia urgente', planId: 'plan-n', clientName: 'Nattal', day: '2026-10-20' },
+    { id: 'e1', title: 'Reel de la otra semana', planId: 'plan-e', clientName: 'Endova', day: '2026-10-23' },
+    { id: 'f1', title: 'Muy lejos', planId: 'plan-f', clientName: 'Foobespain', day: '2026-10-30' }
+  ];
+  const facts = collectFacts({ pieces, today });
+  const grouped = facts.filter((f) => f.kind === 'APROBACIONES_PENDIENTES');
+  assert.deepEqual(grouped.map((f) => f.subject).sort(), ['plan-a', 'plan-e'], 'one notice per client; a lone piece far away also counts');
+  const aristea = grouped.find((f) => f.subject === 'plan-a');
+  assert.match(aristea.text, /^Aristea tiene 3 piezas esperando su aprobación esta semana; la primera, «Carrusel de beneficios», sale el martes 20 de octubre\./);
+  assert.match(aristea.text, /Puedo redactarle el mensaje con el enlace del portal/);
+  assert.equal(aristea.severity, 2, 'the first one goes out tomorrow');
+  assert.deepEqual(aristea.actions, [
+    { label: 'Abrir la parrilla', to: '/parrillas/plan-a' },
+    { label: 'Escribirle a Aristea', ask: 'Redáctame un mensaje por WhatsApp para Aristea para que apruebe lo que tiene pendiente, con el enlace del portal.' }
+  ]);
+  assert.match(grouped.find((f) => f.subject === 'plan-e').text, /^Endova tiene 1 pieza esperando su aprobación esta semana; sale el viernes 23 de octubre\./);
+  assert.deepEqual(facts.filter((f) => f.kind === 'PIEZA_SIN_APROBAR').map((f) => f.subject), ['n1'], 'a single urgent piece keeps its own notice, and Aristea’s pieces are not repeated one by one');
+  assert.equal(facts.some((f) => f.subject === 'f1' || f.subject === 'plan-f'), false, 'nothing beyond the week');
+  const [said] = fallbackPulse([aristea], 1);
+  assert.match(said.title, /^Aristea tiene 3 piezas esperando su aprobación/);
+  assert.match(said.body, /Puedo redactarle el mensaje/);
+  assert.match(read('src/services/briaPulseService.js'), /APPROVAL_LOOKAHEAD_DAYS \+ 1/, 'the pulse reads the whole week');
 });
 
 test('Bria knows when to use it, the reminder notice points to it, and the tool is wired in', () => {

@@ -69,6 +69,8 @@ export const nudgeActions = ({ kind, personName = null, clientName = null, title
     case 'ENTREGA_EN_RIESGO': return [{ label: 'Abrir la tarea', to: url }, { label: 'Revisar alternativas con Bria', ask: `Revisa el margen de entrega de «${title || 'esta tarea'}» de ${personName || name}, considerando cliente, complejidad y compromisos anteriores. Propón qué mover o repartir, con la evidencia disponible.` }];
     case 'OPERACION_ROJA': return [{ label: 'Abrir operación', to: url }, { label: 'Pedirle a Bria qué falta', ask: `¿Qué le falta a ${clientName || 'este cliente'} para salir del rojo en Operación este mes?` }];
     case 'PIEZA_SIN_APROBAR': return [{ label: 'Abrir la pieza', to: url }, { label: 'Redactar recordatorio al cliente', ask: `Redáctame un recordatorio por WhatsApp para ${clientName || 'el cliente'}: «${title || 'la pieza'}» sale ${day ? `el ${day}` : 'pronto'} y todavía falta su aprobación. Incluye el enlace del portal.` }];
+    // Varias piezas del mismo cliente esperando su aprobación esta semana (19 de octubre de 2026): una oferta de escribirle.
+    case 'APROBACIONES_PENDIENTES': return [{ label: 'Abrir la parrilla', to: url }, { label: `Escribirle a ${clientName || 'el cliente'}`, ask: `Redáctame un mensaje por WhatsApp para ${clientName || 'el cliente'} para que apruebe lo que tiene pendiente, con el enlace del portal.` }];
     case 'DEVUELTO_SIN_TOCAR': return [{ label: 'Abrir la tarea', to: url }, { label: 'Ver qué pidió el cliente', ask: `Cuéntame qué pidió corregir el cliente en «${title || 'esa tarea'}» y qué falta para cerrarla.` }];
     case 'FOCO_SEMANAL': case 'CIERRE_DIA': return conversationId ? [{ label: 'Leer en Bria', conversationId }] : [];
     default: return url ? [{ label: 'Abrir', to: url }] : [];
