@@ -198,7 +198,7 @@ const uploadFinalAssetsDirect = async (itemId, files, onProgress) => {
 
 /**
  * La portada de un reel (Rodny, 15 de octubre de 2026). Solo aparece donde Meta la admite —un reel—,
- * y solo cuando la pieza ya tiene su video: una portada sin video no tiene nada que portar.
+ * incluso antes de cargar el video, para poder preparar ambos archivos en cualquier orden.
  *
  * Lo que dice es lo que de verdad pasa al publicar: la imagen sale en la pestaña Reels, y como el reel
  * se comparte al feed, en la cuadrícula del perfil Meta recorta su cuadrado central.
@@ -859,8 +859,8 @@ const serializePlanInternalNotes = (notes) => JSON.stringify(
   notes.map(note => String(note || '').trim()).filter(Boolean)
 );
 
-const FeedbackHistory = ({ comments, isOpen }) => {
-  if (!isOpen || !comments) return null;
+const FeedbackHistory = ({ comments }) => {
+  if (!comments) return null;
 
   return (
     <div className="space-y-3 animate-in fade-in slide-in-from-top-2 duration-500 overflow-hidden">
@@ -873,7 +873,7 @@ const FeedbackHistory = ({ comments, isOpen }) => {
         </label>
       </div>
 
-      <div className="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 p-5 rounded-[2rem] text-sm text-slate-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed italic">
+      <div className="bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/5 p-5 rounded-[2rem] text-sm text-slate-700 dark:text-zinc-300 whitespace-pre-wrap leading-relaxed not-italic">
         {comments}
       </div>
     </div>
@@ -931,7 +931,6 @@ const ContentItemCard = ({
   publicationProblems = [],
   onRequestRevision
 }) => {
-  const [showFeedback, setShowFeedback] = useState(false);
   const finalAssets = item.finalAssets || [];
   const pieceApproval = approvalState(item);
   const isRealizado = item.status === 'REALIZADO' || item.status === 'PROGRAMADO' || item.status === 'PUBLICADO';
@@ -939,8 +938,9 @@ const ContentItemCard = ({
   // Programada y esperando su hora: el estado lo lleva la cola, no el desplegable.
   const queueStatusReason = queueOwnedStatusProblem({ item, publications: item.publications || [] });
   const queueOwnsStatus = Boolean(queueStatusReason);
-  // La portada solo la admite un reel, y solo tiene sentido con su video ya cargado.
-  const acceptsCover = kindAcceptsCover(describeMetaMedia({ format: item.format, assets: finalAssets }).kind);
+  // Reel/Video ofrecen la portada desde el inicio; otros formatos pueden resolver a reel por su archivo.
+  const acceptsCover = ['reel', 'video'].includes(String(item.format || '').trim().toLowerCase())
+    || kindAcceptsCover(describeMetaMedia({ format: item.format, assets: finalAssets }).kind);
   const latestTask = item.tasks?.[0];
 
   return (
@@ -972,17 +972,6 @@ const ContentItemCard = ({
             />
           ) : (
             <h3 className="min-w-0 flex-grow truncate px-2 text-xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">{item.objective}</h3>
-          )}
-
-          {!isEditing && item.comments && (
-            <button
-              type="button"
-              onClick={() => setShowFeedback(!showFeedback)}
-              className="inline-flex h-9 items-center gap-2 rounded-xl border border-zinc-200 bg-white px-3 text-[13px] font-bold text-zinc-600 transition hover:bg-zinc-50 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-300"
-            >
-              <MessageSquare className="h-3.5 w-3.5" />
-              {showFeedback ? 'Ocultar feedback' : 'Feedback del cliente'}
-            </button>
           )}
 
           <button
@@ -1277,8 +1266,7 @@ const ContentItemCard = ({
               </p>
             )}
 
-            {/* Solo un reel lleva portada: es lo único a lo que Meta le admite una (`videoCover.js`).
-                Y solo con el video ya cargado, porque una portada sin video no porta nada. */}
+            {/* La portada se puede preparar antes del video; solo se envía a Meta al publicar un reel. */}
             {acceptsCover && (
               <CoverField
                 item={item}
@@ -1336,9 +1324,9 @@ const ContentItemCard = ({
         serverProblems={publicationProblems}
       />
 
-      {showFeedback && item.comments && (
+      {item.comments && (
         <div className="border-t border-zinc-100 px-6 py-5 dark:border-white/5">
-          <FeedbackHistory comments={item.comments} isOpen={showFeedback} />
+          <FeedbackHistory comments={item.comments} />
         </div>
       )}
     </div>

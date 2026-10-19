@@ -63,6 +63,13 @@ try {
 
     await page.screenshot({ path: `output/editor-carril-${name}.png`, fullPage: true });
 
+    // El feedback debe leerse al abrir la pieza, sin desplegarlo y con letra normal.
+    const feedback = page.getByText('[Cliente - 18/09/2026]: ¿Podemos mostrar más la sala de espera?', { exact: true });
+    assert.equal(await feedback.isVisible(), true, 'el feedback está visible desde que se abre la pieza');
+    assert.equal(await feedback.evaluate((node) => getComputedStyle(node).fontStyle), 'normal', 'el feedback no se escribe en cursiva');
+    assert.equal(await page.getByRole('button', { name: /^(Ocultar feedback|Ver feedback|Feedback del cliente)$/i }).count(), 0, 'no hay un botón para esconder o mostrar el feedback');
+    await feedback.screenshot({ path: `output/editor-feedback-${name}.png` });
+
     // 2. En edición: cada campo dice a quién pertenece, y la vista del cliente está al lado.
     await page.evaluate(() => {
       const edit = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Editar');
@@ -86,6 +93,7 @@ try {
     assert.equal(editing.visible, true, 'el texto de publicación se marca como visible para el cliente');
     assert.equal(editing.renamed, true, '«Caption (Post)» pasa a llamarse por lo que es');
     assert.equal(editing.glance, false, 'la vista del cliente ya no está dentro del editor');
+    assert.equal(await feedback.isVisible(), true, 'el feedback sigue visible mientras se edita la pieza');
 
     // Rodny, 25 de septiembre de 2026: con la nota en la franja de la ficha y alto fijo, un texto
     // largo se salía por encima de toda la tarjeta. Se comprueba que la nota **cabe dentro** de la
@@ -116,6 +124,7 @@ try {
     await page.waitForFunction(() => document.body.textContent.includes('Conoce al equipo de hemodinamia'));
     const afterSwitch = await page.evaluate(() => document.querySelectorAll('[id^="item-"]').length);
     assert.equal(afterSwitch, 1, 'sigue habiendo un solo editor tras cambiar de pieza');
+    assert.equal(await page.getByText('Feedback del Cliente', { exact: true }).count(), 0, 'sin comentarios no se muestra un bloque vacío');
 
     // Rodny, 25 de septiembre de 2026: «al abrir parrilla desde gestión debería viajar directo hacia
     // el pendiente en cuestión, parece que se desincronizó». Pasaba porque convivían dos fuentes —un
