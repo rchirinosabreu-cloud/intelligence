@@ -15,7 +15,7 @@ const normalizePeriod = (input = {}) => {
   const year = Number.parseInt(input.year, 10);
   const month = Number.parseInt(input.month, 10);
   if (!Number.isInteger(year) || year < 2000 || year > 2200 || !Number.isInteger(month) || month < 1 || month > 12) {
-    throw new FinancialDomainError('PAYROLL_PERIOD_INVALID', 'El periodo de nomina no es valido.');
+    throw new FinancialDomainError('PAYROLL_PERIOD_INVALID', 'El período de nómina no es válido.');
   }
   return { year, month };
 };

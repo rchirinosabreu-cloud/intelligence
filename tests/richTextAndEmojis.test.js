@@ -113,7 +113,7 @@ test('RichTextEditor - Tiptap Wrapper, in-flow toolbar and Height Class Verifica
     assert.ok(editorCode.includes('ListOrdered'), 'Ordered lists must use an icon instead of text-only labels.');
     assert.ok(editorCode.includes('List'), 'Bullet lists must use an icon instead of text-only labels.');
     assert.ok(editorCode.includes('levels: [1, 2, 3]'), 'RichTextEditor must support H1, H2 and H3 heading levels.');
-    assert.ok(editorCode.includes('aria-label="Lista con bullets"'), 'Bullet list control must have a clear accessible label.');
+    assert.ok(editorCode.includes('aria-label="Lista con viñetas"'), 'Bullet list control must have a clear accessible label.');
     assert.ok(editorCode.includes('aria-label="Lista numerada"'), 'Ordered list control must have a clear accessible label.');
     assert.ok(!editorCode.includes('• Lista'), 'Bullet list control must not use a text label.');
     assert.ok(!editorCode.includes('1. Lista'), 'Ordered list control must not use a text label.');

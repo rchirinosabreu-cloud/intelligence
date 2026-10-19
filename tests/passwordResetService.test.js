@@ -125,7 +125,7 @@ test('completePasswordReset rejects invalid codes and records the failed attempt
       code: '000000',
       newPassword: 'NuevaClave2026'
     }, deps),
-    /Codigo invalido o expirado/
+    /Código inválido o expirado/
   );
 
   assert.deepEqual(calls.failed, ['reset-1']);

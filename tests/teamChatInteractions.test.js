@@ -45,7 +45,7 @@ await key(input,{}); assert.equal(sends,1,'Enter sends the message');
 await key(input,{shiftKey:true}); assert.equal(sends,1,'Shift+Enter does not send'); assert.match(content,/<br/,'Shift+Enter inserts a line break');
 await key(input,{isComposing:true}); assert.equal(sends,1,'IME confirmation must not send');
 const labels=[...document.querySelectorAll('[data-task-format-toolbar] button')].map(x=>x.getAttribute('aria-label'));
-assert.deepEqual(labels,['Negrita','Cursiva','Subrayado','Resaltado','Lista con bullets']);
+assert.deepEqual(labels,['Negrita','Cursiva','Subrayado','Resaltado','Lista con viñetas']);
 assert.equal(document.querySelector('[data-task-format-toolbar]').closest('[aria-hidden]').getAttribute('aria-hidden'),'false','Chat formatting is visible from the first render');
 assert.equal(document.querySelector('[aria-label="Opciones de formato"]'),null,'The chat has no formatting toggle');
 await render(h(Composer,{draft:{content:'',files:[]},onChange:()=>{},onSend:()=>sends++,files:new Map(),roster:[],voice:{status:'inactive'}}));

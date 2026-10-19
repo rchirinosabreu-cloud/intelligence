@@ -33,10 +33,10 @@ const Login = ({ onLogin }) => {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     if (params.get('expired') === 'true') {
-      setInfoMsg('Tu sesion ha expirado por seguridad. Ingresa nuevamente.');
+      setInfoMsg('Tu sesión ha expirado por seguridad. Ingresa nuevamente.');
     }
     if (params.get('passwordChanged') === 'true') {
-      setInfoMsg('Contrasena actualizada. Ingresa nuevamente con tu nueva clave.');
+      setInfoMsg('Contraseña actualizada. Ingresa nuevamente con tu nueva clave.');
     }
   }, [location]);
 
@@ -163,10 +163,10 @@ const Login = ({ onLogin }) => {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.message || 'No pudimos enviar el codigo de recuperacion.');
+        throw new Error(data.message || 'No pudimos enviar el código de recuperación.');
       }
 
-      setInfoMsg(data.message || 'Si el correo existe, enviaremos un codigo de recuperacion.');
+      setInfoMsg(data.message || 'Si el correo existe, enviaremos un código de recuperación.');
       setAuthMode('reset-confirm');
     } catch (error) {
       console.error('Password reset request error:', error);
@@ -181,7 +181,7 @@ const Login = ({ onLogin }) => {
     clearMessages();
 
     if (newPassword !== confirmPassword) {
-      setErrorMsg('Las contrasenas no coinciden.');
+      setErrorMsg('Las contraseñas no coinciden.');
       return;
     }
 
@@ -195,7 +195,7 @@ const Login = ({ onLogin }) => {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.message || 'No pudimos actualizar la contrasena.');
+        throw new Error(data.message || 'No pudimos actualizar la contraseña.');
       }
 
       setPassword('');
@@ -203,7 +203,7 @@ const Login = ({ onLogin }) => {
       setNewPassword('');
       setConfirmPassword('');
       setAuthMode('login');
-      setInfoMsg(data.message || 'Contrasena actualizada. Ingresa nuevamente con tu nueva clave.');
+      setInfoMsg(data.message || 'Contraseña actualizada. Ingresa nuevamente con tu nueva clave.');
     } catch (error) {
       console.error('Password reset confirm error:', error);
       setErrorMsg(error.message);
@@ -235,7 +235,7 @@ const Login = ({ onLogin }) => {
               Imagina. Crea. Conecta. Trasciende.
             </h2>
             <p className="mt-5 max-w-md text-sm leading-6 text-white/70">
-              La operacion creativa de Brainstudio reunida en un solo lugar para convertir ideas en movimiento.
+              La operación creativa de Brainstudio reunida en un solo lugar para convertir ideas en movimiento.
             </p>
           </div>
         </section>
@@ -255,7 +255,7 @@ const Login = ({ onLogin }) => {
                     ? useBackupCode
                       ? 'Escribe uno de tus códigos de respaldo. Cada uno sirve una sola vez.'
                       : 'Escribe el código de seis dígitos de tu app autenticadora.'
-                    : 'Te enviaremos un codigo al correo registrado para crear una nueva contrasena.'}
+                    : 'Te enviaremos un código al correo registrado para crear una nueva contraseña.'}
               </p>
             </div>
 
@@ -333,7 +333,7 @@ const Login = ({ onLogin }) => {
 
               {!isMfa && (
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Correo electronico</span>
+                <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Correo electrónico</span>
                 <div className="relative">
                   <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
                   <input
@@ -350,7 +350,7 @@ const Login = ({ onLogin }) => {
 
               {authMode === 'login' && (
                 <label className="block">
-                  <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Contrasena</span>
+                  <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Contraseña</span>
                   <div className="relative">
                     <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
                     <input
@@ -368,7 +368,7 @@ const Login = ({ onLogin }) => {
               {isResetConfirm && (
                 <>
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Codigo de verificacion</span>
+                    <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Código de verificación</span>
                     <div className="relative">
                       <KeyRound className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
                       <input
@@ -384,7 +384,7 @@ const Login = ({ onLogin }) => {
                   </label>
 
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Nueva contrasena</span>
+                    <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Nueva contraseña</span>
                     <div className="relative">
                       <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
                       <input
@@ -399,7 +399,7 @@ const Login = ({ onLogin }) => {
                   </label>
 
                   <label className="block">
-                    <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Confirmar contrasena</span>
+                    <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Confirmar contraseña</span>
                     <div className="relative">
                       <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
                       <input
@@ -407,7 +407,7 @@ const Login = ({ onLogin }) => {
                         value={confirmPassword}
                         onChange={(event) => setConfirmPassword(event.target.value)}
                         className="w-full rounded-2xl border border-zinc-200 bg-white py-3 pl-11 pr-4 text-zinc-950 outline-none transition placeholder:text-zinc-400 focus:border-indigo-300 focus:ring-4 focus:ring-indigo-100 dark:border-white/10 dark:bg-white/5 dark:text-white dark:focus:ring-indigo-500/20"
-                        placeholder="Repite la nueva contrasena"
+                        placeholder="Repite la nueva contraseña"
                         required
                       />
                     </div>
@@ -425,9 +425,9 @@ const Login = ({ onLogin }) => {
                   : isMfa
                     ? 'Verificar y entrar'
                     : isResetRequest
-                    ? 'Enviar codigo'
+                    ? 'Enviar código'
                     : isResetConfirm
-                      ? 'Actualizar contrasena'
+                      ? 'Actualizar contraseña'
                       : 'Acceder'}
               </button>
             </form>
@@ -442,7 +442,7 @@ const Login = ({ onLogin }) => {
                   }}
                   className="text-xs font-semibold text-indigo-600 transition-colors hover:text-indigo-700 dark:text-indigo-300 dark:hover:text-indigo-200"
                 >
-                  Olvide mi contrasena
+                  Olvidé mi contraseña
                 </button>
               ) : (
                 <button

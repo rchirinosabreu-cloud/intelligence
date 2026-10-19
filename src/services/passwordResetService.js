@@ -4,7 +4,7 @@ import prisma from '../lib/prisma.js';
 import { isActiveTeamUser } from './teamRosterService.js';
 import { sendPasswordResetCode } from './passwordResetEmailService.js';
 
-export const PASSWORD_RESET_PUBLIC_MESSAGE = 'Si el correo existe, enviaremos un codigo de recuperacion.';
+export const PASSWORD_RESET_PUBLIC_MESSAGE = 'Si el correo existe, enviaremos un código de recuperación.';
 const CODE_LENGTH = 6;
 const CODE_TTL_MINUTES = 10;
 const MAX_ATTEMPTS = 5;
@@ -74,7 +74,7 @@ const buildDefaultDependencies = () => ({
 export const requestPasswordReset = async ({ email }, dependencies = buildDefaultDependencies()) => {
   const normalizedEmail = normalizeEmail(email);
   if (!isEmailLike(normalizedEmail)) {
-    throw new PasswordResetError('Correo electronico invalido');
+    throw new PasswordResetError('Correo electrónico inválido');
   }
 
   const user = await dependencies.userRepository.findByEmail(normalizedEmail);
@@ -111,37 +111,37 @@ export const completePasswordReset = async (
   const normalizedCode = String(code || '').trim();
 
   if (!isEmailLike(normalizedEmail)) {
-    throw new PasswordResetError('Correo electronico invalido');
+    throw new PasswordResetError('Correo electrónico inválido');
   }
 
   if (!/^\d{6}$/.test(normalizedCode)) {
-    throw new PasswordResetError('Codigo invalido o expirado');
+    throw new PasswordResetError('Código inválido o expirado');
   }
 
   if (!newPassword || String(newPassword).length < MIN_PASSWORD_LENGTH) {
-    throw new PasswordResetError(`La nueva contrasena debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`);
+    throw new PasswordResetError(`La nueva contraseña debe tener al menos ${MIN_PASSWORD_LENGTH} caracteres`);
   }
 
   const now = dependencies.now();
   const resetCode = await dependencies.resetCodeRepository.findLatestUsableByEmail(normalizedEmail, now);
   if (!resetCode) {
-    throw new PasswordResetError('Codigo invalido o expirado');
+    throw new PasswordResetError('Código inválido o expirado');
   }
 
   const isCodeValid = await dependencies.compareValue(normalizedCode, resetCode.codeHash);
   if (!isCodeValid) {
     await dependencies.resetCodeRepository.markFailedAttempt(resetCode.id);
-    throw new PasswordResetError('Codigo invalido o expirado');
+    throw new PasswordResetError('Código inválido o expirado');
   }
 
   const user = await dependencies.userRepository.findByEmail(normalizedEmail);
   if (!isActiveTeamUser(user)) {
-    throw new PasswordResetError('Codigo invalido o expirado');
+    throw new PasswordResetError('Código inválido o expirado');
   }
 
   const isSamePassword = await dependencies.compareValue(newPassword, user.password);
   if (isSamePassword) {
-    throw new PasswordResetError('La nueva contrasena debe ser diferente a la actual');
+    throw new PasswordResetError('La nueva contraseña debe ser diferente a la actual');
   }
 
   const passwordHash = await dependencies.hashValue(newPassword);

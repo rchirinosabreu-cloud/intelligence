@@ -459,7 +459,7 @@ export const buildPersonalDashboard = ({ member, now = new Date(), globalAchieve
       type: 'OPORTUNIDAD',
       severity: clientsNeedingAttention.some((client) => client.overdueTasks > 0) ? 'warning' : 'info',
       title: `${clientsNeedingAttention.length} ${clientsNeedingAttention.length === 1 ? 'cliente pide liderazgo' : 'clientes piden liderazgo'}`,
-      content: 'Lleva a la proxima revision una propuesta, no solo una lista de pendientes: objetivo, insight y siguiente accion.',
+      content: 'Lleva a la próxima revisión una propuesta, no solo una lista de pendientes: objetivo, insight y siguiente acción.',
       actionLabel: 'Ver mis clientes',
       actionUrl: '/clientes',
       items: clientsNeedingAttention.slice(0, 5).map((client) => ({

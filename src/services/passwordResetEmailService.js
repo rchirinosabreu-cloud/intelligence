@@ -13,7 +13,7 @@ const getSmtpConfig = () => {
   const from = process.env.SMTP_FROM || process.env.PASSWORD_RESET_FROM || user;
 
   if (!user || !pass) {
-    throw new Error('SMTP_USER y SMTP_PASS son requeridos para enviar correos de recuperacion');
+    throw new Error('SMTP_USER y SMTP_PASS son requeridos para enviar correos de recuperación');
   }
 
   return {
@@ -38,7 +38,7 @@ const getTransporter = () => {
 };
 
 export const buildPasswordResetEmail = ({ code, expiresInMinutes }) => {
-  const preheader = `Tu codigo de recuperacion expira en ${expiresInMinutes} minutos.`;
+  const preheader = `Tu código de recuperación expira en ${expiresInMinutes} minutos.`;
 
   return `
     <!doctype html>
@@ -46,7 +46,7 @@ export const buildPasswordResetEmail = ({ code, expiresInMinutes }) => {
       <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Codigo de recuperacion</title>
+        <title>Código de recuperación</title>
       </head>
       <body style="margin:0;padding:0;background:#f4f7fb;font-family:Arial,Helvetica,sans-serif;color:#1c242c;">
         <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:transparent;">
@@ -69,10 +69,10 @@ export const buildPasswordResetEmail = ({ code, expiresInMinutes }) => {
                 <tr>
                   <td style="padding:34px 32px 30px;">
                     <p style="margin:0 0 18px;font-size:16px;line-height:25px;color:#1f3c58;">
-                      Recibimos una solicitud para crear una nueva contrasena de acceso a Brainstudio Intelligence.
+                      Recibimos una solicitud para crear una nueva contraseña de acceso a Brainstudio Intelligence.
                     </p>
                     <p style="margin:0 0 22px;font-size:15px;line-height:24px;color:#627d9f;">
-                      Ingresa este codigo en la pantalla de recuperacion:
+                      Ingresa este código en la pantalla de recuperación:
                     </p>
                     <div style="background:#eef5ff;border:1px solid #c9dcf3;border-radius:16px;padding:22px 18px;text-align:center;">
                       <div style="font-size:34px;line-height:42px;font-weight:800;letter-spacing:10px;color:#144c8c;">
@@ -80,7 +80,7 @@ export const buildPasswordResetEmail = ({ code, expiresInMinutes }) => {
                       </div>
                     </div>
                     <p style="margin:22px 0 0;font-size:14px;line-height:22px;color:#627d9f;">
-                      Este codigo expira en <strong style="color:#1f3c58;">${expiresInMinutes} minutos</strong>. Por seguridad, no lo compartas con nadie.
+                      Este código expira en <strong style="color:#1f3c58;">${expiresInMinutes} minutos</strong>. Por seguridad, no lo compartas con nadie.
                     </p>
                   </td>
                 </tr>
@@ -88,7 +88,7 @@ export const buildPasswordResetEmail = ({ code, expiresInMinutes }) => {
                   <td style="padding:0 32px 32px;">
                     <div style="border-top:1px solid #e6edf6;padding-top:20px;">
                       <p style="margin:0;font-size:13px;line-height:21px;color:#7b8fa8;">
-                        Si no solicitaste este cambio, puedes ignorar este correo. Tu contrasena actual no cambiara.
+                        Si no solicitaste este cambio, puedes ignorar este correo. Tu contraseña actual no cambiará.
                       </p>
                       <p style="margin:18px 0 0;font-size:12px;line-height:18px;color:#9aaac0;">
                         Enviado automaticamente por Brainstudio Intelligence.
@@ -112,8 +112,8 @@ export const sendPasswordResetCode = async ({ to, code, expiresInMinutes }) => {
   await transporter.sendMail({
     from: config.from,
     to,
-    subject: 'Codigo de recuperacion - Brainstudio Intelligence',
-    text: `Tu codigo de recuperacion es ${code}. Expira en ${expiresInMinutes} minutos. Si no solicitaste este cambio, ignora este correo.`,
+    subject: 'Código de recuperación - Brainstudio Intelligence',
+    text: `Tu código de recuperación es ${code}. Expira en ${expiresInMinutes} minutos. Si no solicitaste este cambio, ignora este correo.`,
     html: buildPasswordResetEmail({ code, expiresInMinutes })
   });
 };

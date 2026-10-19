@@ -110,7 +110,7 @@ export const updateUserPassword = async (userId, currentPassword, newPassword) =
 
     const isSamePassword = await bcrypt.compare(newPassword, user.password);
     if (isSamePassword) {
-        throw new Error('La nueva contrasena debe ser diferente a la actual');
+        throw new Error('La nueva contraseña debe ser diferente a la actual');
     }
 
     const hashedNewPassword = await bcrypt.hash(newPassword, 10);

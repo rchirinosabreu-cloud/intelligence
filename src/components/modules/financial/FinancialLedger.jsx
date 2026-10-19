@@ -968,7 +968,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
 
             <Dialog open={isReopenPeriodOpen} onOpenChange={setIsReopenPeriodOpen}>
                 <DialogContent className="sm:max-w-md dark:bg-zinc-900">
-                    <DialogHeader><DialogTitle>Reabrir mes</DialogTitle><DialogDescription>Esta accion vuelve a permitir cambios en el periodo. El motivo y el usuario quedaran registrados en la auditoria.</DialogDescription></DialogHeader>
+                    <DialogHeader><DialogTitle>Reabrir mes</DialogTitle><DialogDescription>Esta acción vuelve a permitir cambios en el período. El motivo y el usuario quedarán registrados en la auditoría.</DialogDescription></DialogHeader>
                     <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Motivo<textarea autoFocus rows={3} value={reopenPeriodReason} onChange={(event) => setReopenPeriodReason(event.target.value)} placeholder="Ej. Corregir un movimiento conciliado" className={inputClass} /></label>
                     <DialogFooter><button type="button" onClick={() => setIsReopenPeriodOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="button" onClick={reopenSelectedPeriod} disabled={!reopenPeriodReason.trim() || isReopeningPeriod} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isReopeningPeriod && <Loader2 className="h-4 w-4 animate-spin" />}Confirmar reapertura</button></DialogFooter>
                 </DialogContent>

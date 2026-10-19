@@ -73,10 +73,10 @@ const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }) => {
             href={link}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-2 py-1 bg-indigo-50 dark:bg-indigo-900/20 text-indigo-600 hover:text-indigo-700 font-bold text-[10px] rounded-xl transition-colors max-w-full truncate"
+            className="flex items-center gap-1.5 px-2 py-1 bg-brand-cyan-soft dark:bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan hover:text-brand-cyan-deep dark:hover:text-brand-cyan font-bold text-[10px] rounded-xl transition-colors max-w-full truncate"
           >
             <ExternalLink className="w-2.5 h-2.5" />
-            {links.length > 1 ? `Link ${i + 1}` : 'Ver Link'}
+            {links.length > 1 ? `Enlace ${i + 1}` : 'Ver enlace'}
           </a>
         ))}
       </div>
@@ -93,7 +93,7 @@ const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }) => {
             onChange={(e) => handleUpdateLink(i, e.target.value)}
             onBlur={handleBlur}
             placeholder={placeholder}
-            className="flex-1 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all"
+            className="flex-1 bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 rounded-xl px-3 py-2 text-xs focus:ring-2 focus:ring-brand-cyan/20 outline-none transition-all"
           />
           <button
             onClick={() => handleRemoveLink(i)}
@@ -105,9 +105,9 @@ const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }) => {
       ))}
       <button
         onClick={handleAddLink}
-        className="flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:text-indigo-700 transition-colors px-1"
+        className="flex items-center gap-1 text-[10px] font-bold text-brand-cyan-deep dark:text-brand-cyan hover:text-brand-cyan-deep dark:hover:text-brand-cyan transition-colors px-1"
       >
-        <Plus className="w-3 h-3" /> Añadir Link
+        <Plus className="w-3 h-3" /> Añadir enlace
       </button>
     </div>
   );
@@ -139,7 +139,8 @@ const AutoResizeTextarea = ({ id, defaultValue, onBlur, placeholder, disabled, c
       onBlur={onBlur}
       placeholder={placeholder}
       disabled={disabled}
-      className={className}
+      wrap="soft"
+      className={`${className || ''} min-w-0 max-w-full resize-y overflow-x-hidden whitespace-pre-wrap [overflow-wrap:anywhere]`}
       rows={1}
     />
   );
@@ -870,7 +871,7 @@ const FeedbackHistory = ({ comments }) => {
           <MessageSquare className="w-3.5 h-3.5" />
         </div>
         <label className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-[0.2em]">
-          Feedback del Cliente
+          Feedback del cliente
         </label>
       </div>
 
@@ -1140,6 +1141,7 @@ const ContentItemCard = ({
             </div>
             {isEditing ? (
               <AutoResizeTextarea
+                id={`guion-${item.id}`}
                 defaultValue={item.copyText}
                 onBlur={(e) => {
                   if (e.target.value !== item.copyText) onUpdate({ id: item.id, copyText: e.target.value });
@@ -1148,7 +1150,7 @@ const ContentItemCard = ({
                 className="min-h-[260px] max-h-[320px] overflow-y-auto w-full rounded-xl border border-zinc-200 bg-white p-4 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900"
               />
             ) : (
-              <div className="min-h-[260px] max-h-[320px] overflow-y-auto whitespace-pre-wrap rounded-xl bg-zinc-50 p-4 text-[13px] leading-relaxed text-zinc-700 dark:bg-white/5 dark:text-zinc-300">
+              <div id={`guion-${item.id}`} className="min-h-[260px] max-h-[320px] min-w-0 overflow-x-hidden overflow-y-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-xl bg-zinc-50 p-4 text-[13px] leading-relaxed text-zinc-700 dark:bg-white/5 dark:text-zinc-300">
                 {item.copyText || <span className="italic text-zinc-400">Sin guion…</span>}
               </div>
             )}
@@ -1163,6 +1165,7 @@ const ContentItemCard = ({
             </div>
             {isEditing ? (
               <AutoResizeTextarea
+                id={`texto-${item.id}`}
                 defaultValue={item.captionText}
                 onBlur={(e) => {
                   if (e.target.value !== item.captionText) onUpdate({ id: item.id, captionText: e.target.value });
@@ -1171,7 +1174,7 @@ const ContentItemCard = ({
                 className="min-h-[260px] max-h-[320px] overflow-y-auto w-full rounded-xl border-[1.5px] border-brand-cyan/30 bg-brand-cyan-soft/30 p-4 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:bg-brand-cyan/5"
               />
             ) : (
-              <div className="min-h-[260px] max-h-[320px] overflow-y-auto whitespace-pre-wrap rounded-xl border-[1.5px] border-brand-cyan/20 bg-brand-cyan-soft/30 p-4 text-[13px] leading-relaxed text-zinc-700 dark:bg-brand-cyan/5 dark:text-zinc-300">
+              <div id={`texto-${item.id}`} className="min-h-[260px] max-h-[320px] min-w-0 overflow-x-hidden overflow-y-auto whitespace-pre-wrap [overflow-wrap:anywhere] rounded-xl border-[1.5px] border-brand-cyan/20 bg-brand-cyan-soft/30 p-4 text-[13px] leading-relaxed text-zinc-700 dark:bg-brand-cyan/5 dark:text-zinc-300">
                 {item.captionText || <span className="italic text-zinc-400">Sin texto de publicación…</span>}
               </div>
             )}
@@ -1360,7 +1363,7 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
       <DialogContent className="sm:max-w-[425px] bg-white dark:bg-zinc-900 border-zinc-200 dark:border-white/10 shadow-2xl">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold flex items-center gap-2">
-            <Send className="w-5 h-5 text-indigo-600" />
+            <Send className="w-5 h-5 text-brand-cyan-deep dark:text-brand-cyan" />
             Despachar a Kanban
           </DialogTitle>
           <DialogDescription>
@@ -1374,7 +1377,7 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
             <Select
               value={data.assigneeId}
               onChange={(e) => setData({ ...data, assigneeId: e.target.value })}
-              className="w-full h-11 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all text-sm"
+              className="w-full h-11 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-brand-cyan/20 outline-none transition-all text-sm"
             >
               <option value="">Sin asignar (Pendiente)</option>
               {team?.map(member => (
@@ -1390,7 +1393,7 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
               selected={data.dueDate ? new Date(`${data.dueDate}T12:00:00.000Z`) : null}
               onChange={(date) => setData({ ...data, dueDate: date ? date.toISOString().split('T')[0] : '' })}
               dateFormat="dd/MM/yyyy"
-              className="w-full h-11 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-indigo-600/20 outline-none transition-all text-sm"
+              className="w-full h-11 px-4 rounded-xl bg-zinc-50 dark:bg-white/5 border border-zinc-200 dark:border-white/10 focus:ring-2 focus:ring-brand-cyan/20 outline-none transition-all text-sm"
               wrapperClassName="w-full"
               placeholderText="Elegir fecha"
               isClearable
@@ -1403,18 +1406,18 @@ const DispatchModal = ({ isOpen, onClose, onConfirm, isPending }) => {
                 type="checkbox"
                 checked={data.isPriority}
                 onChange={(e) => setData({ ...data, isPriority: e.target.checked })}
-                className="w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-600"
+                className="w-4 h-4 rounded border-zinc-300 text-brand-cyan-deep dark:text-brand-cyan focus:ring-brand-cyan"
               />
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-indigo-600 transition-colors">Prioridad</span>
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-brand-cyan-deep dark:group-hover:text-brand-cyan transition-colors">Prioridad</span>
             </label>
             <label className="flex items-center gap-2 cursor-pointer group">
               <input
                 type="checkbox"
                 checked={data.isSpecial}
                 onChange={(e) => setData({ ...data, isSpecial: e.target.checked })}
-                className="w-4 h-4 rounded border-zinc-300 text-indigo-600 focus:ring-indigo-600"
+                className="w-4 h-4 rounded border-zinc-300 text-brand-cyan-deep dark:text-brand-cyan focus:ring-brand-cyan"
               />
-              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-indigo-600 transition-colors">Especial</span>
+              <span className="text-sm font-medium text-zinc-700 dark:text-zinc-300 group-hover:text-brand-cyan-deep dark:group-hover:text-brand-cyan transition-colors">Especial</span>
             </label>
           </div>
         </div>
@@ -2005,7 +2008,7 @@ const ContentPlanDetail = () => {
   if (planLoading) {
     return (
       <div className="flex flex-col items-center justify-center p-20 gap-4">
-        <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
+        <Loader2 className="w-10 h-10 text-brand-cyan-deep dark:text-brand-cyan animate-spin" />
         <p className="text-zinc-500">Cargando detalles de la parrilla...</p>
       </div>
     );
@@ -2114,7 +2117,7 @@ const ContentPlanDetail = () => {
               onChange={(e) => updatePlanMutation.mutate({ ownerId: e.target.value || null })}
               className="cursor-pointer border-none bg-transparent pl-0 pr-7 text-sm font-medium text-zinc-500 transition-colors hover:text-brand-cyan-deep focus:ring-0 dark:text-zinc-400 dark:hover:text-brand-cyan"
             >
-              <option value="">Sin Responsable (CM)</option>
+              <option value="">Sin responsable (CM)</option>
               {team?.map(member => (
                 <option key={member.id} value={member.id}>{member.name}</option>
               ))}
@@ -2124,7 +2127,7 @@ const ContentPlanDetail = () => {
 
       <div className="bg-white/60 dark:bg-zinc-900/40 border border-zinc-200/60 dark:border-white/5 rounded-3xl p-6">
         <div className="flex items-start gap-3 mb-5">
-          <div className="p-2 bg-indigo-600/10 text-indigo-600 rounded-xl">
+          <div className="p-2 bg-brand-cyan/10 dark:bg-brand-cyan/15 text-brand-cyan-deep dark:text-brand-cyan rounded-xl">
             <Table2 className="w-5 h-5" />
           </div>
           <div>
@@ -2141,7 +2144,7 @@ const ContentPlanDetail = () => {
             }
           }}
           placeholder="Escribe los objetivos estratégicos del mes..."
-          className="w-full min-h-[116px] bg-zinc-50/80 dark:bg-white/5 border border-zinc-200/70 dark:border-white/10 rounded-2xl p-4 text-sm text-zinc-800 dark:text-zinc-200 focus:ring-4 focus:ring-indigo-600/10 outline-none transition-all"
+          className="w-full min-h-[116px] bg-zinc-50/80 dark:bg-white/5 border border-zinc-200/70 dark:border-white/10 rounded-2xl p-4 text-sm text-zinc-800 dark:text-zinc-200 focus:ring-4 focus:ring-brand-cyan/10 outline-none transition-all"
         />
       </div>
 
@@ -2161,7 +2164,7 @@ const ContentPlanDetail = () => {
           className="w-full flex items-center justify-between p-6 hover:bg-zinc-50 dark:hover:bg-white/5 transition-colors"
         >
           <div className="flex items-center gap-3">
-            <div className="p-2 bg-indigo-600/10 text-indigo-600 rounded-xl">
+            <div className="p-2 bg-brand-cyan/10 dark:bg-brand-cyan/15 text-brand-cyan-deep dark:text-brand-cyan rounded-xl">
               <StickyNote className="w-5 h-5" />
             </div>
             <div className="text-left">
@@ -2181,7 +2184,7 @@ const ContentPlanDetail = () => {
                     key={`${note}-${index}`}
                     className="group flex items-start gap-3 rounded-2xl border border-zinc-200/70 dark:border-white/10 bg-zinc-50/70 dark:bg-white/5 p-4"
                   >
-                    <span className="mt-0.5 text-[11px] font-semibold text-indigo-600">#{index + 1}</span>
+                    <span className="mt-0.5 text-[11px] font-semibold text-brand-cyan-deep dark:text-brand-cyan">#{index + 1}</span>
                     <p className="flex-1 whitespace-pre-wrap text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{note}</p>
                     <button
                       type="button"
@@ -2204,7 +2207,7 @@ const ContentPlanDetail = () => {
                   if (e.key === 'Enter') handleAddPlanInternalNote();
                 }}
                 placeholder="Añade una nota interna..."
-                className="flex-1 min-h-[46px] bg-zinc-50/80 dark:bg-white/5 border border-zinc-200/70 dark:border-white/10 rounded-2xl px-4 py-3 text-sm text-zinc-800 dark:text-zinc-200 focus:ring-4 focus:ring-indigo-600/10 outline-none transition-all"
+                className="flex-1 min-h-[46px] bg-zinc-50/80 dark:bg-white/5 border border-zinc-200/70 dark:border-white/10 rounded-2xl px-4 py-3 text-sm text-zinc-800 dark:text-zinc-200 focus:ring-4 focus:ring-brand-cyan/10 outline-none transition-all"
               />
               <Button type="button" onClick={handleAddPlanInternalNote} className="sm:w-auto">
                 <Plus className="w-4 h-4 mr-2" />
@@ -2231,7 +2234,7 @@ const ContentPlanDetail = () => {
                 aria-pressed={planView === option.key}
                 className={`rounded-lg px-4 py-2 text-xs font-bold transition ${
                   planView === option.key
-                    ? 'bg-zinc-900 text-white dark:bg-white dark:text-zinc-900'
+                    ? 'bg-brand-cyan/10 text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan'
                     : 'text-zinc-500 hover:bg-zinc-50 dark:text-zinc-400 dark:hover:bg-white/5'
                 }`}
               >

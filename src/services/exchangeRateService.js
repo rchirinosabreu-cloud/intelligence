@@ -6,7 +6,7 @@ const parseRateValue = (value) => {
   const normalized = String(value ?? '').replace(/,/g, '').trim();
   const rate = Number(normalized);
   if (!Number.isFinite(rate) || rate <= 0) {
-    throw new Error('La fuente oficial no devolvio una TRM valida');
+    throw new Error('La fuente oficial no devolvió una TRM válida');
   }
   return rate;
 };
@@ -15,12 +15,12 @@ export const parseOfficialTrmResponse = (rawText) => {
   try {
     rows = JSON.parse(rawText);
   } catch {
-    throw new Error('La fuente oficial devolvio una respuesta invalida');
+    throw new Error('La fuente oficial devolvió una respuesta inválida');
   }
 
   const row = Array.isArray(rows) ? rows[0] : null;
   if (!row?.vigenciadesde) {
-    throw new Error('La fuente oficial no devolvio una vigencia para la TRM');
+    throw new Error('La fuente oficial no devolvió una vigencia para la TRM');
   }
 
   return {

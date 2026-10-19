@@ -228,7 +228,7 @@ const OperationalCalendar = () => {
       const res = await fetch(`${getApiBaseUrl()}/api/activity/google-calendar/auth-url${query}`, { headers: getAuthHeaders() });
       if (!res.ok) {
         const error = await res.json().catch(() => ({}));
-        throw new Error(error.details || error.error || 'No se pudo iniciar la conexion');
+        throw new Error(error.details || error.error || 'No se pudo iniciar la conexión');
       }
       const data = await res.json();
       if (email) sessionStorage.setItem('googleCalendarRequestedEmail', email);
@@ -659,7 +659,7 @@ const OperationalCalendar = () => {
       return;
     }
     if (!formData.title || !formData.startAt || !formData.endAt) {
-      toast.error('Completa titulo y fechas para generar link');
+      toast.error('Completa el título y las fechas para generar el enlace');
       return;
     }
 

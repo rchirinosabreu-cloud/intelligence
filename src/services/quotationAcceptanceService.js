@@ -122,7 +122,7 @@ export const acceptQuotationBySlug = async ({ db, slug, scenarioId, expectedUpda
       await tx.notification.createMany({
         data: recipients.map((recipient) => ({
           userId: recipient.id,
-          message: `${quotation.client_name || 'Un cliente'} aprobo la cotizacion ${formattedConsecutive}.`,
+          message: `${quotation.client_name || 'Un cliente'} aprobó la cotización ${formattedConsecutive}.`,
           type: 'QUOTATION_ACCEPTED',
           relatedId: quotation.id,
           resourceId: quotation.id,

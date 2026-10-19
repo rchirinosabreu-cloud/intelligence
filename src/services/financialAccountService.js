@@ -20,12 +20,12 @@ const normalizeAccountInput = (input = {}) => {
 
   const type = String(input.type || '').trim().toUpperCase();
   if (!ACCOUNT_TYPES.has(type)) {
-    throw new FinancialDomainError('FINANCIAL_ACCOUNT_TYPE_INVALID', 'El tipo de cuenta no es valido.');
+    throw new FinancialDomainError('FINANCIAL_ACCOUNT_TYPE_INVALID', 'El tipo de cuenta no es válido.');
   }
 
   const openingBalance = Number(input.openingBalance || 0);
   if (!Number.isFinite(openingBalance)) {
-    throw new FinancialDomainError('FINANCIAL_ACCOUNT_BALANCE_INVALID', 'El saldo inicial no es valido.');
+    throw new FinancialDomainError('FINANCIAL_ACCOUNT_BALANCE_INVALID', 'El saldo inicial no es válido.');
   }
 
   const { date: openingBalanceDate } = parseFinancialDateInput(input.openingBalanceDate);

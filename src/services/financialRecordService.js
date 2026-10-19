@@ -59,7 +59,7 @@ export const parseFinancialDateInput = (value) => {
         date.getUTCMonth() + 1 !== month ||
         date.getUTCDate() !== day
     ) {
-        throw new FinancialDomainError('FINANCIAL_RECORD_DATE_INVALID', 'La fecha contable no es valida.');
+        throw new FinancialDomainError('FINANCIAL_RECORD_DATE_INVALID', 'La fecha contable no es válida.');
     }
 
     return { date, year, month };
@@ -76,29 +76,29 @@ export const normalizeFinancialRecordInput = (input = {}) => {
     if (!Number.isFinite(amount) || amount <= 0) {
         throw new FinancialDomainError(
             'FINANCIAL_RECORD_AMOUNT_INVALID',
-            'El valor debe ser un numero mayor que cero.'
+            'El valor debe ser un número mayor que cero.'
         );
     }
 
     const { date, year, month } = parseFinancialDateInput(input.date);
-    const type = requireEnum(input.type, TYPES, 'FINANCIAL_RECORD_TYPE_INVALID', 'El tipo de movimiento no es valido.');
+    const type = requireEnum(input.type, TYPES, 'FINANCIAL_RECORD_TYPE_INVALID', 'El tipo de movimiento no es válido.');
     const category = requireEnum(
         input.category,
         CATEGORIES,
         'FINANCIAL_RECORD_CATEGORY_INVALID',
-        'La categoria financiera no es valida.'
+        'La categoría financiera no es válida.'
     );
     const scenario = requireEnum(
         input.scenario || 'ACTUAL',
         SCENARIOS,
         'FINANCIAL_RECORD_SCENARIO_INVALID',
-        'El escenario financiero no es valido.'
+        'El escenario financiero no es válido.'
     );
     const status = requireEnum(
         input.status || 'POSTED',
         STATUSES,
         'FINANCIAL_RECORD_STATUS_INVALID',
-        'El estado del movimiento no es valido.'
+        'El estado del movimiento no es válido.'
     );
     const origin = input.origin === 'IMPORT' ? 'IMPORT' : 'MANUAL';
     const accountId = input.accountId || null;
@@ -216,18 +216,18 @@ export const listFinancialRecords = async (prismaClient, filters = {}) => {
             filters.scenario,
             SCENARIOS,
             'FINANCIAL_RECORD_SCENARIO_INVALID',
-            'El escenario financiero no es valido.'
+            'El escenario financiero no es válido.'
         );
     }
     if (filters.type) {
-        where.type = requireEnum(filters.type, TYPES, 'FINANCIAL_RECORD_TYPE_INVALID', 'El tipo de movimiento no es valido.');
+        where.type = requireEnum(filters.type, TYPES, 'FINANCIAL_RECORD_TYPE_INVALID', 'El tipo de movimiento no es válido.');
     }
     if (filters.category) {
         where.category = requireEnum(
             filters.category,
             CATEGORIES,
             'FINANCIAL_RECORD_CATEGORY_INVALID',
-            'La categoria financiera no es valida.'
+            'La categoría financiera no es válida.'
         );
     }
     if (filters.status && String(filters.status).toUpperCase() !== 'ALL') {
@@ -236,7 +236,7 @@ export const listFinancialRecords = async (prismaClient, filters = {}) => {
             filters.status,
             allowedStatuses,
             'FINANCIAL_RECORD_STATUS_INVALID',
-            'El estado del movimiento no es valido.'
+            'El estado del movimiento no es válido.'
         );
     } else {
         where.status = { not: 'VOIDED' };

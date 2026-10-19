@@ -18,7 +18,7 @@ export class QuotationValidationError extends Error {
 const toFiniteNumber = (value, fieldName, { min = 0 } = {}) => {
   const parsed = Number(value);
   if (!Number.isFinite(parsed) || parsed < min) {
-    throw new QuotationValidationError(`${fieldName} invalido`);
+    throw new QuotationValidationError(`${fieldName} inválido`);
   }
   return parsed;
 };
@@ -35,7 +35,7 @@ const roundPercentage = (value) => Math.round((value + Number.EPSILON) * 10) / 1
 export const normalizeQuotationDuration = (value = 1) => {
   const durationMonths = Number(value ?? 1);
   if (!Number.isInteger(durationMonths) || durationMonths < 1 || durationMonths > MAX_QUOTATION_DURATION_MONTHS) {
-    throw new QuotationValidationError('Duración de la propuesta invalida');
+    throw new QuotationValidationError('Duración de la propuesta inválida');
   }
   return durationMonths;
 };
@@ -46,7 +46,7 @@ export const normalizeQuotationDiscount = ({ type, value, label } = {}) => {
   }
   const discountType = String(type).toUpperCase();
   if (!DISCOUNT_TYPES.has(discountType)) {
-    throw new QuotationValidationError('Tipo de descuento invalido');
+    throw new QuotationValidationError('Tipo de descuento inválido');
   }
   const discountValue = toFiniteNumber(value, 'Valor del descuento');
   if (discountType === 'PERCENTAGE' && discountValue > 100) {
@@ -136,8 +136,8 @@ export const serializeCatalogService = (service) => {
 };
 
 export const prepareQuotationItems = (items, catalogServices = [], trustedExistingItems = []) => {
-  if (!Array.isArray(items)) throw new QuotationValidationError('Los servicios deben ser una lista valida');
-  if (items.length > MAX_QUOTATION_ITEMS) throw new QuotationValidationError('La cotizacion supera el limite de servicios');
+  if (!Array.isArray(items)) throw new QuotationValidationError('Los servicios deben ser una lista válida');
+  if (items.length > MAX_QUOTATION_ITEMS) throw new QuotationValidationError('La cotización supera el límite de servicios');
 
   const catalogById = new Map(catalogServices.map((service) => [service.id, service]));
   const existingByServiceId = new Map(
@@ -152,7 +152,7 @@ export const prepareQuotationItems = (items, catalogServices = [], trustedExisti
 
     const price = toFiniteNumber(item.price, `Precio del servicio ${index + 1}`);
     const quantity = toFiniteNumber(item.quantity, `Cantidad del servicio ${index + 1}`, { min: 1 });
-    if (!Number.isInteger(quantity)) throw new QuotationValidationError(`Cantidad del servicio ${index + 1} invalida`);
+    if (!Number.isInteger(quantity)) throw new QuotationValidationError(`Cantidad del servicio ${index + 1} inválida`);
 
     const serviceId = typeof item.serviceId === 'string' ? item.serviceId : null;
     const catalogService = serviceId ? catalogById.get(serviceId) : null;
@@ -165,7 +165,7 @@ export const prepareQuotationItems = (items, catalogServices = [], trustedExisti
     );
     const billingType = String(item?.billingType || existingItem?.billingType || 'MONTHLY').toUpperCase();
     if (!BILLING_TYPES.has(billingType)) {
-      throw new QuotationValidationError(`Periodicidad del servicio ${index + 1} invalida`);
+      throw new QuotationValidationError(`Periodicidad del servicio ${index + 1} inválida`);
     }
 
     const scenarioDiscount = item?.scenarioId
@@ -350,7 +350,7 @@ export const normalizeQuotationExchangeRate = ({
   const normalizedRate = toFiniteNumber(exchangeRate, 'Tasa de cambio', { min: Number.EPSILON });
   const normalizedDate = exchangeRateDate ? new Date(exchangeRateDate) : new Date();
   if (Number.isNaN(normalizedDate.getTime())) {
-    throw new QuotationValidationError('Fecha de tasa de cambio invalida');
+    throw new QuotationValidationError('Fecha de tasa de cambio inválida');
   }
 
   return {

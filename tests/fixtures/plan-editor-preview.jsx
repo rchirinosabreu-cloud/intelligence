@@ -135,6 +135,13 @@ if (new URLSearchParams(window.location.search).get('futuro') === '1') {
   items[0].publishDate = `${new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10)}T12:00:00.000Z`;
 }
 
+// Enlaces y palabras largas de verdad: deben partirse al margen, nunca ensanchar el cuadro.
+if (new URLSearchParams(window.location.search).get('textoLargo') === '1') {
+  const longLink = `https://drive.google.com/file/d/${'archivo'.repeat(35)}/view?usp=sharing`;
+  items[0].copyText += `\n\nReferencia de producción:\n${longLink}`;
+  items[0].captionText += `\n\n${longLink}`;
+}
+
 const plan = {
   id: 'p1', month: 9, year: 2026, status: 'EN_REVISION',
   strategicObjectives: 'Posicionar a ENDOVA como una unidad de atención especializada cercana.',

@@ -83,15 +83,15 @@ const sendQuotationError = (res, error, fallbackMessage) => {
         return res.status(error.statusCode).json({ error: error.message });
     }
     if (error?.code === 'P2025') {
-        return res.status(404).json({ error: 'Cotizacion no encontrada' });
+        return res.status(404).json({ error: 'Cotización no encontrada' });
     }
     return res.status(500).json({ error: fallbackMessage });
 };
 
 const validateQuotationEnums = ({ emisorType, currency, status }) => {
-    if (!VALID_EMISORES.has(emisorType)) throw new QuotationValidationError('Emisor invalido');
-    if (!VALID_CURRENCIES.has(currency)) throw new QuotationValidationError('Moneda invalida');
-    if (!VALID_STATUSES.has(status)) throw new QuotationValidationError('Estado de cotizacion invalido');
+    if (!VALID_EMISORES.has(emisorType)) throw new QuotationValidationError('Emisor inválido');
+    if (!VALID_CURRENCIES.has(currency)) throw new QuotationValidationError('Moneda inválida');
+    if (!VALID_STATUSES.has(status)) throw new QuotationValidationError('Estado de cotización inválido');
 };
 
 /**
@@ -210,7 +210,7 @@ export const createQuotation = async (req, res) => {
         });
     } catch (error) {
         console.error("[QuotationController] Create failed:", error);
-        sendQuotationError(res, error, "Error al crear la cotizacion");
+        sendQuotationError(res, error, "Error al crear la cotización");
     }
 };
 
@@ -242,9 +242,9 @@ export const updateQuotation = async (req, res) => {
         } = req.body;
 
         const existing = await prisma.quotation.findUnique({ where: { id } });
-        if (!existing) return res.status(404).json({ error: "Cotizacion no encontrada" });
+        if (!existing) return res.status(404).json({ error: "Cotización no encontrada" });
         if (existing.status === 'APROBADA') {
-            return res.status(409).json({ error: "Una cotizacion aprobada no puede modificarse" });
+            return res.status(409).json({ error: "Una cotización aprobada no puede modificarse" });
         }
 
         const targetStatus = status || existing.status;
@@ -333,7 +333,7 @@ export const updateQuotation = async (req, res) => {
     } catch (error) {
         console.error("[QuotationController] Update failed:", error);
         if (error?.code === 'P2025') return res.status(409).json({ error: 'La propuesta cambió mientras la editabas. Recarga para revisar su versión actual.' });
-        sendQuotationError(res, error, "Error al actualizar la cotizacion");
+        sendQuotationError(res, error, "Error al actualizar la cotización");
     }
 };
 
@@ -370,7 +370,7 @@ export const getPublicQuotation = async (req, res) => {
         });
     } catch (error) {
         console.error("[QuotationController] Fetch public failed:", error);
-        res.status(500).json({ error: "Error al obtener la cotizacion" });
+        res.status(500).json({ error: "Error al obtener la cotización" });
     }
 };
 
@@ -399,7 +399,7 @@ export const acceptPublicQuotation = async (req, res) => {
         if (error instanceof QuotationAcceptanceError) {
             return res.status(error.statusCode).json({ error: error.message });
         }
-        return res.status(500).json({ error: "Error al aprobar la cotizacion" });
+        return res.status(500).json({ error: "Error al aprobar la cotización" });
     }
 };
 

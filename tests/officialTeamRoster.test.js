@@ -163,7 +163,7 @@ test('password recovery does not send email or accept a code for a former member
     resetCodeRepository:{findLatestUsableByEmail:async()=>({id:'r1',codeHash:'hash'})},
   };
   await assert.doesNotReject(requestPasswordReset({email:'former@example.invalid'},dependencies));
-  await assert.rejects(completePasswordReset({email:'former@example.invalid',code:'123456',newPassword:'new-password'},dependencies),/Codigo invalido/);
+  await assert.rejects(completePasswordReset({email:'former@example.invalid',code:'123456',newPassword:'new-password'},dependencies),/Código inválido/);
 });
 
 test('new task assignments reject members that are no longer active',async()=>{

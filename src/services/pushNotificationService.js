@@ -28,7 +28,7 @@ const configureWebPush = () => {
 };
 
 const createValidationError = () => {
-  const error = new Error('La suscripcion push no es valida.');
+  const error = new Error('La suscripción push no es válida.');
   error.statusCode = 400;
   return error;
 };
@@ -176,7 +176,7 @@ export const updatePushPreferences = async (userId, endpoint, preferences, { db 
     data: { preferences: normalizePreferences(preferences) }
   });
   if (result.count === 0) {
-    const error = new Error('El dispositivo no tiene una suscripcion activa.');
+    const error = new Error('El dispositivo no tiene una suscripción activa.');
     error.statusCode = 404;
     throw error;
   }

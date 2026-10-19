@@ -393,18 +393,18 @@ const RichTextEditor = React.forwardRef(({
                 </button>}
                 <div className="mx-1 h-5 w-px shrink-0 bg-zinc-200 dark:bg-zinc-800" />
                 {!compactFormats && <>
-                <button type="button" aria-label="Titulo 1" aria-pressed={formattingState.heading1} onMouseDown={(e) => executeHeadingFormat(e, 1)} className={formatButtonClass(formattingState.heading1)} title="Titulo 1">
+                <button type="button" aria-label="Título 1" aria-pressed={formattingState.heading1} onMouseDown={(e) => executeHeadingFormat(e, 1)} className={formatButtonClass(formattingState.heading1)} title="Título 1">
                   <Heading1 className="h-4 w-4" />
                 </button>
-                <button type="button" aria-label="Titulo 2" aria-pressed={formattingState.heading2} onMouseDown={(e) => executeHeadingFormat(e, 2)} className={formatButtonClass(formattingState.heading2)} title="Titulo 2">
+                <button type="button" aria-label="Título 2" aria-pressed={formattingState.heading2} onMouseDown={(e) => executeHeadingFormat(e, 2)} className={formatButtonClass(formattingState.heading2)} title="Título 2">
                   <Heading2 className="h-4 w-4" />
                 </button>
-                <button type="button" aria-label="Titulo 3" aria-pressed={formattingState.heading3} onMouseDown={(e) => executeHeadingFormat(e, 3)} className={formatButtonClass(formattingState.heading3)} title="Titulo 3">
+                <button type="button" aria-label="Título 3" aria-pressed={formattingState.heading3} onMouseDown={(e) => executeHeadingFormat(e, 3)} className={formatButtonClass(formattingState.heading3)} title="Título 3">
                   <Heading3 className="h-4 w-4" />
                 </button>
                 <div className="mx-1 h-5 w-px shrink-0 bg-zinc-200 dark:bg-zinc-800" />
                 </>}
-                <button type="button" aria-label="Lista con bullets" aria-pressed={formattingState.bulletList} onMouseDown={(e) => executeFormat(e, chain => chain.toggleBulletList())} className={formatButtonClass(formattingState.bulletList)} title="Lista con bullets">
+                <button type="button" aria-label="Lista con viñetas" aria-pressed={formattingState.bulletList} onMouseDown={(e) => executeFormat(e, chain => chain.toggleBulletList())} className={formatButtonClass(formattingState.bulletList)} title="Lista con viñetas">
                   <List className="h-4 w-4" />
                 </button>
                 {!compactFormats && <button type="button" aria-label="Lista numerada" aria-pressed={formattingState.orderedList} onMouseDown={(e) => executeFormat(e, chain => chain.toggleOrderedList())} className={formatButtonClass(formattingState.orderedList)} title="Lista numerada">
