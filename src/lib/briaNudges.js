@@ -16,7 +16,7 @@ export const IDLE_MINUTES = 30; // Rodny: «desde hace 30 minutos».
 export const GRACE_MINUTES = 30; // Al empezar la jornada nadie recibe un aviso en el primer minuto.
 export const DUE_TODAY_FROM_HOUR = 14; // Lo que vence hoy y no empezó se avisa en la tarde.
 export const MAX_NUDGES = 5;
-export const NUDGE_KINDS = Object.freeze(['SIN_PROCESO', 'VENCE_HOY', 'FOCO_SEMANAL', 'CIERRE_DIA']);
+export const NUDGE_KINDS = Object.freeze(['SIN_PROCESO', 'VENCE_HOY', 'FOCO_SEMANAL', 'CIERRE_DIA', 'LECTURA_DIA']);
 
 /** Día, minutos desde medianoche y día de la semana en Bogotá (UTC−5, sin horario de verano). */
 export const bogotaClock = (now) => {
@@ -70,7 +70,7 @@ export const nudgeActions = ({ kind, personName = null, clientName = null, title
     case 'OPERACION_ROJA': return [{ label: 'Abrir operación', to: url }, { label: 'Pedirle a Bria qué falta', ask: `¿Qué le falta a ${clientName || 'este cliente'} para salir del rojo en Operación este mes?` }];
     case 'PIEZA_SIN_APROBAR': return [{ label: 'Abrir la pieza', to: url }, { label: 'Redactar recordatorio al cliente', ask: `Redacta un recordatorio breve y amable para ${clientName || 'el cliente'}: «${title || 'la pieza'}» sale ${day ? `el ${day}` : 'pronto'} y todavía falta su aprobación.` }];
     case 'DEVUELTO_SIN_TOCAR': return [{ label: 'Abrir la tarea', to: url }, { label: 'Ver qué pidió el cliente', ask: `Cuéntame qué pidió corregir el cliente en «${title || 'esa tarea'}» y qué falta para cerrarla.` }];
-    case 'FOCO_SEMANAL': case 'CIERRE_DIA': return conversationId ? [{ label: 'Leer en Bria', conversationId }] : [];
+    case 'FOCO_SEMANAL': case 'CIERRE_DIA': case 'LECTURA_DIA': return conversationId ? [{ label: 'Leer en Bria', conversationId }] : [];
     default: return url ? [{ label: 'Abrir', to: url }] : [];
   }
 };
@@ -82,7 +82,7 @@ export const nudgeActions = ({ kind, personName = null, clientName = null, title
  * `dismissedKeys`: claves ocultas por quien mira; `weeklyFocus`: { conversationId, weekKey } si Bria dejó el foco de la semana;
  * `dailyClose`: { conversationId, dayKey } si Bria ya dejó el cierre del día (14 de octubre de 2026), que va primero.
  */
-export const buildNudges = ({ people = [], now = new Date(), dismissedKeys = new Set(), weeklyFocus = null, dailyClose = null, viewerPersonId = null } = {}) => {
+export const buildNudges = ({ people = [], now = new Date(), dismissedKeys = new Set(), weeklyFocus = null, dailyClose = null, morningBrief = null, viewerPersonId = null } = {}) => {
   const hidden = dismissedKeys instanceof Set ? dismissedKeys : new Set(dismissedKeys);
   const out = [];
   const at = new Date(now).getTime();
@@ -90,6 +90,12 @@ export const buildNudges = ({ people = [], now = new Date(), dismissedKeys = new
     out.push({ key: nudgeKey('CIERRE_DIA', dailyClose.dayKey), kind: 'CIERRE_DIA', personId: null, personName: null, weight: 0,
       title: 'Bria dejó tu cierre del día.', body: 'Lo que cerraste, lo que queda en proceso, lo que vence mañana y cómo terminaron los avisos de hoy.',
       url: null, conversationId: dailyClose.conversationId, taskIds: [], actions: nudgeActions({ kind: 'CIERRE_DIA', conversationId: dailyClose.conversationId }) });
+  }
+  // La lectura de la mañana (19 de octubre de 2026): lo que Bria vio al amanecer y lo que haría hoy.
+  if (morningBrief?.conversationId && !hidden.has(nudgeKey('LECTURA_DIA', morningBrief.dayKey))) {
+    out.push({ key: nudgeKey('LECTURA_DIA', morningBrief.dayKey), kind: 'LECTURA_DIA', personId: null, personName: null, weight: 0,
+      title: 'Bria dejó tu lectura de la mañana.', body: 'Cómo amanecieron las cuentas y el equipo, lo que haría hoy y lo que no haría.',
+      url: null, conversationId: morningBrief.conversationId, taskIds: [], actions: nudgeActions({ kind: 'LECTURA_DIA', conversationId: morningBrief.conversationId }) });
   }
   if (weeklyFocus?.conversationId && !hidden.has(nudgeKey('FOCO_SEMANAL', weeklyFocus.weekKey))) {
     out.push({ key: nudgeKey('FOCO_SEMANAL', weeklyFocus.weekKey), kind: 'FOCO_SEMANAL', personId: null, personName: null, weight: 0,
@@ -126,8 +132,8 @@ export const buildNudges = ({ people = [], now = new Date(), dismissedKeys = new
       }
     }
   }
-  // El cierre de hoy primero, el foco de la semana después, y luego lo que más tiempo lleva.
-  const rank = (nudge) => (nudge.kind === 'CIERRE_DIA' ? 2 : nudge.kind === 'FOCO_SEMANAL' ? 1 : 0);
+  // El cierre de hoy primero, la lectura de la mañana, el foco de la semana y luego lo que más tiempo lleva.
+  const rank = (nudge) => ({ CIERRE_DIA: 3, LECTURA_DIA: 2, FOCO_SEMANAL: 1 }[nudge.kind] || 0);
   return out.sort((a, b) => rank(b) - rank(a) || b.weight - a.weight).slice(0, MAX_NUDGES).map(({ weight: _weight, ...nudge }) => nudge);
 };
 
@@ -136,4 +142,4 @@ export const dismissUntil = (key, now = new Date()) => String(key).startsWith('F
 // `PULSO:<id>` es un aviso que decidió Bria en su pulso (`pulse_messages`); se oculta marcando la fila.
 // `ACCESO:<id>` es un pedido de acceso de la bóveda (15 de octubre de 2026): quien lo decide lo oculta por hoy;
 // quien lo pidió, al ocultar la respuesta, la da por vista. `PERMISO:<id>` es lo mismo para un módulo de la plataforma.
-export const isValidNudgeKey = (key) => /^(SIN_PROCESO|VENCE_HOY|FOCO_SEMANAL|CIERRE_DIA|PULSO|ACCESO|PERMISO):[\w-]{1,80}$/.test(String(key || ''));
+export const isValidNudgeKey = (key) => /^(SIN_PROCESO|VENCE_HOY|FOCO_SEMANAL|CIERRE_DIA|LECTURA_DIA|PULSO|ACCESO|PERMISO):[\w-]{1,80}$/.test(String(key || ''));

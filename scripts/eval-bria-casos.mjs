@@ -30,6 +30,7 @@ const { createOpenAIClient } = await import(root + 'src/services/openAIClient.js
 const { runAssistant } = await import(root + 'src/lib/briaAssistant.js');
 const { briaAssistantTools } = await import(root + 'src/services/briaAssistantTools.js');
 const { createBriaActionTools } = await import(root + 'src/services/briaActionTools.js');
+const { createDailyReadingTools } = await import(root + 'src/services/dailyReadingTools.js');
 const { runWithAiContext } = await import(root + 'src/lib/aiRequestContext.js');
 const { AI_MODELS } = await import(root + 'src/config/aiConfig.js');
 
@@ -89,11 +90,33 @@ const fixtureRuns = {
     ]
   })
 };
+// La memoria del tiempo (19 de octubre de 2026): una lectura ficticia con la forma que entrega el servicio.
+const readingFixture = ({ cliente = '' } = {}) => ({
+  fecha: today, comparadaCon: '2026-10-14', escritaPor: 'Bria', historia: '12 fotos diarias desde el 2026-10-04',
+  resumen: 'Aristea Ficticia sigue en rojo y sus aprobaciones no se mueven; Jarlan Ficticio acumula vencidas desde el viernes.',
+  decisiones: [
+    { titulo: 'Destrabar las aprobaciones de Aristea Ficticia', porque: 'Cuatro piezas llevan ocho días esperando y el mes va atrasado.', tipo: 'HACER', sobre: 'Aristea Ficticia', pedido: 'Redáctame un mensaje por WhatsApp para Aristea Ficticia para que apruebe lo pendiente.', seVeEn: ['Aristea Ficticia lleva 8 días seguidos con piezas esperando su aprobación (hoy 4).'] },
+    { titulo: 'No cargarle más trabajo a Jarlan Ficticio esta semana', porque: 'Lleva cinco días con tareas vencidas y pasó de 2 a 5 desde la última lectura.', tipo: 'NO_HACER', sobre: 'Jarlan Ficticio', pedido: null, seVeEn: ['Jarlan Ficticio lleva 5 días con tareas vencidas (hoy 5).', 'Jarlan Ficticio pasó de 2 a 5 tareas vencidas desde la última lectura.'] }
+  ],
+  senales: [
+    { sobre: 'Aristea Ficticia', cambio: 'peor', texto: 'Aristea Ficticia lleva 6 días en rojo: Van 3 publicadas; a esta fecha deberían ir 6.' },
+    { sobre: 'Aristea Ficticia', cambio: 'peor', texto: 'Aristea Ficticia lleva 8 días seguidos con piezas esperando su aprobación (hoy 4).' },
+    { sobre: 'Jarlan Ficticio', cambio: 'peor', texto: 'Jarlan Ficticio lleva 5 días con tareas vencidas (hoy 5).' },
+    { sobre: 'Nube Azul Ficticia', cambio: 'mejor', texto: 'Nube Azul Ficticia volvió a verde: estaba en amarillo.' }
+  ],
+  ...(plain(cliente).includes('arist') ? { cuenta: {
+    nombre: 'Aristea Ficticia', enlace: '/clientes/operacion/aristea-ficticia', color: 'rojo', motivos: ['Van 3 publicadas; a esta fecha deberían ir 6.'],
+    lectura: 'Publica por debajo del ritmo del mes y las aprobaciones llevan más de una semana sin moverse.',
+    senales: ['Aristea Ficticia lleva 6 días en rojo: Van 3 publicadas; a esta fecha deberían ir 6.', 'Aristea Ficticia lleva 8 días seguidos con piezas esperando su aprobación (hoy 4).'],
+    serie: ['2026-10-09', '2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15'].map((fecha, i) => ({ fecha, color: i === 0 ? 'amarillo' : 'rojo', publicadas: `${i < 4 ? 2 : 3} de 12 (deberían ir ${3 + Math.floor(i / 2)})`, esperanAprobacion: 4, devoluciones: 1, tareasAbiertas: 6, vencidas: i < 3 ? 0 : 1, horasDelDiaAnterior: i % 2 ? 1.5 : 0 }))
+  } } : {})
+});
 const titles = { TASK_UPDATE: 'Cambiar un pendiente', TASKS_STATUS: 'Cambiar varios pendientes', CLIENT_NOTE: 'Registrar una observación' };
 const fakeActionService = { prepare: async ({ type, args }) => ({ type, title: titles[type] || type, status: 'PENDING', summary: Object.entries(args || {}).filter(([, value]) => value != null && value !== '' && (!Array.isArray(value) || value.length)).map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`), missing: [], warnings: [] }) };
 const readTools = briaAssistantTools.filter((tool) => fixtureRuns[tool.name]).map((tool) => ({ ...tool, allowed: () => true, run: async (args) => ({ data: fixtureRuns[tool.name](args || {}), sources: [] }) }));
 const actionTools = createBriaActionTools(fakeActionService).filter((tool) => ['cambiar_pendiente', 'cambiar_pendientes', 'registrar_observacion'].includes(tool.name)).map((tool) => ({ ...tool, allowed: () => true }));
-const baseTools = [...readTools, ...actionTools];
+const readingTools = createDailyReadingTools({ explain: async (args) => readingFixture(args) }).map((tool) => ({ ...tool, allowed: () => true }));
+const baseTools = [...readTools, ...actionTools, ...readingTools];
 
 const provider = createOpenAIClient({ apiKey: config.OPENAI_API_KEY, models: AI_MODELS });
 const selected = EVAL_CASES.filter((item) => !only || item.id === only);

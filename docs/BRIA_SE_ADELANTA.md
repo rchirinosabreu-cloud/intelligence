@@ -37,6 +37,8 @@ Rodny, el mismo día: «un solo mensaje por persona: qué cerró, qué quedó en
 
 Una sola vez por día y persona (`bria_memory.daily_close_deliveries`), aviso en la campana (`BRIA_CIERRE_DEL_DIA`, que abre el chat) y «Bria dejó tu cierre del día» como primer aviso encima de la mascota (`CIERRE_DIA`, se oculta por hoy). Servicio: `src/services/dailyCloseService.js` (`runAutomatic`, `initDailyCloseScheduler` en `server.js`, cada 10 minutos).
 
+**La lectura de la mañana (19 de octubre de 2026)** es la otra punta del día: a las 7:30, a administradores y project managers, lo que Bria vio al amanecer comparado con la historia de cada cuenta y persona, lo que haría hoy y lo que no haría. Encima de la mascota va como `LECTURA_DIA`, después del cierre del día y antes del foco de la semana. Detalle: `docs/BRIA_OJOS_Y_CEREBRO.md`.
+
 ## Pedir acceso a un módulo
 
 Rodny, 15 de octubre de 2026: «si Camila está solicitando algo a lo que Bria no le puede dar acceso por su rol, no tiene que pedírmelo directamente, me debería aparecer a mí el anuncio … y así nos adelantamos aún más», y después «haz también la versión general». Las contraseñas tienen su propio camino (`docs/BOVEDA_DE_ACCESOS.md`, «Pedir un acceso»); esto es lo mismo para los **módulos** de la plataforma.

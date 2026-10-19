@@ -86,6 +86,10 @@ export const getNotificationDisplayParts = (notification = {}) => {
     if (type === 'BRIA_CIERRE_DEL_DIA') {
         return { title: 'Tu cierre del día está listo', context: '', body: cleanNotificationPreview(message, 140) };
     }
+    // La lectura de la mañana (19 de octubre de 2026): a las 7:30, Bria la deja en un chat; el aviso lo abre.
+    if (type === 'BRIA_LECTURA_MANANA') {
+        return { title: 'Tu lectura de la mañana está lista', context: '', body: cleanNotificationPreview(message, 140) };
+    }
     // Pedir un acceso de la bóveda (15 de octubre de 2026): se decide y se lee en el aviso encima de Bria.
     if (type === 'VAULT_ACCESS_REQUESTED') {
         return { title: 'Te piden una contraseña', context: '', body: cleanNotificationPreview(message, 140) };
