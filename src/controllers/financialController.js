@@ -1120,7 +1120,7 @@ export const previewFinancialImport = async (req, res) => {
         if (!req.file?.buffer) {
             return res.status(400).json({
                 error: 'FINANCIAL_IMPORT_FILE_REQUIRED',
-                message: 'Debes subir un archivo CSV o Excel para auditar la informacion financiera.'
+                message: 'Debes subir un archivo CSV o Excel para auditar la información financiera.'
             });
         }
 
@@ -1152,7 +1152,7 @@ export const commitFinancialImport = async (req, res, dependencies = {}) => {
         if (!req.file?.buffer) {
             return res.status(400).json({
                 error: 'FINANCIAL_IMPORT_FILE_REQUIRED',
-                message: 'Debes subir un archivo CSV o Excel para importar la informacion financiera.'
+                message: 'Debes subir un archivo CSV o Excel para importar la información financiera.'
             });
         }
 
@@ -1168,7 +1168,7 @@ export const commitFinancialImport = async (req, res, dependencies = {}) => {
         const result = await persistPlan(prismaClient, plan);
 
         return res.status(201).json({
-            message: 'Informacion financiera importada correctamente.',
+            message: 'Información financiera importada correctamente.',
             importBatchId: result.importBatchId,
             counts: result.counts,
             warnings: plan.preview?.warnings || []

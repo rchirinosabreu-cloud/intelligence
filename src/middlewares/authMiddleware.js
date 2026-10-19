@@ -89,7 +89,7 @@ export const authenticateToken = async (req, res, next) => {
     if (dbUser.mustChangePassword && !isPasswordChangeRoute) {
       return res.status(428).json({
         error: "Password change required",
-        message: "Debes actualizar tu contrasena para continuar",
+        message: "Debes actualizar tu contraseña para continuar",
         code: "PASSWORD_CHANGE_REQUIRED"
       });
     }

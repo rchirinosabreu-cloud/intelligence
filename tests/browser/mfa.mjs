@@ -139,15 +139,15 @@ test('una cuenta nueva cambia su clave temporal y después activa el autenticado
     await page.locator('input[type=password]').fill('ClaveTemporal-0000');
     await page.locator('button[type=submit]').click();
 
-    await page.getByRole('heading', { name: 'Actualiza tu contrasena' }).waitFor();
-    await page.getByLabel('Contrasena actual').fill('ClaveTemporal-0000');
-    await page.getByLabel('Tu nueva contrasena').fill('MiClaveNueva-2026');
-    await page.getByLabel('Confirmar nueva contrasena').fill('MiClaveNueva-2026');
+    await page.getByRole('heading', { name: 'Actualiza tu contraseña' }).waitFor();
+    await page.getByLabel('Contraseña actual').fill('ClaveTemporal-0000');
+    await page.getByLabel('Tu nueva contraseña').fill('MiClaveNueva-2026');
+    await page.getByLabel('Confirmar nueva contraseña').fill('MiClaveNueva-2026');
     await page.screenshot({ path: `${OUT}/13-cuenta-nueva-clave.png`, fullPage: true });
-    await page.getByRole('button', { name: 'Guardar nueva contrasena' }).click();
+    await page.getByRole('button', { name: 'Guardar nueva contraseña' }).click();
 
     // La clave se guardó: vuelve al login con el aviso, no al formulario.
-    await page.getByText(/Contrasena actualizada/).waitFor();
+    await page.getByText(/Contraseña actualizada/).waitFor();
     assert.equal(preview.db.byEmail('nueva@example.test').mustChangePassword, false);
 
     await page.locator('input[type=email]').fill('nueva@example.test');

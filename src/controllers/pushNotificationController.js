@@ -54,6 +54,6 @@ export const updatePreferences = async (req, res) => {
     );
     res.json({ success: true, preferences });
   } catch (error) {
-    sendError(res, error, 'No fue posible actualizar las preferencias de notificacion.');
+    sendError(res, error, 'No fue posible actualizar las preferencias de notificación.');
   }
 };

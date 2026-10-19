@@ -23,17 +23,17 @@ const ForcePasswordChange = () => {
     setErrorMsg('');
 
     if (newPassword.length < 10) {
-      setErrorMsg('Tu nueva contrasena debe tener al menos 10 caracteres.');
+      setErrorMsg('Tu nueva contraseña debe tener al menos 10 caracteres.');
       return;
     }
 
     if (newPassword === currentPassword) {
-      setErrorMsg('Tu nueva contrasena debe ser diferente a la actual.');
+      setErrorMsg('Tu nueva contraseña debe ser diferente a la actual.');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      setErrorMsg('La confirmacion no coincide con tu nueva contrasena.');
+      setErrorMsg('La confirmación no coincide con tu nueva contraseña.');
       return;
     }
 
@@ -47,7 +47,7 @@ const ForcePasswordChange = () => {
 
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
-        throw new Error(data.error || 'No se pudo actualizar la contrasena');
+        throw new Error(data.error || 'No se pudo actualizar la contraseña');
       }
 
       logout();
@@ -79,7 +79,7 @@ const ForcePasswordChange = () => {
               Imagina. Crea. Conecta. Trasciende.
             </h2>
             <p className="mt-5 max-w-md text-sm leading-6 text-indigo-950/65">
-              La operacion creativa de Brainstudio reunida en un solo lugar para convertir ideas en movimiento.
+              La operación creativa de Brainstudio reunida en un solo lugar para convertir ideas en movimiento.
             </p>
           </div>
         </section>
@@ -90,10 +90,10 @@ const ForcePasswordChange = () => {
               <img src="/brainstudio-logo.png" alt="Brainstudio" className="mb-7 h-16 w-auto object-contain" />
               <p className="text-sm text-zinc-500 dark:text-zinc-400">Hola, {currentUser?.name || 'equipo Brain'}.</p>
               <h1 className="mt-3 text-4xl font-bold tracking-tight text-zinc-950 dark:text-white">
-                Actualiza tu contrasena
+                Actualiza tu contraseña
               </h1>
               <p className="mt-3 text-sm leading-6 text-zinc-500 dark:text-zinc-400">
-                Para proteger la plataforma, necesitas crear una nueva contrasena antes de continuar.
+                Para proteger la plataforma, necesitas crear una nueva contraseña antes de continuar.
               </p>
             </div>
 
@@ -105,7 +105,7 @@ const ForcePasswordChange = () => {
               )}
 
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Contrasena actual</span>
+                <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Contraseña actual</span>
                 <div className="relative">
                   <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
                   <input
@@ -119,7 +119,7 @@ const ForcePasswordChange = () => {
               </label>
 
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Tu nueva contrasena</span>
+                <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Tu nueva contraseña</span>
                 <div className="relative">
                   <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
                   <input
@@ -133,7 +133,7 @@ const ForcePasswordChange = () => {
               </label>
 
               <label className="block">
-                <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Confirmar nueva contrasena</span>
+                <span className="mb-2 block text-sm font-medium text-zinc-600 dark:text-zinc-300">Confirmar nueva contraseña</span>
                 <div className="relative">
                   <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-indigo-500" />
                   <input
@@ -152,7 +152,7 @@ const ForcePasswordChange = () => {
                 className="mt-2 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-[#009EB9] px-4 py-3 font-semibold text-white shadow-lg shadow-[#009EB9]/20 transition hover:bg-[#008CA4] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 <LockKeyhole className="h-4 w-4" />
-                {loading ? 'Actualizando...' : 'Guardar nueva contrasena'}
+                {loading ? 'Actualizando...' : 'Guardar nueva contraseña'}
               </button>
 
               <button

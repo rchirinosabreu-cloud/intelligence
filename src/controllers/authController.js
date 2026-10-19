@@ -75,7 +75,7 @@ export const sendPasswordReset = async (req, res) => {
         console.error('[PasswordReset] Request error:', error);
         const status = error instanceof PasswordResetError ? error.status : 500;
         return res.status(status).json({
-            message: status === 500 ? 'No se pudo enviar el codigo de recuperacion' : error.message
+            message: status === 500 ? 'No se pudo enviar el código de recuperación' : error.message
         });
     }
 };
@@ -90,13 +90,13 @@ export const resetPasswordWithCode = async (req, res) => {
 
         return res.json({
             ...result,
-            message: 'Contrasena actualizada correctamente. Ingresa con tu nueva clave.'
+            message: 'Contraseña actualizada correctamente. Ingresa con tu nueva clave.'
         });
     } catch (error) {
         console.error('[PasswordReset] Confirm error:', error);
         const status = error instanceof PasswordResetError ? error.status : 500;
         return res.status(status).json({
-            message: status === 500 ? 'No se pudo actualizar la contrasena' : error.message
+            message: status === 500 ? 'No se pudo actualizar la contraseña' : error.message
         });
     }
 };

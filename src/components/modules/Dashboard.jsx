@@ -81,7 +81,7 @@ const fetchJson = async (url) => {
   });
   if (!response.ok) {
     const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.error || 'No se pudo cargar la informacion.');
+    throw new Error(errorData.error || 'No se pudo cargar la información.');
   }
   return response.json();
 };

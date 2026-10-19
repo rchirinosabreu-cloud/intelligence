@@ -52,11 +52,11 @@ test('push subscriptions require an HTTPS endpoint and both browser encryption k
       endpoint: 'http://push.example/subscription-1',
       keys: { p256dh: 'public-key', auth: 'auth-secret' }
     }),
-    /suscripcion push no es valida/i
+    /suscripción push no es válida/i
   );
   assert.throws(
     () => normalizePushSubscription({ endpoint: 'https://push.example/subscription-1', keys: {} }),
-    /suscripcion push no es valida/i
+    /suscripción push no es válida/i
   );
 });
 

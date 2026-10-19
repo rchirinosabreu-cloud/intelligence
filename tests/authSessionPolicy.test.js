@@ -32,7 +32,7 @@ test('auth session policy supports revocation and mandatory password changes', a
   assert.match(userService, /passwordChangedAt:\s*new Date\(\)/);
   assert.match(userService, /sessionVersion:\s*\{\s*increment:\s*1\s*\}/);
   assert.match(userService, /isSamePassword\s*=\s*await bcrypt\.compare\(newPassword,\s*user\.password\)/);
-  assert.match(userService, /La nueva contrasena debe ser diferente a la actual/);
+  assert.match(userService, /La nueva contraseña debe ser diferente a la actual/);
   assert.match(userRoutes, /requiresLogin:\s*true/);
 
   assert.match(resetScript, /mustChangePassword:\s*true/);
@@ -63,7 +63,7 @@ test('frontend detects expired tokens before rendering the app and owns the pass
   assert.match(forcePassword, /logout\(\)/);
   assert.match(forcePassword, /Usar otra cuenta/);
   assert.match(forcePassword, /navigate\('\/login',\s*\{\s*replace:\s*true\s*\}\)/);
-  assert.match(forcePassword, /Tu nueva contrasena/);
+  assert.match(forcePassword, /Tu nueva contraseña/);
   assert.match(forcePassword, /newPassword === currentPassword/);
 
   assert.match(login, /Imagina\. Crea\. Conecta\. Trasciende\./);
