@@ -74,7 +74,7 @@ const FormatIcon = ({ format, className }) => (
 const StatusChip = ({ item }) => (
   isApproved(item) ? (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-green-soft px-3 py-1.5 text-[11px] font-bold text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green">
-      <CheckCircle2 className="h-3.5 w-3.5" /> Aprobada
+      <CheckCircle2 className="h-3.5 w-3.5" /> {item.status === 'PUBLICADO' ? 'Publicada' : 'Aprobada'}
     </span>
   ) : hasNewMaterial(item) ? (
     // Ya la había aprobado, pero entonces era solo el texto: ahora está la pieza terminada.
@@ -214,7 +214,7 @@ const PieceCard = ({ item, index, onOpen }) => (
         </span>
         <span className="text-zinc-300 dark:text-zinc-600">·</span>
         <span className={`text-xs font-bold ${isApproved(item) ? 'text-brand-green-deep dark:text-brand-green' : hasNewMaterial(item) ? 'text-brand-magenta-deep dark:text-brand-magenta' : 'text-brand-yellow-deep dark:text-brand-yellow'}`}>
-          {isApproved(item) ? 'Aprobada' : hasNewMaterial(item) ? 'Material nuevo' : 'Por revisar'}
+          {item.status === 'PUBLICADO' ? 'Publicada' : isApproved(item) ? 'Aprobada' : hasNewMaterial(item) ? 'Material nuevo' : 'Por revisar'}
         </span>
       </div>
     </div>
@@ -230,6 +230,7 @@ const PieceDetail = ({
 }) => {
   const { body, tags } = splitCaption(item.captionText);
   const approved = isApproved(item);
+  const published = item.status === 'PUBLICADO';
   const materialNuevo = hasNewMaterial(item);
 
   const commentLength = clientComment.trim().length;
@@ -344,13 +345,13 @@ const PieceDetail = ({
                       <Check className="h-5 w-5" />
                     </span>
                     <div className="min-w-0">
-                      <p className="text-sm font-bold text-brand-green-deep dark:text-brand-green">Pieza aprobada</p>
-                      <p className="text-xs text-zinc-600 dark:text-zinc-400">Ya pasó a producción.</p>
+                      <p className="text-sm font-bold text-brand-green-deep dark:text-brand-green">{published ? 'Pieza publicada' : 'Pieza aprobada'}</p>
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400">{published ? 'Esta pieza ya se publicó y está cerrada para revisión.' : 'Ya pasó a producción.'}</p>
                     </div>
                   </div>
                   {/* Aprobada no es un callejón sin salida: si se le ocurre algo después, lo dice aquí
                       y la pieza vuelve a nuestras manos (Rodny, 5 de octubre de 2026). */}
-                  {!isCommenting && (
+                  {!published && !isCommenting && (
                     <button
                       type="button"
                       onClick={() => onStartComment(item.id)}
@@ -383,7 +384,7 @@ const PieceDetail = ({
               )}
             </div>
 
-            {isCommenting && (
+            {!published && isCommenting && (
               <div ref={commentFormRef} className="space-y-3 rounded-2xl border border-zinc-200 bg-zinc-50 p-5 dark:border-white/10 dark:bg-white/5">
                 <div className="flex items-center justify-between">
                   <label htmlFor={`comment-${item.id}`} className="text-sm font-bold text-zinc-900 dark:text-zinc-50">Dinos qué debemos ajustar</label>

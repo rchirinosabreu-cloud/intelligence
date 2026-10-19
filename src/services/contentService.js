@@ -17,7 +17,7 @@ import { fileContentProblem } from '../lib/fileSignature.js';
 import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from './briaContentPlanReviewState.js';
 import { resyncItemPublications } from './socialPublishingService.js';
 import { queueOwnedStatusProblem, splitPublishTime } from '../lib/socialPublishing.js';
-import { itemsNeedingRevisionRequest, shouldRequestRevisionOnNewAsset } from '../lib/contentApproval.js';
+import { itemsNeedingRevisionRequest, shouldRequestRevisionOnNewAsset, REVIEWABLE_ITEM_STATUSES, PUBLISHED_REVIEW_MESSAGE } from '../lib/contentApproval.js';
 
 /** Lo que la pantalla ve de una publicación programada: nunca el token, que ni siquiera vive en esa fila. */
 const publicationSelect = {
@@ -593,7 +593,7 @@ export const createContentItem = async (data) => {
   return normalizeContentItem(item);
 };
 
-export const updateContentItem = async (id, data) => {
+export const updateContentItem = async (id, data, { fromClientReview = false } = {}) => {
   const normalizedData = { ...data };
 
   // Ensure publishDate is handled correctly
@@ -659,6 +659,9 @@ export const updateContentItem = async (id, data) => {
     });
 
     if (!previousItem) throw new Error('Content item not found');
+    if (fromClientReview && previousItem.status === 'PUBLICADO') {
+      throw Object.assign(new Error(PUBLISHED_REVIEW_MESSAGE), { status: 409 });
+    }
 
     const nextItem = { ...previousItem, ...safeData };
     const linkedTaskUpdates = buildLinkedTaskUpdates({
@@ -978,8 +981,8 @@ const requestRevisionIfApproved = async (itemId) => {
       select: { id: true, status: true, revisionRequestedAt: true }
     });
     if (!item || !shouldRequestRevisionOnNewAsset(item) || item.revisionRequestedAt) return;
-    await prisma.contentItem.update({
-      where: { id: itemId },
+    await prisma.contentItem.updateMany({
+      where: { id: itemId, status: { in: REVIEWABLE_ITEM_STATUSES }, revisionRequestedAt: null, deletedAt: null },
       data: { revisionRequestedAt: new Date() }
     });
   } catch (error) {
@@ -994,17 +997,20 @@ export const requestContentItemRevision = async (itemId) => {
     select: { id: true, status: true, deletedAt: true }
   });
   if (!item || item.deletedAt) throw Object.assign(new Error('Pieza no encontrada'), { status: 404 });
+  if (item.status === 'PUBLICADO') throw Object.assign(new Error(PUBLISHED_REVIEW_MESSAGE), { status: 409 });
   if (!shouldRequestRevisionOnNewAsset(item)) {
     throw Object.assign(
       new Error('Esa pieza todavía está en manos del cliente: ya la tiene por revisar.'),
       { status: 409 }
     );
   }
-  const updated = await prisma.contentItem.update({
-    where: { id: itemId },
-    data: { revisionRequestedAt: new Date() },
-    select: await getContentItemSelect()
+  // Vuelve a comprobar el estado al escribir: Meta pudo terminar mientras se leía la pieza.
+  const saved = await prisma.contentItem.updateMany({
+    where: { id: itemId, status: { in: REVIEWABLE_ITEM_STATUSES }, deletedAt: null },
+    data: { revisionRequestedAt: new Date() }
   });
+  if (!saved.count) throw Object.assign(new Error('La pieza cambió de estado. Vuelve a abrirla.'), { status: 409 });
+  const updated = await prisma.contentItem.findUnique({ where: { id: itemId }, select: await getContentItemSelect() });
   return normalizeContentItem(updated);
 };
 
@@ -1020,11 +1026,11 @@ export const requestContentPlanRevision = async (planId) => {
   const pending = itemsNeedingRevisionRequest(items);
   if (pending.length === 0) return { requested: 0 };
 
-  await prisma.contentItem.updateMany({
-    where: { id: { in: pending.map(item => item.id) } },
+  const saved = await prisma.contentItem.updateMany({
+    where: { id: { in: pending.map(item => item.id) }, status: { in: REVIEWABLE_ITEM_STATUSES }, revisionRequestedAt: null, deletedAt: null },
     data: { revisionRequestedAt: new Date() }
   });
-  return { requested: pending.length };
+  return { requested: saved.count };
 };
 
 const storageKeyFor = (basePath, name) => {
@@ -1170,6 +1176,7 @@ export const addClientComment = async (itemId, comment) => {
   return await recognitionTransaction(prisma, async (tx) => {
   const item = await tx.contentItem.findUnique({ where: { id: itemId } });
   if (!item) throw new Error('Content item not found');
+  if (item.status === 'PUBLICADO') throw Object.assign(new Error(PUBLISHED_REVIEW_MESSAGE), { status: 409 });
 
   const now = new Intl.DateTimeFormat('es-CO', {
     timeZone: 'America/Bogota',

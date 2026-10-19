@@ -18,6 +18,11 @@ export const APPROVED_STATUSES = ['APROBADO', 'REALIZADO', 'PROGRAMADO', 'PUBLIC
 
 export const isApprovedStatus = (status) => APPROVED_STATUSES.includes(status);
 
+// Lo que ya se publicó salió del circuito de aprobación (Rodny, 19 de octubre de 2026).
+export const REVIEWABLE_ITEM_STATUSES = APPROVED_STATUSES.filter(status => status !== 'PUBLICADO');
+export const canRequestRevision = (item) => REVIEWABLE_ITEM_STATUSES.includes(item?.status);
+export const PUBLISHED_REVIEW_MESSAGE = 'Esta pieza ya está publicada y no admite una nueva revisión.';
+
 export const APPROVAL_STATES = {
   /** No la ha aprobado, o pidió un cambio y está en nuestras manos. */
   POR_REVISAR: 'POR_REVISAR',
@@ -28,6 +33,8 @@ export const APPROVAL_STATES = {
 };
 
 export const approvalState = (item) => {
+  // Una marca antigua no puede devolver una publicación a manos del cliente.
+  if (item?.status === 'PUBLICADO') return APPROVAL_STATES.APROBADA;
   if (!isApprovedStatus(item?.status)) return APPROVAL_STATES.POR_REVISAR;
   return item?.revisionRequestedAt ? APPROVAL_STATES.MATERIAL_NUEVO : APPROVAL_STATES.APROBADA;
 };
@@ -42,12 +49,12 @@ export const isSettled = (item) => approvalState(item) === APPROVAL_STATES.APROB
  * Si llega material a una pieza ya aprobada, el cliente aprobó otra cosa: hay que pedirle otra vuelta.
  * Una pieza que nunca aprobó no se toca — ya está pendiente y marcarla no añadiría nada.
  */
-export const shouldRequestRevisionOnNewAsset = (item) => isApprovedStatus(item?.status);
+export const shouldRequestRevisionOnNewAsset = (item) => canRequestRevision(item);
 
 /**
  * Las piezas de una parrilla a las que tiene sentido pedirles una vuelta nueva: las que el cliente
  * ya aprobó y todavía no tienen la petición puesta. Las demás ya están en su lado del tablero.
  */
 export const itemsNeedingRevisionRequest = (items = []) => items.filter(
-  (item) => isApprovedStatus(item?.status) && !item?.revisionRequestedAt
+  (item) => canRequestRevision(item) && !item?.revisionRequestedAt
 );

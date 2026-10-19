@@ -50,9 +50,18 @@ test('solo se le pide otra vuelta a lo que ya había aprobado', () => {
     { id: 'c', status: 'EN_REVISION', revisionRequestedAt: null },
     { id: 'd', status: 'PUBLICADO', revisionRequestedAt: null }
   ];
-  // Ni las que ya tienen la petición puesta ni las que el cliente todavía no ha aprobado.
-  assert.deepEqual(itemsNeedingRevisionRequest(items).map(item => item.id), ['a', 'd']);
+  // Tampoco se devuelve a revisión lo que ya salió publicado.
+  assert.deepEqual(itemsNeedingRevisionRequest(items).map(item => item.id), ['a']);
   assert.deepEqual(itemsNeedingRevisionRequest([]), []);
+});
+
+test('una pieza publicada queda cerrada aunque conserve una marca antigua de revisión', () => {
+  const published = { status: 'PUBLICADO', revisionRequestedAt: '2026-10-19T12:00:00.000Z' };
+  assert.equal(shouldRequestRevisionOnNewAsset(published), false);
+  assert.equal(approvalState(published), APPROVAL_STATES.APROBADA);
+  assert.equal(needsClientReview(published), false);
+  assert.equal(isSettled(published), true);
+  assert.deepEqual(itemsNeedingRevisionRequest([published]), []);
 });
 
 test('la marca la pone el servidor cuando llega material a una pieza aprobada', async () => {
