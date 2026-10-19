@@ -5,6 +5,7 @@
 //
 //   node tests/browser/videoCover.mjs
 import { mkdir } from 'node:fs/promises';
+import assert from 'node:assert/strict';
 import { createServer } from 'vite';
 import { chromium } from 'playwright-core';
 
@@ -14,7 +15,7 @@ await mkdir(OUT, { recursive: true });
 
 const server = await createServer({ logLevel: 'error', server: { host: '127.0.0.1', port: 0, open: false } });
 await server.listen();
-const base = `http://127.0.0.1:${server.config.server.port}`;
+const base = `http://127.0.0.1:${server.httpServer.address().port}`;
 
 const browser = await chromium.launch({ channel: 'chrome' });
 const problems = [];
@@ -91,6 +92,24 @@ try {
     const enPost = await page.locator('[data-piece-cover]').isVisible().catch(() => false);
     console.log(`[${theme}] post → control visible: ${enPost} (debe ser false)`);
     if (enPost) problems.push(`${theme}: la portada aparece en un post de foto`);
+
+    // Regresión: poder preparar la portada antes de cargar el video, como cualquier otro material.
+    await open(page, 'Conoce al equipo de hemodinamia');
+    await page.getByRole('button', { name: 'Editar', exact: true }).first().click();
+    const emptyReelCover = page.locator('[data-piece-cover]');
+    const canUploadFirst = await emptyReelCover.isVisible();
+    console.log(`[${theme}] reel sin video → portada visible: ${canUploadFirst}`);
+    await page.locator('#item-i3').screenshot({ path: `${OUT}/${theme}-reel-sin-video.png` });
+    assert.equal(canUploadFirst, true, 'Un reel sin video debe ofrecer subir su portada');
+    await emptyReelCover.locator('input[type="file"]').setInputFiles({
+      name: 'portada.png', mimeType: 'image/png',
+      buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jRZkAAAAASUVORK5CYII=', 'base64')
+    });
+    await emptyReelCover.getByRole('button', { name: 'Quitar', exact: true }).waitFor();
+    assert.equal(await emptyReelCover.getByText('Cambiar', { exact: true }).isVisible(), true);
+    await emptyReelCover.screenshot({ path: `${OUT}/${theme}-portada-antes-del-video.png` });
+    await emptyReelCover.getByRole('button', { name: 'Quitar', exact: true }).click();
+    await emptyReelCover.getByText('Subir portada', { exact: true }).waitFor();
 
     await context.close();
   }

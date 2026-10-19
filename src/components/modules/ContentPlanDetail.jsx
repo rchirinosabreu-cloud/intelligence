@@ -198,7 +198,7 @@ const uploadFinalAssetsDirect = async (itemId, files, onProgress) => {
 
 /**
  * La portada de un reel (Rodny, 15 de octubre de 2026). Solo aparece donde Meta la admite —un reel—,
- * y solo cuando la pieza ya tiene su video: una portada sin video no tiene nada que portar.
+ * incluso antes de cargar el video, para poder preparar ambos archivos en cualquier orden.
  *
  * Lo que dice es lo que de verdad pasa al publicar: la imagen sale en la pestaña Reels, y como el reel
  * se comparte al feed, en la cuadrícula del perfil Meta recorta su cuadrado central.
@@ -939,8 +939,9 @@ const ContentItemCard = ({
   // Programada y esperando su hora: el estado lo lleva la cola, no el desplegable.
   const queueStatusReason = queueOwnedStatusProblem({ item, publications: item.publications || [] });
   const queueOwnsStatus = Boolean(queueStatusReason);
-  // La portada solo la admite un reel, y solo tiene sentido con su video ya cargado.
-  const acceptsCover = kindAcceptsCover(describeMetaMedia({ format: item.format, assets: finalAssets }).kind);
+  // Reel/Video ofrecen la portada desde el inicio; otros formatos pueden resolver a reel por su archivo.
+  const acceptsCover = ['reel', 'video'].includes(String(item.format || '').trim().toLowerCase())
+    || kindAcceptsCover(describeMetaMedia({ format: item.format, assets: finalAssets }).kind);
   const latestTask = item.tasks?.[0];
 
   return (
@@ -1277,8 +1278,7 @@ const ContentItemCard = ({
               </p>
             )}
 
-            {/* Solo un reel lleva portada: es lo único a lo que Meta le admite una (`videoCover.js`).
-                Y solo con el video ya cargado, porque una portada sin video no porta nada. */}
+            {/* La portada se puede preparar antes del video; solo se envía a Meta al publicar un reel. */}
             {acceptsCover && (
               <CoverField
                 item={item}
