@@ -70,6 +70,26 @@ try {
     assert.equal(await page.getByRole('button', { name: /^(Ocultar feedback|Ver feedback|Feedback del cliente)$/i }).count(), 0, 'no hay un botón para esconder o mostrar el feedback');
     await feedback.screenshot({ path: `output/editor-feedback-${name}.png` });
 
+    const noteLabel = page.locator('label[for^="nota-"]');
+    assert.equal((await noteLabel.textContent()).trim(), 'Nota interna', 'la nota no repite «solo el equipo»');
+    const noteBand = noteLabel.locator('..');
+    assert.equal(await noteBand.locator('svg').count(), 0, 'la nota no lleva candado ni otro icono');
+    const bandStyle = await noteBand.evaluate((node) => {
+      const css = getComputedStyle(node);
+      return { edge: parseFloat(css.borderLeftWidth), fill: css.backgroundColor, fontStyle: css.fontStyle };
+    });
+    assert.equal(bandStyle.edge, 3, 'la banda suave tiene un acento fino a la izquierda');
+    assert.notEqual(bandStyle.fill, 'rgba(0, 0, 0, 0)', 'el fondo suave distingue la nota');
+    assert.equal(bandStyle.fontStyle, 'normal');
+    const captureNote = async (path) => {
+      await noteBand.scrollIntoViewIfNeeded();
+      // La cabecera fija de la muestra no debe quedar sobre la nota en la captura.
+      await page.evaluate(() => window.scrollBy(0, -110));
+      await page.waitForTimeout(200);
+      await noteBand.screenshot({ path });
+    };
+    await captureNote(`output/editor-nota-banda-${name}.png`);
+
     // 2. En edición: cada campo dice a quién pertenece, y la vista del cliente está al lado.
     await page.evaluate(() => {
       const edit = [...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Editar');
@@ -94,6 +114,8 @@ try {
     assert.equal(editing.renamed, true, '«Caption (Post)» pasa a llamarse por lo que es');
     assert.equal(editing.glance, false, 'la vista del cliente ya no está dentro del editor');
     assert.equal(await feedback.isVisible(), true, 'el feedback sigue visible mientras se edita la pieza');
+    assert.equal(await page.getByLabel('Nota interna', { exact: true }).count(), 1, 'la etiqueta identifica el campo para editar la nota');
+    await captureNote(`output/editor-nota-editando-${name}.png`);
 
     // Rodny, 25 de septiembre de 2026: con la nota en la franja de la ficha y alto fijo, un texto
     // largo se salía por encima de toda la tarjeta. Se comprueba que la nota **cabe dentro** de la

@@ -114,7 +114,7 @@ const MultiLinkInput = ({ values = [], onChange, placeholder, isEditing }) => {
 };
 
 // Helper for auto-resize textarea with internal state for performance (save on blur)
-const AutoResizeTextarea = ({ defaultValue, onBlur, placeholder, disabled, className }) => {
+const AutoResizeTextarea = ({ id, defaultValue, onBlur, placeholder, disabled, className }) => {
   const [val, setVal] = useState(defaultValue || '');
   const textareaRef = useRef(null);
 
@@ -132,6 +132,7 @@ const AutoResizeTextarea = ({ defaultValue, onBlur, placeholder, disabled, class
 
   return (
     <textarea
+      id={id}
       ref={textareaRef}
       value={val}
       onChange={(e) => setVal(e.target.value)}
@@ -1181,23 +1182,26 @@ const ContentItemCard = ({
             Estaba metida en la franja de la ficha con alto fijo, así que una nota larga se salía por
             encima del resto de la tarjeta. Aquí crece hacia abajo y no empuja a nadie. */}
         <div className="border-t border-zinc-100 px-6 py-5 dark:border-white/5">
-          <label htmlFor={`nota-${item.id}`} className={`${FIELD_LABEL} mb-1.5`}>
-            Nota interna <span className="text-zinc-400">· solo el equipo</span>
-          </label>
-          {isEditing ? (
-            <AutoResizeTextarea
-              defaultValue={item.internalNotes}
-              onBlur={(e) => {
-                if (e.target.value !== item.internalNotes) onUpdate({ id: item.id, internalNotes: e.target.value });
-              }}
-              placeholder="Instrucciones para el equipo…"
-              className="min-h-[72px] max-h-[132px] w-full overflow-y-auto rounded-xl border border-zinc-200 bg-white p-3.5 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900"
-            />
-          ) : (
-            <p className="max-h-[132px] overflow-y-auto whitespace-pre-wrap break-words text-[13px] leading-relaxed text-zinc-700 dark:text-zinc-300">
-              {item.internalNotes || <span className="text-zinc-400">Sin notas internas.</span>}
-            </p>
-          )}
+          <div className="rounded-r-xl border-l-[3px] border-brand-yellow bg-brand-yellow/[0.08] p-4 dark:bg-brand-yellow/[0.08]">
+            <label htmlFor={`nota-${item.id}`} className="mb-2 block text-[13px] font-semibold text-zinc-700 dark:text-zinc-200">
+              Nota interna
+            </label>
+            {isEditing ? (
+              <AutoResizeTextarea
+                id={`nota-${item.id}`}
+                defaultValue={item.internalNotes}
+                onBlur={(e) => {
+                  if (e.target.value !== item.internalNotes) onUpdate({ id: item.id, internalNotes: e.target.value });
+                }}
+                placeholder="Instrucciones para el equipo…"
+                className="min-h-[72px] max-h-[132px] w-full overflow-y-auto rounded-xl border border-zinc-200 bg-white p-3.5 text-[13px] leading-relaxed outline-none transition focus:border-brand-cyan dark:border-white/10 dark:bg-zinc-900"
+              />
+            ) : (
+              <p className="max-h-[132px] overflow-y-auto whitespace-pre-wrap break-words text-[13px] leading-relaxed text-zinc-700 dark:text-zinc-300">
+                {item.internalNotes || <span className="text-zinc-400">Sin notas internas.</span>}
+              </p>
+            )}
+          </div>
         </div>
 
         {/* `items-start`: sin esto las tres columnas se estiran al alto de la más alta y Referencias
