@@ -9,6 +9,7 @@
 import { hasModulePermission, isManagerRole } from '../config/security.js';
 import { pieceStage, shortDate } from '../lib/clientOperations.js';
 import { approvalState, APPROVAL_STATES } from '../lib/contentApproval.js';
+import { lastClientRequest } from '../lib/clientUpdate.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { rankByName } from '../lib/fuzzyMatch.js';
@@ -39,13 +40,9 @@ const SEVERITY_ORDER = ['CRITICAL', 'WARNING', 'INFO'];
 const LEVEL_ORDER = ['red', 'yellow', 'gray', 'green'];
 const fold = (value) => text(value).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
 
-// El portal escribe cada pedido del cliente al final de `comments` como «[Cliente - dd/mm/aaaa]: texto»
-// (`addClientComment`). Lo último que pidió es lo que producción tiene que atender.
-export const lastClientRequest = (comments) => {
-  const matches = [...String(comments || '').matchAll(/\[Cliente - ([^\]]+)\]:\s*([\s\S]*?)(?=\n\n\[Cliente - |$)/g)];
-  const last = matches.at(-1);
-  return last ? { fecha: last[1].trim(), texto: last[2].trim().slice(0, 600) } : null;
-};
+// Lo último que pidió el cliente vive en la biblioteca compartida (19 de octubre de 2026), porque también lo lee el
+// mensaje para el cliente; se reexporta para quien ya lo importaba desde aquí.
+export { lastClientRequest };
 const referenceLinks = (item) => [...(item.assetsLinks || []), ...(Array.isArray(item.mediaUrl) ? item.mediaUrl : [item.mediaUrl])].filter(Boolean).slice(0, 10);
 const compactTask = (task, today) => {
   const vence = dayOf(task.dueDate);

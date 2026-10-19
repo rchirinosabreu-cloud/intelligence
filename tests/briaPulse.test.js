@@ -48,14 +48,15 @@ test('an assumed tomorrow duration cannot trigger a proactive capacity warning',
 
 test('facts come from what the platform already computes, most serious first, each with a stable id and fingerprint', () => {
   const facts = collectFacts({ nudges, load, operations, pieces, returned, today: '2026-10-13' });
-  assert.deepEqual(facts.map((f) => f.id), ['OPERACION_ROJA:aristea', 'DEVUELTO_SIN_TOCAR:t7', 'CARGA_MANANA:m-bra', 'PIEZA_SIN_APROBAR:i1', 'SIN_PROCESO:m-mel']);
+  // Dos piezas de Foobespain esperan su aprobación esta semana: un solo aviso por cliente (19 de octubre de 2026).
+  assert.deepEqual(facts.map((f) => f.id), ['OPERACION_ROJA:aristea', 'DEVUELTO_SIN_TOCAR:t7', 'CARGA_MANANA:m-bra', 'APROBACIONES_PENDIENTES:p1', 'SIN_PROCESO:m-mel']);
   assert.match(facts[0].text, /Aristea está en rojo en Operación: Van 2 publicadas/);
   assert.doesNotMatch(facts[0].text, /informe/, 'only the red reasons');
   assert.match(facts[1].text, /«Portada» \(Helen Ruiz\) lleva 3 días devuelta sin cambios\./);
   assert.match(facts[2].text, /Brayan Torres tiene 2 entregas de mañana con margen insuficiente/);
   assert.deepEqual(facts[2].taskIds, ['o1', 'o2']);
-  assert.match(facts[3].text, /«Reel de vendimia» de Foobespain sale el 14 de octubre y el cliente todavía no la ha aprobado\./);
-  assert.equal(facts[3].url, '/parrillas/p1?item=i1');
+  assert.match(facts[3].text, /Foobespain tiene 2 piezas esperando su aprobación esta semana; la primera, «Reel de vendimia», sale el miércoles 14 de octubre\./);
+  assert.equal(facts[3].url, '/parrillas/p1');
   // Las acciones vienen con el hecho, según su tipo: a dónde ir y qué pedirle a Bria.
   assert.deepEqual(facts[0].actions.map((a) => [a.label, a.to || null]), [['Abrir operación', '/clientes/operacion/aristea'], ['Pedirle a Bria qué falta', null]]);
   assert.match(facts[0].actions[1].ask, /Qué le falta a Aristea para salir del rojo/);
@@ -63,8 +64,8 @@ test('facts come from what the platform already computes, most serious first, ea
   assert.match(facts[1].actions[1].ask, /qué pidió corregir el cliente en «Portada»/);
   assert.deepEqual(facts[2].actions.map((a) => a.label), ['Abrir el mapa de carga', 'Pedirle a Bria qué se mueve']);
   assert.match(facts[2].actions[1].ask, /carga de Brayan Torres para el 14 de octubre/);
-  assert.deepEqual(facts[3].actions.map((a) => a.label), ['Abrir la pieza', 'Redactar recordatorio al cliente']);
-  assert.match(facts[3].actions[1].ask, /para Foobespain: «Reel de vendimia» sale el 14 de octubre/);
+  assert.deepEqual(facts[3].actions.map((a) => a.label), ['Abrir la parrilla', 'Escribirle a Foobespain']);
+  assert.match(facts[3].actions[1].ask, /para Foobespain para que apruebe lo que tiene pendiente, con el enlace del portal/);
   assert.deepEqual(facts[4].actions.map((a) => [a.label, a.to || null]), [['Ver sus pendientes', '/gestion?responsable=Melissa%20Casta%C3%B1o'], ['Que Bria me resuma lo que tiene', null]]);
   assert.equal(facts[0].fingerprint, fingerprintOf(facts[0]));
   assert.notEqual(facts[0].fingerprint, fingerprintOf({ ...facts[0], text: 'otra cosa' }), 'a changed fact is a new fingerprint');
@@ -101,7 +102,8 @@ test('the digest and the request: fast model, strict JSON, data marked as data, 
 });
 
 test('validation keeps only real facts, drops judgments, respects the budget, and a fenced JSON answer still parses', () => {
-  const facts = collectFacts({ nudges, operations, pieces, today: '2026-10-13' });
+  // Una sola pieza urgente del cliente conserva su aviso pieza por pieza.
+  const facts = collectFacts({ nudges, operations, pieces: [pieces[0]], today: '2026-10-13' });
   const raw = parsePulse('```json\n' + JSON.stringify({ speak: true, messages: [
     { factIds: ['OPERACION_ROJA:aristea', 'PIEZA_SIN_APROBAR:i1'], title: 'Aristea va atrasada y el reel de Foobespain sale mañana sin aprobación.', body: 'Vale la pena revisar las dos hoy.', ask: 'Ayúdame con Aristea y el reel.', urgency: 'alta' },
     { factIds: ['SIN_PROCESO:m-mel'], title: 'Melissa está lenta hoy.', body: '', ask: null, urgency: 'baja' },

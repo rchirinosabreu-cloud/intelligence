@@ -31,6 +31,7 @@ const { runAssistant } = await import(root + 'src/lib/briaAssistant.js');
 const { briaAssistantTools } = await import(root + 'src/services/briaAssistantTools.js');
 const { createBriaActionTools } = await import(root + 'src/services/briaActionTools.js');
 const { createDailyReadingTools } = await import(root + 'src/services/dailyReadingTools.js');
+const { briaClientUpdateTools } = await import(root + 'src/services/briaClientUpdateTools.js');
 const { runWithAiContext } = await import(root + 'src/lib/aiRequestContext.js');
 const { AI_MODELS } = await import(root + 'src/config/aiConfig.js');
 
@@ -116,7 +117,17 @@ const fakeActionService = { prepare: async ({ type, args }) => ({ type, title: t
 const readTools = briaAssistantTools.filter((tool) => fixtureRuns[tool.name]).map((tool) => ({ ...tool, allowed: () => true, run: async (args) => ({ data: fixtureRuns[tool.name](args || {}), sources: [] }) }));
 const actionTools = createBriaActionTools(fakeActionService).filter((tool) => ['cambiar_pendiente', 'cambiar_pendientes', 'registrar_observacion'].includes(tool.name)).map((tool) => ({ ...tool, allowed: () => true }));
 const readingTools = createDailyReadingTools({ explain: async (args) => readingFixture(args) }).map((tool) => ({ ...tool, allowed: () => true }));
-const baseTools = [...readTools, ...actionTools, ...readingTools];
+// Escribirle al cliente (19 de octubre de 2026): la herramienta real, sobre una parrilla ficticia, para probar también
+// su instrucción y que nunca se cuele lo que el cliente no ve.
+const noon = (day) => new Date(`${day}T12:00:00.000Z`);
+const clientPlanItems = [
+  { id: 'cp-1', objective: 'Reel de la nueva sede', format: 'Reel', publishDate: noon('2026-10-10'), publishTime: '11:00', status: 'PUBLICADO', comments: '', revisionRequestedAt: null, publications: [{ status: 'PUBLISHED', platform: 'INSTAGRAM', permalink: 'https://www.instagram.com/p/demo/', publishedAt: new Date('2026-10-10T16:01:00Z'), scheduledAt: null }] },
+  { id: 'cp-2', objective: 'Carrusel de horarios', format: 'Carrusel', publishDate: noon('2026-10-17'), publishTime: null, status: 'EN_REVISION', comments: '', revisionRequestedAt: null, publications: [], copyText: 'GUION INTERNO: escena del parqueadero' },
+  { id: 'cp-3', objective: 'Post de bienvenida', format: 'Post', publishDate: noon('2026-10-20'), publishTime: null, status: 'DEVUELTO', comments: '[Cliente - 14/10/2026]: Usen la foto de la fachada', revisionRequestedAt: null, publications: [] }
+];
+const clientUpdateDb = { contentPlan: { findFirst: async ({ where }) => (where.clientId === 'cli-aristea' ? { id: 'plan-aristea-10', month: 10, year: 2026, shareToken: 'demo-token', client: { name: 'Aristea Ficticia', contactName: 'Laura Ficticia' }, contentItems: clientPlanItems } : null) } };
+const clientTools = briaClientUpdateTools.map((tool) => ({ ...tool, allowed: () => true, run: (args, ctx) => tool.run(args, { ...ctx, db: clientUpdateDb, today }) }));
+const baseTools = [...readTools, ...actionTools, ...clientTools, ...readingTools];
 
 const provider = createOpenAIClient({ apiKey: config.OPENAI_API_KEY, models: AI_MODELS });
 const selected = EVAL_CASES.filter((item) => !only || item.id === only);
