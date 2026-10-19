@@ -223,9 +223,9 @@ const CoverField = ({ item, isEditing, onUpload, onRemove, isBusy }) => {
   }, [item.id, cover?.name, cover?.size]);
 
   return (
-    <div className="flex flex-col gap-2" data-piece-cover>
-      <span className={FIELD_LABEL}>Portada del reel</span>
-      <div className="flex items-start gap-3">
+    <div className="flex min-w-0 flex-col gap-2" data-piece-cover>
+      <span className={`${FIELD_LABEL} gap-2`}>Portada del reel <span className="text-[11px] font-normal">Opcional</span></span>
+      <div className="flex min-h-[144px] items-start gap-3 rounded-xl border border-dashed border-zinc-300 bg-white p-4 dark:border-white/15 dark:bg-zinc-900">
         {cover ? (
           <div className="h-20 w-[45px] shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-white/10 dark:bg-zinc-950">
             {previewUrl
@@ -885,9 +885,9 @@ const FeedbackHistory = ({ comments }) => {
 /**
  * La tarjeta de crear contenido (rediseño de Rodny, 25 de septiembre de 2026, propuesta B).
  *
- * La ficha entera —formato, fecha, estado, nota— vive en una franja arriba, y el ancho que antes
- * gastaba una columna de metadatos se lo queda lo que de verdad se hace aquí: escribir. Guion y texto
- * de publicación van lado a lado, y el material (pieza final y enlaces) en un carril estrecho.
+ * La ficha queda arriba y los textos comparten el ancho. Distribución por etapas elegida por Rodny
+ * el 18 de octubre de 2026: escritura, referencias/insumos, nota interna y entrega final. La pieza
+ * final y su portada opcional comparten fila; en móvil se apilan en ese mismo orden.
  *
  * Fuera: el icono de formato —un cuadro de color enorme al lado de la palabra «Reel», que no añadía
  * nada—, los iconos decorativos de cada etiqueta, el «(Links)» de los rótulos y el verde del botón
@@ -1181,6 +1181,28 @@ const ContentItemCard = ({
           </div>
         </div>
 
+        <section aria-label="Recursos de producción" className="grid min-w-0 grid-cols-1 items-start gap-5 border-t border-zinc-100 px-6 py-5 dark:border-white/5 md:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-2">
+            <span className={FIELD_LABEL}>Referencias</span>
+            <MultiLinkInput
+              values={item.mediaUrl}
+              isEditing={isEditing}
+              placeholder="Enlace de Drive o Pinterest"
+              onChange={(links) => onUpdate({ id: item.id, mediaUrl: links })}
+            />
+          </div>
+
+          <div className="flex min-w-0 flex-col gap-2">
+            <span className={FIELD_LABEL}>Insumos</span>
+            <MultiLinkInput
+              values={item.assetsLinks}
+              isEditing={isEditing}
+              placeholder="Enlace de fotos, logos, etc."
+              onChange={(links) => onUpdate({ id: item.id, assetsLinks: links })}
+            />
+          </div>
+        </section>
+
         {/* La nota interna tiene su propia banda, a todo el ancho (Rodny, 25 de septiembre de 2026).
             Estaba metida en la franja de la ficha con alto fijo, así que una nota larga se salía por
             encima del resto de la tarjeta. Aquí crece hacia abajo y no empuja a nadie. */}
@@ -1207,10 +1229,8 @@ const ContentItemCard = ({
           </div>
         </div>
 
-        {/* `items-start`: sin esto las tres columnas se estiran al alto de la más alta y Referencias
-            e Insumos quedaban flotando sobre un vacío enorme. */}
-        <div className="grid grid-cols-1 items-start gap-6 border-t border-zinc-100 bg-zinc-50/60 px-6 py-5 dark:border-white/5 dark:bg-white/5 md:grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1fr)]">
-          <div className="flex flex-col gap-2.5">
+        <section aria-label="Entrega final" className={`grid min-w-0 grid-cols-1 items-start gap-6 border-t border-zinc-100 px-6 py-5 dark:border-white/5 ${acceptsCover ? 'md:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)]' : ''}`}>
+          <div className="flex min-w-0 flex-col gap-2.5">
             <span className={FIELD_LABEL}>Pieza final</span>
 
             {finalAssets.length > 0 && (
@@ -1230,7 +1250,7 @@ const ContentItemCard = ({
               <div className={`rounded-xl border border-dashed border-zinc-300 bg-white dark:border-white/15 dark:bg-zinc-900 ${
                 finalAssets.length
                   ? 'flex flex-wrap items-center gap-x-3 gap-y-1.5 px-3 py-2.5'
-                  : 'flex flex-col items-center gap-2.5 p-5 text-center'
+                  : 'flex min-h-[144px] flex-col items-center justify-center gap-2.5 p-5 text-center'
               }`}>
                 {isFinalAssetUploading
                   ? <Loader2 className="h-4 w-4 animate-spin text-zinc-400" />
@@ -1268,20 +1288,9 @@ const ContentItemCard = ({
                 </div>
               </div>
             ) : finalAssets.length === 0 && (
-              <p className="rounded-xl border border-dashed border-zinc-200 p-4 text-[13px] text-zinc-400 dark:border-white/10">
+              <p className="flex min-h-[144px] items-center justify-center rounded-xl border border-dashed border-zinc-200 p-4 text-[13px] text-zinc-400 dark:border-white/10">
                 Sin pieza final cargada.
               </p>
-            )}
-
-            {/* La portada se puede preparar antes del video; solo se envía a Meta al publicar un reel. */}
-            {acceptsCover && (
-              <CoverField
-                item={item}
-                isEditing={isEditing}
-                onUpload={onCoverUpload}
-                onRemove={onCoverRemove}
-                isBusy={isCoverBusy}
-              />
             )}
 
             {directUploadPercent !== null && (
@@ -1296,26 +1305,17 @@ const ContentItemCard = ({
             )}
           </div>
 
-          <div className="flex flex-col gap-2">
-            <span className={FIELD_LABEL}>Referencias</span>
-            <MultiLinkInput
-              values={item.mediaUrl}
+          {/* La portada se prepara en cualquier orden y sigue siendo opcional al programar. */}
+          {acceptsCover && (
+            <CoverField
+              item={item}
               isEditing={isEditing}
-              placeholder="Link de Drive/Pinterest"
-              onChange={(links) => onUpdate({ id: item.id, mediaUrl: links })}
+              onUpload={onCoverUpload}
+              onRemove={onCoverRemove}
+              isBusy={isCoverBusy}
             />
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <span className={FIELD_LABEL}>Insumos</span>
-            <MultiLinkInput
-              values={item.assetsLinks}
-              isEditing={isEditing}
-              placeholder="Links de fotos, logos, etc."
-              onChange={(links) => onUpdate({ id: item.id, assetsLinks: links })}
-            />
-          </div>
-        </div>
+          )}
+        </section>
       </div>
 
       <SocialPublishingPanel
