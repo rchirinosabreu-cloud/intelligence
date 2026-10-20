@@ -46,6 +46,7 @@ import {
     reopenFinancialPeriodHandler,
     replaceFinancialRecordAllocationsHandler,
     reverseReceivablePaymentHandler,
+    updateReceivablePaymentHandler,
     settleReceivableHandler,
     listReceivableAdjustmentsHandler,
     streamFinancialRecordDocumentHandler,
@@ -145,6 +146,9 @@ router.post('/loans', requireFinancialWrite, createLoanHandler);
 // Corregir un abono mal registrado es parte del trabajo diario de quien lo registra:
 // mismo permiso que crearlo, con motivo obligatorio y auditoría.
 router.post('/receivable-payments/:paymentId/reverse', requireFinancialWrite, reverseReceivablePaymentHandler);
+// Corregir un abono sin revertirlo (Rodny, 20 de octubre de 2026): valor, fecha, cuenta,
+// referencia y notas, con motivo cuando cambia el dinero; su ingreso cambia con él.
+router.patch('/receivable-payments/:paymentId', requireFinancialWrite, updateReceivablePaymentHandler);
 router.get('/payroll-ledger', requireFinancialAccess, getFinancialPayrollLedger);
 router.post('/payroll-contracts', requireFinancialWrite, createFinancialPayrollContract);
 router.patch('/payroll-contracts/:id', requireFinancialWrite, updateFinancialPayrollContract);

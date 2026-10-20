@@ -33,6 +33,7 @@ import ReceivablePaymentDialog from './financial/ReceivablePaymentDialog';
 import ReceivableSettlementDialog from './financial/ReceivableSettlementDialog';
 import ReceivableLoanDialog from './financial/ReceivableLoanDialog';
 import ReceivableAdjustmentsSummary from './financial/ReceivableAdjustmentsSummary';
+import ReceivablePaymentEditDialog from './financial/ReceivablePaymentEditDialog';
 import { isCashPayment, isReceivableClosed, settlementKindLabel } from '@/lib/receivableSettlement';
 import { isLoanReceivable, loanCounterpartyLabel } from '@/lib/receivableLoans';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
@@ -174,6 +175,9 @@ const FinancialDashboard = () => {
     // Préstamos a terceros en Cartera (Rodny, 20 de octubre de 2026).
     const [isLoanDialogOpen, setIsLoanDialogOpen] = useState(false);
     const [isSavingLoan, setIsSavingLoan] = useState(false);
+    // Corregir un abono sin revertirlo (Rodny, 20 de octubre de 2026).
+    const [paymentToEdit, setPaymentToEdit] = useState(null);
+    const [isEditingPayment, setIsEditingPayment] = useState(false);
     const [statementClient, setStatementClient] = useState(null);
     const [paymentForm, setPaymentForm] = useState({ amount: '', paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }), accountId: '', reference: '', notes: '' });
     const [isSavingPayment, setIsSavingPayment] = useState(false);
@@ -514,6 +518,27 @@ const FinancialDashboard = () => {
             setImportError(error.response?.data?.message || 'No fue posible registrar el préstamo.');
         } finally {
             setIsSavingLoan(false);
+        }
+    };
+
+    const handleEditPayment = async (payload) => {
+        const payment = paymentToEdit?.payment;
+        if (!payment?.id || isEditingPayment || !canWriteFinancials) return;
+        setIsEditingPayment(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const { data: result } = await axios.patch(`${baseUrl}/api/financials/receivable-payments/${payment.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
+            await invalidateFinancialQueries(queryClient);
+            setPaymentToEdit(null);
+            setImportSuccess(result?.message || 'Abono corregido.');
+        } catch (error) {
+            console.error('Error editing receivable payment:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible corregir el abono.');
+        } finally {
+            setIsEditingPayment(false);
         }
     };
 
@@ -1691,10 +1716,17 @@ await invalidateFinancialQueries(queryClient);
                                                                                         )}
                                                                                     </div>
                                                                                     {canWriteFinancials && !payment.reversedAt && (
-                                                                                        <button type="button" onClick={() => openPaymentReversal(debt, payment)}
-                                                                                            className="min-h-11 rounded-lg border border-destructive/30 px-3 text-xs font-semibold text-destructive transition hover:bg-destructive/5">
-                                                                                            Revertir
-                                                                                        </button>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            {/* Corregir sin revertir (Rodny, 20 de octubre de 2026). */}
+                                                                                            <button type="button" data-receivable-payment-edit onClick={() => { setImportError(''); setPaymentToEdit({ debt, payment }); }}
+                                                                                                className="min-h-11 rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">
+                                                                                                Corregir
+                                                                                            </button>
+                                                                                            <button type="button" onClick={() => openPaymentReversal(debt, payment)}
+                                                                                                className="min-h-11 rounded-lg border border-destructive/30 px-3 text-xs font-semibold text-destructive transition hover:bg-destructive/5">
+                                                                                                Revertir
+                                                                                            </button>
+                                                                                        </div>
                                                                                     )}
                                                                                 </li>
                                                                             ))}
@@ -2302,6 +2334,7 @@ await invalidateFinancialQueries(queryClient);
 
             <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={importError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
             {settlementDebt && <ReceivableSettlementDialog key={settlementDebt.id} debt={settlementDebt} saving={isSavingSettlement} error={importError} onClose={() => setSettlementDebt(null)} onSubmit={handleReceivableSettlement} />}
+            {paymentToEdit && <ReceivablePaymentEditDialog key={paymentToEdit.payment.id} debt={paymentToEdit.debt} payment={paymentToEdit.payment} accounts={financialAccounts?.accounts || []} saving={isEditingPayment} error={importError} onClose={() => setPaymentToEdit(null)} onSubmit={handleEditPayment} />}
             {isLoanDialogOpen && <ReceivableLoanDialog open clients={clientTargetChoices} accounts={financialAccounts?.accounts || []} saving={isSavingLoan} error={importError} onClose={() => setIsLoanDialogOpen(false)} onSubmit={handleCreateLoan} />}
             {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} />}
 

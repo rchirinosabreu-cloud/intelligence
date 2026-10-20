@@ -288,6 +288,7 @@ export const PLATFORM_OPERATIONS = {
   'GET /financials/receivable-adjustments': { que: 'Resumen de ajustes de cartera del periodo: lo saldado sin dinero (acuerdo, canje, compensación, condonación) y la diferencia en cambio de las cuentas en dólares.', campos: 'year, month' },
   'POST /financials/receivables/:id/settlements': { que: 'Salda una cuenta por cobrar sin dinero: acuerdo por menor valor, canje, compensación o condonación. No crea ingresos.', campos: 'kind (ACUERDO, CANJE, COMPENSACION, CONDONACION), amount, settledAt, reason, authorizedBy, goods, destination, offsetAgainst' },
   'POST /financials/receivable-payments/:paymentId/reverse': { que: 'Revierte un abono o un ajuste con motivo.', campos: 'reason' },
+  'PATCH /financials/receivable-payments/:paymentId': { que: 'Corrige un abono sin revertirlo: valor, fecha, cuenta, referencia o notas. Cambiar el dinero exige motivo; su ingreso cambia con él.', campos: 'amount, paidAt, accountId, reference, notes, reason, settlesInFull' },
   'GET /financials/bank-reconciliation': { que: 'La conciliación bancaria.' },
   'POST /financials/bank-reconciliation/rebuild': { que: 'Recalcula las propuestas de conciliación.' },
   'POST /financials/bank-reconciliation/matches/:id/approve': { que: 'Aprueba un cruce de conciliación.' },

@@ -318,7 +318,7 @@ const dateInputFrom = (date) => {
 // cuál ni dónde deja a quien lo lee sin salida. Cada caso nombra su camino.
 export const financialRecordLockReason = (record) => {
     if (record?.receivablePayment) {
-        return 'Este movimiento es el ingreso de un abono de cartera. Para deshacerlo ve a Cartera, abre la obligación del cliente y usa «Revertir» en ese abono: este movimiento se anulará solo.';
+        return 'Este movimiento es el ingreso de un abono de cartera. Para corregirlo ve a Cartera, abre la obligación del cliente y usa el lápiz de ese abono: el valor, la fecha y la cuenta cambian aquí con él. Para deshacerlo, «Revertir» en ese mismo abono: este movimiento se anulará solo.';
     }
     if (record?.loanReceivable) {
         return 'Este movimiento es el egreso de un préstamo que está en Cartera. Para deshacerlo ve a Cartera y usa «Eliminar» en ese préstamo: este movimiento se anulará solo. Si el valor está mal, elimina el préstamo y regístralo de nuevo.';
