@@ -26,7 +26,8 @@ import {
   confirmContentItemFinalAssets,
   setContentItemCover,
   getContentItemCover,
-  removeContentItemCover
+  removeContentItemCover,
+  recordClientApproval
 } from '../../services/contentService.js';
 import { getFromS3Stream } from '../../services/s3Service.js';
 import { reorderContentItemFinalAssets } from '../../services/finalAssetOrderService.js';
@@ -289,12 +290,25 @@ router.post('/items', async (req, res) => {
 
 router.patch('/items/:id', async (req, res) => {
   try {
-    const item = await updateContentItem(req.params.id, req.body);
+    // Quien mueve el estado queda en la marca de aprobación (20 de octubre de 2026).
+    const item = await updateContentItem(req.params.id, req.body, { actor: { userId: req.user?.userId || req.user?.id || null, name: req.user?.name || null } });
     return res.json(item);
   } catch (error) {
     console.error('[API] Error updating content item:', error);
     if (Number(error.status) >= 400 && Number(error.status) < 500) return res.status(error.status).json({ error: error.message });
     return res.status(500).json({ error: 'Failed to update content item', details: error.message });
+  }
+});
+
+// El cliente aprobó por fuera del portal (20 de octubre de 2026): WhatsApp, correo, llamada o reunión, marcado por quien lo recibió.
+router.post('/items/:id/client-approval', async (req, res) => {
+  try {
+    const item = await recordClientApproval(req.params.id, { channel: req.body?.channel, note: req.body?.note }, { actor: { userId: req.user?.userId || req.user?.id || null, name: req.user?.name || null } });
+    return res.json(item);
+  } catch (error) {
+    console.error('[API] Error recording client approval:', error.response?.data || error.message || error);
+    if (Number(error.status) >= 400 && Number(error.status) < 500) return res.status(error.status).json({ error: error.message });
+    return res.status(500).json({ error: 'No se pudo marcar la aprobación del cliente' });
   }
 });
 

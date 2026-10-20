@@ -6,7 +6,7 @@ import { uploadToS3, deleteFromS3 } from './s3Service.js';
 import { createNotification } from './notificationService.js';
 import { createBriaTaskDraftService } from './briaTaskDraftService.js';
 import { createBriaDispatchService } from './briaDispatchService.js';
-import { sendItemToKanban, createContentPlan, updateContentPlan, createContentItem, updateContentItem } from './contentService.js';
+import { sendItemToKanban, createContentPlan, updateContentPlan, createContentItem, updateContentItem, recordClientApproval } from './contentService.js';
 import { clientOperationsService } from './clientOperationsService.js';
 import { getBriaPlatformClient } from '../lib/briaPlatformClient.js';
 import { getRoutePermission } from '../lib/platformPermissions.js';
@@ -17,4 +17,4 @@ export const briaDeleteDrafts = createBriaDeleteService({ db: prisma, deleteTask
 // Acciones en la plataforma (10 de octubre de 2026): pendientes, parrillas, piezas y observaciones, por las vías de siempre.
 // Crear pendiente, despachar y eliminar se ejecutan por esta misma base (una sola base, 10 de octubre de 2026).
 // Los compromisos de una reunión (14 de octubre de 2026) se crean con el mismo `createTask` del panel y avisan igual.
-export const briaActions = createBriaActionService({ db: prisma, updateTask, createTask, notify: createNotification, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation: (input) => clientOperationsService.addObservation(input), taskDrafts: briaTaskDrafts, dispatchDrafts: briaDispatchDrafts, deleteDrafts: briaDeleteDrafts, platform: getBriaPlatformClient(), routePermissions: getRoutePermission });
+export const briaActions = createBriaActionService({ db: prisma, updateTask, createTask, notify: createNotification, createContentPlan, updateContentPlan, createContentItem, updateContentItem, recordClientApproval, addObservation: (input) => clientOperationsService.addObservation(input), taskDrafts: briaTaskDrafts, dispatchDrafts: briaDispatchDrafts, deleteDrafts: briaDeleteDrafts, platform: getBriaPlatformClient(), routePermissions: getRoutePermission });

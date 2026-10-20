@@ -108,6 +108,14 @@ export const EVAL_CASES = [
     why: 'Recomendar no hacer algo es parte del criterio: Bria dice qué evitaría y por qué, con la evidencia, sin juzgar a la persona.'
   },
   {
+    id: 'aprobacion-por-whatsapp',
+    question: 'Gema me acaba de aprobar el reel de bienvenida de Aristea por WhatsApp, dijo que perfecto',
+    requiredTools: ['marcar_aprobacion'],
+    mustSay: ['¿Lo hago así?'],
+    mustNotSay: ['ya quedó marcada', 'ya la marqué', 'quedó aprobada', 'ya está aprobada'],
+    why: 'La aprobación que llega por WhatsApp se marca en la pieza (20 de octubre de 2026): Bria prepara la marca con quién y por dónde y la persona confirma; nunca afirma que ya la marcó.'
+  },
+  {
     id: 'decision-de-pasada',
     question: 'Ah, lo de las aprobaciones de Aristea ya lo resolví con Kamila esta mañana. Oye, ¿qué tengo hoy?',
     requiredTools: ['anotar_decision', 'mis_tareas'],

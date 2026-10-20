@@ -19,7 +19,7 @@ const H = 3_600_000;
 export const PULSE_USE_CASE = 'bria.pulse';
 export const PULSE_PROMPT_VERSION = 1;
 export const PULSE_LIMITS = Object.freeze({ perDay: 3, perHour: 1, muteAfterDismissals: 3, muteDays: 7, maxFacts: 40 });
-export const FACT_KINDS = Object.freeze(['SIN_PROCESO', 'VENCE_HOY', 'CARGA_MANANA', 'ENTREGA_EN_RIESGO', 'OPERACION_ROJA', 'PIEZA_SIN_APROBAR', 'APROBACIONES_PENDIENTES', 'DEVUELTO_SIN_TOCAR', 'CORREO_IMPORTANTE']);
+export const FACT_KINDS = Object.freeze(['SIN_PROCESO', 'VENCE_HOY', 'CARGA_MANANA', 'ENTREGA_EN_RIESGO', 'OPERACION_ROJA', 'PIEZA_SIN_APROBAR', 'APROBACIONES_PENDIENTES', 'PROGRAMADA_SIN_APROBACION', 'DEVUELTO_SIN_TOCAR', 'CORREO_IMPORTANTE']);
 // Aprobaciones del cliente (Rodny, 19 de octubre de 2026: «hay piezas que no se han aprobado en la parrilla tal, ¿quieres
 // enviarle un mensaje a Aristea? Puedo ayudarte a redactarlo … una forma de pensar, de actuar de Bria»): se mira la semana.
 export const APPROVAL_LOOKAHEAD_DAYS = 7;
@@ -53,8 +53,14 @@ export const slotKeyOf = (now, slotMinutes = PULSE_SLOT_MINUTES) => { const { da
  * Reúne hechos de lo que ya calcula la plataforma. Cada hecho: { id, kind, subject, personId?, personName?, text, ask?,
  * url?, taskIds, severity (3 alto … 1 bajo), fingerprint }. Nunca una opinión: solo lo que dicen los datos.
  */
-export const collectFacts = ({ nudges = [], load = null, operations = [], pieces = [], returned = [], mails = [], today } = {}) => {
+export const collectFacts = ({ nudges = [], load = null, operations = [], pieces = [], returned = [], mails = [], unapproved = [], today } = {}) => {
   const facts = [];
+  // Programada en redes sin la aprobación del cliente marcada (20 de octubre de 2026): sale sola a su hora, así que es
+  // lo primero que hay que mirar. `unapproved`: [{ id, title, planId, clientName, day }], solo piezas creadas desde que existe la marca.
+  for (const piece of unapproved) {
+    const url = `/parrillas/${piece.planId}?item=${piece.id}`;
+    facts.push(fact('PROGRAMADA_SIN_APROBACION', piece.id, { clientName: piece.clientName, text: `«${piece.title}» de ${piece.clientName || 'un cliente'} está programada para salir el ${dayLabel(piece.day)}${piece.day === today ? ' (hoy)' : ''} y no tiene la aprobación del cliente marcada.`, url, taskIds: [], severity: piece.day === today ? 3 : 2, actions: nudgeActions({ kind: 'PROGRAMADA_SIN_APROBACION', clientName: piece.clientName, title: piece.title, url }) }));
+  }
   // Correos importantes de los buzones compartidos (11 de octubre de 2026): el texto lo arma `describeMail`, sin cuerpo.
   for (const mail of mails) {
     if (!mail?.messageId || !mail.text) continue;

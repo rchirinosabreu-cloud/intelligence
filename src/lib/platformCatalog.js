@@ -197,6 +197,7 @@ export const PLATFORM_OPERATIONS = {
   'POST /content/plans/:id/share-token': { que: 'El enlace público de la parrilla (siempre el mismo).' },
   'POST /content/plans/:id/request-revision': { que: 'Pide al cliente volver a revisar las piezas aprobadas con material nuevo.' },
   'POST /content/items/:id/request-revision': { que: 'Pide al cliente volver a revisar una pieza.' },
+  'POST /content/items/:id/client-approval': { que: 'Marca que el cliente aprobó una pieza por fuera del portal: WhatsApp, correo, llamada o reunión (mejor con marcar_aprobacion).', campos: 'channel (WHATSAPP|CORREO|LLAMADA|REUNION), note' },
   'GET /content/items': { que: 'Las piezas de contenido.', campos: 'planId (consulta)' },
   'POST /content/items': { que: 'Crea una pieza (mejor con crear_pieza).', campos: 'planId, objective, format, publishDate, status' },
   'PATCH /content/items/:id': { que: 'Edita una pieza: objetivo, formato, guion, texto, fecha, hora, estado, notas, cuentas.', campos: 'objective, format, copyText, captionText, publishDate (YYYY-MM-DD), publishTime (HH:mm), status (BORRADOR|EN_REVISION|APROBADO|DEVUELTO|EN_PRODUCCION|REALIZADO|PUBLICADO; PROGRAMADO lo pone la cola de Meta, no se escribe a mano), internalNotes, socialPageIds' },

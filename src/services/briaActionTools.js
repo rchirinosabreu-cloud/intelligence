@@ -87,6 +87,17 @@ export const createBriaActionTools = (service) => service ? [{
   }, required: ['pieza', 'fecha', 'hora'], additionalProperties: false },
   run: run(service, 'MOVE_ITEM')
 }, {
+  name: 'marcar_aprobacion',
+  description: 'Prepara la marca de que el cliente aprobó una pieza por fuera del portal (por WhatsApp, correo, una llamada o una reunión), cuando la persona lo cuenta («Gema aprobó el reel por WhatsApp», «la clienta dio el ok en la reunión»). NO cambia nada: muestra el resumen y la persona confirma. Antes localiza la pieza con parrilla_de_cliente y usa su id. La pieza pasa a Aprobado con quién, cuándo y por dónde; una pieza publicada no se marca.',
+  allowed: allowedFor('CLIENT_APPROVAL'),
+  parameters: { type: 'object', properties: {
+    pieza: { type: 'string', description: 'Id de la pieza.' },
+    canal: { type: ['string', 'null'], enum: ['WHATSAPP', 'CORREO', 'LLAMADA', 'REUNION', null], description: 'Por dónde aprobó el cliente; null si no lo dijo.' },
+    nota: { type: ['string', 'null'], description: 'Lo que dijo el cliente al aprobar, en pocas palabras, si lo contaron.' },
+    nuevo: { type: 'boolean' }
+  }, required: ['pieza', 'canal', 'nota'], additionalProperties: false },
+  run: run(service, 'CLIENT_APPROVAL')
+}, {
   name: 'registrar_observacion',
   description: 'Prepara una observación en la ficha de un cliente (Operación de clientes): contexto que el equipo tiene que leer, como un acuerdo, una sensibilidad del cliente o un cambio de interlocutor. NO es un pendiente ni una tarea. NO escribe nada: muestra el resumen y la persona confirma. Antes localiza el cliente con buscar_cliente y usa su id. Pasa el texto con las palabras de la persona.',
   allowed: allowedFor('CLIENT_NOTE'),

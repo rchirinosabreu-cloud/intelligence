@@ -8,6 +8,7 @@ import prisma from '../lib/prisma.js';
 import { AI_MODELS } from '../config/aiConfig.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { needsClientReview } from '../lib/contentApproval.js';
+import { CLIENT_APPROVAL_SINCE, scheduledWithoutApproval } from '../lib/clientApproval.js';
 import { buildNudges, bogotaDayEnd } from '../lib/briaNudges.js';
 import { collectFacts, pulseBudget, mutedKinds, eligibleFacts, buildPulseDigest, buildPulseRequest, parsePulse, validatePulse, fallbackPulse, workdayBounds, slotKeyOf, isWorkingTime, PULSE_LIMITS, APPROVAL_LOOKAHEAD_DAYS } from '../lib/briaPulse.js';
 import { evaluateFollowUp, followUpTargets, isFollowable, FOLLOW_UP_AFTER_MS } from '../lib/briaFollowUp.js';
@@ -43,7 +44,7 @@ export const createBriaPulseService = ({
     async collect(at = now()) {
       const today = bogotaDate(at);
       const safe = async (label, work, fallback) => { try { return await work(); } catch (error) { logger.error(`[BriaPulse] Sin ${label} esta vez:`, error?.message || error); return fallback; } };
-      const [team, loadMap, ops, pieces, returned, mails] = await Promise.all([
+      const [team, loadMap, ops, pieces, returned, mails, unapproved] = await Promise.all([
         safe('personas', () => people().readPeople(at), []),
         safe('mapa de carga', () => load.get(), null),
         safe('operación de clientes', () => operations.listOperations(), []),
@@ -58,9 +59,14 @@ export const createBriaPulseService = ({
           const rows = await db.task.findMany({ where: { status: 'DEVUELTA', returnedAt: { lte: before }, updatedAt: { lte: before } }, select: { id: true, title: true, returnedAt: true, assignee: { select: { id: true, name: true } }, client: { select: { name: true } } }, take: 100 });
           return rows.map((row) => ({ id: row.id, title: row.title, returnedDay: bogotaDate(row.returnedAt), personId: row.assignee?.id || null, assigneeName: row.assignee?.name || null, clientName: row.client?.name || null }));
         }, []),
-        safe('correo', async () => { const service = mailbox(); return service ? service.readImportant({ at }) : []; }, [])
+        safe('correo', async () => { const service = mailbox(); return service ? service.readImportant({ at }) : []; }, []),
+        safe('programadas sin aprobación', async () => {
+          // Programada en redes y sin aprobación marcada (20 de octubre de 2026): solo piezas creadas desde que existe la marca.
+          const rows = await db.contentItem.findMany({ where: { deletedAt: null, status: { not: 'PUBLICADO' }, createdAt: { gte: new Date(`${CLIENT_APPROVAL_SINCE}T00:00:00Z`) }, publications: { some: { status: { in: ['SCHEDULED', 'PUBLISHING'] } } }, plan: { deletedAt: null } }, select: { id: true, objective: true, status: true, publishDate: true, createdAt: true, clientApproval: true, planId: true, publications: { select: { status: true } }, plan: { select: { client: { select: { name: true } } } } }, take: 200 });
+          return scheduledWithoutApproval(rows).map((row) => ({ id: row.id, title: row.objective, planId: row.planId, clientName: row.plan?.client?.name || null, day: bogotaDate(row.publishDate) }));
+        }, [])
       ]);
-      const facts = collectFacts({ nudges: buildNudges({ people: team, now: at }), load: loadMap, operations: ops, pieces, returned, mails, today });
+      const facts = collectFacts({ nudges: buildNudges({ people: team, now: at }), load: loadMap, operations: ops, pieces, returned, mails, unapproved, today });
       return { facts, people: team };
     },
 

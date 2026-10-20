@@ -885,6 +885,10 @@ model ContentItem {
   /// «Ya se publicó» marcado a mano desde Operación de clientes (2 de octubre de 2026): estado anterior de la
   /// pieza y de su parrilla, quién y cuándo. Permite deshacerlo; se vacía al deshacer.
   manualPublish      Json?
+  // Quién, cuándo y por dónde aprobó el cliente (20 de octubre de 2026): { channel, note, byUserId, byName, at }.
+  // El portal lo escribe solo; WhatsApp, correo, llamada o reunión los marca quien recibió la aprobación.
+  // Columna aditiva (scripts/ensure-content-client-approval-schema.js). Ver src/lib/clientApproval.js.
+  clientApproval     Json?
   deletedAt          DateTime?
   plan               ContentPlan                @relation(fields: [planId], references: [id], onDelete: Cascade)
   tasks              Task[]

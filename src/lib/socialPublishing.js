@@ -7,6 +7,7 @@
  * no toca la base ni la red.
  */
 import { isDriveAsset } from './finalAssetShape.js';
+import { missingApprovalNotice } from './clientApproval.js';
 
 const MB = 1024 * 1024;
 
@@ -281,6 +282,10 @@ export const facebookMedia = ({ kind, assets = [] }) => {
  */
 export const schedulingNotices = ({ item, assets = [], platforms = [] }) => {
   const notices = [];
+  // Una pieza nueva sin la aprobación del cliente marcada se avisa, no se frena (20 de octubre de 2026): Nattal y
+  // Pablo Hoff salen casi sin aprobación formal, y frenar rompería lo que hoy funciona.
+  const approval = missingApprovalNotice(item);
+  if (approval) notices.push(approval);
   const wanted = (platforms || []).map((platform) => String(platform || '').toUpperCase());
   if (!wanted.includes('FACEBOOK')) return notices;
   const media = describeMetaMedia({ format: item?.format, assets });

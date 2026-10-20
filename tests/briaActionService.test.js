@@ -131,11 +131,11 @@ test('creating a grid asks for the owner and the strategic objective, proposing 
 
 test('the tools only prepare, open with the module of their screen, and Bria is told never to claim the change', async () => {
   const tools = createBriaActionTools({ prepare: async ({ type, args }) => ({ id: 'a', ownerId: 'u-pm', type, status: 'DRAFT', title: 'x', summary: [], warnings: [], missing: args.estado ? [] : [{ field: 'estado', question: '¿Qué cambio?' }] }) });
-  assert.deepEqual(tools.map((t) => t.name), ['cambiar_pendiente', 'crear_parrilla', 'cambiar_pendientes', 'crear_pieza', 'mover_pieza', 'registrar_observacion', 'pendientes_de_reunion', 'proponer_parrilla']);
+  assert.deepEqual(tools.map((t) => t.name), ['cambiar_pendiente', 'crear_parrilla', 'cambiar_pendientes', 'crear_pieza', 'mover_pieza', 'marcar_aprobacion', 'registrar_observacion', 'pendientes_de_reunion', 'proponer_parrilla']);
   // Las tres acciones que nacieron con flujo propio (crear pendiente, despachar, eliminar) viajan por la misma base.
-  assert.deepEqual(ACTION_PERMISSION, { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion', MINUTE_TASKS: ['gestion', 'minutas'], PLAN_DRAFT: 'parrillas' });
-  assert.equal(tools[5].allowed({ ...pm, modulePermissions: { bria: true, clientes: true } }), true);
-  assert.equal(tools[5].allowed(pm), false, 'an observation needs the Clientes module');
+  assert.deepEqual(ACTION_PERMISSION, { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_APPROVAL: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion', MINUTE_TASKS: ['gestion', 'minutas'], PLAN_DRAFT: 'parrillas' });
+  assert.equal(tools[6].allowed({ ...pm, modulePermissions: { bria: true, clientes: true } }), true);
+  assert.equal(tools[6].allowed(pm), false, 'an observation needs the Clientes module');
   assert.equal(tools[0].allowed({ ...pm, modulePermissions: { bria: true, parrillas: true } }), false);
   assert.equal(tools[1].allowed({ ...pm, modulePermissions: { bria: true, parrillas: true } }), true);
   assert.equal(tools[0].allowed({ ...pm, role: 'EDITOR' }), false, 'Bria is for admins and project managers');
@@ -230,6 +230,23 @@ test('moving a piece: never a published one, warns about scheduled posts, past d
   assert.match(out.text, /sale ahora el .*7 de octubre/);
   const withHour = await service.prepare({ user: pm, type: 'MOVE_ITEM', args: { pieza: 'i1', fecha: '2026-10-21', hora: '09:00' } });
   assert.deepEqual(withHour.payload, { itemId: 'i1', day: '2026-10-21', publishTime: '09:00' });
+});
+
+test('marking an approval that came by WhatsApp: asks the channel, warns if already approved, never a published piece, and goes through recordClientApproval with the person', async () => {
+  const db = planDb();
+  const marks = [];
+  const service = createBriaActionService({ db, recordClientApproval: async (id, data, options) => { marks.push([id, data, options]); return { id, status: 'APROBADO' }; }, now: NOW });
+  await assert.rejects(() => service.prepare({ user: pm, type: 'CLIENT_APPROVAL', args: { pieza: 'i2', canal: 'WHATSAPP' } }), /ya se publicó/);
+  const asked = await service.prepare({ user: pm, type: 'CLIENT_APPROVAL', args: { pieza: 'i1' } });
+  assert.equal(asked.missing[0].field, 'canal');
+  assert.match(asked.missing[0].question, /WhatsApp, correo, una llamada o una reunión/);
+  const action = await service.prepare({ user: pm, type: 'CLIENT_APPROVAL', args: { pieza: 'i1', canal: 'whatsapp', nota: 'Gema dijo que perfecto' }, previous: asked });
+  assert.deepEqual(action.payload, { itemId: 'i1', channel: 'WHATSAPP', note: 'Gema dijo que perfecto' });
+  assert.match(action.summary.join('\n'), /Aprobada por WhatsApp/);
+  assert.match(action.warnings.join('\n'), /ya figura como aprobada/i, 'i1 is APROBADO in the fixture');
+  const out = await service.execute({ user: pm, action });
+  assert.deepEqual(marks, [['i1', { channel: 'WHATSAPP', note: 'Gema dijo que perfecto' }, { actor: { userId: 'u-pm', name: pm.name || null } }]]);
+  assert.match(out.text, /quedó marcada como aprobada por WhatsApp/);
 });
 
 test('a client observation asks for the text, keeps it short and is saved with the author', async () => {

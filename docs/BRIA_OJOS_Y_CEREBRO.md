@@ -47,6 +47,10 @@ Tres pasos cada día, cada uno una sola vez aunque el servidor se reinicie (`src
 
 **Contratos:** `tests/agencySnapshot.test.js`, `tests/dailyReading.test.js`, `tests/dailyReadingService.test.js`; con PostgreSQL real en la base aislada: `tests/dailyReadingPostgres.test.js`. **Muestra local:** `node scripts/preview-bria.js` y abrir `/?lectura`.
 
+## Lo que la plataforma no veía: la aprobación por WhatsApp (20 de octubre de 2026)
+
+Entre la pieza 2 y la 3 entró lo que la lectura de los chats señaló como la brecha más grande: el cliente aprueba por WhatsApp en 13 de los 14 grupos y la plataforma no lo sabía. Desde el 21 de octubre toda aprobación deja marca (`ContentItem.clientApproval`): el portal, el editor y quien recibe la aprobación por fuera («El cliente aprobó por…» o `marcar_aprobacion` con Bria). La banda de redes avisa si una pieza nueva se va a programar sin marca, y el pulso avisa de lo que ya está programado sin ella. Regla en `src/lib/clientApproval.js`; detalle en `docs/BRIA_ACCIONES.md`. Quedan en la fila el empalme al cambiar de responsable y el paso de «versión final» antes de programar.
+
 ## Pieza 2: el libro de decisiones
 
 Rodny, 19 de octubre de 2026: «avanza con el libro de decisiones», y la condición que lo define: «no quiero que se sienta de forma mecánica que uno la está enseñando». Por eso no hay botones ni formularios: el libro se llena con la conversación y con la plataforma.

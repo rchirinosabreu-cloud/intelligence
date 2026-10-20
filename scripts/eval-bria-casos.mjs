@@ -113,10 +113,10 @@ const readingFixture = ({ cliente = '' } = {}) => ({
     serie: ['2026-10-09', '2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15'].map((fecha, i) => ({ fecha, color: i === 0 ? 'amarillo' : 'rojo', publicadas: `${i < 4 ? 2 : 3} de 12 (deberían ir ${3 + Math.floor(i / 2)})`, esperanAprobacion: 4, devoluciones: 1, tareasAbiertas: 6, vencidas: i < 3 ? 0 : 1, horasDelDiaAnterior: i % 2 ? 1.5 : 0 }))
   } } : {})
 });
-const titles = { TASK_UPDATE: 'Cambiar un pendiente', TASKS_STATUS: 'Cambiar varios pendientes', CLIENT_NOTE: 'Registrar una observación' };
+const titles = { TASK_UPDATE: 'Cambiar un pendiente', TASKS_STATUS: 'Cambiar varios pendientes', CLIENT_NOTE: 'Registrar una observación', CLIENT_APPROVAL: 'Marcar la aprobación del cliente' };
 const fakeActionService = { prepare: async ({ type, args }) => ({ type, title: titles[type] || type, status: 'PENDING', summary: Object.entries(args || {}).filter(([, value]) => value != null && value !== '' && (!Array.isArray(value) || value.length)).map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`), missing: [], warnings: [] }) };
 const readTools = briaAssistantTools.filter((tool) => fixtureRuns[tool.name]).map((tool) => ({ ...tool, allowed: () => true, run: async (args) => ({ data: fixtureRuns[tool.name](args || {}), sources: [] }) }));
-const actionTools = createBriaActionTools(fakeActionService).filter((tool) => ['cambiar_pendiente', 'cambiar_pendientes', 'registrar_observacion'].includes(tool.name)).map((tool) => ({ ...tool, allowed: () => true }));
+const actionTools = createBriaActionTools(fakeActionService).filter((tool) => ['cambiar_pendiente', 'cambiar_pendientes', 'registrar_observacion', 'marcar_aprobacion'].includes(tool.name)).map((tool) => ({ ...tool, allowed: () => true }));
 const readingTools = createDailyReadingTools({
   explain: async (args) => readingFixture(args),
   // El libro de decisiones (19 de octubre de 2026): la anotación ficticia responde como el servicio real.

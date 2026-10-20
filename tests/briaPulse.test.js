@@ -46,6 +46,15 @@ test('an assumed tomorrow duration cannot trigger a proactive capacity warning',
   assert.equal(facts.some(f => f.kind === 'CARGA_MANANA'), false);
 });
 
+test('a piece scheduled in Meta without the client approval marked is a fact, with the way to mark it (20 de octubre de 2026)', () => {
+  const facts = collectFacts({ unapproved: [{ id: 'i9', title: 'Reel de vendimia', planId: 'p1', clientName: 'Foobespain', day: '2026-10-13' }], today: '2026-10-13' });
+  assert.equal(facts[0].id, 'PROGRAMADA_SIN_APROBACION:i9');
+  assert.match(facts[0].text, /«Reel de vendimia» de Foobespain está programada para salir el .*13 de octubre \(hoy\) y no tiene la aprobación del cliente marcada\./);
+  assert.equal(facts[0].severity, 3);
+  assert.deepEqual(facts[0].actions.map((a) => [a.label, a.to || null]), [['Abrir la pieza', '/parrillas/p1?item=i9'], ['Marcar la aprobación con Bria', null]]);
+  assert.match(facts[0].actions[1].ask, /Si el cliente ya la aprobó por WhatsApp, correo o llamada, márcala; si no, ayúdame a pedírsela/);
+});
+
 test('facts come from what the platform already computes, most serious first, each with a stable id and fingerprint', () => {
   const facts = collectFacts({ nudges, load, operations, pieces, returned, today: '2026-10-13' });
   // Dos piezas de Foobespain esperan su aprobación esta semana: un solo aviso por cliente (19 de octubre de 2026).

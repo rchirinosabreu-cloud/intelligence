@@ -11,6 +11,7 @@ import { driveAssetUrls, driveEmbedAspect } from '@/lib/finalAssetShape';
 import { finalAssetOrderProblem, moveAssetId, moveAssetToIndex } from '@/lib/finalAssetOrder';
 import { WEEKDAY_LABELS, buildMonthGrid, groupItemsByDay } from '@/lib/contentPlanCalendar';
 import { APPROVAL_STATES, approvalState, canRequestRevision, itemsNeedingRevisionRequest } from '@/lib/contentApproval';
+import { APPROVAL_CHANNELS, HAND_CHANNELS, approvalLabel } from '@/lib/clientApproval';
 import { describeMetaMedia, publishMomentLabel, queueOwnedStatusProblem } from '@/lib/socialPublishing';
 import { kindAcceptsCover } from '@/lib/videoCover';
 import {
@@ -931,10 +932,14 @@ const ContentItemCard = ({
   onChangeSocialPages,
   isPublicationBusy = false,
   publicationProblems = [],
-  onRequestRevision
+  onRequestRevision,
+  onMarkApproval
 }) => {
   const finalAssets = item.finalAssets || [];
   const pieceApproval = approvalState(item);
+  // La aprobación que llegó por fuera del portal (20 de octubre de 2026): quien la recibió la marca aquí.
+  const approvalNote = approvalLabel(item.clientApproval);
+  const canMarkApproval = Boolean(onMarkApproval) && item.status !== 'PUBLICADO' && !queueOwnedStatusProblem({ item, publications: item.publications || [] });
   const isRealizado = item.status === 'REALIZADO' || item.status === 'PROGRAMADO' || item.status === 'PUBLICADO';
   const isDevuelto = item.status === 'DEVUELTO';
   // Programada y esperando su hora: el estado lo lleva la cola, no el desplegable.
@@ -1123,6 +1128,29 @@ const ContentItemCard = ({
               <span className="flex items-center gap-1.5 text-[11px] font-semibold text-brand-magenta-deep dark:text-brand-magenta">
                 <Sparkles className="h-3 w-3 shrink-0" /> El cliente la tiene por revisar
               </span>
+            )}
+            {/* Quién, cuándo y por dónde aprobó el cliente (20 de octubre de 2026). Si la aprobación llegó por
+                WhatsApp, correo, llamada o reunión, quien la recibió la marca aquí y la pieza pasa a Aprobado con esa
+                marca; así quien publica sabe que está aprobada y Bria no avisa en falso. */}
+            {approvalNote && (
+              <p className="text-[11px] leading-snug text-zinc-500 dark:text-zinc-400" data-piece-client-approval={item.clientApproval?.channel}>
+                {approvalNote}{item.clientApproval?.note ? ` · «${item.clientApproval.note}»` : ''}
+              </p>
+            )}
+            {canMarkApproval && (
+              <Select
+                value=""
+                onChange={(e) => { if (e.target.value) onMarkApproval({ id: item.id, channel: e.target.value }); }}
+                aria-label="El cliente aprobó por…"
+                title={approvalNote ? 'Vuelve a marcar quién, cuándo y por dónde aprobó' : 'Si el cliente aprobó por fuera del portal, márcalo aquí'}
+                className="h-8 w-full rounded-xl border border-dashed border-zinc-300 bg-transparent px-2 text-[11px] text-zinc-600 outline-none transition focus:border-brand-cyan dark:border-white/15 dark:text-zinc-300"
+                data-piece-mark-approval
+              >
+                <option value="">{approvalNote ? 'Volver a marcar…' : 'El cliente aprobó por…'}</option>
+                {APPROVAL_CHANNELS.filter((channel) => HAND_CHANNELS.includes(channel.value)).map((channel) => (
+                  <option key={channel.value} value={channel.value}>{channel.label.charAt(0).toUpperCase() + channel.label.slice(1)}</option>
+                ))}
+              </Select>
             )}
           </div>
 
@@ -1668,6 +1696,24 @@ const ContentPlanDetail = () => {
       setEditingItemId(newItem.id);
       selectPiece(newItem.id);
       toast.success('Nueva pieza añadida');
+    }
+  });
+
+  // La aprobación que llegó por fuera del portal (20 de octubre de 2026): el aviso va después del servidor, nunca al clic.
+  const markApprovalMutation = useMutation({
+    mutationFn: async ({ id, channel }) => {
+      const { data } = await axios.post(`${getApiBaseUrl()}/api/content/items/${id}/client-approval`, { channel }, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      return data;
+    },
+    onSuccess: (item) => {
+      queryClient.invalidateQueries(['content-plan', planId || `${clientSlug}-${period}`]);
+      toast.success(approvalLabel(item?.clientApproval) || 'Aprobación del cliente marcada');
+    },
+    onError: (error) => {
+      console.error('[ContentPlan] No se pudo marcar la aprobación del cliente:', error.response?.data || error.message);
+      toast.error(error.response?.data?.error || 'No se pudo marcar la aprobación del cliente');
     }
   });
 
@@ -2278,6 +2324,7 @@ const ContentPlanDetail = () => {
                 onUpdate={updateItemMutation.mutate}
                 onDelete={handleDeleteItem}
                 onRequestRevision={(itemId) => requestItemRevisionMutation.mutate(itemId)}
+                onMarkApproval={markApprovalMutation.mutate}
                 onDispatch={() => setDispatchItemId(selectedItem.id)}
                 navigate={navigate}
                 onFinalAssetUpload={handleFinalAssetUpload}

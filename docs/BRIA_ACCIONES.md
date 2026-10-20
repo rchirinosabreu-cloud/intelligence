@@ -128,6 +128,14 @@ Rodny: «vamos a seguir fortaleciendo a Bria para que sea mi project manager y m
 
 Contrato: `tests/clientUpdate.test.js`. Dos casos nuevos en el conjunto de preguntas reales: `mensaje-cliente-aprobar` y `mensaje-cliente-resumen-correo`.
 
+## Marcar la aprobación que llegó por fuera del portal (20 de octubre de 2026)
+
+La lectura de los chats de WhatsApp mostró que el cliente aprueba por el chat en 13 de los 14 grupos y que la plataforma no guardaba quién, cuándo ni por dónde. Ahora toda aprobación deja su marca en `ContentItem.clientApproval` (`src/lib/clientApproval.js`): el portal escribe la suya, el desplegable de Estado la de quien lo movió, y la que llegó por WhatsApp, correo, llamada o reunión la marca quien la recibió, en el editor («El cliente aprobó por…») o contándoselo a Bria.
+
+- **`marcar_aprobacion`** (acción `CLIENT_APPROVAL`, módulo Parrillas): «Gema me aprobó el reel por WhatsApp» → Bria localiza la pieza, pregunta el canal si no lo dijo (WhatsApp, correo, una llamada o una reunión), resume «Aprobada por WhatsApp · anota Kamila» y avisa si ya figuraba aprobada o tenía una revisión pedida. Con «Confirmar» ejecuta `recordClientApproval`, que pasa por `updateContentItem` como cualquier aprobación (cierra la ronda, otorga el reconocimiento, respeta la cola de redes). Una pieza publicada no se marca.
+- **No frena nada:** programar una pieza nueva sin marca solo añade un aviso en la banda de redes. El pulso avisa `PROGRAMADA_SIN_APROBACION` con «Marcar la aprobación con Bria».
+- Contratos: `tests/clientApproval.test.js`, `tests/briaActionService.test.js`.
+
 ## Dónde se conecta
 - `briaTaskApplication.js` arma `briaActions` con Prisma y las funciones reales; `briaAssistantService.js` monta las herramientas; `briaConversationService.js` resuelve «Confirmar» y «Cancelar»; `briaConversationRepository.js` guarda `pendingAction` en los metadatos del turno; `briaConversationApplication.js` exige el módulo de cada acción para ver o confirmar el turno.
 - Reglas 18, 19 y 20 de `buildInstructions`.

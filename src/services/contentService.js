@@ -18,6 +18,7 @@ import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from 
 import { resyncItemPublications } from './socialPublishingService.js';
 import { queueOwnedStatusProblem, splitPublishTime } from '../lib/socialPublishing.js';
 import { itemsNeedingRevisionRequest, shouldRequestRevisionOnNewAsset, REVIEWABLE_ITEM_STATUSES, PUBLISHED_REVIEW_MESSAGE } from '../lib/contentApproval.js';
+import { approvalStamp, normalizeClientApproval, HAND_CHANNELS } from '../lib/clientApproval.js';
 
 /** Lo que la pantalla ve de una publicación programada: nunca el token, que ni siquiera vive en esa fila. */
 const publicationSelect = {
@@ -155,11 +156,29 @@ const hasContentItemCoverColumns = async () => {
   return hasColumns;
 };
 
+/** La marca de aprobación del cliente es aditiva (20 de octubre de 2026): se lee y se escribe solo si existe. */
+let contentItemClientApprovalColumnExists = null;
+const hasContentItemClientApprovalColumn = async () => {
+  if (contentItemClientApprovalColumnExists !== null) return contentItemClientApprovalColumnExists;
+  const result = await prisma.$queryRaw`
+    SELECT COUNT(*)::int AS "count"
+    FROM information_schema.columns
+    WHERE table_schema = 'public'
+      AND table_name = 'ContentItem'
+      AND column_name = 'clientApproval'
+  `;
+  const hasColumn = Number(result?.[0]?.count || 0) === 1;
+  if (hasColumn) contentItemClientApprovalColumnExists = true;
+  return hasColumn;
+};
+
 const getContentItemSelect = async (extra = {}) => {
   const hasFinalAssetColumns = await hasContentItemFinalAssetColumns();
   const hasCoverColumns = await hasContentItemCoverColumns();
+  const hasClientApproval = await hasContentItemClientApprovalColumn();
   return {
     ...contentItemBaseSelect,
+    ...(hasClientApproval ? { clientApproval: true } : {}),
     ...(hasFinalAssetColumns ? {
       finalAssetKey: true,
       finalAssetName: true,
@@ -209,17 +228,22 @@ const normalizeContentItem = (item) => {
 
 const filterContentItemData = async (data) => {
   if (!data) return data;
-  if (await hasContentItemFinalAssetColumns()) return data;
+  let safeData = data;
+  if (!await hasContentItemClientApprovalColumn()) {
+    const { clientApproval, ...rest } = safeData;
+    safeData = rest;
+  }
+  if (await hasContentItemFinalAssetColumns()) return safeData;
 
   const {
     finalAssetKey,
     finalAssetName,
     finalAssetMimeType,
     finalAssetSize,
-    ...safeData
-  } = data;
+    ...rest
+  } = safeData;
 
-  return safeData;
+  return rest;
 };
 
 const getPlanContentItemsSelect = async () => ({
@@ -593,8 +617,11 @@ export const createContentItem = async (data) => {
   return normalizeContentItem(item);
 };
 
-export const updateContentItem = async (id, data, { fromClientReview = false } = {}) => {
+export const updateContentItem = async (id, data, { fromClientReview = false, actor = null } = {}) => {
   const normalizedData = { ...data };
+  // Toda aprobación deja su marca (20 de octubre de 2026): el portal la suya, el desplegable la de quien lo movió,
+  // y la que llegó por WhatsApp la que trae `clientApproval`. Volver a manos del cliente la borra.
+  Object.assign(normalizedData, approvalStamp(normalizedData, { fromClientReview, actor, now: new Date() }));
 
   // Ensure publishDate is handled correctly
   if (normalizedData.publishDate) {
@@ -726,6 +753,25 @@ export const updateContentItem = async (id, data, { fromClientReview = false } =
   }
 
   return normalizeContentItem(updatedItem);
+};
+
+/**
+ * El cliente aprobó por fuera del portal —WhatsApp, correo, una llamada, una reunión— y quien lo recibió lo marca
+ * (20 de octubre de 2026). Pasa por `updateContentItem` como cualquier aprobación: cierra la ronda de revisión, otorga
+ * el reconocimiento y respeta la cola de redes. Una pieza publicada no se vuelve a aprobar.
+ */
+export const recordClientApproval = async (id, { channel, note = null } = {}, { actor = null } = {}) => {
+  const current = await prisma.contentItem.findFirst({ where: { id, deletedAt: null }, select: { id: true, status: true } });
+  if (!current) throw Object.assign(new Error('Esa pieza ya no existe.'), { status: 404, statusCode: 404 });
+  if (current.status === 'PUBLICADO') throw Object.assign(new Error('Esta pieza ya está publicada: no hace falta marcar su aprobación.'), { status: 409, statusCode: 409 });
+  let who = actor;
+  if (actor?.userId && !actor.name) {
+    const user = await prisma.user.findUnique({ where: { id: actor.userId }, select: { name: true, teamMember: { select: { name: true } } } }).catch(() => null);
+    who = { userId: actor.userId, name: user?.teamMember?.name || user?.name || null };
+  }
+  const clientApproval = normalizeClientApproval({ channel, note }, { actor: who, now: new Date() });
+  if (!HAND_CHANNELS.includes(clientApproval.channel)) throw Object.assign(new Error('Por aquí solo se marca lo que el cliente aprobó por WhatsApp, correo, una llamada o una reunión.'), { status: 400, statusCode: 400 });
+  return updateContentItem(id, { status: 'APROBADO', clientApproval }, { actor: who });
 };
 
 export const deleteContentItem = async (id) => {

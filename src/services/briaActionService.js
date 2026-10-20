@@ -43,7 +43,7 @@ const PRIORITY_LABEL = { NORMAL: 'normal', ALTA: 'alta', URGENTE: 'urgente' };
 
 // Módulos que exige cada acción. Las tres que nacieron con flujo propio (crear pendiente, despachar a producción,
 // eliminar pendientes) viajan por esta misma base desde el 10 de octubre de 2026; el despacho exige dos módulos.
-export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion', MINUTE_TASKS: ['gestion', 'minutas'], PLAN_DRAFT: 'parrillas' };
+export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_APPROVAL: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion', MINUTE_TASKS: ['gestion', 'minutas'], PLAN_DRAFT: 'parrillas' };
 export const actionModules = (type) => [].concat(ACTION_PERMISSION[type] || []);
 const MODULE_LABEL = { gestion: 'Gestión', parrillas: 'Parrillas', clientes: 'Clientes' };
 export const ITEM_FORMATS = ['Reel', 'Carrusel', 'Post', 'Video', 'Historia'];
@@ -546,6 +546,49 @@ const executeMoveItem = async ({ action, updateContentItem }) => {
   return { text: `Listo: «${action.target.objective}» sale ahora el ${humanDate(day)}${publishTime ? ` a las ${publishTime}` : ''}.\n\n[Abrir la pieza](${link})`, sources: [{ kind: 'pieza', id: itemId, label: action.target.objective, url: link }] };
 };
 
+/* ---------------------------------------------------------------- La aprobación que llegó por fuera del portal */
+
+// Rodny, 20 de octubre de 2026: el cliente aprueba por WhatsApp en 13 de los 14 grupos y la plataforma no lo sabía.
+// Quien recibió la aprobación la cuenta («Gema aprobó el reel por WhatsApp») y Bria la marca en la pieza, con confirmación.
+const CHANNEL_WORDS = { WHATSAPP: 'WhatsApp', CORREO: 'correo', LLAMADA: 'una llamada', REUNION: 'una reunión' };
+const channelOf = (value) => {
+  const text = fold(value);
+  if (!text) return null;
+  if (/whats|wasap|wpp|chat/.test(text)) return 'WHATSAPP';
+  if (/correo|mail|email/.test(text)) return 'CORREO';
+  if (/llamad|telefono|celular|hablamos por tel/.test(text)) return 'LLAMADA';
+  if (/reunion|meet|presencial|en persona|zoom/.test(text)) return 'REUNION';
+  return null;
+};
+const prepareClientApproval = async ({ db, user, args, previous }) => {
+  const itemId = tidy(args.pieza) || previous?.target?.itemId;
+  if (!itemId) throw knowledgeError('Falta la pieza: búscala con parrilla_de_cliente y pásame su id.', 400, 'BRIA_ACTION_TARGET');
+  const item = await db.contentItem.findFirst({ where: { id: itemId, deletedAt: null }, select: { ...ITEM_SELECT, clientApproval: true } });
+  if (!item) throw knowledgeError('Esa pieza ya no existe.', 404, 'BRIA_ACTION_TARGET');
+  if (item.status === 'PUBLICADO') throw knowledgeError(`«${item.objective}» ya se publicó: no hace falta marcar su aprobación.`, 400, 'BRIA_ACTION_PUBLISHED');
+  const wanted = { ...(previous?.wanted || {}) };
+  if (args.canal != null && tidy(args.canal)) wanted.canal = tidy(args.canal);
+  if (args.nota != null && tidy(args.nota)) wanted.nota = tidy(args.nota).slice(0, 300);
+  const channel = channelOf(wanted.canal);
+  const missing = [], warnings = [];
+  if (!channel) missing.push({ field: 'canal', question: wanted.canal ? `No entendí «${wanted.canal}». ¿Por dónde aprobó el cliente: WhatsApp, correo, una llamada o una reunión?` : '¿Por dónde te la aprobó el cliente: WhatsApp, correo, una llamada o una reunión?' });
+  const summary = [`Pieza: **${item.objective}** (${item.format}) de ${item.plan?.client?.name || 'cliente'} · sale el ${humanDate(planDayOf(item.publishDate))}`];
+  if (channel) summary.push(`Aprobada por ${CHANNEL_WORDS[channel]}${wanted.nota ? ` · «${wanted.nota}»` : ''} · anota ${user.name || 'quien confirma'}`);
+  if (['APROBADO', 'REALIZADO', 'PROGRAMADO'].includes(item.status)) warnings.push(`Ya figura como aprobada${item.clientApproval?.channel ? ` (${CHANNEL_WORDS[item.clientApproval.channel] || item.clientApproval.channel === 'PORTAL' ? 'por el portal' : 'desde el editor'})` : ''}: marcarla otra vez solo actualiza quién, cuándo y por dónde.`);
+  if (item.revisionRequestedAt) warnings.push('Tenía una revisión pedida por material nuevo: al marcarla, esa ronda se da por respondida.');
+  return {
+    id: previous?.id || randomUUID(), ownerId: user.userId || user.id, type: 'CLIENT_APPROVAL', status: 'DRAFT',
+    title: `Marcar aprobada «${item.objective}»`, target: { itemId, planId: item.planId, objective: item.objective },
+    wanted, payload: { itemId, channel, note: wanted.nota || null }, summary, warnings, missing
+  };
+};
+const executeClientApproval = async ({ user, action, recordClientApproval }) => {
+  const { itemId, channel, note } = action.payload;
+  await recordClientApproval(itemId, { channel, note }, { actor: { userId: user.userId || user.id, name: user.name || null } });
+  const link = `/parrillas/${action.target.planId}?item=${itemId}`;
+  return { text: `Listo: «${action.target.objective}» quedó marcada como aprobada por ${CHANNEL_WORDS[channel]}.\n\n[Abrir la pieza](${link})`, sources: [{ kind: 'pieza', id: itemId, label: action.target.objective, url: link }] };
+};
+
 /* ---------------------------------------------------------------- Observación de un cliente */
 
 const OBSERVATION_MAX = 2000;
@@ -896,6 +939,7 @@ const TYPES = {
   CREATE_PLAN: { prepare: preparePlan, execute: executePlan },
   CREATE_ITEM: { prepare: prepareItem, execute: executeItem },
   MOVE_ITEM: { prepare: prepareMoveItem, execute: executeMoveItem },
+  CLIENT_APPROVAL: { prepare: prepareClientApproval, execute: executeClientApproval },
   CLIENT_NOTE: { prepare: prepareClientNote, execute: executeClientNote },
   TASK_CREATE: { prepare: legacyPrepare, execute: executeTaskCreate },
   DISPATCH: { prepare: legacyPrepare, execute: executeDispatch },
@@ -958,7 +1002,7 @@ const executePlatform = async ({ user, action, platform, session, routePermissio
 };
 
 // `gate` es la puerta de actualizar una tarea (`checkTaskUpdate`); se inyecta solo para probar sus negativas.
-export const createBriaActionService = ({ db, updateTask, createTask = null, notify = null, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, gate = checkTaskUpdate, generate = defaultGenerate, operations = clientOperationsService, now = () => new Date(), readOnly = false } = {}) => ({
+export const createBriaActionService = ({ db, updateTask, createTask = null, notify = null, createContentPlan, updateContentPlan, createContentItem, updateContentItem, recordClientApproval = null, addObservation, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, gate = checkTaskUpdate, generate = defaultGenerate, operations = clientOperationsService, now = () => new Date(), readOnly = false } = {}) => ({
   async prepare({ user, type, args = {}, previous }) {
     if (type === 'PLATFORM') {
       if (!canUseBria(user)) throw knowledgeError('Bria no está activada para tu cuenta.', 403, 'BRIA_ACTION_FORBIDDEN');
@@ -985,6 +1029,6 @@ export const createBriaActionService = ({ db, updateTask, createTask = null, not
       return executePlatform({ user, action, platform, session, routePermissions });
     }
     authorize(user, action.type);
-    return TYPES[action.type].execute({ db, user, action, updateTask, createTask, notify, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts, dispatchDrafts, deleteDrafts, loadAttachment, revalidate, gate });
+    return TYPES[action.type].execute({ db, user, action, updateTask, createTask, notify, createContentPlan, updateContentPlan, createContentItem, updateContentItem, recordClientApproval, addObservation, taskDrafts, dispatchDrafts, deleteDrafts, loadAttachment, revalidate, gate });
   }
 });
