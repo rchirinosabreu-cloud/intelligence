@@ -184,7 +184,8 @@ test('the decision log: natural verdicts are noted, outcomes are read the next d
   const noted = await note.run({ decision: 'Foobespain', veredicto: 'ya lo revisé con Kamila', nota: 'faltaban dos piezas' }, { user: RODNY });
   assert.equal(noted.data.saved, true);
   assert.deepEqual([noted.data.decision, noted.data.veredicto, noted.data.dia], ['Revisar Foobespain hoy', 'HECHO', '2026-10-20']);
-  assert.match(noted.data.instruccion, /nada de «gracias por enseñarme»/);
+  assert.match(noted.data.instruccion, /nunca «gracias por enseñarme»/);
+  assert.match(noted.data.instruccion, /Listo, lo de Aristea ya quedó/);
   const unclear = await note.run({ decision: '9', veredicto: 'no' }, { user: RODNY });
   assert.equal(unclear.data.saved, false);
   assert.match(unclear.data.motivo, /No sé a cuál decisión .* 1\. Revisar Foobespain hoy · 2\. Contarle a Aristea/);
