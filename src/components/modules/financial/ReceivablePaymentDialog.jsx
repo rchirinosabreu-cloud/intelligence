@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import { brainDatePickerProps } from '@/lib/brainDatePicker';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { isLoanReceivable } from '@/lib/receivableLoans';
 
 const field = 'min-h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 disabled:opacity-70 dark:border-white/10 dark:bg-zinc-950 dark:text-white';
 const money = value => Number(value).toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2 });
@@ -18,6 +19,9 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
   const [fileProblem, setFileProblem] = useState('');
   const fileInput = useRef(null);
   const existing = form.source === 'EXISTING';
+  // La devolución de un préstamo es reintegro (Rodny, 20 de octubre de 2026): no se pide
+  // concepto, siempre es Préstamo, y no cuenta como venta.
+  const loan = isLoanReceivable(debt);
   const { data, isLoading, error: candidatesError } = useQuery({
     queryKey: ['financial-payment-candidates', debt?.clientId, page],
     enabled: !!debt?.clientId && existing,
@@ -31,9 +35,9 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
     setForm(current => record ? { ...current, financialRecordId: id, amount: String(record.amount), paidAt: record.date.slice(0, 10), accountId: record.accountId, category: record.category, reference: record.reference || '' } : { ...current, financialRecordId: '' });
   };
   return <Dialog open={!!debt} onOpenChange={open => !open && !saving && onClose()}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg dark:bg-zinc-900">
-    <DialogHeader><DialogTitle>Registrar pago</DialogTitle><DialogDescription>{debt?.clientName} · saldo pendiente {money(debt?.outstanding || 0)}</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>{loan ? 'Registrar reintegro' : 'Registrar pago'}</DialogTitle><DialogDescription>{debt?.clientName} · {loan ? 'préstamo pendiente' : 'saldo pendiente'} {money(debt?.outstanding || 0)}{loan ? '. Entra como reintegro del préstamo, no como venta.' : ''}</DialogDescription></DialogHeader>
     <form onSubmit={onSubmit} className="space-y-4"><fieldset disabled={saving} className="space-y-4">
-      <label className="block space-y-1.5 text-sm">Origen del pago<Select className={field} value={form.source || 'NEW'} onChange={event => { setPage(1); setForm(current => ({ ...current, source: event.target.value, financialRecordId: '', category: '', amount: '', accountId: '', reference: '' })); }}><option value="NEW">Registrar un ingreso nuevo</option><option value="EXISTING" disabled={!debt?.clientId}>Ingreso ya registrado</option></Select></label>
+      {!loan && <label className="block space-y-1.5 text-sm">Origen del pago<Select className={field} value={form.source || 'NEW'} onChange={event => { setPage(1); setForm(current => ({ ...current, source: event.target.value, financialRecordId: '', category: '', amount: '', accountId: '', reference: '' })); }}><option value="NEW">Registrar un ingreso nuevo</option><option value="EXISTING" disabled={!debt?.clientId}>Ingreso ya registrado</option></Select></label>}
       {existing && <div className="space-y-3">
         <p className="text-sm text-zinc-600 dark:text-zinc-300">No se creará otro ingreso. Se aplicará el importe completo del movimiento seleccionado a esta cuenta por cobrar.</p>
         {candidatesError ? <p role="alert" className="text-sm text-destructive">No fue posible consultar los ingresos registrados.</p> : <>
@@ -42,7 +46,7 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
           {(data?.total || 0) > 20 && <div className="flex items-center justify-between text-sm"><button type="button" className="min-h-11 px-2 disabled:opacity-40" disabled={page === 1} onClick={() => { selectRecord(''); setPage(value => value - 1); }}>Anterior</button><span>Página {page} de {Math.ceil(data.total / 20)}</span><button type="button" className="min-h-11 px-2 disabled:opacity-40" disabled={page * 20 >= data.total} onClick={() => { selectRecord(''); setPage(value => value + 1); }}>Siguiente</button></div>}
         </>}
       </div>}
-      <label className="block space-y-1.5 text-sm">Concepto del ingreso<Select required disabled={existing} className={field} value={form.category || ''} onChange={event => setForm(current => ({ ...current, category: event.target.value }))}><option value="">Seleccionar concepto…</option><option value="MEMBRESIA">Membresía / fee</option><option value="SERVICIO">Servicio / adicional</option><option value="PAUTA">Pauta</option></Select></label>
+      {!loan && <label className="block space-y-1.5 text-sm">Concepto del ingreso<Select required disabled={existing} className={field} value={form.category || ''} onChange={event => setForm(current => ({ ...current, category: event.target.value }))}><option value="">Seleccionar concepto…</option><option value="MEMBRESIA">Membresía / fee</option><option value="SERVICIO">Servicio / adicional</option><option value="PAUTA">Pauta</option></Select></label>}
       {/* El financiero se lleva en pesos (Rodny, 30 de septiembre de 2026): de una cuenta en
           dólares se registra lo que entró en pesos. */}
       {debt?.currency === 'USD' && <p data-receivable-payment-usd className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-white/5 dark:text-zinc-300">Esta cuenta de cobro está en dólares. Registra los pesos que entraron a la cuenta. Si entró menos que el valor en pesos de la cartera, ajústalo con el lápiz junto a «Valor original».</p>}
@@ -63,7 +67,7 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
         {fileProblem && <p role="alert" className="text-xs text-destructive brain-destructive-text">{fileProblem}</p>}
       </div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      <DialogFooter><button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose}>Cancelar</button><button type="submit" disabled={saving || (existing && !form.financialRecordId)} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Guardando…' : 'Guardar pago'}</button></DialogFooter>
+      <DialogFooter><button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose}>Cancelar</button><button type="submit" disabled={saving || (existing && !form.financialRecordId)} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Guardando…' : loan ? 'Guardar reintegro' : 'Guardar pago'}</button></DialogFooter>
     </fieldset></form>
   </DialogContent></Dialog>;
 }

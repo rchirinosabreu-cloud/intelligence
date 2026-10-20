@@ -19,6 +19,8 @@ import {
 } from '../services/financialRecordDocumentService.js';
 import { createReceivablePayment, reverseReceivablePayment } from '../services/receivablePaymentService.js';
 import { settleReceivable } from '../services/receivableSettlementService.js';
+import { createLoan } from '../services/receivableLoanService.js';
+import { isLoanReceivable } from '../lib/receivableLoans.js';
 import { settlementKindLabel } from '../lib/receivableSettlement.js';
 import { createReceivable, deleteReceivable } from '../services/financialReceivableService.js';
 import { issueReceivableDocument, correctReceivableDocument } from '../services/receivableDocumentService.js';
@@ -249,12 +251,31 @@ export const createReceivablePaymentHandler = async (req, res, dependencies = {}
     try {
         const result = await createPayment(prismaClient, req.params.id, req.body || {}, req.user);
         return res.status(201).json({
-            message: 'Pago de cartera registrado correctamente.',
+            message: isLoanReceivable(result.receivable)
+                ? (result.outstanding === 0 ? 'Reintegro registrado. El préstamo quedó devuelto por completo.' : 'Reintegro registrado. No cuenta como venta.')
+                : 'Pago de cartera registrado correctamente.',
             ...result
         });
     } catch (error) {
         console.error('[Receivable payments API] Create failed:', error.response?.data || error);
         return respondWithError(res, error, 'RECEIVABLE_PAYMENT_CREATE_FAILED', 'No fue posible registrar el pago de cartera.');
+    }
+};
+
+export const createLoanHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const create = dependencies.createLoan || createLoan;
+    try {
+        const result = await create(prismaClient, req.body || {}, req.user);
+        return res.status(201).json({
+            message: result.linkedExistingRecord
+                ? 'Préstamo registrado en Cartera, ligado al egreso que ya existía.'
+                : 'Préstamo registrado: el egreso quedó en Movimientos y la cuenta por cobrar en Cartera.',
+            ...result
+        });
+    } catch (error) {
+        console.error('[Loans API] Create failed:', error.response?.data || error);
+        return respondWithError(res, error, 'LOAN_CREATE_FAILED', 'No fue posible registrar el préstamo.');
     }
 };
 

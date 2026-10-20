@@ -1920,6 +1920,8 @@ model FinancialRecord {
   createdAt          DateTime                  @default(now())
   updatedAt          DateTime                  @updatedAt
   receivablePayment  ReceivablePayment?
+  // El préstamo que este egreso desembolsó (20 de octubre de 2026): se corrige desde Cartera.
+  loanReceivable     AccountsReceivable?       @relation("LoanDisbursement")
   payrollTransaction PayrollTransaction?
   payrollPayment     PayrollPayment?
   bankMatches        BankReconciliationMatch[]
@@ -2310,8 +2312,18 @@ enum ReceivableStatus {
 
 model AccountsReceivable {
   id            String                @id @default(uuid())
-  clientId      String
-  client        Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  // Un préstamo a un colaborador o a un socio no tiene cliente (20 de octubre de 2026).
+  clientId      String?
+  client        Client?               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  // CLIENTE: lo de siempre. PRESTAMO: dinero prestado a un tercero (Rodny, 20 de octubre de
+  // 2026), que vive en Cartera junto a lo de los clientes, nace ligado al egreso que lo sacó
+  // (`loanRecordId`) y se devuelve como reintegro, nunca como venta. Regla en
+  // `src/lib/receivableLoans.js`; aditivas con `scripts/ensure-receivable-loans-schema.js`.
+  kind             String           @default("CLIENTE")
+  counterpartyType String?
+  counterpartyName String?
+  loanRecordId     String?          @unique
+  loanRecord       FinancialRecord? @relation("LoanDisbursement", fields: [loanRecordId], references: [id], onDelete: SetNull)
   // Cuenta de cobro (Elisa, 21 de septiembre de 2026): el documento que se manda al
   // cliente. Una obligación puede existir sin él —las importadas del Excel no lo
   // tienen— y emitirlo le pone número, la congela y genera el PDF.
@@ -2365,6 +2377,7 @@ model AccountsReceivable {
   @@index([clientId, year, month])
   @@index([importBatchId])
   @@index([number])
+  @@index([kind])
 }
 
 // Las líneas de una cuenta de cobro: «fee mensual más lo que hayan pedido adicional».

@@ -197,6 +197,7 @@ export const createFinancialRecord = async (prismaClient, input, actor) => {
 // De dónde viene un movimiento que no se puede editar ni anular desde Movimientos.
 const recordSourceRelations = {
     receivablePayment: { select: { id: true } },
+    loanReceivable: { select: { id: true } },
     payrollTransaction: { select: { id: true } },
     payrollPayment: { select: { id: true } },
     bankMatches: { where: { status: 'APPROVED' }, select: { id: true, status: true } }
@@ -243,6 +244,13 @@ export const listFinancialRecords = async (prismaClient, filters = {}) => {
     }
     if (filters.clientId) where.clientId = String(filters.clientId);
     if (filters.accountId) where.accountId = String(filters.accountId);
+    // Egresos de préstamo registrados a mano que todavía no están en Cartera (20 de octubre de 2026).
+    if (filters.availableForLoan === true || filters.availableForLoan === 'true') {
+        Object.assign(where, {
+            status: 'POSTED', scenario: 'ACTUAL', type: 'EXPENSE', category: 'PRESTAMO', origin: { not: 'SYSTEM' },
+            loanReceivable: { is: null }, receivablePayment: { is: null }, payrollTransaction: { is: null }, payrollPayment: { is: null }, isProjection: false
+        });
+    }
     if (filters.availableForReceivable === true || filters.availableForReceivable === 'true') {
         const paymentCategories = ['MEMBRESIA', 'SERVICIO', 'PAUTA'];
         Object.assign(where, {
@@ -312,6 +320,9 @@ export const financialRecordLockReason = (record) => {
     if (record?.receivablePayment) {
         return 'Este movimiento es el ingreso de un abono de cartera. Para deshacerlo ve a Cartera, abre la obligación del cliente y usa «Revertir» en ese abono: este movimiento se anulará solo.';
     }
+    if (record?.loanReceivable) {
+        return 'Este movimiento es el egreso de un préstamo que está en Cartera. Para deshacerlo ve a Cartera y usa «Eliminar» en ese préstamo: este movimiento se anulará solo. Si el valor está mal, elimina el préstamo y regístralo de nuevo.';
+    }
     if (record?.payrollPayment || record?.payrollTransaction) {
         return 'Este movimiento es un pago de nómina y su valor no se edita a mano. Usa el lápiz de este mismo movimiento en Movimientos —o la liquidación en Nómina Operativa, eligiendo arriba el mes de esa liquidación— para desglosarlo, subirle el comprobante, cambiar la referencia o revertirlo.';
     }
@@ -325,7 +336,7 @@ export const financialRecordLockReason = (record) => {
 };
 
 const assertIndependentFinancialRecord = (record) => {
-    if (record.receivablePayment || record.payrollTransaction || record.payrollPayment || record.bankMatches?.some((match) => match.status === 'APPROVED')) {
+    if (record.receivablePayment || record.loanReceivable || record.payrollTransaction || record.payrollPayment || record.bankMatches?.some((match) => match.status === 'APPROVED')) {
         throw new FinancialDomainError('FINANCIAL_RECORD_LINKED', financialRecordLockReason(record), 409);
     }
     if (record.origin === 'SYSTEM') {
