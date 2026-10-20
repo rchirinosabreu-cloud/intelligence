@@ -379,8 +379,11 @@ test('quotation UI removes the identity preview and presents USD and service not
   ]);
 
   assert.doesNotMatch(form, /Vista Previa de Identidad/i);
-  assert.match(form, /currency !== 'USD'\s*&&\s*\(/);
-  assert.match(form, /is_tax_exempt:\s*currency === 'USD' \? true : isTaxExempt/);
+  // En dólares (y con Francisco Villa como emisor) el IVA queda bloqueado por la misma regla
+  // compartida con el servidor: no se dibuja el interruptor y viaja la exención efectiva.
+  assert.match(form, /taxLockReason = quotationTaxExemptionReason\(\{ currency, emisorType \}\)/);
+  assert.match(form, /\{!taxLockReason && \(/);
+  assert.match(form, /is_tax_exempt:\s*effectiveTaxExempt/);
   assert.match(controller, /resolveQuotationTaxExemption/);
   assert.match(controller, /generateQuotationPDF[\s\S]{0,500}normalizeQuotationTaxForCurrency/);
   assert.doesNotMatch(publicView, /Preparada para/);

@@ -203,15 +203,26 @@ export const prepareQuotationItems = (items, catalogServices = [], trustedExisti
   });
 };
 
+// Por qué el IVA no se puede tocar en una cotización, o `null` si es decisión de quien cotiza.
+// En dólares nunca va IVA ('USD'). Francisco Villa emite como persona natural, así que con él
+// como emisor la cotización es exenta siempre ('ISSUER'; Elisa, 20 de octubre de 2026: «el IVA
+// solamente es para el tema de Brain»). La pantalla lee esta misma razón para no dibujar el
+// interruptor, y el servidor la aplica antes de cualquier marca manual.
+export const quotationTaxExemptionReason = ({ currency, emisorType }) => {
+  if (currency === 'USD') return 'USD';
+  if (emisorType === 'FRANCISCO_VILLA') return 'ISSUER';
+  return null;
+};
+
 export const resolveQuotationTaxExemption = ({
   currency,
   emisorType,
   clientType,
   manualTaxExempt
 }) => {
-  if (currency === 'USD') return true;
+  if (quotationTaxExemptionReason({ currency, emisorType })) return true;
   if (typeof manualTaxExempt === 'boolean') return manualTaxExempt;
-  return emisorType === 'FRANCISCO_VILLA' || clientType === 'PERSONA_NATURAL';
+  return clientType === 'PERSONA_NATURAL';
 };
 
 export const normalizeQuotationTaxForCurrency = (quotation) => {
