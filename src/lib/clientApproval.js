@@ -72,7 +72,7 @@ export const missingApprovalNotice = (item) => {
   // Sin fecha de creación no se sabe si la pieza es anterior a la marca: no se avisa.
   if (!item.createdAt) return null;
   if (new Date(item.createdAt).toISOString().slice(0, 10) < CLIENT_APPROVAL_SINCE) return null;
-  return 'Esta pieza no tiene la aprobación del cliente marcada. Si te la dio por WhatsApp, correo o en una llamada, márcala en «El cliente aprobó por…» antes de programar.';
+  return 'Esta pieza nunca pasó por «Aprobado»: si el cliente ya la aprobó, cámbiale el estado antes de programarla.';
 };
 
 /** Las piezas con publicación armada en redes y sin aprobación marcada (solo las creadas desde que existe la marca). */

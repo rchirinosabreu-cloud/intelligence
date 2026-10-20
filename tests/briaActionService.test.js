@@ -232,21 +232,22 @@ test('moving a piece: never a published one, warns about scheduled posts, past d
   assert.deepEqual(withHour.payload, { itemId: 'i1', day: '2026-10-21', publishTime: '09:00' });
 });
 
-test('marking an approval that came by WhatsApp: asks the channel, warns if already approved, never a published piece, and goes through recordClientApproval with the person', async () => {
+test('approving a piece from the chat: never asks the channel, keeps it if said, warns if already approved, never a published piece, and goes through recordClientApproval with the person', async () => {
   const db = planDb();
   const marks = [];
   const service = createBriaActionService({ db, recordClientApproval: async (id, data, options) => { marks.push([id, data, options]); return { id, status: 'APROBADO' }; }, now: NOW });
   await assert.rejects(() => service.prepare({ user: pm, type: 'CLIENT_APPROVAL', args: { pieza: 'i2', canal: 'WHATSAPP' } }), /ya se publicó/);
-  const asked = await service.prepare({ user: pm, type: 'CLIENT_APPROVAL', args: { pieza: 'i1' } });
-  assert.equal(asked.missing[0].field, 'canal');
-  assert.match(asked.missing[0].question, /WhatsApp, correo, una llamada o una reunión/);
-  const action = await service.prepare({ user: pm, type: 'CLIENT_APPROVAL', args: { pieza: 'i1', canal: 'whatsapp', nota: 'Gema dijo que perfecto' }, previous: asked });
+  const plain = await service.prepare({ user: pm, type: 'CLIENT_APPROVAL', args: { pieza: 'i1' } });
+  assert.deepEqual(plain.missing, [], 'the channel is never a question (Rodny: «eso es añadir otro reproceso»)');
+  assert.deepEqual(plain.payload, { itemId: 'i1', channel: 'EQUIPO', note: null });
+  assert.match(plain.summary.join('\n'), /Pasa a Aprobado · anota/);
+  const action = await service.prepare({ user: pm, type: 'CLIENT_APPROVAL', args: { pieza: 'i1', canal: 'whatsapp', nota: 'Gema dijo que perfecto' } });
   assert.deepEqual(action.payload, { itemId: 'i1', channel: 'WHATSAPP', note: 'Gema dijo que perfecto' });
-  assert.match(action.summary.join('\n'), /Aprobada por WhatsApp/);
+  assert.match(action.summary.join('\n'), /el cliente aprobó por WhatsApp/);
   assert.match(action.warnings.join('\n'), /ya figura como aprobada/i, 'i1 is APROBADO in the fixture');
   const out = await service.execute({ user: pm, action });
   assert.deepEqual(marks, [['i1', { channel: 'WHATSAPP', note: 'Gema dijo que perfecto' }, { actor: { userId: 'u-pm', name: pm.name || null } }]]);
-  assert.match(out.text, /quedó marcada como aprobada por WhatsApp/);
+  assert.match(out.text, /quedó aprobada \(por WhatsApp\)/);
 });
 
 test('a client observation asks for the text, keeps it short and is saved with the author', async () => {

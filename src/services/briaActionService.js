@@ -569,11 +569,12 @@ const prepareClientApproval = async ({ db, user, args, previous }) => {
   const wanted = { ...(previous?.wanted || {}) };
   if (args.canal != null && tidy(args.canal)) wanted.canal = tidy(args.canal);
   if (args.nota != null && tidy(args.nota)) wanted.nota = tidy(args.nota).slice(0, 300);
-  const channel = channelOf(wanted.canal);
+  // El canal no se pregunta nunca (Rodny, 20 de octubre de 2026: «eso es añadir otro reproceso»): si la persona lo dijo
+  // se guarda; si no, queda como aprobación anotada por el equipo.
+  const channel = channelOf(wanted.canal) || 'EQUIPO';
   const missing = [], warnings = [];
-  if (!channel) missing.push({ field: 'canal', question: wanted.canal ? `No entendí «${wanted.canal}». ¿Por dónde aprobó el cliente: WhatsApp, correo, una llamada o una reunión?` : '¿Por dónde te la aprobó el cliente: WhatsApp, correo, una llamada o una reunión?' });
   const summary = [`Pieza: **${item.objective}** (${item.format}) de ${item.plan?.client?.name || 'cliente'} · sale el ${humanDate(planDayOf(item.publishDate))}`];
-  if (channel) summary.push(`Aprobada por ${CHANNEL_WORDS[channel]}${wanted.nota ? ` · «${wanted.nota}»` : ''} · anota ${user.name || 'quien confirma'}`);
+  summary.push(`Pasa a Aprobado${channel !== 'EQUIPO' ? ` (el cliente aprobó por ${CHANNEL_WORDS[channel]})` : ''}${wanted.nota ? ` · «${wanted.nota}»` : ''} · anota ${user.name || 'quien confirma'}`);
   if (['APROBADO', 'REALIZADO', 'PROGRAMADO'].includes(item.status)) warnings.push(`Ya figura como aprobada${item.clientApproval?.channel ? ` (${CHANNEL_WORDS[item.clientApproval.channel] || item.clientApproval.channel === 'PORTAL' ? 'por el portal' : 'desde el editor'})` : ''}: marcarla otra vez solo actualiza quién, cuándo y por dónde.`);
   if (item.revisionRequestedAt) warnings.push('Tenía una revisión pedida por material nuevo: al marcarla, esa ronda se da por respondida.');
   return {
@@ -586,7 +587,7 @@ const executeClientApproval = async ({ user, action, recordClientApproval }) => 
   const { itemId, channel, note } = action.payload;
   await recordClientApproval(itemId, { channel, note }, { actor: { userId: user.userId || user.id, name: user.name || null } });
   const link = `/parrillas/${action.target.planId}?item=${itemId}`;
-  return { text: `Listo: «${action.target.objective}» quedó marcada como aprobada por ${CHANNEL_WORDS[channel]}.\n\n[Abrir la pieza](${link})`, sources: [{ kind: 'pieza', id: itemId, label: action.target.objective, url: link }] };
+  return { text: `Listo: «${action.target.objective}» quedó aprobada${CHANNEL_WORDS[channel] ? ` (por ${CHANNEL_WORDS[channel]})` : ''}.\n\n[Abrir la pieza](${link})`, sources: [{ kind: 'pieza', id: itemId, label: action.target.objective, url: link }] };
 };
 
 /* ---------------------------------------------------------------- Observación de un cliente */

@@ -130,10 +130,10 @@ Contrato: `tests/clientUpdate.test.js`. Dos casos nuevos en el conjunto de pregu
 
 ## Marcar la aprobación que llegó por fuera del portal (20 de octubre de 2026)
 
-La lectura de los chats de WhatsApp mostró que el cliente aprueba por el chat en 13 de los 14 grupos y que la plataforma no guardaba quién, cuándo ni por dónde. Ahora toda aprobación deja su marca en `ContentItem.clientApproval` (`src/lib/clientApproval.js`): el portal escribe la suya, el desplegable de Estado la de quien lo movió, y la que llegó por WhatsApp, correo, llamada o reunión la marca quien la recibió, en el editor («El cliente aprobó por…») o contándoselo a Bria.
+La lectura de los chats de WhatsApp mostró que el cliente aprueba por el chat en 13 de los 14 grupos y que la plataforma no guardaba quién ni cuándo. Ahora toda aprobación deja su marca en `ContentItem.clientApproval` (`src/lib/clientApproval.js`) **sin pedirle nada a nadie**: el portal escribe la suya y el desplegable de Estado la de quien lo movió. Rodny rechazó ese mismo día un selector de «por dónde aprobó» («eso es añadir otro reproceso»): la marca es información, nunca un paso.
 
-- **`marcar_aprobacion`** (acción `CLIENT_APPROVAL`, módulo Parrillas): «Gema me aprobó el reel por WhatsApp» → Bria localiza la pieza, pregunta el canal si no lo dijo (WhatsApp, correo, una llamada o una reunión), resume «Aprobada por WhatsApp · anota Kamila» y avisa si ya figuraba aprobada o tenía una revisión pedida. Con «Confirmar» ejecuta `recordClientApproval`, que pasa por `updateContentItem` como cualquier aprobación (cierra la ronda, otorga el reconocimiento, respeta la cola de redes). Una pieza publicada no se marca.
-- **No frena nada:** programar una pieza nueva sin marca solo añade un aviso en la banda de redes. El pulso avisa `PROGRAMADA_SIN_APROBACION` con «Marcar la aprobación con Bria».
+- **`marcar_aprobacion`** (acción `CLIENT_APPROVAL`, módulo Parrillas): «Gema me aprobó el reel» → Bria localiza la pieza, resume «Pasa a Aprobado · anota Kamila» (con el canal solo si la persona lo dijo; **nunca lo pregunta**) y avisa si ya figuraba aprobada o tenía una revisión pedida. Con «Confirmar» ejecuta `recordClientApproval`, que pasa por `updateContentItem` como cualquier aprobación (cierra la ronda, otorga el reconocimiento, respeta la cola de redes). Una pieza publicada no se marca.
+- **No frena nada:** programar una pieza nueva que nunca pasó por Aprobado solo añade un aviso en la banda de redes. El pulso avisa `PROGRAMADA_SIN_APROBACION` con «Resolverlo con Bria».
 - Contratos: `tests/clientApproval.test.js`, `tests/briaActionService.test.js`.
 
 ## Dónde se conecta

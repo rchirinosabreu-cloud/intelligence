@@ -109,11 +109,11 @@ export const EVAL_CASES = [
   },
   {
     id: 'aprobacion-por-whatsapp',
-    question: 'Gema me acaba de aprobar el reel de bienvenida de Aristea por WhatsApp, dijo que perfecto',
+    question: 'Gema me acaba de aprobar el carrusel de datos de Aristea, dijo que perfecto',
     requiredTools: ['marcar_aprobacion'],
     mustSay: ['¿Lo hago así?'],
-    mustNotSay: ['ya quedó marcada', 'ya la marqué', 'quedó aprobada', 'ya está aprobada'],
-    why: 'La aprobación que llega por WhatsApp se marca en la pieza (20 de octubre de 2026): Bria prepara la marca con quién y por dónde y la persona confirma; nunca afirma que ya la marcó.'
+    mustNotSay: ['ya quedó marcada', 'ya la marqué', 'quedó aprobada', 'ya está aprobada', '¿por dónde', 'por qué medio', 'por qué canal'],
+    why: 'Cuando cuentan que el cliente aprobó, Bria prepara el paso a Aprobado y la persona confirma (20 de octubre de 2026); nunca pregunta por dónde aprobó («eso es añadir otro reproceso») ni afirma que ya lo hizo.'
   },
   {
     id: 'decision-de-pasada',

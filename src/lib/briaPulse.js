@@ -59,7 +59,7 @@ export const collectFacts = ({ nudges = [], load = null, operations = [], pieces
   // lo primero que hay que mirar. `unapproved`: [{ id, title, planId, clientName, day }], solo piezas creadas desde que existe la marca.
   for (const piece of unapproved) {
     const url = `/parrillas/${piece.planId}?item=${piece.id}`;
-    facts.push(fact('PROGRAMADA_SIN_APROBACION', piece.id, { clientName: piece.clientName, text: `«${piece.title}» de ${piece.clientName || 'un cliente'} está programada para salir el ${dayLabel(piece.day)}${piece.day === today ? ' (hoy)' : ''} y no tiene la aprobación del cliente marcada.`, url, taskIds: [], severity: piece.day === today ? 3 : 2, actions: nudgeActions({ kind: 'PROGRAMADA_SIN_APROBACION', clientName: piece.clientName, title: piece.title, url }) }));
+    facts.push(fact('PROGRAMADA_SIN_APROBACION', piece.id, { clientName: piece.clientName, text: `«${piece.title}» de ${piece.clientName || 'un cliente'} está programada para salir el ${dayLabel(piece.day)}${piece.day === today ? ' (hoy)' : ''} y nunca pasó por Aprobado.`, url, taskIds: [], severity: piece.day === today ? 3 : 2, actions: nudgeActions({ kind: 'PROGRAMADA_SIN_APROBACION', clientName: piece.clientName, title: piece.title, url }) }));
   }
   // Correos importantes de los buzones compartidos (11 de octubre de 2026): el texto lo arma `describeMail`, sin cuerpo.
   for (const mail of mails) {

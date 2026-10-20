@@ -47,12 +47,12 @@ test('the label says where, when (Bogotá) and who noted it', () => {
 
 test('a new piece without a stamp is a notice when scheduling, never a block; an old one is not an alarm', () => {
   const fresh = { status: 'EN_PRODUCCION', createdAt: '2026-10-22T12:00:00Z', clientApproval: null, format: 'Post' };
-  assert.match(missingApprovalNotice(fresh), /no tiene la aprobación del cliente marcada/);
+  assert.match(missingApprovalNotice(fresh), /nunca pasó por «Aprobado»/);
   assert.equal(missingApprovalNotice({ ...fresh, clientApproval: { channel: 'WHATSAPP' } }), null);
   assert.equal(missingApprovalNotice({ ...fresh, createdAt: '2026-10-01T12:00:00Z' }), null, 'created before the stamp existed');
   assert.equal(missingApprovalNotice({ ...fresh, status: 'PUBLICADO' }), null);
   assert.equal(missingApprovalNotice({ ...fresh, createdAt: undefined }), null, 'without a creation date nothing is assumed');
-  assert.match(schedulingNotices({ item: fresh, assets: [], platforms: ['INSTAGRAM'] }).join('\n'), /El cliente aprobó por/, 'the social panel says it without blocking');
+  assert.match(schedulingNotices({ item: fresh, assets: [], platforms: ['INSTAGRAM'] }).join('\n'), /nunca pasó por «Aprobado»/, 'the social panel says it without blocking');
   assert.deepEqual(schedulingNotices({ item: { ...fresh, clientApproval: { channel: 'PORTAL' } }, assets: [], platforms: ['INSTAGRAM'] }), []);
   const scheduled = scheduledWithoutApproval([{ ...fresh, id: 'a', publications: [{ status: 'SCHEDULED' }] }, { ...fresh, id: 'b', publications: [{ status: 'CANCELLED' }] }, { ...fresh, id: 'c', clientApproval: { channel: 'CORREO' }, publications: [{ status: 'SCHEDULED' }] }]);
   assert.deepEqual(scheduled.map((item) => item.id), ['a']);
@@ -72,10 +72,10 @@ test('the column is additive, the service stamps every path, the route and the c
   assert.match(read('src/routes/api/content.js'), /updateContentItem\(req\.params\.id, req\.body, \{ actor: /, 'the editor’s status change carries who moved it');
   assert.match(read('src/controllers/publicController.js'), /updateContentItem\(req\.params\.id, \{ status: 'APROBADO' \}, \{ fromClientReview: true \}\)/, 'the portal keeps its path and stamps PORTAL by itself');
   assert.match(read('src/lib/platformCatalog.js'), /'POST \/content\/items\/:id\/client-approval'/);
+  // El editor solo muestra quién y cuándo; nunca pide por dónde (Rodny, 20 de octubre de 2026: «eso es añadir otro reproceso»).
   const editor = read('src/components/modules/ContentPlanDetail.jsx');
-  assert.match(editor, /El cliente aprobó por…/);
   assert.match(editor, /data-piece-client-approval/);
   assert.match(editor, /approvalLabel\(item\.clientApproval\)/);
-  assert.match(editor, /api\/content\/items\/\$\{id\}\/client-approval/);
+  assert.doesNotMatch(editor, /El cliente aprobó por…|\/client-approval|onMarkApproval/, 'no selector, no extra step');
   assert.match(read('src/lib/briaPulse.js'), /PROGRAMADA_SIN_APROBACION/);
 });

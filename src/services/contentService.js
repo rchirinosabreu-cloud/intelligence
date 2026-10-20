@@ -18,7 +18,7 @@ import { markContentPlanReviewPending, buildContentPlanReviewPendingData } from 
 import { resyncItemPublications } from './socialPublishingService.js';
 import { queueOwnedStatusProblem, splitPublishTime } from '../lib/socialPublishing.js';
 import { itemsNeedingRevisionRequest, shouldRequestRevisionOnNewAsset, REVIEWABLE_ITEM_STATUSES, PUBLISHED_REVIEW_MESSAGE } from '../lib/contentApproval.js';
-import { approvalStamp, normalizeClientApproval, HAND_CHANNELS } from '../lib/clientApproval.js';
+import { approvalStamp, normalizeClientApproval } from '../lib/clientApproval.js';
 
 /** Lo que la pantalla ve de una publicación programada: nunca el token, que ni siquiera vive en esa fila. */
 const publicationSelect = {
@@ -769,8 +769,9 @@ export const recordClientApproval = async (id, { channel, note = null } = {}, { 
     const user = await prisma.user.findUnique({ where: { id: actor.userId }, select: { name: true, teamMember: { select: { name: true } } } }).catch(() => null);
     who = { userId: actor.userId, name: user?.teamMember?.name || user?.name || null };
   }
-  const clientApproval = normalizeClientApproval({ channel, note }, { actor: who, now: new Date() });
-  if (!HAND_CHANNELS.includes(clientApproval.channel)) throw Object.assign(new Error('Por aquí solo se marca lo que el cliente aprobó por WhatsApp, correo, una llamada o una reunión.'), { status: 400, statusCode: 400 });
+  // El canal es opcional (Rodny, 20 de octubre de 2026): sin él, la aprobación queda anotada por el equipo.
+  const clientApproval = normalizeClientApproval({ channel: channel || 'EQUIPO', note }, { actor: who, now: new Date() });
+  if (clientApproval.channel === 'PORTAL') throw Object.assign(new Error('La aprobación del portal la escribe el propio portal.'), { status: 400, statusCode: 400 });
   return updateContentItem(id, { status: 'APROBADO', clientApproval }, { actor: who });
 };
 
