@@ -18,7 +18,7 @@ Bria ya tenía manos (acciones con confirmación), ojos de corto plazo (el pulso
 | # | Pieza | Qué es | Estado |
 |---|---|---|---|
 | 1 | Memoria del tiempo y la mañana | Foto diaria de cada cuenta y persona, lectura del día con lo que haría y no haría, mensaje a las 7:30 | **Construida** (este documento, abajo) |
-| 2 | Libro de decisiones | Cada recomendación queda anotada con lo que decidió la persona («lo hice», «no», «después») y, días después, qué pasó; así se mide el acierto | Siguiente |
+| 2 | Libro de decisiones | Cada recomendación queda anotada con lo que decidió la persona («lo hice», «no», «después») y, días después, qué pasó; así se mide el acierto | **Construida** (abajo) |
 | 3 | Manual de criterio | Cómo decide Rodny, escrito con él en una sesión de preguntas; Bria lo cita al recomendar y propone ajustarlo cuando la corrigen, nunca lo cambia sola | Pendiente: requiere la sesión con Rodny |
 | 4 | Rentabilidad y revisión mensual | Horas de Ritmo frente al fee de cada cuenta; revisión de cada cliente al cerrar el mes | Pendiente |
 
@@ -46,3 +46,20 @@ Tres pasos cada día, cada uno una sola vez aunque el servidor se reinicie (`src
 **Medido:** dos preguntas nuevas en el conjunto de preguntas reales (`como-viene-cuenta`, `que-no-harias`). Con ellas el conjunto pasó 13 de 13 contra el modelo real. Al agregarlas, una pregunta anterior (`fecha-no-inventada`) empezó a fallar 2 de cada 8 veces: buscaba en la parrilla y respondía sin mirar las tareas. La regla 10 ahora pide buscar también en las tareas antes de decir que algo no está, y esa pregunta pasó 6 de 6.
 
 **Contratos:** `tests/agencySnapshot.test.js`, `tests/dailyReading.test.js`, `tests/dailyReadingService.test.js`; con PostgreSQL real en la base aislada: `tests/dailyReadingPostgres.test.js`. **Muestra local:** `node scripts/preview-bria.js` y abrir `/?lectura`.
+
+## Pieza 2: el libro de decisiones
+
+Rodny, 19 de octubre de 2026: «avanza con el libro de decisiones», y la condición que lo define: «no quiero que se sienta de forma mecánica que uno la está enseñando». Por eso no hay botones ni formularios: el libro se llena con la conversación y con la plataforma.
+
+**Cómo se ve desde la persona.**
+- La lectura de la mañana propone, como siempre, sus decisiones numeradas.
+- Durante el día la persona trabaja con Bria como quiera. Si en algún momento cuenta, de pasada, qué hizo con una de esas decisiones («ya le escribí a Gema», «lo de Aristea no, eso lo hablo yo en la reunión», «la de Endova la dejo para la otra semana»), Bria lo anota en media frase y sigue. No da las gracias, no pide confirmar, no pregunta por las demás.
+- Al día siguiente la lectura abre con **«Lo que decidiste ayer»**: qué decidió y **qué pasó**, leído de la plataforma, no preguntado: «la hiciste; hoy la señal ya no se ve» o «la descartaste; hoy Aristea sigue en rojo». Si de alguna decisión no supo nada, lo dice en una sola frase («de ayer no supe qué pasó con…; si la trabajaste o la descartaste, cuéntamelo cuando puedas») y no insiste.
+- Si se le pregunta «¿cómo vas acertando?», responde con cifras de sus decisiones: cuántas propuso, cuántas se hicieron, cuántas de esas se resolvieron, cuántas descartadas se resolvieron solas.
+
+**Cómo aprende sin que nadie la entrene.**
+- **El desenlace lo lee el código** (`decisionOutcome`), desde la lectura del día siguiente y hasta 14 días: sigue (hay una señal que empeora del mismo sujeto, o la cuenta sigue en rojo, o la persona sigue con dos o más vencidas), mejoró (hay una señal que mejora) o ya no se ve. Una decisión «no hacer» no se mide.
+- **Lo que la dirección descarta tres veces seguidas en 30 días deja de proponerse** (`suppressedDecisions`), salvo que la señal suba a la gravedad máxima. Un «hecho» reinicia la cuenta. Así Bria deja de insistir en lo que no se quiere sin que nadie se lo diga.
+- **El acierto** (`scorecard`) mide decisiones, nunca personas: adopción, hechas que se resolvieron, descartadas que se resolvieron solas, descartadas que siguen. Es la cifra que dirá, con los meses, si Bria vale la pena.
+
+**Qué no hace.** No cambia su criterio por su cuenta (eso es la pieza 3, con Rodny), no ejecuta nada, no anota por adivinar: si no entiende a cuál decisión se refiere o qué decidió, pregunta en una frase. Regla pura en `src/lib/decisionLog.js`; tabla `bria_memory.decision_log`; herramienta `anotar_decision`. Contratos: `tests/decisionLog.test.js`, `tests/dailyReadingService.test.js`, `tests/dailyReadingPostgres.test.js`.

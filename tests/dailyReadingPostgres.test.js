@@ -38,6 +38,19 @@ test('real PostgreSQL: one photo per day and subject, its history and series, on
     assert.deepEqual(await repo.saveReading(days[1], { ...reading, source: 'MODELO' }), reading, 'a reading is written once per day');
     assert.equal((await repo.reading(days[1])).source, 'REGLA');
 
+    // El libro de decisiones: una fila por decisión y persona; anotar de nuevo reemplaza; el desenlace se escribe una vez.
+    const decision = { id: `${days[1]}:1`, title: 'Revisar la cuenta', kind: 'HACER', subjectType: 'CLIENT', subjectId: 'pg-c1', subjectName: 'Cuenta', evidence: ['CUENTA_EMPEORO:pg-c1'] };
+    const user = { ref: 'pg-user', name: 'Persona' };
+    const first = await repo.recordDecision({ decision, dayKey: days[1], user, verdict: 'NO', note: 'hoy no' });
+    const second = await repo.recordDecision({ decision, dayKey: days[1], user, verdict: 'HECHO', note: null });
+    assert.equal(first.id, second.id, 'same decision and person: one row');
+    assert.deepEqual([second.verdict, second.note, second.outcome], ['HECHO', null, null]);
+    assert.deepEqual((await repo.pendingOutcomes(days[2])).map((e) => e.decisionId), [decision.id]);
+    assert.equal(await repo.setOutcome(second.id, { outcome: 'SIGUE', text: 'Cuenta sigue en rojo.', day: days[2] }), true);
+    assert.equal(await repo.setOutcome(second.id, { outcome: 'MEJORO', text: 'x', day: days[2] }), false, 'an outcome is written once');
+    assert.deepEqual((await repo.recentDecisions(days[2], { days: 10, userRef: 'pg-user' })).map((e) => [e.verdict, e.outcome, e.outcomeDay]), [['HECHO', 'SIGUE', days[2]]]);
+    assert.deepEqual((await repo.readingsBefore(days[2], 10)).map((r) => r.day), [days[1]]);
+
     const proactive = createBriaProactiveRepository({ pool });
     const conversationId = '00000000-0000-4000-8000-000000000001';
     await proactive.recordMorningBriefDelivery(days[1], 'pg-user', conversationId);
@@ -46,6 +59,7 @@ test('real PostgreSQL: one photo per day and subject, its history and series, on
   } finally {
     await pool.query('DELETE FROM bria_memory.agency_snapshots WHERE day_key = ANY($1)', [days]).catch(() => {});
     await pool.query('DELETE FROM bria_memory.daily_readings WHERE day_key = ANY($1)', [days]).catch(() => {});
+    await pool.query('DELETE FROM bria_memory.decision_log WHERE day_key = ANY($1)', [days]).catch(() => {});
     await pool.query('DELETE FROM bria_memory.morning_brief_deliveries WHERE day_key = ANY($1)', [days]).catch(() => {});
     await pool.end();
   }

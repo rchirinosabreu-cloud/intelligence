@@ -33,7 +33,19 @@ const memoryRepo = (seed = {}) => {
     },
     async saveReading(day, reading) { if (!readings.has(day)) readings.set(day, reading); return readings.get(day); },
     async reading(day) { return readings.get(day) || null; },
-    async latestReading() { return [...readings.entries()].sort().at(-1)?.[1] || null; }
+    async latestReading() { return [...readings.entries()].sort().at(-1)?.[1] || null; },
+    async readingsBefore(before) { return [...readings.entries()].filter(([day]) => day < before).sort().reverse().map(([, r]) => r); },
+    // El libro de decisiones, en memoria.
+    decisions: [],
+    async recordDecision({ decision, dayKey, user, verdict, note, decidedAt }) {
+      const entry = { id: `e${this.decisions.length + 1}`, decisionId: decision.id, dayKey, userRef: user.ref, userName: user.name, title: decision.title, kind: decision.kind, subjectType: decision.subjectType, subjectId: decision.subjectId, subjectName: decision.subjectName, evidence: decision.evidence, verdict, note, decidedAt, outcome: null, outcomeDay: null, outcomeText: null };
+      const index = this.decisions.findIndex((e) => e.decisionId === decision.id && e.userRef === user.ref);
+      if (index >= 0) this.decisions[index] = { ...entry, id: this.decisions[index].id }; else this.decisions.push(entry);
+      return entry;
+    },
+    async pendingOutcomes(today) { return this.decisions.filter((e) => !e.outcome && e.dayKey < today); },
+    async setOutcome(id, { outcome, text, day }) { const e = this.decisions.find((row) => row.id === id); if (!e || e.outcome) return false; Object.assign(e, { outcome, outcomeText: text, outcomeDay: day }); return true; },
+    async recentDecisions(today, { userRef = null } = {}) { return this.decisions.filter((e) => e.dayKey <= today && (!userRef || e.userRef === userRef)); }
   };
 };
 const memoryDeliveries = () => {
@@ -94,14 +106,18 @@ const setup = ({ generate, seed } = {}) => {
     db: fakeDb(), repository, proactive,
     conversations: { postAssistantNote: async (actor, note) => { notes.push({ actor, note }); return { id: `chat-${notes.length}` }; } },
     operations: { listOperations: async () => OPERATIONS },
-    generate: generate || (async (request) => { requests.push(request); return { text: JSON.stringify({ resumen: 'Foobespain se puso en rojo desde ayer.', decisiones: [{ titulo: 'Revisar Foobespain hoy', porque: 'Pasó de verde a rojo de un día para otro.', tipo: 'HACER', evidencia: ['CUENTA_EMPEORO:c1'], pedido: '¿Qué le falta a Foobespain para volver a verde?' }], cuentas: [{ clientId: 'c1', lectura: 'Se atrasó en publicaciones esta semana.' }] }), model: 'gpt-test', usage: { total_tokens: 900 } }; }),
+    generate: generate || (async (request) => { requests.push(request); return { text: JSON.stringify({ resumen: 'Foobespain se puso en rojo desde ayer.', decisiones: [
+      { titulo: 'Revisar Foobespain hoy', porque: 'Pasó de verde a rojo de un día para otro.', tipo: 'HACER', evidencia: ['CUENTA_EMPEORO:c1'], pedido: '¿Qué le falta a Foobespain para volver a verde?' },
+      { titulo: 'Contarle a Aristea que volvió a verde', porque: 'Salió del rojo y conviene decírselo.', tipo: 'CONVERSAR', evidencia: ['CUENTA_MEJORO:c2'], pedido: null }
+    ], cuentas: [{ clientId: 'c1', lectura: 'Se atrasó en publicaciones esta semana.' }] }), model: 'gpt-test', usage: { total_tokens: 900 } }; }),
     now: () => clock, notify: async (row) => { notifications.push(row); },
     listPeople: async () => [RODNY, CAMILA], logger: { error: () => {}, log: () => {} }
   });
   return { service, repository, proactive, notes, notifications, requests, setClock: (value) => { clock = value; } };
 };
 
-const YESTERDAY = { clients: [{ id: 'c1', name: 'Foobespain', slug: 'foobespain', pmId: 'pm-camila', metrics: { level: 'green', reasons: [], contract: 'ACTIVO', cycle: null, awaitingApproval: 0, returnedPieces: 0, openTasks: 1, overdueTasks: 0, returnedTasks: 0, closedTasks: 0, hoursMs: 0 } }], people: [] };
+const clientDay = (id, name, level, pmId) => ({ id, name, slug: name.toLowerCase(), pmId, metrics: { level, reasons: [], contract: 'ACTIVO', cycle: null, awaitingApproval: 0, returnedPieces: 0, openTasks: 1, overdueTasks: 0, returnedTasks: 0, closedTasks: 0, hoursMs: 0 } });
+const YESTERDAY = { clients: [clientDay('c1', 'Foobespain', 'green', 'pm-camila'), clientDay('c2', 'Aristea', 'red', 'pm-otro')], people: [] };
 
 test('the photo of the day: what waits for the client, returns, overdue and yesterday’s hours, without admins or forgotten clocks', async () => {
   const { service } = setup();
@@ -154,6 +170,55 @@ test('6:00 photo every day, 6:30 reading and 7:30 message on business days, each
   assert.match(camila.text, /- Tus cuentas: 1 en rojo y 1 en amarillo\./, 'Foobespain and Endova are hers; Aristea is not');
   assert.doesNotMatch(camila.text, /Equipo:/, 'without Manager, no team load');
   assert.deepEqual(notifications.map((n) => [n.userId, n.type, n.relatedId]), [['u-rodny', MORNING_BRIEF_NOTIFICATION, 'chat-1'], ['u-camila', MORNING_BRIEF_NOTIFICATION, 'chat-2']]);
+});
+
+test('the decision log: natural verdicts are noted, outcomes are read the next day, and the morning tells both', async () => {
+  const { service, repository, notes, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  const [reading, note] = createDailyReadingTools(service);
+  assert.equal(note.name, 'anotar_decision');
+  assert.equal(note.allowed({ role: 'EDITOR' }), false);
+
+  // Rodny cuenta de pasada qué hizo; Bria lo anota con sus palabras, sin formulario.
+  const noted = await note.run({ decision: 'Foobespain', veredicto: 'ya lo revisé con Kamila', nota: 'faltaban dos piezas' }, { user: RODNY });
+  assert.equal(noted.data.saved, true);
+  assert.deepEqual([noted.data.decision, noted.data.veredicto, noted.data.dia], ['Revisar Foobespain hoy', 'HECHO', '2026-10-20']);
+  assert.match(noted.data.instruccion, /nunca «gracias por enseñarme»/);
+  assert.match(noted.data.instruccion, /Listo, lo de Aristea ya quedó/);
+  const unclear = await note.run({ decision: '9', veredicto: 'no' }, { user: RODNY });
+  assert.equal(unclear.data.saved, false);
+  assert.match(unclear.data.motivo, /No sé a cuál decisión .* 1\. Revisar Foobespain hoy · 2\. Contarle a Aristea/);
+  const vague = await note.run({ decision: '1', veredicto: 'tal vez' }, { user: RODNY });
+  assert.match(vague.data.motivo, /No me quedó claro/);
+  const foreign = await note.run({ decision: '2', veredicto: 'no' }, { user: CAMILA });
+  assert.equal(foreign.data.motivo, 'Esa decisión no es de tus cuentas.', 'a PM only notes decisions about her accounts');
+  const again = await note.run({ decision: '1', veredicto: 'la dejo para la otra semana' }, { user: RODNY });
+  assert.equal(again.data.veredicto, 'DESPUES');
+  assert.equal(repository.decisions.length, 1, 'noting it again replaces the verdict, never duplicates');
+
+  const explained = await reading.run({}, { user: RODNY });
+  assert.deepEqual(explained.data.decisiones.map((d) => [d.numero, d.anotada]), [[1, 'DESPUES'], [2, null]]);
+  assert.equal(explained.data.libroDeDecisiones.anotadas, 1);
+  assert.equal(explained.data.libroDeDecisiones.propuestas, 2);
+  assert.match(explained.data.instruccion, /mide tus decisiones, no a las personas/);
+
+  // Al día siguiente: el desenlace se lee de las señales, y el mensaje de la mañana cuenta qué decidiste y qué pasó.
+  await repository.saveSnapshot('2026-10-20', await service.readToday(at('06:05')));
+  repository.decisions[0].verdict = 'HECHO';
+  setClock(at('06:40', '2026-10-21'));
+  await service.runAutomatic();
+  assert.equal(repository.decisions[0].outcome, 'SIGUE', 'Foobespain is still red the next day');
+  assert.match(repository.decisions[0].outcomeText, /Foobespain sigue en rojo: 2 piezas con fecha pasada/);
+  setClock(at('07:40', '2026-10-21'));
+  await service.runAutomatic();
+  const rodny = notes.find((n) => n.actor.ref === 'u-rodny' && n.note.metadata.dayKey === '2026-10-21').note.text;
+  assert.match(rodny, /\*\*Lo que decidiste ayer\*\*\n\n- \*\*Revisar Foobespain hoy\*\*: la hiciste\. Hoy sigue: Foobespain/);
+  assert.match(rodny, /De ayer no supe qué pasó con «Contarle a Aristea que volvió a verde»; si la trabajaste o la descartaste, cuéntamelo cuando puedas\./);
+  assert.doesNotMatch(rodny, /dime «hice/, 'never a form');
+  const camila = notes.find((n) => n.actor.ref === 'u-camila' && n.note.metadata.dayKey === '2026-10-21').note.text;
+  assert.match(camila, /De ayer no supe qué pasó con «Revisar Foobespain hoy»/, 'Camila sees only her account’s decision');
+  assert.doesNotMatch(camila, /Aristea/);
 });
 
 test('if the model fails, Bria reads with the platform’s rules instead of going quiet', async () => {

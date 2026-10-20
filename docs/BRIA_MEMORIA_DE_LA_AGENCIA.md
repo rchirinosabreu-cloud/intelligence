@@ -11,6 +11,8 @@ Lo que Bria sabe de Brain Studio y de cada cuenta, guardado como **hechos**. Cad
 
 Lo que no se sabe queda como **duda abierta**. Nace de la lectura completa del Drive y del correo de social.brainstudio@gmail.com (corte al 7 de octubre de 2026): 1.349 hechos y 202 dudas. La base y su formato viven fuera del repositorio, en `C:\Proyectos\lectura-del-negocio\salida\social\base-conocimiento\`, porque son confidenciales.
 
+**Segunda base, 19 de octubre de 2026: los chats de WhatsApp.** De una lectura confidencial de los grupos con 14 clientes, el «Día a Día» (desde 2023) y «Team Senior» (desde 2025) salieron 650 hechos y 32 dudas (`C:\Proyectos\lectura-del-negocio\salida\whatsapp\base-conocimiento\`, cargados el 20 de octubre de 2026 con `--corte=2026-10-19`): las reglas de cada cliente (qué no publicar, cómo aprueba, qué le gusta), el criterio de la dirección con sus palabras y fechas, los procesos que la plataforma no ve (la aprobación del cliente por WhatsApp en 13 de 14 grupos) y lo comercial. Decisión de Rodny: **Bria los asume como su conocimiento de trabajo** y solo los suelta si el equipo los contradice o los precisa; las contradicciones entraron como `NO_CONCLUYENTE` con su duda. **Los chats en bruto nunca entran** (traen credenciales y datos personales) **y nada sobre personas** salvo rol y cuentas a cargo.
+
 ## Cómo la usa Bria
 - **`memoria_de_la_agencia`:** consulta los hechos de una cuenta (por su `clientId`), de una marca o proceso (por `entidad`) o de un tema (por `consulta`, con búsqueda por prefijo). Devuelve las dudas abiertas de esa cuenta. Bria la interpreta con criterio propio y dice la certeza con palabras.
 - **Orden de autoridad:**

@@ -67,5 +67,43 @@ export const createDailyReadingRepository = ({ pool }) => ({
   async latestReading() {
     const { rows } = await pool.query('SELECT reading FROM bria_memory.daily_readings ORDER BY day_key DESC LIMIT 1');
     return rows[0]?.reading || null;
+  },
+  /** Las lecturas de los últimos `days` días antes de `before` (sin incluirlo), de la más reciente a la más antigua. */
+  async readingsBefore(before, days = 30) {
+    const { rows } = await pool.query('SELECT reading FROM bria_memory.daily_readings WHERE day_key < $1 AND day_key >= $2 ORDER BY day_key DESC', [before, minusDays(before, days)]);
+    return rows.map((row) => row.reading);
+  },
+
+  /* ---- El libro de decisiones (19 de octubre de 2026) ---- */
+
+  /** Anota el veredicto de una persona sobre una decisión; volver a anotarla la reemplaza y borra el desenlace anterior. */
+  async recordDecision({ decision, dayKey, user, verdict, note = null, decidedAt = new Date() }) {
+    const { rows } = await pool.query(`INSERT INTO bria_memory.decision_log(id,decision_id,day_key,user_ref,user_name,title,kind,subject_type,subject_id,subject_name,evidence,verdict,note,decided_at)
+      VALUES(gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+      ON CONFLICT (decision_id,user_ref) DO UPDATE SET verdict=EXCLUDED.verdict, note=EXCLUDED.note, decided_at=EXCLUDED.decided_at, outcome=NULL, outcome_day=NULL, outcome_text=NULL
+      RETURNING *`,
+    [decision.id, dayKey, user.ref, user.name || null, decision.title, decision.kind, decision.subjectType || null, decision.subjectId || null, decision.subjectName || null, decision.evidence || [], verdict, note, decidedAt]);
+    return entryOf(rows[0]);
+  },
+  /** Las entradas con veredicto y sin desenlace, de lecturas de entre `fromDays` y `untilDays` días antes de `today`. */
+  async pendingOutcomes(today, { fromDays = 1, untilDays = 14 } = {}) {
+    const { rows } = await pool.query('SELECT * FROM bria_memory.decision_log WHERE outcome IS NULL AND day_key <= $1 AND day_key >= $2 ORDER BY day_key', [minusDays(today, fromDays), minusDays(today, untilDays)]);
+    return rows.map(entryOf);
+  },
+  async setOutcome(id, { outcome, text, day }) {
+    const { rowCount } = await pool.query('UPDATE bria_memory.decision_log SET outcome=$2, outcome_text=$3, outcome_day=$4 WHERE id=$1 AND outcome IS NULL', [id, outcome, text, day]);
+    return rowCount > 0;
+  },
+  /** Las entradas de los últimos `days` días hasta `today`, de todas las personas o de una. */
+  async recentDecisions(today, { days = 30, userRef = null } = {}) {
+    const { rows } = await pool.query(`SELECT * FROM bria_memory.decision_log WHERE day_key <= $1 AND day_key >= $2 ${userRef ? 'AND user_ref=$3' : ''} ORDER BY day_key, decided_at`, userRef ? [today, minusDays(today, days), userRef] : [today, minusDays(today, days)]);
+    return rows.map(entryOf);
   }
+});
+
+const entryOf = (row) => ({
+  id: row.id, decisionId: row.decision_id, dayKey: row.day_key, userRef: row.user_ref, userName: row.user_name || null,
+  title: row.title, kind: row.kind, subjectType: row.subject_type || null, subjectId: row.subject_id || null, subjectName: row.subject_name || null,
+  evidence: row.evidence || [], verdict: row.verdict, note: row.note || null, decidedAt: row.decided_at,
+  outcome: row.outcome || null, outcomeDay: row.outcome_day || null, outcomeText: row.outcome_text || null
 });
