@@ -2303,6 +2303,9 @@ enum ReceivableStatus {
   DEBE
   PAGADO
   PROMESADO
+  // En cero, pero no todo entró como dinero: acuerdo por menor valor, canje, compensación o
+  // condonación (20 de octubre de 2026). Lo pone y lo quita la regla de `receivableSettlement.js`.
+  SALDADO
 }
 
 model AccountsReceivable {
@@ -2397,6 +2400,12 @@ model ReceivablePayment {
   reversedAt        DateTime?
   reversalReason    String?
   reversedById      String?
+  // Cierre de deuda sin dinero (20 de octubre de 2026): PAGO es un abono de siempre, con su
+  // ingreso; ACUERDO, CANJE, COMPENSACION y CONDONACION no llevan cuenta ni ingreso, y `detail`
+  // guarda quién autorizó y, en un canje, qué entró y a dónde fue. El motivo va en `notes`.
+  // Aditivas con `scripts/ensure-receivable-settlement-schema.js`.
+  kind              String             @default("PAGO")
+  detail            Json?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 

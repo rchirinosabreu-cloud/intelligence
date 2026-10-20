@@ -9,6 +9,7 @@ import { updateReceivable } from '../services/financialReceivableService.js';
 import { createPayrollContract, updatePayrollContract } from '../services/financialPayrollContractService.js';
 import { FINANCIAL_CATEGORIES } from '../services/financialRecordService.js';
 import { formatReceivableNumber } from '../services/receivableDocumentService.js';
+import { isCashPayment, isReceivableClosed } from '../lib/receivableSettlement.js';
 import { accumulateCategoryDistribution } from '../services/financialRecordAllocationService.js';
 
 // Helper to convert Decimal fields safely
@@ -133,6 +134,10 @@ const serializeReceivable = (receivable) => {
         account: payment.account || null,
         reversedAt: payment.reversedAt instanceof Date ? payment.reversedAt.toISOString() : (payment.reversedAt || null),
         reversalReason: payment.reversalReason || null,
+        // PAGO, o la forma en que se saldó sin dinero (acuerdo, canje, compensación,
+        // condonación) con quién lo autorizó y qué entró (20 de octubre de 2026).
+        kind: payment.kind || 'PAGO',
+        detail: payment.detail && typeof payment.detail === 'object' ? payment.detail : null,
         // El ingreso del abono y sus comprobantes, para verlos y subirlos desde Cartera (Elisa,
         // 5 de octubre de 2026). Un abono revertido ya no tiene ingreso.
         financialRecordId: payment.financialRecordId || null,
@@ -143,8 +148,11 @@ const serializeReceivable = (receivable) => {
             size: document.size
         }))
     }));
-    const paidAmount = roundFloat(payments.reduce((sum, payment) => sum + (payment.reversedAt ? 0 : payment.amount), 0));
-    const balanceReviewRequired = receivable.status === 'PAGADO' && roundFloat(amount - paidAmount) > 0;
+    // Lo que entró en dinero y lo que se saldó de otra forma se dicen por separado: en
+    // Salsipuedes entraron 2.000.000 y se acordaron 1.500.000, y eso no es «pagó 3.500.000».
+    const paidAmount = roundFloat(payments.reduce((sum, payment) => sum + (payment.reversedAt || !isCashPayment(payment) ? 0 : payment.amount), 0));
+    const settledAmount = roundFloat(payments.reduce((sum, payment) => sum + (payment.reversedAt || isCashPayment(payment) ? 0 : payment.amount), 0));
+    const balanceReviewRequired = isReceivableClosed(receivable.status) && roundFloat(amount - paidAmount - settledAmount) > 0;
 
     return {
         id: receivable.id,
@@ -158,7 +166,8 @@ const serializeReceivable = (receivable) => {
         clientDocumentNumber: receivable.client?.documentNumber || null,
         amount,
         paidAmount,
-        outstanding: balanceReviewRequired ? null : roundFloat(Math.max(amount - paidAmount, 0)),
+        settledAmount,
+        outstanding: balanceReviewRequired ? null : roundFloat(Math.max(amount - paidAmount - settledAmount, 0)),
         ...(balanceReviewRequired ? { balanceReviewRequired: true } : {}),
         period: receivable.period instanceof Date ? receivable.period.toISOString() : receivable.period,
         month: receivable.month,
@@ -197,6 +206,7 @@ const buildReceivableTotals = (items) => items.reduce((totals, item) => {
     totals[status] = roundFloat((totals[status] || 0) + toNum(item.outstanding));
     totals.originalTotal = roundFloat(totals.originalTotal + toNum(item.amount));
     totals.paidTotal = roundFloat(totals.paidTotal + toNum(item.paidAmount));
+    totals.settledTotal = roundFloat(totals.settledTotal + toNum(item.settledAmount));
     if (item.balanceReviewRequired) totals.reviewCount += 1;
     totals.outstandingTotal = roundFloat(totals.outstandingTotal + toNum(item.outstanding));
     totals.total = totals.outstandingTotal;
@@ -205,8 +215,10 @@ const buildReceivableTotals = (items) => items.reduce((totals, item) => {
     DEBE: 0,
     PAGADO: 0,
     PROMESADO: 0,
+    SALDADO: 0,
     originalTotal: 0,
     paidTotal: 0,
+    settledTotal: 0,
     reviewCount: 0,
     outstandingTotal: 0,
     total: 0

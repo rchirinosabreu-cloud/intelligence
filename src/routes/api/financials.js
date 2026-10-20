@@ -45,6 +45,7 @@ import {
     reopenFinancialPeriodHandler,
     replaceFinancialRecordAllocationsHandler,
     reverseReceivablePaymentHandler,
+    settleReceivableHandler,
     streamFinancialRecordDocumentHandler,
     streamReceivablePdfHandler,
     updateFinancialRecordHandler,
@@ -130,6 +131,9 @@ router.put('/receivables/:id/document', requireFinancialWrite, correctReceivable
 // TRM oficial para las cuentas de cobro en dólares; la misma fuente que Cotizaciones.
 router.get('/exchange-rate', requireFinancialAccess, getFinancialExchangeRateHandler);
 router.post('/receivables/:id/payments', requireFinancialWrite, createReceivablePaymentHandler);
+// Saldar sin dinero (Rodny, 20 de octubre de 2026): acuerdo por menor valor, canje,
+// compensación o condonación. Mismo permiso que registrar un pago; nunca crea un ingreso.
+router.post('/receivables/:id/settlements', requireFinancialWrite, settleReceivableHandler);
 // Corregir un abono mal registrado es parte del trabajo diario de quien lo registra:
 // mismo permiso que crearlo, con motivo obligatorio y auditoría.
 router.post('/receivable-payments/:paymentId/reverse', requireFinancialWrite, reverseReceivablePaymentHandler);

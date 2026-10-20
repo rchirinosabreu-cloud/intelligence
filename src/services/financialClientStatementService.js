@@ -1,5 +1,6 @@
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
 import { FinancialDomainError } from './financialRecordService.js';
+import { isCashPayment, isReceivableClosed } from '../lib/receivableSettlement.js';
 
 const invalid = () => new FinancialDomainError('FINANCIAL_STATEMENT_FILTER_INVALID', 'Revisa el cliente, año o página del estado de cuenta.');
 const accountSelect = { select: { id: true, name: true, currency: true } };
@@ -8,7 +9,7 @@ const debtFields = {
   id: true, clientId: true, period: true, dueDate: true, amount: true, status: true, notes: true, comments: true, metadata: true,
   payments: { orderBy: [{ paidAt: 'asc' }, { id: 'asc' }], select: {
     id: true, amount: true, paidAt: true, reference: true, account: accountSelect,
-    reversedAt: true, reversalReason: true,
+    reversedAt: true, reversalReason: true, kind: true, detail: true, notes: true,
     financialRecord: { select: { ...incomeFields, clientId: true, type: true, status: true, scenario: true, isProjection: true } }
   } }
 };
@@ -16,19 +17,22 @@ function presentDebt(row) {
   const { metadata, ...debt } = row;
   const currency = metadata?.currency || 'COP';
   const amount = financialCents(row.amount);
-  let paid = 0, invalidPaid = false, review = amount === null || amount <= 0;
+  let paid = 0, settled = 0, invalidPaid = false, review = amount === null || amount <= 0;
   for (const payment of row.payments) {
     // Un abono revertido se muestra como evidencia, pero no suma ni se revisa su vínculo:
     // el ingreso quedó anulado o desvinculado a propósito.
     if (payment.reversedAt) continue;
     const cents = financialCents(payment.amount), record = payment.financialRecord;
-    if (cents === null || cents <= 0 || !Number.isSafeInteger(paid + cents)) { review = true; invalidPaid = true; }
-    else paid += cents;
+    if (cents === null || cents <= 0 || !Number.isSafeInteger(paid + settled + cents)) { review = true; invalidPaid = true; continue; }
+    // Un acuerdo, canje, compensación o condonación no tiene ingreso a propósito: baja el
+    // saldo sin ser dinero, y se muestra aparte de lo pagado.
+    if (!isCashPayment(payment)) { settled += cents; continue; }
+    paid += cents;
     if (!record || record.status !== 'POSTED' || record.scenario !== 'ACTUAL' || record.isProjection || record.type !== 'INCOME' || record.clientId !== row.clientId || financialCents(record.amount) !== cents || !payment.account?.id || record.account?.id !== payment.account.id || record.account?.currency !== currency || payment.account.currency !== currency) review = true;
   }
-  if (paid > amount || (row.status === 'PAGADO' && paid !== amount)) review = true;
-  return { ...debt, currency, paidAmount: invalidPaid ? null : financialAmountFromCents(paid),
-    outstanding: review ? null : financialAmountFromCents(amount - paid), balanceReviewRequired: review };
+  if (paid + settled > amount || (isReceivableClosed(row.status) && paid + settled !== amount)) review = true;
+  return { ...debt, currency, paidAmount: invalidPaid ? null : financialAmountFromCents(paid), settledAmount: invalidPaid ? null : financialAmountFromCents(settled),
+    outstanding: review ? null : financialAmountFromCents(amount - paid - settled), balanceReviewRequired: review };
 }
 
 // Read-only pages: annual obligations with their current applications are not a

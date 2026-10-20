@@ -54,6 +54,10 @@ Las pruebas de PostgreSQL usan exclusivamente `TEST_DATABASE_URL` validada por `
 4. Validar con Elisa: fee + adicional + abono; ingreso preexistente aplicado una vez; promesa; error bancario; navegación hasta el último registro.
 5. Confirmar una cuenta y corte inicial; revisar datos heredados sin año/vencimiento, sin sumarlos ni emparejarlos automáticamente.
 
+## Cierres de deuda sin dinero (20 de octubre de 2026)
+
+Pedido de Rodny en la reunión «Actualizaciones Plataforma» con Elisa: Salsipuedes (3.500.000, cerrado por mutuo acuerdo en 2.000.000 porque su negocio cerró) y Nuva (deuda cambiada por muebles que se quedó Francisco). Una cuenta por cobrar se salda por **acuerdo por menor valor, canje, compensación o condonación**: una fila de `ReceivablePayment` con `kind` distinto de `PAGO`, sin cuenta ni ingreso, con quién autorizó y el motivo. La obligación conserva su valor original; lo pagado y lo saldado se muestran aparte; el estado nuevo `SALDADO` dice que quedó en cero sin que todo entrara como dinero. Regla única en `src/lib/receivableSettlement.js`; detalle en AGENTS.md §8. Pendiente, aparte: préstamos a terceros que aparezcan en cartera y se reintegren sin ser venta, y cuentas por pagar.
+
 ## Siguientes bloques
 
 1. **Operación de cobros:** documento/obligación con conceptos y cuotas, aplicaciones repartidas, reversión/ajustes con autorización e historial, soportes y extracto interno por cuenta. Cartera histórica acumulada a un corte, distinguiendo consultas de stock y flujos.

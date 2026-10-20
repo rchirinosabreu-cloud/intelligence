@@ -7,6 +7,7 @@ import {
 } from '../lib/receivableDocument.js';
 import { normalizeReceivableCurrency, pesosFromRate, DEFAULT_RECEIVABLE_CURRENCY } from '../lib/receivableCurrency.js';
 import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
+import { receivableStatusAfter } from '../lib/receivableSettlement.js';
 import {
     assertOpenFinancialPeriod,
     FinancialDomainError,
@@ -191,7 +192,7 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
             const receivable = await tx.accountsReceivable.findUnique({
                 where: { id: receivableId },
                 include: {
-                    payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true } },
+                    payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, kind: true } },
                     client: { select: { id: true, name: true, legalName: true, documentType: true, documentNumber: true } }
                 }
             });
@@ -291,7 +292,7 @@ export const issueReceivableDocument = async (prismaClient, receivableId, input 
                     exchangeRateDate: money.exchangeRateDate,
                     // En dólares, el valor en dólares pasa a ser el del documento.
                     foreignAmount: money.currency === 'USD' ? document.total : null,
-                    status: paidCents === money.amountCents ? 'PAGADO' : receivable.status
+                    status: receivableStatusAfter({ outstandingCents: money.amountCents - paidCents, payments: receivable.payments, currentStatus: receivable.status })
                 },
                 include: {
                     items: { orderBy: { sortOrder: 'asc' } },
@@ -376,7 +377,7 @@ export const correctReceivableDocument = async (prismaClient, receivableId, inpu
                 where: { id: receivableId },
                 include: {
                     items: { orderBy: { sortOrder: 'asc' } },
-                    payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true } },
+                    payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, kind: true } },
                     client: { select: { id: true, name: true, legalName: true, documentType: true, documentNumber: true } }
                 }
             });
@@ -409,9 +410,7 @@ export const correctReceivableDocument = async (prismaClient, receivableId, inpu
                     409
                 );
             }
-            const status = paidCents === money.amountCents
-                ? 'PAGADO'
-                : (receivable.status === 'PROMESADO' ? 'PROMESADO' : 'DEBE');
+            const status = receivableStatusAfter({ outstandingCents: money.amountCents - paidCents, payments: receivable.payments, currentStatus: receivable.status });
 
             await tx.receivableItem.deleteMany({ where: { receivableId } });
             await tx.receivableItem.createMany({

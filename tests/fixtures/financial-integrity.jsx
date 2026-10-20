@@ -245,15 +245,25 @@ axios.defaults.adapter = async config => {
     const paymentId = path.split('/').at(-2);
     const target = debt.payments.find(payment => payment.id === paymentId);
     if (!target || target.reversedAt) throw Object.assign(new Error('Abono no reversible'), { response: { data: { message: 'Este abono ya fue revertido.' } } });
+    const cash = !target.kind || target.kind === 'PAGO';
     debt = {
       ...debt,
       outstanding: debt.outstanding + Number(target.amount),
-      paidAmount: debt.paidAmount - Number(target.amount),
+      paidAmount: cash ? debt.paidAmount - Number(target.amount) : debt.paidAmount,
+      settledAmount: cash ? debt.settledAmount : (debt.settledAmount || 0) - Number(target.amount),
       status: 'DEBE',
       payments: debt.payments.map(payment => payment.id === paymentId ? { ...payment, reversedAt: '2026-09-20T05:00:00Z', reversalReason: body.reason } : payment)
     };
     records = records.map(record => record.id === target.financialRecord?.id ? { ...record, status: 'VOIDED' } : record);
     data = { message: 'Abono revertido. El ingreso que había generado quedó anulado.', outstanding: debt.outstanding };
+  } else if (path.endsWith('/settlements')) {
+    // Como el servidor: un acuerdo, canje, compensación o condonación baja el saldo sin crear ingreso.
+    if (Number(body.amount) > debt.outstanding + 0.005) throw Object.assign(new Error('Supera el saldo'), { response: { data: { message: 'El valor supera el saldo pendiente.' } } });
+    const outstanding = Math.round((debt.outstanding - Number(body.amount)) * 100) / 100;
+    const detail = { authorizedBy: body.authorizedBy, ...(body.kind === 'CANJE' ? { goods: body.goods, ...(body.destination ? { destination: body.destination } : {}) } : {}), ...(body.kind === 'COMPENSACION' ? { offsetAgainst: body.offsetAgainst } : {}) };
+    debt = { ...debt, outstanding, settledAmount: (debt.settledAmount || 0) + Number(body.amount), status: outstanding === 0 ? 'SALDADO' : debt.status, payments: [{ id: `demo-settlement-${Date.now()}`, kind: body.kind, detail, amount: Number(body.amount), paidAt: `${body.settledAt}T12:00:00Z`, notes: body.reason, account: null, financialRecordId: null, documents: [] }, ...(debt.payments || [])] };
+    window.__receivableSettlementBody = body;
+    data = { message: outstanding === 0 ? 'Acuerdo por menor valor registrado. La cuenta quedó saldada; no se creó ningún ingreso.' : 'Ajuste registrado. No se creó ningún ingreso.', outstanding, receivable: { status: debt.status } };
   } else if (path.endsWith('/payments')) {
     if (new URLSearchParams(location.search).has('paymentError')) throw Object.assign(new Error('Pago no guardado (simulado)'), { response: { data: { message: 'Pago no guardado (simulado)' } } });
     debt = { ...debt, outstanding: debt.outstanding - Number(body.amount), paidAmount: debt.paidAmount + Number(body.amount), status: debt.outstanding === Number(body.amount) ? 'PAGADO' : debt.status };

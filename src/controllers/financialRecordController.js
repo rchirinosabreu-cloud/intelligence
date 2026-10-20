@@ -18,6 +18,8 @@ import {
     voidFinancialRecordDocument
 } from '../services/financialRecordDocumentService.js';
 import { createReceivablePayment, reverseReceivablePayment } from '../services/receivablePaymentService.js';
+import { settleReceivable } from '../services/receivableSettlementService.js';
+import { settlementKindLabel } from '../lib/receivableSettlement.js';
 import { createReceivable, deleteReceivable } from '../services/financialReceivableService.js';
 import { issueReceivableDocument, correctReceivableDocument } from '../services/receivableDocumentService.js';
 import { openReceivablePdf, RECEIVABLE_PDF_MIME } from '../services/receivablePdfService.js';
@@ -253,6 +255,23 @@ export const createReceivablePaymentHandler = async (req, res, dependencies = {}
     } catch (error) {
         console.error('[Receivable payments API] Create failed:', error.response?.data || error);
         return respondWithError(res, error, 'RECEIVABLE_PAYMENT_CREATE_FAILED', 'No fue posible registrar el pago de cartera.');
+    }
+};
+
+export const settleReceivableHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const settle = dependencies.settleReceivable || settleReceivable;
+    try {
+        const result = await settle(prismaClient, req.params.id, req.body || {}, req.user);
+        return res.status(201).json({
+            message: result.outstanding === 0
+                ? `${settlementKindLabel(result.payment?.kind)} registrado. La cuenta quedó saldada; no se creó ningún ingreso.`
+                : `${settlementKindLabel(result.payment?.kind)} registrado. No se creó ningún ingreso.`,
+            ...result
+        });
+    } catch (error) {
+        console.error('[Receivable settlements API] Settle failed:', error.response?.data || error);
+        return respondWithError(res, error, 'RECEIVABLE_SETTLEMENT_FAILED', 'No fue posible saldar la cuenta por cobrar.');
     }
 };
 

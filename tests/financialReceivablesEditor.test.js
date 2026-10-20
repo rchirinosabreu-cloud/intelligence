@@ -91,6 +91,8 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
         clientDocumentNumber: null,
         amount: 4680000,
         paidAmount: 680000,
+        // Lo saldado sin dinero (acuerdo, canje, compensación, condonación) va aparte (20 de octubre de 2026).
+        settledAmount: 0,
         outstanding: 4000000,
         period: '2026-01-01T00:00:00.000Z',
         month: 1,
@@ -124,6 +126,9 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
             account: { id: 'account-1', name: 'Bancolombia' },
             reversedAt: null,
             reversalReason: null,
+            // Un abono anterior a los cierres sin dinero es un pago.
+            kind: 'PAGO',
+            detail: null,
             // Comprobantes del abono (5 de octubre de 2026): este no tiene ingreso enlazado.
             financialRecordId: null,
             documents: []
