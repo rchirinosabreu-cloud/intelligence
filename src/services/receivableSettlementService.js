@@ -2,7 +2,74 @@ import { financialCents, financialAmountFromCents } from '../utils/financialMone
 import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
 import { assertOpenFinancialPeriod, FinancialDomainError, parseFinancialDateInput } from './financialRecordService.js';
 import { outstandingCentsOf } from './receivablePaymentService.js';
-import { isReceivableClosed, receivableStatusAfter, settlementDetail, settlementProblem } from '../lib/receivableSettlement.js';
+import { SETTLEMENT_KINDS, isReceivableClosed, receivableStatusAfter, settlementDetail, settlementKindLabel, settlementProblem } from '../lib/receivableSettlement.js';
+import { adjustmentsRange, summarizeAdjustments } from '../lib/receivableAdjustments.js';
+import { loanCounterpartyLabel } from '../lib/receivableLoans.js';
+
+const toNumber = (value) => (value === null || value === undefined ? 0 : (typeof value.toNumber === 'function' ? value.toNumber() : Number(value)) || 0);
+
+/**
+ * Resumen de ajustes de cartera del periodo (Rodny, 20 de octubre de 2026): cierres sin dinero
+ * vigentes por su fecha, y la diferencia en cambio de las cuentas en dólares. Solo lee.
+ */
+export const listReceivableAdjustments = async (prismaClient, query = {}) => {
+    const year = Number.parseInt(query.year, 10) || new Date().getUTCFullYear();
+    const { from, to } = adjustmentsRange({ year, month: query.month });
+    const [settlements, usdReceivables] = await Promise.all([
+        prismaClient.receivablePayment.findMany({
+            where: { kind: { in: SETTLEMENT_KINDS.map((kind) => kind.value) }, reversedAt: null, paidAt: { gte: from, lt: to } },
+            include: { receivable: { include: { client: { select: { id: true, name: true, slug: true } } } } },
+            orderBy: [{ paidAt: 'desc' }, { id: 'desc' }]
+        }),
+        prismaClient.accountsReceivable.findMany({
+            where: { currency: 'USD' },
+            select: { id: true, currency: true, foreignAmount: true, metadata: true, client: { select: { id: true, name: true, slug: true } } }
+        })
+    ]);
+    const items = settlements.map((settlement) => {
+        const receivable = settlement.receivable || {};
+        const detail = settlement.detail && typeof settlement.detail === 'object' ? settlement.detail : {};
+        return {
+            id: settlement.id,
+            receivableId: receivable.id || null,
+            kind: settlement.kind,
+            kindLabel: settlementKindLabel(settlement.kind),
+            amount: toNumber(settlement.amount),
+            originalAmount: toNumber(receivable.amount),
+            date: settlement.paidAt instanceof Date ? settlement.paidAt.toISOString() : settlement.paidAt,
+            clientId: receivable.client?.id || null,
+            clientName: receivable.client?.name || receivable.counterpartyName || receivable.sourceLabel || 'Sin nombre',
+            counterpartyLabel: receivable.kind === 'PRESTAMO' ? `Préstamo · ${loanCounterpartyLabel(receivable.counterpartyType)}` : null,
+            reason: settlement.notes || null,
+            authorizedBy: detail.authorizedBy || null,
+            goods: detail.goods || null,
+            destination: detail.destination || null,
+            offsetAgainst: detail.offsetAgainst || null
+        };
+    });
+    const exchangeAdjustments = [];
+    for (const receivable of usdReceivables) {
+        const list = Array.isArray(receivable.metadata?.exchangeAdjustments) ? receivable.metadata.exchangeAdjustments : [];
+        for (const adjustment of list) {
+            const at = new Date(adjustment.at);
+            if (Number.isNaN(at.getTime()) || at < from || at >= to) continue;
+            exchangeAdjustments.push({
+                receivableId: receivable.id,
+                clientId: receivable.client?.id || null,
+                clientName: receivable.client?.name || 'Sin nombre',
+                foreignAmount: toNumber(receivable.foreignAmount),
+                date: at.toISOString(),
+                fromCents: Number(adjustment.fromCents) || 0,
+                toCents: Number(adjustment.toCents) || 0,
+                from: (Number(adjustment.fromCents) || 0) / 100,
+                to: (Number(adjustment.toCents) || 0) / 100,
+                difference: ((Number(adjustment.toCents) || 0) - (Number(adjustment.fromCents) || 0)) / 100
+            });
+        }
+    }
+    exchangeAdjustments.sort((a, b) => (a.date < b.date ? 1 : -1));
+    return { year, month: adjustmentsRange({ year, month: query.month }).to - from < 32 * 24 * 3600 * 1000 ? Number.parseInt(query.month, 10) : null, items, exchangeAdjustments, summary: summarizeAdjustments({ settlements: items, exchangeAdjustments }) };
+};
 
 const cloneForAudit = (value) => JSON.parse(JSON.stringify(value));
 

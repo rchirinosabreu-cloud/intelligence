@@ -8,6 +8,7 @@ import {
 } from './financialRecordService.js';
 import { isReceivableClosed, receivableStatusAfter } from '../lib/receivableSettlement.js';
 import { isLoanReceivable } from '../lib/receivableLoans.js';
+import { normalizeReceivableCurrency } from '../lib/receivableCurrency.js';
 
 const PAYMENT_CATEGORIES = new Set(['MEMBRESIA', 'SERVICIO', 'PAUTA']);
 export const REVERSAL_REASON_MAX = 300;
@@ -127,12 +128,30 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
 
             const outstandingBeforeCents = outstandingCentsOf(receivable);
             const outstandingBefore = financialAmountFromCents(outstandingBeforeCents);
+            // Una cuenta en dólares guarda en cartera los pesos de la TRM del día en que se creó,
+            // y el depósito llega con la tasa del día (Foobspain, 19 de octubre de 2026: Elisa
+            // «registró el máximo permitido» porque el pago real no cabía). La cartera se ajusta
+            // a lo que de verdad entró: hacia arriba sola, hacia abajo solo si quien registra dice
+            // que con ese pago la cuenta queda al día. En pesos no hay tasa que lo explique.
+            const isUsd = normalizeReceivableCurrency(receivable.currency) === 'USD';
+            const settlesInFull = input.settlesInFull === true || input.settlesInFull === 'true';
+            let exchangeAdjustment = null;
             if (amountCents > outstandingBeforeCents) {
-                throw new FinancialDomainError(
-                    'RECEIVABLE_OVERPAYMENT',
-                    'El pago supera el saldo pendiente de la cuenta por cobrar.',
-                    409
-                );
+                if (!isUsd) {
+                    throw new FinancialDomainError('RECEIVABLE_OVERPAYMENT', 'El pago supera el saldo pendiente de la cuenta por cobrar.', 409);
+                }
+                const fromCents = financialCents(receivable.amount);
+                exchangeAdjustment = { fromCents, toCents: fromCents + (amountCents - outstandingBeforeCents) };
+            } else if (settlesInFull && amountCents < outstandingBeforeCents) {
+                if (!isUsd) {
+                    throw new FinancialDomainError('RECEIVABLE_SETTLES_IN_FULL_UNSUPPORTED', 'En pesos, dar por saldada una cuenta con menos dinero es un acuerdo: usa «Saldar de otra forma».', 409);
+                }
+                const fromCents = financialCents(receivable.amount);
+                exchangeAdjustment = { fromCents, toCents: fromCents - (outstandingBeforeCents - amountCents) };
+            }
+            if (exchangeAdjustment) {
+                const deltaCents = exchangeAdjustment.toCents - exchangeAdjustment.fromCents;
+                exchangeAdjustment.difference = Math.sign(deltaCents) * Number(financialAmountFromCents(Math.abs(deltaCents)));
             }
 
             await assertOpenFinancialPeriod(tx, year, month);
@@ -194,11 +213,33 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
                     createdById: actorId
                 }
             });
-            const outstandingCents = outstandingBeforeCents - amountCents;
+            const outstandingCents = exchangeAdjustment ? 0 : outstandingBeforeCents - amountCents;
             const outstanding = financialAmountFromCents(outstandingCents);
             const updatedReceivable = await tx.accountsReceivable.update({
                 where: { id: receivableId },
-                data: { status: receivableStatusAfter({ outstandingCents, payments: [...receivable.payments, payment], currentStatus: receivable.status }) }
+                data: {
+                    status: receivableStatusAfter({ outstandingCents, payments: [...receivable.payments, payment], currentStatus: receivable.status }),
+                    ...(exchangeAdjustment ? {
+                        amount: financialAmountFromCents(exchangeAdjustment.toCents),
+                        metadata: {
+                            ...(receivable.metadata && typeof receivable.metadata === 'object' ? receivable.metadata : {}),
+                            exchangeAdjustments: [
+                                ...(Array.isArray(receivable.metadata?.exchangeAdjustments) ? receivable.metadata.exchangeAdjustments : []),
+                                { at: new Date().toISOString(), paymentId: payment.id, fromCents: exchangeAdjustment.fromCents, toCents: exchangeAdjustment.toCents }
+                            ]
+                        }
+                    } : {})
+                }
+            });
+            if (exchangeAdjustment) await tx.financialAuditEvent.create({
+                data: {
+                    entityType: 'AccountsReceivable',
+                    entityId: receivableId,
+                    action: 'UPDATE',
+                    before: { amount: financialAmountFromCents(exchangeAdjustment.fromCents), outstanding: outstandingBefore },
+                    after: { operation: 'EXCHANGE_ADJUSTMENT', amount: financialAmountFromCents(exchangeAdjustment.toCents), difference: exchangeAdjustment.difference, paymentId: payment.id, paidAmount: amount },
+                    actorId
+                }
             });
             await tx.financialAuditEvent.create({
                 data: {
@@ -221,7 +262,7 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
                 }
             });
 
-            return { payment, financialRecord, receivable: updatedReceivable, outstanding, replayed: false };
+            return { payment, financialRecord, receivable: updatedReceivable, outstanding, exchangeAdjustment, replayed: false };
         }, { isolationLevel: 'Serializable' });
     } catch (error) {
         if (error?.code === 'P2034' || error?.code === 'P2002') {

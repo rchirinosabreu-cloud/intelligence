@@ -122,6 +122,8 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
         exchangeRateDate: null,
         documentTotal: 0,
         foreignAmount: null,
+        // En dólares, las veces que la cartera en pesos se ajustó a lo que entró (20 de octubre de 2026).
+        exchangeAdjustments: [],
         payments: [{
             id: 'payment-1',
             amount: 680000,

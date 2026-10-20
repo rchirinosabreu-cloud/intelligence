@@ -285,6 +285,7 @@ export const PLATFORM_OPERATIONS = {
   'GET /financials/exchange-rate': { que: 'La TRM del día.' },
   'POST /financials/receivables/:id/payments': { que: 'Registra un abono a una cuenta por cobrar.', campos: 'amount, date, accountId, notes, concept, requestId' },
   'POST /financials/loans': { que: 'Registra un préstamo a un tercero: crea el egreso (o liga uno ya registrado) y la cuenta por cobrar en Cartera. Su devolución entra como reintegro.', campos: 'counterpartyType (COLABORADOR, SOCIO, CLIENTE, PROVEEDOR, OTRO), counterpartyName o clientId, amount, lentAt, accountId o financialRecordId, dueDate, notes' },
+  'GET /financials/receivable-adjustments': { que: 'Resumen de ajustes de cartera del periodo: lo saldado sin dinero (acuerdo, canje, compensación, condonación) y la diferencia en cambio de las cuentas en dólares.', campos: 'year, month' },
   'POST /financials/receivables/:id/settlements': { que: 'Salda una cuenta por cobrar sin dinero: acuerdo por menor valor, canje, compensación o condonación. No crea ingresos.', campos: 'kind (ACUERDO, CANJE, COMPENSACION, CONDONACION), amount, settledAt, reason, authorizedBy, goods, destination, offsetAgainst' },
   'POST /financials/receivable-payments/:paymentId/reverse': { que: 'Revierte un abono o un ajuste con motivo.', campos: 'reason' },
   'GET /financials/bank-reconciliation': { que: 'La conciliación bancaria.' },

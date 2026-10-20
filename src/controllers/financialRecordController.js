@@ -18,7 +18,7 @@ import {
     voidFinancialRecordDocument
 } from '../services/financialRecordDocumentService.js';
 import { createReceivablePayment, reverseReceivablePayment } from '../services/receivablePaymentService.js';
-import { settleReceivable } from '../services/receivableSettlementService.js';
+import { settleReceivable, listReceivableAdjustments } from '../services/receivableSettlementService.js';
 import { createLoan } from '../services/receivableLoanService.js';
 import { isLoanReceivable } from '../lib/receivableLoans.js';
 import { settlementKindLabel } from '../lib/receivableSettlement.js';
@@ -250,10 +250,13 @@ export const createReceivablePaymentHandler = async (req, res, dependencies = {}
     const createPayment = dependencies.createPayment || createReceivablePayment;
     try {
         const result = await createPayment(prismaClient, req.params.id, req.body || {}, req.user);
+        const pesos = (value) => `$ ${Number(value || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 })}`;
         return res.status(201).json({
             message: isLoanReceivable(result.receivable)
                 ? (result.outstanding === 0 ? 'Reintegro registrado. El préstamo quedó devuelto por completo.' : 'Reintegro registrado. No cuenta como venta.')
-                : 'Pago de cartera registrado correctamente.',
+                : result.exchangeAdjustment
+                    ? `Pago registrado. La cartera en pesos se ajustó de ${pesos(result.exchangeAdjustment.fromCents / 100)} a ${pesos(result.exchangeAdjustment.toCents / 100)} por la tasa del día.`
+                    : 'Pago de cartera registrado correctamente.',
             ...result
         });
     } catch (error) {
@@ -276,6 +279,17 @@ export const createLoanHandler = async (req, res, dependencies = {}) => {
     } catch (error) {
         console.error('[Loans API] Create failed:', error.response?.data || error);
         return respondWithError(res, error, 'LOAN_CREATE_FAILED', 'No fue posible registrar el préstamo.');
+    }
+};
+
+export const listReceivableAdjustmentsHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const list = dependencies.listReceivableAdjustments || listReceivableAdjustments;
+    try {
+        return res.json(await list(prismaClient, req.query || {}));
+    } catch (error) {
+        console.error('[Receivable adjustments API] List failed:', error.response?.data || error);
+        return respondWithError(res, error, 'RECEIVABLE_ADJUSTMENTS_FAILED', 'No fue posible cargar los ajustes de cartera.');
     }
 };
 
