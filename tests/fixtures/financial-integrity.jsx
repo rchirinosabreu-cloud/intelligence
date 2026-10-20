@@ -210,6 +210,12 @@ axios.defaults.adapter = async config => {
       targets: [client, archivedClient]
     };
   }
+  else if (path.endsWith('/statement/document')) {
+    // Como el servidor: el estado de cuenta en PDF llega por la API autenticada, como bytes.
+    (window.__documentRequests ||= []).push(`${path}?cutoff=${url.searchParams.get('cutoff') || ''}`);
+    data = new Blob([samplePdf(`Estado de cuenta ${client.name}`)], { type: 'application/pdf' });
+    return { data, status: 200, statusText: 'OK', headers: { 'content-disposition': `inline; filename="Estado de cuenta - ${client.name} - corte.pdf"` }, config };
+  }
   else if (path.endsWith('/statement')) {
     if (new URLSearchParams(location.search).has('statementError')) throw Object.assign(new Error('Estado de cuenta no disponible (simulado)'), { response: { status: 500, data: { message: 'Estado de cuenta no disponible (simulado)' } } });
     const section = url.searchParams.get('section'), offset = Number(url.searchParams.get('cursor') || 0);

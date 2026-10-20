@@ -161,7 +161,7 @@ const safeDocumentName = (name = 'documento') => String(name).replace(/[\r\n"\\/
 
 // Un nombre con tildes o eñes —«Cuenta de cobro No. 0393 - Corporación…»— necesita las
 // dos formas: la ASCII para clientes viejos y la codificada para el resto.
-const contentDisposition = (disposition, name) => {
+export const contentDisposition = (disposition, name) => {
     const filename = safeDocumentName(name);
     const asciiName = filename.replace(/[^\x20-\x7E]/g, '_');
     const encoded = encodeURIComponent(filename).replace(/['()*]/g, (char) => '%' + char.charCodeAt(0).toString(16));

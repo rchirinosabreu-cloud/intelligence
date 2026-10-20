@@ -40,6 +40,7 @@ export const PLATFORM_EXCLUDED = [
   { match: /^\w+ \/financials\/(import|bank-reconciliation\/(preview|import))(\/|$)/, reason: 'cargar archivos de Excel o extractos' },
   { match: /^(POST \/financials\/records\/:id\/documents|GET \/financials\/records\/:id\/documents\/:documentId\/file)$/, reason: 'comprobantes: archivos' },
   { match: /^GET \/financials\/receivables\/:id\/document$/, reason: 'el PDF de la cuenta de cobro' },
+  { match: /^GET \/financials\/clients\/:clientId\/statement\/document$/, reason: 'el PDF del estado de cuenta' },
   { match: /^\w+ \/recognitions(\/|$)/, reason: 'entrega personal de reconocimientos' },
   { match: /^\w+ \/activity\/google-calendar\/(auth-url|oauth-callback)$/, reason: 'conexión con Google: pantalla' },
   { match: /^\w+ \/db(\/|$)/, reason: 'rutas antiguas duplicadas' },
