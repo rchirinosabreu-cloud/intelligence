@@ -22,6 +22,7 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
   // La devolución de un préstamo es reintegro (Rodny, 20 de octubre de 2026): no se pide
   // concepto, siempre es Préstamo, y no cuenta como venta.
   const loan = isLoanReceivable(debt);
+  const usd = debt?.currency === 'USD';
   const { data, isLoading, error: candidatesError } = useQuery({
     queryKey: ['financial-payment-candidates', debt?.clientId, page],
     enabled: !!debt?.clientId && existing,
@@ -49,8 +50,14 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
       {!loan && <label className="block space-y-1.5 text-sm">Concepto del ingreso<Select required disabled={existing} className={field} value={form.category || ''} onChange={event => setForm(current => ({ ...current, category: event.target.value }))}><option value="">Seleccionar concepto…</option><option value="MEMBRESIA">Membresía / fee</option><option value="SERVICIO">Servicio / adicional</option><option value="PAUTA">Pauta</option></Select></label>}
       {/* El financiero se lleva en pesos (Rodny, 30 de septiembre de 2026): de una cuenta en
           dólares se registra lo que entró en pesos. */}
-      {debt?.currency === 'USD' && <p data-receivable-payment-usd className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-white/5 dark:text-zinc-300">Esta cuenta de cobro está en dólares. Registra los pesos que entraron a la cuenta. Si entró menos que el valor en pesos de la cartera, ajústalo con el lápiz junto a «Valor original».</p>}
-      <label className="block space-y-1.5 text-sm">Valor{debt?.currency === 'USD' ? ' en pesos' : ''}<MoneyInput required readOnly={existing} className={field} min="0.01" max={debt?.outstanding} value={form.amount} onChange={amount => setForm(current => ({ ...current, amount }))} /></label>
+      {/* Foobspain, 19 de octubre de 2026: el depósito llega con la tasa del día y no cabía en el
+          valor en pesos de la cartera. En dólares el campo no tiene tope: si entró más, la cartera
+          se ajusta sola a lo que entró; si entró menos y la cuenta queda al día, se marca. */}
+      {usd && <p data-receivable-payment-usd className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-white/5 dark:text-zinc-300">Esta cuenta de cobro está en dólares. Registra los pesos que entraron a la cuenta. Si entró más que el valor en pesos de la cartera ({money(debt?.outstanding || 0)} pendientes), la cartera se ajusta sola a lo que entró.</p>}
+      <label className="block space-y-1.5 text-sm">Valor{usd ? ' en pesos' : ''}<MoneyInput required readOnly={existing} className={field} min="0.01" max={usd ? undefined : debt?.outstanding} value={form.amount} onChange={amount => setForm(current => ({ ...current, amount }))} /></label>
+      {usd && Number(form.amount) > 0 && Number(form.amount) < Number(debt?.outstanding || 0) - 0.005 && (
+        <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1 h-4 w-4" checked={Boolean(form.settlesInFull)} onChange={event => setForm(current => ({ ...current, settlesInFull: event.target.checked }))} /><span>Con este pago la cuenta queda al día: la diferencia de {money(Number(debt?.outstanding || 0) - Number(form.amount))} es por la tasa del día, no un saldo pendiente.</span></label>
+      )}
       <div className="grid gap-4 sm:grid-cols-2"><label className="flex min-w-0 flex-col gap-1.5 text-sm">Fecha<DatePicker {...brainDatePickerProps} required disabled={existing} wrapperClassName="block w-full" className={field} selected={form.paidAt ? new Date(`${form.paidAt}T12:00:00`) : null} dateFormat="dd/MM/yyyy" onChange={date => setForm(current => ({ ...current, paidAt: date ? format(date, 'yyyy-MM-dd') : '' }))}/></label><label className="flex min-w-0 flex-col gap-1.5 text-sm">Cuenta<Select required disabled={existing} className={field} value={form.accountId} onChange={event => setForm(current => ({ ...current, accountId: event.target.value }))}><option value="">Seleccionar…</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</Select></label></div>
       <label className="block space-y-1.5 text-sm">Referencia<input readOnly={existing} className={field} value={form.reference} onChange={event => setForm(current => ({ ...current, reference: event.target.value }))}/></label>
       <label className="block space-y-1.5 text-sm">Notas<textarea className={field} rows={2} value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))}/></label>

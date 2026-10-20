@@ -198,6 +198,10 @@ const serializeReceivable = (receivable) => {
             ? roundFloat(receivable.items.reduce((sum, item) => sum + toNum(item.amount), 0))
             : roundFloat(toNum(receivable.foreignAmount)),
         foreignAmount: receivable.foreignAmount === null || receivable.foreignAmount === undefined ? null : toNum(receivable.foreignAmount),
+        // En dólares, las veces que la cartera en pesos se ajustó a lo que de verdad entró
+        // (20 de octubre de 2026): la tarjeta lo dice en vez de dejar un valor que no cuadra.
+        exchangeAdjustments: (Array.isArray(receivable.metadata?.exchangeAdjustments) ? receivable.metadata.exchangeAdjustments : [])
+            .map((adjustment) => ({ at: adjustment.at, from: (Number(adjustment.fromCents) || 0) / 100, to: (Number(adjustment.toCents) || 0) / 100 })),
         dueDate: receivable.dueDate instanceof Date ? receivable.dueDate.toISOString() : receivable.dueDate,
         status: receivable.status,
         notes: receivable.notes,

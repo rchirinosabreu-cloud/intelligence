@@ -32,6 +32,7 @@ import BankReconciliationPanel from './financial/BankReconciliationPanel';
 import ReceivablePaymentDialog from './financial/ReceivablePaymentDialog';
 import ReceivableSettlementDialog from './financial/ReceivableSettlementDialog';
 import ReceivableLoanDialog from './financial/ReceivableLoanDialog';
+import ReceivableAdjustmentsSummary from './financial/ReceivableAdjustmentsSummary';
 import { isCashPayment, isReceivableClosed, settlementKindLabel } from '@/lib/receivableSettlement';
 import { isLoanReceivable, loanCounterpartyLabel } from '@/lib/receivableLoans';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
@@ -452,7 +453,8 @@ const FinancialDashboard = () => {
             paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }),
             accountId: '',
             reference: '',
-            notes: ''
+            notes: '',
+            settlesInFull: false
         });
     };
 
@@ -1474,6 +1476,10 @@ await invalidateFinancialQueries(queryClient);
                             )}
                         </div>
 
+                        {/* Ajustes de cartera del periodo (Rodny, 20 de octubre de 2026): lo saldado sin dinero
+                            y la diferencia en cambio, que no son movimientos y solo se veían cliente por cliente. */}
+                        <ReceivableAdjustmentsSummary filterQuery={filterQuery} enabled={!!(currentUser && canAccessFinancials)} />
+
                         {!filters.q && !filters.month && data?.sourceSummary?.importBatchId && data?.sourceSummary?.totals && (
                             <Card className="p-4 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm">
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
@@ -1577,6 +1583,12 @@ await invalidateFinancialQueries(queryClient);
                                                                         {debt.currency === 'USD' && (
                                                                             <p data-receivable-usd-summary className="mt-0.5 text-[10px] text-zinc-500">
                                                                                 Documento en {formatReceivableMoney(debt.documentTotal, 'USD')}{debt.exchangeRate ? ` · ${formatExchangeRate(debt.exchangeRate)}` : ''}
+                                                                            </p>
+                                                                        )}
+                                                                        {/* El valor en pesos se ajustó a lo que de verdad entró (Foobspain, 19 de octubre de 2026). */}
+                                                                        {debt.exchangeAdjustments?.length > 0 && (
+                                                                            <p data-receivable-exchange-adjustment className="mt-0.5 text-[10px] text-zinc-500">
+                                                                                Ajustado por la tasa del día: de {formatCurrency(debt.exchangeAdjustments[debt.exchangeAdjustments.length - 1].from)} a {formatCurrency(debt.exchangeAdjustments[debt.exchangeAdjustments.length - 1].to)}
                                                                             </p>
                                                                         )}
                                                                     </div>
