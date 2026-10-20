@@ -56,7 +56,11 @@ Las pruebas de PostgreSQL usan exclusivamente `TEST_DATABASE_URL` validada por `
 
 ## Cierres de deuda sin dinero (20 de octubre de 2026)
 
-Pedido de Rodny en la reunión «Actualizaciones Plataforma» con Elisa: Salsipuedes (3.500.000, cerrado por mutuo acuerdo en 2.000.000 porque su negocio cerró) y Nuva (deuda cambiada por muebles que se quedó Francisco). Una cuenta por cobrar se salda por **acuerdo por menor valor, canje, compensación o condonación**: una fila de `ReceivablePayment` con `kind` distinto de `PAGO`, sin cuenta ni ingreso, con quién autorizó y el motivo. La obligación conserva su valor original; lo pagado y lo saldado se muestran aparte; el estado nuevo `SALDADO` dice que quedó en cero sin que todo entrara como dinero. Regla única en `src/lib/receivableSettlement.js`; detalle en AGENTS.md §8. Pendiente, aparte: préstamos a terceros que aparezcan en cartera y se reintegren sin ser venta, y cuentas por pagar.
+Pedido de Rodny en la reunión «Actualizaciones Plataforma» con Elisa: Salsipuedes (3.500.000, cerrado por mutuo acuerdo en 2.000.000 porque su negocio cerró) y Nuva (deuda cambiada por muebles que se quedó Francisco). Una cuenta por cobrar se salda por **acuerdo por menor valor, canje, compensación o condonación**: una fila de `ReceivablePayment` con `kind` distinto de `PAGO`, sin cuenta ni ingreso, con quién autorizó y el motivo. La obligación conserva su valor original; lo pagado y lo saldado se muestran aparte; el estado nuevo `SALDADO` dice que quedó en cero sin que todo entrara como dinero. Regla única en `src/lib/receivableSettlement.js`; detalle en AGENTS.md §8.
+
+## Préstamos a terceros en Cartera (20 de octubre de 2026)
+
+«Cuando registro un préstamo no se me va a cuentas por cobrar … y cuando lo paguen, se reintegre, no es un ingreso como tal». Un préstamo es una `AccountsReceivable` de clase `PRESTAMO` a un colaborador, socio, cliente, proveedor u otro (`clientId` pasó a ser opcional), ligada por `loanRecordId` al egreso que sacó el dinero (categoría `PRESTAMO`, sección `FINANCING`), creado de una vez o elegido entre los ya registrados a mano. La devolución entra por «Registrar reintegro»: ingreso `PRESTAMO`/`FINANCING`, nunca venta; el tablero lo suma en ingresos registrados y lo dice aparte. Regla única en `src/lib/receivableLoans.js`; detalle en AGENTS.md §8. Pendiente, aparte: cuentas por pagar (proveedores, equipo, arriendo) sobre el registro de terceros, y el cruce de un préstamo con la nómina del colaborador.
 
 ## Siguientes bloques
 

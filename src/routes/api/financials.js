@@ -27,6 +27,7 @@ import {
     createFinancialAccountHandler,
     createReceivableHandler,
     createReceivablePaymentHandler,
+    createLoanHandler,
     deleteReceivableHandler,
     generatePayrollPeriodHandler,
     getFinancialIntegrityAuditHandler,
@@ -134,6 +135,9 @@ router.post('/receivables/:id/payments', requireFinancialWrite, createReceivable
 // Saldar sin dinero (Rodny, 20 de octubre de 2026): acuerdo por menor valor, canje,
 // compensación o condonación. Mismo permiso que registrar un pago; nunca crea un ingreso.
 router.post('/receivables/:id/settlements', requireFinancialWrite, settleReceivableHandler);
+// Préstamos a terceros (Rodny, 20 de octubre de 2026): el egreso y la cuenta por cobrar de
+// una vez; la devolución entra como reintegro por «Registrar pago» de siempre.
+router.post('/loans', requireFinancialWrite, createLoanHandler);
 // Corregir un abono mal registrado es parte del trabajo diario de quien lo registra:
 // mismo permiso que crearlo, con motivo obligatorio y auditoría.
 router.post('/receivable-payments/:paymentId/reverse', requireFinancialWrite, reverseReceivablePaymentHandler);

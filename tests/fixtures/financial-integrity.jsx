@@ -28,6 +28,8 @@ const income = () => records.filter(record => record.type === 'INCOME').reduce((
 // El ingreso que generó un abono: no se edita ni se anula desde Movimientos.
 records[1] = { ...records[1], amount: 400000, origin: 'SYSTEM', description: 'Pago de cartera: Cliente de muestra', attachmentUrl: 'https://example.invalid/soporte.pdf', receivablePayment: { id: 'historical-payment', receivableId: debt.id } };
 records[2] = { ...records[2], attachmentUrl: 'javascript:alert(1)' };
+// Un préstamo que Elisa registró a mano como egreso y todavía no está en Cartera (20 de octubre de 2026).
+records[3] = { ...records[3], amount: 300000, type: 'EXPENSE', category: 'PRESTAMO', description: 'Préstamo a Camila (registrado a mano)', date: '2026-10-05T05:00:00Z', year: 2026, month: 10 };
 // ?payrollRecord: el egreso del pago de nómina de Rodny en el libro, para actuar sobre él
 // desde Movimientos (1 de octubre de 2026). Fuera de esa URL el libro no cambia.
 if (new URLSearchParams(location.search).has('payrollRecord')) {
@@ -91,6 +93,8 @@ const settlePayrollTx = (tx) => {
   tx.status = paidAmount >= tx.netAmount ? 'PAID' : 'APPROVED';
   tx.paidAt = tx.status === 'PAID' ? payrollPayments.filter((payment) => payment.transactionId === tx.id && !payment.reversedAt).map((payment) => payment.paidAt).sort().pop() : null;
 };
+// Préstamos a terceros (20 de octubre de 2026): viven en la cartera junto a lo de los clientes.
+let loans = [];
 const createdReceivables = window.__createdReceivables = [];
 const deletedReceivables = window.__deletedReceivables = [];
 axios.defaults.adapter = async config => {
@@ -105,7 +109,10 @@ axios.defaults.adapter = async config => {
     const scoped = records.filter(record => !category || record.category === category);
     const scopedIncome = scoped.filter(record => record.type === 'INCOME').reduce((sum, record) => sum + Number(record.amount), 0);
     const scopedExpense = category ? scoped.filter(record => record.type === 'EXPENSE').reduce((sum, record) => sum + Number(record.amount), 0) : 250000;
-    data = { cashFlow: [{ year: 2026, month: 9, income: scopedIncome, expense: scopedExpense, netFlow: scopedIncome - scopedExpense }], categoriesDistribution: { INCOME: { SERVICIO: scopedIncome }, EXPENSE: { OPERATIVO: scopedExpense } }, accountsReceivable: debt.outstanding > 0 ? [{ client, clientId: client.id, totalOutstanding: debt.outstanding }] : [], payroll: { collaborators: [] }, sourceSummary: { totals: { income: scopedIncome, expense: scopedExpense, netFlow: scopedIncome - scopedExpense, receivable: debt.outstanding } } };
+    // Como el servidor: los reintegros de préstamos van dentro de los ingresos, pero se dicen aparte.
+    const loanRepayments = scoped.filter(record => record.type === 'INCOME' && record.category === 'PRESTAMO').reduce((sum, record) => sum + Number(record.amount), 0);
+    const receivable = debt.outstanding + loans.reduce((sum, loan) => sum + loan.outstanding, 0);
+    data = { cashFlow: [{ year: 2026, month: 9, income: scopedIncome, expense: scopedExpense, netFlow: scopedIncome - scopedExpense }], categoriesDistribution: { INCOME: { SERVICIO: scopedIncome }, EXPENSE: { OPERATIVO: scopedExpense } }, accountsReceivable: debt.outstanding > 0 ? [{ client, clientId: client.id, totalOutstanding: debt.outstanding }] : [], payroll: { collaborators: [] }, sourceSummary: { totals: { income: scopedIncome, expense: scopedExpense, netFlow: scopedIncome - scopedExpense, receivable, loanRepayments } } };
   }
   else if (path === '/api/financials/clients' && config.method === 'get') data = { clients: directoryClients };
   else if (path === '/api/financials/clients' && config.method === 'post') {
@@ -182,7 +189,8 @@ axios.defaults.adapter = async config => {
   else if (path === '/api/clients') data = url.searchParams.get('isArchived') === 'all' ? [client, archivedClient] : [client];
   else if (path.endsWith('/receivables-ledger')) {
     if (new URLSearchParams(location.search).has('carteraError')) throw Object.assign(new Error('Error simulado de lectura'), { response: { data: { message: 'Error simulado de lectura' } } });
-    data = { year: 2026, items: debt.deleted ? [] : [{ ...debt }], totals: { outstandingTotal: debt.deleted ? 0 : debt.outstanding, total: debt.deleted ? 0 : debt.outstanding, reviewCount: debt.balanceReviewRequired ? 1 : 0 } };
+    const outstandingTotal = (debt.deleted ? 0 : debt.outstanding) + loans.reduce((sum, loan) => sum + loan.outstanding, 0);
+    data = { year: 2026, items: [...(debt.deleted ? [] : [{ ...debt }]), ...loans.map(loan => ({ ...loan }))], totals: { outstandingTotal, total: outstandingTotal, reviewCount: debt.balanceReviewRequired ? 1 : 0 } };
   } else if (path.endsWith('/client-reconciliation')) {
     data = {
       year: 2026,
@@ -207,7 +215,9 @@ axios.defaults.adapter = async config => {
   } else if (path.endsWith('/records')) {
     const page = Number(url.searchParams.get('page') || 1), pageSize = Number(url.searchParams.get('pageSize') || 50);
     const category = url.searchParams.get('category'), accountId = url.searchParams.get('accountId');
-    const selection = records.filter(record => (!category || record.category === category) && (!accountId || record.accountId === accountId));
+    // Egresos de préstamo registrados a mano y todavía sin préstamo en Cartera.
+    const forLoan = url.searchParams.get('availableForLoan') === 'true';
+    const selection = records.filter(record => (!category || record.category === category) && (!accountId || record.accountId === accountId) && (!forLoan || (record.type === 'EXPENSE' && record.category === 'PRESTAMO' && record.origin !== 'SYSTEM' && !record.loanReceivable)));
     // Como el servidor: la bolsa describe toda la selección, no la página visible.
     const totals = selection.reduce((acc, record) => {
       if (record.type === 'INCOME') acc.income += Number(record.amount);
@@ -256,6 +266,23 @@ axios.defaults.adapter = async config => {
     };
     records = records.map(record => record.id === target.financialRecord?.id ? { ...record, status: 'VOIDED' } : record);
     data = { message: 'Abono revertido. El ingreso que había generado quedó anulado.', outstanding: debt.outstanding };
+  } else if (path.endsWith('/loans')) {
+    // Como el servidor: el egreso (o el ya registrado) y la cuenta por cobrar de clase PRESTAMO, de una vez.
+    if (!body.counterpartyName && !body.clientId) throw Object.assign(new Error('Sin nombre'), { response: { data: { message: 'Escribe el nombre de la persona o empresa a la que se le presta.' } } });
+    const name = body.clientId ? client.name : body.counterpartyName;
+    let recordId = body.financialRecordId;
+    if (!recordId) { recordId = `rec-loan-${++payrollCounter}`; records = [{ id: recordId, date: `${body.lentAt}T12:00:00Z`, year: 2026, month: 10, amount: Number(body.amount), type: 'EXPENSE', category: 'PRESTAMO', status: 'POSTED', scenario: 'ACTUAL', origin: 'SYSTEM', description: `Préstamo a ${name}`, accountId: body.accountId, account, documents: [], loanReceivable: { id: 'demo-loan' } }, ...records]; }
+    loans = [{ id: `demo-loan-${payrollCounter}`, kind: 'PRESTAMO', counterpartyType: body.counterpartyType, counterpartyName: name, clientId: body.clientId || null, clientName: name, clientSlug: null, sourceLabel: name, loanRecordId: recordId, amount: Number(body.amount), outstanding: Number(body.amount), paidAmount: 0, settledAmount: 0, status: 'DEBE', year: 2026, month: 10, period: `${body.lentAt}T00:00:00Z`, dueDate: body.dueDate ? `${body.dueDate}T00:00:00Z` : null, notes: body.notes || null, payments: [] }, ...loans];
+    window.__loanBody = body;
+    data = { message: body.financialRecordId ? 'Préstamo registrado en Cartera, ligado al egreso que ya existía.' : 'Préstamo registrado: el egreso quedó en Movimientos y la cuenta por cobrar en Cartera.', receivable: loans[0], financialRecord: { id: recordId } };
+  } else if (path.endsWith('/payments') && loans.some(loan => path.includes(loan.id))) {
+    // La devolución de un préstamo: reintegro, categoría PRESTAMO, sin concepto.
+    const loan = loans.find(item => path.includes(item.id));
+    const outstanding = loan.outstanding - Number(body.amount);
+    Object.assign(loan, { outstanding, paidAmount: loan.paidAmount + Number(body.amount), status: outstanding === 0 ? 'PAGADO' : loan.status, payments: [{ id: `loan-payment-${++payrollCounter}`, kind: 'PAGO', amount: Number(body.amount), paidAt: `${body.paidAt}T12:00:00Z`, reference: body.reference || null, notes: body.notes || null, account, financialRecordId: `rec-reintegro-${payrollCounter}`, documents: [] }, ...loan.payments] });
+    records = [{ id: `rec-reintegro-${payrollCounter}`, date: `${body.paidAt}T12:00:00Z`, year: 2026, month: 11, amount: Number(body.amount), type: 'INCOME', category: 'PRESTAMO', status: 'POSTED', scenario: 'ACTUAL', origin: 'SYSTEM', description: `Reintegro de préstamo: ${loan.counterpartyName}`, accountId: account.id, account, documents: [], receivablePayment: { id: 'x' } }, ...records];
+    window.__loanPaymentBody = body;
+    data = { message: outstanding === 0 ? 'Reintegro registrado. El préstamo quedó devuelto por completo.' : 'Reintegro registrado. No cuenta como venta.', outstanding, payment: { id: 'p' }, financialRecord: { id: `rec-reintegro-${payrollCounter}` }, receivable: { kind: 'PRESTAMO', status: loan.status } };
   } else if (path.endsWith('/settlements')) {
     // Como el servidor: un acuerdo, canje, compensación o condonación baja el saldo sin crear ingreso.
     if (Number(body.amount) > debt.outstanding + 0.005) throw Object.assign(new Error('Supera el saldo'), { response: { data: { message: 'El valor supera el saldo pendiente.' } } });

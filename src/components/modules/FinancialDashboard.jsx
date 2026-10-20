@@ -31,7 +31,9 @@ import FinancialFilters, { FINANCIAL_MONTHS } from './financial/FinancialFilters
 import BankReconciliationPanel from './financial/BankReconciliationPanel';
 import ReceivablePaymentDialog from './financial/ReceivablePaymentDialog';
 import ReceivableSettlementDialog from './financial/ReceivableSettlementDialog';
+import ReceivableLoanDialog from './financial/ReceivableLoanDialog';
 import { isCashPayment, isReceivableClosed, settlementKindLabel } from '@/lib/receivableSettlement';
+import { isLoanReceivable, loanCounterpartyLabel } from '@/lib/receivableLoans';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
@@ -168,6 +170,9 @@ const FinancialDashboard = () => {
     // Saldar sin dinero (Rodny, 20 de octubre de 2026): acuerdo, canje, compensación, condonación.
     const [settlementDebt, setSettlementDebt] = useState(null);
     const [isSavingSettlement, setIsSavingSettlement] = useState(false);
+    // Préstamos a terceros en Cartera (Rodny, 20 de octubre de 2026).
+    const [isLoanDialogOpen, setIsLoanDialogOpen] = useState(false);
+    const [isSavingLoan, setIsSavingLoan] = useState(false);
     const [statementClient, setStatementClient] = useState(null);
     const [paymentForm, setPaymentForm] = useState({ amount: '', paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }), accountId: '', reference: '', notes: '' });
     const [isSavingPayment, setIsSavingPayment] = useState(false);
@@ -468,7 +473,8 @@ const FinancialDashboard = () => {
             }, { headers: { Authorization: `Bearer ${token}` } });
             // El comprobante va al ingreso que el servidor acaba de confirmar (Elisa, 5 de octubre de
             // 2026). Si falla, el pago ya quedó guardado: se dice y se sube desde el abono en Cartera.
-            let message = 'Pago de cartera registrado.';
+            // El servidor dice qué quedó registrado: un pago de cartera o el reintegro de un préstamo.
+            let message = result?.message || 'Pago de cartera registrado.';
             if (file) {
                 try {
                     await uploadRecordDocument(result?.financialRecord?.id, file);
@@ -486,6 +492,26 @@ const FinancialDashboard = () => {
             setImportError(error.response?.data?.message || 'No fue posible registrar el pago de cartera.');
         } finally {
             setIsSavingPayment(false);
+        }
+    };
+
+    const handleCreateLoan = async (payload) => {
+        if (isSavingLoan || !canWriteFinancials) return;
+        setIsSavingLoan(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const { data: result } = await axios.post(`${baseUrl}/api/financials/loans`, payload, { headers: { Authorization: `Bearer ${token}` } });
+            await invalidateFinancialQueries(queryClient);
+            setIsLoanDialogOpen(false);
+            setImportSuccess(result?.message || 'Préstamo registrado en Cartera.');
+        } catch (error) {
+            console.error('Error creating loan:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible registrar el préstamo.');
+        } finally {
+            setIsSavingLoan(false);
         }
     };
 
@@ -1187,7 +1213,10 @@ await invalidateFinancialQueries(queryClient);
                     <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
                         {formatIndicator(kpis.totalIncome)}
                     </p>
-                    <p className="mt-2 text-[10px] text-zinc-400">Según la búsqueda y los filtros seleccionados</p>
+                    {/* Un reintegro de préstamo entra en la cuenta pero no es venta (20 de octubre de 2026). */}
+                    {data?.sourceSummary?.totals?.loanRepayments > 0
+                        ? <p data-loan-repayments className="mt-2 text-[10px] text-zinc-400">Incluye {formatIndicator(data.sourceSummary.totals.loanRepayments)} de reintegros de préstamos, que no son ventas</p>
+                        : <p className="mt-2 text-[10px] text-zinc-400">Según la búsqueda y los filtros seleccionados</p>}
                 </Card>
 
                 {/* KPI Card 2: Egresos del Mes */}
@@ -1437,7 +1466,12 @@ await invalidateFinancialQueries(queryClient);
                                     Controla vencimientos, promesas y pagos sin alterar el saldo histórico.
                                 </p>
                             </div>
-                            {canWriteFinancials && <button type="button" onClick={openNewReceivable} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700">Nueva cuenta por cobrar</button>}
+                            {canWriteFinancials && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <button type="button" onClick={() => { setImportError(''); setIsLoanDialogOpen(true); }} className="min-h-11 rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Registrar préstamo</button>
+                                    <button type="button" onClick={openNewReceivable} className="min-h-11 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Nueva cuenta por cobrar</button>
+                                </div>
+                            )}
                         </div>
 
                         {!filters.q && !filters.month && data?.sourceSummary?.importBatchId && data?.sourceSummary?.totals && (
@@ -1488,6 +1522,7 @@ await invalidateFinancialQueries(queryClient);
                                                         </h4>
                                                         <p className="text-[10px] text-zinc-500">
                                                             {client.debts?.length} registros de cartera
+                                                            {client.debts?.some(isLoanReceivable) && <span className="ml-1.5 rounded-md bg-brand-cyan/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-cyan-deep dark:text-brand-cyan">Préstamo · {loanCounterpartyLabel(client.debts.find(isLoanReceivable)?.counterpartyType)}</span>}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1514,7 +1549,7 @@ await invalidateFinancialQueries(queryClient);
                                                             <div key={debt.id} className="p-3 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5 flex flex-col justify-between gap-3">
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <span className="text-[10px] font-bold text-zinc-400">
-                                                                        Periodo: {formatFinancialPeriod(debt.period)}
+                                                                        {isLoanReceivable(debt) ? <span data-receivable-loan>Préstamo a {loanCounterpartyLabel(debt.counterpartyType).toLowerCase()} · {formatFinancialPeriod(debt.period)}</span> : <>Periodo: {formatFinancialPeriod(debt.period)}</>}
                                                                     </span>
                                                                     {savingReceivableId === debt.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600" />}
                                                                 </div>
@@ -1592,7 +1627,7 @@ await invalidateFinancialQueries(queryClient);
                                                                             className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5">
                                                                             <Edit className="h-3.5 w-3.5" />Corregir
                                                                         </button>}
-                                                                    </>) : canWriteFinancials && (
+                                                                    </>) : canWriteFinancials && !isLoanReceivable(debt) && (
                                                                         <button type="button" onClick={() => openIssueDialog(debt)}
                                                                             className="min-h-11 rounded-lg border border-primary/40 px-3 text-xs font-semibold text-primary transition hover:bg-primary/5">
                                                                             Emitir cuenta de cobro
@@ -2255,6 +2290,7 @@ await invalidateFinancialQueries(queryClient);
 
             <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={importError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
             {settlementDebt && <ReceivableSettlementDialog key={settlementDebt.id} debt={settlementDebt} saving={isSavingSettlement} error={importError} onClose={() => setSettlementDebt(null)} onSubmit={handleReceivableSettlement} />}
+            {isLoanDialogOpen && <ReceivableLoanDialog open clients={clientTargetChoices} accounts={financialAccounts?.accounts || []} saving={isSavingLoan} error={importError} onClose={() => setIsLoanDialogOpen(false)} onSubmit={handleCreateLoan} />}
             {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} />}
 
             {documentPreview && (

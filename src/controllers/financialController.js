@@ -157,8 +157,14 @@ const serializeReceivable = (receivable) => {
     return {
         id: receivable.id,
         clientId: receivable.clientId || receivable.client?.id || null,
-        clientName: receivable.client?.name || receivable.sourceLabel || 'Cliente sin nombre',
+        clientName: receivable.client?.name || receivable.counterpartyName || receivable.sourceLabel || 'Cliente sin nombre',
         clientSlug: receivable.client?.slug || null,
+        // CLIENTE o PRESTAMO (20 de octubre de 2026): un préstamo dice a quién se le prestó y de
+        // qué egreso salió; la pantalla no le ofrece cuenta de cobro y su pago es reintegro.
+        kind: receivable.kind || 'CLIENTE',
+        counterpartyType: receivable.counterpartyType || null,
+        counterpartyName: receivable.counterpartyName || null,
+        loanRecordId: receivable.loanRecordId || null,
         // Lo que va impreso como deudor. Vive en la ficha del cliente y se escribe una
         // sola vez; viaja aquí para que el diálogo de emitir sepa si ya lo tiene.
         clientLegalName: receivable.client?.legalName || null,
@@ -885,8 +891,9 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
         const clientReceivableMap = {};
 
         for (const rec of receivables) {
-            const clientId = rec.clientId;
-            const clientName = rec.client?.name || 'Cliente Desconocido';
+            // Un préstamo a un colaborador no tiene cliente: se agrupa por el nombre del tercero.
+            const clientId = rec.clientId || `loan:${rec.counterpartyName || rec.sourceLabel || rec.id}`;
+            const clientName = rec.client?.name || rec.counterpartyName || 'Cliente Desconocido';
             const clientSlug = rec.client?.slug || 'cliente-desconocido';
             const paidAmount = (rec.payments || []).reduce((sum, payment) => sum + toNum(payment.amount), 0);
             const amount = roundFloat(Math.max(toNum(rec.amount) - paidAmount, 0));
@@ -927,6 +934,14 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
             (sum, item) => roundFloat(sum + item.totalOutstanding),
             0
         );
+        // Lo que entró como reintegro de préstamos no es venta (Rodny, 20 de octubre de 2026):
+        // va dentro de los ingresos registrados, pero el tablero lo dice aparte.
+        const loanRepayments = roundFloat(financialRecords
+            .filter((record) => record.type === 'INCOME' && record.category === 'PRESTAMO')
+            .reduce((sum, record) => sum + toNum(record.amount), 0));
+        const loansGranted = roundFloat(financialRecords
+            .filter((record) => record.type === 'EXPENSE' && record.category === 'PRESTAMO')
+            .reduce((sum, record) => sum + toNum(record.amount), 0));
         const importedExpense = toNum(explicitImportTotals.totalCostAndExpense) || (
             toNum(explicitImportTotals.expense) +
             toNum(explicitImportTotals.operatingExpense) +
@@ -940,7 +955,9 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                 expense: recordTotals.expense,
                 netFlow: recordTotals.netFlow,
                 receivable: receivableTotal,
-                calculatedReceivable: toNum(calculatedImportTotals.debt)
+                calculatedReceivable: toNum(calculatedImportTotals.debt),
+                loanRepayments,
+                loansGranted
             },
             importedTotals: {
                 income: toNum(explicitImportTotals.income),

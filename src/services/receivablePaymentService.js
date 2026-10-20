@@ -7,6 +7,7 @@ import {
     parseFinancialDateInput
 } from './financialRecordService.js';
 import { isReceivableClosed, receivableStatusAfter } from '../lib/receivableSettlement.js';
+import { isLoanReceivable } from '../lib/receivableLoans.js';
 
 const PAYMENT_CATEGORIES = new Set(['MEMBRESIA', 'SERVICIO', 'PAUTA']);
 export const REVERSAL_REASON_MAX = 300;
@@ -54,10 +55,7 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
     }
 
     const financialRecordId = normalizeText(input.financialRecordId);
-    const category = normalizeText(input.category)?.toUpperCase() || null;
-    if (!financialRecordId && !PAYMENT_CATEGORIES.has(category)) {
-        throw new FinancialDomainError('RECEIVABLE_PAYMENT_CATEGORY_INVALID', 'Selecciona si el pago corresponde a una membresía, servicio o pauta.');
-    }
+    const requestedCategory = normalizeText(input.category)?.toUpperCase() || null;
     let requestId = null;
     if (input.requestId !== undefined && input.requestId !== null) {
         requestId = String(input.requestId).trim().toLowerCase();
@@ -70,7 +68,7 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
     const paymentId = requestId ? `receivable-payment:${requestId}` : null;
     const auditId = requestId ? `receivable-payment-request:${requestId}` : null;
     const requestFingerprint = requestId ? createHash('sha256').update(JSON.stringify({
-        receivableId, actorId, amount, paidAt: paidAt.toISOString().slice(0, 10), accountId, category, financialRecordId, reference, notes
+        receivableId, actorId, amount, paidAt: paidAt.toISOString().slice(0, 10), accountId, category: requestedCategory, financialRecordId, reference, notes
     })).digest('hex') : null;
 
     try {
@@ -111,8 +109,16 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
                     : 'La cuenta por cobrar figura pagada. Revisa su historial antes de registrar otro cobro; no se inferirá un saldo nuevo.', 409);
             }
 
+            // La devolución de un préstamo es un reintegro (Rodny, 20 de octubre de 2026): siempre
+            // categoría PRESTAMO y sección FINANCING, sin pedir concepto, y sin exigir cliente porque
+            // a un colaborador o a un socio no se le abre ficha de cliente.
+            const isLoan = isLoanReceivable(receivable);
+            const category = isLoan ? 'PRESTAMO' : requestedCategory;
+            if (!isLoan && !financialRecordId && !PAYMENT_CATEGORIES.has(category)) {
+                throw new FinancialDomainError('RECEIVABLE_PAYMENT_CATEGORY_INVALID', 'Selecciona si el pago corresponde a una membresía, servicio o pauta.');
+            }
             const client = receivable.clientId ? await tx.client.findUnique({ where: { id: receivable.clientId }, select: { id: true } }) : null;
-            if (!client) throw new FinancialDomainError('RECEIVABLE_CLIENT_NOT_FOUND', 'La cuenta por cobrar debe estar vinculada a un cliente existente.', 409);
+            if (!client && !isLoan) throw new FinancialDomainError('RECEIVABLE_CLIENT_NOT_FOUND', 'La cuenta por cobrar debe estar vinculada a un cliente existente.', 409);
             const account = await tx.financialAccount.findUnique({ where: { id: accountId }, select: { id: true, isActive: true, currency: true } });
             if (!account?.isActive) throw new FinancialDomainError('RECEIVABLE_PAYMENT_ACCOUNT_UNAVAILABLE', 'Selecciona una cuenta de caja o banco activa.', 409);
             if (account.currency !== 'COP' || (receivable.metadata?.currency && receivable.metadata.currency !== 'COP')) {
@@ -142,9 +148,9 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
                     financialRecord.year !== year || financialRecord.month !== month ||
                     financialRecord.type !== 'INCOME' || financialRecord.origin === 'SYSTEM' ||
                     financialRecord.receivablePayment || financialRecord.payrollTransaction || financialRecord.payrollPayment ||
-                    financialRecord.clientId !== receivable.clientId || financialRecord.accountId !== accountId ||
+                    (financialRecord.clientId || null) !== (receivable.clientId || null) || financialRecord.accountId !== accountId ||
                     financialCents(financialRecord.amount) !== amountCents || !sameDay ||
-                    !PAYMENT_CATEGORIES.has(financialRecord.category) || (category && financialRecord.category !== category)) {
+                    (isLoan ? financialRecord.category !== 'PRESTAMO' : (!PAYMENT_CATEGORIES.has(financialRecord.category) || (category && financialRecord.category !== category)))) {
                     throw incompatibleRecord();
                 }
             } else {
@@ -153,14 +159,17 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
                         amount,
                         category,
                         type: 'INCOME',
-                        section: 'REVENUE',
+                        section: isLoan ? 'FINANCING' : 'REVENUE',
                         date: paidAt,
                         year,
                         month,
                         clientId: receivable.clientId || null,
                         createdById: actorId,
                         accountId,
-                        description: `Pago de cartera: ${receivable.sourceLabel || receivable.notes || receivableId}`,
+                        ...(isLoan ? { counterparty: receivable.counterpartyName || null } : {}),
+                        description: isLoan
+                            ? `Reintegro de préstamo: ${receivable.counterpartyName || receivable.sourceLabel || receivableId}`
+                            : `Pago de cartera: ${receivable.sourceLabel || receivable.notes || receivableId}`,
                         scenario: 'ACTUAL',
                         status: 'POSTED',
                         origin: 'SYSTEM',

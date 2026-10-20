@@ -84,6 +84,11 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
         clientId: null,
         clientName: 'Jazmin',
         clientSlug: 'jazmin',
+        // CLIENTE o PRESTAMO (20 de octubre de 2026): lo anterior es de clientes.
+        kind: 'CLIENTE',
+        counterpartyType: null,
+        counterpartyName: null,
+        loanRecordId: null,
         // La identidad del tercero viaja con la obligación: la pantalla la necesita
         // para saber si puede emitir, y para ofrecer completarla sin salir de Cartera.
         clientLegalName: null,
