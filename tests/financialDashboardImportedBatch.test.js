@@ -94,7 +94,10 @@ test('getFinancialDashboard uses posted actual records as the source of truth wh
             expense: 40,
             netFlow: 60,
             receivable: 0,
-            calculatedReceivable: 33
+            calculatedReceivable: 33,
+            // Préstamos (20 de octubre de 2026): reintegros que entraron y préstamos otorgados, aparte.
+            loanRepayments: 0,
+            loansGranted: 0
         },
         importedTotals: {
             income: 100,
