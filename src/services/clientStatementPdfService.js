@@ -1,7 +1,6 @@
-import { readFileSync } from 'node:fs';
 import { formatReceivableNumber, receivableIssuer } from '../lib/receivableDocument.js';
 import { isCashPayment, settlementKindLabel } from '../lib/receivableSettlement.js';
-import { newReceivableDocument } from './receivablePdfService.js';
+import { drawDocumentLogo, newReceivableDocument } from './receivablePdfService.js';
 import { FinancialDomainError } from './financialRecordService.js';
 
 // El estado de cuenta que se le manda al cliente (Rodny, 20 de octubre de 2026: «necesito poder
@@ -33,9 +32,6 @@ const monthLabel = (value) => {
     const month = MONTHS[date.getUTCMonth()];
     return `${month.charAt(0).toUpperCase()}${month.slice(1)} de ${date.getUTCFullYear()}`;
 };
-
-let cachedLogo;
-const getLogo = () => (cachedLogo ||= `data:image/png;base64,${readFileSync(new URL('../../public/brainstudio-logo.png', import.meta.url)).toString('base64')}`);
 
 // La fecha de corte: hoy en Bogotá si no se pide otra. Un texto que no es una fecha se rechaza.
 export const resolveStatementCutoff = (value) => {
@@ -128,9 +124,8 @@ const ensureSpace = (doc, y, needed) => {
 
 export const generateClientStatementPdfBuffer = (model) => {
     const doc = newReceivableDocument();
-    doc.addImage(getLogo(), 'PNG', PAGE.width - PAGE.right - 22, PAGE.top - 4, 22, 22, undefined, 'FAST');
-    setText(doc, { size: 8, style: 'bold', color: COLORS.muted });
-    doc.text('BRAIN STUDIO', PAGE.width - PAGE.right - 11, PAGE.top + 21, { align: 'center' });
+    // El mismo logo de la cuenta de cobro, con su proporción, arriba a la derecha.
+    drawDocumentLogo(doc);
 
     let y = PAGE.top + 8;
     setText(doc, { size: 14, style: 'bold' });

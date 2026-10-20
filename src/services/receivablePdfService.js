@@ -36,9 +36,18 @@ const getFonts = () => (cachedFonts ||= {
     bold: readFileSync(new URL('../assets/fonts/WorkSans-Bold.ttf', import.meta.url)).toString('base64')
 });
 
+// El logo de los documentos es el horizontal, cerebro más «BRAIN STUDIO» (Rodny, 20 de
+// octubre de 2026: «este es el logo de los documentos, estás poniendo un logo que no es»);
+// el cerebro cuadrado suelto es el icono de la aplicación, no el de los papeles.
+export const DOCUMENT_LOGO = { file: '../../public/brainstudio-logo-horizontal.png', width: 44, height: 44 * 153 / 426 };
 const getLogo = () => (cachedLogo ||= `data:image/png;base64,${readFileSync(
-    new URL('../../public/brainstudio-logo.png', import.meta.url)
+    new URL(DOCUMENT_LOGO.file, import.meta.url)
 ).toString('base64')}`);
+
+/** Dibuja el logo de la casa arriba a la derecha, con su proporción, como en los documentos de Word. */
+export const drawDocumentLogo = (doc) => {
+    doc.addImage(getLogo(), 'PNG', PAGE.width - PAGE.right - DOCUMENT_LOGO.width, PAGE.top - 4, DOCUMENT_LOGO.width, DOCUMENT_LOGO.height, undefined, 'FAST');
+};
 
 // La rúbrica escaneada de Francisco Villa, recortada y con el fondo transparente.
 const DEFAULT_SIGNATURE = new URL('../assets/firma-francisco-villa.png', import.meta.url);
@@ -312,9 +321,7 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
     const doc = newReceivableDocument();
 
     // Marca arriba a la derecha, como en el documento de Word.
-    doc.addImage(getLogo(), 'PNG', PAGE.width - PAGE.right - 22, PAGE.top - 4, 22, 22, undefined, 'FAST');
-    setText(doc, { size: 8, style: 'bold', color: COLORS.muted });
-    doc.text('BRAIN STUDIO', PAGE.width - PAGE.right - 11, PAGE.top + 21, { align: 'center' });
+    drawDocumentLogo(doc);
 
     let y = PAGE.top + 4;
     setText(doc, { size: 10.5 });
