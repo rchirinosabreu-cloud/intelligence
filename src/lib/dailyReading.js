@@ -39,8 +39,8 @@ export const DAILY_READING_SCHEMA = {
     decisiones: {
       type: 'array',
       items: {
-        type: 'object', additionalProperties: false, required: ['titulo', 'porque', 'tipo', 'evidencia', 'pedido'],
-        properties: { titulo: string, porque: string, tipo: { type: 'string', enum: DECISION_KINDS }, evidencia: { type: 'array', items: string }, pedido: { type: ['string', 'null'] } }
+        type: 'object', additionalProperties: false, required: ['titulo', 'porque', 'tipo', 'evidencia', 'pedido', 'regla'],
+        properties: { titulo: string, porque: string, tipo: { type: 'string', enum: DECISION_KINDS }, evidencia: { type: 'array', items: string }, pedido: { type: ['string', 'null'] }, regla: { type: ['string', 'null'] } }
       }
     },
     cuentas: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['clientId', 'lectura'], properties: { clientId: string, lectura: string } } }
@@ -50,7 +50,7 @@ export const DAILY_READING_SCHEMA = {
 const inTrouble = (client) => client.metrics.level === 'red' || client.metrics.level === 'yellow';
 
 /** Todo lo que el modelo puede nombrar: las señales con su id entre corchetes y las cuentas en rojo o amarillo. */
-export const buildDailyDigest = ({ today, baseDay = null, summary, signals = [], clients = [] }) => {
+export const buildDailyDigest = ({ today, baseDay = null, summary, signals = [], clients = [], criteria = [] }) => {
   const lines = [];
   const since = summary.firstDay && summary.firstDay !== today ? ` (desde el ${dayLabel(summary.firstDay)})` : '';
   lines.push(`Hoy: ${fullDay(today)}. Última lectura: ${baseDay ? fullDay(baseDay) : 'ninguna, es la primera'}. Fotos guardadas: ${plural(summary.historyDays, 'día', 'días')}${since}.`);
@@ -78,6 +78,12 @@ export const buildDailyDigest = ({ today, baseDay = null, summary, signals = [],
       lines.push(`- ${parts.join(' · ')}`);
     }
   }
+  // El manual de criterio (sesión con Rodny, 20 de octubre de 2026): las reglas confirmadas, con su id, para que cada
+  // decisión diga cuál aplica. El modelo propone; el criterio es de la dirección.
+  if (criteria.length) {
+    lines.push('', '## Criterio de la dirección (confirmado por Rodny)');
+    for (const rule of criteria) lines.push(`[R:${rule.id}] ${rule.text}`);
+  }
   return { text: lines.join('\n') };
 };
 
@@ -97,6 +103,7 @@ export const buildDailyReadingRequest = ({ digest, today, signal }) => ({
     'tipo: HACER (algo concreto para hoy), CONVERSAR (hablar con alguien del equipo o con el cliente), VIGILAR (todavía no actuar; mirarlo en la próxima lectura) o NO_HACER (algo que conviene evitar ahora, con su porqué; por ejemplo, no cargarle más trabajo a quien acumula vencidas, o no insistirle a un cliente con una pieza que pidió cambiar antes de corregirla). Incluye un NO_HACER solo si las señales lo sostienen.',
     'titulo: la decisión en pocas palabras, empezando por el verbo. porque: una o dos frases que expliquen por qué hoy, usando la historia (cuántos días lleva, cómo estaba antes).',
     'pedido: la frase que la persona le escribiría a Bria para empezar, en primera persona y en una línea («Redáctame…», «Revisa…», «Resúmeme…»), o null.',
+    'regla: el id [R:…] de la regla del criterio que aplica a la decisión (sin los corchetes ni el prefijo R:), o null si ninguna aplica. Nunca propongas algo que vaya contra una regla del criterio; si una regla pide no hacer algo, esa es una decisión NO_HACER con esa regla.',
     'cuentas: para cada cuenta de la lista de cuentas, una o dos frases de cómo viene y qué la mueve, con su clientId exacto.',
     'resumen: dos o tres frases para la dirección con lo más importante del día. Si nada pide una decisión, dilo.',
     'Nunca uses «lento», «flojo», «mal trabajo», «desempeño» ni «rendimiento», ni un juicio sobre alguien.',
@@ -114,15 +121,16 @@ export const parseDailyReading = (rawText) => {
   return JSON.parse(matched ? matched[0] : cleaned);
 };
 
-const decisionFrom = (day, index, { title, why, kind, evidence, ask }, signalsById) => {
+const decisionFrom = (day, index, { title, why, kind, evidence, ask, rule = null }, signalsById) => {
   const lead = signalsById.get(evidence[0]);
-  return { id: `${day}:${index}`, title, why, kind, evidence, subjectType: lead.subjectType, subjectId: lead.subjectId, subjectName: lead.subjectName, url: lead.url || null, ask: ask || null };
+  return { id: `${day}:${index}`, title, why, kind, evidence, subjectType: lead.subjectType, subjectId: lead.subjectId, subjectName: lead.subjectName, url: lead.url || null, ask: ask || null, rule };
 };
 
-/** Conserva solo lo que las señales respaldan. Nunca inventa una cuenta, una persona ni una cifra. */
-export const validateDailyReading = (raw, { signals = [], clients = [], day }) => {
+/** Conserva solo lo que las señales respaldan. Nunca inventa una cuenta, una persona, una cifra ni una regla. */
+export const validateDailyReading = (raw, { signals = [], clients = [], day, criteria = [] }) => {
   const signalsById = new Map(signals.map((s) => [s.id, s]));
   const clientIds = new Set(clients.map((c) => c.id));
+  const rulesById = new Map(criteria.map((rule) => [rule.id, { id: rule.id, text: rule.text, purpose: rule.purpose || 'operacion' }]));
   const decisions = [];
   for (const item of Array.isArray(raw?.decisiones) ? raw.decisiones : []) {
     const title = text(item?.titulo, 120).replace(/\.$/, ''), why = text(item?.porque, 400);
@@ -130,7 +138,8 @@ export const validateDailyReading = (raw, { signals = [], clients = [], day }) =
     const ask = text(item?.pedido, 200);
     if (!title || !evidence.length || judged(title, why, ask)) continue;
     const kind = DECISION_KINDS.includes(item?.tipo) ? item.tipo : 'VIGILAR';
-    decisions.push(decisionFrom(day, decisions.length + 1, { title, why, kind, evidence, ask }, signalsById));
+    const rule = rulesById.get(text(item?.regla, 120).replace(/^\[?R:/, '').replace(/\]$/, '')) || null;
+    decisions.push(decisionFrom(day, decisions.length + 1, { title, why, kind, evidence, ask, rule }, signalsById));
     if (decisions.length === MAX_DECISIONS) break;
   }
   const accounts = {};
@@ -160,7 +169,8 @@ const RULE_DECISIONS = {
   VENCIDAS_SOSTENIDAS: (s) => ({ title: `Conversar con ${firstName(s.subjectName)} sobre sus vencidas`, kind: 'CONVERSAR', ask: `Resúmeme las tareas vencidas de ${s.subjectName} y propón qué mover.` }),
   VENCIDAS_SUBEN: (s) => ({ title: `Conversar con ${firstName(s.subjectName)} sobre sus vencidas`, kind: 'CONVERSAR', ask: `Resúmeme las tareas vencidas de ${s.subjectName} y propón qué mover.` }),
   CARGA_INUSUAL: (s) => ({ title: `Revisar la carga de ${firstName(s.subjectName)}`, kind: 'VIGILAR', ask: `Revisa la carga de ${s.subjectName} y propón qué se reparte.` }),
-  DEVUELTAS_PERSONA: (s) => ({ title: `Ver qué se le está devolviendo a ${firstName(s.subjectName)}`, kind: 'VIGILAR', ask: `¿Qué tareas se le han devuelto a ${s.subjectName} y por qué?` })
+  DEVUELTAS_PERSONA: (s) => ({ title: `Ver qué se le está devolviendo a ${firstName(s.subjectName)}`, kind: 'VIGILAR', ask: `¿Qué tareas se le han devuelto a ${s.subjectName} y por qué?` }),
+  FUERA_DE_ALCANCE: (s) => ({ title: `Revisar el alcance de ${s.subjectName}`, kind: 'VIGILAR', ask: `¿Qué pidió ${s.subjectName} fuera de la parrilla este mes y qué de eso se cobra aparte?` })
 };
 
 export const fallbackDailyReading = ({ signals = [], summary, day }) => {
@@ -254,11 +264,13 @@ export const buildMorningBrief = ({ recipientName, reading, scope = { clientIds:
       lines.push(`${i + 1}. **${d.title}.** ${d.why}`);
       const seen = d.evidence.map((id) => signalsById.get(id)).filter(Boolean);
       if (seen.length) lines.push(`   - Se ve en: ${seen.map((row) => `${row.text}${row.url ? ` [Ver](${row.url})` : ''}`).join(' ')}`);
+      // La regla del manual que aplica. Una regla de dirección (restringida) solo se le muestra a la dirección.
+      if (d.rule) lines.push(agency || d.rule.purpose !== 'direccion' ? `   - Según tu criterio: «${d.rule.text}»` : '   - Según el criterio de la dirección.');
       if (d.ask) lines.push(`   - Pídemelo así: «${d.ask}»`);
     });
     lines.push('');
   }
-  if (avoid.length) lines.push('**Lo que no haría**', '', ...avoid.map((d) => `- **${d.title}.** ${d.why}`), '');
+  if (avoid.length) lines.push('**Lo que no haría**', '', ...avoid.map((d) => `- **${d.title}.** ${d.why}${d.rule ? (agency || d.rule.purpose !== 'direccion' ? ` Según tu criterio: «${d.rule.text}»` : ' Según el criterio de la dirección.') : ''}`), '');
   const more = (reading.signals || []).filter(visible).filter((row) => row.direction === 'peor' && !covered.has(row.id)).slice(0, 6);
   if (more.length) lines.push('**También cambió**', '', ...more.map((row) => `- ${row.text}${row.url ? ` [Ver](${row.url})` : ''}`), '');
   const better = (reading.signals || []).filter(visible).filter((row) => row.direction === 'mejor').slice(0, 4);
