@@ -30,6 +30,8 @@ import FinancialLedger from './financial/FinancialLedger';
 import FinancialFilters, { FINANCIAL_MONTHS } from './financial/FinancialFilters';
 import BankReconciliationPanel from './financial/BankReconciliationPanel';
 import ReceivablePaymentDialog from './financial/ReceivablePaymentDialog';
+import ReceivableSettlementDialog from './financial/ReceivableSettlementDialog';
+import { isCashPayment, isReceivableClosed, settlementKindLabel } from '@/lib/receivableSettlement';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
@@ -163,6 +165,9 @@ const FinancialDashboard = () => {
     const [savingClientLinkId, setSavingClientLinkId] = useState('');
     const [clientLinkTargets, setClientLinkTargets] = useState({});
     const [paymentDebt, setPaymentDebt] = useState(null);
+    // Saldar sin dinero (Rodny, 20 de octubre de 2026): acuerdo, canje, compensación, condonación.
+    const [settlementDebt, setSettlementDebt] = useState(null);
+    const [isSavingSettlement, setIsSavingSettlement] = useState(false);
     const [statementClient, setStatementClient] = useState(null);
     const [paymentForm, setPaymentForm] = useState({ amount: '', paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }), accountId: '', reference: '', notes: '' });
     const [isSavingPayment, setIsSavingPayment] = useState(false);
@@ -481,6 +486,31 @@ const FinancialDashboard = () => {
             setImportError(error.response?.data?.message || 'No fue posible registrar el pago de cartera.');
         } finally {
             setIsSavingPayment(false);
+        }
+    };
+
+    const openReceivableSettlement = (debt) => {
+        setImportError('');
+        setSettlementDebt(debt);
+    };
+
+    const handleReceivableSettlement = async (payload) => {
+        if (!settlementDebt?.id || isSavingSettlement || !canWriteFinancials) return;
+        setIsSavingSettlement(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const { data: result } = await axios.post(`${baseUrl}/api/financials/receivables/${settlementDebt.id}/settlements`, payload, { headers: { Authorization: `Bearer ${token}` } });
+            await invalidateFinancialQueries(queryClient);
+            setSettlementDebt(null);
+            setImportSuccess(result?.message || 'Ajuste registrado. No se creó ningún ingreso.');
+        } catch (error) {
+            console.error('Error settling receivable:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible saldar la cuenta por cobrar.');
+        } finally {
+            setIsSavingSettlement(false);
         }
     };
 
@@ -1488,7 +1518,7 @@ await invalidateFinancialQueries(queryClient);
                                                                     </span>
                                                                     {savingReceivableId === debt.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600" />}
                                                                 </div>
-                                                                <div className="grid grid-cols-3 gap-2 border-y border-zinc-200 py-3 dark:border-white/10">
+                                                                <div className={cn('grid gap-2 border-y border-zinc-200 py-3 dark:border-white/10', debt.settledAmount > 0.005 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')}>
                                                                     <div data-receivable-amount-editor>
                                                                         <span className="text-[9px] font-medium text-zinc-400">Valor original</span>
                                                                         {editingAmountId === debt.id ? (
@@ -1516,6 +1546,8 @@ await invalidateFinancialQueries(queryClient);
                                                                         )}
                                                                     </div>
                                                                     <div><span className="text-[9px] font-medium text-zinc-400">Abonos registrados</span><p className="mt-1 text-xs font-semibold text-emerald-600">{formatCurrency(debt.paidAmount || 0)}</p></div>
+                                                                    {/* Lo saldado sin dinero se dice aparte: no es plata que entró (20 de octubre de 2026). */}
+                                                                    {debt.settledAmount > 0.005 && <div data-receivable-settled><span className="text-[9px] font-medium text-zinc-400">Saldado sin dinero</span><p className="mt-1 text-xs font-semibold text-brand-magenta-deep dark:text-brand-magenta">{formatCurrency(debt.settledAmount)}</p></div>}
                                                                     <div><span className="text-[9px] font-medium text-zinc-400">Saldo pendiente</span><p className="mt-1 text-xs font-semibold text-amber-600">{debt.balanceReviewRequired ? 'Por verificar' : formatCurrency(debt.outstanding || 0)}</p></div>
                                                                 </div>
                                                                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
@@ -1529,10 +1561,16 @@ await invalidateFinancialQueries(queryClient);
                                                                         >
                                                                             <option value="DEBE">Debe</option>
                                                                             <option value="PROMESADO">Promesado</option>
-                                                                            {(debt.status === 'PAGADO' || debt.outstanding <= 0.005) && <option value="PAGADO">Pagado</option>}
+                                                                            {(debt.status === 'PAGADO' || (debt.outstanding <= 0.005 && !(debt.settledAmount > 0.005))) && <option value="PAGADO">Pagado</option>}
+                                                                            {debt.status === 'SALDADO' && <option value="SALDADO">Saldada sin dinero</option>}
                                                                         </Select>
                                                                     </label>
-                                                                    {canWriteFinancials && debt.status !== 'PAGADO' && debt.outstanding > 0.005 && <button type="button" onClick={() => openReceivablePayment(debt)} className="min-h-11 self-end rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Registrar pago</button>}
+                                                                    {canWriteFinancials && !isReceivableClosed(debt.status) && debt.outstanding > 0.005 && (
+                                                                        <div className="flex flex-wrap items-end gap-2 self-end">
+                                                                            <button type="button" onClick={() => openReceivableSettlement(debt)} className="min-h-11 rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Saldar de otra forma</button>
+                                                                            <button type="button" onClick={() => openReceivablePayment(debt)} className="min-h-11 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Registrar pago</button>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                                 <p className="text-xs text-zinc-600 dark:text-zinc-300">{financialDebtStatus(debt)}{debt.dueDate ? ` · Vence: ${new Date(debt.dueDate).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : ''}</p>
                                                                 {/* Una obligación importada del Excel no tiene documento; emitirla se lo pone. */}
@@ -1575,20 +1613,25 @@ await invalidateFinancialQueries(queryClient);
                                                                     if (!visible.length && !reversedCount) return null;
                                                                     return (
                                                                     <div className="space-y-2">
-                                                                        <p className="text-[9px] font-medium uppercase tracking-widest text-zinc-400">Abonos de esta obligación</p>
+                                                                        <p className="text-[9px] font-medium uppercase tracking-widest text-zinc-400">Abonos y ajustes de esta obligación</p>
                                                                         {!visible.length && <p className="text-xs text-zinc-500">Sin abonos vigentes.</p>}
                                                                         <ul className="divide-y divide-zinc-200 dark:divide-white/10">
                                                                             {visible.map((payment) => (
-                                                                                <li key={payment.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                                                                                <li key={payment.id} data-receivable-payment-kind={payment.kind || 'PAGO'} className="flex flex-wrap items-center justify-between gap-2 py-2">
                                                                                     <div className="min-w-0">
-                                                                                        <p className={cn('text-xs font-semibold', payment.reversedAt ? 'text-zinc-400 line-through' : 'text-zinc-900 dark:text-white')}>
+                                                                                        <p className={cn('flex flex-wrap items-center gap-2 text-xs font-semibold', payment.reversedAt ? 'text-zinc-400 line-through' : 'text-zinc-900 dark:text-white')}>
                                                                                             {formatCurrency(payment.amount || 0)}
+                                                                                            {/* Un acuerdo, canje, compensación o condonación no es dinero: se rotula (20 de octubre de 2026). */}
+                                                                                            {!isCashPayment(payment) && <span className="rounded-md bg-brand-magenta/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-magenta-deep no-underline dark:text-brand-magenta">{settlementKindLabel(payment.kind)}</span>}
                                                                                         </p>
                                                                                         <p className="text-[10px] text-zinc-500">
                                                                                             {new Date(payment.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
                                                                                             {payment.account?.name ? ` · ${payment.account.name}` : ''}
                                                                                             {payment.reference ? ` · ${payment.reference}` : ''}
+                                                                                            {payment.detail?.authorizedBy ? ` · Autorizó ${payment.detail.authorizedBy}` : ''}
                                                                                         </p>
+                                                                                        {payment.detail?.goods && <p className="text-[10px] text-zinc-600 dark:text-zinc-300">Se recibió: {payment.detail.goods}{payment.detail.destination ? ` · Destino: ${payment.detail.destination}` : ''}</p>}
+                                                                                        {payment.detail?.offsetAgainst && <p className="text-[10px] text-zinc-600 dark:text-zinc-300">Compensado contra: {payment.detail.offsetAgainst}</p>}
                                                                                         {/* Lo que se escribió en «Notas» al registrar el pago: es el seguimiento del cobro. */}
                                                                                         {payment.notes && <p data-receivable-payment-note className="mt-1 whitespace-pre-line text-xs text-zinc-600 dark:text-zinc-300">{payment.notes}</p>}
                                                                                         {payment.reversedAt && <p className="text-[10px] text-destructive">Revertido: {payment.reversalReason || 'sin motivo registrado'}</p>}
@@ -2211,6 +2254,7 @@ await invalidateFinancialQueries(queryClient);
             </Dialog>
 
             <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={importError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
+            {settlementDebt && <ReceivableSettlementDialog key={settlementDebt.id} debt={settlementDebt} saving={isSavingSettlement} error={importError} onClose={() => setSettlementDebt(null)} onSubmit={handleReceivableSettlement} />}
             {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} />}
 
             {documentPreview && (
@@ -2432,14 +2476,16 @@ await invalidateFinancialQueries(queryClient);
             <Dialog open={!!paymentToReverse} onOpenChange={(open) => !open && setPaymentToReverse(null)}>
                 <DialogContent className="sm:max-w-md dark:bg-zinc-900">
                     <DialogHeader>
-                        <DialogTitle>Revertir abono</DialogTitle>
+                        <DialogTitle>{isCashPayment(paymentToReverse?.payment) ? 'Revertir abono' : 'Revertir ajuste'}</DialogTitle>
                         <DialogDescription>
-                            El abono se conserva en la bitácora marcado como revertido y deja de descontar saldo. El ingreso que generó queda anulado; si el abono se aplicó sobre un ingreso que ya estaba registrado, ese ingreso se conserva y vuelve a quedar disponible.
+                            {isCashPayment(paymentToReverse?.payment)
+                                ? 'El abono se conserva en la bitácora marcado como revertido y deja de descontar saldo. El ingreso que generó queda anulado; si el abono se aplicó sobre un ingreso que ya estaba registrado, ese ingreso se conserva y vuelve a quedar disponible.'
+                                : `${settlementKindLabel(paymentToReverse?.payment?.kind)}: se conserva en la bitácora marcado como revertido y deja de descontar saldo. La deuda vuelve a quedar pendiente por ese valor. No había ingreso que anular.`}
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleReversePayment} className="space-y-4">
                         <div className="rounded-lg bg-zinc-50 px-3 py-2.5 text-sm dark:bg-white/5">
-                            <span className="text-zinc-500">Abono</span>
+                            <span className="text-zinc-500">{settlementKindLabel(paymentToReverse?.payment?.kind) === 'Pago' ? 'Abono' : settlementKindLabel(paymentToReverse?.payment?.kind)}</span>
                             <strong className="float-right text-zinc-900 dark:text-white">{formatCurrency(paymentToReverse?.payment?.amount || 0)}</strong>
                             <p className="mt-1 text-xs text-zinc-500">
                                 {paymentToReverse?.debt?.clientName || ''}
@@ -2457,7 +2503,7 @@ await invalidateFinancialQueries(queryClient);
                         <DialogFooter>
                             <button type="button" onClick={() => setPaymentToReverse(null)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button>
                             <button type="submit" disabled={isReversingPayment || !reversalReason.trim()} className="inline-flex items-center justify-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-white hover:bg-destructive/90 disabled:opacity-50">
-                                {isReversingPayment && <Loader2 className="h-4 w-4 animate-spin" />}Revertir abono
+                                {isReversingPayment && <Loader2 className="h-4 w-4 animate-spin" />}{isCashPayment(paymentToReverse?.payment) ? 'Revertir abono' : 'Revertir ajuste'}
                             </button>
                         </DialogFooter>
                     </form>

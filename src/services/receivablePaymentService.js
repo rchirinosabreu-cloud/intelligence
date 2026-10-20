@@ -6,6 +6,7 @@ import {
     FinancialDomainError,
     parseFinancialDateInput
 } from './financialRecordService.js';
+import { isReceivableClosed, receivableStatusAfter } from '../lib/receivableSettlement.js';
 
 const PAYMENT_CATEGORIES = new Set(['MEMBRESIA', 'SERVICIO', 'PAUTA']);
 export const REVERSAL_REASON_MAX = 300;
@@ -13,7 +14,9 @@ export const REVERSAL_REASON_MAX = 300;
 // una consulta futura que olvide el filtro no puede inventar dinero aplicado.
 const activePaymentsOf = (receivable) => (receivable.payments || []).filter((payment) => !payment.reversedAt);
 const normalizeText = (value) => String(value || '').trim() || null;
-const outstandingCentsOf = (receivable) => {
+// Lo que falta por cobrar: el valor menos todo lo aplicado y vigente, sea dinero o un
+// ajuste (acuerdo, canje, compensación, condonación). Lo usa también el cierre de deuda.
+export const outstandingCentsOf = (receivable) => {
     const amountCents = financialCents(receivable.amount);
     let paidCents = 0;
     for (const payment of activePaymentsOf(receivable)) {
@@ -75,7 +78,7 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
             if (paymentId) {
                 const previousPayment = await tx.receivablePayment.findUnique({
                     where: { id: paymentId },
-                    include: { financialRecord: true, receivable: { include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, reversedAt: true } } } } }
+                    include: { financialRecord: true, receivable: { include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, kind: true, reversedAt: true } } } } }
                 });
                 if (previousPayment) {
                     const previousAudit = await tx.financialAuditEvent.findUnique({ where: { id: auditId } });
@@ -97,13 +100,15 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
 
             const receivable = await tx.accountsReceivable.findUnique({
                 where: { id: receivableId },
-                include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, reversedAt: true } } }
+                include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, kind: true, reversedAt: true } } }
             });
             if (!receivable) {
                 throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
             }
-            if (receivable.status === 'PAGADO') {
-                throw new FinancialDomainError('RECEIVABLE_ALREADY_PAID', 'La cuenta por cobrar figura pagada. Revisa su historial antes de registrar otro cobro; no se inferirá un saldo nuevo.', 409);
+            if (isReceivableClosed(receivable.status)) {
+                throw new FinancialDomainError('RECEIVABLE_ALREADY_PAID', receivable.status === 'SALDADO'
+                    ? 'La cuenta por cobrar figura saldada por acuerdo, canje, compensación o condonación. Revisa su historial antes de registrar otro cobro; para reabrirla, revierte el ajuste.'
+                    : 'La cuenta por cobrar figura pagada. Revisa su historial antes de registrar otro cobro; no se inferirá un saldo nuevo.', 409);
             }
 
             const client = receivable.clientId ? await tx.client.findUnique({ where: { id: receivable.clientId }, select: { id: true } }) : null;
@@ -184,7 +189,7 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
             const outstanding = financialAmountFromCents(outstandingCents);
             const updatedReceivable = await tx.accountsReceivable.update({
                 where: { id: receivableId },
-                data: { status: outstandingCents === 0 ? 'PAGADO' : (receivable.status === 'PROMESADO' ? 'PROMESADO' : 'DEBE') }
+                data: { status: receivableStatusAfter({ outstandingCents, payments: [...receivable.payments, payment], currentStatus: receivable.status }) }
             });
             await tx.financialAuditEvent.create({
                 data: {
@@ -246,7 +251,7 @@ export const reverseReceivablePayment = async (prismaClient, paymentId, input = 
                 where: { id: paymentId },
                 include: {
                     financialRecord: true,
-                    receivable: { include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { id: true, amount: true, reversedAt: true } } } }
+                    receivable: { include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { id: true, amount: true, kind: true, reversedAt: true } } } }
                 }
             });
             if (!payment) {
@@ -327,7 +332,7 @@ export const reverseReceivablePayment = async (prismaClient, paymentId, input = 
             const outstanding = financialAmountFromCents(outstandingCents);
             const updatedReceivable = await tx.accountsReceivable.update({
                 where: { id: receivable.id },
-                data: { status: outstandingCents === 0 ? 'PAGADO' : (receivable.status === 'PROMESADO' ? 'PROMESADO' : 'DEBE') }
+                data: { status: receivableStatusAfter({ outstandingCents, payments: receivable.payments.filter((other) => other.id !== paymentId), currentStatus: receivable.status }) }
             });
 
             await tx.financialAuditEvent.create({

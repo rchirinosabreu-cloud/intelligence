@@ -3,6 +3,7 @@ import { createClientWith } from './clientService.js';
 import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
 import { normalizeReceivableCurrency } from '../lib/receivableCurrency.js';
 import { normalizeClientProfile } from '../lib/clientProfile.js';
+import { isReceivableClosed, receivableStatusAfter } from '../lib/receivableSettlement.js';
 import { resolveDocumentMoney } from './receivableDocumentService.js';
 import {
     assertOpenFinancialPeriod,
@@ -198,7 +199,7 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
         return await prismaClient.$transaction(async (tx) => {
             const existing = await tx.accountsReceivable.findUnique({
                 where: { id: receivableId },
-                include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, reversedAt: true } } }
+                include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, kind: true, reversedAt: true } } }
             });
             if (!existing) {
                 throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
@@ -238,10 +239,10 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
                 }
                 paidCents += cents;
             }
-            if (existing.status === 'PAGADO' && financialCents(existing.amount) !== paidCents) {
+            if (isReceivableClosed(existing.status) && financialCents(existing.amount) !== paidCents) {
                 throw new FinancialDomainError(
                     'RECEIVABLE_BALANCE_INVALID',
-                    'La cuenta figura pagada, pero sus abonos no respaldan ese estado. Requiere revisión antes de editarla; no se cambió su saldo ni se reabrió el cobro.',
+                    'La cuenta figura cerrada, pero sus abonos y ajustes no respaldan ese estado. Requiere revisión antes de editarla; no se cambió su saldo ni se reabrió el cobro.',
                     409
                 );
             }
@@ -269,7 +270,7 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
 
             const data = {
                 amount,
-                status: outstandingCents === 0 ? 'PAGADO' : ((input.status ?? existing.status) === 'PROMESADO' ? 'PROMESADO' : 'DEBE'),
+                status: receivableStatusAfter({ outstandingCents, payments: existing.payments, currentStatus: existing.status, requestedStatus: input.status }),
                 dueDate,
                 metadata: {
                     ...(existing.metadata && typeof existing.metadata === 'object' ? existing.metadata : {}),
