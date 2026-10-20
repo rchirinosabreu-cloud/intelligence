@@ -92,7 +92,9 @@ export const buildDailyReadingRequest = ({ digest, today, signal }) => ({
   reasoningEffort: 'low',
   strictSchema: true,
   responseSchema: DAILY_READING_SCHEMA,
-  maxOutputTokens: 3000,
+  // La primera lectura real (20 de octubre de 2026) se cortó a los 3.000 tokens de salida —nueve señales, una entrada por
+  // cuenta y seis decisiones no caben— y Bria leyó con las reglas. El tope es holgado; lo que se paga es lo que se usa.
+  maxOutputTokens: 10000,
   signal,
   governanceContext: { useCase: DAILY_READING_USE_CASE },
   instructions: 'Eres Bria, la project manager de Brain Studio, una agencia creativa en Colombia. Cada mañana lees cómo amaneció la agencia —sus cuentas y la carga del equipo, comparadas con su propia historia— y le propones a la dirección qué haría hoy y qué no haría. Escribes en español latinoamericano (tú y ustedes, nunca vosotros), sobrio y directo. Hablas de trabajo, tiempos y carga; nunca juzgas a una persona. Respondes en JSON.',
@@ -104,8 +106,9 @@ export const buildDailyReadingRequest = ({ digest, today, signal }) => ({
     'titulo: la decisión en pocas palabras, empezando por el verbo. porque: una o dos frases que expliquen por qué hoy, usando la historia (cuántos días lleva, cómo estaba antes).',
     'pedido: la frase que la persona le escribiría a Bria para empezar, en primera persona y en una línea («Redáctame…», «Revisa…», «Resúmeme…»), o null.',
     'regla: el id [R:…] de la regla del criterio que aplica a la decisión (sin los corchetes ni el prefijo R:), o null si ninguna aplica. Nunca propongas algo que vaya contra una regla del criterio; si una regla pide no hacer algo, esa es una decisión NO_HACER con esa regla.',
-    'cuentas: para cada cuenta de la lista de cuentas, una o dos frases de cómo viene y qué la mueve, con su clientId exacto.',
+    'cuentas: para cada cuenta de la lista de cuentas, una frase de cómo viene y qué la mueve, con su clientId exacto.',
     'resumen: dos o tres frases para la dirección con lo más importante del día. Si nada pide una decisión, dilo.',
+    'Sé breve en todo: frases cortas, sin repetir lo que ya dice la señal.',
     'Nunca uses «lento», «flojo», «mal trabajo», «desempeño» ni «rendimiento», ni un juicio sobre alguien.',
     '',
     '=== DATOS ===',
@@ -118,7 +121,13 @@ export const parseDailyReading = (rawText) => {
   if (!rawText) throw new Error('El modelo no devolvió contenido.');
   const cleaned = String(rawText).replace(/```json|```/gi, '').trim();
   const matched = cleaned.match(/\{[\s\S]*\}/);
-  return JSON.parse(matched ? matched[0] : cleaned);
+  try {
+    return JSON.parse(matched ? matched[0] : cleaned);
+  } catch (error) {
+    // Un JSON que no cierra es casi siempre una respuesta cortada por el tope de salida: que el registro lo diga.
+    if (!matched || !/\}\s*$/.test(cleaned)) throw new Error(`El modelo devolvió un JSON incompleto (${cleaned.length} caracteres): la respuesta se cortó antes de terminar.`);
+    throw error;
+  }
 };
 
 const decisionFrom = (day, index, { title, why, kind, evidence, ask, rule = null }, signalsById) => {
