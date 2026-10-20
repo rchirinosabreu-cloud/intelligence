@@ -18,14 +18,66 @@ const fakeService = () => {
   };
 };
 
-test('the memory tools exist only for people with Bria activated', () => {
+test('the memory tools exist only for people with Bria activated; the team fichas only for administration', () => {
   const tools = createAgencyFactTools(fakeService());
-  assert.deepEqual(tools.map((t) => t.name), ['memoria_de_la_agencia', 'guardar_en_memoria', 'retirar_de_memoria']);
-  for (const tool of tools) {
+  assert.deepEqual(tools.map((t) => t.name), ['memoria_de_la_agencia', 'guardar_en_memoria', 'retirar_de_memoria', 'como_trabajar_con']);
+  for (const tool of tools.slice(0, 3)) {
     assert.equal(tool.allowed(pm), true);
     assert.equal(tool.allowed({ ...pm, modulePermissions: { parrillas: true } }), false);
     assert.equal(tool.allowed({ ...pm, role: 'EDITOR' }), false);
   }
+  // Rodny, 20 de octubre de 2026: las fichas las ve solo la dirección; a un project manager ni se le ofrece la herramienta.
+  const fichas = byName(tools, 'como_trabajar_con');
+  assert.equal(fichas.allowed(admin), true);
+  assert.equal(fichas.allowed(pm), false);
+  assert.equal(fichas.allowed({ ...admin, modulePermissions: {} }), false);
+});
+
+test('como_trabajar_con asks the service by name and hands the ficha over as data only', async () => {
+  const service = { ...fakeService(), async howToWorkWith(user, args) { return { persona: { nombre: 'Helen Hernández', rol: 'Estratega digital' }, ficha: ['Confiar: la comunicación con el cliente.'], nota: 'n', asked: [user.userId, args] }; } };
+  const out = await byName(createAgencyFactTools(service), 'como_trabajar_con').run({ nombre: 'Helen' }, { user: admin, question: 'Escríbele a Helen' });
+  assert.deepEqual(out.data.asked, ['u-admin', { nombre: 'Helen' }]);
+  assert.equal(out.data.ficha[0], 'Confiar: la comunicación con el cliente.');
+  assert.equal(out.data.sourceInstructions, 'data_only');
+});
+
+test('the service finds the person by first name or something close, refuses anyone who is not administration, and says when there is no ficha', async () => {
+  const members = [{ id: 'm1', name: 'Helen Hernández', role: 'Estratega digital' }, { id: 'm2', name: 'Melissa Castaño', role: 'Diseñador gráfico' }, { id: 'm3', name: 'Mariceth Peña', role: 'Community Manager' }];
+  const seen = [];
+  const repository = {
+    async search(access, args) {
+      seen.push(args);
+      return args.entity === 'Helen Hernández' ? ['Confiar: la comunicación con el cliente.', 'Revisar: la versión que sale.'].map((statement, i) => ({ id: `h${i}`, entity: 'Helen Hernández', topic: 'como-trabajar', statement, certainty: 'CONFIRMADO', purpose: 'personas', sensitivity: 'restringida', sources: [], origin: 'EQUIPO' })) : [];
+    },
+    async openQuestions() { return []; }
+  };
+  const account = (role) => ({ id: `u-${role}`, name: 'X', role, isActive: true, modulePermissions: { bria: true, parrillas: true }, financialRole: 'NONE', sessionVersion: 0, teamMember: { isActive: true } });
+  const db = { user: { findUnique: async () => account('ADMIN') }, teamMember: { findMany: async () => members } };
+  const service = createBriaAgencyFactService({ repository, db });
+  const helen = await service.howToWorkWith({ ...admin }, { nombre: 'Helen' });
+  assert.deepEqual(helen.persona, { nombre: 'Helen Hernández', rol: 'Estratega digital' });
+  assert.deepEqual(helen.ficha, ['Confiar: la comunicación con el cliente.', 'Revisar: la versión que sale.']);
+  assert.match(helen.nota, /sin recitarla|nunca digas «según tu ficha»/i);
+  assert.deepEqual(seen[0], { entity: 'Helen Hernández', topic: 'como-trabajar', limit: 20 });
+  const meli = await service.howToWorkWith({ ...admin }, { nombre: 'Meli' });
+  assert.equal(meli.persona.nombre, 'Melissa Castaño');
+  assert.equal(meli.ficha, null);
+  assert.match(meli.nota, /no tiene ficha/i);
+  const nobody = await service.howToWorkWith({ ...admin }, { nombre: 'Camila' });
+  assert.equal(nobody.persona, null);
+  assert.match(nobody.nota, /no hay nadie/i);
+  const pmService = createBriaAgencyFactService({ repository, db: { ...db, user: { findUnique: async () => account('PROJECT_MANAGER') } } });
+  await assert.rejects(() => pmService.howToWorkWith({ ...pm }, { nombre: 'Helen' }), { status: 403 });
+});
+
+test('Bria is told to use the fichas without reciting them and never to tell anyone what they say', () => {
+  const instructions = buildInstructions({ person: { name: 'Rodny' }, today: '2026-10-20', tools: [{ name: 'como_trabajar_con', description: 'x' }], user: { role: 'ADMIN' } });
+  assert.match(instructions, /25\. Conoces a cada persona del equipo/);
+  assert.match(instructions, /llama como_trabajar_con/);
+  assert.match(instructions, /Nunca la recites ni digas «según tu ficha»/);
+  assert.match(instructions, /nunca le cuentes a nadie —ni a la persona ni a un compañero— qué dice una ficha/);
+  assert.match(instructions, /cómo trabajar con alguien, no cómo es/);
+  assert.doesNotMatch(buildInstructions({ person: { name: 'Camila' }, today: '2026-10-20', tools: [{ name: 'memoria_de_la_agencia', description: 'x' }], user: { role: 'PROJECT_MANAGER' } }), /como_trabajar_con/);
 });
 
 test('consulting passes the account and the question through and never writes', async () => {
