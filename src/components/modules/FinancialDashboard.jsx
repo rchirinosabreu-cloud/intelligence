@@ -155,6 +155,9 @@ const FinancialDashboard = () => {
     // diario es el libro, no las gráficas.
     const [activeTab, setActiveTab] = useState('records');
     const [expandedClients, setExpandedClients] = useState({});
+    // Nómina: los pagos de cada persona van plegados y se abren por elección (Rodny, 20 de octubre
+    // de 2026: «voy a nómina y veo todo eso enredado. Así como los de cartera»).
+    const [expandedPayrollPayments, setExpandedPayrollPayments] = useState({});
     // La conexión con el cliente real vive dentro del panel de cada uno (Rodny, 23 de
     // septiembre de 2026): una lista con un desplegable por fila era ilegible.
     const [importPreview, setImportPreview] = useState(null);
@@ -1924,6 +1927,18 @@ await invalidateFinancialQueries(queryClient);
                                                                 )}>{status.label}</span>
                                                             );
                                                         })()}
+                                                        {transaction?.payments?.length > 0 && (() => {
+                                                            const activeCount = transaction.payments.filter((payment) => !payment.reversedAt).length;
+                                                            const open = !!expandedPayrollPayments[transaction.id];
+                                                            return (
+                                                                <button type="button" data-payroll-payments-toggle aria-expanded={open}
+                                                                    onClick={() => setExpandedPayrollPayments((prev) => ({ ...prev, [transaction.id]: !prev[transaction.id] }))}
+                                                                    className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-[#009EB9] hover:underline dark:text-cyan-300">
+                                                                    {open ? 'Ocultar pagos' : (activeCount > 0 ? `Ver ${activeCount} pago${activeCount === 1 ? '' : 's'}` : 'Ver pagos')}
+                                                                    {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                                                </button>
+                                                            );
+                                                        })()}
                                                     </td>
                                                     <td className="p-4 text-right font-black text-zinc-900 dark:text-white">
                                                         {formatCurrency(netAmount)}
@@ -1938,7 +1953,7 @@ await invalidateFinancialQueries(queryClient);
                                                         {!transaction && <span className="text-[11px] text-zinc-400">Pendiente</span>}
                                                     </td>
                                                 </tr>
-                                                {transaction?.payments?.length > 0 && (
+                                                {transaction?.payments?.length > 0 && expandedPayrollPayments[transaction.id] && (
                                                     <tr className="bg-zinc-50/60 dark:bg-white/[0.02]">
                                                         <td colSpan={6} className="px-4 pb-4 pt-0">
                                                             <PayrollPaymentList transaction={transaction} accounts={financialAccounts?.accounts || []} formatCurrency={formatCurrency}
