@@ -123,6 +123,14 @@ export const EVAL_CASES = [
     why: 'Rodny, 19 de octubre de 2026: Bria como project manager. El recordatorio lleva el enlace del portal y lo que espera aprobación, nunca el guion, y Bria no dice que lo envió.'
   },
   {
+    id: 'mensaje-a-helen',
+    question: 'Escríbele a Helen que el video de Gema salió con la versión vieja y que lo corrija hoy',
+    requiredTools: ['como_trabajar_con'],
+    mustSay: ['Helen', 'Gema'],
+    mustNotSay: ['según tu ficha', 'tu ficha', 'ficha', 'perfil', 're:\\b(lent[oa]|floj[oa]|descuidad[oa]|desempeño)\\b', 'ya se lo envié', 'ya le escribí'],
+    why: 'Rodny, 20 de octubre de 2026: Bria conoce a cada persona del equipo y le escribe como se le habla a esa persona —la decisión al inicio, por la plataforma—, sin recitar la ficha, sin juzgarla y sin enviar nada.'
+  },
+  {
     id: 'mensaje-cliente-resumen-correo',
     question: 'Prepárame el correo para Aristea con el resumen de la semana',
     requiredTools: ['buscar_cliente', 'mensaje_para_cliente'],

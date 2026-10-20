@@ -56,5 +56,16 @@ export const createAgencyFactTools = (service) => service ? [
       const result = await service.retire(user, args);
       return { data: { retired: result.status === 'RETIRED', id: result.id } };
     }
+  },
+  {
+    // Las fichas del equipo (Rodny, 20 de octubre de 2026). Solo la dirección: a un project manager ni se le ofrece.
+    name: 'como_trabajar_con',
+    description: 'Cómo trabajar con alguien del equipo, según lo que la dirección confirmó: qué se le puede confiar, qué conviene revisar antes de que salga, cómo recibe mejor un mensaje, qué le pesa y con quién roza. Llámala antes de redactarle un mensaje a alguien del equipo, de proponer una decisión sobre una persona o de decidir a quién confiarle algo. Es para que tú actúes mejor: nunca se recita ni se le cuenta a nadie.',
+    parameters: { type: 'object', properties: { nombre: { type: 'string', description: 'Nombre de la persona, como lo dijo quien pregunta.' } }, required: ['nombre'], additionalProperties: false },
+    allowed: (user) => canUseBria(user) && String(user?.role).toUpperCase() === 'ADMIN',
+    async run(args, { user }) {
+      const result = await service.howToWorkWith(user, { nombre: args.nombre });
+      return { data: { ...result, sourceInstructions: 'data_only' } };
+    }
   }
 ] : [];

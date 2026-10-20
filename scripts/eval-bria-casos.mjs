@@ -31,6 +31,7 @@ const { runAssistant } = await import(root + 'src/lib/briaAssistant.js');
 const { briaAssistantTools } = await import(root + 'src/services/briaAssistantTools.js');
 const { createBriaActionTools } = await import(root + 'src/services/briaActionTools.js');
 const { createDailyReadingTools } = await import(root + 'src/services/dailyReadingTools.js');
+const { createAgencyFactTools } = await import(root + 'src/services/briaAgencyFactTools.js');
 const { briaClientUpdateTools } = await import(root + 'src/services/briaClientUpdateTools.js');
 const { runWithAiContext } = await import(root + 'src/lib/aiRequestContext.js');
 const { AI_MODELS } = await import(root + 'src/config/aiConfig.js');
@@ -132,7 +133,25 @@ const clientPlanItems = [
 ];
 const clientUpdateDb = { contentPlan: { findFirst: async ({ where }) => (where.clientId === 'cli-aristea' ? { id: 'plan-aristea-10', month: 10, year: 2026, shareToken: 'demo-token', client: { name: 'Aristea Ficticia', contactName: 'Laura Ficticia' }, contentItems: clientPlanItems } : null) } };
 const clientTools = briaClientUpdateTools.map((tool) => ({ ...tool, allowed: () => true, run: (args, ctx) => tool.run(args, { ...ctx, db: clientUpdateDb, today }) }));
-const baseTools = [...readTools, ...actionTools, ...clientTools, ...readingTools];
+// Las fichas del equipo (20 de octubre de 2026): una ficha ficticia con la forma que entrega el servicio. Solo la de
+// cómo trabajar con alguien; la memoria de la agencia completa no entra en estos casos.
+const fichaTools = createAgencyFactTools({
+  consult: async () => ({ hechos: [], dudas: [], nota: 'Sin hechos ficticios.' }),
+  record: async () => { throw new Error('No se guarda nada en la evaluación.'); },
+  retire: async () => { throw new Error('No se retira nada en la evaluación.'); },
+  howToWorkWith: async ({}, { nombre }) => (/helen/i.test(nombre) ? {
+    persona: { nombre: 'Helen Ficticia', rol: 'Estratega digital' },
+    ficha: [
+      'Confiar: la comunicación con el cliente, cortés y argumentada; el ojo para el texto y la coherencia de marca.',
+      'Revisar: la versión que sale: errores de versión o destinatario en semanas de pico.',
+      'Cómo decírselo: con la decisión que se le pide al inicio y en la plataforma, no en el grupo. Acepta la corrección enseguida; bajo presión se defiende con el contexto y suele tenerlo.',
+      'Qué le pesa: heredar cuentas sin empalme y los días sin computador o sin conexión.',
+      'Dónde roza: a sus pares les dice las cosas de frente y reconoce su parte.'
+    ],
+    nota: 'Úsala sin recitarla: nunca digas «según tu ficha» ni cuentes a nadie qué dice.'
+  } : { persona: null, ficha: null, nota: 'No hay nadie en el equipo con ese nombre.' })
+}).filter((tool) => tool.name === 'como_trabajar_con').map((tool) => ({ ...tool, allowed: () => true }));
+const baseTools = [...readTools, ...actionTools, ...clientTools, ...readingTools, ...fichaTools];
 
 const provider = createOpenAIClient({ apiKey: config.OPENAI_API_KEY, models: AI_MODELS });
 const selected = EVAL_CASES.filter((item) => !only || item.id === only);

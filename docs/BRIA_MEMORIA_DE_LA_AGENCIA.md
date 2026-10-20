@@ -25,7 +25,7 @@ Lo que no se sabe queda como **duda abierta**. Nace de la lectura completa del D
 
 ## Quién ve qué
 La puerta es Bria activada (ADMIN o PROJECT_MANAGER con la casilla `bria`). Dentro, cada propósito usa el permiso de la pantalla que muestra ese dato (`factAccess`):
-- **Operación, editorial y personas:** todos los que tienen Bria. «Personas» es rol y cuentas a cargo; nunca desempeño, salarios ni datos personales.
+- **Operación, editorial y personas:** todos los que tienen Bria. «Personas» es rol y cuentas a cargo; nunca desempeño, salarios ni datos personales. **Excepción, decidida por Rodny el 20 de octubre de 2026: las fichas del equipo** (`tipoEntidad: 'persona'`, tema `como-trabajar`) —qué se le puede confiar a cada persona, qué revisar, cómo decírselo, qué le pesa y con quién roza— son **restringidas por construcción** (`validateFact` lo fuerza) y solo las lee la administración, con la herramienta `como_trabajar_con`, que a un project manager ni se le ofrece. Bria las usa para escribirle a cada persona como se le habla a ella y nunca las recita ni le cuenta a nadie qué dicen. Detalle en `docs/BRIA_OJOS_Y_CEREBRO.md`.
 - **Comercial:** administradores, o quien tenga CRM o Cotizaciones.
 - **Financiero:** quien tenga permiso de lectura de Financiero (`hasFinancialPermission`).
 - **Dirección:** solo administradores, y siempre restringido.
