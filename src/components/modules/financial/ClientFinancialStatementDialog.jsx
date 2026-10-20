@@ -4,6 +4,8 @@ import axios from 'axios';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { formatFinancialPeriod } from '@/utils/financialReceivables';
+import { BrainDatePicker, brainDateInputClass } from '@/components/ui/BrainDatePicker';
+import { FileText, Download } from '@/components/ui/icons';
 
 const action = 'min-h-11 rounded-lg px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40';
 const muted = 'text-sm text-zinc-500 dark:text-zinc-400';
@@ -23,9 +25,12 @@ function Support({ record }) {
   return href ? <a href={href} target="_blank" rel="noopener noreferrer" className={`${action} inline-flex items-center text-primary`}>Ver soporte</a> : null;
 }
 
-export default function ClientFinancialStatementDialog({ client, year, onClose }) {
+export default function ClientFinancialStatementDialog({ client, year, onClose, onOpenDocument, openingDocument = false }) {
   const [section, setSection] = useState('debts');
   const [cursors, setCursors] = useState([null]);
+  // El documento que se le manda al cliente (Rodny, 20 de octubre de 2026): las cuentas de cobro
+  // pendientes a una fecha de corte, los abonos y el saldo a pagar. Hoy por defecto.
+  const [cutoff, setCutoff] = useState(() => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }));
   const cursor = cursors.at(-1);
   const { data, error, isLoading, isFetching, refetch } = useQuery({
     queryKey: ['financial-client-statement', client.id, year, section, cursor],
@@ -41,11 +46,18 @@ export default function ClientFinancialStatementDialog({ client, year, onClose }
   });
   const changeSection = next => { setSection(next); setCursors([null]); };
   return <Dialog open onOpenChange={open => !open && onClose()}>
-    <DialogContent className="gap-5 sm:max-w-3xl bg-white text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100">
+    {/* El primer campo enfocable es la fecha de corte: sin esto el autofoco abriría el calendario solo. */}
+    <DialogContent className="gap-5 sm:max-w-3xl bg-white text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100" onOpenAutoFocus={event => { event.preventDefault(); event.currentTarget.focus(); }}>
       <DialogHeader className="pr-8 text-left space-y-2">
         <DialogTitle>Estado de cuenta · {client.name}</DialogTitle>
         <DialogDescription>{section === 'debts' ? `Obligaciones de ${year} con su saldo actual. No es toda la cartera histórica ni un saldo al cierre del año.` : `Ingresos registrados en ${year}. Solo los abonos vinculados descuentan el saldo de una obligación.`}</DialogDescription>
       </DialogHeader>
+      {onOpenDocument && <div data-statement-document className="flex flex-wrap items-end gap-3 rounded-xl border border-zinc-200 p-3 dark:border-zinc-700">
+        <label className="block min-w-0 space-y-1 text-sm"><span className="block text-xs text-zinc-500 dark:text-zinc-400">Fecha de corte</span><BrainDatePicker className={`${brainDateInputClass} w-40`} value={cutoff} onChange={value => setCutoff(value || cutoff)} ariaLabel="Fecha de corte del estado de cuenta" /></label>
+        <button type="button" disabled={openingDocument} onClick={() => onOpenDocument(client, { cutoff })} className={`${action} inline-flex items-center gap-1.5 border border-primary/40 text-primary hover:bg-primary/5`}><FileText className="h-4 w-4" />Ver PDF</button>
+        <button type="button" disabled={openingDocument} onClick={() => onOpenDocument(client, { cutoff, download: true })} className={`${action} inline-flex items-center gap-1.5 border border-zinc-200 dark:border-zinc-700`}><Download className="h-4 w-4" />Descargar</button>
+        <p className={`${muted} basis-full`}>El documento para el cliente: cuentas de cobro pendientes a esa fecha, abonos y saldo a pagar.</p>
+      </div>}
       <div className="flex flex-wrap gap-2 border-b border-zinc-200 pb-3 dark:border-zinc-700" aria-label="Vista del estado de cuenta">
         {[['debts', 'Obligaciones y abonos'], ['income', 'Ingresos registrados']].map(([value, label]) => <button key={value} type="button" aria-pressed={section === value} onClick={() => changeSection(value)} className={`${action} ${section === value ? 'bg-zinc-100 text-zinc-900 dark:bg-zinc-800 dark:text-white' : muted}`}>{label}</button>)}
       </div>

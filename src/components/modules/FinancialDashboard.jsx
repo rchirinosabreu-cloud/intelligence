@@ -845,6 +845,41 @@ const FinancialDashboard = () => {
         }
     };
 
+    // El estado de cuenta en PDF (Rodny, 20 de octubre de 2026): el mismo visor y la misma
+    // descarga que la cuenta de cobro, a la fecha de corte elegida.
+    const openClientStatementDocument = async (client, { cutoff, download = false } = {}) => {
+        if (!client?.id || downloadingDocumentId) return;
+        setDownloadingDocumentId(`statement:${client.id}`);
+        setImportError('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const response = await axios.get(`${baseUrl}/api/financials/clients/${encodeURIComponent(client.id)}/statement/document`, {
+                params: cutoff ? { cutoff } : {},
+                headers: { Authorization: `Bearer ${token}` },
+                responseType: 'blob'
+            });
+            const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: 'application/pdf' });
+            const objectUrl = URL.createObjectURL(blob);
+            const disposition = String(response.headers?.['content-disposition'] || '');
+            const match = /filename\*=UTF-8''([^;]+)|filename="([^"]+)"/i.exec(disposition);
+            const name = match ? decodeURIComponent(match[1] || match[2]) : `Estado de cuenta - ${client.name || 'Cliente'}.pdf`;
+            if (download) {
+                downloadBlobUrl(objectUrl, name);
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+                return;
+            }
+            const data = await blob.arrayBuffer();
+            closeDocumentPreview();
+            setDocumentPreview({ file: { id: `statement:${client.id}:${cutoff || ''}`, name, mimeType: 'application/pdf', size: blob.size }, url: objectUrl, data });
+        } catch (error) {
+            console.error('Error opening client statement document:', error.response?.data || error);
+            setImportError('No fue posible generar el estado de cuenta.');
+        } finally {
+            setDownloadingDocumentId(null);
+        }
+    };
+
     const handleDeleteReceivable = async () => {
         if (!debtToDelete?.id || isDeletingReceivable || !canWriteFinancials) return;
         setIsDeletingReceivable(true);
@@ -1574,7 +1609,16 @@ await invalidateFinancialQueries(queryClient);
                                             {/* Expandable monthly details */}
                                             {isExpanded && (
                                                 <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-white/5 space-y-3 animate-in fade-in duration-300">
-                                                    <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-300 mb-2">Obligaciones y abonos</p>
+                                                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                                        <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">Obligaciones y abonos</p>
+                                                        {/* El documento de seguimiento del cliente, desde la propia cartera (20 de octubre de 2026). */}
+                                                        {client.clientId && !String(client.clientId).includes(':') && (
+                                                            <button type="button" data-receivable-statement onClick={() => setStatementClient({ id: client.clientId, name: client.client.name })}
+                                                                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-primary transition hover:bg-primary/5">
+                                                                <FileText className="h-3.5 w-3.5" />Estado de cuenta
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                     <div className="grid grid-cols-1 gap-4">
                                                         {client.debts?.map((debt) => (
                                                             <div key={debt.id} className="p-3 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5 flex flex-col justify-between gap-3">
@@ -2336,7 +2380,7 @@ await invalidateFinancialQueries(queryClient);
             {settlementDebt && <ReceivableSettlementDialog key={settlementDebt.id} debt={settlementDebt} saving={isSavingSettlement} error={importError} onClose={() => setSettlementDebt(null)} onSubmit={handleReceivableSettlement} />}
             {paymentToEdit && <ReceivablePaymentEditDialog key={paymentToEdit.payment.id} debt={paymentToEdit.debt} payment={paymentToEdit.payment} accounts={financialAccounts?.accounts || []} saving={isEditingPayment} error={importError} onClose={() => setPaymentToEdit(null)} onSubmit={handleEditPayment} />}
             {isLoanDialogOpen && <ReceivableLoanDialog open clients={clientTargetChoices} accounts={financialAccounts?.accounts || []} saving={isSavingLoan} error={importError} onClose={() => setIsLoanDialogOpen(false)} onSubmit={handleCreateLoan} />}
-            {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} />}
+            {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} onOpenDocument={openClientStatementDocument} openingDocument={downloadingDocumentId === `statement:${statementClient.id}`} />}
 
             {documentPreview && (
                 <ChatFilePreview

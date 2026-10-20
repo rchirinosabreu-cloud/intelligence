@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getClientFinancialStatementHandler } from '../../controllers/financialClientStatementController.js';
+import { getClientFinancialStatementHandler, streamClientStatementPdfHandler } from '../../controllers/financialClientStatementController.js';
 import {
     commitFinancialImport,
     getFinancialDashboard,
@@ -110,6 +110,9 @@ router.get('/monthly-ledger', requireFinancialAccess, getFinancialMonthlyLedger)
 router.patch('/monthly-summaries/:id', requireFinancialWrite, updateFinancialMonthlySummary);
 router.get('/client-reconciliation', requireFinancialAccess, getFinancialClientReconciliation);
 router.get('/clients/:clientId/statement', requireFinancialAccess, getClientFinancialStatementHandler);
+// El estado de cuenta en PDF, a una fecha de corte (Rodny, 20 de octubre de 2026). Solo por la
+// API autenticada, como el resto de los documentos financieros.
+router.get('/clients/:clientId/statement/document', requireFinancialAccess, streamClientStatementPdfHandler);
 // El directorio de clientes (30 de septiembre de 2026): la ficha completa de cada cliente,
 // que mantiene quien lleva el financiero con su propio permiso, con auditoría.
 router.get('/clients', requireFinancialAccess, listClientDirectoryHandler);
