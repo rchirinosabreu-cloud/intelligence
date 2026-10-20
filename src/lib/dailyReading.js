@@ -263,7 +263,9 @@ export const buildMorningBrief = ({ recipientName, reading, scope = { clientIds:
     todo.forEach((d, i) => {
       lines.push(`${i + 1}. **${d.title}.** ${d.why}`);
       const seen = d.evidence.map((id) => signalsById.get(id)).filter(Boolean);
-      if (seen.length) lines.push(`   - Se ve en: ${seen.map((row) => `${row.text}${row.url ? ` [Ver](${row.url})` : ''}`).join(' ')}`);
+      // Sin enlaces «Ver» (Rodny, 20 de octubre de 2026: «no me sirven de nada … con el informe que tengo es suficiente»).
+      // La url sigue en la señal para los avisos del pulso, que sí llevan a un sitio exacto.
+      if (seen.length) lines.push(`   - Se ve en: ${seen.map((row) => row.text).join(' ')}`);
       // La regla del manual que aplica queda en la decisión (`d.rule`) para el libro, pero no se escribe en el mensaje
       // (Rodny, 20 de octubre de 2026: «no quiero que debajo de ningún mensaje aparezcan los criterios … le resta naturalidad»).
       if (d.ask) lines.push(`   - Pídemelo así: «${d.ask}»`);
@@ -272,7 +274,7 @@ export const buildMorningBrief = ({ recipientName, reading, scope = { clientIds:
   }
   if (avoid.length) lines.push('**Lo que no haría**', '', ...avoid.map((d) => `- **${d.title}.** ${d.why}`), '');
   const more = (reading.signals || []).filter(visible).filter((row) => row.direction === 'peor' && !covered.has(row.id)).slice(0, 6);
-  if (more.length) lines.push('**También cambió**', '', ...more.map((row) => `- ${row.text}${row.url ? ` [Ver](${row.url})` : ''}`), '');
+  if (more.length) lines.push('**También cambió**', '', ...more.map((row) => `- ${row.text}`), '');
   const better = (reading.signals || []).filter(visible).filter((row) => row.direction === 'mejor').slice(0, 4);
   if (better.length) lines.push('**Lo que mejoró**', '', ...better.map((row) => `- ${row.text}`), '');
   if (!todo.length && !avoid.length && !more.length) lines.push('No veo cambios que pidan una decisión hoy. Si quieres, pregúntame cómo viene cualquier cuenta o cualquier persona.', '');
