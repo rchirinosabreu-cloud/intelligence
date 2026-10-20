@@ -148,7 +148,10 @@ test('the morning message for direction: the day, what to do, what not to do, wh
   assert.match(text, /- Equipo: 6 tareas vencidas \(antes 4\), 2 devueltas y 40 abiertas\./);
   assert.match(text, /- Desde la lectura del lunes 19 de octubre se cerraron 9 tareas y se registraron 30 h\./);
   assert.match(text, /\*\*Lo que haría hoy\*\*\n\n1\. \*\*Destrabar las aprobaciones de Foobespain\.\*\* Cuatro piezas/);
-  assert.match(text, /   - Se ve en: Foobespain lleva 8 días seguidos con piezas esperando su aprobación \(hoy 4\)\. \[Ver\]\(\/clientes\/operacion\/foobespain\)/);
+  assert.match(text, /   - Se ve en: Foobespain lleva 8 días seguidos con piezas esperando su aprobación \(hoy 4\)\.\n/);
+  // Rodny, 20 de octubre de 2026, al leer la primera lectura real: «estos links de “ver” no me sirven de nada … con el
+  // informe que tengo es suficiente». El mensaje no lleva enlaces; la url se queda en la señal para el pulso.
+  assert.doesNotMatch(text, /\[Ver\]|\]\(\//);
   assert.match(text, /   - Pídemelo así: «Redáctame un mensaje por WhatsApp para Foobespain/);
   assert.match(text, /\*\*Lo que no haría\*\*\n\n- \*\*No cargarle más trabajo a Melissa esta semana\.\*\* Acumula vencidas/);
   assert.match(text, /\*\*Lo que mejoró\*\*\n\n- Endova volvió a verde: estaba en rojo\./);
