@@ -23,6 +23,10 @@ let debt = { id: 'demo-debt', clientId: client.id, clientName: client.name, clie
 if (new URLSearchParams(location.search).has('legacyPaid')) debt = { ...debt, outstanding: null, paidAmount: 0, status: 'PAGADO', balanceReviewRequired: true };
 // ?usd: la cuenta de Foobspain (19 de octubre de 2026): USD 300 a TRM 4.000 = 1.200.000 en cartera, sin abonos.
 if (new URLSearchParams(location.search).has('usd')) debt = { ...debt, clientName: 'Foobspain', sourceLabel: 'Foobspain', currency: 'USD', foreignAmount: 300, documentTotal: 300, exchangeRate: 4000, exchangeRateSource: 'MANUAL', amount: 1200000, outstanding: 1200000, paidAmount: 0, status: 'DEBE', exchangeAdjustments: [] };
+// ?usd&foobspain: tal como quedó en producción el 19 de octubre de 2026: USD 360, cartera subida con el
+// lápiz a 1.205.856, abono registrado por el máximo permitido (1.136.000) y un saldo fantasma de 69.856.
+const foobspainAsIs = new URLSearchParams(location.search).has('foobspain');
+if (foobspainAsIs) debt = { ...debt, foreignAmount: 360, documentTotal: 360, exchangeRate: 3156.32, amount: 1205856, outstanding: 69856, paidAmount: 1136000, period: '2026-08-01T00:00:00Z', month: 8 };
 // Unos cuantos egresos administrativos para que el filtro por categoría tenga dos bolsas que comparar.
 const isAdminExpense = (i) => i >= 40 && i < 50;
 let records = Array.from({ length: 62 }, (_, i) => ({ id: `demo-record-${i}`, clientId: client.id, client, date: '2026-09-07T05:00:00Z', year: 2026, month: 9, amount: i ? 10000 : 200000, type: isAdminExpense(i) ? 'EXPENSE' : 'INCOME', category: isAdminExpense(i) ? 'ADMINISTRATIVO' : 'SERVICIO', status: 'POSTED', scenario: 'ACTUAL', origin: 'MANUAL', description: isAdminExpense(i) ? `Gasto administrativo ${i + 1}` : (i ? `Ingreso de muestra ${i + 1}` : 'Adicional ya registrado'), accountId: account.id, account, reference: `DEMO-${i}` }));
@@ -37,7 +41,9 @@ records[3] = { ...records[3], amount: 300000, type: 'EXPENSE', category: 'PRESTA
 if (new URLSearchParams(location.search).has('payrollRecord')) {
   records.unshift({ id: 'rec-payroll-legacy', date: '2026-09-30T12:00:00Z', year: 2026, month: 9, amount: 4808300, type: 'EXPENSE', category: 'NOMINA', status: 'POSTED', scenario: 'ACTUAL', origin: 'SYSTEM', description: 'Pago de nomina: Rodny Chirinos', accountId: account.id, account, reference: null, documents: [], payrollPayment: { id: 'payroll-payment-legacy:tx-rodny' } });
 }
-if (!debt.balanceReviewRequired) debt.payments = [{ id: 'historical-payment', amount: 400000, paidAt: '2026-09-01T05:00:00Z', reference: 'ABONO-01', notes: 'Pagó la mitad; el resto queda para el 15 de octubre.', account, financialRecord: records[1], financialRecordId: records[1].id, documents: [] }];
+if (!debt.balanceReviewRequired) debt.payments = foobspainAsIs
+  ? [{ id: 'historical-payment', amount: 1136000, paidAt: '2026-09-29T05:00:00Z', reference: '0345', notes: 'Entró $ 1.205.856. La plataforma no me deja registrar el valor que realmente ingresó, dejé el valor que ella calcula.', account, financialRecord: records[1], financialRecordId: records[1].id, documents: [] }]
+  : [{ id: 'historical-payment', amount: 400000, paidAt: '2026-09-01T05:00:00Z', reference: 'ABONO-01', notes: 'Pagó la mitad; el resto queda para el 15 de octubre.', account, financialRecord: records[1], financialRecordId: records[1].id, documents: [] }];
 // Un PDF de una página, válido de verdad: el visor de la plataforma lo renderiza con
 // pdf.js, así que unos bytes inventados no probarían nada.
 const samplePdf = (text) => {
@@ -293,6 +299,27 @@ axios.defaults.adapter = async config => {
     debt = { ...debt, outstanding, settledAmount: (debt.settledAmount || 0) + Number(body.amount), status: outstanding === 0 ? 'SALDADO' : debt.status, payments: [{ id: `demo-settlement-${Date.now()}`, kind: body.kind, detail, amount: Number(body.amount), paidAt: `${body.settledAt}T12:00:00Z`, notes: body.reason, account: null, financialRecordId: null, documents: [] }, ...(debt.payments || [])] };
     window.__receivableSettlementBody = body;
     data = { message: outstanding === 0 ? 'Acuerdo por menor valor registrado. La cuenta quedó saldada; no se creó ningún ingreso.' : 'Ajuste registrado. No se creó ningún ingreso.', outstanding, receivable: { status: debt.status } };
+  } else if (path.includes('/receivable-payments/') && config.method === 'patch') {
+    // Como el servidor: el abono se corrige y su ingreso cambia con él; el saldo se recalcula.
+    const paymentId = path.split('/').at(-1);
+    const target = debt.payments.find(payment => payment.id === paymentId);
+    if (!target) throw Object.assign(new Error('No existe'), { response: { data: { message: 'El abono no existe.' } } });
+    if ((body.amount !== undefined || body.paidAt !== undefined || body.accountId !== undefined) && !body.reason) throw Object.assign(new Error('Sin motivo'), { response: { data: { message: 'Explica por qué se corrige el valor, la fecha o la cuenta: queda en la bitácora.' } } });
+    const nextAmount = body.amount !== undefined ? Number(body.amount) : target.amount;
+    const others = debt.payments.filter(payment => payment.id !== paymentId && !payment.reversedAt).reduce((sum, payment) => sum + Number(payment.amount), 0);
+    let exchangeAdjustment = null, amount = debt.amount;
+    if (others + nextAmount > debt.amount + 0.005) {
+      if (debt.currency !== 'USD') throw Object.assign(new Error('De más'), { response: { data: { message: 'Con ese valor los abonos superarían el valor de la cuenta por cobrar.' } } });
+      exchangeAdjustment = { from: debt.amount, to: others + nextAmount, at: '2026-10-19T15:00:00.000Z' };
+      amount = others + nextAmount;
+    }
+    Object.assign(target, { amount: nextAmount, paidAt: body.paidAt ? `${body.paidAt}T12:00:00Z` : target.paidAt, reference: body.reference ?? target.reference, notes: body.notes ?? target.notes, account: body.accountId ? [account].find(item => item.id === body.accountId) || target.account : target.account });
+    const paid = debt.payments.filter(payment => !payment.reversedAt && (!payment.kind || payment.kind === 'PAGO')).reduce((sum, payment) => sum + Number(payment.amount), 0);
+    const outstanding = Math.round((amount - others - nextAmount) * 100) / 100;
+    debt = { ...debt, amount, paidAmount: paid, outstanding, status: outstanding === 0 ? 'PAGADO' : (debt.status === 'PAGADO' ? 'DEBE' : debt.status), exchangeAdjustments: exchangeAdjustment ? [...(debt.exchangeAdjustments || []), exchangeAdjustment] : debt.exchangeAdjustments };
+    if (target.financialRecordId) records = records.map(record => record.id === target.financialRecordId ? { ...record, amount: nextAmount, reference: body.reference ?? record.reference } : record);
+    window.__paymentEditBody = body;
+    data = { message: exchangeAdjustment ? `Abono corregido. La cartera en pesos se ajustó de $ ${exchangeAdjustment.from.toLocaleString('es-CO')} a $ ${exchangeAdjustment.to.toLocaleString('es-CO')} por la tasa del día.` : 'Abono corregido. Su ingreso en Movimientos cambió con él.', outstanding };
   } else if (path.endsWith('/receivable-adjustments')) {
     // Como el servidor: cierres sin dinero vigentes y ajustes por tasa del periodo.
     const settlements = [debt, ...loans].flatMap(row => (row.payments || []).filter(payment => payment.kind && payment.kind !== 'PAGO' && !payment.reversedAt).map(payment => ({ id: payment.id, kind: payment.kind, kindLabel: { ACUERDO: 'Acuerdo por menor valor', CANJE: 'Canje de bienes o servicios', COMPENSACION: 'Compensación de obligaciones', CONDONACION: 'Condonación o baja autorizada' }[payment.kind], amount: payment.amount, originalAmount: row.amount, date: payment.paidAt, clientName: row.clientName, reason: payment.notes, authorizedBy: payment.detail?.authorizedBy || null, goods: payment.detail?.goods || null, destination: payment.detail?.destination || null, offsetAgainst: payment.detail?.offsetAgainst || null })));

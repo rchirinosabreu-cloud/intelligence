@@ -17,7 +17,7 @@ import {
     openFinancialRecordDocument,
     voidFinancialRecordDocument
 } from '../services/financialRecordDocumentService.js';
-import { createReceivablePayment, reverseReceivablePayment } from '../services/receivablePaymentService.js';
+import { createReceivablePayment, reverseReceivablePayment, updateReceivablePayment } from '../services/receivablePaymentService.js';
 import { settleReceivable, listReceivableAdjustments } from '../services/receivableSettlementService.js';
 import { createLoan } from '../services/receivableLoanService.js';
 import { isLoanReceivable } from '../lib/receivableLoans.js';
@@ -307,6 +307,24 @@ export const settleReceivableHandler = async (req, res, dependencies = {}) => {
     } catch (error) {
         console.error('[Receivable settlements API] Settle failed:', error.response?.data || error);
         return respondWithError(res, error, 'RECEIVABLE_SETTLEMENT_FAILED', 'No fue posible saldar la cuenta por cobrar.');
+    }
+};
+
+export const updateReceivablePaymentHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const update = dependencies.updateReceivablePayment || updateReceivablePayment;
+    try {
+        const result = await update(prismaClient, req.params.paymentId, req.body || {}, req.user);
+        const pesos = (value) => `$ ${Number(value || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 })}`;
+        return res.json({
+            message: result.exchangeAdjustment
+                ? `Abono corregido. La cartera en pesos se ajustó de ${pesos(result.exchangeAdjustment.fromCents / 100)} a ${pesos(result.exchangeAdjustment.toCents / 100)} por la tasa del día.`
+                : result.financialRecord ? 'Abono corregido. Su ingreso en Movimientos cambió con él.' : 'Ajuste corregido.',
+            ...result
+        });
+    } catch (error) {
+        console.error('[Receivable payments API] Update failed:', error.response?.data || error);
+        return respondWithError(res, error, 'RECEIVABLE_PAYMENT_UPDATE_FAILED', 'No fue posible corregir el abono.');
     }
 };
 

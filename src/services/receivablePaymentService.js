@@ -274,6 +274,204 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
 
 const cloneForAudit = (value) => JSON.parse(JSON.stringify(value));
 
+const sumOtherPaymentsCents = (payments, exceptId) => {
+    let total = 0;
+    for (const other of payments || []) {
+        if (other.id === exceptId || other.reversedAt) continue;
+        const cents = financialCents(other.amount);
+        if (cents === null || !Number.isSafeInteger(total + cents)) {
+            throw new FinancialDomainError('RECEIVABLE_BALANCE_INVALID', 'Los abonos de esta cuenta requieren revisión de precisión antes de corregir uno.', 409);
+        }
+        total += cents;
+    }
+    return total;
+};
+
+/**
+ * Corrige un abono ya registrado (Rodny, 20 de octubre de 2026: «debe tener la opción de editar lo
+ * que ingresó o el valor registrado para no revertirlo»). Valor, fecha, cuenta, referencia y
+ * notas; cambiar el dinero —valor, fecha o cuenta— exige motivo y queda en la bitácora con el
+ * antes y el después. El ingreso que creó el abono cambia con él en la misma transacción: nunca
+ * quedan desacoplados. Un ingreso que ya existía (MANUAL/IMPORT) no se reescribe desde aquí: se
+ * corrige en Movimientos, o se revierte el abono y se aplica otro. En dólares rige la misma regla
+ * del registro: si entró más que la cartera en pesos, la cartera se ajusta a lo que entró; si ese
+ * abono ya la había ajustado, el ajuste se rehace desde el valor anterior, nunca se acumula.
+ */
+export const updateReceivablePayment = async (prismaClient, paymentId, input = {}, actor) => {
+    const actorId = actor?.id || actor?.userId || null;
+    const wantsAmount = input.amount !== undefined && input.amount !== null && input.amount !== '';
+    const wantsDate = input.paidAt !== undefined && input.paidAt !== null && input.paidAt !== '';
+    const wantsAccount = input.accountId !== undefined && input.accountId !== null && input.accountId !== '';
+    const wantsReference = input.reference !== undefined;
+    const wantsNotes = input.notes !== undefined;
+    const reason = String(input.reason || '').trim();
+    if (reason.length > REVERSAL_REASON_MAX) {
+        throw new FinancialDomainError('RECEIVABLE_PAYMENT_EDIT_REASON_TOO_LONG', `El motivo admite como máximo ${REVERSAL_REASON_MAX} caracteres.`);
+    }
+    const touchesMoney = wantsAmount || wantsDate || wantsAccount;
+    if (touchesMoney && !reason) {
+        throw new FinancialDomainError('RECEIVABLE_PAYMENT_EDIT_REASON_REQUIRED', 'Explica por qué se corrige el valor, la fecha o la cuenta: queda en la bitácora.');
+    }
+    let amountCents = null;
+    if (wantsAmount) {
+        amountCents = financialCents(input.amount);
+        if (amountCents === null || amountCents <= 0) {
+            throw new FinancialDomainError('RECEIVABLE_PAYMENT_AMOUNT_INVALID', 'El valor debe ser positivo, tener como máximo dos decimales y estar dentro del rango de precisión financiera.');
+        }
+    }
+    const newDate = wantsDate ? parseFinancialDateInput(input.paidAt) : null;
+    const newAccountId = wantsAccount ? String(input.accountId).trim() : null;
+    const settlesInFull = input.settlesInFull === true || input.settlesInFull === 'true';
+
+    try {
+        return await prismaClient.$transaction(async (tx) => {
+            const payment = await tx.receivablePayment.findUnique({
+                where: { id: paymentId },
+                include: {
+                    financialRecord: { include: { bankMatches: { where: { status: 'APPROVED' }, select: { id: true, status: true } } } },
+                    receivable: { include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { id: true, amount: true, kind: true, reversedAt: true } } } }
+                }
+            });
+            if (!payment) throw new FinancialDomainError('RECEIVABLE_PAYMENT_NOT_FOUND', 'El abono no existe.', 404);
+            if (payment.reversedAt) throw new FinancialDomainError('RECEIVABLE_PAYMENT_ALREADY_REVERSED', 'Este abono ya fue revertido: no se corrige, se registra uno nuevo.', 409);
+            const receivable = payment.receivable;
+            if (!receivable) throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar del abono no existe.', 409);
+            const isCash = !payment.kind || payment.kind === 'PAGO';
+            if (!isCash && wantsAccount) {
+                throw new FinancialDomainError('RECEIVABLE_PAYMENT_EDIT_INVALID', 'Un acuerdo, canje, compensación o condonación no tiene cuenta: no entró dinero.');
+            }
+            const record = payment.financialRecord;
+            if (isCash && touchesMoney && record && record.origin !== 'SYSTEM') {
+                throw new FinancialDomainError('RECEIVABLE_PAYMENT_RECORD_EXTERNAL', 'Este abono se aplicó sobre un ingreso que ya existía en Movimientos. Corrige ese movimiento allá, o revierte el abono y aplica el ingreso correcto.', 409);
+            }
+            if (isCash && touchesMoney && record?.bankMatches?.length) {
+                throw new FinancialDomainError('FINANCIAL_RECORD_LINKED', 'El ingreso de este abono tiene una conciliación bancaria aprobada. Primero hay que deshacer esa conciliación.', 409);
+            }
+
+            const oldPaidAt = new Date(payment.paidAt);
+            if (Number.isNaN(oldPaidAt.getTime())) throw new FinancialDomainError('RECEIVABLE_BALANCE_INVALID', 'La fecha del abono requiere revisión antes de corregirlo.', 409);
+            const oldPeriod = parseFinancialDateInput(oldPaidAt.toISOString().slice(0, 10));
+            if (touchesMoney) {
+                await assertOpenFinancialPeriod(tx, oldPeriod.year, oldPeriod.month);
+                if (newDate) await assertOpenFinancialPeriod(tx, newDate.year, newDate.month);
+                if (record && (record.year !== oldPeriod.year || record.month !== oldPeriod.month)) await assertOpenFinancialPeriod(tx, record.year, record.month);
+            }
+            if (newAccountId) {
+                const account = await tx.financialAccount.findUnique({ where: { id: newAccountId }, select: { id: true, isActive: true, currency: true } });
+                if (!account?.isActive) throw new FinancialDomainError('RECEIVABLE_PAYMENT_ACCOUNT_UNAVAILABLE', 'Selecciona una cuenta de caja o banco activa.', 409);
+                if (account.currency !== 'COP') throw new FinancialDomainError('RECEIVABLE_PAYMENT_CURRENCY_UNSUPPORTED', 'Este flujo de cartera admite pagos en COP.', 409);
+            }
+
+            const previousCents = financialCents(payment.amount);
+            const nextCents = wantsAmount ? amountCents : previousCents;
+            const othersCents = sumOtherPaymentsCents(receivable.payments, paymentId);
+            // En dólares, si este abono ya había ajustado la cartera por tasa, se parte del valor de
+            // antes de ese ajuste y se rehace: nunca se acumula uno encima de otro.
+            const isUsd = normalizeReceivableCurrency(receivable.currency) === 'USD';
+            const previousAdjustments = Array.isArray(receivable.metadata?.exchangeAdjustments) ? receivable.metadata.exchangeAdjustments : [];
+            const ownAdjustment = previousAdjustments.find((item) => item?.paymentId === paymentId) || null;
+            const baseAmountCents = ownAdjustment ? Number(ownAdjustment.fromCents) : financialCents(receivable.amount);
+            if (baseAmountCents === null || !Number.isSafeInteger(baseAmountCents) || baseAmountCents <= 0) {
+                throw new FinancialDomainError('RECEIVABLE_BALANCE_INVALID', 'El valor de la cuenta por cobrar requiere revisión antes de corregir un abono.', 409);
+            }
+            const roomCents = baseAmountCents - othersCents;
+            let exchangeAdjustment = null;
+            let amountAfterCents = baseAmountCents;
+            if (nextCents > roomCents) {
+                if (!isUsd) throw new FinancialDomainError('RECEIVABLE_OVERPAYMENT', 'Con ese valor los abonos superarían el valor de la cuenta por cobrar.', 409);
+                amountAfterCents = baseAmountCents + (nextCents - roomCents);
+            } else if (isUsd && settlesInFull && nextCents < roomCents) {
+                amountAfterCents = baseAmountCents - (roomCents - nextCents);
+            }
+            if (amountAfterCents !== financialCents(receivable.amount) || ownAdjustment) {
+                if (amountAfterCents !== baseAmountCents || ownAdjustment) {
+                    const deltaCents = amountAfterCents - baseAmountCents;
+                    exchangeAdjustment = deltaCents === 0 ? null : { fromCents: baseAmountCents, toCents: amountAfterCents, difference: Math.sign(deltaCents) * Number(financialAmountFromCents(Math.abs(deltaCents))) };
+                }
+            }
+            const outstandingCents = amountAfterCents - othersCents - nextCents;
+            if (outstandingCents < 0) throw new FinancialDomainError('RECEIVABLE_OVERPAYMENT', 'Con ese valor los abonos superarían el valor de la cuenta por cobrar.', 409);
+
+            const paymentData = {};
+            if (wantsAmount) paymentData.amount = financialAmountFromCents(nextCents);
+            if (newDate) paymentData.paidAt = newDate.date;
+            if (newAccountId) paymentData.accountId = newAccountId;
+            if (wantsReference) paymentData.reference = normalizeText(input.reference);
+            if (wantsNotes) paymentData.notes = normalizeText(input.notes);
+            const updatedPayment = await tx.receivablePayment.update({ where: { id: paymentId }, data: paymentData });
+
+            let updatedRecord = null;
+            if (isCash && record && record.origin === 'SYSTEM') {
+                const recordData = {};
+                if (wantsAmount) recordData.amount = financialAmountFromCents(nextCents);
+                if (newDate) { recordData.date = newDate.date; recordData.year = newDate.year; recordData.month = newDate.month; }
+                if (newAccountId) recordData.accountId = newAccountId;
+                if (wantsReference) recordData.reference = normalizeText(input.reference);
+                if (wantsNotes) recordData.notes = normalizeText(input.notes);
+                if (Object.keys(recordData).length) {
+                    updatedRecord = await tx.financialRecord.update({ where: { id: record.id }, data: recordData });
+                    await tx.financialAuditEvent.create({
+                        data: { entityType: 'FinancialRecord', entityId: record.id, action: 'UPDATE', before: cloneForAudit({ ...record, bankMatches: undefined }), after: cloneForAudit(updatedRecord), actorId }
+                    });
+                }
+            }
+
+            const statusAfter = receivableStatusAfter({
+                outstandingCents,
+                payments: receivable.payments.map((other) => (other.id === paymentId ? { ...other, kind: payment.kind } : other)),
+                currentStatus: receivable.status
+            });
+            const amountChanged = amountAfterCents !== financialCents(receivable.amount);
+            const adjustmentsChanged = Boolean(ownAdjustment) || Boolean(exchangeAdjustment);
+            let updatedReceivable = receivable;
+            if (statusAfter !== receivable.status || amountChanged || adjustmentsChanged) {
+                const keptAdjustments = previousAdjustments.filter((item) => item?.paymentId !== paymentId);
+                updatedReceivable = await tx.accountsReceivable.update({
+                    where: { id: receivable.id },
+                    data: {
+                        status: statusAfter,
+                        ...(amountChanged ? { amount: financialAmountFromCents(amountAfterCents) } : {}),
+                        ...(adjustmentsChanged ? {
+                            metadata: {
+                                ...(receivable.metadata && typeof receivable.metadata === 'object' ? receivable.metadata : {}),
+                                exchangeAdjustments: exchangeAdjustment
+                                    ? [...keptAdjustments, { at: new Date().toISOString(), paymentId, fromCents: exchangeAdjustment.fromCents, toCents: exchangeAdjustment.toCents }]
+                                    : keptAdjustments
+                            }
+                        } : {})
+                    }
+                });
+                if (amountChanged) await tx.financialAuditEvent.create({
+                    data: {
+                        entityType: 'AccountsReceivable', entityId: receivable.id, action: 'UPDATE',
+                        before: { amount: financialAmountFromCents(financialCents(receivable.amount)) },
+                        after: { operation: 'EXCHANGE_ADJUSTMENT', amount: financialAmountFromCents(amountAfterCents), paymentId, reason },
+                        actorId
+                    }
+                });
+            }
+
+            await tx.financialAuditEvent.create({
+                data: {
+                    entityType: 'ReceivablePayment',
+                    entityId: paymentId,
+                    action: 'UPDATE',
+                    before: cloneForAudit({ ...payment, financialRecord: undefined, receivable: undefined }),
+                    after: cloneForAudit({ ...paymentData, reason: reason || null, receivableStatus: statusAfter, outstanding: financialAmountFromCents(outstandingCents), financialRecordId: record?.id || null }),
+                    actorId
+                }
+            });
+
+            return { payment: updatedPayment, financialRecord: updatedRecord || record || null, receivable: updatedReceivable, outstanding: financialAmountFromCents(outstandingCents), exchangeAdjustment };
+        }, { isolationLevel: 'Serializable' });
+    } catch (error) {
+        if (error?.code === 'P2034' || error?.code === 'P2002') {
+            throw new FinancialDomainError('RECEIVABLE_PAYMENT_CONFLICT', 'Otro proceso modificó el abono o la cuenta por cobrar. Actualiza los datos y vuelve a intentarlo.', 409);
+        }
+        throw error;
+    }
+};
+
 /**
  * Revierte un abono mal registrado y corrige todos sus efectos en una sola transacción.
  *
