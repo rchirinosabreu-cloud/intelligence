@@ -11,6 +11,7 @@ import { AI_MODELS } from '../config/aiConfig.js';
 import { dayLabel, formatHours } from './teamLoad.js';
 import { JUDGMENT_WORDS } from './briaPulse.js';
 import { levelLabel } from './agencySnapshot.js';
+import { decisionsSection, isSuppressed } from './decisionLog.js';
 
 export const DAILY_READING_USE_CASE = 'bria.daily-reading';
 export const DAILY_READING_PROMPT_VERSION = 1;
@@ -181,10 +182,14 @@ export const fallbackDailyReading = ({ signals = [], summary, day }) => {
  * no dejó ninguna decisión respaldada habiendo señales, manda la regla. Las cuentas a mirar son las de rojo o amarillo
  * y las que tienen señales; la que el modelo no leyó conserva el motivo de la plataforma.
  */
-export const composeReading = ({ day, baseDay = null, summary, signals = [], clients = [], model = null, usage = null, modelName = null }) => {
+export const composeReading = ({ day, baseDay = null, summary, signals = [], clients = [], model = null, usage = null, modelName = null, suppressed = null }) => {
   const worse = signals.some((s) => s.direction === 'peor');
   const useModel = model && (model.decisions.length || !worse);
-  const base = useModel ? model : fallbackDailyReading({ signals, summary, day });
+  const picked = useModel ? model : fallbackDailyReading({ signals, summary, day });
+  // El libro de decisiones (19 de octubre de 2026): lo que la dirección descartó tres veces no se vuelve a proponer,
+  // salvo que la señal llegue a la gravedad máxima. Se renumeran para que «la 2» siga siendo la segunda.
+  const kept = suppressed?.size ? picked.decisions.filter((d) => !isSuppressed(d, suppressed, { signals })) : picked.decisions;
+  const base = { ...picked, decisions: kept.map((d, i) => ({ ...d, id: `${day}:${i + 1}` })) };
   const flagged = new Set(signals.filter((s) => s.subjectType === 'CLIENT' && s.direction === 'peor').map((s) => s.subjectId));
   const accounts = {};
   for (const client of clients) {
@@ -210,7 +215,7 @@ const levelParts = (now, before = null) => [['red', 'en rojo'], ['yellow', 'en a
  * El mensaje de la mañana para una persona de dirección. `scope.clientIds` (Set) limita las cuentas a las suyas, o
  * null para toda la agencia; `scope.people` dice si ve la carga del equipo (quien tiene Manager).
  */
-export const buildMorningBrief = ({ recipientName, reading, scope = { clientIds: null, people: true } }) => {
+export const buildMorningBrief = ({ recipientName, reading, scope = { clientIds: null, people: true }, log = null }) => {
   const agency = !scope.clientIds;
   const label = fullDay(reading.day);
   const lines = [`Buenos días, ${firstName(recipientName)}. Así ${agency ? 'amaneció la agencia' : 'amanecieron tus cuentas'} este ${label}.`, ''];
@@ -234,6 +239,8 @@ export const buildMorningBrief = ({ recipientName, reading, scope = { clientIds:
     if (s.sinceBase && reading.baseDay) facts.push(`- Desde la lectura del ${fullDay(reading.baseDay)} se cerraron ${plural(s.sinceBase.closedTasks, 'tarea', 'tareas')} y ${s.sinceBase.hoursMs ? `se registraron ${hours(s.sinceBase.hoursMs)}` : 'no se registró tiempo'}.`);
   }
   if (facts.length) lines.push(...facts, '');
+  // Lo que decidiste ayer y qué pasó (el libro de decisiones), antes de lo de hoy.
+  if (log) lines.push(...decisionsSection(log));
 
   const visible = inScope(scope);
   const signalsById = new Map((reading.signals || []).map((row) => [row.id, row]));

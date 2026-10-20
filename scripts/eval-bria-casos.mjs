@@ -96,9 +96,10 @@ const readingFixture = ({ cliente = '' } = {}) => ({
   fecha: today, comparadaCon: '2026-10-14', escritaPor: 'Bria', historia: '12 fotos diarias desde el 2026-10-04',
   resumen: 'Aristea Ficticia sigue en rojo y sus aprobaciones no se mueven; Jarlan Ficticio acumula vencidas desde el viernes.',
   decisiones: [
-    { titulo: 'Destrabar las aprobaciones de Aristea Ficticia', porque: 'Cuatro piezas llevan ocho días esperando y el mes va atrasado.', tipo: 'HACER', sobre: 'Aristea Ficticia', pedido: 'Redáctame un mensaje por WhatsApp para Aristea Ficticia para que apruebe lo pendiente.', seVeEn: ['Aristea Ficticia lleva 8 días seguidos con piezas esperando su aprobación (hoy 4).'] },
-    { titulo: 'No cargarle más trabajo a Jarlan Ficticio esta semana', porque: 'Lleva cinco días con tareas vencidas y pasó de 2 a 5 desde la última lectura.', tipo: 'NO_HACER', sobre: 'Jarlan Ficticio', pedido: null, seVeEn: ['Jarlan Ficticio lleva 5 días con tareas vencidas (hoy 5).', 'Jarlan Ficticio pasó de 2 a 5 tareas vencidas desde la última lectura.'] }
+    { numero: 1, titulo: 'Destrabar las aprobaciones de Aristea Ficticia', porque: 'Cuatro piezas llevan ocho días esperando y el mes va atrasado.', tipo: 'HACER', sobre: 'Aristea Ficticia', pedido: 'Redáctame un mensaje por WhatsApp para Aristea Ficticia para que apruebe lo pendiente.', seVeEn: ['Aristea Ficticia lleva 8 días seguidos con piezas esperando su aprobación (hoy 4).'], anotada: null },
+    { numero: 2, titulo: 'No cargarle más trabajo a Jarlan Ficticio esta semana', porque: 'Lleva cinco días con tareas vencidas y pasó de 2 a 5 desde la última lectura.', tipo: 'NO_HACER', sobre: 'Jarlan Ficticio', pedido: null, seVeEn: ['Jarlan Ficticio lleva 5 días con tareas vencidas (hoy 5).', 'Jarlan Ficticio pasó de 2 a 5 tareas vencidas desde la última lectura.'], anotada: null }
   ],
+  libroDeDecisiones: { propuestas: 9, anotadas: 4, hechas: 3, descartadas: 1, aplazadas: 0, hechasQueSeResolvieron: 2, hechasQueSiguen: 1, descartadasQueSeResolvieronSolas: 0, descartadasQueSiguen: 1, tasaDeAdopcion: 0.33, tasaDeAcierto: 0.67, pendientesDeDesenlace: 0, lectura: 'De 9 decisiones propuestas se anotaron 4: 3 hechas, 1 descartada y 0 aplazadas. De las hechas con desenlace, 2 de 3 se resolvieron. De las descartadas, 0 se resolvieron solas y 1 sigue.' },
   senales: [
     { sobre: 'Aristea Ficticia', cambio: 'peor', texto: 'Aristea Ficticia lleva 6 días en rojo: Van 3 publicadas; a esta fecha deberían ir 6.' },
     { sobre: 'Aristea Ficticia', cambio: 'peor', texto: 'Aristea Ficticia lleva 8 días seguidos con piezas esperando su aprobación (hoy 4).' },
@@ -116,7 +117,11 @@ const titles = { TASK_UPDATE: 'Cambiar un pendiente', TASKS_STATUS: 'Cambiar var
 const fakeActionService = { prepare: async ({ type, args }) => ({ type, title: titles[type] || type, status: 'PENDING', summary: Object.entries(args || {}).filter(([, value]) => value != null && value !== '' && (!Array.isArray(value) || value.length)).map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`), missing: [], warnings: [] }) };
 const readTools = briaAssistantTools.filter((tool) => fixtureRuns[tool.name]).map((tool) => ({ ...tool, allowed: () => true, run: async (args) => ({ data: fixtureRuns[tool.name](args || {}), sources: [] }) }));
 const actionTools = createBriaActionTools(fakeActionService).filter((tool) => ['cambiar_pendiente', 'cambiar_pendientes', 'registrar_observacion'].includes(tool.name)).map((tool) => ({ ...tool, allowed: () => true }));
-const readingTools = createDailyReadingTools({ explain: async (args) => readingFixture(args) }).map((tool) => ({ ...tool, allowed: () => true }));
+const readingTools = createDailyReadingTools({
+  explain: async (args) => readingFixture(args),
+  // El libro de decisiones (19 de octubre de 2026): la anotación ficticia responde como el servicio real.
+  recordVerdict: async ({ ref, veredicto }) => (/^1$|arist|aprobaci/i.test(String(ref)) ? { saved: true, decision: 'Destrabar las aprobaciones de Aristea Ficticia', veredicto: /no\b/i.test(veredicto) ? 'NO' : 'HECHO', dia: today } : { saved: false, motivo: 'No sé a cuál decisión de la lectura te refieres: 1. Destrabar las aprobaciones de Aristea Ficticia · 2. No cargarle más trabajo a Jarlan Ficticio esta semana.' })
+}).map((tool) => ({ ...tool, allowed: () => true }));
 // Escribirle al cliente (19 de octubre de 2026): la herramienta real, sobre una parrilla ficticia, para probar también
 // su instrucción y que nunca se cuele lo que el cliente no ve.
 const noon = (day) => new Date(`${day}T12:00:00.000Z`);

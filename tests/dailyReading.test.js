@@ -93,6 +93,17 @@ test('a model reading with no backed decision falls back to the rules instead of
   assert.equal(good.accounts.c3, undefined, 'a green account without signals is not an account to watch');
 });
 
+test('what direction keeps declining is left out and the rest is renumbered, unless the signal is grave', () => {
+  const suppressed = new Set(['HACER|CLIENT|c1']);
+  const model = validateDailyReading(modelAnswer, { signals: SIGNALS, clients: CLIENTS, day: DAY });
+  const reading = composeReading({ day: DAY, baseDay: '2026-10-19', summary: SUMMARY, signals: SIGNALS, clients: CLIENTS, model, suppressed });
+  assert.deepEqual(reading.decisions.map((d) => [d.id, d.title]), [['2026-10-20:1', 'Destrabar las aprobaciones de Foobespain'], ['2026-10-20:2', 'No cargarle más trabajo a Melissa esta semana'], ['2026-10-20:3', 'Completar la parrilla de Aristea']], 'severity 3 keeps the Foobespain decision');
+  const milder = composeReading({ day: DAY, baseDay: '2026-10-19', summary: SUMMARY, signals: SIGNALS.map((s) => (s.id === 'APROBACION_DETENIDA:c1' ? { ...s, severity: 2 } : s)), clients: CLIENTS, model, suppressed });
+  assert.deepEqual(milder.decisions.map((d) => [d.id, d.title]), [['2026-10-20:1', 'No cargarle más trabajo a Melissa esta semana'], ['2026-10-20:2', 'Completar la parrilla de Aristea']]);
+  const brief = buildMorningBrief({ recipientName: 'Rodny', reading: milder, scope: { clientIds: null, people: true }, log: { decided: [], undecided: [{ id: '2026-10-19:1', title: 'Revisar Endova' }] } });
+  assert.match(brief.text, /registraron 30 h\.\n\nDe ayer no supe qué pasó con «Revisar Endova».*\n\n\*\*Lo que haría hoy\*\*/s, 'yesterday’s decisions go before today’s');
+});
+
 const READING = composeReading({ day: DAY, baseDay: '2026-10-19', summary: SUMMARY, signals: SIGNALS, clients: CLIENTS, model: validateDailyReading(modelAnswer, { signals: SIGNALS, clients: CLIENTS, day: DAY }) });
 
 test('the morning message for direction: the day, what to do, what not to do, what changed and what improved', () => {

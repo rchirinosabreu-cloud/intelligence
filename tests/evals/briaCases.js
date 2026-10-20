@@ -108,6 +108,13 @@ export const EVAL_CASES = [
     why: 'Recomendar no hacer algo es parte del criterio: Bria dice qué evitaría y por qué, con la evidencia, sin juzgar a la persona.'
   },
   {
+    id: 'decision-de-pasada',
+    question: 'Ah, lo de las aprobaciones de Aristea ya lo resolví con Kamila esta mañana. Oye, ¿qué tengo hoy?',
+    requiredTools: ['anotar_decision', 'mis_tareas'],
+    mustNotSay: ['gracias por enseñar', 'gracias por la retroalimentación', 'formulario', '¿confirmas', 'confirmas que'],
+    why: 'El libro de decisiones se llena de pasada (19 de octubre de 2026): la persona cuenta qué hizo y Bria lo anota en media frase y sigue con lo que le pidieron, sin volverlo un trámite.'
+  },
+  {
     id: 'mensaje-cliente-aprobar',
     question: 'Escríbele a Aristea por WhatsApp para que apruebe lo que tiene pendiente',
     requiredTools: ['buscar_cliente', 'mensaje_para_cliente'],
