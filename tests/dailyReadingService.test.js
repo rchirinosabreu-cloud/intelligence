@@ -106,8 +106,10 @@ const setup = ({ generate, seed } = {}) => {
     db: fakeDb(), repository, proactive,
     conversations: { postAssistantNote: async (actor, note) => { notes.push({ actor, note }); return { id: `chat-${notes.length}` }; } },
     operations: { listOperations: async () => OPERATIONS },
+    // El manual de criterio (20 de octubre de 2026), como lo entrega la memoria de la agencia.
+    criteria: async () => [{ id: 'equipo-r4', text: 'Regla 4. Días sin publicar: 3 días es alerta para cualquier cliente; 6 días es grave.', purpose: 'operacion' }],
     generate: generate || (async (request) => { requests.push(request); return { text: JSON.stringify({ resumen: 'Foobespain se puso en rojo desde ayer.', decisiones: [
-      { titulo: 'Revisar Foobespain hoy', porque: 'Pasó de verde a rojo de un día para otro.', tipo: 'HACER', evidencia: ['CUENTA_EMPEORO:c1'], pedido: '¿Qué le falta a Foobespain para volver a verde?' },
+      { titulo: 'Revisar Foobespain hoy', porque: 'Pasó de verde a rojo de un día para otro.', tipo: 'HACER', evidencia: ['CUENTA_EMPEORO:c1'], pedido: '¿Qué le falta a Foobespain para volver a verde?', regla: 'equipo-r4' },
       { titulo: 'Contarle a Aristea que volvió a verde', porque: 'Salió del rojo y conviene decírselo.', tipo: 'CONVERSAR', evidencia: ['CUENTA_MEJORO:c2'], pedido: null }
     ], cuentas: [{ clientId: 'c1', lectura: 'Se atrasó en publicaciones esta semana.' }] }), model: 'gpt-test', usage: { total_tokens: 900 } }; }),
     now: () => clock, notify: async (row) => { notifications.push(row); },
@@ -221,6 +223,19 @@ test('the decision log: natural verdicts are noted, outcomes are read the next d
   assert.doesNotMatch(camila, /Aristea/);
 });
 
+test('the manual of criteria is read from the agency memory, shown to the model, and cited in the morning', async () => {
+  const { service, repository, notes, requests, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  assert.match(requests[0].prompt, /## Criterio de la dirección \(confirmado por Rodny\)\n\[R:equipo-r4\]/);
+  assert.equal(repository.readings.get('2026-10-20').decisions[0].rule.id, 'equipo-r4');
+  setClock(at('07:40'));
+  await service.runAutomatic();
+  // La regla guía la decisión y queda en el libro, pero el mensaje no la recita (Rodny, 20 de octubre de 2026).
+  const rodny = notes.find((n) => n.actor.ref === 'u-rodny').note.text;
+  assert.doesNotMatch(rodny, /Regla 4|criterio/);
+});
+
 test('if the model fails, Bria reads with the platform’s rules instead of going quiet', async () => {
   const { service, repository, setClock } = setup({ seed: { '2026-10-19': YESTERDAY }, generate: async () => { throw new Error('429'); } });
   setClock(at('06:40'));
@@ -270,6 +285,8 @@ test('the morning message shows above the mascot after the close and before the 
 test('Bria is told how to use its memory of time, and the platform runs it on its own', () => {
   const instructions = buildInstructions({ person: { name: 'Rodny' }, today: '2026-10-20', tools: [{ name: 'lectura_de_la_agencia', description: 'x' }], user: { role: 'ADMIN' } });
   assert.match(instructions, /24\. Eres los ojos de la dirección/);
+  assert.match(instructions, /aplícalo al recomendar sin recitarlo ni citar números de regla/);
+  assert.match(instructions, /Nunca recomiendes contra una regla, y si la persona te corrige o precisa algo que una regla dice, no cambies la regla por tu cuenta/);
   assert.match(instructions, /lo que conviene no hacer y por qué/);
   assert.equal(toolProgressLabel('lectura_de_la_agencia'), 'Repasando cómo viene la agencia…');
   assert.match(readFileSync('server.js', 'utf8'), /initDailyReadingScheduler\(\);/);

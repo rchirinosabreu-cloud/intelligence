@@ -14,7 +14,7 @@ const H = 3_600_000;
 const DAY = 86_400_000;
 export const SIGNAL_KINDS = Object.freeze([
   'CUENTA_EMPEORO', 'CUENTA_MEJORO', 'ROJO_SOSTENIDO', 'APROBACION_DETENIDA', 'DEVOLUCIONES', 'SIN_MOVIMIENTO', 'HORAS_SUBEN',
-  'VENCIDAS_SOSTENIDAS', 'VENCIDAS_SUBEN', 'CARGA_INUSUAL', 'DEVUELTAS_PERSONA', 'VENCIDAS_RESUELTAS'
+  'VENCIDAS_SOSTENIDAS', 'VENCIDAS_SUBEN', 'CARGA_INUSUAL', 'DEVUELTAS_PERSONA', 'VENCIDAS_RESUELTAS', 'FUERA_DE_ALCANCE'
 ]);
 const LEVELS = { green: 'verde', yellow: 'amarillo', red: 'rojo', gray: 'gris' };
 const RANK = { green: 0, yellow: 1, red: 2 };
@@ -123,6 +123,12 @@ export const readSignals = ({ today, current = {}, history = [] } = {}) => {
         if (v.closedTasks === 0 && v.hoursMs === 0) quietDays += 1; else break;
       }
       if (quietDays >= 4) push('SIN_MOVIMIENTO', subject, { severity: 2, text: `Nadie registró tiempo ni cerró tareas de ${client.name} en los últimos ${quietDays} días hábiles; tiene ${plural(m.openTasks, 'tarea abierta', 'tareas abiertas')}.` });
+    }
+
+    // Más piezas que las contratadas (regla 10 del manual, 20 de octubre de 2026: «todo extra se cuenta y se cobra por bloque»).
+    if (m.cycle?.quota > 0 && m.cycle.created > m.cycle.quota) {
+      const extra = m.cycle.created - m.cycle.quota;
+      push('FUERA_DE_ALCANCE', subject, { severity: 1, text: `${client.name} tiene ${m.cycle.created} piezas creadas este mes y el contrato dice ${m.cycle.quota}: ${extra} de más que se ${extra === 1 ? 'cuenta y se cobra' : 'cuentan y se cobran'} aparte.` });
     }
 
     // Horas de la última semana contra las tres anteriores: solo con cuatro semanas de fotos completas.

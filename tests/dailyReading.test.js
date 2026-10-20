@@ -37,6 +37,34 @@ const modelAnswer = {
   cuentas: [{ clientId: 'c1', lectura: 'Viene publicando por debajo del ritmo y las aprobaciones no se mueven desde el lunes pasado.' }, { clientId: 'c-otro', lectura: 'No existe.' }]
 };
 
+const CRITERIA = [
+  { id: 'equipo-r4', text: 'Regla 4. Días sin publicar: 3 días es alerta para cualquier cliente; 6 días es grave.', purpose: 'operacion' },
+  { id: 'equipo-r6', text: 'Regla 6. Prioridad entre clientes: MIO Agencia y sus clientes, primero; en un momento crítico se cuida más al que más paga.', purpose: 'direccion' },
+  { id: 'equipo-r7', text: 'Regla 7. La carga de una persona se mide por horas estimadas y por vencidas acumuladas.', purpose: 'operacion' }
+];
+
+test('the manual of criteria goes into the digest, each decision keeps the rule it applies, and the morning never recites it', () => {
+  const digest = buildDailyDigest({ today: DAY, baseDay: '2026-10-19', summary: SUMMARY, signals: SIGNALS, clients: CLIENTS, criteria: CRITERIA });
+  assert.match(digest.text, /## Criterio de la dirección \(confirmado por Rodny\)\n\[R:equipo-r4\] Regla 4\. Días sin publicar/);
+  const request = buildDailyReadingRequest({ digest, today: DAY });
+  assert.match(request.prompt, /regla: el id \[R:…\] de la regla del criterio que aplica/);
+  assert.match(request.prompt, /Nunca propongas algo que vaya contra una regla/);
+  const raw = { ...modelAnswer, decisiones: modelAnswer.decisiones.map((d, i) => ({ ...d, regla: i === 0 ? 'equipo-r4' : i === 1 ? 'equipo-r7' : i === 4 ? 'equipo-inventada' : null })) };
+  const out = validateDailyReading(raw, { signals: SIGNALS, clients: CLIENTS, day: DAY, criteria: CRITERIA });
+  assert.deepEqual(out.decisions.map((d) => d.rule?.id || null), ['equipo-r4', 'equipo-r7', null], 'an unknown rule id is dropped, not invented');
+  assert.equal(out.decisions[0].rule.text, CRITERIA[0].text);
+  const reading = composeReading({ day: DAY, baseDay: '2026-10-19', summary: SUMMARY, signals: SIGNALS, clients: CLIENTS, model: out });
+  const { text } = buildMorningBrief({ recipientName: 'Rodny', reading, scope: { clientIds: null, people: true } });
+  // Rodny, 20 de octubre de 2026: «no quiero que debajo de ningún mensaje aparezcan los criterios o reglas, eso le resta
+  // naturalidad». La regla guía la decisión y queda guardada; el mensaje no la recita, ni a la dirección ni a nadie.
+  assert.match(text, /1\. \*\*Destrabar las aprobaciones de Foobespain\.\*\*[^\n]*\n   - Se ve en: [^\n]*\n   - Pídemelo así/);
+  assert.doesNotMatch(text, /Regla \d|criterio/i);
+  assert.equal(reading.decisions[0].rule.id, 'equipo-r4');
+  const direction = validateDailyReading({ ...modelAnswer, decisiones: [{ ...modelAnswer.decisiones[0], regla: 'equipo-r6' }] }, { signals: SIGNALS, clients: CLIENTS, day: DAY, criteria: CRITERIA });
+  const pmBrief = buildMorningBrief({ recipientName: 'Camila', reading: composeReading({ day: DAY, baseDay: '2026-10-19', summary: SUMMARY, signals: SIGNALS, clients: CLIENTS, model: direction }), scope: { clientIds: new Set(['c1']), people: false } });
+  assert.doesNotMatch(pmBrief.text, /más paga|criterio/i);
+});
+
 test('the digest names every signal and every account in trouble, with its ids, and only data', () => {
   const digest = buildDailyDigest({ today: DAY, baseDay: '2026-10-19', summary: SUMMARY, signals: SIGNALS, clients: CLIENTS });
   assert.match(digest.text, /Hoy: martes 20 de octubre\. Última lectura: lunes 19 de octubre\. Fotos guardadas: 12 días \(desde el 8 de octubre\)\./);

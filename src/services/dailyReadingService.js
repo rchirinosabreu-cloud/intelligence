@@ -18,6 +18,8 @@ import { clientSnapshot, personSnapshot, readSignals, levelLabel } from '../lib/
 import { buildDailyDigest, buildDailyReadingRequest, parseDailyReading, validateDailyReading, composeReading, buildMorningBrief } from '../lib/dailyReading.js';
 import { suppressedDecisions, decisionOutcome, scorecard, resolveDecisionRef, normalizeVerdict, VERDICTS, SUPPRESS_DAYS, OUTCOME_AFTER_DAYS, OUTCOME_UNTIL_DAYS } from '../lib/decisionLog.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
+import { factAccess, AGENCY_ENTITY } from '../lib/briaAgencyFacts.js';
+import { createBriaAgencyFactRepository } from './briaAgencyFactRepository.js';
 import { createDailyReadingRepository } from './dailyReadingRepository.js';
 import { createBriaProactiveRepository } from './briaProactiveRepository.js';
 import { createBriaConversationRepository } from './briaConversationRepository.js';
@@ -49,9 +51,20 @@ const defaultGenerate = async (request) => {
 /** Lo que espera al cliente: una pieza en revisión, o una aprobada que recibió material nuevo. Un borrador no. */
 const awaitsClient = (item) => item.status === 'EN_REVISION' || approvalState(item) === APPROVAL_STATES.MATERIAL_NUEVO;
 
+// El manual de criterio vive en la memoria de la agencia como hechos confirmados por la dirección (entidad «Brain
+// Studio», tema «criterio»). Se lee con acceso de administración para que el modelo vea el criterio entero; en el
+// mensaje de cada persona, una regla de dirección se cita solo a quien puede verla.
+const SYSTEM_READER = { role: 'ADMIN', isActive: true, modulePermissions: { bria: true, financiero: true } };
+const defaultCriteria = async () => {
+  const facts = createBriaAgencyFactRepository({ pool: getSidecarPool(), workspace: 'application' });
+  const rows = await facts.search(factAccess(SYSTEM_READER), { entity: AGENCY_ENTITY, topic: 'criterio', limit: 60 });
+  return rows.filter((row) => row.origin === 'EQUIPO').map((row) => ({ id: row.id, text: row.statement, purpose: row.purpose }))
+    .sort((a, b) => (Number(/Regla (\d+)/.exec(a.text)?.[1]) || 99) - (Number(/Regla (\d+)/.exec(b.text)?.[1]) || 99));
+};
+
 export const createDailyReadingService = ({
   db = prisma, repository, proactive, conversations, operations = clientOperationsService, generate = defaultGenerate,
-  now = () => new Date(), notify = createNotification, listPeople = listBriaPeople, logger = console
+  criteria = defaultCriteria, now = () => new Date(), notify = createNotification, listPeople = listBriaPeople, logger = console
 } = {}) => {
   const repo = repository || createDailyReadingRepository({ pool: getSidecarPool() });
   const deliveries = proactive || createBriaProactiveRepository({ pool: getSidecarPool() });
@@ -122,12 +135,15 @@ export const createDailyReadingService = ({
       const { baseDay, signals, summary } = readSignals({ today, current, history });
       let model = null, usage = null, modelName = null, digestText = null;
       if (signals.length) {
-        const digest = buildDailyDigest({ today, baseDay, summary, signals, clients: current.clients });
+        // El manual de criterio: si la memoria no responde, la lectura sale sin él y se anota; nunca se frena por eso.
+        let rules = [];
+        try { rules = await criteria(); } catch (error) { logger.error('[DailyReading] Sin el manual de criterio esta vez:', error?.message || error); }
+        const digest = buildDailyDigest({ today, baseDay, summary, signals, clients: current.clients, criteria: rules });
         digestText = digest.text;
         try {
           const answer = await generate(buildDailyReadingRequest({ digest, today }));
           modelName = answer.model || null; usage = answer.usage || null;
-          model = validateDailyReading(parseDailyReading(answer.text), { signals, clients: current.clients, day: today });
+          model = validateDailyReading(parseDailyReading(answer.text), { signals, clients: current.clients, day: today, criteria: rules });
         } catch (error) { logger.error('[DailyReading] El modelo no respondió; Bria lee con las reglas:', error?.message || error); }
       }
       // El libro de decisiones: lo que la dirección descartó tres veces en 30 días no se vuelve a proponer.

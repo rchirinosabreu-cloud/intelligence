@@ -125,6 +125,15 @@ test('a missing photo breaks a quiet streak: a day without data is unknown, not 
   assert.equal(out.signals.some((s) => s.kind === 'SIN_MOVIMIENTO'), false, 'only 19 and 16 are known in a row: too short');
 });
 
+test('more pieces than the contract says is a signal (regla 10 del manual: todo extra se cuenta y se cobra)', () => {
+  const over = clientMetrics({ cycle: { label: 'Octubre', quota: 12, created: 15, published: 6, approved: 9, overdueItems: 0, expected: 7, day: 20, length: 31 } });
+  const out = readSignals({ today: '2026-10-20', current: { clients: [{ id: 'c1', name: 'MultiK', slug: 'multik', metrics: over }], people: [] }, history: [day('2026-10-19', { c1: over })] });
+  const signal = out.signals.find((s) => s.kind === 'FUERA_DE_ALCANCE');
+  assert.equal(signal.text, 'MultiK tiene 15 piezas creadas este mes y el contrato dice 12: 3 de más que se cuentan y se cobran aparte.');
+  assert.equal(signal.severity, 1);
+  assert.equal(readSignals({ today: '2026-10-20', current: { clients: [{ id: 'c1', name: 'MultiK', slug: 'multik', metrics: clientMetrics({ cycle: { ...over.cycle, created: 12 } }) }], people: [] }, history: [] }).signals.some((s) => s.kind === 'FUERA_DE_ALCANCE'), false);
+});
+
 test('hours on an account that jump against its own last three weeks', () => {
   const history = [];
   for (let i = 27; i >= 1; i -= 1) {

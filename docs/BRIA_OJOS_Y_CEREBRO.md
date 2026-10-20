@@ -19,7 +19,7 @@ Bria ya tenía manos (acciones con confirmación), ojos de corto plazo (el pulso
 |---|---|---|---|
 | 1 | Memoria del tiempo y la mañana | Foto diaria de cada cuenta y persona, lectura del día con lo que haría y no haría, mensaje a las 7:30 | **Construida** (este documento, abajo) |
 | 2 | Libro de decisiones | Cada recomendación queda anotada con lo que decidió la persona («lo hice», «no», «después») y, días después, qué pasó; así se mide el acierto | **Construida** (abajo) |
-| 3 | Manual de criterio | Cómo decide Rodny, escrito con él en una sesión de preguntas; Bria lo cita al recomendar y propone ajustarlo cuando la corrigen, nunca lo cambia sola | Pendiente: requiere la sesión con Rodny |
+| 3 | Manual de criterio | Cómo decide Rodny, escrito con él en una sesión de preguntas; Bria lo cita al recomendar y propone ajustarlo cuando la corrigen, nunca lo cambia sola | **Construida** (sesión del 20 de octubre de 2026; abajo) |
 | 4 | Rentabilidad y revisión mensual | Horas de Ritmo frente al fee de cada cuenta; revisión de cada cliente al cerrar el mes | Pendiente |
 
 **Autonomía:** sigue mandando la regla de Rodny del 21 de septiembre de 2026 (`docs/BRIA_AUTONOMY_PLAN.md`): **la decisión final siempre es humana** y Bria no ejecuta nada sola, ni siquiera lo interno y reversible. Lo que crece es su lectura y la calidad de lo que propone; si algún día Rodny autoriza que algo concreto se ejecute solo, se decide aparte y por tipo. Lo que toca a un cliente, el dinero o los permisos pasa por una persona en cualquier caso. Los comentarios de Meta quedaron fuera del plan por decisión de Rodny.
@@ -63,3 +63,30 @@ Rodny, 19 de octubre de 2026: «avanza con el libro de decisiones», y la condic
 - **El acierto** (`scorecard`) mide decisiones, nunca personas: adopción, hechas que se resolvieron, descartadas que se resolvieron solas, descartadas que siguen. Es la cifra que dirá, con los meses, si Bria vale la pena.
 
 **Qué no hace.** No cambia su criterio por su cuenta (eso es la pieza 3, con Rodny), no ejecuta nada, no anota por adivinar: si no entiende a cuál decisión se refiere o qué decidió, pregunta en una frase. Regla pura en `src/lib/decisionLog.js`; tabla `bria_memory.decision_log`; herramienta `anotar_decision`. Contratos: `tests/decisionLog.test.js`, `tests/dailyReadingService.test.js`, `tests/dailyReadingPostgres.test.js`.
+
+## Pieza 3 — El manual de criterio (20 de octubre de 2026)
+
+**Qué es.** Cómo decide Rodny, escrito con él en una sesión de doce preguntas en el chat y guardado como **trece reglas numeradas** en la memoria de la agencia (`bria_memory.agency_facts`: entidad «Brain Studio», tema `criterio`, origen `EQUIPO`, certeza `CONFIRMADO`, actor Rodny). No hay tabla nueva ni pantalla: el manual **es memoria**, como todo lo que el equipo le enseña a Bria, y se corrige por la misma vía (`guardar_en_memoria` reemplaza la regla anterior, que queda `SUPERSEDED` con su historial). Las reglas que contradecían lecturas anteriores de los chats las sustituyeron; las dudas que respondían quedaron cerradas.
+
+**Las reglas, en resumen** (el texto completo vive en la memoria):
+1. Nada se publica sin aprobación del cliente; excepción del equipo: si de verdad no responde y conocemos su criterio, se publica con confianza. Bria avisa antes de la fecha cuando falta la aprobación, sin frenar.
+2. Lo ajustado vuelve al cliente antes de publicarse, salvo al límite de tiempo o de publicaciones, o si el ajuste es sencillo y evidente (una tilde, un tono).
+3. Liderar al cliente o darle literal lo que pide es criterio del equipo, cuenta por cuenta: dato de la ficha, no regla general.
+4. Días sin publicar: tres días es alerta para cualquier cliente salvo un plan muy básico; seis días es grave.
+5. Lo que Bria le sube directo a Rodny sin pasar por el PM: cliente en riesgo de irse, pauta apagada por falta de pago, contenido publicado en la cuenta de otro cliente, cualquier error con MIO, entrega web atada a un evento. Lo demás va al PM.
+6. Prioridad entre cuentas: MIO Agencia y sus clientes primero; hoy el objetivo es que todas estén sanas, y en un momento crítico se cuida más al que más paga. *(Propósito `direccion`, sensibilidad restringida: solo la ve la dirección.)*
+7. La carga de una persona se mide por horas estimadas y por vencidas acumuladas; noches y fines de semana no son señal por sí solos (Bria dice el hecho sin suponer el motivo).
+8. Línea roja en web: nunca se entregan accesos al cPanel ni al hosting; si el cliente los exige, la responsabilidad del sitio pasa a él y se deja por escrito.
+9. Nunca se promete una fecha sin los insumos completos, ni se promete al cliente lo que no pidió.
+10. Todo trabajo fuera de alcance se cuenta y se cobra por bloque; Bria avisa cuando una cuenta acumula pedidos fuera de parrilla o versiones de más.
+11. A un mensaje del cliente se le acusa recibo siempre: lo normal es 20 a 30 minutos; una o dos horas es inaceptable; medio día, lo peor. (Bria la cita, no la vigila mientras los chats vivan en WhatsApp.)
+12. En los informes y ante el cliente se cuida el tono aunque los resultados sean malos; hacia adentro, y en lo que Bria le dice a Rodny y al equipo, crudo y sin suavizar.
+13. No hay regla general sobre el uso de IA en el contenido: Bria propone y el criterio final es del equipo, cliente por cliente.
+
+**Cómo se usa.**
+- **La lectura de la mañana lo lee entero** antes de escribir (`dailyReadingService`, `criteria()` → `buildDailyDigest({ criteria })`: sección «Criterio de la dirección (confirmado por Rodny)» con `[R:<id>]` por regla). El modelo debe decir en cada decisión **qué regla aplica** (`regla`), nunca proponer contra una y, si una regla pide no hacer algo, proponerlo como «no hacer» con esa regla. `validateDailyReading` conserva la regla **solo si el id existe** en el manual: una regla inventada se descarta. Si la memoria no responde, la lectura sale sin el manual y se anota; nunca se frena por eso.
+- **El mensaje no lo recita** (Rodny, 20 de octubre de 2026: «no quiero que debajo de ningún mensaje aparezcan los criterios o reglas, eso le resta naturalidad a Bria; los criterios ya me los sé yo»). La regla queda guardada en la decisión (`rule`) para el libro y para saber qué criterio la guió, pero el texto de la mañana dice la decisión y su evidencia, nada más. Se construyó una línea «Según tu criterio: «Regla 4…»» y se quitó el mismo día; no reponerla.
+- **La regla 10 vive también en las señales**: `FUERA_DE_ALCANCE` (`agencySnapshot.readSignals`) avisa cuando una cuenta tiene más piezas creadas que las contratadas, con cuántas de más; la lectura sin modelo la vuelve «Revisar el alcance de X».
+- **En el chat**, la regla 24 de Bria le pide **aplicar** el criterio sin recitarlo ni citar números de regla —nombrarlo solo si le preguntan por qué—, no recomendar contra ninguna regla y, si la corrigen o le precisan algo que una regla dice, **ofrecer guardar la precisión** con `guardar_en_memoria` en vez de cambiarla sola. El manual se afina conversando, no por formularios.
+
+**Qué no hace.** No convierte las reglas en criterios editoriales de la revisión automática de parrillas (eso se decide aparte, por cliente, en `ClientEditorialCriterion`); no aplica el manual a personas (ninguna regla juzga a nadie: la 7 mide carga, no desempeño); no inventa reglas que la dirección no dijo. Contratos: `tests/dailyReading.test.js`, `tests/dailyReadingService.test.js`, `tests/agencySnapshot.test.js`.
