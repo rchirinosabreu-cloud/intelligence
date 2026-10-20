@@ -264,13 +264,13 @@ export const buildMorningBrief = ({ recipientName, reading, scope = { clientIds:
       lines.push(`${i + 1}. **${d.title}.** ${d.why}`);
       const seen = d.evidence.map((id) => signalsById.get(id)).filter(Boolean);
       if (seen.length) lines.push(`   - Se ve en: ${seen.map((row) => `${row.text}${row.url ? ` [Ver](${row.url})` : ''}`).join(' ')}`);
-      // La regla del manual que aplica. Una regla de dirección (restringida) solo se le muestra a la dirección.
-      if (d.rule) lines.push(agency || d.rule.purpose !== 'direccion' ? `   - Según tu criterio: «${d.rule.text}»` : '   - Según el criterio de la dirección.');
+      // La regla del manual que aplica queda en la decisión (`d.rule`) para el libro, pero no se escribe en el mensaje
+      // (Rodny, 20 de octubre de 2026: «no quiero que debajo de ningún mensaje aparezcan los criterios … le resta naturalidad»).
       if (d.ask) lines.push(`   - Pídemelo así: «${d.ask}»`);
     });
     lines.push('');
   }
-  if (avoid.length) lines.push('**Lo que no haría**', '', ...avoid.map((d) => `- **${d.title}.** ${d.why}${d.rule ? (agency || d.rule.purpose !== 'direccion' ? ` Según tu criterio: «${d.rule.text}»` : ' Según el criterio de la dirección.') : ''}`), '');
+  if (avoid.length) lines.push('**Lo que no haría**', '', ...avoid.map((d) => `- **${d.title}.** ${d.why}`), '');
   const more = (reading.signals || []).filter(visible).filter((row) => row.direction === 'peor' && !covered.has(row.id)).slice(0, 6);
   if (more.length) lines.push('**También cambió**', '', ...more.map((row) => `- ${row.text}${row.url ? ` [Ver](${row.url})` : ''}`), '');
   const better = (reading.signals || []).filter(visible).filter((row) => row.direction === 'mejor').slice(0, 4);

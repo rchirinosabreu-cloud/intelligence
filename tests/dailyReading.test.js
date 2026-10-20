@@ -43,7 +43,7 @@ const CRITERIA = [
   { id: 'equipo-r7', text: 'Regla 7. La carga de una persona se mide por horas estimadas y por vencidas acumuladas.', purpose: 'operacion' }
 ];
 
-test('the manual of criteria goes into the digest, each decision may cite the rule it applies, and the morning says it', () => {
+test('the manual of criteria goes into the digest, each decision keeps the rule it applies, and the morning never recites it', () => {
   const digest = buildDailyDigest({ today: DAY, baseDay: '2026-10-19', summary: SUMMARY, signals: SIGNALS, clients: CLIENTS, criteria: CRITERIA });
   assert.match(digest.text, /## Criterio de la dirección \(confirmado por Rodny\)\n\[R:equipo-r4\] Regla 4\. Días sin publicar/);
   const request = buildDailyReadingRequest({ digest, today: DAY });
@@ -55,13 +55,14 @@ test('the manual of criteria goes into the digest, each decision may cite the ru
   assert.equal(out.decisions[0].rule.text, CRITERIA[0].text);
   const reading = composeReading({ day: DAY, baseDay: '2026-10-19', summary: SUMMARY, signals: SIGNALS, clients: CLIENTS, model: out });
   const { text } = buildMorningBrief({ recipientName: 'Rodny', reading, scope: { clientIds: null, people: true } });
-  assert.match(text, /1\. \*\*Destrabar las aprobaciones de Foobespain\.\*\*[^\n]*\n   - Se ve en: [^\n]*\n   - Según tu criterio: «Regla 4\. Días sin publicar[^\n]*\n   - Pídemelo así/);
-  assert.match(text, /- \*\*No cargarle más trabajo a Melissa esta semana\.\*\*[^\n]* Según tu criterio: «Regla 7\./);
-  // Una regla de dirección (restringida) no se le muestra a un project manager; solo que el criterio existe.
+  // Rodny, 20 de octubre de 2026: «no quiero que debajo de ningún mensaje aparezcan los criterios o reglas, eso le resta
+  // naturalidad». La regla guía la decisión y queda guardada; el mensaje no la recita, ni a la dirección ni a nadie.
+  assert.match(text, /1\. \*\*Destrabar las aprobaciones de Foobespain\.\*\*[^\n]*\n   - Se ve en: [^\n]*\n   - Pídemelo así/);
+  assert.doesNotMatch(text, /Regla \d|criterio/i);
+  assert.equal(reading.decisions[0].rule.id, 'equipo-r4');
   const direction = validateDailyReading({ ...modelAnswer, decisiones: [{ ...modelAnswer.decisiones[0], regla: 'equipo-r6' }] }, { signals: SIGNALS, clients: CLIENTS, day: DAY, criteria: CRITERIA });
   const pmBrief = buildMorningBrief({ recipientName: 'Camila', reading: composeReading({ day: DAY, baseDay: '2026-10-19', summary: SUMMARY, signals: SIGNALS, clients: CLIENTS, model: direction }), scope: { clientIds: new Set(['c1']), people: false } });
-  assert.match(pmBrief.text, /- Según el criterio de la dirección\./);
-  assert.doesNotMatch(pmBrief.text, /más paga/);
+  assert.doesNotMatch(pmBrief.text, /más paga|criterio/i);
 });
 
 test('the digest names every signal and every account in trouble, with its ids, and only data', () => {

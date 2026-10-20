@@ -231,8 +231,9 @@ test('the manual of criteria is read from the agency memory, shown to the model,
   assert.equal(repository.readings.get('2026-10-20').decisions[0].rule.id, 'equipo-r4');
   setClock(at('07:40'));
   await service.runAutomatic();
+  // La regla guía la decisión y queda en el libro, pero el mensaje no la recita (Rodny, 20 de octubre de 2026).
   const rodny = notes.find((n) => n.actor.ref === 'u-rodny').note.text;
-  assert.match(rodny, /Según tu criterio: «Regla 4\. Días sin publicar/);
+  assert.doesNotMatch(rodny, /Regla 4|criterio/);
 });
 
 test('if the model fails, Bria reads with the platform’s rules instead of going quiet', async () => {
@@ -284,7 +285,8 @@ test('the morning message shows above the mascot after the close and before the 
 test('Bria is told how to use its memory of time, and the platform runs it on its own', () => {
   const instructions = buildInstructions({ person: { name: 'Rodny' }, today: '2026-10-20', tools: [{ name: 'lectura_de_la_agencia', description: 'x' }], user: { role: 'ADMIN' } });
   assert.match(instructions, /24\. Eres los ojos de la dirección/);
-  assert.match(instructions, /nunca recomiendes contra una regla, y si la persona te corrige en algo que una regla dice, no cambies la regla por tu cuenta/);
+  assert.match(instructions, /aplícalo al recomendar sin recitarlo ni citar números de regla/);
+  assert.match(instructions, /Nunca recomiendes contra una regla, y si la persona te corrige o precisa algo que una regla dice, no cambies la regla por tu cuenta/);
   assert.match(instructions, /lo que conviene no hacer y por qué/);
   assert.equal(toolProgressLabel('lectura_de_la_agencia'), 'Repasando cómo viene la agencia…');
   assert.match(readFileSync('server.js', 'utf8'), /initDailyReadingScheduler\(\);/);
