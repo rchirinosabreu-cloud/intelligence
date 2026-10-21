@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { buildLearningDigest, buildLearningRequest, parseLearnings, validateLearnings, learnedSection, learningId, quotedInText, LEARNING_SCHEMA } from '../src/lib/conversationLearning.js';
+import { buildLearningDigest, buildLearningRequest, parseLearnings, validateLearnings, learningId, quotedInText, LEARNING_SCHEMA } from '../src/lib/conversationLearning.js';
 
 const DAY = '2026-10-20';
 const conversation = {
@@ -63,16 +63,3 @@ test('quotes are compared without accents, case or punctuation, and short ones n
   assert.equal(quotedInText('Mimas', 'Mimas pide todo'), false);
 });
 
-test('the morning says what Bria learned yesterday, with who said it and the way out', () => {
-  const facts = [
-    { entity: 'Mimas Kitchen', statement: 'Los pendientes van con prioridad alta.', sources: [{ ref: 'Chat con Bria de Francisco Villa (Francisco): «Con Mimas siempre va alta»' }] },
-    { entity: 'Wine & Wonder', statement: 'Sin voz en off, solo con música.', sources: [] }
-  ];
-  const lines = learnedSection(facts);
-  assert.equal(lines[0], '**Ayer aprendí** (de las conversaciones con el equipo)');
-  assert.equal(lines[2], '- Mimas Kitchen: Los pendientes van con prioridad alta. (lo dijo Francisco)');
-  assert.equal(lines[3], '- Wine & Wonder: Sin voz en off, solo con música.');
-  assert.ok(lines.includes('Si algo no es así, dímelo y lo retiro.'));
-  assert.deepEqual(learnedSection([]), []);
-  assert.match(learnedSection(Array.from({ length: 7 }, (_, i) => ({ entity: `C${i}`, statement: 's', sources: [] }))).join('\n'), /y 2 más/);
-});

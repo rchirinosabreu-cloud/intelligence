@@ -21,8 +21,7 @@ const setup = ({ answer, chats = [] } = {}) => {
   const conversations = { async conversationsBetween(fromIso, toIso) { queries.push(`between ${fromIso} ${toIso}`); return chats; } };
   const facts = {
     async search() { return [{ id: 'k1', entity: 'Mimas Kitchen', statement: 'Publica martes y jueves.' }]; },
-    async importReading(args) { imported.push(args); return { create: args.facts.length, update: 0, unchanged: 0, keptByTeam: 0 }; },
-    async learnedSince(access, { fromDay }) { return [{ id: 'f1', entity: 'Mimas Kitchen', clientId: 'c-mimas', statement: 'Alta.', purpose: 'operacion', sensitivity: 'normal', access, fromDay }, { id: 'f2', entity: 'Brain Studio', clientId: null, statement: 'Agencia.', purpose: 'operacion', sensitivity: 'normal' }]; }
+    async importReading(args) { imported.push(args); return { create: args.facts.length, update: 0, unchanged: 0, keptByTeam: 0 }; }
   };
   const db = {
     user: { findMany: async () => [{ id: 'u-fran', name: 'Francisco', teamMember: { name: 'Francisco Villa' } }] },
@@ -66,11 +65,7 @@ test('before six in the morning it catches up yesterday; during the day it waits
   assert.ok(queries.length === 0);
 });
 
-test('what Bria learned reaches the morning of each person with their own scope', async () => {
+test('the morning never lists what Bria learned (Rodny, 20 de octubre de 2026: «no quiero lo de “ayer aprendí”»)', async () => {
   const { service } = setup();
-  const admin = { role: 'ADMIN', isActive: true, modulePermissions: { bria: true } };
-  const all = await service.learnedFor(admin, { fromDay: '2026-10-20' });
-  assert.equal(all.length, 2); assert.equal(all[0].fromDay, '2026-10-20');
-  const mine = await service.learnedFor(admin, { fromDay: '2026-10-20', clientIds: new Set(['c-mimas']) });
-  assert.deepEqual(mine.map((f) => f.id), ['f1'], 'un project manager ve solo lo de sus cuentas; lo de la agencia no');
+  assert.equal(typeof service.learnedFor, 'undefined');
 });

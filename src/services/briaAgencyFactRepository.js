@@ -77,14 +77,6 @@ export const createBriaAgencyFactRepository = ({ pool, workspace }) => {
       return rows.map(present).filter((fact) => factVisible(fact, access));
     },
 
-    /** Lo aprendido de los chats desde un día (inclusive), ya filtrado por lo que la persona puede ver. */
-    async learnedSince(access, { fromDay, limit = 40 } = {}) {
-      if (!access?.purposes?.length || !fromDay) return [];
-      const rows = (await pool.query(`${SELECT} WHERE f.workspace = $1 AND f.status = 'ACTIVE' AND f.origin = 'CONVERSACION' AND ${VISIBLE}
-        AND f.created_at >= ($4::date::timestamp AT TIME ZONE 'America/Bogota') ORDER BY f.created_at DESC, f.id LIMIT $5`, [workspace, access.purposes, access.restricted, fromDay, Math.min(Math.max(Number(limit) || 40, 1), 100)])).rows;
-      return rows.map(present).filter((fact) => factVisible(fact, access));
-    },
-
     async get(access, id) {
       const row = present((await pool.query(`${SELECT} WHERE f.workspace=$1 AND f.id=$2`, [workspace, id])).rows[0]);
       return factVisible(row, access) ? row : null;
