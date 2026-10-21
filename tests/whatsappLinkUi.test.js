@@ -5,13 +5,17 @@ import { readFileSync } from 'node:fs';
 // La tarjeta «Bria en WhatsApp» del perfil (20 de octubre de 2026): la persona vincula su número con un código que
 // ella misma le manda a Bria; la tarjeta solo existe para quien tiene Bria y sigue las reglas de superficie de IA.
 
-const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8');
+// Los saltos de línea se igualan: en una copia de Windows el archivo llega con CRLF y las búsquedas por texto fallarían.
+const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
 const card = read('src/components/profile/WhatsAppLink.jsx');
 
-test('el perfil monta la tarjeta solo en el perfil propio, junto a la verificación en dos pasos', () => {
+test('el perfil monta la tarjeta solo en el perfil propio, en la tercera columna, bajo la verificación en dos pasos', () => {
   const profile = read('src/components/modules/Profile.jsx');
   assert.match(profile, /import WhatsAppLink from '@\/components\/profile\/WhatsAppLink'/);
-  assert.match(profile, /\{isOwnProfile && <MfaSettings \/>\}\s*\{isOwnProfile && <WhatsAppLink \/>\}/);
+  // Tres columnas iguales (Rodny, 21 de octubre de 2026): información, seguridad, y verificación con Bria.
+  assert.match(profile, /grid grid-cols-1 lg:grid-cols-3 gap-8 items-start" data-profile-general-grid/);
+  assert.doesNotMatch(profile.slice(profile.indexOf('data-profile-general-grid'), profile.indexOf('data-profile-security-column')), /lg:col-span-2/);
+  assert.match(profile, /\{isOwnProfile && \(\s*<div className="min-w-0 space-y-6" data-profile-security-column>\s*<MfaSettings \/>\s*<WhatsAppLink \/>\s*<\/div>\s*\)\}/);
 });
 
 test('solo quien tiene Bria la ve, y el vínculo nace de la plataforma: código, número de Bria y enlace a WhatsApp', () => {

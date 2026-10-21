@@ -370,9 +370,11 @@ const Profile = () => {
 
                 {/* --- TAB: GENERAL --- */}
                 <TabsContent value="general" className="space-y-6 outline-none">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Tres columnas iguales (Rodny, 21 de octubre de 2026): información, seguridad, y verificación
+                        en dos pasos con Bria en WhatsApp una encima de la otra. */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start" data-profile-general-grid>
                         {/* Profile Info Form */}
-                        <div className="lg:col-span-2 space-y-6">
+                        <div className="min-w-0 space-y-6">
                             <Card className="bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl overflow-hidden">
                                 <CardHeader className="bg-zinc-50/50 dark:bg-zinc-800/20 border-b border-zinc-100 dark:border-zinc-800">
                                     <CardTitle className="text-xl flex items-center gap-2">
@@ -432,7 +434,7 @@ const Profile = () => {
                         </div>
 
                         {/* Password Form (Only for own profile) */}
-                        <div className="space-y-6">
+                        <div className="min-w-0 space-y-6">
                             {isOwnProfile ? (
                                 <Card className="bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl overflow-hidden">
                                     <CardHeader className="bg-zinc-50/50 dark:bg-zinc-800/20 border-b border-zinc-100 dark:border-zinc-800">
@@ -491,9 +493,13 @@ const Profile = () => {
                                     {isAdmin && <MfaAdminReset userId={profileData.id || userId} name={profileData.name} />}
                                 </Card>
                             )}
-                            {isOwnProfile && <MfaSettings />}
-                            {isOwnProfile && <WhatsAppLink />}
                         </div>
+                        {isOwnProfile && (
+                            <div className="min-w-0 space-y-6" data-profile-security-column>
+                                <MfaSettings />
+                                <WhatsAppLink />
+                            </div>
+                        )}
                     </div>
                 </TabsContent>
 

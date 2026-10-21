@@ -79,13 +79,18 @@ export async function createWhatsAppPreview({ port = 3114 } = {}) {
     return res.json({ webhook: outcome, phone });
   });
   api.get('/api/preview/phone', (_req, res) => res.json({ phone }));
+  // El perfil completo en /perfil (21 de octubre de 2026), para ver la tarjeta en su sitio: tres columnas.
+  api.get('/api/user/profile', (_req, res) => res.json({ id: PERSON.id, name: PERSON.name, email: PERSON.email, role: PERSON.role, bio: 'Director de Brain Studio.', avatarUrl: '' }));
+  api.get('/api/user/mfa', (_req, res) => res.json({ enabled: true, required: true, enabledAt: '2026-10-12T15:00:00.000Z', recoveryCodesRemaining: 10 }));
+  api.get('/api/user/notes', (_req, res) => res.json([]));
+  api.get('/api/user/onboarding', (_req, res) => res.json({ guides: [] }));
   api.all('/api/*', (_req, res) => res.status(404).json({ message: 'Solo Bria en WhatsApp está disponible en esta muestra.' }));
 
   const root = path.resolve(import.meta.dirname, '..');
   const server = await createServer({
     configFile: false, root, envDir: path.resolve(root, 'tests/fixtures'),
     cacheDir: path.resolve(root, 'node_modules/.vite-whatsapp'), appType: 'mpa',
-    optimizeDeps: { entries: ['tests/fixtures/whatsapp-preview.html'] }, esbuild: { jsx: 'automatic' },
+    optimizeDeps: { entries: ['tests/fixtures/whatsapp-preview.html', 'tests/fixtures/profile-preview.html'] }, esbuild: { jsx: 'automatic' },
     define: { __BUILD_SHA__: JSON.stringify('local-whatsapp'), 'import.meta.env.VITE_API_URL': 'window.location.origin' },
     resolve: { alias: { '@': path.resolve(root, 'src') } }, logLevel: 'warn',
     server: { host: '127.0.0.1', port, strictPort: port !== 0, proxy: {} },
@@ -94,7 +99,7 @@ export async function createWhatsAppPreview({ port = 3114 } = {}) {
         res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws://127.0.0.1:*; worker-src 'self' blob:; frame-src 'none'");
         const { pathname } = new URL(req.url, 'http://localhost');
         if (pathname.startsWith('/api/')) return api(req, res, next);
-        if (req.headers.accept?.includes('text/html') && !pathname.includes('.')) req.url = '/tests/fixtures/whatsapp-preview.html';
+        if (req.headers.accept?.includes('text/html') && !pathname.includes('.')) req.url = pathname.startsWith('/perfil') ? '/tests/fixtures/profile-preview.html' : '/tests/fixtures/whatsapp-preview.html';
         return next();
       });
     } }]
