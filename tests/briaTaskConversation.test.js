@@ -1,5 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { lastCreatedTaskClient } from '../src/services/briaConversationService.js';
+
+test('the client of the last task created in the chat is read from the saved turns, never guessed (Rodny, 20 de octubre de 2026)', () => {
+  const done = (draft) => ({ role: 'assistant', pendingAction: { type: 'TASK_CREATE', status: 'DONE', draft } });
+  assert.deepEqual(lastCreatedTaskClient([done({ client: { id: 'c1', name: 'Nattal', slug: 'nattal' } })]), { id: 'c1', name: 'Nattal', slug: 'nattal' });
+  assert.equal(lastCreatedTaskClient([{ role: 'assistant', pendingAction: { type: 'TASK_CREATE', status: 'DRAFT', draft: { client: { id: 'c1', name: 'Nattal' } } } }]), null, 'un borrador sin crear no cuenta');
+  assert.deepEqual(lastCreatedTaskClient([done({ client: { id: 'c1', name: 'Nattal' } }), done({ client: { id: 'c2', name: 'Mimas' } })]), { id: 'c2', name: 'Mimas', slug: null }, 'manda el último');
+  assert.equal(lastCreatedTaskClient([done({ items: [{ client: { id: 'c1', name: 'Nattal' } }, { client: { id: 'c2', name: 'Mimas' } }] })]), null, 'un lote de clientes distintos no deja un cliente por defecto');
+  assert.deepEqual(lastCreatedTaskClient([{ role: 'assistant', taskDraft: { status: 'CREATED', client: { id: 'c3', name: 'Bonsai' } } }]), { id: 'c3', name: 'Bonsai', slug: null }, 'un turno viejo con taskDraft se lee igual');
+  assert.equal(lastCreatedTaskClient([]), null);
+});
 import { createBriaConversationService } from '../src/services/briaConversationService.js';
 const user = { userId: 'owner', role: 'ADMIN', isActive: true, modulePermissions: { bria: true, gestion: true } };
 const draft = { id: 'task', ownerId: 'owner', status: 'DRAFT', client: { id: 'client', name: 'Demo' }, assignee: { id: 'member', name: 'Persona demo' }, title: 'Entregar propuesta', context: 'Contexto de prueba', dueDate: '2026-10-09', priority: 'NORMAL', withoutMaterials: true };

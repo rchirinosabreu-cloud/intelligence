@@ -36,9 +36,11 @@ try {
   const panel = page.getByRole('region', { name: 'Conversación con Bria' }), composer = page.getByLabel('Mensaje para Bria');
   await panel.waitFor(); await page.waitForFunction(() => !document.querySelector('[aria-label="Nueva conversación"]')?.disabled);
   await composer.fill('Necesito crear un pendiente para Lucía, para mañana, para Empresa demo: preparar tres piezas para revisión interna.'); await composer.press('Enter');
-  await panel.getByRole('button', { name: 'Continuar sin insumos', exact: true }).click();
-  await panel.getByRole('button', { name: 'Alta', exact: true }).click();
+  // Una sola vuelta (Rodny, 20 de octubre de 2026): sin «¿insumos?» ni «¿prioridad?», el resumen sale listo con prioridad Normal.
   await panel.getByRole('button', { name: 'Crear pendiente', exact: true }).waitFor(); assert.equal(tasks.size, 0);
+  await page.getByText('Prioridad: Normal', { exact: false }).last().waitFor();
+  await page.getByText('Sin referencias ni insumos todavía', { exact: false }).last().waitFor();
+  assert.equal(await panel.getByRole('button', { name: 'Continuar sin insumos', exact: true }).count(), 0);
   await composer.fill('Cambia la prioridad a urgente y añade al contexto: adaptar el diseño al brief actualizado.'); await composer.press('Enter');
   await page.getByText('Prioridad: Urgente', { exact: false }).last().waitFor();
   await page.screenshot({ path: path.join(output, 'bria-pendiente-resumen.png') });
@@ -57,12 +59,12 @@ try {
   await page.screenshot({ path: path.join(output, 'bria-pendiente-creado.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: path.join(output, 'bria-pendiente-movil.png') });
-  assert.deepEqual(errors, []); assert.ok(sent.includes('Alta')); assert.equal(await composer.inputValue(), '');
-  console.log(JSON.stringify({ passed: true, simulatedModelAndDatabase: true, realConversationAndTaskOrchestration: true, tasksCreated: tasks.size, correctionSaved: true, duplicatePrevented: true }));
-} catch (failure) {
-  // Al fallar, queda la pantalla tal como estaba, los errores de página y el texto del panel para no adivinar.
+  assert.deepEqual(errors, []); assert.equal(sent.filter((q) => /^(Alta|Continuar sin insumos)$/.test(q)).length, 0, 'ningún botón de insumos ni prioridad'); assert.equal(await composer.inputValue(), '');
+  console.log(JSON.stringify({ passed: true, simulatedModelAndDatabase: true, realConversationAndTaskOrchestration: true, tasksCreated: tasks.size, oneRound: true, correctionSaved: true, duplicatePrevented: true }));
+} catch (error) {
+  // Si algo falla, dejar la pantalla y el texto del panel para no adivinar.
   await page.screenshot({ path: path.join(output, 'bria-pendiente-fallo.png') }).catch(() => {});
-  const panelText = await page.getByRole('region', { name: 'Conversación con Bria' }).innerText({ timeout: 1000 }).catch(() => '(sin panel)');
-  console.error(JSON.stringify({ passed: false, pageErrors: errors, panelText: panelText.slice(0, 1500) }));
-  throw failure;
+  console.error('[briaTasks] panel:', await page.getByRole('region', { name: 'Conversación con Bria' }).innerText().catch(() => '(sin panel)'));
+  console.error('[briaTasks] errores de página:', errors);
+  throw error;
 } finally { await browser.close(); await preview.close(); }

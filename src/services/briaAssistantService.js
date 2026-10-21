@@ -94,7 +94,7 @@ export const createBriaAssistantService = ({
 
   return {
     // `taskDraft` suelto lo sigue mandando la vista de investigación; aquí se envuelve en la base común.
-    async ask({ user, question, history, attachments = [], revalidateConversation, taskDraft, pendingAction, session = null, taskAttachments = [], taskEvidence, onEvent } = {}) {
+    async ask({ user, question, history, attachments = [], revalidateConversation, taskDraft, pendingAction, session = null, taskAttachments = [], taskEvidence, taskDefaults = {}, onEvent } = {}) {
       if (!pendingAction && taskDraft) pendingAction = wrapLegacyAction('TASK_CREATE', taskDraft);
       if (!canUseBria(user)) throw httpError(403, 'Bria no está activada para tu cuenta.', 'BRIA_DISABLED');
       const text = normalizeQuestion(question);
@@ -115,7 +115,7 @@ export const createBriaAssistantService = ({
         today: bogotaDate(now()),
         logger,
         onEvent,
-        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, ...context, pendingAction, taskAttachments, taskEvidence, revalidate }
+        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, ...context, pendingAction, taskAttachments, taskEvidence, taskDefaults, revalidate }
       });
       // El motivo técnico de un fallo se queda en el registro del servidor; al navegador solo va qué falló.
       await revalidate();
