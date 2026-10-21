@@ -33,4 +33,7 @@
 // 2.14 (20 de octubre de 2026): Bria relee cada noche las conversaciones del día con el equipo y guarda en la
 // memoria de la agencia lo que una persona afirmó sobre cuentas, acuerdos y formas de trabajar, con su autor y su
 // cita; nunca credenciales, datos personales ni juicios sobre personas. Se consulta y se retira como el resto.
-export const PRIVACY_POLICY_VERSION = '2.14 · 2026-10-20';
+// 2.15 (20 de octubre de 2026): Bria conversa por WhatsApp con el equipo desde el número de la agencia, por la API
+// oficial de Meta. Solo con la persona que vincula su número desde su perfil; los mensajes entran al mismo historial
+// de Bria; Meta recibe el texto de los mensajes como encargado del canal; no se envían contraseñas por ahí.
+export const PRIVACY_POLICY_VERSION = '2.15 · 2026-10-20';

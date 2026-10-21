@@ -23,6 +23,7 @@ import { createBriaKnowledgeRouter } from './api/briaKnowledge.js';
 import { createBriaConversationRouter } from './api/briaConversations.js';
 import { createBriaNudgeRouter } from './api/briaNudges.js';
 import { createBriaMailRouter } from './api/briaMail.js';
+import { createWhatsAppWebhookRouter, createBriaWhatsAppRouter } from './api/whatsapp.js';
 import { createVaultRouter } from './api/vault.js';
 // La cerradura de un pendiente privado: el tablero ya no manda su contenido, y estas
 // rutas —comentarios, adjuntos y la propia tarea— tampoco se lo dan a quien no puede
@@ -119,6 +120,10 @@ router.post('/minutes/fireflies/webhook', async (req, res) => {
     }
 });
 
+// Bria en WhatsApp (20 de octubre de 2026): público a propósito, como el de Fireflies; la cerradura es la firma
+// de Meta con el secreto de la app sobre los bytes originales. El GET es la verificación al registrar el webhook.
+router.use('/whatsapp', createWhatsAppWebhookRouter());
+
 router.post('/activity/google-calendar/webhook', async (req, res) => {
     try {
         const result = await handleGoogleCalendarWebhook(req.headers);
@@ -146,6 +151,8 @@ router.use('/bria/conversations', createBriaConversationRouter());
 router.use('/bria/nudges', createBriaNudgeRouter());
 // Buzones compartidos que lee Bria (11 de octubre de 2026): la contraseña de aplicación entra una vez y se sella.
 router.use('/bria/mail', createBriaMailRouter());
+// Bria en WhatsApp (20 de octubre de 2026): el vínculo del número de la persona, desde su perfil y con su sesión.
+router.use('/bria/whatsapp', createBriaWhatsAppRouter());
 // Bóveda de accesos (9 de octubre de 2026): administradores y project managers; quién ve cada acceso lo
 // decide el servicio en cada llamada.
 router.use('/vault', requireManagerRole, createVaultRouter());

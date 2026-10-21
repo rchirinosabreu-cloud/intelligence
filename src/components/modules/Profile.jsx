@@ -10,6 +10,7 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import AvatarEditor from '@/components/profile/AvatarEditor';
 import MfaSettings from '@/components/security/MfaSettings';
 import MfaAdminReset from '@/components/security/MfaAdminReset';
+import WhatsAppLink from '@/components/profile/WhatsAppLink';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
 import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, Trash2, Edit2, X, Check, Calendar, Target, Award, Info, Camera } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
@@ -491,6 +492,7 @@ const Profile = () => {
                                 </Card>
                             )}
                             {isOwnProfile && <MfaSettings />}
+                            {isOwnProfile && <WhatsAppLink />}
                         </div>
                     </div>
                 </TabsContent>
