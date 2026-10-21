@@ -40,3 +40,22 @@ export const fetchRecordDocumentBlob = async (recordId, document) => {
     const response = await axios.get(recordUrl(recordId, `/${document.id}/file`), { headers: authHeaders(), responseType: 'blob' });
     return response.data instanceof Blob ? response.data : new Blob([response.data], { type: document.mimeType });
 };
+
+// El soporte de una cuenta por pagar (20 de octubre de 2026): la factura o la cuenta de cobro que
+// mandó el tercero, con las mismas reglas que un comprobante.
+const payableUrl = (payableId, path = '') => `${getApiBaseUrl()}/api/financials/payables/${payableId}/documents${path}`;
+
+export const uploadPayableDocument = async (payableId, file) => {
+    const body = new FormData();
+    body.append('file', file, file.name);
+    const { data } = await axios.post(payableUrl(payableId), body, { headers: authHeaders() });
+    return data?.document;
+};
+
+export const fetchPayableDocumentBlob = async (payableId, document) => {
+    const response = await axios.get(payableUrl(payableId, `/${document.id}/file`), { headers: authHeaders(), responseType: 'blob' });
+    return response.data instanceof Blob ? response.data : new Blob([response.data], { type: document.mimeType });
+};
+
+export const recordDocumentsApi = { upload: uploadRecordDocument, fetchBlob: fetchRecordDocumentBlob, label: 'comprobante' };
+export const payableDocumentsApi = { upload: uploadPayableDocument, fetchBlob: fetchPayableDocumentBlob, label: 'soporte' };

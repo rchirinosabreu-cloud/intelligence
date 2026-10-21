@@ -37,6 +37,7 @@ import ReceivablePaymentEditDialog from './financial/ReceivablePaymentEditDialog
 import { isCashPayment, isReceivableClosed, settlementKindLabel } from '@/lib/receivableSettlement';
 import { isLoanReceivable, loanCounterpartyLabel } from '@/lib/receivableLoans';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
+import PayablesTab from './financial/PayablesTab';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
@@ -291,7 +292,7 @@ const FinancialDashboard = () => {
             });
             return res.data;
         },
-        enabled: !!(currentUser && canAccessFinancials && ['receivables', 'payroll'].includes(activeTab))
+        enabled: !!(currentUser && canAccessFinancials && ['receivables', 'payables', 'payroll'].includes(activeTab))
     });
 
     const { data: payrollLedger, isLoading: isPayrollLedgerLoading } = useQuery({
@@ -1370,6 +1371,15 @@ await invalidateFinancialQueries(queryClient);
                     Cartera
                 </button>
                 <button
+                    onClick={() => setActiveTab('payables')}
+                    className={cn(
+                        "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
+                        activeTab === 'payables' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
+                    )}
+                >
+                    Por pagar
+                </button>
+                <button
                     onClick={() => setActiveTab('payroll')}
                     className={cn(
                         "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
@@ -1819,6 +1829,12 @@ await invalidateFinancialQueries(queryClient);
                 )}
 
                 {/* PESTAÑA 3: NOMINA OPERATIVA */}
+                {/* Cuentas por pagar y terceros (Rodny, 20 de octubre de 2026): el espejo de Cartera. */}
+                {activeTab === 'payables' && (
+                    <PayablesTab filterQuery={filterQuery} formatCurrency={formatCurrency} accounts={financialAccounts?.accounts || []}
+                        canWrite={canWriteFinancials} enabled={!!(currentUser && canAccessFinancials)} />
+                )}
+
                 {activeTab === 'payroll' && (
                     <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
