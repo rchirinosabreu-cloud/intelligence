@@ -30,4 +30,7 @@
 // 2.13 (11 de octubre de 2026): Bria lee los buzones compartidos de la agencia (social y contacto) que un
 // administrador conecta, para avisar de correos importantes y resumirlos a pedido; no envía correos, no guarda
 // el cuerpo de los mensajes y la contraseña de aplicación se guarda cifrada.
-export const PRIVACY_POLICY_VERSION = '2.13 · 2026-10-11';
+// 2.14 (20 de octubre de 2026): Bria relee cada noche las conversaciones del día con el equipo y guarda en la
+// memoria de la agencia lo que una persona afirmó sobre cuentas, acuerdos y formas de trabajar, con su autor y su
+// cita; nunca credenciales, datos personales ni juicios sobre personas. Se consulta y se retira como el resto.
+export const PRIVACY_POLICY_VERSION = '2.14 · 2026-10-20';

@@ -16,7 +16,7 @@ datasource db {
 //                agency_facts, agency_fact_events, agency_questions, sync_state, rhythm_readings,
 //                nudge_dismissals, weekly_focus_deliveries, daily_close_deliveries, pulse_runs, pulse_messages,
 //                mail_accounts, mail_seen, permission_requests, agency_snapshots, daily_readings,
-//                morning_brief_deliveries, decision_log
+//                morning_brief_deliveries, decision_log, conversation_learning_runs
 //   vault:       credentials, credential_events, reveal_events, access_requests
 
 enum SystemRole {
