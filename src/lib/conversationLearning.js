@@ -158,15 +158,3 @@ export const validateLearnings = (raw, { day, conversation, personText, clients 
   return { facts: out, dropped };
 };
 
-/** «Ayer aprendí», para el mensaje de la mañana: pocas líneas, con quién lo dijo, y la salida para corregir. */
-export const learnedSection = (facts = [], { max = 5 } = {}) => {
-  if (!facts.length) return [];
-  const lines = ['**Ayer aprendí** (de las conversaciones con el equipo)', ''];
-  for (const fact of facts.slice(0, max)) {
-    const who = /\(([^)]+)\):/.exec(fact.sources?.[0]?.ref || '')?.[1];
-    lines.push(`- ${fact.entity}: ${fact.statement}${who ? ` (lo dijo ${who})` : ''}`);
-  }
-  if (facts.length > max) lines.push(`- …y ${facts.length - max} más; pregúntame por cualquier cuenta y te lo cuento.`);
-  lines.push('', 'Si algo no es así, dímelo y lo retiro.', '');
-  return lines;
-};

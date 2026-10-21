@@ -62,12 +62,9 @@ const defaultCriteria = async () => {
     .sort((a, b) => (Number(/Regla (\d+)/.exec(a.text)?.[1]) || 99) - (Number(/Regla (\d+)/.exec(b.text)?.[1]) || 99));
 };
 
-// Lo aprendido de los chats (20 de octubre de 2026) lo lee el servicio de aprendizaje con el acceso de la persona.
-const defaultLearned = async (user, options) => (await import('./conversationLearningService.js')).getConversationLearningService().learnedFor(user, options);
-
 export const createDailyReadingService = ({
   db = prisma, repository, proactive, conversations, operations = clientOperationsService, generate = defaultGenerate,
-  criteria = defaultCriteria, learned = defaultLearned, now = () => new Date(), notify = createNotification, listPeople = listBriaPeople, logger = console
+  criteria = defaultCriteria, now = () => new Date(), notify = createNotification, listPeople = listBriaPeople, logger = console
 } = {}) => {
   const repo = repository || createDailyReadingRepository({ pool: getSidecarPool() });
   const deliveries = proactive || createBriaProactiveRepository({ pool: getSidecarPool() });
@@ -205,12 +202,7 @@ export const createDailyReadingService = ({
       let decisions = null;
       try { decisions = await this.decisionsFor(user, reading); }
       catch (error) { logger.error('[DailyReading] Sin el libro de decisiones esta vez:', error?.message || error); }
-      const scope = scopeFor(user, reading);
-      // Lo que Bria aprendió de los chats desde la última lectura (20 de octubre de 2026), con el alcance de la persona; si falla, la mañana sale sin eso.
-      let learnedFacts = [];
-      try { learnedFacts = await learned(user, { fromDay: reading.baseDay || reading.day, clientIds: scope.clientIds }); }
-      catch (error) { logger.error('[DailyReading] Sin lo aprendido de los chats esta vez:', error?.message || error); }
-      const { title, text } = buildMorningBrief({ recipientName: user.teamMember?.name || user.name, reading, scope, log: decisions, learned: learnedFacts });
+      const { title, text } = buildMorningBrief({ recipientName: user.teamMember?.name || user.name, reading, scope: scopeFor(user, reading), log: decisions });
       const chat = await chats().postAssistantNote(actorOf(user), { title, text, metadata: { note: 'LECTURA_MANANA', dayKey: reading.day } });
       const delivery = await deliveries.recordMorningBriefDelivery(reading.day, user.id, chat.id);
       try { await notify({ userId: user.id, type: MORNING_BRIEF_NOTIFICATION, message: 'Bria dejó tu lectura de la mañana en el chat.', relatedId: chat.id }); }

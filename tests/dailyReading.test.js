@@ -63,9 +63,7 @@ test('the manual of criteria goes into the digest, each decision keeps the rule 
   const direction = validateDailyReading({ ...modelAnswer, decisiones: [{ ...modelAnswer.decisiones[0], regla: 'equipo-r6' }] }, { signals: SIGNALS, clients: CLIENTS, day: DAY, criteria: CRITERIA });
   const pmBrief = buildMorningBrief({ recipientName: 'Camila', reading: composeReading({ day: DAY, baseDay: '2026-10-19', summary: SUMMARY, signals: SIGNALS, clients: CLIENTS, model: direction }), scope: { clientIds: new Set(['c1']), people: false } });
   assert.doesNotMatch(pmBrief.text, /más paga|criterio/i);
-  // Lo que Bria aprendió ayer de los chats (20 de octubre de 2026) se dice en la mañana para poder corregirlo.
-  const withLearned = buildMorningBrief({ recipientName: 'Rodny', reading, scope: { clientIds: null, people: true }, learned: [{ entity: 'Mimas Kitchen', statement: 'Los pendientes van con prioridad alta.', sources: [{ ref: 'Chat con Bria de Francisco Villa (Francisco): «con Mimas siempre va alta»' }] }] });
-  assert.match(withLearned.text, /\*\*Ayer aprendí\*\* \(de las conversaciones con el equipo\)\n\n- Mimas Kitchen: Los pendientes van con prioridad alta\. \(lo dijo Francisco\)\n\nSi algo no es así, dímelo y lo retiro\./);
+  // Lo que Bria aprendió de los chats no se lista en la mañana (Rodny, 20 de octubre de 2026: «no quiero lo de “ayer aprendí”»).
   assert.doesNotMatch(text, /Ayer aprendí/);
 });
 

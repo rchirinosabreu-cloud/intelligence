@@ -95,13 +95,8 @@ export const createConversationLearningService = ({
       if (minutes >= LEARNING_FROM) return this.learnDay(today);
       if (minutes < 6 * 60) return this.learnDay(plusDays(today, -1));
       return { skipped: 'fuera de horario' };
-    },
-
-    /** Lo aprendido desde ayer que esta persona puede ver, para su lectura de la mañana. */
-    async learnedFor(user, { fromDay, clientIds = null } = {}) {
-      const rows = await memory().learnedSince(factAccess(user), { fromDay });
-      return clientIds ? rows.filter((fact) => fact.clientId && clientIds.has(fact.clientId)) : rows;
     }
+
   };
 };
 
