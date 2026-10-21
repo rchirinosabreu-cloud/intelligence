@@ -29,6 +29,7 @@ Lo que sí se exige:
 | `daily_readings` | La lectura de cada día hábil: señales, lo que Bria haría y no haría con la evidencia que lo sostiene, y si la escribió el modelo o las reglas | `scripts/sql/bria-daily-reading.sql` | `dailyReadingRepository.js` |
 | `decision_log` | El libro de decisiones: cada decisión que Bria propuso en una lectura, con lo que decidió la persona (hecha, descartada, aplazada), su motivo si lo dijo y, días después, lo que pasó según las señales. Mide decisiones, nunca personas | `scripts/sql/bria-daily-reading.sql` | `dailyReadingRepository.js` |
 | `morning_brief_deliveries` | La lectura de la mañana que Bria dejó en el chat de cada persona de dirección a las 7:30: día, persona y conversación | `scripts/sql/bria-proactive.sql` | `briaProactiveRepository.js` |
+| `conversation_learning_runs` | Bria aprende de los chats: qué noche se releyeron las conversaciones de cada día, cuántas eran y cuántos hechos dejaron en `agency_facts` (origen `CONVERSACION`). Reclamar el día evita leerlo dos veces | `scripts/sql/bria-conversation-learning.sql` | `conversationLearningService.js` |
 | `mail_accounts`, `mail_seen` | Buzones compartidos conectados por un administrador (contraseña de aplicación sellada con la llave de la bóveda) y lo ya visto en cada uno: remitente, asunto, fecha y decisión, nunca el cuerpo | `scripts/sql/bria-mail.sql` | `mailAccountRepository.js` |
 
 ### `vault` (bóveda de accesos)

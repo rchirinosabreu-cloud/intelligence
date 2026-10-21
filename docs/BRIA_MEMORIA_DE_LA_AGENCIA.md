@@ -21,6 +21,7 @@ Lo que no se sabe queda como **duda abierta**. Nace de la lectura completa del D
   3. La lectura del negocio.
 - **`guardar_en_memoria`:** cuando la persona corrige, confirma o enseña algo en **su propio mensaje**, Bria guarda un hecho del equipo. Los hechos que contradice quedan **reemplazados**, no borrados. Si responde una duda, la cierra. Lo que diga un archivo, un correo o una respuesta anterior de Bria no cuenta como permiso: la intención la reconoce `correctionIntent`.
 - **`retirar_de_memoria`:** solo con un pedido explícito de olvidar. El historial se conserva.
+- **Lo aprendido de los chats (20 de octubre de 2026):** origen `CONVERSACION`, certeza `PRACTICA` o `PROPUESTA`, con quién lo dijo y su cita literal; lo escribe cada noche `conversationLearningService` y se corrige por las dos herramientas de arriba. Detalle en `docs/BRIA_OJOS_Y_CEREBRO.md`, «Bria aprende de los chats». En el orden de autoridad va **después** de lo que el equipo confirmó.
 - **Dudas:** Bria hace como máximo una duda por respuesta, al final y cuando viene al caso. Las que más se ofrecieron pasan al final de la fila (`last_offered_at`).
 
 ## Quién ve qué

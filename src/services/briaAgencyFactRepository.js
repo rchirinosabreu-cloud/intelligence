@@ -77,6 +77,14 @@ export const createBriaAgencyFactRepository = ({ pool, workspace }) => {
       return rows.map(present).filter((fact) => factVisible(fact, access));
     },
 
+    /** Lo aprendido de los chats desde un día (inclusive), ya filtrado por lo que la persona puede ver. */
+    async learnedSince(access, { fromDay, limit = 40 } = {}) {
+      if (!access?.purposes?.length || !fromDay) return [];
+      const rows = (await pool.query(`${SELECT} WHERE f.workspace = $1 AND f.status = 'ACTIVE' AND f.origin = 'CONVERSACION' AND ${VISIBLE}
+        AND f.created_at >= ($4::date::timestamp AT TIME ZONE 'America/Bogota') ORDER BY f.created_at DESC, f.id LIMIT $5`, [workspace, access.purposes, access.restricted, fromDay, Math.min(Math.max(Number(limit) || 40, 1), 100)])).rows;
+      return rows.map(present).filter((fact) => factVisible(fact, access));
+    },
+
     async get(access, id) {
       const row = present((await pool.query(`${SELECT} WHERE f.workspace=$1 AND f.id=$2`, [workspace, id])).rows[0]);
       return factVisible(row, access) ? row : null;
@@ -98,7 +106,7 @@ export const createBriaAgencyFactRepository = ({ pool, workspace }) => {
      * Carga una lectura del negocio. Idempotente: lo igual no cambia; lo nuevo entra; lo que cambió se
      * actualiza solo si nadie del equipo lo tocó. Las dudas ya respondidas o descartadas no reviven.
      */
-    async importReading({ facts = [], questions = [], links = new Map(), asOf, actor, dryRun = false }) {
+    async importReading({ facts = [], questions = [], links = new Map(), asOf, actor, dryRun = false, origin = 'LECTURA', reason = 'Lectura del negocio' }) {
       const valid = facts.map((raw) => ({ ...validateFact(raw), id: String(raw.id) }));
       return transaction(async (db) => {
         const existing = (await db.query('SELECT id, origin, status, digest, client_id FROM bria_memory.agency_facts WHERE workspace=$1 AND id = ANY($2::text[]) FOR UPDATE', [workspace, valid.map((f) => f.id)])).rows;
@@ -122,8 +130,8 @@ export const createBriaAgencyFactRepository = ({ pool, workspace }) => {
         // En simulación solo se leyó: la transacción termina sin escribir nada.
         if (dryRun) return { ...summary, dryRun: true };
         for (const fact of plan.create) {
-          const row = await insertFact(db, fact, { id: fact.id, clientId: linkOf(fact), origin: 'LECTURA', asOf, actor, digest: fact.digest });
-          await event(db, fact.id, 1, 'IMPORT', null, present(row), actor, 'Lectura del negocio');
+          const row = await insertFact(db, fact, { id: fact.id, clientId: fact.clientId || linkOf(fact), origin, asOf, actor, digest: fact.digest });
+          await event(db, fact.id, 1, 'IMPORT', null, present(row), actor, reason);
         }
         for (const fact of plan.update) {
           const before = present((await db.query(`${SELECT} WHERE f.workspace=$1 AND f.id=$2`, [workspace, fact.id])).rows[0]);

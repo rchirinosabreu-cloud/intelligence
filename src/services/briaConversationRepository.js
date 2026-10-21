@@ -13,6 +13,22 @@ export const createBriaConversationRepository = ({ pool, workspace, storage, req
     const turns = (await pool.query('SELECT position,role,content,metadata FROM bria_memory.conversation_turns WHERE conversation_id=$1 ORDER BY position', [id])).rows.map(turn => ({ id: `${id}:${turn.position}`, role: turn.role, text: turn.content, ...turn.metadata, permissionChanged: turn.role === 'assistant' && turn.metadata.accessFingerprint !== fingerprint(actor) }));
     return { ...summary(row), turns };
   },
+  /**
+   * Las conversaciones con turnos entre dos instantes (un día de Bogotá), con todos sus turnos de ese tramo, para que
+   * Bria aprenda de ellas de noche. Solo texto y la marca de nota de plataforma; nunca adjuntos.
+   */
+  async conversationsBetween(fromIso, toIso) {
+    const rows = (await pool.query(`SELECT c.id, c.actor_ref, t.position, t.role, t.content, t.metadata->>'note' AS note, t.created_at
+        FROM bria_memory.conversation_turns t JOIN bria_memory.conversations c ON c.id = t.conversation_id
+        WHERE c.workspace = $1 AND t.created_at >= $2 AND t.created_at < $3 ORDER BY c.id, t.position`, [workspace, fromIso, toIso])).rows;
+    const chats = new Map();
+    for (const row of rows) {
+      const chat = chats.get(row.id) || { id: row.id, actorRef: row.actor_ref, turns: [] };
+      chat.turns.push({ position: row.position, role: row.role, text: row.content, note: row.note || null, createdAt: row.created_at });
+      chats.set(row.id, chat);
+    }
+    return [...chats.values()];
+  },
   async attachments(actor, id) {
     const rows = (await pool.query('SELECT a.* FROM bria_memory.conversation_attachments a JOIN bria_memory.conversations c ON c.id=a.conversation_id WHERE c.workspace=$1 AND c.actor_ref=$2 AND c.id=$3 ORDER BY a.position DESC,a.created_at DESC LIMIT 5', [workspace, actor.ref, id])).rows;
     return Promise.all(rows.map(async row => {
