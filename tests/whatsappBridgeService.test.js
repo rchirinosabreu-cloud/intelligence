@@ -165,6 +165,24 @@ test('una respuesta larga sale en varios mensajes y un día nuevo abre una conve
   assert.notEqual(conversations.calls[2].id, firstChat, 'cada día es un chat, como en la plataforma');
 });
 
+test('un aviso sin nada que atender y cada mensaje atendido dejan una línea en el registro, sin el texto', async () => {
+  const lines = [];
+  const logger = { info: (line) => lines.push(line), warn() {}, error() {} };
+  const conversations = fakeConversations();
+  const work = [];
+  const service = createWhatsAppBridgeService({ repository: fakeRepository(), conversations: () => conversations, db: { user: { findUnique: async () => null } }, env: ENV, fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({}) }), logger, scheduleWork: (fn) => work.push(fn) });
+  const other = inbound({ phoneNumberId: '999', text: 'texto privado' });
+  const raw = Buffer.from(JSON.stringify(other));
+  await service.handleWebhook({ rawBody: raw, signature: sign(raw), body: other });
+  assert.match(lines[0], /^\[WhatsApp\] Aviso sin mensajes para atender \(número esperado 1319887801213730\): objeto=whatsapp_business_account .*números=999 mensajes=1/);
+  const ours = inbound({ text: 'texto privado' });
+  const raw2 = Buffer.from(JSON.stringify(ours));
+  await service.handleWebhook({ rawBody: raw2, signature: sign(raw2), body: ours });
+  while (work.length) await work.shift()();
+  assert.equal(lines.at(-1), '[WhatsApp] Mensaje de …4567 (text): unknown.');
+  assert.ok(lines.every((line) => !/texto privado|573001234567/.test(line)));
+});
+
 test('los mensajes de otro número de la misma cuenta se dejan pasar, y sin token configurado el aviso se acepta sin trabajar', async () => {
   const { service, conversations, drain } = build();
   const other = inbound({ phoneNumberId: '999' });

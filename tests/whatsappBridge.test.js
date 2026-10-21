@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {
-  verifyMetaSignature, webhookChallenge, parseInboundMessages, linkCodeIn, generateLinkCode, linkMessage,
+  verifyMetaSignature, webhookChallenge, parseInboundMessages, describeNotice, maskWaId, linkCodeIn, generateLinkCode, linkMessage,
   displayPhone, waMeLink, toWhatsAppText, splitForWhatsApp, answerForWhatsApp, textMessagePayload, readReceiptPayload,
   REPLIES, WHATSAPP_TEXT_MAX, LINK_CODE_TTL_MS
 } from '../src/lib/whatsappBridge.js';
@@ -55,6 +55,17 @@ test('del aviso de Meta se leen solo los mensajes: quién, qué, de qué número
   assert.deepEqual(parseInboundMessages(null), []);
   const button = inbound(); button.entry[0].changes[0].value.messages[0] = { from: '573001234567', id: 'wamid.2', timestamp: '1', type: 'button', button: { text: 'Crear pendientes', payload: 'x' } };
   assert.equal(parseInboundMessages(button)[0].text, 'Crear pendientes');
+});
+
+test('la forma de un aviso para el registro: objeto, campos, números y cuántos, nunca el texto ni quién escribe', () => {
+  const summary = describeNotice(inbound({ text: 'mi secreto', name: 'Camila' }));
+  assert.equal(summary, 'objeto=whatsapp_business_account entradas=1 campos=messages números=1319887801213730 mensajes=1 estados=0 errores=0');
+  assert.doesNotMatch(summary, /secreto|Camila|573001234567/);
+  const statuses = { object: 'whatsapp_business_account', entry: [{ changes: [{ field: 'messages', value: { metadata: { phone_number_id: '9' }, statuses: [{ id: 'w', status: 'failed' }] } }] }] };
+  assert.equal(describeNotice(statuses), 'objeto=whatsapp_business_account entradas=1 campos=messages números=9 mensajes=0 estados=1 errores=0');
+  assert.equal(describeNotice(null), 'objeto=ninguno entradas=0 campos=ninguno números=ninguno mensajes=0 estados=0 errores=0');
+  assert.equal(maskWaId('573001234567'), '…4567');
+  assert.equal(maskWaId(''), '…');
 });
 
 test('el código de vínculo son seis dígitos, se reconoce con o sin la palabra Bria y nunca dentro de otra cifra', () => {

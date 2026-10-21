@@ -10,7 +10,7 @@ import { getSidecarPool } from '../lib/sidecarPool.js';
 import { META_GRAPH_ORIGIN, META_GRAPH_VERSION } from './metaGraphService.js';
 import { createWhatsAppLinkRepository } from './whatsappLinkRepository.js';
 import {
-  verifyMetaSignature, webhookChallenge, parseInboundMessages, linkCodeIn, generateLinkCode, linkMessage, displayPhone, waMeLink,
+  verifyMetaSignature, webhookChallenge, parseInboundMessages, describeNotice, maskWaId, linkCodeIn, generateLinkCode, linkMessage, displayPhone, waMeLink,
   splitForWhatsApp, answerForWhatsApp, textMessagePayload, readReceiptPayload, REPLIES, LINK_CODE_TTL_MS, UNKNOWN_SENDER_REPLIES_PER_DAY
 } from '../lib/whatsappBridge.js';
 
@@ -137,13 +137,18 @@ export const createWhatsAppBridgeService = ({
     }
     // Solo lo que llegó a nuestro número: una cuenta de WhatsApp puede tener más de uno.
     const messages = parseInboundMessages(body).filter((message) => !message.phoneNumberId || !c.phoneNumberId || message.phoneNumberId === c.phoneNumberId);
+    // Un aviso firmado que no deja nada que atender se dice en el registro, con su forma y sin su contenido: si
+    // no, un formato nuevo de Meta o un número distinto se pierden en silencio.
+    if (!messages.length) logger.info?.(`[WhatsApp] Aviso sin mensajes para atender (número esperado ${c.phoneNumberId || 'sin configurar'}): ${describeNotice(body)}`);
     if (!configured()) {
       if (messages.length) logger.warn?.('[WhatsApp] Llegaron mensajes pero falta META_WHATSAPP_TOKEN o META_WHATSAPP_PHONE_NUMBER_ID.');
       return { status: 200, body: { accepted: true, ignored: messages.length } };
     }
     // Se responde a Meta antes de trabajar: un webhook que espera al modelo vence y Meta lo reenvía.
     for (const message of messages) {
-      scheduleWork(() => processMessage(message).catch((failure) => logger.error('[WhatsApp] Falló un mensaje:', failure.code || failure.message || failure)));
+      scheduleWork(() => processMessage(message)
+        .then((result) => logger.info?.(`[WhatsApp] Mensaje de ${maskWaId(message.from)} (${message.type}): ${result?.outcome || result?.skipped || 'sin resultado'}${result?.reason ? ` (${result.reason})` : ''}.`))
+        .catch((failure) => logger.error('[WhatsApp] Falló un mensaje:', failure.code || failure.message || failure)));
     }
     return { status: 200, body: { accepted: true, messages: messages.length } };
   };

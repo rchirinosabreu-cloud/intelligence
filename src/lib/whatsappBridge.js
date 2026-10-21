@@ -77,7 +77,24 @@ export const parseInboundMessages = (body) => {
   return out;
 };
 
-export const generateLinkCode = (random = (max) => crypto.randomInt(max)) => String(random(1000000) % 1000000).padStart(6, '0');
+/**
+ * La forma de un aviso, para el registro cuando no trae nada que atender (21 de octubre de 2026: un aviso firmado
+ * llegaba, no se respondía y no quedaba rastro de por qué). Dice qué objeto, qué campos, qué números y cuántos
+ * mensajes y estados trae; nunca el texto, el nombre ni el número de quien escribe.
+ */
+export const describeNotice = (body) => {
+  const entries = Array.isArray(body?.entry) ? body.entry : [];
+  const changes = entries.flatMap((entry) => (Array.isArray(entry?.changes) ? entry.changes : []));
+  const fields = [...new Set(changes.map((change) => change?.field).filter(Boolean))];
+  const phoneIds = [...new Set(changes.map((change) => change?.value?.metadata?.phone_number_id).filter(Boolean).map(String))];
+  const count = (key) => changes.reduce((sum, change) => sum + (Array.isArray(change?.value?.[key]) ? change.value[key].length : 0), 0);
+  return `objeto=${body?.object ?? 'ninguno'} entradas=${entries.length} campos=${fields.join(',') || 'ninguno'} números=${phoneIds.join(',') || 'ninguno'} mensajes=${count('messages')} estados=${count('statuses')} errores=${count('errors')}`;
+};
+
+/** El número de quien escribe, recortado para el registro: basta para distinguir, no para identificar. */
+export const maskWaId = (waId) => { const digits = normalizeWaId(waId); return digits ? `…${digits.slice(-4)}` : '…'; };
+
+export const generateLinkCode =(random = (max) => crypto.randomInt(max)) => String(random(1000000) % 1000000).padStart(6, '0');
 export const linkMessage = (code) => `${LINK_CODE_PREFIX} ${code}`;
 
 /** Seis dígitos solos, o precedidos de «BRIA»; nunca seis dígitos dentro de una cifra más larga. */
