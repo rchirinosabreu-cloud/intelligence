@@ -64,6 +64,13 @@ export const SERVICE_CATALOG = Object.freeze([
     intervalMs: 5 * MIN
   },
   {
+    id: 'whatsapp',
+    label: 'WhatsApp (Bria)',
+    purpose: 'El número de Bria en WhatsApp: recibe los mensajes del equipo y responde por la API de Meta.',
+    impact: 'Si cae, Bria no contesta por WhatsApp; en la plataforma sigue funcionando igual.',
+    intervalMs: 5 * MIN
+  },
+  {
     id: 'storage-chat',
     label: 'Archivos de tareas y chat',
     purpose: 'Adjuntos de tareas, comentarios, chat del equipo y piezas finales de las parrillas.',

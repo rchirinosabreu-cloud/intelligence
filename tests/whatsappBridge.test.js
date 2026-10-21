@@ -1,0 +1,123 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
+import {
+  verifyMetaSignature, webhookChallenge, parseInboundMessages, linkCodeIn, generateLinkCode, linkMessage,
+  displayPhone, waMeLink, toWhatsAppText, splitForWhatsApp, answerForWhatsApp, textMessagePayload, readReceiptPayload,
+  REPLIES, WHATSAPP_TEXT_MAX, LINK_CODE_TTL_MS
+} from '../src/lib/whatsappBridge.js';
+
+// Bria en WhatsApp (Rodny, 20 de octubre de 2026): el número de la agencia habla con el equipo por la API oficial
+// de Meta. La regla pura vive en src/lib/whatsappBridge.js y la leen el webhook, el servicio y la pantalla.
+
+const SECRET = 'secreto-de-la-app-de-prueba';
+const sign = (raw) => `sha256=${crypto.createHmac('sha256', SECRET).update(raw).digest('hex')}`;
+
+const inbound = ({ from = '573001234567', id = 'wamid.1', type = 'text', text = 'hola', name = 'Camila' } = {}) => ({
+  object: 'whatsapp_business_account',
+  entry: [{ id: '1061974066819635', changes: [{ field: 'messages', value: {
+    messaging_product: 'whatsapp',
+    metadata: { display_phone_number: '573043786298', phone_number_id: '1319887801213730' },
+    contacts: [{ profile: { name }, wa_id: from }],
+    messages: [{ from, id, timestamp: '1760990400', type, ...(type === 'text' ? { text: { body: text } } : {}), ...(type === 'image' ? { image: { id: 'img' } } : {}) }]
+  } }] }]
+});
+
+test('la firma de Meta se comprueba sobre los bytes originales, en tiempo constante, y sin secreto no pasa nada', () => {
+  const raw = Buffer.from(JSON.stringify(inbound()));
+  assert.equal(verifyMetaSignature({ rawBody: raw, signature: sign(raw), appSecret: SECRET }), true);
+  assert.equal(verifyMetaSignature({ rawBody: raw, signature: sign(raw).toUpperCase().replace('SHA256=', 'sha256='), appSecret: SECRET }), true, 'mayúsculas en el hex valen');
+  assert.equal(verifyMetaSignature({ rawBody: raw, signature: sign(Buffer.from('otro')), appSecret: SECRET }), false);
+  assert.equal(verifyMetaSignature({ rawBody: raw, signature: 'sha256=zz', appSecret: SECRET }), false);
+  assert.equal(verifyMetaSignature({ rawBody: raw, signature: sign(raw), appSecret: '' }), false);
+  assert.equal(verifyMetaSignature({ rawBody: null, signature: sign(raw), appSecret: SECRET }), false);
+  assert.equal(verifyMetaSignature({ rawBody: raw, signature: '', appSecret: SECRET }), false);
+});
+
+test('la verificación del webhook devuelve el reto solo con el modo y el token correctos', () => {
+  const query = { 'hub.mode': 'subscribe', 'hub.verify_token': 'token-de-verificacion', 'hub.challenge': '1158201444' };
+  assert.equal(webhookChallenge(query, 'token-de-verificacion'), '1158201444');
+  assert.equal(webhookChallenge({ ...query, 'hub.verify_token': 'otro' }, 'token-de-verificacion'), null);
+  assert.equal(webhookChallenge({ ...query, 'hub.mode': 'unsubscribe' }, 'token-de-verificacion'), null);
+  assert.equal(webhookChallenge(query, ''), null, 'sin token configurado la puerta no abre');
+  assert.equal(webhookChallenge({}, 'token-de-verificacion'), null);
+});
+
+test('del aviso de Meta se leen solo los mensajes: quién, qué, de qué número; los estados de entrega se ignoran', () => {
+  const [message] = parseInboundMessages(inbound({ text: '  ¿Qué tengo hoy?  ' }));
+  assert.deepEqual(message, { messageId: 'wamid.1', from: '573001234567', profileName: 'Camila', timestamp: 1760990400, type: 'text', text: '¿Qué tengo hoy?', phoneNumberId: '1319887801213730' });
+  const [image] = parseInboundMessages(inbound({ type: 'image' }));
+  assert.equal(image.type, 'image');
+  assert.equal(image.text, null);
+  const statuses = { object: 'whatsapp_business_account', entry: [{ changes: [{ field: 'messages', value: { statuses: [{ id: 'wamid.1', status: 'delivered' }] } }] }] };
+  assert.deepEqual(parseInboundMessages(statuses), []);
+  assert.deepEqual(parseInboundMessages({ object: 'page', entry: [] }), [], 'un aviso que no es de WhatsApp no trae mensajes');
+  assert.deepEqual(parseInboundMessages(null), []);
+  const button = inbound(); button.entry[0].changes[0].value.messages[0] = { from: '573001234567', id: 'wamid.2', timestamp: '1', type: 'button', button: { text: 'Crear pendientes', payload: 'x' } };
+  assert.equal(parseInboundMessages(button)[0].text, 'Crear pendientes');
+});
+
+test('el código de vínculo son seis dígitos, se reconoce con o sin la palabra Bria y nunca dentro de otra cifra', () => {
+  assert.match(generateLinkCode(), /^\d{6}$/);
+  assert.equal(generateLinkCode(() => 42), '000042');
+  assert.equal(linkCodeIn('BRIA 482913'), '482913');
+  assert.equal(linkCodeIn('bria-482913'), '482913');
+  assert.equal(linkCodeIn('482913'), '482913');
+  assert.equal(linkCodeIn('Hola Bria, mi código es BRIA 482913 gracias'), '482913');
+  assert.equal(linkCodeIn('mi cédula es 1234567890'), null);
+  assert.equal(linkCodeIn('¿Qué tengo hoy?'), null);
+  assert.equal(linkCodeIn(''), null);
+  assert.equal(linkMessage('482913'), 'BRIA 482913');
+  assert.equal(LINK_CODE_TTL_MS, 10 * 60 * 1000);
+});
+
+test('el número se muestra como lo escribe una persona y el enlace wa.me lleva el mensaje listo', () => {
+  assert.equal(displayPhone('573043786298'), '+57 304 378 6298');
+  assert.equal(displayPhone('+57 304 378 6298'), '+57 304 378 6298');
+  assert.equal(displayPhone('14155552671'), '+14155552671');
+  assert.equal(displayPhone(''), '');
+  assert.equal(waMeLink('+57 304 378 6298', 'BRIA 482913'), 'https://wa.me/573043786298?text=BRIA%20482913');
+});
+
+test('el Markdown de Bria se traduce a lo que WhatsApp sabe pintar', () => {
+  const md = '## Hoy\n\n**Tres** pendientes:\n- Reel de *Aristea*\n- Informe [Pablo Hoff](https://labs.brainstudioagencia.com/gestion?taskId=1)\n\n1. Primero\n2. Segundo\n\n> cita\n\n\n\nFin.';
+  assert.equal(toWhatsAppText(md), '*Hoy*\n\n*Tres* pendientes:\n• Reel de *Aristea*\n• Informe Pablo Hoff: https://labs.brainstudioagencia.com/gestion?taskId=1\n\n1. Primero\n2. Segundo\n\ncita\n\nFin.');
+  assert.equal(toWhatsAppText(''), '');
+});
+
+test('una respuesta larga se parte en mensajes de hasta 4.000 caracteres por párrafo, nunca a mitad de palabra', () => {
+  const paragraph = 'Una línea de la respuesta de Bria que se repite. ';
+  const long = Array.from({ length: 120 }, (_, i) => `${i + 1}. ${paragraph.repeat(2).trim()}`).join('\n\n');
+  const parts = splitForWhatsApp(long);
+  assert.ok(parts.length >= 3);
+  for (const part of parts) { assert.ok(part.length <= WHATSAPP_TEXT_MAX); assert.doesNotMatch(part, /^\s|\s$/); }
+  assert.equal(parts.join('\n\n'), long, 'nada se pierde ni se duplica');
+  assert.deepEqual(splitForWhatsApp('corto'), ['corto']);
+  assert.deepEqual(splitForWhatsApp('   '), []);
+  const word = 'a'.repeat(9000);
+  assert.deepEqual(splitForWhatsApp(word).map((p) => p.length), [4000, 4000, 1000], 'una palabra sin espacios se corta a la fuerza');
+});
+
+test('la respuesta para WhatsApp: texto traducido, los botones como opciones, y la bóveda nunca sale por aquí', () => {
+  assert.equal(answerForWhatsApp({ text: 'Así quedaría el **pendiente**.', quickReplies: ['Crear pendiente', 'Cancelar pendiente'] }), 'Así quedaría el *pendiente*.\n\nPuedes responder: «Crear pendiente» o «Cancelar pendiente».');
+  assert.equal(answerForWhatsApp({ text: 'Aquí está la clave.', accessCards: [{ id: 'c1' }] }), REPLIES.vaultOnly);
+  assert.equal(answerForWhatsApp({ text: 'Escríbela en el campo protegido.', accessCapture: { id: 'x' } }), REPLIES.vaultOnly);
+  assert.equal(answerForWhatsApp({ text: '' }), REPLIES.failed);
+  assert.equal(answerForWhatsApp(null), REPLIES.failed);
+});
+
+test('lo que se le manda a Meta: texto sin vista previa de enlaces y el visto de leído', () => {
+  assert.deepEqual(textMessagePayload('573001234567', 'Hola'), { messaging_product: 'whatsapp', recipient_type: 'individual', to: '573001234567', type: 'text', text: { preview_url: false, body: 'Hola' } });
+  assert.deepEqual(readReceiptPayload('wamid.1'), { messaging_product: 'whatsapp', status: 'read', message_id: 'wamid.1' });
+});
+
+test('los textos fijos están en español de Latinoamérica y no prometen lo que Bria no hace', () => {
+  for (const value of Object.values(REPLIES)) {
+    const text = typeof value === 'function' ? value('Camila Pérez') : value;
+    assert.doesNotMatch(text, /vosotros|tenéis|podéis|\bos\b/);
+    assert.ok(text.length <= 300, text);
+  }
+  assert.match(REPLIES.linked('Camila Pérez'), /^Listo, Camila\./);
+  assert.match(REPLIES.unknown, /solo para el equipo/);
+  assert.match(REPLIES.vaultOnly, /nunca por WhatsApp/);
+});

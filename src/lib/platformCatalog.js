@@ -14,7 +14,7 @@
 export const PLATFORM_EXCLUDED = [
   { match: /^\w+ \/(public|quotations\/public|login|password-reset|services-catalog)(\/|$)/, reason: 'puerta pública o de inicio de sesión' },
   { match: /^POST \/users$/, reason: 'crear cuentas es de la pantalla de Equipo' },
-  { match: /^\w+ \/(minutes\/fireflies\/webhook|activity\/google-calendar\/webhook)$/, reason: 'avisos de proveedores externos' },
+  { match: /^\w+ \/(minutes\/fireflies\/webhook|activity\/google-calendar\/webhook|whatsapp\/webhook)$/, reason: 'avisos de proveedores externos' },
   { match: /^\w+ \/team-chat-media\//, reason: 'archivos del chat del equipo' },
   { match: /^\w+ \/team-chat\/(events|channels\/:id\/uploads|messages\/:messageId\/attachments)/, reason: 'flujo en vivo y archivos del chat' },
   { match: /^\w+ \/bria(\/|$)/, reason: 'es la propia Bria' },
