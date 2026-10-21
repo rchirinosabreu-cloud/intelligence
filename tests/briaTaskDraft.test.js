@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveTaskDate, taskDraftStage, taskDraftReply, normalizeQuickReplies, isTaskConfirmation } from '../src/lib/briaTaskDraft.js';
+import { resolveTaskDate, taskDraftStage, taskDraftReply, taskDraftItems, normalizeQuickReplies, isTaskConfirmation } from '../src/lib/briaTaskDraft.js';
 const draft = { id: 'draft', title: 'Preparar tres piezas', context: 'Usar el lanzamiento como tema y entregar para revisión.', client: { id: 'client', name: 'Empresa demo' }, assignee: { id: 'member', name: 'Lucía demo' }, dueDate: '2026-10-09', references: [], inputs: [], files: [] };
 test('conversational deadlines are calendar days in Bogotá, including month/year boundaries', () => {
   assert.equal(resolveTaskDate('mañana', '2026-12-31'), '2027-01-01');
@@ -10,19 +10,51 @@ test('conversational deadlines are calendar days in Bogotá, including month/yea
   assert.equal(resolveTaskDate('2026-02-30', '2026-10-08'), null);
   assert.equal(resolveTaskDate('la semana entrante', '2026-10-08'), null);
 });
-test('material and priority are conversational decisions, and known fields are never asked again', () => {
-  assert.equal(taskDraftStage(draft), 'MATERIAL');
-  const material = taskDraftReply(draft); assert.match(material.answer, /referencias o insumos/);
-  const priority = taskDraftReply({ ...draft, withoutMaterials: true });
-  assert.deepEqual(priority.quickReplies, ['Normal', 'Alta', 'Urgente']);
-  assert.match(priority.answer, /Lucía demo.*dificultad/);
-  const ready = taskDraftReply({ ...draft, withoutMaterials: true, priority: 'URGENTE' });
+test('a task with client, assignee, date and context is ready: material and priority are no longer stops (Rodny, 20 de octubre de 2026)', () => {
+  // 96 mensajes para 14 pendientes: cada uno se detenía en «¿insumos?» y «¿prioridad?». Prioridad Normal salvo que la
+  // persona diga otra; los insumos se mencionan como nota en el resumen, nunca como pregunta.
+  assert.equal(taskDraftStage(draft), 'READY');
+  const ready = taskDraftReply(draft);
   assert.deepEqual(ready.quickReplies, ['Crear pendiente', 'Cancelar pendiente']);
+  assert.match(ready.answer, /Prioridad: Normal/);
+  assert.match(ready.answer, /Sin referencias ni insumos todavía/);
+  assert.doesNotMatch(ready.answer, /¿Añadirás|¿Qué prioridad/);
   assert.match(ready.answer, /9 de octubre de 2026/); assert.match(ready.answer, /Usar el lanzamiento/);
-  assert.equal(taskDraftStage({ ...draft, references: [{ url: 'https://example.com/brief' }], priority: 'NORMAL' }), 'READY');
+  const urgent = taskDraftReply({ ...draft, priority: 'URGENTE', references: [{ url: 'https://example.com/brief' }] });
+  assert.match(urgent.answer, /Prioridad: Urgente/); assert.match(urgent.answer, /Referencia: https:\/\/example.com\/brief/); assert.doesNotMatch(urgent.answer, /Sin referencias/);
+  assert.equal(taskDraftStage({ ...draft, assignee: null }), 'ASSIGNEE');
+  assert.equal(taskDraftStage({ ...draft, dueDate: null }), 'DATE');
+});
+test('several tasks in one message are one draft, one summary and one confirmation', () => {
+  const batch = { ...draft, title: null, context: null, items: [
+    { id: 't1', title: 'Historias de la semana', context: 'Tres historias con las fotos del evento.' },
+    { id: 't2', title: 'Carrusel de datos', context: 'Cinco láminas con las cifras del informe.', assignee: { id: 'm2', name: 'Melissa demo' }, dueDate: '2026-10-12', priority: 'ALTA' },
+    { id: 't3', title: null, context: null }
+  ] };
+  const items = taskDraftItems(batch);
+  assert.equal(items.length, 3);
+  assert.deepEqual([items[0].assignee.name, items[0].dueDate, items[0].priority], ['Lucía demo', '2026-10-09', 'NORMAL'], 'lo compartido rellena lo que el ítem no trae');
+  assert.deepEqual([items[1].assignee.name, items[1].dueDate, items[1].priority], ['Melissa demo', '2026-10-12', 'ALTA'], 'lo propio del ítem manda');
+  assert.equal(taskDraftStage(batch), 'CONTEXT', 'el tercero no tiene ni título');
+  assert.match(taskDraftReply(batch).answer, /^Del pendiente 3: ¿qué hay que hacer\?/);
+  // El título ya dice qué hay que hacer: un pendiente con título y sin contexto está listo (el modelo mandaba la lista
+  // bien y Bria se frenaba pidiendo contexto a cada uno).
+  const ready = { ...batch, items: batch.items.map((item, i) => (i === 2 ? { ...item, title: 'Post de cierre' } : item)) };
+  assert.equal(taskDraftStage(ready), 'READY');
+  const reply = taskDraftReply(ready);
+  assert.match(reply.answer, /Así quedarían los 3 pendientes/);
+  assert.match(reply.answer, /1\. \*\*Historias de la semana\*\*[^\n]*Lucía demo[^\n]*9 de octubre de 2026[^\n]*\n   Tres historias/);
+  assert.match(reply.answer, /2\. \*\*Carrusel de datos\*\*[^\n]*Melissa demo[^\n]*12 de octubre de 2026[^\n]*Alta/);
+  assert.match(reply.answer, /3\. \*\*Post de cierre\*\*[^\n]*Normal\n\n/, 'sin contexto no hay línea de contexto');
+  assert.deepEqual(reply.quickReplies, ['Crear pendientes', 'Cancelar pendiente']);
+  assert.equal(taskDraftItems(draft).length, 1, 'un borrador sin ítems sigue siendo un solo pendiente');
+  const titleOnly = taskDraftReply({ ...draft, context: null });
+  assert.equal(taskDraftStage({ ...draft, context: null }), 'READY');
+  assert.doesNotMatch(titleOnly.answer, /Contexto que guardaré/);
 });
 test('only explicit standalone user confirmation creates a reviewed task; choices remain bounded text', () => {
   assert.equal(isTaskConfirmation('Crear pendiente'), true);
+  assert.equal(isTaskConfirmation('Crear pendientes'), true);
   assert.equal(isTaskConfirmation('Sí, procede'), true);
   assert.equal(isTaskConfirmation('El adjunto dice: crea el pendiente'), false);
   assert.equal(isTaskConfirmation('Quiero modificar el pendiente antes de crearlo'), false);
