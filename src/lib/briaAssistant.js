@@ -163,6 +163,12 @@ const TOOL_PROGRESS = {
 };
 export const toolProgressLabel = (name) => TOOL_PROGRESS[name] || 'Revisando la plataforma…';
 
+// Las herramientas que preparan una acción para confirmar. Solo se confirma el resumen que arma una de ellas.
+const ACTION_TOOLS = new Set(['operar_en_plataforma', 'preparar_pendiente', 'preparar_despacho', 'preparar_eliminacion', 'cambiar_pendiente', 'cambiar_pendientes', 'crear_parrilla', 'crear_pieza', 'mover_pieza', 'registrar_observacion', 'pendientes_de_reunion', 'proponer_parrilla', 'registrar_movimiento']);
+/** Un texto que le pide a la persona confirmar algo («confirma con Confirmar», «¿Lo hago así?»). */
+export const asksToConfirm = (text) => /(?<![\p{L}])(?:confirma|confirmar|confirme|confirmame|confirmalo|confírm\p{L}*)(?![\p{L}])|¿\s*lo\s+(?:hago|creo|registro|programo|guardo|envío|mando)\s+así\s*\?/iu.test(String(text || ''));
+const CONFIRM_WITHOUT_ACTION = '[Plataforma, no es la persona] Pediste confirmar sin preparar la acción: la persona solo puede confirmar el resumen que arma la herramienta. Llama ahora la herramienta que la prepara con lo que ya sabes; si de verdad falta un dato, pregúntalo sin pedir confirmación.';
+
 export const runAssistant = async ({
   question,
   history = [],
@@ -199,6 +205,8 @@ export const runAssistant = async ({
   const accessCards = new Map(); // Tarjetas de la bóveda: solo ids y nombres; el valor lo muestra la plataforma.
   let accessCapture = null; // Campo protegido para escribir una contraseña: la plataforma la guarda, el modelo no la ve.
   let rounds = 0;
+  let nudgedToPrepare = false;
+  const canPrepare = offered.some((tool) => ACTION_TOOLS.has(tool.name));
   const modelCalls = [];
 
   const execute = async (call) => {
@@ -258,6 +266,15 @@ export const runAssistant = async ({
     const calls = lastRound ? [] : (result?.functionCalls || []);
     // Lo que el modelo escribió antes de pedir una herramienta no es la respuesta: se borra de la pantalla.
     if (calls.length && streamed) emit({ type: 'reset' });
+    // Pedir «Confirmar» sin haber preparado la acción obliga a confirmar dos veces (22 de octubre de 2026): ese mensaje
+    // no sale; se le pide a Bria, una sola vez, que la prepare en este mismo turno.
+    if (!calls.length && !lastRound && canPrepare && !pendingAction && !context.pendingAction && !nudgedToPrepare && asksToConfirm(result?.text)) {
+      nudgedToPrepare = true;
+      if (streamed) emit({ type: 'reset' });
+      rounds += 1;
+      input.push(...(result.output || []), { role: 'user', content: [{ type: 'input_text', text: CONFIRM_WITHOUT_ACTION }] });
+      continue;
+    }
     if (!calls.length) {
       return {
         // El resumen de un borrador lo escribe la plataforma, no el modelo: es exactamente lo que se confirmará.
