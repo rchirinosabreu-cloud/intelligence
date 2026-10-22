@@ -50,7 +50,7 @@
     "@aws-sdk/client-s3": "^3.1152.0",
     "@aws-sdk/s3-request-presigner": "^3.1152.0",
     "@floating-ui/react": "^0.27.20",
-    "@google-cloud/storage": "^7.19.0",
+    "@google-cloud/storage": "^8.4.0",
     "@hello-pangea/dnd": "^18.0.1",
     "@hugeicons/core-free-icons": "^4.3.5",
     "@hugeicons/react": "^1.1.10",
