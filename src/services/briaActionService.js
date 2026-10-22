@@ -965,8 +965,10 @@ const executePlatform = async ({ user, action, platform, session, routePermissio
   const body = operation.requestId && rawBody && typeof rawBody === 'object' && !rawBody.requestId ? { ...rawBody, requestId: `bria-${String(action.id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 120)}` } : rawBody;
   const result = await platform.call({ token: session?.token, method: action.payload.method, path: action.payload.path, body });
   if (!result.ok) throw knowledgeError(`La plataforma no lo aceptó: ${result.error}`, result.status >= 400 && result.status < 500 ? result.status : 502, 'BRIA_PLATFORM_REJECTED');
-  // Sin la respuesta técnica de la plataforma: la persona ya leyó qué se iba a hacer.
-  return { text: 'Listo, quedó hecho.', sources: [] };
+  // Sin la respuesta técnica de la plataforma: la persona ya leyó qué se iba a hacer. Lo único que se le entrega es
+  // lo que necesita a continuación, como el enlace de una reunión recién creada (22 de octubre de 2026).
+  const meetingLink = result.data && typeof result.data === 'object' ? String(result.data.meetingLink || '') : '';
+  return { text: /^https:\/\/\S+$/.test(meetingLink) ? `Listo, quedó hecho. El enlace de la reunión: ${meetingLink}` : 'Listo, quedó hecho.', sources: [] };
 };
 
 // `gate` es la puerta de actualizar una tarea (`checkTaskUpdate`); se inyecta solo para probar sus negativas.
