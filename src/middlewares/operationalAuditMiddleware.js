@@ -9,7 +9,7 @@ const alreadyCoveredByTaskTrace = (method, pathname) => (
   || (method === 'PATCH' && /^\/api\/tasks\/[^/]+$/.test(pathname))
 );
 
-export const operationalAuditMiddleware = (req, res, next) => {
+export const createOperationalAuditMiddleware = ({ record = recordOperationalTrace } = {}) => (req, res, next) => {
   const method = String(req.method || '').toUpperCase();
   if (!mutationMethods.has(method)) return next();
 
@@ -21,7 +21,7 @@ export const operationalAuditMiddleware = (req, res, next) => {
     if (alreadyCoveredByTaskTrace(method, pathname)) return;
     const details = describePlatformMutation({ method, pathname });
     const taskMatch = pathname.match(/^\/api\/tasks\/([^/]+)/);
-    recordOperationalTrace({
+    record({
       eventType: 'PLATFORM_MUTATION',
       actorId: req.user?.userId || req.user?.id || null,
       subjectUserId: req.user?.userId || req.user?.id || null,
@@ -30,10 +30,14 @@ export const operationalAuditMiddleware = (req, res, next) => {
         ...details,
         method,
         statusCode: res.statusCode,
-        authenticated: Boolean(req.user)
+        authenticated: Boolean(req.user),
+        // Lo que Bria hizo por WhatsApp con la sesión corta de la persona (22 de octubre de 2026).
+        ...(req.user?.channel === 'whatsapp' ? { via: 'whatsapp' } : {})
       }
     }).catch((error) => console.error('[OperationalAudit] Trace failed:', error?.message || error));
   });
 
   next();
 };
+
+export const operationalAuditMiddleware = createOperationalAuditMiddleware();
