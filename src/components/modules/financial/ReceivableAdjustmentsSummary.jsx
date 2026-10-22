@@ -3,7 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import axios from 'axios';
 import { Card } from '@/components/ui/Card';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { SETTLEMENT_KINDS } from '@/lib/receivableSettlement';
+import { RETENTION_KIND, RETENTION_TYPES, SETTLEMENT_KINDS } from '@/lib/receivableSettlement';
+import RecordDocumentsInline from './RecordDocumentsInline';
+import { retentionCertificateApi } from '@/lib/financialDocumentsClient';
 
 // Resumen de ajustes de cartera (Rodny, 20 de octubre de 2026: «el resumen de ajustes de cartera
 // en Financiero»). Lo saldado sin dinero y la diferencia en cambio del periodo, de una vez, sin
@@ -29,7 +31,7 @@ export default function ReceivableAdjustmentsSummary({ filterQuery, enabled = tr
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div>
         <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Ajustes de cartera</h3>
-        <p className="mt-1 text-xs text-zinc-500">Lo que bajó la cartera sin entrar como dinero: acuerdos, canjes, compensaciones, condonaciones y la diferencia en cambio de las cuentas en dólares. No son movimientos.</p>
+        <p className="mt-1 text-xs text-zinc-500">Lo que bajó la cartera sin entrar como dinero: retenciones de los clientes, acuerdos, canjes, compensaciones, condonaciones y la diferencia en cambio de las cuentas en dólares. No son movimientos.</p>
       </div>
       {count > 0 && <button type="button" aria-expanded={open} onClick={() => setOpen(current => !current)} className="min-h-11 rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">{open ? 'Ocultar detalle' : `Ver detalle (${count})`}</button>}
     </div>
@@ -37,8 +39,15 @@ export default function ReceivableAdjustmentsSummary({ filterQuery, enabled = tr
       : isLoading ? <p className="mt-3 text-xs text-zinc-500">Cargando ajustes…</p>
       : count === 0 ? <p data-receivable-adjustments-empty className="mt-3 text-xs text-zinc-500">Sin ajustes en el periodo seleccionado.</p>
       : <>
-        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
-          {SETTLEMENT_KINDS.map(kind => {
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+          {/* Lo retenido por los clientes, con su desglose por tipo: lo que Francisco descuenta en su
+              declaración y para lo que hay que pedir certificados (22 de octubre de 2026). */}
+          <div data-adjustment-retention className="rounded-xl border border-zinc-100 px-3 py-2 dark:border-white/5">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">Retenciones de clientes</p>
+            <p className="mt-1 text-sm font-semibold text-brand-cyan-deep dark:text-brand-cyan">{money(summary?.retention?.total)}</p>
+            <p className="text-[10px] text-zinc-500">{RETENTION_TYPES.filter(type => summary?.retention?.byType?.[type.value]?.count).map(type => `${type.short} ${money(summary.retention.byType[type.value].total)}`).join(' · ') || 'Sin retenciones'}</p>
+          </div>
+          {SETTLEMENT_KINDS.filter(kind => kind.value !== RETENTION_KIND).map(kind => {
             const bucket = summary?.byKind?.[kind.value] || { total: 0, count: 0 };
             return <div key={kind.value} data-adjustment-kind={kind.value} className="rounded-xl border border-zinc-100 px-3 py-2 dark:border-white/5">
               <p className="text-[10px] font-medium uppercase tracking-wide text-zinc-400">{kind.label}</p>
@@ -57,12 +66,13 @@ export default function ReceivableAdjustmentsSummary({ filterQuery, enabled = tr
             {items.map(item => <li key={item.id} data-adjustment-item className="flex flex-wrap items-start justify-between gap-2 py-2 text-xs">
               <div className="min-w-0">
                 <p className="font-semibold text-zinc-900 dark:text-white">{item.clientName}{item.counterpartyLabel ? <span className="ml-1.5 font-normal text-zinc-500">· {item.counterpartyLabel}</span> : null}</p>
-                <p className="text-zinc-500">{day(item.date)} · {item.kindLabel}{item.authorizedBy ? ` · Autorizó ${item.authorizedBy}` : ''} · de un valor original de {money(item.originalAmount)}</p>
+                <p className="text-zinc-500">{day(item.date)} · {item.kindLabel}{item.authorizedBy ? ` · Autorizó ${item.authorizedBy}` : ''}{item.certificateNumber ? ` · Certificado ${item.certificateNumber}` : ''} · de un valor original de {money(item.originalAmount)}</p>
+                {item.kind === RETENTION_KIND && <RecordDocumentsInline className="mt-1" recordId={item.id} documents={item.documents || []} api={retentionCertificateApi} canWrite={false} />}
                 {item.goods && <p className="text-zinc-600 dark:text-zinc-300">Se recibió: {item.goods}{item.destination ? ` · Destino: ${item.destination}` : ''}</p>}
                 {item.offsetAgainst && <p className="text-zinc-600 dark:text-zinc-300">Compensado contra: {item.offsetAgainst}</p>}
                 {item.reason && <p className="whitespace-pre-line text-zinc-600 dark:text-zinc-300">{item.reason}</p>}
               </div>
-              <span className="font-semibold text-brand-magenta-deep dark:text-brand-magenta">{money(item.amount)}</span>
+              <span className={item.kind === RETENTION_KIND ? 'font-semibold text-brand-cyan-deep dark:text-brand-cyan' : 'font-semibold text-brand-magenta-deep dark:text-brand-magenta'}>{money(item.amount)}</span>
             </li>)}
           </ul>}
           {exchange.length > 0 && <ul className="divide-y divide-zinc-200 dark:divide-white/10">

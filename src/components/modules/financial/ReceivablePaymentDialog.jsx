@@ -11,6 +11,10 @@ import { brainDatePickerProps } from '@/lib/brainDatePicker';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { isLoanReceivable } from '@/lib/receivableLoans';
+import { RETENTION_TYPES, normalizeRetentions, retentionsProblem } from '@/lib/receivableSettlement';
+
+// Las retenciones que se ofrecen al registrar un pago: en una cuenta de cobro, la fuente y el ICA.
+const PAYMENT_RETENTION_TYPES = RETENTION_TYPES.filter(type => type.value !== 'RETEIVA');
 
 const field = 'min-h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 disabled:opacity-70 dark:border-white/10 dark:bg-zinc-950 dark:text-white';
 const money = value => Number(value).toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2 });
@@ -23,6 +27,23 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
   // concepto, siempre es Préstamo, y no cuenta como venta.
   const loan = isLoanReceivable(debt);
   const usd = debt?.currency === 'USD';
+  // Lo que el cliente retuvo de este pago (Elisa, 22 de octubre de 2026, Fundación Grit): cierra esa
+  // parte de la deuda sin contar como ingreso, en el mismo paso que el pago.
+  const retentions = form.retentions || {};
+  const retentionList = normalizeRetentions(PAYMENT_RETENTION_TYPES.map(type => ({ type: type.value, amount: retentions[type.value] })));
+  const retained = retentionList.reduce((sum, item) => sum + item.amount, 0);
+  const retentionIssue = !loan && !usd ? retentionsProblem(retentionList, { cash: Number(form.amount) || 0, outstanding: debt?.outstanding }) : null;
+  const afterPayment = Math.max((Number(debt?.outstanding) || 0) - (Number(form.amount) || 0) - retained, 0);
+  const setRetention = (type, amount) => setForm(current => {
+    const next = { ...(current.retentions || {}), [type]: amount };
+    // Si el pago venía con todo el saldo, lo retenido sale de ahí: Elisa escribe la retención y el
+    // valor del pago baja solo a lo que de verdad entró.
+    const nextRetained = normalizeRetentions(PAYMENT_RETENTION_TYPES.map(item => ({ type: item.value, amount: next[item.value] }))).reduce((sum, item) => sum + item.amount, 0);
+    const previousRetained = normalizeRetentions(PAYMENT_RETENTION_TYPES.map(item => ({ type: item.value, amount: (current.retentions || {})[item.value] }))).reduce((sum, item) => sum + item.amount, 0);
+    const outstanding = Number(debt?.outstanding) || 0;
+    const followsBalance = Math.abs((Number(current.amount) || 0) + previousRetained - outstanding) < 0.005;
+    return { ...current, retentions: next, ...(followsBalance && !current.financialRecordId ? { amount: String(Math.max(Math.round((outstanding - nextRetained) * 100) / 100, 0)) } : {}) };
+  });
   const { data, isLoading, error: candidatesError } = useQuery({
     queryKey: ['financial-payment-candidates', debt?.clientId, page],
     enabled: !!debt?.clientId && existing,
@@ -54,7 +75,21 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
           valor en pesos de la cartera. En dólares el campo no tiene tope: si entró más, la cartera
           se ajusta sola a lo que entró; si entró menos y la cuenta queda al día, se marca. */}
       {usd && <p data-receivable-payment-usd className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-white/5 dark:text-zinc-300">Esta cuenta de cobro está en dólares. Registra los pesos que entraron a la cuenta. Si entró más que el valor en pesos de la cartera ({money(debt?.outstanding || 0)} pendientes), la cartera se ajusta sola a lo que entró.</p>}
-      <label className="block space-y-1.5 text-sm">Valor{usd ? ' en pesos' : ''}<MoneyInput required readOnly={existing} className={field} min="0.01" max={usd ? undefined : debt?.outstanding} value={form.amount} onChange={amount => setForm(current => ({ ...current, amount }))} /></label>
+      <label className="block space-y-1.5 text-sm">Valor{usd ? ' que entró en pesos' : retained > 0 ? ' que entró a la cuenta' : ''}<MoneyInput required readOnly={existing} className={field} min="0.01" max={usd ? undefined : Math.max((Number(debt?.outstanding) || 0) - retained, 0.01)} value={form.amount} onChange={amount => setForm(current => ({ ...current, amount }))} /></label>
+      {!loan && !usd && (
+        <div data-receivable-payment-retentions className="space-y-2 rounded-lg border border-zinc-200 p-3 dark:border-white/10">
+          <p className="text-sm">¿El cliente aplicó retenciones? <span className="text-zinc-400">(opcional)</span></p>
+          <p className="text-xs text-zinc-500">Lo retenido lo paga el cliente a la DIAN a nombre de quien emitió la cuenta. Cierra esa parte de la deuda, no cuenta como ingreso y el certificado se adjunta cuando llegue.</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {PAYMENT_RETENTION_TYPES.map(type => (
+              <label key={type.value} className="block space-y-1.5 text-sm"><span className="block">{type.label}</span><MoneyInput className={field} min="0" value={retentions[type.value] || ''} onChange={amount => setRetention(type.value, amount)} aria-label={type.label} /></label>
+            ))}
+          </div>
+          {retentionIssue
+            ? <p role="alert" className="text-xs text-destructive brain-destructive-text">{retentionIssue}</p>
+            : retained > 0 && <p data-receivable-payment-after className="text-xs text-zinc-600 dark:text-zinc-300">{afterPayment > 0.005 ? `Con el pago y las retenciones quedará pendiente ${money(afterPayment)}.` : 'Con el pago y las retenciones la cuenta queda pagada.'}</p>}
+        </div>
+      )}
       {usd && Number(form.amount) > 0 && Number(form.amount) < Number(debt?.outstanding || 0) - 0.005 && (
         <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1 h-4 w-4" checked={Boolean(form.settlesInFull)} onChange={event => setForm(current => ({ ...current, settlesInFull: event.target.checked }))} /><span>Con este pago la cuenta queda al día: la diferencia de {money(Number(debt?.outstanding || 0) - Number(form.amount))} es por la tasa del día, no un saldo pendiente.</span></label>
       )}
@@ -74,7 +109,7 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
         {fileProblem && <p role="alert" className="text-xs text-destructive brain-destructive-text">{fileProblem}</p>}
       </div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      <DialogFooter><button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose}>Cancelar</button><button type="submit" disabled={saving || (existing && !form.financialRecordId)} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Guardando…' : loan ? 'Guardar reintegro' : 'Guardar pago'}</button></DialogFooter>
+      <DialogFooter><button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose}>Cancelar</button><button type="submit" disabled={saving || (existing && !form.financialRecordId) || Boolean(retentionIssue)} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Guardando…' : loan ? 'Guardar reintegro' : 'Guardar pago'}</button></DialogFooter>
     </fieldset></form>
   </DialogContent></Dialog>;
 }

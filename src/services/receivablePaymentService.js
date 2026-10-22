@@ -6,7 +6,7 @@ import {
     FinancialDomainError,
     parseFinancialDateInput
 } from './financialRecordService.js';
-import { isReceivableClosed, receivableStatusAfter } from '../lib/receivableSettlement.js';
+import { RETENTION_KIND, isReceivableClosed, normalizeRetentions, receivableStatusAfter, retentionsProblem } from '../lib/receivableSettlement.js';
 import { isLoanReceivable } from '../lib/receivableLoans.js';
 import { normalizeReceivableCurrency } from '../lib/receivableCurrency.js';
 
@@ -57,6 +57,16 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
 
     const financialRecordId = normalizeText(input.financialRecordId);
     const requestedCategory = normalizeText(input.category)?.toUpperCase() || null;
+    // Lo que el cliente retuvo de este mismo pago (Elisa, 22 de octubre de 2026, Fundación Grit):
+    // entra en la misma transacción como filas RETENCION, sin ingreso, y cierra la cuenta como pagada.
+    const retentionProblem = retentionsProblem(input.retentions);
+    if (retentionProblem) throw new FinancialDomainError('RECEIVABLE_RETENTION_INVALID', retentionProblem);
+    const retentions = normalizeRetentions(input.retentions).map((item) => {
+        const cents = financialCents(item.amount);
+        if (cents === null || cents <= 0) throw new FinancialDomainError('RECEIVABLE_RETENTION_INVALID', 'Cada retención debe ser positiva y tener como máximo dos decimales.');
+        return { type: item.type, cents };
+    });
+    const retentionCents = retentions.reduce((sum, item) => sum + item.cents, 0);
     let requestId = null;
     if (input.requestId !== undefined && input.requestId !== null) {
         requestId = String(input.requestId).trim().toLowerCase();
@@ -69,7 +79,8 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
     const paymentId = requestId ? `receivable-payment:${requestId}` : null;
     const auditId = requestId ? `receivable-payment-request:${requestId}` : null;
     const requestFingerprint = requestId ? createHash('sha256').update(JSON.stringify({
-        receivableId, actorId, amount, paidAt: paidAt.toISOString().slice(0, 10), accountId, category: requestedCategory, financialRecordId, reference, notes
+        receivableId, actorId, amount, paidAt: paidAt.toISOString().slice(0, 10), accountId, category: requestedCategory, financialRecordId, reference, notes,
+        ...(retentions.length ? { retentions: retentions.map((item) => [item.type, item.cents]) } : {})
     })).digest('hex') : null;
 
     try {
@@ -114,6 +125,9 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
             // categoría PRESTAMO y sección FINANCING, sin pedir concepto, y sin exigir cliente porque
             // a un colaborador o a un socio no se le abre ficha de cliente.
             const isLoan = isLoanReceivable(receivable);
+            if (isLoan && retentions.length) {
+                throw new FinancialDomainError('RECEIVABLE_RETENTION_INVALID', 'El reintegro de un préstamo no lleva retenciones.');
+            }
             const category = isLoan ? 'PRESTAMO' : requestedCategory;
             if (!isLoan && !financialRecordId && !PAYMENT_CATEGORIES.has(category)) {
                 throw new FinancialDomainError('RECEIVABLE_PAYMENT_CATEGORY_INVALID', 'Selecciona si el pago corresponde a una membresía, servicio o pauta.');
@@ -126,8 +140,14 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
                 throw new FinancialDomainError('RECEIVABLE_PAYMENT_CURRENCY_UNSUPPORTED', 'Este flujo de cartera admite pagos en COP. No se aplican conversiones de moneda automáticamente.', 409);
             }
 
-            const outstandingBeforeCents = outstandingCentsOf(receivable);
-            const outstandingBefore = financialAmountFromCents(outstandingBeforeCents);
+            const outstandingWithRetentionsCents = outstandingCentsOf(receivable);
+            const outstandingBefore = financialAmountFromCents(outstandingWithRetentionsCents);
+            if (retentionCents > outstandingWithRetentionsCents) {
+                throw new FinancialDomainError('RECEIVABLE_RETENTION_EXCEEDS_BALANCE', 'Las retenciones superan el saldo pendiente de la cuenta por cobrar.', 409);
+            }
+            // El dinero se compara con lo que queda después de lo retenido: la retención no es plata
+            // que entró, pero sí cubre esa parte de la deuda.
+            const outstandingBeforeCents = outstandingWithRetentionsCents - retentionCents;
             // Una cuenta en dólares guarda en cartera los pesos de la TRM del día en que se creó,
             // y el depósito llega con la tasa del día (Foobspain, 19 de octubre de 2026: Elisa
             // «registró el máximo permitido» porque el pago real no cabía). La cartera se ajusta
@@ -213,12 +233,25 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
                     createdById: actorId
                 }
             });
+            const retentionPayments = [];
+            for (const retention of retentions) {
+                retentionPayments.push(await tx.receivablePayment.create({
+                    data: {
+                        receivableId,
+                        kind: RETENTION_KIND,
+                        amount: financialAmountFromCents(retention.cents),
+                        paidAt,
+                        detail: { retentionType: retention.type, withPaymentId: payment.id },
+                        createdById: actorId
+                    }
+                }));
+            }
             const outstandingCents = exchangeAdjustment ? 0 : outstandingBeforeCents - amountCents;
             const outstanding = financialAmountFromCents(outstandingCents);
             const updatedReceivable = await tx.accountsReceivable.update({
                 where: { id: receivableId },
                 data: {
-                    status: receivableStatusAfter({ outstandingCents, payments: [...receivable.payments, payment], currentStatus: receivable.status }),
+                    status: receivableStatusAfter({ outstandingCents, payments: [...receivable.payments, payment, ...retentionPayments], currentStatus: receivable.status }),
                     ...(exchangeAdjustment ? {
                         amount: financialAmountFromCents(exchangeAdjustment.toCents),
                         metadata: {
@@ -248,7 +281,11 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
                     entityId: receivableId,
                     action: 'PAYMENT',
                     before: { status: receivable.status, outstanding: outstandingBefore },
-                    after: { status: updatedReceivable.status, outstanding, paymentId: payment.id, financialRecordId: financialRecord.id, appliedExistingIncome: Boolean(financialRecordId), ...(requestFingerprint ? { requestFingerprint } : {}) },
+                    after: {
+                        status: updatedReceivable.status, outstanding, paymentId: payment.id, financialRecordId: financialRecord.id, appliedExistingIncome: Boolean(financialRecordId),
+                        ...(retentionPayments.length ? { retentions: retentionPayments.map((row) => ({ paymentId: row.id, type: row.detail.retentionType, amount: row.amount })) } : {}),
+                        ...(requestFingerprint ? { requestFingerprint } : {})
+                    },
                     actorId
                 }
             });
@@ -262,7 +299,7 @@ export const createReceivablePayment = async (prismaClient, receivableId, input 
                 }
             });
 
-            return { payment, financialRecord, receivable: updatedReceivable, outstanding, exchangeAdjustment, replayed: false };
+            return { payment, financialRecord, receivable: updatedReceivable, outstanding, exchangeAdjustment, retentionPayments, replayed: false };
         }, { isolationLevel: 'Serializable' });
     } catch (error) {
         if (error?.code === 'P2034' || error?.code === 'P2002') {

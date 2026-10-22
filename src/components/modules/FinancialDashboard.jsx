@@ -34,7 +34,7 @@ import ReceivableSettlementDialog from './financial/ReceivableSettlementDialog';
 import ReceivableLoanDialog from './financial/ReceivableLoanDialog';
 import ReceivableAdjustmentsSummary from './financial/ReceivableAdjustmentsSummary';
 import ReceivablePaymentEditDialog from './financial/ReceivablePaymentEditDialog';
-import { isCashPayment, isReceivableClosed, settlementKindLabel } from '@/lib/receivableSettlement';
+import { isCashPayment, isReceivableClosed, isRetentionPayment, paymentKindLabel, settlementKindLabel } from '@/lib/receivableSettlement';
 import { isLoanReceivable, loanCounterpartyLabel } from '@/lib/receivableLoans';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
 import PayablesTab from './financial/PayablesTab';
@@ -51,7 +51,7 @@ import FinancialClientsDirectory from '@/components/modules/financial/FinancialC
 import UsdToPesosFields from '@/components/modules/financial/UsdToPesosFields';
 import { PayrollPaymentDialog, PayrollPaymentList } from '@/components/modules/financial/PayrollPayments';
 import RecordDocumentsInline from '@/components/modules/financial/RecordDocumentsInline';
-import { uploadRecordDocument } from '@/lib/financialDocumentsClient';
+import { retentionCertificateApi, uploadRecordDocument } from '@/lib/financialDocumentsClient';
 import { payrollStatus } from '@/lib/payrollPayments';
 import ClientProfileFields from '@/components/modules/Clients/ClientProfileFields';
 import { emptyClientProfile, normalizeClientProfile } from '@/lib/clientProfile';
@@ -462,7 +462,8 @@ const FinancialDashboard = () => {
             accountId: '',
             reference: '',
             notes: '',
-            settlesInFull: false
+            settlesInFull: false,
+            retentions: {}
         });
     };
 
@@ -476,10 +477,16 @@ const FinancialDashboard = () => {
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
-            const { file, ...paymentPayload } = paymentForm;
+            const { file, retentions: retentionDraft, ...paymentPayload } = paymentForm;
+            // Las retenciones del cliente viajan con el pago y el servidor las registra en la misma
+            // transacción (Elisa, 22 de octubre de 2026).
+            const retentions = Object.entries(retentionDraft || {})
+                .map(([type, amount]) => ({ type, amount: Number(amount) }))
+                .filter((item) => Number.isFinite(item.amount) && item.amount > 0);
             const { data: result } = await axios.post(`${baseUrl}/api/financials/receivables/${paymentDebt.id}/payments`, {
                 ...paymentPayload,
-                amount: Number(paymentForm.amount)
+                amount: Number(paymentForm.amount),
+                ...(retentions.length ? { retentions } : {})
             }, { headers: { Authorization: `Bearer ${token}` } });
             // El comprobante va al ingreso que el servidor acaba de confirmar (Elisa, 5 de octubre de
             // 2026). Si falla, el pago ya quedó guardado: se dice y se sube desde el abono en Cartera.
@@ -1641,7 +1648,7 @@ await invalidateFinancialQueries(queryClient);
                                                                     </span>
                                                                     {savingReceivableId === debt.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600" />}
                                                                 </div>
-                                                                <div className={cn('grid gap-2 border-y border-zinc-200 py-3 dark:border-white/10', debt.settledAmount > 0.005 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')}>
+                                                                <div className={cn('grid gap-2 border-y border-zinc-200 py-3 dark:border-white/10', (debt.settledAmount > 0.005 && debt.retainedAmount > 0.005) ? 'grid-cols-2 sm:grid-cols-5' : (debt.settledAmount > 0.005 || debt.retainedAmount > 0.005) ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')}>
                                                                     <div data-receivable-amount-editor>
                                                                         <span className="text-[9px] font-medium text-zinc-400">Valor original</span>
                                                                         {editingAmountId === debt.id ? (
@@ -1676,6 +1683,8 @@ await invalidateFinancialQueries(queryClient);
                                                                     </div>
                                                                     <div><span className="text-[9px] font-medium text-zinc-400">Abonos registrados</span><p className="mt-1 text-xs font-semibold text-emerald-600">{formatCurrency(debt.paidAmount || 0)}</p></div>
                                                                     {/* Lo saldado sin dinero se dice aparte: no es plata que entró (20 de octubre de 2026). */}
+                                                                    {/* Lo que retuvo el cliente también va aparte: lo pagó a la DIAN, no es un descuento (22 de octubre de 2026). */}
+                                                                    {debt.retainedAmount > 0.005 && <div data-receivable-retained><span className="text-[9px] font-medium text-zinc-400">Retenido por el cliente</span><p className="mt-1 text-xs font-semibold text-brand-cyan-deep dark:text-brand-cyan">{formatCurrency(debt.retainedAmount)}</p></div>}
                                                                     {debt.settledAmount > 0.005 && <div data-receivable-settled><span className="text-[9px] font-medium text-zinc-400">Saldado sin dinero</span><p className="mt-1 text-xs font-semibold text-brand-magenta-deep dark:text-brand-magenta">{formatCurrency(debt.settledAmount)}</p></div>}
                                                                     <div><span className="text-[9px] font-medium text-zinc-400">Saldo pendiente</span><p className="mt-1 text-xs font-semibold text-amber-600">{debt.balanceReviewRequired ? 'Por verificar' : formatCurrency(debt.outstanding || 0)}</p></div>
                                                                 </div>
@@ -1751,13 +1760,14 @@ await invalidateFinancialQueries(queryClient);
                                                                                         <p className={cn('flex flex-wrap items-center gap-2 text-xs font-semibold', payment.reversedAt ? 'text-zinc-400 line-through' : 'text-zinc-900 dark:text-white')}>
                                                                                             {formatCurrency(payment.amount || 0)}
                                                                                             {/* Un acuerdo, canje, compensación o condonación no es dinero: se rotula (20 de octubre de 2026). */}
-                                                                                            {!isCashPayment(payment) && <span className="rounded-md bg-brand-magenta/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-magenta-deep no-underline dark:text-brand-magenta">{settlementKindLabel(payment.kind)}</span>}
+                                                                                            {!isCashPayment(payment) && <span data-receivable-payment-label className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-semibold no-underline', isRetentionPayment(payment) ? 'bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan' : 'bg-brand-magenta/10 text-brand-magenta-deep dark:text-brand-magenta')}>{paymentKindLabel(payment)}</span>}
                                                                                         </p>
                                                                                         <p className="text-[10px] text-zinc-500">
                                                                                             {new Date(payment.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
                                                                                             {payment.account?.name ? ` · ${payment.account.name}` : ''}
                                                                                             {payment.reference ? ` · ${payment.reference}` : ''}
                                                                                             {payment.detail?.authorizedBy ? ` · Autorizó ${payment.detail.authorizedBy}` : ''}
+                                                                                            {payment.detail?.certificateNumber ? ` · Certificado ${payment.detail.certificateNumber}` : ''}
                                                                                         </p>
                                                                                         {payment.detail?.goods && <p className="text-[10px] text-zinc-600 dark:text-zinc-300">Se recibió: {payment.detail.goods}{payment.detail.destination ? ` · Destino: ${payment.detail.destination}` : ''}</p>}
                                                                                         {payment.detail?.offsetAgainst && <p className="text-[10px] text-zinc-600 dark:text-zinc-300">Compensado contra: {payment.detail.offsetAgainst}</p>}
@@ -1767,6 +1777,13 @@ await invalidateFinancialQueries(queryClient);
                                                                                         {/* Los comprobantes del abono, en su ingreso (Elisa, 5 de octubre de 2026). */}
                                                                                         {!payment.reversedAt && payment.financialRecordId && (
                                                                                             <RecordDocumentsInline className="mt-1.5" recordId={payment.financialRecordId} documents={payment.documents || []}
+                                                                                                canWrite={canWriteFinancials}
+                                                                                                onChanged={async (message) => { setImportError(''); await invalidateFinancialQueries(queryClient); setImportSuccess(message); }}
+                                                                                                onError={(message) => { setImportSuccess(''); setImportError(message); }} />
+                                                                                        )}
+                                                                                        {/* El certificado de una retención, en la propia fila (22 de octubre de 2026). */}
+                                                                                        {!payment.reversedAt && isRetentionPayment(payment) && (
+                                                                                            <RecordDocumentsInline className="mt-1.5" recordId={payment.id} documents={payment.supportDocuments || []} api={retentionCertificateApi}
                                                                                                 canWrite={canWriteFinancials}
                                                                                                 onChanged={async (message) => { setImportError(''); await invalidateFinancialQueries(queryClient); setImportSuccess(message); }}
                                                                                                 onError={(message) => { setImportSuccess(''); setImportError(message); }} />

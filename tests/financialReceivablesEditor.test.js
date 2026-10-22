@@ -98,6 +98,8 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
         paidAmount: 680000,
         // Lo saldado sin dinero (acuerdo, canje, compensación, condonación) va aparte (20 de octubre de 2026).
         settledAmount: 0,
+        // Lo que retuvo el cliente también va aparte: lo pagó a la DIAN, no es un descuento (22 de octubre de 2026).
+        retainedAmount: 0,
         outstanding: 4000000,
         period: '2026-01-01T00:00:00.000Z',
         month: 1,
@@ -138,7 +140,9 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
             detail: null,
             // Comprobantes del abono (5 de octubre de 2026): este no tiene ingreso enlazado.
             financialRecordId: null,
-            documents: []
+            documents: [],
+            // El soporte de un ajuste sin dinero (el certificado de una retención); un pago no lo usa.
+            supportDocuments: []
         }]
     }]);
     assert.equal(res.payload.totals.DEBE, 4000000);

@@ -2524,10 +2524,34 @@ model ReceivablePayment {
   detail            Json?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
+  // El soporte de un ajuste sin dinero: el certificado de una retención (22 de octubre de 2026), el
+  // acta de un canje. Un pago no lo usa: sus comprobantes van en su ingreso.
+  documents         ReceivablePaymentDocument[]
 
   @@index([receivableId, paidAt])
   @@index([accountId, paidAt])
   @@index([createdById, createdAt])
+}
+
+// Soportes de un ajuste de cartera (22 de octubre de 2026). Mismo bucket y mismas reglas que los
+// comprobantes de un movimiento: se detectan por bytes, se sirven solo por la API y nunca se borran.
+// Aditiva con `scripts/ensure-receivable-retention-schema.js`.
+model ReceivablePaymentDocument {
+  id           String            @id @default(uuid())
+  paymentId    String
+  payment      ReceivablePayment @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  storageKey   String            @unique
+  name         String
+  mimeType     String
+  size         Int
+  sha256       String
+  uploadedById String?
+  uploadedAt   DateTime          @default(now()) @db.Timestamptz()
+  voidedAt     DateTime?         @db.Timestamptz()
+  voidReason   String?
+  voidedById   String?
+
+  @@index([paymentId, uploadedAt])
 }
 
 model ServiceCatalog {

@@ -29,8 +29,9 @@ test('el resumen suma por forma de cierre y la diferencia en cambio aparte', () 
         exchangeAdjustments: [{ fromCents: 120000000, toCents: 125000000 }, { fromCents: 100000000, toCents: 98000000 }]
     });
     assert.deepEqual(summary.byKind, {
-        ACUERDO: { total: 2000000, count: 2 }, CANJE: { total: 3200000, count: 1 }, COMPENSACION: { total: 0, count: 0 }, CONDONACION: { total: 200000, count: 1 }
+        ACUERDO: { total: 2000000, count: 2 }, CANJE: { total: 3200000, count: 1 }, COMPENSACION: { total: 0, count: 0 }, CONDONACION: { total: 200000, count: 1 }, RETENCION: { total: 0, count: 0 }
     });
+    assert.equal(summary.retention.total, 0);
     assert.equal(summary.settledTotal, 5400000);
     assert.deepEqual(summary.exchange, { up: 50000, down: 20000, net: 30000, count: 2 });
 });
@@ -59,7 +60,7 @@ test('listReceivableAdjustments lee los cierres vigentes del periodo y los ajust
     };
     const result = await listReceivableAdjustments(prismaClient, { year: 2026, month: 10 });
     const where = calls.find(([name]) => name === 'payment.findMany')[1].where;
-    assert.deepEqual(where.kind, { in: ['ACUERDO', 'CANJE', 'COMPENSACION', 'CONDONACION'] });
+    assert.deepEqual(where.kind, { in: ['ACUERDO', 'CANJE', 'COMPENSACION', 'CONDONACION', 'RETENCION'] });
     assert.equal(where.reversedAt, null, 'un cierre revertido no cuenta');
     assert.deepEqual(where.paidAt, { gte: new Date(Date.UTC(2026, 9, 1)), lt: new Date(Date.UTC(2026, 10, 1)) });
     assert.equal(result.items.length, 2);

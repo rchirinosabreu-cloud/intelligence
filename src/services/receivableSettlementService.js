@@ -2,7 +2,7 @@ import { financialCents, financialAmountFromCents } from '../utils/financialMone
 import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
 import { assertOpenFinancialPeriod, FinancialDomainError, parseFinancialDateInput } from './financialRecordService.js';
 import { outstandingCentsOf } from './receivablePaymentService.js';
-import { SETTLEMENT_KINDS, isReceivableClosed, receivableStatusAfter, settlementDetail, settlementKindLabel, settlementProblem } from '../lib/receivableSettlement.js';
+import { RETENTION_KIND, SETTLEMENT_KINDS, isReceivableClosed, paymentKindLabel, receivableStatusAfter, settlementDetail, settlementKindLabel, settlementProblem } from '../lib/receivableSettlement.js';
 import { adjustmentsRange, summarizeAdjustments } from '../lib/receivableAdjustments.js';
 import { loanCounterpartyLabel } from '../lib/receivableLoans.js';
 
@@ -18,7 +18,10 @@ export const listReceivableAdjustments = async (prismaClient, query = {}) => {
     const [settlements, usdReceivables] = await Promise.all([
         prismaClient.receivablePayment.findMany({
             where: { kind: { in: SETTLEMENT_KINDS.map((kind) => kind.value) }, reversedAt: null, paidAt: { gte: from, lt: to } },
-            include: { receivable: { include: { client: { select: { id: true, name: true, slug: true } } } } },
+            include: {
+                receivable: { include: { client: { select: { id: true, name: true, slug: true } } } },
+                documents: { where: { voidedAt: null }, orderBy: { uploadedAt: 'asc' }, select: { id: true, name: true, mimeType: true, size: true } }
+            },
             orderBy: [{ paidAt: 'desc' }, { id: 'desc' }]
         }),
         prismaClient.accountsReceivable.findMany({
@@ -33,7 +36,10 @@ export const listReceivableAdjustments = async (prismaClient, query = {}) => {
             id: settlement.id,
             receivableId: receivable.id || null,
             kind: settlement.kind,
-            kindLabel: settlementKindLabel(settlement.kind),
+            kindLabel: paymentKindLabel(settlement),
+            retentionType: settlement.kind === RETENTION_KIND ? (detail.retentionType || null) : null,
+            certificateNumber: detail.certificateNumber || null,
+            documents: (settlement.documents || []).map((document) => ({ id: document.id, name: document.name, mimeType: document.mimeType, size: document.size })),
             amount: toNumber(settlement.amount),
             originalAmount: toNumber(receivable.amount),
             date: settlement.paidAt instanceof Date ? settlement.paidAt.toISOString() : settlement.paidAt,
@@ -94,7 +100,7 @@ export const settleReceivable = async (prismaClient, receivableId, input = {}, a
     const { date: settledAt, year, month } = parseFinancialDateInput(input.settledAt);
     const actorId = actor?.id || actor?.userId || null;
     const kind = input.kind;
-    const reason = String(input.reason).trim();
+    const reason = String(input.reason ?? '').trim() || null;
     const detail = settlementDetail(input);
 
     try {

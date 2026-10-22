@@ -1,5 +1,5 @@
 import { formatReceivableNumber, receivableIssuer } from '../lib/receivableDocument.js';
-import { isCashPayment, settlementKindLabel } from '../lib/receivableSettlement.js';
+import { isCashPayment, paymentKindLabel } from '../lib/receivableSettlement.js';
 import { drawDocumentLogo, newReceivableDocument } from './receivablePdfService.js';
 import { FinancialDomainError } from './financialRecordService.js';
 
@@ -77,7 +77,7 @@ export const buildClientStatementModel = (client, receivables = [], { cutoff, en
         for (const payment of applied) {
             deductions.push({
                 receivableId: receivable.id,
-                label: isCashPayment(payment) ? 'Abono' : settlementKindLabel(payment.kind),
+                label: isCashPayment(payment) ? 'Abono' : paymentKindLabel(payment),
                 date: longDate(payment.paidAt),
                 amount: toNumber(payment.amount),
                 formattedAmount: formatMoney(toNumber(payment.amount)),

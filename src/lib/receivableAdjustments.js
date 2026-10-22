@@ -3,7 +3,7 @@
 // dólares, cuya cartera en pesos se ajusta a lo que de verdad entró. Nada de esto es un
 // movimiento: no entró ni salió dinero por estos conceptos, y por eso no aparece en
 // Movimientos; aparece aquí, para que quien lleva el financiero lo vea de una vez.
-import { SETTLEMENT_KINDS } from './receivableSettlement.js';
+import { RETENTION_KIND, RETENTION_TYPES, SETTLEMENT_KINDS } from './receivableSettlement.js';
 
 const round = (value) => Math.round((Number(value) || 0) * 100) / 100;
 
@@ -19,12 +19,22 @@ export const adjustmentsRange = ({ year, month } = {}) => {
 
 export const summarizeAdjustments = ({ settlements = [], exchangeAdjustments = [] } = {}) => {
     const byKind = Object.fromEntries(SETTLEMENT_KINDS.map((kind) => [kind.value, { total: 0, count: 0 }]));
+    // Lo retenido por los clientes se suma aparte y por tipo (22 de octubre de 2026): no es dinero
+    // perdido, y a fin de año hay que saber cuánto se retuvo de cada clase para pedir los certificados.
+    const retention = { total: 0, count: 0, byType: Object.fromEntries(RETENTION_TYPES.map((type) => [type.value, { total: 0, count: 0 }])) };
     let settledTotal = 0;
     for (const settlement of settlements) {
         const bucket = byKind[settlement.kind];
         if (!bucket) continue;
         bucket.total = round(bucket.total + Number(settlement.amount || 0));
         bucket.count += 1;
+        if (settlement.kind === RETENTION_KIND) {
+            retention.total = round(retention.total + Number(settlement.amount || 0));
+            retention.count += 1;
+            const typeBucket = retention.byType[settlement.retentionType];
+            if (typeBucket) { typeBucket.total = round(typeBucket.total + Number(settlement.amount || 0)); typeBucket.count += 1; }
+            continue;
+        }
         settledTotal = round(settledTotal + Number(settlement.amount || 0));
     }
     const exchange = { up: 0, down: 0, net: 0, count: 0 };
@@ -35,5 +45,5 @@ export const summarizeAdjustments = ({ settlements = [], exchangeAdjustments = [
         exchange.count += 1;
     }
     exchange.net = round(exchange.up - exchange.down);
-    return { byKind, settledTotal, exchange };
+    return { byKind, settledTotal, retention, exchange };
 };
