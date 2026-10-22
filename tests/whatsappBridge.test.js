@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {
-  verifyMetaSignature, webhookChallenge, parseInboundMessages, describeNotice, maskWaId, normalizeBsuid, linkCodeIn, generateLinkCode, linkMessage,
+  verifyMetaSignature, webhookChallenge, parseInboundMessages, describeNotice, isStatusOnlyNotice, maskWaId, normalizeBsuid, linkCodeIn, generateLinkCode, linkMessage,
   displayPhone, waMeLink, toWhatsAppText, splitForWhatsApp, answerForWhatsApp, textMessagePayload, readReceiptPayload,
   REPLIES, WHATSAPP_TEXT_MAX, LINK_CODE_TTL_MS
 } from '../src/lib/whatsappBridge.js';
@@ -80,6 +80,14 @@ test('un mensaje sin número se lee por su BSUID; con número, el BSUID sigue si
   assert.equal(normalizeBsuid('573001234567'), null);
   assert.equal(maskWaId('CO.1349120865530274'), 'CO.…0274');
   assert.equal(displayPhone('CO.1349120865530274'), '', 'un BSUID no se muestra como número');
+});
+
+test('los avisos de solo estados (enviado, entregado, leído) no se anotan; uno fallido o un mensaje sí', () => {
+  const statuses = (status) => ({ object: 'whatsapp_business_account', entry: [{ changes: [{ field: 'messages', value: { metadata: { phone_number_id: '1319887801213730' }, statuses: [{ id: 'wamid.x', status }] } }] }] });
+  for (const status of ['sent', 'delivered', 'read']) assert.equal(isStatusOnlyNotice(statuses(status)), true, status);
+  assert.equal(isStatusOnlyNotice(statuses('failed')), false, 'un envío fallido se dice');
+  assert.equal(isStatusOnlyNotice(inbound()), false);
+  assert.equal(isStatusOnlyNotice({ object: 'whatsapp_business_account', entry: [] }), false, 'un aviso vacío sí es raro');
 });
 
 test('se responde por número si se conoce y por BSUID en `recipient` si no; nunca los dos', () => {

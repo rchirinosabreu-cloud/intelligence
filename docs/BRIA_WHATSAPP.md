@@ -40,6 +40,17 @@ Sin token o sin identificador del número, el webhook acepta los avisos (200) y 
 - Solo se atienden los mensajes dirigidos a nuestro número (`metadata.phone_number_id`); los estados de entrega se ignoran.
 - Cada mensaje se recuerda por su identificador 30 días (`whatsapp_inbound`): un aviso que Meta repite no se responde dos veces.
 
+## Los permisos que hicieron falta en Meta (22 de octubre de 2026)
+
+Con los mensajes ya entrando, Bria no podía responder: Meta rechazaba cada envío con «(#10) You do not have WhatsApp granular permission for sending messages on behalf of this WhatsApp Business Account», y también el visto de leído. Un token nuevo no lo arregló. Lo arregló darle al usuario del sistema «Intelligence Publicador»:
+
+- **Todo** (control total) en la cuenta de mensajes «Brain Studio – Bria»; antes tenía solo plantillas.
+- **Administrar app** en la app BrainStudio Metrics; antes tenía acceso parcial (desarrollar, estadísticas, probar).
+
+Se hicieron los dos a la vez, así que no se sabe cuál de los dos era el que faltaba; no quitar ninguno. Meta los revisa en cada envío: no hizo falta otro token. La guía de Meta («Guía de tokens de acceso») pide acceso a la cuenta de WhatsApp **y** a la cuenta de mensajes, y control total de la app, para un usuario del sistema empleado. «Todo» en la cuenta de mensajes incluye la información de pago de esa cuenta.
+
+Los avisos de estado (enviado, entregado, leído) de cada respuesta no se anotan en el registro; uno **fallido** sí, con la forma del aviso.
+
 ## Quién escribe: BSUID y número (22 de octubre de 2026)
 
 El primer mensaje de Rodny llegó firmado, a nuestro número, con un mensaje adentro, y la plataforma lo descartó: no traía `from`. Desde 2026 Meta identifica a quien escribe con un **BSUID** (`from_user_id` en el mensaje y `user_id` en el contacto, forma `CO.1349…`, `US.ENT.…` si es principal), que llega **siempre**. El número (`from`, `wa_id`) solo llega si la persona no usa nombre de usuario o si hubo contacto con ella en los últimos 30 días, así que el primer mensaje de alguien puede venir sin él. Meta dice que soportar el BSUID es obligatorio.

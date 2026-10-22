@@ -109,6 +109,19 @@ export const describeNotice = (body) => {
   return `objeto=${body?.object ?? 'ninguno'} entradas=${entries.length} campos=${fields.join(',') || 'ninguno'} números=${phoneIds.join(',') || 'ninguno'} mensajes=${count('messages')} estados=${count('statuses')} errores=${count('errors')}`;
 };
 
+/**
+ * Si un aviso sin mensajes es solo de estados (enviado, entregado, leído, fallido) de lo que mandó Bria. Esos llegan
+ * tres por respuesta y no son una anomalía: no se anotan, salvo un estado fallido, que sí se dice.
+ */
+export const isStatusOnlyNotice = (body) => {
+  const changes = (Array.isArray(body?.entry) ? body.entry : []).flatMap((entry) => (Array.isArray(entry?.changes) ? entry.changes : []));
+  if (!changes.length) return false;
+  const hasStatuses = changes.some((change) => Array.isArray(change?.value?.statuses) && change.value.statuses.length);
+  const hasOther = changes.some((change) => (Array.isArray(change?.value?.messages) && change.value.messages.length) || (Array.isArray(change?.value?.errors) && change.value.errors.length));
+  const failed = changes.some((change) => (change?.value?.statuses || []).some((status) => status?.status === 'failed'));
+  return hasStatuses && !hasOther && !failed;
+};
+
 /** Quién escribe, recortado para el registro: basta para distinguir, no para identificar. */
 export const maskWaId = (waId) => {
   const bsuid = normalizeBsuid(waId);
