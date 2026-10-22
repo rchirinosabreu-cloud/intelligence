@@ -49,7 +49,10 @@ test('preparing a platform operation: only what the map knows, with the route’
   assert.equal(actionStage(action), 'READY');
   assert.deepEqual(action.payload, { method: 'POST', path: '/global-announcements', body: { content: 'Mañana no hay reunión', type: 'INFO' } });
   assert.deepEqual(action.permission, { roles: ['MANAGER'] });
-  assert.deepEqual(action.summary, ['Publicar el anuncio de que mañana no hay reunión', 'Operación: Publica un anuncio general para todo el equipo.', 'content: Mañana no hay reunión', 'type: INFO']);
+  // Un párrafo y nada más (Rodny, 22 de octubre de 2026: «nada de startAt, endAt, id … en un párrafo me lo puede decir»).
+  assert.deepEqual(action.summary, []);
+  assert.equal(actionReply(action).answer, 'Publicar el anuncio de que mañana no hay reunión\n\n¿Lo hago así? También puedes pedirme cualquier ajuste.');
+  assert.doesNotMatch(actionReply(action).answer, /content:|type:|Operación:/);
   assert.deepEqual(actionReply(action).quickReplies, ['Confirmar', 'Cancelar']);
   await assert.rejects(() => service.prepare({ user: pm, type: 'PLATFORM', args: { metodo: 'POST', ruta: '/client-operations/c1/observations', cuerpo: { text: 'x' }, que_hace: 'Anotar' } }), /módulo Clientes/);
   await assert.rejects(() => service.prepare({ user: pm, type: 'PLATFORM', args: { metodo: 'POST', ruta: '/user/mfa/reset/u1', cuerpo: null, que_hace: 'Reset' } }), /no se hace desde el chat/);
@@ -60,7 +63,7 @@ test('preparing a platform operation: only what the map knows, with the route’
   assert.match(money.warnings[0], /Es dinero/);
   const removal = await service.prepare({ user: admin, type: 'PLATFORM', args: { metodo: 'DELETE', ruta: '/user/notes/n1', cuerpo: null, que_hace: 'Borrar la nota' } });
   assert.match(removal.warnings[0], /Es un borrado/);
-  assert.equal(removal.summary.length, 3, 'the path parameter is listed');
+  assert.deepEqual(removal.summary, [], 'el párrafo de que_hace dice qué se borra; los parámetros no se listan');
 });
 
 test('executing calls the API with the person’s session, re-checks the permission and tells what the platform answered or refused', async () => {
@@ -70,7 +73,7 @@ test('executing calls the API with the person’s session, re-checks the permiss
   const action = await service.prepare({ user: admin, type: 'PLATFORM', args: { metodo: 'POST', ruta: '/global-announcements', cuerpo: { content: 'Hola', type: 'INFO' }, que_hace: 'Publicar un anuncio' } });
   const out = await service.execute({ user: admin, action, session });
   assert.deepEqual(calls[0], { token: 'token-de-la-persona', method: 'POST', path: '/global-announcements', body: { content: 'Hola', type: 'INFO' } });
-  assert.match(out.text, /^Listo: Publicar un anuncio\./);
+  assert.equal(out.text, 'Listo, quedó hecho.', 'sin la respuesta técnica de la plataforma');
   await assert.rejects(() => service.execute({ user: { ...admin, role: 'EDITOR' }, action, session }), { status: 403 }, 'a role that changed since the summary is refused');
   await assert.rejects(() => service.execute({ user: { ...admin, userId: 'otra' }, action, session }), /otra persona/);
   const failing = { ...action, payload: { ...action.payload, path: '/global-announcements' }, target: { key: 'POST /global-announcements', path: '/global-announcements' } };

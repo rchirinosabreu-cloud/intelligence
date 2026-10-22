@@ -1108,10 +1108,16 @@ export async function createOperationalEvent(data, createdById = null, {
   const range = { startAt: validated.startAt, endAt: validated.endAt };
   // Toda reunión lleva a Fireflies y la pantalla ya no lo pregunta: lo decide el servidor,
   // así que una pestaña sin recargar tampoco puede crear una reunión sin Fred.
-  const externalEmails = withFirefliesInvite(validated.type, data.attendeeEmails, {
+  const fireflies = withFirefliesInvite(validated.type, data.attendeeEmails, {
     organizerEmail: auth.connection.email,
     watchedEmail: firefliesWatchedCalendar()
   });
+  // Todo evento queda en todos los calendarios conectados (Rodny, 22 de octubre de 2026: «los eventos deben registrarse
+  // en ambos siempre»): se crea en la cuenta elegida e invita a las demás. Google lo pone en cada calendario y la
+  // sincronización lo une por su iCalUID, así que en Actividad sigue siendo un solo evento.
+  const connected = (await db.googleCalendarConnection?.findMany?.({ where: { isActive: true }, select: { email: true } })) || [];
+  const organizer = String(auth.connection.email || '').toLowerCase();
+  const externalEmails = [...fireflies, ...connected.map(row => row.email).filter(email => email && email.toLowerCase() !== organizer)];
   const attendeeEmails = await normalizeAttendeeEmails(data.memberIds || [], externalEmails, db);
   validateOperationalEventSchedule(data, null, now());
   return await createSyncedOperationalEvent({
