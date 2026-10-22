@@ -103,17 +103,23 @@ Decisiones de Rodny ese día: llegan **los pedidos de acceso, la lectura de la m
 | Avisos del pulso | a quien Bria le habla | cada 15 min, con los topes del pulso | lo que se le puede pedir a Bria + Ocultar por hoy |
 
 - **Una sola salida:** quien avisa llama `alertByWhatsApp` (`src/services/whatsappAlertSender.js`), que no espera ni lanza; dentro de `node --test` o sin token no sale nada. `deliverAlert` decide: vinculado, encendido, en su horario, con Bria activa, menos de 12 en el día, y el mismo origen una sola vez por persona.
-- **La ventana de 24 horas:** se cuenta desde el último mensaje de la persona (`whatsapp_links.last_inbound_at`, también al mandar el código de vínculo), con un cuarto de hora de margen. Dentro de la ventana el aviso sale entero, con sus botones y gratis. Fuera de ella Meta solo admite plantillas aprobadas: sale `bria_aviso` («Hola {{1}}, tienes un aviso nuevo de Bria sobre {{2}}. Tócalo para verlo aquí mismo.», con el botón «Ver aviso») y el aviso guardado llega completo al tocarlo.
+- **La ventana de 24 horas:** se cuenta desde el último mensaje de la persona (`whatsapp_links.last_inbound_at`, también al mandar el código de vínculo), con un cuarto de hora de margen. Dentro de la ventana el aviso sale entero, con sus botones, como mensaje de servicio (ver «Lo que cobra Meta»). Fuera de ella Meta solo admite plantillas aprobadas: sale `bria_aviso` («Hola {{1}}, tienes un aviso nuevo de Bria sobre {{2}}. Tócalo para verlo aquí mismo.», con el botón «Ver aviso») y el aviso guardado llega completo al tocarlo.
 - **Los botones de un aviso** apuntan al aviso guardado (`a:<id>:<n>`, `a:<id>:open` el de la plantilla). Compartir, Dar acceso y Denegar deciden por `decideRequest` y `decide`, las mismas puertas que el aviso encima de Bria, con la identidad de quien está vinculado; si otro administrador ya decidió, se dice. Un botón de pregunta le manda a Bria la pregunta completa. «Ocultar por hoy» marca el aviso del pulso como la X. Un botón de un aviso ajeno, borrado o vencido se reconoce y se dice.
 - **Lo guardado** (`bria_memory.whatsapp_alerts`, 14 días): tipo, origen, texto de la plataforma, botones, si salió por mensaje o por plantilla y el error si falló. Nunca un valor de la bóveda.
 
 ### Lo que le toca a Rodny en Meta
 
-1. **Método de pago** en la cuenta de WhatsApp Business (Business Suite → Facturación). Sin él la cuenta no puede iniciar conversaciones (error 141006) y todo aviso fuera de la ventana queda `FAILED`, sin reintento.
-2. **Enviar la plantilla a revisión:** `node scripts/whatsapp-alert-template.mjs` simula, `--confirmar ENVIAR` la envía y `--estado` dice si Meta la aprobó. Necesita `META_WHATSAPP_TOKEN` en el entorno.
+1. **Método de pago** en la **cuenta de mensajes** «Brain Studio – Bria» (Centro de facturación de Meta). Sin él la cuenta no puede iniciar conversaciones (error 141006), todo aviso fuera de la ventana queda `FAILED` sin reintento y, pasados los 1.000 mensajes de servicio del mes, Meta deja de entregar también las respuestas de Bria.
+2. **La plantilla** se envió a revisión el 22 de octubre de 2026 (`bria_aviso`, id 1637206874617100, utilidad). `node scripts/whatsapp-alert-template.mjs --estado` dice si Meta la aprobó; `--confirmar ENVIAR` la vuelve a enviar. Necesita `META_WHATSAPP_TOKEN` en el entorno (`railway run -- node …`).
 3. Que el nombre visible «Brain Studio» quede aprobado y, si se puede, la verificación del negocio (sube el tope de conversaciones que la empresa inicia al día).
 
-Meta cobra cada plantilla de utilidad que se entrega fuera de la ventana; dentro de la ventana los mensajes no se cobran.
+**Las plantillas viven en la cuenta de mensajes** (1061974066819635), no en la cuenta de WhatsApp 4718657265088198: crearla en esta última responde «WhatsApp accounts cannot be used with this API». Y para crearla, el usuario del sistema necesita **Control total** en la cuenta de WhatsApp «Brain Studio»; con acceso parcial (números y mensajes) Meta responde «(#100) Need permission on either WhatsApp Business Account» (22 de octubre de 2026).
+
+### Lo que cobra Meta (leído en su página de precios el 22 de octubre de 2026)
+
+- **Mensajes de servicio** (todo lo que Bria responde y los avisos que salen dentro de la ventana): desde el 1 de octubre de 2026, **1.000 gratis al mes por número**; desde el 1.001 se cobran por mensaje entregado. Sin método de pago, Meta entrega los 1.000 y después **deja de entregarlos**.
+- **Plantillas de utilidad** (`bria_aviso`, fuera de la ventana): se cobran por mensaje entregado, con la tarifa de Colombia.
+- Meta no cobra los mensajes que el equipo le escribe a Bria.
 
 ## Semáforo y política
 

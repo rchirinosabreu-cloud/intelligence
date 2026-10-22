@@ -7,8 +7,9 @@
 // sin avisos por servicio caído, a menos que se pregunte»; Bria lo responde si alguien le pregunta. Vienen
 // encendidos al vincular el número y cada persona apaga los que no quiera desde su perfil.
 //
-// La ventana de Meta: dentro de las 24 horas desde el último mensaje de la persona, Bria escribe libre y gratis, con
-// botones. Fuera de ella Meta solo admite plantillas aprobadas, que cobra y que exigen un método de pago en la cuenta;
+// La ventana de Meta: dentro de las 24 horas desde el último mensaje de la persona, Bria escribe libre, con botones
+// (mensaje de servicio: desde el 1 de octubre de 2026, 1.000 gratis al mes por número y después se cobran). Fuera de
+// ella Meta solo admite plantillas aprobadas, que cobra y que exigen un método de pago en la cuenta de mensajes;
 // por eso el aviso se guarda entero y por WhatsApp sale un llamado corto (la plantilla `bria_aviso`) con un botón
 // «Ver aviso»: tocarlo abre la ventana y entonces llega el aviso completo, con sus botones.
 //

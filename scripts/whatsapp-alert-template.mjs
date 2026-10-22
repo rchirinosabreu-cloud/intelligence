@@ -7,12 +7,16 @@
 //   node scripts/whatsapp-alert-template.mjs --estado            dice si Meta ya la aprobó
 //   node scripts/whatsapp-alert-template.mjs --confirmar ENVIAR  la envía a revisión
 //
-// Lee META_WHATSAPP_TOKEN y, si existe, META_WHATSAPP_BUSINESS_ACCOUNT_ID (si no, la cuenta de Brain Studio). El token
-// va en la cabecera y nunca se imprime.
+// Lee META_WHATSAPP_TOKEN y, si existe, META_WHATSAPP_MESSAGING_ACCOUNT_ID (si no, la de Brain Studio). El token va en
+// la cabecera y nunca se imprime.
+//
+// Las plantillas viven en la **cuenta de mensajes** («Brain Studio – Bria», 1061974066819635), no en la cuenta de
+// WhatsApp 4718657265088198: desde la capa nueva de Meta, plantillas, facturación y método de pago son de la cuenta de
+// mensajes, y crearla en la de WhatsApp responde «WhatsApp accounts cannot be used with this API» (22 de octubre de 2026).
 import { ALERT_TEMPLATE, ALERT_TEMPLATE_BODY, ALERT_TEMPLATE_EXAMPLE } from '../src/lib/whatsappAlerts.js';
 import { META_GRAPH_ORIGIN, META_GRAPH_VERSION } from '../src/services/metaGraphService.js';
 
-const BRAIN_STUDIO_WABA = '4718657265088198';
+const BRAIN_STUDIO_MESSAGING_ACCOUNT = '1061974066819635';
 
 export const templateDefinition = () => ({
   name: ALERT_TEMPLATE.name,
@@ -31,12 +35,13 @@ const graph = async (path, { method = 'GET', body } = {}) => {
     method, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }, ...(body ? { body: JSON.stringify(body) } : {}), redirect: 'error'
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || data.error) throw new Error(data.error?.message || `Meta respondió ${response.status}`);
+  // Meta explica el motivo de un rechazo en `error_user_title` / `error_user_msg`; «Invalid parameter» solo no dice nada.
+  if (!response.ok || data.error) throw new Error([data.error?.message || `Meta respondió ${response.status}`, data.error?.error_user_title, data.error?.error_user_msg].filter(Boolean).join(' · '));
   return data;
 };
 
 const main = async (argv) => {
-  const waba = process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID || BRAIN_STUDIO_WABA;
+  const waba = process.env.META_WHATSAPP_MESSAGING_ACCOUNT_ID || BRAIN_STUDIO_MESSAGING_ACCOUNT;
   const definition = templateDefinition();
   if (argv.includes('--estado')) {
     const { data = [] } = await graph(`${waba}/message_templates?name=${encodeURIComponent(definition.name)}&fields=name,status,category,language,rejected_reason`);
