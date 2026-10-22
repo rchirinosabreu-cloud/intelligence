@@ -150,6 +150,11 @@ test('quien ya no tiene Bria no habla por aquí; un audio se contesta en palabra
   const handsless = build({ repository, conversations: fakeConversations({ fail: Object.assign(new Error('Esta conversación no trae tu sesión'), { status: 401, code: 'BRIA_PLATFORM_SESSION' }) }), users: { 'u-camila': camila } });
   assert.equal((await handsless.service.processMessage({ messageId: 'g', from: '573001234567', type: 'text', text: 'sí' })).outcome, 'needs-platform');
   assert.equal(handsless.sent.at(-1).body.text.body, REPLIES.needsPlatform);
+  // Un rechazo de la plataforma (4xx) se dice con su motivo, como en el chat de la plataforma (22 de octubre de 2026:
+  // confirmar el evento de Helen respondió «No pude responder» cuando el motivo era «El tipo de evento no es válido»).
+  const rejected = build({ repository, conversations: fakeConversations({ fail: Object.assign(new Error('La plataforma no lo aceptó: El tipo de evento no es válido.'), { status: 422, code: 'BRIA_PLATFORM_REJECTED' }) }), users: { 'u-camila': camila } });
+  assert.equal((await rejected.service.processMessage({ messageId: 'h', from: '573001234567', type: 'text', text: 'Confirmar' })).outcome, 'rejected');
+  assert.equal(rejected.sent.at(-1).body.text.body, 'La plataforma no lo aceptó: El tipo de evento no es válido.');
   const broken = build({ repository, conversations: fakeConversations({ fail: new Error('ECONNRESET') }), users: { 'u-camila': camila } });
   assert.equal((await broken.service.processMessage({ messageId: 'f', from: '573001234567', type: 'text', text: 'hola' })).outcome, 'failed');
   assert.equal(broken.sent.at(-1).body.text.body, REPLIES.failed);

@@ -218,7 +218,8 @@ export const PLATFORM_OPERATIONS = {
   // Actividad y calendario
   'GET /activity/status': { que: 'El estado del módulo de Actividad.' },
   'GET /activity/events': { que: 'Los eventos de Actividad en un rango.', campos: 'from, to (consulta)' },
-  'POST /activity/events': { que: 'Crea un evento en el calendario elegido.', campos: 'title, startAt, endAt, description, googleConnectionId, memberIds' },
+  // 22 de octubre de 2026: sin `type` ni cuenta de Google la plataforma lo rechaza («El tipo de evento no es válido»).
+  'POST /activity/events': { que: 'Crea un evento en el calendario elegido. Obligatorios: title, type, startAt, endAt y googleConnectionId.', campos: 'title, type (PRODUCTION|PROJECT|MEETING|ABSENCE|BREAK; una ausencia, permiso o incapacidad es ABSENCE), startAt y endAt (ISO con -05:00), isAllDay (true para todo el día: startAt el día a las 00:00 y endAt el día siguiente a las 00:00), googleConnectionId (obligatorio: el id de una cuenta conectada; léelo antes con GET /activity/google-calendar/connections y, si hay varias, pregunta en cuál), description, memberIds (ids de TeamMember), attendeeEmails, recurrence (NONE|WEEKLY), recurrenceEnd' },
   'POST /activity/events/generate-meet': { que: 'Genera un enlace de Meet para un evento.', campos: 'googleConnectionId, eventId' },
   'GET /activity/google-calendar/status': { que: 'Si la cuenta de Google está conectada.' },
   'GET /activity/google-calendar/connections': { que: 'Las cuentas de Google conectadas.' },
@@ -230,7 +231,7 @@ export const PLATFORM_OPERATIONS = {
   'PATCH /activity/google-calendar/errors/:id/dismiss': { que: 'Descarta un error de sincronización.' },
   'POST /activity/google-calendar/errors/:id/retry': { que: 'Reintenta un error de sincronización.' },
   'PATCH /activity/google-calendar/reconciliation/:id/dismiss': { que: 'Descarta una diferencia.' },
-  'PATCH /activity/events/:id': { que: 'Edita un evento (no cambia de cuenta ni de calendario).', campos: 'title, startAt, endAt, description, memberIds' },
+  'PATCH /activity/events/:id': { que: 'Edita un evento (no cambia de cuenta ni de calendario).', campos: 'title, type (PRODUCTION|PROJECT|MEETING|ABSENCE|BREAK), startAt, endAt, isAllDay, description, memberIds, attendeeEmails, recurrence, recurrenceEnd' },
   'DELETE /activity/events/:id': { que: 'Cancela un evento.' },
   // Reportes
   'GET /reports/pipeline-status': { que: 'Si la IA de informes está disponible.' },

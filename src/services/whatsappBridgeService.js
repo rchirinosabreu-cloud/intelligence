@@ -209,6 +209,8 @@ export const createWhatsAppBridgeService = ({
     } catch (failure) {
       if (failure.status === 409) { await sendText(replyTo(message), REPLIES.busy); return { outcome: 'busy' }; }
       if (failure.code === 'BRIA_PLATFORM_SESSION') { await sendText(replyTo(message), REPLIES.needsPlatform); return { outcome: 'needs-platform' }; }
+      // Un rechazo de la plataforma o de una regla (4xx) trae su motivo en palabras: se dice, como en el chat de la plataforma.
+      if (failure.status >= 400 && failure.status < 500 && failure.message) { await sendText(replyTo(message), failure.message); return { outcome: 'rejected', reason: failure.code || null }; }
       logger.error('[WhatsApp] Bria no pudo responder:', failure.code || failure.message || failure);
       await sendText(replyTo(message), REPLIES.failed);
       return { outcome: 'failed' };
