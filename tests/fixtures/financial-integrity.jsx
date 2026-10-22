@@ -103,6 +103,9 @@ const settlePayrollTx = (tx) => {
 };
 // Préstamos a terceros (20 de octubre de 2026): viven en la cartera junto a lo de los clientes.
 let loans = [];
+// Terceros y cuentas por pagar (20 de octubre de 2026): un arrendador con el arriendo de octubre vencido.
+let thirdParties = [{ id: 'tp-arrendador', kind: 'ARRENDADOR', name: 'Inmobiliaria Norte', legalName: null, documentType: 'NIT', documentNumber: '900123456', bankName: 'Bancolombia', bankAccountType: 'AHORROS', bankAccountNumber: '123-456', isActive: true }];
+let payables = [{ id: 'payable-arriendo', thirdPartyId: 'tp-arrendador', concept: 'Arriendo de octubre', category: 'ADMINISTRATIVO', amount: 1500000, receivedAt: '2026-10-01T12:00:00Z', dueDate: '2026-10-05T12:00:00Z', documentNumber: 'F-2026-10', notes: null, status: 'POR_PAGAR', payments: [], documents: [] }];
 const createdReceivables = window.__createdReceivables = [];
 const deletedReceivables = window.__deletedReceivables = [];
 axios.defaults.adapter = async config => {
@@ -280,6 +283,78 @@ axios.defaults.adapter = async config => {
     };
     records = records.map(record => record.id === target.financialRecord?.id ? { ...record, status: 'VOIDED' } : record);
     data = { message: 'Abono revertido. El ingreso que había generado quedó anulado.', outstanding: debt.outstanding };
+  }
+  // Terceros y cuentas por pagar (20 de octubre de 2026), con las reglas del servidor en memoria.
+  else if (path.endsWith('/third-parties') && config.method === 'get') data = { thirdParties };
+  else if (path.endsWith('/third-parties') && config.method === 'post') {
+    if (!String(body.name || '').trim()) throw Object.assign(new Error('Sin nombre'), { response: { data: { message: 'Escribe el nombre del tercero.' } } });
+    const created = { id: `tp-${++payrollCounter}`, isActive: true, ...body };
+    thirdParties = [...thirdParties, created];
+    window.__thirdPartyBody = body;
+    data = { message: `Tercero «${created.name}» guardado.`, thirdParty: created };
+  } else if (path.includes('/third-parties/') && config.method === 'patch') {
+    const id = path.split('/').at(-1);
+    thirdParties = thirdParties.map(item => (item.id === id ? { ...item, ...body } : item));
+    data = { message: 'Tercero actualizado.', thirdParty: thirdParties.find(item => item.id === id) };
+  } else if (path.endsWith('/payables-ledger')) {
+    const serialize = payable => {
+      const paidAmount = payable.payments.filter(payment => !payment.reversedAt).reduce((sum, payment) => sum + payment.amount, 0);
+      const outstanding = payable.status === 'ANULADA' ? 0 : payable.amount - paidAmount;
+      const due = payable.dueDate ? Math.floor((Date.UTC(2026, 9, 20) - new Date(payable.dueDate).getTime()) / 86400000) : null;
+      const dueState = ['PAGADA', 'ANULADA'].includes(payable.status) ? { key: 'CERRADA', label: payable.status === 'PAGADA' ? 'Pagada' : 'Anulada' } : due === null ? { key: 'SIN_VENCIMIENTO', label: 'Sin vencimiento' } : due > 0 ? { key: 'VENCIDA', label: `Vencida hace ${due} día${due === 1 ? '' : 's'}` } : due === 0 ? { key: 'VENCE_HOY', label: 'Vence hoy' } : { key: 'POR_VENCER', label: `Vence en ${-due} día${due === -1 ? '' : 's'}` };
+      return { ...payable, paidAmount, outstanding, dueState };
+    };
+    const groups = new Map();
+    for (const payable of payables.map(serialize)) {
+      const tp = thirdParties.find(item => item.id === payable.thirdPartyId);
+      if (!groups.has(tp.id)) groups.set(tp.id, { thirdParty: tp, payables: [], outstanding: 0, overdue: 0 });
+      const group = groups.get(tp.id);
+      group.payables.push(payable);
+      if (!['PAGADA', 'ANULADA'].includes(payable.status)) { group.outstanding += payable.outstanding; if (payable.dueState.key === 'VENCIDA') group.overdue += payable.outstanding; }
+    }
+    const items = [...groups.values()];
+    const open = payables.map(serialize).filter(payable => !['PAGADA', 'ANULADA'].includes(payable.status));
+    data = { items, totals: { outstanding: open.reduce((sum, item) => sum + item.outstanding, 0), overdue: open.filter(item => item.dueState.key === 'VENCIDA').reduce((sum, item) => sum + item.outstanding, 0), paidInPeriod: payables.flatMap(payable => payable.payments).filter(payment => !payment.reversedAt).reduce((sum, payment) => sum + payment.amount, 0), openCount: open.length, overdueCount: open.filter(item => item.dueState.key === 'VENCIDA').length } };
+  } else if (path.endsWith('/payables') && config.method === 'post') {
+    if (!thirdParties.some(item => item.id === body.thirdPartyId)) throw Object.assign(new Error('Sin tercero'), { response: { data: { message: 'Elige el tercero al que se le debe.' } } });
+    const created = { id: `payable-${++payrollCounter}`, status: 'POR_PAGAR', payments: [], documents: [], ...body, amount: Number(body.amount), receivedAt: `${body.receivedAt}T12:00:00Z`, dueDate: body.dueDate ? `${body.dueDate}T12:00:00Z` : null };
+    payables = [...payables, created];
+    window.__payableBody = body;
+    data = { message: 'Cuenta por pagar registrada.', payable: created };
+  } else if (path.includes('/payables/') && path.endsWith('/payments')) {
+    const payable = payables.find(item => path.includes(item.id));
+    const paid = payable.payments.filter(payment => !payment.reversedAt).reduce((sum, payment) => sum + payment.amount, 0);
+    if (Number(body.amount) > payable.amount - paid + 0.005) throw Object.assign(new Error('De más'), { response: { data: { message: 'El pago supera el saldo pendiente de la cuenta.' } } });
+    const recordId = `rec-payable-${++payrollCounter}`;
+    payable.payments = [...payable.payments, { id: `payable-payment-${payrollCounter}`, amount: Number(body.amount), paidAt: `${body.paidAt}T12:00:00Z`, accountName: accountName(body.accountId), reference: body.reference || null, notes: body.notes || null, financialRecordId: recordId, reversedAt: null, documents: [] }];
+    const outstanding = payable.amount - paid - Number(body.amount);
+    payable.status = outstanding <= 0 ? 'PAGADA' : 'PARCIAL';
+    records = [{ id: recordId, date: `${body.paidAt}T12:00:00Z`, year: 2026, month: 10, amount: Number(body.amount), type: 'EXPENSE', category: payable.category, status: 'POSTED', scenario: 'ACTUAL', origin: 'SYSTEM', description: `Pago a ${thirdParties.find(item => item.id === payable.thirdPartyId)?.name}: ${payable.concept}`, accountId: body.accountId, account, documents: [], payablePayment: { id: `payable-payment-${payrollCounter}`, payableId: payable.id } }, ...records];
+    window.__payablePaymentBody = body;
+    data = { message: outstanding <= 0 ? 'Pago registrado. La cuenta quedó pagada.' : 'Pago registrado. El egreso quedó en Movimientos.', outstanding, payment: payable.payments.at(-1), financialRecord: { id: recordId }, payable };
+  } else if (path.includes('/payables/') && path.endsWith('/void')) {
+    const payable = payables.find(item => path.includes(item.id));
+    if (!body.reason) throw Object.assign(new Error('Sin motivo'), { response: { data: { message: 'Indica por qué se anula la cuenta.' } } });
+    payable.status = 'ANULADA';
+    data = { message: 'Cuenta por pagar anulada.', payable };
+  } else if (path.includes('/payables/') && config.method === 'patch') {
+    const payable = payables.find(item => path.includes(item.id));
+    Object.assign(payable, body, { amount: body.amount !== undefined ? Number(body.amount) : payable.amount, dueDate: body.dueDate ? `${body.dueDate}T12:00:00Z` : null });
+    data = { message: 'Cuenta por pagar actualizada.', payable };
+  } else if (path.includes('/payables/') && path.endsWith('/documents')) {
+    const payable = payables.find(item => path.includes(item.id));
+    const file = config.data instanceof FormData ? config.data.get('file') : null;
+    payable.documents = [...payable.documents, { id: `payable-doc-${++payrollCounter}`, name: file?.name || 'soporte.pdf', mimeType: 'application/pdf', size: file?.size || 1 }];
+    data = { message: 'Soporte guardado.', document: payable.documents.at(-1) };
+  } else if (path.includes('/payable-payments/') && path.endsWith('/reverse')) {
+    const paymentId = path.split('/').at(-2);
+    const payable = payables.find(item => item.payments.some(payment => payment.id === paymentId));
+    const target = payable.payments.find(payment => payment.id === paymentId);
+    target.reversedAt = '2026-10-20T05:00:00Z'; target.reversalReason = body.reason;
+    const paid = payable.payments.filter(payment => !payment.reversedAt).reduce((sum, payment) => sum + payment.amount, 0);
+    payable.status = paid <= 0 ? 'POR_PAGAR' : paid >= payable.amount ? 'PAGADA' : 'PARCIAL';
+    records = records.map(record => record.id === target.financialRecordId ? { ...record, status: 'VOIDED' } : record);
+    data = { message: 'Pago revertido. Su egreso quedó anulado.', payable };
   } else if (path.endsWith('/loans')) {
     // Como el servidor: el egreso (o el ya registrado) y la cuenta por cobrar de clase PRESTAMO, de una vez.
     if (!body.counterpartyName && !body.clientId) throw Object.assign(new Error('Sin nombre'), { response: { data: { message: 'Escribe el nombre de la persona o empresa a la que se le presta.' } } });

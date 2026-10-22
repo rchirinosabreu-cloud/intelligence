@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { createBriaConversationService } from '../src/services/briaConversationService.js';
 import { createBriaConversationRepository } from '../src/services/briaConversationRepository.js';
 import { summarizeBriaUsage } from '../src/services/briaUsageService.js';
-import { normalizeRating, RATING_NOTE_MAX } from '../src/lib/briaRating.js';
+import { normalizeRating, RATING_NOTE_MAX, canRateTurn, ratingNoteOpenFor } from '../src/lib/briaRating.js';
 import { EVAL_CASES, checkEvalAnswer } from '../tests/evals/briaCases.js';
 
 const actor = { ref: 'owner', role: 'ADMIN', permissions: { bria: true } };
@@ -54,8 +54,26 @@ test('the repository writes the rating into the turn’s metadata of the owner�
   assert.match(route, /router\.post\('\/:id\/rating', handle\(\(req, instance\) => instance\.rate\(\{ user: req\.user, id: req\.params\.id, turnId: req\.body\?\.turnId, rating: req\.body\?\.rating, note: req\.body\?\.note \}\)\)\);/);
 });
 
+// 20 de octubre de 2026: con un turno sin id, «¿no hay nota abierta?» y «¿este turno no tiene id?» se leían como la
+// misma cosa (undefined === undefined), la caja «¿Qué falló?» se dibujaba sin nota y el panel entero se caía leyendo
+// `null.text`. La regla es una sola y nunca abre la nota sin un turno con id.
+test('the note «¿Qué falló?» opens only for the rated turn, never for a turn without id, and only an id-bearing answer can be rated', () => {
+  assert.equal(ratingNoteOpenFor(null, { id: undefined, role: 'assistant' }), false, 'no open note and no id is not a match');
+  assert.equal(ratingNoteOpenFor(null, { id: 'c:3', role: 'assistant' }), false);
+  assert.equal(ratingNoteOpenFor({ turnId: undefined, text: '' }, { id: undefined, role: 'assistant' }), false);
+  assert.equal(ratingNoteOpenFor({ turnId: 'c:3', text: '' }, { id: 'c:3', role: 'assistant' }), true);
+  assert.equal(ratingNoteOpenFor({ turnId: 'c:3', text: '' }, { id: 'c:5', role: 'assistant' }), false);
+  assert.equal(canRateTurn({ id: 'c:3', role: 'assistant' }), true);
+  assert.equal(canRateTurn({ id: 'pending', role: 'user' }), false);
+  assert.equal(canRateTurn({ id: undefined, role: 'assistant' }), false, 'the server could not find a turn without id');
+  assert.equal(canRateTurn({ id: 'c:2', role: 'user' }), false);
+});
+
 test('the chat shows a thumb up and a thumb down under each answer of Bria, the thumb down asks what failed, and the state comes from the server', () => {
   const chat = readFileSync('src/components/bria/BriaConversation.jsx', 'utf8');
+  assert.match(chat, /ratingNoteOpenFor\(ratingNote, turn\)/, 'the note opens by the shared rule');
+  assert.match(chat, /canRateTurn\(turn\)/, 'the thumbs show by the shared rule');
+  assert.doesNotMatch(chat, /ratingNote\?\.turnId === turn\.id/, 'never compare two possibly-undefined ids');
   assert.match(chat, /aria-label="Me sirvió"/);
   assert.match(chat, /aria-label="No me sirvió"/);
   assert.match(chat, /<ThumbsUp className=/);
@@ -65,7 +83,6 @@ test('the chat shows a thumb up and a thumb down under each answer of Bria, the 
   assert.match(chat, /request\(`\/\$\{chat\.id\}\/rating`, \{ method: 'POST', body: \{ turnId/, 'the rating goes to the chat endpoint');
   assert.match(chat, /¿Qué falló\?/);
   assert.match(chat, /data-bria-rating-note/);
-  assert.match(chat, /turn\.id !== 'pending'/);
   const icons = readFileSync('src/components/ui/icons.jsx', 'utf8');
   assert.match(icons, /export const ThumbsUp = /);
   assert.match(icons, /export const ThumbsDown = /);
