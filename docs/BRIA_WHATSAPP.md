@@ -40,6 +40,14 @@ Sin token o sin identificador del número, el webhook acepta los avisos (200) y 
 - Solo se atienden los mensajes dirigidos a nuestro número (`metadata.phone_number_id`); los estados de entrega se ignoran.
 - Cada mensaje se recuerda por su identificador 30 días (`whatsapp_inbound`): un aviso que Meta repite no se responde dos veces.
 
+## Quién escribe: BSUID y número (22 de octubre de 2026)
+
+El primer mensaje de Rodny llegó firmado, a nuestro número, con un mensaje adentro, y la plataforma lo descartó: no traía `from`. Desde 2026 Meta identifica a quien escribe con un **BSUID** (`from_user_id` en el mensaje y `user_id` en el contacto, forma `CO.1349…`, `US.ENT.…` si es principal), que llega **siempre**. El número (`from`, `wa_id`) solo llega si la persona no usa nombre de usuario o si hubo contacto con ella en los últimos 30 días, así que el primer mensaje de alguien puede venir sin él. Meta dice que soportar el BSUID es obligatorio.
+
+- La clave estable de quien escribe es su BSUID (`wa_id` de `whatsapp_links`); en un aviso antiguo sin BSUID, su número. El número se guarda aparte (`phone`) en cuanto llega, y un vínculo se encuentra por cualquiera de los dos.
+- Se responde por número si vino en el mensaje (Meta lo recomienda, así sigue mandando el número) y, si no, por BSUID en `recipient` en lugar de `to`. Nunca los dos.
+- Sin número, el perfil dice «Tu WhatsApp quedó vinculado» sin inventar uno. Referencia: «Identificadores de usuario específico de la empresa» en la documentación de Meta.
+
 ## El vínculo número ↔ persona
 
 Nadie se vincula sin haber entrado a la plataforma. En **Mi espacio → perfil → «Bria en WhatsApp»** (solo quien tiene Bria activa), «Vincular mi WhatsApp» pide a `POST /api/bria/whatsapp/link-code` un código de seis dígitos que vale 10 minutos; la persona le manda a Bria el mensaje `BRIA 482913` (botón «Abrir WhatsApp» con el enlace `wa.me` ya armado). Cuando el mensaje llega de un número sin vínculo y trae un código vivo, el servidor vincula ese `wa_id` con la persona del código y le responde por su nombre. La tarjeta sondea el estado cada 4 segundos y avisa solo con la respuesta del servidor.

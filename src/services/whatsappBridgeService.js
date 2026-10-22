@@ -82,33 +82,38 @@ export const createWhatsAppBridgeService = ({
     return chat;
   };
 
+  // A quién se responde: al número si vino en este mensaje y, si no, al BSUID (Meta no siempre manda el número).
+  const replyTo = (message) => message.phone || message.from;
+
   const handleUnknown = async (message) => {
     const at = now();
     const code = linkCodeIn(message.text);
     if (code) {
-      const outcome = await repository.consumeCode({ code, waId: message.from, profileName: message.profileName, now: at });
+      const outcome = await repository.consumeCode({ code, waId: message.from, phone: message.phone || null, profileName: message.profileName, now: at });
       if (outcome.ok) {
         const row = await loadUser(outcome.userId);
-        await sendText(message.from, REPLIES.linked(row?.name));
+        await sendText(replyTo(message), REPLIES.linked(row?.name));
         logger.info?.(`[WhatsApp] Número vinculado a ${outcome.userId}.`);
         return { outcome: 'linked', userId: outcome.userId };
       }
-      await sendText(message.from, REPLIES.invalidCode);
+      await sendText(replyTo(message), REPLIES.invalidCode);
       return { outcome: 'invalid-code', reason: outcome.reason };
     }
     if (await repository.unknownRepliesSince(message.from, new Date(at.getTime() - DAY_MS)) >= UNKNOWN_SENDER_REPLIES_PER_DAY) return { outcome: 'ignored' };
     await repository.rememberUnknownReply(message.from, at);
-    await sendText(message.from, REPLIES.unknown);
+    await sendText(replyTo(message), REPLIES.unknown);
     return { outcome: 'unknown' };
   };
 
   const processMessage = async (message) => {
     if (!await repository.rememberInbound(message.messageId, message.from)) return { skipped: 'duplicate' };
-    const link = await repository.linkByWaId(message.from);
+    // Se busca por BSUID y por número: un vínculo hecho con uno se reconoce aunque el siguiente mensaje traiga el otro.
+    const link = await repository.linkByWaId(message.from, message.phone || null);
     if (!link) return handleUnknown(message);
+    if (message.phone && link.phone !== message.phone) await repository.setPhone?.(link.userId, message.phone);
     const row = await loadUser(link.userId);
-    if (!allowed(row)) { await sendText(message.from, REPLIES.notAllowed); return { outcome: 'not-allowed' }; }
-    if (!message.text) { await sendText(message.from, REPLIES.onlyText); return { outcome: 'only-text' }; }
+    if (!allowed(row)) { await sendText(replyTo(message), REPLIES.notAllowed); return { outcome: 'not-allowed' }; }
+    if (!message.text) { await sendText(replyTo(message), REPLIES.onlyText); return { outcome: 'only-text' }; }
     await markRead(message.messageId);
     const user = sessionUser(row);
     const at = now();
@@ -117,13 +122,13 @@ export const createWhatsAppBridgeService = ({
       const chat = await conversationFor(user, link, at);
       saved = await runWithAiContext({ actorId: user.userId, module: 'whatsapp', route: 'POST /api/whatsapp/webhook' }, () => conversations().send({ user, id: chat.id, question: message.text, session: null }));
     } catch (failure) {
-      if (failure.status === 409) { await sendText(message.from, REPLIES.busy); return { outcome: 'busy' }; }
+      if (failure.status === 409) { await sendText(replyTo(message), REPLIES.busy); return { outcome: 'busy' }; }
       logger.error('[WhatsApp] Bria no pudo responder:', failure.code || failure.message || failure);
-      await sendText(message.from, REPLIES.failed);
+      await sendText(replyTo(message), REPLIES.failed);
       return { outcome: 'failed' };
     }
     const turn = [...(saved?.turns || [])].reverse().find((item) => item.role === 'assistant');
-    await sendText(message.from, answerForWhatsApp(turn));
+    await sendText(replyTo(message), answerForWhatsApp(turn));
     await repository.touch(link.userId, at);
     return { outcome: 'answered', conversationId: saved?.id || null };
   };
@@ -156,7 +161,7 @@ export const createWhatsAppBridgeService = ({
   const status = async (userId) => {
     const link = await repository.linkByUser(userId);
     const c = config();
-    return { configured: configured(), number: c.number, numberDisplay: displayPhone(c.number), linked: Boolean(link), phone: link ? displayPhone(link.waId) : null, linkedAt: link?.linkedAt || null, lastMessageAt: link?.lastMessageAt || null };
+    return { configured: configured(), number: c.number, numberDisplay: displayPhone(c.number), linked: Boolean(link), phone: link ? (displayPhone(link.phone || link.waId) || null) : null, linkedAt: link?.linkedAt || null, lastMessageAt: link?.lastMessageAt || null };
   };
 
   const createLinkCode = async (userId) => {
