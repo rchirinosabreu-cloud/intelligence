@@ -145,6 +145,10 @@ test('quien ya no tiene Bria no habla por aquí; un audio se contesta en palabra
   const busy = build({ repository, conversations: fakeConversations({ fail: Object.assign(new Error('respondiendo'), { status: 409 }) }), users: { 'u-camila': camila } });
   assert.equal((await busy.service.processMessage({ messageId: 'e', from: '573001234567', type: 'text', text: 'hola' })).outcome, 'busy');
   assert.equal(busy.sent.at(-1).body.text.body, REPLIES.busy);
+  // Confirmar por WhatsApp algo que necesita la sesión del navegador (22 de octubre de 2026) no es «no pude responder».
+  const handsless = build({ repository, conversations: fakeConversations({ fail: Object.assign(new Error('Esta conversación no trae tu sesión'), { status: 401, code: 'BRIA_PLATFORM_SESSION' }) }), users: { 'u-camila': camila } });
+  assert.equal((await handsless.service.processMessage({ messageId: 'g', from: '573001234567', type: 'text', text: 'sí' })).outcome, 'needs-platform');
+  assert.equal(handsless.sent.at(-1).body.text.body, REPLIES.needsPlatform);
   const broken = build({ repository, conversations: fakeConversations({ fail: new Error('ECONNRESET') }), users: { 'u-camila': camila } });
   assert.equal((await broken.service.processMessage({ messageId: 'f', from: '573001234567', type: 'text', text: 'hola' })).outcome, 'failed');
   assert.equal(broken.sent.at(-1).body.text.body, REPLIES.failed);

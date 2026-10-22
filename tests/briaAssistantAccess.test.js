@@ -20,6 +20,33 @@ test('deactivation during the model call suppresses the answer before returning 
   });
   await assert.rejects(() => service.ask({ user: actor(), question: 'consulta' }), { status: 403 });
 });
+// 22 de octubre de 2026: «Crea un evento de todo el día…» respondía «esta conversación no trae tu sesión» en la
+// plataforma. La sesión llegaba a `ask` pero no a las herramientas, así que consultar_plataforma nunca tuvo manos.
+test('the session that opened the chat reaches every tool, so Bria can read the platform as the person', async () => {
+  let seen = 'sin llamar';
+  let round = 0;
+  const service = createBriaAssistantService({
+    db: { user: { findUnique: async () => row() } },
+    tools: [{ name: 'sonda', description: 'prueba', parameters: { type: 'object', properties: {} }, allowed: () => true, run: async (_args, ctx) => { seen = ctx.session; return { data: { ok: true } }; } }],
+    ai: { generate: async () => { round += 1; return round === 1 ? { functionCalls: [{ id: 'c1', name: 'sonda', args: {} }], output: [] } : { text: 'Listo.' }; } },
+    mail: null
+  });
+  await service.ask({ user: actor(), question: 'consulta', session: { token: 'token-de-la-persona' } });
+  assert.deepEqual(seen, { token: 'token-de-la-persona' });
+});
+// Por WhatsApp no hay sesión del navegador (22 de octubre de 2026): Bria preparaba un evento con operar_en_plataforma
+// y al confirmar fallaba. Sin sesión no se le ofrecen las manos de la plataforma.
+test('without a browser session the platform hands are not offered', async () => {
+  let offered;
+  const service = createBriaAssistantService({
+    db: { user: { findUnique: async () => row() } },
+    tools: [], ai: { generate: async (request) => { offered = request.tools.map(tool => tool.name); return { text: 'Hecho.' }; } },
+    mail: null
+  });
+  await service.ask({ user: actor(), question: 'Crea un evento para Helen', session: null });
+  for (const name of ['mapa_de_plataforma', 'consultar_plataforma', 'operar_en_plataforma']) assert.equal(offered.includes(name), false, name);
+  assert.equal(offered.includes('guardar_en_memoria'), true, 'lo demás sigue igual');
+});
 test('a revoked module is refreshed and no longer offered as a tool', async () => {
   const user = actor();
   let offered;
@@ -30,7 +57,7 @@ test('a revoked module is refreshed and no longer offered as a tool', async () =
     // Los buzones (11 de octubre de 2026) dependen de la misma llave que la bóveda: fuera de esta comparación.
     mail: null
   });
-  const answer = await service.ask({ user, question: 'consulta' });
+  const answer = await service.ask({ user, question: 'consulta', session: { token: 't' } });
   assert.equal(offered.some(tool => tool.name === 'task'), false);
   // Las manos en la plataforma (10 de octubre de 2026) se ofrecen a toda persona con Bria: sus permisos por módulo los
   // hace valer la propia API en cada operación, no la lista de herramientas.
