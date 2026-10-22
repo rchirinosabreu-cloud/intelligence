@@ -68,7 +68,7 @@ const WhatsAppLink = () => {
   };
 
   const unlink = async () => {
-    if (!(await confirm({ title: 'Desvincular tu WhatsApp', description: `Bria dejará de responderte en el ${status.phone}. Puedes volver a vincularlo cuando quieras.`, confirmLabel: 'Desvincular' }))) return;
+    if (!(await confirm({ title: 'Desvincular tu WhatsApp', description: `Bria dejará de responderte ${status.phone ? `en el ${status.phone}` : 'por WhatsApp'}. Puedes volver a vincularlo cuando quieras.`, confirmLabel: 'Desvincular' }))) return;
     setLoading(true); setError('');
     try { await api('', { method: 'DELETE' }); await load(); toast.success('Tu WhatsApp quedó desvinculado'); }
     catch (failure) { setError(failure.message); }
@@ -97,7 +97,8 @@ const WhatsAppLink = () => {
         {status?.configured && status.linked && (
           <>
             <div className="rounded-xl border border-brand-green/40 bg-brand-green-soft px-4 py-3 text-sm text-brand-green-deep dark:bg-brand-green/10 dark:text-brand-green">
-              Vinculado al <strong>{status.phone}</strong> desde el {formatDate(status.linkedAt)}. Guarda el número de Bria: <strong>{status.numberDisplay}</strong>.
+              {/* Meta no siempre manda el número de quien escribe (puede usar nombre de usuario): sin número, se dice sin él. */}
+              {status.phone ? <>Vinculado al <strong>{status.phone}</strong></> : 'Tu WhatsApp quedó vinculado'} desde el {formatDate(status.linkedAt)}. Guarda el número de Bria: <strong>{status.numberDisplay}</strong>.
             </div>
             <p className="text-sm text-zinc-600 dark:text-zinc-300">Lo que hablen por WhatsApp queda en tu historial de Bria, con tus mismos permisos. Las contraseñas de la bóveda nunca salen por ahí.</p>
             <button type="button" onClick={unlink} disabled={loading} className={cn(secondaryButtonClass, 'text-destructive hover:bg-destructive/10 dark:text-destructive')}>

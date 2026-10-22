@@ -22,14 +22,15 @@ const fakeRepository = () => {
   return {
     links, codes, seen, unknown,
     async createCode({ userId, code, expiresAt }) { for (const [k, v] of codes) if (v.userId === userId) codes.delete(k); if (codes.has(code)) return false; codes.set(code, { userId, expiresAt }); return true; },
-    async consumeCode({ code, waId, profileName, now }) {
+    async consumeCode({ code, waId, phone = null, profileName, now }) {
       const row = codes.get(code); if (!row) return { ok: false, reason: 'unknown' }; codes.delete(code);
       if (row.expiresAt.getTime() < now.getTime()) return { ok: false, reason: 'expired' };
-      for (const [, link] of links) if (link.waId === waId && link.userId !== row.userId) return { ok: false, reason: 'taken' };
-      links.set(row.userId, { userId: row.userId, waId, profileName, conversationId: null, linkedAt: now, lastMessageAt: null });
+      for (const [, link] of links) if ((link.waId === waId || (phone && (link.phone === phone || link.waId === phone))) && link.userId !== row.userId) return { ok: false, reason: 'taken' };
+      links.set(row.userId, { userId: row.userId, waId, phone, profileName, conversationId: null, linkedAt: now, lastMessageAt: null });
       return { ok: true, userId: row.userId };
     },
-    async linkByWaId(waId) { return [...links.values()].find((link) => link.waId === waId) || null; },
+    async linkByWaId(waId, phone = null) { return [...links.values()].find((link) => link.waId === waId) || (phone ? [...links.values()].find((link) => link.phone === phone || link.waId === phone) : null) || null; },
+    async setPhone(userId, phone) { links.get(userId).phone = phone; },
     async linkByUser(userId) { return links.get(userId) || null; },
     async setConversation(userId, conversationId) { links.get(userId).conversationId = conversationId; },
     async touch(userId, at) { links.get(userId).lastMessageAt = at; },
@@ -181,6 +182,34 @@ test('un aviso sin nada que atender y cada mensaje atendido dejan una línea en 
   while (work.length) await work.shift()();
   assert.equal(lines.at(-1), '[WhatsApp] Mensaje de …4567 (text): unknown.');
   assert.ok(lines.every((line) => !/texto privado|573001234567/.test(line)));
+});
+
+test('sin número (solo BSUID): se vincula, se responde por `recipient`, y cuando llega el número se reconoce y se guarda', async () => {
+  const { service, sent, repository } = build({ users: { 'u-camila': camila }, random: () => 482913 });
+  const bsuid = 'CO.1349120865530274';
+  // Lo que pasó el 22 de octubre de 2026: el primer mensaje llega sin número y antes se descartaba.
+  assert.equal((await service.processMessage({ messageId: 'b0', from: bsuid, phone: null, userId: bsuid, type: 'text', text: 'hola' })).outcome, 'unknown');
+  assert.deepEqual([sent.at(-1).body.recipient, sent.at(-1).body.to], [bsuid, undefined]);
+  await service.createLinkCode('u-camila');
+  assert.deepEqual(await service.processMessage({ messageId: 'b1', from: bsuid, phone: null, userId: bsuid, profileName: 'Camila', type: 'text', text: 'BRIA 482913' }), { outcome: 'linked', userId: 'u-camila' });
+  assert.equal(sent.at(-1).body.recipient, bsuid);
+  assert.deepEqual([repository.links.get('u-camila').waId, repository.links.get('u-camila').phone], [bsuid, null]);
+  const status = await service.status('u-camila');
+  assert.deepEqual([status.linked, status.phone], [true, null], 'sin número no se inventa uno');
+  assert.equal((await service.processMessage({ messageId: 'b2', from: bsuid, phone: null, userId: bsuid, type: 'text', text: '¿Qué tengo hoy?' })).outcome, 'answered');
+  assert.equal(sent.at(-1).body.recipient, bsuid);
+  // Después de hablar, Meta empieza a mandar el número: el vínculo se reconoce, se guarda el número y se responde por él.
+  assert.equal((await service.processMessage({ messageId: 'b3', from: bsuid, phone: '573001234567', userId: bsuid, type: 'text', text: 'gracias' })).outcome, 'answered');
+  assert.equal(repository.links.get('u-camila').phone, '573001234567');
+  assert.deepEqual([sent.at(-1).body.to, sent.at(-1).body.recipient], ['573001234567', undefined]);
+  assert.equal((await service.status('u-camila')).phone, '+57 300 123 4567');
+});
+
+test('un vínculo antiguo hecho por número se reconoce cuando el aviso trae BSUID y número', async () => {
+  const repository = fakeRepository();
+  repository.links.set('u-camila', { userId: 'u-camila', waId: '573001234567', phone: null, conversationId: null });
+  const { service } = build({ repository, users: { 'u-camila': camila } });
+  assert.equal((await service.processMessage({ messageId: 'c1', from: 'CO.1349120865530274', phone: '573001234567', userId: 'CO.1349120865530274', type: 'text', text: 'hola' })).outcome, 'answered');
 });
 
 test('los mensajes de otro número de la misma cuenta se dejan pasar, y sin token configurado el aviso se acepta sin trabajar', async () => {

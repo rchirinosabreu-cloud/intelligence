@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
 import {
-  verifyMetaSignature, webhookChallenge, parseInboundMessages, describeNotice, maskWaId, linkCodeIn, generateLinkCode, linkMessage,
+  verifyMetaSignature, webhookChallenge, parseInboundMessages, describeNotice, maskWaId, normalizeBsuid, linkCodeIn, generateLinkCode, linkMessage,
   displayPhone, waMeLink, toWhatsAppText, splitForWhatsApp, answerForWhatsApp, textMessagePayload, readReceiptPayload,
   REPLIES, WHATSAPP_TEXT_MAX, LINK_CODE_TTL_MS
 } from '../src/lib/whatsappBridge.js';
@@ -45,7 +45,7 @@ test('la verificación del webhook devuelve el reto solo con el modo y el token 
 
 test('del aviso de Meta se leen solo los mensajes: quién, qué, de qué número; los estados de entrega se ignoran', () => {
   const [message] = parseInboundMessages(inbound({ text: '  ¿Qué tengo hoy?  ' }));
-  assert.deepEqual(message, { messageId: 'wamid.1', from: '573001234567', profileName: 'Camila', timestamp: 1760990400, type: 'text', text: '¿Qué tengo hoy?', phoneNumberId: '1319887801213730' });
+  assert.deepEqual(message, { messageId: 'wamid.1', from: '573001234567', phone: '573001234567', userId: null, profileName: 'Camila', timestamp: 1760990400, type: 'text', text: '¿Qué tengo hoy?', phoneNumberId: '1319887801213730' });
   const [image] = parseInboundMessages(inbound({ type: 'image' }));
   assert.equal(image.type, 'image');
   assert.equal(image.text, null);
@@ -55,6 +55,37 @@ test('del aviso de Meta se leen solo los mensajes: quién, qué, de qué número
   assert.deepEqual(parseInboundMessages(null), []);
   const button = inbound(); button.entry[0].changes[0].value.messages[0] = { from: '573001234567', id: 'wamid.2', timestamp: '1', type: 'button', button: { text: 'Crear pendientes', payload: 'x' } };
   assert.equal(parseInboundMessages(button)[0].text, 'Crear pendientes');
+});
+
+// 22 de octubre de 2026: el primer mensaje de Rodny llegó sin número (solo con su BSUID, `from_user_id`) y se descartó.
+const bsuidOnly = ({ id = 'wamid.b1', text = 'BRIA 482913', withPhone = false } = {}) => ({
+  object: 'whatsapp_business_account',
+  entry: [{ id: '1061974066819635', changes: [{ field: 'messages', value: {
+    messaging_product: 'whatsapp',
+    metadata: { display_phone_number: '573043786298', phone_number_id: '1319887801213730' },
+    contacts: [{ profile: { name: 'Rodny', username: 'rodny' }, user_id: 'CO.1349120865530274', ...(withPhone ? { wa_id: '573001234567' } : {}) }],
+    messages: [{ id, timestamp: '1761140000', type: 'text', text: { body: text }, from_user_id: 'CO.1349120865530274', ...(withPhone ? { from: '573001234567' } : {}) }]
+  } }] }]
+});
+
+test('un mensaje sin número se lee por su BSUID; con número, el BSUID sigue siendo la clave y el número va aparte', () => {
+  assert.deepEqual(parseInboundMessages(bsuidOnly())[0], { messageId: 'wamid.b1', from: 'CO.1349120865530274', phone: null, userId: 'CO.1349120865530274', profileName: 'Rodny', timestamp: 1761140000, type: 'text', text: 'BRIA 482913', phoneNumberId: '1319887801213730' });
+  const both = parseInboundMessages(bsuidOnly({ withPhone: true }))[0];
+  assert.deepEqual([both.from, both.phone, both.userId], ['CO.1349120865530274', '573001234567', 'CO.1349120865530274']);
+  const contactOnly = bsuidOnly(); delete contactOnly.entry[0].changes[0].value.messages[0].from_user_id;
+  assert.equal(parseInboundMessages(contactOnly)[0].from, 'CO.1349120865530274', 'si falta en el mensaje, se toma del contacto');
+  const garbage = bsuidOnly(); garbage.entry[0].changes[0].value.messages[0].from_user_id = 'no es un bsuid'; garbage.entry[0].changes[0].value.contacts = [];
+  assert.deepEqual(parseInboundMessages(garbage), [], 'sin número ni BSUID válido no hay a quién responder');
+  assert.equal(normalizeBsuid('US.ENT.11815799212886844830'), 'US.ENT.11815799212886844830');
+  assert.equal(normalizeBsuid('573001234567'), null);
+  assert.equal(maskWaId('CO.1349120865530274'), 'CO.…0274');
+  assert.equal(displayPhone('CO.1349120865530274'), '', 'un BSUID no se muestra como número');
+});
+
+test('se responde por número si se conoce y por BSUID en `recipient` si no; nunca los dos', () => {
+  assert.deepEqual(textMessagePayload('CO.1349120865530274', 'Hola'), { messaging_product: 'whatsapp', recipient_type: 'individual', recipient: 'CO.1349120865530274', type: 'text', text: { preview_url: false, body: 'Hola' } });
+  assert.equal(textMessagePayload('573001234567', 'Hola').to, '573001234567');
+  assert.equal(textMessagePayload('573001234567', 'Hola').recipient, undefined);
 });
 
 test('la forma de un aviso para el registro: objeto, campos, números y cuántos, nunca el texto ni quién escribe', () => {

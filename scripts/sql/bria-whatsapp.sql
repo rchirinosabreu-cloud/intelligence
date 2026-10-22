@@ -13,6 +13,10 @@ CREATE TABLE IF NOT EXISTS bria_memory.whatsapp_links (
   linked_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_message_at TIMESTAMPTZ
 );
+-- 22 de octubre de 2026: Meta identifica a quien escribe con su BSUID (siempre) y solo a veces con su número. `wa_id`
+-- pasa a guardar la clave estable (el BSUID, o el número en un aviso antiguo) y `phone` el número cuando llega.
+ALTER TABLE bria_memory.whatsapp_links ADD COLUMN IF NOT EXISTS phone TEXT;
+CREATE INDEX IF NOT EXISTS whatsapp_links_phone ON bria_memory.whatsapp_links(phone) WHERE phone IS NOT NULL;
 CREATE TABLE IF NOT EXISTS bria_memory.whatsapp_link_codes (
   code TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,

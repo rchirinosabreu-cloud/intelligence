@@ -47,6 +47,15 @@ export const webhookChallenge = (query, verifyToken) => {
 
 export const normalizeWaId = (value) => String(value || '').replace(/\D/g, '');
 
+// El identificador de usuario de WhatsApp para la empresa (BSUID, 22 de octubre de 2026). Meta lo manda en todo
+// mensaje entrante (`from_user_id`, y `user_id` en el contacto); el número (`from`) solo llega si la persona no usa
+// nombre de usuario o si hubo contacto con ella en los últimos 30 días. Por eso el primer mensaje de alguien puede
+// llegar sin número: la plataforma lo descartaba y Bria nunca respondía. Forma: país ISO de dos letras, punto,
+// `ENT.` si es un BSUID principal, y hasta 128 caracteres alfanuméricos (US.13491208655302741918).
+const BSUID = /^[A-Z]{2}\.(?:ENT\.)?[A-Za-z0-9]{1,128}$/;
+export const normalizeBsuid = (value) => { const text = String(value || '').trim(); return BSUID.test(text) ? text : null; };
+export const isBsuid = (value) => normalizeBsuid(value) !== null;
+
 const textOf = (message) => {
   const raw = message.type === 'text' ? message.text?.body
     : message.type === 'button' ? message.button?.text
@@ -56,7 +65,11 @@ const textOf = (message) => {
   return text || null;
 };
 
-/** Los mensajes entrantes de un aviso de Meta, con su autor, su texto y el número que los recibió. */
+/**
+ * Los mensajes entrantes de un aviso de Meta, con su autor, su texto y el número que los recibió.
+ * `from` es la clave estable de quien escribe: su BSUID si viene (siempre, desde 2026) y, si no, su número.
+ * `phone` y `userId` van aparte: el número sirve para responder y para mostrarlo; el BSUID, cuando no hay número.
+ */
 export const parseInboundMessages = (body) => {
   if (!body || body.object !== 'whatsapp_business_account' || !Array.isArray(body.entry)) return [];
   const out = [];
@@ -65,12 +78,17 @@ export const parseInboundMessages = (body) => {
       if (change?.field !== 'messages') continue;
       const value = change.value || {};
       const phoneNumberId = value.metadata?.phone_number_id ? String(value.metadata.phone_number_id) : null;
-      const names = new Map((value.contacts || []).map((contact) => [normalizeWaId(contact?.wa_id), contact?.profile?.name || null]));
+      const contacts = Array.isArray(value.contacts) ? value.contacts : [];
       for (const message of value.messages || []) {
-        const from = normalizeWaId(message?.from);
-        if (!message?.id || !from) continue;
+        if (!message?.id) continue;
+        const phone = normalizeWaId(message.from) || null;
+        const contact = contacts.find((item) => (phone && normalizeWaId(item?.wa_id) === phone) || (message.from_user_id && item?.user_id === message.from_user_id)) || (contacts.length === 1 ? contacts[0] : null);
+        const userId = normalizeBsuid(message.from_user_id) || normalizeBsuid(contact?.user_id);
+        const resolvedPhone = phone || normalizeWaId(contact?.wa_id) || null;
+        const from = userId || resolvedPhone;
+        if (!from) continue;
         const timestamp = Number(message.timestamp);
-        out.push({ messageId: String(message.id), from, profileName: names.get(from) || null, timestamp: Number.isFinite(timestamp) ? timestamp : null, type: String(message.type || 'unknown'), text: textOf(message), phoneNumberId });
+        out.push({ messageId: String(message.id), from, phone: resolvedPhone, userId, profileName: contact?.profile?.name || null, timestamp: Number.isFinite(timestamp) ? timestamp : null, type: String(message.type || 'unknown'), text: textOf(message), phoneNumberId });
       }
     }
   }
@@ -91,8 +109,13 @@ export const describeNotice = (body) => {
   return `objeto=${body?.object ?? 'ninguno'} entradas=${entries.length} campos=${fields.join(',') || 'ninguno'} números=${phoneIds.join(',') || 'ninguno'} mensajes=${count('messages')} estados=${count('statuses')} errores=${count('errors')}`;
 };
 
-/** El número de quien escribe, recortado para el registro: basta para distinguir, no para identificar. */
-export const maskWaId = (waId) => { const digits = normalizeWaId(waId); return digits ? `…${digits.slice(-4)}` : '…'; };
+/** Quién escribe, recortado para el registro: basta para distinguir, no para identificar. */
+export const maskWaId = (waId) => {
+  const bsuid = normalizeBsuid(waId);
+  if (bsuid) return `${bsuid.split('.')[0]}.…${bsuid.slice(-4)}`;
+  const digits = normalizeWaId(waId);
+  return digits ? `…${digits.slice(-4)}` : '…';
+};
 
 export const generateLinkCode =(random = (max) => crypto.randomInt(max)) => String(random(1000000) % 1000000).padStart(6, '0');
 export const linkMessage = (code) => `${LINK_CODE_PREFIX} ${code}`;
@@ -108,6 +131,7 @@ export const linkCodeIn = (text) => {
 };
 
 export const displayPhone = (value) => {
+  if (isBsuid(value)) return '';
   const digits = normalizeWaId(value);
   if (!digits) return '';
   if (digits.startsWith('57') && digits.length === 12) return `+57 ${digits.slice(2, 5)} ${digits.slice(5, 8)} ${digits.slice(8)}`;
@@ -178,5 +202,15 @@ export const answerForWhatsApp = (turn) => {
   return `${text}\n\nPuedes responder: ${list}.`;
 };
 
-export const textMessagePayload = (to, body) => ({ messaging_product: 'whatsapp', recipient_type: 'individual', to: normalizeWaId(to), type: 'text', text: { preview_url: false, body } });
+/**
+ * A quién se le responde: por número si se conoce (Meta lo recomienda, porque así sigue mandando el número en los
+ * avisos), y si no, por BSUID en `recipient`. Nunca los dos: con ambos gana el número.
+ */
+export const recipientFields = (target) => {
+  const bsuid = normalizeBsuid(target);
+  if (bsuid) return { recipient: bsuid };
+  const digits = normalizeWaId(target);
+  return digits ? { to: digits } : {};
+};
+export const textMessagePayload = (target, body) => ({ messaging_product: 'whatsapp', recipient_type: 'individual', ...recipientFields(target), type: 'text', text: { preview_url: false, body } });
 export const readReceiptPayload = (messageId) => ({ messaging_product: 'whatsapp', status: 'read', message_id: messageId });
