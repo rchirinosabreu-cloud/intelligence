@@ -71,6 +71,19 @@ import {
     listClientDirectoryHandler,
     updateDirectoryClientHandler
 } from '../../controllers/clientDirectoryController.js';
+import {
+    createPayableHandler,
+    createThirdPartyHandler,
+    listPayablesLedgerHandler,
+    listThirdPartiesHandler,
+    payPayableHandler,
+    reversePayablePaymentHandler,
+    streamPayableDocumentHandler,
+    updatePayableHandler,
+    updateThirdPartyHandler,
+    uploadPayableDocumentHandler,
+    voidPayableHandler
+} from '../../controllers/accountsPayableController.js';
 
 const router = express.Router();
 const upload = multer({
@@ -152,6 +165,19 @@ router.post('/receivable-payments/:paymentId/reverse', requireFinancialWrite, re
 // Corregir un abono sin revertirlo (Rodny, 20 de octubre de 2026): valor, fecha, cuenta,
 // referencia y notas, con motivo cuando cambia el dinero; su ingreso cambia con él.
 router.patch('/receivable-payments/:paymentId', requireFinancialWrite, updateReceivablePaymentHandler);
+// Terceros y cuentas por pagar (Rodny, 20 de octubre de 2026): el espejo de Cartera. Pagar crea el
+// egreso en Movimientos ligado al pago; el soporte del tercero se guarda como evidencia.
+router.get('/third-parties', requireFinancialAccess, listThirdPartiesHandler);
+router.post('/third-parties', requireFinancialWrite, createThirdPartyHandler);
+router.patch('/third-parties/:id', requireFinancialWrite, updateThirdPartyHandler);
+router.get('/payables-ledger', requireFinancialAccess, listPayablesLedgerHandler);
+router.post('/payables', requireFinancialWrite, createPayableHandler);
+router.patch('/payables/:id', requireFinancialWrite, updatePayableHandler);
+router.post('/payables/:id/void', requireFinancialWrite, voidPayableHandler);
+router.post('/payables/:id/payments', requireFinancialWrite, payPayableHandler);
+router.post('/payables/:id/documents', requireFinancialWrite, receiveFinancialDocument, uploadPayableDocumentHandler);
+router.get('/payables/:id/documents/:documentId/file', requireFinancialAccess, streamPayableDocumentHandler);
+router.post('/payable-payments/:paymentId/reverse', requireFinancialWrite, reversePayablePaymentHandler);
 router.get('/payroll-ledger', requireFinancialAccess, getFinancialPayrollLedger);
 router.post('/payroll-contracts', requireFinancialWrite, createFinancialPayrollContract);
 router.patch('/payroll-contracts/:id', requireFinancialWrite, updateFinancialPayrollContract);

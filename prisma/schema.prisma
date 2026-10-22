@@ -16,8 +16,9 @@ datasource db {
 //                agency_facts, agency_fact_events, agency_questions, sync_state, rhythm_readings,
 //                nudge_dismissals, weekly_focus_deliveries, daily_close_deliveries, pulse_runs, pulse_messages,
 //                mail_accounts, mail_seen, permission_requests, agency_snapshots, daily_readings,
-//                morning_brief_deliveries, decision_log
-//   vault:       credentials, credential_events, reveal_events, access_requests
+//                morning_brief_deliveries, decision_log, conversation_learning_runs,
+//                whatsapp_links, whatsapp_link_codes, whatsapp_inbound
+//   vault:      credentials, credential_events, reveal_events, access_requests
 
 enum SystemRole {
   ADMIN
@@ -1924,6 +1925,8 @@ model FinancialRecord {
   loanReceivable     AccountsReceivable?       @relation("LoanDisbursement")
   payrollTransaction PayrollTransaction?
   payrollPayment     PayrollPayment?
+  // El pago de una cuenta por pagar que este egreso materializó (20 de octubre de 2026).
+  payablePayment     PayablePayment?             @relation("PayablePaymentRecord")
   bankMatches        BankReconciliationMatch[]
   allocations        FinancialRecordAllocation[]
   documents          FinancialRecordDocument[]
@@ -2001,11 +2004,111 @@ model FinancialAccount {
   records              FinancialRecord[]
   payments             ReceivablePayment[]
   payrollPayments      PayrollPayment[]
+  payablePayments      PayablePayment[]
   statementImports     BankStatementImport[]
   bankTransactions     BankTransaction[]
 
   @@unique([name, currency])
   @@index([type, isActive])
+}
+
+// Terceros y cuentas por pagar (Rodny, 20 de octubre de 2026): a quién le debe Brain Studio
+// —proveedores, el equipo, el arrendador, un socio—, qué documento llegó y cómo se pagó. Pagar
+// crea el egreso en Movimientos ligado al pago. Regla en `src/lib/accountsPayable.js`; tablas
+// aditivas con `scripts/ensure-accounts-payable-schema.js`.
+model ThirdParty {
+  id                String            @id @default(uuid())
+  kind              String // PROVEEDOR, COLABORADOR, ARRENDADOR, SOCIO, OTRO
+  name              String
+  legalName         String?
+  documentType      String?
+  documentNumber    String?
+  email             String?
+  phone             String?
+  bankName          String?
+  bankAccountType   String?
+  bankAccountNumber String?
+  teamMemberId      String?
+  notes             String?
+  isActive          Boolean           @default(true)
+  createdById       String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  payables          AccountsPayable[]
+
+  @@index([kind, isActive])
+  @@index([name])
+  @@index([teamMemberId])
+}
+
+model AccountsPayable {
+  id             String                    @id @default(uuid())
+  thirdPartyId   String
+  thirdParty     ThirdParty                @relation(fields: [thirdPartyId], references: [id], onDelete: Restrict)
+  concept        String
+  category       String // FinancialCategory, menos PRESTAMO
+  amount         Decimal
+  currency       String                    @default("COP")
+  documentNumber String?
+  receivedAt     DateTime
+  year           Int
+  month          Int
+  dueDate        DateTime?
+  status         String                    @default("POR_PAGAR") // POR_PAGAR, PARCIAL, PAGADA, ANULADA
+  notes          String?
+  voidedAt       DateTime?
+  voidReason     String?
+  voidedById     String?
+  createdById    String?
+  metadata       Json?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  payments       PayablePayment[]
+  documents      AccountsPayableDocument[]
+
+  @@index([thirdPartyId])
+  @@index([status, dueDate])
+  @@index([year, month])
+}
+
+model PayablePayment {
+  id                String           @id @default(uuid())
+  payableId         String
+  payable           AccountsPayable  @relation(fields: [payableId], references: [id], onDelete: Restrict)
+  accountId         String?
+  account           FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  financialRecordId String?          @unique
+  financialRecord   FinancialRecord? @relation("PayablePaymentRecord", fields: [financialRecordId], references: [id], onDelete: SetNull)
+  amount            Decimal
+  paidAt            DateTime
+  reference         String?
+  notes             String?
+  createdById       String?
+  reversedAt        DateTime?
+  reversalReason    String?
+  reversedById      String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([payableId, paidAt])
+}
+
+model AccountsPayableDocument {
+  id           String          @id @default(uuid())
+  payableId    String
+  payable      AccountsPayable @relation(fields: [payableId], references: [id], onDelete: Restrict)
+  storageKey   String          @unique
+  name         String
+  mimeType     String
+  size         Int
+  sha256       String
+  uploadedById String?
+  uploadedAt   DateTime        @default(now()) @db.Timestamptz()
+  voidedAt     DateTime?       @db.Timestamptz()
+  voidReason   String?
+  voidedById   String?
+
+  @@index([payableId, uploadedAt])
 }
 
 enum FinancialAccountHolderType {

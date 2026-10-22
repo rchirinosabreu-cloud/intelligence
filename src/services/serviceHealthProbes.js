@@ -254,6 +254,27 @@ export const createServiceHealthProbes = ({
       return slowOrOk(latencyMs, SLOW.http, 'El token es válido.');
     },
 
+    // Bria en WhatsApp (20 de octubre de 2026): se le pregunta a Meta por el número, nada más. Es solo lectura y
+    // gratuito; no manda ningún mensaje.
+    async whatsapp() {
+      if (!env.META_WHATSAPP_TOKEN || !env.META_WHATSAPP_PHONE_NUMBER_ID) return notConfigured('Falta el token o el identificador del número de WhatsApp de Bria.');
+      const { value: response, latencyMs } = await timed(() => get(
+        `${META_GRAPH_ORIGIN}/${META_GRAPH_VERSION}/${encodeURIComponent(String(env.META_WHATSAPP_PHONE_NUMBER_ID))}?fields=display_phone_number,quality_rating,code_verification_status,name_status`,
+        { Authorization: `Bearer ${env.META_WHATSAPP_TOKEN}` }
+      ));
+      const body = await readJson(response);
+      if (!response.ok || body?.error) {
+        if (body?.error?.code === 190 || body?.error?.code === 102) {
+          return fail({ critical: true, errorCode: 'META_TOKEN_INVALID', message: 'El token de WhatsApp venció o fue revocado: hay que generar otro.' });
+        }
+        return fail(classifyHttpFailure(response.status || 500));
+      }
+      const number = body?.display_phone_number ? `+${String(body.display_phone_number).replace(/\D/g, '')}` : 'El número';
+      if (String(body?.quality_rating || '').toUpperCase() === 'RED') return result('WARN', `Meta marca la calidad del número ${number} en rojo: revisar WhatsApp Manager.`, { latencyMs });
+      if (body?.code_verification_status && String(body.code_verification_status).toUpperCase() !== 'VERIFIED') return result('WARN', `${number} todavía no está verificado en Meta.`, { latencyMs });
+      return slowOrOk(latencyMs, SLOW.http, `${number} responde.`);
+    },
+
     async 'storage-chat'() {
       const outcome = await s3Probe({
         endpoint: env.AWS_ENDPOINT_URL || 'https://t3.storageapi.dev',

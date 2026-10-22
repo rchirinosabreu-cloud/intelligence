@@ -10,6 +10,8 @@ try {
   await pool.query(await readFile(new URL('./sql/bria-proactive.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('./sql/bria-mail.sql', import.meta.url), 'utf8'));
   await pool.query(await readFile(new URL('./sql/bria-daily-reading.sql', import.meta.url), 'utf8'));
-  console.log('[Bria] Memoria, conversaciones, memoria de la agencia, lecturas de la semana, avisos, buzones y memoria del tiempo disponibles.');
+  await pool.query(await readFile(new URL('./sql/bria-conversation-learning.sql', import.meta.url), 'utf8'));
+  await pool.query(await readFile(new URL('./sql/bria-whatsapp.sql', import.meta.url), 'utf8'));
+  console.log('[Bria] Memoria, conversaciones, memoria de la agencia, lecturas de la semana, avisos, buzones, memoria del tiempo, aprendizaje de los chats y WhatsApp disponibles.');
 }
 finally { await pool.end(); }

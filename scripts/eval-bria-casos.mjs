@@ -32,6 +32,8 @@ const { briaAssistantTools } = await import(root + 'src/services/briaAssistantTo
 const { createBriaActionTools } = await import(root + 'src/services/briaActionTools.js');
 const { createDailyReadingTools } = await import(root + 'src/services/dailyReadingTools.js');
 const { createAgencyFactTools } = await import(root + 'src/services/briaAgencyFactTools.js');
+const { createBriaTaskDraftService } = await import(root + 'src/services/briaTaskDraftService.js');
+const { createBriaTaskTools } = await import(root + 'src/services/briaTaskTools.js');
 const { briaClientUpdateTools } = await import(root + 'src/services/briaClientUpdateTools.js');
 const { runWithAiContext } = await import(root + 'src/lib/aiRequestContext.js');
 const { AI_MODELS } = await import(root + 'src/config/aiConfig.js');
@@ -151,7 +153,20 @@ const fichaTools = createAgencyFactTools({
     nota: 'Úsala sin recitarla: nunca digas «según tu ficha» ni cuentes a nadie qué dice.'
   } : { persona: null, ficha: null, nota: 'No hay nadie en el equipo con ese nombre.' })
 }).filter((tool) => tool.name === 'como_trabajar_con').map((tool) => ({ ...tool, allowed: () => true }));
-const baseTools = [...readTools, ...actionTools, ...clientTools, ...readingTools, ...fichaTools];
+// Crear pendientes en una sola vuelta (20 de octubre de 2026): el servicio real de borradores sobre un equipo y
+// unos clientes ficticios; nunca crea nada, porque en la evaluación nadie confirma.
+const members = [{ id: 'm-kamila', name: 'Kamila Ficticia', role: 'Project Manager', isActive: true, userId: 'u-kamila' }, { id: 'm-jarlan', name: 'Jarlan Ficticio', role: 'Community Manager', isActive: true, userId: 'u-jarlan' }];
+const like = (value, term) => plain(value).includes(plain(term));
+const taskDrafts = createBriaTaskDraftService({
+  db: {
+    client: { findMany: async ({ where }) => clients.filter((row) => where.OR.some((c) => (c.name?.contains && like(row.nombre, c.name.contains)) || (c.slug?.equals && plain(row.slug) === plain(c.slug.equals)))).map((row) => ({ id: row.id, name: row.nombre, slug: row.slug, isArchived: false })), findUnique: async () => null },
+    teamMember: { findMany: async ({ where }) => members.filter((m) => where.OR.some((c) => c.name?.contains && like(m.name, c.name.contains))), findUnique: async () => null },
+    task: { findUnique: async () => null }
+  },
+  now: () => new Date(`${today}T17:00:00Z`), createTask: async () => { throw new Error('En la evaluación no se crea ningún pendiente.'); }
+});
+const taskTools = createBriaTaskTools(taskDrafts).map((tool) => ({ ...tool, allowed: () => true, run: (args, ctx) => tool.run(args, { ...ctx, taskEvidence: ctx.question || '' }) }));
+const baseTools = [...readTools, ...actionTools, ...clientTools, ...readingTools, ...fichaTools, ...taskTools];
 
 const provider = createOpenAIClient({ apiKey: config.OPENAI_API_KEY, models: AI_MODELS });
 const selected = EVAL_CASES.filter((item) => !only || item.id === only);

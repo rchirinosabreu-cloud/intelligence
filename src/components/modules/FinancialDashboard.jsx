@@ -37,6 +37,7 @@ import ReceivablePaymentEditDialog from './financial/ReceivablePaymentEditDialog
 import { isCashPayment, isReceivableClosed, settlementKindLabel } from '@/lib/receivableSettlement';
 import { isLoanReceivable, loanCounterpartyLabel } from '@/lib/receivableLoans';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
+import PayablesTab from './financial/PayablesTab';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
@@ -155,6 +156,9 @@ const FinancialDashboard = () => {
     // diario es el libro, no las gráficas.
     const [activeTab, setActiveTab] = useState('records');
     const [expandedClients, setExpandedClients] = useState({});
+    // Nómina: los pagos de cada persona van plegados y se abren por elección (Rodny, 20 de octubre
+    // de 2026: «voy a nómina y veo todo eso enredado. Así como los de cartera»).
+    const [expandedPayrollPayments, setExpandedPayrollPayments] = useState({});
     // La conexión con el cliente real vive dentro del panel de cada uno (Rodny, 23 de
     // septiembre de 2026): una lista con un desplegable por fila era ilegible.
     const [importPreview, setImportPreview] = useState(null);
@@ -288,7 +292,7 @@ const FinancialDashboard = () => {
             });
             return res.data;
         },
-        enabled: !!(currentUser && canAccessFinancials && ['receivables', 'payroll'].includes(activeTab))
+        enabled: !!(currentUser && canAccessFinancials && ['receivables', 'payables', 'payroll'].includes(activeTab))
     });
 
     const { data: payrollLedger, isLoading: isPayrollLedgerLoading } = useQuery({
@@ -1367,6 +1371,15 @@ await invalidateFinancialQueries(queryClient);
                     Cartera
                 </button>
                 <button
+                    onClick={() => setActiveTab('payables')}
+                    className={cn(
+                        "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
+                        activeTab === 'payables' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
+                    )}
+                >
+                    Por pagar
+                </button>
+                <button
                     onClick={() => setActiveTab('payroll')}
                     className={cn(
                         "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
@@ -1816,6 +1829,12 @@ await invalidateFinancialQueries(queryClient);
                 )}
 
                 {/* PESTAÑA 3: NOMINA OPERATIVA */}
+                {/* Cuentas por pagar y terceros (Rodny, 20 de octubre de 2026): el espejo de Cartera. */}
+                {activeTab === 'payables' && (
+                    <PayablesTab filterQuery={filterQuery} formatCurrency={formatCurrency} accounts={financialAccounts?.accounts || []}
+                        canWrite={canWriteFinancials} enabled={!!(currentUser && canAccessFinancials)} />
+                )}
+
                 {activeTab === 'payroll' && (
                     <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -1924,6 +1943,18 @@ await invalidateFinancialQueries(queryClient);
                                                                 )}>{status.label}</span>
                                                             );
                                                         })()}
+                                                        {transaction?.payments?.length > 0 && (() => {
+                                                            const activeCount = transaction.payments.filter((payment) => !payment.reversedAt).length;
+                                                            const open = !!expandedPayrollPayments[transaction.id];
+                                                            return (
+                                                                <button type="button" data-payroll-payments-toggle aria-expanded={open}
+                                                                    onClick={() => setExpandedPayrollPayments((prev) => ({ ...prev, [transaction.id]: !prev[transaction.id] }))}
+                                                                    className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-[#009EB9] hover:underline dark:text-cyan-300">
+                                                                    {open ? 'Ocultar pagos' : (activeCount > 0 ? `Ver ${activeCount} pago${activeCount === 1 ? '' : 's'}` : 'Ver pagos')}
+                                                                    {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                                                </button>
+                                                            );
+                                                        })()}
                                                     </td>
                                                     <td className="p-4 text-right font-black text-zinc-900 dark:text-white">
                                                         {formatCurrency(netAmount)}
@@ -1938,7 +1969,7 @@ await invalidateFinancialQueries(queryClient);
                                                         {!transaction && <span className="text-[11px] text-zinc-400">Pendiente</span>}
                                                     </td>
                                                 </tr>
-                                                {transaction?.payments?.length > 0 && (
+                                                {transaction?.payments?.length > 0 && expandedPayrollPayments[transaction.id] && (
                                                     <tr className="bg-zinc-50/60 dark:bg-white/[0.02]">
                                                         <td colSpan={6} className="px-4 pb-4 pt-0">
                                                             <PayrollPaymentList transaction={transaction} accounts={financialAccounts?.accounts || []} formatCurrency={formatCurrency}

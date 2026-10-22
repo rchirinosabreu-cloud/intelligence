@@ -7,6 +7,7 @@ import {
     generateClientStatementPdfBuffer,
     openClientStatementPdf
 } from '../src/services/clientStatementPdfService.js';
+import { DOCUMENT_LOGO } from '../src/services/receivablePdfService.js';
 
 // El documento de seguimiento que Rodny le manda a cada cliente (20 de octubre de 2026:
 // «necesito poder tener mi documento de seguimiento y también el poder generarlo»),
@@ -101,6 +102,20 @@ test('openClientStatementPdf lee la ficha y las obligaciones vivas del cliente, 
     assert.equal(result.buffer.subarray(0, 5).toString(), '%PDF-');
     await assert.rejects(openClientStatementPdf({ client: { findUnique: async () => null }, accountsReceivable: { findMany: async () => [] } }, 'nope', {}), (error) => error.code === 'FINANCIAL_CLIENT_NOT_FOUND');
     await assert.rejects(openClientStatementPdf(prismaClient, 'c1', { cutoff: 'ayer' }), (error) => error.code === 'STATEMENT_CUTOFF_INVALID');
+});
+
+// El logo de los papeles es el horizontal con el nombre (Rodny, 20 de octubre de 2026: «este es el
+// logo de los documentos, estás poniendo un logo que no es»); el cuadrado es el icono de la aplicación.
+test('la cuenta de cobro y el estado de cuenta llevan el logo horizontal de los documentos, con su proporción', () => {
+    assert.equal(DOCUMENT_LOGO.file, '../../public/brainstudio-logo-horizontal.png');
+    assert.ok(fs.existsSync(new URL('../public/brainstudio-logo-horizontal.png', import.meta.url)));
+    assert.ok(Math.abs(DOCUMENT_LOGO.width / DOCUMENT_LOGO.height - 426 / 153) < 0.01, 'el ancho y el alto guardan la proporción del archivo');
+    const statement = read('../src/services/clientStatementPdfService.js');
+    const receivable = read('../src/services/receivablePdfService.js');
+    assert.match(statement, /drawDocumentLogo\(doc\)/);
+    assert.match(receivable, /drawDocumentLogo\(doc\)/);
+    assert.doesNotMatch(statement, /brainstudio-logo\.png|'BRAIN STUDIO'/, 'ni el icono cuadrado ni el rótulo escrito a mano');
+    assert.doesNotMatch(receivable, /brainstudio-logo\.png|'BRAIN STUDIO'/, 'ni el icono cuadrado ni el rótulo escrito a mano');
 });
 
 test('la ruta, el catálogo y la pantalla conocen el estado de cuenta en PDF', () => {

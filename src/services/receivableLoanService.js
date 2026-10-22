@@ -1,6 +1,7 @@
 import { financialCents, financialAmountFromCents } from '../utils/financialMoney.js';
 import { assertOpenFinancialPeriod, FinancialDomainError, parseFinancialDateInput } from './financialRecordService.js';
-import { LOAN_KIND, loanProblem } from '../lib/receivableLoans.js';
+import { loanProblem } from '../lib/receivableLoans.js';
+import { createLoanReceivableFor } from './loanRecordSyncService.js';
 
 const cloneForAudit = (value) => JSON.parse(JSON.stringify(value));
 const text = (value) => String(value ?? '').trim() || null;
@@ -98,28 +99,11 @@ export const createLoan = async (prismaClient, input = {}, actor) => {
                 });
             }
 
-            const receivable = await tx.accountsReceivable.create({
-                data: {
-                    kind: LOAN_KIND,
-                    clientId,
-                    counterpartyType,
-                    counterpartyName,
-                    loanRecordId: financialRecord.id,
-                    amount,
-                    currency: 'COP',
-                    period: lentAt,
-                    year,
-                    month,
-                    dueDate,
-                    status: 'DEBE',
-                    origin: 'MANUAL',
-                    notes,
-                    sourceLabel: counterpartyName,
-                    metadata: { createdBy: actorId, origin: 'PLATFORM', loan: true }
-                }
-            });
-            await tx.financialAuditEvent.create({
-                data: { entityType: 'AccountsReceivable', entityId: receivable.id, action: 'CREATE', after: cloneForAudit(receivable), actorId }
+            // La misma pieza que liga un egreso de Préstamo registrado en Movimientos: un préstamo
+            // nace igual venga de donde venga.
+            const receivable = await createLoanReceivableFor(tx, {
+                financialRecord: { ...financialRecord, amount, date: lentAt, year, month },
+                counterpartyType, counterpartyName, clientId, dueDate, notes, actorId
             });
             return { receivable, financialRecord, linkedExistingRecord: Boolean(financialRecordId) };
         }, { isolationLevel: 'Serializable' });

@@ -5,12 +5,15 @@ import {
     LOAN_COUNTERPARTY_TYPES,
     LOAN_KIND,
     isLoanReceivable,
+    isLoanUntouched,
     loanCounterpartyLabel,
+    loanCounterpartyNameFromRecord,
+    loanFromRecord,
     loanProblem
 } from '../src/lib/receivableLoans.js';
 import { createLoan } from '../src/services/receivableLoanService.js';
 import { createReceivablePayment } from '../src/services/receivablePaymentService.js';
-import { financialRecordLockReason } from '../src/services/financialRecordService.js';
+import { createFinancialRecord, financialRecordLockReason, updateFinancialRecord, voidFinancialRecord } from '../src/services/financialRecordService.js';
 
 // Rodny, 20 de octubre de 2026: «Cuando registro un préstamo no se me va a cuentas por cobrar.
 // No necesariamente que haga un documento de cobro sino que me aparezca en cartera. Y que cuando
@@ -164,11 +167,122 @@ test('la devolución de un préstamo entra como reintegro, no como venta', async
     assert.equal(result.receivable.status, 'DEBE');
 });
 
-test('el egreso del préstamo no se edita ni se anula desde Movimientos: se dice a dónde ir', () => {
-    const reason = financialRecordLockReason({ origin: 'SYSTEM', loanReceivable: { id: 'loan-1' } });
+// Rodny, 20 de octubre de 2026, al ver «Préstamo Melissa» y «Prestamos Fancisco» en Movimientos sin
+// nada en Cartera: «la idea es que si tiene esa categoría de préstamo vaya a cuenta por cobrar en
+// seguida». Un egreso de categoría Préstamo registrado en Movimientos es un préstamo: la cuenta por
+// cobrar nace sola, y mientras nadie lo haya reintegrado sigue al movimiento (se corrige o se anula
+// desde Movimientos y la cartera cambia con él). Con reintegros, el egreso queda bloqueado como antes.
+
+test('loanFromRecord: un egreso de categoría Préstamo es un préstamo, y a quién se le prestó sale de la contraparte o de la descripción', () => {
+    const base = { type: 'EXPENSE', category: 'PRESTAMO', status: 'POSTED', scenario: 'ACTUAL', isProjection: false, description: 'Préstamo Melissa', counterparty: 'Melissa' };
+    assert.deepEqual(loanFromRecord(base), { counterpartyType: null, clientId: null, counterpartyName: 'Melissa' });
+    assert.equal(loanFromRecord({ ...base, counterparty: null }).counterpartyName, 'Melissa', 'sin contraparte, la descripción sin la palabra «préstamo»');
+    assert.equal(loanCounterpartyNameFromRecord({ description: 'Prestamos Fancisco' }), 'Fancisco');
+    assert.equal(loanCounterpartyNameFromRecord({ description: 'Préstamo a Camila Ruiz' }), 'Camila Ruiz');
+    assert.equal(loanCounterpartyNameFromRecord({ description: 'Prestamos' }), 'Sin nombre', 'un préstamo sin nombre no se inventa uno');
+    assert.deepEqual(loanFromRecord({ ...base, clientId: 'client-1', client: { name: 'La Sazón de Iris' } }), { counterpartyType: 'CLIENTE', clientId: 'client-1', counterpartyName: 'La Sazón de Iris' }, 'con ficha de cliente manda el nombre de la ficha');
+    assert.equal(loanFromRecord({ ...base, clientId: 'client-1' }).counterpartyName, 'Melissa', 'sin la ficha a la mano, lo que diga el movimiento');
+    assert.equal(loanFromRecord({ ...base, type: 'INCOME' }), null, 'un ingreso de categoría Préstamo es un reintegro, no un préstamo');
+    assert.equal(loanFromRecord({ ...base, category: 'OPERATIVO' }), null);
+    assert.equal(loanFromRecord({ ...base, status: 'VOIDED' }), null);
+    assert.equal(loanFromRecord({ ...base, scenario: 'FORECAST', isProjection: true }), null, 'una proyección no saca dinero');
+    assert.equal(loanFromRecord({ ...base, payrollPayment: { id: 'p' } }), null, 'un movimiento que ya es de otra operación no se liga');
+    assert.equal(isLoanUntouched({ status: 'DEBE', payments: [] }), true);
+    assert.equal(isLoanUntouched({ status: 'DEBE', payments: [{ id: 'p', reversedAt: new Date() }] }), true, 'un reintegro revertido no cuenta');
+    assert.equal(isLoanUntouched({ status: 'DEBE', payments: [{ id: 'p', reversedAt: null }] }), false);
+    assert.equal(isLoanUntouched({ status: 'SALDADO', payments: [] }), false, 'un préstamo cerrado ya no sigue al movimiento');
+});
+
+const buildLedgerTx = ({ existing = null, members = [], loanRow = null } = {}) => {
+    const calls = [];
+    const tx = {
+        financialPeriod: { findUnique: async () => ({ status: 'OPEN' }) },
+        teamMember: { findFirst: async (args) => { calls.push(['member.findFirst', args]); return members[0] || null; } },
+        financialRecord: {
+            findUnique: async () => existing,
+            create: async (args) => { calls.push(['record.create', args]); return { id: 'rec-new', ...args.data, loanReceivable: null }; },
+            update: async (args) => { calls.push(['record.update', args]); return { ...existing, ...args.data }; }
+        },
+        accountsReceivable: {
+            findUnique: async () => loanRow,
+            create: async (args) => { calls.push(['receivable.create', args]); return { id: 'loan-auto', ...args.data }; },
+            update: async (args) => { calls.push(['receivable.update', args]); return { ...loanRow, ...args.data }; },
+            delete: async (args) => { calls.push(['receivable.delete', args]); return loanRow; }
+        },
+        financialAuditEvent: { create: async (args) => { calls.push(['audit.create', args]); return { id: 'a' }; } }
+    };
+    return { calls, tx, prisma: { $transaction: async (cb) => cb(tx) } };
+};
+
+test('registrar en Movimientos un egreso de categoría Préstamo crea el préstamo en Cartera en la misma transacción', async () => {
+    const { calls, prisma } = buildLedgerTx({ members: [{ id: 'tm-1', name: 'Melisa Castaño' }] });
+    await createFinancialRecord(prisma, {
+        amount: 5525000, type: 'EXPENSE', category: 'PRESTAMO', date: '2026-09-28', accountId: 'acc-1', description: 'Préstamo Melissa', counterparty: 'Melissa'
+    }, { id: 'user-elisa' });
+    const receivable = calls.find(([name]) => name === 'receivable.create')[1].data;
+    assert.equal(receivable.kind, 'PRESTAMO');
+    assert.equal(receivable.loanRecordId, 'rec-new');
+    assert.equal(receivable.counterpartyName, 'Melissa');
+    assert.equal(receivable.counterpartyType, 'COLABORADOR', 'si el nombre es de alguien del equipo, es un colaborador');
+    assert.equal(receivable.amount, 5525000);
+    assert.equal(receivable.year, 2026);
+    assert.equal(receivable.month, 9);
+    assert.equal(receivable.status, 'DEBE');
+    assert.equal(receivable.metadata.autoLinked, true);
+    const audits = calls.filter(([name]) => name === 'audit.create').map(([, args]) => `${args.data.entityType}:${args.data.action}`).sort();
+    assert.deepEqual(audits, ['AccountsReceivable:CREATE', 'FinancialRecord:CREATE']);
+
+    const other = buildLedgerTx({ members: [] });
+    await createFinancialRecord(other.prisma, { amount: 200000, type: 'EXPENSE', category: 'PRESTAMO', date: '2026-09-28', accountId: 'acc-1', description: 'Prestamos Fancisco', counterparty: 'Francisco' }, { id: 'u' });
+    assert.equal(other.calls.find(([name]) => name === 'receivable.create')[1].data.counterpartyType, 'OTRO', 'si no es del equipo, queda como otro tercero');
+
+    const expense = buildLedgerTx();
+    await createFinancialRecord(expense.prisma, { amount: 90000, type: 'EXPENSE', category: 'OPERATIVO', date: '2026-09-28', accountId: 'acc-1', description: 'Papelería' }, { id: 'u' });
+    assert.equal(expense.calls.some(([name]) => name === 'receivable.create'), false, 'un gasto normal no crea nada en Cartera');
+});
+
+test('mientras nadie lo haya reintegrado, el préstamo sigue al movimiento: corregirlo lo actualiza y anularlo lo quita de Cartera', async () => {
+    const loan = { id: 'loan-1', status: 'DEBE', payments: [] };
+    const loanRow = { id: 'loan-1', kind: 'PRESTAMO', amount: 200000, status: 'DEBE', counterpartyName: 'Fancisco', loanRecordId: 'rec-1' };
+    const existing = { id: 'rec-1', type: 'EXPENSE', category: 'PRESTAMO', status: 'POSTED', scenario: 'ACTUAL', isProjection: false, origin: 'MANUAL', amount: 200000, date: new Date('2026-09-28T12:00:00Z'), year: 2026, month: 9, accountId: 'acc-1', description: 'Prestamos Fancisco', counterparty: 'Fancisco', loanReceivable: loan, receivablePayment: null, payrollTransaction: null, payrollPayment: null, bankMatches: [] };
+
+    const edit = buildLedgerTx({ existing, loanRow });
+    await updateFinancialRecord(edit.prisma, 'rec-1', { amount: 250000, counterparty: 'Francisco Villa' }, { id: 'u' });
+    const updated = edit.calls.find(([name]) => name === 'receivable.update')[1];
+    assert.equal(updated.where.id, 'loan-1');
+    assert.equal(updated.data.amount, 250000);
+    assert.equal(updated.data.counterpartyName, 'Francisco Villa');
+
+    const recategorized = buildLedgerTx({ existing, loanRow });
+    await updateFinancialRecord(recategorized.prisma, 'rec-1', { category: 'OPERATIVO' }, { id: 'u' });
+    assert.equal(recategorized.calls.find(([name]) => name === 'receivable.delete')[1].where.id, 'loan-1', 'si deja de ser préstamo, deja de estar en Cartera');
+    assert.ok(recategorized.calls.some(([name, args]) => name === 'audit.create' && args.data.entityType === 'AccountsReceivable' && args.data.action === 'DELETE'));
+
+    const voided = buildLedgerTx({ existing, loanRow });
+    await voidFinancialRecord(voided.prisma, 'rec-1', 'Se registró dos veces', { id: 'u' });
+    assert.equal(voided.calls.find(([name]) => name === 'receivable.delete')[1].where.id, 'loan-1');
+
+    const repaid = buildLedgerTx({ existing: { ...existing, loanReceivable: { ...loan, payments: [{ id: 'p', reversedAt: null }] } }, loanRow });
+    await assert.rejects(updateFinancialRecord(repaid.prisma, 'rec-1', { amount: 1 }, { id: 'u' }), (error) => error.code === 'FINANCIAL_RECORD_LINKED' && /reintegro/i.test(error.message));
+    await assert.rejects(voidFinancialRecord(repaid.prisma, 'rec-1', 'x', { id: 'u' }), (error) => error.code === 'FINANCIAL_RECORD_LINKED');
+});
+
+test('el egreso de un préstamo con reintegros no se edita ni se anula desde Movimientos: se dice a dónde ir', () => {
+    const reason = financialRecordLockReason({ origin: 'MANUAL', loanReceivable: { id: 'loan-1', status: 'DEBE', payments: [{ id: 'p', reversedAt: null }] } });
     assert.match(reason, /préstamo/i);
     assert.match(reason, /Cartera/);
-    assert.match(reason, /Eliminar/);
+    assert.match(reason, /reintegro/i);
+    assert.equal(financialRecordLockReason({ origin: 'MANUAL', loanReceivable: { id: 'loan-1', status: 'DEBE', payments: [] } }), null, 'sin reintegros, el movimiento se corrige en Movimientos y la cartera lo sigue');
+    assert.match(financialRecordLockReason({ origin: 'SYSTEM', loanReceivable: { id: 'loan-1', status: 'DEBE', payments: [] } }), /Eliminar/, 'el egreso que creó «Registrar préstamo» se deshace desde Cartera');
+    const ledger = read('../src/components/modules/financial/FinancialLedger.jsx');
+    assert.match(ledger, /loanReceivable/, 'la pantalla sabe antes que un préstamo con reintegros no se toca aquí');
+});
+
+test('los préstamos que ya estaban en Movimientos se llevan a Cartera con un script que simula por defecto', () => {
+    const script = read('../scripts/link-loan-records.js');
+    assert.match(script, /syncLoanWithRecord/);
+    assert.match(script, /--confirmar LIGAR/);
+    assert.match(script, /loanReceivable: \{ is: null \}/);
 });
 
 test('el esquema, el arranque, el catálogo de Bria y la ruta conocen los préstamos', () => {

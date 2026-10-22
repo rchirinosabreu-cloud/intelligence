@@ -123,6 +123,22 @@ export const EVAL_CASES = [
     why: 'Rodny, 19 de octubre de 2026: Bria como project manager. El recordatorio lleva el enlace del portal y lo que espera aprobación, nunca el guion, y Bria no dice que lo envió.'
   },
   {
+    id: 'varios-pendientes',
+    question: 'Créame estos tres pendientes para Aristea: historias de la semana para Kamila mañana, carrusel de datos para Jarlan el viernes, y post de cierre para Kamila el 20 de octubre',
+    requiredTools: ['preparar_pendiente'],
+    mustSay: ['Así quedarían los 3 pendientes', 'Historias de la semana', 'Carrusel de datos', 'Post de cierre', '¿Los creo así?'],
+    mustNotSay: ['¿Qué prioridad', '¿Añadirás', 'insumos?', 'ya los creé', 'ya quedaron creados', 'quedaron creados'],
+    why: 'Rodny, 20 de octubre de 2026: 96 mensajes para 14 pendientes era un reproceso. Varios pendientes en un mensaje son un solo borrador, en una sola llamada, sin preguntar prioridad ni insumos, y nada se crea sin confirmar.'
+  },
+  {
+    id: 'un-pendiente-una-vuelta',
+    question: 'Crea un pendiente para Kamila para mañana en Aristea: revisar los textos del carrusel antes de enviarlo al cliente',
+    requiredTools: ['preparar_pendiente'],
+    mustSay: ['Prioridad: Normal', '¿Lo creo así?'],
+    mustNotSay: ['¿Qué prioridad', '¿Añadirás', 'ya lo creé', 'ya quedó creado'],
+    why: 'Con cliente, responsable, fecha y qué hacer, el pendiente sale listo en una vuelta: prioridad Normal y los insumos como nota, no como pregunta.'
+  },
+  {
     id: 'mensaje-a-helen',
     question: 'Escríbele a Helen que el video de Gema salió con la versión vieja y que lo corrija hoy',
     requiredTools: ['como_trabajar_con'],

@@ -35,6 +35,42 @@ export const isLoanReceivable = (receivable) => receivable?.kind === LOAN_KIND;
 
 const text = (value) => String(value ?? '').trim();
 
+// Un egreso de categoría Préstamo registrado en Movimientos es un préstamo (Rodny, 20 de octubre
+// de 2026: «si tiene esa categoría de préstamo vaya a cuenta por cobrar en seguida»). Lo que sigue
+// decide si un movimiento es el desembolso de un préstamo y a quién se le prestó, sin tocar la base.
+
+// A quién se le prestó, leído del movimiento: la contraparte si la escribieron; si no, la descripción
+// sin la palabra «préstamo» («Prestamos Fancisco» → «Fancisco»). Nunca se inventa un nombre.
+export const loanCounterpartyNameFromRecord = (record) => {
+    const explicit = text(record?.counterparty);
+    if (explicit) return explicit.slice(0, LOAN_NAME_MAX);
+    const fromDescription = text(record?.description).replace(/^pr[ée]stamos?\b\s*(?:a|para|de)?\s*:?\s*/i, '').trim();
+    return (fromDescription || 'Sin nombre').slice(0, LOAN_NAME_MAX);
+};
+
+// Es el desembolso de un préstamo: un egreso real (ni proyección ni anulado) de categoría PRESTAMO.
+export const recordIsLoanDisbursement = (record) => Boolean(record)
+    && record.type === 'EXPENSE' && record.category === LOAN_KIND
+    && (record.status || 'POSTED') === 'POSTED' && (record.scenario || 'ACTUAL') === 'ACTUAL' && record.isProjection !== true;
+
+// Qué préstamo le corresponde a un movimiento, o `null` si no es un préstamo o ya es de otra
+// operación (un pago de nómina o un abono de cartera nunca se convierten en préstamo).
+export const loanFromRecord = (record) => {
+    if (!recordIsLoanDisbursement(record)) return null;
+    if (record.receivablePayment || record.payrollTransaction || record.payrollPayment) return null;
+    const clientId = text(record.clientId) || null;
+    // Con ficha de cliente, el préstamo lleva el nombre de la ficha, como en «Registrar préstamo».
+    const counterpartyName = (clientId && text(record.client?.name)) || loanCounterpartyNameFromRecord(record);
+    return { counterpartyType: clientId ? 'CLIENTE' : null, clientId, counterpartyName };
+};
+
+// Mientras nadie haya reintegrado nada y el préstamo siga abierto, la cuenta por cobrar sigue a su
+// movimiento: corregirlo o anularlo en Movimientos la corrige o la quita. Con un reintegro vigente
+// o cerrado, el egreso queda bloqueado y se gestiona desde Cartera.
+export const isLoanUntouched = (loan) => Boolean(loan)
+    && (loan.status || 'DEBE') === 'DEBE'
+    && !(loan.payments || []).some((payment) => !payment.reversedAt);
+
 // Qué le falta a un préstamo para poder registrarse, en palabras; `null` si está completo.
 export const loanProblem = ({ counterpartyType, counterpartyName, clientId, amount, lentAt, accountId, financialRecordId, notes } = {}) => {
     if (!isLoanCounterpartyType(counterpartyType)) return 'Elige a quién se le presta.';
