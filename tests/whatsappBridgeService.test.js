@@ -114,7 +114,11 @@ test('un vínculo vivo manda el mensaje al motor de Bria con la identidad de la 
   const call = conversations.calls[0];
   assert.deepEqual([call.user.userId, call.user.role, call.user.sessionVersion, call.session, call.question], ['u-camila', 'PROJECT_MANAGER', 3, null, '¿Qué tengo hoy?']);
   assert.equal(repository.links.get('u-camila').conversationId, call.id, 'la conversación de WhatsApp se recuerda para seguirla');
-  assert.deepEqual(sent.map((row) => row.body.status || row.body.text.body), ['read', 'Hoy tienes *dos* pendientes.\n\nRespóndeme con un sí, o dime qué cambiar.']);
+  // Las opciones salen como botones (22 de octubre de 2026); tocarlos o escribir con sus palabras vale lo mismo.
+  assert.equal(sent[0].body.status, 'read');
+  assert.equal(sent[1].body.type, 'interactive');
+  assert.equal(sent[1].body.interactive.body.text, 'Hoy tienes *dos* pendientes.');
+  assert.deepEqual(sent[1].body.interactive.action.buttons.map((row) => row.reply.title), ['Crear pendiente', 'Cancelar pendiente']);
   // El siguiente mensaje sigue en la misma conversación.
   await service.processMessage({ messageId: 'm2', from: '573001234567', profileName: 'Camila', type: 'text', text: 'Crear pendiente' });
   assert.equal(conversations.calls[1].id, call.id);

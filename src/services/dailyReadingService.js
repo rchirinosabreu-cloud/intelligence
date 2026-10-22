@@ -27,6 +27,8 @@ import { clientOperationsService } from './clientOperationsService.js';
 import { createOpenAIClient } from './openAIClient.js';
 import { createNotification } from './notificationService.js';
 import { listBriaPeople } from './weeklyFocusService.js';
+import { alertByWhatsApp } from './whatsappAlertSender.js';
+import { dailyAlert } from '../lib/whatsappAlerts.js';
 
 export const MORNING_BRIEF_NOTIFICATION = 'BRIA_LECTURA_MANANA';
 export const SNAPSHOT_FROM = 6 * 60;
@@ -64,7 +66,8 @@ const defaultCriteria = async () => {
 
 export const createDailyReadingService = ({
   db = prisma, repository, proactive, conversations, operations = clientOperationsService, generate = defaultGenerate,
-  criteria = defaultCriteria, now = () => new Date(), notify = createNotification, listPeople = listBriaPeople, logger = console
+  criteria = defaultCriteria, now = () => new Date(), notify = createNotification, listPeople = listBriaPeople, logger = console,
+  whatsapp = alertByWhatsApp
 } = {}) => {
   const repo = repository || createDailyReadingRepository({ pool: getSidecarPool() });
   const deliveries = proactive || createBriaProactiveRepository({ pool: getSidecarPool() });
@@ -207,6 +210,8 @@ export const createDailyReadingService = ({
       const delivery = await deliveries.recordMorningBriefDelivery(reading.day, user.id, chat.id);
       try { await notify({ userId: user.id, type: MORNING_BRIEF_NOTIFICATION, message: 'Bria dejó tu lectura de la mañana en el chat.', relatedId: chat.id }); }
       catch (error) { logger.error('[DailyReading] No se pudo avisar a una persona:', error?.message || error); }
+      // La misma lectura por WhatsApp, a quien vinculó su número y no la apagó (22 de octubre de 2026).
+      whatsapp({ userId: user.id, ...dailyAlert({ note: 'LECTURA_MANANA', dayKey: reading.day, text }) });
       return { ...delivery, already: false };
     },
 

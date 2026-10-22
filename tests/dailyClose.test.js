@@ -76,14 +76,24 @@ const db = {
     ? [{ id: 'c1', title: 'Portada', status: 'REALIZADA', assigneeId: 'm-kam', completedAt: new Date('2026-10-13T19:00:00Z'), client: { name: 'Aristea' }, collaborators: [] }, { id: 'c2', title: 'Reel', status: 'REALIZADA', assigneeId: 'm-mel', completedAt: new Date('2026-10-13T20:00:00Z'), client: null, collaborators: [{ memberId: 'm-kam' }] }]
     : [{ id: 'p1', title: 'Historias', status: 'EN_CURSO', dueDate: new Date('2026-10-14T12:00:00Z'), assigneeId: 'm-mel', client: { name: 'Endova' }, collaborators: [] }, { id: 'n1', title: 'Post', status: 'PENDIENTE', dueDate: new Date('2026-10-14T12:00:00Z'), assigneeId: 'm-mel', client: null, collaborators: [] }, { id: 'o1', title: 'Vieja', status: 'PENDIENTE', dueDate: new Date('2026-10-09T12:00:00Z'), assigneeId: 'm-kam', client: null, collaborators: [] }] }
 };
-const build = ({ nowIso, repository = memoryRepo(), notes = [], notices = [], failNotify = false }) => ({
-  repository, notes, notices,
+const build = ({ nowIso, repository = memoryRepo(), notes = [], notices = [], failNotify = false, whatsapp = [] }) => ({
+  repository, notes, notices, whatsapp,
   service: createDailyCloseService({
     db, repository,
     conversations: { postAssistantNote: async (actor, note) => { notes.push({ actor, note }); return { id: `c-${notes.length}`, title: note.title }; } },
     now: () => new Date(nowIso), notify: async (notice) => { if (failNotify) throw new Error('push caído'); notices.push(notice); },
-    listPeople: async () => people, logger: { error: () => {}, log: () => {} }
+    listPeople: async () => people, logger: { error: () => {}, log: () => {} }, whatsapp: (alert) => { whatsapp.push(alert); }
   })
+});
+
+test('el cierre sale también por WhatsApp, entero y con el formato de WhatsApp, una vez por persona y día', async () => {
+  const repository = memoryRepo(), whatsapp = [];
+  await build({ nowIso: '2026-10-13T22:05:00Z', repository, whatsapp }).service.runAutomatic();
+  assert.deepEqual(whatsapp.map((alert) => [alert.userId, alert.kind, alert.sourceRef]), [['u-kamila', 'DAILY', 'CIERRE_DIA:2026-10-13'], ['u-rodny', 'DAILY', 'CIERRE_DIA:2026-10-13']]);
+  assert.match(whatsapp[0].text, /\*El equipo\*/, 'las negritas del chat pasan a las de WhatsApp');
+  assert.doesNotMatch(whatsapp[0].text, /\*\*/);
+  await build({ nowIso: '2026-10-13T23:30:00Z', repository, whatsapp }).service.runAutomatic();
+  assert.equal(whatsapp.length, 2, 'lo ya entregado no se repite');
 });
 
 test('from 17:00 Bogotá on a workday each Bria person gets one chat with the close and one notice; before that, on weekends, and a second time it does nothing', async () => {

@@ -9,13 +9,15 @@ import { vaultKey } from '../lib/vaultCrypto.js';
 import { requestNudge, answerNudge, requestNotificationText, answerNotificationText, decisionMessage, cleanAccessNote } from '../lib/vaultAccessRequests.js';
 import { createVaultRepository } from './vaultRepository.js';
 import { createNotification } from './notificationService.js';
+import { alertByWhatsApp } from './whatsappAlertSender.js';
+import { accessAlert } from '../lib/whatsappAlerts.js';
 
 const vaultError = (message, status, code) => Object.assign(new Error(message), { status, code });
 export const VAULT_ACCESS_REQUESTED = 'VAULT_ACCESS_REQUESTED';
 export const VAULT_ACCESS_SHARED = 'VAULT_ACCESS_SHARED';
 export const VAULT_ACCESS_DENIED = 'VAULT_ACCESS_DENIED';
 
-export const createVaultService = ({ repository, db = prisma, notify = createNotification, logger = console }) => {
+export const createVaultService = ({ repository, db = prisma, notify = createNotification, logger = console, whatsapp = alertByWhatsApp }) => {
   const resolve = async (user) => {
     const row = await db.user.findUnique({
       where: { id: user?.userId || user?.id || '' },
@@ -55,7 +57,13 @@ export const createVaultService = ({ repository, db = prisma, notify = createNot
       const out = await repository.requestAccess(actor, credentialId, cleanAccessNote(note));
       if (out.alreadyVisible || out.deniedRecently) return out;
       const admins = await activeAdmins();
-      if (out.created) for (const admin of admins) await safeNotify({ userId: admin.id, type: VAULT_ACCESS_REQUESTED, message: requestNotificationText(out.request), relatedId: out.request.id });
+      if (out.created) {
+        for (const admin of admins) {
+          await safeNotify({ userId: admin.id, type: VAULT_ACCESS_REQUESTED, message: requestNotificationText(out.request), relatedId: out.request.id });
+          // Y por WhatsApp, con Compartir / Denegar (22 de octubre de 2026). Nunca lleva un valor de la bóveda.
+          whatsapp({ userId: admin.id, ...accessAlert({ type: 'VAULT', request: out.request, text: requestNotificationText(out.request) }) });
+        }
+      }
       return { ...out, admins: admins.map((admin) => admin.name) };
     },
     async decideRequest(user, id, decision) {

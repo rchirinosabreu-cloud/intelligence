@@ -49,8 +49,14 @@ export const createBriaWhatsAppRouter = ({ service } = {}) => {
     }
   };
   const userId = (req) => req.user.userId || req.user.id;
-  router.get('/', handle((req, instance) => instance.status(userId(req))));
+  router.get('/', handle((req, instance) => instance.status(userId(req), { role: req.user.role })));
   router.post('/link-code', handle((req, instance) => instance.createLinkCode(userId(req))));
   router.delete('/', handle((req, instance) => instance.unlink(userId(req))));
+  // Qué avisos le llegan por WhatsApp (22 de octubre de 2026): vienen encendidos y cada quien apaga los suyos.
+  router.patch('/alerts', handle((req, instance) => {
+    const { kind, on } = req.body || {};
+    if (typeof on !== 'boolean') throw Object.assign(new Error('Indica si el aviso queda encendido o apagado.'), { status: 400 });
+    return instance.setAlert(userId(req), String(kind || ''), on);
+  }));
   return router;
 };

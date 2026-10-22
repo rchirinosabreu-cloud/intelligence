@@ -12,6 +12,8 @@ import { createBriaConversationRepository } from './briaConversationRepository.j
 import { createBriaProactiveRepository } from './briaProactiveRepository.js';
 import { createNotification } from './notificationService.js';
 import { listBriaPeople } from './weeklyFocusService.js';
+import { alertByWhatsApp } from './whatsappAlertSender.js';
+import { dailyAlert } from '../lib/whatsappAlerts.js';
 
 export const DAILY_CLOSE_NOTIFICATION = 'BRIA_CIERRE_DEL_DIA';
 export const DAILY_CLOSE_HOUR = 17;
@@ -20,7 +22,8 @@ const OPEN = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 const TASK_SELECT = { id: true, title: true, status: true, dueDate: true, assigneeId: true, completedAt: true, client: { select: { name: true } }, collaborators: { select: { memberId: true } } };
 
 export const createDailyCloseService = ({
-  db = prisma, conversations, repository, now = () => new Date(), notify = createNotification, listPeople = listBriaPeople, logger = console
+  db = prisma, conversations, repository, now = () => new Date(), notify = createNotification, listPeople = listBriaPeople, logger = console,
+  whatsapp = alertByWhatsApp
 } = {}) => {
   const chats = conversations || createBriaConversationRepository({ pool: getSidecarPool(), workspace: 'application' });
   const repo = repository || createBriaProactiveRepository({ pool: getSidecarPool() });
@@ -82,6 +85,8 @@ export const createDailyCloseService = ({
       const delivery = await repo.recordDailyCloseDelivery(dayKey, user.id, chat.id);
       try { await notify({ userId: user.id, type: DAILY_CLOSE_NOTIFICATION, message: 'Bria dejó tu cierre del día en el chat.', relatedId: chat.id }); }
       catch (error) { logger.error('[DailyClose] No se pudo avisar a una persona:', error?.message || error); }
+      // El mismo cierre por WhatsApp, a quien vinculó su número y no lo apagó (22 de octubre de 2026).
+      whatsapp({ userId: user.id, ...dailyAlert({ note: 'CIERRE_DIA', dayKey, text }) });
       return { ...delivery, already: false };
     },
 

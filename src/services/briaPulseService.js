@@ -19,6 +19,8 @@ import { clientOperationsService } from './clientOperationsService.js';
 import { createOpenAIClient } from './openAIClient.js';
 import { listBriaPeople } from './weeklyFocusService.js';
 import { getMailboxService } from './mailboxService.js';
+import { alertByWhatsApp } from './whatsappAlertSender.js';
+import { pulseAlert } from '../lib/whatsappAlerts.js';
 
 export const PULSE_CHECK_MS = 5 * 60 * 1000;
 const H = 3_600_000;
@@ -31,7 +33,8 @@ const defaultGenerate = async (request) => {
 
 export const createBriaPulseService = ({
   db = prisma, repository, nudges, load = teamLoadService, operations = clientOperationsService, generate = defaultGenerate,
-  mail = null, now = () => new Date(), listPeople = listBriaPeople, limits = PULSE_LIMITS, logger = console
+  mail = null, now = () => new Date(), listPeople = listBriaPeople, limits = PULSE_LIMITS, logger = console,
+  whatsapp = alertByWhatsApp
 } = {}) => {
   const repo = repository || createBriaProactiveRepository({ pool: getSidecarPool() });
   const people = () => nudges || getBriaNudgeService();
@@ -85,6 +88,8 @@ export const createBriaPulseService = ({
       }
       if (!messages.length) return { saved: [], skipped: 'Bria decidió callar' };
       const saved = await repo.insertMessages(user.id, messages, { expiresAt: end > at ? end : bogotaDayEnd(at), model, usage, createdAt: at });
+      // Lo mismo por WhatsApp (22 de octubre de 2026), con los mismos topes: el pulso ya decidió cuánto decir.
+      for (const message of saved) whatsapp({ userId: user.id, ...pulseAlert(message) });
       return { saved };
     },
 

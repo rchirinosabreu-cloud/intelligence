@@ -151,14 +151,22 @@ const people = [
 ];
 const team = [{ personId: 'm-mel', personName: 'Melissa Castaño', userId: 'u-mel-pm', inProgress: [], pendingCount: 3, lastActivityAt: new Date(tuesday1030.getTime() - 40 * 60_000), dueToday: [] }];
 const modelAnswer = (ids) => JSON.stringify({ speak: true, messages: [{ factIds: ids, title: 'Aristea va en rojo: 2 de 5 publicadas.', body: 'Conviene revisar hoy qué piezas faltan.', ask: 'Ayúdame a revisar Aristea.', urgency: 'alta' }] });
-const build = ({ repository = memoryRepo(), nowIso = '2026-10-13T15:30:00Z', generate, calls = [] } = {}) => ({
+const build = ({ repository = memoryRepo(), nowIso = '2026-10-13T15:30:00Z', generate, calls = [], whatsapp = () => {} } = {}) => ({
   repository, calls,
   service: createBriaPulseService({
     db: { contentItem: { findMany: async () => [] }, task: { findMany: async () => [] } },
     repository, nudges: { readPeople: async () => team }, load: { get: async () => load }, operations: { listOperations: async () => operations },
     generate: generate || (async (request) => { calls.push(request); return { text: modelAnswer(['OPERACION_ROJA:aristea']), model: 'gpt-test', usage: { input_tokens: 5 } }; }),
-    now: () => new Date(nowIso), listPeople: async () => people, logger: { error: () => {}, log: () => {} }
+    now: () => new Date(nowIso), listPeople: async () => people, logger: { error: () => {}, log: () => {} }, whatsapp
   })
+});
+
+test('lo que Bria dice en el pulso sale también por WhatsApp, con lo que se le puede pedir y «Ocultar por hoy»', async () => {
+  const sent = [];
+  await build({ whatsapp: (alert) => sent.push(alert) }).service.run();
+  assert.deepEqual(sent.map((alert) => [alert.userId, alert.kind, alert.sourceRef]), [['u-kam', 'PULSE', 'pulse:msg-1'], ['u-mel-pm', 'PULSE', 'pulse:msg-2']]);
+  assert.match(sent[0].text, /^\*Aristea va en rojo: 2 de 5 publicadas\.\*/);
+  assert.deepEqual(sent[0].buttons.map((button) => button.label), ['Pedirle a Bria qué falta', 'Ocultar por hoy']);
 });
 
 test('each 15-minute slot runs once: facts are read once, the model is asked per person, and what Bria said is stored with its source and actions', async () => {

@@ -8,10 +8,12 @@ import { useAuth } from '@/context/AuthContext';
 import { useConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { cn } from '@/lib/utils';
 import { primaryButtonClass, secondaryButtonClass, ErrorNote } from '@/components/security/MfaEnrollment';
+import { ALERT_KIND_LABELS } from '@/lib/whatsappAlertKinds';
 
 // Bria en WhatsApp (Rodny, 20 de octubre de 2026): la persona vincula su número desde aquí, con su sesión. La
 // plataforma le da un código de seis dígitos y ella se lo manda a Bria por WhatsApp: Bria nunca escribe primero.
-// Mientras el código vive, la tarjeta pregunta cada pocos segundos si ya quedó vinculado.
+// Mientras el código vive, la tarjeta pregunta cada pocos segundos si ya quedó vinculado. Vinculado, la persona
+// elige qué avisos le llegan por ahí (22 de octubre de 2026): vienen encendidos y cada quien apaga los suyos.
 
 const POLL_MS = 4000;
 const formatDate = (value) => (value ? new Date(value).toLocaleDateString('es-CO', { timeZone: 'America/Bogota', day: 'numeric', month: 'long', year: 'numeric' }) : '');
@@ -29,6 +31,7 @@ const WhatsAppLink = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [copied, setCopied] = useState(false);
+  const [savingAlert, setSavingAlert] = useState(null);
   const copiedTimer = useRef(null);
 
   const load = useCallback(async () => {
@@ -67,6 +70,16 @@ const WhatsAppLink = () => {
     catch { setError('No se pudo copiar. Escríbelo a mano.'); }
   };
 
+  // El interruptor cambia con lo que responde el servidor, nunca con el clic.
+  const toggleAlert = async (kind, on) => {
+    setSavingAlert(kind); setError('');
+    try {
+      const saved = await api('/alerts', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind, on }) });
+      setStatus((current) => ({ ...current, alerts: current.alerts.map((row) => (row.kind === saved.kind ? { ...row, on: saved.on } : row)) }));
+    } catch (failure) { console.error('[WhatsApp] No se pudo cambiar el aviso:', failure.message); setError(failure.message); }
+    finally { setSavingAlert(null); }
+  };
+
   const unlink = async () => {
     if (!(await confirm({ title: 'Desvincular tu WhatsApp', description: `Bria dejará de responderte ${status.phone ? `en el ${status.phone}` : 'por WhatsApp'}. Puedes volver a vincularlo cuando quieras.`, confirmLabel: 'Desvincular' }))) return;
     setLoading(true); setError('');
@@ -101,6 +114,35 @@ const WhatsAppLink = () => {
               {status.phone ? <>Vinculado al <strong>{status.phone}</strong></> : 'Tu WhatsApp quedó vinculado'} desde el {formatDate(status.linkedAt)}. Guarda el número de Bria: <strong>{status.numberDisplay}</strong>.
             </div>
             <p className="text-sm text-zinc-600 dark:text-zinc-300">Lo que hablen por WhatsApp queda en tu historial de Bria, con tus mismos permisos. Las contraseñas de la bóveda nunca salen por ahí.</p>
+            {status.alerts?.length > 0 && (
+              <div data-whatsapp-alerts className="space-y-3 border-t border-zinc-100 pt-4 dark:border-zinc-800">
+                <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Avisos que te llegan por aquí</p>
+                {status.alerts.map(({ kind, on }) => {
+                  const info = ALERT_KIND_LABELS[kind];
+                  if (!info) return null;
+                  return (
+                    <div key={kind} className="flex items-start justify-between gap-4">
+                      <div className="min-w-0">
+                        <p className="text-sm text-zinc-800 dark:text-zinc-200">{info.label}</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">{info.hint}</p>
+                      </div>
+                      <button
+                        type="button"
+                        role="switch"
+                        aria-checked={on}
+                        aria-label={info.label}
+                        disabled={savingAlert === kind}
+                        onClick={() => toggleAlert(kind, !on)}
+                        className={cn('relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-60', on ? 'bg-primary' : 'bg-zinc-300 dark:bg-zinc-600')}
+                      >
+                        <span className={cn('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-all', on ? 'left-[1.375rem]' : 'left-0.5')} />
+                      </button>
+                    </div>
+                  );
+                })}
+                <p className="text-xs text-zinc-500 dark:text-zinc-400">Si llevas un día sin escribirle a Bria, te llega un aviso corto con «Ver aviso»; al tocarlo te lo muestra completo.</p>
+              </div>
+            )}
             <button type="button" onClick={unlink} disabled={loading} className={cn(secondaryButtonClass, 'text-destructive hover:bg-destructive/10 dark:text-destructive')}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null} Desvincular
             </button>
