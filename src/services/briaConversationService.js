@@ -113,15 +113,20 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         };
         const closeAction = (action, status) => ({ ...action, status, ...(action.draft ? { draft: { ...action.draft, status } } : {}) });
         const prepared_ = action => ({ ...actionReply(action), sources: [], failures: [], toolsUsed: [LEGACY_TOOL[action.type] || `accion:${action.type}`], pendingAction: action });
+        // Un sí o un no dicho con naturalidad («dale, así está bien») solo cuenta si lo último que dijo Bria es el
+        // resumen de esta acción. Un borrador de pendiente sobrevive a preguntas sueltas, y un «ok, gracias» varios
+        // mensajes después no puede crear nada.
+        const lastAssistant = [...chat.turns].reverse().find(turn => turn.role === 'assistant');
+        const naturalReply = actionState === 'READY' && open(pendingAction) && Boolean(lastAssistant) && String(lastAssistant.text || '').trim() === String(actionReply(pendingAction).answer || '').trim();
         let result;
-        if (pendingAction && cancelsAction(pendingAction, text) && open(pendingAction)) {
+        if (pendingAction && cancelsAction(pendingAction, text, { natural: naturalReply }) && open(pendingAction)) {
           await revalidateAction();
           const cancelled = closeAction(pendingAction, 'CANCELLED');
           result = { ...actionReply(cancelled), sources: [], failures: [], toolsUsed: [], pendingAction: cancelled };
         } else if (actionState === 'DONE' && confirmsAction(pendingAction, text)) {
           await revalidateAction();
           result = { answer: alreadyDoneReply(pendingAction), sources: pendingAction.type === 'TASK_CREATE' && pendingAction.draft?.taskId ? [{ kind: 'tarea', id: pendingAction.draft.taskId }] : [], failures: [], pendingAction };
-        } else if (actionState === 'READY' && confirmsAction(pendingAction, text) && !files.length) {
+        } else if (actionState === 'READY' && confirmsAction(pendingAction, text, { natural: naturalReply }) && !files.length) {
           await revalidateAction();
           // La escritura corre dentro de append, después del bloqueo de la conversación y de comprobar su revisión.
           result = async () => {

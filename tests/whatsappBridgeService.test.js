@@ -114,7 +114,7 @@ test('un vínculo vivo manda el mensaje al motor de Bria con la identidad de la 
   const call = conversations.calls[0];
   assert.deepEqual([call.user.userId, call.user.role, call.user.sessionVersion, call.session, call.question], ['u-camila', 'PROJECT_MANAGER', 3, null, '¿Qué tengo hoy?']);
   assert.equal(repository.links.get('u-camila').conversationId, call.id, 'la conversación de WhatsApp se recuerda para seguirla');
-  assert.deepEqual(sent.map((row) => row.body.status || row.body.text.body), ['read', 'Hoy tienes *dos* pendientes.\n\nPuedes responder: «Crear pendiente» o «Cancelar pendiente».']);
+  assert.deepEqual(sent.map((row) => row.body.status || row.body.text.body), ['read', 'Hoy tienes *dos* pendientes.\n\nRespóndeme con un sí, o dime qué cambiar.']);
   // El siguiente mensaje sigue en la misma conversación.
   await service.processMessage({ messageId: 'm2', from: '573001234567', profileName: 'Camila', type: 'text', text: 'Crear pendiente' });
   assert.equal(conversations.calls[1].id, call.id);

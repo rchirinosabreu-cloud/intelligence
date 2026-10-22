@@ -211,6 +211,9 @@ export const answerForWhatsApp = (turn) => {
   if (!text) return REPLIES.failed;
   const options = (turn.quickReplies || []).map((option) => String(option || '').trim()).filter(Boolean);
   if (!options.length) return text;
+  // Un resumen que se confirma o se cancela: desde el 22 de octubre de 2026 Bria entiende el sí y el no dichos como
+  // sea («dale, bórralo», «mejor no»), así que no se le pide a nadie que copie una frase.
+  if (options.length === 2 && /^(?:cancelar|no\b)/i.test(options[1])) return `${text}\n\nRespóndeme con un sí, o dime qué cambiar.`;
   const list = options.length === 1 ? `«${options[0]}»` : `${options.slice(0, -1).map((option) => `«${option}»`).join(', ')} o «${options.at(-1)}»`;
   return `${text}\n\nPuedes responder: ${list}.`;
 };
