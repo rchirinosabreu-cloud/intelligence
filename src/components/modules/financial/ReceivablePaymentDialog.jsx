@@ -10,6 +10,7 @@ import { format } from 'date-fns';
 import { brainDatePickerProps } from '@/lib/brainDatePicker';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { isLoanReceivable } from '@/lib/receivableLoans';
 
 const field = 'min-h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 disabled:opacity-70 dark:border-white/10 dark:bg-zinc-950 dark:text-white';
 const money = value => Number(value).toLocaleString('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 2 });
@@ -18,6 +19,10 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
   const [fileProblem, setFileProblem] = useState('');
   const fileInput = useRef(null);
   const existing = form.source === 'EXISTING';
+  // La devolución de un préstamo es reintegro (Rodny, 20 de octubre de 2026): no se pide
+  // concepto, siempre es Préstamo, y no cuenta como venta.
+  const loan = isLoanReceivable(debt);
+  const usd = debt?.currency === 'USD';
   const { data, isLoading, error: candidatesError } = useQuery({
     queryKey: ['financial-payment-candidates', debt?.clientId, page],
     enabled: !!debt?.clientId && existing,
@@ -31,9 +36,9 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
     setForm(current => record ? { ...current, financialRecordId: id, amount: String(record.amount), paidAt: record.date.slice(0, 10), accountId: record.accountId, category: record.category, reference: record.reference || '' } : { ...current, financialRecordId: '' });
   };
   return <Dialog open={!!debt} onOpenChange={open => !open && !saving && onClose()}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg dark:bg-zinc-900">
-    <DialogHeader><DialogTitle>Registrar pago</DialogTitle><DialogDescription>{debt?.clientName} · saldo pendiente {money(debt?.outstanding || 0)}</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>{loan ? 'Registrar reintegro' : 'Registrar pago'}</DialogTitle><DialogDescription>{debt?.clientName} · {loan ? 'préstamo pendiente' : 'saldo pendiente'} {money(debt?.outstanding || 0)}{loan ? '. Entra como reintegro del préstamo, no como venta.' : ''}</DialogDescription></DialogHeader>
     <form onSubmit={onSubmit} className="space-y-4"><fieldset disabled={saving} className="space-y-4">
-      <label className="block space-y-1.5 text-sm">Origen del pago<Select className={field} value={form.source || 'NEW'} onChange={event => { setPage(1); setForm(current => ({ ...current, source: event.target.value, financialRecordId: '', category: '', amount: '', accountId: '', reference: '' })); }}><option value="NEW">Registrar un ingreso nuevo</option><option value="EXISTING" disabled={!debt?.clientId}>Ingreso ya registrado</option></Select></label>
+      {!loan && <label className="block space-y-1.5 text-sm">Origen del pago<Select className={field} value={form.source || 'NEW'} onChange={event => { setPage(1); setForm(current => ({ ...current, source: event.target.value, financialRecordId: '', category: '', amount: '', accountId: '', reference: '' })); }}><option value="NEW">Registrar un ingreso nuevo</option><option value="EXISTING" disabled={!debt?.clientId}>Ingreso ya registrado</option></Select></label>}
       {existing && <div className="space-y-3">
         <p className="text-sm text-zinc-600 dark:text-zinc-300">No se creará otro ingreso. Se aplicará el importe completo del movimiento seleccionado a esta cuenta por cobrar.</p>
         {candidatesError ? <p role="alert" className="text-sm text-destructive">No fue posible consultar los ingresos registrados.</p> : <>
@@ -42,11 +47,17 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
           {(data?.total || 0) > 20 && <div className="flex items-center justify-between text-sm"><button type="button" className="min-h-11 px-2 disabled:opacity-40" disabled={page === 1} onClick={() => { selectRecord(''); setPage(value => value - 1); }}>Anterior</button><span>Página {page} de {Math.ceil(data.total / 20)}</span><button type="button" className="min-h-11 px-2 disabled:opacity-40" disabled={page * 20 >= data.total} onClick={() => { selectRecord(''); setPage(value => value + 1); }}>Siguiente</button></div>}
         </>}
       </div>}
-      <label className="block space-y-1.5 text-sm">Concepto del ingreso<Select required disabled={existing} className={field} value={form.category || ''} onChange={event => setForm(current => ({ ...current, category: event.target.value }))}><option value="">Seleccionar concepto…</option><option value="MEMBRESIA">Membresía / fee</option><option value="SERVICIO">Servicio / adicional</option><option value="PAUTA">Pauta</option></Select></label>
+      {!loan && <label className="block space-y-1.5 text-sm">Concepto del ingreso<Select required disabled={existing} className={field} value={form.category || ''} onChange={event => setForm(current => ({ ...current, category: event.target.value }))}><option value="">Seleccionar concepto…</option><option value="MEMBRESIA">Membresía / fee</option><option value="SERVICIO">Servicio / adicional</option><option value="PAUTA">Pauta</option></Select></label>}
       {/* El financiero se lleva en pesos (Rodny, 30 de septiembre de 2026): de una cuenta en
           dólares se registra lo que entró en pesos. */}
-      {debt?.currency === 'USD' && <p data-receivable-payment-usd className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-white/5 dark:text-zinc-300">Esta cuenta de cobro está en dólares. Registra los pesos que entraron a la cuenta. Si entró menos que el valor en pesos de la cartera, ajústalo con el lápiz junto a «Valor original».</p>}
-      <label className="block space-y-1.5 text-sm">Valor{debt?.currency === 'USD' ? ' en pesos' : ''}<MoneyInput required readOnly={existing} className={field} min="0.01" max={debt?.outstanding} value={form.amount} onChange={amount => setForm(current => ({ ...current, amount }))} /></label>
+      {/* Foobspain, 19 de octubre de 2026: el depósito llega con la tasa del día y no cabía en el
+          valor en pesos de la cartera. En dólares el campo no tiene tope: si entró más, la cartera
+          se ajusta sola a lo que entró; si entró menos y la cuenta queda al día, se marca. */}
+      {usd && <p data-receivable-payment-usd className="rounded-lg bg-zinc-50 px-3 py-2 text-xs text-zinc-600 dark:bg-white/5 dark:text-zinc-300">Esta cuenta de cobro está en dólares. Registra los pesos que entraron a la cuenta. Si entró más que el valor en pesos de la cartera ({money(debt?.outstanding || 0)} pendientes), la cartera se ajusta sola a lo que entró.</p>}
+      <label className="block space-y-1.5 text-sm">Valor{usd ? ' en pesos' : ''}<MoneyInput required readOnly={existing} className={field} min="0.01" max={usd ? undefined : debt?.outstanding} value={form.amount} onChange={amount => setForm(current => ({ ...current, amount }))} /></label>
+      {usd && Number(form.amount) > 0 && Number(form.amount) < Number(debt?.outstanding || 0) - 0.005 && (
+        <label className="flex items-start gap-2 text-sm"><input type="checkbox" className="mt-1 h-4 w-4" checked={Boolean(form.settlesInFull)} onChange={event => setForm(current => ({ ...current, settlesInFull: event.target.checked }))} /><span>Con este pago la cuenta queda al día: la diferencia de {money(Number(debt?.outstanding || 0) - Number(form.amount))} es por la tasa del día, no un saldo pendiente.</span></label>
+      )}
       <div className="grid gap-4 sm:grid-cols-2"><label className="flex min-w-0 flex-col gap-1.5 text-sm">Fecha<DatePicker {...brainDatePickerProps} required disabled={existing} wrapperClassName="block w-full" className={field} selected={form.paidAt ? new Date(`${form.paidAt}T12:00:00`) : null} dateFormat="dd/MM/yyyy" onChange={date => setForm(current => ({ ...current, paidAt: date ? format(date, 'yyyy-MM-dd') : '' }))}/></label><label className="flex min-w-0 flex-col gap-1.5 text-sm">Cuenta<Select required disabled={existing} className={field} value={form.accountId} onChange={event => setForm(current => ({ ...current, accountId: event.target.value }))}><option value="">Seleccionar…</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</Select></label></div>
       <label className="block space-y-1.5 text-sm">Referencia<input readOnly={existing} className={field} value={form.reference} onChange={event => setForm(current => ({ ...current, reference: event.target.value }))}/></label>
       <label className="block space-y-1.5 text-sm">Notas<textarea className={field} rows={2} value={form.notes} onChange={event => setForm(current => ({ ...current, notes: event.target.value }))}/></label>
@@ -63,7 +74,7 @@ export default function ReceivablePaymentDialog({ debt, form, setForm, accounts,
         {fileProblem && <p role="alert" className="text-xs text-destructive brain-destructive-text">{fileProblem}</p>}
       </div>
       {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
-      <DialogFooter><button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose}>Cancelar</button><button type="submit" disabled={saving || (existing && !form.financialRecordId)} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Guardando…' : 'Guardar pago'}</button></DialogFooter>
+      <DialogFooter><button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose}>Cancelar</button><button type="submit" disabled={saving || (existing && !form.financialRecordId)} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Guardando…' : loan ? 'Guardar reintegro' : 'Guardar pago'}</button></DialogFooter>
     </fieldset></form>
   </DialogContent></Dialog>;
 }

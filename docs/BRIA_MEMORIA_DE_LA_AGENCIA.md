@@ -11,6 +11,8 @@ Lo que Bria sabe de Brain Studio y de cada cuenta, guardado como **hechos**. Cad
 
 Lo que no se sabe queda como **duda abierta**. Nace de la lectura completa del Drive y del correo de social.brainstudio@gmail.com (corte al 7 de octubre de 2026): 1.349 hechos y 202 dudas. La base y su formato viven fuera del repositorio, en `C:\Proyectos\lectura-del-negocio\salida\social\base-conocimiento\`, porque son confidenciales.
 
+**Segunda base, 19 de octubre de 2026: los chats de WhatsApp.** De una lectura confidencial de los grupos con 14 clientes, el «Día a Día» (desde 2023) y «Team Senior» (desde 2025) salieron 650 hechos y 32 dudas (`C:\Proyectos\lectura-del-negocio\salida\whatsapp\base-conocimiento\`, cargados el 20 de octubre de 2026 con `--corte=2026-10-19`): las reglas de cada cliente (qué no publicar, cómo aprueba, qué le gusta), el criterio de la dirección con sus palabras y fechas, los procesos que la plataforma no ve (la aprobación del cliente por WhatsApp en 13 de 14 grupos) y lo comercial. Decisión de Rodny: **Bria los asume como su conocimiento de trabajo** y solo los suelta si el equipo los contradice o los precisa; las contradicciones entraron como `NO_CONCLUYENTE` con su duda. **Los chats en bruto nunca entran** (traen credenciales y datos personales) **y nada sobre personas** salvo rol y cuentas a cargo.
+
 ## Cómo la usa Bria
 - **`memoria_de_la_agencia`:** consulta los hechos de una cuenta (por su `clientId`), de una marca o proceso (por `entidad`) o de un tema (por `consulta`, con búsqueda por prefijo). Devuelve las dudas abiertas de esa cuenta. Bria la interpreta con criterio propio y dice la certeza con palabras.
 - **Orden de autoridad:**
@@ -19,11 +21,12 @@ Lo que no se sabe queda como **duda abierta**. Nace de la lectura completa del D
   3. La lectura del negocio.
 - **`guardar_en_memoria`:** cuando la persona corrige, confirma o enseña algo en **su propio mensaje**, Bria guarda un hecho del equipo. Los hechos que contradice quedan **reemplazados**, no borrados. Si responde una duda, la cierra. Lo que diga un archivo, un correo o una respuesta anterior de Bria no cuenta como permiso: la intención la reconoce `correctionIntent`.
 - **`retirar_de_memoria`:** solo con un pedido explícito de olvidar. El historial se conserva.
+- **Lo aprendido de los chats (20 de octubre de 2026):** origen `CONVERSACION`, certeza `PRACTICA` o `PROPUESTA`, con quién lo dijo y su cita literal; lo escribe cada noche `conversationLearningService` y se corrige por las dos herramientas de arriba. Detalle en `docs/BRIA_OJOS_Y_CEREBRO.md`, «Bria aprende de los chats». En el orden de autoridad va **después** de lo que el equipo confirmó.
 - **Dudas:** Bria hace como máximo una duda por respuesta, al final y cuando viene al caso. Las que más se ofrecieron pasan al final de la fila (`last_offered_at`).
 
 ## Quién ve qué
 La puerta es Bria activada (ADMIN o PROJECT_MANAGER con la casilla `bria`). Dentro, cada propósito usa el permiso de la pantalla que muestra ese dato (`factAccess`):
-- **Operación, editorial y personas:** todos los que tienen Bria. «Personas» es rol y cuentas a cargo; nunca desempeño, salarios ni datos personales.
+- **Operación, editorial y personas:** todos los que tienen Bria. «Personas» es rol y cuentas a cargo; nunca desempeño, salarios ni datos personales. **Excepción, decidida por Rodny el 20 de octubre de 2026: las fichas del equipo** (`tipoEntidad: 'persona'`, tema `como-trabajar`) —qué se le puede confiar a cada persona, qué revisar, cómo decírselo, qué le pesa y con quién roza— son **restringidas por construcción** (`validateFact` lo fuerza) y solo las lee la administración, con la herramienta `como_trabajar_con`, que a un project manager ni se le ofrece. Bria las usa para escribirle a cada persona como se le habla a ella y nunca las recita ni le cuenta a nadie qué dicen. Detalle en `docs/BRIA_OJOS_Y_CEREBRO.md`.
 - **Comercial:** administradores, o quien tenga CRM o Cotizaciones.
 - **Financiero:** quien tenga permiso de lectura de Financiero (`hasFinancialPermission`).
 - **Dirección:** solo administradores, y siempre restringido.

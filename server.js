@@ -20,6 +20,8 @@ import { initWeeklyReadingScheduler } from './src/services/weeklyReadingService.
 import { initWeeklyFocusScheduler } from './src/services/weeklyFocusService.js';
 import { initBriaPulseScheduler } from './src/services/briaPulseService.js';
 import { initDailyCloseScheduler } from './src/services/dailyCloseService.js';
+import { initDailyReadingScheduler } from './src/services/dailyReadingService.js';
+import { initConversationLearningScheduler } from './src/services/conversationLearningService.js';
 import { getAIHealth } from './src/services/aiService.js';
 import { configureS3Cors } from './src/services/s3Service.js';
 import { loggerMiddleware } from './src/middlewares/logger.js';
@@ -82,12 +84,12 @@ app.use('/api/fireflies', aiRateLimiter);
 app.use('/api', apiRateLimiter);
 
 // --- BODY PARSING ---
-// The Fireflies signature covers the exact bytes they sent, so that one route
-// keeps its raw body. Every other request parses as before.
+// The Fireflies and Meta (WhatsApp) signatures cover the exact bytes they sent,
+// so those two routes keep their raw body. Every other request parses as before.
 app.use(express.json({
   limit: '5mb',
   verify: (req, _res, buffer) => {
-    if (req.originalUrl?.startsWith('/api/minutes/fireflies/webhook')) req.rawBody = buffer;
+    if (req.originalUrl?.startsWith('/api/minutes/fireflies/webhook') || req.originalUrl?.startsWith('/api/whatsapp/webhook')) req.rawBody = buffer;
   }
 }));
 app.use(express.urlencoded({ limit: '5mb', extended: true }));
@@ -219,6 +221,8 @@ async function bootstrap() {
         initWeeklyFocusScheduler();
         initBriaPulseScheduler();
         initDailyCloseScheduler();
+        initDailyReadingScheduler();
+        initConversationLearningScheduler();
         startTaskAttachmentRetention();
         startTempUploadSweep();
         console.log("[Service: Cron] Tareas en segundo plano inicializadas.");
@@ -233,6 +237,10 @@ async function bootstrap() {
     // Resume durable file deletion even when nobody opens Bria after a restart.
     const { getApplicationConversationService } = await import('./src/services/briaConversationApplication.js');
     getApplicationConversationService();
+    // Bria en WhatsApp (20 de octubre de 2026): el puente usa ese mismo motor; sin él, el webhook responde que
+    // Bria todavía no está lista en vez de perder el mensaje en silencio.
+    const { connectWhatsAppBridge } = await import('./src/services/whatsappBridgeService.js');
+    await connectWhatsAppBridge();
 
     // 5. Start Express Server
     const PORT = process.env.PORT || 3000;

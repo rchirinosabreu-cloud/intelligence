@@ -94,11 +94,11 @@ export const approvePublicItem = async (req, res) => {
   try {
     const authorizedItem = await getAuthorizedPublicItem(req.params.token, req.params.id);
     if (!authorizedItem) return res.status(404).json({ error: 'Pieza no encontrada' });
-    const item = await updateContentItem(req.params.id, { status: 'APROBADO' });
+    const item = await updateContentItem(req.params.id, { status: 'APROBADO' }, { fromClientReview: true });
     return res.json(item);
   } catch (error) {
-    console.error('[API] Public approval error:', error);
-    return res.status(500).json({ error: 'Failed to approve item' });
+    console.error('[API] Public approval error:', error.response?.data || error);
+    return res.status(error.status || 500).json({ error: error.status ? error.message : 'No se pudo aprobar la pieza' });
   }
 };
 
@@ -118,8 +118,8 @@ export const commentPublicItem = async (req, res) => {
     const updatedItem = await addClientComment(req.params.id, normalizedComment);
     return res.json(updatedItem);
   } catch (error) {
-    console.error('[API] Public comment error:', error);
-    return res.status(500).json({ error: 'Failed to add comment' });
+    console.error('[API] Public comment error:', error.response?.data || error);
+    return res.status(error.status || 500).json({ error: error.status ? error.message : 'No se pudo enviar el comentario' });
   }
 };
 

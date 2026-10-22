@@ -6,6 +6,9 @@ import { randomUUID } from 'node:crypto';
 import { createServer } from 'vite';
 import { createBriaConversationRouter } from '../src/routes/api/briaConversations.js';
 import { requestNudge, answerNudge, decisionMessage } from '../src/lib/vaultAccessRequests.js';
+import { permissionRequestNudge, permissionAnswerNudge, permissionDecisionMessage } from '../src/lib/modulePermissionRequests.js';
+import { readSignals } from '../src/lib/agencySnapshot.js';
+import { validateDailyReading, composeReading, buildMorningBrief } from '../src/lib/dailyReading.js';
 
 // Muestra local de «Preguntarle a Bria» (6 de octubre de 2026): el componente real contra una API
 // simulada que responde según la pregunta. No hay dotenv, ni base de datos, ni llamada a OpenAI.
@@ -46,6 +49,42 @@ const ANSWERS = [
     sources: []
   }
 ];
+
+// La lectura de la mañana con el código real: diez días de fotos ficticias, sus señales y una lectura como la del modelo.
+function morningPreview() {
+  const today = '2026-10-20';
+  const day = (back) => new Date(Date.parse(`${today}T12:00:00Z`) - back * 86_400_000).toISOString().slice(0, 10);
+  const client = (level, over = {}) => ({ level, reasons: [], contract: 'ACTIVO', cycle: null, awaitingApproval: 0, returnedPieces: 0, openTasks: 4, overdueTasks: 0, returnedTasks: 0, closedTasks: 1, hoursMs: 2 * 3_600_000, ...over });
+  const person = (over = {}) => ({ open: 9, inProgress: 1, overdue: 0, returned: 0, closedTasks: 2, hoursMs: 6 * 3_600_000, ...over });
+  const history = Array.from({ length: 10 }, (_, i) => 10 - i).map((back) => ({
+    day: day(back),
+    clients: { aristea: client('red'), foobespain: client('yellow', { awaitingApproval: back <= 7 ? 4 : 0 }), endova: client('green'), nube: client('yellow') },
+    people: { melissa: person({ overdue: back <= 4 ? 2 : 0 }), brayan: person({ open: 10 }), helen: person() }
+  }));
+  const current = {
+    clients: [
+      { id: 'aristea', name: 'Aristea', slug: 'aristea', metrics: client('red', { reasons: ['Van 3 publicadas; a esta fecha deberían ir 6.'], cycle: { label: 'Octubre', quota: 12, created: 12, published: 3, approved: 5, overdueItems: 0, expected: 6, day: 20, length: 31 } }) },
+      { id: 'foobespain', name: 'Foobespain', slug: 'foobespain', metrics: client('yellow', { awaitingApproval: 4, reasons: ['Octubre: 10 de 12 piezas creadas, faltan 2.'] }) },
+      { id: 'endova', name: 'Endova', slug: 'endova', metrics: client('yellow', { reasons: ['5 días entre publicaciones (del 21 oct al 26 oct).'] }) },
+      { id: 'nube', name: 'Nube Azul', slug: 'nube-azul', metrics: client('green') }
+    ],
+    people: [{ id: 'melissa', name: 'Melissa Castaño', metrics: person({ overdue: 3 }) }, { id: 'brayan', name: 'Brayan Torres', metrics: person({ open: 17 }) }, { id: 'helen', name: 'Helen Ruiz', metrics: person() }]
+  };
+  const { baseDay, signals, summary } = readSignals({ today, current, history });
+  const model = validateDailyReading({
+    resumen: 'La semana arranca con Aristea en rojo hace once días y Foobespain detenida esperando aprobaciones. El equipo está estable, salvo Melissa, que acumula vencidas.',
+    decisiones: [
+      { titulo: 'Destrabar las aprobaciones de Foobespain', porque: 'Cuatro piezas llevan una semana sin respuesta y dos salen esta semana; sin aprobación, el mes se atrasa igual que el de Aristea.', tipo: 'HACER', evidencia: ['APROBACION_DETENIDA:foobespain'], pedido: 'Redáctame un mensaje por WhatsApp para Foobespain para que apruebe lo pendiente, con el enlace del portal.' },
+      { titulo: 'Recuperar el ritmo de Aristea esta semana', porque: 'Lleva once días en rojo y va tres piezas por debajo de lo esperado; con lo que queda del mes todavía se alcanza si se publican dos esta semana.', tipo: 'HACER', evidencia: ['ROJO_SOSTENIDO:aristea'], pedido: '¿Qué le falta a Aristea para salir del rojo en Operación este mes?' },
+      { titulo: 'Mirar el hueco de publicaciones de Endova', porque: 'Pasó a amarillo hoy por cinco días sin publicar; es fácil de corregir moviendo una pieza.', tipo: 'VIGILAR', evidencia: ['CUENTA_EMPEORO:endova'], pedido: 'Revisa la parrilla de octubre de Endova y propón qué pieza mover para cerrar el hueco.' },
+      { titulo: 'No cargarle más trabajo a Melissa esta semana', porque: 'Lleva cinco días con vencidas; sumarle algo nuevo alargaría el atraso. Brayan tiene más abiertas que de costumbre, así que tampoco es el relevo.', tipo: 'NO_HACER', evidencia: ['VENCIDAS_SOSTENIDAS:melissa', 'CARGA_INUSUAL:brayan'], pedido: null }
+    ],
+    cuentas: []
+  }, { signals, clients: current.clients, day: today });
+  const reading = composeReading({ day: today, baseDay, summary, signals, clients: current.clients, model });
+  const { title, text } = buildMorningBrief({ recipientName: 'Rodny Chirinos', reading, scope: { clientIds: null, people: true } });
+  return { title, turns: [{ id: 'da11e000-0000-4000-8000-000000000003:1', role: 'assistant', text, sources: [], failures: [] }] };
+}
 
 const DEFAULT_ANSWER = { answer: 'No tengo esa información en la plataforma. Puedo contarte de tus tareas, de un cliente, de su parrilla o de lo que sale en redes.', sources: [] };
 
@@ -101,6 +140,11 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
   // El cierre del día (14 de octubre de 2026): a las 5, Bria deja en un chat lo que cerró cada persona, lo que queda, lo de mañana y cómo terminaron los avisos.
   const closeChat = { id: 'c1e44e00-0000-4000-8000-000000000002', title: 'Cierre del día · martes 13 de octubre', revision: 1, updatedAt: new Date().toISOString(), turns: [{ id: 'c1e44e00-0000-4000-8000-000000000002:1', role: 'assistant', text: 'Hola, Kamila. Así cierra el martes 13 de octubre.\n\n**Tu día**\n\nCerraste 2 tareas:\n\n- [Portada de octubre](/gestion?taskId=t5) · Aristea\n- [Informe mensual](/gestion?taskId=t6)\n\nQueda en proceso 1:\n\n- [Reel de lanzamiento](/gestion?taskId=t2) · Endova\n\n**Mañana, miércoles 14 de octubre**\n\nTe vence 1:\n\n- [Carrusel de vendimia](/gestion?taskId=t7) · Foobespain\n\n**El equipo**\n\n- Hoy se cerraron 7 tareas: Melissa 4, Brayan 2 y Helen 1.\n- Al cierre quedan 3 en proceso.\n- Mañana vencen 3 tareas que todavía no están en proceso: Melissa «Historias de Endova» y «Post de Aristea»; Brayan «Video de Nattal».\n- Vencidas abiertas en el equipo: 2.\n\n**Lo que te avisé hoy**\n\n- Melissa no tiene una tarea en proceso desde las 9:55. → Melissa arrancó «Reel de lanzamiento» a las 10:40.\n- Aristea va en rojo: 2 de 5 piezas publicadas a esta fecha. → Al cierre seguía igual.\n\nMañana seguimos.', sources: [], failures: [] }] };
   chats.set(closeChat.id, closeChat);
+  // La lectura de la mañana (19 de octubre de 2026), armada con el mismo código que en producción y datos ficticios.
+  // `?lectura` muestra su aviso encima de la mascota.
+  const morningChat = { id: 'da11e000-0000-4000-8000-000000000003', ...morningPreview(), revision: 1, updatedAt: new Date().toISOString() };
+  chats.set(morningChat.id, morningChat);
+  const morningNudge = { key: 'LECTURA_DIA:2026-10-20', kind: 'LECTURA_DIA', title: 'Bria dejó tu lectura de la mañana.', body: 'Cómo amanecieron las cuentas y el equipo, lo que haría hoy y lo que no haría.', url: null, conversationId: morningChat.id, taskIds: [], actions: [{ label: 'Leer en Bria', conversationId: morningChat.id }] };
   let nudges = [
     { key: 'CIERRE_DIA:2026-10-13', kind: 'CIERRE_DIA', title: 'Bria dejó tu cierre del día.', body: 'Lo que cerraste, lo que queda en proceso, lo que vence mañana y cómo terminaron los avisos de hoy.', url: null, conversationId: closeChat.id, taskIds: [], actions: [{ label: 'Leer en Bria', conversationId: closeChat.id }] },
     { key: 'FOCO_SEMANAL:2026-W42', kind: 'FOCO_SEMANAL', title: 'Bria dejó tu foco de la semana.', body: 'Lo que vence, lo que está en proceso y cómo viene el equipo, en un solo lugar.', url: null, conversationId: focusChat.id, taskIds: [], actions: [{ label: 'Leer en Bria', conversationId: focusChat.id }] },
@@ -123,10 +167,25 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
     accessDecided = { ...accessRequest, status: req.body?.decision === 'APPROVE' ? 'APPROVED' : 'DENIED', decidedByName: 'Rodny Chirinos' };
     res.json({ decided: true, request: accessDecided, message: decisionMessage(accessDecided) });
   });
+  // Pedir acceso a un módulo (15 de octubre de 2026): `?permiso=admin` muestra el pedido de Camila con «Dar acceso» y
+  // «Denegar»; `?permiso=concedido` y `?permiso=denegado`, la respuesta que le llega a ella.
+  const permissionRequest = { id: '5d1e2f30-0000-4000-8000-000000000009', status: 'PENDING', moduleKey: 'financiero', requesterRef: 'u-camila', requesterName: 'Camila del Toro', note: 'ver cuánto debe Aristea', createdAt: new Date(Date.now() - 3 * 60_000).toISOString() };
+  let permissionDecided = null;
+  const permissionNudges = (referer) => {
+    const mode = /permiso=(\w+)/.exec(referer)?.[1];
+    if (mode === 'admin') return permissionDecided ? [] : [permissionRequestNudge(permissionRequest)];
+    if (mode === 'concedido' || mode === 'denegado') return [permissionAnswerNudge({ ...permissionRequest, status: mode === 'concedido' ? 'APPROVED' : 'DENIED', decidedByName: 'Rodny Chirinos' })];
+    return null;
+  };
+  api.post('/api/bria/nudges/permission-requests/:id/decision', async (req, res) => {
+    await wait(300);
+    permissionDecided = { ...permissionRequest, status: req.body?.decision === 'APPROVE' ? 'APPROVED' : 'DENIED', decidedByName: 'Rodny Chirinos' };
+    res.json({ decided: true, request: permissionDecided, message: permissionDecisionMessage(permissionDecided) });
+  });
   // `?sinavisos` en la página deja a Bria sin tarjeta: solo la mascota, con el lápiz y el micrófono al pasar el cursor (la muestra lo lee del referer).
   api.get('/api/bria/nudges', (req, res) => {
     const referer = String(req.headers.referer || '');
-    res.json({ nudges: /sinavisos/.test(referer) ? [] : (accessNudges(referer) ?? nudges) });
+    res.json({ nudges: /sinavisos/.test(referer) ? [] : /lectura/.test(referer) ? [morningNudge] : (accessNudges(referer) ?? permissionNudges(referer) ?? nudges) });
   });
   api.post('/api/bria/nudges/dismiss', (req, res) => { nudges = nudges.filter((row) => row.key !== req.body?.key); res.json({ key: req.body?.key, untilAt: new Date().toISOString() }); });
   // Buzones que lee Bria (11 de octubre de 2026): la contraseña «mala…» se rechaza como lo haría Gmail.

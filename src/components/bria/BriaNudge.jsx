@@ -15,9 +15,11 @@ import toast from 'react-hot-toast';
 // de la consulta, no me gusta así, estorba»): la consulta rápida vive ahora detrás de la mascota (BriaQuickAsk).
 export const NUDGE_REFRESH_MS = 5 * 60 * 1000;
 
-// Pedir un acceso de la bóveda (15 de octubre de 2026): «Compartir» o «Denegar» lo decide el servidor; la tarjeta solo
-// se va y dice el resultado cuando respondió.
-const decideAccess = (requestId, decision) => requestVault(`/requests/${requestId}/decision`, { method: 'POST', body: { decision } });
+// Pedir un acceso (15 de octubre de 2026): «Compartir», «Dar acceso» o «Denegar» lo decide el servidor; la tarjeta solo
+// se va y dice el resultado cuando respondió. Una contraseña se decide en la bóveda; un módulo, en los avisos de Bria.
+const decideAccess = ({ scope, requestId, decision }) => (scope === 'permission'
+  ? requestBriaNudges(`/permission-requests/${requestId}/decision`, { method: 'POST', body: { decision } })
+  : requestVault(`/requests/${requestId}/decision`, { method: 'POST', body: { decision } }));
 
 export default function BriaNudge({ userId, hidden = false, request = requestBriaNudges, decide = decideAccess, refreshMs = NUDGE_REFRESH_MS, className }) {
   const [nudges, setNudges] = useState([]), [busy, setBusy] = useState(false), mounted = useRef(true);
@@ -41,10 +43,10 @@ export default function BriaNudge({ userId, hidden = false, request = requestBri
     catch (failure) { console.error('[BriaNudge] No se pudo ocultar el aviso:', failure.message); }
     finally { if (mounted.current) setBusy(false); }
   };
-  const answer = async ({ requestId, decision }) => {
+  const answer = async (choice) => {
     setBusy(true);
     try {
-      const out = await decide(requestId, decision);
+      const out = await decide(choice);
       if (mounted.current) setNudges(rows => rows.filter(row => row.key !== nudge.key));
       toast.success(out.message);
     } catch (failure) {
@@ -72,6 +74,9 @@ export default function BriaNudge({ userId, hidden = false, request = requestBri
           <div className="mt-2 -ml-2 flex flex-wrap items-center gap-x-1" data-bria-nudge-actions>
             {(nudge.actions || []).map((item) => item.decide
               ? <button key={item.label} type="button" disabled={busy} data-bria-nudge-decision={item.decide.decision} className={cn(item.decide.decision === 'APPROVE' ? action : quiet, 'disabled:opacity-50')} onClick={() => answer(item.decide)}>{item.label}</button>
+              : item.href
+              // Abrir un módulo recién concedido recarga la página: el menú y las rutas leen el permiso nuevo.
+              ? <a key={item.label} href={item.href} className={action}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></a>
               : item.conversationId
               ? <button key={item.label} type="button" className={action} onClick={() => openBriaConversation(item.conversationId)}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></button>
               : item.ask

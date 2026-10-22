@@ -1,0 +1,118 @@
+# Bria como ojos y cerebro de la dirección
+
+19 de octubre de 2026. Rodny: «quiero que BRIA sea mi project, mis ojos, mi cerebro… quiero mejorar los análisis que hace, la lectura que hace, la forma en que me recomienda o no hacer algo, que tenga autonomía en su lectura… esto necesito sea una guía, una ayuda continua». Y el mismo día: «arranquemos con eso, olvidemos lo de Meta, concentrémonos en la operación dentro de la plataforma».
+
+Esta es la guía viva de ese camino: qué se va a construir, en qué orden y qué ya está.
+
+## Lo que le faltaba a Bria
+
+Bria ya tenía manos (acciones con confirmación), ojos de corto plazo (el pulso cada 15 minutos) y memoria de hechos de la agencia. Le faltaban cuatro cosas para pensar en grande:
+
+1. **Memoria del tiempo.** Veía cómo está todo hoy, pero no cómo se movió: no sabía que una cuenta lleva diez días en rojo ni que alguien acumula vencidas desde el viernes.
+2. **Una lectura propia.** Solo pensaba cuando le preguntaban o cuando saltaba un aviso; nunca se sentaba a leer el negocio entero.
+3. **Criterio explícito.** No conocía cómo decide la dirección: qué cuenta pesa más, qué es grave, cuándo escalar, cuándo no hacer algo.
+4. **Saber si acierta.** Recomendaba y nunca se enteraba de qué se decidió ni de cómo salió.
+
+## Las cuatro piezas, en orden
+
+| # | Pieza | Qué es | Estado |
+|---|---|---|---|
+| 1 | Memoria del tiempo y la mañana | Foto diaria de cada cuenta y persona, lectura del día con lo que haría y no haría, mensaje a las 7:30 | **Construida** (este documento, abajo) |
+| 2 | Libro de decisiones | Cada recomendación queda anotada con lo que decidió la persona («lo hice», «no», «después») y, días después, qué pasó; así se mide el acierto | **Construida** (abajo) |
+| 3 | Manual de criterio | Cómo decide Rodny, escrito con él en una sesión de preguntas; Bria lo cita al recomendar y propone ajustarlo cuando la corrigen, nunca lo cambia sola | **Construida** (sesión del 20 de octubre de 2026; abajo) |
+| 4 | Rentabilidad y revisión mensual | Horas de Ritmo frente al fee de cada cuenta; revisión de cada cliente al cerrar el mes | Pendiente |
+
+**Autonomía:** sigue mandando la regla de Rodny del 21 de septiembre de 2026 (`docs/BRIA_AUTONOMY_PLAN.md`): **la decisión final siempre es humana** y Bria no ejecuta nada sola, ni siquiera lo interno y reversible. Lo que crece es su lectura y la calidad de lo que propone; si algún día Rodny autoriza que algo concreto se ejecute solo, se decide aparte y por tipo. Lo que toca a un cliente, el dinero o los permisos pasa por una persona en cualquier caso. Los comentarios de Meta quedaron fuera del plan por decisión de Rodny.
+
+Regla de todas las piezas: **el código manda**. Sin evidencia, Bria no afirma ni recomienda; una recomendación siempre dice qué la sostiene; nunca un juicio sobre una persona.
+
+## Pieza 1: la memoria del tiempo y la mañana
+
+Tres pasos cada día, cada uno una sola vez aunque el servidor se reinicie (`src/services/dailyReadingService.js`, `initDailyReadingScheduler` en `server.js`, cada 10 minutos):
+
+1. **6:00 (Bogotá), todos los días: la foto.** Una fila por cuenta y por persona en `bria_memory.agency_snapshots` (`scripts/sql/bria-daily-reading.sql`).
+   - **Cuenta:** el color y los motivos de Operación de clientes (el mismo cálculo, `clientOperationsService.listOperations`), lo publicado frente a lo esperado del mes, las piezas que esperan al cliente (en revisión, o aprobadas con material nuevo; un borrador no), devoluciones abiertas de piezas y de tareas, tareas abiertas y vencidas, y las tareas cerradas y horas **del día anterior**.
+   - **Persona** (equipo activo sin administradores, como en el cierre del día): abiertas, en proceso, vencidas, devueltas, y cerradas y horas del día anterior. Una sesión de más de 8 h es un reloj olvidado y no se suma; las simultáneas tampoco.
+   - Son números de trabajo, nunca una calificación. La tabla no tiene llave hacia el cliente a propósito: la historia sobrevive a la ficha.
+2. **6:30, días hábiles: la lectura** (`bria_memory.daily_readings`).
+   - **Los ojos** (`src/lib/agencySnapshot.js`, `readSignals`): comparan la foto de hoy con la historia de **esa misma** cuenta o persona. La base es la última foto de un día hábil, así que la lectura del lunes suma el fin de semana. Un día sin foto es desconocido y corta cualquier racha. Señales: cuenta que empeoró o mejoró de color, rojo sostenido, aprobaciones detenidas, devoluciones que suben, cuenta que nadie tocó en 4+ días hábiles, horas de la semana frente a las tres anteriores (solo con cuatro semanas de fotos); persona con vencidas sostenidas, vencidas que suben, carga inusual frente a su propia mediana, devueltas que suben, vencidas resueltas. Sin historia no hay señales: el primer día solo se dice lo que se ve.
+   - **El cerebro** (`src/lib/dailyReading.js`): el modelo (`bria.daily-reading`, por el cliente gobernado) recibe las señales con su id y las cuentas en rojo o amarillo, y propone de 1 a 6 decisiones —HACER, CONVERSAR, VIGILAR o **NO_HACER**— con su porqué, la frase para pedírsela a Bria y una lectura corta de cada cuenta. **El código manda:** una decisión entra solo si cita señales reales, el sujeto lo pone la señal y no el modelo, y un juicio («lento», «flojo», «desempeño») la descarta. Si el modelo falla o no deja ninguna decisión respaldada, lee con las reglas de la plataforma (`fallbackDailyReading`): nunca se queda muda. **Lo que enseñó la primera lectura real (20 de octubre de 2026):** el modelo respondió, pero su JSON se cortó a los 3.000 tokens de salida —nueve señales, una entrada por cuenta y hasta seis decisiones no caben— y Bria leyó con las reglas sin que nadie lo notara hasta mirar la base (`source: REGLA`, `model: null`). El tope pasó a 10.000, el prompt pide brevedad y `parseDailyReading` escribe «JSON incompleto … la respuesta se cortó» en el registro de Railway (`[DailyReading] El modelo no respondió`). Para saber si la lectura de un día la escribió el modelo o las reglas, mirar `source` en `bria_memory.daily_readings`.
+3. **7:30, días hábiles: el mensaje de la mañana.** A cada administrador y project manager con Bria, un chat nuevo «Lectura de la mañana · martes 20 de octubre» (`buildMorningBrief`), un aviso en la campana (`BRIA_LECTURA_MANANA`, abre el chat) y «Bria dejó tu lectura de la mañana» encima de la mascota (`LECTURA_DIA`, después del cierre del día y antes del foco de la semana). Una vez por día y persona (`bria_memory.morning_brief_deliveries`). **Sin enlaces «Ver»** (Rodny, 20 de octubre de 2026, al leer la primera lectura real: «no me sirven de nada … con el informe que tengo es suficiente»): el mensaje dice la decisión, la evidencia y cómo pedírselo a Bria; la url de cada señal se queda en los datos para los avisos del pulso.
+   - **Contenido:** cómo amaneció (cuentas por color y equipo, con «antes» cuando cambió), lo que se hizo desde la última lectura, **lo que haría hoy** (tres decisiones, cada una con «Se ve en» y «Pídemelo así»), **lo que no haría**, lo que también cambió y lo que mejoró. Mientras haya menos de cuatro semanas de fotos, lo dice.
+   - **Alcance:** un administrador lee la agencia; un project manager, **sus cuentas** (`Client.projectManagerId`; si no tiene ninguna asignada, la agencia). La carga de las personas solo la ve quien tiene Manager.
+
+**En el chat**, la herramienta `lectura_de_la_agencia` (administradores y project managers, regla 24 de Bria) responde «¿cómo viene X?», «¿qué cambió?», «¿desde cuándo?», «¿qué harías hoy?» y «¿qué no harías?» con la lectura del día y la serie día por día de una cuenta o una persona, con el mismo alcance que el mensaje. Solo lee.
+
+**Medido:** dos preguntas nuevas en el conjunto de preguntas reales (`como-viene-cuenta`, `que-no-harias`). Con ellas el conjunto pasó 13 de 13 contra el modelo real. Al agregarlas, una pregunta anterior (`fecha-no-inventada`) empezó a fallar 2 de cada 8 veces: buscaba en la parrilla y respondía sin mirar las tareas. La regla 10 ahora pide buscar también en las tareas antes de decir que algo no está, y esa pregunta pasó 6 de 6.
+
+**Contratos:** `tests/agencySnapshot.test.js`, `tests/dailyReading.test.js`, `tests/dailyReadingService.test.js`; con PostgreSQL real en la base aislada: `tests/dailyReadingPostgres.test.js`. **Muestra local:** `node scripts/preview-bria.js` y abrir `/?lectura`.
+
+## Pieza 2: el libro de decisiones
+
+Rodny, 19 de octubre de 2026: «avanza con el libro de decisiones», y la condición que lo define: «no quiero que se sienta de forma mecánica que uno la está enseñando». Por eso no hay botones ni formularios: el libro se llena con la conversación y con la plataforma.
+
+**Cómo se ve desde la persona.**
+- La lectura de la mañana propone, como siempre, sus decisiones numeradas.
+- Durante el día la persona trabaja con Bria como quiera. Si en algún momento cuenta, de pasada, qué hizo con una de esas decisiones («ya le escribí a Gema», «lo de Aristea no, eso lo hablo yo en la reunión», «la de Endova la dejo para la otra semana»), Bria lo anota en media frase y sigue. No da las gracias, no pide confirmar, no pregunta por las demás.
+- Al día siguiente la lectura abre con **«Lo que decidiste ayer»**: qué decidió y **qué pasó**, leído de la plataforma, no preguntado: «la hiciste; hoy la señal ya no se ve» o «la descartaste; hoy Aristea sigue en rojo». Si de alguna decisión no supo nada, lo dice en una sola frase («de ayer no supe qué pasó con…; si la trabajaste o la descartaste, cuéntamelo cuando puedas») y no insiste.
+- Si se le pregunta «¿cómo vas acertando?», responde con cifras de sus decisiones: cuántas propuso, cuántas se hicieron, cuántas de esas se resolvieron, cuántas descartadas se resolvieron solas.
+
+**Cómo aprende sin que nadie la entrene.**
+- **El desenlace lo lee el código** (`decisionOutcome`), desde la lectura del día siguiente y hasta 14 días: sigue (hay una señal que empeora del mismo sujeto, o la cuenta sigue en rojo, o la persona sigue con dos o más vencidas), mejoró (hay una señal que mejora) o ya no se ve. Una decisión «no hacer» no se mide.
+- **Lo que la dirección descarta tres veces seguidas en 30 días deja de proponerse** (`suppressedDecisions`), salvo que la señal suba a la gravedad máxima. Un «hecho» reinicia la cuenta. Así Bria deja de insistir en lo que no se quiere sin que nadie se lo diga.
+- **El acierto** (`scorecard`) mide decisiones, nunca personas: adopción, hechas que se resolvieron, descartadas que se resolvieron solas, descartadas que siguen. Es la cifra que dirá, con los meses, si Bria vale la pena.
+
+**Qué no hace.** No cambia su criterio por su cuenta (eso es la pieza 3, con Rodny), no ejecuta nada, no anota por adivinar: si no entiende a cuál decisión se refiere o qué decidió, pregunta en una frase. Regla pura en `src/lib/decisionLog.js`; tabla `bria_memory.decision_log`; herramienta `anotar_decision`. Contratos: `tests/decisionLog.test.js`, `tests/dailyReadingService.test.js`, `tests/dailyReadingPostgres.test.js`.
+
+## Pieza 3 — El manual de criterio (20 de octubre de 2026)
+
+**Qué es.** Cómo decide Rodny, escrito con él en una sesión de doce preguntas en el chat y guardado como **trece reglas numeradas** en la memoria de la agencia (`bria_memory.agency_facts`: entidad «Brain Studio», tema `criterio`, origen `EQUIPO`, certeza `CONFIRMADO`, actor Rodny). No hay tabla nueva ni pantalla: el manual **es memoria**, como todo lo que el equipo le enseña a Bria, y se corrige por la misma vía (`guardar_en_memoria` reemplaza la regla anterior, que queda `SUPERSEDED` con su historial). Las reglas que contradecían lecturas anteriores de los chats las sustituyeron; las dudas que respondían quedaron cerradas.
+
+**Las reglas, en resumen** (el texto completo vive en la memoria):
+1. Nada se publica sin aprobación del cliente; excepción del equipo: si de verdad no responde y conocemos su criterio, se publica con confianza. Bria avisa antes de la fecha cuando falta la aprobación, sin frenar.
+2. Lo ajustado vuelve al cliente antes de publicarse, salvo al límite de tiempo o de publicaciones, o si el ajuste es sencillo y evidente (una tilde, un tono).
+3. Liderar al cliente o darle literal lo que pide es criterio del equipo, cuenta por cuenta: dato de la ficha, no regla general.
+4. Días sin publicar: tres días es alerta para cualquier cliente salvo un plan muy básico; seis días es grave.
+5. Lo que Bria le sube directo a Rodny sin pasar por el PM: cliente en riesgo de irse, pauta apagada por falta de pago, contenido publicado en la cuenta de otro cliente, cualquier error con MIO, entrega web atada a un evento. Lo demás va al PM.
+6. Prioridad entre cuentas: MIO Agencia y sus clientes primero; hoy el objetivo es que todas estén sanas, y en un momento crítico se cuida más al que más paga. *(Propósito `direccion`, sensibilidad restringida: solo la ve la dirección.)*
+7. La carga de una persona se mide por horas estimadas y por vencidas acumuladas; noches y fines de semana no son señal por sí solos (Bria dice el hecho sin suponer el motivo).
+8. Línea roja en web: nunca se entregan accesos al cPanel ni al hosting; si el cliente los exige, la responsabilidad del sitio pasa a él y se deja por escrito.
+9. Nunca se promete una fecha sin los insumos completos, ni se promete al cliente lo que no pidió.
+10. Todo trabajo fuera de alcance se cuenta y se cobra por bloque; Bria avisa cuando una cuenta acumula pedidos fuera de parrilla o versiones de más.
+11. A un mensaje del cliente se le acusa recibo siempre: lo normal es 20 a 30 minutos; una o dos horas es inaceptable; medio día, lo peor. (Bria la cita, no la vigila mientras los chats vivan en WhatsApp.)
+12. En los informes y ante el cliente se cuida el tono aunque los resultados sean malos; hacia adentro, y en lo que Bria le dice a Rodny y al equipo, crudo y sin suavizar.
+13. No hay regla general sobre el uso de IA en el contenido: Bria propone y el criterio final es del equipo, cliente por cliente.
+
+**Cómo se usa.**
+- **La lectura de la mañana lo lee entero** antes de escribir (`dailyReadingService`, `criteria()` → `buildDailyDigest({ criteria })`: sección «Criterio de la dirección (confirmado por Rodny)» con `[R:<id>]` por regla). El modelo debe decir en cada decisión **qué regla aplica** (`regla`), nunca proponer contra una y, si una regla pide no hacer algo, proponerlo como «no hacer» con esa regla. `validateDailyReading` conserva la regla **solo si el id existe** en el manual: una regla inventada se descarta. Si la memoria no responde, la lectura sale sin el manual y se anota; nunca se frena por eso.
+- **El mensaje no lo recita** (Rodny, 20 de octubre de 2026: «no quiero que debajo de ningún mensaje aparezcan los criterios o reglas, eso le resta naturalidad a Bria; los criterios ya me los sé yo»). La regla queda guardada en la decisión (`rule`) para el libro y para saber qué criterio la guió, pero el texto de la mañana dice la decisión y su evidencia, nada más. Se construyó una línea «Según tu criterio: «Regla 4…»» y se quitó el mismo día; no reponerla.
+- **La regla 10 vive también en las señales**: `FUERA_DE_ALCANCE` (`agencySnapshot.readSignals`) avisa cuando una cuenta tiene más piezas creadas que las contratadas, con cuántas de más; la lectura sin modelo la vuelve «Revisar el alcance de X».
+- **En el chat**, la regla 24 de Bria le pide **aplicar** el criterio sin recitarlo ni citar números de regla —nombrarlo solo si le preguntan por qué—, no recomendar contra ninguna regla y, si la corrigen o le precisan algo que una regla dice, **ofrecer guardar la precisión** con `guardar_en_memoria` en vez de cambiarla sola. El manual se afina conversando, no por formularios.
+
+### Las fichas del equipo (Rodny, 20 de octubre de 2026)
+
+**Qué son.** Rodny: «que Bria tenga y asuma también el informe de los miembros del equipo… que conozca su perfil y sepa actuar conforme a su necesidad, personalidad, carácter». No entra el informe tal cual (esa es la lectura de la dirección, con juicios): entra una **ficha de cómo trabajar con cada persona**, en cinco partes —**Confiar** (lo que se le puede dejar sin mirar), **Revisar** (lo que conviene comprobar antes de que salga), **Cómo decírselo** (cómo recibe mejor un mensaje), **Qué le pesa** (dónde se le va el tiempo o la energía) y **Dónde roza** (con quién y por qué)—, escrita con hechos de trabajo y firmada por Rodny. Siete fichas en la primera carga (Francisco, Rodny, Elisa, Melissa, Helen, Kamila y Sara); quien casi no aparece en lo leído no tiene ficha a propósito, y quien ya no está tampoco.
+
+**Dónde viven.** En la memoria de la agencia, como cinco hechos por persona (`entidad` el nombre completo tal como está en Equipo, `tipoEntidad: 'persona'`, tema `como-trabajar`, propósito `personas`, origen `EQUIPO`, certeza `CONFIRMADO`). **Un hecho sobre una persona es restringido por construcción** (`validateFact`): solo lo lee la administración, lo escriba quien lo escriba. Carga: `lectura-del-negocio/herramientas/cargar-fichas-equipo.mjs` (confidencial, fuera del repositorio; idempotente, y una parte que cambia reemplaza a la anterior de la misma persona).
+
+**Cómo las usa Bria.** La herramienta `como_trabajar_con` (solo administración; a un project manager ni se le ofrece) resuelve el nombre contra el equipo activo —exacto, nombre de pila único o lo más parecido con `fuzzyMatch`; con varias candidatas pregunta— y devuelve la ficha. La regla 25 le pide a Bria llamarla **antes de redactarle un mensaje a alguien del equipo, de proponer una decisión sobre una persona o de decidir a quién confiarle algo**, y usarla para el tono, lo que revisa y lo que propone. Tres prohibiciones: **nunca la recita** ni dice «según tu ficha»; **nunca le cuenta a nadie** —ni a la persona ni a un compañero— qué dice una ficha ni qué piensa la dirección de alguien; **nunca la vuelve un juicio**: la ficha dice cómo trabajar con alguien, no cómo es. Sin ficha, le habla con lo que pide su rol.
+
+**Cómo se corrige.** Conversando, como el manual: si Rodny precisa algo de una persona, Bria ofrece guardarlo con `guardar_en_memoria` (`tipoEntidad persona`, tema `como-trabajar`) y la versión anterior queda `SUPERSEDED`. **Nunca entran** salud, motivos de ausencia, salarios, percepciones de segunda mano ni adjetivos sobre la persona.
+
+**Lo que falta, a propósito.** Las fichas no caducan solas todavía: refrescarlas cada tres meses es una decisión de Rodny, no un automatismo. Y cuando Bria se abra a cada miembro del equipo, la parte de «cómo decírselo» podrá servir para hablarle a esa persona a su manera, sin que vea nunca su ficha; eso se decide aparte.
+
+## Bria aprende de los chats (Rodny, 20 de octubre de 2026)
+
+**Por qué.** Rodny: «que las cosas que se hablan en el chat ella las vaya asumiendo, aprendiendo, guardando, razonando… procede así para tener el camino al machine learning». Hasta ese día Bria solo guardaba lo que alguien le enseñaba a propósito: en 14 días y 172 respuestas, 4 aprendizajes. Lo que se decía de pasada («con Mimas siempre va alta», «Gema ya no quiere voz en off») se perdía al cerrar el chat.
+
+**Qué hace.** Cada noche, desde las 22:00 de Bogotá (`initConversationLearningScheduler`, `conversationLearningService.js`), relee las conversaciones del día (`conversationsBetween`, solo turnos de persona y de Bria, nunca las notas de la plataforma ni los adjuntos) y le pide al modelo, chat por chat (`buildLearningRequest`, uso `bria.conversation-learning`), lo que vale la pena recordar: lo que un cliente pidió, prefiere o rechazó; acuerdos y fechas; costumbres de trabajo de la persona; decisiones; correcciones dichas de pasada. **Solo cuenta lo que escribió la persona**; lo que dijo Bria es contexto.
+
+**El código manda** (`validateLearnings`, `src/lib/conversationLearning.js`): entra solo lo que trae la **cita literal** de la persona (`quotedInText`), sobre una entidad real (cliente de la lista —«Mimas» encuentra «Mimas Kitchen» si es único—, persona del equipo, la agencia o un proceso nombrado), sin credenciales (`CREDENTIAL_WORDS` además de `validateFact`), sin datos personales (`PERSONAL_WORDS`: salud, ausencias, familia, dinero de una persona), sin juicios (`JUDGMENT_WORDS`), sin repetir lo ya sabido ni lo del mismo chat; hasta 8 por chat. Una costumbre de una persona entra como `persona` → propósito `personas`, restringida por construcción.
+
+**Cómo se guarda.** En `agency_facts` con **origen `CONVERSACION`**, certeza `PRACTICA` o `PROPUESTA` —nunca `CONFIRMADO`: eso sigue siendo lo que el equipo dice a propósito—, fuente «Chat con Bria de X (quién lo dijo): «cita»», `desde` el día, id determinista por día, chat, entidad y afirmación (releer no duplica), por `importReading` con `origin` y `reason`. Una lectura por noche (`conversation_learning_runs`, reclamada; una que no terminó en dos horas se repite); antes de las 6:00 alcanza el día anterior si quedó sin leer. Se corrige como todo lo demás: `guardar_en_memoria` reemplaza, `retirar_de_memoria` retira; nada se borra.
+
+**Cómo habla.** En el chat (regla 13) Bria lo usa con su certeza y su autor —«por lo que dijo Francisco ayer, los pendientes de Mimas van en alta; ¿la dejo así?»— y, si la persona lo niega, ofrece retirarlo o guardar la corrección. **La mañana no lo lista** (Rodny, 20 de octubre de 2026, el mismo día: «no quiero lo de “ayer aprendí”, no es necesario»): se construyó la sección y se quitó; no reponerla. Lo aprendido se ve donde se usa, conversando, y en `memoria_de_la_agencia`.
+
+**Lo que no hace.** No aprende de lo que Bria misma dijo, no toca el manual de criterio ni las fichas del equipo (esos los firma Rodny), no guarda salud, ausencias, salarios ni juicios, no aprende de chats de pendientes privados más allá de lo que la persona escribió en el chat de Bria, y no cambia nada en la plataforma: es memoria. Política de privacidad 2.14. Contratos: `tests/conversationLearning.test.js`, `tests/conversationLearningService.test.js`, `tests/dailyReading.test.js`.
+
+**Qué no hace.** No convierte las reglas en criterios editoriales de la revisión automática de parrillas (eso se decide aparte, por cliente, en `ClientEditorialCriterion`); no aplica el manual a personas (ninguna regla juzga a nadie: la 7 mide carga, no desempeño); no inventa reglas que la dirección no dijo. Contratos: `tests/dailyReading.test.js`, `tests/dailyReadingService.test.js`, `tests/agencySnapshot.test.js`.

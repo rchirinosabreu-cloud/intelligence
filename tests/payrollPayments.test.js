@@ -253,6 +253,17 @@ test('en Movimientos, un pago de nómina dice dónde se parte y dónde se suben 
     assert.match(reason, /comprobante/);
 });
 
+// Rodny, 20 de octubre de 2026: «voy a nómina y veo todo eso enredado … un desplegable que me
+// permita ocultar los movimientos, así como los de cartera».
+test('en Nómina los pagos de cada persona van plegados y se abren con «Ver N pagos»', () => {
+    const dashboard = fs.readFileSync(new URL('../src/components/modules/FinancialDashboard.jsx', import.meta.url), 'utf8');
+    assert.match(dashboard, /data-payroll-payments-toggle/);
+    assert.match(dashboard, /aria-expanded=\{open\}/);
+    assert.match(dashboard, /Ver \$\{activeCount\} pago/);
+    assert.match(dashboard, /Ocultar pagos/);
+    assert.match(dashboard, /transaction\?\.payments\?\.length > 0 && expandedPayrollPayments\[transaction\.id\] && \(/, 'la lista de pagos solo se dibuja abierta');
+});
+
 test('la fila dice «Pago parcial» cuando una aprobada ya tiene pagos', () => {
     assert.equal(payrollStatus(null).label, 'Sin generar');
     assert.equal(payrollStatus({ status: 'DRAFT' }).label, 'Borrador');

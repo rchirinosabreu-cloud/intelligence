@@ -9,6 +9,7 @@ import { updateReceivable } from '../services/financialReceivableService.js';
 import { createPayrollContract, updatePayrollContract } from '../services/financialPayrollContractService.js';
 import { FINANCIAL_CATEGORIES } from '../services/financialRecordService.js';
 import { formatReceivableNumber } from '../services/receivableDocumentService.js';
+import { isCashPayment, isReceivableClosed } from '../lib/receivableSettlement.js';
 import { accumulateCategoryDistribution } from '../services/financialRecordAllocationService.js';
 
 // Helper to convert Decimal fields safely
@@ -133,6 +134,10 @@ const serializeReceivable = (receivable) => {
         account: payment.account || null,
         reversedAt: payment.reversedAt instanceof Date ? payment.reversedAt.toISOString() : (payment.reversedAt || null),
         reversalReason: payment.reversalReason || null,
+        // PAGO, o la forma en que se saldó sin dinero (acuerdo, canje, compensación,
+        // condonación) con quién lo autorizó y qué entró (20 de octubre de 2026).
+        kind: payment.kind || 'PAGO',
+        detail: payment.detail && typeof payment.detail === 'object' ? payment.detail : null,
         // El ingreso del abono y sus comprobantes, para verlos y subirlos desde Cartera (Elisa,
         // 5 de octubre de 2026). Un abono revertido ya no tiene ingreso.
         financialRecordId: payment.financialRecordId || null,
@@ -143,14 +148,23 @@ const serializeReceivable = (receivable) => {
             size: document.size
         }))
     }));
-    const paidAmount = roundFloat(payments.reduce((sum, payment) => sum + (payment.reversedAt ? 0 : payment.amount), 0));
-    const balanceReviewRequired = receivable.status === 'PAGADO' && roundFloat(amount - paidAmount) > 0;
+    // Lo que entró en dinero y lo que se saldó de otra forma se dicen por separado: en
+    // Salsipuedes entraron 2.000.000 y se acordaron 1.500.000, y eso no es «pagó 3.500.000».
+    const paidAmount = roundFloat(payments.reduce((sum, payment) => sum + (payment.reversedAt || !isCashPayment(payment) ? 0 : payment.amount), 0));
+    const settledAmount = roundFloat(payments.reduce((sum, payment) => sum + (payment.reversedAt || isCashPayment(payment) ? 0 : payment.amount), 0));
+    const balanceReviewRequired = isReceivableClosed(receivable.status) && roundFloat(amount - paidAmount - settledAmount) > 0;
 
     return {
         id: receivable.id,
         clientId: receivable.clientId || receivable.client?.id || null,
-        clientName: receivable.client?.name || receivable.sourceLabel || 'Cliente sin nombre',
+        clientName: receivable.client?.name || receivable.counterpartyName || receivable.sourceLabel || 'Cliente sin nombre',
         clientSlug: receivable.client?.slug || null,
+        // CLIENTE o PRESTAMO (20 de octubre de 2026): un préstamo dice a quién se le prestó y de
+        // qué egreso salió; la pantalla no le ofrece cuenta de cobro y su pago es reintegro.
+        kind: receivable.kind || 'CLIENTE',
+        counterpartyType: receivable.counterpartyType || null,
+        counterpartyName: receivable.counterpartyName || null,
+        loanRecordId: receivable.loanRecordId || null,
         // Lo que va impreso como deudor. Vive en la ficha del cliente y se escribe una
         // sola vez; viaja aquí para que el diálogo de emitir sepa si ya lo tiene.
         clientLegalName: receivable.client?.legalName || null,
@@ -158,7 +172,8 @@ const serializeReceivable = (receivable) => {
         clientDocumentNumber: receivable.client?.documentNumber || null,
         amount,
         paidAmount,
-        outstanding: balanceReviewRequired ? null : roundFloat(Math.max(amount - paidAmount, 0)),
+        settledAmount,
+        outstanding: balanceReviewRequired ? null : roundFloat(Math.max(amount - paidAmount - settledAmount, 0)),
         ...(balanceReviewRequired ? { balanceReviewRequired: true } : {}),
         period: receivable.period instanceof Date ? receivable.period.toISOString() : receivable.period,
         month: receivable.month,
@@ -183,6 +198,10 @@ const serializeReceivable = (receivable) => {
             ? roundFloat(receivable.items.reduce((sum, item) => sum + toNum(item.amount), 0))
             : roundFloat(toNum(receivable.foreignAmount)),
         foreignAmount: receivable.foreignAmount === null || receivable.foreignAmount === undefined ? null : toNum(receivable.foreignAmount),
+        // En dólares, las veces que la cartera en pesos se ajustó a lo que de verdad entró
+        // (20 de octubre de 2026): la tarjeta lo dice en vez de dejar un valor que no cuadra.
+        exchangeAdjustments: (Array.isArray(receivable.metadata?.exchangeAdjustments) ? receivable.metadata.exchangeAdjustments : [])
+            .map((adjustment) => ({ at: adjustment.at, from: (Number(adjustment.fromCents) || 0) / 100, to: (Number(adjustment.toCents) || 0) / 100 })),
         dueDate: receivable.dueDate instanceof Date ? receivable.dueDate.toISOString() : receivable.dueDate,
         status: receivable.status,
         notes: receivable.notes,
@@ -197,6 +216,7 @@ const buildReceivableTotals = (items) => items.reduce((totals, item) => {
     totals[status] = roundFloat((totals[status] || 0) + toNum(item.outstanding));
     totals.originalTotal = roundFloat(totals.originalTotal + toNum(item.amount));
     totals.paidTotal = roundFloat(totals.paidTotal + toNum(item.paidAmount));
+    totals.settledTotal = roundFloat(totals.settledTotal + toNum(item.settledAmount));
     if (item.balanceReviewRequired) totals.reviewCount += 1;
     totals.outstandingTotal = roundFloat(totals.outstandingTotal + toNum(item.outstanding));
     totals.total = totals.outstandingTotal;
@@ -205,8 +225,10 @@ const buildReceivableTotals = (items) => items.reduce((totals, item) => {
     DEBE: 0,
     PAGADO: 0,
     PROMESADO: 0,
+    SALDADO: 0,
     originalTotal: 0,
     paidTotal: 0,
+    settledTotal: 0,
     reviewCount: 0,
     outstandingTotal: 0,
     total: 0
@@ -873,8 +895,9 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
         const clientReceivableMap = {};
 
         for (const rec of receivables) {
-            const clientId = rec.clientId;
-            const clientName = rec.client?.name || 'Cliente Desconocido';
+            // Un préstamo a un colaborador no tiene cliente: se agrupa por el nombre del tercero.
+            const clientId = rec.clientId || `loan:${rec.counterpartyName || rec.sourceLabel || rec.id}`;
+            const clientName = rec.client?.name || rec.counterpartyName || 'Cliente Desconocido';
             const clientSlug = rec.client?.slug || 'cliente-desconocido';
             const paidAmount = (rec.payments || []).reduce((sum, payment) => sum + toNum(payment.amount), 0);
             const amount = roundFloat(Math.max(toNum(rec.amount) - paidAmount, 0));
@@ -915,6 +938,14 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
             (sum, item) => roundFloat(sum + item.totalOutstanding),
             0
         );
+        // Lo que entró como reintegro de préstamos no es venta (Rodny, 20 de octubre de 2026):
+        // va dentro de los ingresos registrados, pero el tablero lo dice aparte.
+        const loanRepayments = roundFloat(financialRecords
+            .filter((record) => record.type === 'INCOME' && record.category === 'PRESTAMO')
+            .reduce((sum, record) => sum + toNum(record.amount), 0));
+        const loansGranted = roundFloat(financialRecords
+            .filter((record) => record.type === 'EXPENSE' && record.category === 'PRESTAMO')
+            .reduce((sum, record) => sum + toNum(record.amount), 0));
         const importedExpense = toNum(explicitImportTotals.totalCostAndExpense) || (
             toNum(explicitImportTotals.expense) +
             toNum(explicitImportTotals.operatingExpense) +
@@ -928,7 +959,9 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                 expense: recordTotals.expense,
                 netFlow: recordTotals.netFlow,
                 receivable: receivableTotal,
-                calculatedReceivable: toNum(calculatedImportTotals.debt)
+                calculatedReceivable: toNum(calculatedImportTotals.debt),
+                loanRepayments,
+                loansGranted
             },
             importedTotals: {
                 income: toNum(explicitImportTotals.income),

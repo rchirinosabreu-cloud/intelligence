@@ -15,8 +15,10 @@ datasource db {
 //                conversations, conversation_turns, conversation_attachments, conversation_purges,
 //                agency_facts, agency_fact_events, agency_questions, sync_state, rhythm_readings,
 //                nudge_dismissals, weekly_focus_deliveries, daily_close_deliveries, pulse_runs, pulse_messages,
-//                mail_accounts, mail_seen
-//   vault:       credentials, credential_events, reveal_events, access_requests
+//                mail_accounts, mail_seen, permission_requests, agency_snapshots, daily_readings,
+//                morning_brief_deliveries, decision_log, conversation_learning_runs,
+//                whatsapp_links, whatsapp_link_codes, whatsapp_inbound
+//   vault:      credentials, credential_events, reveal_events, access_requests
 
 enum SystemRole {
   ADMIN
@@ -1919,8 +1921,12 @@ model FinancialRecord {
   createdAt          DateTime                  @default(now())
   updatedAt          DateTime                  @updatedAt
   receivablePayment  ReceivablePayment?
+  // El préstamo que este egreso desembolsó (20 de octubre de 2026): se corrige desde Cartera.
+  loanReceivable     AccountsReceivable?       @relation("LoanDisbursement")
   payrollTransaction PayrollTransaction?
   payrollPayment     PayrollPayment?
+  // El pago de una cuenta por pagar que este egreso materializó (20 de octubre de 2026).
+  payablePayment     PayablePayment?             @relation("PayablePaymentRecord")
   bankMatches        BankReconciliationMatch[]
   allocations        FinancialRecordAllocation[]
   documents          FinancialRecordDocument[]
@@ -1998,11 +2004,111 @@ model FinancialAccount {
   records              FinancialRecord[]
   payments             ReceivablePayment[]
   payrollPayments      PayrollPayment[]
+  payablePayments      PayablePayment[]
   statementImports     BankStatementImport[]
   bankTransactions     BankTransaction[]
 
   @@unique([name, currency])
   @@index([type, isActive])
+}
+
+// Terceros y cuentas por pagar (Rodny, 20 de octubre de 2026): a quién le debe Brain Studio
+// —proveedores, el equipo, el arrendador, un socio—, qué documento llegó y cómo se pagó. Pagar
+// crea el egreso en Movimientos ligado al pago. Regla en `src/lib/accountsPayable.js`; tablas
+// aditivas con `scripts/ensure-accounts-payable-schema.js`.
+model ThirdParty {
+  id                String            @id @default(uuid())
+  kind              String // PROVEEDOR, COLABORADOR, ARRENDADOR, SOCIO, OTRO
+  name              String
+  legalName         String?
+  documentType      String?
+  documentNumber    String?
+  email             String?
+  phone             String?
+  bankName          String?
+  bankAccountType   String?
+  bankAccountNumber String?
+  teamMemberId      String?
+  notes             String?
+  isActive          Boolean           @default(true)
+  createdById       String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  payables          AccountsPayable[]
+
+  @@index([kind, isActive])
+  @@index([name])
+  @@index([teamMemberId])
+}
+
+model AccountsPayable {
+  id             String                    @id @default(uuid())
+  thirdPartyId   String
+  thirdParty     ThirdParty                @relation(fields: [thirdPartyId], references: [id], onDelete: Restrict)
+  concept        String
+  category       String // FinancialCategory, menos PRESTAMO
+  amount         Decimal
+  currency       String                    @default("COP")
+  documentNumber String?
+  receivedAt     DateTime
+  year           Int
+  month          Int
+  dueDate        DateTime?
+  status         String                    @default("POR_PAGAR") // POR_PAGAR, PARCIAL, PAGADA, ANULADA
+  notes          String?
+  voidedAt       DateTime?
+  voidReason     String?
+  voidedById     String?
+  createdById    String?
+  metadata       Json?
+  createdAt      DateTime                  @default(now())
+  updatedAt      DateTime                  @updatedAt
+  payments       PayablePayment[]
+  documents      AccountsPayableDocument[]
+
+  @@index([thirdPartyId])
+  @@index([status, dueDate])
+  @@index([year, month])
+}
+
+model PayablePayment {
+  id                String           @id @default(uuid())
+  payableId         String
+  payable           AccountsPayable  @relation(fields: [payableId], references: [id], onDelete: Restrict)
+  accountId         String?
+  account           FinancialAccount? @relation(fields: [accountId], references: [id], onDelete: SetNull)
+  financialRecordId String?          @unique
+  financialRecord   FinancialRecord? @relation("PayablePaymentRecord", fields: [financialRecordId], references: [id], onDelete: SetNull)
+  amount            Decimal
+  paidAt            DateTime
+  reference         String?
+  notes             String?
+  createdById       String?
+  reversedAt        DateTime?
+  reversalReason    String?
+  reversedById      String?
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  @@index([payableId, paidAt])
+}
+
+model AccountsPayableDocument {
+  id           String          @id @default(uuid())
+  payableId    String
+  payable      AccountsPayable @relation(fields: [payableId], references: [id], onDelete: Restrict)
+  storageKey   String          @unique
+  name         String
+  mimeType     String
+  size         Int
+  sha256       String
+  uploadedById String?
+  uploadedAt   DateTime        @default(now()) @db.Timestamptz()
+  voidedAt     DateTime?       @db.Timestamptz()
+  voidReason   String?
+  voidedById   String?
+
+  @@index([payableId, uploadedAt])
 }
 
 enum FinancialAccountHolderType {
@@ -2302,12 +2408,25 @@ enum ReceivableStatus {
   DEBE
   PAGADO
   PROMESADO
+  // En cero, pero no todo entró como dinero: acuerdo por menor valor, canje, compensación o
+  // condonación (20 de octubre de 2026). Lo pone y lo quita la regla de `receivableSettlement.js`.
+  SALDADO
 }
 
 model AccountsReceivable {
   id            String                @id @default(uuid())
-  clientId      String
-  client        Client                @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  // Un préstamo a un colaborador o a un socio no tiene cliente (20 de octubre de 2026).
+  clientId      String?
+  client        Client?               @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  // CLIENTE: lo de siempre. PRESTAMO: dinero prestado a un tercero (Rodny, 20 de octubre de
+  // 2026), que vive en Cartera junto a lo de los clientes, nace ligado al egreso que lo sacó
+  // (`loanRecordId`) y se devuelve como reintegro, nunca como venta. Regla en
+  // `src/lib/receivableLoans.js`; aditivas con `scripts/ensure-receivable-loans-schema.js`.
+  kind             String           @default("CLIENTE")
+  counterpartyType String?
+  counterpartyName String?
+  loanRecordId     String?          @unique
+  loanRecord       FinancialRecord? @relation("LoanDisbursement", fields: [loanRecordId], references: [id], onDelete: SetNull)
   // Cuenta de cobro (Elisa, 21 de septiembre de 2026): el documento que se manda al
   // cliente. Una obligación puede existir sin él —las importadas del Excel no lo
   // tienen— y emitirlo le pone número, la congela y genera el PDF.
@@ -2361,6 +2480,7 @@ model AccountsReceivable {
   @@index([clientId, year, month])
   @@index([importBatchId])
   @@index([number])
+  @@index([kind])
 }
 
 // Las líneas de una cuenta de cobro: «fee mensual más lo que hayan pedido adicional».
@@ -2396,6 +2516,12 @@ model ReceivablePayment {
   reversedAt        DateTime?
   reversalReason    String?
   reversedById      String?
+  // Cierre de deuda sin dinero (20 de octubre de 2026): PAGO es un abono de siempre, con su
+  // ingreso; ACUERDO, CANJE, COMPENSACION y CONDONACION no llevan cuenta ni ingreso, y `detail`
+  // guarda quién autorizó y, en un canje, qué entró y a dónde fue. El motivo va en `notes`.
+  // Aditivas con `scripts/ensure-receivable-settlement-schema.js`.
+  kind              String             @default("PAGO")
+  detail            Json?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
 

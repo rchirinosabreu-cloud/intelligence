@@ -110,7 +110,7 @@ async function prePushEnum() {
 
             DO $$ BEGIN
                 CREATE TYPE "ReceivableStatus" AS ENUM (
-                    'DEBE', 'PAGADO', 'PROMESADO'
+                    'DEBE', 'PAGADO', 'PROMESADO', 'SALDADO'
                 );
             EXCEPTION
                 WHEN duplicate_object THEN null;

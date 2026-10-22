@@ -90,6 +90,7 @@ export const cancelsAction = (action, question) => isActionCancellation(question
 
 /** Lo que se dice cuando la persona vuelve a confirmar algo que ya se hizo. */
 export const alreadyDoneReply = (action) => {
+  if (action?.type === 'TASK_CREATE' && (action.draft?.tasks?.filter((row) => row.taskId).length || 0) > 1) return `Esos pendientes ya están creados.\n\n${action.draft.tasks.filter((row) => row.taskId).map((row) => `- [${row.title}](/gestion?taskId=${encodeURIComponent(row.taskId)})`).join('\n')}`;
   if (action?.type === 'TASK_CREATE' && action.draft?.taskId) return `Este pendiente ya está creado. [Abrir en Gestión](/gestion?taskId=${encodeURIComponent(action.draft.taskId)})`;
   if (action?.type === 'DISPATCH') return `Ese despacho ya se hizo.\n\n${dispatchResultText(action.draft?.results || [])}`;
   if (action?.type === 'TASK_DELETE') return `Esa eliminación ya se hizo.\n\n${deleteResultText(action.draft?.results || [])}`;

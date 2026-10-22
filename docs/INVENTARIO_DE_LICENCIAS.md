@@ -454,7 +454,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | fill-range | 7.1.1 | MIT |  |
 | finalhandler | 1.3.2 | MIT |  |
 | find-up | 4.1.0 | MIT |  |
-| follow-redirects | 1.16.0 | MIT |  |
+| follow-redirects | 1.16.1 | MIT |  |
 | foreground-child | 3.3.1 | ISC |  |
 | form-data | 2.5.6 | MIT |  |
 | form-data | 4.0.6 | MIT |  |
@@ -696,7 +696,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | postcss-load-config | 6.0.1 | MIT |  |
 | postcss-nested | 6.2.0 | MIT |  |
 | postcss-selector-parser | 6.0.10 | MIT |  |
-| postcss-selector-parser | 6.1.4 | MIT |  |
+| postcss-selector-parser | 6.1.5 | MIT |  |
 | postcss-value-parser | 4.2.0 | MIT |  |
 | postgres-array | 2.0.0 | MIT |  |
 | postgres-bytea | 1.0.1 | MIT |  |

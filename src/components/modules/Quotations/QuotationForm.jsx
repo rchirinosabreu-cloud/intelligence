@@ -17,7 +17,7 @@ import ServiceCatalogModal from './ServiceCatalogModal';
 import ProposalDetailsEditor, { ExecutionEditor, ProposalRichField, proposalInput } from './ProposalDetailsEditor';
 import { normalizeProposalDetails, plainTextToProposalHtml } from '@/services/quotationProposalDetails';
 import { catalogServiceHtml } from '@/services/serviceCatalogDescription';
-import { calculateQuotationEconomics, calculateQuotationTotals, normalizeQuotationItemTitle } from '@/services/quotationDomainService';
+import { calculateQuotationEconomics, calculateQuotationTotals, normalizeQuotationItemTitle, quotationTaxExemptionReason } from '@/services/quotationDomainService';
 import { matchesServiceSearch } from '@/utils/serviceCatalogSearch';
 
 const QuotationForm = () => {
@@ -143,20 +143,16 @@ const QuotationForm = () => {
         if (isEditing) fetchQuotation();
     }, [fetchQuotation, isEditing]);
 
-    // Auto-toggle tax exempt based on emisor/client
+    // Por qué el IVA no se puede tocar (dólares o Francisco Villa como emisor), o null si lo
+    // decide quien cotiza. La misma regla que aplica el servidor al guardar.
+    const taxLockReason = quotationTaxExemptionReason({ currency, emisorType });
+    const effectiveTaxExempt = Boolean(taxLockReason) || isTaxExempt;
+
+    // Al crear, la propuesta para persona natural arranca exenta y la de empresa con IVA; quien
+    // cotiza puede cambiarlo con el interruptor. Al editar se respeta lo guardado.
     useEffect(() => {
-        if (currency === 'USD') {
-            setIsTaxExempt(true);
-            return;
-        }
-        if (!isEditing) {
-            if (emisorType === 'FRANCISCO_VILLA' || clientType === 'PERSONA_NATURAL') {
-                setIsTaxExempt(true);
-            } else {
-                setIsTaxExempt(false);
-            }
-        }
-    }, [currency, emisorType, clientType, isEditing]);
+        if (!isEditing) setIsTaxExempt(clientType === 'PERSONA_NATURAL');
+    }, [clientType, isEditing]);
 
     // Fetch catalog
     const { data: catalog = [] } = useQuery({
@@ -245,11 +241,6 @@ const QuotationForm = () => {
             )
         })));
         setCurrency(nextCurrency);
-        setIsTaxExempt(
-            nextCurrency === 'USD'
-            || emisorType === 'FRANCISCO_VILLA'
-            || clientType === 'PERSONA_NATURAL'
-        );
     };
 
     const addItem = (service) => {
@@ -334,7 +325,7 @@ const QuotationForm = () => {
     };
 
     const calculateTotals = () => {
-        const result = calculateQuotationTotals(selectedItems, currency === 'USD' || isTaxExempt, {
+        const result = calculateQuotationTotals(selectedItems, effectiveTaxExempt, {
             durationMonths,
             discountType,
             discountValue
@@ -429,7 +420,7 @@ const QuotationForm = () => {
                     exchange_rate_source: currency === 'USD' ? exchangeRateSource : null,
                     exchange_rate_date: currency === 'USD' ? exchangeRateDate : null,
                     status: targetStatus,
-                    is_tax_exempt: currency === 'USD' ? true : isTaxExempt,
+                    is_tax_exempt: effectiveTaxExempt,
                     terms_and_conditions: contractTermsText
                 })
             });
@@ -476,12 +467,12 @@ const QuotationForm = () => {
     };
 
     const totals = calculateTotals();
-    const proposalTotals = quotationMode === 'SCENARIOS' ? scenarios.map(scenario => ({ id: scenario.id, name: scenario.name, totals: calculateQuotationTotals(selectedItems.filter(item => item.scenarioId === scenario.id), currency === 'USD' || isTaxExempt, { durationMonths, discountType: scenario.discountType, discountValue: scenario.discountValue }) })) : [{ id: null, name: 'Propuesta completa', totals }];
+    const proposalTotals = quotationMode === 'SCENARIOS' ? scenarios.map(scenario => ({ id: scenario.id, name: scenario.name, totals: calculateQuotationTotals(selectedItems.filter(item => item.scenarioId === scenario.id), effectiveTaxExempt, { durationMonths, discountType: scenario.discountType, discountValue: scenario.discountValue }) })) : [{ id: null, name: 'Propuesta completa', totals }];
     const activeScenarioItems = quotationMode === 'SCENARIOS'
         ? selectedItems.filter((item) => item.scenarioId === activeScenarioId)
         : selectedItems;
     const activeScenario = scenarios.find(({ id: scenarioId }) => scenarioId === activeScenarioId);
-    const activeScenarioTotals = calculateQuotationTotals(activeScenarioItems, currency === 'USD' || isTaxExempt, {
+    const activeScenarioTotals = calculateQuotationTotals(activeScenarioItems, effectiveTaxExempt, {
         durationMonths,
         discountType: activeScenario?.discountType,
         discountValue: activeScenario?.discountValue
@@ -589,14 +580,15 @@ const QuotationForm = () => {
                             {/* Client Data */}
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-bold text-zinc-500 uppercase">Tipo de Propuesta</label>
+                                    <label htmlFor="quotation-client-type" className="text-xs font-bold text-zinc-500 uppercase">Tipo de Propuesta</label>
                                     <Select
+                                        id="quotation-client-type"
                                         value={clientType}
                                         onChange={(e) => setClientType(e.target.value)}
                                         className="w-full bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl px-4 py-2.5 text-sm outline-none"
                                     >
-                                        <option value="EMPRESA">Para Empresa (Aplica IVA 19%)</option>
-                                        <option value="PERSONA_NATURAL">Para Persona Natural (Exento)</option>
+                                        <option value="EMPRESA">{taxLockReason ? 'Para Empresa' : 'Para Empresa (Aplica IVA 19%)'}</option>
+                                        <option value="PERSONA_NATURAL">{taxLockReason ? 'Para Persona Natural' : 'Para Persona Natural (Exento)'}</option>
                                     </Select>
                                 </div>
 
@@ -851,7 +843,7 @@ const QuotationForm = () => {
                                 paymentPlanEnabled={Boolean(proposalDetails?.paymentPlans?.length)}
                                 services={selectedItems}
                                 currency={currency}
-                                isTaxExempt={isTaxExempt}
+                                isTaxExempt={effectiveTaxExempt}
                                 existingText={contractTermsText}
                                 isEditing={isEditing}
                                 onChange={setContractTermsText}
@@ -955,7 +947,8 @@ const QuotationForm = () => {
                                     {activeScenarioTotals.oneTimeSubtotal > 0 && <div className="flex justify-between"><span className="text-zinc-500">Pagos únicos</span><span>{formatCurrency(activeScenarioTotals.oneTimeSubtotal)}</span></div>}
                                     {activeScenarioTotals.discountAmount > 0 && <div className="flex justify-between text-violet-700 dark:text-violet-300"><span>{activeScenario?.discountLabel || 'Descuento'}</span><span>-{formatCurrency(activeScenarioTotals.discountAmount)}</span></div>}
                                     <div className="flex justify-between font-semibold"><span>Subtotal contractual</span><span>{formatCurrency(activeScenarioTotals.subtotal)}</span></div>
-                                    {currency !== 'USD' && !isTaxExempt && <div className="flex justify-between"><span className="text-zinc-500">IVA (19%)</span><span>{formatCurrency(activeScenarioTotals.taxAmount)}</span></div>}
+                                    {!effectiveTaxExempt && <div className="flex justify-between"><span className="text-zinc-500">IVA (19%)</span><span>{formatCurrency(activeScenarioTotals.taxAmount)}</span></div>}
+                                    {taxLockReason === 'ISSUER' && <p data-quotation-tax-locked="ISSUER" className="text-[11px] leading-4 text-zinc-500">Exenta de IVA: Francisco Villa emite como persona natural.</p>}
                                 </div>
                                 <p className="text-[10px] leading-4 text-zinc-500">La propuesta no mostrará un total general. El valor definitivo se calculará cuando el cliente elija una opción.</p>
                             </div>
@@ -968,11 +961,23 @@ const QuotationForm = () => {
                             {totals.oneTimeSubtotal > 0 && <div className="flex justify-between text-xs"><span className="text-zinc-500">Servicios de pago único</span><span className="font-medium">{formatCurrency(totals.oneTimeSubtotal)}</span></div>}
                             {totals.discountAmount > 0 && <div className="flex justify-between text-xs text-violet-700 dark:text-violet-300"><span>{discountLabel || 'Descuento'}</span><span className="font-medium">-{formatCurrency(totals.discountAmount)}</span></div>}
                             <div className="flex justify-between border-t border-zinc-100 pt-3 text-xs dark:border-zinc-800"><span className="text-zinc-500">Subtotal contractual</span><span className="font-medium">{formatCurrency(totals.subtotal)}</span></div>
-                            {currency !== 'USD' && (
+                            {taxLockReason === 'ISSUER' && (
+                                <div className="text-xs" data-quotation-tax-locked="ISSUER">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-zinc-500">IVA (19%)</span>
+                                        <span className="font-medium text-zinc-500">Exenta</span>
+                                    </div>
+                                    <p className="mt-1 text-[11px] leading-4 text-zinc-500">Francisco Villa emite como persona natural.</p>
+                                </div>
+                            )}
+                            {!taxLockReason && (
                                 <div className="flex justify-between items-center text-xs">
                                     <div className="flex items-center gap-2">
                                         <span className="text-zinc-500">IVA (19%)</span>
                                         <button
+                                            type="button"
+                                            aria-label={isTaxExempt ? 'Aplicar IVA' : 'Marcar exenta de IVA'}
+                                            aria-pressed={!isTaxExempt}
                                             onClick={() => setIsTaxExempt(!isTaxExempt)}
                                             className={cn(
                                                 "w-6 h-3 rounded-full relative transition-colors",

@@ -12,7 +12,10 @@ import { canUseBria } from './briaLivingMemory.js';
 
 export const FACT_CERTAINTIES = ['CONFIRMADO', 'VIGENTE_DOCUMENTADO', 'VIGENTE_DE_HECHO', 'PRACTICA', 'PROPUESTA', 'NO_CONCLUYENTE', 'HISTORICO'];
 export const FACT_PURPOSES = ['operacion', 'editorial', 'personas', 'comercial', 'financiero', 'direccion'];
-export const FACT_ENTITY_TYPES = ['cliente', 'marca', 'pagador', 'canal', 'proyecto', 'servicio', 'proceso', 'agencia', 'rol', 'herramienta'];
+// «persona» es alguien del equipo (Rodny, 20 de octubre de 2026: las fichas de cómo trabajar con cada quien). Un hecho
+// sobre una persona es restringido por construcción: solo lo lee la administración, lo escriba quien lo escriba.
+export const FACT_ENTITY_TYPES = ['cliente', 'marca', 'pagador', 'canal', 'proyecto', 'servicio', 'proceso', 'agencia', 'rol', 'herramienta', 'persona'];
+export const PERSON_TOPIC = 'como-trabajar';
 export const FACT_MAX_LENGTH = 600;
 export const AGENCY_ENTITY = 'Brain Studio';
 
@@ -71,7 +74,7 @@ export const validateFact = (input = {}) => {
   if (validFrom && validUntil && validUntil < validFrom) throw factError('La vigencia termina antes de empezar.');
   const sources = (Array.isArray(input.fuentes ?? input.sources) ? (input.fuentes ?? input.sources) : [])
     .slice(0, 3).map((s) => ({ tipo: String(s?.tipo || ''), ref: String(s?.ref || '').slice(0, 300), fecha: s?.fecha || null }));
-  const sensitivity = purpose === 'direccion' ? 'restringida' : (input.sensibilidad ?? input.sensitivity) === 'restringida' ? 'restringida' : 'normal';
+  const sensitivity = purpose === 'direccion' || entityType === 'persona' ? 'restringida' : (input.sensibilidad ?? input.sensitivity) === 'restringida' ? 'restringida' : 'normal';
   return {
     ...(input.id ? { id: String(input.id).slice(0, 120) } : {}),
     entity, entityType, topic, statement, certainty, purpose, sensitivity, validFrom, validUntil, sources,

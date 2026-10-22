@@ -28,6 +28,13 @@ test('direction facts are always restricted, whatever the source said', () => {
   assert.equal(validateFact(fact({ proposito: 'direccion', sensibilidad: 'normal' })).sensitivity, 'restringida');
 });
 
+test('a fact about a person of the team is restricted by construction (Rodny, 20 de octubre de 2026: las fichas del equipo)', () => {
+  const ficha = validateFact(fact({ entidad: 'Helen Hernández', tipoEntidad: 'persona', tema: 'como-trabajar', proposito: 'personas', sensibilidad: 'normal', afirmacion: 'Cómo decírselo: con la decisión al inicio y en la plataforma, no en el grupo.' }));
+  assert.equal(ficha.sensitivity, 'restringida');
+  assert.equal(factVisible(ficha, factAccess(admin)), true);
+  assert.equal(factVisible(ficha, factAccess(pm)), false, 'un project manager nunca lee la ficha de nadie');
+});
+
 test('credentials and personal data never enter the agency memory', () => {
   for (const afirmacion of ['La contraseña: Brain2026*', 'Escríbele a gerencia@cliente.com', 'Cuenta 1234567890 de Bancolombia', 'password = abc123']) {
     assert.throws(() => validateFact(fact({ afirmacion })), /credencial|dato personal/i, afirmacion);

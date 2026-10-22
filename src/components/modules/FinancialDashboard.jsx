@@ -30,7 +30,14 @@ import FinancialLedger from './financial/FinancialLedger';
 import FinancialFilters, { FINANCIAL_MONTHS } from './financial/FinancialFilters';
 import BankReconciliationPanel from './financial/BankReconciliationPanel';
 import ReceivablePaymentDialog from './financial/ReceivablePaymentDialog';
+import ReceivableSettlementDialog from './financial/ReceivableSettlementDialog';
+import ReceivableLoanDialog from './financial/ReceivableLoanDialog';
+import ReceivableAdjustmentsSummary from './financial/ReceivableAdjustmentsSummary';
+import ReceivablePaymentEditDialog from './financial/ReceivablePaymentEditDialog';
+import { isCashPayment, isReceivableClosed, settlementKindLabel } from '@/lib/receivableSettlement';
+import { isLoanReceivable, loanCounterpartyLabel } from '@/lib/receivableLoans';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
+import PayablesTab from './financial/PayablesTab';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
@@ -149,6 +156,9 @@ const FinancialDashboard = () => {
     // diario es el libro, no las gráficas.
     const [activeTab, setActiveTab] = useState('records');
     const [expandedClients, setExpandedClients] = useState({});
+    // Nómina: los pagos de cada persona van plegados y se abren por elección (Rodny, 20 de octubre
+    // de 2026: «voy a nómina y veo todo eso enredado. Así como los de cartera»).
+    const [expandedPayrollPayments, setExpandedPayrollPayments] = useState({});
     // La conexión con el cliente real vive dentro del panel de cada uno (Rodny, 23 de
     // septiembre de 2026): una lista con un desplegable por fila era ilegible.
     const [importPreview, setImportPreview] = useState(null);
@@ -163,6 +173,15 @@ const FinancialDashboard = () => {
     const [savingClientLinkId, setSavingClientLinkId] = useState('');
     const [clientLinkTargets, setClientLinkTargets] = useState({});
     const [paymentDebt, setPaymentDebt] = useState(null);
+    // Saldar sin dinero (Rodny, 20 de octubre de 2026): acuerdo, canje, compensación, condonación.
+    const [settlementDebt, setSettlementDebt] = useState(null);
+    const [isSavingSettlement, setIsSavingSettlement] = useState(false);
+    // Préstamos a terceros en Cartera (Rodny, 20 de octubre de 2026).
+    const [isLoanDialogOpen, setIsLoanDialogOpen] = useState(false);
+    const [isSavingLoan, setIsSavingLoan] = useState(false);
+    // Corregir un abono sin revertirlo (Rodny, 20 de octubre de 2026).
+    const [paymentToEdit, setPaymentToEdit] = useState(null);
+    const [isEditingPayment, setIsEditingPayment] = useState(false);
     const [statementClient, setStatementClient] = useState(null);
     const [paymentForm, setPaymentForm] = useState({ amount: '', paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }), accountId: '', reference: '', notes: '' });
     const [isSavingPayment, setIsSavingPayment] = useState(false);
@@ -273,7 +292,7 @@ const FinancialDashboard = () => {
             });
             return res.data;
         },
-        enabled: !!(currentUser && canAccessFinancials && ['receivables', 'payroll'].includes(activeTab))
+        enabled: !!(currentUser && canAccessFinancials && ['receivables', 'payables', 'payroll'].includes(activeTab))
     });
 
     const { data: payrollLedger, isLoading: isPayrollLedgerLoading } = useQuery({
@@ -442,7 +461,8 @@ const FinancialDashboard = () => {
             paidAt: new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }),
             accountId: '',
             reference: '',
-            notes: ''
+            notes: '',
+            settlesInFull: false
         });
     };
 
@@ -463,7 +483,8 @@ const FinancialDashboard = () => {
             }, { headers: { Authorization: `Bearer ${token}` } });
             // El comprobante va al ingreso que el servidor acaba de confirmar (Elisa, 5 de octubre de
             // 2026). Si falla, el pago ya quedó guardado: se dice y se sube desde el abono en Cartera.
-            let message = 'Pago de cartera registrado.';
+            // El servidor dice qué quedó registrado: un pago de cartera o el reintegro de un préstamo.
+            let message = result?.message || 'Pago de cartera registrado.';
             if (file) {
                 try {
                     await uploadRecordDocument(result?.financialRecord?.id, file);
@@ -481,6 +502,72 @@ const FinancialDashboard = () => {
             setImportError(error.response?.data?.message || 'No fue posible registrar el pago de cartera.');
         } finally {
             setIsSavingPayment(false);
+        }
+    };
+
+    const handleCreateLoan = async (payload) => {
+        if (isSavingLoan || !canWriteFinancials) return;
+        setIsSavingLoan(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const { data: result } = await axios.post(`${baseUrl}/api/financials/loans`, payload, { headers: { Authorization: `Bearer ${token}` } });
+            await invalidateFinancialQueries(queryClient);
+            setIsLoanDialogOpen(false);
+            setImportSuccess(result?.message || 'Préstamo registrado en Cartera.');
+        } catch (error) {
+            console.error('Error creating loan:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible registrar el préstamo.');
+        } finally {
+            setIsSavingLoan(false);
+        }
+    };
+
+    const handleEditPayment = async (payload) => {
+        const payment = paymentToEdit?.payment;
+        if (!payment?.id || isEditingPayment || !canWriteFinancials) return;
+        setIsEditingPayment(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const { data: result } = await axios.patch(`${baseUrl}/api/financials/receivable-payments/${payment.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
+            await invalidateFinancialQueries(queryClient);
+            setPaymentToEdit(null);
+            setImportSuccess(result?.message || 'Abono corregido.');
+        } catch (error) {
+            console.error('Error editing receivable payment:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible corregir el abono.');
+        } finally {
+            setIsEditingPayment(false);
+        }
+    };
+
+    const openReceivableSettlement = (debt) => {
+        setImportError('');
+        setSettlementDebt(debt);
+    };
+
+    const handleReceivableSettlement = async (payload) => {
+        if (!settlementDebt?.id || isSavingSettlement || !canWriteFinancials) return;
+        setIsSavingSettlement(true);
+        setImportError('');
+        setImportSuccess('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const { data: result } = await axios.post(`${baseUrl}/api/financials/receivables/${settlementDebt.id}/settlements`, payload, { headers: { Authorization: `Bearer ${token}` } });
+            await invalidateFinancialQueries(queryClient);
+            setSettlementDebt(null);
+            setImportSuccess(result?.message || 'Ajuste registrado. No se creó ningún ingreso.');
+        } catch (error) {
+            console.error('Error settling receivable:', error.response?.data || error);
+            setImportError(error.response?.data?.message || 'No fue posible saldar la cuenta por cobrar.');
+        } finally {
+            setIsSavingSettlement(false);
         }
     };
 
@@ -757,6 +844,41 @@ const FinancialDashboard = () => {
         } catch (error) {
             console.error('Error opening receivable document:', error.response?.data || error);
             setImportError('No fue posible abrir la cuenta de cobro.');
+        } finally {
+            setDownloadingDocumentId(null);
+        }
+    };
+
+    // El estado de cuenta en PDF (Rodny, 20 de octubre de 2026): el mismo visor y la misma
+    // descarga que la cuenta de cobro, a la fecha de corte elegida.
+    const openClientStatementDocument = async (client, { cutoff, download = false } = {}) => {
+        if (!client?.id || downloadingDocumentId) return;
+        setDownloadingDocumentId(`statement:${client.id}`);
+        setImportError('');
+        try {
+            const baseUrl = getApiBaseUrl();
+            const token = localStorage.getItem('authToken');
+            const response = await axios.get(`${baseUrl}/api/financials/clients/${encodeURIComponent(client.id)}/statement/document`, {
+                params: cutoff ? { cutoff } : {},
+                headers: { Authorization: `Bearer ${token}` },
+                responseType: 'blob'
+            });
+            const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: 'application/pdf' });
+            const objectUrl = URL.createObjectURL(blob);
+            const disposition = String(response.headers?.['content-disposition'] || '');
+            const match = /filename\*=UTF-8''([^;]+)|filename="([^"]+)"/i.exec(disposition);
+            const name = match ? decodeURIComponent(match[1] || match[2]) : `Estado de cuenta - ${client.name || 'Cliente'}.pdf`;
+            if (download) {
+                downloadBlobUrl(objectUrl, name);
+                setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+                return;
+            }
+            const data = await blob.arrayBuffer();
+            closeDocumentPreview();
+            setDocumentPreview({ file: { id: `statement:${client.id}:${cutoff || ''}`, name, mimeType: 'application/pdf', size: blob.size }, url: objectUrl, data });
+        } catch (error) {
+            console.error('Error opening client statement document:', error.response?.data || error);
+            setImportError('No fue posible generar el estado de cuenta.');
         } finally {
             setDownloadingDocumentId(null);
         }
@@ -1157,7 +1279,10 @@ await invalidateFinancialQueries(queryClient);
                     <p className="text-2xl font-black tracking-tight text-zinc-900 dark:text-white">
                         {formatIndicator(kpis.totalIncome)}
                     </p>
-                    <p className="mt-2 text-[10px] text-zinc-400">Según la búsqueda y los filtros seleccionados</p>
+                    {/* Un reintegro de préstamo entra en la cuenta pero no es venta (20 de octubre de 2026). */}
+                    {data?.sourceSummary?.totals?.loanRepayments > 0
+                        ? <p data-loan-repayments className="mt-2 text-[10px] text-zinc-400">Incluye {formatIndicator(data.sourceSummary.totals.loanRepayments)} de reintegros de préstamos, que no son ventas</p>
+                        : <p className="mt-2 text-[10px] text-zinc-400">Según la búsqueda y los filtros seleccionados</p>}
                 </Card>
 
                 {/* KPI Card 2: Egresos del Mes */}
@@ -1244,6 +1369,15 @@ await invalidateFinancialQueries(queryClient);
                     )}
                 >
                     Cartera
+                </button>
+                <button
+                    onClick={() => setActiveTab('payables')}
+                    className={cn(
+                        "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
+                        activeTab === 'payables' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
+                    )}
+                >
+                    Por pagar
                 </button>
                 <button
                     onClick={() => setActiveTab('payroll')}
@@ -1407,8 +1541,17 @@ await invalidateFinancialQueries(queryClient);
                                     Controla vencimientos, promesas y pagos sin alterar el saldo histórico.
                                 </p>
                             </div>
-                            {canWriteFinancials && <button type="button" onClick={openNewReceivable} className="rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700">Nueva cuenta por cobrar</button>}
+                            {canWriteFinancials && (
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <button type="button" onClick={() => { setImportError(''); setIsLoanDialogOpen(true); }} className="min-h-11 rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Registrar préstamo</button>
+                                    <button type="button" onClick={openNewReceivable} className="min-h-11 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Nueva cuenta por cobrar</button>
+                                </div>
+                            )}
                         </div>
+
+                        {/* Ajustes de cartera del periodo (Rodny, 20 de octubre de 2026): lo saldado sin dinero
+                            y la diferencia en cambio, que no son movimientos y solo se veían cliente por cliente. */}
+                        <ReceivableAdjustmentsSummary filterQuery={filterQuery} enabled={!!(currentUser && canAccessFinancials)} />
 
                         {!filters.q && !filters.month && data?.sourceSummary?.importBatchId && data?.sourceSummary?.totals && (
                             <Card className="p-4 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm">
@@ -1458,6 +1601,7 @@ await invalidateFinancialQueries(queryClient);
                                                         </h4>
                                                         <p className="text-[10px] text-zinc-500">
                                                             {client.debts?.length} registros de cartera
+                                                            {client.debts?.some(isLoanReceivable) && <span className="ml-1.5 rounded-md bg-brand-cyan/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-cyan-deep dark:text-brand-cyan">Préstamo · {loanCounterpartyLabel(client.debts.find(isLoanReceivable)?.counterpartyType)}</span>}
                                                         </p>
                                                     </div>
                                                 </div>
@@ -1478,17 +1622,26 @@ await invalidateFinancialQueries(queryClient);
                                             {/* Expandable monthly details */}
                                             {isExpanded && (
                                                 <div className="mt-4 pt-4 border-t border-zinc-100 dark:border-white/5 space-y-3 animate-in fade-in duration-300">
-                                                    <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-300 mb-2">Obligaciones y abonos</p>
+                                                    <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                                                        <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">Obligaciones y abonos</p>
+                                                        {/* El documento de seguimiento del cliente, desde la propia cartera (20 de octubre de 2026). */}
+                                                        {client.clientId && !String(client.clientId).includes(':') && (
+                                                            <button type="button" data-receivable-statement onClick={() => setStatementClient({ id: client.clientId, name: client.client.name })}
+                                                                className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-primary transition hover:bg-primary/5">
+                                                                <FileText className="h-3.5 w-3.5" />Estado de cuenta
+                                                            </button>
+                                                        )}
+                                                    </div>
                                                     <div className="grid grid-cols-1 gap-4">
                                                         {client.debts?.map((debt) => (
                                                             <div key={debt.id} className="p-3 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5 flex flex-col justify-between gap-3">
                                                                 <div className="flex justify-between items-center mb-2">
                                                                     <span className="text-[10px] font-bold text-zinc-400">
-                                                                        Periodo: {formatFinancialPeriod(debt.period)}
+                                                                        {isLoanReceivable(debt) ? <span data-receivable-loan>Préstamo a {loanCounterpartyLabel(debt.counterpartyType).toLowerCase()} · {formatFinancialPeriod(debt.period)}</span> : <>Periodo: {formatFinancialPeriod(debt.period)}</>}
                                                                     </span>
                                                                     {savingReceivableId === debt.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600" />}
                                                                 </div>
-                                                                <div className="grid grid-cols-3 gap-2 border-y border-zinc-200 py-3 dark:border-white/10">
+                                                                <div className={cn('grid gap-2 border-y border-zinc-200 py-3 dark:border-white/10', debt.settledAmount > 0.005 ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')}>
                                                                     <div data-receivable-amount-editor>
                                                                         <span className="text-[9px] font-medium text-zinc-400">Valor original</span>
                                                                         {editingAmountId === debt.id ? (
@@ -1514,8 +1667,16 @@ await invalidateFinancialQueries(queryClient);
                                                                                 Documento en {formatReceivableMoney(debt.documentTotal, 'USD')}{debt.exchangeRate ? ` · ${formatExchangeRate(debt.exchangeRate)}` : ''}
                                                                             </p>
                                                                         )}
+                                                                        {/* El valor en pesos se ajustó a lo que de verdad entró (Foobspain, 19 de octubre de 2026). */}
+                                                                        {debt.exchangeAdjustments?.length > 0 && (
+                                                                            <p data-receivable-exchange-adjustment className="mt-0.5 text-[10px] text-zinc-500">
+                                                                                Ajustado por la tasa del día: de {formatCurrency(debt.exchangeAdjustments[debt.exchangeAdjustments.length - 1].from)} a {formatCurrency(debt.exchangeAdjustments[debt.exchangeAdjustments.length - 1].to)}
+                                                                            </p>
+                                                                        )}
                                                                     </div>
                                                                     <div><span className="text-[9px] font-medium text-zinc-400">Abonos registrados</span><p className="mt-1 text-xs font-semibold text-emerald-600">{formatCurrency(debt.paidAmount || 0)}</p></div>
+                                                                    {/* Lo saldado sin dinero se dice aparte: no es plata que entró (20 de octubre de 2026). */}
+                                                                    {debt.settledAmount > 0.005 && <div data-receivable-settled><span className="text-[9px] font-medium text-zinc-400">Saldado sin dinero</span><p className="mt-1 text-xs font-semibold text-brand-magenta-deep dark:text-brand-magenta">{formatCurrency(debt.settledAmount)}</p></div>}
                                                                     <div><span className="text-[9px] font-medium text-zinc-400">Saldo pendiente</span><p className="mt-1 text-xs font-semibold text-amber-600">{debt.balanceReviewRequired ? 'Por verificar' : formatCurrency(debt.outstanding || 0)}</p></div>
                                                                 </div>
                                                                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
@@ -1529,10 +1690,16 @@ await invalidateFinancialQueries(queryClient);
                                                                         >
                                                                             <option value="DEBE">Debe</option>
                                                                             <option value="PROMESADO">Promesado</option>
-                                                                            {(debt.status === 'PAGADO' || debt.outstanding <= 0.005) && <option value="PAGADO">Pagado</option>}
+                                                                            {(debt.status === 'PAGADO' || (debt.outstanding <= 0.005 && !(debt.settledAmount > 0.005))) && <option value="PAGADO">Pagado</option>}
+                                                                            {debt.status === 'SALDADO' && <option value="SALDADO">Saldada sin dinero</option>}
                                                                         </Select>
                                                                     </label>
-                                                                    {canWriteFinancials && debt.status !== 'PAGADO' && debt.outstanding > 0.005 && <button type="button" onClick={() => openReceivablePayment(debt)} className="min-h-11 self-end rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Registrar pago</button>}
+                                                                    {canWriteFinancials && !isReceivableClosed(debt.status) && debt.outstanding > 0.005 && (
+                                                                        <div className="flex flex-wrap items-end gap-2 self-end">
+                                                                            <button type="button" onClick={() => openReceivableSettlement(debt)} className="min-h-11 rounded-lg border border-zinc-200 px-3 py-2 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Saldar de otra forma</button>
+                                                                            <button type="button" onClick={() => openReceivablePayment(debt)} className="min-h-11 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-primary-foreground">Registrar pago</button>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                                 <p className="text-xs text-zinc-600 dark:text-zinc-300">{financialDebtStatus(debt)}{debt.dueDate ? ` · Vence: ${new Date(debt.dueDate).toLocaleDateString('es-CO', { timeZone: 'UTC' })}` : ''}</p>
                                                                 {/* Una obligación importada del Excel no tiene documento; emitirla se lo pone. */}
@@ -1554,7 +1721,7 @@ await invalidateFinancialQueries(queryClient);
                                                                             className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-zinc-600 transition hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5">
                                                                             <Edit className="h-3.5 w-3.5" />Corregir
                                                                         </button>}
-                                                                    </>) : canWriteFinancials && (
+                                                                    </>) : canWriteFinancials && !isLoanReceivable(debt) && (
                                                                         <button type="button" onClick={() => openIssueDialog(debt)}
                                                                             className="min-h-11 rounded-lg border border-primary/40 px-3 text-xs font-semibold text-primary transition hover:bg-primary/5">
                                                                             Emitir cuenta de cobro
@@ -1575,20 +1742,25 @@ await invalidateFinancialQueries(queryClient);
                                                                     if (!visible.length && !reversedCount) return null;
                                                                     return (
                                                                     <div className="space-y-2">
-                                                                        <p className="text-[9px] font-medium uppercase tracking-widest text-zinc-400">Abonos de esta obligación</p>
+                                                                        <p className="text-[9px] font-medium uppercase tracking-widest text-zinc-400">Abonos y ajustes de esta obligación</p>
                                                                         {!visible.length && <p className="text-xs text-zinc-500">Sin abonos vigentes.</p>}
                                                                         <ul className="divide-y divide-zinc-200 dark:divide-white/10">
                                                                             {visible.map((payment) => (
-                                                                                <li key={payment.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                                                                                <li key={payment.id} data-receivable-payment-kind={payment.kind || 'PAGO'} className="flex flex-wrap items-center justify-between gap-2 py-2">
                                                                                     <div className="min-w-0">
-                                                                                        <p className={cn('text-xs font-semibold', payment.reversedAt ? 'text-zinc-400 line-through' : 'text-zinc-900 dark:text-white')}>
+                                                                                        <p className={cn('flex flex-wrap items-center gap-2 text-xs font-semibold', payment.reversedAt ? 'text-zinc-400 line-through' : 'text-zinc-900 dark:text-white')}>
                                                                                             {formatCurrency(payment.amount || 0)}
+                                                                                            {/* Un acuerdo, canje, compensación o condonación no es dinero: se rotula (20 de octubre de 2026). */}
+                                                                                            {!isCashPayment(payment) && <span className="rounded-md bg-brand-magenta/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-magenta-deep no-underline dark:text-brand-magenta">{settlementKindLabel(payment.kind)}</span>}
                                                                                         </p>
                                                                                         <p className="text-[10px] text-zinc-500">
                                                                                             {new Date(payment.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
                                                                                             {payment.account?.name ? ` · ${payment.account.name}` : ''}
                                                                                             {payment.reference ? ` · ${payment.reference}` : ''}
+                                                                                            {payment.detail?.authorizedBy ? ` · Autorizó ${payment.detail.authorizedBy}` : ''}
                                                                                         </p>
+                                                                                        {payment.detail?.goods && <p className="text-[10px] text-zinc-600 dark:text-zinc-300">Se recibió: {payment.detail.goods}{payment.detail.destination ? ` · Destino: ${payment.detail.destination}` : ''}</p>}
+                                                                                        {payment.detail?.offsetAgainst && <p className="text-[10px] text-zinc-600 dark:text-zinc-300">Compensado contra: {payment.detail.offsetAgainst}</p>}
                                                                                         {/* Lo que se escribió en «Notas» al registrar el pago: es el seguimiento del cobro. */}
                                                                                         {payment.notes && <p data-receivable-payment-note className="mt-1 whitespace-pre-line text-xs text-zinc-600 dark:text-zinc-300">{payment.notes}</p>}
                                                                                         {payment.reversedAt && <p className="text-[10px] text-destructive">Revertido: {payment.reversalReason || 'sin motivo registrado'}</p>}
@@ -1601,10 +1773,17 @@ await invalidateFinancialQueries(queryClient);
                                                                                         )}
                                                                                     </div>
                                                                                     {canWriteFinancials && !payment.reversedAt && (
-                                                                                        <button type="button" onClick={() => openPaymentReversal(debt, payment)}
-                                                                                            className="min-h-11 rounded-lg border border-destructive/30 px-3 text-xs font-semibold text-destructive transition hover:bg-destructive/5">
-                                                                                            Revertir
-                                                                                        </button>
+                                                                                        <div className="flex items-center gap-2">
+                                                                                            {/* Corregir sin revertir (Rodny, 20 de octubre de 2026). */}
+                                                                                            <button type="button" data-receivable-payment-edit onClick={() => { setImportError(''); setPaymentToEdit({ debt, payment }); }}
+                                                                                                className="min-h-11 rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">
+                                                                                                Corregir
+                                                                                            </button>
+                                                                                            <button type="button" onClick={() => openPaymentReversal(debt, payment)}
+                                                                                                className="min-h-11 rounded-lg border border-destructive/30 px-3 text-xs font-semibold text-destructive transition hover:bg-destructive/5">
+                                                                                                Revertir
+                                                                                            </button>
+                                                                                        </div>
                                                                                     )}
                                                                                 </li>
                                                                             ))}
@@ -1650,6 +1829,12 @@ await invalidateFinancialQueries(queryClient);
                 )}
 
                 {/* PESTAÑA 3: NOMINA OPERATIVA */}
+                {/* Cuentas por pagar y terceros (Rodny, 20 de octubre de 2026): el espejo de Cartera. */}
+                {activeTab === 'payables' && (
+                    <PayablesTab filterQuery={filterQuery} formatCurrency={formatCurrency} accounts={financialAccounts?.accounts || []}
+                        canWrite={canWriteFinancials} enabled={!!(currentUser && canAccessFinancials)} />
+                )}
+
                 {activeTab === 'payroll' && (
                     <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
                         <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
@@ -1758,6 +1943,18 @@ await invalidateFinancialQueries(queryClient);
                                                                 )}>{status.label}</span>
                                                             );
                                                         })()}
+                                                        {transaction?.payments?.length > 0 && (() => {
+                                                            const activeCount = transaction.payments.filter((payment) => !payment.reversedAt).length;
+                                                            const open = !!expandedPayrollPayments[transaction.id];
+                                                            return (
+                                                                <button type="button" data-payroll-payments-toggle aria-expanded={open}
+                                                                    onClick={() => setExpandedPayrollPayments((prev) => ({ ...prev, [transaction.id]: !prev[transaction.id] }))}
+                                                                    className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-[#009EB9] hover:underline dark:text-cyan-300">
+                                                                    {open ? 'Ocultar pagos' : (activeCount > 0 ? `Ver ${activeCount} pago${activeCount === 1 ? '' : 's'}` : 'Ver pagos')}
+                                                                    {open ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                                                                </button>
+                                                            );
+                                                        })()}
                                                     </td>
                                                     <td className="p-4 text-right font-black text-zinc-900 dark:text-white">
                                                         {formatCurrency(netAmount)}
@@ -1772,7 +1969,7 @@ await invalidateFinancialQueries(queryClient);
                                                         {!transaction && <span className="text-[11px] text-zinc-400">Pendiente</span>}
                                                     </td>
                                                 </tr>
-                                                {transaction?.payments?.length > 0 && (
+                                                {transaction?.payments?.length > 0 && expandedPayrollPayments[transaction.id] && (
                                                     <tr className="bg-zinc-50/60 dark:bg-white/[0.02]">
                                                         <td colSpan={6} className="px-4 pb-4 pt-0">
                                                             <PayrollPaymentList transaction={transaction} accounts={financialAccounts?.accounts || []} formatCurrency={formatCurrency}
@@ -2211,7 +2408,10 @@ await invalidateFinancialQueries(queryClient);
             </Dialog>
 
             <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={importError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
-            {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} />}
+            {settlementDebt && <ReceivableSettlementDialog key={settlementDebt.id} debt={settlementDebt} saving={isSavingSettlement} error={importError} onClose={() => setSettlementDebt(null)} onSubmit={handleReceivableSettlement} />}
+            {paymentToEdit && <ReceivablePaymentEditDialog key={paymentToEdit.payment.id} debt={paymentToEdit.debt} payment={paymentToEdit.payment} accounts={financialAccounts?.accounts || []} saving={isEditingPayment} error={importError} onClose={() => setPaymentToEdit(null)} onSubmit={handleEditPayment} />}
+            {isLoanDialogOpen && <ReceivableLoanDialog open clients={clientTargetChoices} accounts={financialAccounts?.accounts || []} saving={isSavingLoan} error={importError} onClose={() => setIsLoanDialogOpen(false)} onSubmit={handleCreateLoan} />}
+            {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} onOpenDocument={openClientStatementDocument} openingDocument={downloadingDocumentId === `statement:${statementClient.id}`} />}
 
             {documentPreview && (
                 <ChatFilePreview
@@ -2432,14 +2632,16 @@ await invalidateFinancialQueries(queryClient);
             <Dialog open={!!paymentToReverse} onOpenChange={(open) => !open && setPaymentToReverse(null)}>
                 <DialogContent className="sm:max-w-md dark:bg-zinc-900">
                     <DialogHeader>
-                        <DialogTitle>Revertir abono</DialogTitle>
+                        <DialogTitle>{isCashPayment(paymentToReverse?.payment) ? 'Revertir abono' : 'Revertir ajuste'}</DialogTitle>
                         <DialogDescription>
-                            El abono se conserva en la bitácora marcado como revertido y deja de descontar saldo. El ingreso que generó queda anulado; si el abono se aplicó sobre un ingreso que ya estaba registrado, ese ingreso se conserva y vuelve a quedar disponible.
+                            {isCashPayment(paymentToReverse?.payment)
+                                ? 'El abono se conserva en la bitácora marcado como revertido y deja de descontar saldo. El ingreso que generó queda anulado; si el abono se aplicó sobre un ingreso que ya estaba registrado, ese ingreso se conserva y vuelve a quedar disponible.'
+                                : `${settlementKindLabel(paymentToReverse?.payment?.kind)}: se conserva en la bitácora marcado como revertido y deja de descontar saldo. La deuda vuelve a quedar pendiente por ese valor. No había ingreso que anular.`}
                         </DialogDescription>
                     </DialogHeader>
                     <form onSubmit={handleReversePayment} className="space-y-4">
                         <div className="rounded-lg bg-zinc-50 px-3 py-2.5 text-sm dark:bg-white/5">
-                            <span className="text-zinc-500">Abono</span>
+                            <span className="text-zinc-500">{settlementKindLabel(paymentToReverse?.payment?.kind) === 'Pago' ? 'Abono' : settlementKindLabel(paymentToReverse?.payment?.kind)}</span>
                             <strong className="float-right text-zinc-900 dark:text-white">{formatCurrency(paymentToReverse?.payment?.amount || 0)}</strong>
                             <p className="mt-1 text-xs text-zinc-500">
                                 {paymentToReverse?.debt?.clientName || ''}
@@ -2457,7 +2659,7 @@ await invalidateFinancialQueries(queryClient);
                         <DialogFooter>
                             <button type="button" onClick={() => setPaymentToReverse(null)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button>
                             <button type="submit" disabled={isReversingPayment || !reversalReason.trim()} className="inline-flex items-center justify-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-white hover:bg-destructive/90 disabled:opacity-50">
-                                {isReversingPayment && <Loader2 className="h-4 w-4 animate-spin" />}Revertir abono
+                                {isReversingPayment && <Loader2 className="h-4 w-4 animate-spin" />}{isCashPayment(paymentToReverse?.payment) ? 'Revertir abono' : 'Revertir ajuste'}
                             </button>
                         </DialogFooter>
                     </form>

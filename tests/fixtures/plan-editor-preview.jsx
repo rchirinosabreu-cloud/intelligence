@@ -9,6 +9,7 @@ import { AuthProvider } from '../../src/context/AuthContext';
 import { ConfirmDialogProvider } from '../../src/components/ui/ConfirmDialog';
 import '../../src/index.css';
 import 'react-datepicker/dist/react-datepicker.css';
+import { itemsNeedingRevisionRequest } from '../../src/lib/contentApproval';
 
 // Muestra local del editor de parrilla con el mes en un carril (Rodny, 24 de septiembre de 2026).
 // Nada se guarda: la API vive en memoria. Se monta el componente **real**, no una copia.
@@ -142,6 +143,11 @@ if (new URLSearchParams(window.location.search).get('textoLargo') === '1') {
   items[0].captionText += `\n\n${longLink}`;
 }
 
+if (new URLSearchParams(window.location.search).get('publicada') === '1') {
+  items[0].status = 'PUBLICADO';
+  items[0].revisionRequestedAt = '2026-10-19T12:00:00.000Z';
+}
+
 const plan = {
   id: 'p1', month: 9, year: 2026, status: 'EN_REVISION',
   strategicObjectives: 'Posicionar a ENDOVA como una unidad de atención especializada cercana.',
@@ -240,7 +246,7 @@ axios.defaults.adapter = async (config) => {
   // «Pedir nueva revisión»: la pieza sigue aprobada pero vuelve a manos del cliente.
   const planRevision = /\/api\/content\/plans\/([^/?]+)\/request-revision$/.test(url);
   if (planRevision) {
-    const pending = items.filter((item) => ['APROBADO', 'REALIZADO', 'PUBLICADO'].includes(item.status) && !item.revisionRequestedAt);
+    const pending = itemsNeedingRevisionRequest(items);
     pending.forEach((item) => { item.revisionRequestedAt = new Date().toISOString(); });
     return ok({ requested: pending.length });
   }

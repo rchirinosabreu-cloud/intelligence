@@ -1,6 +1,6 @@
 import express from 'express';
 import multer from 'multer';
-import { getClientFinancialStatementHandler } from '../../controllers/financialClientStatementController.js';
+import { getClientFinancialStatementHandler, streamClientStatementPdfHandler } from '../../controllers/financialClientStatementController.js';
 import {
     commitFinancialImport,
     getFinancialDashboard,
@@ -27,6 +27,7 @@ import {
     createFinancialAccountHandler,
     createReceivableHandler,
     createReceivablePaymentHandler,
+    createLoanHandler,
     deleteReceivableHandler,
     generatePayrollPeriodHandler,
     getFinancialIntegrityAuditHandler,
@@ -45,6 +46,9 @@ import {
     reopenFinancialPeriodHandler,
     replaceFinancialRecordAllocationsHandler,
     reverseReceivablePaymentHandler,
+    updateReceivablePaymentHandler,
+    settleReceivableHandler,
+    listReceivableAdjustmentsHandler,
     streamFinancialRecordDocumentHandler,
     streamReceivablePdfHandler,
     updateFinancialRecordHandler,
@@ -67,6 +71,19 @@ import {
     listClientDirectoryHandler,
     updateDirectoryClientHandler
 } from '../../controllers/clientDirectoryController.js';
+import {
+    createPayableHandler,
+    createThirdPartyHandler,
+    listPayablesLedgerHandler,
+    listThirdPartiesHandler,
+    payPayableHandler,
+    reversePayablePaymentHandler,
+    streamPayableDocumentHandler,
+    updatePayableHandler,
+    updateThirdPartyHandler,
+    uploadPayableDocumentHandler,
+    voidPayableHandler
+} from '../../controllers/accountsPayableController.js';
 
 const router = express.Router();
 const upload = multer({
@@ -106,6 +123,9 @@ router.get('/monthly-ledger', requireFinancialAccess, getFinancialMonthlyLedger)
 router.patch('/monthly-summaries/:id', requireFinancialWrite, updateFinancialMonthlySummary);
 router.get('/client-reconciliation', requireFinancialAccess, getFinancialClientReconciliation);
 router.get('/clients/:clientId/statement', requireFinancialAccess, getClientFinancialStatementHandler);
+// El estado de cuenta en PDF, a una fecha de corte (Rodny, 20 de octubre de 2026). Solo por la
+// API autenticada, como el resto de los documentos financieros.
+router.get('/clients/:clientId/statement/document', requireFinancialAccess, streamClientStatementPdfHandler);
 // El directorio de clientes (30 de septiembre de 2026): la ficha completa de cada cliente,
 // que mantiene quien lleva el financiero con su propio permiso, con auditoría.
 router.get('/clients', requireFinancialAccess, listClientDirectoryHandler);
@@ -130,9 +150,34 @@ router.put('/receivables/:id/document', requireFinancialWrite, correctReceivable
 // TRM oficial para las cuentas de cobro en dólares; la misma fuente que Cotizaciones.
 router.get('/exchange-rate', requireFinancialAccess, getFinancialExchangeRateHandler);
 router.post('/receivables/:id/payments', requireFinancialWrite, createReceivablePaymentHandler);
+// Saldar sin dinero (Rodny, 20 de octubre de 2026): acuerdo por menor valor, canje,
+// compensación o condonación. Mismo permiso que registrar un pago; nunca crea un ingreso.
+router.post('/receivables/:id/settlements', requireFinancialWrite, settleReceivableHandler);
+// Resumen de ajustes de cartera (Rodny, 20 de octubre de 2026): cierres sin dinero y
+// diferencia en cambio del periodo. Solo lee.
+router.get('/receivable-adjustments', requireFinancialAccess, listReceivableAdjustmentsHandler);
+// Préstamos a terceros (Rodny, 20 de octubre de 2026): el egreso y la cuenta por cobrar de
+// una vez; la devolución entra como reintegro por «Registrar pago» de siempre.
+router.post('/loans', requireFinancialWrite, createLoanHandler);
 // Corregir un abono mal registrado es parte del trabajo diario de quien lo registra:
 // mismo permiso que crearlo, con motivo obligatorio y auditoría.
 router.post('/receivable-payments/:paymentId/reverse', requireFinancialWrite, reverseReceivablePaymentHandler);
+// Corregir un abono sin revertirlo (Rodny, 20 de octubre de 2026): valor, fecha, cuenta,
+// referencia y notas, con motivo cuando cambia el dinero; su ingreso cambia con él.
+router.patch('/receivable-payments/:paymentId', requireFinancialWrite, updateReceivablePaymentHandler);
+// Terceros y cuentas por pagar (Rodny, 20 de octubre de 2026): el espejo de Cartera. Pagar crea el
+// egreso en Movimientos ligado al pago; el soporte del tercero se guarda como evidencia.
+router.get('/third-parties', requireFinancialAccess, listThirdPartiesHandler);
+router.post('/third-parties', requireFinancialWrite, createThirdPartyHandler);
+router.patch('/third-parties/:id', requireFinancialWrite, updateThirdPartyHandler);
+router.get('/payables-ledger', requireFinancialAccess, listPayablesLedgerHandler);
+router.post('/payables', requireFinancialWrite, createPayableHandler);
+router.patch('/payables/:id', requireFinancialWrite, updatePayableHandler);
+router.post('/payables/:id/void', requireFinancialWrite, voidPayableHandler);
+router.post('/payables/:id/payments', requireFinancialWrite, payPayableHandler);
+router.post('/payables/:id/documents', requireFinancialWrite, receiveFinancialDocument, uploadPayableDocumentHandler);
+router.get('/payables/:id/documents/:documentId/file', requireFinancialAccess, streamPayableDocumentHandler);
+router.post('/payable-payments/:paymentId/reverse', requireFinancialWrite, reversePayablePaymentHandler);
 router.get('/payroll-ledger', requireFinancialAccess, getFinancialPayrollLedger);
 router.post('/payroll-contracts', requireFinancialWrite, createFinancialPayrollContract);
 router.patch('/payroll-contracts/:id', requireFinancialWrite, updateFinancialPayrollContract);

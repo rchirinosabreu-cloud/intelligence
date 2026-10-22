@@ -84,6 +84,11 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
         clientId: null,
         clientName: 'Jazmin',
         clientSlug: 'jazmin',
+        // CLIENTE o PRESTAMO (20 de octubre de 2026): lo anterior es de clientes.
+        kind: 'CLIENTE',
+        counterpartyType: null,
+        counterpartyName: null,
+        loanRecordId: null,
         // La identidad del tercero viaja con la obligación: la pantalla la necesita
         // para saber si puede emitir, y para ofrecer completarla sin salir de Cartera.
         clientLegalName: null,
@@ -91,6 +96,8 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
         clientDocumentNumber: null,
         amount: 4680000,
         paidAmount: 680000,
+        // Lo saldado sin dinero (acuerdo, canje, compensación, condonación) va aparte (20 de octubre de 2026).
+        settledAmount: 0,
         outstanding: 4000000,
         period: '2026-01-01T00:00:00.000Z',
         month: 1,
@@ -115,6 +122,8 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
         exchangeRateDate: null,
         documentTotal: 0,
         foreignAmount: null,
+        // En dólares, las veces que la cartera en pesos se ajustó a lo que entró (20 de octubre de 2026).
+        exchangeAdjustments: [],
         payments: [{
             id: 'payment-1',
             amount: 680000,
@@ -124,6 +133,9 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
             account: { id: 'account-1', name: 'Bancolombia' },
             reversedAt: null,
             reversalReason: null,
+            // Un abono anterior a los cierres sin dinero es un pago.
+            kind: 'PAGO',
+            detail: null,
             // Comprobantes del abono (5 de octubre de 2026): este no tiene ingreso enlazado.
             financialRecordId: null,
             documents: []

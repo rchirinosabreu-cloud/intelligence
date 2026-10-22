@@ -3,6 +3,7 @@ import { createClientWith } from './clientService.js';
 import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
 import { normalizeReceivableCurrency } from '../lib/receivableCurrency.js';
 import { normalizeClientProfile } from '../lib/clientProfile.js';
+import { isReceivableClosed, receivableStatusAfter } from '../lib/receivableSettlement.js';
 import { resolveDocumentMoney } from './receivableDocumentService.js';
 import {
     assertOpenFinancialPeriod,
@@ -144,7 +145,8 @@ export const deleteReceivable = async (prismaClient, receivableId, reason, actor
                 include: {
                     items: { orderBy: { sortOrder: 'asc' } },
                     payments: { orderBy: { paidAt: 'desc' } },
-                    client: { select: { id: true, name: true } }
+                    client: { select: { id: true, name: true } },
+                    loanRecord: true
                 }
             });
             if (!existing) throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
@@ -177,8 +179,24 @@ export const deleteReceivable = async (prismaClient, receivableId, reason, actor
             if (existing.payments?.length) {
                 await tx.receivablePayment.deleteMany({ where: { receivableId } });
             }
+            // El egreso que desembolsó un préstamo (20 de octubre de 2026): si lo creó la propia
+            // plataforma se anula, porque ese dinero no existía por su cuenta; si estaba registrado
+            // a mano solo se suelta, para que vuelva a estar disponible.
+            let voidedLoanRecordId = null;
+            const loanRecord = existing.loanRecord;
+            if (loanRecord && loanRecord.origin === 'SYSTEM' && loanRecord.status !== 'VOIDED') {
+                if (loanRecord.year && loanRecord.month) await assertOpenFinancialPeriod(tx, loanRecord.year, loanRecord.month);
+                const voided = await tx.financialRecord.update({
+                    where: { id: loanRecord.id },
+                    data: { status: 'VOIDED', voidedAt: new Date(), voidReason: `Préstamo eliminado${voidReason ? `: ${voidReason}` : ''}` }
+                });
+                await tx.financialAuditEvent.create({
+                    data: { entityType: 'FinancialRecord', entityId: loanRecord.id, action: 'VOID', before: cloneForAudit(loanRecord), after: cloneForAudit(voided), actorId }
+                });
+                voidedLoanRecordId = loanRecord.id;
+            }
             await tx.accountsReceivable.delete({ where: { id: receivableId } });
-            return { id: receivableId, number: existing.number ?? null, clientName: existing.client?.name || existing.sourceLabel || null };
+            return { id: receivableId, number: existing.number ?? null, clientName: existing.client?.name || existing.counterpartyName || existing.sourceLabel || null, voidedLoanRecordId };
         }, { isolationLevel: 'Serializable' });
     } catch (error) {
         if (error?.code === 'P2034') {
@@ -198,7 +216,7 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
         return await prismaClient.$transaction(async (tx) => {
             const existing = await tx.accountsReceivable.findUnique({
                 where: { id: receivableId },
-                include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, reversedAt: true } } }
+                include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true, kind: true, reversedAt: true } } }
             });
             if (!existing) {
                 throw new FinancialDomainError('RECEIVABLE_NOT_FOUND', 'La cuenta por cobrar no existe.', 404);
@@ -238,10 +256,10 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
                 }
                 paidCents += cents;
             }
-            if (existing.status === 'PAGADO' && financialCents(existing.amount) !== paidCents) {
+            if (isReceivableClosed(existing.status) && financialCents(existing.amount) !== paidCents) {
                 throw new FinancialDomainError(
                     'RECEIVABLE_BALANCE_INVALID',
-                    'La cuenta figura pagada, pero sus abonos no respaldan ese estado. Requiere revisión antes de editarla; no se cambió su saldo ni se reabrió el cobro.',
+                    'La cuenta figura cerrada, pero sus abonos y ajustes no respaldan ese estado. Requiere revisión antes de editarla; no se cambió su saldo ni se reabrió el cobro.',
                     409
                 );
             }
@@ -269,7 +287,7 @@ export const updateReceivable = async (prismaClient, receivableId, input = {}, a
 
             const data = {
                 amount,
-                status: outstandingCents === 0 ? 'PAGADO' : ((input.status ?? existing.status) === 'PROMESADO' ? 'PROMESADO' : 'DEBE'),
+                status: receivableStatusAfter({ outstandingCents, payments: existing.payments, currentStatus: existing.status, requestedStatus: input.status }),
                 dueDate,
                 metadata: {
                     ...(existing.metadata && typeof existing.metadata === 'object' ? existing.metadata : {}),

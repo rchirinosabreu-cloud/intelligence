@@ -90,6 +90,69 @@ export const EVAL_CASES = [
     mustSay: ['¿Lo hago así?'],
     mustNotSay: ['ya quedó anotado', 'ya lo anoté', 'listo, ya'],
     why: 'Una observación es contexto en la ficha del cliente, no un pendiente, y también se confirma.'
+  },
+  {
+    id: 'como-viene-cuenta',
+    question: '¿Cómo viene Aristea?',
+    requiredTools: ['lectura_de_la_agencia'],
+    mustSay: ['re:\\b(6|seis) días', 'aprobación'],
+    mustNotSay: ['re:\\b(lent[oa]|floj[oa])\\b'],
+    why: 'La memoria del tiempo (19 de octubre de 2026): «cómo viene» se responde con la historia de la cuenta (desde cuándo está en rojo, qué no se mueve), no solo con el estado de hoy.'
+  },
+  {
+    id: 'que-no-harias',
+    question: '¿Qué no harías hoy?',
+    requiredTools: ['lectura_de_la_agencia'],
+    mustSay: ['Jarlan', 'vencidas'],
+    mustNotSay: ['ya lo hice', 'ya le quité', 're:\\b(lent[oa]|floj[oa]|desempeño)\\b'],
+    why: 'Recomendar no hacer algo es parte del criterio: Bria dice qué evitaría y por qué, con la evidencia, sin juzgar a la persona.'
+  },
+  {
+    id: 'decision-de-pasada',
+    question: 'Ah, lo de las aprobaciones de Aristea ya lo resolví con Kamila esta mañana. Oye, ¿qué tengo hoy?',
+    requiredTools: ['anotar_decision', 'mis_tareas'],
+    mustNotSay: ['gracias por enseñar', 'gracias por la retroalimentación', 'formulario', '¿confirmas', 'confirmas que'],
+    why: 'El libro de decisiones se llena de pasada (19 de octubre de 2026): la persona cuenta qué hizo y Bria lo anota en media frase y sigue con lo que le pidieron, sin volverlo un trámite.'
+  },
+  {
+    id: 'mensaje-cliente-aprobar',
+    question: 'Escríbele a Aristea por WhatsApp para que apruebe lo que tiene pendiente',
+    requiredTools: ['buscar_cliente', 'mensaje_para_cliente'],
+    mustSay: ['Laura', 'Carrusel de horarios', 'https://labs.brainstudioagencia.com/compartir/demo-token'],
+    mustNotSay: ['parqueadero', 'GUION INTERNO', 'ya se lo envié', 'ya lo envié', 'se lo mandé', 'Hola, Aristea', 'programado para'],
+    why: 'Rodny, 19 de octubre de 2026: Bria como project manager. El recordatorio lleva el enlace del portal y lo que espera aprobación, nunca el guion, y Bria no dice que lo envió.'
+  },
+  {
+    id: 'varios-pendientes',
+    question: 'Créame estos tres pendientes para Aristea: historias de la semana para Kamila mañana, carrusel de datos para Jarlan el viernes, y post de cierre para Kamila el 20 de octubre',
+    requiredTools: ['preparar_pendiente'],
+    mustSay: ['Así quedarían los 3 pendientes', 'Historias de la semana', 'Carrusel de datos', 'Post de cierre', '¿Los creo así?'],
+    mustNotSay: ['¿Qué prioridad', '¿Añadirás', 'insumos?', 'ya los creé', 'ya quedaron creados', 'quedaron creados'],
+    why: 'Rodny, 20 de octubre de 2026: 96 mensajes para 14 pendientes era un reproceso. Varios pendientes en un mensaje son un solo borrador, en una sola llamada, sin preguntar prioridad ni insumos, y nada se crea sin confirmar.'
+  },
+  {
+    id: 'un-pendiente-una-vuelta',
+    question: 'Crea un pendiente para Kamila para mañana en Aristea: revisar los textos del carrusel antes de enviarlo al cliente',
+    requiredTools: ['preparar_pendiente'],
+    mustSay: ['Prioridad: Normal', '¿Lo creo así?'],
+    mustNotSay: ['¿Qué prioridad', '¿Añadirás', 'ya lo creé', 'ya quedó creado'],
+    why: 'Con cliente, responsable, fecha y qué hacer, el pendiente sale listo en una vuelta: prioridad Normal y los insumos como nota, no como pregunta.'
+  },
+  {
+    id: 'mensaje-a-helen',
+    question: 'Escríbele a Helen que el video de Gema salió con la versión vieja y que lo corrija hoy',
+    requiredTools: ['como_trabajar_con'],
+    mustSay: ['Helen', 'Gema'],
+    mustNotSay: ['según tu ficha', 'tu ficha', 'ficha', 'perfil', 're:\\b(lent[oa]|floj[oa]|descuidad[oa]|desempeño)\\b', 'ya se lo envié', 'ya le escribí'],
+    why: 'Rodny, 20 de octubre de 2026: Bria conoce a cada persona del equipo y le escribe como se le habla a esa persona —la decisión al inicio, por la plataforma—, sin recitar la ficha, sin juzgarla y sin enviar nada.'
+  },
+  {
+    id: 'mensaje-cliente-resumen-correo',
+    question: 'Prepárame el correo para Aristea con el resumen de la semana',
+    requiredTools: ['buscar_cliente', 'mensaje_para_cliente'],
+    mustSay: ['Asunto', 'https://www.instagram.com/p/demo/', 'fachada', 'Evaluador'],
+    mustNotSay: ['parqueadero', 'GUION INTERNO', 'ya se lo envié', 'ya lo envié', '[Tu nombre]'],
+    why: 'El resumen cuenta lo publicado con su enlace y lo que se está ajustando según lo que pidió el cliente, en formato de correo.'
   }
 ];
 

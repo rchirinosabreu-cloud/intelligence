@@ -30,6 +30,11 @@ const { createOpenAIClient } = await import(root + 'src/services/openAIClient.js
 const { runAssistant } = await import(root + 'src/lib/briaAssistant.js');
 const { briaAssistantTools } = await import(root + 'src/services/briaAssistantTools.js');
 const { createBriaActionTools } = await import(root + 'src/services/briaActionTools.js');
+const { createDailyReadingTools } = await import(root + 'src/services/dailyReadingTools.js');
+const { createAgencyFactTools } = await import(root + 'src/services/briaAgencyFactTools.js');
+const { createBriaTaskDraftService } = await import(root + 'src/services/briaTaskDraftService.js');
+const { createBriaTaskTools } = await import(root + 'src/services/briaTaskTools.js');
+const { briaClientUpdateTools } = await import(root + 'src/services/briaClientUpdateTools.js');
 const { runWithAiContext } = await import(root + 'src/lib/aiRequestContext.js');
 const { AI_MODELS } = await import(root + 'src/config/aiConfig.js');
 
@@ -89,11 +94,79 @@ const fixtureRuns = {
     ]
   })
 };
+// La memoria del tiempo (19 de octubre de 2026): una lectura ficticia con la forma que entrega el servicio.
+const readingFixture = ({ cliente = '' } = {}) => ({
+  fecha: today, comparadaCon: '2026-10-14', escritaPor: 'Bria', historia: '12 fotos diarias desde el 2026-10-04',
+  resumen: 'Aristea Ficticia sigue en rojo y sus aprobaciones no se mueven; Jarlan Ficticio acumula vencidas desde el viernes.',
+  decisiones: [
+    { numero: 1, titulo: 'Destrabar las aprobaciones de Aristea Ficticia', porque: 'Cuatro piezas llevan ocho días esperando y el mes va atrasado.', tipo: 'HACER', sobre: 'Aristea Ficticia', pedido: 'Redáctame un mensaje por WhatsApp para Aristea Ficticia para que apruebe lo pendiente.', seVeEn: ['Aristea Ficticia lleva 8 días seguidos con piezas esperando su aprobación (hoy 4).'], anotada: null },
+    { numero: 2, titulo: 'No cargarle más trabajo a Jarlan Ficticio esta semana', porque: 'Lleva cinco días con tareas vencidas y pasó de 2 a 5 desde la última lectura.', tipo: 'NO_HACER', sobre: 'Jarlan Ficticio', pedido: null, seVeEn: ['Jarlan Ficticio lleva 5 días con tareas vencidas (hoy 5).', 'Jarlan Ficticio pasó de 2 a 5 tareas vencidas desde la última lectura.'], anotada: null }
+  ],
+  libroDeDecisiones: { propuestas: 9, anotadas: 4, hechas: 3, descartadas: 1, aplazadas: 0, hechasQueSeResolvieron: 2, hechasQueSiguen: 1, descartadasQueSeResolvieronSolas: 0, descartadasQueSiguen: 1, tasaDeAdopcion: 0.33, tasaDeAcierto: 0.67, pendientesDeDesenlace: 0, lectura: 'De 9 decisiones propuestas se anotaron 4: 3 hechas, 1 descartada y 0 aplazadas. De las hechas con desenlace, 2 de 3 se resolvieron. De las descartadas, 0 se resolvieron solas y 1 sigue.' },
+  senales: [
+    { sobre: 'Aristea Ficticia', cambio: 'peor', texto: 'Aristea Ficticia lleva 6 días en rojo: Van 3 publicadas; a esta fecha deberían ir 6.' },
+    { sobre: 'Aristea Ficticia', cambio: 'peor', texto: 'Aristea Ficticia lleva 8 días seguidos con piezas esperando su aprobación (hoy 4).' },
+    { sobre: 'Jarlan Ficticio', cambio: 'peor', texto: 'Jarlan Ficticio lleva 5 días con tareas vencidas (hoy 5).' },
+    { sobre: 'Nube Azul Ficticia', cambio: 'mejor', texto: 'Nube Azul Ficticia volvió a verde: estaba en amarillo.' }
+  ],
+  ...(plain(cliente).includes('arist') ? { cuenta: {
+    nombre: 'Aristea Ficticia', enlace: '/clientes/operacion/aristea-ficticia', color: 'rojo', motivos: ['Van 3 publicadas; a esta fecha deberían ir 6.'],
+    lectura: 'Publica por debajo del ritmo del mes y las aprobaciones llevan más de una semana sin moverse.',
+    senales: ['Aristea Ficticia lleva 6 días en rojo: Van 3 publicadas; a esta fecha deberían ir 6.', 'Aristea Ficticia lleva 8 días seguidos con piezas esperando su aprobación (hoy 4).'],
+    serie: ['2026-10-09', '2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15'].map((fecha, i) => ({ fecha, color: i === 0 ? 'amarillo' : 'rojo', publicadas: `${i < 4 ? 2 : 3} de 12 (deberían ir ${3 + Math.floor(i / 2)})`, esperanAprobacion: 4, devoluciones: 1, tareasAbiertas: 6, vencidas: i < 3 ? 0 : 1, horasDelDiaAnterior: i % 2 ? 1.5 : 0 }))
+  } } : {})
+});
 const titles = { TASK_UPDATE: 'Cambiar un pendiente', TASKS_STATUS: 'Cambiar varios pendientes', CLIENT_NOTE: 'Registrar una observación' };
 const fakeActionService = { prepare: async ({ type, args }) => ({ type, title: titles[type] || type, status: 'PENDING', summary: Object.entries(args || {}).filter(([, value]) => value != null && value !== '' && (!Array.isArray(value) || value.length)).map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : value}`), missing: [], warnings: [] }) };
 const readTools = briaAssistantTools.filter((tool) => fixtureRuns[tool.name]).map((tool) => ({ ...tool, allowed: () => true, run: async (args) => ({ data: fixtureRuns[tool.name](args || {}), sources: [] }) }));
 const actionTools = createBriaActionTools(fakeActionService).filter((tool) => ['cambiar_pendiente', 'cambiar_pendientes', 'registrar_observacion'].includes(tool.name)).map((tool) => ({ ...tool, allowed: () => true }));
-const baseTools = [...readTools, ...actionTools];
+const readingTools = createDailyReadingTools({
+  explain: async (args) => readingFixture(args),
+  // El libro de decisiones (19 de octubre de 2026): la anotación ficticia responde como el servicio real.
+  recordVerdict: async ({ ref, veredicto }) => (/^1$|arist|aprobaci/i.test(String(ref)) ? { saved: true, decision: 'Destrabar las aprobaciones de Aristea Ficticia', veredicto: /no\b/i.test(veredicto) ? 'NO' : 'HECHO', dia: today } : { saved: false, motivo: 'No sé a cuál decisión de la lectura te refieres: 1. Destrabar las aprobaciones de Aristea Ficticia · 2. No cargarle más trabajo a Jarlan Ficticio esta semana.' })
+}).map((tool) => ({ ...tool, allowed: () => true }));
+// Escribirle al cliente (19 de octubre de 2026): la herramienta real, sobre una parrilla ficticia, para probar también
+// su instrucción y que nunca se cuele lo que el cliente no ve.
+const noon = (day) => new Date(`${day}T12:00:00.000Z`);
+const clientPlanItems = [
+  { id: 'cp-1', objective: 'Reel de la nueva sede', format: 'Reel', publishDate: noon('2026-10-10'), publishTime: '11:00', status: 'PUBLICADO', comments: '', revisionRequestedAt: null, publications: [{ status: 'PUBLISHED', platform: 'INSTAGRAM', permalink: 'https://www.instagram.com/p/demo/', publishedAt: new Date('2026-10-10T16:01:00Z'), scheduledAt: null }] },
+  { id: 'cp-2', objective: 'Carrusel de horarios', format: 'Carrusel', publishDate: noon('2026-10-17'), publishTime: null, status: 'EN_REVISION', comments: '', revisionRequestedAt: null, publications: [], copyText: 'GUION INTERNO: escena del parqueadero' },
+  { id: 'cp-3', objective: 'Post de bienvenida', format: 'Post', publishDate: noon('2026-10-20'), publishTime: null, status: 'DEVUELTO', comments: '[Cliente - 14/10/2026]: Usen la foto de la fachada', revisionRequestedAt: null, publications: [] }
+];
+const clientUpdateDb = { contentPlan: { findFirst: async ({ where }) => (where.clientId === 'cli-aristea' ? { id: 'plan-aristea-10', month: 10, year: 2026, shareToken: 'demo-token', client: { name: 'Aristea Ficticia', contactName: 'Laura Ficticia' }, contentItems: clientPlanItems } : null) } };
+const clientTools = briaClientUpdateTools.map((tool) => ({ ...tool, allowed: () => true, run: (args, ctx) => tool.run(args, { ...ctx, db: clientUpdateDb, today }) }));
+// Las fichas del equipo (20 de octubre de 2026): una ficha ficticia con la forma que entrega el servicio. Solo la de
+// cómo trabajar con alguien; la memoria de la agencia completa no entra en estos casos.
+const fichaTools = createAgencyFactTools({
+  consult: async () => ({ hechos: [], dudas: [], nota: 'Sin hechos ficticios.' }),
+  record: async () => { throw new Error('No se guarda nada en la evaluación.'); },
+  retire: async () => { throw new Error('No se retira nada en la evaluación.'); },
+  howToWorkWith: async ({}, { nombre }) => (/helen/i.test(nombre) ? {
+    persona: { nombre: 'Helen Ficticia', rol: 'Estratega digital' },
+    ficha: [
+      'Confiar: la comunicación con el cliente, cortés y argumentada; el ojo para el texto y la coherencia de marca.',
+      'Revisar: la versión que sale: errores de versión o destinatario en semanas de pico.',
+      'Cómo decírselo: con la decisión que se le pide al inicio y en la plataforma, no en el grupo. Acepta la corrección enseguida; bajo presión se defiende con el contexto y suele tenerlo.',
+      'Qué le pesa: heredar cuentas sin empalme y los días sin computador o sin conexión.',
+      'Dónde roza: a sus pares les dice las cosas de frente y reconoce su parte.'
+    ],
+    nota: 'Úsala sin recitarla: nunca digas «según tu ficha» ni cuentes a nadie qué dice.'
+  } : { persona: null, ficha: null, nota: 'No hay nadie en el equipo con ese nombre.' })
+}).filter((tool) => tool.name === 'como_trabajar_con').map((tool) => ({ ...tool, allowed: () => true }));
+// Crear pendientes en una sola vuelta (20 de octubre de 2026): el servicio real de borradores sobre un equipo y
+// unos clientes ficticios; nunca crea nada, porque en la evaluación nadie confirma.
+const members = [{ id: 'm-kamila', name: 'Kamila Ficticia', role: 'Project Manager', isActive: true, userId: 'u-kamila' }, { id: 'm-jarlan', name: 'Jarlan Ficticio', role: 'Community Manager', isActive: true, userId: 'u-jarlan' }];
+const like = (value, term) => plain(value).includes(plain(term));
+const taskDrafts = createBriaTaskDraftService({
+  db: {
+    client: { findMany: async ({ where }) => clients.filter((row) => where.OR.some((c) => (c.name?.contains && like(row.nombre, c.name.contains)) || (c.slug?.equals && plain(row.slug) === plain(c.slug.equals)))).map((row) => ({ id: row.id, name: row.nombre, slug: row.slug, isArchived: false })), findUnique: async () => null },
+    teamMember: { findMany: async ({ where }) => members.filter((m) => where.OR.some((c) => c.name?.contains && like(m.name, c.name.contains))), findUnique: async () => null },
+    task: { findUnique: async () => null }
+  },
+  now: () => new Date(`${today}T17:00:00Z`), createTask: async () => { throw new Error('En la evaluación no se crea ningún pendiente.'); }
+});
+const taskTools = createBriaTaskTools(taskDrafts).map((tool) => ({ ...tool, allowed: () => true, run: (args, ctx) => tool.run(args, { ...ctx, taskEvidence: ctx.question || '' }) }));
+const baseTools = [...readTools, ...actionTools, ...clientTools, ...readingTools, ...fichaTools, ...taskTools];
 
 const provider = createOpenAIClient({ apiKey: config.OPENAI_API_KEY, models: AI_MODELS });
 const selected = EVAL_CASES.filter((item) => !only || item.id === only);

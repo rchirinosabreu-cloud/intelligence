@@ -10,6 +10,7 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import AvatarEditor from '@/components/profile/AvatarEditor';
 import MfaSettings from '@/components/security/MfaSettings';
 import MfaAdminReset from '@/components/security/MfaAdminReset';
+import WhatsAppLink from '@/components/profile/WhatsAppLink';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs.jsx";
 import { User, Key, StickyNote, ClipboardList, TrendingUp, Loader2, Save, Plus, Trash2, Edit2, X, Check, Calendar, Target, Award, Info, Camera } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
@@ -369,10 +370,14 @@ const Profile = () => {
 
                 {/* --- TAB: GENERAL --- */}
                 <TabsContent value="general" className="space-y-6 outline-none">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    {/* Tres columnas iguales (Rodny, 21 de octubre de 2026): información, seguridad, y verificación
+                        en dos pasos con Bria en WhatsApp una encima de la otra. */}
+                    {/* Las tres al mismo alto (Rodny, el mismo día): la fila se estira a la columna más alta y las
+                        tarjetas de información y seguridad la llenan. */}
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch" data-profile-general-grid>
                         {/* Profile Info Form */}
-                        <div className="lg:col-span-2 space-y-6">
-                            <Card className="bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl overflow-hidden">
+                        <div className="min-w-0 flex flex-col">
+                            <Card className="flex-1 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl overflow-hidden">
                                 <CardHeader className="bg-zinc-50/50 dark:bg-zinc-800/20 border-b border-zinc-100 dark:border-zinc-800">
                                     <CardTitle className="text-xl flex items-center gap-2">
                                         <User className="w-5 h-5 text-primary" /> Información de Perfil
@@ -431,9 +436,9 @@ const Profile = () => {
                         </div>
 
                         {/* Password Form (Only for own profile) */}
-                        <div className="space-y-6">
+                        <div className="min-w-0 flex flex-col">
                             {isOwnProfile ? (
-                                <Card className="bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl overflow-hidden">
+                                <Card className="flex-1 bg-white/50 dark:bg-zinc-900/50 backdrop-blur-sm border-zinc-200 dark:border-zinc-800 shadow-xl rounded-2xl overflow-hidden">
                                     <CardHeader className="bg-zinc-50/50 dark:bg-zinc-800/20 border-b border-zinc-100 dark:border-zinc-800">
                                         <CardTitle className="text-xl flex items-center gap-2">
                                             <Key className="w-5 h-5 text-amber-500" /> Seguridad
@@ -490,8 +495,13 @@ const Profile = () => {
                                     {isAdmin && <MfaAdminReset userId={profileData.id || userId} name={profileData.name} />}
                                 </Card>
                             )}
-                            {isOwnProfile && <MfaSettings />}
                         </div>
+                        {isOwnProfile && (
+                            <div className="min-w-0 space-y-6" data-profile-security-column>
+                                <MfaSettings />
+                                <WhatsAppLink />
+                            </div>
+                        )}
                     </div>
                 </TabsContent>
 

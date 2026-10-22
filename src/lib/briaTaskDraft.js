@@ -1,10 +1,13 @@
 import { humanDate } from './briaAssistant.js';
 import { normalizeQuickReplies } from './briaQuickReplies.js';
 export { normalizeQuickReplies } from './briaQuickReplies.js';
-const clean = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const clean = value => String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim();
 const months = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
 const validDay = value => /^\d{4}-\d{2}-\d{2}$/.test(value) && Number.isFinite(Date.parse(value)) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
 const advanceDay = (today, amount) => { const day = new Date(`${today}T12:00:00Z`); day.setUTCDate(day.getUTCDate() + amount); return day.toISOString().slice(0, 10); };
+export const TASK_PRIORITIES = ['NORMAL','ALTA','URGENTE'];
+export const MAX_TASKS_PER_DRAFT = 15;
+const PRIORITY_LABEL = { NORMAL: 'Normal', ALTA: 'Alta', URGENTE: 'Urgente' };
 export const resolveTaskDate = (value, today) => {
   const text = clean(value); if (!validDay(today)) return null;
   if (validDay(text)) return text;
@@ -16,32 +19,68 @@ export const resolveTaskDate = (value, today) => {
   const day = `${written[3] || today.slice(0, 4)}-${String(months.indexOf(written[2]) + 1).padStart(2, '0')}-${written[1].padStart(2, '0')}`;
   return validDay(day) ? day : null;
 };
-export const isTaskConfirmation = question => /^(?:(?:si|ok|vale)[,. ]+)?(?:crear (?:el )?pendiente|crea (?:el )?(?:pendiente|tarea)|confirmo|procede|adelante|confirmar creacion)[.! ]*$/.test(clean(question));
-export const isTaskCancellation = question => /^(?:cancelar (?:el )?pendiente|cancela (?:el )?(?:pendiente|tarea)|descarta (?:el |este )?pendiente)[.! ]*$/.test(clean(question));
-export const taskCreationIntent = question => /\b(?:crea(?:r|me)?|asigna(?:r|le)?|registr(?:a|ar)|pon(?:le|me)?|nuevo|nueva)\b[^.!?]{0,140}\b(?:pendiente|tarea)\b/.test(clean(question));
+export const isTaskConfirmation = question => /^(?:(?:si|ok|vale)[,. ]+)?(?:crear (?:el |los )?pendientes?|crea (?:el |los )?(?:pendientes?|tareas?)|confirmo|procede|adelante|confirmar creacion)[.! ]*$/.test(clean(question));
+export const isTaskCancellation = question => /^(?:cancelar (?:el |los )?pendientes?|cancela (?:el |los )?(?:pendientes?|tareas?)|descarta (?:el |este |los )?pendientes?)[.! ]*$/.test(clean(question));
+export const taskCreationIntent = question => /\b(?:crea(?:r|me)?|asigna(?:r|le)?|registr(?:a|ar)|pon(?:le|me)?|nuevo|nueva|nuevos|nuevas)\b[^.!?]{0,140}\b(?:pendientes?|tareas?)\b/.test(clean(question));
 export const materialDeclined = (question, stage) => /\b(?:sin|no (?:hay|tengo|tenemos|anadire|voy a anadir|quiero anadir|necesito))\b[^.!?]{0,50}\b(?:insumos|referencias|material)\b/.test(clean(question)) || (stage === 'MATERIAL' && /^(?:no|no gracias|procede|si,? procede|continua|continuar sin insumos|no,? procede)[.! ]*$/.test(clean(question)));
+
+/**
+ * Los pendientes de un borrador (Rodny, 20 de octubre de 2026: «créame estos cinco»). Un borrador sin `items` es un
+ * solo pendiente, como siempre; con `items`, cada ítem toma lo suyo y hereda del borrador lo que no trae (cliente,
+ * responsable, fecha, prioridad, material). La prioridad es Normal salvo que alguien diga otra.
+ */
+export const taskDraftItems = draft => {
+  if (!draft) return [];
+  const base = {
+    id: draft.id, title: draft.title || null, context: draft.context || null, client: draft.client || null, assignee: draft.assignee || null, dueDate: draft.dueDate || null,
+    priority: TASK_PRIORITIES.includes(draft.priority) ? draft.priority : 'NORMAL', references: draft.references || [], inputs: draft.inputs || [], files: draft.files || []
+  };
+  if (!Array.isArray(draft.items) || !draft.items.length) return [base];
+  return draft.items.map(item => {
+    const own = Object.fromEntries(Object.entries(item || {}).filter(([, value]) => value != null && !(Array.isArray(value) && !value.length)));
+    return { ...base, ...own, priority: TASK_PRIORITIES.includes(item?.priority) ? item.priority : base.priority };
+  });
+};
+// El título ya dice qué hay que hacer: el contexto es un detalle más, nunca una parada («historias de la semana para
+// Kamila mañana» es un pendiente completo). Sin contexto no se escribe comentario inicial.
+const itemStage = item => !item.client ? 'CLIENT' : !item.assignee ? 'ASSIGNEE' : !item.dueDate ? 'DATE' : !item.title ? 'CONTEXT' : 'READY';
+/** El primer pendiente al que le falta algo, con su posición (1 en adelante) para nombrarlo en un lote. */
+export const taskDraftMissing = draft => {
+  const items = taskDraftItems(draft);
+  for (let index = 0; index < items.length; index += 1) { const stage = itemStage(items[index]); if (stage !== 'READY') return { index: index + 1, item: items[index], stage, batch: items.length > 1 }; }
+  return null;
+};
 export const taskDraftStage = draft => {
   if (!draft) return null;
   if (['CREATED','CANCELLED'].includes(draft.status)) return draft.status;
-  if (!draft.client) return 'CLIENT';
-  if (!draft.assignee) return 'ASSIGNEE';
-  if (!draft.dueDate) return 'DATE';
-  if (!draft.context || !draft.title) return 'CONTEXT';
-  if (!draft.withoutMaterials && !(draft.references?.length || draft.inputs?.length || draft.files?.length)) return 'MATERIAL';
-  if (!['NORMAL','ALTA','URGENTE'].includes(draft.priority)) return 'PRIORITY';
-  return 'READY';
+  return taskDraftMissing(draft)?.stage || 'READY';
 };
+const materialLines = item => [...(item.references || []).map(row => `Referencia: ${row.url}`), ...(item.inputs || []).map(row => `Insumo: ${row.url}`), ...(item.files || []).map(row => `Archivo: ${row.name}`)];
+// Los insumos ya no son una parada (Rodny, 20 de octubre de 2026): se nombran en el resumen y se pueden añadir después.
+const NO_MATERIAL = 'Sin referencias ni insumos todavía: puedes adjuntarlos ahora o después en la tarea.';
 export const taskDraftReply = draft => {
-  const stage = taskDraftStage(draft), warning = draft.withoutMaterials ? `Un buen pendiente incluye referencias o insumos. ${draft.assignee?.name || 'La persona responsable'} podría tener dificultad para empezar sin insumos disponibles.` : '';
-  if (stage === 'CLIENT') return { answer: draft.clientCandidates?.length ? 'Encontré estas cuentas. ¿Para cuál es el pendiente?' : '¿Para qué cliente es el pendiente?', quickReplies: normalizeQuickReplies(draft.clientCandidates?.map(row => row.name)) };
-  if (stage === 'ASSIGNEE') return { answer: draft.assigneeCandidates?.length ? 'Encontré estas personas. ¿A quién se lo asignamos?' : '¿Quién será responsable del pendiente?', quickReplies: normalizeQuickReplies(draft.assigneeCandidates?.map(row => row.name)) };
-  if (stage === 'DATE') return { answer: '¿Para qué fecha necesitas el pendiente? Dime un día concreto.', quickReplies: ['Hoy', 'Mañana', 'Pasado mañana'] };
-  if (stage === 'CONTEXT') return { answer: 'Cuéntame qué debe hacer y qué resultado esperas. Lo sintetizaré como contexto del pendiente.', quickReplies: [] };
-  if (stage === 'MATERIAL') return { answer: `Ya tengo la cuenta, responsable, fecha y contexto. ¿Añadirás referencias o insumos? Puedes adjuntar archivos o pegar enlaces.\n\nUn buen pendiente incluye ese material; ${draft.assignee.name} podría tener dificultad para empezar sin insumos disponibles.`, quickReplies: ['Continuar sin insumos'] };
-  if (stage === 'PRIORITY') return { answer: `${warning ? warning + '\n\n' : ''}¿Qué prioridad le damos al pendiente?`, quickReplies: ['Normal', 'Alta', 'Urgente'] };
+  const stage = taskDraftStage(draft);
+  if (['CLIENT','ASSIGNEE','DATE','CONTEXT'].includes(stage)) {
+    const missing = taskDraftMissing(draft);
+    const about = missing.batch ? `Del pendiente ${missing.index}${missing.item.title ? ` («${missing.item.title}»)` : ''}: ` : '';
+    if (stage === 'CLIENT') return { answer: `${about}${draft.clientCandidates?.length ? 'encontré estas cuentas. ¿Para cuál es el pendiente?' : '¿para qué cliente es el pendiente?'}`.replace(/^(\p{L})/u, m => m.toUpperCase()), quickReplies: normalizeQuickReplies(draft.clientCandidates?.map(row => row.name)) };
+    if (stage === 'ASSIGNEE') return { answer: `${about}${draft.assigneeCandidates?.length ? 'encontré estas personas. ¿A quién se lo asignamos?' : '¿quién será responsable del pendiente?'}`.replace(/^(\p{L})/u, m => m.toUpperCase()), quickReplies: normalizeQuickReplies(draft.assigneeCandidates?.map(row => row.name)) };
+    if (stage === 'DATE') return { answer: `${about}¿para qué fecha lo necesitas? Dime un día concreto.`.replace(/^(\p{L})/u, m => m.toUpperCase()), quickReplies: ['Hoy', 'Mañana', 'Pasado mañana'] };
+    return { answer: `${about}¿qué hay que hacer? Dímelo en una frase y la pongo como título.`.replace(/^(\p{L})/u, m => m.toUpperCase()), quickReplies: [] };
+  }
   if (stage === 'READY') {
-    const materials = [...(draft.references || []).map(row => `Referencia: ${row.url}`), ...(draft.inputs || []).map(row => `Insumo: ${row.url}`), ...(draft.files || []).map(row => `Archivo: ${row.name}`)];
-    return { answer: `Así quedaría el pendiente:\n\n**${draft.title}**\n- Cliente: ${draft.client.name}\n- Responsable: ${draft.assignee.name}\n- Fecha: ${humanDate(draft.dueDate)}\n- Prioridad: ${{ NORMAL: 'Normal', ALTA: 'Alta', URGENTE: 'Urgente' }[draft.priority]}\n\n**Contexto que guardaré como comentario**\n\n${draft.context}\n\n${materials.length ? materials.map(row => `- ${row}`).join('\n') : warning}\n\n¿Lo creo así? También puedes indicarme cualquier ajuste.`, quickReplies: ['Crear pendiente', 'Cancelar pendiente'] };
+    const items = taskDraftItems(draft);
+    if (items.length === 1) {
+      const [item] = items, materials = materialLines(item);
+      return { answer: `Así quedaría el pendiente:\n\n**${item.title}**\n- Cliente: ${item.client.name}${draft.clientInferred ? ' (el mismo del pendiente anterior)' : ''}\n- Responsable: ${item.assignee.name}\n- Fecha: ${humanDate(item.dueDate)}\n- Prioridad: ${PRIORITY_LABEL[item.priority]}\n\n${item.context ? `**Contexto que guardaré como comentario**\n\n${item.context}\n\n` : ''}${materials.length ? materials.map(row => `- ${row}`).join('\n') : NO_MATERIAL}\n\n¿Lo creo así? También puedes indicarme cualquier ajuste.`, quickReplies: ['Crear pendiente', 'Cancelar pendiente'] };
+    }
+    const sameClient = items.every(item => item.client.id === items[0].client.id);
+    const rows = items.map((item, index) => {
+      const materials = materialLines(item);
+      return `${index + 1}. **${item.title}** — ${item.assignee.name} · ${humanDate(item.dueDate)} · ${PRIORITY_LABEL[item.priority]}${sameClient ? '' : ` · ${item.client.name}`}${item.context ? `\n   ${item.context}` : ''}${materials.length ? `\n   ${materials.join(' · ')}` : ''}`;
+    });
+    const anyWithout = items.some(item => !materialLines(item).length);
+    return { answer: `Así quedarían los ${items.length} pendientes${sameClient ? ` de ${items[0].client.name}${draft.clientInferred ? ' (el mismo del pendiente anterior)' : ''}` : ''}:\n\n${rows.join('\n\n')}${anyWithout ? `\n\n${NO_MATERIAL}` : ''}\n\n¿Los creo así? También puedes indicarme cualquier ajuste («el 2 para el viernes», «el 3 a Melissa»).`, quickReplies: ['Crear pendientes', 'Cancelar pendiente'] };
   }
   return { answer: stage === 'CANCELLED' ? 'Descarté el borrador del pendiente.' : 'Ese pendiente ya está creado.', quickReplies: [] };
 };

@@ -5,10 +5,28 @@
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import prisma from '../lib/prisma.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
-import { factAccess, factError, presentFact } from '../lib/briaAgencyFacts.js';
+import { factAccess, factError, factKey, presentFact, PERSON_TOPIC } from '../lib/briaAgencyFacts.js';
+import { rankByName } from '../lib/fuzzyMatch.js';
 import { createBriaAgencyFactRepository } from './briaAgencyFactRepository.js';
 
 const NOTE = 'Memoria de la agencia: lo confirmado por el equipo manda sobre la lectura del negocio, y la plataforma actual manda sobre ambas para el estado de hoy. Di la certeza con estas palabras.';
+// Las fichas del equipo (Rodny, 20 de octubre de 2026): cómo trabajar con cada persona, para que Bria le escriba como se
+// le habla a ella, sepa qué revisar y qué confiar. Solo administración, y nunca se recitan.
+const FICHA_NOTE = 'Úsala sin recitarla: nunca digas «según tu ficha» ni cuentes a nadie —ni a la persona ni a un compañero— qué dice. Cambia el tono, lo que revisas y lo que propones; no es un juicio sobre la persona. Si la dirección te corrige o precisa algo de ella, ofrece guardarlo con guardar_en_memoria (entidad el nombre completo, tipoEntidad persona, tema como-trabajar, proposito personas).';
+
+/** La persona del equipo a la que se refiere un nombre: exacto, por nombre de pila único, o lo más parecido. */
+const findMember = (members, name) => {
+  const key = factKey(name);
+  if (!key) return { member: null };
+  const exact = members.find((m) => factKey(m.name) === key);
+  if (exact) return { member: exact };
+  const byFirst = members.filter((m) => factKey(m.name).split(' ')[0] === key);
+  if (byFirst.length === 1) return { member: byFirst[0] };
+  if (byFirst.length > 1) return { member: null, candidates: byFirst };
+  const close = rankByName(members, name);
+  if (close.length === 1 || (close.length > 1 && close[0].score - close[1].score >= 0.15)) return { member: close[0] };
+  return { member: null, candidates: close };
+};
 
 export const createBriaAgencyFactService = ({ repository, db = prisma }) => {
   const resolve = async (user) => {
@@ -48,6 +66,23 @@ export const createBriaAgencyFactService = ({ repository, db = prisma }) => {
       });
       await resolve(user);
       return result;
+    },
+
+    /** Cómo trabajar con alguien del equipo. Solo administración; sin ficha dice que no la hay, nunca inventa una. */
+    async howToWorkWith(user, { nombre = '' } = {}) {
+      const { user: row, access } = await resolve(user);
+      if (String(row.role).toUpperCase() !== 'ADMIN') throw factError('Las fichas del equipo son de administración.', 403, 'BRIA_FICHA_FORBIDDEN');
+      const members = await db.teamMember.findMany({ where: { isActive: true }, select: { id: true, name: true, role: true }, orderBy: { name: 'asc' } });
+      const { member, candidates = [] } = findMember(members, nombre);
+      if (!member) {
+        return candidates.length
+          ? { persona: null, ficha: null, candidatos: candidates.map((m) => m.name), nota: 'Hay varias personas con un nombre parecido: pregunta cuál.' }
+          : { persona: null, ficha: null, nota: 'No hay nadie en el equipo activo con ese nombre.' };
+      }
+      const rows = await repository.search(access, { entity: member.name, topic: PERSON_TOPIC, limit: 20 });
+      const persona = { nombre: member.name, rol: member.role || null };
+      if (!rows.length) return { persona, ficha: null, nota: `${member.name} no tiene ficha todavía: háblale con lo que pide su rol y lo que veas en la plataforma.` };
+      return { persona, ficha: rows.map((fact) => fact.statement), nota: FICHA_NOTE };
     },
 
     async retire(user, { id, revision } = {}) {

@@ -17,7 +17,11 @@ import {
     openFinancialRecordDocument,
     voidFinancialRecordDocument
 } from '../services/financialRecordDocumentService.js';
-import { createReceivablePayment, reverseReceivablePayment } from '../services/receivablePaymentService.js';
+import { createReceivablePayment, reverseReceivablePayment, updateReceivablePayment } from '../services/receivablePaymentService.js';
+import { settleReceivable, listReceivableAdjustments } from '../services/receivableSettlementService.js';
+import { createLoan } from '../services/receivableLoanService.js';
+import { isLoanReceivable } from '../lib/receivableLoans.js';
+import { settlementKindLabel } from '../lib/receivableSettlement.js';
 import { createReceivable, deleteReceivable } from '../services/financialReceivableService.js';
 import { issueReceivableDocument, correctReceivableDocument } from '../services/receivableDocumentService.js';
 import { openReceivablePdf, RECEIVABLE_PDF_MIME } from '../services/receivablePdfService.js';
@@ -157,7 +161,7 @@ const safeDocumentName = (name = 'documento') => String(name).replace(/[\r\n"\\/
 
 // Un nombre con tildes o eñes —«Cuenta de cobro No. 0393 - Corporación…»— necesita las
 // dos formas: la ASCII para clientes viejos y la codificada para el resto.
-const contentDisposition = (disposition, name) => {
+export const contentDisposition = (disposition, name) => {
     const filename = safeDocumentName(name);
     const asciiName = filename.replace(/[^\x20-\x7E]/g, '_');
     const encoded = encodeURIComponent(filename).replace(/['()*]/g, (char) => '%' + char.charCodeAt(0).toString(16));
@@ -246,13 +250,81 @@ export const createReceivablePaymentHandler = async (req, res, dependencies = {}
     const createPayment = dependencies.createPayment || createReceivablePayment;
     try {
         const result = await createPayment(prismaClient, req.params.id, req.body || {}, req.user);
+        const pesos = (value) => `$ ${Number(value || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 })}`;
         return res.status(201).json({
-            message: 'Pago de cartera registrado correctamente.',
+            message: isLoanReceivable(result.receivable)
+                ? (result.outstanding === 0 ? 'Reintegro registrado. El préstamo quedó devuelto por completo.' : 'Reintegro registrado. No cuenta como venta.')
+                : result.exchangeAdjustment
+                    ? `Pago registrado. La cartera en pesos se ajustó de ${pesos(result.exchangeAdjustment.fromCents / 100)} a ${pesos(result.exchangeAdjustment.toCents / 100)} por la tasa del día.`
+                    : 'Pago de cartera registrado correctamente.',
             ...result
         });
     } catch (error) {
         console.error('[Receivable payments API] Create failed:', error.response?.data || error);
         return respondWithError(res, error, 'RECEIVABLE_PAYMENT_CREATE_FAILED', 'No fue posible registrar el pago de cartera.');
+    }
+};
+
+export const createLoanHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const create = dependencies.createLoan || createLoan;
+    try {
+        const result = await create(prismaClient, req.body || {}, req.user);
+        return res.status(201).json({
+            message: result.linkedExistingRecord
+                ? 'Préstamo registrado en Cartera, ligado al egreso que ya existía.'
+                : 'Préstamo registrado: el egreso quedó en Movimientos y la cuenta por cobrar en Cartera.',
+            ...result
+        });
+    } catch (error) {
+        console.error('[Loans API] Create failed:', error.response?.data || error);
+        return respondWithError(res, error, 'LOAN_CREATE_FAILED', 'No fue posible registrar el préstamo.');
+    }
+};
+
+export const listReceivableAdjustmentsHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const list = dependencies.listReceivableAdjustments || listReceivableAdjustments;
+    try {
+        return res.json(await list(prismaClient, req.query || {}));
+    } catch (error) {
+        console.error('[Receivable adjustments API] List failed:', error.response?.data || error);
+        return respondWithError(res, error, 'RECEIVABLE_ADJUSTMENTS_FAILED', 'No fue posible cargar los ajustes de cartera.');
+    }
+};
+
+export const settleReceivableHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const settle = dependencies.settleReceivable || settleReceivable;
+    try {
+        const result = await settle(prismaClient, req.params.id, req.body || {}, req.user);
+        return res.status(201).json({
+            message: result.outstanding === 0
+                ? `${settlementKindLabel(result.payment?.kind)} registrado. La cuenta quedó saldada; no se creó ningún ingreso.`
+                : `${settlementKindLabel(result.payment?.kind)} registrado. No se creó ningún ingreso.`,
+            ...result
+        });
+    } catch (error) {
+        console.error('[Receivable settlements API] Settle failed:', error.response?.data || error);
+        return respondWithError(res, error, 'RECEIVABLE_SETTLEMENT_FAILED', 'No fue posible saldar la cuenta por cobrar.');
+    }
+};
+
+export const updateReceivablePaymentHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const update = dependencies.updateReceivablePayment || updateReceivablePayment;
+    try {
+        const result = await update(prismaClient, req.params.paymentId, req.body || {}, req.user);
+        const pesos = (value) => `$ ${Number(value || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 })}`;
+        return res.json({
+            message: result.exchangeAdjustment
+                ? `Abono corregido. La cartera en pesos se ajustó de ${pesos(result.exchangeAdjustment.fromCents / 100)} a ${pesos(result.exchangeAdjustment.toCents / 100)} por la tasa del día.`
+                : result.financialRecord ? 'Abono corregido. Su ingreso en Movimientos cambió con él.' : 'Ajuste corregido.',
+            ...result
+        });
+    } catch (error) {
+        console.error('[Receivable payments API] Update failed:', error.response?.data || error);
+        return respondWithError(res, error, 'RECEIVABLE_PAYMENT_UPDATE_FAILED', 'No fue posible corregir el abono.');
     }
 };
 

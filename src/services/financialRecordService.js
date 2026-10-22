@@ -1,4 +1,6 @@
 import { withFinancialSearch, activeFinancialSource } from './financialQueryFilters.js';
+import { isLoanUntouched, loanFromRecord } from '../lib/receivableLoans.js';
+import { syncLoanWithRecord } from './loanRecordSyncService.js';
 
 const TYPES = new Set(['INCOME', 'EXPENSE']);
 export const FINANCIAL_CATEGORIES = new Set([
@@ -190,15 +192,24 @@ export const createFinancialRecord = async (prismaClient, input, actor) => {
             }
         });
 
+        // Un egreso de categoría Préstamo va a Cartera en seguida (Rodny, 20 de octubre de 2026).
+        if (loanFromRecord(record)) {
+            await syncLoanWithRecord(tx, { ...record, loanReceivable: null }, { actorId });
+        }
+
         return record;
     });
 };
 
-// De dónde viene un movimiento que no se puede editar ni anular desde Movimientos.
+// De dónde viene un movimiento que no se puede editar ni anular desde Movimientos. Del préstamo
+// se traen su estado y sus reintegros vigentes: sin reintegros, el egreso sigue siendo editable y
+// la cartera lo sigue.
 const recordSourceRelations = {
     receivablePayment: { select: { id: true } },
+    loanReceivable: { select: { id: true, status: true, payments: { where: { reversedAt: null }, select: { id: true } } } },
     payrollTransaction: { select: { id: true } },
     payrollPayment: { select: { id: true } },
+    payablePayment: { select: { id: true, payableId: true } },
     bankMatches: { where: { status: 'APPROVED' }, select: { id: true, status: true } }
 };
 
@@ -243,6 +254,13 @@ export const listFinancialRecords = async (prismaClient, filters = {}) => {
     }
     if (filters.clientId) where.clientId = String(filters.clientId);
     if (filters.accountId) where.accountId = String(filters.accountId);
+    // Egresos de préstamo registrados a mano que todavía no están en Cartera (20 de octubre de 2026).
+    if (filters.availableForLoan === true || filters.availableForLoan === 'true') {
+        Object.assign(where, {
+            status: 'POSTED', scenario: 'ACTUAL', type: 'EXPENSE', category: 'PRESTAMO', origin: { not: 'SYSTEM' },
+            loanReceivable: { is: null }, receivablePayment: { is: null }, payrollTransaction: { is: null }, payrollPayment: { is: null }, isProjection: false
+        });
+    }
     if (filters.availableForReceivable === true || filters.availableForReceivable === 'true') {
         const paymentCategories = ['MEMBRESIA', 'SERVICIO', 'PAUTA'];
         Object.assign(where, {
@@ -310,7 +328,19 @@ const dateInputFrom = (date) => {
 // cuál ni dónde deja a quien lo lee sin salida. Cada caso nombra su camino.
 export const financialRecordLockReason = (record) => {
     if (record?.receivablePayment) {
-        return 'Este movimiento es el ingreso de un abono de cartera. Para deshacerlo ve a Cartera, abre la obligación del cliente y usa «Revertir» en ese abono: este movimiento se anulará solo.';
+        return 'Este movimiento es el ingreso de un abono de cartera. Para corregirlo ve a Cartera, abre la obligación del cliente y usa el lápiz de ese abono: el valor, la fecha y la cuenta cambian aquí con él. Para deshacerlo, «Revertir» en ese mismo abono: este movimiento se anulará solo.';
+    }
+    if (record?.loanReceivable) {
+        if (!isLoanUntouched(record.loanReceivable)) {
+            return 'Este movimiento es el egreso de un préstamo que ya tiene reintegros en Cartera. Para corregirlo o deshacerlo ve a Cartera: revierte los reintegros de ese préstamo y usa «Eliminar»; este movimiento se anulará solo.';
+        }
+        if (record.origin === 'SYSTEM') {
+            return 'Este movimiento es el egreso de un préstamo que está en Cartera. Para deshacerlo ve a Cartera y usa «Eliminar» en ese préstamo: este movimiento se anulará solo. Si el valor está mal, elimina el préstamo y regístralo de nuevo.';
+        }
+        // Registrado a mano y sin reintegros: se corrige o se anula aquí y la cartera lo sigue.
+    }
+    if (record?.payablePayment) {
+        return 'Este movimiento es el pago de una cuenta por pagar. Para deshacerlo ve a Financiero → Por pagar y usa «Revertir» en ese pago: este movimiento se anulará solo. Los comprobantes se suben aquí mismo.';
     }
     if (record?.payrollPayment || record?.payrollTransaction) {
         return 'Este movimiento es un pago de nómina y su valor no se edita a mano. Usa el lápiz de este mismo movimiento en Movimientos —o la liquidación en Nómina Operativa, eligiendo arriba el mes de esa liquidación— para desglosarlo, subirle el comprobante, cambiar la referencia o revertirlo.';
@@ -325,7 +355,8 @@ export const financialRecordLockReason = (record) => {
 };
 
 const assertIndependentFinancialRecord = (record) => {
-    if (record.receivablePayment || record.payrollTransaction || record.payrollPayment || record.bankMatches?.some((match) => match.status === 'APPROVED')) {
+    const lockedLoan = record.loanReceivable && !isLoanUntouched(record.loanReceivable);
+    if (record.receivablePayment || lockedLoan || record.payablePayment || record.payrollTransaction || record.payrollPayment || record.bankMatches?.some((match) => match.status === 'APPROVED')) {
         throw new FinancialDomainError('FINANCIAL_RECORD_LINKED', financialRecordLockReason(record), 409);
     }
     if (record.origin === 'SYSTEM') {
@@ -391,6 +422,11 @@ export const updateFinancialRecord = async (prismaClient, recordId, patch, actor
                 actorId
             }
         });
+        // El préstamo de Cartera sigue a su egreso: se corrige con él, nace si ahora es un
+        // préstamo y se quita si dejó de serlo (Rodny, 20 de octubre de 2026).
+        if (existing.loanReceivable || loanFromRecord(updated)) {
+            await syncLoanWithRecord(tx, updated, { actorId, existingLoan: existing.loanReceivable || null });
+        }
         return updated;
     });
 };
@@ -432,6 +468,10 @@ export const voidFinancialRecord = async (prismaClient, recordId, reason, actor)
                 actorId
             }
         });
+        // Anular el egreso de un préstamo sin reintegros lo quita de Cartera: el dinero nunca salió.
+        if (existing.loanReceivable) {
+            await syncLoanWithRecord(tx, updated, { actorId, existingLoan: existing.loanReceivable });
+        }
         return updated;
     });
 };

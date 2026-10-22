@@ -1,7 +1,7 @@
 import React, { useRef, useState } from 'react';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import { FileText, Loader2, Paperclip } from '@/components/ui/icons';
-import { FINANCIAL_DOCUMENT_ACCEPT, fetchRecordDocumentBlob, financialDocumentProblem, uploadRecordDocument } from '@/lib/financialDocumentsClient';
+import { FINANCIAL_DOCUMENT_ACCEPT, financialDocumentProblem, recordDocumentsApi } from '@/lib/financialDocumentsClient';
 
 /**
  * Los comprobantes de un movimiento, en una línea: cada uno se abre con el visor de la
@@ -9,17 +9,21 @@ import { FINANCIAL_DOCUMENT_ACCEPT, fetchRecordDocumentBlob, financialDocumentPr
  * octubre de 2026: «registré un ingreso de SunPartners desde cartera pero no se puede adjuntar el
  * comprobante»). `onChanged` recibe el mensaje después de que el servidor confirme la subida.
  */
-export default function RecordDocumentsInline({ recordId, documents = [], canWrite, onChanged, onError, className = '' }) {
+// `api` dice a dónde van los archivos: por defecto a un movimiento; una cuenta por pagar pasa
+// `payableDocumentsApi` y su id, y el soporte se guarda con las mismas reglas (20 de octubre de 2026).
+export default function RecordDocumentsInline({ recordId, documents = [], canWrite, onChanged, onError, className = '', api = recordDocumentsApi }) {
     const [uploading, setUploading] = useState(false);
     const [preview, setPreview] = useState(null);
     const input = useRef(null);
     if (!recordId) return null;
+    const label = api.label || 'comprobante';
+    const capitalized = label.charAt(0).toUpperCase() + label.slice(1);
 
     const closePreview = () => setPreview((current) => { if (current?.url) URL.revokeObjectURL(current.url); return null; });
 
     const open = async (document, download = false) => {
         try {
-            const blob = await fetchRecordDocumentBlob(recordId, document);
+            const blob = await api.fetchBlob(recordId, document);
             const url = URL.createObjectURL(blob);
             if (download) {
                 const anchor = window.document.createElement('a');
@@ -37,7 +41,7 @@ export default function RecordDocumentsInline({ recordId, documents = [], canWri
             setPreview({ file: { id: document.id, name: document.name, mimeType: document.mimeType, size: Number(document.size) }, url, data, document });
         } catch (requestError) {
             console.error('Error opening financial document:', requestError.response?.data || requestError);
-            onError?.(requestError.response?.data?.message || 'No fue posible abrir el comprobante.');
+            onError?.(requestError.response?.data?.message || `No fue posible abrir el ${label}.`);
         }
     };
 
@@ -46,11 +50,11 @@ export default function RecordDocumentsInline({ recordId, documents = [], canWri
         if (problem) { onError?.(problem); return; }
         setUploading(true);
         try {
-            await uploadRecordDocument(recordId, file);
-            await onChanged?.('Comprobante guardado.');
+            await api.upload(recordId, file);
+            await onChanged?.(`${capitalized} guardado.`);
         } catch (requestError) {
             console.error('Error uploading financial document:', requestError.response?.data || requestError);
-            onError?.(requestError.response?.data?.message || 'No fue posible subir el comprobante.');
+            onError?.(requestError.response?.data?.message || `No fue posible subir el ${label}.`);
         } finally {
             setUploading(false);
         }
@@ -70,7 +74,7 @@ export default function RecordDocumentsInline({ recordId, documents = [], canWri
                         onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ''; if (file) upload(file); }} />
                     <button type="button" disabled={uploading} onClick={() => input.current?.click()}
                         className="inline-flex min-h-8 items-center gap-1 rounded-md px-2 text-[11px] font-medium text-primary hover:bg-primary/10 disabled:opacity-50">
-                        {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}Subir comprobante
+                        {uploading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Paperclip className="h-3.5 w-3.5" />}Subir {label}
                     </button>
                 </>
             )}

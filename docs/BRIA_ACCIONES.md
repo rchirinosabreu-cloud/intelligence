@@ -20,6 +20,19 @@ Las tres acciones anteriores a esta base —crear pendiente, despachar a producc
 - **Cómo viaja:** `wrapLegacyAction(type, draft)` (`src/lib/briaActions.js`) envuelve el borrador en una acción (`draft` dentro, `missing` según la etapa del borrador, `status` DRAFT/DONE/CANCELLED); `actionReply` delega en el texto de cada flujo; `confirmsAction` / `cancelsAction` entienden la frase común y la de cada flujo; `LEGACY_ACTIONS` guarda esa tabla. Las herramientas `preparar_pendiente`, `preparar_despacho` y `preparar_eliminacion` devuelven `pendingAction`, y `briaActionService` ejecuta los tres tipos llamando a `createConfirmedTask`, `createConfirmedDispatch` y `createConfirmedDelete` con su frase canónica (la persona ya confirmó sobre el resumen). `ACTION_PERMISSION` admite varios módulos (`DISPATCH: ['gestion', 'parrillas']`); `actionModules` los lee.
 - **Lo guardado antes se sigue leyendo:** `pendingActionOf` envuelve un turno viejo que traiga `taskDraft`, `dispatchDraft` o `deleteDraft`, y `authorizeTurn` conserva sus tres comprobaciones. El repositorio ya solo escribe `pendingAction`.
 
+### Crear pendientes en una sola vuelta (Rodny, 20 de octubre de 2026)
+
+Los números del 20 de octubre: en el chat de Francisco hubo **96 mensajes para crear 14 pendientes**, porque cada borrador se detenía tres veces —«¿para qué cliente?» (25 veces), «¿añadirás insumos?» (15) y «¿qué prioridad?» (12)—. Rodny: eso es un reproceso. Ahora:
+
+- **La prioridad es Normal salvo que la persona diga otra.** `taskDraftStage` ya no tiene etapa `PRIORITY`: el servicio pone `NORMAL` si nadie dijo nada, y «alta» o «urgente» entran si se dicen (en el mensaje o en una corrección). No se pregunta.
+- **Los insumos no son una parada.** Tampoco hay etapa `MATERIAL`: el resumen dice «Sin referencias ni insumos todavía: puedes adjuntarlos ahora o después en la tarea», y si los hay los lista. La regla de la plataforma «sin insumos no se diseña» sigue viva donde corresponde (la tarea se devuelve), no en una pregunta del chat.
+- **El cliente del último pendiente creado en el chat se asume.** `lastCreatedTaskClient(turns)` (`briaConversationService`) lo lee de los turnos guardados —nunca lo adivina el modelo— y viaja como `taskDefaults.client` al servicio y a la herramienta; el resumen lo dice: «Cliente: Nattal (el mismo del pendiente anterior)». Lo que la persona nombra manda; un lote con clientes distintos no deja cliente por defecto. Sin pendiente anterior y sin nombre, se pregunta, como siempre. (Una tarea sin cliente no existe en la plataforma: `Task.clientId` es obligatorio.)
+- **Varios pendientes en un mensaje son un solo borrador** («créame estos cinco»): `preparar_pendiente` recibe `pendientes[]` (hasta `MAX_TASKS_PER_DRAFT` = 15) con lo común arriba; viven en `draft.items`, cada uno con su id desde el primer borrador —una corrección vuelve a pasar la lista completa y los ids se conservan por posición— y heredan del borrador lo que no traen (`taskDraftItems`). Lo que falta se pregunta nombrando el pendiente («Del pendiente 3 («Post de cierre»): ¿para qué fecha…?»). El resumen es una lista numerada y el botón dice **«Crear pendientes»**; `createConfirmedTask` los crea uno por uno con `createTask`, cada uno idempotente por su id, **una falla no frena a los demás** y el resultado enlaza cada tarea creada y dice cuál no se pudo y por qué. Un solo pendiente sigue siendo el de siempre.
+- **El título basta.** «Historias de la semana para Kamila mañana» es un pendiente completo: el contexto es un detalle más que se guarda como comentario inicial **si la persona lo dio**, nunca una parada (`CONTEXT` solo falta cuando no hay ni título). En la primera evaluación con el modelo real, Bria mandaba bien la lista de tres y se frenaba pidiéndole contexto al primero: ese fue el último reproceso que se quitó.
+- **Lo que no cambió:** nada se crea sin la confirmación sobre el resumen; cliente y responsable se resuelven contra la base; los enlaces solo valen si la persona los pegó en el chat; los archivos se copian a la tarea al confirmar.
+
+Contratos: `tests/briaTaskDraft.test.js`, `tests/briaTaskCreation.test.js`, `tests/briaTaskConversation.test.js`; recorrido real con capturas: `node tests/browser/briaTasks.mjs`; caso real: `varios-pendientes` en `tests/evals/briaCases.js`.
+
 ## Las acciones de hoy
 
 ### `cambiar_pendiente` (permiso de Gestión)
@@ -114,6 +127,19 @@ BRIA_EVAL_OUTPUT=tmp/bria-casos.json npm run eval:bria-casos -- --solo accion-no
 ```
 
 `scripts/eval-bria-casos.mjs` lee solo `OPENAI_API_KEY` y el modelo del archivo de entorno (`BRIA_PROJECT_ENV`, `.env` por defecto), arma herramientas ficticias con las mismas declaraciones que las reales (lecturas y acciones que solo preparan), no abre ninguna base de datos y escribe un informe JSON con cada respuesta y su veredicto; termina con código 1 si algo falló. Se corre cada vez que cambien las instrucciones de Bria (`buildInstructions`) o sus herramientas, y nunca en CI. Un caso nuevo se añade al conjunto con su `why`; `tests/briaRating.test.js` valida la forma de todos.
+
+## Escribirle al cliente (19 de octubre de 2026)
+
+Rodny: «vamos a seguir fortaleciendo a Bria para que sea mi project manager y mi community manager». Es la primera pieza de ese frente. El aviso «Redactar recordatorio al cliente» ya existía, pero Bria lo escribía a ciegas: sin el enlace del portal y sin saber qué había salido ni qué esperaba la aprobación.
+
+- **`mensaje_para_cliente`** (`src/services/briaClientUpdateTools.js`, módulo Parrillas) lee la parrilla del mes **como la ve el cliente** (`buildClientUpdate`, regla pura en `src/lib/clientUpdate.js`): lo que espera su aprobación —`EN_REVISION` o con material nuevo—, lo que se está ajustando según lo que pidió —`DEVUELTO`, con su último pedido—, lo publicado en la última semana con sus enlaces de Instagram y Facebook, lo programado en las dos semanas siguientes, cuántas piezas siguen en preparación, el avance y **el enlace del portal que ya tiene** (`portalUrlOf`, `…/compartir/<token>`; sin token no se inventa uno: Bria dice que lo creen con «Compartir»).
+- **Nunca sale lo que el cliente no ve.** La consulta ni siquiera lee el guion ni las notas internas, y la instrucción prohíbe hablar del equipo, de horas o de herramientas.
+- **Saluda y firma como persona.** Saluda al contacto de la ficha por su nombre, o «equipo de» la marca si no hay contacto, y firma con el nombre de quien lo va a enviar. La primera prueba saludó «Hola, Aristea» y firmó «[Tu nombre]». Una pieza que espera aprobación «sale tal día una vez la apruebes», nunca «está programada».
+- **Canal y enfoque.** WhatsApp, corto y sin asunto, o correo, con asunto y viñetas. Resumen de la semana, recordarle aprobar o contarle lo publicado.
+- **Bria nunca lo envía.** Entrega el mensaje listo para copiar; la persona lo manda.
+- El aviso de pieza sin aprobar pide ahora el recordatorio por WhatsApp con el enlace del portal, y por eso cae en esta herramienta.
+
+Contrato: `tests/clientUpdate.test.js`. Dos casos nuevos en el conjunto de preguntas reales: `mensaje-cliente-aprobar` y `mensaje-cliente-resumen-correo`.
 
 ## Dónde se conecta
 - `briaTaskApplication.js` arma `briaActions` con Prisma y las funciones reales; `briaAssistantService.js` monta las herramientas; `briaConversationService.js` resuelve «Confirmar» y «Cancelar»; `briaConversationRepository.js` guarda `pendingAction` en los metadatos del turno; `briaConversationApplication.js` exige el módulo de cada acción para ver o confirmar el turno.

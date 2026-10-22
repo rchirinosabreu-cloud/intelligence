@@ -1,4 +1,5 @@
 import { ACTIVE_RECEIVABLE_PAYMENT } from './financialQueryFilters.js';
+import { isReceivableClosed } from '../lib/receivableSettlement.js';
 
 const toNumber = (value) => {
     if (value && typeof value.toNumber === 'function') return value.toNumber();
@@ -45,7 +46,9 @@ export const auditFinancialIntegrity = async (prismaClient, { year: rawYear } = 
     const receivableMismatch = receivables.filter((receivable) => {
         const paid = (receivable.payments || []).reduce((sum, payment) => sum + toNumber(payment.amount), 0);
         const isPaid = toNumber(receivable.amount) - paid <= 0.005;
-        return (isPaid && receivable.status !== 'PAGADO') || (!isPaid && receivable.status === 'PAGADO') || paid - toNumber(receivable.amount) > 0.005;
+        // Cerrada es PAGADO o SALDADO: un acuerdo, canje, compensación o condonación también cuenta como aplicado.
+        const closed = isReceivableClosed(receivable.status);
+        return (isPaid && !closed) || (!isPaid && closed) || paid - toNumber(receivable.amount) > 0.005;
     }).length;
     const sharedContracts = contracts.filter((contract) => /\s[/&]\s|\s+y\s+/i.test(String(contract.sourceLabel || ''))).length;
     const contractsWithoutCollaborator = contracts.filter((contract) => !contract.collaboratorId).length;
