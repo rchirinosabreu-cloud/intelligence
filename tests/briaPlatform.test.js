@@ -125,6 +125,10 @@ test('the tools: the map searches, reading goes straight to the API with the ses
   const text = buildInstructions({ person: { name: 'Rodny', jobTitle: 'Director' }, today: '2026-10-10', tools });
   assert.match(text, /Tienes las manos de la persona en toda la plataforma/);
   assert.match(text, /Nunca digas que hiciste un cambio/);
+  // 22 de octubre de 2026: Bria escribió su propio «El evento está preparado… confirma con Confirmar» sin llamar a
+  // operar_en_plataforma, y Rodny tuvo que confirmar dos veces.
+  assert.match(text, /en esa misma respuesta/);
+  assert.match(text, /nunca escribas tú el resumen ni pidas «Confirmar»/);
 });
 
 test('in conversation, the session travels with the question and with the confirmation, and is never stored in a turn', async () => {
