@@ -3,7 +3,7 @@ import Select from '@/components/ui/Select';
 import MoneyInput from '@/components/ui/MoneyInput';
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { isCashPayment, settlementKindLabel } from '@/lib/receivableSettlement';
+import { isCashPayment, isRetentionPayment, paymentKindLabel } from '@/lib/receivableSettlement';
 
 // Corregir un abono sin revertirlo (Rodny, 20 de octubre de 2026: «debe tener la opción de editar
 // lo que ingresó o el valor registrado para no revertirlo»). Valor, fecha, cuenta, referencia y
@@ -39,7 +39,7 @@ export default function ReceivablePaymentEditDialog({ debt, payment, accounts = 
     onSubmit(payload);
   };
   return <Dialog open={!!payment} onOpenChange={open => !open && !saving && onClose()}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg dark:bg-zinc-900" onOpenAutoFocus={event => { event.preventDefault(); event.currentTarget.focus(); }}>
-    <DialogHeader><DialogTitle>{cash ? 'Corregir abono' : `Corregir ${settlementKindLabel(payment?.kind).toLowerCase()}`}</DialogTitle><DialogDescription>{debt?.clientName}{cash ? ' · el ingreso de este abono en Movimientos cambia con él.' : ' · un ajuste sin dinero: no hay ingreso que tocar.'}</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>{cash ? 'Corregir abono' : `Corregir ${paymentKindLabel(payment).toLowerCase()}`}</DialogTitle><DialogDescription>{debt?.clientName}{cash ? ' · el ingreso de este abono en Movimientos cambia con él.' : ' · un ajuste sin dinero: no hay ingreso que tocar.'}</DialogDescription></DialogHeader>
     <form onSubmit={submit} className="space-y-4"><fieldset disabled={saving} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block space-y-1.5 text-sm"><span className="block">Valor{usd ? ' en pesos' : ''}</span><MoneyInput required className={field} min="0.01" max={usd ? undefined : room} value={form.amount} onChange={amount => set({ amount })} /></label>
@@ -51,7 +51,7 @@ export default function ReceivablePaymentEditDialog({ debt, payment, accounts = 
       )}
       {cash && <label className="block space-y-1.5 text-sm"><span className="block">Cuenta</span><Select required className={field} value={form.accountId} onChange={event => set({ accountId: event.target.value })}><option value="">Seleccionar…</option>{accounts.map(account => <option key={account.id} value={account.id}>{account.name}</option>)}</Select></label>}
       {cash && <label className="block space-y-1.5 text-sm"><span className="block">Referencia</span><input className={field} value={form.reference} onChange={event => set({ reference: event.target.value })} /></label>}
-      <label className="block space-y-1.5 text-sm"><span className="block">{cash ? 'Notas' : 'Motivo del ajuste'}</span><textarea className={field} rows={2} value={form.notes} onChange={event => set({ notes: event.target.value })} /></label>
+      <label className="block space-y-1.5 text-sm"><span className="block">{cash ? 'Notas' : isRetentionPayment(payment) ? 'Nota' : 'Motivo del ajuste'}</span><textarea className={field} rows={2} value={form.notes} onChange={event => set({ notes: event.target.value })} /></label>
       {touchesMoney && <label className="block space-y-1.5 text-sm"><span className="block">Motivo de la corrección</span><textarea required className={field} rows={2} maxLength={300} value={form.reason} onChange={event => set({ reason: event.target.value })} placeholder="Ej.: se registró por el máximo permitido; el depósito real fue 1.205.856." /><span className="block text-[11px] text-zinc-500">Cambiar el valor, la fecha o la cuenta queda en la bitácora con su motivo.</span></label>}
       {error && <p role="alert" className="text-sm text-destructive brain-destructive-text">{error}</p>}
       <DialogFooter><button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose}>Cancelar</button><button type="submit" disabled={saving} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Guardando…' : 'Guardar corrección'}</button></DialogFooter>

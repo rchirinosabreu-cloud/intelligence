@@ -9,7 +9,7 @@ import { updateReceivable } from '../services/financialReceivableService.js';
 import { createPayrollContract, updatePayrollContract } from '../services/financialPayrollContractService.js';
 import { FINANCIAL_CATEGORIES } from '../services/financialRecordService.js';
 import { formatReceivableNumber } from '../services/receivableDocumentService.js';
-import { isCashPayment, isReceivableClosed } from '../lib/receivableSettlement.js';
+import { isCashPayment, isReceivableClosed, isRetentionPayment } from '../lib/receivableSettlement.js';
 import { accumulateCategoryDistribution } from '../services/financialRecordAllocationService.js';
 
 // Helper to convert Decimal fields safely
@@ -146,13 +146,22 @@ const serializeReceivable = (receivable) => {
             name: document.name,
             mimeType: document.mimeType,
             size: document.size
+        })),
+        // El soporte de un ajuste sin dinero: el certificado de una retención (22 de octubre de 2026).
+        supportDocuments: (payment.documents || []).map((document) => ({
+            id: document.id,
+            name: document.name,
+            mimeType: document.mimeType,
+            size: document.size
         }))
     }));
-    // Lo que entró en dinero y lo que se saldó de otra forma se dicen por separado: en
-    // Salsipuedes entraron 2.000.000 y se acordaron 1.500.000, y eso no es «pagó 3.500.000».
+    // Lo que entró en dinero, lo que retuvo el cliente y lo que se saldó de otra forma se dicen por
+    // separado: en Salsipuedes entraron 2.000.000 y se acordaron 1.500.000, y eso no es «pagó
+    // 3.500.000»; en Grit lo retenido lo pagó el cliente a la DIAN, no es un descuento.
     const paidAmount = roundFloat(payments.reduce((sum, payment) => sum + (payment.reversedAt || !isCashPayment(payment) ? 0 : payment.amount), 0));
-    const settledAmount = roundFloat(payments.reduce((sum, payment) => sum + (payment.reversedAt || isCashPayment(payment) ? 0 : payment.amount), 0));
-    const balanceReviewRequired = isReceivableClosed(receivable.status) && roundFloat(amount - paidAmount - settledAmount) > 0;
+    const retainedAmount = roundFloat(payments.reduce((sum, payment) => sum + (payment.reversedAt || !isRetentionPayment(payment) ? 0 : payment.amount), 0));
+    const settledAmount = roundFloat(payments.reduce((sum, payment) => sum + (payment.reversedAt || isCashPayment(payment) || isRetentionPayment(payment) ? 0 : payment.amount), 0));
+    const balanceReviewRequired = isReceivableClosed(receivable.status) && roundFloat(amount - paidAmount - settledAmount - retainedAmount) > 0;
 
     return {
         id: receivable.id,
@@ -173,7 +182,8 @@ const serializeReceivable = (receivable) => {
         amount,
         paidAmount,
         settledAmount,
-        outstanding: balanceReviewRequired ? null : roundFloat(Math.max(amount - paidAmount - settledAmount, 0)),
+        retainedAmount,
+        outstanding: balanceReviewRequired ? null : roundFloat(Math.max(amount - paidAmount - settledAmount - retainedAmount, 0)),
         ...(balanceReviewRequired ? { balanceReviewRequired: true } : {}),
         period: receivable.period instanceof Date ? receivable.period.toISOString() : receivable.period,
         month: receivable.month,
@@ -217,6 +227,7 @@ const buildReceivableTotals = (items) => items.reduce((totals, item) => {
     totals.originalTotal = roundFloat(totals.originalTotal + toNum(item.amount));
     totals.paidTotal = roundFloat(totals.paidTotal + toNum(item.paidAmount));
     totals.settledTotal = roundFloat(totals.settledTotal + toNum(item.settledAmount));
+    totals.retainedTotal = roundFloat((totals.retainedTotal || 0) + toNum(item.retainedAmount));
     if (item.balanceReviewRequired) totals.reviewCount += 1;
     totals.outstandingTotal = roundFloat(totals.outstandingTotal + toNum(item.outstanding));
     totals.total = totals.outstandingTotal;
@@ -511,7 +522,8 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
                                 id: true,
                                 documents: { where: { voidedAt: null }, orderBy: { uploadedAt: 'asc' }, select: { id: true, name: true, mimeType: true, size: true } }
                             }
-                        }
+                        },
+                        documents: { where: { voidedAt: null }, orderBy: { uploadedAt: 'asc' }, select: { id: true, name: true, mimeType: true, size: true } }
                     },
                     orderBy: { paidAt: 'desc' }
                 },

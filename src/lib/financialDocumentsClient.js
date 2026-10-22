@@ -57,5 +57,21 @@ export const fetchPayableDocumentBlob = async (payableId, document) => {
     return response.data instanceof Blob ? response.data : new Blob([response.data], { type: document.mimeType });
 };
 
+// El soporte de un ajuste de cartera (22 de octubre de 2026): el certificado de una retención.
+const receivablePaymentUrl = (paymentId, path = '') => `${getApiBaseUrl()}/api/financials/receivable-payments/${encodeURIComponent(paymentId)}/documents${path}`;
+
+export const uploadReceivablePaymentDocument = async (paymentId, file) => {
+    const body = new FormData();
+    body.append('file', file, file.name);
+    const { data } = await axios.post(receivablePaymentUrl(paymentId), body, { headers: authHeaders() });
+    return data?.document;
+};
+
+export const fetchReceivablePaymentDocumentBlob = async (paymentId, document) => {
+    const response = await axios.get(receivablePaymentUrl(paymentId, `/${document.id}/file`), { headers: authHeaders(), responseType: 'blob' });
+    return response.data instanceof Blob ? response.data : new Blob([response.data], { type: document.mimeType });
+};
+
 export const recordDocumentsApi = { upload: uploadRecordDocument, fetchBlob: fetchRecordDocumentBlob, label: 'comprobante' };
+export const retentionCertificateApi = { upload: uploadReceivablePaymentDocument, fetchBlob: fetchReceivablePaymentDocumentBlob, label: 'certificado' };
 export const payableDocumentsApi = { upload: uploadPayableDocument, fetchBlob: fetchPayableDocumentBlob, label: 'soporte' };

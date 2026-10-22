@@ -21,7 +21,8 @@ import { createReceivablePayment, reverseReceivablePayment, updateReceivablePaym
 import { settleReceivable, listReceivableAdjustments } from '../services/receivableSettlementService.js';
 import { createLoan } from '../services/receivableLoanService.js';
 import { isLoanReceivable } from '../lib/receivableLoans.js';
-import { settlementKindLabel } from '../lib/receivableSettlement.js';
+import { paymentKindLabel } from '../lib/receivableSettlement.js';
+import { attachReceivablePaymentDocument, openReceivablePaymentDocument } from '../services/receivablePaymentDocumentService.js';
 import { createReceivable, deleteReceivable } from '../services/financialReceivableService.js';
 import { issueReceivableDocument, correctReceivableDocument } from '../services/receivableDocumentService.js';
 import { openReceivablePdf, RECEIVABLE_PDF_MIME } from '../services/receivablePdfService.js';
@@ -256,7 +257,9 @@ export const createReceivablePaymentHandler = async (req, res, dependencies = {}
                 ? (result.outstanding === 0 ? 'Reintegro registrado. El préstamo quedó devuelto por completo.' : 'Reintegro registrado. No cuenta como venta.')
                 : result.exchangeAdjustment
                     ? `Pago registrado. La cartera en pesos se ajustó de ${pesos(result.exchangeAdjustment.fromCents / 100)} a ${pesos(result.exchangeAdjustment.toCents / 100)} por la tasa del día.`
-                    : 'Pago de cartera registrado correctamente.',
+                    : result.retentionPayments?.length
+                        ? (result.outstanding === 0 ? 'Pago y retenciones registrados. La cuenta quedó pagada.' : 'Pago y retenciones registrados. Las retenciones no cuentan como ingreso.')
+                        : 'Pago de cartera registrado correctamente.',
             ...result
         });
     } catch (error) {
@@ -293,15 +296,61 @@ export const listReceivableAdjustmentsHandler = async (req, res, dependencies = 
     }
 };
 
+// El soporte de un ajuste de cartera: el certificado de una retención o el acta de un canje.
+export const uploadReceivablePaymentDocumentHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const storage = dependencies.storage || financialEvidenceStorage();
+    const attach = dependencies.attachDocument || attachReceivablePaymentDocument;
+    try {
+        if (!req.file) return res.status(400).json({ error: 'FINANCIAL_DOCUMENT_REQUIRED', message: 'Selecciona un documento PDF, JPG o PNG.' });
+        const document = await attach(prismaClient, storage, req.params.paymentId, req.file, req.user);
+        return res.status(201).json({ message: 'Soporte guardado.', document });
+    } catch (error) {
+        console.error('[Receivable payment documents API] Upload failed:', error.response?.data || error);
+        return respondWithError(res, error, 'FINANCIAL_DOCUMENT_UPLOAD_FAILED', 'No fue posible guardar el soporte.');
+    }
+};
+
+export const streamReceivablePaymentDocumentHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const storage = dependencies.storage || financialEvidenceStorage();
+    const open = dependencies.openDocument || openReceivablePaymentDocument;
+    try {
+        const { document, object } = await open(prismaClient, storage, req.params.paymentId, req.params.documentId);
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+        res.setHeader('Content-Type', document.mimeType);
+        res.setHeader('Content-Disposition', contentDisposition(req.query?.download === '1' ? 'attachment' : 'inline', document.name));
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        if (object.ContentLength) res.setHeader('Content-Length', String(object.ContentLength));
+        object.Body.on('error', (error) => {
+            console.error('[Receivable payment documents API] Stream failed:', error);
+            if (!res.headersSent) res.status(500).json({ error: 'FINANCIAL_DOCUMENT_STREAM_FAILED', message: 'No se pudo cargar el documento.' });
+            else res.destroy(error);
+        });
+        return object.Body.pipe(res);
+    } catch (error) {
+        console.error('[Receivable payment documents API] Open failed:', error?.message || error);
+        if (res.headersSent) return undefined;
+        if (error?.name === 'NoSuchKey') return res.status(404).json({ error: 'FINANCIAL_DOCUMENT_MISSING', message: 'El archivo no está disponible en el almacenamiento.' });
+        return respondWithError(res, error, 'FINANCIAL_DOCUMENT_OPEN_FAILED', 'No fue posible abrir el documento.');
+    }
+};
+
 export const settleReceivableHandler = async (req, res, dependencies = {}) => {
     const prismaClient = dependencies.prismaClient || prisma;
     const settle = dependencies.settleReceivable || settleReceivable;
     try {
         const result = await settle(prismaClient, req.params.id, req.body || {}, req.user);
+        // Una retención cierra la cuenta como pagada: el cliente pagó todo, una parte a la DIAN.
+        const label = paymentKindLabel(result.payment);
+        const retention = result.payment?.kind === 'RETENCION';
         return res.status(201).json({
-            message: result.outstanding === 0
-                ? `${settlementKindLabel(result.payment?.kind)} registrado. La cuenta quedó saldada; no se creó ningún ingreso.`
-                : `${settlementKindLabel(result.payment?.kind)} registrado. No se creó ningún ingreso.`,
+            message: retention
+                ? (result.outstanding === 0 ? `${label} registrada. La cuenta quedó pagada; no se creó ningún ingreso.` : `${label} registrada. No se creó ningún ingreso.`)
+                : result.outstanding === 0
+                    ? `${label} registrado. La cuenta quedó saldada; no se creó ningún ingreso.`
+                    : `${label} registrado. No se creó ningún ingreso.`,
             ...result
         });
     } catch (error) {

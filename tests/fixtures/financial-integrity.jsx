@@ -355,6 +355,14 @@ axios.defaults.adapter = async config => {
     payable.status = paid <= 0 ? 'POR_PAGAR' : paid >= payable.amount ? 'PAGADA' : 'PARCIAL';
     records = records.map(record => record.id === target.financialRecordId ? { ...record, status: 'VOIDED' } : record);
     data = { message: 'Pago revertido. Su egreso quedó anulado.', payable };
+  } else if (path.includes('/receivable-payments/') && path.endsWith('/documents')) {
+    // Como el servidor: el certificado de una retención va a la propia fila del ajuste.
+    const paymentId = decodeURIComponent(path.split('/').at(-2));
+    const target = (debt.payments || []).find(payment => payment.id === paymentId);
+    const file = config.data instanceof FormData ? config.data.get('file') : null;
+    target.supportDocuments = [...(target.supportDocuments || []), { id: `cert-${++payrollCounter}`, name: file?.name || 'certificado.pdf', mimeType: 'application/pdf', size: file?.size || 1 }];
+    window.__certificateUpload = paymentId;
+    data = { message: 'Soporte guardado.', document: target.supportDocuments.at(-1) };
   } else if (path.endsWith('/loans')) {
     // Como el servidor: el egreso (o el ya registrado) y la cuenta por cobrar de clase PRESTAMO, de una vez.
     if (!body.counterpartyName && !body.clientId) throw Object.assign(new Error('Sin nombre'), { response: { data: { message: 'Escribe el nombre de la persona o empresa a la que se le presta.' } } });
@@ -376,10 +384,11 @@ axios.defaults.adapter = async config => {
     // Como el servidor: un acuerdo, canje, compensación o condonación baja el saldo sin crear ingreso.
     if (Number(body.amount) > debt.outstanding + 0.005) throw Object.assign(new Error('Supera el saldo'), { response: { data: { message: 'El valor supera el saldo pendiente.' } } });
     const outstanding = Math.round((debt.outstanding - Number(body.amount)) * 100) / 100;
-    const detail = { authorizedBy: body.authorizedBy, ...(body.kind === 'CANJE' ? { goods: body.goods, ...(body.destination ? { destination: body.destination } : {}) } : {}), ...(body.kind === 'COMPENSACION' ? { offsetAgainst: body.offsetAgainst } : {}) };
-    debt = { ...debt, outstanding, settledAmount: (debt.settledAmount || 0) + Number(body.amount), status: outstanding === 0 ? 'SALDADO' : debt.status, payments: [{ id: `demo-settlement-${Date.now()}`, kind: body.kind, detail, amount: Number(body.amount), paidAt: `${body.settledAt}T12:00:00Z`, notes: body.reason, account: null, financialRecordId: null, documents: [] }, ...(debt.payments || [])] };
+    const retention = body.kind === 'RETENCION';
+    const detail = retention ? { retentionType: body.retentionType, ...(body.certificateNumber ? { certificateNumber: body.certificateNumber } : {}) } : { authorizedBy: body.authorizedBy, ...(body.kind === 'CANJE' ? { goods: body.goods, ...(body.destination ? { destination: body.destination } : {}) } : {}), ...(body.kind === 'COMPENSACION' ? { offsetAgainst: body.offsetAgainst } : {}) };
+    debt = { ...debt, outstanding, ...(retention ? { retainedAmount: (debt.retainedAmount || 0) + Number(body.amount) } : { settledAmount: (debt.settledAmount || 0) + Number(body.amount) }), status: outstanding === 0 ? (retention && !(debt.settledAmount > 0) ? 'PAGADO' : 'SALDADO') : debt.status, payments: [{ id: `demo-settlement-${Date.now()}`, kind: body.kind, detail, amount: Number(body.amount), paidAt: `${body.settledAt}T12:00:00Z`, notes: body.reason || null, account: null, financialRecordId: null, documents: [], supportDocuments: [] }, ...(debt.payments || [])] };
     window.__receivableSettlementBody = body;
-    data = { message: outstanding === 0 ? 'Acuerdo por menor valor registrado. La cuenta quedó saldada; no se creó ningún ingreso.' : 'Ajuste registrado. No se creó ningún ingreso.', outstanding, receivable: { status: debt.status } };
+    data = { message: retention ? (outstanding === 0 ? 'Retención en la fuente registrada. La cuenta quedó pagada; no se creó ningún ingreso.' : 'Retención registrada. No se creó ningún ingreso.') : outstanding === 0 ? 'Acuerdo por menor valor registrado. La cuenta quedó saldada; no se creó ningún ingreso.' : 'Ajuste registrado. No se creó ningún ingreso.', outstanding, receivable: { status: debt.status } };
   } else if (path.includes('/receivable-payments/') && config.method === 'patch') {
     // Como el servidor: el abono se corrige y su ingreso cambia con él; el saldo se recalcula.
     const paymentId = path.split('/').at(-1);
@@ -403,11 +412,13 @@ axios.defaults.adapter = async config => {
     data = { message: exchangeAdjustment ? `Abono corregido. La cartera en pesos se ajustó de $ ${exchangeAdjustment.from.toLocaleString('es-CO')} a $ ${exchangeAdjustment.to.toLocaleString('es-CO')} por la tasa del día.` : 'Abono corregido. Su ingreso en Movimientos cambió con él.', outstanding };
   } else if (path.endsWith('/receivable-adjustments')) {
     // Como el servidor: cierres sin dinero vigentes y ajustes por tasa del periodo.
-    const settlements = [debt, ...loans].flatMap(row => (row.payments || []).filter(payment => payment.kind && payment.kind !== 'PAGO' && !payment.reversedAt).map(payment => ({ id: payment.id, kind: payment.kind, kindLabel: { ACUERDO: 'Acuerdo por menor valor', CANJE: 'Canje de bienes o servicios', COMPENSACION: 'Compensación de obligaciones', CONDONACION: 'Condonación o baja autorizada' }[payment.kind], amount: payment.amount, originalAmount: row.amount, date: payment.paidAt, clientName: row.clientName, reason: payment.notes, authorizedBy: payment.detail?.authorizedBy || null, goods: payment.detail?.goods || null, destination: payment.detail?.destination || null, offsetAgainst: payment.detail?.offsetAgainst || null })));
+    const settlements = [debt, ...loans].flatMap(row => (row.payments || []).filter(payment => payment.kind && payment.kind !== 'PAGO' && !payment.reversedAt).map(payment => ({ id: payment.id, kind: payment.kind, kindLabel: payment.kind === 'RETENCION' ? { RETEFUENTE: 'Retención en la fuente', RETEICA: 'Retención de ICA', RETEIVA: 'Retención de IVA' }[payment.detail?.retentionType] : { ACUERDO: 'Acuerdo por menor valor', CANJE: 'Canje de bienes o servicios', COMPENSACION: 'Compensación de obligaciones', CONDONACION: 'Condonación o baja autorizada' }[payment.kind], retentionType: payment.detail?.retentionType || null, certificateNumber: payment.detail?.certificateNumber || null, documents: payment.supportDocuments || [], amount: payment.amount, originalAmount: row.amount, date: payment.paidAt, clientName: row.clientName, reason: payment.notes, authorizedBy: payment.detail?.authorizedBy || null, goods: payment.detail?.goods || null, destination: payment.detail?.destination || null, offsetAgainst: payment.detail?.offsetAgainst || null })));
     const exchangeAdjustments = (debt.exchangeAdjustments || []).map(item => ({ receivableId: debt.id, clientName: debt.clientName, foreignAmount: debt.foreignAmount, date: item.at, from: item.from, to: item.to, difference: item.to - item.from }));
-    const byKind = Object.fromEntries(['ACUERDO', 'CANJE', 'COMPENSACION', 'CONDONACION'].map(kind => [kind, { total: settlements.filter(item => item.kind === kind).reduce((sum, item) => sum + item.amount, 0), count: settlements.filter(item => item.kind === kind).length }]));
+    const byKind = Object.fromEntries(['ACUERDO', 'CANJE', 'COMPENSACION', 'CONDONACION', 'RETENCION'].map(kind => [kind, { total: settlements.filter(item => item.kind === kind).reduce((sum, item) => sum + item.amount, 0), count: settlements.filter(item => item.kind === kind).length }]));
+    const retained = settlements.filter(item => item.kind === 'RETENCION');
+    const retention = { total: retained.reduce((sum, item) => sum + item.amount, 0), count: retained.length, byType: Object.fromEntries(['RETEFUENTE', 'RETEICA', 'RETEIVA'].map(type => [type, { total: retained.filter(item => item.retentionType === type).reduce((sum, item) => sum + item.amount, 0), count: retained.filter(item => item.retentionType === type).length }])) };
     const up = exchangeAdjustments.filter(item => item.difference > 0).reduce((sum, item) => sum + item.difference, 0), down = exchangeAdjustments.filter(item => item.difference < 0).reduce((sum, item) => sum - item.difference, 0);
-    data = { year: 2026, items: settlements, exchangeAdjustments, summary: { byKind, settledTotal: settlements.reduce((sum, item) => sum + item.amount, 0), exchange: { up, down, net: up - down, count: exchangeAdjustments.length } } };
+    data = { year: 2026, items: settlements, exchangeAdjustments, summary: { byKind, retention, settledTotal: settlements.filter(item => item.kind !== 'RETENCION').reduce((sum, item) => sum + item.amount, 0), exchange: { up, down, net: up - down, count: exchangeAdjustments.length } } };
   } else if (path.endsWith('/payments')) {
     if (new URLSearchParams(location.search).has('paymentError')) throw Object.assign(new Error('Pago no guardado (simulado)'), { response: { data: { message: 'Pago no guardado (simulado)' } } });
     // Como el servidor: en dólares, lo que entró de más (o de menos, si «queda al día») ajusta la cartera.
@@ -416,14 +427,17 @@ axios.defaults.adapter = async config => {
       exchangeAdjustment = { from: debt.amount, to: debt.amount + (Number(body.amount) - debt.outstanding), at: '2026-10-19T15:00:00.000Z' };
       debt = { ...debt, amount: exchangeAdjustment.to, outstanding: Number(body.amount), exchangeAdjustments: [...(debt.exchangeAdjustments || []), exchangeAdjustment] };
       window.__exchangeAdjustment = exchangeAdjustment;
-    } else if (Number(body.amount) > debt.outstanding + 0.005) throw Object.assign(new Error('De más'), { response: { data: { message: 'El pago supera el saldo pendiente de la cuenta por cobrar.' } } });
-    debt = { ...debt, outstanding: debt.outstanding - Number(body.amount), paidAmount: debt.paidAmount + Number(body.amount), status: debt.outstanding === Number(body.amount) ? 'PAGADO' : debt.status };
+    } else if (Number(body.amount) + (body.retentions || []).reduce((sum, item) => sum + Number(item.amount), 0) > debt.outstanding + 0.005) throw Object.assign(new Error('De más'), { response: { data: { message: 'El pago supera el saldo pendiente de la cuenta por cobrar.' } } });
+    // Como el servidor (22 de octubre de 2026): lo retenido cierra su parte sin ser ingreso y deja la cuenta pagada.
+    const retained = (body.retentions || []).reduce((sum, item) => sum + Number(item.amount), 0);
+    const retentionRows = (body.retentions || []).map((item, index) => ({ id: `demo-retention-${index}`, kind: 'RETENCION', detail: { retentionType: item.type }, amount: Number(item.amount), paidAt: `${body.paidAt}T12:00:00Z`, notes: null, account: null, financialRecordId: null, documents: [], supportDocuments: [] }));
+    debt = { ...debt, outstanding: debt.outstanding - Number(body.amount) - retained, paidAmount: debt.paidAmount + Number(body.amount), retainedAmount: (debt.retainedAmount || 0) + retained, status: Math.abs(debt.outstanding - Number(body.amount) - retained) < 0.005 ? 'PAGADO' : debt.status, payments: [...retentionRows, ...(debt.payments || [])] };
     if (!body.financialRecordId) records = [{ ...records[0], id: 'demo-new', amount: body.amount, category: body.category, origin: 'SYSTEM', receivablePayment: { id: 'demo-payment' }, documents: [] }, ...records];
     // Como el servidor: el abono queda con su ingreso, y la respuesta trae ese ingreso.
     const recordId = body.financialRecordId || 'demo-new';
     debt = { ...debt, payments: [{ id: 'demo-payment', amount: Number(body.amount), paidAt: `${body.paidAt}T12:00:00Z`, reference: body.reference || null, notes: body.notes || null, account, financialRecordId: recordId, documents: [] }, ...(debt.payments || [])] };
     window.__receivablePaymentBody = body;
-    data = { message: exchangeAdjustment ? `Pago registrado. La cartera en pesos se ajustó de $ ${exchangeAdjustment.from.toLocaleString('es-CO')} a $ ${exchangeAdjustment.to.toLocaleString('es-CO')} por la tasa del día.` : 'Pago de cartera registrado correctamente.', outstanding: debt.outstanding, payment: { id: 'demo-payment' }, financialRecord: { id: recordId }, receivable: { kind: 'CLIENTE', status: debt.status } };
+    data = { message: exchangeAdjustment ? `Pago registrado. La cartera en pesos se ajustó de $ ${exchangeAdjustment.from.toLocaleString('es-CO')} a $ ${exchangeAdjustment.to.toLocaleString('es-CO')} por la tasa del día.` : retentionRows.length ? (debt.outstanding < 0.005 ? 'Pago y retenciones registrados. La cuenta quedó pagada.' : 'Pago y retenciones registrados. Las retenciones no cuentan como ingreso.') : 'Pago de cartera registrado correctamente.', outstanding: debt.outstanding, payment: { id: 'demo-payment' }, financialRecord: { id: recordId }, receivable: { kind: 'CLIENTE', status: debt.status } };
   } else if (path.endsWith('/bank-reconciliation')) data = { transactions: Array.from({ length: 90 }, (_, i) => ({ id: `bank-${i}`, description: `Movimiento bancario ${i + 1}`, postedAt: '2026-09-07', amount: 10000, account, status: i === 0 ? 'MATCHED' : 'UNMATCHED', matches: i === 0 ? [{ id: 'match', status: 'APPROVED' }] : [] })), continuityGaps: [], statements: [] };
   else if (path.endsWith('/periods')) data = { periods: [] };
   else if (path.includes('/receivables/') && config.method === 'delete') {

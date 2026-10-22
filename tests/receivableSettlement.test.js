@@ -22,8 +22,8 @@ import { createReceivablePayment, reverseReceivablePayment } from '../src/servic
 
 const read = (relative) => fs.readFileSync(new URL(relative, import.meta.url), 'utf8');
 
-test('las formas de saldar una deuda sin dinero son cuatro y cada una dice qué es', () => {
-    assert.deepEqual(SETTLEMENT_KINDS.map((kind) => kind.value), ['ACUERDO', 'CANJE', 'COMPENSACION', 'CONDONACION']);
+test('las formas de saldar una deuda sin dinero son cuatro, más la retención del cliente, y cada una dice qué es', () => {
+    assert.deepEqual(SETTLEMENT_KINDS.map((kind) => kind.value), ['ACUERDO', 'CANJE', 'COMPENSACION', 'CONDONACION', 'RETENCION']);
     for (const kind of SETTLEMENT_KINDS) {
         assert.ok(kind.label.length > 5 && kind.help.length > 20, `${kind.value} necesita etiqueta y explicación`);
         assert.doesNotMatch(kind.help, /vosotros|podéis|tenéis/);
@@ -39,9 +39,9 @@ test('un abono sin kind o con kind PAGO es dinero; el resto es ajuste', () => {
     assert.equal(isCashPayment({ kind: 'ACUERDO' }), false);
     assert.deepEqual(
         splitAppliedCents([{ amount: 200000000, kind: 'PAGO' }, { amount: 150000000, kind: 'ACUERDO' }, { amount: 999, kind: 'CANJE', reversedAt: '2026-10-01' }]),
-        { paidCents: 200000000, settledCents: 150000000, hasSettlement: true }
+        { paidCents: 200000000, settledCents: 150000000, retainedCents: 0, hasSettlement: true }
     );
-    assert.deepEqual(splitAppliedCents([]), { paidCents: 0, settledCents: 0, hasSettlement: false });
+    assert.deepEqual(splitAppliedCents([]), { paidCents: 0, settledCents: 0, retainedCents: 0, hasSettlement: false });
 });
 
 test('el estado después de aplicar: PAGADO si todo fue dinero, SALDADO si hubo un ajuste', () => {
