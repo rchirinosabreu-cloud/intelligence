@@ -39,12 +39,12 @@ export const createBriaPlatformTools = ({ actions, platform } = {}) => (actions 
   }
 }, {
   name: 'operar_en_plataforma',
-  description: 'Prepara cualquier cambio de la plataforma que no tenga herramienta propia, por su ruta del mapa (POST, PUT, PATCH o DELETE), con la sesión y los permisos de la persona. NO lo ejecuta: muestra el resumen y la persona confirma. Pasa que_hace en una frase con las palabras de la persona, y el cuerpo con los campos que indica el mapa. Si falta un dato que la persona no dio, pregúntalo antes.',
+  description: 'Prepara cualquier cambio de la plataforma que no tenga herramienta propia, por su ruta del mapa (POST, PUT, PATCH o DELETE), con la sesión y los permisos de la persona. NO lo ejecuta: muestra el resumen y la persona confirma. Pasa que_hace como un párrafo corto en palabras normales (es lo único que la persona lee antes de confirmar), y el cuerpo con los campos que indica el mapa. Si falta un dato que la persona no dio, pregúntalo antes.',
   parameters: { type: 'object', properties: {
     metodo: { type: 'string', enum: ['POST', 'PUT', 'PATCH', 'DELETE'] },
     ruta: { type: 'string', description: 'Ruta completa con sus ids, por ejemplo /crm/leads/abc/stage' },
     cuerpo: { type: ['object', 'null'], description: 'Los campos del mapa con sus valores; null si no lleva.' },
-    que_hace: { type: 'string', description: 'Qué va a pasar, en una frase para la persona.' },
+    que_hace: { type: 'string', description: 'Lo que la persona va a confirmar, en un párrafo corto y en palabras normales: qué se hace, cuándo y a quién, con fechas como «jueves 22 de octubre». Nunca nombres de campos, ids, fechas ISO ni palabras en inglés. Ej.: «Creo un evento de todo el día para hoy, jueves 22 de octubre: Helen Hernández, ausente por enfermedad. Queda en los dos calendarios.»' },
     nuevo: { type: 'boolean' }
   }, required: ['metodo', 'ruta', 'cuerpo', 'que_hace'] },
   allowed: canUseBria,

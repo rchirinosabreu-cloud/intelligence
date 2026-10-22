@@ -128,6 +128,25 @@ for (const type of ['PRODUCTION', 'PROJECT', 'MEETING', 'ABSENCE', 'BREAK']) {
   }
 }
 
+// Rodny, 22 de octubre de 2026: «los eventos deben registrarse en ambos siempre». Un evento nuevo se crea en la cuenta
+// elegida e invita a las demás cuentas conectadas: Google lo pone en todos los calendarios y la sincronización lo une
+// por su iCalUID, así que no se duplica en Actividad.
+test('a new event invites every other connected account, once, never its own organizer', async () => {
+  let persisted;
+  const selected = { ...connection, id: 'social', email: 'social.brainstudio@gmail.com' };
+  await events.createOperationalEvent({ ...payload, type: 'ABSENCE', attendeeEmails: ['Coordinadorbrainstudio@gmail.com'] }, 'actor', {
+    ...creationDeps(),
+    authorize: async () => ({ connection: selected }),
+    resolveCreationTarget: async () => ({ calendarId: 'primary', resolvedCalendarId: selected.email }),
+    db: {
+      operationalEvent: { findUnique: async () => null, create: async ({ data }) => { persisted = data; return { id: 'local', ...data }; } },
+      googleCalendarConnection: { findMany: async ({ where }) => { assert.deepEqual(where, { isActive: true }); return [{ email: 'social.brainstudio@gmail.com' }, { email: 'coordinadorbrainstudio@gmail.com' }, { email: 'contacto@brainstudioagencia.com' }]; } }
+    },
+    syncToGoogle: async event => event
+  });
+  assert.deepEqual(persisted.attendeeEmails.sort(), ['contacto@brainstudioagencia.com', 'coordinadorbrainstudio@gmail.com']);
+});
+
 test('editing rejects changing the organizer account before local or remote writes', async () => {
   await assert.rejects(events.updateOperationalEvent('local', { googleConnectionId: 'social' }, {
     lock: task => task(), db: { operationalEvent: { findUnique: async () => ({ ...payload, id: 'local', googleConnectionId: 'coordinator', googleSyncStatus: 'SYNCED' }), update: fail('must not update') } },

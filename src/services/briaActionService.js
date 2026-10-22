@@ -914,7 +914,6 @@ const TYPES = {
 // Rodny, 10 de octubre de 2026: «quiero que Bria tenga permiso para todo en la plataforma, ella vive ahí». Lo que
 // no tiene herramienta propia se hace por la API, con la sesión de la persona. Aquí solo se arma el resumen y se
 // comprueba, de entrada, lo que la ruta pide (módulo, rol); la API vuelve a comprobarlo al ejecutar.
-const renderValue = (value) => Array.isArray(value) ? value.map(renderValue).join(', ') : value && typeof value === 'object' ? JSON.stringify(value) : String(value);
 const platformPermissionProblem = (user, permission) => {
   if (!permission) return null;
   const module = (permission.modules || []).find((name) => !hasModulePermission(user, name));
@@ -939,9 +938,11 @@ const preparePlatform = async ({ user, args, previous, routePermissions }) => {
   const problem = platformPermissionProblem(user, permission);
   if (problem) throw knowledgeError(problem, 403, 'BRIA_PLATFORM_FORBIDDEN');
   const body = args.cuerpo && typeof args.cuerpo === 'object' && !Array.isArray(args.cuerpo) ? args.cuerpo : (args.body && typeof args.body === 'object' ? args.body : null);
-  const intent = tidy(args.que_hace || args.intent).slice(0, 200);
-  if (!intent) throw knowledgeError('Dime en una frase qué va a hacer esta operación, con las palabras de la persona (que_hace).', 400, 'BRIA_PLATFORM_INTENT');
-  const summary = [intent, `Operación: ${operation.que}`, ...Object.entries(operation.params || {}).map(([name, value]) => `${name}: ${value}`), ...Object.entries(body || {}).map(([name, value]) => `${name}: ${renderValue(value)}`)];
+  const intent = tidy(args.que_hace || args.intent).slice(0, 500);
+  if (!intent) throw knowledgeError('Dime en un párrafo corto qué va a hacer esta operación, en palabras normales (que_hace).', 400, 'BRIA_PLATFORM_INTENT');
+  // El resumen es el párrafo de que_hace y nada más (Rodny, 22 de octubre de 2026: «nada de startAt, endAt, id … en
+  // un párrafo me lo puede decir»). Los campos crudos van en el cuerpo, que es lo que se envía; la persona no los lee.
+  const summary = [];
   const warnings = [];
   if (method === 'DELETE') warnings.push('Es un borrado: si la plataforma no lo deja deshacer, no se deshace.');
   if (operation.key.startsWith('POST /financials') || operation.key.startsWith('PUT /financials') || operation.key.startsWith('PATCH /financials')) warnings.push('Es dinero: revisa el importe y la fecha antes de confirmar.');
@@ -958,10 +959,14 @@ const executePlatform = async ({ user, action, platform, session, routePermissio
   if (!operation) throw knowledgeError('Esa operación ya no está en el mapa de la plataforma.', 404, 'BRIA_PLATFORM_UNKNOWN');
   const problem = platformPermissionProblem(user, (await routePermissions?.(operation.key)) || action.permission);
   if (problem) throw knowledgeError(problem, 403, 'BRIA_PLATFORM_FORBIDDEN');
-  const result = await platform.call({ token: session?.token, method: action.payload.method, path: action.payload.path, body: action.payload.body ?? undefined });
+  // Las rutas que guardan sin duplicados piden un `requestId` (22 de octubre de 2026: el evento de Helen se rechazó por
+  // eso). La pantalla lo pone sola; aquí sale del id de la acción, así que un reintento lleva el mismo y no duplica.
+  const rawBody = action.payload.body ?? undefined;
+  const body = operation.requestId && rawBody && typeof rawBody === 'object' && !rawBody.requestId ? { ...rawBody, requestId: `bria-${String(action.id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 120)}` } : rawBody;
+  const result = await platform.call({ token: session?.token, method: action.payload.method, path: action.payload.path, body });
   if (!result.ok) throw knowledgeError(`La plataforma no lo aceptó: ${result.error}`, result.status >= 400 && result.status < 500 ? result.status : 502, 'BRIA_PLATFORM_REJECTED');
-  const detail = result.data && typeof result.data === 'object' ? result.text.slice(0, 1500) : '';
-  return { text: `Listo: ${action.title}.${detail ? `\n\nLo que respondió la plataforma (datos): ${detail}` : ''}`, sources: [] };
+  // Sin la respuesta técnica de la plataforma: la persona ya leyó qué se iba a hacer.
+  return { text: 'Listo, quedó hecho.', sources: [] };
 };
 
 // `gate` es la puerta de actualizar una tarea (`checkTaskUpdate`); se inyecta solo para probar sus negativas.

@@ -49,7 +49,10 @@ test('preparing a platform operation: only what the map knows, with the route’
   assert.equal(actionStage(action), 'READY');
   assert.deepEqual(action.payload, { method: 'POST', path: '/global-announcements', body: { content: 'Mañana no hay reunión', type: 'INFO' } });
   assert.deepEqual(action.permission, { roles: ['MANAGER'] });
-  assert.deepEqual(action.summary, ['Publicar el anuncio de que mañana no hay reunión', 'Operación: Publica un anuncio general para todo el equipo.', 'content: Mañana no hay reunión', 'type: INFO']);
+  // Un párrafo y nada más (Rodny, 22 de octubre de 2026: «nada de startAt, endAt, id … en un párrafo me lo puede decir»).
+  assert.deepEqual(action.summary, []);
+  assert.equal(actionReply(action).answer, 'Publicar el anuncio de que mañana no hay reunión\n\n¿Lo hago así? También puedes pedirme cualquier ajuste.');
+  assert.doesNotMatch(actionReply(action).answer, /content:|type:|Operación:/);
   assert.deepEqual(actionReply(action).quickReplies, ['Confirmar', 'Cancelar']);
   await assert.rejects(() => service.prepare({ user: pm, type: 'PLATFORM', args: { metodo: 'POST', ruta: '/client-operations/c1/observations', cuerpo: { text: 'x' }, que_hace: 'Anotar' } }), /módulo Clientes/);
   await assert.rejects(() => service.prepare({ user: pm, type: 'PLATFORM', args: { metodo: 'POST', ruta: '/user/mfa/reset/u1', cuerpo: null, que_hace: 'Reset' } }), /no se hace desde el chat/);
@@ -60,7 +63,7 @@ test('preparing a platform operation: only what the map knows, with the route’
   assert.match(money.warnings[0], /Es dinero/);
   const removal = await service.prepare({ user: admin, type: 'PLATFORM', args: { metodo: 'DELETE', ruta: '/user/notes/n1', cuerpo: null, que_hace: 'Borrar la nota' } });
   assert.match(removal.warnings[0], /Es un borrado/);
-  assert.equal(removal.summary.length, 3, 'the path parameter is listed');
+  assert.deepEqual(removal.summary, [], 'el párrafo de que_hace dice qué se borra; los parámetros no se listan');
 });
 
 test('executing calls the API with the person’s session, re-checks the permission and tells what the platform answered or refused', async () => {
@@ -70,7 +73,7 @@ test('executing calls the API with the person’s session, re-checks the permiss
   const action = await service.prepare({ user: admin, type: 'PLATFORM', args: { metodo: 'POST', ruta: '/global-announcements', cuerpo: { content: 'Hola', type: 'INFO' }, que_hace: 'Publicar un anuncio' } });
   const out = await service.execute({ user: admin, action, session });
   assert.deepEqual(calls[0], { token: 'token-de-la-persona', method: 'POST', path: '/global-announcements', body: { content: 'Hola', type: 'INFO' } });
-  assert.match(out.text, /^Listo: Publicar un anuncio\./);
+  assert.equal(out.text, 'Listo, quedó hecho.', 'sin la respuesta técnica de la plataforma');
   await assert.rejects(() => service.execute({ user: { ...admin, role: 'EDITOR' }, action, session }), { status: 403 }, 'a role that changed since the summary is refused');
   await assert.rejects(() => service.execute({ user: { ...admin, userId: 'otra' }, action, session }), /otra persona/);
   const failing = { ...action, payload: { ...action.payload, path: '/global-announcements' }, target: { key: 'POST /global-announcements', path: '/global-announcements' } };
@@ -78,6 +81,27 @@ test('executing calls the API with the person’s session, re-checks the permiss
   await assert.rejects(() => service.execute({ user: admin, action: failing, session }), /La plataforma no lo aceptó: Falta el contenido\./);
   const noPlatform = createBriaActionService({ routePermissions: permissions });
   await assert.rejects(() => noPlatform.execute({ user: admin, action, session }), /no puede operar/);
+});
+
+// 22 de octubre de 2026: crear el evento de Helen se rechazó por «falta un identificador válido para guardar sin
+// duplicados». La pantalla lo pone sola; por Bria lo pone la plataforma, fijo por acción, así reintentar no duplica.
+test('an operation that needs a request id gets one tied to the action, and keeps the one the body brought', async () => {
+  const calls = [];
+  const platform = { call: async (input) => { calls.push(input); return { ok: true, status: 200, data: { id: 'e1' }, text: '{"id":"e1"}' }; } };
+  const service = createBriaActionService({ platform, routePermissions: async () => ({ roles: ['MANAGER'] }) });
+  const body = { title: 'Helen Hernández ausente por enfermedad', type: 'ABSENCE', startAt: '2026-10-22T00:00:00-05:00', endAt: '2026-10-23T00:00:00-05:00', isAllDay: true, googleConnectionId: 'g1' };
+  const action = await service.prepare({ user: admin, type: 'PLATFORM', args: { metodo: 'POST', ruta: '/activity/events', cuerpo: body, que_hace: 'Crear la ausencia de Helen' } });
+  await service.execute({ user: admin, action, session });
+  await service.execute({ user: admin, action, session });
+  assert.match(calls[0].body.requestId, /^bria-[a-zA-Z0-9_-]{8,120}$/);
+  assert.equal(calls[1].body.requestId, calls[0].body.requestId, 'el mismo en un reintento: el evento no se crea dos veces');
+  assert.equal(calls[0].body.type, 'ABSENCE');
+  const own = await service.prepare({ user: admin, type: 'PLATFORM', args: { metodo: 'POST', ruta: '/activity/events', cuerpo: { ...body, requestId: 'propio-1234' }, que_hace: 'Crear' } });
+  await service.execute({ user: admin, action: own, session });
+  assert.equal(calls[2].body.requestId, 'propio-1234');
+  const announcement = await service.prepare({ user: admin, type: 'PLATFORM', args: { metodo: 'POST', ruta: '/global-announcements', cuerpo: { content: 'Hola', type: 'INFO' }, que_hace: 'Publicar' } });
+  await service.execute({ user: admin, action: announcement, session });
+  assert.equal('requestId' in calls[3].body, false, 'solo donde la ruta lo pide');
 });
 
 test('the tools: the map searches, reading goes straight to the API with the session, writing only prepares', async () => {
