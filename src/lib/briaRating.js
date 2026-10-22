@@ -15,6 +15,14 @@ export const normalizeRating = ({ rating, note } = {}) => {
   return { value, note: text || null };
 };
 
+/** Solo se valora una respuesta de Bria ya guardada: con id real, nunca la burbuja provisional ni un turno sin id. */
+export const canRateTurn = (turn) => turn?.role === 'assistant' && typeof turn.id === 'string' && turn.id !== '' && turn.id !== 'pending';
+
+// 20 de octubre de 2026: comparar `ratingNote?.turnId === turn.id` a secas daba `undefined === undefined` con un turno
+// sin id, así que la caja «¿Qué falló?» se dibujaba sin nota abierta y el panel se caía leyendo `null.text`.
+/** La nota «¿Qué falló?» está abierta para este turno: hay nota, el turno tiene id y es el mismo. */
+export const ratingNoteOpenFor = (ratingNote, turn) => Boolean(ratingNote && canRateTurn(turn) && ratingNote.turnId === turn.id);
+
 /** La posición de un turno a partir de su id `${conversationId}:${position}`; null si no es de ese chat. */
 export const turnPosition = (conversationId, turnId) => {
   const match = /^(.+):(\d+)$/.exec(String(turnId || ''));

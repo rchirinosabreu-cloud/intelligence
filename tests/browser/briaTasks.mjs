@@ -14,7 +14,8 @@ const client = { id: 'client', name: 'Empresa demo', slug: 'demo', isArchived: f
 const taskDrafts = createBriaTaskDraftService({ db: { client: { findMany: async () => [client], findUnique: async () => client }, teamMember: { findMany: async () => [member], findUnique: async () => member }, task: { findUnique: async ({ where }) => tasks.get(where.id) } }, now: () => new Date('2026-10-08T17:00:00Z'), createTask: async (payload, { taskId }) => { const row = { id: taskId, ...payload }; tasks.set(taskId, row); return row; } });
 const repository = {
   list: async () => [...chats.values()], create: async () => { const row = { id: randomUUID(), revision: 0, title: 'Nueva conversación', turns: [] }; chats.set(row.id, row); return row; }, get: async (_actor, id) => chats.get(id),
-  append: async (_actor, id, revision, question, result) => { const row = chats.get(id); assert.equal(row.revision, revision); const reply = typeof result === 'function' ? await result() : result; row.turns.push({ role: 'user', text: question }, { role: 'assistant', text: reply.answer, ...reply }); row.revision++; return row; }
+  // Cada turno lleva su id `${chat}:${posición}`, como en el repositorio real: la pantalla los usa como clave y para el pulgar.
+  append: async (_actor, id, revision, question, result) => { const row = chats.get(id); assert.equal(row.revision, revision); const reply = typeof result === 'function' ? await result() : result; row.turns.push({ id: `${id}:${revision * 2}`, role: 'user', text: question }, { id: `${id}:${revision * 2 + 1}`, role: 'assistant', text: reply.answer, ...reply }); row.revision++; return row; }
 };
 const assistant = { ask: async request => {
   let called = false;
