@@ -80,6 +80,27 @@ test('executing calls the API with the person’s session, re-checks the permiss
   await assert.rejects(() => noPlatform.execute({ user: admin, action, session }), /no puede operar/);
 });
 
+// 22 de octubre de 2026: crear el evento de Helen se rechazó por «falta un identificador válido para guardar sin
+// duplicados». La pantalla lo pone sola; por Bria lo pone la plataforma, fijo por acción, así reintentar no duplica.
+test('an operation that needs a request id gets one tied to the action, and keeps the one the body brought', async () => {
+  const calls = [];
+  const platform = { call: async (input) => { calls.push(input); return { ok: true, status: 200, data: { id: 'e1' }, text: '{"id":"e1"}' }; } };
+  const service = createBriaActionService({ platform, routePermissions: async () => ({ roles: ['MANAGER'] }) });
+  const body = { title: 'Helen Hernández ausente por enfermedad', type: 'ABSENCE', startAt: '2026-10-22T00:00:00-05:00', endAt: '2026-10-23T00:00:00-05:00', isAllDay: true, googleConnectionId: 'g1' };
+  const action = await service.prepare({ user: admin, type: 'PLATFORM', args: { metodo: 'POST', ruta: '/activity/events', cuerpo: body, que_hace: 'Crear la ausencia de Helen' } });
+  await service.execute({ user: admin, action, session });
+  await service.execute({ user: admin, action, session });
+  assert.match(calls[0].body.requestId, /^bria-[a-zA-Z0-9_-]{8,120}$/);
+  assert.equal(calls[1].body.requestId, calls[0].body.requestId, 'el mismo en un reintento: el evento no se crea dos veces');
+  assert.equal(calls[0].body.type, 'ABSENCE');
+  const own = await service.prepare({ user: admin, type: 'PLATFORM', args: { metodo: 'POST', ruta: '/activity/events', cuerpo: { ...body, requestId: 'propio-1234' }, que_hace: 'Crear' } });
+  await service.execute({ user: admin, action: own, session });
+  assert.equal(calls[2].body.requestId, 'propio-1234');
+  const announcement = await service.prepare({ user: admin, type: 'PLATFORM', args: { metodo: 'POST', ruta: '/global-announcements', cuerpo: { content: 'Hola', type: 'INFO' }, que_hace: 'Publicar' } });
+  await service.execute({ user: admin, action: announcement, session });
+  assert.equal('requestId' in calls[3].body, false, 'solo donde la ruta lo pide');
+});
+
 test('the tools: the map searches, reading goes straight to the API with the session, writing only prepares', async () => {
   const calls = [];
   const platform = { call: async (input) => { calls.push(input); return { ok: true, status: 200, data: [{ id: 'l1', company: 'Aristea' }], text: '[…]', truncated: false }; } };

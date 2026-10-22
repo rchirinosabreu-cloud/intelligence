@@ -958,7 +958,11 @@ const executePlatform = async ({ user, action, platform, session, routePermissio
   if (!operation) throw knowledgeError('Esa operación ya no está en el mapa de la plataforma.', 404, 'BRIA_PLATFORM_UNKNOWN');
   const problem = platformPermissionProblem(user, (await routePermissions?.(operation.key)) || action.permission);
   if (problem) throw knowledgeError(problem, 403, 'BRIA_PLATFORM_FORBIDDEN');
-  const result = await platform.call({ token: session?.token, method: action.payload.method, path: action.payload.path, body: action.payload.body ?? undefined });
+  // Las rutas que guardan sin duplicados piden un `requestId` (22 de octubre de 2026: el evento de Helen se rechazó por
+  // eso). La pantalla lo pone sola; aquí sale del id de la acción, así que un reintento lleva el mismo y no duplica.
+  const rawBody = action.payload.body ?? undefined;
+  const body = operation.requestId && rawBody && typeof rawBody === 'object' && !rawBody.requestId ? { ...rawBody, requestId: `bria-${String(action.id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 120)}` } : rawBody;
+  const result = await platform.call({ token: session?.token, method: action.payload.method, path: action.payload.path, body });
   if (!result.ok) throw knowledgeError(`La plataforma no lo aceptó: ${result.error}`, result.status >= 400 && result.status < 500 ? result.status : 502, 'BRIA_PLATFORM_REJECTED');
   const detail = result.data && typeof result.data === 'object' ? result.text.slice(0, 1500) : '';
   return { text: `Listo: ${action.title}.${detail ? `\n\nLo que respondió la plataforma (datos): ${detail}` : ''}`, sources: [] };
