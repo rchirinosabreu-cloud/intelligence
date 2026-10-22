@@ -215,6 +215,7 @@ export const REPLIES = Object.freeze({
   vaultOnly: 'Las contraseñas solo se muestran dentro de la plataforma, nunca por WhatsApp.',
   failed: 'No pude responder ahora. Inténtalo en un momento o escríbeme desde la plataforma.',
   busy: 'Todavía estoy respondiendo tu mensaje anterior. Dame un momento.',
+  needsPlatform: 'Eso lo tengo que hacer desde la plataforma, con tu sesión abierta: confírmalo en el chat de Bria allá y lo hago.',
   alertGone: 'Ese aviso ya no está disponible. Lo que siga pendiente lo ves en la plataforma.',
   dismissed: 'Listo, no te lo vuelvo a mostrar hoy.',
   done: 'Listo.'

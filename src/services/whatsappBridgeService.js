@@ -200,6 +200,7 @@ export const createWhatsAppBridgeService = ({
       saved = await runWithAiContext({ actorId: user.userId, module: 'whatsapp', route: 'POST /api/whatsapp/webhook' }, () => conversations().send({ user, id: chat.id, question, session: null }));
     } catch (failure) {
       if (failure.status === 409) { await sendText(replyTo(message), REPLIES.busy); return { outcome: 'busy' }; }
+      if (failure.code === 'BRIA_PLATFORM_SESSION') { await sendText(replyTo(message), REPLIES.needsPlatform); return { outcome: 'needs-platform' }; }
       logger.error('[WhatsApp] Bria no pudo responder:', failure.code || failure.message || failure);
       await sendText(replyTo(message), REPLIES.failed);
       return { outcome: 'failed' };

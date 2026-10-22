@@ -113,24 +113,29 @@ export const canWriteFact = (user, fact) => factVisible(fact, factAccess(user))
 
 // Una corrección, una confirmación o una enseñanza dicha por la persona en este mensaje. Las preguntas y los
 // pedidos de trabajo no lo son; lo que diga un archivo o un correo nunca cuenta.
-// `\b` no reconoce letras con tilde («cambió»), así que los bordes se marcan con letras Unicode.
-const CORRECTION = /(?<![\p{L}\p{N}])(te\s+corrijo|corr[ií]ge(lo|la)?|corrijo|correcci[oó]n|est[aá]\s+mal|no\s+es\s+as[ií]|es\s+incorrecto|ya\s+no|ya\s+cambi[oó]|cambi[oó]|en\s+realidad|recuerda|recu[eé]rdalo|apr[eé]ndete|aprende|gu[aá]rda(lo|la)?|tenlo\s+en\s+cuenta|ten\s+en\s+cuenta|para\s+que\s+sepas|confirmo|confirmado|as[ií]\s+es|actual[ií]za(lo|la)?|no\s+es\s+.+\s+sino)(?![\p{L}\p{N}])/iu;
+//
+// Se lee sobre el texto doblado (sin tildes ni mayúsculas): WhatsApp manda a veces la tilde descompuesta («a» más
+// la tilde aparte) y «guárdalo» no coincidía (Rodny, 22 de octubre de 2026: enseñó los apodos del equipo tres veces
+// y las tres se rechazaron). Y vale como se dice de verdad: «debes tenerlo presente», «obvio, guárdalo»,
+// «acuérdate», «anótalo», «siempre le decimos». Lo único que nunca cuenta es negarse: «no lo guardes».
+const fold = (value) => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
+const words = (value) => ` ${fold(value).replace(/[^\p{L}\p{N}]+/gu, ' ').trim()} `;
+const TEACHING = / (te corrijo|corrige(lo|la)?|corrijo|correccion|esta mal|no es asi|es incorrecto|ya no|ya cambio|cambio|en realidad|recuerda(lo|la)?|acuerdate|no (lo |la )?olvides|aprende(te|telo|lo|la)?|guarda(lo|la|r|rlo|rla)?|guardes|anota(lo|la|r|rlo)?|registra(lo|la|r|rlo)?|ten(lo|la)? (en cuenta|presente)|tener(lo|la)? (en cuenta|presente)|debes saber(lo)?|para que sepas|confirmo|confirmado|asi es|actualiza(lo|la)?|siempre (usamos|decimos|le decimos|les decimos|llamamos)|le decimos|les decimos|no es .+ sino) /;
+const REFUSAL = / no (lo |la |me |te )?(guardes|guarde|anotes|registres|recuerdes|aprendas) /;
 export const correctionIntent = (text) => {
-  const value = String(text || '').trim();
-  if (!value) return false;
-  return CORRECTION.test(value);
+  const value = words(text);
+  if (!value.trim()) return false;
+  if (REFUSAL.test(value)) return false;
+  return TEACHING.test(value);
 };
 
-// Un «sí» corto solo es permiso si llega justo después de que Bria ofreció guardar (Rodny, 9 de octubre de
-// 2026: contestó «Listo» a esa oferta y el guardado se rechazó). La aceptación la escribe la persona; la
+// Un «sí» solo es permiso si llega justo después de que Bria ofreció guardar (Rodny, 9 de octubre de 2026:
+// contestó «Listo» a esa oferta y el guardado se rechazó). Vale como lo diga, aunque siga hablando («obvio, esto
+// es algo global…», 22 de octubre de 2026); un «no» al principio nunca. La aceptación la escribe la persona; la
 // respuesta anterior de Bria solo dice qué está aceptando.
-const fold = (value) => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
-const AFFIRMATIVE = /^(si|listo|dale|ok|okay|vale|de acuerdo|hazlo|perfecto|claro|adelante|va|correcto|exacto|asi es|guardalo|guardala|por favor)( [a-z, ]{0,30})?[.!]*$/;
+const AFFIRMATIVE = /^ (si|obvio|claro|dale|listo|ok|okay|vale|de acuerdo|hazlo|perfecto|adelante|va|correcto|exacto|asi es|por supuesto|por favor|guardalo|guardala|hagale|de una) /;
 const SAVE_OFFER = /(guard|record|anot|registr|memoria)[^?]*\?/;
-export const acceptsSaveOffer = (question, previousAnswer) => {
-  const answer = fold(question).replace(/[,]/g, ' ').replace(/\s+/g, ' ');
-  return answer.length <= 40 && !/(^| )no( |$)/.test(answer) && AFFIRMATIVE.test(answer) && SAVE_OFFER.test(fold(previousAnswer));
-};
+export const acceptsSaveOffer = (question, previousAnswer) => AFFIRMATIVE.test(words(question)) && SAVE_OFFER.test(fold(previousAnswer));
 
 /** Qué hacer con cada hecho de una nueva lectura. Lo que el equipo tocó o retiró, no se pisa ni revive. */
 export const planFactImport = (existing = [], incoming = []) => {

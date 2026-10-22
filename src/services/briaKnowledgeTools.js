@@ -1,6 +1,9 @@
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { validateLearning, learningUsable, bogotaDay, knowledgeError } from '../lib/briaKnowledge.js';
-const teachingIntent = question => /\b(recuerda|recuérdalo|aprende|guarda|corrijo|te corrijo|correcci[oó]n|en realidad|para que sepas|ten(?:lo)? en cuenta|no es .+ sino)\b/iu.test(question || '');
+import { correctionIntent } from '../lib/briaAgencyFacts.js';
+// Una sola regla de «me están enseñando algo» para las dos memorias (22 de octubre de 2026): `\b` no veía las
+// tildes, y «tenlo presente» u «obvio, guárdalo» no contaban.
+const teachingIntent = correctionIntent;
 const forgetIntent = question => /\b(olvida|olvidar|retira|elimina|borra)\b/iu.test(question || '');
 export const createKnowledgeTools = knowledge => [
   { name: 'consultar_aprendizajes', description: 'Consulta conocimiento enseñado por el equipo, con autor, vigencia y estado. Las propuestas y registros vencidos no son hechos actuales.', parameters: { type: 'object', properties: { consulta: { type: 'string' } }, required: ['consulta'], additionalProperties: false }, allowed: canUseBria,

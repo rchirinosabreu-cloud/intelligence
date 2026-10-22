@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  validateFact, factDigest, factAccess, factVisible, correctionIntent, planFactImport,
+  validateFact, factDigest, factAccess, factVisible, correctionIntent, acceptsSaveOffer, planFactImport,
   resolveClientLinks, presentFact, CERTAINTY_WORDS
 } from '../src/lib/briaAgencyFacts.js';
 
@@ -75,6 +75,33 @@ test('a correction or confirmation in the human message is explicit; a question 
   for (const text of ['¿Cómo va Aristea este mes?', 'Prepárame los pendientes de Endova', 'Resume la parrilla']) {
     assert.equal(correctionIntent(text), false, text);
   }
+});
+
+// Rodny, 22 de octubre de 2026, por WhatsApp: le enseñó los apodos del equipo tres veces y las tres se rechazaron,
+// porque solo valían ciertas palabras exactas y WhatsApp manda las tildes descompuestas («a» + tilde).
+test('an everyday teaching counts, with any accents, and a refusal to save never does', () => {
+  const decomposed = 'Sí, guárdalo como regla global del equipo, y Kei o Key es Keila Daza';
+  for (const text of [
+    'Sí, Meli es Melissa, Eli es Elissa, Cami es Camila del Toro… siempre usamos esos abreviados, debes tenerlo presente siempre.',
+    'obvio, debes guardarlo esto es algo global, y aplica en general',
+    decomposed,
+    'Acuérdate de que Helen no trabaja los viernes',
+    'Anótalo: Wine & Wonder aprueba los martes',
+    'Ten presente que a Endova le decimos Endo',
+    'No olvides que Rod es Rodny'
+  ]) assert.equal(correctionIntent(text), true, text);
+  for (const text of ['No lo guardes, era una prueba', '¿Qué está haciendo Meli ahorita?', 'Crea un evento para Helen']) {
+    assert.equal(correctionIntent(text), false, text);
+  }
+});
+
+test('a plain yes, however long, accepts the offer Bria just made; a no never does', () => {
+  const offer = 'Entendido: Meli es Melissa. ¿Quieres que lo guarde para usarlo en futuras conversaciones?';
+  assert.equal(acceptsSaveOffer('obvio, esto es algo global y aplica en general si cualquier pregunta abrevia un nombre', offer), true);
+  assert.equal(acceptsSaveOffer('Por supuesto', offer), true);
+  assert.equal(acceptsSaveOffer('Listo', offer), true);
+  assert.equal(acceptsSaveOffer('No, mejor no', offer), false);
+  assert.equal(acceptsSaveOffer('sí', 'Melissa tiene cinco tareas hoy.'), false, 'sin oferta de guardar, un sí no es permiso');
 });
 
 test('importing never overwrites what the team confirmed and never resurrects a retired fact', () => {
