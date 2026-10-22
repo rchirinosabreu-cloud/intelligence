@@ -6,6 +6,8 @@ import { MODULE_KEYS, hasModuleAccess } from '../lib/platformModules.js';
 import { grantModule, moduleOf, permissionRequestNudge, permissionAnswerNudge, permissionRequestText, permissionAnswerText, permissionDecisionMessage, cleanPermissionNote } from '../lib/modulePermissionRequests.js';
 import { createNotification } from './notificationService.js';
 import { getPermissionRequestRepository } from './permissionRequestRepository.js';
+import { alertByWhatsApp } from './whatsappAlertSender.js';
+import { accessAlert } from '../lib/whatsappAlerts.js';
 
 const requestError = (message, status, code) => Object.assign(new Error(message), { status, code });
 export const MODULE_ACCESS_REQUESTED = 'MODULE_ACCESS_REQUESTED';
@@ -13,7 +15,7 @@ export const MODULE_ACCESS_GRANTED = 'MODULE_ACCESS_GRANTED';
 export const MODULE_ACCESS_DENIED = 'MODULE_ACCESS_DENIED';
 const ACCOUNT = { id: true, name: true, role: true, isActive: true, modulePermissions: true, financialRole: true, teamMember: { select: { name: true, isActive: true } } };
 
-export const createPermissionRequestService = ({ repository, db = prisma, notify = createNotification, logger = console } = {}) => {
+export const createPermissionRequestService = ({ repository, db = prisma, notify = createNotification, logger = console, whatsapp = alertByWhatsApp } = {}) => {
   const repo = () => repository || getPermissionRequestRepository();
   const actorOf = async (user) => {
     const row = await db.user.findUnique({ where: { id: user?.userId || user?.id || '' }, select: ACCOUNT });
@@ -43,7 +45,13 @@ export const createPermissionRequestService = ({ repository, db = prisma, notify
       const out = await repo().create({ moduleKey, requesterRef: actor.ref, requesterName: actor.name, note: cleanPermissionNote(note) });
       if (out.deniedRecently) return out;
       const admins = await activeAdmins();
-      if (out.created) for (const admin of admins) await safeNotify({ userId: admin.id, type: MODULE_ACCESS_REQUESTED, message: permissionRequestText(out.request), relatedId: out.request.id });
+      if (out.created) {
+        for (const admin of admins) {
+          await safeNotify({ userId: admin.id, type: MODULE_ACCESS_REQUESTED, message: permissionRequestText(out.request), relatedId: out.request.id });
+          // Y por WhatsApp, con Dar acceso / Denegar (22 de octubre de 2026).
+          whatsapp({ userId: admin.id, ...accessAlert({ type: 'MODULE', request: out.request, text: permissionRequestText(out.request) }) });
+        }
+      }
       return { ...out, admins: admins.map((admin) => admin.name) };
     },
     async decide(user, id, decision) {

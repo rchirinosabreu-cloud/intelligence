@@ -118,13 +118,17 @@ test('the service sends the request to every active admin once, and the decision
     getRequest: async () => pending,
     decideRequest: async (actor, id, decision) => ({ decided: true, request: { ...pending, status: decision === 'APPROVE' ? 'APPROVED' : 'DENIED', decidedByName: actor.name } })
   };
-  const service = createVaultService({ repository, db: fakeDb(people), notify: async (row) => { notes.push(row); } });
+  const whatsapp = [];
+  const service = createVaultService({ repository, db: fakeDb(people), notify: async (row) => { notes.push(row); }, whatsapp: (alert) => whatsapp.push(alert) });
   const asked = await service.requestAccess(pm, 'cred-1', '  Para editar  ');
   assert.deepEqual(asked.admins, ['Rodny Chirinos']);
   assert.deepEqual(notes.map((n) => [n.userId, n.type, n.message]), [['u-admin', 'VAULT_ACCESS_REQUESTED', 'Camila necesita la contraseña de CapCut (Brain Studio).']]);
+  // Por WhatsApp, el mismo aviso con Compartir / Denegar (22 de octubre de 2026); nunca un valor de la bóveda.
+  assert.deepEqual(whatsapp.map((a) => [a.userId, a.kind, a.sourceRef, a.text, a.buttons.map((b) => b.act).join(',')]), [['u-admin', 'ACCESS', `vault:${pending.id}`, 'Camila necesita la contraseña de CapCut (Brain Studio).', 'VAULT_APPROVE,VAULT_DENY']]);
   repository.requestAccess = async () => ({ created: false, request: pending });
   await service.requestAccess(pm, 'cred-1', null);
   assert.equal(notes.length, 1, 'asking again does not notify again');
+  assert.equal(whatsapp.length, 1);
   repository.requestAccess = async () => ({ created: false, deniedRecently: true, request: { ...pending, status: 'DENIED' } });
   await service.requestAccess(pm, 'cred-1', null);
   assert.equal(notes.length, 1, 'a recent denial is respected: no new notice');

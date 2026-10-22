@@ -11,10 +11,25 @@ import { META_GRAPH_ORIGIN, META_GRAPH_VERSION } from './metaGraphService.js';
 import { createWhatsAppLinkRepository } from './whatsappLinkRepository.js';
 import {
   verifyMetaSignature, webhookChallenge, parseInboundMessages, describeNotice, isStatusOnlyNotice, maskWaId, linkCodeIn, generateLinkCode, linkMessage, displayPhone, waMeLink,
-  splitForWhatsApp, answerForWhatsApp, textMessagePayload, readReceiptPayload, REPLIES, LINK_CODE_TTL_MS, UNKNOWN_SENDER_REPLIES_PER_DAY
+  splitForWhatsApp, replyForWhatsApp, textWithOptions, optionsMessagePayload, textMessagePayload, readReceiptPayload, REPLIES, LINK_CODE_TTL_MS, UNKNOWN_SENDER_REPLIES_PER_DAY,
+  INTERACTIVE_BODY_MAX, OPTIONS_PROMPT
 } from '../lib/whatsappBridge.js';
+import {
+  ALERT_KINDS, ALERT_ACTIONS, isWindowOpen, alertsEnabled, withinAlertHours, parseAlertReplyId, alertOptions, templateMessagePayload
+} from '../lib/whatsappAlerts.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+/** Ningún día manda más avisos que estos por persona, pase lo que pase en la plataforma. */
+export const ALERTS_PER_DAY = 12;
+const firstName = (name) => String(name || '').trim().split(/\s+/)[0] || 'equipo';
+
+// Lo que hace cada botón de un aviso, con las mismas puertas que el aviso encima de Bria. Se cargan al usarlas:
+// esos servicios avisan por WhatsApp y un import directo sería circular.
+const defaultActions = {
+  vault: async () => (await import('./vaultService.js')).getVaultService(),
+  permissions: async () => (await import('./permissionRequestService.js')).getPermissionRequestService(),
+  pulse: async () => (await import('./briaProactiveRepository.js')).createBriaProactiveRepository({ pool: getSidecarPool() })
+};
 const SEND_TIMEOUT_MS = 20 * 1000;
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
 const bogotaDay = (date) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
@@ -28,8 +43,10 @@ export const createWhatsAppBridgeService = ({
   now = () => new Date(),
   random,
   logger = console,
-  scheduleWork = (work) => queueMicrotask(work)
+  scheduleWork = (work) => queueMicrotask(work),
+  actions = {}
 } = {}) => {
+  const act = { ...defaultActions, ...actions };
   const config = () => ({
     token: env.META_WHATSAPP_TOKEN || '',
     phoneNumberId: env.META_WHATSAPP_PHONE_NUMBER_ID ? String(env.META_WHATSAPP_PHONE_NUMBER_ID) : '',
@@ -54,7 +71,25 @@ export const createWhatsAppBridgeService = ({
     if (!response.ok || body?.error) throw httpError(response.status || 502, body?.error?.message || `Meta respondió ${response.status}`, 'META_WHATSAPP_SEND');
     return body;
   };
-  const sendText = async (to, text) => { for (const part of splitForWhatsApp(text)) await graph(`${config().phoneNumberId}/messages`, textMessagePayload(to, part)); };
+  const messages = (payload) => graph(`${config().phoneNumberId}/messages`, payload);
+  const sendText = async (to, text) => { for (const part of splitForWhatsApp(text)) await messages(textMessagePayload(to, part)); };
+  // Texto y opciones: lo largo sale antes en texto y las opciones van con el último trozo (o con una línea corta si
+  // ese trozo no cabe en un mensaje con botones). Si Meta no acepta los botones, las opciones se dicen en texto.
+  const sendReply = async (to, { text, options = [] }) => {
+    const parts = splitForWhatsApp(text);
+    if (!options.length || !parts.length) { for (const part of parts) await messages(textMessagePayload(to, part)); return; }
+    const last = parts.at(-1);
+    const fits = last.length <= INTERACTIVE_BODY_MAX;
+    for (const part of fits ? parts.slice(0, -1) : parts) await messages(textMessagePayload(to, part));
+    const body = fits ? last : OPTIONS_PROMPT;
+    const payload = optionsMessagePayload(to, body, options);
+    if (!payload) { await sendText(to, textWithOptions({ text: body, options })); return; }
+    try { await messages(payload); }
+    catch (failure) {
+      logger.warn?.(`[WhatsApp] Los botones no salieron (${failure.message}); van en texto.`);
+      await sendText(to, textWithOptions({ text: body, options }));
+    }
+  };
   const markRead = async (messageId) => {
     try { await graph(`${config().phoneNumberId}/messages`, readReceiptPayload(messageId)); }
     catch (failure) { logger.warn?.(`[WhatsApp] No se pudo marcar como leído: ${failure.message}`); }
@@ -105,22 +140,64 @@ export const createWhatsAppBridgeService = ({
     return { outcome: 'unknown' };
   };
 
+  // Un aviso guardado, con sus botones: dentro de la ventana de 24 horas, o después de que la persona tocó «Ver aviso».
+  const sendAlertContent = (to, alert) => sendReply(to, { text: alert.text, options: alertOptions(alert) });
+
+  // Lo que hace un botón de un aviso. Un rechazo de la plataforma (4xx) se dice con su motivo; otra falla, en general.
+  const runAlertAction = async (user, button) => {
+    const decision = button.act.endsWith('_APPROVE') ? 'APPROVE' : 'DENY';
+    if (button.act.startsWith('VAULT_')) return (await (await act.vault()).decideRequest(user, button.ref, decision))?.message || REPLIES.done;
+    if (button.act.startsWith('MODULE_')) return (await (await act.permissions()).decide(user, button.ref, decision))?.message || REPLIES.done;
+    await (await act.pulse()).dismissMessage(user.userId, button.ref, now());
+    return REPLIES.dismissed;
+  };
+  const handleAlertReply = async (user, link, message, parsed) => {
+    const alert = await repository.alertById?.(parsed.alertId);
+    const to = replyTo(message);
+    if (!alert || alert.userId !== link.userId) { await sendText(to, REPLIES.alertGone); return { outcome: 'alert-gone' }; }
+    if (parsed.index === 'open') {
+      await repository.markAlertOpened?.(alert.id, now());
+      await sendAlertContent(to, alert);
+      return { outcome: 'alert-opened' };
+    }
+    const button = alert.buttons?.[parsed.index];
+    if (!button) { await sendText(to, REPLIES.alertGone); return { outcome: 'alert-gone' }; }
+    if (button.ask) return { ask: button.ask };
+    if (!ALERT_ACTIONS.includes(button.act)) { await sendText(to, REPLIES.alertGone); return { outcome: 'alert-gone' }; }
+    try { await sendText(to, await runAlertAction(user, button)); }
+    catch (failure) {
+      const told = failure.status >= 400 && failure.status < 500 && failure.message;
+      if (!told) logger.error('[WhatsApp] Un botón de aviso falló:', failure.code || failure.message || failure);
+      await sendText(to, told || REPLIES.failed);
+    }
+    return { outcome: 'alert-action', action: button.act };
+  };
+
   const processMessage = async (message) => {
     if (!await repository.rememberInbound(message.messageId, message.from)) return { skipped: 'duplicate' };
     // Se busca por BSUID y por número: un vínculo hecho con uno se reconoce aunque el siguiente mensaje traiga el otro.
     const link = await repository.linkByWaId(message.from, message.phone || null);
     if (!link) return handleUnknown(message);
     if (message.phone && link.phone !== message.phone) await repository.setPhone?.(link.userId, message.phone);
+    // Cada mensaje de la persona abre otra vez la ventana de 24 horas en la que Bria le puede escribir libre.
+    await repository.markInbound?.(link.userId, now());
     const row = await loadUser(link.userId);
     if (!allowed(row)) { await sendText(replyTo(message), REPLIES.notAllowed); return { outcome: 'not-allowed' }; }
     if (!message.text) { await sendText(replyTo(message), REPLIES.onlyText); return { outcome: 'only-text' }; }
     await markRead(message.messageId);
     const user = sessionUser(row);
+    let question = message.text;
+    const alertReply = parseAlertReplyId(message.replyId);
+    if (alertReply) {
+      const handled = await handleAlertReply(user, link, message, alertReply);
+      if (!handled.ask) return handled;
+      question = handled.ask;
+    }
     const at = now();
     let saved;
     try {
       const chat = await conversationFor(user, link, at);
-      saved = await runWithAiContext({ actorId: user.userId, module: 'whatsapp', route: 'POST /api/whatsapp/webhook' }, () => conversations().send({ user, id: chat.id, question: message.text, session: null }));
+      saved = await runWithAiContext({ actorId: user.userId, module: 'whatsapp', route: 'POST /api/whatsapp/webhook' }, () => conversations().send({ user, id: chat.id, question, session: null }));
     } catch (failure) {
       if (failure.status === 409) { await sendText(replyTo(message), REPLIES.busy); return { outcome: 'busy' }; }
       logger.error('[WhatsApp] Bria no pudo responder:', failure.code || failure.message || failure);
@@ -128,9 +205,52 @@ export const createWhatsAppBridgeService = ({
       return { outcome: 'failed' };
     }
     const turn = [...(saved?.turns || [])].reverse().find((item) => item.role === 'assistant');
-    await sendText(replyTo(message), answerForWhatsApp(turn));
+    await sendReply(replyTo(message), replyForWhatsApp(turn));
     await repository.touch(link.userId, at);
     return { outcome: 'answered', conversationId: saved?.id || null };
+  };
+
+  /**
+   * Un aviso de la plataforma por WhatsApp (22 de octubre de 2026). Se guarda una sola vez por persona y origen; dentro
+   * de la ventana de 24 horas sale entero y con botones, fuera de ella como la plantilla `bria_aviso`. Nunca lanza:
+   * un aviso que no sale queda anotado y la campana sigue siendo la que avisa.
+   */
+  const deliverAlert = async ({ userId, kind, sourceRef, topic, text, buttons = [] }) => {
+    if (!configured()) return { outcome: 'not-configured' };
+    if (!ALERT_KINDS.includes(kind) || !sourceRef || !String(text || '').trim()) return { outcome: 'invalid' };
+    const link = await repository.linkByUser(userId);
+    if (!link) return { outcome: 'not-linked' };
+    if (!alertsEnabled(link.alertsOff, kind)) return { outcome: 'off' };
+    const at = now();
+    if (!withinAlertHours(kind, at)) return { outcome: 'quiet-hours' };
+    const row = await loadUser(userId);
+    if (!allowed(row)) return { outcome: 'not-allowed' };
+    if (await repository.alertsSince(userId, new Date(at.getTime() - DAY_MS)) >= ALERTS_PER_DAY) return { outcome: 'daily-limit' };
+    const alert = await repository.saveAlert({ userId, kind, sourceRef, topic, text: String(text).trim(), buttons, createdAt: at });
+    if (!alert) return { outcome: 'duplicate' };
+    const to = link.phone || link.waId;
+    const via = isWindowOpen(link.lastInboundAt, at) ? 'SESSION' : 'TEMPLATE';
+    try {
+      if (via === 'SESSION') await sendAlertContent(to, alert);
+      else await messages(templateMessagePayload(to, { params: [firstName(row.teamMember?.name || row.name), topic || 'tu trabajo'], payload: `a:${alert.id}:open` }));
+      await repository.markAlertSent(alert.id, via);
+      return { outcome: 'sent', via, alertId: alert.id };
+    } catch (failure) {
+      logger.warn?.(`[WhatsApp] Un aviso (${kind}) no salió por ${via === 'SESSION' ? 'mensaje' : 'plantilla'}: ${failure.message}`);
+      await repository.markAlertFailed(alert.id, String(failure.message || 'error').slice(0, 300));
+      return { outcome: 'failed', via };
+    }
+  };
+
+  const setAlert = async (userId, kind, on) => {
+    if (!ALERT_KINDS.includes(kind)) throw httpError(400, 'Ese tipo de aviso no existe.', 'WHATSAPP_ALERT_UNKNOWN');
+    const link = await repository.linkByUser(userId);
+    if (!link) throw httpError(409, 'Primero vincula tu WhatsApp.', 'WHATSAPP_NOT_LINKED');
+    const off = new Set(link.alertsOff || []);
+    if (on) off.delete(kind); else off.add(kind);
+    const list = ALERT_KINDS.filter((item) => off.has(item));
+    await repository.setAlertsOff(userId, list);
+    return { kind, on: !list.includes(kind) };
   };
 
   const handleWebhook = async ({ rawBody, signature, body }) => {
@@ -158,10 +278,15 @@ export const createWhatsAppBridgeService = ({
     return { status: 200, body: { accepted: true, messages: messages.length } };
   };
 
-  const status = async (userId) => {
+  // Los pedidos de acceso solo le llegan a administración: a los demás ni se les ofrece el interruptor.
+  const status = async (userId, { role = null } = {}) => {
     const link = await repository.linkByUser(userId);
     const c = config();
-    return { configured: configured(), number: c.number, numberDisplay: displayPhone(c.number), linked: Boolean(link), phone: link ? (displayPhone(link.phone || link.waId) || null) : null, linkedAt: link?.linkedAt || null, lastMessageAt: link?.lastMessageAt || null };
+    const kinds = ALERT_KINDS.filter((kind) => kind !== 'ACCESS' || role === 'ADMIN');
+    return {
+      configured: configured(), number: c.number, numberDisplay: displayPhone(c.number), linked: Boolean(link), phone: link ? (displayPhone(link.phone || link.waId) || null) : null, linkedAt: link?.linkedAt || null, lastMessageAt: link?.lastMessageAt || null,
+      alerts: link ? kinds.map((kind) => ({ kind, on: alertsEnabled(link.alertsOff, kind) })) : []
+    };
   };
 
   const createLinkCode = async (userId) => {
@@ -180,7 +305,7 @@ export const createWhatsAppBridgeService = ({
 
   const unlink = async (userId) => { await repository.unlink(userId); return { linked: false }; };
 
-  return { handleWebhook, verificationChallenge: (query) => webhookChallenge(query, config().verifyToken), processMessage, status, createLinkCode, unlink, configured };
+  return { handleWebhook, verificationChallenge: (query) => webhookChallenge(query, config().verifyToken), processMessage, status, createLinkCode, unlink, configured, deliverAlert, setAlert };
 };
 
 let instance;

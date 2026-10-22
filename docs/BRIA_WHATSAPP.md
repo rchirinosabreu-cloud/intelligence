@@ -76,27 +76,62 @@ Un mensaje de un número vinculado:
 1. Se vuelve a leer la persona en la base: cuenta activa, miembro activo del equipo y Bria activa (`canUseBria`). Si ya no puede, se le dice y no se procesa.
 2. Se arma la misma identidad que deja `authenticateToken` (id, rol, permisos, `sessionVersion`) y se manda a `conversations.send(...)` con `session: null`: las acciones propias de Bria (pendientes, despachos, memoria, lecturas) corren con la identidad; las «manos» que operan la API con la sesión del navegador (`operar_en_plataforma`) no están aquí, y Bria lo dice.
 3. **Cada día es una conversación**, como en la plataforma: así el aprendizaje nocturno la lee por día y el historial no crece sin fin. Dentro del día se sigue la misma, para que «Confirmar» encuentre su acción.
-4. La respuesta sale como texto por `POST /{phone_number_id}/messages` (token en la cabecera, nunca en la dirección): el Markdown se traduce a lo que WhatsApp pinta (`*negrita*`, viñetas, enlaces aplanados) y lo largo se parte en mensajes de hasta 4.000 caracteres. Los botones del chat salen como «Puedes responder: «Crear pendiente» o «Cancelar pendiente»». Antes de responder se marca el mensaje como leído.
+4. La respuesta sale como texto por `POST /{phone_number_id}/messages` (token en la cabecera, nunca en la dirección): el Markdown se traduce a lo que WhatsApp pinta (`*negrita*`, viñetas, enlaces aplanados) y lo largo se parte en mensajes de hasta 4.000 caracteres. Las opciones del chat salen como botones (ver abajo). Antes de responder se marca el mensaje como leído.
 5. **La bóveda nunca sale por aquí**: una respuesta con tarjetas de acceso o el campo protegido se sustituye por «Las contraseñas solo se muestran dentro de la plataforma, nunca por WhatsApp». El modelo tampoco las recibe, como siempre.
 6. Por ahora solo texto: un audio o una imagen se contestan en palabras. Un fallo del motor se dice («No pude responder ahora»); si Bria todavía está respondiendo el mensaje anterior, se pide un momento.
 
 El uso de IA de estos mensajes queda en el registro con módulo `whatsapp` y la persona como actor (`runWithAiContext`).
 
+## Botones (22 de octubre de 2026)
+
+Rodny: «bria no podría también darme las opciones tipo botones?» · «si hay botones, uno puede responder dándole al botón o respondiendo naturalmente».
+
+- Las opciones de un turno de Bria (`quickReplies`) salen como **botones de respuesta** si son hasta tres y caben en 20 caracteres; si son hasta diez, o alguna no cabe, como una **lista** con el botón «Ver opciones» (título de hasta 24 caracteres y el texto completo debajo). Más de diez, o un cuerpo de más de 1.024 caracteres, salen en texto como antes. El pie dice «O escríbeme con tus palabras».
+- El identificador de cada botón guarda la opción completa (`q:<opción>`): tocarlo llega exactamente igual que escribirla, aunque el título se viera recortado. Escribir con sus palabras sigue valiendo: «dale» confirma igual que el botón.
+- Si Meta no acepta los botones (por ejemplo, un tipo de mensaje que no admite responder por BSUID), las opciones se dicen en texto y queda una línea en el registro.
+
+## Avisos (22 de octubre de 2026)
+
+Decisiones de Rodny ese día: llegan **los pedidos de acceso, la lectura de la mañana y el cierre del día, y los avisos del pulso**; **el semáforo de servicios no se avisa** («mejor sin avisos por servicio caído, a menos que se pregunte»: Bria lo responde con `estado_de_servicios` si un administrador pregunta); y **vienen encendidos** al vincular el número, cada quien los apaga en su perfil.
+
+| Aviso | A quién | Cuándo | Botones |
+|---|---|---|---|
+| Pedido de contraseña | cada administrador | al pedirse, de 7:00 a 21:00 | Compartir / Denegar |
+| Pedido de módulo | cada administrador | al pedirse, de 7:00 a 21:00 | Dar acceso / Denegar |
+| Lectura de la mañana | quien la recibe en el chat | 7:30, días hábiles | — |
+| Cierre del día | quien lo recibe en el chat | 17:00, días hábiles | — |
+| Avisos del pulso | a quien Bria le habla | cada 15 min, con los topes del pulso | lo que se le puede pedir a Bria + Ocultar por hoy |
+
+- **Una sola salida:** quien avisa llama `alertByWhatsApp` (`src/services/whatsappAlertSender.js`), que no espera ni lanza; dentro de `node --test` o sin token no sale nada. `deliverAlert` decide: vinculado, encendido, en su horario, con Bria activa, menos de 12 en el día, y el mismo origen una sola vez por persona.
+- **La ventana de 24 horas:** se cuenta desde el último mensaje de la persona (`whatsapp_links.last_inbound_at`, también al mandar el código de vínculo), con un cuarto de hora de margen. Dentro de la ventana el aviso sale entero, con sus botones y gratis. Fuera de ella Meta solo admite plantillas aprobadas: sale `bria_aviso` («Hola {{1}}, tienes un aviso nuevo de Bria sobre {{2}}. Tócalo para verlo aquí mismo.», con el botón «Ver aviso») y el aviso guardado llega completo al tocarlo.
+- **Los botones de un aviso** apuntan al aviso guardado (`a:<id>:<n>`, `a:<id>:open` el de la plantilla). Compartir, Dar acceso y Denegar deciden por `decideRequest` y `decide`, las mismas puertas que el aviso encima de Bria, con la identidad de quien está vinculado; si otro administrador ya decidió, se dice. Un botón de pregunta le manda a Bria la pregunta completa. «Ocultar por hoy» marca el aviso del pulso como la X. Un botón de un aviso ajeno, borrado o vencido se reconoce y se dice.
+- **Lo guardado** (`bria_memory.whatsapp_alerts`, 14 días): tipo, origen, texto de la plataforma, botones, si salió por mensaje o por plantilla y el error si falló. Nunca un valor de la bóveda.
+
+### Lo que le toca a Rodny en Meta
+
+1. **Método de pago** en la cuenta de WhatsApp Business (Business Suite → Facturación). Sin él la cuenta no puede iniciar conversaciones (error 141006) y todo aviso fuera de la ventana queda `FAILED`, sin reintento.
+2. **Enviar la plantilla a revisión:** `node scripts/whatsapp-alert-template.mjs` simula, `--confirmar ENVIAR` la envía y `--estado` dice si Meta la aprobó. Necesita `META_WHATSAPP_TOKEN` en el entorno.
+3. Que el nombre visible «Brain Studio» quede aprobado y, si se puede, la verificación del negocio (sube el tope de conversaciones que la empresa inicia al día).
+
+Meta cobra cada plantilla de utilidad que se entrega fuera de la ventana; dentro de la ventana los mensajes no se cobran.
+
 ## Semáforo y política
 
 - Servicio `whatsapp` en Salud operativa: le pregunta a Meta por el número (`display_phone_number`, `quality_rating`, `code_verification_status`), solo lectura y sin mandar nada; token vencido es rojo, calidad en rojo o número sin verificar es amarillo, sin token es gris.
-- Política de tratamiento de datos 2.15: Meta como encargado del canal, solo con quien vincula su número, mismo historial y mismo derecho de borrado, sin contraseñas.
+- Política de tratamiento de datos 2.15: Meta como encargado del canal, solo con quien vincula su número, mismo historial y mismo derecho de borrado, sin contraseñas. 2.16 (22 de octubre de 2026): los avisos por WhatsApp, que cada persona apaga desde su perfil, y los avisos enviados guardados 14 días.
 
 ## Lo que falta y se decide con Rodny
 
 - Quién puede hablarle a Bria por WhatsApp: hoy, cualquiera con Bria activa (administradores y project managers). Abrirlo al resto del equipo es la misma decisión que abrir Bria.
 - Audios: transcribirlos con el dictado de siempre (`transcribe`) y responder; hoy se piden en texto.
-- Que Bria escriba primero (avisos del pulso, cierre del día, lectura de la mañana por WhatsApp): exige plantillas aprobadas por Meta y un método de pago en la cuenta; se decide después de ver el uso.
 - La verificación del negocio en Meta, para subir límites y quitar el aviso de «No verificado».
 
 ## Contratos
 
 - `tests/whatsappBridge.test.js`: firma, verificación, lectura del aviso, código, traducción y partición del texto, respuestas fijas.
 - `tests/whatsappBridgeService.test.js`: webhook (503/401/200 antes de trabajar), vínculo por código, puente al motor con identidad y sin sesión, bóveda, fallos, conversación por día, rutas.
-- `tests/whatsappLinkUi.test.js`: la tarjeta del perfil.
+- `tests/whatsappLinkUi.test.js`: la tarjeta del perfil y sus interruptores de avisos.
+- `tests/whatsappButtons.test.js`: botones y listas, lo que llega al tocarlos, la ventana de 24 horas, la plantilla y la forma de cada aviso.
+- `tests/whatsappAlertsService.test.js`: entrega dentro y fuera de la ventana, lo que no se manda, y lo que hace cada botón de un aviso.
+- `tests/briaServiceHealthTool.test.js`: el semáforo a pedido; `tests/briaPulse.test.js`, `tests/dailyClose.test.js`, `tests/vaultAccessRequest.test.js` y `tests/modulePermissionRequest.test.js`: cada aviso sale desde su sitio.
 - `tests/platformCatalog.test.js` (ruta excluida), `tests/serviceHealthProbes.test.js` (cada servicio con su comprobación), `tests/sidecarSchemaRegistry.test.js` (tablas anunciadas), `tests/legalPages.test.js` (política 2.15).

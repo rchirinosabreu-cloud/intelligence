@@ -11,7 +11,9 @@
 //   la plataforma, con su sesión) y le manda a Bria por WhatsApp: la plataforma nunca escribe primero (eso exige
 //   plantillas aprobadas y un método de pago) y nadie se vincula sin haber entrado a la plataforma.
 // - La respuesta de Bria sale como texto: el Markdown del chat se traduce a lo que WhatsApp pinta y lo largo se
-//   parte en mensajes de hasta 4.000 caracteres. Una respuesta que trae tarjetas de la bóveda no sale por aquí.
+//   parte en mensajes de hasta 4.000 caracteres; sus opciones salen como botones. Una respuesta que trae tarjetas de
+//   la bóveda no sale por aquí.
+// - Los avisos que Bria escribe primero viven en whatsappAlerts.js.
 import crypto from 'node:crypto';
 
 /** Meta admite 4.096 caracteres por mensaje de texto; se deja margen. */
@@ -65,6 +67,17 @@ const textOf = (message) => {
   return text || null;
 };
 
+// El identificador de lo que se tocó: un botón o una fila de una lista nuestra, o el botón de una plantilla.
+const replyIdOf = (message) => {
+  const raw = message.type === 'interactive' ? (message.interactive?.button_reply?.id || message.interactive?.list_reply?.id)
+    : message.type === 'button' ? message.button?.payload
+      : null;
+  const id = String(raw || '').trim();
+  return id || null;
+};
+// Una opción de Bria guarda en su identificador la frase completa: el título del botón puede venir recortado.
+const replyText = (message, replyId) => (replyId?.startsWith('q:') && replyId.length > 2 ? replyId.slice(2) : textOf(message));
+
 /**
  * Los mensajes entrantes de un aviso de Meta, con su autor, su texto y el número que los recibió.
  * `from` es la clave estable de quien escribe: su BSUID si viene (siempre, desde 2026) y, si no, su número.
@@ -88,7 +101,8 @@ export const parseInboundMessages = (body) => {
         const from = userId || resolvedPhone;
         if (!from) continue;
         const timestamp = Number(message.timestamp);
-        out.push({ messageId: String(message.id), from, phone: resolvedPhone, userId, profileName: contact?.profile?.name || null, timestamp: Number.isFinite(timestamp) ? timestamp : null, type: String(message.type || 'unknown'), text: textOf(message), phoneNumberId });
+        const replyId = replyIdOf(message);
+        out.push({ messageId: String(message.id), from, phone: resolvedPhone, userId, profileName: contact?.profile?.name || null, timestamp: Number.isFinite(timestamp) ? timestamp : null, type: String(message.type || 'unknown'), text: replyText(message, replyId), replyId, phoneNumberId });
       }
     }
   }
@@ -200,22 +214,79 @@ export const REPLIES = Object.freeze({
   onlyText: 'Por ahora, por WhatsApp solo leo texto. Escríbeme lo que necesitas.',
   vaultOnly: 'Las contraseñas solo se muestran dentro de la plataforma, nunca por WhatsApp.',
   failed: 'No pude responder ahora. Inténtalo en un momento o escríbeme desde la plataforma.',
-  busy: 'Todavía estoy respondiendo tu mensaje anterior. Dame un momento.'
+  busy: 'Todavía estoy respondiendo tu mensaje anterior. Dame un momento.',
+  alertGone: 'Ese aviso ya no está disponible. Lo que siga pendiente lo ves en la plataforma.',
+  dismissed: 'Listo, no te lo vuelvo a mostrar hoy.',
+  done: 'Listo.'
 });
 
-/** El turno guardado de Bria, listo para salir por WhatsApp. */
-export const answerForWhatsApp = (turn) => {
-  if (!turn) return REPLIES.failed;
-  if (turn.accessCards?.length || turn.accessCapture) return REPLIES.vaultOnly;
+// Botones (Rodny, 22 de octubre de 2026: «bria no podría también darme las opciones tipo botones?»). Hasta tres
+// opciones cortas van como botones de respuesta; hasta diez, o las que no caben en un botón, en una lista. Tocar un
+// botón llega con su identificador, que guarda la opción completa (`q:<opción>`), así que vale exactamente lo mismo
+// que escribirla; y escribir con sus palabras sigue valiendo, porque Bria entiende el sí y el no dichos como sea.
+export const BUTTON_TITLE_MAX = 20;
+export const LIST_ROW_TITLE_MAX = 24;
+export const LIST_ROW_DESCRIPTION_MAX = 72;
+export const LIST_ROWS_MAX = 10;
+export const INTERACTIVE_BODY_MAX = 1024;
+const REPLY_ID_MAX = 256;
+const FOOTER_MAX = 60;
+export const OPTIONS_FOOTER = 'O escríbeme con tus palabras';
+export const OPTIONS_LIST_BUTTON = 'Ver opciones';
+export const OPTIONS_PROMPT = 'Elige una opción o escríbeme.';
+const QUICK_REPLY_PREFIX = 'q:';
+
+const clip = (text, max) => (text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`);
+export const quickReplyId = (option) => `${QUICK_REPLY_PREFIX}${option}`.slice(0, REPLY_ID_MAX);
+
+/** El turno guardado de Bria, listo para salir por WhatsApp: el texto y sus opciones como botones. */
+export const replyForWhatsApp = (turn) => {
+  if (!turn) return { text: REPLIES.failed, options: [] };
+  if (turn.accessCards?.length || turn.accessCapture) return { text: REPLIES.vaultOnly, options: [] };
   const text = toWhatsAppText(turn.text);
-  if (!text) return REPLIES.failed;
-  const options = (turn.quickReplies || []).map((option) => String(option || '').trim()).filter(Boolean);
-  if (!options.length) return text;
+  if (!text) return { text: REPLIES.failed, options: [] };
+  const labels = [...new Set((turn.quickReplies || []).map((option) => String(option || '').trim()).filter(Boolean))];
+  return { text, options: labels.map((label) => ({ id: quickReplyId(label), label })) };
+};
+
+/** Las opciones dichas en texto, para cuando los botones no pueden salir. */
+export const textWithOptions = ({ text, options = [] }) => {
+  const labels = options.map((option) => option.label);
+  if (!labels.length) return text;
   // Un resumen que se confirma o se cancela: desde el 22 de octubre de 2026 Bria entiende el sí y el no dichos como
   // sea («dale, bórralo», «mejor no»), así que no se le pide a nadie que copie una frase.
-  if (options.length === 2 && /^(?:cancelar|no\b)/i.test(options[1])) return `${text}\n\nRespóndeme con un sí, o dime qué cambiar.`;
-  const list = options.length === 1 ? `«${options[0]}»` : `${options.slice(0, -1).map((option) => `«${option}»`).join(', ')} o «${options.at(-1)}»`;
+  if (labels.length === 2 && /^(?:cancelar|no\b)/i.test(labels[1])) return `${text}\n\nRespóndeme con un sí, o dime qué cambiar.`;
+  const list = labels.length === 1 ? `«${labels[0]}»` : `${labels.slice(0, -1).map((label) => `«${label}»`).join(', ')} o «${labels.at(-1)}»`;
   return `${text}\n\nPuedes responder: ${list}.`;
+};
+
+export const answerForWhatsApp = (turn) => textWithOptions(replyForWhatsApp(turn));
+
+/**
+ * Un mensaje con botones (hasta tres, de hasta 20 caracteres) o con una lista (hasta diez filas). Devuelve null si
+ * no se puede: sin opciones, más de diez, o un cuerpo de más de 1.024 caracteres; entonces sale en texto.
+ */
+export const optionsMessagePayload = (target, body, options, { footer = OPTIONS_FOOTER } = {}) => {
+  const rows = [];
+  for (const option of options || []) {
+    const label = String(option?.label || '').trim();
+    if (option?.id && label && !rows.some((row) => row.id === option.id)) rows.push({ id: String(option.id).slice(0, REPLY_ID_MAX), label });
+  }
+  const text = String(body || '').trim();
+  if (!rows.length || rows.length > LIST_ROWS_MAX || !text || text.length > INTERACTIVE_BODY_MAX) return null;
+  const base = { messaging_product: 'whatsapp', recipient_type: 'individual', ...recipientFields(target), type: 'interactive' };
+  const footerPart = footer ? { footer: { text: clip(footer, FOOTER_MAX) } } : {};
+  const fitsButtons = rows.length <= 3 && rows.every((row) => row.label.length <= BUTTON_TITLE_MAX) && new Set(rows.map((row) => row.label)).size === rows.length;
+  if (fitsButtons) {
+    return { ...base, interactive: { type: 'button', body: { text }, ...footerPart, action: { buttons: rows.map((row) => ({ type: 'reply', reply: { id: row.id, title: row.label } })) } } };
+  }
+  return {
+    ...base,
+    interactive: {
+      type: 'list', body: { text }, ...footerPart,
+      action: { button: OPTIONS_LIST_BUTTON, sections: [{ title: 'Opciones', rows: rows.map((row) => ({ id: row.id, title: clip(row.label, LIST_ROW_TITLE_MAX), ...(row.label.length > LIST_ROW_TITLE_MAX ? { description: clip(row.label, LIST_ROW_DESCRIPTION_MAX) } : {}) })) }] }
+    }
+  };
 };
 
 /**

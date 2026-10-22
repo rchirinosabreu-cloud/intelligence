@@ -30,7 +30,10 @@ test('la política de datos cumple el contenido mínimo del Decreto 1074 de 2015
     ]) {
         assert.ok(page.includes(expected), `Falta en la política: ${expected}`);
     }
-    assert.match(PRIVACY_POLICY_VERSION, /^2\.15 · 2026-10-20$/);
+    assert.match(PRIVACY_POLICY_VERSION, /^2\.16 · 2026-10-22$/);
+    // 22 de octubre de 2026: por WhatsApp también llegan avisos, que cada persona apaga desde su perfil.
+    assert.match(page, /avisos de la plataforma/);
+    assert.match(page, /apagar desde su perfil/);
     assert.match(page, /bóveda cifrada/);
     // 20 de octubre de 2026: Bria conversa por WhatsApp con el equipo que vincula su número; Meta es encargado del canal.
     assert.match(page, /WhatsApp de la agencia/);

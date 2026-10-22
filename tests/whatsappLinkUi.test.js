@@ -49,3 +49,17 @@ test('superficie de IA: cabecera con el degradado aprobado y la mascota, cuerpo 
   assert.doesNotMatch(card, /window\.confirm/);
   assert.match(card, /useConfirmDialog/);
 });
+
+test('los avisos por WhatsApp: un interruptor por tipo, que solo cambia con la respuesta del servidor', () => {
+  assert.match(card, /import \{ ALERT_KIND_LABELS \} from '@\/lib\/whatsappAlertKinds'/);
+  assert.match(card, /data-whatsapp-alerts/);
+  assert.match(card, /Avisos que te llegan por aquí/);
+  assert.match(card, /role="switch"/);
+  assert.match(card, /aria-checked=\{on\}/);
+  const toggle = card.slice(card.indexOf('const toggleAlert'), card.indexOf('const unlink'));
+  assert.match(toggle, /api\('\/alerts', \{ method: 'PATCH'/);
+  assert.match(toggle, /setStatus\(\(current\) => \(\{ \.\.\.current, alerts: current\.alerts\.map\(\(row\) => \(row\.kind === saved\.kind \? \{ \.\.\.row, on: saved\.on \} : row\)\) \}\)\)/, 'se pinta lo que devolvió el servidor');
+  const kinds = read('src/lib/whatsappAlertKinds.js');
+  assert.doesNotMatch(kinds, /^import /m, 'la pantalla no arrastra nada del servidor');
+  assert.match(kinds, /Pedidos de acceso/);
+});

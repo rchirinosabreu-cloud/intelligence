@@ -23,13 +23,18 @@ function Phone() {
   const [busy, setBusy] = useState(false);
   const refresh = async () => { const data = await fetch('/api/preview/phone').then((r) => r.json()); setMessages(data.phone); };
   useEffect(() => { refresh(); const timer = setInterval(refresh, 1500); return () => clearInterval(timer); }, []);
+  const post = async (path, payload) => {
+    setBusy(true);
+    try { const data = await fetch(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload) }).then((r) => r.json()); if (data.phone) setMessages(data.phone); }
+    finally { setBusy(false); }
+  };
   const send = async (event) => {
     event.preventDefault();
     if (!text.trim()) return;
-    setBusy(true);
-    try { const data = await fetch('/api/preview/phone', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) }).then((r) => r.json()); setMessages(data.phone || []); setText(''); }
-    finally { setBusy(false); }
+    await post('/api/preview/phone', { text }); setText('');
   };
+  // Tocar un botón de Bria: llega con su identificador, como en producción.
+  const tap = (button) => post('/api/preview/phone', { text: button.title, replyId: button.id, list: Boolean(button.list), template: Boolean(button.template) });
   return (
     <section data-preview-phone style={{ height: 640, borderRadius: '2rem' }} className="flex flex-col overflow-hidden border border-zinc-300 bg-zinc-100 shadow-sm dark:border-zinc-700 dark:bg-zinc-950">
       <header className="flex items-center gap-3 border-b border-zinc-200 bg-white px-4 py-3 dark:border-zinc-800 dark:bg-zinc-900">
@@ -39,8 +44,21 @@ function Phone() {
       <div className="flex-1 space-y-2 overflow-y-auto p-4">
         {messages.length === 0 && <p className="text-center text-xs text-zinc-500">Escríbele a Bria como lo harías desde tu WhatsApp.</p>}
         {messages.map((message, index) => (
-          <div key={`${message.at}-${index}`} className={`max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm ${message.from === 'me' ? 'ml-auto bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/10 dark:text-brand-green' : 'bg-white text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100'}`}>{message.text}</div>
+          <div key={`${message.at}-${index}`} data-preview-bubble={message.from} className={`max-w-[85%] overflow-hidden rounded-2xl text-sm shadow-sm ${message.from === 'me' ? 'ml-auto bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/10 dark:text-brand-green' : 'bg-white text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100'}`}>
+            <p className="whitespace-pre-wrap px-3 py-2">{message.text}</p>
+            {message.footer && <p className="px-3 pb-2 text-xs text-zinc-500">{message.footer}</p>}
+            {message.listButton && <p className="border-t border-zinc-100 px-3 py-2 text-center text-xs font-semibold text-brand-cyan-deep dark:border-zinc-800 dark:text-brand-cyan">☰ {message.listButton}</p>}
+            {message.buttons?.map((button) => (
+              <button key={button.id} type="button" data-preview-button={button.title} disabled={busy} onClick={() => tap(button)} className="block min-h-11 w-full border-t border-zinc-100 px-3 py-2 text-center text-sm font-semibold text-brand-cyan-deep hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-800 dark:text-brand-cyan dark:hover:bg-zinc-800">
+                {button.title}{button.description ? <span className="block text-xs font-normal text-zinc-500">{button.description}</span> : null}
+              </button>
+            ))}
+          </div>
         ))}
+      </div>
+      <div className="flex flex-wrap gap-2 border-t border-zinc-200 bg-white px-3 py-2 dark:border-zinc-800 dark:bg-zinc-900">
+        <button type="button" disabled={busy} onClick={() => post('/api/preview/alert', { kind: 'ACCESS' })} className="min-h-9 rounded-full border border-zinc-200 px-3 text-xs dark:border-zinc-700">Simular pedido de acceso</button>
+        <button type="button" disabled={busy} onClick={() => post('/api/preview/alert', { kind: 'PULSE', fuera: true })} className="min-h-9 rounded-full border border-zinc-200 px-3 text-xs dark:border-zinc-700">Aviso tras un día sin escribir</button>
       </div>
       <form onSubmit={send} className="flex gap-2 border-t border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-900">
         <input aria-label="Mensaje" value={text} onChange={(event) => setText(event.target.value)} placeholder="Mensaje" className="min-h-11 flex-1 rounded-full border border-zinc-200 bg-zinc-50 px-4 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100" />

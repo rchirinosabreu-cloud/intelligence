@@ -36,4 +36,7 @@
 // 2.15 (20 de octubre de 2026): Bria conversa por WhatsApp con el equipo desde el número de la agencia, por la API
 // oficial de Meta. Solo con la persona que vincula su número desde su perfil; los mensajes entran al mismo historial
 // de Bria; Meta recibe el texto de los mensajes como encargado del canal; no se envían contraseñas por ahí.
-export const PRIVACY_POLICY_VERSION = '2.15 · 2026-10-20';
+// 2.16 (22 de octubre de 2026): por WhatsApp también llegan los avisos de la plataforma (pedidos de acceso, mañana,
+// cierre y avisos del día), que cada persona apaga desde su perfil; fuera de la ventana de 24 horas sale un mensaje
+// corto aprobado por Meta y el aviso entero al tocarlo. Los avisos enviados se guardan 14 días.
+export const PRIVACY_POLICY_VERSION = '2.16 · 2026-10-22';

@@ -122,16 +122,19 @@ test('the service: notifies admins once, grants on approval through one write, a
     claim: async (id, decision, actor) => ({ ...pending, status: decision === 'APPROVE' ? 'APPROVED' : 'DENIED', decidedByName: actor.name }),
     release: async (id) => { released.push(id); }
   };
-  const service = createPermissionRequestService({ repository, db: fakeDb(people, updates), notify: async (row) => { notes.push(row); } });
+  const whatsapp = [];
+  const service = createPermissionRequestService({ repository, db: fakeDb(people, updates), notify: async (row) => { notes.push(row); }, whatsapp: (alert) => whatsapp.push(alert) });
   await assert.rejects(() => service.request(camila, 'boveda', null), { status: 400 });
   await assert.rejects(() => service.request(rodny, 'crm', null), { status: 400 });
   assert.deepEqual(await service.request({ ...camila }, 'gestion', null), { alreadyHas: true });
   const asked = await service.request(camila, 'financiero', '  ver cuánto debe Aristea ');
   assert.deepEqual(asked.admins, ['Rodny Chirinos']);
   assert.deepEqual(notes.map((n) => [n.userId, n.type, n.message]), [['u-admin', 'MODULE_ACCESS_REQUESTED', 'Camila necesita acceso a Financiero.']]);
+  assert.deepEqual(whatsapp.map((a) => [a.userId, a.kind, a.sourceRef, a.buttons.map((b) => b.label).join(',')]), [['u-admin', 'ACCESS', `module:${pending.id}`, 'Dar acceso,Denegar']]);
   repository.create = async () => ({ created: false, request: pending });
   await service.request(camila, 'financiero', null);
   assert.equal(notes.length, 1, 'asking again does not notify again');
+  assert.equal(whatsapp.length, 1);
   await assert.rejects(() => service.decide(camila, pending.id, 'APPROVE'), { status: 403 });
   const given = await service.decide(rodny, pending.id, 'APPROVE');
   assert.equal(given.message, 'Le diste acceso a Financiero a Camila.');

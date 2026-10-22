@@ -15,24 +15,52 @@ const ENV = { META_APP_SECRET: APP_SECRET, META_WHATSAPP_TOKEN: 'token-de-muestr
 const PERSON = { id: 'u-rodny', name: 'Rodny Muestra', email: 'rodny@example.test', role: 'ADMIN', isActive: true, modulePermissions: { bria: true, gestion: true, parrillas: true }, sessionVersion: 0, teamMember: { isActive: true } };
 
 const memoryRepository = () => {
-  const links = new Map(), codes = new Map(), seen = new Set(), unknown = [];
+  const links = new Map(), codes = new Map(), seen = new Set(), unknown = [], alerts = new Map();
   return {
+    links,
     async createCode({ userId, code, expiresAt }) { for (const [k, v] of codes) if (v.userId === userId) codes.delete(k); codes.set(code, { userId, expiresAt }); return true; },
-    async consumeCode({ code, waId, profileName, now }) {
+    async consumeCode({ code, waId, phone = null, profileName, now }) {
       const row = codes.get(code); if (!row) return { ok: false, reason: 'unknown' }; codes.delete(code);
       if (row.expiresAt.getTime() < now.getTime()) return { ok: false, reason: 'expired' };
-      links.set(row.userId, { userId: row.userId, waId, profileName, conversationId: null, linkedAt: now, lastMessageAt: null });
+      links.set(row.userId, { userId: row.userId, waId, phone, profileName, conversationId: null, linkedAt: now, lastMessageAt: null, lastInboundAt: now, alertsOff: links.get(row.userId)?.alertsOff || [] });
       return { ok: true, userId: row.userId };
     },
     async linkByWaId(waId) { return [...links.values()].find((link) => link.waId === waId) || null; },
     async linkByUser(userId) { return links.get(userId) || null; },
+    async setPhone(userId, phone) { links.get(userId).phone = phone; },
     async setConversation(userId, conversationId) { links.get(userId).conversationId = conversationId; },
     async touch(userId, at) { links.get(userId).lastMessageAt = at; },
+    async markInbound(userId, at) { links.get(userId).lastInboundAt = at; },
+    async setAlertsOff(userId, kinds) { links.get(userId).alertsOff = kinds; },
     async unlink(userId) { links.delete(userId); for (const [k, v] of codes) if (v.userId === userId) codes.delete(k); },
     async rememberInbound(messageId) { if (seen.has(messageId)) return false; seen.add(messageId); return true; },
     async unknownRepliesSince(waId, since) { return unknown.filter((row) => row.waId === waId && row.at >= since).length; },
-    async rememberUnknownReply(waId, at) { unknown.push({ waId, at }); }
+    async rememberUnknownReply(waId, at) { unknown.push({ waId, at }); },
+    async alertsSince(userId, since) { return [...alerts.values()].filter((row) => row.userId === userId && row.createdAt >= since).length; },
+    async saveAlert(row) { const saved = { ...row, id: crypto.randomUUID(), status: 'PENDING' }; alerts.set(saved.id, saved); return saved; },
+    async alertById(id) { return alerts.get(id) || null; },
+    async markAlertSent(id, via) { Object.assign(alerts.get(id), { status: 'SENT', via }); },
+    async markAlertFailed(id, error) { Object.assign(alerts.get(id), { status: 'FAILED', error }); },
+    async markAlertOpened(id, at) { alerts.get(id).openedAt = at; }
   };
+};
+
+// Lo que Bria le mandaría a Meta, como se vería en el celular: texto, botones, lista o la plantilla de aviso.
+const phoneMessage = (body) => {
+  if (body.type === 'text') return { text: body.text.body };
+  if (body.type === 'interactive') {
+    const { interactive } = body;
+    const buttons = interactive.type === 'button'
+      ? interactive.action.buttons.map((row) => ({ id: row.reply.id, title: row.reply.title }))
+      : interactive.action.sections.flatMap((section) => section.rows.map((row) => ({ id: row.id, title: row.title, description: row.description || null, list: true })));
+    return { text: interactive.body.text, footer: interactive.footer?.text || null, buttons, listButton: interactive.type === 'list' ? interactive.action.button : null };
+  }
+  if (body.type === 'template') {
+    const [name, topic] = body.template.components[0].parameters.map((row) => row.text);
+    const payload = body.template.components[1].parameters[0].payload;
+    return { text: `Hola ${name}, tienes un aviso nuevo de Bria sobre ${topic}. Tócalo para verlo aquí mismo.`, buttons: [{ id: payload, title: 'Ver aviso', template: true }], template: true };
+  }
+  return null;
 };
 
 // Una Bria sin modelo: responde con la forma de siempre (Markdown, botones) para ver cómo llega a WhatsApp.
@@ -40,6 +68,9 @@ const sampleBria = () => {
   const chats = new Map();
   const answer = (question) => {
     const text = question.toLowerCase();
+    if (/^(crear pendiente|dale|sí|si)\b/.test(text)) return { text: 'Listo. Creé el pendiente **Reel de octubre** para Melissa: [abrirlo](https://labs.brainstudioagencia.com/gestion?taskId=muestra).' };
+    if (/asign|quién/.test(text)) return { text: '¿A quién se lo asignamos?', quickReplies: ['Melissa Castaño', 'Kamila Pérez', 'Helen Ruiz', 'Jarlan Gómez', 'Camila Pérez'] };
+    if (/resúmeme|resumen/.test(text)) return { text: 'Melissa tiene **dos** pendientes para hoy: el reel de Aristea y las historias de Endova.' };
     if (/pendiente/.test(text)) return { text: 'Así quedaría el pendiente:\n\n**Reel de octubre** · Aristea · Melissa · mañana · Normal\n\n¿Lo creo?', quickReplies: ['Crear pendiente', 'Cancelar pendiente'] };
     if (/crear pendiente/.test(text)) return { text: 'Listo. Creé el pendiente **Reel de octubre** para Melissa: [abrirlo](https://labs.brainstudioagencia.com/gestion?taskId=muestra).' };
     if (/clave|contraseña|acceso/.test(text)) return { text: 'Aquí está el acceso.', accessCards: [{ id: 'muestra' }] };
@@ -55,10 +86,17 @@ const sampleBria = () => {
 export async function createWhatsAppPreview({ port = 3114 } = {}) {
   const phone = []; // lo que Bria le manda al celular de muestra
   const bria = sampleBria();
+  const repository = memoryRepository();
+  // Las decisiones de los botones de un aviso, sin bóveda real: lo que diría la plataforma.
+  const actions = {
+    vault: async () => ({ decideRequest: async (_user, _id, decision) => ({ decided: true, message: decision === 'APPROVE' ? 'Compartiste la contraseña de CapCut con Camila.' : 'Denegaste el acceso de Camila a la contraseña de CapCut.' }) }),
+    permissions: async () => ({ decide: async (_user, _id, decision) => ({ decided: true, message: decision === 'APPROVE' ? 'Le diste acceso a Financiero a Camila.' : 'Denegaste el acceso de Camila a Financiero.' }) }),
+    pulse: async () => ({ dismissMessage: async () => true })
+  };
   const service = createWhatsAppBridgeService({
-    repository: memoryRepository(), conversations: () => bria, env: ENV,
+    repository, conversations: () => bria, env: ENV, actions,
     db: { user: { findUnique: async ({ where }) => (where.id === PERSON.id ? { ...PERSON } : null) } },
-    fetchImpl: async (_url, options) => { const body = JSON.parse(options.body); if (body.type === 'text') phone.push({ from: 'bria', text: body.text.body, at: Date.now() }); return { ok: true, status: 200, json: async () => ({ messages: [{ id: `wamid.out.${phone.length}` }] }) }; },
+    fetchImpl: async (_url, options) => { const body = JSON.parse(options.body); const shown = phoneMessage(body); if (shown) phone.push({ from: 'bria', ...shown, at: Date.now() }); return { ok: true, status: 200, json: async () => ({ messages: [{ id: `wamid.out.${phone.length}` }] }) }; },
     logger: console
   });
 
@@ -69,16 +107,32 @@ export async function createWhatsAppPreview({ port = 3114 } = {}) {
   api.get('/api/auth/me', (_req, res) => res.json({ id: PERSON.id, name: PERSON.name, email: PERSON.email, role: PERSON.role, modulePermissions: PERSON.modulePermissions }));
   api.use('/api/bria/whatsapp', createBriaWhatsAppRouter({ service }));
   // El celular de muestra: lo que la persona escribe llega como un aviso firmado de Meta, igual que en producción.
+  // Tocar un botón llega como en producción: un botón o una fila de lista (interactive) o el botón de una plantilla.
   api.post('/api/preview/phone', async (req, res) => {
     const text = String(req.body?.text || '').trim(); if (!text) return res.status(400).json({ message: 'Escribe algo.' });
+    const replyId = req.body?.replyId ? String(req.body.replyId) : null;
     phone.push({ from: 'me', text, at: Date.now() });
-    const body = { object: 'whatsapp_business_account', entry: [{ changes: [{ field: 'messages', value: { metadata: { phone_number_id: ENV.META_WHATSAPP_PHONE_NUMBER_ID }, contacts: [{ profile: { name: 'Rodny' }, wa_id: '573001234567' }], messages: [{ from: '573001234567', id: `wamid.${crypto.randomUUID()}`, timestamp: String(Math.floor(Date.now() / 1000)), type: 'text', text: { body: text } }] } }] }] };
+    const kind = !replyId ? { type: 'text', text: { body: text } }
+      : req.body.template ? { type: 'button', button: { text, payload: replyId } }
+        : { type: 'interactive', interactive: req.body.list ? { type: 'list_reply', list_reply: { id: replyId, title: text } } : { type: 'button_reply', button_reply: { id: replyId, title: text } } };
+    const body = { object: 'whatsapp_business_account', entry: [{ changes: [{ field: 'messages', value: { metadata: { phone_number_id: ENV.META_WHATSAPP_PHONE_NUMBER_ID }, contacts: [{ profile: { name: 'Rodny' }, wa_id: '573001234567' }], messages: [{ from: '573001234567', id: `wamid.${crypto.randomUUID()}`, timestamp: String(Math.floor(Date.now() / 1000)), ...kind }] } }] }] };
     const raw = Buffer.from(JSON.stringify(body));
     const outcome = await service.handleWebhook({ rawBody: raw, signature: `sha256=${crypto.createHmac('sha256', APP_SECRET).update(raw).digest('hex')}`, body });
     await new Promise((resolve) => setTimeout(resolve, 50));
     return res.json({ webhook: outcome, phone });
   });
   api.get('/api/preview/phone', (_req, res) => res.json({ phone }));
+  // Un aviso de muestra: un pedido de acceso o un aviso del pulso; `fuera` simula que pasó más de un día sin escribir.
+  api.post('/api/preview/alert', async (req, res) => {
+    const link = repository.links.get(PERSON.id);
+    if (!link) return res.status(409).json({ message: 'Primero vincula el WhatsApp de muestra.' });
+    if (req.body?.fuera) link.lastInboundAt = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+    const { accessAlert, pulseAlert } = await import('../src/lib/whatsappAlerts.js');
+    const alert = req.body?.kind === 'PULSE'
+      ? pulseAlert({ id: crypto.randomUUID(), title: 'Melissa no tiene una tarea en proceso desde las 10:05', body: 'Tiene tres pendientes para hoy; conviene preguntarle en qué está.', actions: [{ label: 'Ver sus pendientes', to: '/gestion?responsable=Melissa%20Casta%C3%B1o' }, { label: 'Que Bria me resuma lo que tiene', ask: 'Resúmeme qué tiene pendiente Melissa hoy y qué le vence pronto.' }] })
+      : accessAlert({ type: 'VAULT', request: { id: crypto.randomUUID() }, text: 'Camila necesita la contraseña de CapCut (Brain Studio).' });
+    return res.json({ result: await service.deliverAlert({ userId: PERSON.id, ...alert }), phone });
+  });
   // El perfil completo en /perfil (21 de octubre de 2026), para ver la tarjeta en su sitio: tres columnas.
   api.get('/api/user/profile', (_req, res) => res.json({ id: PERSON.id, name: PERSON.name, email: PERSON.email, role: PERSON.role, bio: 'Director de Brain Studio.', avatarUrl: '' }));
   api.get('/api/user/mfa', (_req, res) => res.json({ enabled: true, required: true, enabledAt: '2026-10-12T15:00:00.000Z', recoveryCodesRemaining: 10 }));
