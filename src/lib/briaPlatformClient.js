@@ -18,7 +18,10 @@ export const normalizePlatformPath = (path) => {
 
 const humanStatus = (status, body) => {
   const message = body && typeof body === 'object' ? (body.error || body.message) : null;
-  if (typeof message === 'string' && message.trim()) return message.trim();
+  // Muchas rutas responden un titular («Revisa los datos del evento») y el motivo en `details` («El tipo de evento no
+  // es válido»): sin el detalle, Bria no sabe qué corregir (22 de octubre de 2026).
+  const detail = body && typeof body === 'object' && typeof body.details === 'string' ? body.details.trim().slice(0, 300) : '';
+  if (typeof message === 'string' && message.trim()) return detail && detail !== message.trim() ? `${message.trim()}: ${detail}` : message.trim();
   if (status === 401) return 'Tu sesión no se aceptó: vuelve a entrar.';
   if (status === 403) return 'No tienes permiso para eso.';
   if (status === 404) return 'Eso no existe.';
