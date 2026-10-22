@@ -104,6 +104,16 @@ test('an operation that needs a request id gets one tied to the action, and keep
   assert.equal('requestId' in calls[3].body, false, 'solo donde la ruta lo pide');
 });
 
+// Rodny, 22 de octubre de 2026: «si creo un evento de tipo reunión, Bria me responde con el link de google meet?».
+test('a confirmed meeting hands over its Meet link; anything else just says it is done', async () => {
+  const platform = { call: async () => ({ ok: true, status: 200, data: { id: 'e1', meetingLink: 'https://meet.google.com/abc-defg-hij' }, text: '{}' }) };
+  const service = createBriaActionService({ platform, routePermissions: async () => ({ roles: ['MANAGER'] }) });
+  const action = await service.prepare({ user: admin, type: 'PLATFORM', args: { metodo: 'POST', ruta: '/activity/events', cuerpo: { title: 'Reunión con Endova', type: 'MEETING' }, que_hace: 'Creo la reunión con Endova' } });
+  assert.equal((await service.execute({ user: admin, action, session })).text, 'Listo, quedó hecho. El enlace de la reunión: https://meet.google.com/abc-defg-hij');
+  platform.call = async () => ({ ok: true, status: 200, data: { id: 'e2', meetingLink: 'javascript:alert(1)' }, text: '{}' });
+  assert.equal((await service.execute({ user: admin, action, session })).text, 'Listo, quedó hecho.', 'solo un enlace https');
+});
+
 test('the tools: the map searches, reading goes straight to the API with the session, writing only prepares', async () => {
   const calls = [];
   const platform = { call: async (input) => { calls.push(input); return { ok: true, status: 200, data: [{ id: 'l1', company: 'Aristea' }], text: '[…]', truncated: false }; } };
