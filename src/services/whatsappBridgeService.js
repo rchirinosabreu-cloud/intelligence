@@ -1,14 +1,15 @@
 // Bria en WhatsApp (Rodny, 20 de octubre de 2026): el puente entre el número de la agencia y el motor de Bria de
 // siempre. Lo que llega por WhatsApp entra a una conversación de Bria de la persona vinculada —con su identidad,
 // sus permisos y las mismas puertas que el chat de la plataforma— y lo que Bria responde sale como texto por la
-// API de Meta. Sin sesión del navegador: las «manos» que piden la sesión (operar_en_plataforma) no están aquí, y
-// Bria lo dice; las acciones propias (pendientes, despachos, memoria) sí, porque corren con la identidad.
+// API de Meta. No hay navegador: cada mensaje lleva una sesión corta de la persona (whatsappSession.js, 22 de
+// octubre de 2026) para que las manos de Bria en la plataforma entren por las mismas puertas que el navegador.
 import prisma from '../lib/prisma.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { runWithAiContext } from '../lib/aiRequestContext.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { META_GRAPH_ORIGIN, META_GRAPH_VERSION } from './metaGraphService.js';
 import { createWhatsAppLinkRepository } from './whatsappLinkRepository.js';
+import { signWhatsAppSession } from '../lib/whatsappSession.js';
 import {
   verifyMetaSignature, webhookChallenge, parseInboundMessages, describeNotice, isStatusOnlyNotice, maskWaId, linkCodeIn, generateLinkCode, linkMessage, displayPhone, waMeLink,
   splitForWhatsApp, replyForWhatsApp, textWithOptions, optionsMessagePayload, textMessagePayload, readReceiptPayload, REPLIES, LINK_CODE_TTL_MS, UNKNOWN_SENDER_REPLIES_PER_DAY,
@@ -44,7 +45,8 @@ export const createWhatsAppBridgeService = ({
   random,
   logger = console,
   scheduleWork = (work) => queueMicrotask(work),
-  actions = {}
+  actions = {},
+  signSession = signWhatsAppSession
 } = {}) => {
   const act = { ...defaultActions, ...actions };
   const config = () => ({
@@ -97,8 +99,14 @@ export const createWhatsAppBridgeService = ({
 
   const loadUser = async (userId) => db.user.findUnique({
     where: { id: userId },
-    select: { id: true, name: true, email: true, role: true, isActive: true, modulePermissions: true, sessionVersion: true, teamMember: { select: { isActive: true } } }
+    select: { id: true, name: true, email: true, role: true, isActive: true, modulePermissions: true, sessionVersion: true, hasFinancialAccess: true, financialRole: true, teamMember: { select: { isActive: true } } }
   });
+  // La sesión corta de este mensaje (22 de octubre de 2026): sin ella Bria no tiene manos en la plataforma. Si no se
+  // puede firmar, Bria sigue respondiendo sin esas manos; nunca se cae el mensaje por esto.
+  const sessionFor = (row) => {
+    try { return { token: signSession(row) }; }
+    catch (failure) { logger.warn?.(`[WhatsApp] Sin sesión corta para este mensaje: ${failure.message}`); return null; }
+  };
   const allowed = (row) => Boolean(row) && row.isActive !== false && row.teamMember?.isActive !== false && canUseBria(row);
   // La misma forma que deja `authenticateToken` en req.user: el motor de Bria no distingue por dónde llegó la persona.
   const sessionUser = (row) => ({ userId: row.id, id: row.id, name: row.name, email: row.email, role: row.role, modulePermissions: row.modulePermissions, sessionVersion: row.sessionVersion, isActive: row.isActive });
@@ -197,7 +205,7 @@ export const createWhatsAppBridgeService = ({
     let saved;
     try {
       const chat = await conversationFor(user, link, at);
-      saved = await runWithAiContext({ actorId: user.userId, module: 'whatsapp', route: 'POST /api/whatsapp/webhook' }, () => conversations().send({ user, id: chat.id, question, session: null }));
+      saved = await runWithAiContext({ actorId: user.userId, module: 'whatsapp', route: 'POST /api/whatsapp/webhook' }, () => conversations().send({ user, id: chat.id, question, session: sessionFor(row) }));
     } catch (failure) {
       if (failure.status === 409) { await sendText(replyTo(message), REPLIES.busy); return { outcome: 'busy' }; }
       if (failure.code === 'BRIA_PLATFORM_SESSION') { await sendText(replyTo(message), REPLIES.needsPlatform); return { outcome: 'needs-platform' }; }

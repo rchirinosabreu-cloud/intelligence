@@ -61,7 +61,7 @@ const build = ({ repository = fakeRepository(), conversations = fakeConversation
   const fetchFn = fetchImpl || (async (url, options) => { sent.push({ url, body: JSON.parse(options.body), auth: options.headers.Authorization }); return { ok: true, status: 200, json: async () => ({ messages: [{ id: 'wamid.out' }] }) }; });
   const db = { user: { findUnique: async ({ where }) => users[where.id] || null } };
   const work = [];
-  const service = createWhatsAppBridgeService({ repository, conversations: () => conversations, db, env, fetchImpl: fetchFn, now, random, logger: { warn() {}, error() {}, info() {} }, scheduleWork: (fn) => work.push(fn) });
+  const service = createWhatsAppBridgeService({ repository, conversations: () => conversations, db, env, fetchImpl: fetchFn, now, random, logger: { warn() {}, error() {}, info() {} }, scheduleWork: (fn) => work.push(fn), signSession: (row) => `sesion-corta-de-${row.id}-v${row.sessionVersion}` });
   const drain = async () => { while (work.length) await work.shift()(); };
   return { service, sent, repository, conversations, drain };
 };
@@ -112,7 +112,8 @@ test('un vínculo vivo manda el mensaje al motor de Bria con la identidad de la 
   const result = await service.processMessage({ messageId: 'm1', from: '573001234567', profileName: 'Camila', type: 'text', text: '¿Qué tengo hoy?' });
   assert.equal(result.outcome, 'answered');
   const call = conversations.calls[0];
-  assert.deepEqual([call.user.userId, call.user.role, call.user.sessionVersion, call.session, call.question], ['u-camila', 'PROJECT_MANAGER', 3, null, '¿Qué tengo hoy?']);
+  // Desde el 22 de octubre de 2026 cada mensaje lleva una sesión corta de la persona, para las manos de la plataforma.
+  assert.deepEqual([call.user.userId, call.user.role, call.user.sessionVersion, call.session, call.question], ['u-camila', 'PROJECT_MANAGER', 3, { token: 'sesion-corta-de-u-camila-v3' }, '¿Qué tengo hoy?']);
   assert.equal(repository.links.get('u-camila').conversationId, call.id, 'la conversación de WhatsApp se recuerda para seguirla');
   // Las opciones salen como botones (22 de octubre de 2026); tocarlos o escribir con sus palabras vale lo mismo.
   assert.equal(sent[0].body.status, 'read');

@@ -1,8 +1,8 @@
 // Bria habla con la API con la sesión de la persona que le habla (Rodny, 10 de octubre de 2026: «quiero que Bria
 // tenga permiso para todo en la plataforma, ella vive ahí … según los módulos a los que ese usuario tiene acceso»).
 //
-// No se emite ninguna sesión nueva ni existe una segunda tabla de permisos: la llamada lleva **el mismo token** con
-// el que la persona abrió el chat, entra por la misma puerta que la pantalla —`authenticateToken`, el módulo, el rol,
+// No existe una segunda tabla de permisos: la llamada lleva **el mismo token** con el que la persona abrió el chat
+// (o, por WhatsApp, la sesión corta que el puente firma para ella: whatsappSession.js), entra por la misma puerta que la pantalla —`authenticateToken`, el módulo, el rol,
 // los guardianes de cada ruta— y la API responde exactamente lo que le respondería a ella. Si su sesión vence o se
 // revoca, Bria se queda sin manos en ese mismo instante. El rastro queda en la auditoría operativa con su nombre y
 // la marca `x-brain-via: bria`. El token nunca se guarda: viaja en la petición y muere con ella.
