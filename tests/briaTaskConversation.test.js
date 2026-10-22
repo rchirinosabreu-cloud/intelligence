@@ -42,6 +42,29 @@ test('only an explicit confirmation of a persisted ready draft creates a task un
   assert.equal(fixture.writes, 1);
   assert.match(fixture.stored.turns.at(-1).answer, /ya está creado/);
 });
+test('«dale, así está bien» right after the summary creates it; a loose «ok, gracias» later does not (Rodny, 22 de octubre de 2026)', async () => {
+  const { actionReply, wrapLegacyAction } = await import('../src/lib/briaActions.js');
+  const summary = actionReply(wrapLegacyAction('TASK_CREATE', draft)).answer;
+  const fixture = setup();
+  fixture.stored = { id: 'chat', revision: 1, turns: [{ role: 'assistant', text: summary, pendingAction: wrapLegacyAction('TASK_CREATE', draft) }] };
+  await fixture.service.send({ user, id: 'chat', question: 'dale, así está bien' });
+  assert.equal(fixture.writes, 1, 'el sí natural sobre el resumen crea el pendiente');
+  assert.equal(fixture.aiCalls, 0, 'no pasa por el modelo');
+
+  const later = setup();
+  later.stored = { id: 'chat', revision: 1, turns: [{ role: 'assistant', text: summary, pendingAction: wrapLegacyAction('TASK_CREATE', draft) }] };
+  await later.service.send({ user, id: 'chat', question: 'dale pero que sea urgente' });
+  assert.equal(later.writes, 0, 'un sí con un cambio adentro no crea nada');
+  await later.service.send({ user, id: 'chat', question: 'ok, gracias' });
+  assert.equal(later.writes, 0, 'el borrador siguió colgado de otra respuesta: un ok suelto no lo crea');
+  assert.equal(later.aiCalls, 2);
+
+  const refuse = setup();
+  refuse.stored = { id: 'chat', revision: 1, turns: [{ role: 'assistant', text: summary, pendingAction: wrapLegacyAction('TASK_CREATE', draft) }] };
+  await refuse.service.send({ user, id: 'chat', question: 'mejor no' });
+  assert.equal(refuse.stored.turns.at(-1).pendingAction.status, 'CANCELLED');
+  assert.equal(refuse.writes, 0);
+});
 test('«Confirmar» also creates it: the three old flows accept the common confirmation', async () => {
   const fixture = setup();
   await fixture.service.send({ user, id: 'chat', question: 'Confirmar' });

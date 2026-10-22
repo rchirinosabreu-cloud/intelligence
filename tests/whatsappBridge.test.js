@@ -141,7 +141,9 @@ test('una respuesta larga se parte en mensajes de hasta 4.000 caracteres por pá
 });
 
 test('la respuesta para WhatsApp: texto traducido, los botones como opciones, y la bóveda nunca sale por aquí', () => {
-  assert.equal(answerForWhatsApp({ text: 'Así quedaría el **pendiente**.', quickReplies: ['Crear pendiente', 'Cancelar pendiente'] }), 'Así quedaría el *pendiente*.\n\nPuedes responder: «Crear pendiente» o «Cancelar pendiente».');
+  assert.equal(answerForWhatsApp({ text: 'Así quedaría el **pendiente**.', quickReplies: ['Crear pendiente', 'Cancelar pendiente'] }), 'Así quedaría el *pendiente*.\n\nRespóndeme con un sí, o dime qué cambiar.');
+  assert.equal(answerForWhatsApp({ text: '¿Lo elimino?', quickReplies: ['Eliminar pendiente', 'No eliminar'] }), '¿Lo elimino?\n\nRespóndeme con un sí, o dime qué cambiar.');
+  assert.equal(answerForWhatsApp({ text: '¿Para cuándo?', quickReplies: ['Hoy', 'Mañana', 'Pasado mañana'] }), '¿Para cuándo?\n\nPuedes responder: «Hoy», «Mañana» o «Pasado mañana».', 'las opciones de una pregunta se siguen listando');
   assert.equal(answerForWhatsApp({ text: 'Aquí está la clave.', accessCards: [{ id: 'c1' }] }), REPLIES.vaultOnly);
   assert.equal(answerForWhatsApp({ text: 'Escríbela en el campo protegido.', accessCapture: { id: 'x' } }), REPLIES.vaultOnly);
   assert.equal(answerForWhatsApp({ text: '' }), REPLIES.failed);

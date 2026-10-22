@@ -13,6 +13,7 @@
 // confirmación («Crear pendiente», «Despachar a producción», «Eliminar pendiente»), y además aceptan «Confirmar».
 
 import { taskDraftReply, taskDraftStage, isTaskConfirmation, isTaskCancellation } from './briaTaskDraft.js';
+import { isPlainAgreement, isPlainRefusal, ACTION_VERBS } from './briaAgreement.js';
 import { dispatchReply, dispatchStage, isDispatchConfirmation, isDispatchCancellation, dispatchResultText, DISPATCH_CONFIRM } from './briaDispatchDraft.js';
 import { deleteReply, deleteStage, isDeleteConfirmation, isDeleteCancellation, deleteResultText, DELETE_CONFIRM } from './briaDeleteDraft.js';
 
@@ -85,8 +86,12 @@ export const actionReply = (action) => {
 };
 
 /** «Confirmar» vale para todas; cada flujo viejo conserva además sus frases («Crear pendiente», «Despachar a producción»…). */
-export const confirmsAction = (action, question) => isActionConfirmation(question) || Boolean(action && LEGACY_ACTIONS[action.type]?.confirms(question));
-export const cancelsAction = (action, question) => isActionCancellation(question) || Boolean(action && LEGACY_ACTIONS[action.type]?.cancels(question));
+// Un sí o un no dicho con naturalidad («dale, así está bien», «mejor no»; 22 de octubre de 2026, `briaAgreement.js`)
+// cuenta solo con `natural`, que la conversación pone cuando Bria acaba de mostrar un resumen listo para confirmar.
+// A mitad de preparar, un «no» responde a la pregunta de Bria y no tumba la acción; después de hecha, un «ok, gracias»
+// es charla y no un «ya se hizo».
+export const confirmsAction = (action, question, { natural = false } = {}) => isActionConfirmation(question) || Boolean(action && LEGACY_ACTIONS[action.type]?.confirms(question)) || (natural && isPlainAgreement(question, { verbs: ACTION_VERBS[action?.type] || [] }));
+export const cancelsAction = (action, question, { natural = false } = {}) => isActionCancellation(question) || Boolean(action && LEGACY_ACTIONS[action.type]?.cancels(question)) || (natural && isPlainRefusal(question));
 
 /** Lo que se dice cuando la persona vuelve a confirmar algo que ya se hizo. */
 export const alreadyDoneReply = (action) => {

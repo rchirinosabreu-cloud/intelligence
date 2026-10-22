@@ -43,7 +43,14 @@ export const taskDraftItems = draft => {
 };
 // El título ya dice qué hay que hacer: el contexto es un detalle más, nunca una parada («historias de la semana para
 // Kamila mañana» es un pendiente completo). Sin contexto no se escribe comentario inicial.
-const itemStage = item => !item.client ? 'CLIENT' : !item.assignee ? 'ASSIGNEE' : !item.dueDate ? 'DATE' : !item.title ? 'CONTEXT' : 'READY';
+// Un título que solo repite el pedido («Crear pendiente», «Nueva tarea urgente») no dice qué hay que hacer: es como no
+// tener título, y Bria lo pregunta (Rodny, 22 de octubre de 2026: el pendiente salió titulado «Crear pendiente»).
+const PLACEHOLDER_WORDS = new Set(['crear', 'crea', 'creame', 'nuevo', 'nueva', 'un', 'una', 'el', 'la', 'pendiente', 'pendientes', 'tarea', 'tareas', 'urgente', 'para', 'hoy', 'manana', 'registrar', 'asignar', 'agregar', 'anadir', 'de', 'otro', 'otra']);
+export const isPlaceholderTaskTitle = title => {
+  const words = clean(title).replace(/[^a-z0-9ñ ]+/g, ' ').split(/\s+/).filter(Boolean);
+  return words.length > 0 && words.some(word => ['pendiente', 'pendientes', 'tarea', 'tareas'].includes(word)) && words.every(word => PLACEHOLDER_WORDS.has(word));
+};
+const itemStage = item => !item.client ? 'CLIENT' : !item.assignee ? 'ASSIGNEE' : !item.dueDate ? 'DATE' : (!item.title || isPlaceholderTaskTitle(item.title)) ? 'CONTEXT' : 'READY';
 /** El primer pendiente al que le falta algo, con su posición (1 en adelante) para nombrarlo en un lote. */
 export const taskDraftMissing = draft => {
   const items = taskDraftItems(draft);
