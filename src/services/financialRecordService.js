@@ -209,6 +209,7 @@ const recordSourceRelations = {
     loanReceivable: { select: { id: true, status: true, payments: { where: { reversedAt: null }, select: { id: true } } } },
     payrollTransaction: { select: { id: true } },
     payrollPayment: { select: { id: true } },
+    payablePayment: { select: { id: true, payableId: true } },
     bankMatches: { where: { status: 'APPROVED' }, select: { id: true, status: true } }
 };
 
@@ -338,6 +339,9 @@ export const financialRecordLockReason = (record) => {
         }
         // Registrado a mano y sin reintegros: se corrige o se anula aquí y la cartera lo sigue.
     }
+    if (record?.payablePayment) {
+        return 'Este movimiento es el pago de una cuenta por pagar. Para deshacerlo ve a Financiero → Por pagar y usa «Revertir» en ese pago: este movimiento se anulará solo. Los comprobantes se suben aquí mismo.';
+    }
     if (record?.payrollPayment || record?.payrollTransaction) {
         return 'Este movimiento es un pago de nómina y su valor no se edita a mano. Usa el lápiz de este mismo movimiento en Movimientos —o la liquidación en Nómina Operativa, eligiendo arriba el mes de esa liquidación— para desglosarlo, subirle el comprobante, cambiar la referencia o revertirlo.';
     }
@@ -352,7 +356,7 @@ export const financialRecordLockReason = (record) => {
 
 const assertIndependentFinancialRecord = (record) => {
     const lockedLoan = record.loanReceivable && !isLoanUntouched(record.loanReceivable);
-    if (record.receivablePayment || lockedLoan || record.payrollTransaction || record.payrollPayment || record.bankMatches?.some((match) => match.status === 'APPROVED')) {
+    if (record.receivablePayment || lockedLoan || record.payablePayment || record.payrollTransaction || record.payrollPayment || record.bankMatches?.some((match) => match.status === 'APPROVED')) {
         throw new FinancialDomainError('FINANCIAL_RECORD_LINKED', financialRecordLockReason(record), 409);
     }
     if (record.origin === 'SYSTEM') {

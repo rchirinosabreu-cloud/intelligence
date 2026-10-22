@@ -63,6 +63,7 @@ const lockReason = (record) => {
     if (record?.payrollPayment || record?.payrollTransaction) return 'Es un pago de nómina. Se corrige en Nómina Operativa: elige arriba el mes de esa liquidación y búscalo debajo de la persona para desglosarlo, subirle el comprobante, cambiar la referencia o revertirlo.';
     // El egreso de un préstamo sigue siendo editable aquí mientras nadie lo haya reintegrado: la
     // cartera lo sigue. Con reintegros, se gestiona desde Cartera (20 de octubre de 2026).
+    if (record?.payablePayment) return 'Es el pago de una cuenta por pagar. Para deshacerlo ve a Por pagar y usa «Revertir» en ese pago: este movimiento se anulará solo.';
     if (record?.loanReceivable && !isLoanUntouched(record.loanReceivable)) return 'Es el egreso de un préstamo que ya tiene reintegros en Cartera. Para corregirlo o deshacerlo, revierte allí los reintegros y usa «Eliminar» en el préstamo: este movimiento se anulará solo.';
     if (record?.bankMatches?.length) return 'Tiene una conciliación bancaria aprobada. Primero hay que deshacer esa conciliación.';
     if (record?.origin === 'SYSTEM') return 'Lo generó otro proceso de la plataforma, no se registró a mano. Se corrige desde donde se originó.';
