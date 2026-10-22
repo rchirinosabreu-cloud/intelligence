@@ -585,11 +585,18 @@ const executeTaskCreate = async ({ user, action, taskDrafts, loadAttachment, rev
   if (!taskDrafts) throw knowledgeError('Crear pendientes no está disponible en esta vista.', 403);
   const draft = action.draft;
   const receipt = await taskDrafts.createConfirmedTask({ user, draft, question: LEGACY_ACTIONS.TASK_CREATE.confirmPhrase, revalidate, loadAttachment });
-  const link = `/gestion?taskId=${encodeURIComponent(receipt.taskId)}`;
+  const link = (id) => `/gestion?taskId=${encodeURIComponent(id)}`;
+  const tasks = receipt.tasks || [{ taskId: receipt.taskId, alreadyCreated: receipt.alreadyCreated, title: draft.title, assignee: draft.assignee?.name, error: null }];
+  const created = tasks.filter((row) => row.taskId);
+  // Un lote (Rodny, 20 de octubre de 2026: «créame estos cinco») se cuenta de una vez; lo que no se pudo crear se dice con su motivo.
+  const text = tasks.length === 1
+    ? `${receipt.alreadyCreated ? 'El pendiente ya estaba creado' : 'Pendiente creado'} para ${tasks[0].assignee}. Guardé el contexto como comentario${draft.files?.length ? ' y los archivos como insumos' : ''}.\n\n[Abrir en Gestión](${link(receipt.taskId)})`
+    : [`${receipt.alreadyCreated ? 'Esos pendientes ya estaban creados' : `${created.length === tasks.length ? 'Listo, creé' : 'Creé'} ${created.length} de ${tasks.length} pendientes`}:`, '',
+      ...created.map((row) => `- [${row.title}](${link(row.taskId)}) para ${row.assignee}${row.alreadyCreated && !receipt.alreadyCreated ? ' (ya estaba)' : ''}`),
+      ...tasks.filter((row) => !row.taskId).map((row) => `- No pude crear «${row.title}»: ${row.error}`)].join('\n');
   return {
-    text: `${receipt.alreadyCreated ? 'El pendiente ya estaba creado' : 'Pendiente creado'} para ${draft.assignee.name}. Guardé el contexto como comentario${draft.files?.length ? ' y los archivos como insumos' : ''}.\n\n[Abrir en Gestión](${link})`,
-    sources: [{ kind: 'tarea', id: receipt.taskId }], toolsUsed: ['crear_pendiente'],
-    patch: { draft: { ...draft, status: 'CREATED', taskId: receipt.taskId } }
+    text, sources: created.map((row) => ({ kind: 'tarea', id: row.taskId })), toolsUsed: ['crear_pendiente'],
+    patch: { draft: { ...draft, status: 'CREATED', taskId: receipt.taskId, tasks } }
   };
 };
 const executeDispatch = async ({ user, action, dispatchDrafts, revalidate }) => {

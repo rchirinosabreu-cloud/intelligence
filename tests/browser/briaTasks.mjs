@@ -14,7 +14,8 @@ const client = { id: 'client', name: 'Empresa demo', slug: 'demo', isArchived: f
 const taskDrafts = createBriaTaskDraftService({ db: { client: { findMany: async () => [client], findUnique: async () => client }, teamMember: { findMany: async () => [member], findUnique: async () => member }, task: { findUnique: async ({ where }) => tasks.get(where.id) } }, now: () => new Date('2026-10-08T17:00:00Z'), createTask: async (payload, { taskId }) => { const row = { id: taskId, ...payload }; tasks.set(taskId, row); return row; } });
 const repository = {
   list: async () => [...chats.values()], create: async () => { const row = { id: randomUUID(), revision: 0, title: 'Nueva conversación', turns: [] }; chats.set(row.id, row); return row; }, get: async (_actor, id) => chats.get(id),
-  append: async (_actor, id, revision, question, result) => { const row = chats.get(id); assert.equal(row.revision, revision); const reply = typeof result === 'function' ? await result() : result; row.turns.push({ role: 'user', text: question }, { role: 'assistant', text: reply.answer, ...reply }); row.revision++; return row; }
+  // Cada turno lleva su id `${chat}:${posición}`, como en el repositorio real: la pantalla los usa como clave y para el pulgar.
+  append: async (_actor, id, revision, question, result) => { const row = chats.get(id); assert.equal(row.revision, revision); const reply = typeof result === 'function' ? await result() : result; row.turns.push({ id: `${id}:${revision * 2}`, role: 'user', text: question }, { id: `${id}:${revision * 2 + 1}`, role: 'assistant', text: reply.answer, ...reply }); row.revision++; return row; }
 };
 const assistant = { ask: async request => {
   let called = false;
@@ -35,9 +36,11 @@ try {
   const panel = page.getByRole('region', { name: 'Conversación con Bria' }), composer = page.getByLabel('Mensaje para Bria');
   await panel.waitFor(); await page.waitForFunction(() => !document.querySelector('[aria-label="Nueva conversación"]')?.disabled);
   await composer.fill('Necesito crear un pendiente para Lucía, para mañana, para Empresa demo: preparar tres piezas para revisión interna.'); await composer.press('Enter');
-  await panel.getByRole('button', { name: 'Continuar sin insumos', exact: true }).click();
-  await panel.getByRole('button', { name: 'Alta', exact: true }).click();
+  // Una sola vuelta (Rodny, 20 de octubre de 2026): sin «¿insumos?» ni «¿prioridad?», el resumen sale listo con prioridad Normal.
   await panel.getByRole('button', { name: 'Crear pendiente', exact: true }).waitFor(); assert.equal(tasks.size, 0);
+  await page.getByText('Prioridad: Normal', { exact: false }).last().waitFor();
+  await page.getByText('Sin referencias ni insumos todavía', { exact: false }).last().waitFor();
+  assert.equal(await panel.getByRole('button', { name: 'Continuar sin insumos', exact: true }).count(), 0);
   await composer.fill('Cambia la prioridad a urgente y añade al contexto: adaptar el diseño al brief actualizado.'); await composer.press('Enter');
   await page.getByText('Prioridad: Urgente', { exact: false }).last().waitFor();
   await page.screenshot({ path: path.join(output, 'bria-pendiente-resumen.png') });
@@ -56,6 +59,12 @@ try {
   await page.screenshot({ path: path.join(output, 'bria-pendiente-creado.png') });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: path.join(output, 'bria-pendiente-movil.png') });
-  assert.deepEqual(errors, []); assert.ok(sent.includes('Alta')); assert.equal(await composer.inputValue(), '');
-  console.log(JSON.stringify({ passed: true, simulatedModelAndDatabase: true, realConversationAndTaskOrchestration: true, tasksCreated: tasks.size, correctionSaved: true, duplicatePrevented: true }));
+  assert.deepEqual(errors, []); assert.equal(sent.filter((q) => /^(Alta|Continuar sin insumos)$/.test(q)).length, 0, 'ningún botón de insumos ni prioridad'); assert.equal(await composer.inputValue(), '');
+  console.log(JSON.stringify({ passed: true, simulatedModelAndDatabase: true, realConversationAndTaskOrchestration: true, tasksCreated: tasks.size, oneRound: true, correctionSaved: true, duplicatePrevented: true }));
+} catch (error) {
+  // Si algo falla, dejar la pantalla y el texto del panel para no adivinar.
+  await page.screenshot({ path: path.join(output, 'bria-pendiente-fallo.png') }).catch(() => {});
+  console.error('[briaTasks] panel:', await page.getByRole('region', { name: 'Conversación con Bria' }).innerText().catch(() => '(sin panel)'));
+  console.error('[briaTasks] errores de página:', errors);
+  throw error;
 } finally { await browser.close(); await preview.close(); }

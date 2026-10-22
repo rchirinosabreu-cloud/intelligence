@@ -260,6 +260,8 @@ export const buildMorningBrief = ({ recipientName, reading, scope = { clientIds:
   if (facts.length) lines.push(...facts, '');
   // Lo que decidiste ayer y qué pasó (el libro de decisiones), antes de lo de hoy.
   if (log) lines.push(...decisionsSection(log));
+  // Lo que Bria aprendió de los chats no se lista aquí (Rodny, 20 de octubre de 2026: «no quiero lo de “ayer aprendí”, no es
+  // necesario»): se usa al conversar, con su certeza y su autor, y se corrige ahí.
 
   const visible = inScope(scope);
   const signalsById = new Map((reading.signals || []).map((row) => [row.id, row]));
