@@ -102,7 +102,7 @@ export const accessAlert = ({ type, request, text }) => ({
   buttons: ACCESS_BUTTONS[type](request.id)
 });
 
-const DAILY_TOPICS = { CIERRE_DIA: 'tu cierre del día', LECTURA_MANANA: 'tu lectura de la mañana' };
+const DAILY_TOPICS = { CIERRE_DIA: 'tu cierre del día', LECTURA_MANANA: 'tu lectura de la mañana', REVISION_MES: 'la revisión de las cuentas del mes' };
 /** La lectura de la mañana o el cierre del día, enteros: son el mismo texto que queda en el chat. */
 export const dailyAlert = ({ note, dayKey, text }) => ({ kind: 'DAILY', sourceRef: `${note}:${dayKey}`, topic: DAILY_TOPICS[note] || 'tu día', text: toWhatsAppText(text), buttons: [] });
 

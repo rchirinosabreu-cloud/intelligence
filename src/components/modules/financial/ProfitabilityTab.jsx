@@ -27,8 +27,8 @@ function Figure({ label, value, hint }) {
   );
 }
 
-export default function ProfitabilityTab({ enabled }) {
-  const [month, setMonth] = useState('');
+export default function ProfitabilityTab({ enabled, initialMonth = '' }) {
+  const [month, setMonth] = useState(initialMonth);
   const [year, monthNumber] = month ? month.split('-').map(Number) : [null, null];
   const { data, isLoading, error } = useQuery({
     queryKey: ['client-profitability', month || 'ultimo'],
