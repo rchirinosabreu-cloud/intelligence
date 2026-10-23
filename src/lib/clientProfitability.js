@@ -135,7 +135,7 @@ export const buildClientProfitability = ({ year, month, clients = [], receivable
   const fromIncome = result.filter((entry) => entry.revenueSource === 'INGRESOS').length;
   if (fromIncome) notes.push(`${fromIncome === 1 ? 'Para un cliente' : `Para ${fromIncome} clientes`} sin cuenta por cobrar del mes se usó lo que entró en Movimientos.`);
   // Un ingreso sin cliente no se le puede dar a ninguna cuenta: se dice cuánto es, para vincularlo.
-  if (unlinkedIncomeCents > 0) notes.push(`${money(unlinkedIncomeCents)} de ingresos del mes no están ligados a ningún cliente, así que no cuentan para ninguna cuenta. Se ligan en Financiero → Clientes → Vincular, o editando el movimiento.`);
+  if (unlinkedIncomeCents > 0) notes.push(`${money(unlinkedIncomeCents)} de ingresos del mes no están ligados a ningún cliente, así que no cuentan para ninguna cuenta. Se ligan en Financiero → Cuentas por cobrar → Directorio de clientes → Vincular, o editando el movimiento.`);
 
   return {
     period: { year, month, label: `${MONTHS[month - 1]} de ${year}` },

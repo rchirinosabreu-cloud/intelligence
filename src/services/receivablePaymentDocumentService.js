@@ -19,7 +19,7 @@ export const attachReceivablePaymentDocument = async (prismaClient, storage, pay
     const payment = await prismaClient.receivablePayment.findUnique({ where: { id: paymentId }, select: { id: true, kind: true, reversedAt: true } });
     if (!payment) throw new FinancialDomainError('RECEIVABLE_PAYMENT_NOT_FOUND', 'El abono o ajuste no existe.', 404);
     if (isCashPayment(payment)) {
-        throw new FinancialDomainError('RECEIVABLE_PAYMENT_DOCUMENT_ON_INCOME', 'Los comprobantes de un pago van en su ingreso: súbelos desde el abono en Cartera o desde Movimientos.', 409);
+        throw new FinancialDomainError('RECEIVABLE_PAYMENT_DOCUMENT_ON_INCOME', 'Los comprobantes de un pago van en su ingreso: súbelos desde el abono en Cuentas por cobrar o desde Movimientos.', 409);
     }
     if (payment.reversedAt) throw new FinancialDomainError('RECEIVABLE_PAYMENT_REVERSED', 'Este ajuste fue revertido.', 409);
     const meta = inspectFinancialDocument(file);

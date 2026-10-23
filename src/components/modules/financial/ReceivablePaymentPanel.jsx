@@ -17,7 +17,7 @@ export default function ReceivablePaymentPanel({ record, formatCurrency, canWrit
             <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg dark:bg-zinc-900">
                 <DialogHeader>
                     <DialogTitle>Ingreso de un abono de cartera</DialogTitle>
-                    <DialogDescription>Lo generó un abono en Cartera, así que su valor no se edita aquí. Puedes subirle el comprobante. Para corregir el abono, ve a Cartera y usa «Revertir».</DialogDescription>
+                    <DialogDescription>Lo generó un abono en Cuentas por cobrar, así que su valor no se edita aquí. Puedes subirle el comprobante. Para corregir el abono, ve a Cuentas por cobrar y usa «Revertir».</DialogDescription>
                 </DialogHeader>
                 <div className="space-y-2 rounded-lg border border-zinc-200 px-3 py-2.5 text-xs dark:border-white/10" data-receivable-payment-panel>
                     <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">

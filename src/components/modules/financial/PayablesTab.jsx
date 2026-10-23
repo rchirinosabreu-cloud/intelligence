@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -15,6 +15,9 @@ import RecordDocumentsInline from './RecordDocumentsInline';
 import PayableDialog from './PayableDialog';
 import PayablePaymentDialog from './PayablePaymentDialog';
 import { ThirdPartiesDialog, ThirdPartyDialog } from './ThirdParties';
+import { FinancialSectionHeader } from './FinancialSectionParts';
+import DebtAgingSummary from './DebtAgingSummary';
+import { agingBucketLabel, agingBucketOf, payableAgeStart } from '@/lib/debtAging';
 
 // «Por pagar» (Rodny, 20 de octubre de 2026): el espejo de Cartera. Cada tercero es una tarjeta que se
 // despliega; cada cuenta dice qué llegó, cuándo vence y cuánto falta; pagarla crea el egreso en
@@ -42,6 +45,8 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
   const [dialog, setDialog] = useState(null); // { kind: 'payable' | 'pay' | 'void' | 'reverse' | 'third-parties' | 'third-party', ... }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // El tramo de antigüedad elegido en el resumen (23 de octubre de 2026): filtra la lista.
+  const [bucket, setBucket] = useState(null);
 
   const { data: ledger, isLoading, error: ledgerError, refetch } = useQuery({
     queryKey: ['financial-payables-ledger', filterQuery],
@@ -87,57 +92,52 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
   const documentsChanged = async (message) => { await invalidateFinancialQueries(queryClient); toast.success(message); };
 
   const totals = ledger?.totals || { outstanding: 0, overdue: 0, paidInPeriod: 0, openCount: 0, overdueCount: 0 };
+  const allPayables = useMemo(() => (ledger?.items || []).flatMap((group) => group.payables.map((payable) => ({ ...payable, thirdPartyId: group.thirdParty.id }))), [ledger?.items]);
+  const groups = useMemo(() => {
+    if (!bucket) return ledger?.items || [];
+    return (ledger?.items || []).map((group) => {
+      const payables = group.payables.filter((payable) => agingBucketOf(payable, undefined, payableAgeStart) === bucket);
+      const outstanding = payables.reduce((sum, payable) => sum + Math.round((Number(payable.outstanding) || 0) * 100), 0) / 100;
+      const overdue = payables.filter((payable) => payable.dueState?.key === 'VENCIDA').reduce((sum, payable) => sum + Math.round((Number(payable.outstanding) || 0) * 100), 0) / 100;
+      return { ...group, payables, outstanding, overdue };
+    }).filter((group) => group.payables.length > 0);
+  }, [ledger?.items, bucket]);
 
   return (
     <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300" data-payables-tab>
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h3 className="text-lg font-black text-zinc-900 dark:text-white">Por pagar</h3>
-          <p className="text-sm text-zinc-500">Lo que Brain Studio les debe a proveedores, equipo, arrendador y socios. Pagar una cuenta crea el egreso en Movimientos; nómina sigue aparte.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" data-third-parties-open onClick={() => setDialog({ kind: 'third-parties' })} className="min-h-11 rounded-lg border border-zinc-200 px-4 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Terceros</button>
-          {canWrite && <button type="button" data-payable-new onClick={() => setDialog({ kind: 'payable' })} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">Nueva cuenta por pagar</button>}
-        </div>
-      </div>
+      <FinancialSectionHeader title="Proveedores y gastos"
+        description="Lo que Brain Studio les debe a proveedores, equipo, arrendador y socios: herramientas, apps, dotaciones, arriendo. Pagar una cuenta crea el egreso en Movimientos. La nómina se liquida en su vista, al lado.">
+        <button type="button" data-third-parties-open onClick={() => setDialog({ kind: 'third-parties' })} className="min-h-11 rounded-lg border border-zinc-200 px-4 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Terceros</button>
+        {canWrite && <button type="button" data-payable-new onClick={() => setDialog({ kind: 'payable' })} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">Nueva cuenta por pagar</button>}
+      </FinancialSectionHeader>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <Card className="rounded-2xl border-zinc-200/50 bg-white p-4 shadow-sm dark:border-white/5 dark:bg-zinc-900">
-          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Por pagar</p>
-          <p data-payables-outstanding className="mt-1 text-xl font-black text-zinc-900 dark:text-white">{formatCurrency(totals.outstanding)}</p>
-          <p className="text-xs text-zinc-500">{totals.openCount} cuenta{totals.openCount === 1 ? '' : 's'} abierta{totals.openCount === 1 ? '' : 's'}</p>
-        </Card>
-        <Card className="rounded-2xl border-zinc-200/50 bg-white p-4 shadow-sm dark:border-white/5 dark:bg-zinc-900">
-          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Vencido</p>
-          <p className={cn('mt-1 text-xl font-black', totals.overdue > 0 ? 'text-destructive' : 'text-zinc-900 dark:text-white')}>{formatCurrency(totals.overdue)}</p>
-          <p className="text-xs text-zinc-500">{totals.overdueCount} cuenta{totals.overdueCount === 1 ? '' : 's'} vencida{totals.overdueCount === 1 ? '' : 's'}</p>
-        </Card>
-        <Card className="rounded-2xl border-zinc-200/50 bg-white p-4 shadow-sm dark:border-white/5 dark:bg-zinc-900">
-          <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Pagado en el periodo</p>
-          <p className="mt-1 text-xl font-black text-zinc-900 dark:text-white">{formatCurrency(totals.paidInPeriod)}</p>
-          <p className="text-xs text-zinc-500">Según los filtros de arriba</p>
-        </Card>
-      </div>
+      <DebtAgingSummary data-payables-summary items={allPayables} totalLabel="Total por pagar" formatCurrency={formatCurrency}
+        startOf={payableAgeStart} partyOf={(payable) => payable.thirdPartyId} bucket={bucket} onBucketChange={setBucket} />
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <span data-payables-outstanding className="sr-only">{formatCurrency(totals.outstanding)}</span>
+        {totals.overdue > 0 ? <span className="text-destructive brain-destructive-text">Vencido: {formatCurrency(totals.overdue)} en {totals.overdueCount} cuenta{totals.overdueCount === 1 ? '' : 's'}. </span> : null}
+        Pagado en el periodo: {formatCurrency(totals.paidInPeriod)}, según los filtros de arriba.{bucket ? ` Mostrando ${agingBucketLabel(bucket)}.` : ''}
+      </p>
 
       {ledgerError ? <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">No fue posible cargar las cuentas por pagar.<button type="button" onClick={() => refetch()} className="ml-3 min-h-11 underline">Reintentar</button></div>
-        : isLoading ? <div className="rounded-2xl border border-zinc-200/50 bg-white p-10 text-center dark:border-white/5 dark:bg-zinc-900"><Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin text-primary" /><p className="text-sm font-bold text-zinc-900 dark:text-white">Cargando cuentas por pagar…</p></div>
-          : !ledger?.items?.length ? <div className="rounded-2xl border border-zinc-200/50 bg-white p-10 text-center dark:border-white/5 dark:bg-zinc-900"><h4 className="text-sm font-bold text-zinc-900 dark:text-white">Sin cuentas por pagar</h4><p className="mx-auto mt-1 max-w-sm text-xs text-zinc-500">Nada abierto, y nada cerrado en el periodo elegido. Registra la primera con «Nueva cuenta por pagar».</p></div>
+        : isLoading ? <div className="rounded-2xl border border-zinc-200/50 bg-white p-10 text-center dark:border-white/5 dark:bg-zinc-900"><Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin text-primary" /><p className="text-sm font-semibold text-zinc-900 dark:text-white">Cargando cuentas por pagar…</p></div>
+          : !groups.length ? <div className="rounded-2xl border border-zinc-200/50 bg-white p-10 text-center dark:border-white/5 dark:bg-zinc-900"><h4 className="text-sm font-semibold text-zinc-900 dark:text-white">Sin cuentas por pagar</h4><p className="mx-auto mt-1 max-w-sm text-xs text-zinc-500">Nada abierto, y nada cerrado en el periodo elegido. Registra la primera con «Nueva cuenta por pagar».</p></div>
             : <div className="space-y-3">
-              {ledger.items.map((group) => {
+              {groups.map((group) => {
                 const open = !!expanded[group.thirdParty.id];
                 return (
                   <Card key={group.thirdParty.id} data-payable-group className="rounded-2xl border-zinc-200/50 bg-white p-4 shadow-sm dark:border-white/5 dark:bg-zinc-900">
                     <button type="button" aria-expanded={open} onClick={() => setExpanded((prev) => ({ ...prev, [group.thirdParty.id]: !prev[group.thirdParty.id] }))} className="group flex min-h-11 w-full items-center justify-between gap-3 text-left">
                       <div className="flex min-w-0 items-center gap-3">
-                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-coral/10 text-sm font-black text-brand-coral-deep dark:text-brand-coral">{group.thirdParty.name.substring(0, 2).toUpperCase()}</div>
+                        <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-brand-coral/10 text-sm font-semibold text-brand-coral-deep dark:text-brand-coral">{group.thirdParty.name.substring(0, 2).toUpperCase()}</div>
                         <div className="min-w-0">
-                          <h4 className="truncate text-sm font-black text-zinc-900 transition-colors group-hover:text-primary dark:text-white">{group.thirdParty.name}</h4>
-                          <p className="text-[10px] text-zinc-500">{thirdPartyKindLabel(group.thirdParty.kind)} · {group.payables.length} cuenta{group.payables.length === 1 ? '' : 's'}</p>
+                          <h4 className="truncate text-sm font-semibold text-zinc-900 transition-colors group-hover:text-primary dark:text-white">{group.thirdParty.name}</h4>
+                          <p className="text-xs text-zinc-500">{thirdPartyKindLabel(group.thirdParty.kind)} · {group.payables.length} cuenta{group.payables.length === 1 ? '' : 's'}</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-4">
                         <div className="text-right">
-                          <p className="text-sm font-black text-zinc-900 dark:text-white">{formatCurrency(group.outstanding)}</p>
+                          <p className="text-sm font-semibold text-zinc-900 dark:text-white">{formatCurrency(group.outstanding)}</p>
                           <span className={cn('text-xs', group.overdue > 0 ? 'text-destructive' : 'text-zinc-600 dark:text-zinc-300')}>{group.overdue > 0 ? `Vencido: ${formatCurrency(group.overdue)}` : group.outstanding > 0 ? 'Por vencer' : 'Sin saldo pendiente'}</span>
                         </div>
                         {open ? <ChevronUp className="h-4 w-4 text-zinc-400" /> : <ChevronDown className="h-4 w-4 text-zinc-400" />}
@@ -158,7 +158,7 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
                                   {payable.notes && <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-300">{payable.notes}</p>}
                                 </div>
                                 <div className="text-right">
-                                  <p className="font-black text-zinc-900 dark:text-white">{formatCurrency(payable.amount)}</p>
+                                  <p className="font-semibold text-zinc-900 dark:text-white">{formatCurrency(payable.amount)}</p>
                                   {!closed && payable.paidAmount > 0 && <p className="text-xs text-zinc-500">Pagado {formatCurrency(payable.paidAmount)} · falta {formatCurrency(payable.outstanding)}</p>}
                                   <span data-payable-due={payable.dueState.key} className={cn('mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold',
                                     payable.status === 'PAGADA' && 'bg-status-positive/10 text-status-positive',
@@ -172,7 +172,7 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
                               <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
                                 <RecordDocumentsInline recordId={payable.id} documents={payable.documents} api={payableDocumentsApi} canWrite={canWrite && payable.status !== 'ANULADA'} onChanged={documentsChanged} onError={(message) => toast.error(message)} />
                                 {payable.payments.length > 0 && (
-                                  <button type="button" data-payable-payments-toggle aria-expanded={paymentsOpen} onClick={() => setExpandedPayments((prev) => ({ ...prev, [payable.id]: !prev[payable.id] }))} className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary hover:underline">
+                                  <button type="button" data-payable-payments-toggle aria-expanded={paymentsOpen} onClick={() => setExpandedPayments((prev) => ({ ...prev, [payable.id]: !prev[payable.id] }))} className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline">
                                     {paymentsOpen ? 'Ocultar pagos' : activePayments.length > 0 ? `Ver ${activePayments.length} pago${activePayments.length === 1 ? '' : 's'}` : 'Ver pagos'}{paymentsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                                   </button>
                                 )}

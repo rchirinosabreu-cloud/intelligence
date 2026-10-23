@@ -8,5 +8,7 @@ test('financial dashboard exposes client reconciliation API and tab', () => {
     assert.match(source, /financials-client-reconciliation/);
     assert.match(source, /\/api\/financials\/client-reconciliation/);
     assert.match(source, /\/api\/financials\/client-links\/\$\{encodeURIComponent\(sourceClientId\)\}/);
-    assert.match(source, />\s*Clientes\s*</);
+    // El directorio de clientes es una vista de Cuentas por cobrar (23 de octubre de 2026).
+    assert.match(fs.readFileSync(new URL('../src/lib/financialTabs.js', import.meta.url), 'utf8'), /key: 'clients', label: 'Directorio de clientes'/);
+    assert.match(source, /activeTab === 'clients'/);
 });

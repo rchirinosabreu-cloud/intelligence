@@ -41,7 +41,7 @@ export default function ReceivableLoanDialog({ open, clients = [], accounts = []
   };
   const shown = problem || error;
   return <Dialog open={open} onOpenChange={next => !next && !saving && onClose()}><DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg dark:bg-zinc-900" onOpenAutoFocus={event => { event.preventDefault(); event.currentTarget.focus(); }}>
-    <DialogHeader><DialogTitle>Registrar préstamo</DialogTitle><DialogDescription>Queda en Cartera junto a lo de los clientes. El egreso sale de la cuenta que elijas y la devolución se registra como reintegro, no como venta.</DialogDescription></DialogHeader>
+    <DialogHeader><DialogTitle>Registrar préstamo</DialogTitle><DialogDescription>Queda en Cuentas por cobrar, aparte de lo de los clientes. El egreso sale de la cuenta que elijas y la devolución se registra como reintegro, no como venta.</DialogDescription></DialogHeader>
     <form onSubmit={submit} className="space-y-4"><fieldset disabled={saving} className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block space-y-1.5 text-sm"><span className="block">A quién se le presta</span><Select required className={field} value={form.counterpartyType} onChange={event => set({ counterpartyType: event.target.value, counterpartyName: '', clientId: '' })}>{LOAN_COUNTERPARTY_TYPES.map(item => <option key={item.value} value={item.value}>{item.label}</option>)}</Select></label>

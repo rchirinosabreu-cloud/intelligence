@@ -18,7 +18,7 @@ try {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(base, { timeout: 90000, waitUntil: 'domcontentloaded' });
   await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
-  await page.getByRole('button', { name: 'Por pagar', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por pagar' }).click();
   await page.locator('[data-payables-tab]').waitFor();
 
   // La pestaña abre con los totales y el arrendador con su arriendo vencido.
@@ -77,7 +77,7 @@ try {
   await page.screenshot({ path: shot('pagada-y-pagos.png'), animations: 'disabled', fullPage: true });
 
   // En Movimientos, el egreso del pago queda bloqueado y dice a dónde ir.
-  await page.getByRole('button', { name: 'Movimientos', exact: true }).click();
+  await page.getByRole('tab', { name: 'Movimientos' }).click();
   await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
   const row = page.locator('tr', { hasText: 'Pago a Inmobiliaria Norte' });
   await row.waitFor();
@@ -87,7 +87,7 @@ try {
   // En oscuro.
   await page.emulateMedia({ colorScheme: 'dark' });
   await page.evaluate(() => document.documentElement.classList.add('dark'));
-  await page.getByRole('button', { name: 'Por pagar', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por pagar' }).click();
   await page.locator('[data-payables-tab]').waitFor();
   await page.locator('[data-third-parties-open]').click();
   await page.locator('[data-third-parties-dialog]').waitFor();

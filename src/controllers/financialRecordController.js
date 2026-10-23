@@ -274,8 +274,8 @@ export const createLoanHandler = async (req, res, dependencies = {}) => {
         const result = await create(prismaClient, req.body || {}, req.user);
         return res.status(201).json({
             message: result.linkedExistingRecord
-                ? 'Préstamo registrado en Cartera, ligado al egreso que ya existía.'
-                : 'Préstamo registrado: el egreso quedó en Movimientos y la cuenta por cobrar en Cartera.',
+                ? 'Préstamo registrado en Cuentas por cobrar, ligado al egreso que ya existía.'
+                : 'Préstamo registrado: el egreso quedó en Movimientos y la deuda en Cuentas por cobrar.',
             ...result
         });
     } catch (error) {

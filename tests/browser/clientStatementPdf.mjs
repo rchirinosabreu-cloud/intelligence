@@ -17,7 +17,7 @@ try {
   let popups = 0; page.on('popup', () => { popups += 1; });
   await page.goto(base, { timeout: 90000, waitUntil: 'domcontentloaded' });
   await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   await page.getByRole('button', { name: /Cliente de muestra/ }).click();
 
   // Desde la cartera se abre el estado de cuenta del cliente, con la fecha de corte de hoy.

@@ -30,9 +30,9 @@ const ledgerFixture = (record, { closedMonth } = {}) => {
 // Negarse no basta: el motivo tiene que nombrar dónde sí se puede corregir,
 // o quien lo lee se queda sin salida (Rodny, 22 de septiembre de 2026).
 for (const [label, relations, wayOut] of [
-  ['receivable payment', { receivablePayment: { id: 'payment-1' } }, /Cartera[\s\S]*«Revertir»/],
+  ['receivable payment', { receivablePayment: { id: 'payment-1' } }, /Cuentas por cobrar[\s\S]*«Revertir»/],
   // Desde el 1 de octubre de 2026 el pago de nómina se corrige con el lápiz del propio movimiento.
-  ['payroll payment', { payrollTransaction: { id: 'payroll-1' } }, /lápiz de este mismo movimiento[\s\S]*Nómina Operativa/]
+  ['payroll payment', { payrollTransaction: { id: 'payroll-1' } }, /lápiz de este mismo movimiento[\s\S]*Cuentas por pagar → Nómina/]
 ]) {
   for (const operation of ['update', 'void']) {
     test(`${operation} cannot disconnect a ${label} through generic ledger CRUD`, async () => {

@@ -18,7 +18,7 @@ try {
     await page.goto(base, { timeout: 90000, waitUntil: 'domcontentloaded' });
     await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
     if (scheme === 'dark') await page.evaluate(() => document.documentElement.classList.add('dark'));
-    await page.getByRole('button', { name: 'Rentabilidad', exact: true }).click();
+    await page.getByRole('tab', { name: 'Análisis' }).click(); await page.getByRole('button', { name: 'Rentabilidad', exact: true }).click();
     await page.locator('[data-profitability-client]').first().waitFor();
     // Primero la cuenta que más pierde; la que tuvo horas sin factura lo dice; lo interno va aparte.
     assert.equal(await page.locator('[data-profitability-client]').first().getAttribute('data-profitability-client'), 'Endova');
@@ -58,7 +58,7 @@ try {
   // Un miembro sin rol de administrador no ve la pestaña.
   const viewer = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await viewer.goto(`${base}?viewer=reader`, { timeout: 90000, waitUntil: 'domcontentloaded' });
-  await viewer.getByRole('button', { name: 'Cartera', exact: true }).waitFor();
+  await viewer.getByRole('tab', { name: 'Cuentas por cobrar' }).waitFor();
   assert.equal(await viewer.getByRole('button', { name: 'Rentabilidad', exact: true }).count(), 0);
   console.log('Rentabilidad por cliente: OK');
 } finally {

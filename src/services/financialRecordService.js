@@ -323,22 +323,22 @@ const dateInputFrom = (date) => {
 // cuál ni dónde deja a quien lo lee sin salida. Cada caso nombra su camino.
 export const financialRecordLockReason = (record) => {
     if (record?.receivablePayment) {
-        return 'Este movimiento es el ingreso de un abono de cartera. Para corregirlo ve a Cartera, abre la obligación del cliente y usa el lápiz de ese abono: el valor, la fecha y la cuenta cambian aquí con él. Para deshacerlo, «Revertir» en ese mismo abono: este movimiento se anulará solo.';
+        return 'Este movimiento es el ingreso de un abono de cartera. Para corregirlo ve a Cuentas por cobrar, abre la obligación del cliente y usa el lápiz de ese abono: el valor, la fecha y la cuenta cambian aquí con él. Para deshacerlo, «Revertir» en ese mismo abono: este movimiento se anulará solo.';
     }
     if (record?.loanReceivable) {
         if (!isLoanUntouched(record.loanReceivable)) {
-            return 'Este movimiento es el egreso de un préstamo que ya tiene reintegros en Cartera. Para corregirlo o deshacerlo ve a Cartera: revierte los reintegros de ese préstamo y usa «Eliminar»; este movimiento se anulará solo.';
+            return 'Este movimiento es el egreso de un préstamo que ya tiene reintegros en Cuentas por cobrar. Para corregirlo o deshacerlo ve a Cuentas por cobrar: revierte los reintegros de ese préstamo y usa «Eliminar»; este movimiento se anulará solo.';
         }
         if (record.origin === 'SYSTEM') {
-            return 'Este movimiento es el egreso de un préstamo que está en Cartera. Para deshacerlo ve a Cartera y usa «Eliminar» en ese préstamo: este movimiento se anulará solo. Si el valor está mal, elimina el préstamo y regístralo de nuevo.';
+            return 'Este movimiento es el egreso de un préstamo que está en Cuentas por cobrar. Para deshacerlo ve a Cuentas por cobrar y usa «Eliminar» en ese préstamo: este movimiento se anulará solo. Si el valor está mal, elimina el préstamo y regístralo de nuevo.';
         }
         // Registrado a mano y sin reintegros: se corrige o se anula aquí y la cartera lo sigue.
     }
     if (record?.payablePayment) {
-        return 'Este movimiento es el pago de una cuenta por pagar. Para deshacerlo ve a Financiero → Por pagar y usa «Revertir» en ese pago: este movimiento se anulará solo. Los comprobantes se suben aquí mismo.';
+        return 'Este movimiento es el pago de una cuenta por pagar. Para deshacerlo ve a Cuentas por pagar → Proveedores y gastos y usa «Revertir» en ese pago: este movimiento se anulará solo. Los comprobantes se suben aquí mismo.';
     }
     if (record?.payrollPayment || record?.payrollTransaction) {
-        return 'Este movimiento es un pago de nómina y su valor no se edita a mano. Usa el lápiz de este mismo movimiento en Movimientos —o la liquidación en Nómina Operativa, eligiendo arriba el mes de esa liquidación— para desglosarlo, subirle el comprobante, cambiar la referencia o revertirlo.';
+        return 'Este movimiento es un pago de nómina y su valor no se edita a mano. Usa el lápiz de este mismo movimiento en Movimientos —o la liquidación en Cuentas por pagar → Nómina, eligiendo arriba el mes de esa liquidación— para desglosarlo, subirle el comprobante, cambiar la referencia o revertirlo.';
     }
     if (record?.origin === 'SYSTEM') {
         return 'Este movimiento lo generó otro proceso de la plataforma, no se registró a mano. Se corrige desde donde se originó, no desde Movimientos.';
