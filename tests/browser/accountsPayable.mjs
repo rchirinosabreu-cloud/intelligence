@@ -89,9 +89,14 @@ try {
   await page.evaluate(() => document.documentElement.classList.add('dark'));
   await page.getByRole('tab', { name: 'Cuentas por pagar' }).click();
   await page.locator('[data-payables-tab]').waitFor();
+  // «Terceros» lleva a su pestaña (23 de octubre de 2026): los dos terceros de pago, cada uno con su rol.
   await page.locator('[data-third-parties-open]').click();
-  await page.locator('[data-third-parties-dialog]').waitFor();
-  assert.equal(await page.locator('[data-third-party-row]').count(), 2);
+  await page.locator('[data-financial-parties]').waitFor();
+  await page.getByRole('combobox', { name: 'Rol' }).waitFor();
+  // Los dos tienen rol de pago; el arrendador comparte NIT con el cliente de muestra y va en su fila.
+  const payees = page.locator('[data-party-roles]').filter({ hasText: /Proveedor|Arrendador|Colaborador|Socio|Otro tercero/ });
+  await payees.first().waitFor();
+  assert.equal(await payees.count(), 2);
   await page.screenshot({ path: shot('terceros-oscuro.png'), animations: 'disabled' });
 
   assert.deepEqual(errors, []);

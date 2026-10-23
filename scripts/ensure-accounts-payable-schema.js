@@ -32,6 +32,17 @@ try {
   await client.query(`CREATE INDEX IF NOT EXISTS "ThirdParty_kind_isActive_idx" ON "ThirdParty"("kind", "isActive");`);
   await client.query(`CREATE INDEX IF NOT EXISTS "ThirdParty_name_idx" ON "ThirdParty"("name");`);
   await client.query(`CREATE INDEX IF NOT EXISTS "ThirdParty_teamMemberId_idx" ON "ThirdParty"("teamMemberId");`);
+  // Terceros (23 de octubre de 2026): el tercero que también es cliente queda ligado a su ficha.
+  await client.query(`ALTER TABLE "ThirdParty" ADD COLUMN IF NOT EXISTS "clientId" TEXT;`);
+  await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ThirdParty_clientId_key" ON "ThirdParty"("clientId");`);
+  await client.query(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'ThirdParty_clientId_fkey') THEN
+        ALTER TABLE "ThirdParty" ADD CONSTRAINT "ThirdParty_clientId_fkey"
+          FOREIGN KEY ("clientId") REFERENCES "Client"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+      END IF;
+    END $$;
+  `);
 
   await client.query(`
     CREATE TABLE IF NOT EXISTS "AccountsPayable" (

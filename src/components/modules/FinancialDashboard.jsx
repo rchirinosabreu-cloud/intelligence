@@ -51,7 +51,7 @@ import { RECEIVABLE_CONCEPT_DEFAULT, RECEIVABLE_ITEM_MAX, formatReceivableNumber
 import { formatExchangeRate, formatReceivableMoney, pesosFromRate } from '@/lib/receivableCurrency';
 import CurrencyToggle from '@/components/ui/CurrencyToggle';
 import MoneyInput from '@/components/ui/MoneyInput';
-import FinancialClientsDirectory from '@/components/modules/financial/FinancialClientsDirectory';
+import FinancialPartiesDirectory from '@/components/modules/financial/FinancialPartiesDirectory';
 import UsdToPesosFields from '@/components/modules/financial/UsdToPesosFields';
 import { PayrollPaymentDialog, PayrollPaymentList } from '@/components/modules/financial/PayrollPayments';
 import RecordDocumentsInline from '@/components/modules/financial/RecordDocumentsInline';
@@ -308,7 +308,7 @@ const FinancialDashboard = () => {
             });
             return res.data;
         },
-        enabled: !!(currentUser && canAccessFinancials && ['clients', 'receivables'].includes(activeTab))
+        enabled: !!(currentUser && canAccessFinancials && ['parties', 'receivables'].includes(activeTab))
     });
     // Los archivados vienen incluidos y se marcan: una cuenta por cobrar puede
     // apuntar a un cliente que ya no está activo y sigue debiendo.
@@ -1677,7 +1677,7 @@ await invalidateFinancialQueries(queryClient);
                 )}
 
                 {activeTab === 'payables' && (
-                    <PayablesTab filterQuery={filterQuery} formatCurrency={formatCurrency} accounts={financialAccounts?.accounts || []}
+                    <PayablesTab filterQuery={filterQuery} formatCurrency={formatCurrency} accounts={financialAccounts?.accounts || []} onOpenThirdParties={() => setActiveTab('parties')}
                         canWrite={canWriteFinancials} enabled={!!(currentUser && canAccessFinancials)} />
                 )}
 
@@ -1833,8 +1833,8 @@ await invalidateFinancialQueries(queryClient);
                     </div>
                 )}
 
-                {activeTab === 'clients' && (
-                    <FinancialClientsDirectory
+                {activeTab === 'parties' && (
+                    <FinancialPartiesDirectory
                         reconciliation={clientReconciliation}
                         isReconciliationLoading={isClientReconciliationLoading}
                         clientTargetChoices={clientTargetChoices}
