@@ -45,7 +45,7 @@ test('la verificación del webhook devuelve el reto solo con el modo y el token 
 
 test('del aviso de Meta se leen solo los mensajes: quién, qué, de qué número; los estados de entrega se ignoran', () => {
   const [message] = parseInboundMessages(inbound({ text: '  ¿Qué tengo hoy?  ' }));
-  assert.deepEqual(message, { messageId: 'wamid.1', from: '573001234567', phone: '573001234567', userId: null, profileName: 'Camila', timestamp: 1760990400, type: 'text', text: '¿Qué tengo hoy?', replyId: null, phoneNumberId: '1319887801213730' });
+  assert.deepEqual(message, { messageId: 'wamid.1', from: '573001234567', phone: '573001234567', userId: null, profileName: 'Camila', timestamp: 1760990400, type: 'text', text: '¿Qué tengo hoy?', replyId: null, media: null, phoneNumberId: '1319887801213730' });
   const [image] = parseInboundMessages(inbound({ type: 'image' }));
   assert.equal(image.type, 'image');
   assert.equal(image.text, null);
@@ -69,7 +69,7 @@ const bsuidOnly = ({ id = 'wamid.b1', text = 'BRIA 482913', withPhone = false } 
 });
 
 test('un mensaje sin número se lee por su BSUID; con número, el BSUID sigue siendo la clave y el número va aparte', () => {
-  assert.deepEqual(parseInboundMessages(bsuidOnly())[0], { messageId: 'wamid.b1', from: 'CO.1349120865530274', phone: null, userId: 'CO.1349120865530274', profileName: 'Rodny', timestamp: 1761140000, type: 'text', text: 'BRIA 482913', replyId: null, phoneNumberId: '1319887801213730' });
+  assert.deepEqual(parseInboundMessages(bsuidOnly())[0], { messageId: 'wamid.b1', from: 'CO.1349120865530274', phone: null, userId: 'CO.1349120865530274', profileName: 'Rodny', timestamp: 1761140000, type: 'text', text: 'BRIA 482913', replyId: null, media: null, phoneNumberId: '1319887801213730' });
   const both = parseInboundMessages(bsuidOnly({ withPhone: true }))[0];
   assert.deepEqual([both.from, both.phone, both.userId], ['CO.1349120865530274', '573001234567', 'CO.1349120865530274']);
   const contactOnly = bsuidOnly(); delete contactOnly.entry[0].changes[0].value.messages[0].from_user_id;

@@ -82,6 +82,21 @@ Un mensaje de un número vinculado:
 
 El uso de IA de estos mensajes queda en el registro con módulo `whatsapp` y la persona como actor (`runWithAiContext`).
 
+## Fotos, documentos y notas de voz (22 de octubre de 2026)
+
+Rodny: «que incluso la contadora pueda enviar una imagen por WhatsApp y decir: registra este movimiento, este es el comprobante … sí, también por audio enviar, todo».
+
+- **Una foto o un documento** (PDF, Word, Excel) entra al chat como archivo, igual que adjuntarlo en la plataforma: Bria lo lee (imágenes y PDF los ve el modelo). Lo que se escribe debajo de la foto es la pregunta.
+- **Una nota de voz** se transcribe con el mismo servicio del dictado de la plataforma y Bria responde a lo que se dijo. Si no se entiende, lo dice y pide repetir.
+- **Se descarga solo de Meta**: el puente pide la dirección del archivo por su identificador (`GET /{media-id}?phone_number_id=`) y lo baja con el token en la cabecera; solo por https y de los servidores de Meta (`isMetaMediaUrl`), hasta 20 MB. Un archivo más grande o que no se descarga se dice; nunca se pierde en silencio.
+- **«Escribiendo…»**: al recibir, el mensaje se marca como leído con el indicador de escritura (`typingPayload`), que se quita solo al responder o a los 25 segundos.
+- **Lo que llega seguido se junta**: en WhatsApp la gente manda la foto y enseguida «regístralo» como dos mensajes. El puente espera 2,5 segundos (`WHATSAPP_BATCH_WINDOW_MS`), junta los textos y los archivos de la misma persona y Bria responde una vez. Lo de cada persona se atiende en orden. Un toque de botón no se junta: se atiende tal cual.
+- Un sticker, un video o una ubicación se contestan en palabras.
+
+## Registrar un movimiento con su comprobante (22 de octubre de 2026)
+
+`registrar_movimiento` (acción `FINANCIAL_RECORD`, `src/lib/briaMovementDraft.js`): Bria lee el comprobante y pasa lo que vio (valor, fecha, a quién, concepto, referencia) con lo que dijo la persona; la herramienta entiende el tipo («gasto», «nos pagaron»), la categoría dicha en palabras («impuestos», «4x1000»), la fecha hacia atrás («ayer», «el lunes») y la cuenta por banco o últimos cuatro dígitos, y **pregunta de a una cosa lo que falta, con botones** (¿de qué cuenta salió?, ¿en qué categoría?). El resumen es un párrafo («Registro un egreso de $1.200.000 del 21 de octubre de 2026 en Bancolombia, categoría Administrativo: Licencia de Canva, a Canva. Le pego el comprobante recibo.jpg.»). Al confirmar se registra por `createFinancialRecord` (la vía de la pantalla, con su auditoría y su periodo abierto) y el comprobante se pega con la misma pieza que «Subir comprobante»; si el comprobante falla, el movimiento queda y se dice. Pide Financiero con escritura. Funciona igual en la plataforma y por WhatsApp.
+
 ## Botones (22 de octubre de 2026)
 
 Rodny: «bria no podría también darme las opciones tipo botones?» · «si hay botones, uno puede responder dándole al botón o respondiendo naturalmente».

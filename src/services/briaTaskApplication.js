@@ -10,6 +10,8 @@ import { sendItemToKanban, createContentPlan, updateContentPlan, createContentIt
 import { clientOperationsService } from './clientOperationsService.js';
 import { getBriaPlatformClient } from '../lib/briaPlatformClient.js';
 import { getRoutePermission } from '../lib/platformPermissions.js';
+import { createFinancialRecord } from './financialRecordService.js';
+import { attachFinancialRecordDocument, financialEvidenceStorage } from './financialRecordDocumentService.js';
 export const briaTaskDrafts = createBriaTaskDraftService({ db: prisma, createTask, uploadFile: uploadToS3, removeFile: deleteFromS3, notify: createNotification });
 export const briaDispatchDrafts = createBriaDispatchService({ db: prisma, dispatchItem: sendItemToKanban });
 // Eliminar desde el chat (10 de octubre de 2026): la misma vía que el botón de Gestión, con su registro.
@@ -17,4 +19,8 @@ export const briaDeleteDrafts = createBriaDeleteService({ db: prisma, deleteTask
 // Acciones en la plataforma (10 de octubre de 2026): pendientes, parrillas, piezas y observaciones, por las vías de siempre.
 // Crear pendiente, despachar y eliminar se ejecutan por esta misma base (una sola base, 10 de octubre de 2026).
 // Los compromisos de una reunión (14 de octubre de 2026) se crean con el mismo `createTask` del panel y avisan igual.
-export const briaActions = createBriaActionService({ db: prisma, updateTask, createTask, notify: createNotification, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation: (input) => clientOperationsService.addObservation(input), taskDrafts: briaTaskDrafts, dispatchDrafts: briaDispatchDrafts, deleteDrafts: briaDeleteDrafts, platform: getBriaPlatformClient(), routePermissions: getRoutePermission });
+// Los movimientos con su comprobante (22 de octubre de 2026): la misma vía que la pantalla y la misma pieza que «Subir comprobante».
+export const briaActions = createBriaActionService({ db: prisma, updateTask, createTask, notify: createNotification, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation: (input) => clientOperationsService.addObservation(input),
+  recordMovement: ({ input, user }) => createFinancialRecord(prisma, input, user),
+  attachMovementDocument: ({ recordId, file, user }) => attachFinancialRecordDocument(prisma, financialEvidenceStorage(), recordId, file, user),
+  taskDrafts: briaTaskDrafts, dispatchDrafts: briaDispatchDrafts, deleteDrafts: briaDeleteDrafts, platform: getBriaPlatformClient(), routePermissions: getRoutePermission });

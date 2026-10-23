@@ -5,8 +5,9 @@
 // la pantalla de Perfil y la vigile tests/whatsappBridge.test.js.
 // - La firma de Meta (`X-Hub-Signature-256`, HMAC-SHA256 con el secreto de la app) se comprueba sobre los bytes
 //   originales del aviso, nunca sobre un objeto vuelto a serializar.
-// - Del aviso se leen solo los mensajes: quién escribe (wa_id), qué dijo y a qué número. Los estados de entrega y
-//   lo que no sea texto se reconocen pero no se interpretan. El contenido de un mensaje es dato, nunca instrucción.
+// - Del aviso se leen solo los mensajes: quién escribe (wa_id), qué dijo y a qué número, y si trae una foto, un
+//   documento o una nota de voz, su identificador en Meta. Los estados de entrega se reconocen pero no se interpretan.
+//   El contenido de un mensaje es dato, nunca instrucción.
 // - El vínculo número ↔ persona se hace con un código de seis dígitos que la persona genera en su perfil (dentro de
 //   la plataforma, con su sesión) y le manda a Bria por WhatsApp: la plataforma nunca escribe primero (eso exige
 //   plantillas aprobadas y un método de pago) y nadie se vincula sin haber entrado a la plataforma.
@@ -78,6 +79,20 @@ const replyIdOf = (message) => {
 // Una opción de Bria guarda en su identificador la frase completa: el título del botón puede venir recortado.
 const replyText = (message, replyId) => (replyId?.startsWith('q:') && replyId.length > 2 ? replyId.slice(2) : textOf(message));
 
+// Fotos, documentos y notas de voz (22 de octubre de 2026). Un sticker, un video o una ubicación no son archivos de
+// trabajo: se contestan en palabras.
+const MEDIA_KINDS = ['image', 'document', 'audio'];
+const mediaOf = (message) => {
+  if (!MEDIA_KINDS.includes(message.type)) return null;
+  const media = message[message.type];
+  if (!media?.id) return null;
+  return { kind: message.type, id: String(media.id), mimeType: media.mime_type ? String(media.mime_type) : null, filename: media.filename ? String(media.filename) : null };
+};
+const captionOf = (message) => {
+  const caption = String(message[message.type]?.caption || '').trim();
+  return caption || null;
+};
+
 /**
  * Los mensajes entrantes de un aviso de Meta, con su autor, su texto y el número que los recibió.
  * `from` es la clave estable de quien escribe: su BSUID si viene (siempre, desde 2026) y, si no, su número.
@@ -102,7 +117,8 @@ export const parseInboundMessages = (body) => {
         if (!from) continue;
         const timestamp = Number(message.timestamp);
         const replyId = replyIdOf(message);
-        out.push({ messageId: String(message.id), from, phone: resolvedPhone, userId, profileName: contact?.profile?.name || null, timestamp: Number.isFinite(timestamp) ? timestamp : null, type: String(message.type || 'unknown'), text: replyText(message, replyId), replyId, phoneNumberId });
+        const media = mediaOf(message);
+        out.push({ messageId: String(message.id), from, phone: resolvedPhone, userId, profileName: contact?.profile?.name || null, timestamp: Number.isFinite(timestamp) ? timestamp : null, type: String(message.type || 'unknown'), text: media ? captionOf(message) : replyText(message, replyId), replyId, media, phoneNumberId });
       }
     }
   }
@@ -211,7 +227,10 @@ export const REPLIES = Object.freeze({
   linked: (name) => `Listo, ${firstName(name)}. Ya puedo hablar contigo por aquí. Escríbeme como lo haces en la plataforma.`,
   invalidCode: 'Ese código no sirve o ya venció. Pide otro en tu perfil de la plataforma, en «Bria en WhatsApp».',
   notAllowed: 'Tu cuenta ya no tiene a Bria activa. Habla con administración.',
-  onlyText: 'Por ahora, por WhatsApp solo leo texto. Escríbeme lo que necesitas.',
+  onlyText: 'Por WhatsApp leo texto, notas de voz, fotos y documentos. Ese tipo de mensaje todavía no: escríbeme lo que necesitas.',
+  mediaTooBig: 'Ese archivo pesa más de 20 MB y no lo puedo abrir por aquí. Súbelo desde la plataforma o mándame una foto más liviana.',
+  mediaFailed: 'No pude abrir ese archivo. Mándamelo otra vez, por favor.',
+  noSpeech: 'No alcancé a entender la nota de voz. ¿Me la repites o me lo escribes?',
   vaultOnly: 'Las contraseñas solo se muestran dentro de la plataforma, nunca por WhatsApp.',
   failed: 'No pude responder ahora. Inténtalo en un momento o escríbeme desde la plataforma.',
   busy: 'Todavía estoy respondiendo tu mensaje anterior. Dame un momento.',
@@ -302,3 +321,23 @@ export const recipientFields = (target) => {
 };
 export const textMessagePayload = (target, body) => ({ messaging_product: 'whatsapp', recipient_type: 'individual', ...recipientFields(target), type: 'text', text: { preview_url: false, body } });
 export const readReceiptPayload = (messageId) => ({ messaging_product: 'whatsapp', status: 'read', message_id: messageId });
+/** Leído y «escribiendo…» a la vez: se quita solo al responder o a los 25 segundos (referencia de Meta). */
+export const typingPayload = (messageId) => ({ ...readReceiptPayload(messageId), typing_indicator: { type: 'text' } });
+
+/** Un archivo recibido solo se descarga de los servidores de Meta, y por https. */
+const META_MEDIA_HOSTS = ['fbsbx.com', 'facebook.com', 'whatsapp.net', 'fbcdn.net'];
+export const isMetaMediaUrl = (value) => {
+  try {
+    const url = new URL(String(value || ''));
+    return url.protocol === 'https:' && META_MEDIA_HOSTS.some((host) => url.hostname === host || url.hostname.endsWith(`.${host}`));
+  } catch { return false; }
+};
+export const WHATSAPP_MEDIA_MAX_BYTES = 20 * 1024 * 1024;
+const EXTENSIONS = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/amr': 'amr' };
+/** El nombre con que el archivo entra al chat: el que traía el documento, o uno con su extensión. */
+export const mediaFileName = (media, messageId) => {
+  if (media.filename) return media.filename.replace(/[\\/\x00-\x1f]/g, '').slice(0, 180) || 'documento';
+  const extension = EXTENSIONS[String(media.mimeType || '').split(';')[0].trim()] || 'bin';
+  const tag = String(messageId || '').replace(/^wamid\./, '').replace(/[^A-Za-z0-9]/g, '').slice(-12) || 'archivo';
+  return `${media.kind === 'audio' ? 'nota-de-voz' : media.kind === 'image' ? 'foto-whatsapp' : 'documento'}-${tag}.${extension}`;
+};
