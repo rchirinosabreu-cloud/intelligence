@@ -183,6 +183,15 @@ export const displayPhone = (value) => {
 
 export const waMeLink = (number, text) => `https://wa.me/${normalizeWaId(number)}?text=${encodeURIComponent(text)}`;
 
+// WhatsApp toma un monto de ocho cifras o más («$51.307.715») por un teléfono y lo pinta como enlace: se dice en
+// millones, que además se lee mejor en un celular. Lo de siete cifras o menos no se vuelve enlace y queda exacto.
+const LONG_PESOS = /\$\s?(\d{1,3}(?:\.\d{3}){2,})(?:,\d+)?/g;
+const MILLIONS = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 1 });
+const pesosForWhatsApp = (text) => text.replace(LONG_PESOS, (match, digits) => {
+  const value = Number(digits.replace(/\./g, ''));
+  return value >= 10_000_000 ? `$${MILLIONS.format(value / 1_000_000)} millones` : match;
+});
+
 /** Lo que WhatsApp pinta: *negrita*, ```código```, viñetas con punto; títulos, enlaces y citas se aplanan. */
 export const toWhatsAppText = (markdown) => {
   let text = String(markdown || '').replace(/\r\n/g, '\n');
@@ -195,7 +204,7 @@ export const toWhatsAppText = (markdown) => {
   text = text.replace(/^([ \t]*)[-*•][ \t]+/gm, '$1• ');
   text = text.replace(/^[ \t]*>[ \t]?/gm, '');
   text = text.replace(/\n{3,}/g, '\n\n');
-  return text.trim();
+  return pesosForWhatsApp(text).trim();
 };
 
 const cutPoint = (rest, max) => {
