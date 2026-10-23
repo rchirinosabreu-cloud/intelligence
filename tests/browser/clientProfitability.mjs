@@ -22,11 +22,18 @@ try {
     await page.locator('[data-profitability-client]').first().waitFor();
     // Primero la cuenta que más pierde; la que tuvo horas sin factura lo dice; lo interno va aparte.
     assert.equal(await page.locator('[data-profitability-client]').first().getAttribute('data-profitability-client'), 'Endova');
-    assert.match(await page.locator('[data-profitability-client="Nuva"]').innerText(), /no tiene nada facturado/);
+    assert.match(await page.locator('[data-profitability-client="Nuva"]').innerText(), /no tiene nada facturado ni ingresos/);
+    // Sin cuenta por cobrar del mes, lo que entró en Movimientos (23 de octubre de 2026).
+    const pablo = page.locator('[data-profitability-client="Pablo Hoff"]');
+    assert.match(await pablo.innerText(), /se usó lo que entró en Movimientos/);
+    assert.equal(await pablo.locator('[data-profitability-source]').getAttribute('data-profitability-source'), 'INGRESOS');
+    assert.match(await page.locator('[data-profitability-notes]').innerText(), /no están ligados a ningún cliente/);
     assert.match(await page.locator('[data-profitability-client="Endova"]').innerText(), /tareas cerradas tienen tiempo medido/);
     assert.match(await page.locator('[data-profitability-internal]').innerText(), /Trabajo interno/);
     assert.match(await page.locator('[data-profitability-notes]').innerText(), /El costo hora es/);
-    assert.match(await page.locator('[data-profitability-client="Endova"]').innerText(), /-\$2\.221\.250/, 'el negativo se escribe -$, no $-');
+    const endova = await page.locator('[data-profitability-client="Endova"]').innerText();
+    assert.match(endova, /-\$\d/, 'el negativo se escribe -$');
+    assert.doesNotMatch(endova, /\$-/, 'nunca $-');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(overflow <= 1, `sin desplazamiento horizontal (${overflow}px)`);
     await page.locator('[data-profitability]').screenshot({ path: shot(`rentabilidad-${scheme}-${viewport.width}.png`), animations: 'disabled' });

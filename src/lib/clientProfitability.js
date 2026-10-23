@@ -4,6 +4,11 @@
 //     horas medidas del equipo. Así nadie deduce el salario de una persona y la IA nunca ve la nómina;
 //   - lo que deja la cuenta es **lo facturado del mes** (sus cuentas por cobrar), se haya pagado o no;
 //   - lo ven **solo administradores**.
+// Rodny, 23 de octubre de 2026, al verla con datos reales: «hay muchos clientes que dice “no tiene nada facturado”…
+// no está leyendo los movimientos». A muchos clientes no se les crea la cuenta por cobrar de cada mes y su pago entra
+// directo en Movimientos. Por eso, sin cuenta por cobrar del mes, el ingreso de la cuenta es **lo que entró** de ese
+// cliente en el mes (sin préstamos), y se dice. Nunca se suman las dos cosas: un pago de una cuenta por cobrar
+// también es un ingreso, y sumarlos contaría el mismo dinero dos veces.
 // Un egreso ligado a un cliente (la pauta que se le paga, una producción) es costo directo de esa cuenta y sale del
 // costo hora. Las horas sin cliente son trabajo interno: se dicen aparte, con su costo, para que lo asignado más lo
 // interno sea siempre todo el costo del mes. Lógica pura, en centavos; la lee la pantalla, el servidor y Bria.
@@ -19,6 +24,8 @@ export const PROFITABILITY_LIMITS = Object.freeze({
 const NOT_OPERATING_SECTIONS = new Set(['FINANCING', 'INVESTMENT']);
 /** Un egreso real de la operación: ni préstamos, ni inversiones, ni financiación. */
 export const isOperatingExpense = (record) => record?.type === 'EXPENSE' && record.category !== 'PRESTAMO' && !NOT_OPERATING_SECTIONS.has(record.section);
+/** Un ingreso de un cliente por su servicio: ni el reintegro de un préstamo, ni financiación. */
+export const isClientIncome = (record) => record?.type === 'INCOME' && Boolean(record.clientId) && record.category !== 'PRESTAMO' && record.section !== 'FINANCING';
 
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const cents = (amount) => Math.round(Number(amount || 0) * 100);
@@ -27,30 +34,35 @@ const money = (value) => `${value < 0 ? '-' : ''}$${new Intl.NumberFormat('es-CO
 const hours = (ms) => { const h = ms / H; return `${new Intl.NumberFormat('es-CO', { maximumFractionDigits: 1 }).format(h)} h`; };
 
 const FLAG_TEXT = {
-  PIERDE: (row) => `Costó ${money(row.costCents)} y se le facturó ${money(row.billedCents)}: ${money(-row.marginCents)} por debajo.`,
-  SIN_FACTURAR: (row) => `Tuvo ${hours(row.hoursMs)} de trabajo y no tiene nada facturado este mes.`,
-  SIN_HORAS: () => 'Se le facturó, pero no hay trabajo medido: el margen se ve mejor de lo que es.',
+  INGRESOS: (row) => `Sin cuenta por cobrar del mes: se usó lo que entró en Movimientos (${money(row.receivedCents)}).`,
+  PIERDE: (row) => `Costó ${money(row.costCents)} y ${row.revenueSource === 'INGRESOS' ? 'entró' : 'se le facturó'} ${money(row.revenueCents)}: ${money(-row.marginCents)} por debajo.`,
+  SIN_FACTURAR: (row) => `Tuvo ${hours(row.hoursMs)} de trabajo y no tiene nada facturado ni ingresos este mes.`,
+  SIN_HORAS: () => 'Tiene ingreso del mes, pero no hay trabajo medido: el margen se ve mejor de lo que es.',
   POCA_MEDICION: (row) => `Solo ${row.measuredClosed} de ${row.closedTasks} tareas cerradas tienen tiempo medido: el costo real es mayor.`
 };
 
 /**
  * `receivables`: cuentas por cobrar de clientes del mes `{ clientId, amount }` (pesos).
+ * `incomes`: ingresos del mes de cada cliente ya filtrados con `isClientIncome` `{ clientId, amount }`; se usan solo
+ *   para el cliente que no tiene cuenta por cobrar del mes.
+ * `unlinkedIncomeCents`: lo que entró en el mes sin cliente ligado, solo para decirlo.
  * `expenses`: egresos reales del mes ya filtrados con `isOperatingExpense` `{ amount, clientId? }`.
  * `sessions`: sesiones de trabajo del mes sin simultáneas `{ clientId, ms }`.
  * `closedTasks`: tareas cerradas del mes `{ clientId, measuredMs }`, para decir cuánto se midió.
  */
-export const buildClientProfitability = ({ year, month, clients = [], receivables = [], expenses = [], sessions = [], closedTasks = [] }) => {
+export const buildClientProfitability = ({ year, month, clients = [], receivables = [], incomes = [], unlinkedIncomeCents = 0, expenses = [], sessions = [], closedTasks = [] }) => {
   const names = new Map(clients.map((client) => [client.id, client]));
   const rows = new Map();
   const row = (clientId) => {
     if (!rows.has(clientId)) {
       const client = names.get(clientId);
-      rows.set(clientId, { clientId, name: client?.name || 'Cliente', slug: client?.slug || null, billedCents: 0, hoursMs: 0, directCostCents: 0, closedTasks: 0, measuredClosed: 0 });
+      rows.set(clientId, { clientId, name: client?.name || 'Cliente', slug: client?.slug || null, billedCents: 0, receivedCents: 0, hoursMs: 0, directCostCents: 0, closedTasks: 0, measuredClosed: 0 });
     }
     return rows.get(clientId);
   };
 
   for (const receivable of receivables) if (receivable.clientId) row(receivable.clientId).billedCents += cents(receivable.amount);
+  for (const income of incomes) if (income.clientId) row(income.clientId).receivedCents += cents(income.amount);
   let costCents = 0, directCostCents = 0;
   for (const expense of expenses) {
     const value = cents(expense.amount);
@@ -77,20 +89,24 @@ export const buildClientProfitability = ({ year, month, clients = [], receivable
   const result = [...rows.values()].map((entry) => {
     const laborCostCents = share(entry.hoursMs, hoursMs, sharedCostCents);
     const total = laborCostCents + entry.directCostCents;
-    const margin = entry.billedCents - total;
+    // Lo facturado manda; sin cuenta por cobrar del mes, lo que entró. Nunca las dos sumadas.
+    const revenueSource = entry.billedCents > 0 ? 'FACTURADO' : entry.receivedCents > 0 ? 'INGRESOS' : null;
+    const revenue = revenueSource === 'INGRESOS' ? entry.receivedCents : entry.billedCents;
+    const margin = revenue - total;
     const out = {
-      ...entry, laborCostCents, costCents: total, marginCents: margin,
-      marginRate: entry.billedCents > 0 ? margin / entry.billedCents : null,
-      revenuePerHourCents: entry.hoursMs > 0 ? Math.round(entry.billedCents / (entry.hoursMs / H)) : null,
+      ...entry, revenueCents: revenue, revenueSource, laborCostCents, costCents: total, marginCents: margin,
+      marginRate: revenue > 0 ? margin / revenue : null,
+      revenuePerHourCents: entry.hoursMs > 0 ? Math.round(revenue / (entry.hoursMs / H)) : null,
       coverage: entry.closedTasks ? entry.measuredClosed / entry.closedTasks : null
     };
     const flags = [];
-    if (!out.billedCents && out.hoursMs) flags.push('SIN_FACTURAR');
-    else if (out.billedCents && margin < 0) flags.push('PIERDE');
-    if (out.billedCents && !out.hoursMs) flags.push('SIN_HORAS');
+    if (revenueSource === 'INGRESOS') flags.push('INGRESOS');
+    if (!revenue && out.hoursMs) flags.push('SIN_FACTURAR');
+    else if (revenue && margin < 0) flags.push('PIERDE');
+    if (revenue && !out.hoursMs) flags.push('SIN_HORAS');
     if (out.closedTasks >= PROFITABILITY_LIMITS.minClosedForCoverage && out.coverage < PROFITABILITY_LIMITS.lowCoverage) flags.push('POCA_MEDICION');
     // La línea en palabras: las cifras viajan en centavos y quien lee (una persona o Bria) no tiene que convertirlas.
-    const line = `${out.name}: facturado ${money(out.billedCents)}, costo ${money(total)} (${hours(out.hoursMs)}${out.directCostCents ? ` y ${money(out.directCostCents)} directo` : ''}), margen ${money(margin)}${out.marginRate !== null ? ` (${Math.round(out.marginRate * 100)} %)` : ''}.`;
+    const line = `${out.name}: ${revenueSource === 'INGRESOS' ? 'entró' : 'facturado'} ${money(revenue)}, costo ${money(total)} (${hours(out.hoursMs)}${out.directCostCents ? ` y ${money(out.directCostCents)} directo` : ''}), margen ${money(margin)}${out.marginRate !== null ? ` (${Math.round(out.marginRate * 100)} %)` : ''}.`;
     return { ...out, flags, line, reading: flags.map((flag) => FLAG_TEXT[flag](out)) };
   }).sort((a, b) => a.marginCents - b.marginCents || a.name.localeCompare(b.name, 'es'));
 
@@ -104,10 +120,14 @@ export const buildClientProfitability = ({ year, month, clients = [], receivable
   if (closed) notes.push(`${measured} de ${closed} tareas cerradas del mes tienen tiempo medido${coverage < PROFITABILITY_LIMITS.lowCoverage ? ': con tan poco medido, el costo hora sale inflado y lo que se asigna a cada cuenta, impreciso' : ''}.`);
   if (forgottenSessions) notes.push(`${forgottenSessions === 1 ? 'Una sesión de más de 8 horas no se contó' : `${forgottenSessions} sesiones de más de 8 horas no se contaron`}: es un reloj que nadie pausó.`);
   if (internalHoursMs > 0) notes.push(`${hours(internalHoursMs)} fueron trabajo interno, sin cliente: ${money(internalCostCents)} que no se le carga a ninguna cuenta.`);
+  const fromIncome = result.filter((entry) => entry.revenueSource === 'INGRESOS').length;
+  if (fromIncome) notes.push(`${fromIncome === 1 ? 'Para un cliente' : `Para ${fromIncome} clientes`} sin cuenta por cobrar del mes se usó lo que entró en Movimientos.`);
+  // Un ingreso sin cliente no se le puede dar a ninguna cuenta: se dice cuánto es, para vincularlo.
+  if (unlinkedIncomeCents > 0) notes.push(`${money(unlinkedIncomeCents)} de ingresos del mes no están ligados a ningún cliente, así que no cuentan para ninguna cuenta. Se ligan en Financiero → Clientes → Vincular, o editando el movimiento.`);
 
   return {
     period: { year, month, label: `${MONTHS[month - 1]} de ${year}` },
-    agency: { costCents, directCostCents, sharedCostCents, hoursMs, clientHoursMs, internalHoursMs, internalCostCents, hourCostCents, billedCents: result.reduce((sum, entry) => sum + entry.billedCents, 0), coverage, forgottenSessions },
+    agency: { costCents, directCostCents, sharedCostCents, hoursMs, clientHoursMs, internalHoursMs, internalCostCents, hourCostCents, revenueCents: result.reduce((sum, entry) => sum + entry.revenueCents, 0), billedCents: result.reduce((sum, entry) => sum + entry.billedCents, 0), fromIncome, coverage, forgottenSessions },
     clients: result,
     notes
   };
