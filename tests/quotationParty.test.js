@@ -59,6 +59,12 @@ test('the open opportunity of the same client, email or company receives the quo
     assert.equal(matchQuotationLead(leads, quotationParty({ client_company: 'Café Altura' }))?.id, 'l-new');
     // Con ficha de cliente, la oportunidad de ese cliente; nunca la de otro cliente con el mismo nombre.
     assert.equal(matchQuotationLead(leads, quotationParty({ client_company: 'Titanes' }), 'c1')?.id, 'l-titanes');
+    // Un cliente con una oportunidad vieja ya ligada y otra nueva del mismo correo: la propuesta nueva va con la nueva.
+    const brieva = [
+        { id: 'l-89', clientId: 'c-brieva', email: null, companyKey: 'grupo brieva', stage: 'APROBADA', updatedAt: '2026-08-24' },
+        { id: 'l-177', clientId: null, email: 'gerencia@brieva.co', companyKey: 'grupo brieva', stage: 'PROPUESTA_ENVIADA', updatedAt: '2026-10-14' }
+    ];
+    assert.equal(matchQuotationLead(brieva, quotationParty({ client_company: 'Grupo Brieva', client_email: 'gerencia@brieva.co' }), 'c-brieva')?.id, 'l-177');
     assert.equal(isOpenLead({ stage: 'GANADO' }), false);
     assert.equal(isOpenLead({ stage: 'APROBADA', archivedAt: null }), true);
     assert.equal(isOpenLead({ stage: 'CONTACTADO', archivedAt: '2026-10-01' }), false);
