@@ -76,15 +76,27 @@ export default function BriaConversation({ userId = 'local-research-owner', user
     (async () => { try { const rows = await loadHistory(), active = sessionStorage.getItem(key); if (active && rows.some(row => row.id === active)) rememberChat(await request(`/${active}`)); else if (rows.length) rememberChat(await request(`/${rows[0].id}`)); } catch (failure) { if (mounted.current) setError(failure.message); } finally { if (mounted.current) setLoading(false); } })();
     return () => { mounted.current = false; };
   }, [userId]);
+  // Abrir o volver a un chat lo deja en lo último conversado (Rodny, 23 de octubre de 2026: «no me abre donde iba …
+  // debe quedar donde lo dejé»). El chat se carga con el panel cerrado, cuando todavía no tiene alto: por eso se mide
+  // al hacerse visible, y otra vez en el siguiente cuadro, cuando ya se pintaron las tablas y las listas. Solo una
+  // respuesta que acaba de llegar en este mismo chat se muestra desde su comienzo, para leerla de arriba abajo.
+  const shownTurns = useRef({ id: null, length: 0 });
   useLayoutEffect(() => {
     const box = scrollBox.current;
-    if (!box) return;
-    const latest = chat?.turns.at(-1);
-    if (latest?.role === 'assistant') {
+    if (!box || !visible || view !== 'chat' || !chat) return undefined;
+    const previous = shownTurns.current, length = chat.turns.length;
+    shownTurns.current = { id: chat.id, length };
+    const arrived = previous.id === chat.id && length > previous.length && chat.turns.at(-1)?.role === 'assistant';
+    if (arrived) {
       const answers = box.querySelectorAll('[data-conversation-turn="assistant"]'), last = answers[answers.length - 1];
       if (last) box.scrollTop = box.scrollTop + last.getBoundingClientRect().top - box.getBoundingClientRect().top - 12;
-    } else box.scrollTop = box.scrollHeight;
-  }, [chat?.id, chat?.turns.length, view]);
+      return undefined;
+    }
+    box.scrollTop = box.scrollHeight;
+    const frame = requestAnimationFrame(() => { box.scrollTop = box.scrollHeight; });
+    return () => cancelAnimationFrame(frame);
+    // Sin `chat` entero: valorar una respuesta o cualquier otro cambio del mismo chat no puede mover la vista.
+  }, [chat?.id, chat?.turns.length, view, visible]); // eslint-disable-line react-hooks/exhaustive-deps
   // Mientras Bria escribe, la vista la sigue, salvo que la persona haya subido a leer algo anterior.
   useLayoutEffect(() => {
     const box = scrollBox.current;
