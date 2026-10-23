@@ -15,6 +15,15 @@
 
 export const TIME_CORRECTION_EVENT_TYPE = 'system_time_correction';
 export const TIME_CORRECTION_REASON_MAX = 300;
+// Los motivos de siempre, para elegir en vez de escribir (Rodny, 23 de octubre de 2026: «más sencillo y rápido»).
+// El primero es el más común y viene elegido; «Otro motivo» abre el campo para escribirlo.
+export const TIME_CORRECTION_REASONS = Object.freeze([
+  'Se le olvidó pausar al salir',
+  'Dejó el reloj corriendo de un día para otro',
+  'Trabajó en otra tarea con este reloj abierto',
+  'Se interrumpió por una reunión u otra urgencia'
+]);
+export const TIME_CORRECTION_OTHER = 'OTRO';
 const M = 60_000;
 
 const span = (ms) => {

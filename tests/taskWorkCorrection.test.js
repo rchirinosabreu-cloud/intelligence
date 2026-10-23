@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { correctionProblem, correctionPlan, formatTimeCorrectionContent, timeCorrectionPresentation, TIME_CORRECTION_EVENT_TYPE } from '../src/lib/taskWorkCorrection.js';
+import { correctionProblem, correctionPlan, formatTimeCorrectionContent, timeCorrectionPresentation, TIME_CORRECTION_EVENT_TYPE, TIME_CORRECTION_REASONS } from '../src/lib/taskWorkCorrection.js';
 import { createTaskWorkCorrectionService } from '../src/services/taskWorkCorrectionService.js';
 import { getTaskSystemEventPresentation } from '../src/lib/taskTiming.js';
 
@@ -75,6 +75,11 @@ test('las piezas que la sostienen: ruta con su guardián, columna aditiva en el 
   assert.match(catalog, /'POST \/tasks\/:taskId\/work-sessions\/:sessionId\/correction'/);
   assert.match(history, /canCorrect = String\(currentUser\?\.role \|\| ''\)\.toUpperCase\(\) === 'ADMIN'/);
   assert.match(history, /z-\[131\]/, 'el diálogo queda por encima del panel de la tarea');
+  // Los motivos se eligen (Rodny, 23 de octubre de 2026): el más común viene elegido y «Otro motivo» abre el texto.
+  assert.equal(TIME_CORRECTION_REASONS[0], 'Se le olvidó pausar al salir');
+  assert.match(history, /useState\(TIME_CORRECTION_REASONS\[0\]\)/);
+  assert.match(history, /<Select id="time-correction-reason"/, 'el desplegable compartido de la plataforma, no un select a mano');
+  assert.match(history, /choice === TIME_CORRECTION_OTHER && \(/);
   assert.match(panel, /\[TIME_CORRECTION_EVENT_TYPE\]: \{/, 'la novedad tiene su tarjeta en la tarea');
 });
 
