@@ -17,7 +17,8 @@ if (previousToken && !previousToken.endsWith('.recognition-local')) {
   throw new Error('Este origen ya tiene una sesión. Usa un puerto distinto para no sustituirla.');
 }
 localStorage.setItem('authToken', `e30.${btoa(JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 86400 }))}.recognition-local`);
-localStorage.setItem('currentUser', JSON.stringify(recognitionDemoUser));
+// `?admin`: la misma muestra vista por un administrador, que puede corregir el tiempo de una tarea cerrada.
+localStorage.setItem('currentUser', JSON.stringify(new URLSearchParams(location.search).has('admin') ? { ...recognitionDemoUser, role: 'ADMIN' } : recognitionDemoUser));
 markTaskTimingTutorialSeen(localStorage, recognitionDemoUser.id);
 markTaskTimingTutorialAfternoonSeen(localStorage, recognitionDemoUser.id);
 

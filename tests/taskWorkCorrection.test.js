@@ -64,7 +64,12 @@ test('la novedad de la tarea dice de cuánto a cuánto y el motivo, con su propi
 test('las piezas que la sostienen: ruta con su guardián, columna aditiva en el arranque, mapa de Bria y pantalla solo para administradores', async () => {
   const { readFile } = await import('node:fs/promises');
   const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
-  const [routes, pkg, catalog, history, panel] = await Promise.all([read('src/routes/index.js'), read('package.json'), read('src/lib/platformCatalog.js'), read('src/components/modules/TaskWorkHistory.jsx'), read('src/components/modules/TaskSidePanel.jsx')]);
+  const [routes, pkg, catalog, history, panel, completed] = await Promise.all([read('src/routes/index.js'), read('package.json'), read('src/lib/platformCatalog.js'), read('src/components/modules/TaskWorkHistory.jsx'), read('src/components/modules/TaskSidePanel.jsx'), read('src/components/modules/CompletedTasksHistoryModal.jsx')]);
+  // Rodny, 23 de octubre de 2026: en el historial de logros no aparecía «Corregir». Todo sitio que dibuja el historial
+  // de tiempo le dice quién mira, o el botón no sale.
+  for (const [name, source] of [['TaskSidePanel', panel], ['CompletedTasksHistoryModal', completed]]) {
+    assert.match(source, /<TaskWorkHistory[\s\S]*?currentUser=\{currentUser\}[\s\S]*?onCorrected=/, `${name} pasa quién mira y qué hacer al corregir`);
+  }
   assert.match(routes, /router\.post\('\/tasks\/:taskId\/work-sessions\/:sessionId\/correction', guardTask, taskController\.correctTaskWorkSessionHandler\)/, 'un pendiente privado sigue cerrado también para quien corrige');
   assert.match(pkg, /ensure-task-work-correction-schema\.js/);
   assert.match(catalog, /'POST \/tasks\/:taskId\/work-sessions\/:sessionId\/correction'/);
