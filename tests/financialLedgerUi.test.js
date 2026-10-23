@@ -8,8 +8,9 @@ const dashboardSource = fs.readFileSync(
 );
 
 test('financial dashboard exposes the operational ledger as a primary tab', () => {
-    assert.match(dashboardSource, /setActiveTab\('records'\)/);
-    assert.match(dashboardSource, />\s*Movimientos\s*</);
+    // Financiero abre en Movimientos, la primera de sus cuatro pestañas.
+    assert.match(dashboardSource, /useState\('records'\)/);
+    assert.match(fs.readFileSync(new URL('../src/lib/financialTabs.js', import.meta.url), 'utf8'), /key: 'movimientos', label: 'Movimientos'/);
     assert.match(dashboardSource, /<FinancialLedger/);
     assert.match(dashboardSource, /<FinancialFilters/);
     assert.match(dashboardSource, /filters=\{filters\}/);

@@ -196,7 +196,7 @@ test('la pestaña agrupa por tercero: lo abierto de cualquier fecha más lo cerr
 test('el egreso de un pago no se edita ni se anula desde Movimientos: se dice a dónde ir', () => {
     const reason = financialRecordLockReason({ origin: 'SYSTEM', payablePayment: { id: 'pay-1', payableId: 'p1' } });
     assert.match(reason, /cuenta por pagar/i);
-    assert.match(reason, /Por pagar/);
+    assert.match(reason, /Cuentas por pagar → Proveedores y gastos/);
     assert.match(reason, /Revertir/);
     assert.match(read('../src/components/modules/financial/FinancialLedger.jsx'), /record\?\.payablePayment/);
 });
@@ -221,7 +221,9 @@ test('el esquema, el arranque, las rutas, el catálogo de Bria y la caché conoc
 
 test('la pantalla: pestaña «Por pagar», terceros, cuenta nueva, pago con comprobante y pagos plegados', () => {
     const dashboard = read('../src/components/modules/FinancialDashboard.jsx');
-    assert.match(dashboard, /setActiveTab\('payables'\)/);
+    // Desde el 23 de octubre de 2026 es la vista «Proveedores y gastos» de Cuentas por pagar.
+    assert.match(read('../src/lib/financialTabs.js'), /key: 'payables', label: 'Proveedores y gastos'/);
+    assert.match(dashboard, /activeTab === 'payables'/);
     assert.match(dashboard, /<PayablesTab /);
     const tab = read('../src/components/modules/financial/PayablesTab.jsx');
     assert.match(tab, /data-payable-new/);

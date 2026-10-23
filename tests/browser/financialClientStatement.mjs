@@ -7,7 +7,7 @@ try {
   page.setDefaultTimeout(8000);
   const open = async suffix => {
     await page.goto(base + suffix);
-    await page.getByRole('button', { name: 'Clientes', exact: true }).click();
+    await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click(); await page.getByRole('button', { name: 'Directorio de clientes' }).click();
     await page.getByRole('button', { name: 'Ver estado de cuenta', exact: true }).click();
     await page.getByRole('dialog').waitFor();
   };

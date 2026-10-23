@@ -17,7 +17,7 @@ try {
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(base, { timeout: 90000, waitUntil: 'domcontentloaded' });
   await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   await page.getByRole('button', { name: /Cliente de muestra/ }).waitFor();
 
   // Un préstamo a una colaboradora: el egreso se registra ahora.

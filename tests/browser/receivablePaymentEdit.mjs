@@ -18,7 +18,7 @@ try {
   // La deuda de muestra: 1.200.000, abono de 400.000, saldo 800.000. Se corrige el abono a 450.000.
   await page.goto(base, { timeout: 90000, waitUntil: 'domcontentloaded' });
   await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   await page.getByRole('button', { name: /Cliente de muestra/ }).click();
   await page.locator('[data-receivable-payment-edit]').first().click();
   const dialog = page.getByRole('dialog');
@@ -43,7 +43,7 @@ try {
   await page.goto(`${base}?usd&foobspain`, { timeout: 90000, waitUntil: 'domcontentloaded' });
   await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
   await page.evaluate(() => document.documentElement.classList.add('dark'));
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   const foob = page.getByRole('button', { name: /Foobspain/ });
   assert.match(await foob.innerText(), /69[.,]856/);
   await foob.click();

@@ -57,14 +57,14 @@ const categoryLabel = financialCategoryLabel;
 // lo sabe por el propio registro y lo dice al tocarlo, en vez de dejar que el
 // servidor lo rechace con un error después de escribir el motivo.
 const lockReason = (record) => {
-    if (record?.receivablePayment) return 'Es el ingreso de un abono de cartera. Para deshacerlo ve a Cartera, abre la obligación del cliente y usa «Revertir» en ese abono: este movimiento se anulará solo.';
+    if (record?.receivablePayment) return 'Es el ingreso de un abono de cartera. Para deshacerlo ve a Cuentas por cobrar, abre la obligación del cliente y usa «Revertir» en ese abono: este movimiento se anulará solo.';
     // Con su pago de nómina a la mano, el lápiz abre sus acciones aquí mismo; esto solo queda
     // para un pago antiguo que todavía no tenga su fila de pago.
-    if (record?.payrollPayment || record?.payrollTransaction) return 'Es un pago de nómina. Se corrige en Nómina Operativa: elige arriba el mes de esa liquidación y búscalo debajo de la persona para desglosarlo, subirle el comprobante, cambiar la referencia o revertirlo.';
+    if (record?.payrollPayment || record?.payrollTransaction) return 'Es un pago de nómina. Se corrige en Cuentas por pagar → Nómina: elige arriba el mes de esa liquidación y búscalo debajo de la persona para desglosarlo, subirle el comprobante, cambiar la referencia o revertirlo.';
     // El egreso de un préstamo sigue siendo editable aquí mientras nadie lo haya reintegrado: la
     // cartera lo sigue. Con reintegros, se gestiona desde Cartera (20 de octubre de 2026).
-    if (record?.payablePayment) return 'Es el pago de una cuenta por pagar. Para deshacerlo ve a Por pagar y usa «Revertir» en ese pago: este movimiento se anulará solo.';
-    if (record?.loanReceivable && !isLoanUntouched(record.loanReceivable)) return 'Es el egreso de un préstamo que ya tiene reintegros en Cartera. Para corregirlo o deshacerlo, revierte allí los reintegros y usa «Eliminar» en el préstamo: este movimiento se anulará solo.';
+    if (record?.payablePayment) return 'Es el pago de una cuenta por pagar. Para deshacerlo ve a Cuentas por pagar → Proveedores y gastos y usa «Revertir» en ese pago: este movimiento se anulará solo.';
+    if (record?.loanReceivable && !isLoanUntouched(record.loanReceivable)) return 'Es el egreso de un préstamo que ya tiene reintegros en Cuentas por cobrar. Para corregirlo o deshacerlo, revierte allí los reintegros y usa «Eliminar» en el préstamo: este movimiento se anulará solo.';
     if (record?.origin === 'SYSTEM') return 'Lo generó otro proceso de la plataforma, no se registró a mano. Se corrige desde donde se originó.';
     return null;
 };

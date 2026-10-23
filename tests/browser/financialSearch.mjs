@@ -6,7 +6,7 @@ export async function verifyFinancialSearch(page) {
     assert.equal(await search.count(), 1, 'one universal search field');
     assert.equal(await page.getByRole('combobox', { name: 'Escenario financiero', exact: true }).count(), 1);
     assert.equal(await page.getByRole('combobox', { name: 'Mes', exact: true }).count(), 1);
-    await page.getByRole('button', { name: 'Movimientos', exact: true }).click();
+    await page.getByRole('tab', { name: 'Movimientos' }).click();
     await search.fill('rodny');
     await page.getByText('Servicio Rodny 1', { exact: true }).waitFor({ state: 'visible' });
     assert.equal(await page.getByText('Suscripción Brain Studio', { exact: true }).count(), 0);

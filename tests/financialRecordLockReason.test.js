@@ -9,9 +9,9 @@ const ledger = fs.readFileSync(new URL('../src/components/modules/financial/Fina
 // abono y el mensaje lo mandó a «una corrección controlada de la operación de origen»
 // sin decir cuál ni dónde. Un motivo que no dice a dónde ir no sirve de nada.
 
-test('el ingreso de un abono manda a Cartera, por su nombre', () => {
+test('el ingreso de un abono manda a Cuentas por cobrar, por su nombre', () => {
     const reason = financialRecordLockReason({ receivablePayment: { id: 'payment-1' }, origin: 'SYSTEM' });
-    assert.match(reason, /Cartera/);
+    assert.match(reason, /Cuentas por cobrar/);
     assert.match(reason, /Revertir/);
     assert.match(reason, /se anulará solo/);
     assert.doesNotMatch(reason, /corrección controlada/);
@@ -20,7 +20,7 @@ test('el ingreso de un abono manda a Cartera, por su nombre', () => {
 test('el pago de nómina manda a Nómina', () => {
     const reason = financialRecordLockReason({ payrollTransaction: { id: 'payroll-1' }, origin: 'SYSTEM' });
     assert.match(reason, /Nómina/);
-    assert.doesNotMatch(reason, /Cartera/);
+    assert.doesNotMatch(reason, /Cuentas por cobrar/);
 });
 
 // La conciliación bancaria se retiró (Rodny, 23 de octubre de 2026): un cruce que quedó en la base
@@ -54,7 +54,7 @@ test('el servidor rechaza con ese mismo motivo, no con uno genérico', async () 
 
     await assert.rejects(
         voidFinancialRecord(prismaClient, 'record-1', 'Fue una prueba', { id: 'user-1' }),
-        (error) => error.code === 'FINANCIAL_RECORD_LINKED' && /Cartera/.test(error.message) && error.statusCode === 409
+        (error) => error.code === 'FINANCIAL_RECORD_LINKED' && /Cuentas por cobrar/.test(error.message) && error.statusCode === 409
     );
 });
 

@@ -8,7 +8,7 @@ try {
   await page.goto(base);
   // Financiero abre en Movimientos: el trabajo diario es el libro, no las gráficas.
   await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   const row = page.getByRole('button', { name: /Cliente de muestra/ });
   await row.waitFor();
   assert.match(await row.innerText(), /800[.,]000/);
@@ -33,7 +33,7 @@ try {
   assert.match(await row.innerText(), /600[.,]000/);
   // Clientes es el directorio (30 de septiembre de 2026): cada cliente con lo que suma y,
   // al desplegarlo, su ficha y la conexión con otra ficha.
-  await page.getByRole('button', { name: 'Clientes', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click(); await page.getByRole('button', { name: 'Directorio de clientes' }).click();
   const reconciliationRow = page.getByRole('button', { name: /Cliente de muestra/ });
   await reconciliationRow.waitFor();
   assert.match(await reconciliationRow.innerText(), /600[.,]000/);
@@ -51,7 +51,7 @@ try {
   await page.screenshot({ path: 'output/financial-clients-list.png', fullPage: true, animations: 'disabled' });
   await reconciliationRow.click();
   assert.equal(await page.getByText('Conexión con otra ficha', { exact: true }).count(), 0, 'el panel se cierra');
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   await page.screenshot({ path: 'output/financial-cartera-preview.png', fullPage: true, animations: 'disabled' });
   await page.getByRole('button', { name: 'Cambiar tema' }).click();
   await page.screenshot({ path: 'output/financial-cartera-dark.png', fullPage: true, animations: 'disabled' });
@@ -65,7 +65,7 @@ try {
   await page.screenshot({ path: 'output/financial-cartera-mobile.png', animations: 'disabled' });
   await page.setViewportSize({ width: 1440, height: 1050 });
   await page.getByRole('button', { name: 'Cambiar tema' }).click();
-  await page.getByRole('button', { name: 'Movimientos', exact: true }).click();
+  await page.getByRole('tab', { name: 'Movimientos' }).click();
   const ledgerPages = page.getByRole('navigation', { name: 'Paginación de movimientos' });
   await ledgerPages.getByText('Página 1 de 3').waitFor();
   await ledgerPages.getByRole('button', { name: 'Siguiente' }).click();
@@ -80,7 +80,7 @@ try {
   }
   assert.equal(await page.getByRole('button', { name: 'Auditar archivo' }).count(), 0);
   await page.goto(`${base}?paymentError=1`);
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   await page.getByRole('button', { name: /Cliente de muestra/ }).click();
   await page.getByRole('button', { name: 'Registrar pago', exact: true }).click();
   await chooseOption(page.getByLabel('Concepto del ingreso'), 'SERVICIO');
@@ -89,16 +89,16 @@ try {
   await page.getByRole('dialog').getByText('Pago no guardado (simulado)').waitFor();
   assert.equal(await page.getByText('Pago de cartera registrado.').count(), 0);
   await page.goto(`${base}?carteraError=1`);
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   await page.getByText('No fue posible cargar la cartera.').waitFor();
   assert.equal(await page.getByText('¡Cartera 100% al día!').count(), 0);
   await page.goto(`${base}?viewer=reader`);
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   await page.getByRole('button', { name: /Cliente de muestra/ }).click();
   assert.equal(await page.getByRole('button', { name: 'Registrar pago', exact: true }).count(), 0);
   assert.equal(await page.getByLabel('Estado de seguimiento').isDisabled(), true);
   await page.goto(`${base}?legacyPaid=1`);
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   const legacyRow = page.getByRole('button', { name: /Cliente de muestra/ });
   assert.match(await legacyRow.innerText(), /Saldo por verificar/);
   assert.doesNotMatch(await legacyRow.innerText(), /Sin saldo pendiente/);
@@ -111,7 +111,7 @@ try {
   // La categoría vive en la barra de filtros de arriba, con el resto, y acota
   // tanto los indicadores como el libro. La bolsa es la de toda la selección.
   await page.goto(base);
-  await page.getByRole('button', { name: 'Movimientos', exact: true }).click();
+  await page.getByRole('tab', { name: 'Movimientos' }).click();
   // El valor vive en la tarjeta, no junto a la etiqueta: se lee la tarjeta entera.
   const indicator = async label => (await page.getByText(label, { exact: true })
     .locator('xpath=ancestor::*[contains(@class,"rounded-2xl")][1]').innerText()).replace(/\s/g, '');
@@ -139,7 +139,7 @@ try {
 
   // Una cuenta por cobrar puede crear la ficha del cliente en el mismo acto, sin salir
   // a Clientes a crearlo primero (Rodny, 23 de septiembre de 2026).
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   await page.getByRole('button', { name: 'Nueva cuenta por cobrar', exact: true }).click();
   const newDebtDialog = page.getByRole('dialog').filter({ hasText: 'Nueva cuenta por cobrar' });
   await newDebtDialog.waitFor();
@@ -233,7 +233,7 @@ try {
   await deleteDialog.waitFor({ state: 'hidden' });
 
   await page.goto(base);
-  await page.getByRole('button', { name: 'Movimientos', exact: true }).click();
+  await page.getByRole('tab', { name: 'Movimientos' }).click();
 
   // El ingreso de un abono no se anula desde Movimientos: la pantalla lo dice al
   // tocarlo y nombra dónde sí se puede, en vez de dejar escribir un motivo para nada.
@@ -277,7 +277,7 @@ try {
   await page.getByRole('dialog').waitFor({ state: 'hidden' });
 
   // Reversión de un abono: exige motivo, devuelve el saldo y conserva el abono como evidencia.
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   const reversalRow = page.getByRole('button', { name: /Cliente de muestra/ });
   await reversalRow.click();
   await page.getByText('ABONOS DE ESTA OBLIGACIÓN', { exact: false }).waitFor();

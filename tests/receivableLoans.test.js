@@ -270,7 +270,7 @@ test('mientras nadie lo haya reintegrado, el préstamo sigue al movimiento: corr
 test('el egreso de un préstamo con reintegros no se edita ni se anula desde Movimientos: se dice a dónde ir', () => {
     const reason = financialRecordLockReason({ origin: 'MANUAL', loanReceivable: { id: 'loan-1', status: 'DEBE', payments: [{ id: 'p', reversedAt: null }] } });
     assert.match(reason, /préstamo/i);
-    assert.match(reason, /Cartera/);
+    assert.match(reason, /Cuentas por cobrar/);
     assert.match(reason, /reintegro/i);
     assert.equal(financialRecordLockReason({ origin: 'MANUAL', loanReceivable: { id: 'loan-1', status: 'DEBE', payments: [] } }), null, 'sin reintegros, el movimiento se corrige en Movimientos y la cartera lo sigue');
     assert.match(financialRecordLockReason({ origin: 'SYSTEM', loanReceivable: { id: 'loan-1', status: 'DEBE', payments: [] } }), /Eliminar/, 'el egreso que creó «Registrar préstamo» se deshace desde Cartera');

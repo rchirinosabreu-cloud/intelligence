@@ -19,7 +19,7 @@ try {
   // 1. El resumen de ajustes: vacío al abrir, y con el acuerdo en cuanto se registra.
   await page.goto(base, { timeout: 90000, waitUntil: 'domcontentloaded' });
   await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   await page.locator('[data-receivable-adjustments-empty]').waitFor();
   const row = page.getByRole('button', { name: /Cliente de muestra/ });
   await row.click();
@@ -38,7 +38,7 @@ try {
   // 2. Foobspain: USD 300 a TRM 4.000 son 1.200.000 en cartera; entraron 1.250.000 con la tasa del día.
   await page.goto(`${base}?usd`, { timeout: 90000, waitUntil: 'domcontentloaded' });
   await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   await page.getByRole('button', { name: /Foobspain/ }).click();
   await page.getByRole('button', { name: 'Registrar pago', exact: true }).click();
   const payment = page.getByRole('dialog');
@@ -62,7 +62,7 @@ try {
   await page.goto(`${base}?usd`, { timeout: 90000, waitUntil: 'domcontentloaded' });
   await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
   await page.evaluate(() => document.documentElement.classList.add('dark'));
-  await page.getByRole('button', { name: 'Cartera', exact: true }).click();
+  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   await page.getByRole('button', { name: /Foobspain/ }).click();
   await page.getByRole('button', { name: 'Registrar pago', exact: true }).click();
   const less = page.getByRole('dialog');

@@ -37,6 +37,10 @@ import { isCashPayment, isReceivableClosed, isRetentionPayment, paymentKindLabel
 import { isLoanReceivable, loanCounterpartyLabel } from '@/lib/receivableLoans';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
 import PayablesTab from './financial/PayablesTab';
+import ReceivableAgingSummary from './financial/ReceivableAgingSummary';
+import { FinancialSectionHeader, FinancialSubTabs } from './financial/FinancialSectionParts';
+import { financialTabOfView, viewForFinancialTab, visibleFinancialTabs } from '@/lib/financialTabs';
+import { agingBucketLabel, agingBucketOf } from '@/lib/receivableAging';
 import ProfitabilityTab from './financial/ProfitabilityTab';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
@@ -155,6 +159,9 @@ const FinancialDashboard = () => {
     // diario es el libro, no las gráficas.
     const [activeTab, setActiveTab] = useState('records');
     const [expandedClients, setExpandedClients] = useState({});
+    // Filtros de Cuentas por cobrar (23 de octubre de 2026): a quién se le cobra y cuánto lleva esperando.
+    const [receivableKind, setReceivableKind] = useState(null);
+    const [receivableBucket, setReceivableBucket] = useState(null);
     // Nómina: los pagos de cada persona van plegados y se abren por elección (Rodny, 20 de octubre
     // de 2026: «voy a nómina y veo todo eso enredado. Así como los de cartera»).
     const [expandedPayrollPayments, setExpandedPayrollPayments] = useState({});
@@ -421,7 +428,7 @@ const FinancialDashboard = () => {
             const { data: result } = await axios.post(`${baseUrl}/api/financials/loans`, payload, { headers: { Authorization: `Bearer ${token}` } });
             await invalidateFinancialQueries(queryClient);
             setIsLoanDialogOpen(false);
-            setNoticeSuccess(result?.message || 'Préstamo registrado en Cartera.');
+            setNoticeSuccess(result?.message || 'Préstamo registrado en Cuentas por cobrar.');
         } catch (error) {
             console.error('Error creating loan:', error.response?.data || error);
             setNoticeError(error.response?.data?.message || 'No fue posible registrar el préstamo.');
@@ -1100,7 +1107,17 @@ await invalidateFinancialQueries(queryClient);
             .filter(item => item.value > 0);
     }, [data?.categoriesDistribution]);
 
-    const receivablesByClient = useMemo(() => groupFinancialReceivables(receivablesLedger?.items), [receivablesLedger?.items]);
+    const receivablesByClient = useMemo(() => groupFinancialReceivables((receivablesLedger?.items || []).filter((item) => (
+        (!receivableKind || (receivableKind === 'PRESTAMO') === (item.kind === 'PRESTAMO'))
+        && (!receivableBucket || agingBucketOf(item) === receivableBucket)
+    ))), [receivablesLedger?.items, receivableKind, receivableBucket]);
+    const receivableSections = useMemo(() => [
+        { key: 'CLIENTE', title: 'Clientes', groups: receivablesByClient.filter((group) => group.kind !== 'PRESTAMO') },
+        { key: 'PRESTAMO', title: 'Préstamos a terceros', groups: receivablesByClient.filter((group) => group.kind === 'PRESTAMO') }
+    ].filter((section) => section.groups.length > 0), [receivablesByClient]);
+    const financialTabs = useMemo(() => visibleFinancialTabs({ isAdmin: isAdminUser }), [isAdminUser]);
+    const activeFinancialTab = financialTabOfView(activeTab);
+    const activeTabViews = financialTabs.find((group) => group.key === activeFinancialTab)?.views || [];
 
     const payrollRows = useMemo(() => {
         if (payrollLedger?.items) {
@@ -1224,74 +1241,24 @@ await invalidateFinancialQueries(queryClient);
                 </Card>
             </div>
 
-            {/* --- SECTION 2: TABS / SCENARIO NAVIGATION --- */}
-            <div className="flex items-center overflow-x-auto border-b border-zinc-200 pb-px dark:border-white/5">
-                <button
-                    onClick={() => setActiveTab('records')}
-                    className={cn(
-                        "py-3 px-6 text-sm font-medium border-b-2 transition-all mr-2",
-                        activeTab === 'records' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
-                    )}
-                >
-                    Movimientos
-                </button>
-                <button
-                    onClick={() => setActiveTab('flow')}
-                    className={cn(
-                        "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                        activeTab === 'flow' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
-                    )}
-                >
-                    Análisis de Flujo
-                </button>
-                <button
-                    onClick={() => setActiveTab('receivables')}
-                    className={cn(
-                        "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                        activeTab === 'receivables' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
-                    )}
-                >
-                    Cartera
-                </button>
-                <button
-                    onClick={() => setActiveTab('payables')}
-                    className={cn(
-                        "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                        activeTab === 'payables' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
-                    )}
-                >
-                    Por pagar
-                </button>
-                <button
-                    onClick={() => setActiveTab('payroll')}
-                    className={cn(
-                        "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                        activeTab === 'payroll' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
-                    )}
-                >
-                    Nómina Operativa
-                </button>
-                <button
-                    onClick={() => setActiveTab('clients')}
-                    className={cn(
-                        "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                        activeTab === 'clients' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
-                    )}
-                >
-                    Clientes
-                </button>
-                {/* Rentabilidad por cliente (22 de octubre de 2026): solo administradores; el servidor también lo exige. */}
-                {isAdminUser && (
-                    <button
-                        onClick={() => setActiveTab('profitability')}
-                        className={cn(
-                            "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                            activeTab === 'profitability' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
-                        )}
-                    >
-                        Rentabilidad
-                    </button>
-                )}
+            {/* --- SECTION 2: TABS --- */}
+            {/* Cuatro pestañas (Elisa, 23 de octubre de 2026): Movimientos, Cuentas por cobrar, Cuentas por
+                pagar y Análisis. Cada una abre sus vistas debajo, en el mismo sitio. */}
+            <div className="space-y-4">
+                <div role="tablist" aria-label="Secciones de Financiero" className="flex items-center overflow-x-auto border-b border-zinc-200 pb-px dark:border-white/5">
+                    {financialTabs.map((group) => (
+                        <button key={group.key} type="button" role="tab" data-financial-tab={group.key} aria-selected={activeFinancialTab === group.key}
+                            onClick={() => setActiveTab(viewForFinancialTab(group.key, activeTab, { isAdmin: isAdminUser }))}
+                            className={cn(
+                                "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
+                                activeFinancialTab === group.key ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
+                            )}
+                        >
+                            {group.label}
+                        </button>
+                    ))}
+                </div>
+                <FinancialSubTabs views={activeTabViews} active={activeTab} onChange={setActiveTab} label="Vistas de la sección" />
             </div>
 
             {/* --- SECTION 3: TAB SCENARIO VIEWS --- */}
@@ -1411,35 +1378,36 @@ await invalidateFinancialQueries(queryClient);
                 {/* PESTAÑA 2: CARTERA MOROSA */}
                 {activeTab === 'receivables' && (
                     <div className="space-y-4 animate-in slide-in-from-left-4 duration-300">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-                            <div>
-                                <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Cuentas por cobrar</h2>
-                                <p className="mt-1 text-xs text-zinc-500">
-                                    Controla vencimientos, promesas y pagos sin alterar el saldo histórico.
-                                </p>
-                            </div>
-                            {canWriteFinancials && (
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <button type="button" onClick={() => { setNoticeError(''); setIsLoanDialogOpen(true); }} className="min-h-11 rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Registrar préstamo</button>
-                                    <button type="button" onClick={openNewReceivable} className="min-h-11 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Nueva cuenta por cobrar</button>
-                                </div>
-                            )}
-                        </div>
+                        <FinancialSectionHeader title="Cuentas por cobrar"
+                            description="Lo que les deben a Brain Studio sus clientes y los terceros a quienes les prestó. Los pagos no alteran el valor original.">
+                            {canWriteFinancials && <>
+                                <button type="button" onClick={() => { setNoticeError(''); setIsLoanDialogOpen(true); }} className="min-h-11 rounded-lg border border-zinc-200 px-4 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Registrar préstamo</button>
+                                <button type="button" onClick={openNewReceivable} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">Nueva cuenta por cobrar</button>
+                            </>}
+                        </FinancialSectionHeader>
+
+                        {!receivablesError && !isReceivablesLedgerLoading && (
+                            <ReceivableAgingSummary items={receivablesLedger?.items || []} formatCurrency={formatCurrency}
+                                kind={receivableKind} onKindChange={setReceivableKind} bucket={receivableBucket} onBucketChange={setReceivableBucket} />
+                        )}
 
                         {/* Ajustes de cartera del periodo (Rodny, 20 de octubre de 2026): lo saldado sin dinero
                             y la diferencia en cambio, que no son movimientos y solo se veían cliente por cliente. */}
                         <ReceivableAdjustmentsSummary filterQuery={filterQuery} enabled={!!(currentUser && canAccessFinancials)} />
 
-                        <p className="text-sm text-zinc-600 dark:text-zinc-300">Obligaciones del periodo seleccionado de {selectedYear}{filters.q ? ` · Búsqueda: ${filters.q}` : ''} · saldo actual después de abonos. Una promesa de pago no reduce la deuda.</p>
+                        <p className="text-xs text-zinc-500 dark:text-zinc-400">Obligaciones del periodo seleccionado de {selectedYear}{filters.q ? ` · Búsqueda: ${filters.q}` : ''}{receivableBucket ? ` · ${agingBucketLabel(receivableBucket)}` : ''} · saldo actual después de abonos. Una promesa de pago no reduce la deuda.</p>
                         {!!receivablesLedger?.totals?.reviewCount && <p role="alert" className="text-sm text-destructive">Hay registros históricos marcados como pagados sin abonos suficientes vinculados. Su saldo está por verificar y no se suma como deuda confirmada.</p>}
                         {receivablesError ? <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">No fue posible cargar la cartera.<button type="button" onClick={() => refetchReceivables()} className="ml-3 min-h-11 underline">Reintentar</button></div> : isReceivablesLedgerLoading ? (
                             <div className="p-10 bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl text-center">
-                                <Loader2 className="w-5 h-5 animate-spin text-violet-600 mx-auto mb-3" />
-                                <p className="text-sm font-bold text-zinc-900 dark:text-white">Cargando cartera...</p>
+                                <Loader2 className="w-5 h-5 animate-spin text-primary mx-auto mb-3" />
+                                <p className="text-sm font-semibold text-zinc-900 dark:text-white">Cargando cuentas por cobrar…</p>
                             </div>
                         ) : receivablesByClient.length > 0 ? (
-                            <div className="space-y-3">
-                                {receivablesByClient.map((client) => {
+                            <div className="space-y-6">
+                                {receivableSections.map((section) => (
+                                <section key={section.key} data-receivable-section={section.key} className="space-y-3">
+                                <h3 className="text-sm font-semibold text-zinc-700 dark:text-zinc-200">{section.title}</h3>
+                                {section.groups.map((client) => {
                                     const isExpanded = !!expandedClients[client.clientId];
                                     return (
                                         <Card key={client.clientId} className="p-4 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm">
@@ -1448,22 +1416,22 @@ await invalidateFinancialQueries(queryClient);
                                                 className="flex min-h-11 w-full items-center justify-between gap-3 text-left group"
                                             >
                                                 <div className="flex items-center gap-3">
-                                                    <div className="w-10 h-10 rounded-xl bg-amber-500/10 flex items-center justify-center text-amber-500 font-black text-sm">
+                                                    <div className={cn('grid h-10 w-10 shrink-0 place-items-center rounded-xl text-sm font-semibold', client.kind === 'PRESTAMO' ? 'bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan' : 'bg-brand-green/10 text-brand-green-deep dark:text-brand-green')}>
                                                         {client.client.name.substring(0, 2).toUpperCase()}
                                                     </div>
-                                                    <div>
-                                                        <h4 className="text-sm font-black text-zinc-900 dark:text-white group-hover:text-violet-600 transition-colors">
+                                                    <div className="min-w-0">
+                                                        <h4 className="truncate text-sm font-semibold text-zinc-900 transition-colors group-hover:text-primary dark:text-white">
                                                             {client.client.name}
                                                         </h4>
-                                                        <p className="text-[10px] text-zinc-500">
-                                                            {client.debts?.length} registros de cartera
-                                                            {client.debts?.some(isLoanReceivable) && <span className="ml-1.5 rounded-md bg-brand-cyan/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-cyan-deep dark:text-brand-cyan">Préstamo · {loanCounterpartyLabel(client.debts.find(isLoanReceivable)?.counterpartyType)}</span>}
+                                                        <p className="text-xs text-zinc-500">
+                                                            {client.kind === 'PRESTAMO' ? `Préstamo · ${loanCounterpartyLabel(client.counterpartyType)}` : `${client.debts?.length} cuenta${client.debts?.length === 1 ? '' : 's'}`}
+                                                            {client.oldestBucket && <span data-receivable-oldest={client.oldestBucket} className={cn('ml-1.5 rounded-md px-1.5 py-0.5 text-xs font-medium', ['DE_61_A_90', 'MAS_DE_90'].includes(client.oldestBucket) ? 'bg-destructive/10 text-destructive brain-destructive-text' : 'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-300')}>{agingBucketLabel(client.oldestBucket)}</span>}
                                                         </p>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center gap-4">
                                                     <div className="text-right">
-                                                        <p className="text-sm font-black text-zinc-900 dark:text-white">
+                                                        <p className="text-sm font-semibold text-zinc-900 dark:text-white">
                                                             {client.reviewCount > 0 && client.totalOutstanding === 0 ? 'Saldo por verificar' : formatCurrency(client.totalOutstanding)}
                                                         </p>
                                                         <span className={cn('text-xs', client.overdue > 0 ? 'text-destructive' : 'text-zinc-600 dark:text-zinc-300')}>
@@ -1492,14 +1460,14 @@ await invalidateFinancialQueries(queryClient);
                                                         {client.debts?.map((debt) => (
                                                             <div key={debt.id} className="p-3 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5 flex flex-col justify-between gap-3">
                                                                 <div className="flex justify-between items-center mb-2">
-                                                                    <span className="text-[10px] font-bold text-zinc-400">
+                                                                    <span className="text-sm font-semibold text-zinc-800 dark:text-zinc-100">
                                                                         {isLoanReceivable(debt) ? <span data-receivable-loan>Préstamo a {loanCounterpartyLabel(debt.counterpartyType).toLowerCase()} · {formatFinancialPeriod(debt.period)}</span> : <>Periodo: {formatFinancialPeriod(debt.period)}</>}
                                                                     </span>
-                                                                    {savingReceivableId === debt.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-violet-600" />}
+                                                                    {savingReceivableId === debt.id && <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" />}
                                                                 </div>
                                                                 <div className={cn('grid gap-2 border-y border-zinc-200 py-3 dark:border-white/10', (debt.settledAmount > 0.005 && debt.retainedAmount > 0.005) ? 'grid-cols-2 sm:grid-cols-5' : (debt.settledAmount > 0.005 || debt.retainedAmount > 0.005) ? 'grid-cols-2 sm:grid-cols-4' : 'grid-cols-3')}>
                                                                     <div data-receivable-amount-editor>
-                                                                        <span className="text-[9px] font-medium text-zinc-400">Valor original</span>
+                                                                        <span className="text-xs text-zinc-500 dark:text-zinc-400">Valor original</span>
                                                                         {editingAmountId === debt.id ? (
                                                                             <form className="mt-1 flex flex-wrap items-center gap-1" onSubmit={(event) => { event.preventDefault(); saveAmountEdit(debt); }}>
                                                                                 <MoneyInput min="0.01" required autoFocus aria-label={debt.currency === 'USD' ? 'Nuevo valor en pesos' : 'Nuevo valor original'} value={amountDraft} onChange={setAmountDraft} className="w-28 rounded-lg border border-zinc-200 bg-white px-2 py-1 text-xs font-semibold text-zinc-900 outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
@@ -1507,7 +1475,7 @@ await invalidateFinancialQueries(queryClient);
                                                                                 <button type="button" onClick={() => setEditingAmountId('')} className="rounded-lg px-2 py-1 text-[11px] font-medium text-zinc-500 hover:bg-zinc-100 dark:hover:bg-white/10">Cancelar</button>
                                                                             </form>
                                                                         ) : (
-                                                                            <p className="mt-1 flex items-center gap-1 text-xs font-semibold text-zinc-900 dark:text-white">
+                                                                            <p className="mt-1 flex items-center gap-1 text-sm font-semibold text-zinc-900 dark:text-white">
                                                                                 {formatCurrency(debt.amount || 0)}
                                                                                 {/* En una cuenta emitida en pesos el valor es la suma de sus conceptos y
                                                                                     va impreso: el lápiz abre la corrección, que rehace el PDF. En una en
@@ -1519,32 +1487,32 @@ await invalidateFinancialQueries(queryClient);
                                                                             </p>
                                                                         )}
                                                                         {debt.currency === 'USD' && (
-                                                                            <p data-receivable-usd-summary className="mt-0.5 text-[10px] text-zinc-500">
+                                                                            <p data-receivable-usd-summary className="mt-0.5 text-xs text-zinc-500">
                                                                                 Documento en {formatReceivableMoney(debt.documentTotal, 'USD')}{debt.exchangeRate ? ` · ${formatExchangeRate(debt.exchangeRate)}` : ''}
                                                                             </p>
                                                                         )}
                                                                         {/* El valor en pesos se ajustó a lo que de verdad entró (Foobspain, 19 de octubre de 2026). */}
                                                                         {debt.exchangeAdjustments?.length > 0 && (
-                                                                            <p data-receivable-exchange-adjustment className="mt-0.5 text-[10px] text-zinc-500">
+                                                                            <p data-receivable-exchange-adjustment className="mt-0.5 text-xs text-zinc-500">
                                                                                 Ajustado por la tasa del día: de {formatCurrency(debt.exchangeAdjustments[debt.exchangeAdjustments.length - 1].from)} a {formatCurrency(debt.exchangeAdjustments[debt.exchangeAdjustments.length - 1].to)}
                                                                             </p>
                                                                         )}
                                                                     </div>
-                                                                    <div><span className="text-[9px] font-medium text-zinc-400">Abonos registrados</span><p className="mt-1 text-xs font-semibold text-emerald-600">{formatCurrency(debt.paidAmount || 0)}</p></div>
+                                                                    <div><span className="text-xs text-zinc-500 dark:text-zinc-400">Abonos registrados</span><p className="mt-1 text-sm font-semibold text-brand-green-deep dark:text-brand-green">{formatCurrency(debt.paidAmount || 0)}</p></div>
                                                                     {/* Lo saldado sin dinero se dice aparte: no es plata que entró (20 de octubre de 2026). */}
                                                                     {/* Lo que retuvo el cliente también va aparte: lo pagó a la DIAN, no es un descuento (22 de octubre de 2026). */}
-                                                                    {debt.retainedAmount > 0.005 && <div data-receivable-retained><span className="text-[9px] font-medium text-zinc-400">Retenido por el cliente</span><p className="mt-1 text-xs font-semibold text-brand-cyan-deep dark:text-brand-cyan">{formatCurrency(debt.retainedAmount)}</p></div>}
-                                                                    {debt.settledAmount > 0.005 && <div data-receivable-settled><span className="text-[9px] font-medium text-zinc-400">Saldado sin dinero</span><p className="mt-1 text-xs font-semibold text-brand-magenta-deep dark:text-brand-magenta">{formatCurrency(debt.settledAmount)}</p></div>}
-                                                                    <div><span className="text-[9px] font-medium text-zinc-400">Saldo pendiente</span><p className="mt-1 text-xs font-semibold text-amber-600">{debt.balanceReviewRequired ? 'Por verificar' : formatCurrency(debt.outstanding || 0)}</p></div>
+                                                                    {debt.retainedAmount > 0.005 && <div data-receivable-retained><span className="text-xs text-zinc-500 dark:text-zinc-400">Retenido por el cliente</span><p className="mt-1 text-sm font-semibold text-brand-cyan-deep dark:text-brand-cyan">{formatCurrency(debt.retainedAmount)}</p></div>}
+                                                                    {debt.settledAmount > 0.005 && <div data-receivable-settled><span className="text-xs text-zinc-500 dark:text-zinc-400">Saldado sin dinero</span><p className="mt-1 text-sm font-semibold text-brand-magenta-deep dark:text-brand-magenta">{formatCurrency(debt.settledAmount)}</p></div>}
+                                                                    <div><span className="text-xs text-zinc-500 dark:text-zinc-400">Saldo pendiente</span><p className="mt-1 text-sm font-semibold text-amber-700 dark:text-amber-400">{debt.balanceReviewRequired ? 'Por verificar' : formatCurrency(debt.outstanding || 0)}</p></div>
                                                                 </div>
                                                                 <div className="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-2">
                                                                     <label className="space-y-1">
-                                                                        <span className="text-[9px] font-medium text-zinc-400">Estado de seguimiento</span>
+                                                                        <span className="text-xs text-zinc-500 dark:text-zinc-400">Estado de seguimiento</span>
                                                                         <Select
                                                                             value={debt.status}
                                                                             disabled={!canWriteFinancials || debt.balanceReviewRequired || savingReceivableId === debt.id}
                                                                             onChange={(event) => handleReceivableUpdate(debt, { status: event.target.value })}
-                                                                            className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-xs font-bold text-zinc-900 outline-none focus:border-violet-400 focus:ring-2 focus:ring-violet-500/10 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
+                                                                            className="w-full rounded-lg border border-zinc-200 bg-white px-2 py-2 text-sm font-medium text-zinc-900 outline-none focus:border-primary/60 focus:ring-2 focus:ring-primary/20 disabled:opacity-50 dark:border-white/10 dark:bg-zinc-950 dark:text-white"
                                                                         >
                                                                             <option value="DEBE">Debe</option>
                                                                             <option value="PROMESADO">Promesado</option>
@@ -1600,29 +1568,29 @@ await invalidateFinancialQueries(queryClient);
                                                                     if (!visible.length && !reversedCount) return null;
                                                                     return (
                                                                     <div className="space-y-2">
-                                                                        <p className="text-[9px] font-medium uppercase tracking-widest text-zinc-400">Abonos y ajustes de esta obligación</p>
+                                                                        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Abonos y ajustes de esta obligación</p>
                                                                         {!visible.length && <p className="text-xs text-zinc-500">Sin abonos vigentes.</p>}
                                                                         <ul className="divide-y divide-zinc-200 dark:divide-white/10">
                                                                             {visible.map((payment) => (
                                                                                 <li key={payment.id} data-receivable-payment-kind={payment.kind || 'PAGO'} className="flex flex-wrap items-center justify-between gap-2 py-2">
                                                                                     <div className="min-w-0">
-                                                                                        <p className={cn('flex flex-wrap items-center gap-2 text-xs font-semibold', payment.reversedAt ? 'text-zinc-400 line-through' : 'text-zinc-900 dark:text-white')}>
+                                                                                        <p className={cn('flex flex-wrap items-center gap-2 text-sm font-semibold', payment.reversedAt ? 'text-zinc-400 line-through' : 'text-zinc-900 dark:text-white')}>
                                                                                             {formatCurrency(payment.amount || 0)}
                                                                                             {/* Un acuerdo, canje, compensación o condonación no es dinero: se rotula (20 de octubre de 2026). */}
-                                                                                            {!isCashPayment(payment) && <span data-receivable-payment-label className={cn('rounded-md px-1.5 py-0.5 text-[10px] font-semibold no-underline', isRetentionPayment(payment) ? 'bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan' : 'bg-brand-magenta/10 text-brand-magenta-deep dark:text-brand-magenta')}>{paymentKindLabel(payment)}</span>}
+                                                                                            {!isCashPayment(payment) && <span data-receivable-payment-label className={cn('rounded-md px-1.5 py-0.5 text-xs font-medium no-underline', isRetentionPayment(payment) ? 'bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan' : 'bg-brand-magenta/10 text-brand-magenta-deep dark:text-brand-magenta')}>{paymentKindLabel(payment)}</span>}
                                                                                         </p>
-                                                                                        <p className="text-[10px] text-zinc-500">
+                                                                                        <p className="text-xs text-zinc-500">
                                                                                             {new Date(payment.paidAt).toLocaleDateString('es-CO', { timeZone: 'UTC' })}
                                                                                             {payment.account?.name ? ` · ${payment.account.name}` : ''}
                                                                                             {payment.reference ? ` · ${payment.reference}` : ''}
                                                                                             {payment.detail?.authorizedBy ? ` · Autorizó ${payment.detail.authorizedBy}` : ''}
                                                                                             {payment.detail?.certificateNumber ? ` · Certificado ${payment.detail.certificateNumber}` : ''}
                                                                                         </p>
-                                                                                        {payment.detail?.goods && <p className="text-[10px] text-zinc-600 dark:text-zinc-300">Se recibió: {payment.detail.goods}{payment.detail.destination ? ` · Destino: ${payment.detail.destination}` : ''}</p>}
-                                                                                        {payment.detail?.offsetAgainst && <p className="text-[10px] text-zinc-600 dark:text-zinc-300">Compensado contra: {payment.detail.offsetAgainst}</p>}
+                                                                                        {payment.detail?.goods && <p className="text-xs text-zinc-600 dark:text-zinc-300">Se recibió: {payment.detail.goods}{payment.detail.destination ? ` · Destino: ${payment.detail.destination}` : ''}</p>}
+                                                                                        {payment.detail?.offsetAgainst && <p className="text-xs text-zinc-600 dark:text-zinc-300">Compensado contra: {payment.detail.offsetAgainst}</p>}
                                                                                         {/* Lo que se escribió en «Notas» al registrar el pago: es el seguimiento del cobro. */}
                                                                                         {payment.notes && <p data-receivable-payment-note className="mt-1 whitespace-pre-line text-xs text-zinc-600 dark:text-zinc-300">{payment.notes}</p>}
-                                                                                        {payment.reversedAt && <p className="text-[10px] text-destructive">Revertido: {payment.reversalReason || 'sin motivo registrado'}</p>}
+                                                                                        {payment.reversedAt && <p className="text-xs text-destructive">Revertido: {payment.reversalReason || 'sin motivo registrado'}</p>}
                                                                                         {/* Los comprobantes del abono, en su ingreso (Elisa, 5 de octubre de 2026). */}
                                                                                         {!payment.reversedAt && payment.financialRecordId && (
                                                                                             <RecordDocumentsInline className="mt-1.5" recordId={payment.financialRecordId} documents={payment.documents || []}
@@ -1671,7 +1639,7 @@ await invalidateFinancialQueries(queryClient);
                                                                     Un comentario que la obligación ya tenía se sigue mostrando, guardado. */}
                                                                 {(debt.comments || debt.notes) && (
                                                                     <div data-receivable-saved-comment className="space-y-1">
-                                                                        <p className="text-[9px] font-medium uppercase tracking-widest text-zinc-400">Comentario de seguimiento</p>
+                                                                        <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Comentario de seguimiento</p>
                                                                         <p className="whitespace-pre-line text-xs text-zinc-700 dark:text-zinc-200">{debt.comments || debt.notes}</p>
                                                                     </div>
                                                                 )}
@@ -1683,11 +1651,13 @@ await invalidateFinancialQueries(queryClient);
                                         </Card>
                                     );
                                 })}
+                                </section>
+                                ))}
                             </div>
                         ) : (
                             <div className="p-10 bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl text-center flex flex-col items-center justify-center">
-                                <ShieldCheck className="w-12 h-12 text-emerald-500 mb-3 animate-pulse" />
-                                <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">No hay obligaciones con estos filtros</h4>
+                                <ShieldCheck className="mb-3 h-10 w-10 text-brand-green" />
+                                <h4 className="text-sm font-semibold text-zinc-900 dark:text-white">No hay cuentas por cobrar con estos filtros</h4>
                                 <p className="text-sm text-zinc-500 dark:text-zinc-400 max-w-md mt-1">Este resultado no confirma que no existan deudas de otros periodos o pendientes por registrar.</p>
                             </div>
                         )}
@@ -1707,30 +1677,22 @@ await invalidateFinancialQueries(queryClient);
 
                 {activeTab === 'payroll' && (
                     <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
-                        <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                            <div>
-                                <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Nómina mensual</h2>
-                                <p className="mt-1 text-xs text-zinc-500">
-                                    Genera las liquidaciones, apruébalas y registra el pago desde la cuenta bancaria correspondiente.
-                                </p>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-2">
-                                <span className="text-xs text-zinc-600 dark:text-zinc-300">Liquidación de {FINANCIAL_MONTHS[payrollMonth - 1]} · elige el mes en los filtros superiores</span>
-                                <span className="rounded-lg bg-violet-600/10 px-3 py-2 text-xs font-semibold text-violet-700 dark:text-violet-300" title={`Total contractual: ${formatCurrency(editablePayrollTotal || 0)}`}>
-                                    {formatCurrency(editablePayrollTotal || 0)}
-                                </span>
-                                {canWriteFinancials && <button type="button" onClick={() => openPayrollContractEditor()} className="rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Nuevo contrato</button>}
-                                {canWriteFinancials && <button type="button" onClick={() => setIsPayrollGenerationConfirmOpen(true)} disabled={isGeneratingPayroll} className="inline-flex items-center gap-2 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-50">
-                                    {isGeneratingPayroll && <Loader2 className="h-4 w-4 animate-spin" />}
-                                    Generar nómina
-                                </button>}
-                            </div>
-                        </div>
+                        <FinancialSectionHeader title="Nómina"
+                            description={`Liquidación de ${FINANCIAL_MONTHS[payrollMonth - 1].toLowerCase()} (elige el mes en los filtros de arriba). Genera las liquidaciones, apruébalas y registra el pago desde la cuenta que corresponde.`}>
+                            <span className="rounded-lg bg-primary/10 px-3 py-2 text-sm font-semibold text-brand-cyan-deep dark:text-brand-cyan" title={`Total contractual: ${formatCurrency(editablePayrollTotal || 0)}`}>
+                                {formatCurrency(editablePayrollTotal || 0)}
+                            </span>
+                            {canWriteFinancials && <button type="button" onClick={() => openPayrollContractEditor()} className="min-h-11 rounded-lg border border-zinc-200 px-4 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Nuevo contrato</button>}
+                            {canWriteFinancials && <button type="button" onClick={() => setIsPayrollGenerationConfirmOpen(true)} disabled={isGeneratingPayroll} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">
+                                {isGeneratingPayroll && <Loader2 className="h-4 w-4 animate-spin" />}
+                                Generar nómina
+                            </button>}
+                        </FinancialSectionHeader>
 
                         {isPayrollLedgerLoading ? (
                             <div className="p-10 bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl text-center">
-                                <Loader2 className="w-5 h-5 animate-spin text-violet-600 mx-auto mb-3" />
-                                <p className="text-sm font-bold text-zinc-900 dark:text-white">Cargando nómina...</p>
+                                <Loader2 className="w-5 h-5 animate-spin text-primary mx-auto mb-3" />
+                                <p className="text-sm font-semibold text-zinc-900 dark:text-white">Cargando nómina…</p>
                             </div>
                         ) : payrollRows.length > 0 ? (
                             <Card className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
