@@ -4,7 +4,7 @@
 // aunque el servidor se reinicie (`monthly_review_deliveries`). Solo administradores, como la rentabilidad: dice
 // cuánto deja cada cuenta y cuánto cuesta operar la agencia. Lo escribe la plataforma; no pasa por el modelo.
 
-import { bogotaDate } from '../lib/colombiaBusinessDays.js';
+import { addBusinessDays, bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { bogotaClock } from '../lib/briaNudges.js';
 import { buildMonthlyReview, firstBusinessDayOf, previousMonthOf } from '../lib/monthlyReview.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
@@ -20,6 +20,8 @@ import prisma from '../lib/prisma.js';
 export const MONTHLY_REVIEW_NOTIFICATION = 'BRIA_REVISION_MES';
 export const MONTHLY_REVIEW_HOUR = 8;
 export const MONTHLY_REVIEW_CHECK_MS = 10 * 60 * 1000;
+// Si el servidor no estuvo el primer día hábil, sale en los siguientes, hasta el quinto; después ya es tarde.
+export const MONTHLY_REVIEW_CATCHUP_BUSINESS_DAYS = 5;
 const isAdmin = (user) => String(user?.role || '').toUpperCase() === 'ADMIN';
 const monthKeyOf = ({ year, month }) => `${year}-${String(month).padStart(2, '0')}`;
 
@@ -58,7 +60,10 @@ export const createMonthlyReviewService = ({
     async runAutomatic() {
       const at = now();
       const today = bogotaDate(at);
-      if (today < firstBusinessDayOf(today.slice(0, 7)) || (today === firstBusinessDayOf(today.slice(0, 7)) && bogotaClock(at).minutes < MONTHLY_REVIEW_HOUR * 60)) return { skipped: 'fuera de horario' };
+      const firstDay = firstBusinessDayOf(today.slice(0, 7));
+      if (today < firstDay || (today === firstDay && bogotaClock(at).minutes < MONTHLY_REVIEW_HOUR * 60)) return { skipped: 'fuera de horario' };
+      // Ponerse al día solo la primera semana hábil: el 23 de octubre de 2026 salió la de septiembre al desplegar.
+      if (today > addBusinessDays(firstDay, MONTHLY_REVIEW_CATCHUP_BUSINESS_DAYS - 1)) return { skipped: 'fuera de la primera semana' };
       const period = previousMonthOf(today);
       const monthKey = monthKeyOf(period);
       const admins = (await listPeople(db)).filter(isAdmin);
