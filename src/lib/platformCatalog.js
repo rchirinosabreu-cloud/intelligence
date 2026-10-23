@@ -346,6 +346,7 @@ export const PLATFORM_OPERATIONS = {
   'PATCH /ai-governance/:kind/:id': { que: 'Edita un registro de gobierno.', campos: 'según el tipo' },
   // Salud de servicios
   'GET /service-health': { que: 'El semáforo de servicios externos (administradores).' },
+  'GET /client-profitability': { que: 'La rentabilidad de cada cliente en un mes (administradores): lo facturado frente a sus horas por el costo hora de la agencia más su costo directo, con el margen, el ingreso por hora y una lectura de cada cuenta. Las cifras terminadas en Cents van en centavos: para hablar usa `line`, `reading` y `notes`, que ya vienen en pesos y en palabras.', campos: 'year, month (consulta; sin ellos, el último mes cerrado)' },
   'GET /service-health/summary': { que: 'El punto de color del semáforo.' },
   'POST /service-health/run': { que: 'Comprueba los servicios ahora.' }
 };

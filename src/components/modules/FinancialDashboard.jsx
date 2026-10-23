@@ -38,6 +38,7 @@ import { isCashPayment, isReceivableClosed, isRetentionPayment, paymentKindLabel
 import { isLoanReceivable, loanCounterpartyLabel } from '@/lib/receivableLoans';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
 import PayablesTab from './financial/PayablesTab';
+import ProfitabilityTab from './financial/ProfitabilityTab';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
@@ -240,6 +241,7 @@ const FinancialDashboard = () => {
     const canAccessFinancials = hasFinancialPermission(currentUser, 'read');
     const canWriteFinancials = hasFinancialPermission(currentUser, 'write');
     const canApproveFinancials = hasFinancialPermission(currentUser, 'approve');
+    const isAdminUser = String(currentUser?.role || '').toUpperCase() === 'ADMIN';
 
     // Fetch analytical aggregation from protected backend endpoint
     const { data, isLoading, isFetching, error, refetch } = useQuery({
@@ -1354,7 +1356,7 @@ await invalidateFinancialQueries(queryClient);
                     onClick={() => setActiveTab('records')}
                     className={cn(
                         "py-3 px-6 text-sm font-medium border-b-2 transition-all mr-2",
-                        activeTab === 'records' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
+                        activeTab === 'records' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
                     Movimientos
@@ -1363,7 +1365,7 @@ await invalidateFinancialQueries(queryClient);
                     onClick={() => setActiveTab('flow')}
                     className={cn(
                         "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                        activeTab === 'flow' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
+                        activeTab === 'flow' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
                     Análisis de Flujo
@@ -1372,7 +1374,7 @@ await invalidateFinancialQueries(queryClient);
                     onClick={() => setActiveTab('receivables')}
                     className={cn(
                         "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                        activeTab === 'receivables' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
+                        activeTab === 'receivables' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
                     Cartera
@@ -1381,7 +1383,7 @@ await invalidateFinancialQueries(queryClient);
                     onClick={() => setActiveTab('payables')}
                     className={cn(
                         "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                        activeTab === 'payables' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
+                        activeTab === 'payables' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
                     Por pagar
@@ -1390,7 +1392,7 @@ await invalidateFinancialQueries(queryClient);
                     onClick={() => setActiveTab('payroll')}
                     className={cn(
                         "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                        activeTab === 'payroll' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
+                        activeTab === 'payroll' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
                     Nómina Operativa
@@ -1399,7 +1401,7 @@ await invalidateFinancialQueries(queryClient);
                     onClick={() => setActiveTab('editor')}
                     className={cn(
                         "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                        activeTab === 'editor' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
+                        activeTab === 'editor' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
                     Conciliación
@@ -1408,16 +1410,28 @@ await invalidateFinancialQueries(queryClient);
                     onClick={() => setActiveTab('clients')}
                     className={cn(
                         "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                        activeTab === 'clients' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
+                        activeTab === 'clients' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
                     Clientes
                 </button>
+                {/* Rentabilidad por cliente (22 de octubre de 2026): solo administradores; el servidor también lo exige. */}
+                {isAdminUser && (
+                    <button
+                        onClick={() => setActiveTab('profitability')}
+                        className={cn(
+                            "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
+                            activeTab === 'profitability' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
+                        )}
+                    >
+                        Rentabilidad
+                    </button>
+                )}
                 <button
                     onClick={() => setActiveTab('import')}
                     className={cn(
                         "whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                        activeTab === 'import' ? "text-violet-600 border-violet-600 dark:text-violet-300 dark:border-violet-400" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
+                        activeTab === 'import' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
                     )}
                 >
                     Auditoría 2026
@@ -1847,6 +1861,10 @@ await invalidateFinancialQueries(queryClient);
 
                 {/* PESTAÑA 3: NOMINA OPERATIVA */}
                 {/* Cuentas por pagar y terceros (Rodny, 20 de octubre de 2026): el espejo de Cartera. */}
+                {activeTab === 'profitability' && isAdminUser && (
+                    <ProfitabilityTab enabled={!!currentUser} />
+                )}
+
                 {activeTab === 'payables' && (
                     <PayablesTab filterQuery={filterQuery} formatCurrency={formatCurrency} accounts={financialAccounts?.accounts || []}
                         canWrite={canWriteFinancials} enabled={!!(currentUser && canAccessFinancials)} />
