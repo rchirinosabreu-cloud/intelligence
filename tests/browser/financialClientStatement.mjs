@@ -7,7 +7,9 @@ try {
   page.setDefaultTimeout(8000);
   const open = async suffix => {
     await page.goto(base + suffix);
-    await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click(); await page.getByRole('button', { name: 'Directorio de clientes' }).click();
+    await page.getByRole('tab', { name: 'Terceros' }).click();
+    // El estado de cuenta está dentro de la ficha: primero se despliega la fila del cliente.
+    await page.locator('[data-party-row]').filter({ hasText: 'Cliente de muestra' }).locator('button[aria-expanded]').click();
     await page.getByRole('button', { name: 'Ver estado de cuenta', exact: true }).click();
     await page.getByRole('dialog').waitFor();
   };

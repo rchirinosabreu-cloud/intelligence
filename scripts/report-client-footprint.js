@@ -46,6 +46,7 @@ export const CLIENT_RELATIONS = Object.freeze([
   // dice si alguien tocó la ficha es cuándo se creó el registro, no a qué mes apunta.
   { table: 'FinancialRecord', label: 'movimientos financieros', recent: 'createdAt' },
   { table: 'AccountsReceivable', label: 'cuentas por cobrar', recent: 'createdAt' },
+  { table: 'ThirdParty', label: 'ficha de pago como tercero', recent: 'updatedAt' },
   { table: 'CrmLead', label: 'oportunidades del CRM', recent: 'createdAt' },
   { table: 'DeletedTaskLog', label: 'pendientes eliminados', recent: null }
 ]);

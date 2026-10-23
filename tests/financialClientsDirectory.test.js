@@ -57,13 +57,14 @@ test('se busca por nombre, nombre legal, documento o correo, sin importar tildes
     assert.equal(filterClientDirectoryRows(rows, '   ').length, rows.length);
 });
 
-test('la pestaña Clientes es el directorio: ficha al desplegar, nuevo cliente y sin la etiqueta de importación', () => {
+test('Terceros es el directorio: ficha al desplegar, nuevo tercero y sin la etiqueta de importación', () => {
     const dashboard = read('../src/components/modules/FinancialDashboard.jsx');
-    assert.match(dashboard, /<FinancialClientsDirectory/);
+    assert.match(dashboard, /<FinancialPartiesDirectory/);
     assert.doesNotMatch(dashboard, /Importación activa/, 'Rodny: «esa etiqueta de importación activa no es necesaria»');
-    const tab = read('../src/components/modules/financial/FinancialClientsDirectory.jsx');
-    assert.match(tab, /\/api\/financials\/clients/);
-    assert.match(tab, /Nuevo cliente/);
+    const tab = read('../src/components/modules/financial/FinancialPartiesDirectory.jsx');
+    assert.match(tab, /apiUrl\('\/clients'\)/);
+    assert.match(tab, /apiUrl\('\/third-parties'\)/);
+    assert.match(tab, /Nuevo tercero/);
     assert.match(tab, /data-client-profile-card/);
     assert.match(tab, /Editar ficha/);
     assert.match(tab, /Crear una ficha con este nombre/);

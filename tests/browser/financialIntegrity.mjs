@@ -33,7 +33,7 @@ try {
   assert.match(await row.innerText(), /600[.,]000/);
   // Clientes es el directorio (30 de septiembre de 2026): cada cliente con lo que suma y,
   // al desplegarlo, su ficha y la conexión con otra ficha.
-  await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click(); await page.getByRole('button', { name: 'Directorio de clientes' }).click();
+  await page.getByRole('tab', { name: 'Terceros' }).click();
   const reconciliationRow = page.getByRole('button', { name: /Cliente de muestra/ });
   await reconciliationRow.waitFor();
   assert.match(await reconciliationRow.innerText(), /600[.,]000/);

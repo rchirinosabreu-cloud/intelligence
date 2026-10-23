@@ -1,8 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useState } from 'react';
 import Select from '@/components/ui/Select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Edit, Loader2 } from '@/components/ui/icons';
-import { THIRD_PARTY_KINDS, thirdPartyKindLabel, thirdPartyProblem } from '@/lib/accountsPayable';
+import { THIRD_PARTY_KINDS, thirdPartyProblem } from '@/lib/accountsPayable';
 
 // El registro de terceros (Rodny, 20 de octubre de 2026: «arranca con las cuentas por pagar y los
 // terceros»): cada proveedor, colaborador, arrendador o socio una sola vez, con sus datos de pago.
@@ -51,34 +50,5 @@ export function ThirdPartyDialog({ open, thirdParty, saving, error, onClose, onS
       {shown && <p role="alert" className="text-sm text-destructive brain-destructive-text">{shown}</p>}
       <DialogFooter><button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose}>Cancelar</button><button type="submit" disabled={saving} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">{saving ? 'Guardando…' : 'Guardar tercero'}</button></DialogFooter>
     </fieldset></form>
-  </DialogContent></Dialog>;
-}
-
-export function ThirdPartiesDialog({ open, thirdParties = [], loading, canWrite, onClose, onCreate, onEdit }) {
-  const [query, setQuery] = useState('');
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return thirdParties.filter((item) => !q || `${item.name} ${item.legalName || ''} ${item.documentNumber || ''}`.toLowerCase().includes(q));
-  }, [thirdParties, query]);
-  return <Dialog open={open} onOpenChange={(next) => !next && onClose()}><DialogContent data-third-parties-dialog className="max-h-[90vh] overflow-y-auto sm:max-w-2xl dark:bg-zinc-900">
-    <DialogHeader><DialogTitle>Terceros</DialogTitle><DialogDescription>Proveedores, colaboradores, arrendador y socios a los que Brain Studio les paga. Cada uno una sola vez, con sus datos de pago.</DialogDescription></DialogHeader>
-    <div className="flex flex-wrap items-center justify-between gap-2">
-      <input className={`${field} sm:max-w-xs`} value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Buscar por nombre o documento…" aria-label="Buscar tercero" />
-      {canWrite && <button type="button" data-third-party-new onClick={onCreate} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">Nuevo tercero</button>}
-    </div>
-    {loading ? <p className="flex items-center gap-2 text-sm text-zinc-500"><Loader2 className="h-4 w-4 animate-spin" />Cargando terceros…</p>
-      : filtered.length === 0 ? <p className="rounded-xl border border-dashed border-zinc-200 p-6 text-center text-sm text-zinc-500 dark:border-white/10">{thirdParties.length ? 'Ningún tercero coincide con la búsqueda.' : 'Todavía no hay terceros. Crea el primero para registrarle una cuenta por pagar.'}</p>
-        : <ul className="divide-y divide-zinc-100 rounded-xl border border-zinc-200 dark:divide-white/5 dark:border-white/10">
-          {filtered.map((item) => (
-            <li key={item.id} data-third-party-row className="flex min-w-0 items-center gap-3 px-3 py-2.5 text-sm">
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-semibold text-zinc-900 dark:text-white">{item.name}{item.isActive === false && <span className="ml-2 rounded-md bg-zinc-100 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:bg-white/10">Inactivo</span>}</p>
-                <p className="truncate text-xs text-zinc-500">{thirdPartyKindLabel(item.kind)}{item.documentNumber ? ` · ${item.documentType} ${item.documentNumber}` : ''}{item.bankName ? ` · ${item.bankName}${item.bankAccountNumber ? ` ${item.bankAccountNumber}` : ''}` : ''}</p>
-              </div>
-              {canWrite && <button type="button" onClick={() => onEdit(item)} aria-label={`Editar ${item.name}`} className="grid h-9 w-9 place-items-center rounded-md text-zinc-500 hover:bg-zinc-100 hover:text-primary dark:hover:bg-white/10"><Edit className="h-4 w-4" /></button>}
-            </li>
-          ))}
-        </ul>}
-    <DialogFooter><button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose}>Cerrar</button></DialogFooter>
   </DialogContent></Dialog>;
 }

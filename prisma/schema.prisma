@@ -634,6 +634,8 @@ model Client {
   aiGovernancePolicy        AiGovernanceClientPolicy?
   criterionDiscovery ClientCriterionDiscovery?
   editorialCriteria ClientEditorialCriterion[]
+  // Su ficha de pago cuando también se le paga (Terceros, 23 de octubre de 2026).
+  thirdParty         ThirdParty?          @relation("ClientThirdParty")
   id                  String               @id @default(uuid())
   name                String
   slug                String               @unique
@@ -2032,6 +2034,9 @@ model ThirdParty {
   bankAccountType   String?
   bankAccountNumber String?
   teamMemberId      String?
+  // El mismo tercero cuando también es cliente (23 de octubre de 2026): una sola ficha en Terceros.
+  clientId          String?           @unique
+  client            Client?           @relation("ClientThirdParty", fields: [clientId], references: [id], onDelete: SetNull)
   notes             String?
   isActive          Boolean           @default(true)
   createdById       String?

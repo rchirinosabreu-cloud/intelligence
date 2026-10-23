@@ -14,7 +14,7 @@ import { payableDocumentsApi, uploadRecordDocument } from '@/lib/financialDocume
 import RecordDocumentsInline from './RecordDocumentsInline';
 import PayableDialog from './PayableDialog';
 import PayablePaymentDialog from './PayablePaymentDialog';
-import { ThirdPartiesDialog, ThirdPartyDialog } from './ThirdParties';
+import { ThirdPartyDialog } from './ThirdParties';
 import { FinancialSectionHeader } from './FinancialSectionParts';
 import DebtAgingSummary from './DebtAgingSummary';
 import { agingBucketLabel, agingBucketOf, payableAgeStart } from '@/lib/debtAging';
@@ -38,11 +38,11 @@ function ReasonDialog({ open, title, description, confirmLabel, saving, onClose,
   </DialogContent></Dialog>;
 }
 
-export default function PayablesTab({ filterQuery, formatCurrency, accounts = [], canWrite, enabled }) {
+export default function PayablesTab({ filterQuery, formatCurrency, accounts = [], canWrite, enabled, onOpenThirdParties }) {
   const queryClient = useQueryClient();
   const [expanded, setExpanded] = useState({});
   const [expandedPayments, setExpandedPayments] = useState({});
-  const [dialog, setDialog] = useState(null); // { kind: 'payable' | 'pay' | 'void' | 'reverse' | 'third-parties' | 'third-party', ... }
+  const [dialog, setDialog] = useState(null); // { kind: 'payable' | 'pay' | 'void' | 'reverse' | 'third-party', ... }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   // El tramo de antigüedad elegido en el resumen (23 de octubre de 2026): filtra la lista.
@@ -53,7 +53,7 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
     queryFn: async () => (await axios.get(apiUrl(`/payables-ledger?${filterQuery}`), authed())).data,
     enabled
   });
-  const { data: thirdPartiesData, isLoading: loadingThirdParties } = useQuery({
+  const { data: thirdPartiesData } = useQuery({
     queryKey: ['financial-third-parties'],
     queryFn: async () => (await axios.get(apiUrl('/third-parties'), { ...authed(), params: { includeInactive: true } })).data,
     enabled
@@ -107,7 +107,7 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
     <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300" data-payables-tab>
       <FinancialSectionHeader title="Proveedores y gastos"
         description="Lo que Brain Studio les debe a proveedores, equipo, arrendador y socios: herramientas, apps, dotaciones, arriendo. Pagar una cuenta crea el egreso en Movimientos. La nómina se liquida en su vista, al lado.">
-        <button type="button" data-third-parties-open onClick={() => setDialog({ kind: 'third-parties' })} className="min-h-11 rounded-lg border border-zinc-200 px-4 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Terceros</button>
+        <button type="button" data-third-parties-open onClick={() => onOpenThirdParties?.()} className="min-h-11 rounded-lg border border-zinc-200 px-4 text-sm font-semibold text-zinc-700 hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Terceros</button>
         {canWrite && <button type="button" data-payable-new onClick={() => setDialog({ kind: 'payable' })} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">Nueva cuenta por pagar</button>}
       </FinancialSectionHeader>
 
@@ -207,11 +207,9 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
               })}
             </div>}
 
-      {dialog?.kind === 'third-parties' && <ThirdPartiesDialog open thirdParties={thirdParties} loading={loadingThirdParties} canWrite={canWrite} onClose={close}
-        onCreate={() => setDialog({ kind: 'third-party', thirdParty: null, returnTo: 'third-parties' })} onEdit={(thirdParty) => setDialog({ kind: 'third-party', thirdParty, returnTo: 'third-parties' })} />}
       {dialog?.kind === 'third-party' && <ThirdPartyDialog open thirdParty={dialog.thirdParty} saving={saving} error={error}
-        onClose={() => (dialog.returnTo === 'third-parties' ? setDialog({ kind: 'third-parties' }) : dialog.returnTo === 'payable' ? setDialog({ kind: 'payable' }) : close())}
-        onSubmit={(form) => saveThirdParty(form).then(() => { if (dialog.returnTo === 'third-parties') setDialog({ kind: 'third-parties' }); })} />}
+        onClose={() => (dialog.returnTo === 'payable' ? setDialog({ kind: 'payable' }) : close())}
+        onSubmit={saveThirdParty} />}
       {dialog?.kind === 'payable' && <PayableDialog key={dialog.payable?.id || dialog.defaultThirdPartyId || 'new'} open payable={dialog.payable || null} thirdParties={thirdParties} defaultThirdPartyId={dialog.defaultThirdPartyId || ''} saving={saving} error={error} onClose={close} onSubmit={savePayable}
         onNewThirdParty={() => setDialog({ kind: 'third-party', thirdParty: null, returnTo: 'payable' })} />}
       {dialog?.kind === 'pay' && <PayablePaymentDialog payable={dialog.payable} accounts={accounts} saving={saving} error={error} onClose={close} onSubmit={pay} />}

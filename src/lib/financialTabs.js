@@ -8,10 +8,7 @@ export const FINANCIAL_TAB_GROUPS = Object.freeze([
     {
         key: 'cobrar',
         label: 'Cuentas por cobrar',
-        views: [
-            { key: 'receivables', label: 'Cuentas y préstamos' },
-            { key: 'clients', label: 'Directorio de clientes' }
-        ]
+        views: [{ key: 'receivables', label: 'Cuentas por cobrar' }]
     },
     {
         key: 'pagar',
@@ -21,6 +18,10 @@ export const FINANCIAL_TAB_GROUPS = Object.freeze([
             { key: 'payroll', label: 'Nómina' }
         ]
     },
+    // Terceros (Elisa, 23 de octubre de 2026: «el tema de terceros, nos gusta como lo hacen acá»): una
+    // ficha por tercero con sus roles. Sustituye al directorio de clientes y a la ventana de terceros de
+    // Por pagar; vive en Financiero porque guarda documentos y cuentas bancarias.
+    { key: 'terceros', label: 'Terceros', views: [{ key: 'parties', label: 'Terceros' }] },
     {
         key: 'analisis',
         label: 'Análisis',
