@@ -86,6 +86,8 @@ try {
             planned.push(lead);
         } else if (lead.planned && client && !lead.clientId) lead.clientId = client.id;
         if (lead.planned) lead.quotations.push(quotation);
+        // Como al escribir: ligar mueve la oportunidad, así que pasa a ser la más reciente para las siguientes.
+        lead.updatedAt = new Date(now.getTime() + rows.length);
         rows.push({ quotation, party, client, lead });
     }
 
