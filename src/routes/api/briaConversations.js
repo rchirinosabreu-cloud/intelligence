@@ -14,13 +14,13 @@ export const createBriaConversationRouter = ({ service } = {}) => {
   router.use(createRateLimiter({ windowMs: 60000, max: 40, keyGenerator: req => req.user?.userId || req.user?.id || req.ip }));
   // Preserve provenance in the service for fresh authorization, never expose its catalogue in chat.
   const strip = result => (result?.turns ? { ...result, turns: result.turns.map(({ sources: _sources, ...turn }) => turn) } : result);
-  const failureOf = failure => { const status = Number.isInteger(failure.status) ? failure.status : 500; if (status === 500) console.error('[BriaConversation]', failure.code || failure.name); return { status, message: status === 500 ? 'No se pudo abrir o continuar la conversación.' : failure.message }; };
+  const failureOf = failure => { const status = Number.isInteger(failure.status) ? failure.status : 500; if (status === 500) console.error('[BriaConversation]', failure.code || failure.name); return { status, message: status === 500 ? 'No se pudo abrir o continuar la conversación.' : failure.message, ...(failure.code === 'BRIA_CONVERSATION_STALE' ? { code: failure.code } : {}) }; };
   const handle = work => async (req, res) => {
     try {
       const result = await work(req, await resolve());
       res.status(result?.filesPending ? 202 : 200).json(strip(result));
     }
-    catch (failure) { const { status, message } = failureOf(failure); res.status(status).json({ message }); }
+    catch (failure) { const { status, ...body } = failureOf(failure); res.status(status).json(body); }
   };
   // Respuesta en vivo (9 de octubre de 2026): con `Accept: text/event-stream` se mandan los avances a medida que
   // pasan (qué está haciendo Bria, el texto que va escribiendo, «borra lo escrito») y al final el chat guardado, que
@@ -46,18 +46,27 @@ export const createBriaConversationRouter = ({ service } = {}) => {
   const audio = multer({ storage: uploadMemoryStorage(), limits: { fileSize: BRIA_AUDIO_MAX_BYTES, files: 1, fields: 0, parts: 2 } });
   const files = multer({ storage: uploadMemoryStorage(), limits: { fileSize: BRIA_FILE_MAX_BYTES, files: BRIA_FILES_MAX_COUNT, fields: 4, fieldSize: 48000, parts: BRIA_FILES_MAX_COUNT + 5 } });
   const authorizeInput = async (req, res, next) => { try { const instance = await resolve(); await instance.authorizeInput?.(req.user); next(); } catch (failure) { res.status(failure.status || 500).json({ message: failure.status ? failure.message : 'No se pudo verificar tu acceso.' }); } };
+  const requireRevision = (req, res, next) => {
+    const value = req.body?.expectedRevision;
+    // FormData transports text; JSON must already contain a number. Do not coerce blanks, arrays or duplicates.
+    const revision = req.is('multipart/form-data') && typeof value === 'string' && /^(0|[1-9]\d*)$/.test(value) ? Number(value) : value;
+    if (!Number.isSafeInteger(revision) || revision < 0) return res.status(400).json({ message: 'Actualiza la página antes de enviar el mensaje.' });
+    req.briaExpectedRevision = revision;
+    next();
+  };
+  const message = req => ({ user: req.user, id: req.params.id, question: req.body?.question, files: req.files || [], expectedRevision: req.briaExpectedRevision, session: sessionOf(req) });
   router.post('/dictation', authorizeInput, receive(audio.single('audio')), handle((req, instance) => instance.transcribe(req.user, req.file)));
   router.use('/:id', (req, res, next) => uuid(req.params.id) ? next() : res.status(400).json({ message: 'Conversación no válida.' }));
   // Check ownership/fresh session before buffering a multipart request.
   router.post('/:id/messages', authorizeInput, async (req, res, next) => {
     try { await (await resolve()).read(req.user, req.params.id); next(); }
     catch (failure) { res.status(failure.status || 500).json({ message: failure.status ? failure.message : 'No se pudo abrir la conversación.' }); }
-  }, receive(files.array('files', BRIA_FILES_MAX_COUNT)), async (req, res, next) => {
+  }, receive(files.array('files', BRIA_FILES_MAX_COUNT)), requireRevision, async (req, res, next) => {
     if (!wantsStream(req)) return next();
     const instance = await resolve();
     // La sesión de la persona viaja con cada mensaje: con ella Bria opera en la plataforma como ella (manos de Bria).
-    return stream(req, res, onEvent => instance.send({ user: req.user, id: req.params.id, question: req.body?.question, files: req.files || [], onEvent, session: sessionOf(req) }));
-  }, handle((req, instance) => instance.send({ user: req.user, id: req.params.id, question: req.body?.question, files: req.files || [], session: sessionOf(req) })));
+    return stream(req, res, onEvent => instance.send({ ...message(req), onEvent }));
+  }, handle((req, instance) => instance.send(message(req))));
   router.get('/:id/attachments/:fileId', async (req, res) => {
     try {
       if (!uuid(req.params.fileId)) return res.status(400).json({ message: 'Adjunto no válido.' });

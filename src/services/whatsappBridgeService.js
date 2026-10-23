@@ -18,7 +18,7 @@ import {
 /** Cuánto se espera a que la persona termine de mandar lo que manda seguido (la foto y luego el texto). */
 export const WHATSAPP_BATCH_WINDOW_MS = 2500;
 import {
-  ALERT_KINDS, ALERT_ACTIONS, isWindowOpen, alertsEnabled, withinAlertHours, parseAlertReplyId, alertOptions, templateMessagePayload
+  ALERT_KINDS, ALERT_ACTIONS, isWindowOpen, alertsEnabled, withinAlertHours, isAlertCurrent, parseAlertReplyId, alertOptions, templateMessagePayload
 } from '../lib/whatsappAlerts.js';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -102,7 +102,7 @@ export const createWhatsAppBridgeService = ({
   const sendText = async (to, text) => { for (const part of splitForWhatsApp(text)) await messages(textMessagePayload(to, part)); };
   // Texto y opciones: lo largo sale antes en texto y las opciones van con el último trozo (o con una línea corta si
   // ese trozo no cabe en un mensaje con botones). Si Meta no acepta los botones, las opciones se dicen en texto.
-  const sendReply = async (to, { text, options = [] }) => {
+  const sendReply = async (to, { text, options = [], optionsUnavailable = null }) => {
     const parts = splitForWhatsApp(text);
     if (!options.length || !parts.length) { for (const part of parts) await messages(textMessagePayload(to, part)); return; }
     const last = parts.at(-1);
@@ -110,11 +110,12 @@ export const createWhatsAppBridgeService = ({
     for (const part of fits ? parts.slice(0, -1) : parts) await messages(textMessagePayload(to, part));
     const body = fits ? last : OPTIONS_PROMPT;
     const payload = optionsMessagePayload(to, body, options);
-    if (!payload) { await sendText(to, textWithOptions({ text: body, options })); return; }
+    const fallback = optionsUnavailable ? `${body}\n\n${optionsUnavailable}` : textWithOptions({ text: body, options });
+    if (!payload) { await sendText(to, fallback); return; }
     try { await messages(payload); }
     catch (failure) {
       logger.warn?.(`[WhatsApp] Los botones no salieron (${failure.message}); van en texto.`);
-      await sendText(to, textWithOptions({ text: body, options }));
+      await sendText(to, fallback);
     }
   };
   const markRead = async (messageId) => {
@@ -145,9 +146,7 @@ export const createWhatsAppBridgeService = ({
       try { return await service.read(user, link.conversationId); }
       catch (failure) { if (failure.status !== 404) throw failure; }
     }
-    const chat = await service.create(user);
-    await repository.setConversation(user.userId, chat.id);
-    return chat;
+    return service.create(user);
   };
 
   // A quién se responde: al número si vino en este mensaje y, si no, al BSUID (Meta no siempre manda el número).
@@ -174,7 +173,11 @@ export const createWhatsAppBridgeService = ({
   };
 
   // Un aviso guardado, con sus botones: dentro de la ventana de 24 horas, o después de que la persona tocó «Ver aviso».
-  const sendAlertContent = (to, alert) => sendReply(to, { text: alert.text, options: alertOptions(alert) });
+  const sendAlertContent = (to, alert) => sendReply(to, {
+    text: alert.text, options: alertOptions(alert),
+    // Sin botón no hay una selección inequívoca de la lectura. No prometer que escribir su rótulo cambia de chat.
+    optionsUnavailable: alert.conversationId ? 'No pude mostrar el botón para revisar esta lectura. Ábrela en el chat de Bria de la plataforma.' : null
+  });
 
   // Lo que hace un botón de un aviso. Un rechazo de la plataforma (4xx) se dice con su motivo; otra falla, en general.
   const runAlertAction = async (user, button) => {
@@ -187,7 +190,16 @@ export const createWhatsAppBridgeService = ({
   const handleAlertReply = async (user, link, message, parsed) => {
     const alert = await repository.alertById?.(parsed.alertId);
     const to = replyTo(message);
-    if (!alert || alert.userId !== link.userId) { await sendText(to, REPLIES.alertGone); return { outcome: 'alert-gone' }; }
+    const gone = async () => { await sendText(to, REPLIES.alertGone); return { outcome: 'alert-gone' }; };
+    if (!alert || alert.userId !== link.userId || !isAlertCurrent(alert, now())) return gone();
+    let sourceChat = null;
+    if (alert.conversationId) {
+      try { sourceChat = await conversations().read(user, alert.conversationId); }
+      catch (failure) { if ([403, 404].includes(failure.status)) return gone(); throw failure; }
+      // `read` exige propietario y sanea lo que ya no puede ver: un turno sin permiso pierde su metadata.
+      // No reenviar la copia del aviso si esa lectura se borró, cambió de acceso o apunta a otro origen.
+      if (!sourceChat?.turns?.some((turn) => turn.role === 'assistant' && turn.note && `${turn.note}:${turn.dayKey || turn.monthKey}` === alert.sourceRef)) return gone();
+    }
     if (parsed.index === 'open') {
       await repository.markAlertOpened?.(alert.id, now());
       await sendAlertContent(to, alert);
@@ -195,7 +207,7 @@ export const createWhatsAppBridgeService = ({
     }
     const button = alert.buttons?.[parsed.index];
     if (!button) { await sendText(to, REPLIES.alertGone); return { outcome: 'alert-gone' }; }
-    if (button.ask) return { ask: button.ask };
+    if (button.ask) return { ask: button.ask, sourceChat };
     if (!ALERT_ACTIONS.includes(button.act)) { await sendText(to, REPLIES.alertGone); return { outcome: 'alert-gone' }; }
     try { await sendText(to, await runAlertAction(user, button)); }
     catch (failure) {
@@ -241,29 +253,59 @@ export const createWhatsAppBridgeService = ({
         return { outcome: 'no-speech' };
       }
     }
-    const alertReply = parseAlertReplyId(message.replyId);
-    if (alertReply) {
-      const handled = await handleAlertReply(user, link, message, alertReply);
-      if (!handled.ask) return handled;
-      question = handled.ask;
-    }
     const at = now();
-    let saved;
+    let saved, chat, selectedChat = null;
     try {
-      const chat = await conversationFor(user, link, at);
-      saved = await runWithAiContext({ actorId: user.userId, module: 'whatsapp', route: 'POST /api/whatsapp/webhook' }, () => conversations().send({ user, id: chat.id, question, files, session: sessionFor(row) }));
+      const alertReply = parseAlertReplyId(message.replyId);
+      if (alertReply) {
+        const handled = await handleAlertReply(user, link, message, alertReply);
+        if (!handled.ask) return handled;
+        question = handled.ask;
+        selectedChat = handled.sourceChat;
+      }
+      chat = selectedChat || await conversationFor(user, link, at);
+      if (message.replyId && !alertReply) {
+        const lastAssistant = [...(chat.turns || [])].reverse().find((turn) => turn.role === 'assistant');
+        const option = message.replyId.startsWith('c:')
+          ? replyForWhatsApp(lastAssistant, { conversationId: chat.id, revision: chat.revision }).options.find((row) => row.id === message.replyId)
+          : null;
+        if (!option) { await sendText(replyTo(message), REPLIES.optionGone); return { outcome: 'stale-option' }; }
+        // La opción pertenece a la respuesta actual. Su texto sale del turno guardado, no del título de Meta.
+        question = option.label;
+      }
+      // Capturar primero el chat y quitar el vínculo antes de que el motor guarde otra respuesta. Si el motor,
+      // Meta o el guardado final fallan, un «sí» posterior no puede confirmar un resumen que nunca llegó.
+      // También vale para un chat ya activo; si no podemos invalidarlo, no llamamos al motor.
+      await repository.setConversation(link.userId, null);
+      saved = await runWithAiContext({ actorId: user.userId, module: 'whatsapp', route: 'POST /api/whatsapp/webhook' }, () => conversations().send({ user, id: chat.id, question, files, session: sessionFor(row), expectedRevision: chat.revision }));
     } catch (failure) {
+      if (failure.code === 'BRIA_CONVERSATION_STALE') { await sendText(replyTo(message), failure.message); return { outcome: 'stale-conversation' }; }
       if (failure.status === 409) { await sendText(replyTo(message), REPLIES.busy); return { outcome: 'busy' }; }
       if (failure.code === 'BRIA_PLATFORM_SESSION') { await sendText(replyTo(message), REPLIES.needsPlatform); return { outcome: 'needs-platform' }; }
       // Un rechazo de la plataforma o de una regla (4xx) trae su motivo en palabras: se dice, como en el chat de la plataforma.
       if (failure.status >= 400 && failure.status < 500 && failure.message) { await sendText(replyTo(message), failure.message); return { outcome: 'rejected', reason: failure.code || null }; }
       logger.error('[WhatsApp] Bria no pudo responder:', failure.code || failure.message || failure);
-      await sendText(replyTo(message), REPLIES.failed);
+      await sendText(replyTo(message), selectedChat ? 'No pude revisar la lectura. Toca «Revisar lectura» para retomarla.' : REPLIES.failed);
       return { outcome: 'failed' };
     }
     const turn = [...(saved?.turns || [])].reverse().find((item) => item.role === 'assistant');
-    await sendReply(replyTo(message), replyForWhatsApp(turn));
-    await repository.touch(link.userId, at);
+    try { await sendReply(replyTo(message), replyForWhatsApp(turn, { conversationId: chat.id, revision: saved?.revision })); }
+    catch (failure) {
+      logger.error('[WhatsApp] No se pudo entregar la respuesta:', failure.code || failure.message || failure);
+      return { outcome: 'delivery-failed' };
+    }
+    // La conversación solo vuelve a quedar activa tras entregar su respuesta completa. La lectura original
+    // permanece en su aviso para retomarla si falla; los demás chats conservan su historial en la plataforma.
+    try {
+      await repository.touch(link.userId, at);
+      await repository.setConversation(link.userId, chat.id);
+    } catch (failure) {
+      logger.error('[WhatsApp] No se pudo enlazar la conversación:', failure.code || failure.message || failure);
+      await sendText(replyTo(message), selectedChat
+        ? 'No pude enlazar esta lectura. Toca «Revisar lectura» para retomarla antes de confirmar.'
+        : 'No pude conservar este chat para continuar por aquí. Retómalo en Bria de la plataforma antes de confirmar.');
+      return { outcome: 'conversation-link-failed' };
+    }
     return { outcome: 'answered', conversationId: saved?.id || null };
   };
 
@@ -272,7 +314,7 @@ export const createWhatsAppBridgeService = ({
    * de la ventana de 24 horas sale entero y con botones, fuera de ella como la plantilla `bria_aviso`. Nunca lanza:
    * un aviso que no sale queda anotado y la campana sigue siendo la que avisa.
    */
-  const deliverAlert = async ({ userId, kind, sourceRef, topic, text, buttons = [] }) => {
+  const deliverAlert = async ({ userId, kind, sourceRef, conversationId = null, topic, text, buttons = [] }) => {
     if (!configured()) return { outcome: 'not-configured' };
     if (!ALERT_KINDS.includes(kind) || !sourceRef || !String(text || '').trim()) return { outcome: 'invalid' };
     const link = await repository.linkByUser(userId);
@@ -283,7 +325,7 @@ export const createWhatsAppBridgeService = ({
     const row = await loadUser(userId);
     if (!allowed(row)) return { outcome: 'not-allowed' };
     if (await repository.alertsSince(userId, new Date(at.getTime() - DAY_MS)) >= ALERTS_PER_DAY) return { outcome: 'daily-limit' };
-    const alert = await repository.saveAlert({ userId, kind, sourceRef, topic, text: String(text).trim(), buttons, createdAt: at });
+    const alert = await repository.saveAlert({ userId, kind, sourceRef, conversationId, topic, text: String(text).trim(), buttons, createdAt: at });
     if (!alert) return { outcome: 'duplicate' };
     const to = link.phone || link.waId;
     const via = isWindowOpen(link.lastInboundAt, at) ? 'SESSION' : 'TEMPLATE';

@@ -2,7 +2,7 @@
 // siempre (una versión anterior o una prueba simulada), funciona igual.
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { streamBriaChat } from '../src/lib/briaChatRequest.js';
+import { requestBriaChat, streamBriaChat } from '../src/lib/briaChatRequest.js';
 
 const sseResponse = (events) => new Response(new ReadableStream({
   start(controller) {
@@ -35,6 +35,21 @@ test('an error event becomes an error with its words', async () => {
   try {
     await withFetch(sseResponse([{ type: 'delta', text: 'Ho' }, { type: 'error', status: 409, message: 'Bria está respondiendo en esta conversación.' }]), async () => {
       await assert.rejects(() => streamBriaChat('/c1/messages', { body: { question: 'hola' }, onEvent: () => {} }), /Bria está respondiendo/);
+    });
+  } finally { console.error = original; }
+});
+
+test('el cliente conserva el conflicto y su código en JSON, fallback JSON y eventos SSE', async () => {
+  const data = { code: 'BRIA_CONVERSATION_STALE', message: 'La conversación cambió. Revisa su última respuesta antes de confirmar.' };
+  const original = console.error; console.error = () => {};
+  try {
+    for (const request of [requestBriaChat, streamBriaChat]) {
+      await withFetch(new Response(JSON.stringify(data), { status: 409, headers: { 'content-type': 'application/json' } }), async () => {
+        await assert.rejects(() => request('/c1/messages', { method: 'POST', body: { question: 'Confirmar', expectedRevision: 1 } }), { message: data.message, code: data.code, status: 409 });
+      });
+    }
+    await withFetch(sseResponse([{ type: 'error', ...data, status: 409 }]), async () => {
+      await assert.rejects(() => streamBriaChat('/c1/messages', { body: { question: 'Confirmar', expectedRevision: 1 } }), { message: data.message, code: data.code, status: 409 });
     });
   } finally { console.error = original; }
 });

@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   buildDailyDigest, buildDailyReadingRequest, parseDailyReading, validateDailyReading, fallbackDailyReading, composeReading,
-  buildMorningBrief, codeOverview, DAILY_READING_USE_CASE
+  buildMorningBrief, codeOverview, visibleReadingDecisions, DAILY_READING_USE_CASE
 } from '../src/lib/dailyReading.js';
 
 // La lectura del día (Rodny, 19 de octubre de 2026): Bria lee cómo amaneció la agencia y propone qué haría hoy y qué
@@ -129,7 +129,7 @@ test('a model reading with no backed decision falls back to the rules instead of
 });
 
 test('what direction keeps declining is left out and the rest is renumbered, unless the signal is grave', () => {
-  const suppressed = new Set(['HACER|CLIENT|c1']);
+  const suppressed = new Set(['HACER|CLIENT|c1|APROBACION_DETENIDA']);
   const model = validateDailyReading(modelAnswer, { signals: SIGNALS, clients: CLIENTS, day: DAY });
   const reading = composeReading({ day: DAY, baseDay: '2026-10-19', summary: SUMMARY, signals: SIGNALS, clients: CLIENTS, model, suppressed });
   assert.deepEqual(reading.decisions.map((d) => [d.id, d.title]), [['2026-10-20:1', 'Destrabar las aprobaciones de Foobespain'], ['2026-10-20:2', 'No cargarle más trabajo a Melissa esta semana'], ['2026-10-20:3', 'Completar la parrilla de Aristea']], 'severity 3 keeps the Foobespain decision');
@@ -176,4 +176,113 @@ test('a quiet day says so, without inventing work', () => {
   const { text } = buildMorningBrief({ recipientName: 'Rodny', reading: quiet, scope: { clientIds: null, people: true } });
   assert.match(text, /No veo cambios que pidan una decisión hoy/);
   assert.doesNotMatch(text, /Lo que haría hoy|Empecé a guardar/);
+});
+
+const manySignals = (count) => Array.from({ length: count }, (_, index) => signal({
+  id: `APROBACION_DETENIDA:client-${index + 1}`, kind: 'APROBACION_DETENIDA', subjectType: 'CLIENT',
+  subjectId: `client-${index + 1}`, subjectName: `Cuenta ${index + 1}`, text: `Cuenta ${index + 1} tiene aprobaciones detenidas.`
+}));
+
+test('a partial model reading keeps more than fifty supported proposals while the morning stays short', () => {
+  const signals = manySignals(55);
+  const model = validateDailyReading({ resumen: 'Revisar aprobaciones.', decisiones: signals.slice(0, 9).map((row) => ({
+    titulo: `Revisar ${row.subjectName}`, porque: row.text, tipo: 'HACER', evidencia: [row.id], pedido: null
+  })) }, { signals, day: DAY });
+  assert.equal(model.decisions.length, 6, 'the model limit is unchanged');
+  assert.ok(model.decisions.every((decision) => decision.source === 'MODELO'));
+  const reading = composeReading({ day: DAY, summary: SUMMARY, signals, model });
+  assert.equal(reading.decisions.length, 55, 'all fifty-five supported risks persist in the reading');
+  assert.equal(reading.decisions.filter((decision) => decision.source === 'MODELO').length, 6);
+  assert.equal(reading.decisions.filter((decision) => decision.source === 'REGLA').length, 49);
+  assert.equal(new Set(reading.decisions.map((decision) => decision.id)).size, 55);
+  assert.deepEqual(reading.decisions.at(-1).evidence, ['APROBACION_DETENIDA:client-55'], 'signals beyond the model digest are still represented');
+  assert.deepEqual(reading.coverage, { worseSignals: 55, representedSignals: 55, suppressedSignals: 0, unrepresentedSignals: 0 });
+  const brief = buildMorningBrief({ recipientName: 'Rodny', reading });
+  assert.equal((brief.text.match(/^\d+\. \*\*/gm) || []).length, 3);
+  assert.match(brief.text, /Quedan 52 propuestas.*lectura/i);
+  const scoped = buildMorningBrief({ recipientName: 'Camila', reading, scope: { clientIds: new Set(['client-1', 'client-2', 'client-3', 'client-4']), people: false } });
+  assert.match(scoped.text, /Queda 1 propuesta.*lectura/i);
+  assert.doesNotMatch(scoped.text, /52 propuestas|55 propuestas|Cuenta 55/);
+});
+
+test('fallback groups the same problem family and preserves different risks of the same subject', () => {
+  const signals = [
+    SIGNALS[2],
+    signal({ ...SIGNALS[2], id: 'ROJO_SOSTENIDO:c2', kind: 'ROJO_SOSTENIDO', text: 'Aristea sigue en rojo.' }),
+    signal({ ...SIGNALS[0], id: 'APROBACION_DETENIDA:c2', subjectId: 'c2', subjectName: 'Aristea' }),
+    SIGNALS[1],
+    signal({ ...SIGNALS[1], id: 'VENCIDAS_SUBEN:m1', kind: 'VENCIDAS_SUBEN', text: 'Melissa acumula otra vencida.' }),
+    signal({ ...SIGNALS[1], id: 'DEVUELTAS_PERSONA:m1', kind: 'DEVUELTAS_PERSONA', text: 'Melissa tiene tareas devueltas.' })
+  ];
+  const fallback = fallbackDailyReading({ signals, summary: SUMMARY, day: DAY });
+  assert.equal(fallback.decisions.length, 4);
+  assert.ok(fallback.decisions.every((decision) => decision.source === 'REGLA'));
+  assert.deepEqual(fallback.decisions.map((decision) => decision.evidence), [
+    ['CUENTA_EMPEORO:c2', 'ROJO_SOSTENIDO:c2'], ['APROBACION_DETENIDA:c2'],
+    ['VENCIDAS_SOSTENIDAS:m1', 'VENCIDAS_SUBEN:m1'], ['DEVUELTAS_PERSONA:m1']
+  ]);
+  assert.deepEqual(composeReading({ day: DAY, summary: SUMMARY, signals }).coverage, { worseSignals: 6, representedSignals: 6, suppressedSignals: 0, unrepresentedSignals: 0 });
+});
+
+test('a model abstention covers its problem without adding a contradictory fallback but other risks remain', () => {
+  const signals = [SIGNALS[0], signal({ ...SIGNALS[0], id: 'DEVOLUCIONES:c1', kind: 'DEVOLUCIONES', text: 'Foobespain tiene devoluciones.' })];
+  const model = validateDailyReading({ decisiones: [{ titulo: 'No insistir por aprobaciones hasta revisar', porque: signals[0].text, tipo: 'NO_HACER', evidencia: [signals[0].id] }] }, { signals, day: DAY });
+  const reading = composeReading({ day: DAY, summary: SUMMARY, signals, model });
+  assert.deepEqual(reading.decisions.map((decision) => [decision.kind, decision.source, decision.evidence]), [
+    ['NO_HACER', 'MODELO', ['APROBACION_DETENIDA:c1']], ['HACER', 'REGLA', ['DEVOLUCIONES:c1']]
+  ]);
+  assert.equal(reading.coverage.representedSignals, 2);
+});
+
+test('different validated model recommendations about the same problem remain available, including what to avoid', () => {
+  const signals = [SIGNALS[0]];
+  const suggestions = [
+    { titulo: 'Revisar las piezas pendientes', pedido: 'Muéstrame las piezas pendientes.', tipo: 'HACER' },
+    { titulo: 'Preparar un mensaje al cliente', pedido: 'Redáctame un mensaje para el cliente.', tipo: 'CONVERSAR' },
+    { titulo: 'No programar lo que falta aprobar', pedido: null, tipo: 'NO_HACER' }
+  ];
+  const model = validateDailyReading({ decisiones: suggestions.map((item) => ({ ...item, porque: signals[0].text, evidencia: [signals[0].id] })) }, { signals, day: DAY });
+  const reading = composeReading({ day: DAY, summary: SUMMARY, signals, model });
+  assert.deepEqual(reading.decisions.map((decision) => [decision.title, decision.ask, decision.kind]), suggestions.map((item) => [item.titulo, item.pedido, item.tipo]));
+  assert.ok(reading.decisions.every((decision) => decision.source === 'MODELO'), 'completion does not add a redundant rule proposal');
+  assert.deepEqual(reading.coverage, { worseSignals: 1, representedSignals: 1, suppressedSignals: 0, unrepresentedSignals: 0 });
+});
+
+test('completion never restores suppressed proposals and separates unrepresented signals from suppression', () => {
+  const approval = { ...SIGNALS[0], severity: 2 };
+  const unknown = signal({ ...SIGNALS[2], id: 'SIN_REGLA:c2', kind: 'SIN_REGLA' });
+  const signals = [approval, unknown];
+  const model = validateDailyReading({ decisiones: [modelAnswer.decisiones[0]] }, { signals, day: DAY });
+  const suppressed = new Set(['HACER|CLIENT|c1|APROBACION_DETENIDA']);
+  const reading = composeReading({ day: DAY, summary: SUMMARY, signals, model, suppressed });
+  assert.deepEqual(reading.decisions, []);
+  assert.deepEqual(reading.coverage, { worseSignals: 2, representedSignals: 0, suppressedSignals: 1, unrepresentedSignals: 1 });
+  const severe = composeReading({ day: DAY, summary: SUMMARY, signals: [{ ...approval, severity: 3 }, unknown], model, suppressed });
+  assert.equal(severe.decisions.length, 1);
+  assert.deepEqual(severe.coverage, { worseSignals: 2, representedSignals: 1, suppressedSignals: 0, unrepresentedSignals: 1 });
+});
+
+test('a model proposal may coordinate several subjects when every cited source exists', () => {
+  for (const secondary of [SIGNALS[1], SIGNALS[2]]) {
+    const model = validateDailyReading({ decisiones: [{ titulo: 'Revisar varias cuentas y personas', porque: `${SIGNALS[0].text} ${secondary.text}`, tipo: 'HACER', evidencia: [SIGNALS[0].id, secondary.id] }] }, { signals: SIGNALS, day: DAY });
+    assert.equal(model.decisions.length, 1, 'direction may review proposals that coordinate accounts or people');
+    assert.deepEqual(model.decisions[0].evidence, [SIGNALS[0].id, secondary.id]);
+    assert.equal(visibleReadingDecisions({ signals: SIGNALS, decisions: model.decisions }, { clientIds: null, people: true }).length, 1);
+    assert.deepEqual(visibleReadingDecisions({ signals: SIGNALS, decisions: model.decisions }, { clientIds: new Set(['c1']), people: false }), [], 'a restricted reader cannot see only the leading subject and leak the other source');
+  }
+});
+
+test('saved mixed proposals require access to every source, including people and unknown evidence', () => {
+  const lead = { id: `${DAY}:legacy`, title: 'Revisar', subjectType: 'CLIENT', subjectId: 'c1', kind: 'HACER' };
+  const crossClient = { ...lead, evidence: [SIGNALS[0].id, SIGNALS[2].id] };
+  const crossPerson = { ...lead, evidence: [SIGNALS[0].id, SIGNALS[1].id] };
+  const unknown = { ...lead, evidence: [SIGNALS[0].id, 'DESCONOCIDA:x'] };
+  const reading = { signals: SIGNALS, decisions: [crossClient, crossPerson, unknown] };
+  assert.deepEqual(visibleReadingDecisions(reading, { clientIds: new Set(['c1']), people: true }), [crossPerson]);
+  assert.deepEqual(visibleReadingDecisions(reading, { clientIds: null, people: false }), [crossClient]);
+  assert.deepEqual(visibleReadingDecisions(reading, { clientIds: null, people: true }), reading.decisions, 'full scope may inspect missing evidence explicitly');
+  const validLegacy = { ...lead, evidence: [SIGNALS[0].id] };
+  assert.deepEqual(visibleReadingDecisions({ signals: SIGNALS, decisions: [validLegacy] }, { clientIds: new Set(['c1']), people: false }), [validLegacy]);
+  const privateBrief = buildMorningBrief({ recipientName: 'Camila', reading: { ...READING, decisions: [crossClient] }, scope: { clientIds: new Set(['c1']), people: false } });
+  assert.doesNotMatch(privateBrief.text, /1\. \*\*Revisar/);
 });

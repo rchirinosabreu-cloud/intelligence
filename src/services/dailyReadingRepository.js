@@ -4,6 +4,10 @@
 const DAY = 86_400_000;
 const minusDays = (day, amount) => new Date(Date.parse(`${day}T12:00:00Z`) - amount * DAY).toISOString().slice(0, 10);
 const subjectOf = (row) => ({ id: row.subject_id, name: row.subject_name, slug: row.subject_slug || null, pmId: row.pm_id || null, metrics: row.metrics });
+// El historial se lee del registro inmutable, nunca de una copia editable en la fila de trabajo.
+const decisionHistory = `COALESCE((SELECT jsonb_agg(events.event ORDER BY events.id)
+  FROM bria_memory.decision_events events WHERE events.decision_log_id=decision_log.id), '[]'::jsonb) AS history`;
+const verdictChanged = '(decision_log.verdict,decision_log.note) IS DISTINCT FROM (EXCLUDED.verdict,EXCLUDED.note)';
 
 export const createDailyReadingRepository = ({ pool }) => ({
   async hasSnapshot(dayKey) {
@@ -76,27 +80,50 @@ export const createDailyReadingRepository = ({ pool }) => ({
 
   /* ---- El libro de decisiones (19 de octubre de 2026) ---- */
 
-  /** Anota el veredicto de una persona sobre una decisión; volver a anotarla la reemplaza y borra el desenlace anterior. */
+  /** Repetir es inocuo; corregir abre otra revisión y conserva la historia anterior. */
   async recordDecision({ decision, dayKey, user, verdict, note = null, decidedAt = new Date() }) {
-    const { rows } = await pool.query(`INSERT INTO bria_memory.decision_log(id,decision_id,day_key,user_ref,user_name,title,kind,subject_type,subject_id,subject_name,evidence,verdict,note,decided_at)
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      const { rows } = await client.query(`INSERT INTO bria_memory.decision_log(id,decision_id,day_key,user_ref,user_name,title,kind,subject_type,subject_id,subject_name,evidence,verdict,note,decided_at)
       VALUES(gen_random_uuid(),$1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
-      ON CONFLICT (decision_id,user_ref) DO UPDATE SET verdict=EXCLUDED.verdict, note=EXCLUDED.note, decided_at=EXCLUDED.decided_at, outcome=NULL, outcome_day=NULL, outcome_text=NULL
+      ON CONFLICT (decision_id,user_ref) DO UPDATE SET
+        verdict=EXCLUDED.verdict, note=EXCLUDED.note,
+        decided_at=CASE WHEN ${verdictChanged} THEN EXCLUDED.decided_at ELSE decision_log.decided_at END,
+        revision=decision_log.revision + CASE WHEN ${verdictChanged} THEN 1 ELSE 0 END,
+        outcome=CASE WHEN ${verdictChanged} THEN NULL ELSE decision_log.outcome END,
+        outcome_day=CASE WHEN ${verdictChanged} THEN NULL ELSE decision_log.outcome_day END,
+        outcome_text=CASE WHEN ${verdictChanged} THEN NULL ELSE decision_log.outcome_text END
       RETURNING *`,
     [decision.id, dayKey, user.ref, user.name || null, decision.title, decision.kind, decision.subjectType || null, decision.subjectId || null, decision.subjectName || null, decision.evidence || [], verdict, note, decidedAt]);
-    return entryOf(rows[0]);
+      // AFTER ya registró el evento; la transacción mantiene bloqueada la fila hasta leer su historial coherente.
+      const saved = await client.query(`SELECT decision_log.*, ${decisionHistory} FROM bria_memory.decision_log WHERE id=$1`, [rows[0].id]);
+      await client.query('COMMIT');
+      return entryOf(saved.rows[0]);
+    } catch (error) {
+      await client.query('ROLLBACK');
+      throw error;
+    } finally {
+      client.release();
+    }
   },
-  /** Las entradas con veredicto y sin desenlace, de lecturas de entre `fromDays` y `untilDays` días antes de `today`. */
+  /** Una observación por día durante la ventana, incluso tras mejorar, para detectar recaídas. */
   async pendingOutcomes(today, { fromDays = 1, untilDays = 14 } = {}) {
-    const { rows } = await pool.query('SELECT * FROM bria_memory.decision_log WHERE outcome IS NULL AND day_key <= $1 AND day_key >= $2 ORDER BY day_key', [minusDays(today, fromDays), minusDays(today, untilDays)]);
+    const { rows } = await pool.query(`SELECT decision_log.*, ${decisionHistory} FROM bria_memory.decision_log
+      WHERE kind <> 'NO_HACER' AND (outcome_day IS NULL OR outcome_day < $3)
+        AND day_key <= $1 AND day_key >= $2 ORDER BY day_key`, [minusDays(today, fromDays), minusDays(today, untilDays), today]);
     return rows.map(entryOf);
   },
-  async setOutcome(id, { outcome, text, day }) {
-    const { rowCount } = await pool.query('UPDATE bria_memory.decision_log SET outcome=$2, outcome_text=$3, outcome_day=$4 WHERE id=$1 AND outcome IS NULL', [id, outcome, text, day]);
+  async setOutcome(id, { outcome, text, day, expectedRevision }) {
+    if (!Number.isSafeInteger(expectedRevision) || expectedRevision < 1) return false;
+    const { rowCount } = await pool.query(`UPDATE bria_memory.decision_log SET outcome=$2, outcome_text=$3, outcome_day=$4
+      WHERE id=$1 AND revision=$5 AND kind <> 'NO_HACER' AND (outcome_day IS NULL OR outcome_day < $4)
+        AND day_key < $4 AND day_key >= $6`, [id, outcome, text, day, expectedRevision, minusDays(day, 14)]);
     return rowCount > 0;
   },
   /** Las entradas de los últimos `days` días hasta `today`, de todas las personas o de una. */
   async recentDecisions(today, { days = 30, userRef = null } = {}) {
-    const { rows } = await pool.query(`SELECT * FROM bria_memory.decision_log WHERE day_key <= $1 AND day_key >= $2 ${userRef ? 'AND user_ref=$3' : ''} ORDER BY day_key, decided_at`, userRef ? [today, minusDays(today, days), userRef] : [today, minusDays(today, days)]);
+    const { rows } = await pool.query(`SELECT decision_log.*, ${decisionHistory} FROM bria_memory.decision_log WHERE day_key <= $1 AND day_key >= $2 ${userRef ? 'AND user_ref=$3' : ''} ORDER BY day_key, decided_at`, userRef ? [today, minusDays(today, days), userRef] : [today, minusDays(today, days)]);
     return rows.map(entryOf);
   }
 });
@@ -105,5 +132,6 @@ const entryOf = (row) => ({
   id: row.id, decisionId: row.decision_id, dayKey: row.day_key, userRef: row.user_ref, userName: row.user_name || null,
   title: row.title, kind: row.kind, subjectType: row.subject_type || null, subjectId: row.subject_id || null, subjectName: row.subject_name || null,
   evidence: row.evidence || [], verdict: row.verdict, note: row.note || null, decidedAt: row.decided_at,
-  outcome: row.outcome || null, outcomeDay: row.outcome_day || null, outcomeText: row.outcome_text || null
+  outcome: row.outcome || null, outcomeDay: row.outcome_day || null, outcomeText: row.outcome_text || null,
+  revision: row.revision, history: row.history || []
 });

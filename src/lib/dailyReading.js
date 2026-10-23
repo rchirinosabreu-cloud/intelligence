@@ -11,7 +11,7 @@ import { AI_MODELS } from '../config/aiConfig.js';
 import { dayLabel, formatHours } from './teamLoad.js';
 import { JUDGMENT_WORDS } from './briaPulse.js';
 import { levelLabel } from './agencySnapshot.js';
-import { decisionsSection, isSuppressed } from './decisionLog.js';
+import { decisionsSection, isSuppressed, signalProblem } from './decisionLog.js';
 
 export const DAILY_READING_USE_CASE = 'bria.daily-reading';
 export const DAILY_READING_PROMPT_VERSION = 1;
@@ -130,10 +130,11 @@ export const parseDailyReading = (rawText) => {
   }
 };
 
-const decisionFrom = (day, index, { title, why, kind, evidence, ask, rule = null }, signalsById) => {
+const decisionFrom = (day, index, { title, why, kind, evidence, ask, rule = null, source = 'REGLA' }, signalsById) => {
   const lead = signalsById.get(evidence[0]);
-  return { id: `${day}:${index}`, title, why, kind, evidence, subjectType: lead.subjectType, subjectId: lead.subjectId, subjectName: lead.subjectName, url: lead.url || null, ask: ask || null, rule };
+  return { id: `${day}:${index}`, title, why, kind, evidence, subjectType: lead.subjectType, subjectId: lead.subjectId, subjectName: lead.subjectName, url: lead.url || null, ask: ask || null, rule, source };
 };
+const problemKey = (signal) => `${signal.subjectType}:${signal.subjectId}:${signalProblem(signal.kind)}`;
 
 /** Conserva solo lo que las señales respaldan. Nunca inventa una cuenta, una persona, una cifra ni una regla. */
 export const validateDailyReading = (raw, { signals = [], clients = [], day, criteria = [] }) => {
@@ -148,7 +149,7 @@ export const validateDailyReading = (raw, { signals = [], clients = [], day, cri
     if (!title || !evidence.length || judged(title, why, ask)) continue;
     const kind = DECISION_KINDS.includes(item?.tipo) ? item.tipo : 'VIGILAR';
     const rule = rulesById.get(text(item?.regla, 120).replace(/^\[?R:/, '').replace(/\]$/, '')) || null;
-    decisions.push(decisionFrom(day, decisions.length + 1, { title, why, kind, evidence, ask, rule }, signalsById));
+    decisions.push(decisionFrom(day, decisions.length + 1, { title, why, kind, evidence, ask, rule, source: 'MODELO' }, signalsById));
     if (decisions.length === MAX_DECISIONS) break;
   }
   const accounts = {};
@@ -184,14 +185,17 @@ const RULE_DECISIONS = {
 
 export const fallbackDailyReading = ({ signals = [], summary, day }) => {
   const signalsById = new Map(signals.map((s) => [s.id, s]));
-  const seen = new Set(), decisions = [];
+  const groups = new Map(), decisions = [];
   for (const s of signals) {
-    const rule = RULE_DECISIONS[s.kind];
-    if (s.direction !== 'peor' || !rule || seen.has(`${s.subjectType}:${s.subjectId}`)) continue;
-    seen.add(`${s.subjectType}:${s.subjectId}`);
+    if (s.direction !== 'peor' || !RULE_DECISIONS[s.kind]) continue;
+    const key = problemKey(s);
+    if (!groups.has(key)) groups.set(key, []);
+    if (!groups.get(key).some((row) => row.id === s.id)) groups.get(key).push(s);
+  }
+  for (const group of groups.values()) {
+    const s = group[0], rule = RULE_DECISIONS[s.kind];
     const { title, kind, ask } = rule(s);
-    decisions.push(decisionFrom(day, decisions.length + 1, { title, why: s.text, kind, evidence: [s.id], ask }, signalsById));
-    if (decisions.length === BRIEF_DECISIONS) break;
+    decisions.push(decisionFrom(day, decisions.length + 1, { title, why: group.map((row) => row.text).join(' '), kind, evidence: group.map((row) => row.id), ask }, signalsById));
   }
   return { overview: codeOverview(summary), decisions, accounts: {} };
 };
@@ -204,10 +208,36 @@ export const fallbackDailyReading = ({ signals = [], summary, day }) => {
 export const composeReading = ({ day, baseDay = null, summary, signals = [], clients = [], model = null, usage = null, modelName = null, suppressed = null }) => {
   const worse = signals.some((s) => s.direction === 'peor');
   const useModel = model && (model.decisions.length || !worse);
-  const picked = useModel ? model : fallbackDailyReading({ signals, summary, day });
+  const fallback = fallbackDailyReading({ signals, summary, day });
+  const picked = useModel ? model : fallback;
+  const signalsById = new Map(signals.map((s) => [s.id, s]));
+  const representedProblems = new Set();
+  const proposals = [];
+  // La lectura conserva el conjunto completo aunque el modelo solo priorice seis. Las reglas recorren todas las
+  // señales persistidas, incluidas las que no cabían en el digest; el resumen matinal mantiene su propio límite.
+  for (const decision of useModel ? model.decisions : []) {
+    const problems = decision.evidence.map((id) => signalsById.get(id)).filter(Boolean).map(problemKey);
+    // Un problema puede motivar varias acciones y una abstención distintas: conservar el criterio ya validado.
+    proposals.push({ ...decision, source: 'MODELO' });
+    problems.forEach((key) => representedProblems.add(key));
+  }
+  // NO_HACER también cubre el problema: no añadir una instrucción de las reglas que contradiga esa abstención.
+  for (const decision of fallback.decisions) {
+    if (!representedProblems.has(problemKey(signalsById.get(decision.evidence[0])))) proposals.push(decision);
+  }
   // El libro de decisiones (19 de octubre de 2026): lo que la dirección descartó tres veces no se vuelve a proponer,
   // salvo que la señal llegue a la gravedad máxima. Se renumeran para que «la 2» siga siendo la segunda.
-  const kept = suppressed?.size ? picked.decisions.filter((d) => !isSuppressed(d, suppressed, { signals })) : picked.decisions;
+  const kept = suppressed?.size ? proposals.filter((d) => !isSuppressed(d, suppressed, { signals })) : proposals;
+  // Contadores de señales, no de personas ni de aciertos. Lo no representado sigue explícito, sin inventar una regla.
+  const represented = new Set(kept.flatMap((d) => d.evidence));
+  const proposed = new Set(proposals.flatMap((d) => d.evidence));
+  const worseIds = [...new Set(signals.filter((s) => s.direction === 'peor').map((s) => s.id))];
+  const coverage = {
+    worseSignals: worseIds.length,
+    representedSignals: worseIds.filter((id) => represented.has(id)).length,
+    suppressedSignals: worseIds.filter((id) => proposed.has(id) && !represented.has(id)).length,
+    unrepresentedSignals: worseIds.filter((id) => !proposed.has(id)).length
+  };
   const base = { ...picked, decisions: kept.map((d, i) => ({ ...d, id: `${day}:${i + 1}` })) };
   const flagged = new Set(signals.filter((s) => s.subjectType === 'CLIENT' && s.direction === 'peor').map((s) => s.subjectId));
   const accounts = {};
@@ -218,7 +248,7 @@ export const composeReading = ({ day, baseDay = null, summary, signals = [], cli
   return {
     day, baseDay, promptVersion: DAILY_READING_PROMPT_VERSION, source: useModel ? 'MODELO' : 'REGLA',
     model: useModel ? modelName : null, usage: useModel ? usage : null,
-    overview: base.overview || codeOverview(summary), summary, signals, decisions: base.decisions, accounts,
+    overview: base.overview || codeOverview(summary), summary, signals, decisions: base.decisions, coverage, accounts,
     levels: Object.fromEntries(clients.map((client) => [client.id, client.metrics.level])),
     // De quién es cada cuenta: el mensaje de un project manager se limita a las suyas.
     owners: Object.fromEntries(clients.filter((client) => client.pmId).map((client) => [client.id, client.pmId]))
@@ -226,6 +256,20 @@ export const composeReading = ({ day, baseDay = null, summary, signals = [], cli
 };
 
 const inScope = (scope) => (row) => (row.subjectType === 'PERSON' ? Boolean(scope.people) : !scope.clientIds || scope.clientIds.has(row.subjectId));
+
+// La numeración que ve la persona es la que puede anotar: primero lo que haría, luego lo que evitaría.
+// El id guardado de la decisión no cambia al filtrar por permisos ni al resumir la mañana.
+export const visibleReadingDecisions = (reading, scope) => {
+  const allowed = inScope(scope);
+  const signalsById = new Map((reading.signals || []).map((signal) => [signal.id, signal]));
+  const fullScope = !scope.clientIds && Boolean(scope.people);
+  const visible = (reading.decisions || []).filter((decision) => allowed(decision) && (decision.evidence || []).every((id) => {
+    const signal = signalsById.get(id);
+    // No recortar solo la fuente: el título y el porqué pueden nombrar también a la cuenta/persona que no se ve.
+    return signal ? allowed(signal) : fullScope;
+  }));
+  return [...visible.filter((d) => d.kind !== 'NO_HACER'), ...visible.filter((d) => d.kind === 'NO_HACER')];
+};
 const levelParts = (now, before = null) => [['red', 'en rojo'], ['yellow', 'en amarillo'], ['green', 'en verde']]
   .filter(([key]) => now[key] > 0 || (before && before[key] !== now[key]))
   .map(([key, label]) => `${now[key]} ${label}${before && before[key] !== now[key] ? ` (antes ${before[key]})` : ''}`);
@@ -265,7 +309,7 @@ export const buildMorningBrief = ({ recipientName, reading, scope = { clientIds:
 
   const visible = inScope(scope);
   const signalsById = new Map((reading.signals || []).map((row) => [row.id, row]));
-  const decisions = (reading.decisions || []).filter(visible);
+  const decisions = visibleReadingDecisions(reading, scope);
   const todo = decisions.filter((d) => d.kind !== 'NO_HACER').slice(0, BRIEF_DECISIONS);
   const avoid = decisions.filter((d) => d.kind === 'NO_HACER').slice(0, 2);
   const covered = new Set([...todo, ...avoid].flatMap((d) => d.evidence));
@@ -284,6 +328,8 @@ export const buildMorningBrief = ({ recipientName, reading, scope = { clientIds:
     lines.push('');
   }
   if (avoid.length) lines.push('**Lo que no haría**', '', ...avoid.map((d) => `- **${d.title}.** ${d.why}`), '');
+  const remaining = decisions.length - todo.length - avoid.length;
+  if (remaining > 0) lines.push(`${remaining === 1 ? 'Queda' : 'Quedan'} ${plural(remaining, 'propuesta', 'propuestas')} en esta lectura. Pídeme la lectura completa para revisarlas.`, '');
   const more = (reading.signals || []).filter(visible).filter((row) => row.direction === 'peor' && !covered.has(row.id)).slice(0, 6);
   if (more.length) lines.push('**También cambió**', '', ...more.map((row) => `- ${row.text}`), '');
   const better = (reading.signals || []).filter(visible).filter((row) => row.direction === 'mejor').slice(0, 4);

@@ -67,3 +67,47 @@ test('a revoked module is refreshed and no longer offered as a tool', async () =
   assert.deepEqual(offered.map(tool => tool.name).filter(name => !/_acceso$/.test(name)), ['ofrecer_opciones', 'mapa_de_plataforma', 'consultar_plataforma', 'operar_en_plataforma', 'consultar_aprendizajes', 'recordar_aprendizaje', 'retirar_recuerdo', 'memoria_de_la_agencia', 'guardar_en_memoria', 'retirar_de_memoria', 'pedir_permiso', 'lectura_de_la_agencia', 'anotar_decision']);
   assert.deepEqual(answer.sources, []);
 });
+
+test('daily reading tools receive the validated user identity and current team member', async () => {
+  const user = { ...actor(), id: 'obsolete-id', teamMember: { id: 'obsolete-member' } };
+  const current = { ...row(), teamMember: { id: 'current-member', name: 'PM actual', isActive: true } };
+  let seen, round = 0;
+  const service = createBriaAssistantService({
+    db: { user: { findUnique: async ({ where }) => { assert.equal(where.id, 'u'); return current; } } },
+    tools: [], mail: null, vault: null,
+    dailyReading: { explain: async ({ user: person }) => { seen = structuredClone(person); return { fecha: '2026-10-23' }; } },
+    ai: { generate: async () => ++round === 1 ? { functionCalls: [{ id: 'read', name: 'lectura_de_la_agencia', args: {} }], output: [] } : { text: 'Esta es tu lectura.' } }
+  });
+  await service.ask({ user, question: 'Revisa mis cuentas' });
+  assert.equal(seen.id, 'u', 'el libro propio se consulta por la identidad validada');
+  assert.equal(seen.userId, 'u');
+  assert.deepEqual(seen.teamMember, current.teamMember, 'el alcance usa la ficha actual del PM');
+});
+
+test('a changed team member is refreshed before the next tool executes', async () => {
+  let member = 'first-member', seen, round = 0;
+  const service = createBriaAssistantService({
+    db: { user: { findUnique: async () => ({ ...row(), teamMember: { id: member, isActive: true } }) } },
+    tools: [], mail: null, vault: null,
+    dailyReading: { explain: async ({ user }) => { seen = structuredClone(user); return {}; } },
+    ai: { generate: async () => {
+      if (++round !== 1) return { text: 'Esta es tu lectura.' };
+      member = 'new-member';
+      return { functionCalls: [{ id: 'read', name: 'lectura_de_la_agencia', args: {} }], output: [] };
+    } }
+  });
+  await service.ask({ user: actor(), question: 'Revisa mis cuentas' });
+  assert.equal(seen.teamMember?.id, 'new-member');
+  assert.equal(seen.id, 'u');
+});
+
+test('the source reading day reaches decision tools even when the model omits the day', async () => {
+  let seen, round = 0;
+  const service = createBriaAssistantService({
+    db: { user: { findUnique: async () => row() } }, tools: [], mail: null, vault: null,
+    dailyReading: { recordVerdict: async (input) => { seen = input; return { saved: true }; } },
+    ai: { generate: async () => ++round === 1 ? { functionCalls: [{ id: 'note', name: 'anotar_decision', args: { decision: '2', veredicto: 'hecho' } }], output: [] } : { text: 'Listo.' } }
+  });
+  await service.ask({ user: actor(), question: 'La 2 ya la hice', readingDay: '2026-10-22' });
+  assert.equal(seen.dia, '2026-10-22', 'una lectura anterior no se convierte en la última por omitir el modelo el día');
+});

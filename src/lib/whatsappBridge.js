@@ -245,6 +245,7 @@ export const REPLIES = Object.freeze({
   busy: 'Todavía estoy respondiendo tu mensaje anterior. Dame un momento.',
   needsPlatform: 'Eso lo tengo que hacer desde la plataforma, con tu sesión abierta: confírmalo en el chat de Bria allá y lo hago.',
   alertGone: 'Ese aviso ya no está disponible. Lo que siga pendiente lo ves en la plataforma.',
+  optionGone: 'Esa opción corresponde a otra respuesta. Revisa el resumen actual antes de confirmar o escríbeme qué quieres cambiar.',
   dismissed: 'Listo, no te lo vuelvo a mostrar hoy.',
   done: 'Listo.'
 });
@@ -269,13 +270,16 @@ const clip = (text, max) => (text.length <= max ? text : `${text.slice(0, max - 
 export const quickReplyId = (option) => `${QUICK_REPLY_PREFIX}${option}`.slice(0, REPLY_ID_MAX);
 
 /** El turno guardado de Bria, listo para salir por WhatsApp: el texto y sus opciones como botones. */
-export const replyForWhatsApp = (turn) => {
+export const replyForWhatsApp = (turn, { conversationId = null, revision } = {}) => {
   if (!turn) return { text: REPLIES.failed, options: [] };
   if (turn.accessCards?.length || turn.accessCapture) return { text: REPLIES.vaultOnly, options: [] };
   const text = toWhatsAppText(turn.text);
   if (!text) return { text: REPLIES.failed, options: [] };
   const labels = [...new Set((turn.quickReplies || []).map((option) => String(option || '').trim()).filter(Boolean))];
-  return { text, options: labels.map((label) => ({ id: quickReplyId(label), label })) };
+  const scoped = conversationId && Number.isSafeInteger(revision) && revision >= 0;
+  // El puente usa la revisión guardada y resuelve la opción contra ese mismo turno, nunca contra el título
+  // recibido. El formato q: queda para las representaciones antiguas sin contexto; el puente ya no lo ejecuta.
+  return { text, options: labels.map((label, index) => ({ id: scoped ? `c:${conversationId}:${revision}:${index}` : quickReplyId(label), label })) };
 };
 
 /** Las opciones dichas en texto, para cuando los botones no pueden salir. */

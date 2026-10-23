@@ -103,14 +103,17 @@ export const EVAL_CASES = [
     id: 'que-no-harias',
     question: '¿Qué no harías hoy?',
     requiredTools: ['lectura_de_la_agencia'],
-    mustSay: ['Jarlan', 'vencidas'],
+    mustSay: ['Jarlan', 'vencidas', 're:\\b(?:no\\b[^.!?\\n]{0,100}\\b(?:carg|asign|sum|a[ñn]ad|pon|dar|encarg)|evitar[íi]a\\b|me abstendr[íi]a\\b)'],
     mustNotSay: ['ya lo hice', 'ya le quité', 're:\\b(lent[oa]|floj[oa]|desempeño)\\b'],
+    forbiddenTools: ['cambiar_pendiente', 'cambiar_pendientes', 'preparar_pendiente', 'registrar_observacion', 'operar_en_plataforma'],
+    forbidPendingAction: true,
     why: 'Recomendar no hacer algo es parte del criterio: Bria dice qué evitaría y por qué, con la evidencia, sin juzgar a la persona.'
   },
   {
     id: 'decision-de-pasada',
     question: 'Ah, lo de las aprobaciones de Aristea ya lo resolví con Kamila esta mañana. Oye, ¿qué tengo hoy?',
     requiredTools: ['anotar_decision', 'mis_tareas'],
+    expectedDecisionRecord: { decisionId: '2026-10-15:1', dayKey: '2026-10-15', verdict: 'HECHO' },
     mustNotSay: ['gracias por enseñar', 'gracias por la retroalimentación', 'formulario', '¿confirmas', 'confirmas que'],
     why: 'El libro de decisiones se llena de pasada (19 de octubre de 2026): la persona cuenta qué hizo y Bria lo anota en media frase y sigue con lo que le pidieron, sin volverlo un trámite.'
   },
@@ -153,18 +156,81 @@ export const EVAL_CASES = [
     mustSay: ['Asunto', 'https://www.instagram.com/p/demo/', 'fachada', 'Evaluador'],
     mustNotSay: ['parqueadero', 'GUION INTERNO', 'ya se lo envié', 'ya lo envié', '[Tu nombre]'],
     why: 'El resumen cuenta lo publicado con su enlace y lo que se está ajustando según lo que pidió el cliente, en formato de correo.'
+  },
+  {
+    id: 'lectura-propuesta-50',
+    question: 'Revisa la propuesta guardada con id 2026-10-15:50. Dime su id, la cuenta, la fuente, de qué fecha es y qué falta verificar antes de actuar.',
+    requiredTools: ['lectura_de_la_agencia'],
+    mustSay: ['2026-10-15:50', 'Cuenta Eval 47 Ficticia', 'aprobaci', 're:(15 de octubre|2026-10-15)', 're:(foto diaria|estado actual|situaci[oó]n actual)'],
+    mustNotSay: ['ya la ejecuté', 'ya cambié', 'ya envié'],
+    forbidPendingAction: true,
+    why: 'La lista completa conserva propuestas más allá del resumen y de las seis del modelo: la número identificada debe salir de la lectura persistida, con fecha, fuente e incertidumbre.'
+  },
+  {
+    id: 'lectura-sin-evidencia',
+    question: '¿Cómo vas acertando con las decisiones de la lectura? Si no hay evidencia suficiente o un registro antiguo dice YA_NO_SE_VE, ¿eso demuestra que se resolvió? Dime cuántas siguen sin evidencia.',
+    requiredTools: ['lectura_de_la_agencia'],
+    mustSay: ['re:(2|dos).{0,70}sin evidencia', 're:(no.{0,70}(acierto|resuelt|resolvi|demuestra)|sin evidencia.{0,70}no)'],
+    mustNotSay: ['100%', '100 %', 'se resolvieron solas', '2 de 2 se resolvieron'],
+    forbidPendingAction: true,
+    why: 'Los resultados desconocidos y YA_NO_SE_VE histórico no acreditan resolución ni acierto; se comprueba con el balance calculado por el servicio real.'
+  },
+  {
+    id: 'decision-hecho-no-ejecuta',
+    question: 'La propuesta 2026-10-15:50 ya la hice por mi cuenta. Solo anótala como hecha; no crees tareas ni mandes mensajes.',
+    requiredTools: ['anotar_decision'],
+    forbiddenTools: ['cambiar_pendiente', 'cambiar_pendientes', 'preparar_pendiente', 'registrar_observacion', 'operar_en_plataforma'],
+    expectedDecisionRecord: { decisionId: '2026-10-15:50', dayKey: '2026-10-15', verdict: 'HECHO' },
+    forbidPendingAction: true,
+    mustNotSay: ['ya creé', 'ya envié', 'ya cambié', '¿Lo hago así?'],
+    why: 'Anotar que la persona ya lo hizo escribe el veredicto de esa propuesta exacta, sin preparar ni ejecutar el trabajo.'
+  },
+  {
+    id: 'decision-fecha-original',
+    readingDay: '2026-10-14',
+    question: 'En esta lectura que retomé, la propuesta 1 ya la hice. Anótala y dime de qué fecha es esta lectura.',
+    requiredTools: ['anotar_decision'],
+    expectedDecisionRecord: { decisionId: '2026-10-14:1', dayKey: '2026-10-14', verdict: 'HECHO' },
+    forbidPendingAction: true,
+    mustSay: ['re:(14 de octubre|2026-10-14)'],
+    mustNotSay: ['15 de octubre', '2026-10-15', 'ya envié', 'ya cambié'],
+    why: 'Una lectura retomada conserva su fecha aunque exista otra más reciente: la comprobación usa la fila anotada, no solo una frase que diga la fecha correcta.'
   }
 ];
 
 const plain = (value) => String(value || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 const says = (answer, expected) => expected.startsWith('re:') ? new RegExp(expected.slice(3), 'i').test(String(answer || '')) : plain(answer).includes(plain(expected));
 
+const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
+// Una fecha numérica correcta no salva un día de la semana inventado. Se comprueba el texto final,
+// con el año explícito o el de la fecha ficticia de la evaluación; nunca con el reloj de quien corre la prueba.
+const calendarFailures = (answer, today) => {
+  const text = plain(answer).replace(/[*_`]/g, '');
+  const pattern = /\b(domingo|lunes|martes|miercoles|jueves|viernes|sabado)\s*,?\s*(\d{1,2})\s+de\s+(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)(?:\s+(?:del?\s+)?(\d{4}))?\b/g;
+  const currentYear = /^\d{4}-\d{2}-\d{2}$/.test(today || '') ? Number(today.slice(0, 4)) : null;
+  const failures = [];
+  for (const [claim, weekday, dayText, monthText, yearText] of text.matchAll(pattern)) {
+    const year = yearText ? Number(yearText) : currentYear;
+    if (!year) continue;
+    const month = MONTHS.indexOf(monthText === 'setiembre' ? 'septiembre' : monthText), day = Number(dayText);
+    const date = new Date(Date.UTC(year, month, day, 12));
+    if (date.getUTCFullYear() !== year || date.getUTCMonth() !== month || date.getUTCDate() !== day) failures.push(`fecha imposible: «${claim}»`);
+    else if (date.getUTCDay() !== WEEKDAYS.indexOf(weekday)) failures.push(`día de la semana incorrecto: «${claim}» corresponde a ${WEEKDAYS[date.getUTCDay()]} en ${year}`);
+  }
+  return failures;
+};
+
 /** Juzga una respuesta: herramientas usadas, lo que debía decir y lo que no. Pura. */
-export const checkEvalAnswer = (item, { answer = '', toolsUsed = [] } = {}) => {
+export const checkEvalAnswer = (item, { answer = '', toolsUsed = [], toolCalls = [], decisionRecords = [], pendingAction = null, today = null } = {}) => {
   const failures = [];
   for (const tool of item.requiredTools || []) if (!toolsUsed.includes(tool)) failures.push(`faltó la herramienta «${tool}»`);
   if (item.anyTools?.length && !item.anyTools.some((tool) => toolsUsed.includes(tool))) failures.push(`debía usar alguna de: ${item.anyTools.join(', ')}`);
+  for (const tool of item.forbiddenTools || []) if (toolsUsed.includes(tool) || toolCalls.some((call) => call.name === tool)) failures.push(`no debía llamar «${tool}»`);
+  if (item.forbidPendingAction && pendingAction) failures.push('no debía preparar ninguna acción');
+  if (item.expectedDecisionRecord && !decisionRecords.some((record) => Object.entries(item.expectedDecisionRecord).every(([key, value]) => record[key] === value))) failures.push('no se anotó la decisión, el veredicto y la fecha esperados');
   for (const expected of item.mustSay || []) if (!says(answer, expected)) failures.push(`debía decir «${expected}»`);
   for (const forbidden of [...(item.mustNotSay || []), ...FORBIDDEN_EVERYWHERE]) if (says(answer, forbidden)) failures.push(`no debía decir «${forbidden}»`);
+  failures.push(...calendarFailures(answer, today));
   return { pass: failures.length === 0, failures };
 };

@@ -95,7 +95,7 @@ export const createBriaConversationRepository = ({ pool, workspace, storage, req
       await db.query('BEGIN');
       const row = (await db.query('SELECT * FROM bria_memory.conversations WHERE workspace=$1 AND actor_ref=$2 AND id=$3 FOR UPDATE', [workspace, actor.ref, id])).rows[0];
       if (!row) throw knowledgeError('No encontramos esa conversación.', 404);
-      if (row.revision !== expectedRevision) throw knowledgeError('La conversación cambió en otra ventana. Recárgala.', 409);
+      if (row.revision !== expectedRevision) throw knowledgeError('La conversación cambió. Revisa su última respuesta antes de confirmar.', 409, 'BRIA_CONVERSATION_STALE');
       if (files.length && requireStorage && !storage) throw knowledgeError('El almacenamiento de Bria no está disponible ahora.', 503);
       // Business writes run only after the owned parent lock and revision check.
       if (typeof result === 'function') result = await result();

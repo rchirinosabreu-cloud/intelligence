@@ -11,5 +11,5 @@ test('the date and the name go at the end, so the start is the same for everyone
   const helen = buildInstructions({ person: { name: 'Helen' }, today: '2026-10-10', tools });
   const shared = (a, b) => { let i = 0; while (i < a.length && a[i] === b[i]) i += 1; return i; };
   assert.ok(shared(rodny, helen) / rodny.length > 0.9, 'more than 90 % of the instructions is a shared prefix');
-  assert.match(rodny.split('\n').at(-1), /^Hoy es 9 de octubre de 2026 \(hora de Bogotá\)\. Hablas con Rodny, Director\.$/);
+  assert.match(rodny.split('\n').at(-1), /^Hoy es viernes 9 de octubre de 2026 \(hora de Bogotá\)\. Hablas con Rodny, Director\.$/);
 });

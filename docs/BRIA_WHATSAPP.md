@@ -71,6 +71,20 @@ Por qué así y no al revés: que Bria escriba primero exige plantillas aprobada
 
 ## El puente al motor de Bria
 
+### Retomar la lectura de la mañana (23 de octubre de 2026)
+
+La revisión de una propuesta y sus cambios comparten la misma conversación con la web. Los mensajes de ambos canales llevan la revisión que vio la persona: si WhatsApp avanzó mientras una pestaña seguía abierta, esa pestaña recupera la última respuesta y pide revisar antes de confirmar otra vez. El mensaje y los archivos se conservan; una confirmación rechazada no se reenvía automáticamente.
+
+La lectura de la mañana vincula el aviso con su chat original. **«Revisar lectura»** abre una pregunta de revisión en ese mismo chat, con la identidad y los permisos de quien toca el botón. Se valida que la conversación pertenezca a esa persona, que siga accesible, que corresponda a la lectura y a su fecha, y que el aviso no tenga más de 14 días. No se muestra contenido de una conversación ajena o inaccesible.
+
+Recibir el aviso o tocar **«Ver aviso»** para leerlo no cambia el chat activo. Revisar tampoco equivale a aceptar una propuesta: el motor recibe una pregunta, y las acciones conservan su confirmación explícita. Después de entregar la respuesta, esa conversación se retoma durante el día. Al día siguiente se conserva la regla de conversación diaria; se puede tocar otra vez «Revisar lectura» para volver a la fuente.
+
+En ese chat las herramientas de lectura conservan la fecha de la nota original, incluso cuando ya existe otra lectura. Así «hice la 1» se refiere a la decisión de esa lectura; el número coincide con el resumen visible para esa persona. Una fecha indicada expresamente al anotar permite elegir otra lectura.
+
+Las opciones del chat quedan ligadas a la conversación y a la revisión que las mostró. Un botón viejo, uno de otro chat o uno anterior a esta actualización pide revisar la respuesta actual y no ejecuta nada. La respuesta libre sigue admitida. Antes de producir una respuesta nueva se retira temporalmente el vínculo activo y se restablece solo después de entregarla completa: si falla el motor, la entrega o el guardado del vínculo, un «sí» posterior no confirma el resumen que no llegó. El historial sigue en Bria de la plataforma y una lectura se puede retomar desde su aviso.
+
+Si WhatsApp no admite el botón, el aviso indica abrir el chat en Bria de la plataforma. No se promete que escribir el título del botón seleccione una lectura. Las respuestas libres y las respuestas citadas sin selección explícita siguen el chat activo. Los avisos antiguos sin vínculo, el cierre del día y la revisión mensual mantienen su comportamiento previo. Esta continuidad no incorpora los grupos de clientes.
+
 Un mensaje de un número vinculado:
 
 1. Se vuelve a leer la persona en la base: cuenta activa, miembro activo del equipo y Bria activa (`canUseBria`). Si ya no puede, se le dice y no se procesa.

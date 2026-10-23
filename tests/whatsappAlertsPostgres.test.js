@@ -42,6 +42,11 @@ test('real PostgreSQL: el vínculo abre la ventana, las preferencias se guardan 
     await repo.markAlertOpened(saved.id, new Date('2099-01-05T19:00:00Z'));
     const read = await repo.alertById(saved.id);
     assert.deepEqual([read.status, read.via, read.openedAt.toISOString(), read.userId], ['SENT', 'TEMPLATE', '2099-01-05T19:00:00.000Z', USER]);
+    assert.equal(read.conversationId, null, 'los avisos anteriores conservan su forma sin conversación fuente');
+    const conversationId = '86c579ab-b2f3-4b8b-90ba-57e693342dd5';
+    const morning = await repo.saveAlert({ userId: USER, kind: 'DAILY', sourceRef: 'LECTURA_MANANA:2099-01-05', text: 'Revisemos las decisiones de hoy.', conversationId, createdAt: at });
+    assert.equal(morning.conversationId, conversationId);
+    assert.equal((await repo.alertById(morning.id)).conversationId, conversationId, 'la selección puede recuperar su chat después del envío');
     await repo.markAlertFailed(saved.id, 'Meta no lo aceptó');
     assert.equal((await repo.alertById(saved.id)).error, 'Meta no lo aceptó');
     assert.equal(await repo.alertById('no-es-un-id'), null);

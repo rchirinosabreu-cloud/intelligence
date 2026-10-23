@@ -15,7 +15,7 @@ import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
 import { bogotaClock, personBoardUrl } from '../lib/briaNudges.js';
 import { approvalState, APPROVAL_STATES } from '../lib/contentApproval.js';
 import { clientSnapshot, personSnapshot, readSignals, levelLabel } from '../lib/agencySnapshot.js';
-import { buildDailyDigest, buildDailyReadingRequest, parseDailyReading, validateDailyReading, composeReading, buildMorningBrief } from '../lib/dailyReading.js';
+import { buildDailyDigest, buildDailyReadingRequest, parseDailyReading, validateDailyReading, composeReading, buildMorningBrief, visibleReadingDecisions } from '../lib/dailyReading.js';
 import { suppressedDecisions, decisionOutcome, scorecard, resolveDecisionRef, normalizeVerdict, VERDICTS, SUPPRESS_DAYS, OUTCOME_AFTER_DAYS, OUTCOME_UNTIL_DAYS } from '../lib/decisionLog.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { factAccess, AGENCY_ENTITY } from '../lib/briaAgencyFacts.js';
@@ -45,6 +45,31 @@ const DAY = 86_400_000;
 const plusDays = (day, amount) => new Date(Date.parse(`${day}T12:00:00Z`) + amount * DAY).toISOString().slice(0, 10);
 const fold = (value) => String(value ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
 const count = (map, key, amount = 1) => { if (key) map.set(key, (map.get(key) || 0) + amount); };
+
+// La revisión amplía la misma lectura guardada: ni el veredicto ni mirar sus fuentes son una orden de ejecución.
+// No se atribuye a un modelo una propuesta histórica cuyo origen individual no quedó registrado.
+const reviewDecision = (decision, index, { reading, signalsById, entry, user }) => {
+  const evidence = (decision.evidence || []).map(id => signalsById.get(id)).filter(Boolean);
+  const subjects = new Map(evidence.map(row => [`${row.subjectType}:${row.subjectId}`, { tipo: row.subjectType, id: row.subjectId, nombre: row.subjectName }]));
+  if (!subjects.size) subjects.set(`${decision.subjectType}:${decision.subjectId}`, { tipo: decision.subjectType, id: decision.subjectId, nombre: decision.subjectName });
+  return {
+    id: decision.id, numero: index + 1, fecha: reading.day,
+    titulo: decision.title, porque: decision.why, tipo: decision.kind, sobre: decision.subjectName,
+    pedido: decision.ask, seVeEn: evidence.map(row => row.text), anotada: entry?.verdict || null,
+    origen: ['MODELO', 'REGLA'].includes(decision.source) ? decision.source : 'NO_REGISTRADO',
+    alcance: [...subjects.values()],
+    fuentes: evidence.map(row => ({ id: row.id, fecha: reading.day, comparadaCon: reading.baseDay || null, sobre: row.subjectName, texto: row.text, enlace: row.url || null })),
+    fuentesFaltantes: (decision.evidence || []).filter(id => !signalsById.has(id)),
+    faltaVerificar: 'La situación actual y la causa del problema: esta evidencia es una foto diaria, no una comprobación en vivo ni una garantía del efecto de actuar.',
+    cambioPreparado: false, ejecucionAutorizada: false,
+    quienDecide: user.teamMember?.name || user.name || 'La persona que revisa esta propuesta',
+    anotacion: entry ? {
+      veredicto: entry.verdict, nota: entry.note || null, revision: entry.revision || 1, fecha: entry.decidedAt,
+      desenlace: entry.outcome || null, fechaDesenlace: entry.outcomeDay || null, evidenciaDesenlace: entry.outcomeText || null,
+      historia: entry.history || []
+    } : null
+  };
+};
 
 const defaultGenerate = async (request) => {
   const result = await createOpenAIClient({ models: AI_MODELS }).generate(request);
@@ -135,7 +160,12 @@ export const createDailyReadingService = ({
     async generateReading(at = now()) {
       const today = bogotaDate(at);
       const existing = await repo.reading(today);
-      if (existing) return existing;
+      if (existing) {
+        // La lectura puede haberse guardado antes de un fallo al observar los desenlaces. Reintentar esa escritura
+        // no vuelve a pedirle una lectura al modelo; el repositorio conserva una observación por día y revisión.
+        await this.settleOutcomes(today, existing.signals, await repo.snapshot(today));
+        return existing;
+      }
       const [current, history] = await Promise.all([repo.snapshot(today), repo.history(today, HISTORY_DAYS)]);
       const { baseDay, signals, summary } = readSignals({ today, current, history });
       let model = null, usage = null, modelName = null, digestText = null;
@@ -166,7 +196,7 @@ export const createDailyReadingService = ({
       let settled = 0;
       for (const entry of await repo.pendingOutcomes(today, { fromDays: OUTCOME_AFTER_DAYS, untilDays: OUTCOME_UNTIL_DAYS })) {
         const verdict = decisionOutcome(entry, { signals, current });
-        if (verdict && await repo.setOutcome(entry.id, { outcome: verdict.outcome, text: verdict.text, day: today })) settled += 1;
+        if (verdict && await repo.setOutcome(entry.id, { outcome: verdict.outcome, text: verdict.text, day: today, expectedRevision: entry.revision })) settled += 1;
       }
       return settled;
     },
@@ -177,8 +207,9 @@ export const createDailyReadingService = ({
       const previous = (await repo.readingsBefore(reading.day, 7))[0];
       if (!previous?.decisions?.length) return null;
       const scope = scopeFor(user, previous);
-      const visible = previous.decisions.filter((d) => (d.subjectType === 'PERSON' ? scope.people : !scope.clientIds || scope.clientIds.has(d.subjectId)));
-      const entries = (await repo.recentDecisions(reading.day, { days: 8, userRef: user.id })).filter((e) => e.dayKey === previous.day);
+      const visible = visibleReadingDecisions(previous, scope);
+      const visibleIds = new Set(visible.map(decision => decision.id));
+      const entries = (await repo.recentDecisions(reading.day, { days: 8, userRef: user.id })).filter((e) => e.dayKey === previous.day && visibleIds.has(e.decisionId));
       const noted = new Set(entries.map((e) => e.decisionId));
       return { decided: entries, undecided: visible.filter((d) => !noted.has(d.id)) };
     },
@@ -190,12 +221,12 @@ export const createDailyReadingService = ({
     async recordVerdict({ user, ref, veredicto, nota = null, dia = null }) {
       const reading = dia ? await repo.reading(dia) : await repo.latestReading();
       if (!reading) return { saved: false, motivo: 'Todavía no hay una lectura con decisiones.' };
-      const decision = resolveDecisionRef(ref, reading.decisions || []);
-      if (!decision) return { saved: false, motivo: `No sé a cuál decisión de la lectura del ${reading.day} te refieres: ${(reading.decisions || []).map((d, i) => `${i + 1}. ${d.title}`).join(' · ') || 'no había ninguna'}.` };
+      const scope = scopeFor(user, reading);
+      const visible = visibleReadingDecisions(reading, scope);
+      const decision = resolveDecisionRef(ref, visible);
+      if (!decision) return { saved: false, motivo: `No sé a cuál decisión de la lectura del ${reading.day} te refieres: ${visible.map((d, i) => `${i + 1}. ${d.title}`).join(' · ') || 'no había ninguna'}.` };
       const verdict = VERDICTS.includes(veredicto) ? veredicto : normalizeVerdict(veredicto);
       if (!verdict) return { saved: false, motivo: 'No me quedó claro si la hiciste, la descartaste o la dejaste para después.' };
-      const scope = scopeFor(user, reading);
-      if (decision.subjectType === 'PERSON' ? !scope.people : scope.clientIds && !scope.clientIds.has(decision.subjectId)) return { saved: false, motivo: 'Esa decisión no es de tus cuentas.' };
       const entry = await repo.recordDecision({ decision, dayKey: reading.day, user: { ref: user.id, name: user.teamMember?.name || user.name || null }, verdict, note: nota ? String(nota).slice(0, 300) : null, decidedAt: now() });
       return { saved: true, decision: decision.title, veredicto: entry.verdict, dia: reading.day };
     },
@@ -213,7 +244,7 @@ export const createDailyReadingService = ({
       try { await notify({ userId: user.id, type: MORNING_BRIEF_NOTIFICATION, message: 'Bria dejó tu lectura de la mañana en el chat.', relatedId: chat.id }); }
       catch (error) { logger.error('[DailyReading] No se pudo avisar a una persona:', error?.message || error); }
       // La misma lectura por WhatsApp, a quien vinculó su número y no la apagó (22 de octubre de 2026).
-      whatsapp({ userId: user.id, ...dailyAlert({ note: 'LECTURA_MANANA', dayKey: reading.day, text }) });
+      whatsapp({ userId: user.id, ...dailyAlert({ note: 'LECTURA_MANANA', dayKey: reading.day, text, conversationId: chat.id }) });
       return { ...delivery, already: false };
     },
 
@@ -239,23 +270,44 @@ export const createDailyReadingService = ({
      * Lo que Bria consulta en el chat: la última lectura y, si se pide, la historia de una cuenta o de una persona.
      * Respeta el mismo alcance que el mensaje de la mañana.
      */
-    async explain({ user, cliente = '', persona = '', days = 14 } = {}) {
-      const reading = await repo.latestReading();
+    async explain({ user, cliente = '', persona = '', days = 14, day = null } = {}) {
+      const reading = day ? await repo.reading(day) : await repo.latestReading();
       if (!reading) return { mensaje: 'Todavía no hay una lectura guardada: la primera foto se toma a las 6:00 y la primera lectura sale el siguiente día hábil a las 6:30.' };
       const scope = scopeFor(user, reading);
       const visible = (row) => (row.subjectType === 'PERSON' ? scope.people : !scope.clientIds || scope.clientIds.has(row.subjectId));
       const signalsById = new Map(reading.signals.map((row) => [row.id, row]));
       // El libro de decisiones: qué anotó esta persona y cómo viene el acierto (la agencia para administración; lo propio para un PM).
       const own = typeof repo.recentDecisions === 'function' ? await repo.recentDecisions(reading.day, { days: 30, userRef: user.id }) : [];
-      const all = scope.clientIds ? own : (typeof repo.recentDecisions === 'function' ? await repo.recentDecisions(reading.day, { days: 30 }) : []);
-      const proposed = typeof repo.readingsBefore === 'function' ? [reading, ...await repo.readingsBefore(reading.day, 30)].reduce((sum, row) => sum + (row.decisions || []).length, 0) : 0;
+      // Un PM sin cuentas puede leer la agencia, pero ese alcance no le concede los veredictos de otras personas.
+      const isAdmin = String(user.role || '').toUpperCase() === 'ADMIN';
+      const all = isAdmin && typeof repo.recentDecisions === 'function' ? await repo.recentDecisions(reading.day, { days: 30 }) : own;
+      const readings = [reading, ...(typeof repo.readingsBefore === 'function' ? await repo.readingsBefore(reading.day, 30) : [])];
+      const proposed = readings.reduce((sum, row) => {
+        const rowScope = scopeFor(user, row);
+        return sum + visibleReadingDecisions(row, rowScope).length;
+      }, 0);
       const noted = new Map(own.filter((e) => e.dayKey === reading.day).map((e) => [e.decisionId, e]));
+      const decisions = visibleReadingDecisions(reading, scope);
+      const visibleSignals = reading.signals.filter(visible);
+      const represented = new Set(decisions.flatMap(decision => decision.evidence || []));
+      const uncovered = visibleSignals.filter(signal => !represented.has(signal.id));
       const data = {
         fecha: reading.day, comparadaCon: reading.baseDay, escritaPor: reading.source === 'MODELO' ? 'Bria' : 'las reglas de la plataforma (el modelo no estaba disponible o no hacía falta)',
         historia: `${reading.summary.historyDays} ${reading.summary.historyDays === 1 ? 'foto' : 'fotos'} diarias desde el ${reading.summary.firstDay}`,
         resumen: scope.clientIds ? null : reading.overview,
-        decisiones: reading.decisions.map((d, i) => ({ d, numero: i + 1 })).filter(({ d }) => visible(d)).map(({ d, numero }) => ({ numero, titulo: d.title, porque: d.why, tipo: d.kind, sobre: d.subjectName, pedido: d.ask, seVeEn: d.evidence.map((id) => signalsById.get(id)?.text).filter(Boolean), anotada: noted.get(d.id)?.verdict || null })),
-        senales: reading.signals.filter(visible).slice(0, 25).map((row) => ({ sobre: row.subjectName, cambio: row.direction, texto: row.text })),
+        decisiones: decisions.map((decision, index) => reviewDecision(decision, index, { reading, signalsById, entry: noted.get(decision.id), user })),
+        // La lista completa no se recorta al tamaño del saludo. Estos conteos se calculan DESPUÉS del alcance,
+        // sin revelar a un PM las cifras de señales o propuestas de las cuentas de otra persona.
+        cobertura: { propuestas: decisions.length, senalesVisibles: visibleSignals.length, senalesConPropuesta: visibleSignals.length - uncovered.length, senalesSinPropuesta: uncovered.length, listaCompleta: true },
+        senalesSinPropuesta: uncovered.map(row => ({ id: row.id, sobre: row.subjectName, cambio: row.direction, texto: row.text })),
+        revisionHumana: 'Estas son propuestas guardadas, no cambios autorizados. Podemos revisar y ajustar una en conversación. Para actuar hay que preparar el cambio con los datos actuales, mostrar su resumen y recibir una confirmación de esa versión. Anotar «hecho» solo registra lo que la persona contó.',
+        opcionesDeRevision: [
+          { opcion: 'Revisar', efecto: 'Consultar el estado actual y preparar una acción concreta, si hace falta.' },
+          { opcion: 'Ajustar', efecto: 'Cambiar lo propuesto en conversación y revisar el nuevo resumen antes de confirmar.' },
+          { opcion: 'Posponer', efecto: 'Anotar la decisión humana; no cambia por sí sola las fechas de tareas ni programa recordatorios.' },
+          { opcion: 'Descartar', efecto: 'Anotar el motivo; no cancela ni borra trabajo en la plataforma.' }
+        ],
+        senales: visibleSignals.slice(0, 25).map((row) => ({ sobre: row.subjectName, cambio: row.direction, texto: row.text })),
         libroDeDecisiones: scorecard(all, { proposed })
       };
       const span = Math.min(Math.max(Number(days) || 14, 3), 40);

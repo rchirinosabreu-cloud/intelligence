@@ -55,3 +55,6 @@ CREATE TABLE IF NOT EXISTS bria_memory.whatsapp_alerts (
   UNIQUE (user_id, source_ref)
 );
 CREATE INDEX IF NOT EXISTS whatsapp_alerts_user_recent ON bria_memory.whatsapp_alerts(user_id, created_at DESC);
+-- La lectura y su revisión comparten el chat original. Opcional para conservar los avisos anteriores; nunca
+-- cambia el chat activo al entregar un aviso. El puente revalida propietario y acceso al seleccionarlo.
+ALTER TABLE bria_memory.whatsapp_alerts ADD COLUMN IF NOT EXISTS conversation_id UUID;

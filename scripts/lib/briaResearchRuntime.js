@@ -7,6 +7,25 @@ export const loadResearchConfig = async file => {
   return Object.fromEntries(['OPENAI_API_KEY', 'DATABASE_URL', 'OPENAI_MODEL_CHAT', 'OPENAI_MODEL'].filter(key => parsed[key]).map(key => [key, parsed[key]]));
 };
 
+// Evaluaciones ficticias: inyectar la credencial evita que los procesos aislados necesiten abrir un .env.
+// A diferencia de la investigación, estos casos no reciben una conexión a la plataforma.
+export const loadCaseEvalConfig = async ({ env = process.env, load = loadResearchConfig } = {}) => {
+  const source = env.OPENAI_API_KEY ? env : await load(env.BRIA_PROJECT_ENV || '.env');
+  return Object.fromEntries(['OPENAI_API_KEY', 'OPENAI_MODEL_CHAT', 'OPENAI_MODEL'].filter(key => source[key]).map(key => [key, source[key]]));
+};
+
+export const createCaseEvalProvider = async ({ apiKey, models, fetchImpl = globalThis.fetch, usage = [] }) => {
+  const [{ createOpenAIClient }, { createGovernanceService }] = await Promise.all([
+    import('../../src/services/openAIClient.js'), import('../../src/services/aiGovernanceService.js')
+  ]);
+  // El servicio real de gobierno, sobre un inventario ficticio vacío: nunca consultar políticas de producción.
+  const governance = createGovernanceService({ pool: { query: async sql => {
+    if (sql !== 'SELECT EXISTS (SELECT 1 FROM "AiGovernanceClientPolicy" WHERE enabled=true) AS enabled') throw new Error('Consulta inesperada en la evaluación ficticia.');
+    return { rows: [{ enabled: false }] };
+  } } });
+  return createOpenAIClient({ apiKey, models, fetchImpl, governance, usageLog: { record: async event => { usage.push(event); } } });
+};
+
 // The research owner is not a production User. Production policies are read as-is;
 // audit metadata stays local, and this adapter cannot write to the application database.
 export const createResearchGovernancePool = ({ pool, record }) => ({

@@ -129,3 +129,10 @@ test('un pedido de acceso trae sus dos decisiones; la mañana y el cierre van en
   assert.match(close.topic, /cierre del día/);
   assert.match(dailyAlert({ note: 'LECTURA_MANANA', dayKey: '2026-10-22', text: 'x' }).topic, /lectura de la mañana/);
 });
+test('las opciones con contexto se vinculan a la conversación, su revisión y la posición de la opción', () => {
+  const turn = { text: 'Resumen para confirmar.', quickReplies: ['Confirmar', 'Cancelar', 'Confirmar'] };
+  const reply = replyForWhatsApp(turn, { conversationId: 'chat-a', revision: 4 });
+  assert.deepEqual(reply.options, [{ id: 'c:chat-a:4:0', label: 'Confirmar' }, { id: 'c:chat-a:4:1', label: 'Cancelar' }]);
+  assert.notEqual(reply.options[0].id, replyForWhatsApp(turn, { conversationId: 'chat-b', revision: 4 }).options[0].id);
+  assert.notEqual(reply.options[0].id, replyForWhatsApp(turn, { conversationId: 'chat-a', revision: 5 }).options[0].id);
+});

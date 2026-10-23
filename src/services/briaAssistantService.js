@@ -84,8 +84,9 @@ export const createBriaAssistantService = ({
     if (!canUseBria(row) || !row.teamMember?.isActive) throw httpError(403, 'Bria no está activada para tu cuenta.', 'BRIA_DISABLED');
     if (row.sessionVersion !== (user.sessionVersion ?? 0)) throw httpError(401, 'Tu sesión ya no está activa.', 'TOKEN_REVOKED');
     if (user.exp && user.exp * 1000 <= Date.now()) throw httpError(401, 'Tu sesión ya no está activa.', 'TOKEN_REVOKED');
-    // Refresh module permissions before the next tool; a revoked permission cannot survive in an old token.
-    Object.assign(user, { role: row.role, modulePermissions: row.modulePermissions });
+    // La identidad y la ficha actuales acompañan a los permisos: las herramientas de lectura usan ambas
+    // para limitar el libro propio y las cuentas del PM, aunque el token solo traiga userId.
+    Object.assign(user, { id: row.id, userId: row.id, teamMember: row.teamMember, role: row.role, modulePermissions: row.modulePermissions });
     return {
       userId: row.id,
       name: row.teamMember?.name || row.name || 'colega',
@@ -97,7 +98,7 @@ export const createBriaAssistantService = ({
 
   return {
     // `taskDraft` suelto lo sigue mandando la vista de investigación; aquí se envuelve en la base común.
-    async ask({ user, question, history, attachments = [], chatAttachments = [], revalidateConversation, taskDraft, pendingAction, session = null, taskAttachments = [], taskEvidence, taskDefaults = {}, onEvent } = {}) {
+    async ask({ user, question, history, attachments = [], chatAttachments = [], revalidateConversation, taskDraft, pendingAction, session = null, taskAttachments = [], taskEvidence, taskDefaults = {}, readingDay = null, onEvent } = {}) {
       if (!pendingAction && taskDraft) pendingAction = wrapLegacyAction('TASK_CREATE', taskDraft);
       if (!canUseBria(user)) throw httpError(403, 'Bria no está activada para tu cuenta.', 'BRIA_DISABLED');
       const text = normalizeQuestion(question);
@@ -114,7 +115,7 @@ export const createBriaAssistantService = ({
         user,
         person,
         // Las manos de la plataforma usan la sesión del navegador: por WhatsApp no la hay y no se ofrecen (22 de octubre de 2026).
-        tools: [...tools, conversationChoiceTool, ...createBriaTaskTools(taskDrafts), ...createBriaDispatchTools(dispatchDrafts), ...createBriaDeleteTools(deleteDrafts), ...createBriaActionTools(actions), ...createBriaUsageTools(typeof usage === 'function' ? usage() : usage), ...(session?.token ? createBriaPlatformTools({ actions, platform: typeof platform === 'function' ? platform() : platform }) : []), ...createKnowledgeTools(typeof knowledge === 'function' ? knowledge() : knowledge), ...createAgencyFactTools(typeof agencyFacts === 'function' ? agencyFacts() : agencyFacts), ...createVaultTools(vaultFor()), ...createBriaMailTools(mailFor()), ...briaClientUpdateTools, ...createPermissionRequestTools(typeof permissions === 'function' ? permissions() : permissions), ...createDailyReadingTools(typeof dailyReading === 'function' ? dailyReading() : dailyReading), ...createServiceHealthTools(typeof serviceHealth === 'function' ? serviceHealth() : serviceHealth)],
+        tools: [...tools, conversationChoiceTool, ...createBriaTaskTools(taskDrafts), ...createBriaDispatchTools(dispatchDrafts), ...createBriaDeleteTools(deleteDrafts), ...createBriaActionTools(actions), ...createBriaUsageTools(typeof usage === 'function' ? usage() : usage), ...(session?.token ? createBriaPlatformTools({ actions, platform: typeof platform === 'function' ? platform() : platform }) : []), ...createKnowledgeTools(typeof knowledge === 'function' ? knowledge() : knowledge), ...createAgencyFactTools(typeof agencyFacts === 'function' ? agencyFacts() : agencyFacts), ...createVaultTools(vaultFor()), ...createBriaMailTools(mailFor()), ...briaClientUpdateTools, ...createPermissionRequestTools(typeof permissions === 'function' ? permissions() : permissions), ...createDailyReadingTools(typeof dailyReading === 'function' ? dailyReading() : dailyReading, { readingDay }), ...createServiceHealthTools(typeof serviceHealth === 'function' ? serviceHealth() : serviceHealth)],
         ai: createBriaModelRuntime({ ai: client, user }),
         today: bogotaDate(now()),
         logger,

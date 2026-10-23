@@ -151,14 +151,21 @@ export default function BriaConversation({ userId = 'local-research-owner', user
       let current = liveChat.current;
       if (!current) { current = await request('', { method: 'POST' }); rememberChat(current); }
       setChat({ ...current, turns: [...current.turns, { id: 'pending', role: 'user', text: value || 'Analiza los archivos adjuntos.', attachments: files.map((file, index) => ({ id: `pending-${index}`, name: file.name })) }] });
-      const body = files.length ? new FormData() : { question: value };
-      if (files.length) { body.append('question', value); files.forEach(file => body.append('files', file, file.name)); }
+      const body = files.length ? new FormData() : { question: value, expectedRevision: current.revision };
+      if (files.length) { body.append('question', value); body.append('expectedRevision', String(current.revision)); files.forEach(file => body.append('files', file, file.name)); }
       liveText.current = ''; setLive({ text: '', status: '' });
       const saved = streamer
         ? await streamer(`/${current.id}/messages`, { body, onEvent: onStreamEvent })
         : await request(`/${current.id}/messages`, { method: 'POST', body });
       rememberChat(saved); setFreshTurnId(saved.turns?.at(-1)?.id || null); setFiles([]); await loadHistory();
-    } catch (failure) { console.error('[BriaConversation]', failure.message); setError(failure.message); setQuestion(value); setChat(liveChat.current); }
+    } catch (failure) {
+      console.error('[BriaConversation]', failure.message); setError(failure.message); setQuestion(value); setChat(liveChat.current);
+      // A different tab or WhatsApp may have changed the proposal. Show that response without replaying consent.
+      if (failure.code === 'BRIA_CONVERSATION_STALE' && liveChat.current) {
+        try { rememberChat(await request(`/${liveChat.current.id}`)); setFreshTurnId(null); }
+        catch (refreshFailure) { console.error('[BriaConversation]', refreshFailure.message); setError('La conversación cambió y no pude actualizarla. Vuelve a abrirla antes de confirmar. Tu mensaje y archivos siguen aquí.'); }
+      }
+    }
     finally { clearTimeout(liveFrame.current); liveText.current = ''; setLive({ text: '', status: '' }); setBusy(false); lock.current = false; input.current?.focus({ preventScroll: true }); }
   };
   const removeChat = async row => {

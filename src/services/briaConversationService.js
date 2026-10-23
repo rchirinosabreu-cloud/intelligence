@@ -76,14 +76,18 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
     },
     // `session` trae el token con el que la persona abrió el chat: Bria lo usa para hablar con la API como ella
     // (10 de octubre de 2026). Vive en esta petición y nunca se guarda en la conversación.
-    async send({ user, id, question, files = [], onEvent, session = null }) {
+    async send({ user, id, question, files = [], onEvent, session = null, expectedRevision }) {
       if (String(question || '').length > MAX_QUESTION_LENGTH) throw knowledgeError('Divide el mensaje en partes de hasta 12.000 caracteres.');
+      if (expectedRevision !== undefined && (!Number.isSafeInteger(expectedRevision) || expectedRevision < 0)) throw knowledgeError('La revisión de la conversación no es válida.');
       const text = normalizeQuestion(question) || (files.length ? 'Analiza los archivos adjuntos.' : ''); if (!text) throw knowledgeError('Escribe un mensaje.');
       const actor = await resolveActor(user), key = `${actor.ref}:${id}`;
       if (pending.has(key)) throw knowledgeError('Bria está respondiendo en esta conversación.', 409);
       pending.add(key);
       try {
         const chat = await read(user, id);
+        // WhatsApp ya leyó el turno al resolver un botón o un mensaje. No interpretar su respuesta sobre otra
+        // revisión que haya llegado desde la plataforma entretanto; append vuelve a comprobarla al guardar.
+        if (expectedRevision !== undefined && chat.revision !== expectedRevision) throw knowledgeError('La conversación cambió. Revisa su última respuesta antes de confirmar.', 409, 'BRIA_CONVERSATION_STALE');
         if (files.length) await authorizeInput(user);
         validateAttachmentSelection(files);
         const prepared = []; for (const file of files) { await resolveActor(user); prepared.push(await prepareAttachment(file)); }
@@ -146,7 +150,10 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           // Los archivos del chat, del más reciente al más viejo: el comprobante de un movimiento puede haber llegado antes.
           // Con su tipo: la pieza final de una pieza solo puede ser una foto o un video.
           const chatAttachments = [...prepared.map(file => ({ id: file.id, name: file.name, mime: file.mime, status: file.status, current: true })), ...previous.map(file => ({ id: file.id, name: file.name, mime: file.mime, status: file.status, current: false }))];
-          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, chatAttachments, pendingAction: open(pendingAction) ? pendingAction : null, session, taskAttachments: prepared, taskDefaults, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
+          // La lectura pertenece a una fecha concreta, aunque su nota ya no quepa en los últimos diez turnos.
+          // `read` saneó antes los turnos: una nota que perdió acceso no puede aportar este contexto.
+          const readingDay = chat.turns.find(turn => turn.role === 'assistant' && turn.note === 'LECTURA_MANANA')?.dayKey || null;
+          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), readingDay, attachments, chatAttachments, pendingAction: open(pendingAction) ? pendingAction : null, session, taskAttachments: prepared, taskDefaults, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
           // Un borrador de pendiente, despacho o eliminación sobrevive a una pregunta suelta, como siempre; las demás
           // acciones solo valen sobre la respuesta inmediatamente anterior.
           if (!result.pendingAction && open(pendingAction) && isLegacyAction(pendingAction)) result.pendingAction = pendingAction;

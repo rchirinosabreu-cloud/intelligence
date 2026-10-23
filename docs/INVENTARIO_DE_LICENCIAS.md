@@ -7,13 +7,13 @@ y la política que lo verifica está en `scripts/license-policy.json` (AGENTS.md
 Incluye los binarios opcionales que npm instala según el sistema operativo (marcados «opcional»):
 en producción (Linux) solo se instala el que corresponde.
 
-**842 paquetes.**
+**820 paquetes.**
 
 ## Resumen por licencia
 
 | Licencia | Paquetes |
 | --- | ---: |
-| MIT | 669 |
+| MIT | 647 |
 | Apache-2.0 | 66 |
 | ISC | 45 |
 | BSD-2-Clause | 19 |
@@ -63,22 +63,22 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | @asamuzakjp/dom-selector | 7.1.1 | MIT |  |
 | @asamuzakjp/generational-cache | 1.0.1 | MIT |  |
 | @asamuzakjp/nwsapi | 2.3.9 | MIT |  |
-| @aws-sdk/checksums | 3.1000.16 | Apache-2.0 |  |
-| @aws-sdk/client-s3 | 3.1086.0 | Apache-2.0 |  |
-| @aws-sdk/core | 3.978.1 | Apache-2.0 |  |
-| @aws-sdk/credential-provider-env | 3.972.57 | Apache-2.0 |  |
-| @aws-sdk/credential-provider-http | 3.972.59 | Apache-2.0 |  |
-| @aws-sdk/credential-provider-ini | 3.973.1 | Apache-2.0 |  |
-| @aws-sdk/credential-provider-login | 3.972.63 | Apache-2.0 |  |
-| @aws-sdk/credential-provider-node | 3.972.67 | Apache-2.0 |  |
-| @aws-sdk/credential-provider-process | 3.972.57 | Apache-2.0 |  |
-| @aws-sdk/credential-provider-sso | 3.973.1 | Apache-2.0 |  |
-| @aws-sdk/credential-provider-web-identity | 3.972.63 | Apache-2.0 |  |
-| @aws-sdk/middleware-sdk-s3 | 3.972.62 | Apache-2.0 |  |
-| @aws-sdk/nested-clients | 3.997.31 | Apache-2.0 |  |
-| @aws-sdk/s3-request-presigner | 3.1140.0 | Apache-2.0 |  |
-| @aws-sdk/signature-v4-multi-region | 3.996.47 | Apache-2.0 |  |
-| @aws-sdk/token-providers | 3.1083.0 | Apache-2.0 |  |
+| @aws-sdk/checksums | 3.1001.3 | Apache-2.0 |  |
+| @aws-sdk/client-s3 | 3.1152.0 | Apache-2.0 |  |
+| @aws-sdk/core | 3.978.3 | Apache-2.0 |  |
+| @aws-sdk/credential-provider-env | 3.972.74 | Apache-2.0 |  |
+| @aws-sdk/credential-provider-http | 3.972.76 | Apache-2.0 |  |
+| @aws-sdk/credential-provider-ini | 3.973.19 | Apache-2.0 |  |
+| @aws-sdk/credential-provider-login | 3.972.81 | Apache-2.0 |  |
+| @aws-sdk/credential-provider-node | 3.972.86 | Apache-2.0 |  |
+| @aws-sdk/credential-provider-process | 3.972.74 | Apache-2.0 |  |
+| @aws-sdk/credential-provider-sso | 3.973.18 | Apache-2.0 |  |
+| @aws-sdk/credential-provider-web-identity | 3.972.80 | Apache-2.0 |  |
+| @aws-sdk/middleware-sdk-s3 | 3.972.79 | Apache-2.0 |  |
+| @aws-sdk/nested-clients | 3.997.48 | Apache-2.0 |  |
+| @aws-sdk/s3-request-presigner | 3.1152.0 | Apache-2.0 |  |
+| @aws-sdk/signature-v4-multi-region | 3.996.48 | Apache-2.0 |  |
+| @aws-sdk/token-providers | 3.1150.0 | Apache-2.0 |  |
 | @aws-sdk/types | 3.974.6 | Apache-2.0 |  |
 | @aws-sdk/xml-builder | 3.972.41 | Apache-2.0 |  |
 | @aws/lambda-invoke-store | 0.3.0 | Apache-2.0 |  |
@@ -92,18 +92,18 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | @csstools/css-tokenizer | 4.0.0 | MIT |  |
 | @emnapi/runtime | 1.11.3 | MIT | opcional |
 | @exodus/bytes | 1.15.1 | MIT |  |
-| @floating-ui/core | 1.7.5 | MIT |  |
-| @floating-ui/dom | 1.7.6 | MIT |  |
-| @floating-ui/react | 0.27.19 | MIT |  |
-| @floating-ui/react-dom | 2.1.8 | MIT |  |
-| @floating-ui/utils | 0.2.11 | MIT |  |
+| @floating-ui/core | 1.8.0 | MIT |  |
+| @floating-ui/dom | 1.8.0 | MIT |  |
+| @floating-ui/react | 0.27.20 | MIT |  |
+| @floating-ui/react-dom | 2.1.9 | MIT |  |
+| @floating-ui/utils | 0.2.12 | MIT |  |
 | @google-cloud/paginator | 5.0.2 | Apache-2.0 |  |
 | @google-cloud/projectify | 4.0.0 | Apache-2.0 |  |
 | @google-cloud/promisify | 4.0.0 | Apache-2.0 |  |
 | @google-cloud/storage | 7.22.0 | Apache-2.0 |  |
 | @hello-pangea/dnd | 18.0.1 | Apache-2.0 |  |
-| @hugeicons/core-free-icons | 4.2.3 | MIT |  |
-| @hugeicons/react | 1.1.9 | MIT |  |
+| @hugeicons/core-free-icons | 4.3.5 | MIT |  |
+| @hugeicons/react | 1.1.10 | MIT |  |
 | @img/colour | 1.1.0 | MIT |  |
 | @img/sharp-darwin-arm64 | 0.35.5 | Apache-2.0 | opcional |
 | @img/sharp-darwin-x64 | 0.35.5 | Apache-2.0 | opcional |
@@ -166,102 +166,80 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | @pinojs/redact | 0.4.0 | MIT |  |
 | @pkgjs/parseargs | 0.11.0 | MIT | opcional |
 | @prisma/client | 6.19.3 | Apache-2.0 |  |
-| @radix-ui/number | 1.1.1 | MIT |  |
-| @radix-ui/primitive | 1.1.3 | MIT |  |
-| @radix-ui/primitive | 1.1.7 | MIT |  |
-| @radix-ui/react-alert-dialog | 1.1.15 | MIT |  |
-| @radix-ui/react-arrow | 1.1.15 | MIT |  |
-| @radix-ui/react-arrow | 1.1.7 | MIT |  |
-| @radix-ui/react-collection | 1.1.7 | MIT |  |
-| @radix-ui/react-compose-refs | 1.1.2 | MIT |  |
+| @radix-ui/number | 1.1.3 | MIT |  |
+| @radix-ui/primitive | 1.2.0 | MIT |  |
+| @radix-ui/react-alert-dialog | 1.2.1 | MIT |  |
+| @radix-ui/react-arrow | 1.1.17 | MIT |  |
+| @radix-ui/react-collection | 1.2.0 | MIT |  |
 | @radix-ui/react-compose-refs | 1.1.5 | MIT |  |
-| @radix-ui/react-context | 1.1.2 | MIT |  |
-| @radix-ui/react-context | 1.2.2 | MIT |  |
-| @radix-ui/react-dialog | 1.1.15 | MIT |  |
-| @radix-ui/react-direction | 1.1.1 | MIT |  |
-| @radix-ui/react-dismissable-layer | 1.1.11 | MIT |  |
-| @radix-ui/react-dismissable-layer | 1.1.19 | MIT |  |
-| @radix-ui/react-dropdown-menu | 2.1.16 | MIT |  |
-| @radix-ui/react-focus-guards | 1.1.3 | MIT |  |
-| @radix-ui/react-focus-guards | 1.1.6 | MIT |  |
-| @radix-ui/react-focus-scope | 1.1.16 | MIT |  |
-| @radix-ui/react-focus-scope | 1.1.7 | MIT |  |
-| @radix-ui/react-id | 1.1.1 | MIT |  |
+| @radix-ui/react-context | 1.3.0 | MIT |  |
+| @radix-ui/react-dialog | 1.3.1 | MIT |  |
+| @radix-ui/react-direction | 1.2.0 | MIT |  |
+| @radix-ui/react-dismissable-layer | 1.2.1 | MIT |  |
+| @radix-ui/react-dropdown-menu | 2.2.1 | MIT |  |
+| @radix-ui/react-focus-guards | 1.2.0 | MIT |  |
+| @radix-ui/react-focus-scope | 1.3.1 | MIT |  |
 | @radix-ui/react-id | 1.1.4 | MIT |  |
-| @radix-ui/react-menu | 2.1.16 | MIT |  |
-| @radix-ui/react-popover | 1.1.23 | MIT |  |
-| @radix-ui/react-popper | 1.2.8 | MIT |  |
-| @radix-ui/react-popper | 1.3.7 | MIT |  |
-| @radix-ui/react-portal | 1.1.17 | MIT |  |
-| @radix-ui/react-portal | 1.1.9 | MIT |  |
-| @radix-ui/react-presence | 1.1.10 | MIT |  |
-| @radix-ui/react-presence | 1.1.5 | MIT |  |
-| @radix-ui/react-primitive | 2.1.10 | MIT |  |
-| @radix-ui/react-primitive | 2.1.3 | MIT |  |
-| @radix-ui/react-roving-focus | 1.1.11 | MIT |  |
-| @radix-ui/react-select | 2.2.6 | MIT |  |
-| @radix-ui/react-slot | 1.2.3 | MIT |  |
-| @radix-ui/react-slot | 1.2.4 | MIT |  |
-| @radix-ui/react-slot | 1.3.3 | MIT |  |
-| @radix-ui/react-tabs | 1.1.13 | MIT |  |
-| @radix-ui/react-use-callback-ref | 1.1.1 | MIT |  |
-| @radix-ui/react-use-callback-ref | 1.1.4 | MIT |  |
-| @radix-ui/react-use-controllable-state | 1.2.2 | MIT |  |
-| @radix-ui/react-use-controllable-state | 1.2.6 | MIT |  |
-| @radix-ui/react-use-effect-event | 0.0.2 | MIT |  |
+| @radix-ui/react-menu | 2.2.1 | MIT |  |
+| @radix-ui/react-popover | 1.3.1 | MIT |  |
+| @radix-ui/react-popper | 1.4.0 | MIT |  |
+| @radix-ui/react-portal | 1.2.0 | MIT |  |
+| @radix-ui/react-presence | 1.1.11 | MIT |  |
+| @radix-ui/react-primitive | 2.2.0 | MIT |  |
+| @radix-ui/react-roving-focus | 1.2.1 | MIT |  |
+| @radix-ui/react-select | 2.4.1 | MIT |  |
+| @radix-ui/react-slot | 1.5.0 | MIT |  |
+| @radix-ui/react-tabs | 1.2.1 | MIT |  |
+| @radix-ui/react-use-callback-ref | 1.1.5 | MIT |  |
+| @radix-ui/react-use-controllable-state | 1.3.0 | MIT |  |
 | @radix-ui/react-use-effect-event | 0.0.5 | MIT |  |
-| @radix-ui/react-use-escape-keydown | 1.1.1 | MIT |  |
-| @radix-ui/react-use-layout-effect | 1.1.1 | MIT |  |
+| @radix-ui/react-use-is-hydrated | 0.1.3 | MIT |  |
 | @radix-ui/react-use-layout-effect | 1.1.4 | MIT |  |
-| @radix-ui/react-use-previous | 1.1.1 | MIT |  |
-| @radix-ui/react-use-rect | 1.1.1 | MIT |  |
 | @radix-ui/react-use-rect | 1.1.4 | MIT |  |
-| @radix-ui/react-use-size | 1.1.1 | MIT |  |
-| @radix-ui/react-use-size | 1.1.4 | MIT |  |
-| @radix-ui/react-visually-hidden | 1.2.3 | MIT |  |
-| @radix-ui/rect | 1.1.1 | MIT |  |
+| @radix-ui/react-use-size | 1.1.5 | MIT |  |
+| @radix-ui/react-visually-hidden | 1.2.13 | MIT |  |
 | @radix-ui/rect | 1.1.3 | MIT |  |
 | @selderee/plugin-htmlparser2 | 0.12.0 | MIT |  |
-| @smithy/core | 3.35.0 | Apache-2.0 |  |
-| @smithy/credential-provider-imds | 4.4.8 | Apache-2.0 |  |
-| @smithy/fetch-http-handler | 5.6.5 | Apache-2.0 |  |
-| @smithy/node-http-handler | 4.9.5 | Apache-2.0 |  |
-| @smithy/signature-v4 | 5.7.3 | Apache-2.0 |  |
+| @smithy/core | 3.36.0 | Apache-2.0 |  |
+| @smithy/credential-provider-imds | 4.5.2 | Apache-2.0 |  |
+| @smithy/fetch-http-handler | 5.8.0 | Apache-2.0 |  |
+| @smithy/node-http-handler | 4.12.1 | Apache-2.0 |  |
+| @smithy/signature-v4 | 5.7.4 | Apache-2.0 |  |
 | @smithy/types | 4.19.0 | Apache-2.0 |  |
 | @tailwindcss/typography | 0.5.20 | MIT |  |
-| @tanstack/query-core | 5.90.20 | MIT |  |
-| @tanstack/react-query | 5.90.21 | MIT |  |
-| @tiptap/core | 3.31.4 | MIT |  |
-| @tiptap/extension-blockquote | 3.31.4 | MIT |  |
-| @tiptap/extension-bold | 3.31.4 | MIT |  |
-| @tiptap/extension-bubble-menu | 3.31.4 | MIT | opcional |
-| @tiptap/extension-bullet-list | 3.31.4 | MIT |  |
-| @tiptap/extension-code | 3.31.4 | MIT |  |
-| @tiptap/extension-code-block | 3.31.4 | MIT |  |
-| @tiptap/extension-document | 3.31.4 | MIT |  |
-| @tiptap/extension-dropcursor | 3.31.4 | MIT |  |
-| @tiptap/extension-floating-menu | 3.31.4 | MIT | opcional |
-| @tiptap/extension-gapcursor | 3.31.4 | MIT |  |
-| @tiptap/extension-hard-break | 3.31.4 | MIT |  |
-| @tiptap/extension-heading | 3.31.4 | MIT |  |
-| @tiptap/extension-horizontal-rule | 3.31.4 | MIT |  |
-| @tiptap/extension-italic | 3.31.4 | MIT |  |
-| @tiptap/extension-link | 3.31.4 | MIT |  |
-| @tiptap/extension-list | 3.31.4 | MIT |  |
-| @tiptap/extension-list-item | 3.31.4 | MIT |  |
-| @tiptap/extension-list-keymap | 3.31.4 | MIT |  |
-| @tiptap/extension-mention | 3.31.4 | MIT |  |
-| @tiptap/extension-ordered-list | 3.31.4 | MIT |  |
-| @tiptap/extension-paragraph | 3.31.4 | MIT |  |
-| @tiptap/extension-placeholder | 3.31.4 | MIT |  |
-| @tiptap/extension-strike | 3.31.4 | MIT |  |
-| @tiptap/extension-text | 3.31.4 | MIT |  |
-| @tiptap/extension-underline | 3.31.4 | MIT |  |
-| @tiptap/extensions | 3.31.4 | MIT |  |
-| @tiptap/pm | 3.31.4 | MIT |  |
-| @tiptap/react | 3.31.4 | MIT |  |
-| @tiptap/starter-kit | 3.31.4 | MIT |  |
-| @tiptap/suggestion | 3.31.4 | MIT |  |
+| @tanstack/query-core | 5.104.4 | MIT |  |
+| @tanstack/react-query | 5.104.4 | MIT |  |
+| @tiptap/core | 3.32.0 | MIT |  |
+| @tiptap/extension-blockquote | 3.32.0 | MIT |  |
+| @tiptap/extension-bold | 3.32.0 | MIT |  |
+| @tiptap/extension-bubble-menu | 3.32.0 | MIT | opcional |
+| @tiptap/extension-bullet-list | 3.32.0 | MIT |  |
+| @tiptap/extension-code | 3.32.0 | MIT |  |
+| @tiptap/extension-code-block | 3.32.0 | MIT |  |
+| @tiptap/extension-document | 3.32.0 | MIT |  |
+| @tiptap/extension-dropcursor | 3.32.0 | MIT |  |
+| @tiptap/extension-floating-menu | 3.32.0 | MIT | opcional |
+| @tiptap/extension-gapcursor | 3.32.0 | MIT |  |
+| @tiptap/extension-hard-break | 3.32.0 | MIT |  |
+| @tiptap/extension-heading | 3.32.0 | MIT |  |
+| @tiptap/extension-horizontal-rule | 3.32.0 | MIT |  |
+| @tiptap/extension-italic | 3.32.0 | MIT |  |
+| @tiptap/extension-link | 3.32.0 | MIT |  |
+| @tiptap/extension-list | 3.32.0 | MIT |  |
+| @tiptap/extension-list-item | 3.32.0 | MIT |  |
+| @tiptap/extension-list-keymap | 3.32.0 | MIT |  |
+| @tiptap/extension-mention | 3.32.0 | MIT |  |
+| @tiptap/extension-ordered-list | 3.32.0 | MIT |  |
+| @tiptap/extension-paragraph | 3.32.0 | MIT |  |
+| @tiptap/extension-placeholder | 3.32.0 | MIT |  |
+| @tiptap/extension-strike | 3.32.0 | MIT |  |
+| @tiptap/extension-text | 3.32.0 | MIT |  |
+| @tiptap/extension-underline | 3.32.0 | MIT |  |
+| @tiptap/extensions | 3.32.0 | MIT |  |
+| @tiptap/pm | 3.32.0 | MIT |  |
+| @tiptap/react | 3.32.0 | MIT |  |
+| @tiptap/starter-kit | 3.32.0 | MIT |  |
+| @tiptap/suggestion | 3.32.0 | MIT |  |
 | @tootallnate/once | 2.0.1 | MIT |  |
 | @types/caseless | 0.12.5 | MIT |  |
 | @types/d3-array | 3.2.2 | MIT |  |
@@ -293,7 +271,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | @types/use-sync-external-store | 0.0.6 | MIT |  |
 | @ungap/structured-clone | 1.3.0 | ISC |  |
 | @xmldom/xmldom | 0.8.15 | MIT |  |
-| @zone-eu/mailsplit | 5.4.20 | (MIT OR EUPL-1.1+) |  |
+| @zone-eu/mailsplit | 5.4.23 | (MIT OR EUPL-1.1+) |  |
 | abort-controller | 3.0.0 | MIT |  |
 | accepts | 1.3.8 | MIT |  |
 | agent-base | 6.0.2 | MIT |  |
@@ -325,7 +303,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | bignumber.js | 9.3.1 | MIT |  |
 | binary-extensions | 2.3.0 | MIT |  |
 | bn.js | 4.12.5 | MIT |  |
-| body-parser | 1.20.8 | MIT |  |
+| body-parser | 1.20.9 | MIT |  |
 | boolbase | 1.0.0 | ISC |  |
 | boring-avatars | 2.0.4 | MIT |  |
 | bowser | 2.14.1 | MIT |  |
@@ -387,7 +365,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | d3-timer | 3.0.1 | ISC |  |
 | data-uri-to-buffer | 4.0.1 | MIT |  |
 | data-urls | 7.0.0 | MIT |  |
-| date-fns | 4.1.0 | MIT |  |
+| date-fns | 4.4.0 | MIT |  |
 | debug | 2.6.9 | MIT |  |
 | debug | 4.4.3 | MIT |  |
 | decamelize | 1.2.0 | MIT |  |
@@ -505,7 +483,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | iconv-lite | 0.4.24 | MIT |  |
 | iconv-lite | 0.6.3 | MIT |  |
 | iconv-lite | 0.7.3 | MIT |  |
-| imapflow | 2.4.0 | MIT |  |
+| imapflow | 2.5.2 | MIT |  |
 | immediate | 3.0.6 | MIT |  |
 | inherits | 2.0.4 | ISC |  |
 | inline-style-parser | 0.2.7 | MIT |  |
@@ -540,9 +518,9 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | jwa | 2.0.1 | MIT |  |
 | jws | 4.0.1 | MIT |  |
 | leac | 0.7.0 | MIT |  |
-| libbase64 | 1.3.2 | MIT |  |
-| libmime | 5.4.7 | MIT |  |
-| libqp | 2.1.2 | MIT |  |
+| libbase64 | 1.3.3 | MIT |  |
+| libmime | 5.4.9 | MIT |  |
+| libqp | 2.1.3 | MIT |  |
 | lie | 3.3.0 | MIT |  |
 | lilconfig | 3.1.3 | MIT |  |
 | lines-and-columns | 1.2.4 | MIT |  |
@@ -562,7 +540,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | lop | 0.4.2 | BSD-2-Clause |  |
 | lru-cache | 10.4.3 | ISC |  |
 | lru-cache | 11.5.2 | BlueOak-1.0.0 |  |
-| mailparser | 3.9.38 | MIT |  |
+| mailparser | 3.9.40 | MIT |  |
 | mammoth | 1.13.0 | BSD-2-Clause |  |
 | markdown-table | 3.0.4 | MIT |  |
 | math-intrinsics | 1.1.0 | MIT |  |
@@ -635,7 +613,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | node-domexception | 1.0.0 | MIT |  |
 | node-fetch | 2.7.0 | MIT |  |
 | node-fetch | 3.3.2 | MIT |  |
-| nodemailer | 10.1.0 | MIT-0 |  |
+| nodemailer | 10.1.2 | MIT-0 |  |
 | nodemailer | 9.1.1 | MIT-0 |  |
 | normalize-path | 3.0.0 | MIT |  |
 | nth-check | 2.1.1 | BSD-2-Clause |  |
@@ -672,12 +650,12 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | pdfjs-dist | 5.7.284 | Apache-2.0 |  |
 | peberminta | 0.10.0 | MIT |  |
 | performance-now | 2.1.0 | MIT | opcional |
-| pg | 8.20.0 | MIT |  |
-| pg-cloudflare | 1.3.0 | MIT | opcional |
-| pg-connection-string | 2.12.0 | MIT |  |
+| pg | 8.23.1 | MIT |  |
+| pg-cloudflare | 1.4.1 | MIT | opcional |
+| pg-connection-string | 2.14.1 | MIT |  |
 | pg-int8 | 1.0.1 | ISC |  |
-| pg-pool | 3.13.0 | MIT |  |
-| pg-protocol | 1.13.0 | MIT |  |
+| pg-pool | 3.14.0 | MIT |  |
+| pg-protocol | 1.16.1 | MIT |  |
 | pg-types | 2.2.0 | MIT |  |
 | pgpass | 1.0.5 | MIT |  |
 | picocolors | 1.1.1 | ISC |  |
@@ -688,9 +666,9 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | pino-abstract-transport | 3.0.0 | MIT |  |
 | pino-std-serializers | 7.1.0 | MIT |  |
 | pirates | 4.0.7 | MIT |  |
-| playwright-core | 1.62.1 | Apache-2.0 |  |
+| playwright-core | 1.64.1 | Apache-2.0 |  |
 | pngjs | 5.0.0 | MIT |  |
-| postcss | 8.5.29 | MIT |  |
+| postcss | 8.5.30 | MIT |  |
 | postcss-import | 15.1.0 | MIT |  |
 | postcss-js | 4.1.0 | MIT |  |
 | postcss-load-config | 6.0.1 | MIT |  |
@@ -706,18 +684,18 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | process-warning | 5.1.1 | MIT |  |
 | prop-types | 15.8.1 | MIT |  |
 | property-information | 7.1.0 | MIT |  |
-| prosemirror-changeset | 2.4.1 | MIT |  |
-| prosemirror-commands | 1.7.1 | MIT |  |
-| prosemirror-dropcursor | 1.8.3 | MIT |  |
+| prosemirror-changeset | 2.4.4 | MIT |  |
+| prosemirror-commands | 1.7.2 | MIT |  |
+| prosemirror-dropcursor | 1.8.4 | MIT |  |
 | prosemirror-gapcursor | 1.4.1 | MIT |  |
-| prosemirror-history | 1.5.0 | MIT |  |
+| prosemirror-history | 1.5.1 | MIT |  |
 | prosemirror-inputrules | 1.5.1 | MIT |  |
 | prosemirror-keymap | 1.2.3 | MIT |  |
 | prosemirror-model | 1.25.12 | MIT |  |
 | prosemirror-schema-list | 1.5.1 | MIT |  |
 | prosemirror-state | 1.4.4 | MIT |  |
 | prosemirror-tables | 1.8.5 | MIT |  |
-| prosemirror-transform | 1.12.0 | MIT |  |
+| prosemirror-transform | 1.12.2 | MIT |  |
 | prosemirror-view | 1.42.6 | MIT |  |
 | proxy-addr | 2.0.8 | MIT |  |
 | proxy-from-env | 2.1.0 | MIT |  |
@@ -735,7 +713,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | react-datepicker | 9.1.0 | MIT |  |
 | react-dom | 18.3.1 | MIT |  |
 | react-dropzone | 15.0.0 | MIT |  |
-| react-hot-toast | 2.6.0 | MIT |  |
+| react-hot-toast | 2.6.1 | MIT |  |
 | react-is | 16.13.1 | MIT |  |
 | react-is | 18.3.1 | MIT |  |
 | react-markdown | 9.1.0 | MIT |  |

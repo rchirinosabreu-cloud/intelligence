@@ -32,7 +32,8 @@ export const AUDIT_TABLES = Object.freeze([
     { schema: 'vault', name: 'reveal_events', retention: null, nullableRefs: [] },
     { schema: 'vault', name: 'credential_events', retention: null, nullableRefs: [] },
     { schema: 'bria_memory', name: 'agency_fact_events', retention: null, nullableRefs: [] },
-    { schema: 'bria_memory', name: 'learning_events', retention: null, nullableRefs: [] }
+    { schema: 'bria_memory', name: 'learning_events', retention: null, nullableRefs: [] },
+    { schema: 'bria_memory', name: 'decision_events', retention: null, nullableRefs: [] }
 ].map(Object.freeze));
 
 const ident = (value) => `"${String(value).replace(/"/g, '""')}"`;

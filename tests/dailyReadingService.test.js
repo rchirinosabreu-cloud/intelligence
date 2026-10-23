@@ -38,13 +38,28 @@ const memoryRepo = (seed = {}) => {
     // El libro de decisiones, en memoria.
     decisions: [],
     async recordDecision({ decision, dayKey, user, verdict, note, decidedAt }) {
-      const entry = { id: `e${this.decisions.length + 1}`, decisionId: decision.id, dayKey, userRef: user.ref, userName: user.name, title: decision.title, kind: decision.kind, subjectType: decision.subjectType, subjectId: decision.subjectId, subjectName: decision.subjectName, evidence: decision.evidence, verdict, note, decidedAt, outcome: null, outcomeDay: null, outcomeText: null };
       const index = this.decisions.findIndex((e) => e.decisionId === decision.id && e.userRef === user.ref);
-      if (index >= 0) this.decisions[index] = { ...entry, id: this.decisions[index].id }; else this.decisions.push(entry);
+      const previous = this.decisions[index];
+      if (previous && previous.verdict === verdict && previous.note === note) return { ...previous };
+      const revision = previous ? previous.revision + 1 : 1;
+      const history = [...(previous?.history || []), { type: 'VERDICT', revision, verdict, note, decidedAt }];
+      const entry = { id: previous?.id || `e${this.decisions.length + 1}`, decisionId: decision.id, dayKey, userRef: user.ref, userName: user.name, title: decision.title, kind: decision.kind, subjectType: decision.subjectType, subjectId: decision.subjectId, subjectName: decision.subjectName, evidence: decision.evidence, verdict, note, decidedAt, outcome: null, outcomeDay: null, outcomeText: null, revision, history };
+      if (index >= 0) this.decisions[index] = entry; else this.decisions.push(entry);
       return entry;
     },
-    async pendingOutcomes(today) { return this.decisions.filter((e) => !e.outcome && e.dayKey < today); },
-    async setOutcome(id, { outcome, text, day }) { const e = this.decisions.find((row) => row.id === id); if (!e || e.outcome) return false; Object.assign(e, { outcome, outcomeText: text, outcomeDay: day }); return true; },
+    async pendingOutcomes(today, { fromDays = 1, untilDays = 14 } = {}) {
+      return this.decisions.filter((e) => {
+        const age = (Date.parse(`${today}T12:00:00Z`) - Date.parse(`${e.dayKey}T12:00:00Z`)) / 86_400_000;
+        return e.kind !== 'NO_HACER' && age >= fromDays && age <= untilDays && (!e.outcomeDay || e.outcomeDay < today);
+      }).map((e) => ({ ...e, history: [...e.history] }));
+    },
+    async setOutcome(id, { outcome, text, day, expectedRevision }) {
+      const e = this.decisions.find((row) => row.id === id);
+      if (!e || !Number.isInteger(expectedRevision) || e.revision !== expectedRevision || (e.outcomeDay && e.outcomeDay >= day)) return false;
+      e.history.push({ type: 'OUTCOME', revision: e.revision, outcome, text, day });
+      Object.assign(e, { outcome, outcomeText: text, outcomeDay: day });
+      return true;
+    },
     async recentDecisions(today, { userRef = null } = {}) { return this.decisions.filter((e) => e.dayKey <= today && (!userRef || e.userRef === userRef)); }
   };
 };
@@ -100,7 +115,7 @@ const CAMILA = { id: 'u-camila', name: 'Camila Torres', role: 'PROJECT_MANAGER',
 const setup = ({ generate, seed } = {}) => {
   const repository = memoryRepo(seed);
   const proactive = memoryDeliveries();
-  const notes = [], notifications = [], requests = [];
+  const notes = [], notifications = [], requests = [], whatsappMessages = [];
   let clock = at('05:50');
   const service = createDailyReadingService({
     db: fakeDb(), repository, proactive,
@@ -113,13 +128,104 @@ const setup = ({ generate, seed } = {}) => {
       { titulo: 'Contarle a Aristea que volvió a verde', porque: 'Salió del rojo y conviene decírselo.', tipo: 'CONVERSAR', evidencia: ['CUENTA_MEJORO:c2'], pedido: null }
     ], cuentas: [{ clientId: 'c1', lectura: 'Se atrasó en publicaciones esta semana.' }] }), model: 'gpt-test', usage: { total_tokens: 900 } }; }),
     now: () => clock, notify: async (row) => { notifications.push(row); },
+    whatsapp: (row) => { whatsappMessages.push(row); },
     listPeople: async () => [RODNY, CAMILA], logger: { error: () => {}, log: () => {} }
   });
-  return { service, repository, proactive, notes, notifications, requests, setClock: (value) => { clock = value; } };
+  return { service, repository, proactive, notes, notifications, requests, whatsappMessages, setClock: (value) => { clock = value; } };
 };
 
 const clientDay = (id, name, level, pmId) => ({ id, name, slug: name.toLowerCase(), pmId, metrics: { level, reasons: [], contract: 'ACTIVO', cycle: null, awaitingApproval: 0, returnedPieces: 0, openTasks: 1, overdueTasks: 0, returnedTasks: 0, closedTasks: 0, hoursMs: 0 } });
 const YESTERDAY = { clients: [clientDay('c1', 'Foobespain', 'green', 'pm-camila'), clientDay('c2', 'Aristea', 'red', 'pm-otro')], people: [] };
+
+test('reviewing a proposal exposes its saved evidence and human corrections without authorizing execution', async () => {
+  const { service, repository, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  const reading = await repository.latestReading();
+  const proposal = reading.decisions[0];
+  await service.recordVerdict({ user: RODNY, ref: proposal.id, veredicto: 'después', nota: 'Primero revisar el material.' });
+  await service.recordVerdict({ user: RODNY, ref: proposal.id, veredicto: 'hecho', nota: 'Lo revisé; falta hablar con el cliente.' });
+  const data = await service.explain({ user: RODNY });
+  const review = data.decisiones.find(row => row.id === proposal.id);
+  assert.ok(review, 'the full review keeps the persisted identity, not only a position');
+  assert.equal(review.fecha, reading.day);
+  assert.equal(review.origen, 'MODELO');
+  assert.deepEqual(review.alcance, [{ tipo: 'CLIENT', id: 'c1', nombre: 'Foobespain' }]);
+  assert.equal(review.fuentes[0].id, 'CUENTA_EMPEORO:c1');
+  assert.equal(review.fuentes[0].fecha, reading.day);
+  assert.equal(review.fuentes[0].comparadaCon, reading.baseDay);
+  assert.equal(review.fuentes[0].texto, reading.signals.find(row => row.id === 'CUENTA_EMPEORO:c1').text);
+  assert.match(review.faltaVerificar, /situación actual/i);
+  assert.equal(review.ejecucionAutorizada, false, 'a reported HECHO is never a permission to run anything');
+  assert.equal(review.quienDecide, RODNY.teamMember.name);
+  assert.equal(review.anotacion.nota, 'Lo revisé; falta hablar con el cliente.');
+  assert.equal(review.anotacion.revision, 2);
+  assert.deepEqual(review.anotacion.historia.filter(event => event.type === 'VERDICT').map(event => event.verdict), ['DESPUES', 'HECHO']);
+  assert.match(data.revisionHumana, /resumen.*confirmación/i);
+  assert.ok(data.opcionesDeRevision.some(option => option.opcion === 'Ajustar'));
+  assert.ok(data.opcionesDeRevision.every(option => option.efecto && !/aprobado/i.test(option.efecto)));
+});
+
+test('a complete review can return fifty proposals and calculates coverage only within the viewer scope', async () => {
+  const { service, repository, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  const reading = await repository.latestReading();
+  const base = reading.decisions[0];
+  reading.signals = Array.from({ length: 51 }, (_, i) => ({ id: `APROBACION_DETENIDA:c${i}`, kind: 'APROBACION_DETENIDA', direction: 'peor', subjectType: 'CLIENT', subjectId: `c${i}`, subjectName: `Cuenta ${i}`, text: `Cuenta ${i}: aprobación detenida.`, url: `/clientes/operacion/c${i}` }));
+  reading.decisions = reading.signals.slice(0, 50).map((signal, i) => ({ ...base, id: `${reading.day}:${i + 1}`, title: `Revisar Cuenta ${i}`, subjectId: signal.subjectId, subjectName: signal.subjectName, evidence: [signal.id], source: i ? 'REGLA' : 'MODELO' }));
+  reading.owners = Object.fromEntries(reading.signals.map((signal, i) => [signal.subjectId, i < 3 ? CAMILA.teamMember.id : 'pm-otro']));
+  // These agency-wide counters must never be returned as a scoped PM's coverage.
+  reading.coverage = { worseSignals: 999, representedSignals: 998, suppressedSignals: 0, unrepresentedSignals: 1 };
+  const admin = await service.explain({ user: RODNY });
+  assert.equal(admin.decisiones.length, 50);
+  assert.deepEqual(admin.cobertura, { propuestas: 50, senalesVisibles: 51, senalesConPropuesta: 50, senalesSinPropuesta: 1, listaCompleta: true });
+  assert.equal(admin.senalesSinPropuesta[0].id, 'APROBACION_DETENIDA:c50');
+  assert.equal(admin.decisiones.at(-1).origen, 'REGLA');
+  const pm = await service.explain({ user: CAMILA });
+  assert.deepEqual(pm.cobertura, { propuestas: 3, senalesVisibles: 3, senalesConPropuesta: 3, senalesSinPropuesta: 0, listaCompleta: true });
+  assert.equal(pm.decisiones.length, 3);
+  assert.doesNotMatch(JSON.stringify(pm.decisiones), /Cuenta (?:[3-9]|[1-9][0-9])/);
+  const verdict = await service.recordVerdict({ user: RODNY, ref: '50', veredicto: 'después', nota: 'Primero confirmar los insumos.' });
+  assert.equal(verdict.saved, true);
+  assert.equal(repository.decisions[0].decisionId, `${reading.day}:50`);
+  const reviewed = await service.explain({ user: RODNY });
+  assert.equal(reviewed.decisiones.at(-1).anotacion.nota, 'Primero confirmar los insumos.');
+  assert.equal(reviewed.decisiones.at(-1).ejecucionAutorizada, false);
+});
+
+test('historical proposals distinguish missing provenance from a confirmed recommendation', async () => {
+  const { service, repository, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  const reading = await repository.latestReading();
+  const proposal = reading.decisions[0];
+  delete proposal.source;
+  proposal.evidence.push('missing-source');
+  const data = await service.explain({ user: RODNY });
+  const review = data.decisiones.find(row => row.id === proposal.id);
+  assert.ok(review, 'historical proposal remains available with its persisted identity');
+  assert.equal(review.origen, 'NO_REGISTRADO');
+  assert.deepEqual(review.fuentesFaltantes, ['missing-source']);
+  assert.equal(review.ejecucionAutorizada, false);
+  assert.equal(review.anotacion, null);
+});
+
+test('the next morning cannot reintroduce mixed or inaccessible proposals through yesterday’s verdicts', async () => {
+  const { service, repository, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  const previous = await repository.latestReading();
+  const [mine, foreign] = previous.decisions;
+  const mixed = { ...mine, id: 'mixed', title: 'Cruzar Foobespain con Aristea', evidence: [...mine.evidence, ...foreign.evidence] };
+  const people = { ...mine, id: 'people', title: 'Mover la carga de la persona privada', evidence: [...mine.evidence, 'CARGA_INUSUAL:p-private'] };
+  previous.signals.push({ id: 'CARGA_INUSUAL:p-private', kind: 'CARGA_INUSUAL', subjectType: 'PERSON', subjectId: 'p-private', subjectName: 'Persona privada', text: 'Carga privada.' });
+  previous.decisions = [mine, mixed, { ...mixed, id: 'mixed-without-verdict' }, people, foreign];
+  for (const decision of [mixed, people, foreign]) repository.decisions.push({ ...decision, decisionId: decision.id, dayKey: previous.day, userRef: CAMILA.id, verdict: 'NO' });
+  const summary = await service.decisionsFor({ ...CAMILA, modulePermissions: { bria: true, manager: false } }, { day: '2026-10-21' });
+  assert.deepEqual(summary.decided, []);
+  assert.deepEqual(summary.undecided.map(row => row.id), [mine.id]);
+});
 
 test('the photo of the day: what waits for the client, returns, overdue and yesterday’s hours, without admins or forgotten clocks', async () => {
   const { service } = setup();
@@ -174,6 +280,22 @@ test('6:00 photo every day, 6:30 reading and 7:30 message on business days, each
   assert.deepEqual(notifications.map((n) => [n.userId, n.type, n.relatedId]), [['u-rodny', MORNING_BRIEF_NOTIFICATION, 'chat-1'], ['u-camila', MORNING_BRIEF_NOTIFICATION, 'chat-2']]);
 });
 
+test('the WhatsApp morning alert points to the same conversation and only invites review', async () => {
+  const { service, whatsappMessages, proactive, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
+  setClock(at('07:40'));
+  await service.runAutomatic();
+  assert.equal(whatsappMessages.length, 2);
+  for (const alert of whatsappMessages) {
+    const delivery = await proactive.morningBriefDelivery('2026-10-20', alert.userId);
+    assert.equal(alert.conversationId, delivery.conversationId);
+    assert.equal(alert.sourceRef, 'LECTURA_MANANA:2026-10-20');
+    assert.equal(alert.buttons[0].label, 'Revisar lectura');
+    assert.match(alert.buttons[0].ask, /antes de hacer cambios/);
+  }
+  await service.runAutomatic();
+  assert.equal(whatsappMessages.length, 2, 'an already delivered reading does not send a second alert');
+});
+
 test('the decision log: natural verdicts are noted, outcomes are read the next day, and the morning tells both', async () => {
   const { service, repository, notes, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
   setClock(at('06:40'));
@@ -194,7 +316,8 @@ test('the decision log: natural verdicts are noted, outcomes are read the next d
   const vague = await note.run({ decision: '1', veredicto: 'tal vez' }, { user: RODNY });
   assert.match(vague.data.motivo, /No me quedó claro/);
   const foreign = await note.run({ decision: '2', veredicto: 'no' }, { user: CAMILA });
-  assert.equal(foreign.data.motivo, 'Esa decisión no es de tus cuentas.', 'a PM only notes decisions about her accounts');
+  assert.equal(foreign.data.saved, false, 'a PM only notes decisions about her accounts');
+  assert.doesNotMatch(foreign.data.motivo, /Aristea/, 'a missing reference never lists other accounts');
   const again = await note.run({ decision: '1', veredicto: 'la dejo para la otra semana' }, { user: RODNY });
   assert.equal(again.data.veredicto, 'DESPUES');
   assert.equal(repository.decisions.length, 1, 'noting it again replaces the verdict, never duplicates');
@@ -221,6 +344,159 @@ test('the decision log: natural verdicts are noted, outcomes are read the next d
   const camila = notes.find((n) => n.actor.ref === 'u-camila' && n.note.metadata.dayKey === '2026-10-21').note.text;
   assert.match(camila, /De ayer no supe qué pasó con «Revisar Foobespain hoy»/, 'Camila sees only her account’s decision');
   assert.doesNotMatch(camila, /Aristea/);
+});
+
+test('the number in the morning brief, the explanation and the verdict refers to the same visible decision', async () => {
+  const { service, repository, notes, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  const reading = await repository.latestReading();
+  const [mine, foreign] = reading.decisions;
+  reading.decisions = [foreign, { ...mine, id: `${reading.day}:avoid`, title: 'No cambiar fechas', kind: 'NO_HACER' }, mine];
+  await service.deliver(CAMILA, reading);
+  assert.match(notes[0].note.text, /1\. \*\*Revisar Foobespain hoy/);
+  const explained = await service.explain({ user: CAMILA });
+  assert.deepEqual(explained.decisiones.map((d) => [d.numero, d.titulo]), [[1, mine.title], [2, 'No cambiar fechas']]);
+  const result = await service.recordVerdict({ user: CAMILA, ref: '1', veredicto: 'HECHO' });
+  assert.equal(result.saved, true);
+  assert.equal(repository.decisions[0].decisionId, mine.id);
+  const missing = await service.recordVerdict({ user: CAMILA, ref: '9', veredicto: 'NO' });
+  assert.equal(missing.saved, false);
+  assert.doesNotMatch(missing.motivo, /Aristea/);
+});
+
+test('tools in a morning-reading conversation keep its date when a newer reading exists', async () => {
+  const { service, repository, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  const original = await repository.latestReading();
+  const newer = { ...original, day: '2026-10-21', decisions: original.decisions.map((d, i) => ({ ...d, id: `2026-10-21:${i + 1}`, title: `Nueva propuesta ${i + 1}` })) };
+  await repository.saveReading(newer.day, newer);
+  const [read, note] = createDailyReadingTools(service, { readingDay: original.day });
+  assert.equal((await read.run({}, { user: RODNY })).data.fecha, original.day);
+  const result = await note.run({ decision: '1', veredicto: 'hecho' }, { user: RODNY });
+  assert.equal(result.data.dia, original.day);
+  assert.equal(repository.decisions[0].decisionId, original.decisions[0].id);
+  const explicit = await note.run({ decision: '1', dia: newer.day, veredicto: 'no' }, { user: RODNY });
+  assert.equal(explicit.data.dia, newer.day, 'an explicit date still selects that reading');
+  const [latest] = createDailyReadingTools(service);
+  assert.equal((await latest.run({}, { user: RODNY })).data.fecha, newer.day, 'ordinary chats still read the latest');
+});
+
+test('a saved reading retries a failed outcome write without generating the reading again', async () => {
+  const { service, repository, requests, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  await service.recordVerdict({ user: RODNY, ref: '1', veredicto: 'HECHO' });
+  const setOutcome = repository.setOutcome.bind(repository);
+  let attempts = 0;
+  repository.setOutcome = async (...args) => {
+    if (attempts++ === 0) throw new Error('No se pudo guardar el desenlace');
+    return setOutcome(...args);
+  };
+  setClock(at('06:40', '2026-10-21'));
+  await assert.rejects(service.runAutomatic(), /No se pudo guardar el desenlace/);
+  const savedReading = repository.readings.get('2026-10-21');
+  assert.ok(savedReading, 'the reading is already durable when the outcome fails');
+  assert.equal(repository.decisions[0].outcome, null);
+  const generated = requests.length;
+  const restored = await service.generateReading(at('06:50', '2026-10-21'));
+  assert.equal(restored, savedReading);
+  assert.equal(requests.length, generated, 'retrying persistence does not call the model again');
+  assert.equal(repository.decisions[0].outcome, 'SIGUE');
+  assert.equal(repository.decisions[0].outcomeDay, '2026-10-21');
+  assert.equal(attempts, 2);
+});
+
+test('outcomes keep following the same decision once a day through improvement, missing data and relapse', async () => {
+  const { service, repository, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  await service.recordVerdict({ user: RODNY, ref: '1', veredicto: 'HECHO', nota: 'Lo revisamos' });
+  const observations = [
+    ['2026-10-21', 'red', 'SIGUE'], ['2026-10-22', 'green', 'MEJORO'],
+    ['2026-10-23', null, 'SIN_EVIDENCIA'], ['2026-10-24', 'red', 'SIGUE']
+  ];
+  for (const [day, level, expected] of observations) {
+    const current = { clients: level ? [clientDay('c1', 'Foobespain', level, 'pm-camila')] : [], people: [] };
+    assert.equal(await service.settleOutcomes(day, [], current), 1);
+    assert.equal(repository.decisions[0].outcome, expected);
+    assert.equal(await service.settleOutcomes(day, [], current), 0, 'the same day is not written twice');
+  }
+  const row = repository.decisions[0];
+  assert.deepEqual(row.history.filter((event) => event.type === 'OUTCOME').map((event) => [event.day, event.outcome]), observations.map(([day, , expected]) => [day, expected]));
+  const history = structuredClone(row.history), revision = row.revision, decidedAt = row.decidedAt;
+  setClock(at('09:00', '2026-10-24'));
+  await service.recordVerdict({ user: RODNY, ref: '1', dia: '2026-10-20', veredicto: 'HECHO', nota: 'Lo revisamos' });
+  assert.deepEqual(repository.decisions[0].history, history, 'repeating the same words does not erase the observations');
+  assert.equal(repository.decisions[0].revision, revision);
+  assert.equal(repository.decisions[0].decidedAt, decidedAt);
+  assert.equal(repository.decisions[0].outcome, 'SIGUE');
+  assert.equal(await service.settleOutcomes('2026-11-04', [], { clients: [clientDay('c1', 'Foobespain', 'green', 'pm-camila')], people: [] }), 0, 'after fourteen days the automatic window has ended');
+});
+
+test('an outcome read before a human correction cannot overwrite the corrected decision', async () => {
+  const { service, repository, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  await service.recordVerdict({ user: RODNY, ref: '1', veredicto: 'HECHO' });
+  const pending = repository.pendingOutcomes.bind(repository);
+  const setOutcome = repository.setOutcome.bind(repository);
+  const attemptedRevisions = [];
+  repository.setOutcome = async (id, args) => { attemptedRevisions.push(args.expectedRevision); return setOutcome(id, args); };
+  repository.pendingOutcomes = async (...args) => {
+    const rows = await pending(...args);
+    await service.recordVerdict({ user: RODNY, ref: '1', veredicto: 'NO', nota: 'Cambiamos de camino' });
+    return rows;
+  };
+  assert.equal(await service.settleOutcomes('2026-10-21', [], { clients: [clientDay('c1', 'Foobespain', 'green', 'pm-camila')], people: [] }), 0);
+  assert.deepEqual(attemptedRevisions, [1], 'the version read with the observation is the one sent to the compare-and-set');
+  assert.equal(repository.decisions[0].verdict, 'NO');
+  assert.equal(repository.decisions[0].outcome, null);
+  assert.equal(repository.decisions[0].revision, 2);
+  assert.deepEqual(repository.decisions[0].history.map((event) => event.type), ['VERDICT', 'VERDICT']);
+});
+
+test('only an administrator reads other people’s verdicts, even when a PM has no assigned accounts', async () => {
+  const { service, repository, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  await service.recordVerdict({ user: RODNY, ref: '1', veredicto: 'HECHO' });
+  await service.recordVerdict({ user: CAMILA, ref: '1', veredicto: 'NO' });
+  const noAccounts = { ...CAMILA, id: 'pm-without-accounts', teamMember: { id: 'unassigned', name: 'Otro project' } };
+  const lookedUp = [];
+  const recent = repository.recentDecisions.bind(repository);
+  repository.recentDecisions = async (day, options) => { lookedUp.push(options.userRef || null); return recent(day, options); };
+  const pm = await service.explain({ user: noAccounts });
+  assert.equal(pm.decisiones.length, 2, 'the existing agency-reading scope for an unassigned PM is preserved');
+  assert.equal(pm.libroDeDecisiones.anotadas, 0, 'an agency reading is not authority to inspect others’ verdicts');
+  assert.equal(pm.libroDeDecisiones.hechas, 0);
+  assert.deepEqual(lookedUp, ['pm-without-accounts']);
+  const assigned = await service.explain({ user: CAMILA });
+  assert.equal(assigned.libroDeDecisiones.anotadas, 1);
+  assert.equal(assigned.libroDeDecisiones.descartadas, 1);
+  const admin = await service.explain({ user: RODNY });
+  assert.equal(admin.libroDeDecisiones.anotadas, 2);
+  assert.equal(admin.libroDeDecisiones.hechas, 1);
+  assert.equal(admin.libroDeDecisiones.descartadas, 1);
+});
+
+test('the adoption denominator counts the decisions visible in each historical reading', async () => {
+  const { service, repository, setClock } = setup({ seed: { '2026-10-19': YESTERDAY } });
+  setClock(at('06:40'));
+  await service.runAutomatic();
+  const current = repository.readings.get('2026-10-20');
+  const teamDecision = { id: '2026-10-19:3', title: 'Revisar vencidas del equipo', kind: 'CONVERSAR', subjectType: 'PERSON', subjectId: 'm1', evidence: [] };
+  repository.readings.set('2026-10-19', {
+    ...current, day: '2026-10-19', owners: { c1: 'pm-otro', c2: 'pm-camila' },
+    decisions: [...current.decisions.map((decision, index) => ({ ...decision, id: `2026-10-19:${index + 1}` })), teamDecision]
+  });
+  await service.recordVerdict({ user: CAMILA, ref: '1', veredicto: 'HECHO' });
+  const pm = await service.explain({ user: CAMILA });
+  assert.equal(pm.libroDeDecisiones.propuestas, 2, 'one current account decision and one previously owned account decision; no team permission');
+  assert.equal(pm.libroDeDecisiones.tasaDeAdopcion, 0.5);
+  const admin = await service.explain({ user: RODNY });
+  assert.equal(admin.libroDeDecisiones.propuestas, 5);
 });
 
 test('the manual of criteria is read from the agency memory, shown to the model, and cited in the morning', async () => {

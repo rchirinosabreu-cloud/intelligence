@@ -1,0 +1,100 @@
+# Bria como project manager de la agencia
+
+23 de octubre de 2026. Mandato de Rodny: que Bria entienda la agencia, observe la plataforma, pregunte, proponga cómo abordar el trabajo y acompañe las decisiones como un segundo CEO. Puede plantear muchas decisiones; Rodny necesita verlas, entenderlas y modificarlas. La decisión final sigue siendo humana. Aumentar autonomía de ejecución requiere una autorización futura, explícita y por tipo de acción.
+
+Este plan amplía lo construido en [Ojos y cerebro](BRIA_OJOS_Y_CEREBRO.md), [autonomía](BRIA_AUTONOMY_PLAN.md) y [WhatsApp](BRIA_WHATSAPP.md). Las etapas se aceptan por comportamiento comprobado, sin prometer fechas antes de medir el piloto.
+
+## Punto de partida
+
+Ya existen el chat y las acciones con confirmación, memoria de agencia y criterio, mapa de la plataforma, señales operativas, fotos diarias, lectura de la mañana, libro de decisiones, cierre del día, foco semanal, rentabilidad y revisión mensual. WhatsApp usa la misma identidad, permisos, motor y confirmaciones; admite texto, archivos y notas de voz. Es una base para fortalecer.
+
+Los informes de negocio aportados por Rodny señalan cuatro vacíos que guían la siguiente inversión: aprobaciones y pedidos que quedan en conversaciones; reglas de cliente que no acompañan la pieza; relevos sin contexto; y versiones o instrucciones que se pierden entre canales. Son evidencia histórica para investigar, no órdenes vigentes ni autorizaciones. Los informes privados y los chats originales permanecen fuera de este repositorio; las reglas confirmadas actuales prevalecen sobre una práctica antigua.
+
+El canal directo equipo–Bria en WhatsApp no equivale a observar los grupos de clientes. Un aviso tampoco demuestra que una persona lo leyó, aprobó una pieza o aceptó una propuesta.
+
+## Etapas y criterios de aceptación
+
+| Etapa | Resultado para Rodny | Ampliación de lo existente | Cómo se acepta |
+|---|---|---|---|
+| **1. Seguimiento confiable y continuidad** | Retomar una lectura desde WhatsApp y distinguir mejora comprobada, problema persistente y falta de datos. | Libro de decisiones, seguimiento diario y vínculo del aviso a su conversación original. | Datos ausentes no producen éxito; correcciones conservan historia; un cálculo anterior no pisa una corrección; revisar una lectura no confirma acciones. |
+| **2. Decisiones que se pueden revisar** | Ver todas las propuestas relevantes, su motivo, alternativas y efecto antes de decidir; corregirlas en conversación. | Propuestas persistentes conectadas con acciones y confirmaciones existentes; resumen corto separado del conjunto completo. | Cada propuesta muestra fuente, fecha, alcance, incertidumbre, qué cambiaría y quién autoriza. Cambiar el contenido invalida la aprobación anterior. Repetir una confirmación no duplica la acción. |
+| **3. Compromisos y contexto de trabajo** | Saber quién quedó en qué, qué falta, de quién depende y cuándo volver a mirar. | Tareas, parrillas, comentarios, reuniones y memoria actuales; captura revisable de pedidos/aprobaciones compartidos con Bria por WhatsApp. | Una muestra de casos reales se reconstruye de fuente a pieza/tarea. Si no se sabe qué versión se aprobó, Bria pregunta. Una orden de esperar o retirar se propone como cambio visible con decisión humana. |
+| **4. Coordinación diaria de la agencia** | Recibir un plan de trabajo viable, detectar bloqueos y preparar empalmes antes de que se pierdan. | Prioridades, dependencias, carga y vencimientos; seguimiento unido entre plataforma y WhatsApp. | Una urgencia no genera avisos duplicados; las propuestas explican qué se pospone y por qué; ninguna asignación, fecha ni comunicación cambia sin aprobación. Se mide trabajo bloqueado y compromisos incumplidos, no el valor de una persona. |
+| **5. Criterio y revisión de negocio** | Relacionar operación, calidad, alcance, horas y rentabilidad; entender cuándo una regla funcionó o necesita revisión. | Manual de criterio, libro de decisiones y revisión mensual; fuentes comerciales/editoriales con permisos. | Cada conclusión distingue observación de causalidad y declara cobertura. Una corrección distingue excepción de regla general. Cambios del criterio se proponen para confirmación, conservando fuente y versión. |
+| **6. Autonomía concedida por ámbitos** | Delegar acciones concretas cuando haya evidencia suficiente de fiabilidad. | Las mismas puertas de ejecución, con límites, trazabilidad, revocación y revisión humana. | Rodny concede cada ámbito explícitamente; hay límites de impacto, mecanismo de parada y auditoría. El acierto estadístico nunca activa permisos por sí solo. |
+
+## Primera entrega
+
+La primera entrega de esta rama cubre la etapa 1, con cambios aditivos en el registro lateral de Bria:
+
+- **Desenlace con evidencia del asunto original.** Una señal distinta del mismo cliente no resuelve el problema. Una mejora parcial sigue en seguimiento. Si falta evidencia, se informa `SIN_EVIDENCIA`; el antiguo `YA_NO_SE_VE` se conserva como dato histórico y deja de contar como éxito.
+- **Revisión cada día hábil durante la ventana existente de 14 días**, desde el día posterior a la lectura, incluidos los resultados que habían mejorado para detectar recaídas. Una lectura ya guardada permite reintentar el seguimiento si falló su guardado. No vuelve a pedir al modelo una lectura del mismo día.
+- **Correcciones e historia.** Repetir el mismo veredicto y nota conserva fecha y desenlace. Cambiarlos crea una nueva revisión y conserva los eventos previos; el seguimiento comprueba la revisión para no escribir sobre una corrección concurrente. Las filas históricas se preservan al modificarlas. El nuevo registro `decision_events` está protegido contra edición y borrado por la misma guardia de auditoría del proyecto.
+- **Referencia consistente.** El número de una decisión significa lo mismo en el resumen matinal, al pedir explicaciones y al anotarla, después de aplicar el alcance de la persona. En el chat de una lectura, sus consultas y anotaciones conservan la fecha de esa lectura aunque haya una más reciente; una fecha explícita al anotar sigue siendo válida.
+- **Alcance por persona.** Solo administración obtiene el balance de decisiones de otras personas. El PM conserva el alcance operativo ya acordado y su propio libro; el total de propuestas del balance se cuenta dentro del alcance visible de cada lectura.
+- **WhatsApp: «Revisar lectura».** La lectura de la mañana guarda el identificador de su conversación. El botón valida propietario, permisos, fecha y procedencia; abre una consulta de revisión en ese mismo chat. Solo después de enviar la respuesta se conserva como conversación activa del día. El aviso por sí solo y «Ver aviso» no cambian la conversación ni confirman nada.
+- **Confirmación de la respuesta correcta.** Los botones del chat corresponden a su conversación y revisión. Un botón anterior no confirma una propuesta nueva, y el motor vuelve a comprobar la revisión antes de actuar. Si el envío completo falla, no queda activo el contexto de una respuesta no entregada.
+
+La revisión de una lectura reutiliza el motor de conversación, la puerta de ejecución y la confirmación humana existentes. Registrar que una persona hizo algo sigue siendo distinto de ejecutar ese trabajo.
+
+## Límites de esta entrega
+
+En la primera entrega, el modelo proponía hasta seis decisiones por lectura y el mensaje matinal resumía tres. La ampliación de la etapa 2, descrita abajo, separa la lista completa de la cantidad de avisos.
+
+Esta entrega no incorpora grupos de clientes ni interpreta respuestas citadas para elegir automáticamente una lectura. Para retomarla por WhatsApp se toca el botón; si el canal no admite ese botón, se indica abrir el chat en la plataforma. Una respuesta libre sin seleccionar la lectura sigue en la conversación activa del día. Cierre diario y revisión mensual conservan su comportamiento actual.
+
+El seguimiento de resultados ocurre al generar o recuperar la lectura en días hábiles. La ventana de 14 días se mide desde la lectura original; las decisiones más largas requieren compromisos persistentes en la etapa 3. Una mejora observada después de un «hecho» no prueba que la decisión la causó. Esto es aprendizaje mediante memoria, evidencia y correcciones, sin entrenamiento nuevo del modelo.
+
+## Validación y salida
+
+Antes del primer cambio se confirmó que `main` local y remoto eran `6e111f45a9a5a5a074f6129ee8c72862dec96d3d` y que la ejecución de CI del resultado fusionado estaba en verde: [ejecución 40023932237](https://github.com/rchirinosabreu-cloud/intelligence/actions/runs/40023932237). Incluye pruebas completas con PostgreSQL, integración de gobierno de IA, compilación y controles estáticos.
+
+La entrega se valida como conjunto: pruebas de decisiones y lectura, PostgreSQL real aislado con esquema reaplicado, y puente WhatsApp con el motor real y transporte/IA simulados. El caso crítico es «revisar» con una acción pendiente: cero ejecuciones hasta una confirmación explícita de lo mostrado, y una ejecución aunque se repita. Se revisan también permisos revocados, lectura ajena o vencida, fallos de entrega y corrección humana mientras corre un seguimiento.
+
+El despliegue y el piloto de WhatsApp real quedan separados de la verificación local. Las pruebas automatizadas usan servicios simulados y bases temporales. La evaluación con el proveedor real, autorizada por Rodny el 23 de octubre, usa únicamente su credencial de modelo y datos ficticios, sin conectar a producción ni enviar mensajes reales. Antes de fusionar, la validación de CI debe corresponder al conjunto final de cambios.
+
+Para el piloto posterior: contar decisiones con evidencia suficiente, casos que siguieron bloqueados, correcciones humanas, avisos duplicados y fallos de continuidad. La siguiente etapa se prioriza con esos resultados y con ejemplos reales que Rodny revise.
+
+### Resultado de la verificación local de esta entrega
+
+- Suite general: **3.579 aprobadas, 0 fallos y 24 integraciones optativas omitidas** (3.603 casos). El primer recorrido encontró cinco fallos del entorno aislado: Git no estaba disponible y dos pruebas de reuniones requerían una tabla real de gobierno. Tras corregir el entorno temporal, se repitió la suite completa con el resultado anterior, sin alterar esos tests ni el producto para hacerlos pasar.
+- Pruebas focalizadas conjuntas: **63 aprobadas, sin omisiones**, con PostgreSQL real aislado para decisiones, esquema, auditoría y avisos, más alcance de lectura, identidad del asistente y continuidad de WhatsApp.
+- Compilación, revisión estática de código y auditoría de código sin uso: correctas. La compilación conserva avisos por tamaño de algunos archivos generados. La comprobación de licencias no falla, aunque avisa que el inventario local está desactualizado; no se cambiaron dependencias.
+- Entorno: Windows, Node 24 y PostgreSQL 17 local; CI usa Node 22 y bases aisladas. La integración final en `main` aún requiere CI sobre el conjunto que se vaya a fusionar.
+
+Cambios preparados localmente en `codex/bria-project-foundations`, con el plan y los archivos disponibles para revisión en Codex. No se desplegó ni se enviaron mensajes reales.
+
+## Segunda entrega — Lista completa y confirmación de la versión revisada
+
+Primer incremento de la etapa 2, iniciado con la autorización «Listo, empieza». Antes de modificar se volvió a consultar `main`: seguía en `6e111f45a9a5a5a074f6129ee8c72862dec96d3d`, con la misma ejecución de CI completada en verde. Se mantienen los cambios de la primera entrega.
+
+- **El resumen y el conjunto de propuestas son cosas distintas.** El modelo conserva su límite de seis recomendaciones. La composición completa los problemas que no cubrió con las reglas operativas que ya existían, usando todas las señales guardadas, incluso las que no caben en el contexto resumido del modelo. Agrupa las señales del mismo problema, sin ocultar otro problema del mismo cliente. Las abstenciones del modelo también cuentan como cobertura para no proponer su contrario. Cada propuesta guarda su origen. La mañana conserva el resumen breve e indica cuántas propuestas quedan por revisar.
+- **La revisión devuelve la lista guardada completa.** La herramienta de lectura existente entrega identidad estable, fecha, evidencia, procedencia, personas o cuentas afectadas y las anotaciones propias con su historia. Declara lo que falta comprobar y distingue una propuesta de un cambio preparado. El conteo de cobertura se calcula dentro del alcance de quien consulta; una recomendación con evidencia de otra cuenta no se muestra parcialmente a quien no puede verla.
+- **Las alternativas de revisión son explícitas.** Revisar, ajustar, posponer o descartar tienen efectos distintos. Posponer una propuesta no cambia una fecha ni crea un recordatorio. Anotar «hecho» conserva lo que contó la persona y nunca concede permiso de ejecución. El ajuste de una acción sigue el chat y el resumen existentes, con confirmación humana de su versión.
+- **Web y WhatsApp comprueban lo que la persona vio.** Los mensajes de la web incluyen la revisión de la conversación, igual que el puente de WhatsApp. Una pestaña desactualizada no puede confirmar el borrador que alguien corrigió después: se recupera la respuesta nueva, se conserva el mensaje y los adjuntos, y se requiere otro gesto humano. No se reenvía la confirmación automáticamente.
+- **Descartar un problema no silencia otros.** La supresión distingue la familia del problema y los días: rechazar tres propuestas distintas del mismo cliente no equivale a rechazar la misma recomendación durante tres días. La gravedad máxima conserva su excepción.
+
+Esta entrega no añade un motor de acciones, una tabla de propuestas ni otra herramienta. Las propuestas viven en la lectura persistente; los cambios preparados y las correcciones conversadas, en los turnos del chat. Las lecturas históricas no se regeneran ni se renumeran, y una procedencia que no se guardó se declara desconocida.
+
+**Límites de este incremento.** La consulta entrega más de cincuenta propuestas cuando existen señales suficientes, pero la respuesta del modelo sigue teniendo un límite de longitud: no se promete que cincuenta explicaciones completas quepan en un único mensaje. Se pueden revisar por cuenta o por su referencia estable dentro de la lectura. La cantidad no demuestra calidad ni cubre lo que la plataforma todavía no observa. Las alternativas específicas de negocio, su impacto comparado y el enlace explícito entre propuesta y acción ejecutada siguen pendientes para cerrar la etapa 2; esta entrega ofrece opciones de revisión y conserva el recorrido en la conversación, sin inventar esos análisis. No se incorpora lectura de grupos de clientes ni se aumenta autonomía.
+
+La evaluación de este corte comprueba composición, cobertura, permisos, historial, revisión concurrente y entrega entre canales con datos ficticios. Los esquemas de las herramientas del modelo se conservan. La evaluación real permitió precisar sus instrucciones y corregir el detector de confirmaciones; sus resultados se detallan abajo. El piloto con personas y WhatsApp real sigue siendo una validación posterior.
+
+### Verificación local de la segunda entrega
+
+- Suite conjunta de ambas etapas: **3.625 pruebas; 3.600 aprobadas, cero fallos y 25 omitidas** (integraciones optativas). Se ejecutó con gobierno de IA en un esquema temporal de PostgreSQL aislado.
+- Comprobaciones específicas del historial, lectura, WhatsApp y revisión concurrente: **68 aprobadas, cero omitidas**, incluyendo las pruebas de PostgreSQL real. El caso de dos confirmaciones simultáneas ejecutó el efecto una sola vez; la revisión anterior ejecutó cero veces.
+- Navegador real, con servicios y mensajes simulados: dos pestañas, respuesta progresiva y normal, texto y botones, conservación de adjuntos, escritorio claro y móvil oscuro. Capturas revisadas en `output/bria-conversation-revision/` (salida local ignorada por Git).
+- Compilación, lint y detección de código/dependencias sin uso: correctos. La compilación conserva el aviso de paquetes grandes ya existente.
+- La base temporal iniciada para las comprobaciones se cerró al finalizar. No se consultó producción, no se enviaron mensajes reales y no se desplegó.
+
+### Cierre de evaluación de ambas entregas — 23 de octubre de 2026
+
+- **Modelo real configurado: `gpt-5.6-terra`, 46/46 respuestas aprobadas**, 23 casos repetidos dos veces. Se conservan los 19 casos existentes y se añaden revisión de la propuesta 50, resultados sin evidencia, anotación sin ejecución y fecha original de una lectura retomada. La lectura ficticia usa el servicio y la composición reales con 55 propuestas; el registro de decisiones se comprueba en memoria por caso. Informe local: `output/bria-project/real-eval-validated.json`.
+- **Las comprobaciones incluyen el efecto real.** Invocar `anotar_decision` no basta: se exige la fila esperada, el veredicto y su fecha. Se comprueba la abstención solicitada, la ausencia de acciones preparadas en una revisión y la correspondencia entre fecha y día de la semana. La revisión cualitativa complementa esas comprobaciones; pasar esta muestra no garantiza que cualquier respuesta futura del modelo sea correcta.
+- **Correcciones surgidas de la evaluación.** Una propuesta guardada se consulta por su referencia dentro de la lectura actual o abierta; su campo `pedido` no sustituye la pregunta humana. Al anotar se conserva asunto y cliente, porque una cuenta puede tener varias propuestas. «Falta confirmar el estado actual» no pide ejecutar: el detector reconoce solicitudes directas y el aviso interno solo permite preparar un cambio pedido por la persona. Las fechas autorizadas llevan un calendario calculado, sin convertir horas ni modificar los datos originales.
+- **Aislamiento del evaluador.** Usa el proveedor real con gobierno y registro de uso en memoria. No consulta políticas ni escribe uso en producción. Los datos de búsqueda y lectura ficticios comparten las mismas cuentas; se corrigió un día de semana incorrecto en el período ficticio de carga. El proceso devuelve error si falla cualquier caso, aunque no queden conexiones abiertas.
+- **Validación focalizada final: 164/164 pruebas aprobadas**, completando por separado la integración de auditoría que el recorrido sin base omite. Además, seis pruebas de PostgreSQL sobre lectura, correcciones concurrentes, historia, revisión de conversación y avisos aprobaron sin omisiones. Compilación, lint y detección de código sin uso correctos. Se mantienen las capturas y comprobaciones de navegador descritas arriba.
+- **Dependencia corregida antes de integrar.** La auditoría de CI detectó [GHSA-27r3-jxmh-p828](https://github.com/advisories/GHSA-27r3-jxmh-p828) en `body-parser`. Se actualizó únicamente su resolución de 1.20.8 a 1.20.9, dentro del rango de Express, y se regeneró el inventario de licencias. No se añadieron excepciones ni se cambiaron políticas de seguridad. Auditoría, política de dependencias y 39 comprobaciones de rutas/confirmaciones aprobadas tras el parche.
+
+Rodny autorizó integrar ambas entregas si todo queda en verde. Se presentan juntas para validar su combinación: la fusión requiere CI sobre la revisión final y se comprueba nuevamente el CI de `main` después de fusionar. El verde inicial de `main` solo acredita el punto de partida. No se concede autonomía adicional ni se da por completada toda la etapa 2.
