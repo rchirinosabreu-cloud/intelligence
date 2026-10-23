@@ -23,6 +23,7 @@ export function FinancialSectionHeader({ title, description, children }) {
 const TONES = {
     neutral: 'text-zinc-900 dark:text-white',
     danger: 'text-destructive brain-destructive-text',
+    warning: 'text-brand-yellow-deep dark:text-brand-yellow',
     positive: 'text-brand-green-deep dark:text-brand-green',
     accent: 'text-brand-cyan-deep dark:text-brand-cyan'
 };

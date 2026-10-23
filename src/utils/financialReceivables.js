@@ -1,4 +1,4 @@
-import { oldestAgingBucket } from '../lib/receivableAging.js';
+import { oldestAgingBucket } from '../lib/debtAging.js';
 
 const round = value => Math.round((Number(value) || 0) * 100) / 100;
 const today = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Bogota' });

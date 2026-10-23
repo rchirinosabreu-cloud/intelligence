@@ -37,10 +37,10 @@ import { isCashPayment, isReceivableClosed, isRetentionPayment, paymentKindLabel
 import { isLoanReceivable, loanCounterpartyLabel } from '@/lib/receivableLoans';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
 import PayablesTab from './financial/PayablesTab';
-import ReceivableAgingSummary from './financial/ReceivableAgingSummary';
+import DebtAgingSummary from './financial/DebtAgingSummary';
 import { FinancialSectionHeader, FinancialSubTabs } from './financial/FinancialSectionParts';
 import { financialTabOfView, viewForFinancialTab, visibleFinancialTabs } from '@/lib/financialTabs';
-import { agingBucketLabel, agingBucketOf } from '@/lib/receivableAging';
+import { agingBucketLabel, agingBucketOf, agingBucketTone } from '@/lib/debtAging';
 import ProfitabilityTab from './financial/ProfitabilityTab';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
@@ -1386,10 +1386,16 @@ await invalidateFinancialQueries(queryClient);
                             </>}
                         </FinancialSectionHeader>
 
-                        {!receivablesError && !isReceivablesLedgerLoading && (
-                            <ReceivableAgingSummary items={receivablesLedger?.items || []} formatCurrency={formatCurrency}
-                                kind={receivableKind} onKindChange={setReceivableKind} bucket={receivableBucket} onBucketChange={setReceivableBucket} />
-                        )}
+                        {!receivablesError && !isReceivablesLedgerLoading && <>
+                            {/* A quién se le cobra (Elisa, 23 de octubre de 2026): clientes o terceros a quienes se les prestó. */}
+                            <FinancialSubTabs label="Clase de cuenta por cobrar" active={receivableKind || 'ALL'}
+                                onChange={(key) => setReceivableKind(key === 'ALL' ? null : key)}
+                                views={[{ key: 'ALL', label: 'Todas' }, { key: 'CLIENTE', label: 'Clientes' }, { key: 'PRESTAMO', label: 'Préstamos a terceros' }]} />
+                            <DebtAgingSummary data-receivable-summary totalLabel="Total por cobrar" formatCurrency={formatCurrency}
+                                items={(receivablesLedger?.items || []).filter((item) => !receivableKind || (receivableKind === 'PRESTAMO') === (item.kind === 'PRESTAMO'))}
+                                partyOf={(item) => `${item.kind === 'PRESTAMO' ? 'loan:' : ''}${item.clientId || item.clientName || item.id}`}
+                                bucket={receivableBucket} onBucketChange={setReceivableBucket} />
+                        </>}
 
                         {/* Ajustes de cartera del periodo (Rodny, 20 de octubre de 2026): lo saldado sin dinero
                             y la diferencia en cambio, que no son movimientos y solo se veían cliente por cliente. */}
@@ -1425,7 +1431,7 @@ await invalidateFinancialQueries(queryClient);
                                                         </h4>
                                                         <p className="text-xs text-zinc-500">
                                                             {client.kind === 'PRESTAMO' ? `Préstamo · ${loanCounterpartyLabel(client.counterpartyType)}` : `${client.debts?.length} cuenta${client.debts?.length === 1 ? '' : 's'}`}
-                                                            {client.oldestBucket && <span data-receivable-oldest={client.oldestBucket} className={cn('ml-1.5 rounded-md px-1.5 py-0.5 text-xs font-medium', ['DE_61_A_90', 'MAS_DE_90'].includes(client.oldestBucket) ? 'bg-destructive/10 text-destructive brain-destructive-text' : 'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-300')}>{agingBucketLabel(client.oldestBucket)}</span>}
+                                                            {client.oldestBucket && <span data-receivable-oldest={client.oldestBucket} className={cn('ml-1.5 rounded-md px-1.5 py-0.5 text-xs font-medium', agingBucketTone(client.oldestBucket) === 'danger' ? 'bg-destructive/10 text-destructive brain-destructive-text' : agingBucketTone(client.oldestBucket) === 'warning' ? 'bg-brand-yellow/15 text-brand-yellow-deep dark:text-brand-yellow' : 'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-300')}>{agingBucketLabel(client.oldestBucket)}</span>}
                                                         </p>
                                                     </div>
                                                 </div>

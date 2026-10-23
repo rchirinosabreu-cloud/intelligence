@@ -24,16 +24,21 @@ try {
   // Cuentas por cobrar: resumen por clase y por antigüedad.
   await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
   await page.locator('[data-receivable-summary]').waitFor();
-  assert.match(await page.locator('[data-receivable-kind="ALL"]').innerText(), /800[.,]000/);
-  for (const key of ['POR_VENCER', 'HASTA_30', 'DE_31_A_60', 'DE_61_A_90', 'MAS_DE_90']) await page.locator(`[data-receivable-aging="${key}"]`).waitFor();
+  const receivables = page.locator('[data-receivable-summary]');
+  assert.match(await receivables.locator('[data-debt-aging-total]').innerText(), /800[.,]000/);
+  assert.equal((await receivables.locator('[data-debt-aging-parties]').innerText()).match(/\n(\d+)\n/)[1], '1');
+  for (const key of ['DE_0_A_30', 'DE_31_A_60', 'MAS_DE_60']) await receivables.locator(`[data-debt-aging-bucket="${key}"]`).waitFor();
+  await page.getByRole('group', { name: 'Clase de cuenta por cobrar' }).getByRole('button', { name: 'Préstamos a terceros' }).click();
+  assert.match(await receivables.locator('[data-debt-aging-total]').innerText(), /\$\s*0/);
+  await page.getByRole('group', { name: 'Clase de cuenta por cobrar' }).getByRole('button', { name: 'Todas' }).click();
   await page.locator('[data-receivable-section="CLIENTE"]').waitFor();
   await page.screenshot({ path: shot('cuentas-por-cobrar.png'), animations: 'disabled', fullPage: true });
 
   // Tocar un tramo filtra la lista; tocarlo otra vez la suelta.
-  const bucket = page.locator('[data-receivable-aging="MAS_DE_90"]');
+  const bucket = receivables.locator('[data-debt-aging-bucket="DE_31_A_60"]');
   await bucket.click();
   assert.equal(await bucket.getAttribute('aria-pressed'), 'true');
-  await page.screenshot({ path: shot('filtro-mas-de-90.png'), animations: 'disabled', fullPage: true });
+  await page.screenshot({ path: shot('filtro-31-a-60.png'), animations: 'disabled', fullPage: true });
   await bucket.click();
   assert.equal(await bucket.getAttribute('aria-pressed'), 'false');
   await page.locator('[data-receivable-section="CLIENTE"]').waitFor();
@@ -46,6 +51,10 @@ try {
   await page.getByRole('tab', { name: 'Cuentas por pagar' }).click();
   await page.locator('[data-payables-tab]').waitFor();
   await page.getByRole('heading', { name: 'Proveedores y gastos' }).waitFor();
+  const payablesSummary = page.locator('[data-payables-summary]');
+  await payablesSummary.locator('[data-debt-aging-bucket="MAS_DE_60"]').waitFor();
+  assert.match(await payablesSummary.locator('[data-debt-aging-total]').innerText(), /1[.,]500[.,]000/);
+  await page.screenshot({ path: shot('cuentas-por-pagar.png'), animations: 'disabled' });
   await page.getByRole('button', { name: 'Nómina', exact: true }).click();
   await page.getByRole('heading', { name: 'Nómina', exact: true }).waitFor();
   await page.screenshot({ path: shot('cuentas-por-pagar-nomina.png'), animations: 'disabled' });

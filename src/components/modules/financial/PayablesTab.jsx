@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import axios from 'axios';
 import toast from 'react-hot-toast';
@@ -15,7 +15,9 @@ import RecordDocumentsInline from './RecordDocumentsInline';
 import PayableDialog from './PayableDialog';
 import PayablePaymentDialog from './PayablePaymentDialog';
 import { ThirdPartiesDialog, ThirdPartyDialog } from './ThirdParties';
-import { FinancialSectionHeader, FinancialSummaryCard } from './FinancialSectionParts';
+import { FinancialSectionHeader } from './FinancialSectionParts';
+import DebtAgingSummary from './DebtAgingSummary';
+import { agingBucketLabel, agingBucketOf, payableAgeStart } from '@/lib/debtAging';
 
 // «Por pagar» (Rodny, 20 de octubre de 2026): el espejo de Cartera. Cada tercero es una tarjeta que se
 // despliega; cada cuenta dice qué llegó, cuándo vence y cuánto falta; pagarla crea el egreso en
@@ -43,6 +45,8 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
   const [dialog, setDialog] = useState(null); // { kind: 'payable' | 'pay' | 'void' | 'reverse' | 'third-parties' | 'third-party', ... }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  // El tramo de antigüedad elegido en el resumen (23 de octubre de 2026): filtra la lista.
+  const [bucket, setBucket] = useState(null);
 
   const { data: ledger, isLoading, error: ledgerError, refetch } = useQuery({
     queryKey: ['financial-payables-ledger', filterQuery],
@@ -88,6 +92,16 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
   const documentsChanged = async (message) => { await invalidateFinancialQueries(queryClient); toast.success(message); };
 
   const totals = ledger?.totals || { outstanding: 0, overdue: 0, paidInPeriod: 0, openCount: 0, overdueCount: 0 };
+  const allPayables = useMemo(() => (ledger?.items || []).flatMap((group) => group.payables.map((payable) => ({ ...payable, thirdPartyId: group.thirdParty.id }))), [ledger?.items]);
+  const groups = useMemo(() => {
+    if (!bucket) return ledger?.items || [];
+    return (ledger?.items || []).map((group) => {
+      const payables = group.payables.filter((payable) => agingBucketOf(payable, undefined, payableAgeStart) === bucket);
+      const outstanding = payables.reduce((sum, payable) => sum + Math.round((Number(payable.outstanding) || 0) * 100), 0) / 100;
+      const overdue = payables.filter((payable) => payable.dueState?.key === 'VENCIDA').reduce((sum, payable) => sum + Math.round((Number(payable.outstanding) || 0) * 100), 0) / 100;
+      return { ...group, payables, outstanding, overdue };
+    }).filter((group) => group.payables.length > 0);
+  }, [ledger?.items, bucket]);
 
   return (
     <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300" data-payables-tab>
@@ -97,19 +111,19 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
         {canWrite && <button type="button" data-payable-new onClick={() => setDialog({ kind: 'payable' })} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">Nueva cuenta por pagar</button>}
       </FinancialSectionHeader>
 
-      <div className="grid gap-3 sm:grid-cols-3">
-        <FinancialSummaryCard label="Por pagar" value={<span data-payables-outstanding>{formatCurrency(totals.outstanding)}</span>}
-          hint={`${totals.openCount} cuenta${totals.openCount === 1 ? '' : 's'} abierta${totals.openCount === 1 ? '' : 's'}`} />
-        <FinancialSummaryCard label="Vencido" value={formatCurrency(totals.overdue)} tone={totals.overdue > 0 ? 'danger' : 'neutral'}
-          hint={`${totals.overdueCount} cuenta${totals.overdueCount === 1 ? '' : 's'} vencida${totals.overdueCount === 1 ? '' : 's'}`} />
-        <FinancialSummaryCard label="Pagado en el periodo" value={formatCurrency(totals.paidInPeriod)} hint="Según los filtros de arriba" />
-      </div>
+      <DebtAgingSummary data-payables-summary items={allPayables} totalLabel="Total por pagar" formatCurrency={formatCurrency}
+        startOf={payableAgeStart} partyOf={(payable) => payable.thirdPartyId} bucket={bucket} onBucketChange={setBucket} />
+      <p className="text-xs text-zinc-500 dark:text-zinc-400">
+        <span data-payables-outstanding className="sr-only">{formatCurrency(totals.outstanding)}</span>
+        {totals.overdue > 0 ? <span className="text-destructive brain-destructive-text">Vencido: {formatCurrency(totals.overdue)} en {totals.overdueCount} cuenta{totals.overdueCount === 1 ? '' : 's'}. </span> : null}
+        Pagado en el periodo: {formatCurrency(totals.paidInPeriod)}, según los filtros de arriba.{bucket ? ` Mostrando ${agingBucketLabel(bucket)}.` : ''}
+      </p>
 
       {ledgerError ? <div role="alert" className="rounded-xl border border-destructive/30 p-4 text-sm text-destructive">No fue posible cargar las cuentas por pagar.<button type="button" onClick={() => refetch()} className="ml-3 min-h-11 underline">Reintentar</button></div>
         : isLoading ? <div className="rounded-2xl border border-zinc-200/50 bg-white p-10 text-center dark:border-white/5 dark:bg-zinc-900"><Loader2 className="mx-auto mb-3 h-5 w-5 animate-spin text-primary" /><p className="text-sm font-semibold text-zinc-900 dark:text-white">Cargando cuentas por pagar…</p></div>
-          : !ledger?.items?.length ? <div className="rounded-2xl border border-zinc-200/50 bg-white p-10 text-center dark:border-white/5 dark:bg-zinc-900"><h4 className="text-sm font-semibold text-zinc-900 dark:text-white">Sin cuentas por pagar</h4><p className="mx-auto mt-1 max-w-sm text-xs text-zinc-500">Nada abierto, y nada cerrado en el periodo elegido. Registra la primera con «Nueva cuenta por pagar».</p></div>
+          : !groups.length ? <div className="rounded-2xl border border-zinc-200/50 bg-white p-10 text-center dark:border-white/5 dark:bg-zinc-900"><h4 className="text-sm font-semibold text-zinc-900 dark:text-white">Sin cuentas por pagar</h4><p className="mx-auto mt-1 max-w-sm text-xs text-zinc-500">Nada abierto, y nada cerrado en el periodo elegido. Registra la primera con «Nueva cuenta por pagar».</p></div>
             : <div className="space-y-3">
-              {ledger.items.map((group) => {
+              {groups.map((group) => {
                 const open = !!expanded[group.thirdParty.id];
                 return (
                   <Card key={group.thirdParty.id} data-payable-group className="rounded-2xl border-zinc-200/50 bg-white p-4 shadow-sm dark:border-white/5 dark:bg-zinc-900">

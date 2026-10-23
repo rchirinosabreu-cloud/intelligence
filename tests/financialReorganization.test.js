@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { AGING_BUCKETS, agingBucketOf, oldestAgingBucket, receivableAgeDays, summarizeAging } from '../src/lib/receivableAging.js';
+import { AGING_BUCKETS, agingBucketOf, debtAgeDays, oldestAgingBucket, payableAgeStart, summarizeAging } from '../src/lib/debtAging.js';
 import { FINANCIAL_TAB_GROUPS, financialTabOfView, viewForFinancialTab, visibleFinancialTabs } from '../src/lib/financialTabs.js';
 import { groupFinancialReceivables } from '../src/utils/financialReceivables.js';
 
@@ -30,54 +30,56 @@ test('Rentabilidad solo aparece para administración, y tocar una pestaña abre 
     assert.equal(viewForFinancialTab('analisis', 'records', { isAdmin: false }), 'flow');
 });
 
-test('la antigüedad cuenta desde el vencimiento, o desde que se emitió, o desde el periodo', () => {
-    assert.equal(receivableAgeDays(open({ dueDate: '2026-09-23T00:00:00.000Z', issuedAt: '2026-01-01T00:00:00.000Z' }), today), 30);
-    assert.equal(receivableAgeDays(open({ issuedAt: '2026-08-24T00:00:00.000Z' }), today), 60);
-    assert.equal(receivableAgeDays(open({ period: '2026-07-01T00:00:00.000Z' }), today), 114);
+test('la antigüedad es la del documento: desde la emisión, o el periodo; en lo que se paga, desde que llegó', () => {
+    assert.equal(debtAgeDays(open({ issuedAt: '2026-09-23T00:00:00.000Z', dueDate: '2026-12-01' }), today), 30, 'el vencimiento no la mueve');
+    assert.equal(debtAgeDays(open({ period: '2026-07-01T00:00:00.000Z' }), today), 114);
+    assert.equal(debtAgeDays({ receivedAt: '2026-08-24T12:00:00.000Z' }, today, payableAgeStart), 60);
+    assert.equal(debtAgeDays(open({ issuedAt: '2026-11-01' }), today), 0, 'una fecha futura cuenta como hoy');
 });
 
-test('cada cuenta abierta cae en un tramo; lo que todavía no vence no es mora', () => {
-    assert.equal(agingBucketOf(open({ dueDate: '2026-11-15' }), today), 'POR_VENCER');
-    assert.equal(agingBucketOf(open({ dueDate: '2026-10-23' }), today), 'HASTA_30');
-    assert.equal(agingBucketOf(open({ dueDate: '2026-09-23' }), today), 'HASTA_30');
-    assert.equal(agingBucketOf(open({ dueDate: '2026-09-22' }), today), 'DE_31_A_60');
-    assert.equal(agingBucketOf(open({ dueDate: '2026-07-25' }), today), 'DE_61_A_90');
-    assert.equal(agingBucketOf(open({ dueDate: '2026-07-24' }), today), 'MAS_DE_90');
+test('los tres tramos del modelo de Elisa: 0–30, 31–60 y más de 60 días', () => {
+    assert.deepEqual(AGING_BUCKETS.map((bucket) => bucket.label), ['0–30 días', '31–60 días', 'Más de 60 días']);
+    assert.equal(agingBucketOf(open({ issuedAt: '2026-09-23' }), today), 'DE_0_A_30');
+    assert.equal(agingBucketOf(open({ issuedAt: '2026-09-22' }), today), 'DE_31_A_60');
+    assert.equal(agingBucketOf(open({ issuedAt: '2026-08-24' }), today), 'DE_31_A_60');
+    assert.equal(agingBucketOf(open({ issuedAt: '2026-08-23' }), today), 'MAS_DE_60');
+    assert.equal(agingBucketOf({ status: 'PARCIAL', outstanding: 500000, receivedAt: '2026-06-01' }, today, payableAgeStart), 'MAS_DE_60');
 });
 
-test('lo pagado, lo saldado y lo que está por verificar no entran en la antigüedad', () => {
+test('lo pagado, lo saldado, lo anulado y lo que está por verificar no entran en la antigüedad', () => {
     assert.equal(agingBucketOf(open({ outstanding: 0 }), today), null);
     assert.equal(agingBucketOf(open({ status: 'PAGADO' }), today), null);
     assert.equal(agingBucketOf(open({ status: 'SALDADO' }), today), null);
     assert.equal(agingBucketOf(open({ balanceReviewRequired: true, outstanding: null }), today), null);
+    assert.equal(agingBucketOf({ status: 'ANULADA', outstanding: 100, receivedAt: '2026-01-01' }, today, payableAgeStart), null);
 });
 
-test('el resumen suma en centavos por tramo y dice cuántas cuentas hay', () => {
+test('el resumen suma en centavos por tramo y cuenta los terceros con saldo', () => {
     const summary = summarizeAging([
-        open({ id: 'a', outstanding: 0.1, dueDate: '2026-10-20' }),
-        open({ id: 'b', outstanding: 0.2, dueDate: '2026-10-10' }),
-        open({ id: 'c', outstanding: 3500000, dueDate: '2026-05-01' }),
-        open({ id: 'd', outstanding: 0, dueDate: '2026-05-01' })
-    ], today);
+        open({ id: 'a', clientId: 'grit', outstanding: 0.1, issuedAt: '2026-10-20' }),
+        open({ id: 'b', clientId: 'grit', outstanding: 0.2, issuedAt: '2026-10-10' }),
+        open({ id: 'c', clientId: 'salsipuedes', outstanding: 3500000, issuedAt: '2026-05-01' }),
+        open({ id: 'd', clientId: 'nuva', outstanding: 0, issuedAt: '2026-05-01' })
+    ], { today });
     assert.equal(summary.total, 3500000.3);
     assert.equal(summary.count, 3);
-    assert.deepEqual(summary.buckets.map((bucket) => bucket.key), AGING_BUCKETS.map((bucket) => bucket.key));
-    assert.equal(summary.buckets.find((bucket) => bucket.key === 'HASTA_30').amount, 0.3);
-    assert.equal(summary.buckets.find((bucket) => bucket.key === 'MAS_DE_90').count, 1);
-    assert.equal(oldestAgingBucket([open({ dueDate: '2026-10-20' }), open({ dueDate: '2026-05-01' })], today), 'MAS_DE_90');
+    assert.equal(summary.parties, 2, 'Nuva no tiene saldo');
+    assert.equal(summary.buckets.find((bucket) => bucket.key === 'DE_0_A_30').amount, 0.3);
+    assert.equal(summary.buckets.find((bucket) => bucket.key === 'MAS_DE_60').count, 1);
+    assert.equal(oldestAgingBucket([open({ issuedAt: '2026-10-20' }), open({ issuedAt: '2026-05-01' })], today), 'MAS_DE_60');
 });
 
 test('un préstamo va en su propio grupo, aunque el tercero también sea cliente', () => {
     const groups = groupFinancialReceivables([
-        open({ id: 'factura', clientId: 'iris', clientName: 'La Sazón de Iris', dueDate: '2026-10-20' }),
-        open({ id: 'prestamo', clientId: 'iris', clientName: 'La Sazón de Iris', kind: 'PRESTAMO', counterpartyType: 'CLIENTE', outstanding: 1060000, dueDate: '2026-06-01' })
+        open({ id: 'factura', clientId: 'iris', clientName: 'La Sazón de Iris', issuedAt: '2026-10-20' }),
+        open({ id: 'prestamo', clientId: 'iris', clientName: 'La Sazón de Iris', kind: 'PRESTAMO', counterpartyType: 'CLIENTE', outstanding: 1060000, period: '2026-06-01' })
     ], today);
     assert.equal(groups.length, 2);
     const loan = groups.find((group) => group.kind === 'PRESTAMO');
     assert.equal(loan.counterpartyType, 'CLIENTE');
     assert.equal(loan.totalOutstanding, 1060000);
-    assert.equal(loan.oldestBucket, 'MAS_DE_90');
-    assert.equal(groups.find((group) => group.kind === 'CLIENTE').oldestBucket, 'HASTA_30');
+    assert.equal(loan.oldestBucket, 'MAS_DE_60');
+    assert.equal(groups.find((group) => group.kind === 'CLIENTE').oldestBucket, 'DE_0_A_30');
 });
 
 const dashboard = fs.readFileSync(new URL('../src/components/modules/FinancialDashboard.jsx', import.meta.url), 'utf8');
@@ -95,8 +97,9 @@ test('Cuentas por cobrar, Proveedores y Nómina usan el mismo encabezado y las m
     assert.match(dashboard, /<FinancialSectionHeader title="Cuentas por cobrar"/);
     assert.match(dashboard, /<FinancialSectionHeader title="Nómina"/);
     assert.match(payables, /<FinancialSectionHeader title="Proveedores y gastos"/);
-    assert.match(payables, /<FinancialSummaryCard label="Por pagar"/);
-    assert.match(dashboard, /<ReceivableAgingSummary /);
+    // Cobrar y pagar usan el mismo resumen de antigüedad.
+    assert.match(payables, /<DebtAgingSummary data-payables-summary/);
+    assert.match(dashboard, /<DebtAgingSummary data-receivable-summary/);
     // En las cuentas por cobrar no quedan letras de 9 px ni títulos en negra: era lo que se veía distinto.
     const receivables = dashboard.slice(dashboard.indexOf("{activeTab === 'receivables' && ("), dashboard.indexOf("{activeTab === 'profitability'"));
     assert.doesNotMatch(receivables, /text-\[9px\]|font-black|violet-/);
