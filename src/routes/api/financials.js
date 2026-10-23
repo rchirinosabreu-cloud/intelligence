@@ -1,5 +1,6 @@
 import express from 'express';
 import multer from 'multer';
+import { receivesFiles } from '../../lib/uploadMarker.js';
 import { getClientFinancialStatementHandler, streamClientStatementPdfHandler } from '../../controllers/financialClientStatementController.js';
 import {
     commitFinancialImport,
@@ -97,14 +98,15 @@ const upload = multer({
 
 // Supporting documents: one PDF/JPG/PNG per request, kept in memory only until it reaches the evidence bucket.
 const documentUpload = multer({ storage: uploadMemoryStorage(), limits: { fileSize: FINANCIAL_DOCUMENT_MAX_BYTES, files: 1 } });
-const receiveFinancialDocument = (req, res, next) => documentUpload.single('file')(req, res, (error) => {
+// Marcado con su campo: Bria lo manda desde el chat o WhatsApp con el archivo que llegó (22 de octubre de 2026).
+const receiveFinancialDocument = receivesFiles((req, res, next) => documentUpload.single('file')(req, res, (error) => {
     if (!error) return next();
     if (error.code === 'LIMIT_FILE_SIZE') {
         return res.status(413).json({ error: 'FINANCIAL_DOCUMENT_TOO_LARGE', message: 'El documento supera el máximo de 25 MB.' });
     }
     console.error('[Financial documents API] Upload rejected:', error.message);
     return res.status(400).json({ error: 'FINANCIAL_DOCUMENT_INVALID', message: 'No fue posible leer el documento enviado.' });
-});
+}), { field: 'file' });
 
 router.get('/dashboard', requireFinancialAccess, getFinancialDashboard);
 router.get('/accounts', requireFinancialAccess, listFinancialAccountsHandler);
@@ -193,11 +195,13 @@ router.get('/payroll-transactions/:id/payment-candidates', requireFinancialAcces
 router.post('/payroll-payments/:paymentId/split', requireFinancialApproval, splitPayrollPaymentHandler);
 router.post('/payroll-payments/:paymentId/reverse', requireFinancialApproval, reversePayrollPaymentHandler);
 router.patch('/payroll-payments/:paymentId', requireFinancialWrite, updatePayrollPaymentHandler);
-router.post('/import/preview', requireFinancialApproval, upload.single('file'), previewFinancialImport);
-router.post('/import/commit', requireFinancialApproval, upload.single('file'), commitFinancialImport);
+// Las cargas de Excel y de extractos reciben archivos pero no se hacen desde el chat (mapa: excluidas); se marcan igual
+// para que el mapa sepa que son archivos.
+router.post('/import/preview', requireFinancialApproval, receivesFiles(upload.single('file'), { field: 'file' }), previewFinancialImport);
+router.post('/import/commit', requireFinancialApproval, receivesFiles(upload.single('file'), { field: 'file' }), commitFinancialImport);
 router.get('/bank-reconciliation', requireFinancialAccess, getBankReconciliation);
-router.post('/bank-reconciliation/preview', requireFinancialApproval, upload.single('file'), previewBankStatement);
-router.post('/bank-reconciliation/import', requireFinancialApproval, upload.single('file'), importBankStatement);
+router.post('/bank-reconciliation/preview', requireFinancialApproval, receivesFiles(upload.single('file'), { field: 'file' }), previewBankStatement);
+router.post('/bank-reconciliation/import', requireFinancialApproval, receivesFiles(upload.single('file'), { field: 'file' }), importBankStatement);
 router.post('/bank-reconciliation/rebuild', requireFinancialApproval, rebuildBankReconciliation);
 router.post('/bank-reconciliation/matches/:id/approve', requireFinancialApproval, approveBankReconciliationMatch);
 

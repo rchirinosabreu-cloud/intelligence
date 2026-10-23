@@ -215,7 +215,9 @@ test('el esquema, el arranque, las rutas, el catálogo de Bria y la caché conoc
         assert.ok(routes.includes(route), route);
     }
     for (const key of ['GET /financials/third-parties', 'POST /financials/payables', 'POST /financials/payables/:id/payments', 'POST /financials/payable-payments/:paymentId/reverse']) assert.ok(PLATFORM_OPERATIONS[key], key);
-    assert.ok(isExcludedOperation('POST /financials/payables/:id/documents'));
+    // Desde el 22 de octubre de 2026 Bria adjunta el soporte que llegó al chat; bajarlo sigue fuera.
+    assert.ok(PLATFORM_OPERATIONS['POST /financials/payables/:id/documents'].archivo);
+    assert.ok(isExcludedOperation('GET /financials/payables/:id/documents/:documentId/file'));
     assert.match(read('../src/utils/financialQueryCache.js'), /'financial-payables-ledger', 'financial-third-parties'/);
 });
 

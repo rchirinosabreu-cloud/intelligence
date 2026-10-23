@@ -1,5 +1,6 @@
 import express from 'express';
 import multer from 'multer';
+import { receivesFiles } from '../../lib/uploadMarker.js';
 import {
   getContentPlans,
   getContentPlanById,
@@ -298,7 +299,7 @@ router.patch('/items/:id', async (req, res) => {
   }
 });
 
-router.post('/items/:id/final-asset', receiveFinalAssets(upload.single('file')), async (req, res) => {
+router.post('/items/:id/final-asset', receivesFiles(receiveFinalAssets(upload.single('file')), { field: 'file' }), async (req, res) => {
   try {
     const item = await uploadContentItemFinalAsset(req.params.id, req.file);
     return res.json(item);
@@ -336,7 +337,7 @@ router.delete('/items/:id/final-asset', async (req, res) => {
 
 // La portada de un video (Rodny, 15 de octubre de 2026). Una por pieza, aparte de la rejilla de
 // archivos finales, y solo tiene sentido en un reel: lo único a lo que Meta le admite portada.
-router.post('/items/:id/cover', receiveFinalAssets(upload.single('file')), async (req, res) => {
+router.post('/items/:id/cover', receivesFiles(receiveFinalAssets(upload.single('file')), { field: 'file' }), async (req, res) => {
   try {
     return res.json(await setContentItemCover(req.params.id, req.file));
   } catch (error) {
@@ -373,7 +374,7 @@ router.delete('/items/:id/cover', async (req, res) => {
   }
 });
 
-router.post('/items/:id/final-assets', receiveFinalAssets(carouselUpload.array('files', FINAL_ASSET_MAX_FILES)), async (req, res) => {
+router.post('/items/:id/final-assets', receivesFiles(receiveFinalAssets(carouselUpload.array('files', FINAL_ASSET_MAX_FILES)), { field: 'files', max: FINAL_ASSET_MAX_FILES }), async (req, res) => {
   try {
     const assets = await uploadContentItemFinalAssets(req.params.id, req.files);
     return res.status(201).json(assets);

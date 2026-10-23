@@ -28,6 +28,24 @@ test('every real route is described for Bria or excluded with a reason', () => {
   assert.deepEqual(missing, [], `rutas sin describir ni excluir:\n${missing.join('\n')}`);
 });
 
+// 22 de octubre de 2026: una pantalla que recibe archivos lo dice en su código (`receivesFiles`) y en el mapa
+// (`archivo`), así Bria la usa desde el chat o WhatsApp sin una herramienta propia; una que recibe archivos sin
+// decirlo, o un mapa que promete archivos donde la ruta no los recibe, rompe esta prueba.
+test('every route that receives files says so in its code, and the map promises files only where the route takes them', () => {
+  const unmarked = routes.filter((route) => route.unmarkedFiles && !isExcludedOperation(routeKey(route.method, route.path))).map((route) => routeKey(route.method, route.path));
+  assert.deepEqual(unmarked, [], `rutas que reciben archivos sin receivesFiles:\n${unmarked.join('\n')}`);
+  const uploads = new Map(routes.filter((route) => route.upload).map((route) => [routeKey(route.method, route.path), route.upload]));
+  const silent = [...uploads.keys()].filter((key) => PLATFORM_OPERATIONS[key] && !PLATFORM_OPERATIONS[key].archivo);
+  assert.deepEqual(silent, [], `reciben archivos y el mapa no lo dice:\n${silent.join('\n')}`);
+  const promised = Object.entries(PLATFORM_OPERATIONS).filter(([key, op]) => op.archivo && !uploads.has(key)).map(([key]) => key);
+  assert.deepEqual(promised, [], `el mapa promete archivos donde la ruta no los recibe:\n${promised.join('\n')}`);
+  for (const key of ['POST /financials/records/:id/documents', 'POST /financials/payables/:id/documents', 'POST /financials/receivable-payments/:paymentId/documents', 'POST /content/items/:id/cover', 'POST /tasks/:taskId/comments']) assert.deepEqual(uploads.get(key)?.field, 'file', key);
+  assert.deepEqual(uploads.get('POST /content/items/:id/final-assets'), { field: 'files', max: 10 });
+  for (const key of ['GET /financials/records/:id/documents/:documentId/file', 'GET /content/items/:id/final-assets/:assetId', 'DELETE /content/items/:id/final-assets/:assetId', 'POST /financials/import/commit', 'POST /content/items/:id/final-assets/direct-upload']) {
+    assert.ok(isExcludedOperation(key), `${key}: bajar, borrar o cargar en masa sigue fuera del chat`);
+  }
+});
+
 test('nothing described is also excluded, and nothing described points to a route that no longer exists', () => {
   const both = Object.keys(PLATFORM_OPERATIONS).filter((key) => isExcludedOperation(key));
   assert.deepEqual(both, [], `descritas y excluidas a la vez: ${both.join(', ')}`);

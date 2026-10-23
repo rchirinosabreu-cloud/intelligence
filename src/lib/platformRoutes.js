@@ -2,6 +2,8 @@
 // cuidan (10 de octubre de 2026). Es la fuente del mapa de la plataforma que usa Bria: se lee del código que corre,
 // no de una lista escrita a mano. Lógica pura sobre la estructura interna del router (`stack`, `route`, `regexp`).
 
+import { uploadOf } from './uploadMarker.js';
+
 const unexpress = (regexp) => String(regexp)
   .replace(/^\/\^\\\//, '/')
   .replace(/\\\/\?\(\?=\\\/\|\$\)\/i$/, '')
@@ -9,6 +11,9 @@ const unexpress = (regexp) => String(regexp)
   .replace(/\(\?:\(\[\^\\\/\]\+\?\)\)/g, ':param');
 
 const guardOf = (layer) => layer?.handle?.permission || null;
+// Un archivo que entra por multer sin decir su campo (`receivesFiles`) no se puede mandar desde el chat: la prueba
+// del mapa lo señala para que se marque o se excluya.
+const MULTER = 'multerMiddleware';
 
 export const listApiRoutes = (router) => {
   const rows = [];
@@ -21,7 +26,9 @@ export const listApiRoutes = (router) => {
         const path = prefix + (layer.route.path === '/' ? '' : layer.route.path);
         const own = layer.route.stack.map(guardOf).filter(Boolean);
         const applying = scoped.filter((s) => path.startsWith(s.prefix)).map((s) => s.guard);
-        for (const method of methods) rows.push({ method, path: path || '/', guards: [...inherited, ...applying, ...own] });
+        const upload = uploadOf(layer.route.stack);
+        const unmarkedFiles = !upload && layer.route.stack.some((step) => step.handle?.name === MULTER);
+        for (const method of methods) rows.push({ method, path: path || '/', guards: [...inherited, ...applying, ...own], upload, unmarkedFiles });
       } else if (layer.name === 'router' && layer.handle?.stack) {
         const mount = layer.regexp?.fast_slash ? '' : unexpress(layer.regexp);
         const applying = scoped.filter((s) => (prefix + mount).startsWith(s.prefix)).map((s) => s.guard);

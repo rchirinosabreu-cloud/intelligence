@@ -1,6 +1,7 @@
 // Qué pide cada ruta de la API, leído del router real (10 de octubre de 2026). Es lo que Bria comprueba de entrada
 // antes de preparar una operación del mapa; la API lo vuelve a comprobar al ejecutar. Se arma una vez, perezosamente,
 // porque el router importa servicios y los servicios no pueden importar el router al arrancar.
+// Desde el 22 de octubre de 2026 también dice qué rutas reciben archivos, con su campo (`receivesFiles`).
 
 import { listApiRoutes, routeKey } from './platformRoutes.js';
 import { describeGuards } from './platformCatalog.js';
@@ -17,8 +18,17 @@ export const buildRoutePermissionIndex = (router) => {
   return index;
 };
 
+export const buildRouteUploadIndex = (router) => {
+  const index = new Map();
+  for (const route of listApiRoutes(router)) if (route.upload) index.set(routeKey(route.method, route.path), route.upload);
+  return index;
+};
+
 let loading = null;
-const load = () => loading ||= import('../routes/index.js').then((module) => buildRoutePermissionIndex(module.default));
+const load = () => loading ||= import('../routes/index.js').then((module) => ({ permissions: buildRoutePermissionIndex(module.default), uploads: buildRouteUploadIndex(module.default) }));
 
 /** `{ modules, roles, financial }` de una operación del mapa, o `null` si solo pide sesión. */
-export const getRoutePermission = async (key) => (await load()).get(key) || null;
+export const getRoutePermission = async (key) => (await load()).permissions.get(key) || null;
+
+/** `{ field, max }` si la operación recibe archivos, o `null`. */
+export const getRouteUpload = async (key) => (await load()).uploads.get(key) || null;

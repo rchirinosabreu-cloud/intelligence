@@ -15,7 +15,7 @@ export const createBriaPlatformTools = ({ actions, platform } = {}) => (actions 
   async run({ busqueda, soloEscrituras } = {}) {
     const rows = findOperations(busqueda, { writesOnly: Boolean(soloEscrituras) });
     return { data: {
-      operaciones: rows.map((row) => ({ operacion: row.key, queHace: row.que, campos: row.campos || null, escribe: row.write })),
+      operaciones: rows.map((row) => ({ operacion: row.key, queHace: row.que, campos: row.campos || null, ...(row.archivo ? { recibeArchivo: row.archivo } : {}), escribe: row.write })),
       instruccion: rows.length
         ? 'Las rutas llevan :parametro donde va un id. Para leer usa consultar_plataforma con la ruta completa; para escribir, operar_en_plataforma con el cuerpo que indican los campos. Si hay una herramienta propia para lo mismo (crear pendiente, cambiar pendiente, parrilla, pieza, despacho, eliminación, observación), úsala en vez del mapa.'
         : 'No hay ninguna operación para eso en el mapa: no se hace desde el chat. Dile a la persona en qué pantalla se hace, si lo sabes.'
@@ -39,17 +39,18 @@ export const createBriaPlatformTools = ({ actions, platform } = {}) => (actions 
   }
 }, {
   name: 'operar_en_plataforma',
-  description: 'Prepara cualquier cambio de la plataforma que no tenga herramienta propia, por su ruta del mapa (POST, PUT, PATCH o DELETE), con la sesión y los permisos de la persona. NO lo ejecuta: muestra el resumen y la persona confirma. Pasa que_hace como un párrafo corto en palabras normales (es lo único que la persona lee antes de confirmar), y el cuerpo con los campos que indica el mapa. Si falta un dato que la persona no dio, pregúntalo antes.',
+  description: 'Prepara cualquier cambio de la plataforma que no tenga herramienta propia, por su ruta del mapa (POST, PUT, PATCH o DELETE), con la sesión y los permisos de la persona. NO lo ejecuta: muestra el resumen y la persona confirma. Pasa que_hace como un párrafo corto en palabras normales (es lo único que la persona lee antes de confirmar), y el cuerpo con los campos que indica el mapa. Si falta un dato que la persona no dio, pregúntalo antes. Si la operación recibe archivos (recibeArchivo en el mapa), los que llegaron con este mensaje —por el chat o por WhatsApp— van solos; para uno anterior pasa su nombre o «el último» en archivos. Para adjuntar un archivo a algo que todavía no existe, primero se crea y después se adjunta.',
   parameters: { type: 'object', properties: {
     metodo: { type: 'string', enum: ['POST', 'PUT', 'PATCH', 'DELETE'] },
     ruta: { type: 'string', description: 'Ruta completa con sus ids, por ejemplo /crm/leads/abc/stage' },
     cuerpo: { type: ['object', 'null'], description: 'Los campos del mapa con sus valores; null si no lleva.' },
     que_hace: { type: 'string', description: 'Lo que la persona va a confirmar, en un párrafo corto y en palabras normales: qué se hace, cuándo y a quién, con fechas como «jueves 22 de octubre». Nunca nombres de campos, ids, fechas ISO ni palabras en inglés. Ej.: «Creo un evento de todo el día para hoy, jueves 22 de octubre: Helen Hernández, ausente por enfermedad. Queda en los dos calendarios.»' },
+    archivos: { type: ['string', 'null'], description: 'Solo si la operación recibe archivos y no son los de este mensaje: el nombre del archivo del chat, varios separados por coma, o «el último».' },
     nuevo: { type: 'boolean' }
   }, required: ['metodo', 'ruta', 'cuerpo', 'que_hace'] },
   allowed: canUseBria,
   async run(args, ctx) {
-    const action = await actions.prepare({ user: ctx.user, type: 'PLATFORM', args, previous: ctx.pendingAction });
+    const action = await actions.prepare({ user: ctx.user, type: 'PLATFORM', args, previous: ctx.pendingAction, attachments: ctx.chatAttachments || [] });
     const reply = actionReply(action);
     return { data: { stage: actionStage(action), action, message: reply.answer, done: false }, pendingAction: action, actionReply: reply, quickReplies: reply.quickReplies };
   }
