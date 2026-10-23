@@ -135,6 +135,16 @@ test('el Markdown de Bria se traduce a lo que WhatsApp sabe pintar', () => {
   assert.equal(toWhatsAppText(''), '');
 });
 
+test('por WhatsApp, un monto de ocho cifras o más se dice en millones para que no salga como teléfono', () => {
+  // La revisión de septiembre (23 de octubre de 2026): WhatsApp pintó «$51.307.715» como un número para llamar.
+  const md = 'Ingreso de clientes $51.307.715 y costo de operación $31.916.303: quedaron $19.391.412. Antes, -$24.190.808.';
+  assert.equal(toWhatsAppText(md), 'Ingreso de clientes $51,3 millones y costo de operación $31,9 millones: quedaron $19,4 millones. Antes, -$24,2 millones.');
+  assert.equal(toWhatsAppText('Fueron $10.000.000 y $1.250.000.000,50'), 'Fueron $10 millones y $1.250 millones');
+  // Lo de siete cifras o menos no se vuelve enlace: queda exacto.
+  assert.equal(toWhatsAppText('Multik: entró $160.000 y costó $1.308.507 (-$1.148.507, 25 h).'), 'Multik: entró $160.000 y costó $1.308.507 (-$1.148.507, 25 h).');
+  assert.equal(toWhatsAppText('Llama al 3043786298'), 'Llama al 3043786298', 'solo los montos con su signo de pesos');
+});
+
 test('una respuesta larga se parte en mensajes de hasta 4.000 caracteres por párrafo, nunca a mitad de palabra', () => {
   const paragraph = 'Una línea de la respuesta de Bria que se repite. ';
   const long = Array.from({ length: 120 }, (_, i) => `${i + 1}. ${paragraph.repeat(2).trim()}`).join('\n\n');
