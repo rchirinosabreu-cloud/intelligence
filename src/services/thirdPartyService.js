@@ -9,7 +9,17 @@ const text = (value) => String(value ?? '').trim() || null;
 const cloneForAudit = (value) => JSON.parse(JSON.stringify(value));
 const actorIdFrom = (actor) => actor?.id || actor?.userId || null;
 
-const FIELDS = ['kind', 'name', 'legalName', 'documentType', 'documentNumber', 'email', 'phone', 'bankName', 'bankAccountType', 'bankAccountNumber', 'teamMemberId', 'notes'];
+const FIELDS = ['kind', 'name', 'legalName', 'documentType', 'documentNumber', 'email', 'phone', 'bankName', 'bankAccountType', 'bankAccountNumber', 'teamMemberId', 'clientId', 'notes'];
+
+// Terceros (23 de octubre de 2026): un tercero que también es cliente queda ligado a la ficha del
+// cliente, una sola vez. Se comprueba aquí para decir el motivo, no con un error de la base.
+const assertClientLink = async (tx, clientId, thirdPartyId = null) => {
+    if (!clientId) return;
+    const client = await tx.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } });
+    if (!client) throw new FinancialDomainError('THIRD_PARTY_CLIENT_NOT_FOUND', 'El cliente que se quiere ligar no existe.', 404);
+    const taken = await tx.thirdParty.findFirst({ where: { clientId, ...(thirdPartyId ? { id: { not: thirdPartyId } } : {}) }, select: { name: true } });
+    if (taken) throw new FinancialDomainError('THIRD_PARTY_CLIENT_TAKEN', `«${client.name}» ya tiene su ficha de pago como «${taken.name}». Edita esa en vez de crear otra.`, 409);
+};
 
 const normalize = (input) => {
     const data = {};
@@ -39,6 +49,7 @@ export const createThirdParty = async (prismaClient, input = {}, actor) => {
     return prismaClient.$transaction(async (tx) => {
         const duplicate = await tx.thirdParty.findFirst({ where: { name: { equals: data.name, mode: 'insensitive' }, kind: data.kind, isActive: true }, select: { id: true, name: true } });
         if (duplicate) throw new FinancialDomainError('THIRD_PARTY_DUPLICATE', `Ya existe «${duplicate.name}» como ${data.kind.toLowerCase()}. Úsalo o edítalo en vez de crear otro.`, 409);
+        await assertClientLink(tx, data.clientId);
         const thirdParty = await tx.thirdParty.create({ data: { ...data, createdById: actorId } });
         await tx.financialAuditEvent.create({ data: { entityType: 'ThirdParty', entityId: thirdParty.id, action: 'CREATE', after: cloneForAudit(thirdParty), actorId } });
         return thirdParty;
@@ -55,6 +66,7 @@ export const updateThirdParty = async (prismaClient, thirdPartyId, patch = {}, a
         const merged = { ...existing, ...data };
         const problem = thirdPartyProblem(merged);
         if (problem) throw new FinancialDomainError('THIRD_PARTY_INVALID', problem);
+        if (data.clientId && data.clientId !== existing.clientId) await assertClientLink(tx, data.clientId, thirdPartyId);
         const updated = await tx.thirdParty.update({ where: { id: thirdPartyId }, data });
         await tx.financialAuditEvent.create({ data: { entityType: 'ThirdParty', entityId: thirdPartyId, action: 'UPDATE', before: cloneForAudit(existing), after: cloneForAudit(updated), actorId } });
         return updated;

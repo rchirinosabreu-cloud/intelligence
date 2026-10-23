@@ -13,12 +13,13 @@ const today = '2026-10-23';
 const open = (overrides = {}) => ({ id: 'r', kind: 'CLIENTE', status: 'DEBE', outstanding: 100000, balanceReviewRequired: false, period: '2026-10-01T00:00:00.000Z', ...overrides });
 
 test('Financiero tiene cuatro pestañas y cada vista vive en una sola', () => {
-    assert.deepEqual(FINANCIAL_TAB_GROUPS.map((group) => group.label), ['Movimientos', 'Cuentas por cobrar', 'Cuentas por pagar', 'Análisis']);
+    // Terceros llegó el mismo día, como su propia pestaña (el modelo que mandó Elisa).
+    assert.deepEqual(FINANCIAL_TAB_GROUPS.map((group) => group.label), ['Movimientos', 'Cuentas por cobrar', 'Cuentas por pagar', 'Terceros', 'Análisis']);
     const views = FINANCIAL_TAB_GROUPS.flatMap((group) => group.views.map((view) => view.key));
-    assert.deepEqual(views.sort(), ['clients', 'flow', 'payables', 'payroll', 'profitability', 'receivables', 'records']);
+    assert.deepEqual(views.sort(), ['flow', 'parties', 'payables', 'payroll', 'profitability', 'receivables', 'records']);
     assert.equal(new Set(views).size, views.length);
     assert.equal(financialTabOfView('payroll'), 'pagar', 'la nómina va dentro de Cuentas por pagar');
-    assert.equal(financialTabOfView('clients'), 'cobrar');
+    assert.equal(financialTabOfView('parties'), 'terceros');
     assert.equal(financialTabOfView('profitability'), 'analisis');
 });
 

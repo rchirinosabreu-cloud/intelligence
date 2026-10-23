@@ -18,7 +18,7 @@ try {
   await page.getByRole('navigation', { name: 'Paginación de movimientos' }).waitFor();
 
   const tabs = await page.getByRole('tablist', { name: 'Secciones de Financiero' }).getByRole('tab').allInnerTexts();
-  assert.deepEqual(tabs.map((tab) => tab.trim()), ['Movimientos', 'Cuentas por cobrar', 'Cuentas por pagar', 'Análisis']);
+  assert.deepEqual(tabs.map((tab) => tab.trim()), ['Movimientos', 'Cuentas por cobrar', 'Cuentas por pagar', 'Terceros', 'Análisis']);
   assert.equal(await page.getByRole('group', { name: 'Vistas de la sección' }).count(), 0, 'Movimientos no tiene vistas que elegir');
 
   // Cuentas por cobrar: resumen por clase y por antigüedad.
@@ -43,9 +43,6 @@ try {
   assert.equal(await bucket.getAttribute('aria-pressed'), 'false');
   await page.locator('[data-receivable-section="CLIENTE"]').waitFor();
 
-  // El directorio de clientes es una vista de la misma pestaña.
-  await page.getByRole('button', { name: 'Directorio de clientes' }).click();
-  await page.getByText('Solo en el Excel · sin ficha').first().waitFor();
 
   // Cuentas por pagar: proveedores primero, nómina al lado.
   await page.getByRole('tab', { name: 'Cuentas por pagar' }).click();
@@ -59,13 +56,23 @@ try {
   await page.getByRole('heading', { name: 'Nómina', exact: true }).waitFor();
   await page.screenshot({ path: shot('cuentas-por-pagar-nomina.png'), animations: 'disabled' });
 
+  // Terceros, justo después de Cuentas por pagar: comparten la caché de terceros.
+  await page.getByRole('tab', { name: 'Terceros' }).click();
+  await page.locator('[data-financial-parties]').waitFor();
+  const shared = page.locator('[data-party-row]').filter({ has: page.locator('[data-party-roles]', { hasText: 'Cliente' }) }).filter({ has: page.locator('[data-party-roles]', { hasText: 'Arrendador' }) });
+  assert.equal(await shared.count(), 1, 'el cliente que también se paga es una sola fila con los dos roles');
+  await shared.locator('button[aria-expanded]').click();
+  await page.locator('[data-third-party-card]').waitFor();
+  await page.locator('[data-client-profile-card]').first().waitFor();
+  await page.screenshot({ path: shot('terceros.png'), animations: 'disabled', fullPage: true });
+  await page.getByRole('combobox', { name: 'Rol' }).waitFor();
+
   // Análisis: el flujo de caja; Rentabilidad solo para administración.
   await page.getByRole('tab', { name: 'Análisis' }).click();
   await page.getByText('Flujo de Caja Histórico').waitFor();
 
   // En oscuro, Cuentas por cobrar.
   await page.getByRole('tab', { name: 'Cuentas por cobrar' }).click();
-  await page.getByRole('button', { name: 'Cuentas y préstamos' }).click();
   await page.evaluate(() => document.documentElement.classList.add('dark'));
   await page.locator('[data-receivable-summary]').waitFor();
   await page.screenshot({ path: shot('cuentas-por-cobrar-oscuro.png'), animations: 'disabled', fullPage: true });
