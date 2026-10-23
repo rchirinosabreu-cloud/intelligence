@@ -14,6 +14,7 @@ import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { rankByName } from '../lib/fuzzyMatch.js';
 import { formatDuration } from '../lib/teamRhythm.js';
+import { getTaskElapsedMs } from '../lib/taskTiming.js';
 import { taskPrivacyFilter } from '../lib/taskPrivacy.js';
 import { searchTasks, statusesFor } from './taskSearch.js';
 import { profilePredictionProblem, RHYTHM_POLICY } from '../lib/workPrediction.js';
@@ -44,8 +45,14 @@ const fold = (value) => text(value).normalize('NFD').replace(/\p{M}/gu, '').toLo
 // mensaje para el cliente; se reexporta para quien ya lo importaba desde aquí.
 export { lastClientRequest };
 const referenceLinks = (item) => [...(item.assetsLinks || []), ...(Array.isArray(item.mediaUrl) ? item.mediaUrl : [item.mediaUrl])].filter(Boolean).slice(0, 10);
-const compactTask = (task, today) => {
+// El tiempo registrado de cada tarea viaja con la tarea (Rodny, 23 de octubre de 2026: Bria dio las horas de los
+// trabajos de 2X Global en una respuesta y en la siguiente dijo que no las tenía). Es el mismo total que muestra el
+// historial de la tarea (`getTaskElapsedMs`: lo acumulado más lo que corre ahora), así que una persona y Bria leen la
+// misma cifra. Solo se añade cuando la lectura trae el reloj de la tarea.
+const timeOf = (task, now) => (task.accumulatedWorkMs === undefined ? null : getTaskElapsedMs(task, now));
+const compactTask = (task, today, now = new Date()) => {
   const vence = dayOf(task.dueDate);
+  const ms = timeOf(task, now);
   return {
     id: task.id,
     titulo: task.title,
@@ -54,8 +61,15 @@ const compactTask = (task, today) => {
     responsable: task.assignee?.name || null,
     vence,
     vencida: Boolean(vence && vence < today && task.status !== 'REALIZADA'),
-    privada: Boolean(task.isPrivate)
+    privada: Boolean(task.isPrivate),
+    ...(task.completedAt ? { cerrada: dayOf(task.completedAt) } : {}),
+    ...(ms === null ? {} : { tiempoRegistrado: ms >= 60_000 ? formatDuration(ms) : 'sin tiempo registrado', minutosRegistrados: Math.round(ms / 60_000) })
   };
+};
+/** El total de tiempo de una lista de tareas, en palabras y en minutos, para que la suma la haga la plataforma. */
+const timeTotal = (rows, now) => {
+  const ms = rows.reduce((sum, task) => sum + (timeOf(task, now) || 0), 0);
+  return { tiempoTotal: formatDuration(ms), minutosTotales: Math.round(ms / 60_000), sinTiempo: rows.filter((task) => (timeOf(task, now) || 0) < 60_000).length };
 };
 
 const buscarCliente = {
@@ -118,18 +132,36 @@ const misTareas = {
   }
 };
 
+const TASK_LIST_MAX = 60;
 const tareasDeCliente = {
   name: 'tareas_de_cliente',
-  description: 'Las tareas de Gestión de un cliente (por su id), con responsable, estado y fecha. Por defecto las no cerradas; con estado «realizadas», las últimas cerradas.',
-  parameters: { type: 'object', properties: { clientId: { type: 'string' }, estado: { type: 'string', enum: ['pendientes', 'en_proceso', 'devueltas', 'realizadas', 'todas'] } }, required: ['clientId'] },
+  description: 'Las tareas de Gestión de un cliente (por su id), con responsable, estado, fecha, fecha de cierre y el tiempo registrado de cada una, más el total sumado. Por defecto las no cerradas; con estado «realizadas», las cerradas. Con mes y año, solo las cerradas ese mes (los trabajos que se hicieron ese mes): úsala así para «qué se hizo para X en octubre y cuántas horas tomó». El tiempo de cada tarea es el registrado en la plataforma; no uses promedios de Ritmo para esto.',
+  parameters: { type: 'object', properties: {
+    clientId: { type: 'string' },
+    estado: { type: 'string', enum: ['pendientes', 'en_proceso', 'devueltas', 'realizadas', 'todas'] },
+    mes: { type: 'integer', minimum: 1, maximum: 12, description: 'Con anio: solo las tareas cerradas ese mes.' },
+    anio: { type: 'integer' }
+  }, required: ['clientId'] },
   allowed: (user) => hasModulePermission(user, 'gestion'),
-  async run({ clientId, estado } = {}, { getTasks, user, today }) {
+  async run({ clientId, estado, mes, anio } = {}, { getTasks, user, today, now }) {
     const id = text(clientId);
     if (!id) return { data: { tareas: [], mensaje: 'Falta el id del cliente: búscalo primero con buscar_cliente.' } };
-    const wanted = new Set(statusesFor(estado));
+    const at = now?.() || new Date();
+    const month = Number.isInteger(mes) ? `${Number.isInteger(anio) ? anio : Number(today.slice(0, 4))}-${String(mes).padStart(2, '0')}` : null;
+    const wanted = new Set(statusesFor(month ? 'realizadas' : estado));
     // Misma lectura que el tablero: la reserva de los pendientes privados se aplica en el servidor.
-    const rows = (await getTasks(id, user?.userId || user?.id || null)).filter((task) => wanted.has(task.status)).slice(0, 40);
-    return { data: { tareas: rows.map((task) => compactTask(task, today)) }, sources: rows.map(taskSource) };
+    const all = (await getTasks(id, user?.userId || user?.id || null)).filter((task) => wanted.has(task.status) && (!month || dayOf(task.completedAt)?.startsWith(month)));
+    const rows = all.slice(0, TASK_LIST_MAX);
+    return {
+      data: {
+        ...(month ? { periodo: monthLabel(Number(month.slice(5)), Number(month.slice(0, 4))) } : {}),
+        total: all.length, ...timeTotal(all, at),
+        tareas: rows.map((task) => compactTask(task, today, at)),
+        ...(all.length > rows.length ? { nota: `Son ${all.length}; aquí van ${rows.length}. El total de tiempo cuenta todas.` } : {}),
+        instruccion: 'El tiempo de cada tarea y el total los calcula la plataforma: úsalos tal cual, sin estimar ni promediar. Si te piden lo mismo en otro formato, son estas mismas cifras.'
+      },
+      sources: rows.map(taskSource)
+    };
   }
 };
 
@@ -137,7 +169,7 @@ const tareasDeCliente = {
 // que resuelve el lote de cambiar_pendientes: lo que se cuenta aquí es lo que se cambia allá. Solo la cabecera de
 // cada tarea; la reserva de los pendientes privados se aplica como en el tablero.
 const SEARCH_SELECT = {
-  id: true, title: true, status: true, dueDate: true, isPrivate: true, creatorId: true,
+  id: true, title: true, status: true, dueDate: true, isPrivate: true, creatorId: true, completedAt: true, startedAt: true, accumulatedWorkMs: true,
   client: { select: { name: true } }, assignee: { select: { id: true, name: true, userId: true } },
   collaborators: { select: { member: { select: { userId: true } } } }, viewers: { select: { userId: true } }
 };
@@ -158,7 +190,7 @@ const buscarPendientes = {
     const tareas = rows.map(taskPrivacyFilter(viewer)).map((task) => compactTask(task, today));
     return {
       data: {
-        total, descripcion, tareas,
+        total, descripcion, tareas, ...timeTotal(rows, new Date()),
         ...(resolved.responsable ? { responsable: resolved.responsable } : {}),
         ...(resolved.cliente ? { cliente: resolved.cliente } : {}),
         ...(approximate ? { aproximado: true, instruccion: 'No había nadie con ese nombre exacto; se buscó el más parecido. Di a quién se refiere el resultado y, si no era esa persona, pregunta.' } : {}),
