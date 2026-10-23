@@ -10,11 +10,19 @@ try {
   page.setDefaultTimeout(10000);
   const errors = []; page.on('pageerror', error => errors.push(error.message));
   await page.goto(`${base}?view=new`, { timeout: 60000, waitUntil: 'domcontentloaded' });
+  await page.getByPlaceholder('Ej: Acme Corp SAS').fill('Café Altura');
+  assert.match(await page.locator('[data-quotation-party="NONE"]').innerText(), /Al guardar, la cotización se liga con su cliente/);
   await page.getByRole('button', { name: 'Añadir servicio personalizado', exact: true }).click();
   await page.getByLabel('Nombre del servicio 1').fill('Asesoría de muestra');
   await page.getByRole('button', { name: 'Guardar como Borrador' }).click();
   await page.getByText('Borrador guardado', { exact: true }).waitFor();
   assert.deepEqual(await page.evaluate(() => window.__quotationDemoCalls()), ['POST /api/quotations']);
+  // Guardada, dice a qué tercero quedó ligada (punto 1 de la solicitud de Elisa, 23 de octubre de 2026).
+  const party = page.locator('[data-quotation-party="CLIENTE_POTENCIAL"]');
+  await party.waitFor();
+  assert.match(await party.innerText(), /Cliente potencial: .+ · CRM-0187 en el CRM/);
+  await party.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: 'output/quotation-party.png', animations: 'disabled' });
   await page.getByText('Borrador guardado', { exact: true }).waitFor({ state: 'hidden' });
   // Se vuelve a guardar dos veces seguidas, como un doble toque: tiene que actualizar la misma.
   const save = page.getByRole('button', { name: 'Guardar como Borrador' });

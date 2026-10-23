@@ -304,6 +304,8 @@ export const PLATFORM_OPERATIONS = {
   'PATCH /financials/receivable-payments/:paymentId': { que: 'Corrige un abono sin revertirlo: valor, fecha, cuenta, referencia o notas. Cambiar el dinero exige motivo; su ingreso cambia con él.', campos: 'amount, paidAt, accountId, reference, notes, reason, settlesInFull' },
   // Terceros y cuentas por pagar (20 de octubre de 2026)
   'GET /financials/third-parties': { que: 'Las fichas de pago de los terceros: proveedores, colaboradores, arrendador, socios (los clientes están en /financials/clients).', campos: 'q, kind, includeInactive (consulta)' },
+  'GET /financials/parties/commercial': { que: 'Lo comercial de los terceros: los clientes potenciales (oportunidades del CRM con cotización y sin ficha de cliente) y las cotizaciones de cada cliente.' },
+  'POST /financials/parties/prospects/:leadId/client': { que: 'Une un cliente potencial con su ficha de cliente: su oportunidad y sus cotizaciones pasan a esa ficha.', campos: 'clientId' },
   'POST /financials/third-parties': { que: 'Crea un tercero con sus datos de pago.', campos: 'kind (PROVEEDOR, COLABORADOR, ARRENDADOR, SOCIO, OTRO), name, legalName, documentType, documentNumber, email, phone, bankName, bankAccountType, bankAccountNumber, clientId (si también es cliente), notes' },
   'PATCH /financials/third-parties/:id': { que: 'Edita o desactiva un tercero.', campos: 'los mismos de crear, isActive' },
   'GET /financials/payables-ledger': { que: 'Las cuentas por pagar: lo abierto de cualquier fecha más lo cerrado del periodo, agrupado por tercero, con totales por pagar, vencido y pagado.', campos: 'year, month, status, thirdPartyId, q (consulta)' },

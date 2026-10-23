@@ -48,7 +48,7 @@ test('documento, contacto y estado salen de la ficha que los tenga', () => {
 });
 
 test('las cifras de arriba cuentan terceros con ficha, por rol', () => {
-    assert.deepEqual(summarizeParties(rows()), { total: 5, clients: 3, suppliers: 2, team: 1, others: 1, active: 3, unlinked: 1 });
+    assert.deepEqual(summarizeParties(rows()), { total: 5, clients: 3, prospects: 0, suppliers: 2, team: 1, others: 1, active: 3, unlinked: 1 });
 });
 
 test('se filtra por rol, por estado y por búsqueda, también en la ficha de pago', () => {

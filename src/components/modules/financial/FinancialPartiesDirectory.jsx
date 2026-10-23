@@ -11,6 +11,7 @@ import { FinancialSectionHeader, FinancialSummaryCard } from './FinancialSection
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { partyDocumentType } from '@/lib/partyIdentity';
 import { thirdPartyKindLabel } from '@/lib/accountsPayable';
+import { CRM_STAGES } from '@/lib/crmRules';
 import { cn } from '@/lib/utils';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import {
@@ -40,10 +41,36 @@ const ProfileLine = ({ label, value }) => (
 const RoleChip = ({ children, tone = 'neutral' }) => (
     <span className={cn('inline-flex rounded-md px-1.5 py-0.5 text-xs font-medium',
         tone === 'client' ? 'bg-brand-green/10 text-brand-green-deep dark:text-brand-green'
-            : tone === 'muted' ? 'bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-300'
-                : 'bg-brand-coral/10 text-brand-coral-deep dark:text-brand-coral')}>
+            : tone === 'prospect' ? 'bg-brand-yellow/15 text-brand-yellow-deep dark:text-brand-yellow'
+                : tone === 'muted' ? 'bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-300'
+                    : 'bg-brand-coral/10 text-brand-coral-deep dark:text-brand-coral')}>
         {children}
     </span>
+);
+const roleTone = (role) => (role === 'CLIENTE' ? 'client' : role === 'CLIENTE_POTENCIAL' ? 'prospect' : 'pay');
+
+const QUOTATION_STATUS_LABELS = { BORRADOR: 'Borrador', ACTIVA: 'Enviada', APROBADA: 'Aprobada' };
+const crmStageLabel = (value) => CRM_STAGES.find((stage) => stage.value === value)?.label || value;
+const shortDate = (value) => (value ? new Date(value).toLocaleDateString('es-CO', { day: 'numeric', month: 'short', year: 'numeric', timeZone: 'America/Bogota' }) : '');
+
+/** Las cotizaciones de un tercero, con su estado: lo que se le ha propuesto, de dónde viene la relación. */
+const quotationAmount = (quotation) => (quotation.total
+    ? new Intl.NumberFormat('es-CO', { style: 'currency', currency: quotation.currency === 'USD' ? 'USD' : 'COP', maximumFractionDigits: quotation.currency === 'USD' ? 2 : 0 }).format(quotation.total)
+    : 'Con opciones');
+
+const PartyQuotations = ({ quotations }) => (
+    <section className="min-w-0 space-y-2 rounded-lg border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900 lg:col-span-2" data-party-quotations>
+        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Cotizaciones</h3>
+        <ul className="divide-y divide-zinc-100 dark:divide-white/5">
+            {quotations.map((quotation) => (
+                <li key={quotation.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2 text-sm">
+                    <a href={`/cotizaciones/editar/${quotation.id}`} className="font-medium text-primary underline-offset-2 hover:underline">{quotation.code}</a>
+                    <span className="text-zinc-500">{QUOTATION_STATUS_LABELS[quotation.status] || quotation.status} · {shortDate(quotation.acceptedAt || quotation.createdAt)}</span>
+                    <span className="ml-auto tabular-nums text-zinc-900 dark:text-white">{quotationAmount(quotation)}</span>
+                </li>
+            ))}
+        </ul>
+    </section>
 );
 
 const ROW_GRID = 'md:grid md:grid-cols-[9rem_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.4fr)_5.5rem_1.25rem] md:items-center md:gap-4';
@@ -66,7 +93,7 @@ export default function FinancialPartiesDirectory({
     const [search, setSearch] = useState('');
     const [role, setRole] = useState('');
     const [status, setStatus] = useState('');
-    // { kind: 'client', client, initialName, linkThirdPartyId } | { kind: 'third-party', thirdParty }
+    // { kind: 'client', client, initialName, initialProfile, linkThirdPartyId, prospect } | { kind: 'third-party', thirdParty }
     const [dialog, setDialog] = useState(null);
     const [saving, setSaving] = useState(false);
     const [dialogError, setDialogError] = useState('');
@@ -87,8 +114,14 @@ export default function FinancialPartiesDirectory({
         staleTime: 30000
     });
     const thirdParties = useMemo(() => (Array.isArray(thirdPartiesData?.thirdParties) ? thirdPartiesData.thirdParties : []), [thirdPartiesData]);
+    // Lo comercial: los clientes potenciales que dejó cada cotización y las cotizaciones de cada cliente.
+    const { data: commercial, isLoading: isCommercialLoading, error: commercialError } = useQuery({
+        queryKey: ['financial-party-commercial'],
+        queryFn: async () => (await axios.get(apiUrl('/parties/commercial'), authed())).data,
+        staleTime: 30000
+    });
 
-    const rows = useMemo(() => buildPartyRows(buildClientDirectoryRows(directory, reconciliation?.clients || []), thirdParties), [directory, reconciliation, thirdParties]);
+    const rows = useMemo(() => buildPartyRows(buildClientDirectoryRows(directory, reconciliation?.clients || []), thirdParties, commercial), [directory, reconciliation, thirdParties, commercial]);
     const summary = useMemo(() => summarizeParties(rows), [rows]);
     const visible = useMemo(() => filterPartyRows(rows, { search, role, status }), [rows, search, role, status]);
 
@@ -139,13 +172,29 @@ export default function FinancialPartiesDirectory({
         }
     };
 
-    const isLoading = isDirectoryLoading || isReconciliationLoading || isThirdPartiesLoading;
+    // «Ya es cliente»: se crea su ficha con lo que ya se sabe de él, y su oportunidad queda apuntando a ella.
+    const handleProspectClientSaved = async (client, message) => {
+        const prospect = dialog?.prospect;
+        if (client?.id && prospect?.id) {
+            try {
+                await axios.post(apiUrl(`/parties/prospects/${prospect.id}/client`), { clientId: client.id }, authed());
+            } catch (linkError) {
+                console.error('[Terceros] Cliente potencial no unido a su ficha:', linkError.response?.data || linkError);
+                onNotice?.(linkError.response?.data?.message || 'La ficha del cliente quedó, pero no se pudo unir con su oportunidad.');
+                await invalidateFinancialQueries(queryClient);
+                return;
+            }
+        }
+        await afterSave(client?.id, message || 'Ficha del cliente creada. Sus cotizaciones quedaron con ella.');
+    };
+
+    const isLoading = isDirectoryLoading || isReconciliationLoading || isThirdPartiesLoading || isCommercialLoading;
     const filtersActive = Boolean(search.trim() || role || status);
 
     return (
         <div className="space-y-4 animate-in fade-in duration-200" data-financial-parties>
             <FinancialSectionHeader title="Terceros"
-                description="Todos los terceros de Brain Studio con sus roles: los clientes y a quienes se les paga. Una sola ficha por tercero; despliega uno para ver su ficha de cobro, su ficha de pago o vincularlo.">
+                description="Todos los terceros de Brain Studio con sus roles: los clientes, quienes recibieron una cotización y a quienes se les paga. Una sola ficha por tercero; despliega uno para ver su ficha de cobro, su ficha de pago o vincularlo.">
                 {canWriteFinancials && (
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
@@ -167,7 +216,7 @@ export default function FinancialPartiesDirectory({
 
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" data-party-summary>
                 <FinancialSummaryCard label="Total" value={summary.total} hint={summary.unlinked ? `${summary.unlinked} nombre${summary.unlinked === 1 ? '' : 's'} solo en el Excel` : 'Con ficha'} />
-                <FinancialSummaryCard label="Clientes" value={summary.clients} hint="Se les cobra" />
+                <FinancialSummaryCard label="Clientes" value={summary.clients} hint={summary.prospects ? `Y ${summary.prospects} potencial${summary.prospects === 1 ? '' : 'es'}` : 'Se les cobra'} />
                 <FinancialSummaryCard label="Proveedores" value={summary.suppliers} hint="Se les paga" />
                 <FinancialSummaryCard label="Colaboradores" value={summary.team} hint={summary.others ? `Y ${summary.others} arrendador, socio u otro` : 'Del equipo'} />
                 <FinancialSummaryCard label="Activos" value={summary.active} hint={`${summary.total - summary.active} inactivo${summary.total - summary.active === 1 ? '' : 's'}`} />
@@ -195,7 +244,7 @@ export default function FinancialPartiesDirectory({
             </Card>
 
             <Card className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
-                {(directoryError || thirdPartiesError) && <p role="alert" className="border-b border-zinc-200 px-4 py-3 text-sm text-destructive brain-destructive-text dark:border-white/10">No fue posible cargar todas las fichas. Lo que sí cargó sigue abajo.</p>}
+                {(directoryError || thirdPartiesError || commercialError) &&<p role="alert" className="border-b border-zinc-200 px-4 py-3 text-sm text-destructive brain-destructive-text dark:border-white/10">No fue posible cargar todas las fichas. Lo que sí cargó sigue abajo.</p>}
                 <div className={cn('hidden border-b border-zinc-200 bg-zinc-50/80 px-4 py-3 text-xs font-medium text-zinc-500 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400', ROW_GRID)} aria-hidden="true">
                     <span>NIT / CC</span><span>Nombre</span><span>Roles</span><span>Contacto</span><span>Estado</span><span />
                 </div>
@@ -226,7 +275,7 @@ export default function FinancialPartiesDirectory({
                                         </span>
                                         <span className="order-2 flex flex-wrap gap-1 md:order-none" data-party-roles>
                                             {row.unlinked ? <RoleChip tone="muted">Sin ficha</RoleChip>
-                                                : row.roles.map((item) => <RoleChip key={item} tone={item === 'CLIENTE' ? 'client' : 'pay'}>{partyRoleLabel(item)}</RoleChip>)}
+                                                : row.roles.map((item) => <RoleChip key={item} tone={roleTone(item)}>{partyRoleLabel(item)}</RoleChip>)}
                                         </span>
                                         <span className="order-4 hidden truncate text-sm text-zinc-600 dark:text-zinc-300 md:order-none md:block">{partyContact(row) || '—'}</span>
                                         <span className="order-5 hidden md:order-none md:block">
@@ -287,6 +336,33 @@ export default function FinancialPartiesDirectory({
                                                 </section>
                                             )}
 
+                                            {/* Cliente potencial: nació de una cotización y vive como oportunidad en el CRM. */}
+                                            {row.prospect && (
+                                                <section className="min-w-0 space-y-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900" data-prospect-card>
+                                                    <div className="min-w-0">
+                                                        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Cliente potencial</h3>
+                                                        <p className="text-xs text-zinc-500">Recibió una cotización y todavía no tiene ficha de cliente. Su seguimiento está en el CRM.</p>
+                                                    </div>
+                                                    <dl className="grid gap-3 sm:grid-cols-2">
+                                                        <ProfileLine label="Persona de contacto" value={row.prospect.contactName} />
+                                                        <ProfileLine label="Correo" value={row.prospect.email} />
+                                                        <ProfileLine label="Teléfono" value={row.prospect.phone} />
+                                                        <ProfileLine label="En el CRM" value={`${row.prospect.code} · ${crmStageLabel(row.prospect.stage)}`} />
+                                                        <ProfileLine label="Responsable comercial" value={row.prospect.owner?.name} />
+                                                    </dl>
+                                                    <div className="flex flex-wrap gap-x-4">
+                                                        <a href={`/crm/oportunidades/${row.prospect.id}`} className="inline-flex min-h-11 items-center text-sm font-medium text-primary underline underline-offset-2">Ver en el CRM</a>
+                                                        {canWriteFinancials && (
+                                                            <button type="button" data-prospect-make-client
+                                                                onClick={() => setDialog({ kind: 'client', client: null, initialName: row.name, initialProfile: { contactName: row.prospect.contactName || '', email: row.prospect.email || '', phone: row.prospect.phone || '' }, prospect: row.prospect })}
+                                                                className="min-h-11 text-sm font-medium text-primary underline underline-offset-2">
+                                                                Ya es cliente: crear su ficha
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                </section>
+                                            )}
+
                                             {/* La ficha de pago: a quién y cómo se le paga. */}
                                             {thirdParty ? (
                                                 <section className="min-w-0 space-y-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900" data-third-party-card>
@@ -338,6 +414,8 @@ export default function FinancialPartiesDirectory({
                                                 </section>
                                             )}
 
+                                            {row.quotations?.length > 0 && <PartyQuotations quotations={row.quotations} />}
+
                                             {/* La vinculación de siempre: pasar movimientos y cartera a otra ficha. */}
                                             {(row.clientId || row.unlinked) && (
                                                 <section className="min-w-0 space-y-2 rounded-lg border border-zinc-200 bg-white p-3 dark:border-white/10 dark:bg-zinc-900 lg:col-span-2">
@@ -379,7 +457,8 @@ export default function FinancialPartiesDirectory({
             </Card>
 
             {dialog?.kind === 'client' && (
-                <ClientProfileDialog open client={dialog.client} initialName={dialog.initialName} onClose={closeDialog} onSaved={handleClientSaved} />
+                <ClientProfileDialog open client={dialog.client} initialName={dialog.initialName} initialProfile={dialog.initialProfile}
+                    onClose={closeDialog} onSaved={dialog.prospect ? handleProspectClientSaved : handleClientSaved} />
             )}
             {dialog?.kind === 'third-party' && (
                 <ThirdPartyDialog open thirdParty={dialog.thirdParty} saving={saving} error={dialogError} onClose={closeDialog} onSubmit={saveThirdParty} />

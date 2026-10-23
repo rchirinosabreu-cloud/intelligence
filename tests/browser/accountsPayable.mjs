@@ -28,6 +28,15 @@ try {
   assert.equal(await page.locator('[data-payable-due="VENCIDA"]').count(), 1, 'el arriendo de octubre está vencido');
   await page.screenshot({ path: shot('por-pagar-abierta.png'), animations: 'disabled', fullPage: true });
 
+  // Cancelar «Nuevo tercero» cierra todo y deja a la persona en la pestaña donde estaba (Rodny, 23 de octubre de 2026).
+  await page.locator('[data-payable-new]').click();
+  await page.locator('[data-payable-dialog]').waitFor();
+  await page.locator('[data-payable-new-third-party]').click();
+  await page.locator('[data-third-party-dialog]').getByRole('button', { name: 'Cancelar' }).click();
+  await page.locator('[data-third-party-dialog]').waitFor({ state: 'detached' });
+  assert.equal(await page.locator('[data-payable-dialog]').count(), 0, 'no vuelve a la cuenta por pagar: se sale de todo');
+  assert.equal(await page.getByRole('dialog').count(), 0);
+
   // Un tercero nuevo desde el propio formulario de la cuenta: no hay que salir a crearlo aparte.
   await page.locator('[data-payable-new]').click();
   await page.locator('[data-payable-dialog]').waitFor();

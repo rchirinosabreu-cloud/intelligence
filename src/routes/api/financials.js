@@ -65,6 +65,8 @@ import {
 import {
     createPayableHandler,
     createThirdPartyHandler,
+    linkProspectClientHandler,
+    listPartyCommercialHandler,
     listPayablesLedgerHandler,
     listThirdPartiesHandler,
     payPayableHandler,
@@ -153,6 +155,8 @@ router.patch('/receivable-payments/:paymentId', requireFinancialWrite, updateRec
 // Terceros y cuentas por pagar (Rodny, 20 de octubre de 2026): el espejo de Cartera. Pagar crea el
 // egreso en Movimientos ligado al pago; el soporte del tercero se guarda como evidencia.
 router.get('/third-parties', requireFinancialAccess, listThirdPartiesHandler);
+router.get('/parties/commercial', requireFinancialAccess, listPartyCommercialHandler);
+router.post('/parties/prospects/:leadId/client', requireFinancialWrite, linkProspectClientHandler);
 router.post('/third-parties', requireFinancialWrite, createThirdPartyHandler);
 router.patch('/third-parties/:id', requireFinancialWrite, updateThirdPartyHandler);
 router.get('/payables-ledger', requireFinancialAccess, listPayablesLedgerHandler);

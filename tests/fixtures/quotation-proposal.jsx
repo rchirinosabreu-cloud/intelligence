@@ -41,6 +41,9 @@ window.fetch = async (input, config = {}) => {
       const details = normalizeProposalDetails(body.proposal_details, { issue: body.status === 'ACTIVA', totalsByScenario: quotationProposalTotals(items, body.is_tax_exempt, options) });
       const totals = calculateQuotationTotals(items, body.is_tax_exempt, options);
       saved = { ...saved, ...body, items, proposal_details: details, terms_and_conditions: termsWithProposalPayments(body.terms_and_conditions, Boolean(details?.paymentPlans?.length)), subtotal: totals.subtotal, tax_amount: totals.taxAmount, total_amount: totals.totalAmount };
+      // Como el servidor (23 de octubre de 2026): al guardar, la cotización queda ligada a su tercero; aquí, un cliente potencial nuevo.
+      const partyName = body.client_type === 'EMPRESA' ? body.client_company || body.client_name : body.client_name;
+      if (!saved.party && partyName) saved.party = { kind: 'CLIENTE_POTENCIAL', label: 'Cliente potencial', name: partyName, clientId: null, leadId: 'lead-local', leadCode: 'CRM-0187' };
       sessionStorage.setItem('quotation-proposal-demo', JSON.stringify(saved)); data = saved;
     } else if (path.includes('/public/')) data = { ...serializePublicQuotation({ ...saved, status: saved.status === 'APROBADA' ? 'APROBADA' : 'ACTIVA' }), consecutive_formatted: saved.consecutive_formatted, emisor_data: { razonSocial: 'Brainstudio · muestra', nit: 'DEMO' } };
     else if (!path.includes('/quotations/')) throw new Error('Conexión externa bloqueada en esta muestra');

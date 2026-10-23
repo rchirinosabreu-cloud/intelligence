@@ -67,6 +67,30 @@ try {
   await page.screenshot({ path: shot('terceros.png'), animations: 'disabled', fullPage: true });
   await page.getByRole('combobox', { name: 'Rol' }).waitFor();
 
+  // Un cliente potencial nace de una cotización (punto 1 de la solicitud de Elisa): su ficha, su oportunidad
+  // en el CRM y sus cotizaciones. «Ya es cliente» le crea la ficha con lo que ya se sabe y lo une a ella.
+  const prospect = page.locator('[data-party-row="prospecto:lead-cafe"]');
+  assert.equal(await prospect.locator('[data-party-roles]').innerText(), 'Cliente potencial');
+  await prospect.locator('button[aria-expanded]').click();
+  await page.locator('[data-prospect-card]').waitFor();
+  assert.match(await page.locator('[data-prospect-card]').innerText(), /CRM-0187 · Propuesta enviada/);
+  assert.match(await prospect.locator('[data-party-quotations]').innerText(), /COT-0042[\s\S]*Enviada/);
+  await page.locator('[data-prospect-card]').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: shot('terceros-cliente-potencial.png'), animations: 'disabled', fullPage: true });
+  await page.locator('[data-prospect-make-client]').click();
+  const clientDialog = page.getByRole('dialog', { name: 'Nuevo cliente' });
+  await clientDialog.waitFor();
+  assert.equal(await clientDialog.getByRole('textbox', { name: /nombre/i }).first().inputValue(), 'Café Altura');
+  await clientDialog.getByRole('button', { name: 'Crear cliente' }).click();
+  await clientDialog.waitFor({ state: 'detached' });
+  const linkBody = await page.evaluate(() => window.__prospectLinkBody);
+  assert.ok(linkBody?.clientId, 'la oportunidad queda unida a la ficha recién creada');
+  const converted = page.locator(`[data-party-row="${linkBody.clientId}"]`);
+  await converted.waitFor();
+  assert.equal(await converted.locator('[data-party-roles]').innerText(), 'Cliente');
+  assert.equal(await page.locator('[data-party-row="prospecto:lead-cafe"]').count(), 0, 'deja de ser potencial: es una sola ficha');
+  assert.match(await converted.locator('[data-party-quotations]').innerText(), /COT-0042/);
+
   // Análisis: el flujo de caja; Rentabilidad solo para administración.
   await page.getByRole('tab', { name: 'Análisis' }).click();
   await page.getByText('Flujo de Caja Histórico').waitFor();

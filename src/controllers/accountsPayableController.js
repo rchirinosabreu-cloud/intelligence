@@ -4,6 +4,7 @@ import { createPayable, listPayablesLedger, payPayable, reversePayablePayment, u
 import { attachPayableDocument, openPayableDocument } from '../services/payableDocumentService.js';
 import { financialEvidenceStorage } from '../services/financialRecordDocumentService.js';
 import { contentDisposition } from './financialRecordController.js';
+import { linkProspectClient, listPartyCommercial } from '../services/quotationPartyService.js';
 
 // Terceros y cuentas por pagar (20 de octubre de 2026). Cada manejador recibe sus dependencias para
 // probarse sin base de datos, como el resto del módulo financiero.
@@ -19,6 +20,28 @@ export const listThirdPartiesHandler = async (req, res, dependencies = {}) => {
     try { return res.json(await list(prismaClient, req.query || {})); } catch (error) {
         console.error('[Third parties API] List failed:', error.response?.data || error);
         return respondWithError(res, error, 'THIRD_PARTY_LIST_FAILED', 'No fue posible cargar los terceros.');
+    }
+};
+
+// Lo comercial de los terceros: clientes potenciales y cotizaciones de cada cliente (punto 1 de la solicitud de Elisa).
+export const listPartyCommercialHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const list = dependencies.listPartyCommercial || listPartyCommercial;
+    try { return res.json(await list(prismaClient)); } catch (error) {
+        console.error('[Third parties API] Commercial list failed:', error.response?.data || error);
+        return respondWithError(res, error, 'PARTY_COMMERCIAL_LIST_FAILED', 'No fue posible cargar las cotizaciones de los terceros.');
+    }
+};
+
+export const linkProspectClientHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const link = dependencies.linkProspectClient || linkProspectClient;
+    try {
+        const result = await link(prismaClient, req.params.leadId, req.body?.clientId, req.user);
+        return res.json({ message: 'El cliente potencial quedó unido a su ficha de cliente, con sus cotizaciones.', ...result });
+    } catch (error) {
+        console.error('[Third parties API] Prospect link failed:', error.response?.data || error);
+        return respondWithError(res, error, 'PROSPECT_LINK_FAILED', 'No fue posible unir el cliente potencial con su ficha.');
     }
 };
 
