@@ -44,7 +44,7 @@ export default function ProfitabilityTab({ enabled }) {
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div className="min-w-0 max-w-2xl">
           <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Rentabilidad por cliente{data?.period ? ` · ${data.period.label}` : ''}</h2>
-          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Lo facturado en el mes frente a lo que costó atender cada cuenta: sus horas por el costo hora de la agencia, más lo que se pagó directamente por ella.</p>
+          <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">Lo facturado en el mes —o, si el cliente no tiene cuenta por cobrar del mes, lo que entró en Movimientos— frente a lo que costó atender cada cuenta: sus horas por el costo hora de la agencia, más lo que se pagó directamente por ella.</p>
         </div>
         <label className="w-56 space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
           <span className="block">Mes</span>
@@ -58,7 +58,7 @@ export default function ProfitabilityTab({ enabled }) {
       {agency && (
         <>
           <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <Figure label="Facturado a clientes" value={money(agency.billedCents)} />
+            <Figure label="Ingreso de clientes" value={money(agency.revenueCents)} hint={agency.fromIncome ? `${agency.fromIncome} sin cuenta por cobrar: se usó lo que entró` : 'Lo facturado del mes'} />
             <Figure label="Costo de operación" value={money(agency.costCents)} hint={agency.directCostCents ? `${money(agency.directCostCents)} directo de clientes` : null} />
             <Figure label="Costo hora de la agencia" value={money(agency.hourCostCents)} />
             <Figure label="Horas medidas" value={hours(agency.hoursMs)} hint={agency.coverage === null ? null : `${percent(agency.coverage)} de lo cerrado tiene tiempo`} />
@@ -72,7 +72,7 @@ export default function ProfitabilityTab({ enabled }) {
 
           <Card className="overflow-hidden dark:bg-zinc-900">
             <div className="hidden grid-cols-[minmax(0,2fr)_repeat(5,minmax(0,1fr))] gap-3 border-b border-zinc-100 px-4 py-2 text-xs text-zinc-500 dark:border-white/5 dark:text-zinc-400 md:grid">
-              <span>Cliente</span><span className="text-right">Facturado</span><span className="text-right">Horas</span><span className="text-right">Costo</span><span className="text-right">Margen</span><span className="text-right">Por hora</span>
+              <span>Cliente</span><span className="text-right">Ingreso</span><span className="text-right">Horas</span><span className="text-right">Costo</span><span className="text-right">Margen</span><span className="text-right">Por hora</span>
             </div>
             {data.clients.length === 0 && <p className="px-4 py-6 text-sm text-zinc-500 dark:text-zinc-400">No hay facturación ni horas de clientes en este mes.</p>}
             <ul className="divide-y divide-zinc-100 dark:divide-white/5">
@@ -82,7 +82,11 @@ export default function ProfitabilityTab({ enabled }) {
                   <li key={row.clientId} className="px-4 py-3" data-profitability-client={row.name}>
                     <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-sm md:grid-cols-[minmax(0,2fr)_repeat(5,minmax(0,1fr))] md:items-baseline">
                       <span className="col-span-2 min-w-0 truncate font-medium text-zinc-900 dark:text-zinc-50 md:col-span-1">{row.name}</span>
-                      <span className="text-zinc-500 md:hidden">Facturado</span><span className="text-right text-zinc-700 dark:text-zinc-200">{money(row.billedCents)}</span>
+                      <span className="text-zinc-500 md:hidden">Ingreso</span>
+                      <span className="text-right text-zinc-700 dark:text-zinc-200" data-profitability-source={row.revenueSource || 'NINGUNO'}>
+                        {money(row.revenueCents)}
+                        {row.revenueSource && <span className="block text-xs text-zinc-500 dark:text-zinc-400">{row.revenueSource === 'INGRESOS' ? 'lo que entró' : 'facturado'}</span>}
+                      </span>
                       <span className="text-zinc-500 md:hidden">Horas</span><span className="text-right text-zinc-700 dark:text-zinc-200">{hours(row.hoursMs)}</span>
                       <span className="text-zinc-500 md:hidden">Costo</span><span className="text-right text-zinc-700 dark:text-zinc-200">{money(row.costCents)}</span>
                       <span className="text-zinc-500 md:hidden">Margen</span>

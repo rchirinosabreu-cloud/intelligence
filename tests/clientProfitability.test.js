@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { buildClientProfitability, isOperatingExpense, PROFITABILITY_LIMITS } from '../src/lib/clientProfitability.js';
+import { buildClientProfitability, isOperatingExpense, isClientIncome, PROFITABILITY_LIMITS } from '../src/lib/clientProfitability.js';
 import { createClientProfitabilityService, lastClosedMonth } from '../src/services/clientProfitabilityService.js';
 import { createClientProfitabilityRouter } from '../src/routes/api/clientProfitability.js';
 
@@ -53,6 +53,29 @@ test('cada cuenta dice en una frase lo que hay que mirar, sin juicios', () => {
   const endova = onlyBilled.clients.find((row) => row.name === 'Endova');
   assert.ok(endova.flags.includes('SIN_HORAS'), 'facturó y nadie midió trabajo: el margen se ve mejor de lo que es');
   for (const row of buildClientProfitability(base).clients) for (const line of row.reading) assert.doesNotMatch(line, /\b(mal|malo|lento|flojo|culpa)\b/i);
+});
+
+// Rodny, 23 de octubre de 2026: «hay muchos clientes que dice “no tiene nada facturado”… no está leyendo los
+// movimientos». Sin cuenta por cobrar del mes, el ingreso es lo que entró; con ella, lo facturado y nunca los dos.
+test('sin cuenta por cobrar del mes se usa lo que entró en Movimientos, y se dice; con ella, el pago no se suma encima', () => {
+  const out = buildClientProfitability({
+    ...base,
+    incomes: [{ clientId: 'c-nuva', amount: 2_000_000 }, { clientId: 'c-aristea', amount: 3_000_000 }],
+    unlinkedIncomeCents: 70_000_000
+  });
+  const byName = Object.fromEntries(out.clients.map((row) => [row.name, row]));
+  assert.deepEqual([byName.Nuva.revenueSource, byName.Nuva.revenueCents, byName.Nuva.marginCents], ['INGRESOS', 200_000_000, 200_000_000 - 95_000_000]);
+  assert.deepEqual(byName.Nuva.flags, ['INGRESOS'], 'ya no dice que no tiene nada facturado');
+  assert.match(byName.Nuva.reading[0], /Sin cuenta por cobrar del mes: se usó lo que entró en Movimientos \(\$2\.000\.000\)/);
+  assert.match(byName.Nuva.line, /^Nuva: entró \$2\.000\.000/);
+  assert.deepEqual([byName.Aristea.revenueSource, byName.Aristea.revenueCents], ['FACTURADO', 300_000_000], 'el pago de su cuenta por cobrar no se cuenta dos veces');
+  assert.equal(out.agency.revenueCents, 300_000_000 + 150_000_000 + 200_000_000);
+  assert.equal(out.agency.fromIncome, 1);
+  assert.match(out.notes.join(' '), /Para un cliente sin cuenta por cobrar del mes se usó lo que entró/);
+  assert.match(out.notes.join(' '), /\$700\.000 de ingresos del mes no están ligados a ningún cliente/);
+  assert.equal(isClientIncome({ type: 'INCOME', clientId: 'c1', category: 'SERVICIO' }), true);
+  assert.equal(isClientIncome({ type: 'INCOME', clientId: 'c1', category: 'PRESTAMO', section: 'FINANCING' }), false, 'un reintegro de préstamo no es venta');
+  assert.equal(isClientIncome({ type: 'INCOME', clientId: null, category: 'SERVICIO' }), false);
 });
 
 test('lo que no es operación no entra al costo: préstamos, inversiones, financiación, anulados y proyecciones se filtran antes', () => {
