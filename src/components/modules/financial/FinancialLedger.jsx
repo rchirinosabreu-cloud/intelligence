@@ -65,7 +65,6 @@ const lockReason = (record) => {
     // cartera lo sigue. Con reintegros, se gestiona desde Cartera (20 de octubre de 2026).
     if (record?.payablePayment) return 'Es el pago de una cuenta por pagar. Para deshacerlo ve a Por pagar y usa «Revertir» en ese pago: este movimiento se anulará solo.';
     if (record?.loanReceivable && !isLoanUntouched(record.loanReceivable)) return 'Es el egreso de un préstamo que ya tiene reintegros en Cartera. Para corregirlo o deshacerlo, revierte allí los reintegros y usa «Eliminar» en el préstamo: este movimiento se anulará solo.';
-    if (record?.bankMatches?.length) return 'Tiene una conciliación bancaria aprobada. Primero hay que deshacer esa conciliación.';
     if (record?.origin === 'SYSTEM') return 'Lo generó otro proceso de la plataforma, no se registró a mano. Se corrige desde donde se originó.';
     return null;
 };
@@ -965,8 +964,8 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
 
             <Dialog open={isClosePeriodOpen} onOpenChange={setIsClosePeriodOpen}>
                 <DialogContent className="sm:max-w-md dark:bg-zinc-900">
-                    <DialogHeader><DialogTitle>Cerrar mes</DialogTitle><DialogDescription>Después del cierre no se podrán editar, anular ni registrar movimientos en este periodo. Todos los ejecutados deben tener una cuenta conciliada.</DialogDescription></DialogHeader>
-                    <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Nota de cierre<textarea rows={3} value={closePeriodNotes} onChange={(event) => setClosePeriodNotes(event.target.value)} placeholder="Ej. Extracto y cartera conciliados" className={inputClass} /></label>
+                    <DialogHeader><DialogTitle>Cerrar mes</DialogTitle><DialogDescription>Después del cierre no se podrán editar, anular ni registrar movimientos en este periodo. Todos los ejecutados deben tener su cuenta de caja o banco asignada.</DialogDescription></DialogHeader>
+                    <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Nota de cierre<textarea rows={3} value={closePeriodNotes} onChange={(event) => setClosePeriodNotes(event.target.value)} placeholder="Ej. Movimientos y cartera revisados" className={inputClass} /></label>
                     <DialogFooter><button type="button" onClick={() => setIsClosePeriodOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button><button type="button" onClick={closeSelectedPeriod} disabled={isClosingPeriod} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isClosingPeriod && <Loader2 className="h-4 w-4 animate-spin" />}Confirmar cierre</button></DialogFooter>
                 </DialogContent>
             </Dialog>

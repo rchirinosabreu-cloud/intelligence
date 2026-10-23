@@ -244,7 +244,7 @@ test('registrar en Movimientos un egreso de categoría Préstamo crea el présta
 test('mientras nadie lo haya reintegrado, el préstamo sigue al movimiento: corregirlo lo actualiza y anularlo lo quita de Cartera', async () => {
     const loan = { id: 'loan-1', status: 'DEBE', payments: [] };
     const loanRow = { id: 'loan-1', kind: 'PRESTAMO', amount: 200000, status: 'DEBE', counterpartyName: 'Fancisco', loanRecordId: 'rec-1' };
-    const existing = { id: 'rec-1', type: 'EXPENSE', category: 'PRESTAMO', status: 'POSTED', scenario: 'ACTUAL', isProjection: false, origin: 'MANUAL', amount: 200000, date: new Date('2026-09-28T12:00:00Z'), year: 2026, month: 9, accountId: 'acc-1', description: 'Prestamos Fancisco', counterparty: 'Fancisco', loanReceivable: loan, receivablePayment: null, payrollTransaction: null, payrollPayment: null, bankMatches: [] };
+    const existing = { id: 'rec-1', type: 'EXPENSE', category: 'PRESTAMO', status: 'POSTED', scenario: 'ACTUAL', isProjection: false, origin: 'MANUAL', amount: 200000, date: new Date('2026-09-28T12:00:00Z'), year: 2026, month: 9, accountId: 'acc-1', description: 'Prestamos Fancisco', counterparty: 'Fancisco', loanReceivable: loan, receivablePayment: null, payrollTransaction: null, payrollPayment: null };
 
     const edit = buildLedgerTx({ existing, loanRow });
     await updateFinancialRecord(edit.prisma, 'rec-1', { amount: 250000, counterparty: 'Francisco Villa' }, { id: 'u' });

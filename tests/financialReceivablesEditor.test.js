@@ -35,20 +35,11 @@ const makeResponse = () => ({
     }
 });
 
-test('getFinancialReceivablesLedger returns editable receivable rows from the active import batch', async () => {
+test('getFinancialReceivablesLedger returns editable receivable rows of the year, imported history included', async () => {
     const prismaClient = {
-        financialImportBatch: {
-            findFirst: async () => ({ id: 'batch-1', year: 2026 })
-        },
         accountsReceivable: {
             findMany: async (args) => {
-                assert.deepEqual(args.where, {
-                    year: 2026,
-                    OR: [
-                        { importBatchId: 'batch-1' },
-                        { importBatchId: null }
-                    ]
-                });
+                assert.deepEqual(args.where, { year: 2026 });
                 return [{
                     id: 'debt-1',
                     amount: 4680000,
@@ -78,7 +69,6 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
     await getFinancialReceivablesLedger({ query: { year: 2026 } }, res, { prismaClient });
 
     assert.equal(res.statusCode, 200);
-    assert.equal(res.payload.importBatchId, 'batch-1');
     assert.deepEqual(res.payload.items, [{
         id: 'debt-1',
         clientId: null,
@@ -155,7 +145,6 @@ test('getFinancialReceivablesLedger returns editable receivable rows from the ac
 // cobro» o muestra su número (Elisa, reunión del 21 de septiembre de 2026).
 test('una obligación ya emitida llega con su número, su periodo y sus conceptos', async () => {
     const prismaClient = {
-        financialImportBatch: { findFirst: async () => null },
         accountsReceivable: {
             findMany: async (args) => {
                 assert.ok(args.include.items, 'sin los conceptos la pantalla no puede mostrar el documento');
@@ -188,7 +177,6 @@ test('una obligación ya emitida llega con su número, su periodo y sus concepto
 // Un abono revertido sigue visible en la cartera como evidencia, pero no descuenta saldo.
 test('getFinancialReceivablesLedger shows a reversed payment without letting it reduce the debt', async () => {
     const prismaClient = {
-        financialImportBatch: { findFirst: async () => null },
         accountsReceivable: {
             findMany: async () => [{
                 id: 'debt-1',

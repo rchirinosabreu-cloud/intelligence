@@ -27,7 +27,7 @@ reflejar que el dinero salió en varias fechas.
   valor, fecha, cuenta, referencia y documento de respaldo, que tienen que sumar exactamente el
   pago («Faltan / Sobran», «Aplicar desglose»). La diferencia con el desglose interno es que
   cada ítem queda como **su propio egreso**: salió de la cuenta en su propia fecha, y así el
-  libro y la conciliación bancaria lo ven igual que el extracto.
+  libro lo ve igual que el extracto del banco.
 - **Revertir** un pago, con motivo. Si lo creó la plataforma, su egreso se anula; si era un
   egreso registrado a mano, se conserva intacto y queda libre para aplicarlo donde toque.
 - **Editar referencia**: la referencia y la nota se corrigen sin tocar el dinero.

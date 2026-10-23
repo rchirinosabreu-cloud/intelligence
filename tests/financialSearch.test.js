@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getFinancialDashboard, getFinancialReceivablesLedger, getFinancialPayrollLedger, getFinancialClientReconciliation } from '../src/controllers/financialController.js';
 import { listFinancialRecords } from '../src/services/financialRecordService.js';
-import { listBankReconciliation } from '../src/services/bankReconciliationService.js';
 
 // Persistence double: exercises the actual query builders and aggregators, not PostgreSQL.
 function matches(row, where = {}) {
@@ -28,7 +27,6 @@ function fixture() {
         { ...base, id: 'payroll', amount: 50.75, type: 'EXPENSE', payrollTransaction: { contract: { collaborator: { displayName: 'Rodny Chirinos' } } } },
         { ...base, id: 'import', amount: 10, type: 'INCOME', importBatchId: 'active', sourceLabel: 'Rodny', clientId: 'rodny', client: { id: 'rodny', name: 'Rodny' } },
         { ...base, id: 'actor-only', amount: 999, type: 'INCOME', createdBy: { name: 'Rodny' }, client: { name: 'Otro cliente' } },
-        { ...base, id: 'old', amount: 9000, type: 'INCOME', importBatchId: 'old', sourceLabel: 'Rodny' },
         { ...base, id: 'void', amount: 9000, type: 'INCOME', status: 'VOIDED', counterparty: 'Rodny' },
         { ...base, id: 'draft', amount: 9000, type: 'INCOME', status: 'DRAFT', counterparty: 'Rodny' },
         { ...base, id: 'other-month', amount: 9000, type: 'INCOME', month: 8, counterparty: 'Rodny' },
@@ -40,7 +38,7 @@ function fixture() {
         findMany: async args => { calls.push({ name, args }); const found = rows.filter(row => matches(row, args.where)); return found.slice(args.skip || 0, args.take ? (args.skip || 0) + args.take : undefined); },
         count: async args => rows.filter(row => matches(row, args.where)).length
     }; }
-    return { calls, prismaClient: { financialImportBatch: { findFirst: async () => ({ id: 'active', summary: {} }) }, financialRecord: model('records', records), accountsReceivable: model('debts', debts), payrollTransaction: model('payroll', []), payrollContract: model('contracts', contracts), client: model('clients', []) } };
+    return { calls, prismaClient: { financialRecord: model('records', records), accountsReceivable: model('debts', debts), payrollTransaction: model('payroll', []), payrollContract: model('contracts', contracts), client: model('clients', []) } };
 }
 const filters = { year: '2026', scenario: 'ACTUAL', month: '9', q: '  RoDnY  ', scope: 'active', status: 'POSTED' };
 
@@ -80,24 +78,11 @@ test('search also filters receivables, payroll contracts, and client reconciliat
     }
 });
 
-test('ledger pagination has a unique tie breaker and composes search with import scope', async () => {
+test('ledger pagination has a unique tie breaker', async () => {
     const { prismaClient, calls } = fixture();
     await listFinancialRecords(prismaClient, filters);
     const query = calls.find(c => c.name === 'records').args;
     assert.deepEqual(query.orderBy, [{ date: 'desc' }, { createdAt: 'desc' }, { id: 'desc' }]);
-    assert.equal(matches({ year: 2026, month: 9, scenario: 'ACTUAL', status: 'POSTED', importBatchId: 'old', counterparty: 'Rodny' }, query.where), false);
-});
-
-test('bank search filters the complete annual list and keeps continuity evidence', async () => {
-    const rows = [
-        { id: 'one', postedAt: new Date('2026-09-01T12:00:00Z'), description: 'Pago Rodny', amount: -100, matches: [] },
-        { id: 'two', postedAt: new Date('2026-08-01T12:00:00Z'), description: 'Pago Rodny', amount: -200, matches: [] },
-        { id: 'three', postedAt: new Date('2026-09-01T12:00:00Z'), description: 'Ingreso Brain', amount: 300, matches: [] }
-    ];
-    const prismaClient = { bankStatementImport: { findMany: async () => [] }, bankTransaction: { findMany: async () => rows } };
-    const result = await listBankReconciliation(prismaClient, 2026, { q: 'rodny', month: '9', type: 'EXPENSE' });
-    assert.deepEqual(result.transactions.map(r=>r.id), ['one']);
-    assert.deepEqual(result.continuityGaps, []);
 });
 
 test('multiword search matches the related person and invalid input is an explicit client error', async () => {

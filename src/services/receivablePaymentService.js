@@ -365,7 +365,7 @@ export const updateReceivablePayment = async (prismaClient, paymentId, input = {
             const payment = await tx.receivablePayment.findUnique({
                 where: { id: paymentId },
                 include: {
-                    financialRecord: { include: { bankMatches: { where: { status: 'APPROVED' }, select: { id: true, status: true } } } },
+                    financialRecord: true,
                     receivable: { include: { payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { id: true, amount: true, kind: true, reversedAt: true } } } }
                 }
             });
@@ -380,9 +380,6 @@ export const updateReceivablePayment = async (prismaClient, paymentId, input = {
             const record = payment.financialRecord;
             if (isCash && touchesMoney && record && record.origin !== 'SYSTEM') {
                 throw new FinancialDomainError('RECEIVABLE_PAYMENT_RECORD_EXTERNAL', 'Este abono se aplicó sobre un ingreso que ya existía en Movimientos. Corrige ese movimiento allá, o revierte el abono y aplica el ingreso correcto.', 409);
-            }
-            if (isCash && touchesMoney && record?.bankMatches?.length) {
-                throw new FinancialDomainError('FINANCIAL_RECORD_LINKED', 'El ingreso de este abono tiene una conciliación bancaria aprobada. Primero hay que deshacer esa conciliación.', 409);
             }
 
             const oldPaidAt = new Date(payment.paidAt);
@@ -448,7 +445,7 @@ export const updateReceivablePayment = async (prismaClient, paymentId, input = {
                 if (Object.keys(recordData).length) {
                     updatedRecord = await tx.financialRecord.update({ where: { id: record.id }, data: recordData });
                     await tx.financialAuditEvent.create({
-                        data: { entityType: 'FinancialRecord', entityId: record.id, action: 'UPDATE', before: cloneForAudit({ ...record, bankMatches: undefined }), after: cloneForAudit(updatedRecord), actorId }
+                        data: { entityType: 'FinancialRecord', entityId: record.id, action: 'UPDATE', before: cloneForAudit(record), after: cloneForAudit(updatedRecord), actorId }
                     });
                 }
             }

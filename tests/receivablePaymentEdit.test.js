@@ -28,7 +28,7 @@ const build = ({ payment, receivable, period = { status: 'OPEN' }, account = { i
         }
     };
 };
-const systemRecord = (overrides = {}) => ({ id: 'rec-1', origin: 'SYSTEM', status: 'POSTED', amount: 1136000, date: new Date('2026-09-29T12:00:00Z'), year: 2026, month: 9, accountId: 'acc-1', reference: '0345', notes: 'nota', bankMatches: [], ...overrides });
+const systemRecord = (overrides = {}) => ({ id: 'rec-1', origin: 'SYSTEM', status: 'POSTED', amount: 1136000, date: new Date('2026-09-29T12:00:00Z'), year: 2026, month: 9, accountId: 'acc-1', reference: '0345', notes: 'nota', ...overrides });
 const foobspain = (overrides = {}) => ({ id: 'debt-foob', clientId: 'c1', currency: 'USD', foreignAmount: 360, amount: 1205856, status: 'DEBE', metadata: {}, payments: [{ id: 'pay-1', amount: 1136000, kind: 'PAGO', reversedAt: null }], ...overrides });
 const payment = (overrides = {}) => ({ id: 'pay-1', receivableId: 'debt-foob', kind: 'PAGO', amount: 1136000, paidAt: new Date('2026-09-29T12:00:00Z'), accountId: 'acc-1', reference: '0345', notes: 'nota', financialRecordId: 'rec-1', reversedAt: null, financialRecord: systemRecord(), ...overrides });
 
@@ -115,7 +115,7 @@ test('si ese abono ya había ajustado la cartera por tasa, corregirlo rehace el 
     assert.equal(result.receivable.status, 'PAGADO');
 });
 
-test('lo que no se corrige aquí se dice: abono revertido, ingreso que ya existía, conciliación aprobada, ajuste sin dinero', async () => {
+test('lo que no se corrige aquí se dice: abono revertido, ingreso que ya existía, ajuste sin dinero', async () => {
     const reversed = build({ payment: payment({ reversedAt: new Date() }), receivable: foobspain() });
     await assert.rejects(updateReceivablePayment({ $transaction: async (cb) => cb(reversed.tx) }, 'pay-1', { notes: 'x' }, { id: 'u' }),
         (error) => error.code === 'RECEIVABLE_PAYMENT_ALREADY_REVERSED');
@@ -126,10 +126,6 @@ test('lo que no se corrige aquí se dice: abono revertido, ingreso que ya exist�
     const appliedNotes = build({ payment: payment({ financialRecord: systemRecord({ origin: 'MANUAL' }) }), receivable: foobspain() });
     await updateReceivablePayment({ $transaction: async (cb) => cb(appliedNotes.tx) }, 'pay-1', { notes: 'Seguimiento.' }, { id: 'u' });
     assert.equal(appliedNotes.calls.some(([name]) => name === 'record.update'), false, 'las notas del abono no reescriben un ingreso que ya existía');
-
-    const matched = build({ payment: payment({ financialRecord: systemRecord({ bankMatches: [{ id: 'm', status: 'APPROVED' }] }) }), receivable: foobspain() });
-    await assert.rejects(updateReceivablePayment({ $transaction: async (cb) => cb(matched.tx) }, 'pay-1', { amount: 1205856, reason: 'x' }, { id: 'u' }),
-        (error) => error.code === 'FINANCIAL_RECORD_LINKED');
 
     const settlement = build({ payment: payment({ kind: 'ACUERDO', accountId: null, financialRecordId: null, financialRecord: null }), receivable: foobspain({ currency: 'COP' }) });
     const edited = await updateReceivablePayment({ $transaction: async (cb) => cb(settlement.tx) }, 'pay-1', { amount: 1000000, notes: 'Motivo corregido.', reason: 'El valor acordado era otro.' }, { id: 'u' });

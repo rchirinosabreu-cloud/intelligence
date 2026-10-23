@@ -5,6 +5,7 @@ import {
   parseFinancialDateInput
 } from './financialRecordService.js';
 import { financialAmountFromCents, financialCents } from '../utils/financialMoney.js';
+import { LIVE_PAYROLL_CONTRACT } from './financialQueryFilters.js';
 
 const toNumber = (value) => {
   if (value && typeof value.toNumber === 'function') return value.toNumber();
@@ -30,11 +31,6 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
 
   return prismaClient.$transaction(async (tx) => {
     await assertOpenFinancialPeriod(tx, year, month);
-    const activeImportBatch = await tx.financialImportBatch.findFirst({
-      where: { year, status: 'IMPORTED' },
-      orderBy: { createdAt: 'desc' },
-      select: { id: true }
-    });
     const contracts = await tx.payrollContract.findMany({
       where: {
         AND: [
@@ -42,9 +38,7 @@ export const generatePayrollPeriod = async (prismaClient, input, actor) => {
             startDate: { lte: periodEnd },
             OR: [{ endDate: null }, { endDate: { gte: periodStart } }]
           },
-          activeImportBatch
-            ? { OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null }] }
-            : { importBatchId: null }
+          { ...LIVE_PAYROLL_CONTRACT }
         ]
       },
       include: { collaborator: { select: { displayName: true } } }

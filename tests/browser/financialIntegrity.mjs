@@ -74,13 +74,11 @@ try {
   await ledgerPages.getByText('Página 3 de 3').waitFor();
   assert.match(await page.locator('tbody').innerText(), /Ingreso de muestra 62/);
   await page.screenshot({ path: 'output/financial-ledger-preview.png', fullPage: true, animations: 'disabled' });
-  await page.getByRole('button', { name: 'Conciliación', exact: true }).click();
-  await page.getByText('Conciliado', { exact: true }).waitFor();
-  const bankPages = page.getByRole('navigation', { name: 'Paginación de conciliación' });
-  for (let i = 0; i < 4; i++) await bankPages.getByRole('button', { name: 'Siguiente' }).click();
-  await bankPages.getByText('Página 5 de 5').waitFor();
-  await page.getByText('Movimiento bancario 90', { exact: true }).waitFor();
-  await page.screenshot({ path: 'output/financial-bank-preview.png', fullPage: true, animations: 'disabled' });
+  // Conciliación y Auditoría se retiraron el 23 de octubre de 2026: Financiero opera solo en la plataforma.
+  for (const gone of ['Conciliación', 'Auditoría 2026']) {
+    assert.equal(await page.getByRole('button', { name: gone, exact: true }).count(), 0, `${gone} ya no existe`);
+  }
+  assert.equal(await page.getByRole('button', { name: 'Auditar archivo' }).count(), 0);
   await page.goto(`${base}?paymentError=1`);
   await page.getByRole('button', { name: 'Cartera', exact: true }).click();
   await page.getByRole('button', { name: /Cliente de muestra/ }).click();

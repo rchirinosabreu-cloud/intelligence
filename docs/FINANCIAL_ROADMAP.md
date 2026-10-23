@@ -8,15 +8,13 @@ Registrar una operación una sola vez y mantener coherencia entre movimientos, c
 
 ## Primer bloque implementado, pendiente de validación operativa
 
-- Clientes incluye movimientos ACTUAL/POSTED de la importación vigente y registros de plataforma posteriores. Cartera, Dashboard y Auditoría comparten el alcance de fuentes, incluidos SYSTEM.
+- Clientes, Cartera y el Dashboard leen todo lo registrado del periodo: la historia que cargó el Excel en 2026 y lo de la plataforma, incluidos SYSTEM. Desde el 23 de octubre de 2026 no hay cargas de Excel ni conciliación de extractos: Financiero opera solo en la plataforma.
 - Saldos después de abonos; PROMESADO no reduce deuda. Grupos por ID de cliente. Vencido, por vencer y sin vencimiento son situaciones distintas. La vista anual representa obligaciones registradas en ese año, no toda la cartera histórica ni un balance reconstruido a fecha pasada.
 - Importes de cobros y obligaciones positivos, con hasta dos decimales y operaciones en centavos seguros. No se puede llevar una obligación a cero para simular pago. Estados históricos PAGADO sin abonos suficientes quedan «Saldo por verificar», excluidos de deuda confirmada y bloqueados para edición hasta revisión; no se crean pagos ni se reabren cobros automáticamente.
 - Nuevo pago exige concepto explícito (fee, servicio/adicional o pauta), cuenta activa COP y cliente vinculado. El formulario mantiene un requestId para reintentos; una petición repetida con el mismo contenido/actor no crea otro ingreso.
 - Se puede aplicar un ingreso ACTUAL/POSTED existente del mismo cliente, cuenta, día e importe, sin volver a registrarlo. En este bloque se aplica su importe completo a una sola obligación. El reparto entre obligaciones y las conversiones de moneda no están implementados.
-- Generic CRUD no permite editar/anular movimientos SYSTEM o vinculados a pagos/nómina/conciliaciones aprobadas. Por ahora se bloquea la operación; todavía no hay una interfaz de reversión controlada.
+- Generic CRUD no permite editar/anular movimientos SYSTEM o vinculados a pagos/nómina. Por ahora se bloquea la operación; todavía no hay una interfaz de reversión controlada.
 - Saldo de cuenta desde el día contable de apertura. No se alteraron saldos iniciales existentes.
-- Conciliación revalida datos antes de confirmar; no mueve un registro de una cuenta asignada a otra. Extractos incompletos o inconsistentes se rechazan con explicación, no se aceptan como ceros.
-- Reimportar Excel se bloquea antes de borrar si afectaría pagos, nómina, coincidencias bancarias o periodos cerrados. No hay recuperación o reasignación histórica automática.
 - Regla confirmada por Rodny: ADMIN accede automáticamente; para otros usuarios decide la casilla Financiero de Equipo. Desmarcarla revoca incluso con flags/niveles antiguos. Los niveles financieros limitan acciones una vez concedida la entrada; VIEWER no escribe. Casilla histórica marcada con NONE/ausente equivale a EDITOR, nunca a aprobador. No se reasignan permisos productivos.
 - Paginación de Movimientos y Banco, estado Conciliado persistente, errores distintos de ausencia de datos. Invalidación compartida después de escrituras confirmadas.
 
@@ -39,7 +37,7 @@ Las pruebas de PostgreSQL usan exclusivamente `TEST_DATABASE_URL` validada por `
 ## Segundo bloque local: estado de cuenta del cliente
 
 - Desde Clientes se abre un modal centrado con obligaciones del año y sus abonos actuales. Los ingresos registrados se consultan en una vista separada: no se descuentan dos veces ni se presume que todo ingreso sea un abono.
-- API de lectura protegida por el mismo permiso Financiero. Páginas de 25 registros, cursor ligado a cliente/año/vista/importación y lectura RepeatableRead. Un cambio de importación entre páginas exige volver al inicio.
+- API de lectura protegida por el mismo permiso Financiero. Páginas de 25 registros, cursor ligado a cliente/año/vista y lectura RepeatableRead.
 - Los abonos muestran fecha, cuenta, referencia e ingreso vinculado; los soportes solo admiten enlaces HTTP(S). Un importe inválido, falta de vínculo, proyección, cliente/cuenta diferente o PAGADO sin aplicaciones suficientes deja el saldo por verificar.
 - No es una cartera histórica acumulada ni un corte retroactivo. No suma monedas, reparte pagos, crea movimientos ni revierte operaciones. Esas acciones siguen pendientes del siguiente bloque.
 - La invalidación compartida actualiza este detalle tras las operaciones financieras. Los lectores pueden consultarlo, pero no vincular clientes.
@@ -69,7 +67,7 @@ La pestaña Cartera abre con «Ajustes de cartera»: lo saldado sin dinero por f
 ## Siguientes bloques
 
 1. **Operación de cobros:** documento/obligación con conceptos y cuotas, aplicaciones repartidas, reversión/ajustes con autorización e historial, soportes y extracto interno por cuenta. Cartera histórica acumulada a un corte, distinguiendo consultas de stock y flujos.
-2. **Cierres:** acordar qué significa cierre gerencial; completar cobertura bancaria y excepciones. Unificar el protocolo de concurrencia con todas las rutas (incluidas nómina, importación, cambio de cliente y cierre). Las transacciones Serializable añadidas no prueban por sí solas exclusión global frente a caminos que aún no participan del mismo protocolo.
+2. **Cierres:** acordar qué significa cierre gerencial; completar cobertura bancaria y excepciones. Unificar el protocolo de concurrencia con todas las rutas (incluidas nómina, cambio de cliente y cierre). Las transacciones Serializable añadidas no prueban por sí solas exclusión global frente a caminos que aún no participan del mismo protocolo.
 3. **Nómina — diferida por Rodny:** «Generar nómina» puede informar borradores sin hacerlos visibles. El pago real del equipo se realiza el **15 y el último día de cada mes**. Diseñar periodos quincenales, liquidaciones visibles y pagos diferenciados; no asumir que el flujo mensual actual resuelve este requisito. No implementado en este primer bloque.
 4. **Decisiones:** caja a 13 semanas y cobranza; después recurrencia frente a estructura, margen/concentración por cliente y presupuesto. Datos y metas versionados; costos y moneda explícitos. Un cliente estratégico puede tener margen negativo: no ocultarlo con una categoría comercial.
 5. **Bria:** explicaciones y escenarios reproducibles con enlaces al origen, límites de cobertura y permisos financieros. No automatizar pagos, condonaciones, mensajes de cobro ni cierres. La información financiera no es memoria editorial.

@@ -3,18 +3,14 @@ import multer from 'multer';
 import { receivesFiles } from '../../lib/uploadMarker.js';
 import { getClientFinancialStatementHandler, streamClientStatementPdfHandler } from '../../controllers/financialClientStatementController.js';
 import {
-    commitFinancialImport,
     getFinancialDashboard,
     createFinancialPayrollContract,
     getFinancialClientReconciliation,
-    getFinancialMonthlyLedger,
     getFinancialPayrollLedger,
     getFinancialReceivablesLedger,
     linkFinancialClient,
-    previewFinancialImport,
     updateFinancialPayrollContract,
-    updateFinancialReceivable,
-    updateFinancialMonthlySummary
+    updateFinancialReceivable
 } from '../../controllers/financialController.js';
 import {
     requireFinancialAccess,
@@ -31,7 +27,6 @@ import {
     createLoanHandler,
     deleteReceivableHandler,
     generatePayrollPeriodHandler,
-    getFinancialIntegrityAuditHandler,
     issueReceivableDocumentHandler,
     correctReceivableDocumentHandler,
     getFinancialExchangeRateHandler,
@@ -61,13 +56,6 @@ import {
 } from '../../controllers/financialRecordController.js';
 import { FINANCIAL_DOCUMENT_MAX_BYTES } from '../../services/financialRecordDocumentService.js';
 import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
-import {
-    approveBankReconciliationMatch,
-    getBankReconciliation,
-    importBankStatement,
-    previewBankStatement,
-    rebuildBankReconciliation
-} from '../../controllers/bankReconciliationController.js';
 
 import {
     createDirectoryClientHandler,
@@ -89,13 +77,6 @@ import {
 } from '../../controllers/accountsPayableController.js';
 
 const router = express.Router();
-const upload = multer({
-    storage: uploadMemoryStorage(),
-    limits: {
-        fileSize: 10 * 1024 * 1024
-    }
-});
-
 // Supporting documents: one PDF/JPG/PNG per request, kept in memory only until it reaches the evidence bucket.
 const documentUpload = multer({ storage: uploadMemoryStorage(), limits: { fileSize: FINANCIAL_DOCUMENT_MAX_BYTES, files: 1 } });
 // Marcado con su campo: Bria lo manda desde el chat o WhatsApp con el archivo que llegó (22 de octubre de 2026).
@@ -112,7 +93,6 @@ router.get('/dashboard', requireFinancialAccess, getFinancialDashboard);
 router.get('/accounts', requireFinancialAccess, listFinancialAccountsHandler);
 router.post('/accounts', requireFinancialApproval, createFinancialAccountHandler);
 router.get('/records', requireFinancialAccess, listFinancialRecordsHandler);
-router.get('/integrity', requireFinancialAccess, getFinancialIntegrityAuditHandler);
 router.post('/records', requireFinancialWrite, createFinancialRecordHandler);
 router.patch('/records/:id', requireFinancialWrite, updateFinancialRecordHandler);
 router.post('/records/:id/void', requireFinancialWrite, voidFinancialRecordHandler);
@@ -123,8 +103,6 @@ router.post('/records/:id/documents/:documentId/void', requireFinancialWrite, vo
 router.get('/periods', requireFinancialAccess, listFinancialPeriodsHandler);
 router.post('/periods/close', requireFinancialApproval, closeFinancialPeriodHandler);
 router.post('/periods/reopen', requireFinancialAdmin, reopenFinancialPeriodHandler);
-router.get('/monthly-ledger', requireFinancialAccess, getFinancialMonthlyLedger);
-router.patch('/monthly-summaries/:id', requireFinancialWrite, updateFinancialMonthlySummary);
 router.get('/client-reconciliation', requireFinancialAccess, getFinancialClientReconciliation);
 router.get('/clients/:clientId/statement', requireFinancialAccess, getClientFinancialStatementHandler);
 // El estado de cuenta en PDF, a una fecha de corte (Rodny, 20 de octubre de 2026). Solo por la
@@ -195,14 +173,5 @@ router.get('/payroll-transactions/:id/payment-candidates', requireFinancialAcces
 router.post('/payroll-payments/:paymentId/split', requireFinancialApproval, splitPayrollPaymentHandler);
 router.post('/payroll-payments/:paymentId/reverse', requireFinancialApproval, reversePayrollPaymentHandler);
 router.patch('/payroll-payments/:paymentId', requireFinancialWrite, updatePayrollPaymentHandler);
-// Las cargas de Excel y de extractos reciben archivos pero no se hacen desde el chat (mapa: excluidas); se marcan igual
-// para que el mapa sepa que son archivos.
-router.post('/import/preview', requireFinancialApproval, receivesFiles(upload.single('file'), { field: 'file' }), previewFinancialImport);
-router.post('/import/commit', requireFinancialApproval, receivesFiles(upload.single('file'), { field: 'file' }), commitFinancialImport);
-router.get('/bank-reconciliation', requireFinancialAccess, getBankReconciliation);
-router.post('/bank-reconciliation/preview', requireFinancialApproval, receivesFiles(upload.single('file'), { field: 'file' }), previewBankStatement);
-router.post('/bank-reconciliation/import', requireFinancialApproval, receivesFiles(upload.single('file'), { field: 'file' }), importBankStatement);
-router.post('/bank-reconciliation/rebuild', requireFinancialApproval, rebuildBankReconciliation);
-router.post('/bank-reconciliation/matches/:id/approve', requireFinancialApproval, approveBankReconciliationMatch);
 
 export default router;

@@ -146,7 +146,7 @@ test('pagar crea el egreso en Movimientos ligado al pago, con la categoría de l
 });
 
 test('revertir un pago lo conserva como evidencia, anula su egreso y reabre la cuenta', async () => {
-    const payment = { id: 'pay-1', payableId: 'p1', amount: 1000000, paidAt: new Date('2026-10-10T12:00:00Z'), reversedAt: null, financialRecord: { id: 'rec-pay', status: 'POSTED', bankMatches: [] } };
+    const payment = { id: 'pay-1', payableId: 'p1', amount: 1000000, paidAt: new Date('2026-10-10T12:00:00Z'), reversedAt: null, financialRecord: { id: 'rec-pay', status: 'POSTED' } };
     const { calls, prisma } = buildTx({ payable: openPayable({ status: 'PAGADA', payments: [{ ...payment, reversedAt: new Date() }] }), payment });
     const result = await reversePayablePayment(prisma, 'pay-1', 'Se pagó a la cuenta equivocada', { id: 'u' });
     assert.ok(calls.find(([name]) => name === 'payment.update')[1].data.reversedAt instanceof Date);
@@ -156,8 +156,6 @@ test('revertir un pago lo conserva como evidencia, anula su egreso y reabre la c
     assert.equal(calls.find(([name]) => name === 'payable.update')[1].data.status, 'POR_PAGAR');
     assert.equal(result.payable.status, 'POR_PAGAR');
     await assert.rejects(reversePayablePayment(prisma, 'pay-1', '', { id: 'u' }), (error) => error.code === 'PAYABLE_REVERSAL_REASON_REQUIRED');
-    const reconciled = buildTx({ payment: { ...payment, financialRecord: { ...payment.financialRecord, bankMatches: [{ id: 'm' }] } } });
-    await assert.rejects(reversePayablePayment(reconciled.prisma, 'pay-1', 'x', { id: 'u' }), (error) => error.code === 'PAYABLE_PAYMENT_RECONCILED');
 });
 
 test('corregir no baja el valor de lo pagado; anular exige motivo y una cuenta sin pagos vigentes', async () => {

@@ -5,7 +5,7 @@ Plataforma interna de Brain Studio Agencia Creativa. Reúne en un solo lugar la 
 - **Gestión**: tablero Kanban de tareas, compromisos con hora, pendientes privados y reconocimientos del equipo.
 - **Parrillas**: planeación de contenido por cliente, portal público de aprobación y publicación en redes.
 - **Clientes**: directorio, ficha, enlaces y archivos; para administradores y PM, la operación del mes de cada cliente.
-- **Financiero**: movimientos, cartera, cuentas de cobro, nómina y conciliación.
+- **Financiero**: movimientos, cartera, cuentas de cobro, cuentas por pagar y nómina.
 - **CRM**: oportunidades comerciales, seguimientos y formulario público de solicitud.
 - **Minutas**: reuniones de Fireflies analizadas automáticamente y memoria de la agencia.
 - **Bria**: el asistente de IA que revisa parrillas, propone criterios editoriales y detecta señales en las minutas.

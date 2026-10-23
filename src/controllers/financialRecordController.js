@@ -27,7 +27,6 @@ import { createReceivable, deleteReceivable } from '../services/financialReceiva
 import { issueReceivableDocument, correctReceivableDocument } from '../services/receivableDocumentService.js';
 import { openReceivablePdf, RECEIVABLE_PDF_MIME } from '../services/receivablePdfService.js';
 import { fetchOfficialUsdCopRate } from '../services/exchangeRateService.js';
-import { auditFinancialIntegrity } from '../services/financialIntegrityAuditService.js';
 import { createFinancialAccount, listFinancialAccounts } from '../services/financialAccountService.js';
 import {
     approvePayrollTransaction,
@@ -492,18 +491,6 @@ export const streamReceivablePdfHandler = async (req, res, dependencies = {}) =>
         console.error('[Receivables API] PDF open failed:', error?.message || error);
         if (res.headersSent) return undefined;
         return respondWithError(res, error, 'RECEIVABLE_PDF_FAILED', 'No fue posible abrir la cuenta de cobro.');
-    }
-};
-
-export const getFinancialIntegrityAuditHandler = async (req, res, dependencies = {}) => {
-    const prismaClient = dependencies.prismaClient || prisma;
-    const auditIntegrity = dependencies.auditIntegrity || auditFinancialIntegrity;
-    try {
-        const audit = await auditIntegrity(prismaClient, req.query || {});
-        return res.json(audit);
-    } catch (error) {
-        console.error('[Financial integrity API] Audit failed:', error.response?.data || error);
-        return respondWithError(res, error, 'FINANCIAL_INTEGRITY_AUDIT_FAILED', 'No fue posible auditar la integridad financiera.');
     }
 };
 

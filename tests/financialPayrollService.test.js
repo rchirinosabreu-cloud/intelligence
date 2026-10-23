@@ -10,12 +10,6 @@ test('generatePayrollPeriod snapshots every active contract even without a platf
   let contractQuery;
   const tx = {
     financialPeriod: { findUnique: async () => ({ status: 'OPEN' }) },
-    financialImportBatch: {
-      findFirst: async (args) => {
-        assert.deepEqual(args.where, { year: 2026, status: 'IMPORTED' });
-        return { id: 'batch-current' };
-      }
-    },
     payrollContract: {
       findMany: async (args) => {
         contractQuery = args;
@@ -45,9 +39,8 @@ test('generatePayrollPeriod snapshots every active contract even without a platf
   assert.equal(calls[0].create.baseSalary, 3000000);
   assert.equal(calls[0].create.netAmount, 3000000);
   assert.equal(calls[0].create.status, 'DRAFT');
-  assert.deepEqual(contractQuery.where.AND[1], {
-    OR: [{ importBatchId: 'batch-current' }, { importBatchId: null }]
-  });
+  // Solo los contratos de la plataforma: los repetidos de las cargas del Excel nunca se liquidan.
+  assert.deepEqual(contractQuery.where.AND[1], { importBatchId: null });
 });
 
 test('payPayrollTransaction posts the payroll expense to the selected account atomically', async () => {

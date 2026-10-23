@@ -24,11 +24,12 @@ test('financial dashboard exposes the operational ledger as a primary tab', () =
     assert.match(filtersSource, /type="search" aria-label="Buscar en financiero"/);
     assert.doesNotMatch(dashboardSource, /setPayrollMonth/);
     assert.match(dashboardSource, /const payrollMonth = Number\(filters\.month\)/);
-    assert.match(dashboardSource, /actualThroughMonth/);
-    assert.match(dashboardSource, /Mes ejecutado hasta/);
     assert.match(dashboardSource, /canApproveFinancials/);
-    assert.match(dashboardSource, /Preparación para operar sin Excel/);
-    assert.match(dashboardSource, /\/integrity\?year=/);
+    // Rodny, 23 de octubre de 2026: «ya estoy 100 % en la plataforma». Ni carga de Excel ni
+    // conciliación de extractos: lo que se registra en la plataforma es la fuente.
+    assert.doesNotMatch(dashboardSource, /Auditar archivo|Auditoría 2026|Mes ejecutado hasta|Preparación para operar sin Excel/);
+    assert.doesNotMatch(dashboardSource, /\/integrity\?year=|\/import\/(preview|commit)|monthly-ledger/);
+    assert.doesNotMatch(dashboardSource, /BankReconciliationPanel|setActiveTab\('editor'\)|setActiveTab\('import'\)/);
 });
 
 test('financial ledger uses canonical record endpoints and server-confirmed mutations', () => {

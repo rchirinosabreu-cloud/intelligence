@@ -23,10 +23,10 @@ test('el pago de nómina manda a Nómina', () => {
     assert.doesNotMatch(reason, /Cartera/);
 });
 
-test('una conciliación aprobada dice que hay que deshacerla primero', () => {
-    const reason = financialRecordLockReason({ bankMatches: [{ id: 'match-1', status: 'APPROVED' }], origin: 'MANUAL' });
-    assert.match(reason, /conciliación bancaria aprobada/);
-    assert.match(reason, /deshacer esa conciliación/);
+// La conciliación bancaria se retiró (Rodny, 23 de octubre de 2026): un cruce que quedó en la base
+// ya no congela el movimiento.
+test('un cruce bancario antiguo ya no bloquea un movimiento hecho a mano', () => {
+    assert.equal(financialRecordLockReason({ bankMatches: [{ id: 'match-1', status: 'APPROVED' }], origin: 'MANUAL' }), null);
 });
 
 test('el origen del sistema sin vínculo conocido no deja a nadie sin explicación', () => {
@@ -43,7 +43,7 @@ test('un movimiento normal no está bloqueado', () => {
 test('el servidor rechaza con ese mismo motivo, no con uno genérico', async () => {
     const record = {
         id: 'record-1', origin: 'SYSTEM', status: 'POSTED', year: 2026, month: 9,
-        receivablePayment: { id: 'payment-1' }, payrollTransaction: null, bankMatches: []
+        receivablePayment: { id: 'payment-1' }, payrollTransaction: null
     };
     const prismaClient = {
         $transaction: async (callback) => callback({
