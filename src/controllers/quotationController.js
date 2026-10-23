@@ -27,6 +27,7 @@ import {
 } from '../services/quotationDomainService.js';
 import { fetchOfficialUsdCopRate } from '../services/exchangeRateService.js';
 import { syncLeadStageFromQuotation } from '../services/quotationDraftService.js';
+import { linkQuotationParty, readQuotationParty } from '../services/quotationPartyService.js';
 
 // A quotation born from the CRM moves its opportunity forward; a CRM hiccup never undoes the quotation itself.
 const syncLeadStage = async (quotation, event) => {
@@ -34,6 +35,18 @@ const syncLeadStage = async (quotation, event) => {
         await syncLeadStageFromQuotation(prisma, quotation, event);
     } catch (error) {
         console.error(`[QuotationController] CRM stage sync (${event}) failed:`, error?.message || error);
+    }
+};
+
+// Toda cotización queda ligada a su tercero: el cliente que ya existe o su ficha de cliente potencial en el CRM.
+// Un fallo aquí se anota y la cotización queda guardada: el siguiente guardado vuelve a intentarlo.
+const linkParty = async (quotation, actor) => {
+    try {
+        const { party } = await linkQuotationParty(prisma, quotation, actor);
+        return party;
+    } catch (error) {
+        console.error('[QuotationController] Tercero de la cotización no ligado:', error?.message || error);
+        return null;
     }
 };
 import {
@@ -203,9 +216,12 @@ export const createQuotation = async (req, res) => {
 
         // Format for response if needed
         const formattedConsecutive = `COT-${String(quotation.consecutive).padStart(4, '0')}`;
+        const party = await linkParty(quotation, req.user);
 
         res.status(201).json({
             ...quotation,
+            ...(party ? { lead_id: party.leadId } : {}),
+            party,
             consecutive_formatted: formattedConsecutive
         });
     } catch (error) {
@@ -323,10 +339,14 @@ export const updateQuotation = async (req, res) => {
             }
         });
 
-        if (existing.status === 'BORRADOR' && targetStatus === 'ACTIVA') await syncLeadStage(quotation, 'ISSUED');
+        // Ligar antes de mover la etapa: una propuesta que se emite por primera vez también avanza su oportunidad.
+        const party = await linkParty(quotation, req.user);
+        if (existing.status === 'BORRADOR' && targetStatus === 'ACTIVA') await syncLeadStage({ ...quotation, lead_id: party?.leadId || quotation.lead_id }, 'ISSUED');
 
         res.json({
             ...quotation,
+            ...(party ? { lead_id: party.leadId } : {}),
+            party,
             consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`
         });
 
@@ -383,7 +403,10 @@ export const acceptPublicQuotation = async (req, res) => {
             scenarioId,
             expectedUpdatedAt
         });
-        if (!alreadyAccepted) await syncLeadStage(quotation, 'ACCEPTED');
+        if (!alreadyAccepted) {
+            const party = await linkParty(quotation, null);
+            await syncLeadStage({ ...quotation, lead_id: party?.leadId || quotation.lead_id }, 'ACCEPTED');
+        }
         const publicQuotation = serializePublicQuotation(quotation);
         const emisor_data = EMISORES_DATA[quotation.emisor_type] || {};
 
@@ -433,9 +456,14 @@ export const getQuotation = async (req, res) => {
             return res.status(404).json({ error: "Cotización no encontrada" });
         }
         const normalizedQuotation = normalizeQuotationTaxForCurrency(quotation);
+        const party = await readQuotationParty(prisma, quotation.lead_id).catch((partyError) => {
+            console.error('[QuotationController] Tercero de la cotización no leído:', partyError?.message || partyError);
+            return null;
+        });
 
         res.json({
             ...normalizedQuotation,
+            party,
             consecutive_formatted: `COT-${String(quotation.consecutive).padStart(4, '0')}`,
             isExpired: quotation.status === 'ACTIVA' && new Date() > quotation.expires_at,
             profitability: calculateQuotationEconomics(quotation.items || [], {

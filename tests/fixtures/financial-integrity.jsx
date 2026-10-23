@@ -107,6 +107,7 @@ let loans = [];
 // Terceros y cuentas por pagar (20 de octubre de 2026): un arrendador con el arriendo de octubre vencido.
 let thirdParties = [{ id: 'tp-arrendador', kind: 'ARRENDADOR', name: 'Inmobiliaria Norte', legalName: null, documentType: 'NIT', documentNumber: '900123456', bankName: 'Bancolombia', bankAccountType: 'AHORROS', bankAccountNumber: '123-456', isActive: true }];
 let payables = [{ id: 'payable-arriendo', thirdPartyId: 'tp-arrendador', concept: 'Arriendo de octubre', category: 'ADMINISTRATIVO', amount: 1500000, receivedAt: '2026-10-01T12:00:00Z', dueDate: '2026-10-05T12:00:00Z', documentNumber: 'F-2026-10', notes: null, status: 'POR_PAGAR', payments: [], documents: [] }];
+let prospectClientId = null;
 const createdReceivables = window.__createdReceivables = [];
 const deletedReceivables = window.__deletedReceivables = [];
 axios.defaults.adapter = async config => {
@@ -300,6 +301,20 @@ axios.defaults.adapter = async config => {
     };
     records = records.map(record => record.id === target.financialRecord?.id ? { ...record, status: 'VOIDED' } : record);
     data = { message: 'Abono revertido. El ingreso que había generado quedó anulado.', outstanding: debt.outstanding };
+  }
+  // Lo comercial de los terceros (23 de octubre de 2026): un cliente potencial con su cotización enviada
+  // y las cotizaciones del cliente de muestra. Unir el potencial a una ficha lo pasa a cliente.
+  else if (path === '/api/financials/parties/commercial') {
+    const clientQuotations = [{ id: 'q-demo-2', code: 'COT-0038', status: 'APROBADA', total: 2400000, currency: 'COP', createdAt: '2026-08-02T15:00:00Z', acceptedAt: '2026-08-05T15:00:00Z' }];
+    const prospectQuotations = [{ id: 'q-cafe-1', code: 'COT-0042', status: 'ACTIVA', total: 3200000, currency: 'COP', createdAt: '2026-10-15T15:00:00Z', acceptedAt: null }];
+    data = {
+      prospects: prospectClientId ? [] : [{ id: 'lead-cafe', code: 'CRM-0187', company: 'Café Altura', contactName: 'Laura Gómez', email: 'laura@cafealtura.co', phone: '+57 300 555 1234', stage: 'PROPUESTA_ENVIADA', owner: { id: 'tm-franci', name: 'Francisco Villa' }, quotations: prospectQuotations }],
+      quotationsByClient: { [client.id]: clientQuotations, ...(prospectClientId ? { [prospectClientId]: prospectQuotations } : {}) }
+    };
+  } else if (path === '/api/financials/parties/prospects/lead-cafe/client' && config.method === 'post') {
+    prospectClientId = body.clientId;
+    window.__prospectLinkBody = body;
+    data = { message: 'El cliente potencial quedó unido a su ficha de cliente, con sus cotizaciones.', leadId: 'lead-cafe', clientId: body.clientId };
   }
   // Terceros y cuentas por pagar (20 de octubre de 2026), con las reglas del servidor en memoria.
   else if (path.endsWith('/third-parties') && config.method === 'get') data = { thirdParties };

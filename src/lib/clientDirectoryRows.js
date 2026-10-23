@@ -54,7 +54,7 @@ export const isClientDirectoryRowOpen = (row, expanded) => {
 export const filterClientDirectoryRows = (rows = [], search = '') => {
     const needle = normalizeText(String(search).trim());
     if (!needle) return rows;
-    return rows.filter((row) => [row.name, ...SEARCH_FIELDS.map((field) => row.profile?.[field]), ...THIRD_PARTY_SEARCH_FIELDS.map((field) => row.thirdParty?.[field])]
+    return rows.filter((row) => [row.name, ...SEARCH_FIELDS.map((field) => row.profile?.[field]), ...THIRD_PARTY_SEARCH_FIELDS.map((field) => row.thirdParty?.[field]), row.prospect?.contactName, row.prospect?.email, row.prospect?.phone]
         .some((value) => normalizeText(value).includes(needle)));
 };
 
@@ -67,6 +67,8 @@ const THIRD_PARTY_SEARCH_FIELDS = ['name', 'legalName', 'documentNumber', 'email
 
 export const PARTY_ROLES = Object.freeze([
     { value: 'CLIENTE', label: 'Cliente' },
+    // Quien recibió una cotización y todavía no tiene ficha de cliente (punto 1 de la solicitud de Elisa).
+    { value: 'CLIENTE_POTENCIAL', label: 'Cliente potencial' },
     { value: 'PROVEEDOR', label: 'Proveedor' },
     { value: 'COLABORADOR', label: 'Colaborador' },
     { value: 'ARRENDADOR', label: 'Arrendador' },
@@ -77,9 +79,19 @@ export const partyRoleLabel = (value) => PARTY_ROLES.find((role) => role.value =
 
 const documentKey = (value) => String(value || '').toUpperCase().replace(/[^0-9A-Z]/g, '') || null;
 
-export const buildPartyRows = (clientRows = [], thirdParties = []) => {
+// Las etapas del CRM en que una oportunidad ya no sigue: un cliente potencial perdido queda inactivo.
+const CLOSED_PROSPECT_STAGES = new Set(['PERDIDO', 'DESCARTADO']);
+
+/**
+ * `commercial` es lo que entrega /financials/parties/commercial: los clientes potenciales (una fila cada uno)
+ * y las cotizaciones de cada cliente, que se cuelgan de su fila.
+ */
+export const buildPartyRows = (clientRows = [], thirdParties = [], commercial = {}) => {
+    const quotationsByClient = commercial?.quotationsByClient || {};
     const rows = clientRows.map((row) => ({
         ...row,
+        quotations: (row.clientId && quotationsByClient[row.clientId]) || [],
+        prospect: null,
         thirdParty: null,
         roles: row.clientId ? ['CLIENTE'] : [],
         // Una etiqueta del Excel sin ficha: se vincula, no es un tercero todavía.
@@ -95,13 +107,28 @@ export const buildPartyRows = (clientRows = [], thirdParties = []) => {
             match.roles = [...match.roles, thirdParty.kind];
             continue;
         }
-        rows.push({ sourceId: `tercero:${thirdParty.id}`, clientId: null, name: thirdParty.name, slug: null, profile: null, income: 0, receivable: 0, recordCount: 0, thirdParty, roles: [thirdParty.kind], unlinked: false });
+        rows.push({ sourceId: `tercero:${thirdParty.id}`, clientId: null, name: thirdParty.name, slug: null, profile: null, income: 0, receivable: 0, recordCount: 0, quotations: [], prospect: null, thirdParty, roles: [thirdParty.kind], unlinked: false });
+    }
+    for (const prospect of commercial?.prospects || []) {
+        rows.push({
+            sourceId: `prospecto:${prospect.id}`, clientId: null, name: prospect.company || prospect.contactName || prospect.email || 'Sin nombre',
+            slug: null, profile: null, income: 0, receivable: 0, recordCount: 0, quotations: prospect.quotations || [],
+            prospect, thirdParty: null, roles: ['CLIENTE_POTENCIAL'], unlinked: false
+        });
     }
     return rows;
 };
 
-/** Activo si el cliente no está archivado o, si solo se le paga, si su ficha de pago está activa. */
-export const isPartyActive = (row) => (row.clientId ? !row.profile?.isArchived : row.thirdParty ? row.thirdParty.isActive !== false : true);
+/**
+ * Activo si el cliente no está archivado; si solo se le paga, si su ficha de pago está activa; si es un
+ * cliente potencial, mientras su oportunidad siga en la ruta comercial.
+ */
+export const isPartyActive = (row) => {
+    if (row.clientId) return !row.profile?.isArchived;
+    if (row.thirdParty) return row.thirdParty.isActive !== false;
+    if (row.prospect) return !CLOSED_PROSPECT_STAGES.has(row.prospect.stage);
+    return true;
+};
 
 export const partyDocument = (row) => {
     const source = row.profile?.documentNumber ? row.profile : row.thirdParty?.documentNumber ? row.thirdParty : null;
@@ -109,8 +136,8 @@ export const partyDocument = (row) => {
 };
 
 export const partyContact = (row) => {
-    const phone = row.profile?.phone || row.thirdParty?.phone;
-    const email = row.profile?.email || row.thirdParty?.email;
+    const phone = row.profile?.phone || row.thirdParty?.phone || row.prospect?.phone;
+    const email = row.profile?.email || row.thirdParty?.email || row.prospect?.email;
     return [phone, email].filter(Boolean).join(' · ') || null;
 };
 
@@ -121,6 +148,7 @@ export const summarizeParties = (rows = []) => {
     return {
         total: real.length,
         clients: withRole('CLIENTE'),
+        prospects: withRole('CLIENTE_POTENCIAL'),
         suppliers: withRole('PROVEEDOR'),
         team: withRole('COLABORADOR'),
         others: real.filter((row) => row.roles.some((role) => ['ARRENDADOR', 'SOCIO', 'OTRO'].includes(role))).length,

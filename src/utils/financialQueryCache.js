@@ -9,5 +9,7 @@ export const invalidateFinancialQueries = (queryClient) => Promise.all([
   // Ajustes de cartera y egresos de préstamo disponibles (20 de octubre de 2026).
   'financial-receivable-adjustments', 'financial-loan-candidates',
   // Terceros y cuentas por pagar (20 de octubre de 2026).
-  'financial-payables-ledger', 'financial-third-parties'
+  'financial-payables-ledger', 'financial-third-parties',
+  // Clientes potenciales y cotizaciones de cada tercero (23 de octubre de 2026).
+  'financial-party-commercial'
 ].map(key => queryClient.invalidateQueries({ queryKey: [key] })));

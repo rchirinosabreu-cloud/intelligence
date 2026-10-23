@@ -12,9 +12,10 @@ import { changedClientProfile, clientProfileFrom, emptyClientProfile, normalizeC
  * crea. Valida antes de enviar con la misma regla del servidor, y solo cierra y avisa
  * después de que el servidor confirma.
  */
-export default function ClientProfileDialog({ client, initialName = '', open, onClose, onSaved }) {
+export default function ClientProfileDialog({ client, initialName = '', initialProfile = null, open, onClose, onSaved }) {
     const editing = Boolean(client?.id);
-    const [draft, setDraft] = useState(() => (editing ? clientProfileFrom(client) : { ...emptyClientProfile(), name: initialName }));
+    // `initialProfile`: lo que ya se sabe del tercero (un cliente potencial trae su contacto), para no volver a escribirlo.
+    const [draft, setDraft] = useState(() => (editing ? clientProfileFrom(client) : { ...emptyClientProfile(), ...(initialProfile || {}), name: initialName }));
     const [errors, setErrors] = useState({});
     const [serverError, setServerError] = useState('');
     const [saving, setSaving] = useState(false);

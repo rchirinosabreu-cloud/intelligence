@@ -208,7 +208,9 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
             </div>}
 
       {dialog?.kind === 'third-party' && <ThirdPartyDialog open thirdParty={dialog.thirdParty} saving={saving} error={error}
-        onClose={() => (dialog.returnTo === 'payable' ? setDialog({ kind: 'payable' }) : close())}
+        // Cancelar, la X o Escape cierran todo y dejan a la persona donde estaba (Rodny, 23 de octubre de 2026);
+        // solo guardar vuelve a la cuenta por pagar, con el tercero nuevo ya elegido.
+        onClose={close}
         onSubmit={saveThirdParty} />}
       {dialog?.kind === 'payable' && <PayableDialog key={dialog.payable?.id || dialog.defaultThirdPartyId || 'new'} open payable={dialog.payable || null} thirdParties={thirdParties} defaultThirdPartyId={dialog.defaultThirdPartyId || ''} saving={saving} error={error} onClose={close} onSubmit={savePayable}
         onNewThirdParty={() => setDialog({ kind: 'third-party', thirdParty: null, returnTo: 'payable' })} />}

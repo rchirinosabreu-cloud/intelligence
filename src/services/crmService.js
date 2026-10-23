@@ -7,6 +7,7 @@ import {
 } from '../lib/crmRules.js';
 import { assertActiveTeamMembers } from './teamRosterService.js';
 import { parseAmountText } from '../lib/amountInput.js';
+import { partyNameKey } from '../lib/quotationParty.js';
 
 export class CrmValidationError extends Error {
   constructor(message) {
@@ -26,11 +27,8 @@ const text = value => {
   return trimmed ? trimmed : null;
 };
 
-/** Company names written slightly differently still group together. */
-export const normalizeCompanyKey = value => {
-  const key = text(value)?.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[.'’]/g, '').replace(/[^a-z0-9]+/g, ' ').trim();
-  return key || null;
-};
+/** Company names written slightly differently still group together. The rule lives once, in quotationParty.js. */
+export const normalizeCompanyKey = partyNameKey;
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 

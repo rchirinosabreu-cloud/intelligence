@@ -44,6 +44,8 @@ const QuotationForm = () => {
     const [isSaving, setIsSaving] = useState(false);
     // La cotización que este formulario creó en su primer guardado: desde ahí se actualiza.
     const [savedQuotationId, setSavedQuotationId] = useState(null);
+    // El tercero de la cotización: el cliente que ya existe o su ficha de cliente potencial (lo decide el servidor).
+    const [party, setParty] = useState(null);
     const savingRef = useRef(false);
     const [generatedLink, setGeneratedLink] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
@@ -96,6 +98,7 @@ const QuotationForm = () => {
             setExchangeRateDate(data.exchange_rate_date || null);
             setContractTermsText(data.terms_and_conditions || '');
             setProposalDetails(data.proposal_details || null);
+            setParty(data.party || null);
 
             // Robust parsing for items to prevent crash
             let parsedItems = [];
@@ -428,6 +431,7 @@ const QuotationForm = () => {
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || "Error al guardar la cotización");
             if (!wasExisting && data.id) setSavedQuotationId(data.id);
+            if (data.party) setParty(data.party);
 
             const shouldShare = targetStatus === 'ACTIVA';
             if (shouldShare) {
@@ -648,6 +652,18 @@ const QuotationForm = () => {
                                     />
                                 </div>
                             </div>
+
+                            {/* A quién quedó ligada: el cliente que ya existía o su ficha de cliente potencial, sin duplicar datos. */}
+                            <p className="text-xs leading-5 text-zinc-500" data-quotation-party={party?.kind || 'NONE'}>
+                                {party ? (
+                                    <>
+                                        {party.kind === 'CLIENTE' ? 'Ligada a la ficha del cliente ' : 'Cliente potencial: '}
+                                        <span className="font-semibold text-zinc-800 dark:text-zinc-100">{party.name}</span>
+                                        {' · '}
+                                        <a href={`/crm/oportunidades/${party.leadId}`} className="font-medium text-primary underline-offset-2 hover:underline">{party.leadCode} en el CRM</a>
+                                    </>
+                                ) : 'Al guardar, la cotización se liga con su cliente si ya existe; si no, queda como cliente potencial en el CRM y en Terceros.'}
+                            </p>
 
                             <div className="space-y-3 border-t border-zinc-100 pt-6 dark:border-zinc-800">
                                 <div className="flex flex-wrap items-center justify-between gap-3">

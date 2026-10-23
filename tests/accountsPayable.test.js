@@ -240,3 +240,10 @@ test('la pantalla: pestaña «Por pagar», terceros, cuenta nueva, pago con comp
     assert.match(read('../src/components/modules/financial/PayableDialog.jsx'), /payableProblem\(/);
     assert.match(read('../src/components/modules/financial/PayablePaymentDialog.jsx'), /MoneyInput/);
 });
+
+// Rodny, 23 de octubre de 2026: cancelar «Nuevo tercero» desde la cuenta por pagar volvía a la cuenta; debe cerrarse todo.
+test('cancelling a new third party from the payable form closes everything', () => {
+    const tab = fs.readFileSync(new URL('../src/components/modules/financial/PayablesTab.jsx', import.meta.url), 'utf8');
+    assert.match(tab, /<ThirdPartyDialog open thirdParty=\{dialog\.thirdParty\}[\s\S]*?onClose=\{close\}/);
+    assert.doesNotMatch(tab, /returnTo === 'payable' \? setDialog\(\{ kind: 'payable' \}\)/);
+});
