@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import axios from 'axios';
 import { AuthProvider } from '../../src/context/AuthContext';
 import FinancialDashboard from '../../src/components/modules/FinancialDashboard';
+import { buildClientProfitability } from '../../src/lib/clientProfitability.js';
 import '../../src/index.css';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -124,6 +125,19 @@ axios.defaults.adapter = async config => {
     const loanRepayments = scoped.filter(record => record.type === 'INCOME' && record.category === 'PRESTAMO').reduce((sum, record) => sum + Number(record.amount), 0);
     const receivable = debt.outstanding + loans.reduce((sum, loan) => sum + loan.outstanding, 0);
     data = { cashFlow: [{ year: 2026, month: 9, income: scopedIncome, expense: scopedExpense, netFlow: scopedIncome - scopedExpense }], categoriesDistribution: { INCOME: { SERVICIO: scopedIncome }, EXPENSE: { OPERATIVO: scopedExpense } }, accountsReceivable: debt.outstanding > 0 ? [{ client, clientId: client.id, totalOutstanding: debt.outstanding }] : [], payroll: { collaborators: [] }, sourceSummary: { totals: { income: scopedIncome, expense: scopedExpense, netFlow: scopedIncome - scopedExpense, receivable, loanRepayments } } };
+  }
+  // Rentabilidad por cliente (22 de octubre de 2026): la cuenta real (`buildClientProfitability`) con un mes inventado.
+  else if (path === '/api/client-profitability') {
+    const month = Number(url.searchParams.get('month') || 9), year = Number(url.searchParams.get('year') || 2026);
+    const work = (clientId, total) => Array.from({ length: total / 2 }, () => ({ clientId, ms: 2 * 3_600_000 }));
+    data = buildClientProfitability({
+      year, month,
+      clients: [{ id: 'c-aristea', name: 'Aristea' }, { id: 'c-endova', name: 'Endova' }, { id: 'c-wine', name: 'Wine & Wonder' }, { id: 'c-nuva', name: 'Nuva' }],
+      receivables: [{ clientId: 'c-aristea', amount: 4_500_000 }, { clientId: 'c-endova', amount: 1_800_000 }, { clientId: 'c-wine', amount: 6_000_000 }],
+      expenses: [{ amount: 14_000_000 }, { amount: 2_100_000 }, { amount: 600_000, clientId: 'c-endova' }],
+      sessions: [...work('c-aristea', 36), ...work('c-endova', 34), ...work('c-wine', 40), ...work('c-nuva', 8), ...work(null, 42)],
+      closedTasks: [...Array(12).fill({ clientId: 'c-aristea', measuredMs: 3_600_000 }), ...Array(3).fill({ clientId: 'c-endova', measuredMs: 0 }), { clientId: 'c-endova', measuredMs: 3_600_000 }, ...Array(10).fill({ clientId: 'c-wine', measuredMs: 3_600_000 })]
+    });
   }
   else if (path === '/api/financials/clients' && config.method === 'get') data = { clients: directoryClients };
   else if (path === '/api/financials/clients' && config.method === 'post') {

@@ -46,4 +46,6 @@
 // 2.19 (22 de octubre de 2026): un archivo del chat o de WhatsApp se guarda en la pantalla que lo recibe (comprobante,
 // soporte, certificado, pieza final, portada, adjunto de una tarea) cuando la persona lo confirma; bajar o borrar
 // archivos sigue fuera del chat.
-export const PRIVACY_POLICY_VERSION = '2.19 · 2026-10-22';
+// 2.20 (22 de octubre de 2026): la rentabilidad por cliente, solo para administradores, con un costo hora de la
+// agencia; la nómina entra sumada con los demás gastos, nunca por persona.
+export const PRIVACY_POLICY_VERSION = '2.20 · 2026-10-22';
