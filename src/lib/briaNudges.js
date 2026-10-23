@@ -46,8 +46,18 @@ export const formatIdle = (ms) => {
 };
 const list = (titles) => titles.slice(0, 3).map((title) => `«${title}»`).join(', ') + (titles.length > 3 ? ` y ${titles.length - 3} más` : '');
 
-/** El tablero de Gestión filtrado por una persona (el filtro de responsable va por nombre). */
-export const personBoardUrl = (personName) => `/gestion?responsable=${encodeURIComponent(String(personName || '').trim())}`;
+/**
+ * El tablero de Gestión filtrado por una persona (el filtro de responsable va por nombre). Sin tildes y con «+» en vez
+ * de espacios (Rodny, 23 de octubre de 2026: por WhatsApp salía «Helen%20Hern%C3%A1ndez»); Gestión lo reconoce igual.
+ */
+export const personBoardUrl = (personName) => {
+  const plain = String(personName || '').trim().normalize('NFD').replace(/\p{M}/gu, '');
+  return `/gestion?responsable=${encodeURIComponent(plain).replace(/%20/g, '+')}`;
+};
+
+// Los textos de las acciones caben enteros en una opción de WhatsApp (24 caracteres; Rodny, 23 de octubre de 2026: la
+// opción salía cortada y repetida debajo). La tarjeta de la plataforma usa los mismos.
+const clientChoice = (verb, clientName) => (clientName && `${verb} ${clientName}`.length <= 24 ? `${verb} ${clientName}` : `${verb} al cliente`);
 
 /**
  * Las acciones de un aviso según su tipo (Rodny, 10 de octubre de 2026: «¿cuál sería la lógica de ir al kanban en un
@@ -56,22 +66,22 @@ export const personBoardUrl = (personName) => `/gestion?responsable=${encodeURIC
  */
 export const nudgeActions = ({ kind, personName = null, clientName = null, title = null, day = null, url = null, taskIds = [], conversationId = null, messageId = null } = {}) => {
   const name = firstName(personName);
-  const summary = { label: 'Que Bria me resuma lo que tiene', ask: `Resúmeme qué tiene pendiente ${name} hoy y qué le vence pronto.` };
+  const summary = { label: 'Resumir sus pendientes', ask: `Resúmeme qué tiene pendiente ${name} hoy y qué le vence pronto.` };
   switch (kind) {
     // Correo importante (11 de octubre de 2026). Sin enlace al correo (Rodny: «no siempre la plataforma está abierta
     // desde el navegador de social o de contacto, entonces el link no llevaría a ese correo»): lo que importa es el
     // aviso, que ya lo pone en el radar. Bria sí puede resumirlo, porque lo lee por IMAP y no por el navegador; propone
     // la respuesta y la persona la envía desde su correo. Bria nunca manda correos.
-    case 'CORREO_IMPORTANTE': return [{ label: 'Que Bria me lo resuma y proponga respuesta', ask: `Resume el correo «${title || 'sin asunto'}»${personName ? ` de ${personName}` : ''}${clientName ? ` (${clientName})` : ''} (id ${messageId || 'desconocido'}) y propón una respuesta breve y amable que yo pueda enviar.` }];
+    case 'CORREO_IMPORTANTE': return [{ label: 'Resumir y responder', ask: `Resume el correo «${title || 'sin asunto'}»${personName ? ` de ${personName}` : ''}${clientName ? ` (${clientName})` : ''} (id ${messageId || 'desconocido'}) y propón una respuesta breve y amable que yo pueda enviar.` }];
     case 'SIN_PROCESO': return [{ label: 'Ver sus pendientes', to: personBoardUrl(personName) }, summary];
     case 'VENCE_HOY': return [taskIds.length === 1 && url ? { label: 'Abrir la tarea', to: url } : { label: 'Ver sus pendientes', to: personBoardUrl(personName) }, summary];
-    case 'CARGA_MANANA': return [{ label: 'Abrir el mapa de carga', to: '/manager?tab=ritmo' }, { label: 'Pedirle a Bria qué se mueve', ask: `Revisa la carga de ${personName || name} para ${day ? `el ${day}` : 'mañana'} y propón qué tarea se mueve o se reparte.` }];
-    case 'ENTREGA_EN_RIESGO': return [{ label: 'Abrir la tarea', to: url }, { label: 'Revisar alternativas con Bria', ask: `Revisa el margen de entrega de «${title || 'esta tarea'}» de ${personName || name}, considerando cliente, complejidad y compromisos anteriores. Propón qué mover o repartir, con la evidencia disponible.` }];
-    case 'OPERACION_ROJA': return [{ label: 'Abrir operación', to: url }, { label: 'Pedirle a Bria qué falta', ask: `¿Qué le falta a ${clientName || 'este cliente'} para salir del rojo en Operación este mes?` }];
-    case 'PIEZA_SIN_APROBAR': return [{ label: 'Abrir la pieza', to: url }, { label: 'Redactar recordatorio al cliente', ask: `Redáctame un recordatorio por WhatsApp para ${clientName || 'el cliente'}: «${title || 'la pieza'}» sale ${day ? `el ${day}` : 'pronto'} y todavía falta su aprobación. Incluye el enlace del portal.` }];
+    case 'CARGA_MANANA': return [{ label: 'Abrir el mapa de carga', to: '/manager?tab=ritmo' }, { label: 'Qué se puede mover', ask: `Revisa la carga de ${personName || name} para ${day ? `el ${day}` : 'mañana'} y propón qué tarea se mueve o se reparte.` }];
+    case 'ENTREGA_EN_RIESGO': return [{ label: 'Abrir la tarea', to: url }, { label: 'Ver alternativas', ask: `Revisa el margen de entrega de «${title || 'esta tarea'}» de ${personName || name}, considerando cliente, complejidad y compromisos anteriores. Propón qué mover o repartir, con la evidencia disponible.` }];
+    case 'OPERACION_ROJA': return [{ label: 'Abrir operación', to: url }, { label: 'Qué le falta', ask: `¿Qué le falta a ${clientName || 'este cliente'} para salir del rojo en Operación este mes?` }];
+    case 'PIEZA_SIN_APROBAR': return [{ label: 'Abrir la pieza', to: url }, { label: 'Recordarle al cliente', ask: `Redáctame un recordatorio por WhatsApp para ${clientName || 'el cliente'}: «${title || 'la pieza'}» sale ${day ? `el ${day}` : 'pronto'} y todavía falta su aprobación. Incluye el enlace del portal.` }];
     // Varias piezas del mismo cliente esperando su aprobación esta semana (19 de octubre de 2026): una oferta de escribirle.
-    case 'APROBACIONES_PENDIENTES': return [{ label: 'Abrir la parrilla', to: url }, { label: `Escribirle a ${clientName || 'el cliente'}`, ask: `Redáctame un mensaje por WhatsApp para ${clientName || 'el cliente'} para que apruebe lo que tiene pendiente, con el enlace del portal.` }];
-    case 'DEVUELTO_SIN_TOCAR': return [{ label: 'Abrir la tarea', to: url }, { label: 'Ver qué pidió el cliente', ask: `Cuéntame qué pidió corregir el cliente en «${title || 'esa tarea'}» y qué falta para cerrarla.` }];
+    case 'APROBACIONES_PENDIENTES': return [{ label: 'Abrir la parrilla', to: url }, { label: clientChoice('Escribirle a', clientName), ask: `Redáctame un mensaje por WhatsApp para ${clientName || 'el cliente'} para que apruebe lo que tiene pendiente, con el enlace del portal.` }];
+    case 'DEVUELTO_SIN_TOCAR': return [{ label: 'Abrir la tarea', to: url }, { label: 'Qué pidió el cliente', ask: `Cuéntame qué pidió corregir el cliente en «${title || 'esa tarea'}» y qué falta para cerrarla.` }];
     case 'FOCO_SEMANAL': case 'CIERRE_DIA': case 'LECTURA_DIA': return conversationId ? [{ label: 'Leer en Bria', conversationId }] : [];
     default: return url ? [{ label: 'Abrir', to: url }] : [];
   }

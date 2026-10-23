@@ -9,6 +9,7 @@
 import { isBusinessDay } from './colombiaBusinessDays.js';
 import { expectedPublished } from './clientOperations.js';
 import { formatHours } from './teamLoad.js';
+import { personBoardUrl } from './briaNudges.js';
 
 const H = 3_600_000;
 const DAY = 86_400_000;
@@ -25,7 +26,8 @@ const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
 const hours = (ms) => formatHours(Math.round(ms / H) * H);
 const median = (values) => { const sorted = [...values].sort((a, b) => a - b); const mid = Math.floor(sorted.length / 2); return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2; };
 const clientUrl = (slug) => (slug ? `/clientes/operacion/${encodeURIComponent(slug)}` : '/clientes?tab=operacion');
-const personUrl = (name) => `/gestion?responsable=${encodeURIComponent(String(name || '').trim())}`;
+// El mismo enlace que los avisos de Bria: sin tildes ni %20, para que se lea limpio también por WhatsApp.
+const personUrl = personBoardUrl;
 
 /** La foto de una cuenta: lo que ya calcula Operación de clientes, más lo que solo se sabe mirando el día. */
 export const clientSnapshot = (operation, extra = {}) => {

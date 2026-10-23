@@ -40,11 +40,15 @@ export const collaboratorMoveProblem = ({ currentStatus, payload }) => {
 };
 
 /** El filtro por persona del tablero: la tarea es suya si es responsable o colaboradora. */
+// Sin tildes ni mayúsculas: el enlace de un aviso de Bria llega como «Helen Hernandez» (23 de octubre de 2026).
+const samePerson = (a, b) => String(a || '').normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase() === String(b || '').normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase();
 export const isTaskOfPerson = (task, personName) => {
     if (!personName || personName === 'Todos') return true;
-    if ((task?.assigneeName || 'Desconocido') === personName) return true;
-    return (task?.collaborators || []).some((collaborator) => collaborator?.name === personName);
+    if (samePerson(task?.assigneeName || 'Desconocido', personName)) return true;
+    return (task?.collaborators || []).some((collaborator) => samePerson(collaborator?.name, personName));
 };
+/** El nombre tal como lo tiene el tablero, para uno que llegó sin tildes por un enlace; o el mismo si no hay otro. */
+export const boardPersonName = (names, personName) => names.find((name) => name === personName) || names.find((name) => samePerson(name, personName)) || personName;
 
 /** Quién tiene su reloj corriendo ahora en la tarea, sin repetir. */
 export const workingMemberIds = (task) => [...new Set(

@@ -9,7 +9,7 @@ import { createBriaNudgeService } from '../src/services/briaNudgeService.js';
 
 const H = 3_600_000;
 const tuesday1030 = new Date('2026-10-13T15:30:00Z'); // martes 13 de octubre, 10:30 de Bogotá
-const nudges = [{ key: 'SIN_PROCESO:m-mel', kind: 'SIN_PROCESO', personId: 'm-mel', personName: 'Melissa Castaño', title: 'Melissa no tiene una tarea en proceso desde las 9:55.', body: 'Tiene 3 pendientes por empezar.', url: '/gestion?responsable=Melissa%20Casta%C3%B1o', taskIds: [] }, { key: 'FOCO_SEMANAL:x', kind: 'FOCO_SEMANAL', title: 'foco' }];
+const nudges = [{ key: 'SIN_PROCESO:m-mel', kind: 'SIN_PROCESO', personId: 'm-mel', personName: 'Melissa Castaño', title: 'Melissa no tiene una tarea en proceso desde las 9:55.', body: 'Tiene 3 pendientes por empezar.', url: '/gestion?responsable=Melissa+Castano', taskIds: [] }, { key: 'FOCO_SEMANAL:x', kind: 'FOCO_SEMANAL', title: 'foco' }];
 const load = { days: ['2026-10-13', '2026-10-14'], people: [{ personId: 'm-bra', personName: 'Brayan Torres', cells: [{ day: '2026-10-14', level: 'excedida', ms: 9 * H, count: 3, tasks: [{ id: 'o1' }, { id: 'o2' }] }] }] };
 load.forecast = { policy: 'ritmo-contexto-v2', people: [{ personId: 'm-bra', personName: 'Brayan Torres', tasks: ['o1','o2'].map(id => ({ id, dueDay: '2026-10-14', risk: 'riesgo', confidence: 'suficiente', queueComplete: true })) }] };
 const operations = [{ id: 'c1', name: 'Aristea', slug: 'aristea', evaluation: { level: 'red', reasons: [{ level: 'red', text: 'Van 2 publicadas; a esta fecha deberían ir 5.' }, { level: 'yellow', text: 'Falta el informe.' }] } }, { id: 'c2', name: 'Endova', slug: 'endova', evaluation: { level: 'yellow', reasons: [] } }];
@@ -58,15 +58,15 @@ test('facts come from what the platform already computes, most serious first, ea
   assert.match(facts[3].text, /Foobespain tiene 2 piezas esperando su aprobación esta semana; la primera, «Reel de vendimia», sale el miércoles 14 de octubre\./);
   assert.equal(facts[3].url, '/parrillas/p1');
   // Las acciones vienen con el hecho, según su tipo: a dónde ir y qué pedirle a Bria.
-  assert.deepEqual(facts[0].actions.map((a) => [a.label, a.to || null]), [['Abrir operación', '/clientes/operacion/aristea'], ['Pedirle a Bria qué falta', null]]);
+  assert.deepEqual(facts[0].actions.map((a) => [a.label, a.to || null]), [['Abrir operación', '/clientes/operacion/aristea'], ['Qué le falta', null]]);
   assert.match(facts[0].actions[1].ask, /Qué le falta a Aristea para salir del rojo/);
-  assert.deepEqual(facts[1].actions.map((a) => a.label), ['Abrir la tarea', 'Ver qué pidió el cliente']);
+  assert.deepEqual(facts[1].actions.map((a) => a.label), ['Abrir la tarea', 'Qué pidió el cliente']);
   assert.match(facts[1].actions[1].ask, /qué pidió corregir el cliente en «Portada»/);
-  assert.deepEqual(facts[2].actions.map((a) => a.label), ['Abrir el mapa de carga', 'Pedirle a Bria qué se mueve']);
+  assert.deepEqual(facts[2].actions.map((a) => a.label), ['Abrir el mapa de carga', 'Qué se puede mover']);
   assert.match(facts[2].actions[1].ask, /carga de Brayan Torres para el 14 de octubre/);
   assert.deepEqual(facts[3].actions.map((a) => a.label), ['Abrir la parrilla', 'Escribirle a Foobespain']);
   assert.match(facts[3].actions[1].ask, /para Foobespain para que apruebe lo que tiene pendiente, con el enlace del portal/);
-  assert.deepEqual(facts[4].actions.map((a) => [a.label, a.to || null]), [['Ver sus pendientes', '/gestion?responsable=Melissa%20Casta%C3%B1o'], ['Que Bria me resuma lo que tiene', null]]);
+  assert.deepEqual(facts[4].actions.map((a) => [a.label, a.to || null]), [['Ver sus pendientes', '/gestion?responsable=Melissa+Castano'], ['Resumir sus pendientes', null]]);
   assert.equal(facts[0].fingerprint, fingerprintOf(facts[0]));
   assert.notEqual(facts[0].fingerprint, fingerprintOf({ ...facts[0], text: 'otra cosa' }), 'a changed fact is a new fingerprint');
 });
@@ -116,7 +116,7 @@ test('validation keeps only real facts, drops judgments, respects the budget, an
   assert.deepEqual(out[0].kinds, ['OPERACION_ROJA', 'PIEZA_SIN_APROBAR']);
   assert.equal(out[0].url, '/clientes/operacion/aristea');
   assert.equal(out[0].source, 'MODELO');
-  assert.deepEqual(out[0].actions.map((a) => a.label), ['Abrir operación', 'Pedirle a Bria qué falta', 'Abrir la pieza'], 'the main fact’s actions plus the second fact’s link');
+  assert.deepEqual(out[0].actions.map((a) => a.label), ['Abrir operación', 'Qué le falta', 'Abrir la pieza'], 'the main fact’s actions plus the second fact’s link');
   assert.match(out[1].title, /35 minutos/, 'the judgment («lenta») was dropped, the factual one kept');
   assert.deepEqual(validatePulse({ speak: false, messages: [{ factIds: ['SIN_PROCESO:m-mel'], title: 'x', body: '', ask: null, urgency: 'alta' }] }, { facts, budget: 1 }), [], 'speak:false means silence');
   assert.deepEqual(validatePulse(raw, { facts, budget: 0 }), []);
@@ -166,7 +166,7 @@ test('lo que Bria dice en el pulso sale también por WhatsApp, con lo que se le 
   await build({ whatsapp: (alert) => sent.push(alert) }).service.run();
   assert.deepEqual(sent.map((alert) => [alert.userId, alert.kind, alert.sourceRef]), [['u-kam', 'PULSE', 'pulse:msg-1'], ['u-mel-pm', 'PULSE', 'pulse:msg-2']]);
   assert.match(sent[0].text, /^\*Aristea va en rojo: 2 de 5 publicadas\.\*/);
-  assert.deepEqual(sent[0].buttons.map((button) => button.label), ['Pedirle a Bria qué falta', 'Ocultar por hoy']);
+  assert.deepEqual(sent[0].buttons.map((button) => button.label), ['Qué le falta', 'Ocultar por hoy']);
 });
 
 test('each 15-minute slot runs once: facts are read once, the model is asked per person, and what Bria said is stored with its source and actions', async () => {
@@ -178,7 +178,7 @@ test('each 15-minute slot runs once: facts are read once, the model is asked per
   assert.doesNotMatch(calls[1].prompt, /SIN_PROCESO:m-mel/, 'Melissa never hears about herself');
   assert.deepEqual(repository.messages.map((m) => [m.userRef, m.source, m.model, m.title]), [['u-kam', 'MODELO', 'gpt-test', 'Aristea va en rojo: 2 de 5 publicadas.'], ['u-mel-pm', 'MODELO', 'gpt-test', 'Aristea va en rojo: 2 de 5 publicadas.']]);
   assert.equal(repository.messages[0].expiresAt.toISOString(), '2026-10-13T23:00:00.000Z', 'a message lives until the workday ends');
-  assert.deepEqual(repository.messages[0].actions.map((a) => a.label), ['Abrir operación', 'Pedirle a Bria qué falta']);
+  assert.deepEqual(repository.messages[0].actions.map((a) => a.label), ['Abrir operación', 'Qué le falta']);
   assert.deepEqual(await service.run(), { skipped: 'este tramo ya corrió', slotKey: '2026-10-13T10:30' });
   assert.deepEqual(await build({ nowIso: '2026-10-13T23:30:00Z' }).service.run(), { skipped: 'fuera de horario' });
   assert.deepEqual(await build({ nowIso: '2026-10-17T15:30:00Z' }).service.run(), { skipped: 'fuera de horario' }, 'Saturday');
@@ -226,7 +226,7 @@ test('the card reads the pulse when it is alive and the X marks the message; wit
   await build({ repository }).service.run();
   const after = await nudgeService.list(pm);
   assert.deepEqual([after.source, after.nudges.length, after.nudges[0].key, after.nudges[0].kind, after.nudges[0].urgency], ['pulso', 1, 'PULSO:msg-1', 'OPERACION_ROJA', 'alta']);
-  assert.deepEqual(after.nudges[0].actions.map((a) => a.label), ['Abrir operación', 'Pedirle a Bria qué falta']);
+  assert.deepEqual(after.nudges[0].actions.map((a) => a.label), ['Abrir operación', 'Qué le falta']);
   assert.deepEqual(await nudgeService.dismiss(pm, 'PULSO:msg-1'), { key: 'PULSO:msg-1', untilAt: null });
   assert.equal((await nudgeService.list(pm)).nudges.length, 0);
   await assert.rejects(() => nudgeService.dismiss(pm, 'PULSO:msg-1'), { status: 404 });
