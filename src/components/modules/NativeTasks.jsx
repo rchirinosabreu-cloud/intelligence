@@ -36,7 +36,7 @@ import {
 } from '@/components/ui/icons';
 import { bogotaTimeOf, findFocusTaskFor, focusLockMessage, getTaskLock, hasSeenFocusNotice, isActiveFocusTask, isFocusOverdue, markFocusNoticeSeen, nextLockReaction } from '@/lib/taskFocus';
 import { PRIVATE_TASK_HINT, nextPrivateAttempt } from '@/lib/taskPrivacy';
-import { isTaskOfPerson, workingMemberIds } from '@/lib/taskCollaborators';
+import { isTaskOfPerson, workingMemberIds, boardPersonName } from '@/lib/taskCollaborators';
 import FocusExtensionDialog from '@/components/tasks/FocusExtensionDialog';
 import FocusCommitmentNotice from '@/components/tasks/FocusCommitmentNotice';
 import TeamTaskStartNotice from '@/components/tasks/TeamTaskStartNotice';
@@ -622,6 +622,15 @@ const NativeTasks = () => {
         ])].filter(value => value && value !== 'Todos').sort();
         return ['Todos', ...unique];
     }, [tasks, responsibleFilter]);
+
+    // Un enlace de Bria trae el nombre sin tildes («Helen Hernandez»): al cargar las tareas se cambia por el del
+    // tablero, para que el desplegable no muestre a la misma persona dos veces (23 de octubre de 2026).
+    useEffect(() => {
+        if (!responsibleFilter || responsibleFilter === 'Todos' || !tasks.length) return;
+        const names = [...new Set([...tasks.map(t => t.assigneeName), ...tasks.flatMap(t => (t.collaborators || []).map(collaborator => collaborator.name))].filter(Boolean))];
+        const real = boardPersonName(names, responsibleFilter);
+        if (real !== responsibleFilter) updateFilters({ responsibleFilter: real });
+    }, [tasks, responsibleFilter]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const clients = useMemo(() => {
         const unique = [...new Set([...tasks.map(t => t.clientName || "Desconocido"), clientFilter])].filter(value => value && value !== 'Todos').sort();
