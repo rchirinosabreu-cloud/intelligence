@@ -83,7 +83,8 @@ export const buildClientProfitability = ({ year, month, clients = [], receivable
   for (const session of sessions) {
     const ms = Number(session.ms) || 0;
     if (ms <= 0) continue;
-    if (ms > PROFITABILITY_LIMITS.forgottenSessionMs) { forgottenSessions += 1; continue; }
+    // Una sesión declarada o corregida por un administrador (`trusted`) cuenta aunque pase de 8 h.
+    if (ms > PROFITABILITY_LIMITS.forgottenSessionMs && !session.trusted) { forgottenSessions += 1; continue; }
     hoursMs += ms;
     if (account(session.clientId)) { clientHoursMs += ms; row(session.clientId).hoursMs += ms; }
     else if (session.clientId) agencyHoursMs += ms;

@@ -43,7 +43,7 @@ export const createTeamLoadService = ({ db = prisma, rhythm = teamRhythmService,
         where: { status: { in: OPEN_STATUSES }, assigneeId: { not: null } },
         select: { id: true, title: true, status: true, dueDate: true, focusDeadlineAt: true, isPrivate: true, assigneeId: true, aiCategory: true, aiComplexity: true, clientId: true,
           contentItem: { select: { format: true, publishDate: true, publishTime: true, status: true } }, client: { select: { name: true } }, collaborators: { select: { id: true } },
-          workSessions: { where: { cycle: { closedAt: null }, isOverlapping: false, isCollaborator: false }, select: { workerId: true, startedAt: true, endedAt: true, durationMs: true, isOverlapping: true, isCollaborator: true } } },
+          workSessions: { where: { cycle: { closedAt: null }, isOverlapping: false, isCollaborator: false }, select: { workerId: true, startedAt: true, endedAt: true, durationMs: true, isOverlapping: true, isCollaborator: true, correctedAt: true } } },
         take: 3001
       }),
       rhythm.get({ days: 90, includeHours })

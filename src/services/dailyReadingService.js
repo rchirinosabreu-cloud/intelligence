@@ -29,6 +29,7 @@ import { createNotification } from './notificationService.js';
 import { listBriaPeople } from './weeklyFocusService.js';
 import { alertByWhatsApp } from './whatsappAlertSender.js';
 import { dailyAlert } from '../lib/whatsappAlerts.js';
+import { isTrustedSession } from '../lib/taskWorkCorrection.js';
 
 export const MORNING_BRIEF_NOTIFICATION = 'BRIA_LECTURA_MANANA';
 export const SNAPSHOT_FROM = 6 * 60;
@@ -95,7 +96,7 @@ export const createDailyReadingService = ({
         db.contentItem.findMany({ where: { deletedAt: null, status: { not: 'PUBLICADO' }, publishDate: { gte: new Date(end.getTime() - 45 * DAY) }, plan: { deletedAt: null, status: { not: 'FINALIZADO' } } }, select: { status: true, revisionRequestedAt: true, plan: { select: { clientId: true } } }, take: 5000 }),
         db.task.findMany({ where: { status: { in: OPEN } }, select: { status: true, dueDate: true, assigneeId: true, clientId: true }, take: 5000 }),
         db.task.findMany({ where: { status: 'REALIZADA', completedAt: { gte: start, lt: end } }, select: { assigneeId: true, clientId: true }, take: 3000 }),
-        db.taskWorkSession.findMany({ where: { startedAt: { gte: start, lt: end }, endedAt: { not: null }, isOverlapping: false }, select: { workerId: true, durationMs: true, task: { select: { clientId: true } } }, take: 10000 }),
+        db.taskWorkSession.findMany({ where: { startedAt: { gte: start, lt: end }, endedAt: { not: null }, isOverlapping: false }, select: { workerId: true, durationMs: true, closeReason: true, correctedAt: true, task: { select: { clientId: true } } }, take: 10000 }),
         db.teamMember.findMany({ where: { isActive: true }, select: { id: true, name: true, user: { select: { role: true } } } })
       ]);
       const awaiting = new Map(), returnedPieces = new Map();
@@ -112,7 +113,8 @@ export const createDailyReadingService = ({
       for (const task of closed) { count(closedBy.client, task.clientId); count(closedBy.person, task.assigneeId); }
       for (const session of sessions) {
         const ms = Number(session.durationMs) || 0;
-        if (ms <= 0 || ms > MAX_SESSION_MS) continue;
+        // Lo declarado o corregido por un administrador cuenta aunque pase de 8 h (23 de octubre de 2026).
+        if (ms <= 0 || (ms > MAX_SESSION_MS && !isTrustedSession(session))) continue;
         count(hoursBy.client, session.task?.clientId, ms); count(hoursBy.person, session.workerId, ms);
       }
       const clients = ops.map((op) => clientSnapshot(op, { awaitingApproval: awaiting.get(op.id), returnedPieces: returnedPieces.get(op.id), returnedTasks: returnedTasks.get(op.id), closedTasks: closedBy.client.get(op.id), hoursMs: hoursBy.client.get(op.id) }));

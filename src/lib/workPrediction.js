@@ -69,7 +69,8 @@ export function recordedWorkHours({ sessions = [], from, now = new Date() }) {
     const row = rows.get(session.workerId);
     const start = new Date(session.startedAt).getTime(), end = session.endedAt ? new Date(session.endedAt).getTime() : until;
     const span = end - start, duration = session.endedAt ? Number(session.durationMs ?? span) : span;
-    const declared = session.closeReason === 'DECLARED';
+    // Declarada al cerrar o corregida por un administrador: ya la miró una persona, no es un reloj olvidado.
+    const declared = session.closeReason === 'DECLARED' || Boolean(session.correctedAt);
     if (session.isOverlapping || (!declared && duration >= RHYTHM_LIMITS.forgottenSessionMs) || !Number.isFinite(span) || span <= 0 || !Number.isFinite(duration) || duration < 0) { row.excludedSessions++; continue; }
     let cursor = Math.max(start, cutoff);
     const stop = Math.min(end, until);

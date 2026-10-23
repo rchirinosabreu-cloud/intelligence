@@ -23,8 +23,8 @@ const sessionElapsed = (session, now) => session.endedAt
   ? Number(session.durationMs || 0)
   : Math.max(0, now.getTime() - new Date(session.startedAt).getTime());
 
-// Corregir el tiempo de una sesión (Rodny, 23 de octubre de 2026): solo administradores, con motivo, solo para
-// acortar. La regla es la misma del servidor (`correctionProblem`); el aviso de éxito sale después de su respuesta.
+// Corregir el tiempo de una sesión (Rodny, 23 de octubre de 2026): solo administradores, con motivo, hacia arriba o
+// hacia abajo. La regla es la misma del servidor (`correctionProblem`); el aviso de éxito sale después de su respuesta.
 function TimeCorrectionDialog({ taskId, session, user, onClose, onCorrected }) {
   const [hours, setHours] = useState('');
   const [minutes, setMinutes] = useState('');
@@ -62,10 +62,8 @@ function TimeCorrectionDialog({ taskId, session, user, onClose, onCorrected }) {
         <form onSubmit={submit} className="space-y-4">
           <DialogHeader>
             <DialogTitle>Corregir el tiempo de la sesión</DialogTitle>
-            <DialogDescription>
-              Marca {formatCorrectionSpan(current)}{session.endedAt ? '' : ' y sigue corriendo'}. Escribe cuánto duró de verdad: la corrección solo acorta, queda en la tarea con tu nombre y el motivo, y se guarda el tiempo original.
-              {!session.endedAt && !session.isCollaborator ? ' El reloj se detiene; en una tarea de una sola persona, la tarea vuelve a Pendiente.' : ''}
-            </DialogDescription>
+            {/* Sin explicación a la vista (Rodny, 23 de octubre de 2026); el lector de pantalla sí dice qué marca. */}
+            <DialogDescription className="sr-only">Marca {formatCorrectionSpan(current)}. Escribe cuánto duró y por qué se corrige.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-2 gap-3">
             <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Horas</span>

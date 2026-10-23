@@ -3,8 +3,11 @@
 //
 // Reglas, en lógica pura, compartidas por la pantalla y el servidor:
 //   - solo un administrador corrige, y siempre dice por qué;
-//   - la corrección **solo acorta**: es para el reloj que se quedó corriendo. Si faltó tiempo, se declara al cerrar
-//     la tarea (tiempo declarado), que ya existe;
+//   - se corrige **hacia arriba o hacia abajo** (Rodny, el mismo día: «puede ser más, no me interesan esas
+//     restricciones»). Acortar mueve el fin de la sesión al tiempo real; alargar deja su hora de fin como estaba y
+//     cambia solo la duración, porque no se sabe en qué momento se trabajó lo que faltó;
+//   - una sesión corregida por un administrador **cuenta siempre** (`isTrustedSession`), como el tiempo declarado: la
+//     regla de las 8 horas de «reloj olvidado» no la descarta, porque ya la miró una persona;
 //   - nada se borra: la sesión guarda su tiempo original la primera vez que se corrige, y la tarea lo dice como una
 //     novedad, igual que una devolución o una reapertura;
 //   - casi toda la plataforma lee la duración guardada de cada sesión (Ritmo, carga, previsión, rentabilidad), así que
@@ -33,6 +36,9 @@ const span = (ms) => {
   return rest ? `${hours} h ${rest} min` : `${hours} h`;
 };
 
+/** Una sesión que ya miró una persona —declarada al cerrar o corregida por un administrador— no es un reloj olvidado. */
+export const isTrustedSession = (session) => session?.closeReason === 'DECLARED' || Boolean(session?.correctedAt);
+
 /** Lo que marca la sesión ahora: lo guardado, o lo que lleva corriendo. */
 export const sessionCurrentMs = (session, now = new Date()) => (session?.endedAt
   ? Number(session.durationMs || 0)
@@ -45,9 +51,7 @@ export const correctionProblem = ({ user, session, durationMs, reason, now = new
   const why = String(reason ?? '').trim();
   if (why.length < 3) return 'Escribe por qué se corrige el tiempo: queda en la tarea.';
   if (why.length > TIME_CORRECTION_REASON_MAX) return `El motivo puede tener hasta ${TIME_CORRECTION_REASON_MAX} caracteres.`;
-  if (!Number.isFinite(durationMs) || durationMs < M) return 'El tiempo corregido tiene que ser de al menos un minuto.';
-  const current = sessionCurrentMs(session, now);
-  if (durationMs >= current) return `La corrección solo acorta un tiempo que se pasó: esta sesión marca ${span(current)}. Si faltó tiempo, se declara al cerrar la tarea.`;
+  if (!Number.isFinite(durationMs) || durationMs < M) return 'Escribe cuánto duró: al menos un minuto.';
   return null;
 };
 
@@ -56,9 +60,12 @@ export const correctionPlan = ({ task, session, durationMs, reason, actorId, now
   const at = new Date(now);
   const wasRunning = !session.endedAt;
   const current = sessionCurrentMs(session, at);
+  const start = new Date(session.startedAt).getTime();
+  // Al acortar, el fin pasa al tiempo real; al alargar, se queda donde estaba (o ahora, si el reloj corría).
+  const endedAt = durationMs < current ? new Date(start + durationMs) : (session.endedAt ? new Date(session.endedAt) : at);
   const sessionData = {
     durationMs,
-    endedAt: new Date(new Date(session.startedAt).getTime() + durationMs),
+    endedAt,
     closeReason: wasRunning ? 'CORRECTED' : session.closeReason,
     originalDurationMs: session.originalDurationMs ?? current,
     correctedAt: at, correctedById: actorId || null, correctionReason: String(reason).trim()
@@ -71,7 +78,7 @@ export const correctionPlan = ({ task, session, durationMs, reason, actorId, now
       taskData = { accumulatedWorkMs: accumulated + durationMs, startedAt: null };
       if (String(task.status) === 'EN_CURSO' && !(task._count?.collaborators > 0)) taskData.status = 'PENDIENTE';
     } else {
-      taskData = { accumulatedWorkMs: Math.max(0, accumulated - (current - durationMs)) };
+      taskData = { accumulatedWorkMs: Math.max(0, accumulated + (durationMs - current)) };
     }
   }
   return { wasRunning, fromMs: current, toMs: durationMs, session: sessionData, task: taskData };
