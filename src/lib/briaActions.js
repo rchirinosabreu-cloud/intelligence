@@ -76,8 +76,9 @@ export const actionReply = (action) => {
   }
   if (stage === 'CANCELLED') return { answer: 'Listo, no hice ningún cambio.', quickReplies: [] };
   if (stage === 'DONE') return { answer: action.result || 'Listo.', quickReplies: [] };
-  // Una operación de la plataforma se resume en un párrafo, sin negrita ni lista (22 de octubre de 2026).
-  const head = action.type === 'PLATFORM' && !action.summary?.length ? action.title : `**${action.title}**${action.summary?.length ? `\n\n${lines(action.summary)}` : ''}`;
+  // Una operación de la plataforma o un movimiento se resumen en un párrafo, sin negrita ni lista (22 de octubre de 2026).
+  const paragraph = ['PLATFORM', 'FINANCIAL_RECORD'].includes(action.type) && !action.summary?.length;
+  const head = paragraph ? action.title : `**${action.title}**${action.summary?.length ? `\n\n${lines(action.summary)}` : ''}`;
   const warnings = action.warnings?.length ? `\n\n${lines(action.warnings)}` : '';
   if (stage === 'MISSING') {
     const next = action.missing[0];

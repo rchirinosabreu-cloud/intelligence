@@ -61,7 +61,7 @@ const build = ({ repository = fakeRepository(), conversations = fakeConversation
   const fetchFn = fetchImpl || (async (url, options) => { sent.push({ url, body: JSON.parse(options.body), auth: options.headers.Authorization }); return { ok: true, status: 200, json: async () => ({ messages: [{ id: 'wamid.out' }] }) }; });
   const db = { user: { findUnique: async ({ where }) => users[where.id] || null } };
   const work = [];
-  const service = createWhatsAppBridgeService({ repository, conversations: () => conversations, db, env, fetchImpl: fetchFn, now, random, logger: { warn() {}, error() {}, info() {} }, scheduleWork: (fn) => work.push(fn), signSession: (row) => `sesion-corta-de-${row.id}-v${row.sessionVersion}` });
+  const service = createWhatsAppBridgeService({ repository, conversations: () => conversations, db, env, fetchImpl: fetchFn, now, random, logger: { warn() {}, error() {}, info() {} }, scheduleWork: (fn) => work.push(fn), signSession: (row) => `sesion-corta-de-${row.id}-v${row.sessionVersion}`, batchWindowMs: 0 });
   const drain = async () => { while (work.length) await work.shift()(); };
   return { service, sent, repository, conversations, drain };
 };

@@ -31,6 +31,8 @@ import { buildPlanDraftDigest, buildPlanDraftRequest, parsePlanDraft, validatePl
 import { AI_MODELS } from '../config/aiConfig.js';
 import { createOpenAIClient } from './openAIClient.js';
 import { clientOperationsService } from './clientOperationsService.js';
+import { hasFinancialPermission } from '../utils/financialPermissions.js';
+import { movementType, movementAmount, movementDate, movementCategory, pickReceipt, movementParagraph, MOVEMENT_CATEGORY_LABELS } from '../lib/briaMovementDraft.js';
 
 const tidy = (value) => String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
 const fold = (value) => tidy(value).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -43,9 +45,9 @@ const PRIORITY_LABEL = { NORMAL: 'normal', ALTA: 'alta', URGENTE: 'urgente' };
 
 // Módulos que exige cada acción. Las tres que nacieron con flujo propio (crear pendiente, despachar a producción,
 // eliminar pendientes) viajan por esta misma base desde el 10 de octubre de 2026; el despacho exige dos módulos.
-export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion', MINUTE_TASKS: ['gestion', 'minutas'], PLAN_DRAFT: 'parrillas' };
+export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion', MINUTE_TASKS: ['gestion', 'minutas'], PLAN_DRAFT: 'parrillas', FINANCIAL_RECORD: 'financiero' };
 export const actionModules = (type) => [].concat(ACTION_PERMISSION[type] || []);
-const MODULE_LABEL = { gestion: 'Gestión', parrillas: 'Parrillas', clientes: 'Clientes' };
+const MODULE_LABEL = { gestion: 'Gestión', parrillas: 'Parrillas', clientes: 'Clientes', financiero: 'Financiero' };
 export const ITEM_FORMATS = ['Reel', 'Carrusel', 'Post', 'Video', 'Historia'];
 // Hasta 50 tareas por lote (Rodny, 11 de octubre de 2026: «Todos los pendientes de Jarlan, pónselos a Kamila»).
 export const BULK_MAX = TASK_SEARCH_MAX;
@@ -575,6 +577,75 @@ const executeClientNote = async ({ user, action, addObservation }) => {
   return { text: `Listo: anoté la observación en la ficha de **${action.target.clientName}**.\n\n[Abrir la operación del cliente](${link})`, sources: [] };
 };
 
+/* ---------------------------------------------------------------- Un movimiento de Financiero */
+
+// «Registra este movimiento, este es el comprobante» (Rodny, 22 de octubre de 2026: «que incluso la contadora pueda
+// enviar una imagen por WhatsApp … natural, rápido, fluido»). Bria lee el comprobante y pasa lo que vio; aquí se
+// entiende, se pregunta de a una cosa lo que falta —con botones— y se resume en un párrafo. Registrar va por la misma
+// vía que la pantalla (`createFinancialRecord`, con su auditoría y su periodo abierto) y el comprobante se pega con
+// la misma pieza que «Subir comprobante».
+const MOVEMENT_FIELDS = ['tipo', 'valor', 'fecha', 'cuenta', 'categoria', 'cliente', 'concepto', 'contraparte', 'referencia', 'comprobante'];
+const accountLabel = (row) => row.name || row.institution || 'Cuenta';
+const findAccount = (rows, term) => {
+  const text = fold(term);
+  if (!text) return null;
+  const hits = rows.filter((row) => [row.name, row.institution, row.lastFour].some((value) => value && (fold(value).includes(text) || text.includes(fold(value)))));
+  return hits.length === 1 ? hits[0] : (hits.find((row) => same(row.name, term)) || null);
+};
+
+const prepareFinancialRecord = async ({ db, user, args, previous, today, attachments = [] }) => {
+  if (!hasFinancialPermission(user, 'write')) throw knowledgeError('Registrar movimientos necesita permiso de escritura en Financiero.', 403, 'BRIA_ACTION_FORBIDDEN');
+  const wanted = { ...(previous?.wanted || {}) };
+  for (const field of MOVEMENT_FIELDS) if (args[field] != null && String(args[field]).trim()) wanted[field] = String(args[field]).trim();
+  const type = movementType(wanted.tipo);
+  const amount = movementAmount(wanted.valor);
+  const date = wanted.fecha ? movementDate(wanted.fecha, today) : null;
+  const category = movementCategory(wanted.categoria);
+  const accounts = await db.financialAccount.findMany({ where: { isActive: true }, select: { id: true, name: true, institution: true, lastFour: true, currency: true }, orderBy: { name: 'asc' } });
+  const account = accounts.length === 1 ? accounts[0] : findAccount(accounts, wanted.cuenta);
+  let client = null;
+  if (wanted.cliente) {
+    const found = await findClientByTerm(db, wanted.cliente);
+    const rows = Array.isArray(found) ? found : (found?.rows || []);
+    client = rows.length === 1 ? rows[0] : (rows.find((row) => same(row.name, wanted.cliente)) || null);
+  }
+  const receipt = pickReceipt(attachments, args.comprobante ?? null) || (previous?.payload?.fileId ? { id: previous.payload.fileId, name: previous.target?.receiptName } : null);
+  const missing = [];
+  if (!type) missing.push({ field: 'tipo', question: '¿Es un ingreso o un egreso?', options: ['Ingreso', 'Egreso'] });
+  else if (!amount) missing.push({ field: 'valor', question: `¿De cuánto fue el ${type === 'INCOME' ? 'ingreso' : 'egreso'}?` });
+  else if (!date) missing.push({ field: 'fecha', question: wanted.fecha ? `«${wanted.fecha}» no es una fecha pasada que entienda. ¿Qué día fue?` : '¿Qué día fue?', options: ['Hoy', 'Ayer'] });
+  else if (!account) missing.push({ field: 'cuenta', question: type === 'INCOME' ? '¿A qué cuenta entró?' : '¿De qué cuenta salió?', options: accounts.slice(0, 10).map(accountLabel) });
+  else if (!category) missing.push({ field: 'categoria', question: '¿En qué categoría lo registro?', options: MOVEMENT_CATEGORY_LABELS });
+  if (wanted.cliente && !client && !missing.length) missing.push({ field: 'cliente', question: `No encontré al cliente «${wanted.cliente}». ¿Cómo se llama en la plataforma? Si no es de un cliente, dime «sin cliente».` });
+  const concept = wanted.concepto || null;
+  const counterparty = wanted.contraparte || null;
+  const payload = { type, amount, date, accountId: account?.id || null, category, clientId: client?.id || null, description: concept, counterparty, reference: wanted.referencia || null, fileId: receipt?.id || null };
+  const ready = !missing.length;
+  return {
+    id: previous?.id || randomUUID(), ownerId: user.userId || user.id, type: 'FINANCIAL_RECORD', status: 'DRAFT',
+    title: ready ? movementParagraph({ type, amount, date, accountName: accountLabel(account), category, concept, counterparty, clientName: client?.name || null, receiptName: receipt?.name || null }) : 'Registrar un movimiento',
+    target: { receiptName: receipt?.name || null }, wanted, payload, summary: [], warnings: [], missing
+  };
+};
+
+const executeFinancialRecord = async ({ user, action, recordMovement, attachMovementDocument, loadAttachment }) => {
+  if (!recordMovement) throw knowledgeError('Registrar movimientos no está disponible en esta vista.', 403);
+  const { fileId, ...data } = action.payload;
+  const record = await recordMovement({ input: { ...data, notes: 'Registrado con Bria.' }, user });
+  const link = '\n\n[Abrir en Financiero](/financiero?tab=movimientos)';
+  if (!fileId) return { text: `Listo, quedó registrado.${link}`, sources: [] };
+  // El movimiento ya existe: un comprobante que no se pudo pegar nunca lo deshace, se dice y se sube a mano.
+  try {
+    const file = await loadAttachment?.(fileId);
+    if (!file?.buffer) throw new Error('El comprobante ya no está en el chat.');
+    await attachMovementDocument({ recordId: record.id, file: { buffer: file.buffer, originalname: file.name, mimetype: file.mime, size: file.buffer.length }, user });
+    return { text: `Listo, quedó registrado con su comprobante.${link}`, sources: [] };
+  } catch (failure) {
+    console.error('[BriaActions] El comprobante no se pudo pegar al movimiento:', failure?.message || failure);
+    return { text: `Listo, quedó registrado. El comprobante no se pudo pegar: súbelo desde Financiero, en el movimiento.${link}`, sources: [] };
+  }
+};
+
 /* ---------------------------------------------------------------- Los tres flujos que nacieron aparte */
 
 // Crear pendiente, despachar a producción y eliminar pendientes conservan su servicio (preparación, textos y
@@ -904,6 +975,7 @@ const TYPES = {
   CREATE_ITEM: { prepare: prepareItem, execute: executeItem },
   MOVE_ITEM: { prepare: prepareMoveItem, execute: executeMoveItem },
   CLIENT_NOTE: { prepare: prepareClientNote, execute: executeClientNote },
+  FINANCIAL_RECORD: { prepare: prepareFinancialRecord, execute: executeFinancialRecord },
   TASK_CREATE: { prepare: legacyPrepare, execute: executeTaskCreate },
   DISPATCH: { prepare: legacyPrepare, execute: executeDispatch },
   TASK_DELETE: { prepare: legacyPrepare, execute: executeTaskDelete }
@@ -972,8 +1044,9 @@ const executePlatform = async ({ user, action, platform, session, routePermissio
 };
 
 // `gate` es la puerta de actualizar una tarea (`checkTaskUpdate`); se inyecta solo para probar sus negativas.
-export const createBriaActionService = ({ db, updateTask, createTask = null, notify = null, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, gate = checkTaskUpdate, generate = defaultGenerate, operations = clientOperationsService, now = () => new Date(), readOnly = false } = {}) => ({
-  async prepare({ user, type, args = {}, previous }) {
+export const createBriaActionService = ({ db, updateTask, createTask = null, notify = null, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, recordMovement = null, attachMovementDocument = null, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, gate = checkTaskUpdate, generate = defaultGenerate, operations = clientOperationsService, now = () => new Date(), readOnly = false } = {}) => ({
+  // `attachments`: los archivos del chat (del más reciente al más viejo), para el comprobante de un movimiento.
+  async prepare({ user, type, args = {}, previous, attachments = [] }) {
     if (type === 'PLATFORM') {
       if (!canUseBria(user)) throw knowledgeError('Bria no está activada para tu cuenta.', 403, 'BRIA_ACTION_FORBIDDEN');
       return preparePlatform({ user, args, previous, routePermissions });
@@ -982,7 +1055,7 @@ export const createBriaActionService = ({ db, updateTask, createTask = null, not
     const owner = user.userId || user.id;
     // Solo se continúa una acción del mismo tipo, de la misma persona y sin cerrar; lo demás arranca de cero.
     const ongoing = previous && previous.status === 'DRAFT' && previous.type === type && previous.ownerId === owner && args.nuevo !== true ? previous : null;
-    return TYPES[type].prepare({ db, user, args, previous: ongoing, today: bogotaDate(now()), gate, generate, operations });
+    return TYPES[type].prepare({ db, user, args, previous: ongoing, today: bogotaDate(now()), gate, generate, operations, attachments });
   },
 
   // `loadAttachment` solo lo usa crear pendiente (los archivos del chat pasan a insumos de la tarea).
@@ -999,6 +1072,6 @@ export const createBriaActionService = ({ db, updateTask, createTask = null, not
       return executePlatform({ user, action, platform, session, routePermissions });
     }
     authorize(user, action.type);
-    return TYPES[action.type].execute({ db, user, action, updateTask, createTask, notify, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, taskDrafts, dispatchDrafts, deleteDrafts, loadAttachment, revalidate, gate });
+    return TYPES[action.type].execute({ db, user, action, updateTask, createTask, notify, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, recordMovement, attachMovementDocument, taskDrafts, dispatchDrafts, deleteDrafts, loadAttachment, revalidate, gate });
   }
 });

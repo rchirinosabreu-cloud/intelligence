@@ -39,4 +39,6 @@
 // 2.16 (22 de octubre de 2026): por WhatsApp también llegan los avisos de la plataforma (pedidos de acceso, mañana,
 // cierre y avisos del día), que cada persona apaga desde su perfil; fuera de la ventana de 24 horas sale un mensaje
 // corto aprobado por Meta y el aviso entero al tocarlo. Los avisos enviados se guardan 14 días.
-export const PRIVACY_POLICY_VERSION = '2.16 · 2026-10-22';
+// 2.17 (22 de octubre de 2026): por WhatsApp también entran fotos, documentos y notas de voz; las notas de voz se
+// transcriben con el mismo servicio del dictado y todo queda en el historial de Bria, como los mensajes.
+export const PRIVACY_POLICY_VERSION = '2.17 · 2026-10-22';

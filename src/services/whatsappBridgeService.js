@@ -12,9 +12,11 @@ import { createWhatsAppLinkRepository } from './whatsappLinkRepository.js';
 import { signWhatsAppSession } from '../lib/whatsappSession.js';
 import {
   verifyMetaSignature, webhookChallenge, parseInboundMessages, describeNotice, isStatusOnlyNotice, maskWaId, linkCodeIn, generateLinkCode, linkMessage, displayPhone, waMeLink,
-  splitForWhatsApp, replyForWhatsApp, textWithOptions, optionsMessagePayload, textMessagePayload, readReceiptPayload, REPLIES, LINK_CODE_TTL_MS, UNKNOWN_SENDER_REPLIES_PER_DAY,
-  INTERACTIVE_BODY_MAX, OPTIONS_PROMPT
+  splitForWhatsApp, replyForWhatsApp, textWithOptions, optionsMessagePayload, textMessagePayload, typingPayload, REPLIES, LINK_CODE_TTL_MS, UNKNOWN_SENDER_REPLIES_PER_DAY,
+  INTERACTIVE_BODY_MAX, OPTIONS_PROMPT, isMetaMediaUrl, mediaFileName, WHATSAPP_MEDIA_MAX_BYTES
 } from '../lib/whatsappBridge.js';
+/** Cuánto se espera a que la persona termine de mandar lo que manda seguido (la foto y luego el texto). */
+export const WHATSAPP_BATCH_WINDOW_MS = 2500;
 import {
   ALERT_KINDS, ALERT_ACTIONS, isWindowOpen, alertsEnabled, withinAlertHours, parseAlertReplyId, alertOptions, templateMessagePayload
 } from '../lib/whatsappAlerts.js';
@@ -46,7 +48,10 @@ export const createWhatsAppBridgeService = ({
   logger = console,
   scheduleWork = (work) => queueMicrotask(work),
   actions = {},
-  signSession = signWhatsAppSession
+  signSession = signWhatsAppSession,
+  // Lo que alguien manda seguido (la foto y enseguida «regístralo») se junta en una sola respuesta.
+  batchWindowMs = WHATSAPP_BATCH_WINDOW_MS,
+  delay = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); })
 } = {}) => {
   const act = { ...defaultActions, ...actions };
   const config = () => ({
@@ -74,6 +79,26 @@ export const createWhatsAppBridgeService = ({
     return body;
   };
   const messages = (payload) => graph(`${config().phoneNumberId}/messages`, payload);
+
+  // Un archivo recibido (22 de octubre de 2026): Meta da su dirección por el identificador y se descarga con el mismo
+  // token, en la cabecera. Solo de sus servidores, por https, y hasta 20 MB.
+  const readMedia = async (path, { json = true } = {}) => {
+    const response = await fetchImpl(path, { headers: { Authorization: `Bearer ${config().token}` }, signal: AbortSignal.timeout(SEND_TIMEOUT_MS) });
+    if (!response.ok) throw httpError(response.status || 502, `Meta respondió ${response.status} al pedir el archivo`, 'WHATSAPP_MEDIA');
+    return json ? response.json() : response;
+  };
+  const downloadMedia = async (media, messageId) => {
+    const info = await readMedia(`${META_GRAPH_ORIGIN}/${META_GRAPH_VERSION}/${encodeURIComponent(media.id)}?phone_number_id=${encodeURIComponent(config().phoneNumberId)}`);
+    if (Number(info?.file_size) > WHATSAPP_MEDIA_MAX_BYTES) throw httpError(413, 'Archivo demasiado grande', 'WHATSAPP_MEDIA_TOO_BIG');
+    if (!isMetaMediaUrl(info?.url)) throw httpError(502, 'La dirección del archivo no es de Meta', 'WHATSAPP_MEDIA');
+    const response = await readMedia(info.url, { json: false });
+    if (response.url && !isMetaMediaUrl(response.url)) throw httpError(502, 'El archivo se redirigió fuera de Meta', 'WHATSAPP_MEDIA');
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (!buffer.length) throw httpError(502, 'El archivo llegó vacío', 'WHATSAPP_MEDIA');
+    if (buffer.length > WHATSAPP_MEDIA_MAX_BYTES) throw httpError(413, 'Archivo demasiado grande', 'WHATSAPP_MEDIA_TOO_BIG');
+    const mimetype = media.mimeType || info.mime_type || 'application/octet-stream';
+    return { buffer, originalname: mediaFileName({ ...media, mimeType: mimetype }, messageId), mimetype: media.kind === 'audio' ? mimetype : mimetype.split(';')[0].trim(), size: buffer.length };
+  };
   const sendText = async (to, text) => { for (const part of splitForWhatsApp(text)) await messages(textMessagePayload(to, part)); };
   // Texto y opciones: lo largo sale antes en texto y las opciones van con el último trozo (o con una línea corta si
   // ese trozo no cabe en un mensaje con botones). Si Meta no acepta los botones, las opciones se dicen en texto.
@@ -93,7 +118,7 @@ export const createWhatsAppBridgeService = ({
     }
   };
   const markRead = async (messageId) => {
-    try { await graph(`${config().phoneNumberId}/messages`, readReceiptPayload(messageId)); }
+    try { await graph(`${config().phoneNumberId}/messages`, typingPayload(messageId)); }
     catch (failure) { logger.warn?.(`[WhatsApp] No se pudo marcar como leído: ${failure.message}`); }
   };
 
@@ -109,7 +134,7 @@ export const createWhatsAppBridgeService = ({
   };
   const allowed = (row) => Boolean(row) && row.isActive !== false && row.teamMember?.isActive !== false && canUseBria(row);
   // La misma forma que deja `authenticateToken` en req.user: el motor de Bria no distingue por dónde llegó la persona.
-  const sessionUser = (row) => ({ userId: row.id, id: row.id, name: row.name, email: row.email, role: row.role, modulePermissions: row.modulePermissions, sessionVersion: row.sessionVersion, isActive: row.isActive });
+  const sessionUser = (row) => ({ userId: row.id, id: row.id, name: row.name, email: row.email, role: row.role, modulePermissions: row.modulePermissions, hasFinancialAccess: row.hasFinancialAccess, financialRole: row.financialRole, sessionVersion: row.sessionVersion, isActive: row.isActive });
 
   // Cada día es una conversación, como en la plataforma: así el aprendizaje nocturno la lee por día y el historial
   // no crece sin fin. Dentro del mismo día se sigue la misma, para que «Confirmar» encuentre su acción.
@@ -181,8 +206,9 @@ export const createWhatsAppBridgeService = ({
     return { outcome: 'alert-action', action: button.act };
   };
 
-  const processMessage = async (message) => {
-    if (!await repository.rememberInbound(message.messageId, message.from)) return { skipped: 'duplicate' };
+  // `message.medias` llega cuando se juntaron varios mensajes seguidos (ver `accept`); uno suelto trae `media`.
+  const processMessage = async (message, { alreadyRemembered = false } = {}) => {
+    if (!alreadyRemembered && !await repository.rememberInbound(message.messageId, message.from)) return { skipped: 'duplicate' };
     // Se busca por BSUID y por número: un vínculo hecho con uno se reconoce aunque el siguiente mensaje traiga el otro.
     const link = await repository.linkByWaId(message.from, message.phone || null);
     if (!link) return handleUnknown(message);
@@ -191,10 +217,30 @@ export const createWhatsAppBridgeService = ({
     await repository.markInbound?.(link.userId, now());
     const row = await loadUser(link.userId);
     if (!allowed(row)) { await sendText(replyTo(message), REPLIES.notAllowed); return { outcome: 'not-allowed' }; }
-    if (!message.text) { await sendText(replyTo(message), REPLIES.onlyText); return { outcome: 'only-text' }; }
+    const medias = message.medias || (message.media ? [message.media] : []);
+    if (!message.text && !medias.length) { await sendText(replyTo(message), REPLIES.onlyText); return { outcome: 'only-text' }; }
     await markRead(message.messageId);
     const user = sessionUser(row);
-    let question = message.text;
+    let question = message.text || '';
+    // Fotos y documentos entran al chat como archivos; una nota de voz se transcribe y se responde a lo que se dijo.
+    const files = [];
+    for (const media of medias) {
+      let upload;
+      try { upload = await downloadMedia(media, message.messageId); }
+      catch (failure) {
+        if (failure.code === 'WHATSAPP_MEDIA_TOO_BIG') { await sendText(replyTo(message), REPLIES.mediaTooBig); return { outcome: 'media-too-big' }; }
+        logger.error('[WhatsApp] No se pudo descargar un archivo:', failure.code || failure.message || failure);
+        await sendText(replyTo(message), REPLIES.mediaFailed);
+        return { outcome: 'media-failed' };
+      }
+      if (media.kind !== 'audio') { files.push(upload); continue; }
+      try { question = [question, (await conversations().transcribe(user, upload)).text].filter(Boolean).join('\n'); }
+      catch (failure) {
+        logger.warn?.(`[WhatsApp] Nota de voz sin transcribir: ${failure.code || failure.message}`);
+        await sendText(replyTo(message), REPLIES.noSpeech);
+        return { outcome: 'no-speech' };
+      }
+    }
     const alertReply = parseAlertReplyId(message.replyId);
     if (alertReply) {
       const handled = await handleAlertReply(user, link, message, alertReply);
@@ -205,7 +251,7 @@ export const createWhatsAppBridgeService = ({
     let saved;
     try {
       const chat = await conversationFor(user, link, at);
-      saved = await runWithAiContext({ actorId: user.userId, module: 'whatsapp', route: 'POST /api/whatsapp/webhook' }, () => conversations().send({ user, id: chat.id, question, session: sessionFor(row) }));
+      saved = await runWithAiContext({ actorId: user.userId, module: 'whatsapp', route: 'POST /api/whatsapp/webhook' }, () => conversations().send({ user, id: chat.id, question, files, session: sessionFor(row) }));
     } catch (failure) {
       if (failure.status === 409) { await sendText(replyTo(message), REPLIES.busy); return { outcome: 'busy' }; }
       if (failure.code === 'BRIA_PLATFORM_SESSION') { await sendText(replyTo(message), REPLIES.needsPlatform); return { outcome: 'needs-platform' }; }
@@ -281,12 +327,45 @@ export const createWhatsAppBridgeService = ({
       return { status: 200, body: { accepted: true, ignored: messages.length } };
     }
     // Se responde a Meta antes de trabajar: un webhook que espera al modelo vence y Meta lo reenvía.
-    for (const message of messages) {
-      scheduleWork(() => processMessage(message)
-        .then((result) => logger.info?.(`[WhatsApp] Mensaje de ${maskWaId(message.from)} (${message.type}): ${result?.outcome || result?.skipped || 'sin resultado'}${result?.reason ? ` (${result.reason})` : ''}.`))
-        .catch((failure) => logger.error('[WhatsApp] Falló un mensaje:', failure.code || failure.message || failure)));
-    }
+    for (const message of messages) accept(message);
     return { status: 200, body: { accepted: true, messages: messages.length } };
+  };
+
+  // Lo que alguien manda seguido se junta (22 de octubre de 2026): en WhatsApp la gente manda la foto y enseguida
+  // «regístralo» como dos mensajes. Se espera un momento, se juntan en una sola pregunta con sus archivos y Bria
+  // responde una vez; y lo de cada persona se atiende en orden, para que el segundo no choque con el primero.
+  const inbox = new Map();
+  const queues = new Map();
+  const enqueue = (key, work) => {
+    const run = (queues.get(key) || Promise.resolve()).catch(() => {}).then(work);
+    queues.set(key, run);
+    run.finally(() => { if (queues.get(key) === run) queues.delete(key); }).catch(() => {});
+    return run;
+  };
+  const flush = async (key) => {
+    const batch = inbox.get(key) || [];
+    inbox.delete(key);
+    const fresh = [];
+    for (const message of batch) if (await repository.rememberInbound(message.messageId, message.from)) fresh.push(message);
+    if (!fresh.length) return [{ message: batch.at(-1), result: { skipped: 'duplicate' } }];
+    // Un toque de botón es una respuesta concreta: se atiende tal cual, en su orden.
+    if (fresh.length === 1 || fresh.some((message) => message.replyId)) {
+      const out = [];
+      for (const message of fresh) out.push({ message, result: await processMessage(message, { alreadyRemembered: true }) });
+      return out;
+    }
+    const last = fresh.at(-1);
+    const merged = { ...last, text: fresh.map((message) => message.text).filter(Boolean).join('\n') || null, media: null, medias: fresh.map((message) => message.media).filter(Boolean).slice(0, 5), replyId: null };
+    return [{ message: merged, result: await processMessage(merged, { alreadyRemembered: true }) }];
+  };
+  const accept = (message) => {
+    const key = message.from;
+    if (inbox.has(key)) { inbox.get(key).push(message); return; }
+    inbox.set(key, [message]);
+    scheduleWork(() => delay(batchWindowMs)
+      .then(() => enqueue(key, () => flush(key)))
+      .then((rows) => { for (const { message: done, result } of rows) logger.info?.(`[WhatsApp] Mensaje de ${maskWaId(done.from)} (${done.medias?.length ? `${done.type}+${done.medias.length} archivos` : done.type}): ${result?.outcome || result?.skipped || 'sin resultado'}${result?.reason ? ` (${result.reason})` : ''}.`); })
+      .catch((failure) => logger.error('[WhatsApp] Falló un mensaje:', failure.code || failure.message || failure)));
   };
 
   // Los pedidos de acceso solo le llegan a administración: a los demás ni se les ofrece el interruptor.

@@ -2,12 +2,13 @@ import { ACTION_PERMISSION, ITEM_FORMATS, actionModules } from './briaActionServ
 import { actionReply, actionStage } from '../lib/briaActions.js';
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { hasModulePermission } from '../config/security.js';
+import { hasFinancialPermission } from '../utils/financialPermissions.js';
 
 // Las herramientas solo preparan: el modelo no tiene forma de cambiar nada. El servidor ejecuta cuando la
 // persona escribe «Confirmar» sobre el resumen de la respuesta inmediatamente anterior (briaConversationService).
 const allowedFor = (type) => (user) => canUseBria(user) && hasModulePermission(user, ACTION_PERMISSION[type]);
 const run = (service, type) => async (args, ctx) => {
-  const action = await service.prepare({ user: ctx.user, type, args, previous: ctx.pendingAction });
+  const action = await service.prepare({ user: ctx.user, type, args, previous: ctx.pendingAction, attachments: ctx.chatAttachments || [] });
   const reply = actionReply(action);
   return { data: { stage: actionStage(action), action, message: reply.answer, done: false }, pendingAction: action, actionReply: reply, quickReplies: reply.quickReplies };
 };
@@ -96,6 +97,25 @@ export const createBriaActionTools = (service) => service ? [{
     nuevo: { type: 'boolean' }
   }, required: ['clientId', 'texto'], additionalProperties: false },
   run: run(service, 'CLIENT_NOTE')
+}, {
+  // Registrar un movimiento conversando, con su comprobante (Rodny, 22 de octubre de 2026).
+  name: 'registrar_movimiento',
+  description: 'Prepara un movimiento de Financiero (un ingreso o un egreso) con su comprobante. Úsala cuando la persona pida registrar un pago, un gasto, un cobro o un movimiento, sobre todo si manda la foto o el PDF de un comprobante, una factura o un recibo: léelo tú (valor, fecha, a quién o de quién, concepto, número de referencia) y pasa lo que viste junto con lo que dijo la persona. NO registra nada: muestra un párrafo y la persona confirma. Lo que falte (la cuenta, la categoría…) lo pregunta la herramienta de a una cosa, con botones: no lo inventes ni lo preguntes tú antes. Si dice el cliente, pásalo por su nombre. Para corregir algo del resumen, vuelve a llamarla con lo nuevo.',
+  allowed: (user) => allowedFor('FINANCIAL_RECORD')(user) && hasFinancialPermission(user, 'write'),
+  parameters: { type: 'object', properties: {
+    tipo: { type: ['string', 'null'], description: 'ingreso o egreso; deducido de lo que dijo la persona o del comprobante.' },
+    valor: { type: ['string', 'null'], description: 'El valor total del comprobante o el que dijo la persona, en pesos, por ejemplo «1.200.000».' },
+    fecha: { type: ['string', 'null'], description: 'El día del movimiento: YYYY-MM-DD del comprobante, o hoy, ayer, el lunes, 15 de octubre.' },
+    cuenta: { type: ['string', 'null'], description: 'La cuenta de banco o caja, si la persona la dijo o se ve en el comprobante (banco o últimos cuatro dígitos).' },
+    categoria: { type: ['string', 'null'], description: 'La categoría si la persona la dijo o es inequívoca (impuestos, nómina, pauta, banco); si no, null y la herramienta pregunta.' },
+    cliente: { type: ['string', 'null'], description: 'El cliente, por su nombre, si el movimiento es de un cliente.' },
+    concepto: { type: ['string', 'null'], description: 'Qué fue, en pocas palabras: «Licencia de Canva», «Pago de octubre».' },
+    contraparte: { type: ['string', 'null'], description: 'A quién se le pagó o quién pagó, si no es un cliente.' },
+    referencia: { type: ['string', 'null'], description: 'Número de comprobante, factura o transacción, si aparece.' },
+    comprobante: { type: ['string', 'null'], description: 'El nombre del archivo del chat que es el comprobante, o «el último». Null si llegó con este mensaje o no hay comprobante.' },
+    nuevo: { type: 'boolean', description: 'Solo si la persona pide registrar otro movimiento distinto.' }
+  }, required: ['tipo', 'valor', 'fecha', 'cuenta', 'categoria', 'cliente', 'concepto', 'contraparte', 'referencia', 'comprobante'], additionalProperties: false },
+  run: run(service, 'FINANCIAL_RECORD')
 }, {
   // Los compromisos de una reunión, a pendientes (Rodny, 14 de octubre de 2026).
   name: 'pendientes_de_reunion',

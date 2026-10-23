@@ -30,7 +30,9 @@ test('la política de datos cumple el contenido mínimo del Decreto 1074 de 2015
     ]) {
         assert.ok(page.includes(expected), `Falta en la política: ${expected}`);
     }
-    assert.match(PRIVACY_POLICY_VERSION, /^2\.16 · 2026-10-22$/);
+    assert.match(PRIVACY_POLICY_VERSION, /^2\.17 · 2026-10-22$/);
+    // 22 de octubre de 2026: por WhatsApp entran fotos, documentos y notas de voz.
+    assert.match(page, /fotos, documentos y notas de voz/);
     // 22 de octubre de 2026: por WhatsApp también llegan avisos, que cada persona apaga desde su perfil.
     assert.match(page, /avisos de la plataforma/);
     assert.match(page, /apagar desde su perfil/);
