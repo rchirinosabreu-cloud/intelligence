@@ -45,7 +45,7 @@ const PRIORITY_LABEL = { NORMAL: 'normal', ALTA: 'alta', URGENTE: 'urgente' };
 
 // Módulos que exige cada acción. Las tres que nacieron con flujo propio (crear pendiente, despachar a producción,
 // eliminar pendientes) viajan por esta misma base desde el 10 de octubre de 2026; el despacho exige dos módulos.
-export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion', MINUTE_TASKS: ['gestion', 'minutas'], PLAN_DRAFT: 'parrillas', FINANCIAL_RECORD: 'financiero' };
+export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion', MINUTE_TASKS: ['gestion', 'minutas'], PLAN_DRAFT: 'parrillas', FINANCIAL_RECORD: 'financiero', EDIT_ITEM: 'parrillas' };
 export const actionModules = (type) => [].concat(ACTION_PERMISSION[type] || []);
 const MODULE_LABEL = { gestion: 'Gestión', parrillas: 'Parrillas', clientes: 'Clientes', financiero: 'Financiero' };
 export const ITEM_FORMATS = ['Reel', 'Carrusel', 'Post', 'Video', 'Historia'];
@@ -541,6 +541,69 @@ const prepareMoveItem = async ({ db, user, args, previous, today }) => {
   };
 };
 
+/* ---------------------------------------------------------------- Editar una pieza */
+
+// Lo que más hace el equipo en la plataforma (22 de octubre de 2026: 4.310 ediciones de 11 personas en 60 días): el
+// texto, el guion, el estado, el objetivo, el formato o la nota de una pieza. Se guarda por `updateContentItem`, la
+// vía de la pantalla, con sus reglas (la cola de Meta manda en el estado de lo programado, una ronda de revisión se
+// cierra al cambiar el estado). Programado y Publicado no se ponen a mano: los pone la cola o «Ya se publicó».
+const EDIT_STATUS = { borrador: 'BORRADOR', 'en revision': 'EN_REVISION', revision: 'EN_REVISION', aprobado: 'APROBADO', aprobada: 'APROBADO', devuelto: 'DEVUELTO', devuelta: 'DEVUELTO', 'en produccion': 'EN_PRODUCCION', produccion: 'EN_PRODUCCION', realizado: 'REALIZADO', realizada: 'REALIZADO' };
+const EDIT_STATUS_LABEL = { BORRADOR: 'Borrador', EN_REVISION: 'En revisión', APROBADO: 'Aprobado', DEVUELTO: 'Devuelto', EN_PRODUCCION: 'En producción', REALIZADO: 'Realizado' };
+const EDIT_FIELDS = [['objetivo', 'objective', 'el objetivo'], ['formato', 'format', 'el formato'], ['guion', 'copyText', 'el guion'], ['texto', 'captionText', 'el texto de la publicación'], ['nota', 'internalNotes', 'la nota interna']];
+const EDIT_SELECT = { ...ITEM_SELECT, copyText: true, captionText: true, internalNotes: true };
+const quoteShort = (text) => (text.length > 160 ? `«${text.slice(0, 160)}…»` : `«${text}»`);
+const WEEKDAY_NAMES = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const weekdayDate = (day) => { const date = new Date(`${day}T12:00:00Z`); return `${WEEKDAY_NAMES[date.getUTCDay()]} ${date.getUTCDate()} de ${MONTHS[date.getUTCMonth()]}`; };
+const joinParts = (parts) => (parts.length < 2 ? parts.join('') : `${parts.slice(0, -1).join(', ')} y ${parts.at(-1)}`);
+
+const prepareEditItem = async ({ db, user, args, previous }) => {
+  const itemId = tidy(args.pieza) || previous?.target?.itemId;
+  if (!itemId) throw knowledgeError('Falta la pieza: búscala con parrilla_de_cliente y pásame su id.', 400, 'BRIA_ACTION_TARGET');
+  const item = await db.contentItem.findFirst({ where: { id: itemId, deletedAt: null }, select: EDIT_SELECT });
+  if (!item) throw knowledgeError('Esa pieza ya no existe.', 404, 'BRIA_ACTION_TARGET');
+  if (item.status === 'PUBLICADO') throw knowledgeError(`«${item.objective}» ya se publicó: no se edita desde aquí. Si hay que volver a mandarla, se hace con «Publicar de nuevo» en la pieza.`, 400, 'BRIA_ACTION_PUBLISHED');
+  const wanted = { ...(previous?.wanted || {}) };
+  for (const [arg] of EDIT_FIELDS) if (args[arg] != null && String(args[arg]).trim()) wanted[arg] = String(args[arg]).trim();
+  if (args.estado != null && tidy(args.estado)) wanted.estado = tidy(args.estado);
+  const data = {};
+  const parts = [];
+  for (const [arg, field, label] of EDIT_FIELDS) {
+    if (!wanted[arg]) continue;
+    let value = wanted[arg];
+    if (field === 'format') {
+      value = ITEM_FORMATS.find((format) => same(format, value));
+      if (!value) throw knowledgeError(`El formato es Reel, Carrusel, Post, Video o Historia; «${wanted[arg]}» no existe en la parrilla.`, 400, 'BRIA_ACTION_FORMAT');
+    }
+    if (value === (item[field] || '')) continue;
+    data[field] = value;
+    parts.push(`${label} queda ${field === 'format' ? value : quoteShort(value)}`);
+  }
+  if (wanted.estado) {
+    const key = fold(wanted.estado);
+    if (['programado', 'publicado', 'programada', 'publicada'].includes(key)) throw knowledgeError('Programado y Publicado no se pone a mano: los pone la cola de Meta al programar y publicar, o «Ya se publicó» si salió por fuera.', 400, 'BRIA_ACTION_STATUS');
+    const status = EDIT_STATUS[key] || Object.keys(EDIT_STATUS_LABEL).find((value) => same(value, wanted.estado));
+    if (!status) throw knowledgeError(`No conozco el estado «${wanted.estado}». Puede ser Borrador, En revisión, Aprobado, Devuelto, En producción o Realizado.`, 400, 'BRIA_ACTION_STATUS');
+    if (status !== item.status) { data.status = status; parts.push(`pasa a ${EDIT_STATUS_LABEL[status]}`); }
+  }
+  if (!parts.length) throw knowledgeError(`«${item.objective}» ya dice eso: no hay nada que cambiar.`, 400, 'BRIA_ACTION_NOOP');
+  const warnings = [];
+  if (item.status === 'APROBADO' && (data.captionText || data.copyText || data.format) && !data.status) warnings.push('El cliente ya la aprobó: este cambio no le pide otra revisión. Si quieres que la vea de nuevo, pídele una revisión desde la parrilla.');
+  if ((item.publications || []).some((row) => LIVE_PUBLICATION.has(row.status)) && data.captionText) warnings.push('Tiene una publicación programada en redes: sale con el texto nuevo.');
+  const day = planDayOf(item.publishDate);
+  // Las frases van con «el objetivo queda…, el guion queda…»; un estado se une con «y pasa a…».
+  const sentence = joinParts(parts).replace(/, pasa a/, ' y pasa a');
+  return {
+    id: previous?.id || randomUUID(), ownerId: user.userId || user.id, type: 'EDIT_ITEM', status: 'DRAFT',
+    title: `Cambio «${item.objective}» (${item.format} de ${item.plan?.client?.name || 'cliente'}${day ? `, ${weekdayDate(day)}` : ''}): ${sentence}.`,
+    target: { itemId, planId: item.planId, objective: item.objective }, wanted, payload: { itemId, data }, summary: [], warnings, missing: []
+  };
+};
+
+const executeEditItem = async ({ action, updateContentItem }) => {
+  await updateContentItem(action.payload.itemId, action.payload.data);
+  return { text: `Listo, quedó cambiada.\n\n[Abrir la pieza](/parrillas/${action.target.planId}?item=${action.payload.itemId})`, sources: [{ kind: 'pieza', id: action.payload.itemId, label: action.target.objective }] };
+};
+
 const executeMoveItem = async ({ action, updateContentItem }) => {
   const { itemId, day, publishTime } = action.payload;
   await updateContentItem(itemId, { publishDate: day, ...(publishTime !== undefined ? { publishTime } : {}) });
@@ -974,6 +1037,7 @@ const TYPES = {
   CREATE_PLAN: { prepare: preparePlan, execute: executePlan },
   CREATE_ITEM: { prepare: prepareItem, execute: executeItem },
   MOVE_ITEM: { prepare: prepareMoveItem, execute: executeMoveItem },
+  EDIT_ITEM: { prepare: prepareEditItem, execute: executeEditItem },
   CLIENT_NOTE: { prepare: prepareClientNote, execute: executeClientNote },
   FINANCIAL_RECORD: { prepare: prepareFinancialRecord, execute: executeFinancialRecord },
   TASK_CREATE: { prepare: legacyPrepare, execute: executeTaskCreate },
