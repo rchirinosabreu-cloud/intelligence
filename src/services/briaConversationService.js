@@ -144,7 +144,8 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           result = prepared_(wrapLegacyAction('TASK_DELETE', await deleteDrafts.prepare({ user, previous: pendingAction.draft, question: text, args: { tareas: [], motivo: text } }), { title: pendingAction.title }));
         } else {
           // Los archivos del chat, del más reciente al más viejo: el comprobante de un movimiento puede haber llegado antes.
-          const chatAttachments = [...prepared.map(file => ({ id: file.id, name: file.name, status: file.status, current: true })), ...previous.map(file => ({ id: file.id, name: file.name, status: file.status, current: false }))];
+          // Con su tipo: la pieza final de una pieza solo puede ser una foto o un video.
+          const chatAttachments = [...prepared.map(file => ({ id: file.id, name: file.name, mime: file.mime, status: file.status, current: true })), ...previous.map(file => ({ id: file.id, name: file.name, mime: file.mime, status: file.status, current: false }))];
           result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), attachments, chatAttachments, pendingAction: open(pendingAction) ? pendingAction : null, session, taskAttachments: prepared, taskDefaults, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
           // Un borrador de pendiente, despacho o eliminación sobrevive a una pregunta suelta, como siempre; las demás
           // acciones solo valen sobre la respuesta inmediatamente anterior.

@@ -104,6 +104,18 @@ export const createBriaActionTools = (service) => service ? [{
   }, required: ['pieza', 'texto', 'guion', 'estado', 'objetivo', 'formato', 'nota'], additionalProperties: false },
   run: run(service, 'EDIT_ITEM')
 }, {
+  // La pieza final desde el chat o WhatsApp (22 de octubre de 2026).
+  name: 'subir_pieza_final',
+  description: 'Prepara la subida de la pieza final de una pieza de la parrilla: la foto o el video que llegó en el chat (por la plataforma o por WhatsApp), o un enlace de Google Drive cuando el archivo pesa más de 20 MB. NO sube nada: muestra un párrafo y la persona confirma. Antes localiza la pieza con parrilla_de_cliente y usa su id. Si el archivo llegó con este mensaje, archivos va en null; si llegó antes, pasa su nombre (o varios, separados por coma) o «el último». Si te pegan un enlace de Drive, pásalo en enlace. Lo que falte lo pregunta la herramienta.',
+  allowed: allowedFor('FINAL_ASSET'),
+  parameters: { type: 'object', properties: {
+    pieza: { type: 'string', description: 'Id de la pieza.' },
+    archivos: { type: ['string', 'null'], description: 'Nombre del archivo del chat, varios separados por coma, o «el último». Null si llegaron con este mensaje.' },
+    enlace: { type: ['string', 'null'], description: 'El enlace de Google Drive del archivo, si la persona lo pegó.' },
+    nuevo: { type: 'boolean' }
+  }, required: ['pieza', 'archivos', 'enlace'], additionalProperties: false },
+  run: run(service, 'FINAL_ASSET')
+}, {
   name: 'registrar_observacion',
   description: 'Prepara una observación en la ficha de un cliente (Operación de clientes): contexto que el equipo tiene que leer, como un acuerdo, una sensibilidad del cliente o un cambio de interlocutor. NO es un pendiente ni una tarea. NO escribe nada: muestra el resumen y la persona confirma. Antes localiza el cliente con buscar_cliente y usa su id. Pasa el texto con las palabras de la persona.',
   allowed: allowedFor('CLIENT_NOTE'),

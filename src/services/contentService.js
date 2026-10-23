@@ -8,7 +8,7 @@ import { COVER_MAX_BYTES, coverFileProblem, publicCover } from '../lib/videoCove
 import { randomBytes, randomUUID } from 'node:crypto';
 import { buildLinkedTaskUpdates } from '../lib/contentTaskReciprocity.js';
 import {
-  FINAL_ASSET_MAX_BYTES, FINAL_ASSET_MAX_FILES, FINAL_ASSET_DIRECT_MAX_BYTES,
+  FINAL_ASSET_MAX_BYTES, FINAL_ASSET_MAX_FILES, FINAL_ASSET_DIRECT_MAX_BYTES, FINAL_ASSETS_PER_ITEM,
   fileTooLargeMessage, tooManyFilesMessage
 } from '../lib/uploadLimits.js';
 import { DRIVE_PROVIDER, driveLinkProblem, parseDriveFileId } from '../lib/driveLinks.js';
@@ -932,9 +932,6 @@ export const uploadContentItemFinalAssets = async (itemId, files = []) => {
   await requestRevisionIfApproved(item.id);
   return listFinalAssets(item.id);
 };
-
-/** El máximo de piezas que admite un carrusel, contando archivos y enlaces por igual. */
-const FINAL_ASSETS_PER_ITEM = 20;
 
 /**
  * Dónde viven los archivos de esta pieza y cuánto sitio le queda. Lo comparten los tres caminos

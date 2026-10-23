@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseInboundMessages, typingPayload, isMetaMediaUrl, mediaFileName, REPLIES } from '../src/lib/whatsappBridge.js';
+import { parseInboundMessages, typingPayload, isMetaMediaUrl, mediaFileName, isCompressedByWhatsApp, REPLIES } from '../src/lib/whatsappBridge.js';
 import { createWhatsAppBridgeService } from '../src/services/whatsappBridgeService.js';
 
 // Fotos, documentos y notas de voz por WhatsApp (Rodny, 22 de octubre de 2026: «que incluso la contadora pueda enviar
@@ -111,7 +111,17 @@ test('un archivo demasiado grande, fuera de Meta o que no se descarga se dice; n
   const outside = build({ url: 'https://evil.example/x' });
   assert.equal((await outside.service.processMessage({ messageId: 'wamid.E', from: 'CO.1349', type: 'image', text: null, media: { kind: 'image', id: 'media1', mimeType: 'image/jpeg' } })).outcome, 'media-failed');
   assert.equal(outside.sent.at(-1).text.body, REPLIES.mediaFailed);
-  const video = build();
-  assert.equal((await video.service.processMessage({ messageId: 'wamid.X', from: 'CO.1349', type: 'video', text: null, media: null })).outcome, 'only-text');
-  assert.equal(video.sent.at(-1).text.body, REPLIES.onlyText);
+  const sticker = build();
+  assert.equal((await sticker.service.processMessage({ messageId: 'wamid.X', from: 'CO.1349', type: 'sticker', text: null, media: null })).outcome, 'only-text');
+  assert.equal(sticker.sent.at(-1).text.body, REPLIES.onlyText);
+});
+
+test('un video llega al chat como archivo, con su nombre, para subirlo como pieza final', async () => {
+  const [message] = parseInboundMessages(notice({ id: 'wamid.HBgVIDEO123456', type: 'video', video: { id: 'media9', mime_type: 'video/mp4', caption: 'Súbelo al reel de Aristea' } }));
+  assert.deepEqual(message.media, { kind: 'video', id: 'media9', mimeType: 'video/mp4', filename: null });
+  assert.equal(message.text, 'Súbelo al reel de Aristea');
+  assert.equal(mediaFileName(message.media, 'wamid.HBgVIDEO123456'), 'video-whatsapp-gVIDEO123456.mp4');
+  assert.equal(isCompressedByWhatsApp('video-whatsapp-VIDEO123456.mp4'), true);
+  assert.equal(isCompressedByWhatsApp('foto-whatsapp-ABC.jpg'), true);
+  assert.equal(isCompressedByWhatsApp('Reel final.mp4'), false, 'un documento llega como se envió');
 });

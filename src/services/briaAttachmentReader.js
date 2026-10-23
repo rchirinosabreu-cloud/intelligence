@@ -6,6 +6,7 @@ import XLSX from '../lib/xlsx.js';
 import sharp from 'sharp';
 import { PDFParse } from 'pdf-parse';
 import { validateAttachmentSelection, attachmentError } from '../lib/briaAttachments.js';
+import { sniffMediaType } from '../lib/fileSignature.js';
 
 const MAX_TEXT = 40000, MAX_EXPANDED = 40 * 1024 * 1024;
 const checkZip = bytes => {
@@ -45,6 +46,8 @@ export const readBriaAttachment = async file => {
       const entries = unzipSync(bytes, { filter: entry => /^ppt\/(slides\/slide\d+|notesSlides\/notesSlide\d+)\.xml$/.test(entry.name) });
       text = Object.entries(entries).sort(([a],[b]) => a.localeCompare(b, undefined, { numeric: true })).map(([key, value]) => `${key}\n${[...Buffer.from(value).toString().matchAll(/<a:t(?:\s[^>]*)?>([\s\S]*?)<\/a:t>/g)].map(match => xmlText(match[1])).join('\n')}`).join('\n\n');
     } else if (['.txt', '.md', '.json', '.xml', '.html', '.rtf', '.log'].includes(extension)) text = bytes.subarray(0,2).equals(Buffer.from([255,254])) ? bytes.subarray(2).toString('utf16le') : bytes.toString('utf8');
+    // Un video (o una foto HEIC) no se mira, pero se conserva con su tipo real: puede ser la pieza final de una pieza.
+    else if (sniffMediaType(bytes)) { mime = sniffMediaType(bytes); status = 'UNREADABLE'; warning = mime.startsWith('video/') ? 'Video conservado; Bria no ve lo que muestra, pero puede subirlo como pieza final.' : 'Imagen conservada en un formato que Bria no puede mirar; puede subirla como pieza final.'; }
     else { status = 'UNREADABLE'; warning = 'Archivo conservado; Bria no puede interpretar este formato. Puedes convertirlo a PDF, DOCX, XLSX o PPTX.'; }
   } catch (failure) { console.error('[BriaAttachment]', failure.code || failure.name); status = 'UNREADABLE'; warning = 'Archivo conservado; no se pudo leer su contenido. Puede estar protegido, dañado o usar un formato distinto.'; }
   if (/(?:password|contrase(?:ña|na)|api[_ -]?key|refresh[_ -]?token|client[_ -]?secret)\s*[:=]\s*\S+|\bsk-[a-zA-Z0-9_-]{12,}|-----BEGIN .*PRIVATE KEY-----/i.test(text)) throw attachmentError('El archivo contiene credenciales. Retíralas antes de adjuntarlo.');

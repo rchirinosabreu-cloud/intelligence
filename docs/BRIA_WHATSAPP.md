@@ -91,7 +91,8 @@ Rodny: «que incluso la contadora pueda enviar una imagen por WhatsApp y decir: 
 - **Se descarga solo de Meta**: el puente pide la dirección del archivo por su identificador (`GET /{media-id}?phone_number_id=`) y lo baja con el token en la cabecera; solo por https y de los servidores de Meta (`isMetaMediaUrl`), hasta 20 MB. Un archivo más grande o que no se descarga se dice; nunca se pierde en silencio.
 - **«Escribiendo…»**: al recibir, el mensaje se marca como leído con el indicador de escritura (`typingPayload`), que se quita solo al responder o a los 25 segundos.
 - **Lo que llega seguido se junta**: en WhatsApp la gente manda la foto y enseguida «regístralo» como dos mensajes. El puente espera 2,5 segundos (`WHATSAPP_BATCH_WINDOW_MS`), junta los textos y los archivos de la misma persona y Bria responde una vez. Lo de cada persona se atiende en orden. Un toque de botón no se junta: se atiende tal cual.
-- Un sticker, un video o una ubicación se contestan en palabras.
+- **Un video** (también desde el 22 de octubre de 2026, para la pieza final de un reel) entra al chat como archivo con su tipo real (`video-whatsapp-….mp4`); Bria no ve lo que muestra, pero puede subirlo como pieza final con `subir_pieza_final`. WhatsApp comprime las fotos y los videos que se mandan como tales, y Bria lo avisa: la versión final se manda como documento.
+- Un sticker o una ubicación se contestan en palabras.
 
 ## Registrar un movimiento con su comprobante (22 de octubre de 2026)
 

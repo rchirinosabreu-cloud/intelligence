@@ -9,6 +9,8 @@
 
 export const FINAL_ASSET_MAX_BYTES = 100 * 1024 * 1024;
 export const FINAL_ASSET_MAX_FILES = 10;
+/** El máximo de piezas que admite un carrusel, contando archivos y enlaces por igual. */
+export const FINAL_ASSETS_PER_ITEM = 20;
 /**
  * El archivo viaja por la memoria del servidor antes de llegar al almacenamiento y corremos con una sola
  * réplica, así que un envío completo no puede pesar más que esto. Para ir más arriba habría que subir desde

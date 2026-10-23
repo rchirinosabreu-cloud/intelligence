@@ -79,9 +79,9 @@ const replyIdOf = (message) => {
 // Una opción de Bria guarda en su identificador la frase completa: el título del botón puede venir recortado.
 const replyText = (message, replyId) => (replyId?.startsWith('q:') && replyId.length > 2 ? replyId.slice(2) : textOf(message));
 
-// Fotos, documentos y notas de voz (22 de octubre de 2026). Un sticker, un video o una ubicación no son archivos de
-// trabajo: se contestan en palabras.
-const MEDIA_KINDS = ['image', 'document', 'audio'];
+// Fotos, videos, documentos y notas de voz (22 de octubre de 2026; el video, para subir la pieza final de un reel).
+// Un sticker o una ubicación no son archivos de trabajo: se contestan en palabras.
+const MEDIA_KINDS = ['image', 'video', 'document', 'audio'];
 const mediaOf = (message) => {
   if (!MEDIA_KINDS.includes(message.type)) return null;
   const media = message[message.type];
@@ -227,7 +227,7 @@ export const REPLIES = Object.freeze({
   linked: (name) => `Listo, ${firstName(name)}. Ya puedo hablar contigo por aquí. Escríbeme como lo haces en la plataforma.`,
   invalidCode: 'Ese código no sirve o ya venció. Pide otro en tu perfil de la plataforma, en «Bria en WhatsApp».',
   notAllowed: 'Tu cuenta ya no tiene a Bria activa. Habla con administración.',
-  onlyText: 'Por WhatsApp leo texto, notas de voz, fotos y documentos. Ese tipo de mensaje todavía no: escríbeme lo que necesitas.',
+  onlyText: 'Por WhatsApp leo texto, notas de voz, fotos, videos y documentos. Ese tipo de mensaje todavía no: escríbeme lo que necesitas.',
   mediaTooBig: 'Ese archivo pesa más de 20 MB y no lo puedo abrir por aquí. Súbelo desde la plataforma o mándame una foto más liviana.',
   mediaFailed: 'No pude abrir ese archivo. Mándamelo otra vez, por favor.',
   noSpeech: 'No alcancé a entender la nota de voz. ¿Me la repites o me lo escribes?',
@@ -333,11 +333,14 @@ export const isMetaMediaUrl = (value) => {
   } catch { return false; }
 };
 export const WHATSAPP_MEDIA_MAX_BYTES = 20 * 1024 * 1024;
-const EXTENSIONS = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/amr': 'amr' };
+const EXTENSIONS = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'video/mp4': 'mp4', 'video/3gpp': '3gp', 'application/pdf': 'pdf', 'audio/ogg': 'ogg', 'audio/mpeg': 'mp3', 'audio/mp4': 'm4a', 'audio/aac': 'aac', 'audio/amr': 'amr' };
+const MEDIA_PREFIX = { audio: 'nota-de-voz', image: 'foto-whatsapp', video: 'video-whatsapp' };
+/** WhatsApp comprime las fotos y los videos que se mandan como tales; los documentos llegan como se enviaron. */
+export const isCompressedByWhatsApp = (name) => /^(foto|video)-whatsapp-/.test(String(name || ''));
 /** El nombre con que el archivo entra al chat: el que traía el documento, o uno con su extensión. */
 export const mediaFileName = (media, messageId) => {
   if (media.filename) return media.filename.replace(/[\\/\x00-\x1f]/g, '').slice(0, 180) || 'documento';
   const extension = EXTENSIONS[String(media.mimeType || '').split(';')[0].trim()] || 'bin';
   const tag = String(messageId || '').replace(/^wamid\./, '').replace(/[^A-Za-z0-9]/g, '').slice(-12) || 'archivo';
-  return `${media.kind === 'audio' ? 'nota-de-voz' : media.kind === 'image' ? 'foto-whatsapp' : 'documento'}-${tag}.${extension}`;
+  return `${MEDIA_PREFIX[media.kind] || 'documento'}-${tag}.${extension}`;
 };

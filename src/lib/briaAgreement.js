@@ -51,7 +51,8 @@ export const ACTION_VERBS = Object.freeze({
   PLAN_DRAFT: ['envialas', 'envialos', 'mandalas', 'mandalos', 'pasalas', 'pasalos', 'subelas', 'subelos', 'crealas', 'crealos'],
   PLATFORM: ['hazlo', 'aplicalo', 'aplicala', 'guardalo', 'guardala'],
   EDIT_ITEM: ['cambiala', 'cambialo', 'guardala', 'guardalo', 'hazlo', 'aplicalo', 'aplicala', 'editala'],
-  FINANCIAL_RECORD: ['registralo', 'registrala', 'guardalo', 'guardala', 'anotalo', 'anotala', 'subelo', 'subela', 'hazlo']
+  FINANCIAL_RECORD: ['registralo', 'registrala', 'guardalo', 'guardala', 'anotalo', 'anotala', 'subelo', 'subela', 'hazlo'],
+  FINAL_ASSET: ['subela', 'subelo', 'subelas', 'subelos', 'cargala', 'cargalo', 'cargalos', 'ponla', 'ponlo', 'ponlos', 'agregala', 'agregalo', 'agregalos', 'guardala', 'guardalo', 'hazlo']
 });
 /** «No», «mejor no», «no, déjalo», «olvídalo»: un no sin un cambio adentro. */
 export const isPlainRefusal = (value) => plain(value, REFUSE, REFUSE_FILLER);

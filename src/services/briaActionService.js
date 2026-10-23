@@ -33,6 +33,10 @@ import { createOpenAIClient } from './openAIClient.js';
 import { clientOperationsService } from './clientOperationsService.js';
 import { hasFinancialPermission } from '../utils/financialPermissions.js';
 import { movementType, movementAmount, movementDate, movementCategory, pickReceipt, movementParagraph, MOVEMENT_CATEGORY_LABELS } from '../lib/briaMovementDraft.js';
+import { driveLinkProblem, parseDriveFileId } from '../lib/driveLinks.js';
+import { FINAL_ASSET_MAX_FILES, FINAL_ASSETS_PER_ITEM } from '../lib/uploadLimits.js';
+import { isCompressedByWhatsApp } from '../lib/whatsappBridge.js';
+import { sniffMediaType } from '../lib/fileSignature.js';
 
 const tidy = (value) => String(value ?? '').normalize('NFKC').replace(/\s+/g, ' ').trim();
 const fold = (value) => tidy(value).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -45,7 +49,7 @@ const PRIORITY_LABEL = { NORMAL: 'normal', ALTA: 'alta', URGENTE: 'urgente' };
 
 // Módulos que exige cada acción. Las tres que nacieron con flujo propio (crear pendiente, despachar a producción,
 // eliminar pendientes) viajan por esta misma base desde el 10 de octubre de 2026; el despacho exige dos módulos.
-export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion', MINUTE_TASKS: ['gestion', 'minutas'], PLAN_DRAFT: 'parrillas', FINANCIAL_RECORD: 'financiero', EDIT_ITEM: 'parrillas' };
+export const ACTION_PERMISSION = { TASK_UPDATE: 'gestion', TASKS_STATUS: 'gestion', CREATE_PLAN: 'parrillas', CREATE_ITEM: 'parrillas', MOVE_ITEM: 'parrillas', CLIENT_NOTE: 'clientes', TASK_CREATE: 'gestion', DISPATCH: ['gestion', 'parrillas'], TASK_DELETE: 'gestion', MINUTE_TASKS: ['gestion', 'minutas'], PLAN_DRAFT: 'parrillas', FINANCIAL_RECORD: 'financiero', EDIT_ITEM: 'parrillas', FINAL_ASSET: 'parrillas' };
 export const actionModules = (type) => [].concat(ACTION_PERMISSION[type] || []);
 const MODULE_LABEL = { gestion: 'Gestión', parrillas: 'Parrillas', clientes: 'Clientes', financiero: 'Financiero' };
 export const ITEM_FORMATS = ['Reel', 'Carrusel', 'Post', 'Video', 'Historia'];
@@ -604,6 +608,103 @@ const executeEditItem = async ({ action, updateContentItem }) => {
   return { text: `Listo, quedó cambiada.\n\n[Abrir la pieza](/parrillas/${action.target.planId}?item=${action.payload.itemId})`, sources: [{ kind: 'pieza', id: action.payload.itemId, label: action.target.objective }] };
 };
 
+/* ---------------------------------------------------------------- La pieza final */
+
+// «Súbele este video al reel de Aristea» (22 de octubre de 2026): el material llega con el mensaje, por el chat o por
+// WhatsApp, o como enlace de Drive cuando pesa más de lo que cabe en un mensaje (20 MB). Se guarda por la misma vía
+// que el editor (`uploadContentItemFinalAssets`, `addContentItemDriveAsset`), con su lectura del contenido de cada
+// archivo y la ronda de revisión que se le pide al cliente cuando ya había aprobado.
+const isFinalAssetFile = (file) => /^(image|video)\//.test(String(file?.mime || ''));
+const LAST_FILE = /\b(ultim[oa]s?|anterior)\b/;
+const pickFinalAssets = (files, wanted) => {
+  const usable = files.filter(isFinalAssetFile);
+  const text = fold(wanted);
+  if (!text) return usable.filter((file) => file.current);
+  if (LAST_FILE.test(text)) return usable.slice(0, 1);
+  const picked = [];
+  for (const term of text.split(/\s*(?:,|\by\b)\s*/).filter(Boolean)) {
+    const hit = usable.find((file) => fold(file.name).includes(term) && !picked.includes(file));
+    if (hit) picked.push(hit);
+  }
+  return picked;
+};
+const pieceLabel = (item) => {
+  const day = planDayOf(item.publishDate);
+  return `«${item.objective}» (${item.format} de ${item.plan?.client?.name || 'cliente'}${day ? `, ${weekdayDate(day)}` : ''})`;
+};
+
+const prepareFinalAsset = async ({ db, user, args, previous, attachments = [] }) => {
+  const itemId = tidy(args.pieza) || previous?.target?.itemId;
+  if (!itemId) throw knowledgeError('Falta la pieza: búscala con parrilla_de_cliente y pásame su id.', 400, 'BRIA_ACTION_TARGET');
+  const item = await db.contentItem.findFirst({ where: { id: itemId, deletedAt: null }, select: { ...ITEM_SELECT, _count: { select: { finalAssets: true } } } });
+  if (!item) throw knowledgeError('Esa pieza ya no existe.', 404, 'BRIA_ACTION_TARGET');
+  const existing = item._count?.finalAssets || 0;
+  const warnings = [];
+  if (item.status === 'PUBLICADO') warnings.push('Ya se publicó: el material queda en la pieza, pero no la vuelve a abrir ni sale otra vez.');
+  else if (item.status === 'APROBADO') warnings.push('El cliente ya la aprobó: al llegar material nuevo la vuelve a ver en el portal como «Material nuevo».');
+  if ((item.publications || []).some((row) => LIVE_PUBLICATION.has(row.status))) warnings.push('Tiene una publicación programada en redes: sale con este material.');
+  if (existing) warnings.push(`Ya tiene ${existing === 1 ? 'un archivo' : `${existing} archivos`}: lo nuevo queda después, y ese es el orden del carrusel.`);
+  const base = { id: previous?.id || randomUUID(), ownerId: user.userId || user.id, type: 'FINAL_ASSET', status: 'DRAFT', target: { itemId, planId: item.planId, objective: item.objective }, wanted: {}, summary: [] };
+
+  const url = tidy(args.enlace);
+  if (url) {
+    const problem = driveLinkProblem(url);
+    if (problem) throw knowledgeError(problem, 400, 'BRIA_ACTION_DRIVE');
+    if (await db.contentItemFinalAsset?.findFirst?.({ where: { contentItemId: itemId, externalFileId: parseDriveFileId(url) }, select: { id: true } })) throw knowledgeError('Ese archivo de Drive ya está en esta pieza.', 409, 'BRIA_ACTION_DUPLICATE');
+    if (existing >= FINAL_ASSETS_PER_ITEM) throw knowledgeError(`La pieza ya tiene ${FINAL_ASSETS_PER_ITEM} archivos, el máximo de un carrusel.`, 400, 'BRIA_ACTION_LIMIT');
+    // El único fallo que la plataforma no puede ver es el permiso en Drive: el archivo se abre para quien lo subió.
+    warnings.push('Revisa que en Drive esté compartido con «cualquier persona con el enlace»: si no, el cliente se encuentra un muro.');
+    return { ...base, title: `Agrego el enlace de Drive como pieza final de ${pieceLabel(item)}.`, payload: { itemId, driveUrl: url, files: [] }, warnings, missing: [] };
+  }
+
+  const wantedFiles = args.archivos ?? null;
+  let picked = pickFinalAssets(attachments, wantedFiles);
+  if (!picked.length && !wantedFiles && previous?.payload?.files?.length) picked = previous.payload.files;
+  if (!picked.length && !wantedFiles && attachments.some((file) => file.current)) throw knowledgeError('La pieza final son solo fotos o videos; ese archivo no lo es.', 400, 'BRIA_ACTION_FILE');
+  const missing = [];
+  if (!picked.length) {
+    const recent = attachments.filter(isFinalAssetFile).slice(0, 10).map((file) => file.name);
+    missing.push(recent.length
+      ? { field: 'archivos', question: '¿Cuál de los archivos del chat es la pieza final?', options: recent }
+      : { field: 'archivos', question: 'Mándame la foto o el video por aquí (hasta 20 MB), o pégame el enlace de Drive si pesa más.' });
+  }
+  if (picked.length > FINAL_ASSET_MAX_FILES) throw knowledgeError(`Se suben hasta ${FINAL_ASSET_MAX_FILES} archivos a la vez.`, 400, 'BRIA_ACTION_LIMIT');
+  if (existing + picked.length > FINAL_ASSETS_PER_ITEM) throw knowledgeError(`Una pieza lleva hasta ${FINAL_ASSETS_PER_ITEM} archivos y esta ya tiene ${existing}.`, 400, 'BRIA_ACTION_LIMIT');
+  if (picked.some((file) => isCompressedByWhatsApp(file.name))) warnings.push('WhatsApp la comprime al mandarla como foto o video: si es la versión final, mándala como documento para que llegue con su calidad.');
+  const names = picked.map((file) => file.name);
+  const what = names.length === 1 ? `«${names[0]}»` : `${names.length} archivos (${joinParts(names)})`;
+  return {
+    ...base, title: picked.length ? `Subo ${what} como pieza final de ${pieceLabel(item)}.` : 'Subir la pieza final',
+    payload: { itemId, driveUrl: null, files: picked.map((file) => ({ id: file.id, name: file.name })) }, warnings, missing
+  };
+};
+
+const executeFinalAsset = async ({ action, loadAttachment, uploadFinalAssets, addDriveAsset }) => {
+  const { itemId, driveUrl, files } = action.payload;
+  const link = `\n\n[Abrir la pieza](/parrillas/${action.target.planId}?item=${itemId})`;
+  const sources = [{ kind: 'pieza', id: itemId, label: action.target.objective }];
+  // Los motivos del editor ya vienen en palabras («02.png es un video con la extensión cambiada»); otro fallo se anota.
+  const rejected = (failure) => {
+    console.error('[BriaActions] La pieza final no se pudo guardar:', failure?.message || failure);
+    return failure?.status === 400 || failure?.status === 409 ? knowledgeError(failure.message, failure.status, 'BRIA_ACTION_REJECTED') : knowledgeError('No se pudo guardar el material. Intenta otra vez o súbelo desde la parrilla.', 502, 'BRIA_ACTION_FAILED');
+  };
+  if (driveUrl) {
+    if (!addDriveAsset) throw knowledgeError('Subir material no está disponible en esta vista.', 403);
+    try { await addDriveAsset(itemId, { url: driveUrl }); } catch (failure) { throw rejected(failure); }
+    return { text: `Listo, el enlace quedó como pieza final.${link}`, sources };
+  }
+  if (!uploadFinalAssets) throw knowledgeError('Subir material no está disponible en esta vista.', 403);
+  const loaded = [];
+  for (const file of files) {
+    const row = await loadAttachment?.(file.id);
+    if (!row?.buffer?.length) throw knowledgeError(`«${file.name}» ya no está en el chat: vuelve a mandarlo.`, 409, 'BRIA_ACTION_FILE_GONE');
+    // El tipo sale del contenido: el chat guarda las fotos como «image/jpeg» aunque sean PNG, por la copia que mira Bria.
+    loaded.push({ buffer: row.buffer, originalname: row.name || file.name, mimetype: sniffMediaType(row.buffer) || row.mime, size: row.buffer.length });
+  }
+  try { await uploadFinalAssets(itemId, loaded); } catch (failure) { throw rejected(failure); }
+  return { text: `Listo, ${loaded.length === 1 ? 'quedó subida' : `quedaron subidos los ${loaded.length} archivos`} como pieza final.${link}`, sources };
+};
+
 const executeMoveItem = async ({ action, updateContentItem }) => {
   const { itemId, day, publishTime } = action.payload;
   await updateContentItem(itemId, { publishDate: day, ...(publishTime !== undefined ? { publishTime } : {}) });
@@ -1038,6 +1139,7 @@ const TYPES = {
   CREATE_ITEM: { prepare: prepareItem, execute: executeItem },
   MOVE_ITEM: { prepare: prepareMoveItem, execute: executeMoveItem },
   EDIT_ITEM: { prepare: prepareEditItem, execute: executeEditItem },
+  FINAL_ASSET: { prepare: prepareFinalAsset, execute: executeFinalAsset },
   CLIENT_NOTE: { prepare: prepareClientNote, execute: executeClientNote },
   FINANCIAL_RECORD: { prepare: prepareFinancialRecord, execute: executeFinancialRecord },
   TASK_CREATE: { prepare: legacyPrepare, execute: executeTaskCreate },
@@ -1108,7 +1210,7 @@ const executePlatform = async ({ user, action, platform, session, routePermissio
 };
 
 // `gate` es la puerta de actualizar una tarea (`checkTaskUpdate`); se inyecta solo para probar sus negativas.
-export const createBriaActionService = ({ db, updateTask, createTask = null, notify = null, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, recordMovement = null, attachMovementDocument = null, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, gate = checkTaskUpdate, generate = defaultGenerate, operations = clientOperationsService, now = () => new Date(), readOnly = false } = {}) => ({
+export const createBriaActionService = ({ db, updateTask, createTask = null, notify = null, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, recordMovement = null, attachMovementDocument = null, uploadFinalAssets = null, addDriveAsset = null, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, gate = checkTaskUpdate, generate = defaultGenerate, operations = clientOperationsService, now = () => new Date(), readOnly = false } = {}) => ({
   // `attachments`: los archivos del chat (del más reciente al más viejo), para el comprobante de un movimiento.
   async prepare({ user, type, args = {}, previous, attachments = [] }) {
     if (type === 'PLATFORM') {
@@ -1136,6 +1238,6 @@ export const createBriaActionService = ({ db, updateTask, createTask = null, not
       return executePlatform({ user, action, platform, session, routePermissions });
     }
     authorize(user, action.type);
-    return TYPES[action.type].execute({ db, user, action, updateTask, createTask, notify, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, recordMovement, attachMovementDocument, taskDrafts, dispatchDrafts, deleteDrafts, loadAttachment, revalidate, gate });
+    return TYPES[action.type].execute({ db, user, action, updateTask, createTask, notify, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, recordMovement, attachMovementDocument, uploadFinalAssets, addDriveAsset, taskDrafts, dispatchDrafts, deleteDrafts, loadAttachment, revalidate, gate });
   }
 });
