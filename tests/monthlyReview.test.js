@@ -85,6 +85,13 @@ test('el primer día hábil desde las 8:00 le deja la revisión a cada administr
   assert.equal(notes.length, 1);
   const later = fakeService({ at: '2026-10-06T15:00:00Z' });
   assert.equal((await later.service.runAutomatic()).delivered, 1, 'si el servidor no estuvo el primer día hábil, sale el siguiente');
+  const fifth = fakeService({ at: '2026-10-07T15:00:00Z' }); // quinto día hábil de octubre
+  assert.equal((await fifth.service.runAutomatic()).delivered, 1);
+  // El 23 de octubre de 2026 salió la de septiembre al desplegar: pasada la primera semana hábil ya no sale.
+  const late = fakeService({ at: '2026-10-08T15:00:00Z' });
+  assert.equal((await late.service.runAutomatic()).skipped, 'fuera de la primera semana');
+  assert.equal(late.notes.length, 0);
+  assert.equal((await fakeService({ at: '2026-10-23T17:00:00Z' }).service.runAutomatic()).skipped, 'fuera de la primera semana');
 });
 
 test('el primer día hábil del mes y el mes que se revisa, en reloj de Colombia', () => {
