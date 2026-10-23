@@ -19,6 +19,7 @@ export const humanMutationCatalog = [
   entry('POST', '/api/tasks/reorder', 'Tareas organizadas', 'cambió el orden de las tareas'),
   entry('POST', '/api/tasks/:id/toggle-follow', 'Seguimiento de tarea', 'cambió el seguimiento de una tarea'),
   entry('POST', '/api/tasks/:id/comments', 'Comentario enviado', 'envió un comentario'),
+  entry('POST', '/api/tasks/:id/work-sessions/:sessionId/correction', 'Tiempo corregido', 'corrigió el tiempo de una sesión de trabajo'),
   entry('PATCH', '/api/tasks/:id/comments/:commentId', 'Comentario editado', 'editó un comentario'),
   entry('DELETE', '/api/tasks/:id/comments/:commentId', 'Comentario eliminado', 'eliminó un comentario'),
   entry('POST', '/api/tasks/:id/comments/:commentId/reactions', 'Reacción a comentario', 'cambió su reacción a un comentario'),

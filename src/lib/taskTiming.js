@@ -1,4 +1,5 @@
 import { FOCUS_EXTENSION_EVENT_TYPE, FOCUS_OVERDUE_EVENT_TYPE, focusEventPresentation } from './taskFocus.js';
+import { TIME_CORRECTION_EVENT_TYPE, timeCorrectionPresentation } from './taskWorkCorrection.js';
 
 export const REOPEN_REASONS = [
   { value: 'CLIENT_CORRECTION', label: 'Corrección normal del cliente' },
@@ -141,6 +142,8 @@ export function getTaskSystemEventPresentation(type, content = '') {
   if (type === FOCUS_OVERDUE_EVENT_TYPE || type === FOCUS_EXTENSION_EVENT_TYPE) {
     return focusEventPresentation(type, note);
   }
+  // Un administrador corrigió el tiempo de una sesión (23 de octubre de 2026): de cuánto a cuánto, y por qué.
+  if (type === TIME_CORRECTION_EVENT_TYPE) return timeCorrectionPresentation(note);
   return { badgeLabel: 'Actualización', note };
 }
 

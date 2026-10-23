@@ -1360,6 +1360,9 @@ model TaskWorkSession {
   durationMs       Float?
   closeReason      String?
   isOverlapping    Boolean       @default(false)
+  // Corrección de un administrador (23 de octubre de 2026): `durationMs` pasa a ser el tiempo real y aquí queda el que
+  // marcaba antes de la primera corrección. Aditiva con `scripts/ensure-task-work-correction-schema.js`.
+  originalDurationMs Float?
   correctedAt      DateTime?
   correctedById    String?
   correctionReason String?

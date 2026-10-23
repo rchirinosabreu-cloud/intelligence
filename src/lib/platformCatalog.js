@@ -117,6 +117,7 @@ export const PLATFORM_OPERATIONS = {
   'POST /tasks/:taskId/toggle-follow': { que: 'Sigue o deja de seguir una tarea.' },
   'GET /tasks/:taskId/follow-status': { que: 'Si la persona sigue una tarea.' },
   'GET /tasks/:taskId/work-history': { que: 'Los ciclos y sesiones de trabajo de una tarea (managers).' },
+  'POST /tasks/:taskId/work-sessions/:sessionId/correction': { que: 'Corrige el tiempo de una sesión de trabajo que se pasó, por ejemplo un reloj que nadie pausó (solo administradores, con motivo, solo para acortar). Si el reloj seguía corriendo, se detiene; en una tarea de una sola persona, la tarea vuelve a Pendiente.', campos: 'durationMinutes (el tiempo real, en minutos), reason (por qué se corrige; queda en la tarea)' },
   'GET /tasks/:taskId/work/team': { que: 'El tiempo de cada colaborador en una tarea.' },
   'POST /tasks/:taskId/work/start': { que: 'Arranca el reloj propio en una tarea en proceso.' },
   'POST /tasks/:taskId/work/pause': { que: 'Pausa el reloj propio en una tarea.' },

@@ -20,6 +20,7 @@ import { canDeleteTask, isManagerRole, pickAllowedTaskUpdates, validateUploadFil
 import { canCreatePrivateTask } from '../lib/taskPrivacy.js';
 import { commentFilesValidationMessage, MAX_COMMENT_FILE_BYTES } from '../lib/taskCommentAttachments.js';
 import { listTaskWorkHistory } from '../services/taskWorkSessionService.js';
+import { taskWorkCorrectionService } from '../services/taskWorkCorrectionService.js';
 import { checkTaskUpdate } from '../services/taskUpdateGate.js';
 import { needsDeclaredTime, declareTaskTime } from '../services/declaredTimeService.js';
 export { getMyExcessiveTaskAlertsHandler as getMyExcessiveTaskAlerts } from './excessiveTaskAlertController.js';
@@ -96,6 +97,21 @@ export const getTaskWorkHistory = async (req, res) => {
     } catch (error) {
         console.error('[TaskController] Work history failed:', error?.message || error);
         res.status(500).json({ error: 'Failed to fetch task work history', details: error.message });
+    }
+};
+
+// Corregir el tiempo de una sesión (23 de octubre de 2026): solo administradores; el servicio lo vuelve a exigir.
+export const correctTaskWorkSessionHandler = async (req, res) => {
+    try {
+        const result = await taskWorkCorrectionService().correct({
+            user: req.user, taskId: req.params.taskId, sessionId: req.params.sessionId,
+            durationMinutes: req.body?.durationMinutes, reason: req.body?.reason
+        });
+        res.json(result);
+    } catch (error) {
+        console.error('[TaskController] Time correction failed:', error.response?.data || error?.message || error);
+        if (error.status && error.status < 500) return res.status(error.status).json({ error: error.message, code: error.code });
+        res.status(500).json({ error: 'No se pudo corregir el tiempo de la sesión.' });
     }
 };
 
