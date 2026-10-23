@@ -20,6 +20,7 @@ import { askDeclaredTimeIfNeeded } from '@/lib/declaredTime';
 import BrainDatePicker, { BrainTimePicker } from '@/components/ui/BrainDatePicker';
 import { QUARTER_HOURS } from '@/lib/brainDatePicker';
 import { FOCUS_EXTENSION_EVENT_TYPE, FOCUS_OVERDUE_EVENT_TYPE, focusDeadlineIso, focusTimeFromIso } from '@/lib/taskFocus';
+import { TIME_CORRECTION_EVENT_TYPE } from '@/lib/taskWorkCorrection';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { useAuth } from '@/context/AuthContext';
 import { canChangeTaskPrivacy, canCreatePrivateTask } from '@/lib/taskPrivacy';
@@ -154,6 +155,12 @@ const TASK_EVENT_STYLES = {
     },
     [FOCUS_EXTENSION_EVENT_TYPE]: {
         label: 'Evento: Solicitud de tiempo', Icon: Clock,
+        card: 'border-brand-cyan/20 bg-brand-cyan/[0.06]', icon: 'bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan',
+        title: 'text-brand-cyan-deep dark:text-brand-cyan', badge: 'border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan'
+    },
+    // Un administrador corrigió el tiempo de una sesión (23 de octubre de 2026).
+    [TIME_CORRECTION_EVENT_TYPE]: {
+        label: 'Evento: Tiempo corregido', Icon: Clock,
         card: 'border-brand-cyan/20 bg-brand-cyan/[0.06]', icon: 'bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan',
         title: 'text-brand-cyan-deep dark:text-brand-cyan', badge: 'border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan'
     }
@@ -2737,6 +2744,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     status={formData.status}
                                     startedAt={formData.startedAt}
                                     accumulatedWorkMs={formData.accumulatedWorkMs || 0}
+                                    currentUser={currentUser}
+                                    // Corregir el tiempo (23 de octubre de 2026): el panel y el tablero toman lo que dijo el servidor.
+                                    onCorrected={(result) => {
+                                        if (result?.task) setFormData(prev => ({ ...prev, ...result.task }));
+                                        fetchComments(false);
+                                        onSuccess?.();
+                                    }}
                                 />
                             )}
 

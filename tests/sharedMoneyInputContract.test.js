@@ -12,6 +12,8 @@ import path from 'node:path';
 // dinero. Están contados aquí, archivo por archivo: un campo de dinero nuevo con
 // `type="number"` sube la cuenta y esta prueba lo frena.
 const NON_MONEY_NUMBER_FIELDS = {
+    // Horas y minutos del tiempo real de una sesión que corrige un administrador (23 de octubre de 2026).
+    'src/components/modules/TaskWorkHistory.jsx': 2,
     // Año de la parrilla.
     'src/components/modules/ContentGrids/CreatePlanModal.jsx': 1,
     // Cantidad de un servicio, meses de duración y el descuento cuando es un porcentaje
