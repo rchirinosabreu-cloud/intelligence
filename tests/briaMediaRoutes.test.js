@@ -11,7 +11,7 @@ test('media is authenticated and multipart files cannot supply an identity or tr
   app.use('/knowledge', createBriaKnowledgeRouter({ service: { registry: async () => assert.fail('PM reached registry') } }));
   const server = await new Promise(resolve => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); }); const base = `http://127.0.0.1:${server.address().port}`;
   try {
-    const form = new FormData(); form.set('question', 'Revisa'); form.set('user', '{"id":"victim"}'); form.set('files', new Blob(['Real bytes']), 'nota.txt');
+    const form = new FormData(); form.set('question', 'Revisa'); form.set('expectedRevision', '0'); form.set('user', '{"id":"victim"}'); form.set('files', new Blob(['Real bytes']), 'nota.txt');
     const sent = await fetch(`${base}/chat/${id}/messages`, { method: 'POST', body: form });
     assert.equal(sent.status, 200);
     assert.equal(Object.hasOwn((await sent.json()).turns[0], 'sources'), false, 'source titles and URLs stay server-side');

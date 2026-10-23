@@ -23,6 +23,12 @@ export { ALERT_KINDS, ALERT_KIND_LABELS };
 
 const H = 60 * 60 * 1000;
 export const SERVICE_WINDOW_MS = 24 * H;
+// La vigencia se comprueba también al pulsar: la purga periódica no es una puerta de acceso.
+export const ALERT_RETENTION_DAYS = 14;
+export const isAlertCurrent = (alert, at = new Date()) => {
+  const age = at.getTime() - new Date(alert?.createdAt).getTime();
+  return Boolean(alert?.createdAt) && age >= 0 && age < ALERT_RETENTION_DAYS * 24 * H;
+};
 // No se arriesga un mensaje libre en el último cuarto de hora: si la ventana cierra en el camino, Meta lo rechaza.
 export const WINDOW_MARGIN_MS = 15 * 60 * 1000;
 /** Un pedido de acceso de noche no despierta a nadie: queda en la campana y encima de Bria. */
@@ -104,6 +110,11 @@ export const accessAlert = ({ type, request, text }) => ({
 
 const DAILY_TOPICS = { CIERRE_DIA: 'tu cierre del día', LECTURA_MANANA: 'tu lectura de la mañana', REVISION_MES: 'la revisión de las cuentas del mes' };
 /** La lectura de la mañana o el cierre del día, enteros: son el mismo texto que queda en el chat. */
-export const dailyAlert = ({ note, dayKey, text }) => ({ kind: 'DAILY', sourceRef: `${note}:${dayKey}`, topic: DAILY_TOPICS[note] || 'tu día', text: toWhatsAppText(text), buttons: [] });
+export const dailyAlert = ({ note, dayKey, text, conversationId = null }) => ({
+  kind: 'DAILY', sourceRef: `${note}:${dayKey}`, topic: DAILY_TOPICS[note] || 'tu día', text: toWhatsAppText(text),
+  ...(conversationId ? { conversationId } : {}),
+  // Revisar es una pregunta, nunca una aprobación de lo propuesto ni de una acción preparada en ese chat.
+  buttons: conversationId ? [{ label: 'Revisar lectura', ask: 'Quiero revisar esta lectura y sus propuestas contigo. Explícame qué propones y por qué antes de hacer cambios.' }] : []
+});
 
 export const ALERT_ACTIONS = Object.freeze(['VAULT_APPROVE', 'VAULT_DENY', 'MODULE_APPROVE', 'MODULE_DENY', 'PULSE_DISMISS']);

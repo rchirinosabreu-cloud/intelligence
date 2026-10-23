@@ -1,10 +1,11 @@
 import { getApiBaseUrl } from './apiBaseUrl.js';
+const chatFailure = (data, status) => Object.assign(new Error(data.message || 'Bria no pudo responder. Intenta nuevamente.'), { status, ...(data.code ? { code: data.code } : {}) });
 export const requestBriaChat = async (suffix = '', { method = 'GET', body } = {}) => {
   const token = globalThis.localStorage?.getItem('authToken'), base = import.meta.env ? getApiBaseUrl() : '';
   const multipart = body instanceof FormData;
   const response = await fetch(`${base}/api/bria/conversations${suffix}`, { method, credentials: 'same-origin', headers: { ...(!multipart ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }, ...(body ? { body: multipart ? body : JSON.stringify(body) } : {}) });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) { console.error('[BriaConversation] No se pudo completar la consulta:', data); throw new Error(data.message || 'Bria no pudo responder. Intenta nuevamente.'); }
+  if (!response.ok) { console.error('[BriaConversation] No se pudo completar la consulta:', data); throw chatFailure(data, response.status); }
   return data;
 };
 // Respuesta en vivo (9 de octubre de 2026): manda el mensaje pidiendo `text/event-stream`, entrega cada avance a
@@ -16,7 +17,7 @@ export const streamBriaChat = async (suffix, { body, onEvent = () => {} } = {}) 
   const response = await fetch(`${base}/api/bria/conversations${suffix}`, { method: 'POST', credentials: 'same-origin', headers: { Accept: 'text/event-stream', ...(!multipart ? { 'Content-Type': 'application/json' } : {}), ...(token ? { Authorization: `Bearer ${token}` } : {}) }, body: multipart ? body : JSON.stringify(body || {}) });
   if (!(response.headers.get('content-type') || '').includes('text/event-stream')) {
     const data = await response.json().catch(() => ({}));
-    if (!response.ok) { console.error('[BriaConversation] No se pudo completar la consulta:', data); throw new Error(data.message || 'Bria no pudo responder. Intenta nuevamente.'); }
+    if (!response.ok) { console.error('[BriaConversation] No se pudo completar la consulta:', data); throw chatFailure(data, response.status); }
     return data;
   }
   const reader = response.body.getReader(), decoder = new TextDecoder();
@@ -32,7 +33,7 @@ export const streamBriaChat = async (suffix, { body, onEvent = () => {} } = {}) 
       if (!data) continue;
       let event; try { event = JSON.parse(data); } catch { continue; }
       if (event.type === 'done') return event.chat;
-      if (event.type === 'error') { console.error('[BriaConversation] No se pudo completar la consulta:', event); throw new Error(event.message || 'Bria no pudo responder. Intenta nuevamente.'); }
+      if (event.type === 'error') { console.error('[BriaConversation] No se pudo completar la consulta:', event); throw chatFailure(event, event.status); }
       onEvent(event);
     }
   }

@@ -27,7 +27,7 @@ test('streaming: progress as it happens, then the saved chat without its sources
   } };
   const app = await serve(service);
   try {
-    const response = await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify({ question: 'hola' }) });
+    const response = await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify({ question: 'hola', expectedRevision: 0 }) });
     assert.match(response.headers.get('content-type'), /text\/event-stream/);
     assert.match(response.headers.get('cache-control'), /no-store/);
     const list = events(await response.text());
@@ -46,7 +46,7 @@ test('streaming: a failure arrives as words, and an unexpected one never shows i
     for (const [error, expected] of [[Object.assign(new Error('Bria está respondiendo en esta conversación.'), { status: 409 }), { status: 409, message: 'Bria está respondiendo en esta conversación.' }], [new Error('connect ECONNREFUSED 10.0.0.5'), { status: 500, message: 'No se pudo abrir o continuar la conversación.' }]]) {
       const app = await serve(failing(error));
       try {
-        const response = await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify({ question: 'hola' }) });
+        const response = await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'text/event-stream' }, body: JSON.stringify({ question: 'hola', expectedRevision: 0 }) });
         const last = events(await response.text()).at(-1);
         assert.deepEqual({ status: last.status, message: last.message }, expected);
         assert.equal(last.type, 'error');
@@ -61,9 +61,9 @@ test('the person’s own token travels as `session` with each message, streamed 
   const seen = [];
   const app = await serve({ read: async () => ({}), authorizeInput: async () => {}, send: async ({ session }) => { seen.push(session); return saved; } });
   try {
-    await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-de-rodny' }, body: JSON.stringify({ question: 'hola' }) });
-    await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-de-rodny', Accept: 'text/event-stream' }, body: JSON.stringify({ question: 'hola' }) });
-    await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: 'hola' }) });
+    await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-de-rodny' }, body: JSON.stringify({ question: 'hola', expectedRevision: 0 }) });
+    await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer token-de-rodny', Accept: 'text/event-stream' }, body: JSON.stringify({ question: 'hola', expectedRevision: 0 }) });
+    await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: 'hola', expectedRevision: 0 }) });
     assert.deepEqual(seen, [{ token: 'token-de-rodny' }, { token: 'token-de-rodny' }, null]);
   } finally { await app.close(); }
 });
@@ -71,7 +71,7 @@ test('the person’s own token travels as `session` with each message, streamed 
 test('without the header the answer is the same single JSON as before', async () => {
   const app = await serve({ read: async () => ({}), authorizeInput: async () => {}, send: async ({ onEvent }) => { assert.equal(onEvent, undefined); return saved; } });
   try {
-    const response = await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: 'hola' }) });
+    const response = await fetch(app.url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: 'hola', expectedRevision: 0 }) });
     const body = await response.json();
     assert.equal(body.turns[1].text, 'Hola, Rodny.');
   } finally { await app.close(); }

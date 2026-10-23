@@ -199,7 +199,8 @@ test('the instructions name the person, the day and exactly the tools she can us
   // Rodny, 10 de octubre de 2026: al cuestionarle una cifra, Bria «corregía» repitiendo los mismos números.
   assert.match(text, /Nunca inventes una corrección ni pidas disculpas por lo que no fue un error/);
   assert.match(text, /No describas tus herramientas/);
-  assert.match(text, /Fechas con su día de la semana, como «lunes 6 de octubre»/);
+  assert.match(text, /Fechas con su día de la semana.*calendarioFechas/);
+  assert.match(text, /Hoy es martes 6 de octubre de 2026/);
   const none = buildInstructions({ person, today: TODAY, tools: [] });
   assert.match(none, /ninguna/);
 });

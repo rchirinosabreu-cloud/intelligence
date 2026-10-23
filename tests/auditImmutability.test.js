@@ -15,12 +15,12 @@ import { TRACE_RETENTION_DAYS } from '../src/services/operationalTraceService.js
 
 const byName = (name) => AUDIT_TABLES.find((spec) => spec.name === name);
 const schema = await readFile(new URL('../prisma/schema.prisma', import.meta.url), 'utf8');
-const sqlFiles = (await Promise.all(['vault.sql', 'bria-agency-facts.sql', 'bria-knowledge.sql']
+const sqlFiles = (await Promise.all(['vault.sql', 'bria-agency-facts.sql', 'bria-knowledge.sql', 'bria-daily-reading.sql']
     .map((file) => readFile(new URL(`../scripts/sql/${file}`, import.meta.url), 'utf8')))).join('\n');
 
 test('el catálogo cubre todos los registros de auditoría y de historial', () => {
     assert.deepEqual(AUDIT_TABLES.map((spec) => `${spec.schema}.${spec.name}`).sort(), [
-        'bria_memory.agency_fact_events', 'bria_memory.learning_events',
+        'bria_memory.agency_fact_events', 'bria_memory.decision_events', 'bria_memory.learning_events',
         'public.AiGovernanceEvent', 'public.AiUsageEvent', 'public.DeletedTaskLog',
         'public.FinancialAuditEvent', 'public.OperationalTraceEvent',
         'vault.credential_events', 'vault.reveal_events'
