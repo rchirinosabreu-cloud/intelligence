@@ -88,6 +88,22 @@ export const createBriaActionTools = (service) => service ? [{
   }, required: ['pieza', 'fecha', 'hora'], additionalProperties: false },
   run: run(service, 'MOVE_ITEM')
 }, {
+  // Lo que más hace el equipo (22 de octubre de 2026): editar una pieza.
+  name: 'editar_pieza',
+  description: 'Prepara un cambio en una pieza de la parrilla: el texto de la publicación (lo que ve el cliente), el guion (solo el equipo), el estado (borrador, en revisión, aprobado, devuelto, en producción, realizado), el objetivo, el formato o la nota interna. NO cambia nada: muestra un párrafo y la persona confirma. Antes localiza la pieza con parrilla_de_cliente (y lee su texto con leer_piezas_de_parrilla si te piden ajustarlo, no reemplazarlo) y pasa el texto completo como debe quedar, nunca solo el pedazo nuevo. Pasa solo lo que cambia; lo demás en null. Para mover la fecha usa mover_pieza. Programado y Publicado no se ponen a mano.',
+  allowed: allowedFor('EDIT_ITEM'),
+  parameters: { type: 'object', properties: {
+    pieza: { type: 'string', description: 'Id de la pieza.' },
+    texto: { type: ['string', 'null'], description: 'El texto completo de la publicación, como debe quedar.' },
+    guion: { type: ['string', 'null'], description: 'El guion completo, como debe quedar.' },
+    estado: { type: ['string', 'null'], enum: ['borrador', 'en revisión', 'aprobado', 'devuelto', 'en producción', 'realizado', null] },
+    objetivo: { type: ['string', 'null'] },
+    formato: { type: ['string', 'null'], enum: [...ITEM_FORMATS, null] },
+    nota: { type: ['string', 'null'], description: 'La nota interna para el equipo, completa.' },
+    nuevo: { type: 'boolean' }
+  }, required: ['pieza', 'texto', 'guion', 'estado', 'objetivo', 'formato', 'nota'], additionalProperties: false },
+  run: run(service, 'EDIT_ITEM')
+}, {
   name: 'registrar_observacion',
   description: 'Prepara una observación en la ficha de un cliente (Operación de clientes): contexto que el equipo tiene que leer, como un acuerdo, una sensibilidad del cliente o un cambio de interlocutor. NO es un pendiente ni una tarea. NO escribe nada: muestra el resumen y la persona confirma. Antes localiza el cliente con buscar_cliente y usa su id. Pasa el texto con las palabras de la persona.',
   allowed: allowedFor('CLIENT_NOTE'),

@@ -81,6 +81,9 @@ Una pieza nueva en una parrilla (por su id o por cliente y mes). **Nace con un o
 ### `mover_pieza` (permiso de Parrillas)
 La fecha y la hora de publicación de una pieza. Una pieza ya publicada no se mueve. Avisa si tiene una publicación programada en redes (se mueve con ella, porque `updateContentItem` resincroniza la cola), si la fecha es pasada (lo programado se cancela) y si el cliente ya la aprobó (no le pide otra aprobación, pero conviene avisarle). La fecha viaja como `YYYY-MM-DD`, igual que desde el editor.
 
+### `editar_pieza` (permiso de Parrillas)
+Rodny, 22 de octubre de 2026: editar piezas es lo que más hace el equipo en la plataforma (4.310 ediciones de 11 personas en 60 días) y Bria solo sabía cambiarles la fecha. La acción `EDIT_ITEM` cambia el objetivo, el formato, el guion, el texto de la publicación, el estado o la nota interna de una pieza, uno o varios a la vez, y lo resume en **un párrafo** («Cambio «Menú de otoño» (Reel de Aristea, viernes 23 de octubre): el texto de la publicación queda «…» y pasa a Aprobado»), con los textos largos recortados en el resumen pero guardados enteros. Pone las mismas cerraduras que la pantalla: una pieza publicada no se edita, «Programado» y «Publicado» no se ponen a mano (son de la cola), un formato que no existe se rechaza diciendo cuáles sí y un cambio que no cambia nada se dice («ya dice eso»). Avisa cuando el cliente ya aprobó la pieza y cuando tiene una publicación armada. Al confirmar («sí, cámbiala») guarda por `updateContentItem`, la misma vía del editor, y devuelve el enlace a la pieza. La fecha sigue en `mover_pieza`. Contrato: `tests/briaEditItem.test.js`.
+
 ### `registrar_observacion` (módulo Clientes)
 Una observación en la ficha del cliente (Operación de clientes): contexto que el equipo tiene que leer, no un pendiente. Pide el texto si no lo dieron, respeta el tope de 2.000 caracteres y la guarda con el autor por `addObservation`, la misma función de la ruta.
 

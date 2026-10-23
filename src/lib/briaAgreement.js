@@ -50,6 +50,7 @@ export const ACTION_VERBS = Object.freeze({
   MINUTE_TASKS: ['crear', 'crealos', 'crealas', 'crea', 'montalos', 'registralos'],
   PLAN_DRAFT: ['envialas', 'envialos', 'mandalas', 'mandalos', 'pasalas', 'pasalos', 'subelas', 'subelos', 'crealas', 'crealos'],
   PLATFORM: ['hazlo', 'aplicalo', 'aplicala', 'guardalo', 'guardala'],
+  EDIT_ITEM: ['cambiala', 'cambialo', 'guardala', 'guardalo', 'hazlo', 'aplicalo', 'aplicala', 'editala'],
   FINANCIAL_RECORD: ['registralo', 'registrala', 'guardalo', 'guardala', 'anotalo', 'anotala', 'subelo', 'subela', 'hazlo']
 });
 /** «No», «mejor no», «no, déjalo», «olvídalo»: un no sin un cambio adentro. */
