@@ -1,4 +1,5 @@
 import express from 'express';
+import { receivesFiles } from '../lib/uploadMarker.js';
 import * as authController from '../controllers/authController.js';
 import * as taskController from '../controllers/taskController.js';
 import { taskCollaboratorController } from '../controllers/taskCollaboratorController.js';
@@ -262,7 +263,7 @@ router.get('/tasks/work-alerts', taskController.getMyExcessiveTaskAlerts);
 router.get('/tasks/returned-alerts', taskController.getMyReturnedTaskAlerts);
 router.get('/tasks', taskController.getAllTasks);
 router.post('/tasks', taskController.createNewTask);
-router.post('/tasks/upload-temp', upload.single('file'), taskController.uploadTempFile);
+router.post('/tasks/upload-temp', receivesFiles(upload.single('file'), { field: 'file' }), taskController.uploadTempFile);
 router.post('/tasks/reorder', taskController.reorderTasks);
 router.post('/tasks/:taskId/work-confirmation', taskController.confirmExcessiveTaskWork);
 router.post('/tasks/:taskId/alert-interaction', taskController.taskAlertInteractionHandler);
@@ -282,7 +283,7 @@ router.post('/tasks/:taskId/work/pause', guardTask, taskCollaboratorController.p
 router.get('/tasks/:taskId/attachments/:attachmentId/file', guardTask, taskController.getTaskAttachmentFileProxy);
 router.get('/tasks/:taskId/attachments/:attachmentId/download', guardTask, taskController.getTaskAttachmentDownloadProxy);
 router.get('/tasks/:taskId/comments', guardTask, taskController.getTaskComments);
-router.post('/tasks/:taskId/comments', guardTask, commentUpload.array('file', MAX_COMMENT_FILES), taskController.addTaskComment);
+router.post('/tasks/:taskId/comments', guardTask, receivesFiles(commentUpload.array('file', MAX_COMMENT_FILES), { field: 'file', max: MAX_COMMENT_FILES }), taskController.addTaskComment);
 router.get('/tasks/:taskId/comments/:commentId/file', guardTask, taskController.getCommentFileProxy);
 router.get('/tasks/:taskId/comments/:commentId/download', guardTask, taskController.getCommentFileDownloadProxy);
 router.post('/tasks/:taskId/comments/:commentId/reactions', guardTask, taskController.toggleCommentReaction);

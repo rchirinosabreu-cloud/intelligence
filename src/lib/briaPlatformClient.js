@@ -16,8 +16,11 @@ export const normalizePlatformPath = (path) => {
   return text.startsWith('/api/') ? text.slice(4) : text;
 };
 
+const CODE = /^[A-Z][A-Z0-9_]+$/;
 const humanStatus = (status, body) => {
-  const message = body && typeof body === 'object' ? (body.error || body.message) : null;
+  // Algunas rutas mandan el código en `error` y la frase en `message` (FINANCIAL_DOCUMENT_TOO_LARGE): se dice la frase.
+  const error = body && typeof body === 'object' ? body.error : null;
+  const message = body && typeof body === 'object' ? ((typeof error === 'string' && CODE.test(error.trim()) && body.message) || error || body.message) : null;
   // Muchas rutas responden un titular («Revisa los datos del evento») y el motivo en `details` («El tipo de evento no
   // es válido»): sin el detalle, Bria no sabe qué corregir (22 de octubre de 2026).
   const detail = body && typeof body === 'object' && typeof body.details === 'string' ? body.details.trim().slice(0, 300) : '';
@@ -31,15 +34,27 @@ const humanStatus = (status, body) => {
 };
 
 export const createBriaPlatformClient = ({ baseUrl = `http://127.0.0.1:${process.env.PORT || 3000}`, fetchFn = (...args) => fetch(...args), limit = PLATFORM_RESPONSE_LIMIT } = {}) => ({
-  async call({ token, method = 'GET', path, body }) {
+  // `files`: los archivos del chat para una ruta que los recibe (`receivesFiles`), como `{ field, name, mime, buffer }`.
+  // Viajan como el formulario del navegador: los campos del cuerpo como texto y cada archivo con su nombre.
+  async call({ token, method = 'GET', path, body, files = [] }) {
     if (!token) throw Object.assign(new Error('Esta conversación no trae tu sesión: recarga la página e inténtalo de nuevo.'), { status: 401, code: 'BRIA_PLATFORM_SESSION' });
     const route = normalizePlatformPath(path);
     const verb = String(method || 'GET').toUpperCase();
-    const withBody = body !== undefined && body !== null && verb !== 'GET';
+    const multipart = files.length > 0 && verb !== 'GET';
+    const withBody = !multipart && body !== undefined && body !== null && verb !== 'GET';
+    let payload;
+    if (multipart) {
+      payload = new FormData();
+      for (const [key, value] of Object.entries(body && typeof body === 'object' ? body : {})) {
+        if (value !== undefined && value !== null) payload.append(key, typeof value === 'object' ? JSON.stringify(value) : String(value));
+      }
+      for (const file of files) payload.append(file.field, new Blob([file.buffer], { type: file.mime || 'application/octet-stream' }), file.name);
+    }
     const response = await fetchFn(`${baseUrl}/api${route}`, {
       method: verb,
       headers: { Authorization: `Bearer ${token}`, 'x-brain-via': 'bria', Accept: 'application/json', ...(withBody ? { 'Content-Type': 'application/json' } : {}) },
-      ...(withBody ? { body: JSON.stringify(body) } : {})
+      ...(withBody ? { body: JSON.stringify(body) } : {}),
+      ...(multipart ? { body: payload } : {})
     });
     const type = response.headers?.get?.('content-type') || '';
     let data = null, text = '';

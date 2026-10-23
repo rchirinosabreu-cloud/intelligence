@@ -43,4 +43,7 @@
 // transcriben con el mismo servicio del dictado y todo queda en el historial de Bria, como los mensajes.
 // 2.18 (22 de octubre de 2026): por WhatsApp también entran videos, que se guardan como los demás archivos del chat y,
 // si la persona lo confirma, pasan a ser la pieza final de una pieza de la parrilla.
-export const PRIVACY_POLICY_VERSION = '2.18 · 2026-10-22';
+// 2.19 (22 de octubre de 2026): un archivo del chat o de WhatsApp se guarda en la pantalla que lo recibe (comprobante,
+// soporte, certificado, pieza final, portada, adjunto de una tarea) cuando la persona lo confirma; bajar o borrar
+// archivos sigue fuera del chat.
+export const PRIVACY_POLICY_VERSION = '2.19 · 2026-10-22';

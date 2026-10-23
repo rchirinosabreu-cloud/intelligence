@@ -157,7 +157,9 @@ test('el esquema, el arranque, las rutas, el catálogo y la pantalla conocen las
     assert.match(JSON.parse(read('../package.json')).scripts.start, /ensure-receivable-retention-schema\.js/);
     const routes = read('../src/routes/api/financials.js');
     assert.ok(routes.includes("'/receivable-payments/:paymentId/documents', requireFinancialWrite, receiveFinancialDocument"));
-    assert.ok(isExcludedOperation('POST /financials/receivable-payments/:paymentId/documents'));
+    // Desde el 22 de octubre de 2026 Bria adjunta el certificado que llegó al chat; bajarlo sigue fuera.
+    assert.ok(PLATFORM_OPERATIONS['POST /financials/receivable-payments/:paymentId/documents'].archivo);
+    assert.ok(isExcludedOperation('GET /financials/receivable-payments/:paymentId/documents/:documentId/file'));
     assert.match(PLATFORM_OPERATIONS['POST /financials/receivables/:id/payments'].campos, /retentions/);
     const controller = read('../src/controllers/financialController.js');
     assert.match(controller, /retainedAmount/);

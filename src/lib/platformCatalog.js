@@ -6,8 +6,11 @@
 //   lleva cuando se conocen. Es lo único que se escribe a mano. Los permisos NO están aquí: los lee
 //   `listApiRoutes` de las rutas reales (etiqueta `permission` de cada guardián) y los hace valer la propia API.
 // - `PLATFORM_EXCLUDED`: lo que Bria no hace ni confirmando, con su motivo: cuentas y permisos de personas,
-//   contraseñas y verificación en dos pasos, la bóveda (tiene su propio camino), borrar una parrilla entera, subir
-//   archivos (no caben en un chat), binarios, proxies y lo interno de la plataforma.
+//   contraseñas y verificación en dos pasos, la bóveda (tiene su propio camino), borrar una parrilla entera, bajar
+//   o borrar archivos, cargas masivas (Excel, extractos), binarios, proxies y lo interno de la plataforma.
+// - Subir un archivo sí (22 de octubre de 2026): una ruta que recibe archivos lo dice en su código con
+//   `receivesFiles` (campo y cuántos), Bria lo lee del router y manda el archivo que llegó al chat o por WhatsApp.
+//   Aquí solo va `archivo`, en palabras: qué archivo espera esa pantalla.
 // - La prueba `tests/platformCatalog.test.js` exige que toda ruta real esté descrita o excluida: una ruta nueva sin
 //   su frase rompe CI, así Bria crece con la plataforma sin que nadie se acuerde de avisarle.
 
@@ -32,16 +35,18 @@ export const PLATFORM_EXCLUDED = [
   { match: /^\w+ \/(drive\/upload|tasks\/upload-temp|drive\/managed-files)/, reason: 'subir o descargar archivos' },
   { match: /^\w+ \/tasks\/:taskId\/(trace-open|alert-interaction|work-confirmation|returned-reminder\/snooze)$/, reason: 'señales de la pantalla' },
   { match: /^GET \/tasks\/:taskId\/(attachments|comments)\/[^/]+\/(file|download)$/, reason: 'descarga de archivos' },
-  { match: /^\w+ \/content\/items\/:id\/final-assets?(\/|$)/, reason: 'subir, ordenar o bajar piezas finales se hace en el editor' },
-  { match: /^\w+ \/content\/items\/:id\/cover$/, reason: 'la portada de un video se sube en el editor' },
+  // Subir una pieza final, su portada o un enlace de Drive sí se hace desde el chat (22 de octubre de 2026); bajar o
+  // borrar archivos, la subida directa al almacenamiento y la ruta antigua de un solo archivo, no.
+  { match: /^\w+ \/content\/items\/:id\/final-asset(\/|$)/, reason: 'la ruta antigua de un solo archivo' },
+  { match: /^(GET|DELETE) \/content\/items\/:id\/(final-assets\/:assetId|cover)$/, reason: 'bajar o borrar archivos de una pieza se hace en el editor' },
+  { match: /^POST \/content\/items\/:id\/final-assets\/(direct-upload|confirm)$/, reason: 'la subida directa va del navegador al almacenamiento' },
   { match: /^\w+ \/clients\/:\w+\/(logo-image|storage\/signed-url|files)(\/|$)/, reason: 'archivos y logos' },
   { match: /^\w+ \/boards\/(unfurl|:boardId\/storage\/signed-url)$/, reason: 'adjuntos de inspiración' },
   { match: /^\w+ \/reports\/(generate|extract-metrics|image-proxy|:reportId\/(pdf|preview))$/, reason: 'subir capturas y archivos del informe' },
   { match: /^\w+ \/financials\/(import|bank-reconciliation\/(preview|import))(\/|$)/, reason: 'cargar archivos de Excel o extractos' },
-  { match: /^(POST \/financials\/records\/:id\/documents|GET \/financials\/records\/:id\/documents\/:documentId\/file)$/, reason: 'comprobantes: archivos' },
+  // Adjuntar un comprobante, un soporte o un certificado sí se hace desde el chat (22 de octubre de 2026); bajarlo no.
+  { match: /^GET \/financials\/(records\/:id|payables\/:id|receivable-payments\/:paymentId)\/documents\/:documentId\/file$/, reason: 'descargar comprobantes, soportes y certificados' },
   { match: /^GET \/financials\/receivables\/:id\/document$/, reason: 'el PDF de la cuenta de cobro' },
-  { match: /^(POST \/financials\/payables\/:id\/documents|GET \/financials\/payables\/:id\/documents\/:documentId\/file)$/, reason: 'soportes de cuentas por pagar: archivos' },
-  { match: /^(POST \/financials\/receivable-payments\/:paymentId\/documents|GET \/financials\/receivable-payments\/:paymentId\/documents\/:documentId\/file)$/, reason: 'certificados de retención y soportes de ajustes: archivos' },
   { match: /^GET \/financials\/clients\/:clientId\/statement\/document$/, reason: 'el PDF del estado de cuenta' },
   { match: /^\w+ \/recognitions(\/|$)/, reason: 'entrega personal de reconocimientos' },
   { match: /^\w+ \/activity\/google-calendar\/(auth-url|oauth-callback)$/, reason: 'conexión con Google: pantalla' },
@@ -55,7 +60,7 @@ export const PLATFORM_EXCLUDED = [
 
 export const isExcludedOperation = (key) => PLATFORM_EXCLUDED.find((rule) => rule.match.test(key)) || null;
 
-// method path → { que, campos? }. Las rutas con parámetro llevan `:nombre` como en el servidor.
+// method path → { que, campos?, archivo? }. Las rutas con parámetro llevan `:nombre` como en el servidor.
 export const PLATFORM_OPERATIONS = {
   // Cotizaciones y catálogo
   'GET /quotations/catalog': { que: 'El catálogo de servicios con sus precios, para armar cotizaciones.' },
@@ -116,7 +121,7 @@ export const PLATFORM_OPERATIONS = {
   'POST /tasks/:taskId/work/start': { que: 'Arranca el reloj propio en una tarea en proceso.' },
   'POST /tasks/:taskId/work/pause': { que: 'Pausa el reloj propio en una tarea.' },
   'GET /tasks/:taskId/comments': { que: 'La conversación de una tarea.' },
-  'POST /tasks/:taskId/comments': { que: 'Escribe un comentario en una tarea, firmado por la persona.', campos: 'content (texto o HTML sencillo)' },
+  'POST /tasks/:taskId/comments': { que: 'Escribe un comentario en una tarea, firmado por la persona, con archivos adjuntos si los hay.', campos: 'content (texto o HTML sencillo)', archivo: 'los adjuntos del comentario, hasta 10 y 25 MB en total' },
   'POST /tasks/:taskId/comments/:commentId/reactions': { que: 'Reacciona a un comentario.', campos: 'emoji' },
   'PATCH /tasks/:taskId/comments/:commentId': { que: 'Edita un comentario propio.', campos: 'content' },
   'DELETE /tasks/:taskId/comments/:commentId': { que: 'Borra un comentario propio.' },
@@ -201,6 +206,10 @@ export const PLATFORM_OPERATIONS = {
   'POST /content/plans/:id/request-revision': { que: 'Pide al cliente volver a revisar las piezas aprobadas con material nuevo.' },
   'POST /content/items/:id/request-revision': { que: 'Pide al cliente volver a revisar una pieza.' },
   'GET /content/items': { que: 'Las piezas de contenido.', campos: 'planId (consulta)' },
+  'POST /content/items/:id/final-assets': { que: 'Sube fotos o videos como pieza final de una pieza; quedan al final del carrusel.', archivo: 'las fotos o videos, hasta 10' },
+  'POST /content/items/:id/final-assets/drive': { que: 'Agrega un archivo de Google Drive como pieza final de una pieza.', campos: 'url (enlace del archivo, no de una carpeta), name (opcional)' },
+  'PUT /content/items/:id/final-assets/order': { que: 'Cambia el orden de los archivos de la pieza final, que es el orden del carrusel que sale publicado.', campos: 'order (lista de ids de los archivos, en el orden nuevo)' },
+  'POST /content/items/:id/cover': { que: 'Sube la portada de un reel (una imagen; se ajusta a 9:16 sin recortar).', archivo: 'la imagen de la portada' },
   'POST /content/items': { que: 'Crea una pieza (mejor con crear_pieza).', campos: 'planId, objective, format, publishDate, status' },
   'PATCH /content/items/:id': { que: 'Edita una pieza: objetivo, formato, guion, texto, fecha, hora, estado, notas, cuentas.', campos: 'objective, format, copyText, captionText, publishDate (YYYY-MM-DD), publishTime (HH:mm), status (BORRADOR|EN_REVISION|APROBADO|DEVUELTO|EN_PRODUCCION|REALIZADO|PUBLICADO; PROGRAMADO lo pone la cola de Meta, no se escribe a mano), internalNotes, socialPageIds' },
   'DELETE /content/items/:id': { que: 'Elimina una pieza de la parrilla.' },
@@ -268,7 +277,10 @@ export const PLATFORM_OPERATIONS = {
   'PATCH /financials/records/:id': { que: 'Edita un movimiento no vinculado a pagos.', campos: 'amount, date, concept, category, accountId, clientId' },
   'POST /financials/records/:id/void': { que: 'Anula un movimiento con motivo.', campos: 'reason' },
   'PUT /financials/records/:id/allocations': { que: 'El desglose interno de un movimiento (ítems que suman el total).', campos: 'allocations[{amount, category, concept}]' },
+  'POST /financials/records/:id/documents': { que: 'Adjunta un comprobante o una factura (PDF, JPG o PNG) a un movimiento de Financiero.', archivo: 'el comprobante, un archivo por vez' },
   'POST /financials/records/:id/documents/:documentId/void': { que: 'Anula un comprobante con motivo.', campos: 'reason' },
+  'POST /financials/payables/:id/documents': { que: 'Adjunta el soporte (factura, cuenta de cobro o recibo en PDF, JPG o PNG) a una cuenta por pagar.', archivo: 'el soporte, un archivo por vez' },
+  'POST /financials/receivable-payments/:paymentId/documents': { que: 'Adjunta el certificado de una retención, o el soporte de un ajuste, a su fila de la cartera.', archivo: 'el certificado o soporte, un archivo por vez' },
   'GET /financials/periods': { que: 'Los periodos contables y su estado.' },
   'POST /financials/periods/close': { que: 'Cierra un periodo.', campos: 'year, month' },
   'POST /financials/periods/reopen': { que: 'Reabre un periodo.', campos: 'year, month' },
@@ -374,7 +386,7 @@ export const findOperations = (query, { limit = 12, writesOnly = false } = {}) =
   if (!words.length) return [];
   return Object.entries(PLATFORM_OPERATIONS)
     .map(([key, op]) => {
-      const haystack = fold(`${key} ${op.que} ${op.campos || ''}`);
+      const haystack = fold(`${key} ${op.que} ${op.campos || ''} ${op.archivo ? `archivo adjuntar subir ${op.archivo}` : ''}`);
       const score = words.reduce((sum, word) => sum + (haystack.includes(word) ? 1 : 0), 0);
       return { key, score, write: WRITE.has(key.split(' ')[0]), ...op };
     })

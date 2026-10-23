@@ -9,7 +9,7 @@ import { createBriaDispatchService } from './briaDispatchService.js';
 import { sendItemToKanban, createContentPlan, updateContentPlan, createContentItem, updateContentItem, uploadContentItemFinalAssets, addContentItemDriveAsset } from './contentService.js';
 import { clientOperationsService } from './clientOperationsService.js';
 import { getBriaPlatformClient } from '../lib/briaPlatformClient.js';
-import { getRoutePermission } from '../lib/platformPermissions.js';
+import { getRoutePermission, getRouteUpload } from '../lib/platformPermissions.js';
 import { createFinancialRecord } from './financialRecordService.js';
 import { attachFinancialRecordDocument, financialEvidenceStorage } from './financialRecordDocumentService.js';
 export const briaTaskDrafts = createBriaTaskDraftService({ db: prisma, createTask, uploadFile: uploadToS3, removeFile: deleteFromS3, notify: createNotification });
@@ -25,4 +25,4 @@ export const briaActions = createBriaActionService({ db: prisma, updateTask, cre
   attachMovementDocument: ({ recordId, file, user }) => attachFinancialRecordDocument(prisma, financialEvidenceStorage(), recordId, file, user),
   // La pieza final desde el chat o WhatsApp (22 de octubre de 2026): las mismas funciones que el editor.
   uploadFinalAssets: uploadContentItemFinalAssets, addDriveAsset: addContentItemDriveAsset,
-  taskDrafts: briaTaskDrafts, dispatchDrafts: briaDispatchDrafts, deleteDrafts: briaDeleteDrafts, platform: getBriaPlatformClient(), routePermissions: getRoutePermission });
+  taskDrafts: briaTaskDrafts, dispatchDrafts: briaDispatchDrafts, deleteDrafts: briaDeleteDrafts, platform: getBriaPlatformClient(), routePermissions: getRoutePermission, routeUploads: getRouteUpload });

@@ -616,8 +616,8 @@ const executeEditItem = async ({ action, updateContentItem }) => {
 // archivo y la ronda de revisión que se le pide al cliente cuando ya había aprobado.
 const isFinalAssetFile = (file) => /^(image|video)\//.test(String(file?.mime || ''));
 const LAST_FILE = /\b(ultim[oa]s?|anterior)\b/;
-const pickFinalAssets = (files, wanted) => {
-  const usable = files.filter(isFinalAssetFile);
+// Qué archivos del chat quiere la persona: los de este mensaje si no dice nada, «el último», o por su nombre.
+const pickChatFiles = (usable, wanted) => {
   const text = fold(wanted);
   if (!text) return usable.filter((file) => file.current);
   if (LAST_FILE.test(text)) return usable.slice(0, 1);
@@ -627,6 +627,14 @@ const pickFinalAssets = (files, wanted) => {
     if (hit) picked.push(hit);
   }
   return picked;
+};
+const pickFinalAssets = (files, wanted) => pickChatFiles(files.filter(isFinalAssetFile), wanted);
+// El archivo como lo recibe la ruta: el tipo sale del contenido, porque el chat guarda las fotos como «image/jpeg»
+// aunque sean PNG (por la copia que mira Bria).
+const loadChatFile = async (loadAttachment, file) => {
+  const row = await loadAttachment?.(file.id);
+  if (!row?.buffer?.length) throw knowledgeError(`«${file.name}» ya no está en el chat: vuelve a mandarlo.`, 409, 'BRIA_ACTION_FILE_GONE');
+  return { buffer: row.buffer, name: row.name || file.name, mime: sniffMediaType(row.buffer) || row.mime };
 };
 const pieceLabel = (item) => {
   const day = planDayOf(item.publishDate);
@@ -696,10 +704,8 @@ const executeFinalAsset = async ({ action, loadAttachment, uploadFinalAssets, ad
   if (!uploadFinalAssets) throw knowledgeError('Subir material no está disponible en esta vista.', 403);
   const loaded = [];
   for (const file of files) {
-    const row = await loadAttachment?.(file.id);
-    if (!row?.buffer?.length) throw knowledgeError(`«${file.name}» ya no está en el chat: vuelve a mandarlo.`, 409, 'BRIA_ACTION_FILE_GONE');
-    // El tipo sale del contenido: el chat guarda las fotos como «image/jpeg» aunque sean PNG, por la copia que mira Bria.
-    loaded.push({ buffer: row.buffer, originalname: row.name || file.name, mimetype: sniffMediaType(row.buffer) || row.mime, size: row.buffer.length });
+    const row = await loadChatFile(loadAttachment, file);
+    loaded.push({ buffer: row.buffer, originalname: row.name, mimetype: row.mime, size: row.buffer.length });
   }
   try { await uploadFinalAssets(itemId, loaded); } catch (failure) { throw rejected(failure); }
   return { text: `Listo, ${loaded.length === 1 ? 'quedó subida' : `quedaron subidos los ${loaded.length} archivos`} como pieza final.${link}`, sources };
@@ -1161,7 +1167,7 @@ const platformPermissionProblem = (user, permission) => {
   return null;
 };
 
-const preparePlatform = async ({ user, args, previous, routePermissions }) => {
+const preparePlatform = async ({ user, args, previous, routePermissions, routeUploads, attachments = [] }) => {
   const method = tidy(args.metodo || args.method).toUpperCase();
   const path = tidy(args.ruta || args.path);
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) throw knowledgeError('Para leer usa consultar_plataforma; operar_en_plataforma es para POST, PUT, PATCH o DELETE.', 400, 'BRIA_PLATFORM_METHOD');
@@ -1184,15 +1190,33 @@ const preparePlatform = async ({ user, args, previous, routePermissions }) => {
   const warnings = [];
   if (method === 'DELETE') warnings.push('Es un borrado: si la plataforma no lo deja deshacer, no se deshace.');
   if (operation.key.startsWith('POST /financials') || operation.key.startsWith('PUT /financials') || operation.key.startsWith('PATCH /financials')) warnings.push('Es dinero: revisa el importe y la fecha antes de confirmar.');
-  if (operation.campos && !body && ['POST', 'PUT', 'PATCH'].includes(method)) warnings.push(`Va sin cuerpo; esta operación suele llevar: ${operation.campos}.`);
+  // Archivos (22 de octubre de 2026): la ruta dice en su código si los recibe y con qué campo (`receivesFiles`). Van
+  // los del mensaje si la persona no nombró otros; una pantalla que solo recibe un archivo lo pide si no llegó.
+  const upload = (await routeUploads?.(operation.key)) || null;
+  const wantedFiles = args.archivos ?? null;
+  const picked = upload ? pickChatFiles(attachments, wantedFiles) : [];
+  const missing = [];
+  if (!upload && tidy(wantedFiles)) throw knowledgeError('Esa operación no recibe archivos; súbelos donde la plataforma los pide, o dime para qué son.', 400, 'BRIA_PLATFORM_FILES');
+  if (upload && picked.length > upload.max) throw knowledgeError(upload.max === 1 ? 'Esa pantalla recibe un archivo por vez: dime cuál.' : `Esa pantalla recibe hasta ${upload.max} archivos a la vez.`, 400, 'BRIA_PLATFORM_FILES');
+  if (upload && tidy(wantedFiles) && !picked.length) throw knowledgeError(`No encuentro «${tidy(wantedFiles)}» entre los archivos del chat.`, 404, 'BRIA_PLATFORM_FILES');
+  if (upload && !picked.length && !operation.campos) {
+    const recent = attachments.slice(0, 10).map((file) => file.name);
+    missing.push(recent.length
+      ? { field: 'archivos', question: '¿Cuál de los archivos del chat va?', options: recent }
+      : { field: 'archivos', question: `Mándame ${operation.archivo || 'el archivo'} por aquí (hasta 20 MB).` });
+  }
+  const names = picked.map((file) => `«${file.name}»`);
+  const title = names.length ? `${intent.replace(/\.?$/, '.')} ${names.length === 1 ? `Va con ${names[0]}.` : `Van ${names.length} archivos: ${joinParts(names)}.`}` : intent;
+  if (!upload && attachments.some((file) => file.current)) warnings.push('El archivo que mandaste no va en este paso: si es su soporte, lo adjunto después.');
+  if (operation.campos && !body && !picked.length && ['POST', 'PUT', 'PATCH'].includes(method)) warnings.push(`Va sin cuerpo; esta operación suele llevar: ${operation.campos}.`);
   return {
     id: previous?.id || randomUUID(), ownerId: user.userId || user.id, type: 'PLATFORM', status: 'DRAFT',
-    title: intent, target: { key: operation.key, path: path.split('?')[0] }, wanted: {}, permission,
-    payload: { method, path: path.split('?')[0], body }, summary, warnings, missing: []
+    title, target: { key: operation.key, path: path.split('?')[0] }, wanted: {}, permission,
+    payload: { method, path: path.split('?')[0], body, ...(picked.length ? { files: picked.map((file) => ({ id: file.id, name: file.name })) } : {}) }, ...(upload ? { upload } : {}), summary, warnings, missing
   };
 };
 
-const executePlatform = async ({ user, action, platform, session, routePermissions }) => {
+const executePlatform = async ({ user, action, platform, session, routePermissions, routeUploads, loadAttachment }) => {
   const operation = matchOperation(action.payload.method, action.payload.path);
   if (!operation) throw knowledgeError('Esa operación ya no está en el mapa de la plataforma.', 404, 'BRIA_PLATFORM_UNKNOWN');
   const problem = platformPermissionProblem(user, (await routePermissions?.(operation.key)) || action.permission);
@@ -1201,7 +1225,12 @@ const executePlatform = async ({ user, action, platform, session, routePermissio
   // eso). La pantalla lo pone sola; aquí sale del id de la acción, así que un reintento lleva el mismo y no duplica.
   const rawBody = action.payload.body ?? undefined;
   const body = operation.requestId && rawBody && typeof rawBody === 'object' && !rawBody.requestId ? { ...rawBody, requestId: `bria-${String(action.id).replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 120)}` } : rawBody;
-  const result = await platform.call({ token: session?.token, method: action.payload.method, path: action.payload.path, body });
+  const chosen = action.payload.files || [];
+  const upload = chosen.length ? ((await routeUploads?.(operation.key)) || action.upload) : null;
+  if (chosen.length && !upload) throw knowledgeError('Esa operación ya no recibe archivos.', 400, 'BRIA_PLATFORM_FILES');
+  const files = [];
+  for (const file of chosen) files.push({ field: upload.field, ...(await loadChatFile(loadAttachment, file)) });
+  const result = await platform.call({ token: session?.token, method: action.payload.method, path: action.payload.path, body, ...(files.length ? { files } : {}) });
   if (!result.ok) throw knowledgeError(`La plataforma no lo aceptó: ${result.error}`, result.status >= 400 && result.status < 500 ? result.status : 502, 'BRIA_PLATFORM_REJECTED');
   // Sin la respuesta técnica de la plataforma: la persona ya leyó qué se iba a hacer. Lo único que se le entrega es
   // lo que necesita a continuación, como el enlace de una reunión recién creada (22 de octubre de 2026).
@@ -1210,12 +1239,12 @@ const executePlatform = async ({ user, action, platform, session, routePermissio
 };
 
 // `gate` es la puerta de actualizar una tarea (`checkTaskUpdate`); se inyecta solo para probar sus negativas.
-export const createBriaActionService = ({ db, updateTask, createTask = null, notify = null, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, recordMovement = null, attachMovementDocument = null, uploadFinalAssets = null, addDriveAsset = null, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, gate = checkTaskUpdate, generate = defaultGenerate, operations = clientOperationsService, now = () => new Date(), readOnly = false } = {}) => ({
+export const createBriaActionService = ({ db, updateTask, createTask = null, notify = null, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, recordMovement = null, attachMovementDocument = null, uploadFinalAssets = null, addDriveAsset = null, taskDrafts = null, dispatchDrafts = null, deleteDrafts = null, platform = null, routePermissions = null, routeUploads = null, gate = checkTaskUpdate, generate = defaultGenerate, operations = clientOperationsService, now = () => new Date(), readOnly = false } = {}) => ({
   // `attachments`: los archivos del chat (del más reciente al más viejo), para el comprobante de un movimiento.
   async prepare({ user, type, args = {}, previous, attachments = [] }) {
     if (type === 'PLATFORM') {
       if (!canUseBria(user)) throw knowledgeError('Bria no está activada para tu cuenta.', 403, 'BRIA_ACTION_FORBIDDEN');
-      return preparePlatform({ user, args, previous, routePermissions });
+      return preparePlatform({ user, args, previous, routePermissions, routeUploads, attachments });
     }
     authorize(user, type);
     const owner = user.userId || user.id;
@@ -1235,7 +1264,7 @@ export const createBriaActionService = ({ db, updateTask, createTask = null, not
     await revalidate?.();
     if (isPlatform) {
       if (!platform) throw knowledgeError('Esta vista no puede operar en la plataforma.', 403);
-      return executePlatform({ user, action, platform, session, routePermissions });
+      return executePlatform({ user, action, platform, session, routePermissions, routeUploads, loadAttachment });
     }
     authorize(user, action.type);
     return TYPES[action.type].execute({ db, user, action, updateTask, createTask, notify, createContentPlan, updateContentPlan, createContentItem, updateContentItem, addObservation, recordMovement, attachMovementDocument, uploadFinalAssets, addDriveAsset, taskDrafts, dispatchDrafts, deleteDrafts, loadAttachment, revalidate, gate });
