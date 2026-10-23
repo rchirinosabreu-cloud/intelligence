@@ -105,7 +105,7 @@ export const linkProspectClient = async (db, leadId, clientId, actor = {}, { now
  * ligada no se mueve. Devuelve `{ linked, created, party }`; sin datos suficientes del cliente (un borrador
  * vacío) no hace nada. Quien la llama decide qué hacer si falla: guardar la cotización nunca depende de esto.
  */
-export const linkQuotationParty = async (db, quotation, actor = {}, { now = new Date() } = {}) => {
+export const linkQuotationParty = async (db, quotation, actor = {}, { now = new Date(), clientId: forcedClientId = null, leadId: forcedLeadId = null } = {}) => {
     if (!quotation?.id) return { linked: false, created: false, party: null };
     if (quotation.lead_id) return { linked: false, created: false, party: await readQuotationParty(db, quotation.lead_id) };
 
@@ -113,7 +113,8 @@ export const linkQuotationParty = async (db, quotation, actor = {}, { now = new 
     if (!isQuotationPartyKnown(party)) return { linked: false, created: false, party: null };
 
     const clients = await db.client.findMany({ select: { id: true, name: true, legalName: true, email: true, isArchived: true } });
-    const client = matchQuotationClient(clients, party);
+    // Una persona puede decir a qué ficha va cuando el nombre no basta («Foobespain American LLC» es FoobeSpain).
+    const client = forcedClientId ? clients.find((item) => item.id === forcedClientId) || null : matchQuotationClient(clients, party);
 
     const where = [
         client ? { clientId: client.id } : null,
@@ -125,7 +126,12 @@ export const linkQuotationParty = async (db, quotation, actor = {}, { now = new 
         where: { archivedAt: null, OR: where },
         select: { id: true, stage: true, clientId: true, email: true, company: true, companyKey: true, contactName: true, updatedAt: true, archivedAt: true, quotationId: true, quotedValue: true }
     });
-    const match = matchQuotationLead(leads, party, client?.id ?? null);
+    // …y a qué oportunidad, cuando ni el correo ni el nombre la encuentran (otro correo de la misma empresa).
+    const forcedLead = forcedLeadId
+        ? await db.crmLead.findUnique({ where: { id: forcedLeadId }, select: { id: true, stage: true, clientId: true, archivedAt: true, quotationId: true, quotedValue: true } })
+        : null;
+    if (forcedLeadId && (!forcedLead || forcedLead.archivedAt)) throw Object.assign(new Error('La oportunidad indicada no existe.'), { statusCode: 404 });
+    const match = forcedLead || matchQuotationLead(leads, party, client?.id ?? null);
     const code = quotationCode(quotation);
     const total = Number(quotation.total_amount) || 0;
 

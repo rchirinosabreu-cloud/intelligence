@@ -62,22 +62,17 @@ const CLOSED_STAGES = new Set(['PERDIDO', 'DESCARTADO', 'GANADO']);
 export const isOpenLead = (lead) => Boolean(lead) && !lead.archivedAt && !CLOSED_STAGES.has(lead.stage);
 
 /**
- * La oportunidad abierta de ese tercero, o null: la del mismo cliente, o la del mismo correo, o la de la misma
- * empresa. Si hay varias, la que se movió más recientemente.
+ * La oportunidad abierta de ese tercero, o null. Primero las del mismo cliente o del mismo correo; si no hay,
+ * las de la misma empresa. Entre varias, la que se movió más recientemente: un cliente puede tener una
+ * oportunidad vieja ya ligada a su ficha y otra nueva que todavía no lo está, y la propuesta nueva va con la nueva.
  */
 export const matchQuotationLead = (leads = [], party = {}, clientId = null) => {
     const open = leads.filter(isOpenLead);
     const newest = (candidates) => candidates.sort((a, b) => new Date(b.updatedAt || 0) - new Date(a.updatedAt || 0))[0] || null;
-    if (clientId) {
-        const byClient = newest(open.filter((lead) => lead.clientId === clientId));
-        if (byClient) return byClient;
-    }
-    // Sin ficha de cliente, la oportunidad de otro cliente no es la suya aunque coincida el nombre.
+    // La oportunidad de otro cliente no es la suya aunque coincida el correo o el nombre.
     const free = open.filter((lead) => !lead.clientId || lead.clientId === clientId);
-    if (party.email) {
-        const byEmail = newest(free.filter((lead) => partyEmail(lead.email) === party.email));
-        if (byEmail) return byEmail;
-    }
+    const byClientOrEmail = newest(free.filter((lead) => (clientId && lead.clientId === clientId) || (party.email && partyEmail(lead.email) === party.email)));
+    if (byClientOrEmail) return byClientOrEmail;
     if (party.nameKey) {
         return newest(free.filter((lead) => (lead.companyKey || partyNameKey(lead.company || lead.contactName)) === party.nameKey));
     }
