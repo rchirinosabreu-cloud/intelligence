@@ -286,6 +286,14 @@ export const answerForWhatsApp = (turn) => textWithOptions(replyForWhatsApp(turn
  * Un mensaje con botones (hasta tres, de hasta 20 caracteres) o con una lista (hasta diez filas). Devuelve null si
  * no se puede: sin opciones, más de diez, o un cuerpo de más de 1.024 caracteres; entonces sale en texto.
  */
+/** Un texto recortado a `max` en la última palabra completa que cabe; si la primera ya no cabe, se corta a secas. */
+export const wordFit = (value, max) => {
+  const text = String(value || '').trim();
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max + 1).replace(/\s+\S*$/, '').replace(/[\s,;:.·—-]+$/, '');
+  return cut.length >= 4 ? cut : text.slice(0, max);
+};
+
 export const optionsMessagePayload = (target, body, options, { footer = OPTIONS_FOOTER } = {}) => {
   const rows = [];
   for (const option of options || []) {
@@ -304,7 +312,9 @@ export const optionsMessagePayload = (target, body, options, { footer = OPTIONS_
     ...base,
     interactive: {
       type: 'list', body: { text }, ...footerPart,
-      action: { button: OPTIONS_LIST_BUTTON, sections: [{ title: 'Opciones', rows: rows.map((row) => ({ id: row.id, title: clip(row.label, LIST_ROW_TITLE_MAX), ...(row.label.length > LIST_ROW_TITLE_MAX ? { description: clip(row.label, LIST_ROW_DESCRIPTION_MAX) } : {}) })) }] }
+      // Lo que no cabe en el título se corta en una palabra completa, sin «…», y solo entonces va entero debajo
+      // (23 de octubre de 2026: «Que Bria me resuma lo q…» con la frase repetida debajo).
+      action: { button: OPTIONS_LIST_BUTTON, sections: [{ title: 'Opciones', rows: rows.map((row) => ({ id: row.id, title: wordFit(row.label, LIST_ROW_TITLE_MAX), ...(row.label.length > LIST_ROW_TITLE_MAX ? { description: clip(row.label, LIST_ROW_DESCRIPTION_MAX) } : {}) })) }] }
     }
   };
 };

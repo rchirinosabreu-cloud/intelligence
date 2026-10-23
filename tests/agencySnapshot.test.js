@@ -167,7 +167,7 @@ test('people: overdue that lasts, overdue that jumps, an unusual load and the ov
   ] }, history });
   const byId = new Map(out.signals.map((s) => [s.id, s]));
   assert.equal(byId.get('VENCIDAS_SOSTENIDAS:m1').text, 'Melissa Ruiz lleva 5 días con tareas vencidas (hoy 3).');
-  assert.equal(byId.get('VENCIDAS_SOSTENIDAS:m1').url, '/gestion?responsable=Melissa%20Ruiz');
+  assert.equal(byId.get('VENCIDAS_SOSTENIDAS:m1').url, '/gestion?responsable=Melissa+Ruiz');
   assert.equal(byId.get('VENCIDAS_SUBEN:m2').text, 'Jesús Pérez pasó de 1 a 4 tareas vencidas desde la última lectura.');
   assert.equal(byId.has('VENCIDAS_SOSTENIDAS:m2'), true, 'a long streak is said too');
   assert.equal(byId.get('CARGA_INUSUAL:m3').text, 'Kamila Díaz tiene 19 pendientes abiertos; lo habitual en las últimas semanas eran 10.');

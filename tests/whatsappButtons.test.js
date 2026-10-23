@@ -40,7 +40,8 @@ test('más de tres opciones, o una que no cabe en un botón, van en una lista; m
   assert.equal(asList.interactive.type, 'list', 'un botón cortado se leería mal');
   const named = [{ id: 'q:x', label: 'Que Bria me resuma lo que tiene pendiente hoy' }, { id: 'q:y', label: 'Ver' }];
   const row = optionsMessagePayload('573001234567', 'Hola', named).interactive.action.sections[0].rows[0];
-  assert.ok(row.title.length <= 24 && row.title.endsWith('…'));
+  // Cortado en palabra completa y sin «…» (23 de octubre de 2026: «Que Bria me resuma lo q…»).
+  assert.equal(row.title, 'Que Bria me resuma lo');
   assert.equal(row.description, 'Que Bria me resuma lo que tiene pendiente hoy', 'lo que no cabe en el título va completo debajo');
   const eleven = Array.from({ length: 11 }, (_, i) => ({ id: `q:${i}`, label: `Opción ${i}` }));
   assert.equal(optionsMessagePayload('573001234567', 'Elige', eleven), null);

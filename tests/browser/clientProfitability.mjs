@@ -46,6 +46,15 @@ try {
     assert.deepEqual(errors, []);
     await page.close();
   }
+  // El enlace de la revisión de cierre de mes abre Rentabilidad en ese mes (23 de octubre de 2026).
+  const linked = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  const asked = [];
+  linked.on('request', (request) => { if (request.url().includes('/api/client-profitability')) asked.push(new URL(request.url()).search); });
+  await linked.goto(`${base}?tab=rentabilidad&year=2026&month=8`, { timeout: 90000, waitUntil: 'domcontentloaded' });
+  await linked.locator('[data-profitability-client]').first().waitFor();
+  assert.match(await linked.locator('[data-profitability] h2').innerText(), /agosto de 2026/);
+  await linked.close();
+
   // Un miembro sin rol de administrador no ve la pestaña.
   const viewer = await browser.newPage({ viewport: { width: 1440, height: 900 } });
   await viewer.goto(`${base}?viewer=reader`, { timeout: 90000, waitUntil: 'domcontentloaded' });

@@ -78,12 +78,12 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-bria-nudge]')?.getAttribute('data-bria-nudge') === 'SIN_PROCESO');
   assert.ok(sent.includes('POST /api/bria/nudges/dismiss'));
   await page.getByText('Melissa no tiene una tarea en proceso desde las 9:55', { exact: false }).waitFor();
-  assert.equal(await card.getByRole('link', { name: 'Ver sus pendientes' }).getAttribute('href'), '/gestion?responsable=Melissa%20Casta%C3%B1o', 'the board link lands on her tasks');
+  assert.equal(await card.getByRole('link', { name: 'Ver sus pendientes' }).getAttribute('href'), '/gestion?responsable=Melissa+Castano', 'the board link lands on her tasks');
   // El seguimiento: el desenlace del aviso se lee en la misma tarjeta.
   assert.equal(await card.locator('[data-bria-nudge-resolution]').innerText(), 'Melissa arrancó «Reel de lanzamiento» a las 10:40.');
   await page.screenshot({ path: path.join(output, 'bria-adelanta-sin-proceso.png') });
-  // «Que Bria me resuma lo que tiene» deja el mensaje escrito, nunca lo manda.
-  await card.getByRole('button', { name: 'Que Bria me resuma lo que tiene' }).click();
+  // «Resumir sus pendientes» deja el mensaje escrito, nunca lo manda.
+  await card.getByRole('button', { name: 'Resumir sus pendientes' }).click();
   await panel.waitFor({ state: 'visible' });
   const composer = page.getByLabel('Mensaje para Bria');
   assert.match(await composer.inputValue(), /Resúmeme qué tiene pendiente Melissa/);

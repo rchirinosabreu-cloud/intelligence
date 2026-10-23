@@ -12,7 +12,7 @@ import prisma from '../lib/prisma.js';
 import { AI_MODELS } from '../config/aiConfig.js';
 import { hasModulePermission } from '../config/security.js';
 import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
-import { bogotaClock } from '../lib/briaNudges.js';
+import { bogotaClock, personBoardUrl } from '../lib/briaNudges.js';
 import { approvalState, APPROVAL_STATES } from '../lib/contentApproval.js';
 import { clientSnapshot, personSnapshot, readSignals, levelLabel } from '../lib/agencySnapshot.js';
 import { buildDailyDigest, buildDailyReadingRequest, parseDailyReading, validateDailyReading, composeReading, buildMorningBrief } from '../lib/dailyReading.js';
@@ -284,7 +284,7 @@ export const createDailyReadingService = ({
             const row = matches[0];
             const series = await repo.series('PERSON', row.id, { days: span, until: reading.day });
             data.persona = {
-              nombre: row.name, enlace: `/gestion?responsable=${encodeURIComponent(row.name)}`,
+              nombre: row.name, enlace: personBoardUrl(row.name),
               senales: reading.signals.filter((s) => s.subjectType === 'PERSON' && s.subjectId === row.id).map((s) => s.text),
               serie: series.map(({ day, metrics: m }) => ({ fecha: day, abiertas: m.open, enProceso: m.inProgress, vencidas: m.overdue, devueltas: m.returned, cerradasElDiaAnterior: m.closedTasks, horasDelDiaAnterior: Math.round((m.hoursMs / H) * 10) / 10 }))
             };

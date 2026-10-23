@@ -1,5 +1,5 @@
 // Que Bria sea project manager y community manager (Rodny, 19 de octubre de 2026). Primera pieza: escribirle al cliente.
-// Bria ya tenía el aviso «Redactar recordatorio al cliente», pero lo escribía a ciegas: sin el enlace del portal, sin
+// Bria ya tenía el aviso «Recordarle al cliente», pero lo escribía a ciegas: sin el enlace del portal, sin
 // saber qué salió publicado ni qué espera la aprobación. Ahora lee la parrilla como la ve el cliente y redacta el
 // mensaje listo para copiar. Nunca lo envía, y nunca lleva lo que el cliente no ve (guion, notas internas, el equipo).
 import test from 'node:test';
@@ -122,7 +122,7 @@ test('Bria knows when to use it, the reminder notice points to it, and the tool 
   assert.match(text, /23\. Cuando te pidan escribirle a un cliente/);
   assert.match(text, /nunca lo envías/);
   const [, remind] = nudgeActions({ kind: 'PIEZA_SIN_APROBAR', clientName: 'Aristea', title: 'Reel de lanzamiento', day: 'miércoles 22 de octubre', url: '/parrillas/p?item=i' });
-  assert.equal(remind.label, 'Redactar recordatorio al cliente');
+  assert.equal(remind.label, 'Recordarle al cliente');
   assert.match(remind.ask, /WhatsApp/);
   assert.match(remind.ask, /enlace del portal/);
   assert.match(read('src/lib/briaAssistant.js'), /mensaje_para_cliente: '/);

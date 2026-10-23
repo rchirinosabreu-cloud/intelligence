@@ -139,7 +139,7 @@ export const buildClientProfitability = ({ year, month, clients = [], receivable
 
   return {
     period: { year, month, label: `${MONTHS[month - 1]} de ${year}` },
-    agency: { costCents, directCostCents, sharedCostCents, hoursMs, clientHoursMs, internalHoursMs, internalCostCents, hourCostCents, revenueCents: result.reduce((sum, entry) => sum + entry.revenueCents, 0), billedCents: result.reduce((sum, entry) => sum + entry.billedCents, 0), fromIncome, coverage, forgottenSessions },
+    agency: { costCents, directCostCents, sharedCostCents, hoursMs, clientHoursMs, internalHoursMs, internalCostCents, hourCostCents, revenueCents: result.reduce((sum, entry) => sum + entry.revenueCents, 0), billedCents: result.reduce((sum, entry) => sum + entry.billedCents, 0), fromIncome, unlinkedIncomeCents, coverage, forgottenSessions },
     clients: result,
     notes
   };

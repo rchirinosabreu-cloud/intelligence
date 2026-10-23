@@ -25,7 +25,7 @@ import {
 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useLocation } from 'react-router-dom';
 import FinancialLedger from './financial/FinancialLedger';
 import FinancialFilters, { FINANCIAL_MONTHS } from './financial/FinancialFilters';
 import ReceivablePaymentDialog from './financial/ReceivablePaymentDialog';
@@ -157,7 +157,12 @@ const FinancialDashboard = () => {
     ), [filterQuery, filters.category]);
     // Financiero abre en Movimientos (Rodny, 23 de septiembre de 2026): el trabajo
     // diario es el libro, no las gráficas.
-    const [activeTab, setActiveTab] = useState('records');
+    // `?tab=rentabilidad&year=&month=` (23 de octubre de 2026): la revisión de cierre de mes de Bria abre aquí, en ese mes.
+    const location = useLocation();
+    const linkParams = new URLSearchParams(location.search);
+    const linkedMonth = linkParams.get('tab') === 'rentabilidad' && /^\d{4}$/.test(linkParams.get('year') || '') && /^\d{1,2}$/.test(linkParams.get('month') || '')
+        ? `${linkParams.get('year')}-${String(linkParams.get('month')).padStart(2, '0')}-01` : '';
+    const [activeTab, setActiveTab] = useState(() => (linkParams.get('tab') === 'rentabilidad' ? 'profitability' : 'records'));
     const [expandedClients, setExpandedClients] = useState({});
     // Filtros de Cuentas por cobrar (23 de octubre de 2026): a quién se le cobra y cuánto lleva esperando.
     const [receivableKind, setReceivableKind] = useState(null);
@@ -243,6 +248,8 @@ const FinancialDashboard = () => {
     const canWriteFinancials = hasFinancialPermission(currentUser, 'write');
     const canApproveFinancials = hasFinancialPermission(currentUser, 'approve');
     const isAdminUser = String(currentUser?.role || '').toUpperCase() === 'ADMIN';
+    // Quien no administra y llega con el enlace de la revisión del mes ve Movimientos, no una pestaña vacía.
+    useEffect(() => { if (activeTab === 'profitability' && currentUser && !isAdminUser) setActiveTab('records'); }, [activeTab, currentUser, isAdminUser]);
 
     // Fetch analytical aggregation from protected backend endpoint
     const { data, isLoading, isFetching, error, refetch } = useQuery({
@@ -1673,7 +1680,7 @@ await invalidateFinancialQueries(queryClient);
                 {/* PESTAÑA 3: NOMINA OPERATIVA */}
                 {/* Cuentas por pagar y terceros (Rodny, 20 de octubre de 2026): el espejo de Cartera. */}
                 {activeTab === 'profitability' && isAdminUser && (
-                    <ProfitabilityTab enabled={!!currentUser} />
+                    <ProfitabilityTab enabled={!!currentUser} initialMonth={linkedMonth} />
                 )}
 
                 {activeTab === 'payables' && (

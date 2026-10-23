@@ -86,6 +86,10 @@ export const getNotificationDisplayParts = (notification = {}) => {
     if (type === 'BRIA_CIERRE_DEL_DIA') {
         return { title: 'Tu cierre del día está listo', context: '', body: cleanNotificationPreview(message, 140) };
     }
+    // La revisión de las cuentas al cerrar el mes (23 de octubre de 2026): el primer día hábil, en un chat.
+    if (type === 'BRIA_REVISION_MES') {
+        return { title: 'La revisión de las cuentas del mes está lista', context: '', body: cleanNotificationPreview(message, 140) };
+    }
     // La lectura de la mañana (19 de octubre de 2026): a las 7:30, Bria la deja en un chat; el aviso lo abre.
     if (type === 'BRIA_LECTURA_MANANA') {
         return { title: 'Tu lectura de la mañana está lista', context: '', body: cleanNotificationPreview(message, 140) };

@@ -20,6 +20,7 @@ import { initWeeklyReadingScheduler } from './src/services/weeklyReadingService.
 import { initWeeklyFocusScheduler } from './src/services/weeklyFocusService.js';
 import { initBriaPulseScheduler } from './src/services/briaPulseService.js';
 import { initDailyCloseScheduler } from './src/services/dailyCloseService.js';
+import { initMonthlyReviewScheduler } from './src/services/monthlyReviewService.js';
 import { initDailyReadingScheduler } from './src/services/dailyReadingService.js';
 import { initConversationLearningScheduler } from './src/services/conversationLearningService.js';
 import { getAIHealth } from './src/services/aiService.js';
@@ -221,6 +222,7 @@ async function bootstrap() {
         initWeeklyFocusScheduler();
         initBriaPulseScheduler();
         initDailyCloseScheduler();
+        initMonthlyReviewScheduler();
         initDailyReadingScheduler();
         initConversationLearningScheduler();
         startTaskAttachmentRetention();
