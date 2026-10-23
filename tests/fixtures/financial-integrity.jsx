@@ -455,8 +455,7 @@ axios.defaults.adapter = async config => {
     debt = { ...debt, payments: [{ id: 'demo-payment', amount: Number(body.amount), paidAt: `${body.paidAt}T12:00:00Z`, reference: body.reference || null, notes: body.notes || null, account, financialRecordId: recordId, documents: [] }, ...(debt.payments || [])] };
     window.__receivablePaymentBody = body;
     data = { message: exchangeAdjustment ? `Pago registrado. La cartera en pesos se ajustó de $ ${exchangeAdjustment.from.toLocaleString('es-CO')} a $ ${exchangeAdjustment.to.toLocaleString('es-CO')} por la tasa del día.` : retentionRows.length ? (debt.outstanding < 0.005 ? 'Pago y retenciones registrados. La cuenta quedó pagada.' : 'Pago y retenciones registrados. Las retenciones no cuentan como ingreso.') : 'Pago de cartera registrado correctamente.', outstanding: debt.outstanding, payment: { id: 'demo-payment' }, financialRecord: { id: recordId }, receivable: { kind: 'CLIENTE', status: debt.status } };
-  } else if (path.endsWith('/bank-reconciliation')) data = { transactions: Array.from({ length: 90 }, (_, i) => ({ id: `bank-${i}`, description: `Movimiento bancario ${i + 1}`, postedAt: '2026-09-07', amount: 10000, account, status: i === 0 ? 'MATCHED' : 'UNMATCHED', matches: i === 0 ? [{ id: 'match', status: 'APPROVED' }] : [] })), continuityGaps: [], statements: [] };
-  else if (path.endsWith('/periods')) data = { periods: [] };
+  } else if (path.endsWith('/periods')) data = { periods: [] };
   else if (path.includes('/receivables/') && config.method === 'delete') {
     // Como el servidor: con abonos vigentes no se borra, y se dice por dónde salir.
     if ((debt.payments || []).some(payment => !payment.reversedAt)) {

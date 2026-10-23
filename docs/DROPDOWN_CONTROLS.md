@@ -8,7 +8,7 @@ La lista visible utiliza `brain-popover-surface`, igual que los menús de accion
 
 ## Inventario migrado
 
-83 selectores nativos en 32 archivos de producto: Gestión; formularios e historial de tareas; Dashboard y anuncios; Actividad/Calendario; clientes y detalle; Equipo y perfil; parrillas y Bria; reportes y fuentes; Financiero, cartera, movimientos y conciliación; cotizaciones, servicios y propuestas; Moodboard; BrainCore; Radar de Mérito y trazabilidad.
+83 selectores nativos en 32 archivos de producto: Gestión; formularios e historial de tareas; Dashboard y anuncios; Actividad/Calendario; clientes y detalle; Equipo y perfil; parrillas y Bria; reportes y fuentes; Financiero, cartera y movimientos; cotizaciones, servicios y propuestas; Moodboard; BrainCore; Radar de Mérito y trazabilidad.
 
 El componente de menús aplica la misma superficie a cuenta/notificaciones, Clientes, Parrillas, criterios de Bria y comentarios. Enlaces de tareas y menú Añadir de Moodboard también usan ese componente. Menciones de chat/anuncios, sugerencias de catálogo, emojis y prioridad conservan su interacción especializada con la superficie neutra común. Los acordeones de contenido y datepickers no se convierten en selectores.
 

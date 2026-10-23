@@ -39,14 +39,11 @@ const makeResponse = () => ({
     }
 });
 
-test('getFinancialPayrollLedger returns imported payroll contracts as editable rows', async () => {
+test('getFinancialPayrollLedger returns the live payroll contracts as editable rows', async () => {
     const prismaClient = {
-        financialImportBatch: {
-            findFirst: async () => ({ id: 'batch-1', year: 2026 })
-        },
         payrollContract: {
             findMany: async (args) => {
-                assert.deepEqual(args.where, { OR: [{ importBatchId: 'batch-1' }, { importBatchId: null }] });
+                assert.deepEqual(args.where, { importBatchId: null });
                 return [{
                     id: 'contract-1',
                     userId: null,

@@ -41,9 +41,6 @@ const makeLinkClient = ({ clients, records = [], receivables = [] }) => {
 
 test('getFinancialClientReconciliation groups platform and imported source clients by income and debts', async () => {
     const prismaClient = {
-        financialImportBatch: {
-            findFirst: async () => ({ id: 'batch-2026' })
-        },
         financialRecord: {
             findMany: async () => [
                 {
@@ -79,7 +76,6 @@ test('getFinancialClientReconciliation groups platform and imported source clien
 
 test('getFinancialClientReconciliation ignores expense rows when computing client income', async () => {
     const prismaClient = {
-        financialImportBatch: { findFirst: async () => ({ id: 'batch-2026' }) },
         financialRecord: {
             findMany: async () => [
                 { id: 'rec-1', type: 'EXPENSE', amount: 100, sourceLabel: 'Nomina', clientId: null, client: null }
@@ -98,7 +94,6 @@ test('getFinancialClientReconciliation ignores expense rows when computing clien
 
 test('getFinancialClientReconciliation counts platform entries recorded after the import', async () => {
     const prismaClient = {
-        financialImportBatch: { findFirst: async () => ({ id: 'batch-2026' }) },
         financialRecord: {
             findMany: async () => [
                 { id: 'rec-1', type: 'INCOME', amount: 100, sourceLabel: 'Pablo hoff', clientId: 'client-1', importBatchId: 'batch-2026', client: { id: 'client-1', name: 'Pablo Hoff', slug: 'pablo-hoff' } },

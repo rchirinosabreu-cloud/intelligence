@@ -21,14 +21,13 @@ import {
 import {
     TrendingUp, TrendingDown, DollarSign, Wallet, ShieldCheck, AlertCircle,
     Users, ChevronDown, ChevronUp, Loader2, Sparkles, Calendar, PieChart as PieIcon, ListCollapse, ListCollapse as ExpandIcon,
-    UploadCloud, FileSpreadsheet, AlertTriangle, CheckCircle2, Link2, FileText, Download, Trash2, Edit
+    CheckCircle2, Link2, FileText, Download, Trash2, Edit
 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/context/AuthContext';
 import { Navigate } from 'react-router-dom';
 import FinancialLedger from './financial/FinancialLedger';
 import FinancialFilters, { FINANCIAL_MONTHS } from './financial/FinancialFilters';
-import BankReconciliationPanel from './financial/BankReconciliationPanel';
 import ReceivablePaymentDialog from './financial/ReceivablePaymentDialog';
 import ReceivableSettlementDialog from './financial/ReceivableSettlementDialog';
 import ReceivableLoanDialog from './financial/ReceivableLoanDialog';
@@ -136,7 +135,6 @@ const FinancialDashboard = () => {
     const [selectedYear, setSelectedYear] = useState(2026);
     const [filters, setFilters] = useState({ scenario: 'ACTUAL', month: '', type: '', category: '', q: '' });
     const [search, setSearch] = useState('');
-    const [isImportSetupOpen, setIsImportSetupOpen] = useState(false);
     useEffect(() => {
         const timer = setTimeout(() => setFilters(current => ({ ...current, q: search.trim() })), 250);
         return () => clearTimeout(timer);
@@ -162,13 +160,9 @@ const FinancialDashboard = () => {
     const [expandedPayrollPayments, setExpandedPayrollPayments] = useState({});
     // La conexión con el cliente real vive dentro del panel de cada uno (Rodny, 23 de
     // septiembre de 2026): una lista con un desplegable por fila era ilegible.
-    const [importPreview, setImportPreview] = useState(null);
-    const [importFile, setImportFile] = useState(null);
-    const [importError, setImportError] = useState('');
-    const [importSuccess, setImportSuccess] = useState('');
-    const [isImporting, setIsImporting] = useState(false);
-    const [isCommittingImport, setIsCommittingImport] = useState(false);
-    const [actualThroughMonth, setActualThroughMonth] = useState(new Date().getMonth() + 1);
+    // El aviso de arriba de la pantalla: lo que salió bien o mal de la última acción.
+    const [noticeError, setNoticeError] = useState('');
+    const [noticeSuccess, setNoticeSuccess] = useState('');
     const [savingReceivableId, setSavingReceivableId] = useState('');
     const [savingPayrollContractId, setSavingPayrollContractId] = useState('');
     const [savingClientLinkId, setSavingClientLinkId] = useState('');
@@ -258,19 +252,6 @@ const FinancialDashboard = () => {
         enabled: !!(currentUser && canAccessFinancials) // Dynamic safeguard to prevent 401s
     });
 
-    const { data: monthlyLedger, isLoading: isMonthlyLedgerLoading } = useQuery({
-        queryKey: ['financials-monthly-ledger', selectedYear],
-        queryFn: async () => {
-            const baseUrl = getApiBaseUrl();
-            const token = localStorage.getItem('authToken');
-            const res = await axios.get(`${baseUrl}/api/financials/monthly-ledger?year=${selectedYear}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            return res.data;
-        },
-        enabled: !!(currentUser && canAccessFinancials && activeTab === 'editor')
-    });
-
     const { data: receivablesLedger, isLoading: isReceivablesLedgerLoading, error: receivablesError, refetch: refetchReceivables } = useQuery({
         queryKey: ['financials-receivables-ledger', filterQuery],
         queryFn: async () => {
@@ -326,19 +307,6 @@ const FinancialDashboard = () => {
     // apuntar a un cliente que ya no está activo y sigue debiendo.
     const clientTargetChoices = useMemo(() => clientOptions(clientReconciliation?.targets), [clientReconciliation?.targets]);
 
-    const { data: integrityAudit, isLoading: isIntegrityAuditLoading } = useQuery({
-        queryKey: ['financial-integrity', selectedYear],
-        queryFn: async () => {
-            const baseUrl = getApiBaseUrl();
-            const token = localStorage.getItem('authToken');
-            const res = await axios.get(`${baseUrl}/api/financials/integrity?year=${selectedYear}`, {
-                headers: { Authorization: `Bearer ${token}` }
-            });
-            return res.data;
-        },
-        enabled: !!(currentUser && canAccessFinancials && activeTab === 'import')
-    });
-
     const toggleClientExpand = (clientId) => {
         setExpandedClients(prev => ({
             ...prev,
@@ -346,83 +314,11 @@ const FinancialDashboard = () => {
         }));
     };
 
-    const handleFinancialImportPreview = async (event) => {
-        const file = event.target.files?.[0];
-        if (!file) return;
-
-        setIsImporting(true);
-        setImportError('');
-        setImportSuccess('');
-
-        try {
-            const baseUrl = getApiBaseUrl();
-            const token = localStorage.getItem('authToken');
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('year', String(selectedYear));
-            formData.append('actualThroughMonth', String(actualThroughMonth));
-
-            const res = await axios.post(`${baseUrl}/api/financials/import/preview`, formData, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'multipart/form-data'
-                }
-            });
-
-            setImportPreview(res.data);
-            setImportFile(file);
-            setIsImportSetupOpen(false);
-            setActiveTab('import');
-        } catch (error) {
-            console.error('Error previewing financial import:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible auditar el archivo financiero.');
-            setImportFile(null);
-        } finally {
-            setIsImporting(false);
-            event.target.value = '';
-        }
-    };
-
-    const handleFinancialImportCommit = async () => {
-        if (!importFile) {
-            setImportError('Primero debes auditar un archivo financiero.');
-            return;
-        }
-
-        setIsCommittingImport(true);
-        setImportError('');
-        setImportSuccess('');
-
-        try {
-            const baseUrl = getApiBaseUrl();
-            const token = localStorage.getItem('authToken');
-            const formData = new FormData();
-            formData.append('file', importFile);
-            formData.append('year', String(selectedYear));
-            formData.append('actualThroughMonth', String(actualThroughMonth));
-
-            const res = await axios.post(`${baseUrl}/api/financials/import/commit`, formData, {
-                headers: {
-                    Authorization: `Bearer ${token}`,
-                    'Content-Type': 'multipart/form-data'
-                }
-            });
-
-            setImportSuccess(`Importación guardada: ${res.data?.counts?.records || 0} registros mensuales, ${res.data?.counts?.receivables || 0} morosos.`);
-            await invalidateFinancialQueries(queryClient);
-        } catch (error) {
-            console.error('Error committing financial import:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible guardar la importación financiera.');
-        } finally {
-            setIsCommittingImport(false);
-        }
-    };
-
     const handleReceivableUpdate = async (debt, patch) => {
         if (!debt?.id) return false;
         setSavingReceivableId(debt.id);
-        setImportError('');
-        setImportSuccess('');
+        setNoticeError('');
+        setNoticeSuccess('');
 
         try {
             const baseUrl = getApiBaseUrl();
@@ -431,11 +327,11 @@ const FinancialDashboard = () => {
                 headers: { Authorization: `Bearer ${token}` }
             });
             await invalidateFinancialQueries(queryClient);
-            setImportSuccess('Cartera actualizada.');
+            setNoticeSuccess('Cartera actualizada.');
             return true;
         } catch (error) {
             console.error('Error updating financial receivable:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible guardar el cambio de cartera.');
+            setNoticeError(error.response?.data?.message || 'No fue posible guardar el cambio de cartera.');
             return false;
         } finally {
             setSavingReceivableId('');
@@ -453,7 +349,7 @@ const FinancialDashboard = () => {
     };
 
     const openReceivablePayment = (debt) => {
-        setImportError('');
+        setNoticeError('');
         setPaymentDebt(debt);
         setPaymentForm({
             source: 'NEW',
@@ -474,8 +370,8 @@ const FinancialDashboard = () => {
         if (!paymentDebt?.id || isSavingPayment || !canWriteFinancials) return;
 
         setIsSavingPayment(true);
-        setImportError('');
-        setImportSuccess('');
+        setNoticeError('');
+        setNoticeSuccess('');
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
@@ -505,10 +401,10 @@ const FinancialDashboard = () => {
             }
             await invalidateFinancialQueries(queryClient);
             setPaymentDebt(null);
-            setImportSuccess(message);
+            setNoticeSuccess(message);
         } catch (error) {
             console.error('Error registering receivable payment:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible registrar el pago de cartera.');
+            setNoticeError(error.response?.data?.message || 'No fue posible registrar el pago de cartera.');
         } finally {
             setIsSavingPayment(false);
         }
@@ -517,18 +413,18 @@ const FinancialDashboard = () => {
     const handleCreateLoan = async (payload) => {
         if (isSavingLoan || !canWriteFinancials) return;
         setIsSavingLoan(true);
-        setImportError('');
-        setImportSuccess('');
+        setNoticeError('');
+        setNoticeSuccess('');
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
             const { data: result } = await axios.post(`${baseUrl}/api/financials/loans`, payload, { headers: { Authorization: `Bearer ${token}` } });
             await invalidateFinancialQueries(queryClient);
             setIsLoanDialogOpen(false);
-            setImportSuccess(result?.message || 'Préstamo registrado en Cartera.');
+            setNoticeSuccess(result?.message || 'Préstamo registrado en Cartera.');
         } catch (error) {
             console.error('Error creating loan:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible registrar el préstamo.');
+            setNoticeError(error.response?.data?.message || 'No fue posible registrar el préstamo.');
         } finally {
             setIsSavingLoan(false);
         }
@@ -538,43 +434,43 @@ const FinancialDashboard = () => {
         const payment = paymentToEdit?.payment;
         if (!payment?.id || isEditingPayment || !canWriteFinancials) return;
         setIsEditingPayment(true);
-        setImportError('');
-        setImportSuccess('');
+        setNoticeError('');
+        setNoticeSuccess('');
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
             const { data: result } = await axios.patch(`${baseUrl}/api/financials/receivable-payments/${payment.id}`, payload, { headers: { Authorization: `Bearer ${token}` } });
             await invalidateFinancialQueries(queryClient);
             setPaymentToEdit(null);
-            setImportSuccess(result?.message || 'Abono corregido.');
+            setNoticeSuccess(result?.message || 'Abono corregido.');
         } catch (error) {
             console.error('Error editing receivable payment:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible corregir el abono.');
+            setNoticeError(error.response?.data?.message || 'No fue posible corregir el abono.');
         } finally {
             setIsEditingPayment(false);
         }
     };
 
     const openReceivableSettlement = (debt) => {
-        setImportError('');
+        setNoticeError('');
         setSettlementDebt(debt);
     };
 
     const handleReceivableSettlement = async (payload) => {
         if (!settlementDebt?.id || isSavingSettlement || !canWriteFinancials) return;
         setIsSavingSettlement(true);
-        setImportError('');
-        setImportSuccess('');
+        setNoticeError('');
+        setNoticeSuccess('');
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
             const { data: result } = await axios.post(`${baseUrl}/api/financials/receivables/${settlementDebt.id}/settlements`, payload, { headers: { Authorization: `Bearer ${token}` } });
             await invalidateFinancialQueries(queryClient);
             setSettlementDebt(null);
-            setImportSuccess(result?.message || 'Ajuste registrado. No se creó ningún ingreso.');
+            setNoticeSuccess(result?.message || 'Ajuste registrado. No se creó ningún ingreso.');
         } catch (error) {
             console.error('Error settling receivable:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible saldar la cuenta por cobrar.');
+            setNoticeError(error.response?.data?.message || 'No fue posible saldar la cuenta por cobrar.');
         } finally {
             setIsSavingSettlement(false);
         }
@@ -595,7 +491,7 @@ const FinancialDashboard = () => {
         setRestoredIssueDraft(null);
     };
     const openNewReceivable = () => {
-        setImportError('');
+        setNoticeError('');
         setRateStatus({ loading: false, error: '' });
         setNewClientErrors({});
         const fresh = freshReceivableForm(`${selectedYear}-${String(new Date().getMonth() + 1).padStart(2, '0')}-01`);
@@ -615,7 +511,7 @@ const FinancialDashboard = () => {
     // Corregir una cuenta ya emitida (Rodny, 30 de septiembre de 2026): el mismo formulario,
     // precargado con lo que dice el documento. Conserva el número y rehace el PDF.
     const openCorrectDialog = (debt) => {
-        setImportError('');
+        setNoticeError('');
         setRateStatus({ loading: false, error: '' });
         setIsCorrecting(true);
         setDebtToIssue(debt);
@@ -694,7 +590,7 @@ const FinancialDashboard = () => {
     };
 
     const openIssueDialog = (debt) => {
-        setImportError('');
+        setNoticeError('');
         setRateStatus({ loading: false, error: '' });
         setIsCorrecting(false);
         setDebtToIssue(debt);
@@ -760,8 +656,8 @@ const FinancialDashboard = () => {
         event.preventDefault();
         if (!debtToIssue?.id || isIssuing || !canWriteFinancials) return;
         setIsIssuing(true);
-        setImportError('');
-        setImportSuccess('');
+        setNoticeError('');
+        setNoticeSuccess('');
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
@@ -779,7 +675,7 @@ const FinancialDashboard = () => {
                 setDebtToIssue(null);
                 setIssueForm(null);
                 setIsCorrecting(false);
-                setImportSuccess(result?.message || 'Cuenta de cobro corregida.');
+                setNoticeSuccess(result?.message || 'Cuenta de cobro corregida.');
                 return;
             }
             const { data: result } = await axios.post(`${baseUrl}/api/financials/receivables/${debtToIssue.id}/issue`, {
@@ -796,10 +692,10 @@ const FinancialDashboard = () => {
             await invalidateFinancialQueries(queryClient);
             setDebtToIssue(null);
             setIssueForm(null);
-            setImportSuccess(result?.message || 'Cuenta de cobro emitida.');
+            setNoticeSuccess(result?.message || 'Cuenta de cobro emitida.');
         } catch (error) {
             console.error(isCorrecting ? 'Error correcting receivable document:' : 'Error issuing receivable document:', error.response?.data || error);
-            setImportError(error.response?.data?.message || (isCorrecting ? 'No fue posible corregir la cuenta de cobro.' : 'No fue posible emitir la cuenta de cobro.'));
+            setNoticeError(error.response?.data?.message || (isCorrecting ? 'No fue posible corregir la cuenta de cobro.' : 'No fue posible emitir la cuenta de cobro.'));
         } finally {
             setIsIssuing(false);
         }
@@ -825,7 +721,7 @@ const FinancialDashboard = () => {
     const openReceivableDocument = async (debt, { download = false } = {}) => {
         if (!debt?.id || downloadingDocumentId) return;
         setDownloadingDocumentId(debt.id);
-        setImportError('');
+        setNoticeError('');
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
@@ -852,7 +748,7 @@ const FinancialDashboard = () => {
             setDocumentPreview({ file: { id: debt.id, name, mimeType: 'application/pdf', size: blob.size }, url: objectUrl, data });
         } catch (error) {
             console.error('Error opening receivable document:', error.response?.data || error);
-            setImportError('No fue posible abrir la cuenta de cobro.');
+            setNoticeError('No fue posible abrir la cuenta de cobro.');
         } finally {
             setDownloadingDocumentId(null);
         }
@@ -863,7 +759,7 @@ const FinancialDashboard = () => {
     const openClientStatementDocument = async (client, { cutoff, download = false } = {}) => {
         if (!client?.id || downloadingDocumentId) return;
         setDownloadingDocumentId(`statement:${client.id}`);
-        setImportError('');
+        setNoticeError('');
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
@@ -887,7 +783,7 @@ const FinancialDashboard = () => {
             setDocumentPreview({ file: { id: `statement:${client.id}:${cutoff || ''}`, name, mimeType: 'application/pdf', size: blob.size }, url: objectUrl, data });
         } catch (error) {
             console.error('Error opening client statement document:', error.response?.data || error);
-            setImportError('No fue posible generar el estado de cuenta.');
+            setNoticeError('No fue posible generar el estado de cuenta.');
         } finally {
             setDownloadingDocumentId(null);
         }
@@ -896,8 +792,8 @@ const FinancialDashboard = () => {
     const handleDeleteReceivable = async () => {
         if (!debtToDelete?.id || isDeletingReceivable || !canWriteFinancials) return;
         setIsDeletingReceivable(true);
-        setImportError('');
-        setImportSuccess('');
+        setNoticeError('');
+        setNoticeSuccess('');
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
@@ -908,17 +804,17 @@ const FinancialDashboard = () => {
             await invalidateFinancialQueries(queryClient);
             setDebtToDelete(null);
             setDeleteReason('');
-            setImportSuccess(result?.message || 'Cuenta por cobrar eliminada.');
+            setNoticeSuccess(result?.message || 'Cuenta por cobrar eliminada.');
         } catch (error) {
             console.error('Error deleting receivable:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible eliminar la cuenta por cobrar.');
+            setNoticeError(error.response?.data?.message || 'No fue posible eliminar la cuenta por cobrar.');
         } finally {
             setIsDeletingReceivable(false);
         }
     };
 
     const openPaymentReversal = (debt, payment) => {
-        setImportError('');
+        setNoticeError('');
         setReversalReason('');
         setPaymentToReverse({ debt, payment });
     };
@@ -929,8 +825,8 @@ const FinancialDashboard = () => {
         if (!payment?.id || isReversingPayment || !canWriteFinancials || !reversalReason.trim()) return;
 
         setIsReversingPayment(true);
-        setImportError('');
-        setImportSuccess('');
+        setNoticeError('');
+        setNoticeSuccess('');
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
@@ -940,10 +836,10 @@ const FinancialDashboard = () => {
             await invalidateFinancialQueries(queryClient);
             setPaymentToReverse(null);
             setReversalReason('');
-            setImportSuccess(result?.message || 'Abono revertido.');
+            setNoticeSuccess(result?.message || 'Abono revertido.');
         } catch (error) {
             console.error('Error reversing receivable payment:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible revertir el abono.');
+            setNoticeError(error.response?.data?.message || 'No fue posible revertir el abono.');
         } finally {
             setIsReversingPayment(false);
         }
@@ -963,8 +859,8 @@ const FinancialDashboard = () => {
 
     const handleCreateReceivable = async (event) => {
         event.preventDefault();
-        setImportError('');
-        setImportSuccess('');
+        setNoticeError('');
+        setNoticeSuccess('');
         // La ficha del cliente nuevo se revisa antes de enviar, con la regla del servidor.
         if (receivableForm.isNewClient) {
             const check = normalizeClientProfile(receivableForm.newClient, { requireName: true });
@@ -998,10 +894,10 @@ const FinancialDashboard = () => {
                     .map((key) => queryClient.invalidateQueries({ queryKey: [key] })));
             }
             setIsReceivableEditorOpen(false);
-            setImportSuccess(receivableForm.isNewClient ? 'Cliente y cuenta por cobrar creados.' : 'Cuenta por cobrar registrada.');
+            setNoticeSuccess(receivableForm.isNewClient ? 'Cliente y cuenta por cobrar creados.' : 'Cuenta por cobrar registrada.');
         } catch (error) {
             console.error('Error creating receivable:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible registrar la cuenta por cobrar.');
+            setNoticeError(error.response?.data?.message || 'No fue posible registrar la cuenta por cobrar.');
         } finally {
             setIsSavingReceivable(false);
         }
@@ -1012,8 +908,8 @@ const FinancialDashboard = () => {
         if (!contractId) return;
 
         setSavingPayrollContractId(contractId);
-        setImportError('');
-        setImportSuccess('');
+        setNoticeError('');
+        setNoticeSuccess('');
 
         try {
             const baseUrl = getApiBaseUrl();
@@ -1022,10 +918,10 @@ const FinancialDashboard = () => {
                 headers: { Authorization: `Bearer ${token}` }
             });
 await invalidateFinancialQueries(queryClient);
-            setImportSuccess('Nómina actualizada.');
+            setNoticeSuccess('Nómina actualizada.');
         } catch (error) {
             console.error('Error updating financial payroll contract:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible guardar el cambio de nómina.');
+            setNoticeError(error.response?.data?.message || 'No fue posible guardar el cambio de nómina.');
         } finally {
             setSavingPayrollContractId('');
         }
@@ -1048,8 +944,8 @@ await invalidateFinancialQueries(queryClient);
     const handleSavePayrollContract = async (event) => {
         event.preventDefault();
         setIsSavingPayrollContract(true);
-        setImportError('');
-        setImportSuccess('');
+        setNoticeError('');
+        setNoticeSuccess('');
         const payload = {
             ...payrollContractForm,
             baseSalary: Number(payrollContractForm.baseSalary),
@@ -1067,10 +963,10 @@ await invalidateFinancialQueries(queryClient);
             }
             await invalidatePayroll();
             setIsPayrollContractEditorOpen(false);
-            setImportSuccess(editingPayrollContract ? 'Contrato actualizado.' : 'Contrato creado.');
+            setNoticeSuccess(editingPayrollContract ? 'Contrato actualizado.' : 'Contrato creado.');
         } catch (error) {
             console.error('Error saving payroll contract:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible guardar el contrato.');
+            setNoticeError(error.response?.data?.message || 'No fue posible guardar el contrato.');
         } finally {
             setIsSavingPayrollContract(false);
         }
@@ -1082,8 +978,8 @@ await invalidateFinancialQueries(queryClient);
 
     const handleGeneratePayroll = async () => {
         setIsGeneratingPayroll(true);
-        setImportError('');
-        setImportSuccess('');
+        setNoticeError('');
+        setNoticeSuccess('');
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
@@ -1093,10 +989,10 @@ await invalidateFinancialQueries(queryClient);
             }, { headers: { Authorization: `Bearer ${token}` } });
             await invalidatePayroll();
             setIsPayrollGenerationConfirmOpen(false);
-            setImportSuccess('Nómina mensual generada en borrador.');
+            setNoticeSuccess('Nómina mensual generada en borrador.');
         } catch (error) {
             console.error('Error generating payroll period:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible generar la nómina mensual.');
+            setNoticeError(error.response?.data?.message || 'No fue posible generar la nómina mensual.');
         } finally {
             setIsGeneratingPayroll(false);
         }
@@ -1104,8 +1000,8 @@ await invalidateFinancialQueries(queryClient);
 
     const handleApprovePayroll = async (transaction) => {
         setSavingPayrollTransactionId(transaction.id);
-        setImportError('');
-        setImportSuccess('');
+        setNoticeError('');
+        setNoticeSuccess('');
         try {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
@@ -1113,10 +1009,10 @@ await invalidateFinancialQueries(queryClient);
                 headers: { Authorization: `Bearer ${token}` }
             });
             await invalidatePayroll();
-            setImportSuccess('Liquidación aprobada.');
+            setNoticeSuccess('Liquidación aprobada.');
         } catch (error) {
             console.error('Error approving payroll transaction:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible aprobar la liquidación.');
+            setNoticeError(error.response?.data?.message || 'No fue posible aprobar la liquidación.');
         } finally {
             setSavingPayrollTransactionId('');
         }
@@ -1125,9 +1021,9 @@ await invalidateFinancialQueries(queryClient);
     // Pagos de nómina por partes (30 de septiembre de 2026): el diálogo y la lista de pagos
     // hablan con el servidor; aquí solo se refresca todo y se da el aviso, después de confirmar.
     const handlePayrollChanged = async (message) => {
-        setImportError('');
+        setNoticeError('');
         await invalidatePayroll();
-        setImportSuccess(message);
+        setNoticeSuccess(message);
     };
 
     const handleClientLink = async (sourceClientId) => {
@@ -1135,8 +1031,8 @@ await invalidateFinancialQueries(queryClient);
         if (!sourceClientId || !targetClientId || sourceClientId === targetClientId) return;
 
         setSavingClientLinkId(sourceClientId);
-        setImportError('');
-        setImportSuccess('');
+        setNoticeError('');
+        setNoticeSuccess('');
 
         try {
             const baseUrl = getApiBaseUrl();
@@ -1152,10 +1048,10 @@ await invalidateFinancialQueries(queryClient);
                 delete next[sourceClientId];
                 return next;
             });
-            setImportSuccess('Cliente financiero conciliado.');
+            setNoticeSuccess('Cliente financiero conciliado.');
         } catch (error) {
             console.error('Error linking financial client:', error.response?.data || error);
-            setImportError(error.response?.data?.message || 'No fue posible conciliar el cliente financiero.');
+            setNoticeError(error.response?.data?.message || 'No fue posible conciliar el cliente financiero.');
         } finally {
             setSavingClientLinkId('');
         }
@@ -1190,8 +1086,6 @@ await invalidateFinancialQueries(queryClient);
             maximumFractionDigits: 0
         }).format(val);
     };
-
-    const monthLabels = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
     // Donut chart formatted distribution data
     const expenseDistributionData = useMemo(() => {
@@ -1233,11 +1127,7 @@ await invalidateFinancialQueries(queryClient);
 
     return (
         <div className="min-h-screen bg-zinc-50/50 dark:bg-zinc-950/20 space-y-8 animate-in fade-in duration-500">
-            <PageHeader title="Consola de Inteligencia Financiera" subtitle="Flujo de caja, cuentas por cobrar y costos operativos.">
-                {canApproveFinancials && <button type="button" onClick={() => setIsImportSetupOpen(true)} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-violet-600 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-700">
-                    <UploadCloud className="h-4 w-4" />Auditar archivo
-                </button>}
-            </PageHeader>
+            <PageHeader title="Consola de Inteligencia Financiera" subtitle="Flujo de caja, cuentas por cobrar y costos operativos." />
             <FinancialFilters year={selectedYear} onYearChange={setSelectedYear} filters={filters}
                 onChange={patch => setFilters(current => ({ ...current, ...patch }))}
                 search={search} onSearchChange={setSearch} busy={indicatorsPending} />
@@ -1245,33 +1135,17 @@ await invalidateFinancialQueries(queryClient);
                 <p>No fue posible cargar los indicadores financieros. Conservamos tus filtros.</p>
                 <button type="button" onClick={() => refetch()} className="min-h-11 px-3 font-semibold underline">Reintentar indicadores</button>
             </div>}
-            <Dialog open={isImportSetupOpen} onOpenChange={setIsImportSetupOpen}>
-                <DialogContent className="bg-white text-zinc-900 dark:bg-zinc-900 dark:text-zinc-100 sm:max-w-md">
-                    <DialogHeader><DialogTitle>Auditar archivo financiero</DialogTitle><DialogDescription>Configura el corte del archivo que vas a revisar.</DialogDescription></DialogHeader>
-                    <label className="space-y-2 text-sm">Mes ejecutado hasta
-                        <Select value={actualThroughMonth} onChange={event => setActualThroughMonth(Number(event.target.value))}>
-                            {FINANCIAL_MONTHS.map((month, index) => <option key={month} value={index + 1}>{month}</option>)}
-                        </Select>
-                    </label>
-                    <label className="space-y-2 text-sm">Archivo Excel o CSV
-                        <input type="file" accept=".csv,.xlsx,.xls" onChange={handleFinancialImportPreview} disabled={isImporting} className="block w-full text-sm file:mr-3 file:rounded-lg file:border-0 file:bg-violet-600 file:px-4 file:py-3 file:text-white" />
-                    </label>
-                    {isImporting && <p role="status" className="text-sm text-zinc-500 dark:text-zinc-400">Revisando archivo…</p>}
-                    {importError && <p role="alert" className="text-sm text-destructive">{importError}</p>}
-                </DialogContent>
-            </Dialog>
-
-            {importError && (
+            {noticeError && (
                 <div className="brain-alert-surface flex items-start gap-3 rounded-2xl p-4 text-sm">
                     <AlertCircle className="h-5 w-5 shrink-0 text-destructive" />
-                    <p>{importError}</p>
+                    <p>{noticeError}</p>
                 </div>
             )}
 
-            {importSuccess && (
+            {noticeSuccess && (
                 <div className="flex items-start gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700 dark:border-emerald-500/20 dark:bg-emerald-950/30 dark:text-emerald-200">
                     <CheckCircle2 className="w-5 h-5 shrink-0" />
-                    <p>{importSuccess}</p>
+                    <p>{noticeSuccess}</p>
                 </div>
             )}
 
@@ -1398,15 +1272,6 @@ await invalidateFinancialQueries(queryClient);
                     Nómina Operativa
                 </button>
                 <button
-                    onClick={() => setActiveTab('editor')}
-                    className={cn(
-                        "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                        activeTab === 'editor' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
-                    )}
-                >
-                    Conciliación
-                </button>
-                <button
                     onClick={() => setActiveTab('clients')}
                     className={cn(
                         "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
@@ -1427,15 +1292,6 @@ await invalidateFinancialQueries(queryClient);
                         Rentabilidad
                     </button>
                 )}
-                <button
-                    onClick={() => setActiveTab('import')}
-                    className={cn(
-                        "whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
-                        activeTab === 'import' ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
-                    )}
-                >
-                    Auditoría 2026
-                </button>
             </div>
 
             {/* --- SECTION 3: TAB SCENARIO VIEWS --- */}
@@ -1564,7 +1420,7 @@ await invalidateFinancialQueries(queryClient);
                             </div>
                             {canWriteFinancials && (
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <button type="button" onClick={() => { setImportError(''); setIsLoanDialogOpen(true); }} className="min-h-11 rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Registrar préstamo</button>
+                                    <button type="button" onClick={() => { setNoticeError(''); setIsLoanDialogOpen(true); }} className="min-h-11 rounded-lg border border-zinc-200 px-3 py-2 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Registrar préstamo</button>
                                     <button type="button" onClick={openNewReceivable} className="min-h-11 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-primary-foreground">Nueva cuenta por cobrar</button>
                                 </div>
                             )}
@@ -1573,27 +1429,6 @@ await invalidateFinancialQueries(queryClient);
                         {/* Ajustes de cartera del periodo (Rodny, 20 de octubre de 2026): lo saldado sin dinero
                             y la diferencia en cambio, que no son movimientos y solo se veían cliente por cliente. */}
                         <ReceivableAdjustmentsSummary filterQuery={filterQuery} enabled={!!(currentUser && canAccessFinancials)} />
-
-                        {!filters.q && !filters.month && data?.sourceSummary?.importBatchId && data?.sourceSummary?.totals && (
-                            <Card className="p-4 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm">
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                    <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Saldo vigente</p>
-                                        <p className="mt-1 font-black text-zinc-900 dark:text-white">{formatCurrency(data.sourceSummary.totals.receivable || 0)}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Referencia importada</p>
-                                        <p className="mt-1 font-black text-amber-600">{formatCurrency(data.sourceSummary.totals.calculatedReceivable || 0)}</p>
-                                    </div>
-                                    <div>
-                                        <p className="text-[10px] font-black uppercase tracking-widest text-zinc-400">Diferencia histórica</p>
-                                        <p className="mt-1 font-black text-violet-600">
-                                            {formatCurrency((data.sourceSummary.totals.calculatedReceivable || 0) - (data.sourceSummary.totals.receivable || 0))}
-                                        </p>
-                                    </div>
-                                </div>
-                            </Card>
-                        )}
 
                         <p className="text-sm text-zinc-600 dark:text-zinc-300">Obligaciones del periodo seleccionado de {selectedYear}{filters.q ? ` · Búsqueda: ${filters.q}` : ''} · saldo actual después de abonos. Una promesa de pago no reduce la deuda.</p>
                         {!!receivablesLedger?.totals?.reviewCount && <p role="alert" className="text-sm text-destructive">Hay registros históricos marcados como pagados sin abonos suficientes vinculados. Su saldo está por verificar y no se suma como deuda confirmada.</p>}
@@ -1751,7 +1586,7 @@ await invalidateFinancialQueries(queryClient);
                                                                         </button>
                                                                     )}
                                                                     {canWriteFinancials && <button type="button"
-                                                                        onClick={() => { setDeleteReason(''); setImportError(''); setDebtToDelete(debt); }}
+                                                                        onClick={() => { setDeleteReason(''); setNoticeError(''); setDebtToDelete(debt); }}
                                                                         className="ml-auto inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2 text-xs font-semibold text-zinc-500 transition hover:bg-destructive/10 hover:text-destructive">
                                                                         <Trash2 className="h-3.5 w-3.5" />Eliminar
                                                                     </button>}
@@ -1792,21 +1627,21 @@ await invalidateFinancialQueries(queryClient);
                                                                                         {!payment.reversedAt && payment.financialRecordId && (
                                                                                             <RecordDocumentsInline className="mt-1.5" recordId={payment.financialRecordId} documents={payment.documents || []}
                                                                                                 canWrite={canWriteFinancials}
-                                                                                                onChanged={async (message) => { setImportError(''); await invalidateFinancialQueries(queryClient); setImportSuccess(message); }}
-                                                                                                onError={(message) => { setImportSuccess(''); setImportError(message); }} />
+                                                                                                onChanged={async (message) => { setNoticeError(''); await invalidateFinancialQueries(queryClient); setNoticeSuccess(message); }}
+                                                                                                onError={(message) => { setNoticeSuccess(''); setNoticeError(message); }} />
                                                                                         )}
                                                                                         {/* El certificado de una retención, en la propia fila (22 de octubre de 2026). */}
                                                                                         {!payment.reversedAt && isRetentionPayment(payment) && (
                                                                                             <RecordDocumentsInline className="mt-1.5" recordId={payment.id} documents={payment.supportDocuments || []} api={retentionCertificateApi}
                                                                                                 canWrite={canWriteFinancials}
-                                                                                                onChanged={async (message) => { setImportError(''); await invalidateFinancialQueries(queryClient); setImportSuccess(message); }}
-                                                                                                onError={(message) => { setImportSuccess(''); setImportError(message); }} />
+                                                                                                onChanged={async (message) => { setNoticeError(''); await invalidateFinancialQueries(queryClient); setNoticeSuccess(message); }}
+                                                                                                onError={(message) => { setNoticeSuccess(''); setNoticeError(message); }} />
                                                                                         )}
                                                                                     </div>
                                                                                     {canWriteFinancials && !payment.reversedAt && (
                                                                                         <div className="flex items-center gap-2">
                                                                                             {/* Corregir sin revertir (Rodny, 20 de octubre de 2026). */}
-                                                                                            <button type="button" data-receivable-payment-edit onClick={() => { setImportError(''); setPaymentToEdit({ debt, payment }); }}
+                                                                                            <button type="button" data-receivable-payment-edit onClick={() => { setNoticeError(''); setPaymentToEdit({ debt, payment }); }}
                                                                                                 className="min-h-11 rounded-lg border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">
                                                                                                 Corregir
                                                                                             </button>
@@ -2009,7 +1844,7 @@ await invalidateFinancialQueries(queryClient);
                                                         <td colSpan={6} className="px-4 pb-4 pt-0">
                                                             <PayrollPaymentList transaction={transaction} accounts={financialAccounts?.accounts || []} formatCurrency={formatCurrency}
                                                                 canApprove={canApproveFinancials} canWrite={canWriteFinancials}
-                                                                onChanged={handlePayrollChanged} onError={(message) => { setImportSuccess(''); setImportError(message); }} />
+                                                                onChanged={handlePayrollChanged} onError={(message) => { setNoticeSuccess(''); setNoticeError(message); }} />
                                                         </td>
                                                     </tr>
                                                 )}
@@ -2030,89 +1865,6 @@ await invalidateFinancialQueries(queryClient);
                     </div>
                 )}
 
-                {activeTab === 'editor' && (
-                    <div className="space-y-4 animate-in slide-in-from-bottom-4 duration-300">
-                        <BankReconciliationPanel selectedYear={selectedYear} canApprove={canApproveFinancials} filters={filters} />
-                        <div className="border-t border-zinc-200 pt-5 dark:border-white/10">
-                        <div className="flex items-center justify-between gap-4">
-                            <div>
-                                <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Conciliación mensual</h2>
-                                <p className="text-[11px] text-zinc-500 mt-1">
-                                    Referencia original importada. Las correcciones se realizan desde Movimientos para conservar la trazabilidad.
-                                </p>
-                            </div>
-                            {monthlyLedger?.importBatchId && (
-                                <span className="rounded-full bg-violet-600/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-violet-600">
-                                    Fuente DB activa
-                                </span>
-                            )}
-                        </div>
-
-                        <Card className="bg-white dark:bg-zinc-900 border border-zinc-200/50 dark:border-white/5 rounded-2xl shadow-sm overflow-hidden">
-                            {isMonthlyLedgerLoading ? (
-                                <div className="flex items-center justify-center py-16 text-sm text-zinc-500">
-                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                                    Cargando conciliación...
-                                </div>
-                            ) : monthlyLedger?.rows?.length > 0 ? (
-                                <div className="overflow-x-auto">
-                                    <table className="min-w-[1120px] w-full text-left border-collapse">
-                                        <thead>
-                                            <tr className="border-b border-zinc-100 dark:border-white/5 bg-zinc-50/80 dark:bg-zinc-900/60 text-[10px] font-black uppercase text-zinc-400 tracking-wider">
-                                                <th className="sticky left-0 z-10 bg-zinc-50/95 dark:bg-zinc-900 p-4 min-w-[220px]">Rubro</th>
-                                                {monthlyLedger.months.map((month) => (
-                                                    <th key={month.month} className="p-3 text-right min-w-[110px]">{month.label}</th>
-                                                ))}
-                                                <th className="p-3 text-right min-w-[130px]">Total</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                            {monthlyLedger.rows.map((row) => {
-                                                const rowTotal = row.values.reduce((sum, cell) => sum + (Number(cell.amount) || 0), 0);
-                                                return (
-                                                    <tr key={row.key} className="text-xs hover:bg-zinc-50/60 dark:hover:bg-white/5">
-                                                        <td className="sticky left-0 z-10 bg-white dark:bg-zinc-900 p-4">
-                                                            <div className="font-bold text-zinc-900 dark:text-white">{row.label}</div>
-                                                            <div className={cn(
-                                                                "mt-1 inline-flex rounded-full px-2 py-0.5 text-[9px] font-black uppercase tracking-widest",
-                                                                row.tone === 'income' && "bg-emerald-500/10 text-emerald-600",
-                                                                row.tone === 'expense' && "bg-red-500/10 text-red-500",
-                                                                row.tone === 'financing' && "bg-cyan-500/10 text-cyan-600",
-                                                                row.tone === 'warning' && "bg-amber-500/10 text-amber-600",
-                                                                row.tone === 'net' && "bg-violet-600/10 text-violet-600"
-                                                            )}>
-                                                                {row.tone}
-                                                            </div>
-                                                        </td>
-                                                        {row.values.map((cell) => (
-                                                            <td key={`${row.key}-${cell.month}`} className="p-3 text-right text-[11px] font-medium text-zinc-700 dark:text-zinc-200">
-                                                                {formatCurrency(Number(cell.amount) || 0)}
-                                                            </td>
-                                                        ))}
-                                                        <td className={cn(
-                                                            "p-3 text-right text-xs font-black",
-                                                            rowTotal < 0 ? "text-red-500" : row.tone === 'income' ? "text-emerald-600" : "text-zinc-900 dark:text-white"
-                                                        )}>
-                                                            {formatCurrency(rowTotal)}
-                                                        </td>
-                                                    </tr>
-                                                );
-                                            })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            ) : (
-                                <div className="py-16 text-center">
-                                    <FileSpreadsheet className="w-10 h-10 mx-auto text-zinc-300 mb-3" />
-                                    <p className="text-sm font-bold text-zinc-900 dark:text-white">No hay datos mensuales para conciliar</p>
-                                    <p className="text-xs text-zinc-500 mt-1">Importa primero el financiero del año seleccionado.</p>
-                                </div>
-                            )}
-                        </Card>
-                        </div>
-                    </div>
-                )}
-
                 {activeTab === 'clients' && (
                     <FinancialClientsDirectory
                         reconciliation={clientReconciliation}
@@ -2125,223 +1877,10 @@ await invalidateFinancialQueries(queryClient);
                         onLinkClient={handleClientLink}
                         onOpenStatement={setStatementClient}
                         formatCurrency={formatCurrency}
-                        onNotice={(message) => { setImportError(''); setImportSuccess(message); }}
+                        onNotice={(message) => { setNoticeError(''); setNoticeSuccess(message); }}
                     />
                 )}
 
-                {activeTab === 'import' && (
-                    <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-300">
-                        <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl">
-                            <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                                <div>
-                                    <h2 className="text-sm font-semibold text-zinc-900 dark:text-white">Preparación para operar sin Excel</h2>
-                                    <p className="mt-1 text-xs text-zinc-500">Control automático sobre cuentas, movimientos, cartera, nómina y cierres de {selectedYear}.</p>
-                                </div>
-                                {isIntegrityAuditLoading ? <Loader2 className="h-5 w-5 animate-spin text-violet-600" /> : <span className={cn('rounded-full px-3 py-1.5 text-xs font-semibold', integrityAudit?.ready ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-300' : 'bg-amber-500/10 text-amber-700 dark:text-amber-300')}>{integrityAudit?.ready ? 'Lista para operar' : `${integrityAudit?.issues?.length || 0} puntos por resolver`}</span>}
-                            </div>
-                            {!isIntegrityAuditLoading && integrityAudit?.issues?.length > 0 && <div className="mt-5 divide-y divide-zinc-100 border-y border-zinc-100 dark:divide-white/5 dark:border-white/5">{integrityAudit.issues.map((item) => <div key={item.code} className="flex items-start gap-3 py-3"><span className={cn('mt-0.5 h-2 w-2 shrink-0 rounded-full', item.severity === 'ERROR' ? 'bg-destructive' : 'bg-amber-500')} /><div><p className="text-sm font-medium text-zinc-900 dark:text-white">{item.message}</p><p className="mt-0.5 text-xs text-zinc-500">{item.count} {item.count === 1 ? 'registro' : 'registros'} · {item.severity === 'ERROR' ? 'Bloquea una conciliación confiable' : 'Requiere revisión'}</p></div></div>)}</div>}
-                            {!isIntegrityAuditLoading && integrityAudit?.ready && <div className="mt-5 flex items-center gap-3 border-y border-emerald-100 py-4 text-sm text-emerald-700 dark:border-emerald-500/20 dark:text-emerald-300"><CheckCircle2 className="h-5 w-5" /> No se detectaron bloqueos de integridad.</div>}
-                        </Card>
-                        {!importPreview ? (
-                            <Card className="p-10 bg-white dark:bg-zinc-900 border border-dashed border-zinc-300 dark:border-white/10 rounded-2xl text-center">
-                                <FileSpreadsheet className="w-12 h-12 text-violet-500 mx-auto mb-4" />
-                                <h3 className="text-lg font-bold text-zinc-900 dark:text-white">Auditor financiero 2026</h3>
-                                <p className="text-sm text-zinc-500 max-w-xl mx-auto mt-2">
-                                    Sube el CSV o Excel de finanzas para convertirlo en registros mensuales, revisar totales y detectar filas que necesitan separarse antes de entrar a la base de datos.
-                                </p>
-                            </Card>
-                        ) : (
-                            <>
-                                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                                    <Card className="p-5 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl">
-                                        <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Ingresos detectados</p>
-                                        <p className="text-xl font-black mt-2 text-emerald-600">{formatCurrency(importPreview.totals?.calculated?.income || 0)}</p>
-                                    </Card>
-                                    <Card className="p-5 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl">
-                                        <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Egresos detectados</p>
-                                        <p className="text-xl font-black mt-2 text-red-500">{formatCurrency(importPreview.totals?.calculated?.expense || 0)}</p>
-                                    </Card>
-                                    <Card className="p-5 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl">
-                                        <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Deudas grandes</p>
-                                        <p className="text-xl font-black mt-2 text-amber-500">{formatCurrency(importPreview.totals?.explicit?.debt || importPreview.totals?.calculated?.debt || 0)}</p>
-                                    </Card>
-                                    <Card className="p-5 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl">
-                                        <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Registros mensuales</p>
-                                        <p className="text-xl font-black mt-2 text-violet-600">{importPreview.entries?.length || 0}</p>
-                                    </Card>
-                                </div>
-
-                                <Card className="p-6 bg-white dark:bg-zinc-900 border-zinc-200/50 dark:border-white/5 rounded-2xl">
-                                    <div className="flex items-start justify-between gap-6">
-                                        <div>
-                                            <h3 className="text-sm font-bold text-zinc-900 dark:text-white">Resultado de auditoría</h3>
-                                            <p className="text-[11px] text-zinc-500 mt-1">
-                                                Archivo: {importPreview.filename || 'Sin nombre'} · Año {importPreview.year}
-                                            </p>
-                                            {importPreview.workbook?.sheetNames?.length > 0 && (
-                                                <p className="text-[11px] text-zinc-500 mt-1">
-                                                    Hojas detectadas: {importPreview.workbook.sheetNames.join(', ')}
-                                                </p>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-col items-end gap-3">
-                                            <div className={cn(
-                                                "inline-flex items-center gap-2 rounded-xl px-3 py-1.5 text-[10px] font-black uppercase tracking-widest",
-                                                importPreview.warnings?.length > 0
-                                                    ? "bg-destructive/10 text-destructive"
-                                                    : "bg-emerald-500/10 text-emerald-600"
-                                            )}>
-                                                {importPreview.warnings?.length > 0 ? <AlertTriangle className="h-4 w-4 text-destructive" /> : <CheckCircle2 className="w-4 h-4" />}
-                                                {importPreview.warnings?.length || 0} alertas
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onClick={handleFinancialImportCommit}
-                                                disabled={isCommittingImport || !importFile}
-                                                className="inline-flex items-center gap-2 rounded-xl bg-violet-600 px-4 py-2 text-[10px] font-black uppercase tracking-widest text-white shadow-sm transition-colors hover:bg-violet-700 disabled:cursor-not-allowed disabled:opacity-60"
-                                            >
-                                                {isCommittingImport ? <Loader2 className="w-4 h-4 animate-spin" /> : <UploadCloud className="w-4 h-4" />}
-                                                Importar a base de datos
-                                            </button>
-                                        </div>
-                                    </div>
-
-                                    {importPreview.payrollContinuityFlags?.length > 0 && (
-                                        <div className="mt-6 space-y-3">
-                                            <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Continuidad de nómina por revisar</p>
-                                            {importPreview.payrollContinuityFlags.map((flag) => (
-                                                <div key={`${flag.rowNumber}-${flag.label}`} className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/20 dark:bg-amber-950/20">
-                                                    <p className="text-sm font-bold text-zinc-900 dark:text-white">{flag.label}</p>
-                                                    <p className="text-xs text-amber-700 dark:text-amber-200 mt-1">{flag.reason}</p>
-                                                    <p className="text-[10px] text-zinc-500 mt-2">Fila {flag.rowNumber} · Meses: {flag.months.join(', ')}</p>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {importPreview.totals?.monthly && (
-                                        <div className="mt-6 overflow-x-auto">
-                                            <div className="flex items-start justify-between gap-4 mb-3">
-                                                <div>
-                                                    <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Resumen mensual importado</p>
-                                                    <p className="text-xs text-zinc-500 mt-1">Esta tabla es el puente entre el Excel y el módulo financiero operativo.</p>
-                                                </div>
-                                                <span className="shrink-0 rounded-full bg-violet-600/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-violet-600">
-                                                    {importPreview.layout === 'CATEGORIZED_MONTHLY' ? 'Formato nuevo' : 'Formato legado'}
-                                                </span>
-                                            </div>
-                                            <table className="min-w-[980px] w-full text-left text-[11px]">
-                                                <thead className="text-[9px] uppercase tracking-widest text-zinc-400">
-                                                    <tr>
-                                                        <th className="py-2 pr-4">Rubro</th>
-                                                        {monthLabels.map((month) => (
-                                                            <th key={month} className="py-2 px-2 text-right">{month}</th>
-                                                        ))}
-                                                        <th className="py-2 pl-2 text-right">Total</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                                    {[
-                                                        ['Ingresos', importPreview.totals.monthly.explicit.income, 'text-emerald-600'],
-                                                        ['Costos administrativos', importPreview.totals.monthly.explicit.expense, 'text-red-500'],
-                                                        ['Gastos operativos', importPreview.totals.monthly.explicit.operatingExpense, 'text-orange-500'],
-                                                        ['Financiamiento / inversión', importPreview.totals.monthly.explicit.financing, 'text-cyan-600'],
-                                                        ['Resultado del ejercicio', importPreview.totals.monthly.explicit.netResult, 'text-violet-600']
-                                                    ].map(([label, values, colorClass]) => {
-                                                        const safeValues = Array.isArray(values) ? values : Array(12).fill(0);
-                                                        const total = safeValues.reduce((sum, value) => sum + value, 0);
-                                                        return (
-                                                            <tr key={label} className="hover:bg-zinc-50/70 dark:hover:bg-white/5">
-                                                                <td className="py-3 pr-4 font-bold text-zinc-800 dark:text-zinc-100">{label}</td>
-                                                                {safeValues.map((value, index) => (
-                                                                    <td key={`${label}-${index}`} className={cn("py-3 px-2 text-right font-bold", value < 0 ? "text-red-500" : value > 0 ? colorClass : "text-zinc-300")}>
-                                                                        {value ? formatCurrency(value) : '-'}
-                                                                    </td>
-                                                                ))}
-                                                                <td className={cn("py-3 pl-2 text-right font-black", total < 0 ? "text-red-500" : total > 0 ? colorClass : "text-zinc-300")}>
-                                                                    {total ? formatCurrency(total) : '-'}
-                                                                </td>
-                                                            </tr>
-                                                        );
-                                                    })}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-
-                                    {importPreview.payrollRoster?.length > 0 && (
-                                        <div className="mt-6 overflow-x-auto">
-                                            <div className="flex items-center justify-between gap-4 mb-3">
-                                                <div>
-                                                    <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Nómina detectada</p>
-                                                    <p className="text-xs text-zinc-500 mt-1">Base para crear contratos y vigencias del equipo dentro de la plataforma.</p>
-                                                </div>
-                                                <span className="rounded-full bg-pink-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-pink-600">
-                                                    {importPreview.payrollRoster.length} personas
-                                                </span>
-                                            </div>
-                                            <table className="min-w-[760px] w-full text-left text-xs">
-                                                <thead className="text-[10px] uppercase tracking-widest text-zinc-400">
-                                                    <tr>
-                                                        <th className="py-2 pr-4">Persona</th>
-                                                        <th className="py-2 pr-4">Cargo</th>
-                                                        <th className="py-2 text-right">Devengado</th>
-                                                        <th className="py-2 text-right">Seguridad social</th>
-                                                        <th className="py-2 text-right">Total mensual</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                                    {importPreview.payrollRoster.map((person) => (
-                                                        <tr key={`${person.rowNumber}-${person.name}`} className="hover:bg-zinc-50/70 dark:hover:bg-white/5">
-                                                            <td className="py-3 pr-4 font-bold text-zinc-800 dark:text-zinc-100">{person.name}</td>
-                                                            <td className="py-3 pr-4 text-zinc-500">{person.role || '-'}</td>
-                                                            <td className="py-3 text-right font-bold">{person.baseSalary ? formatCurrency(person.baseSalary) : '-'}</td>
-                                                            <td className="py-3 text-right font-bold">{person.socialSecurity ? formatCurrency(person.socialSecurity) : '-'}</td>
-                                                            <td className="py-3 text-right font-black text-pink-600">{person.monthlyTotal ? formatCurrency(person.monthlyTotal) : '-'}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-
-                                    {importPreview.debts?.length > 0 && (
-                                        <div className="mt-6 overflow-x-auto">
-                                            <div className="flex items-center justify-between gap-4 mb-3">
-                                                <div>
-                                                    <p className="text-[10px] uppercase tracking-widest font-black text-zinc-400">Morosos detectados</p>
-                                                    <p className="text-xs text-zinc-500 mt-1">
-                                                        Total operativo del Excel: {formatCurrency(importPreview.totals?.explicit?.debt || 0)}
-                                                        {importPreview.totals?.explicit?.debtComments ? ` · Comentarios: ${formatCurrency(importPreview.totals.explicit.debtComments)}` : ''}
-                                                    </p>
-                                                </div>
-                                                <span className="rounded-full bg-amber-500/10 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-amber-600">
-                                                    {importPreview.debts.length} registros
-                                                </span>
-                                            </div>
-                                            <table className="w-full text-left text-xs">
-                                                <thead className="text-[10px] uppercase tracking-widest text-zinc-400">
-                                                    <tr>
-                                                        <th className="py-2">Cliente / tercero</th>
-                                                        <th className="py-2 text-right">Monto</th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
-                                                    {importPreview.debts.map((debt) => (
-                                                        <tr key={`${debt.rowNumber}-${debt.sourceLabel}`}>
-                                                            <td className="py-3 font-bold text-zinc-800 dark:text-zinc-100">{debt.sourceLabel}</td>
-                                                            <td className="py-3 text-right font-black">{formatCurrency(debt.amount)}</td>
-                                                        </tr>
-                                                    ))}
-                                                </tbody>
-                                            </table>
-                                        </div>
-                                    )}
-                                </Card>
-                            </>
-                        )}
-                    </div>
-                )}
             </div>
 
             <Dialog open={isPayrollGenerationConfirmOpen} onOpenChange={(open) => !isGeneratingPayroll && setIsPayrollGenerationConfirmOpen(open)}>
@@ -2442,10 +1981,10 @@ await invalidateFinancialQueries(queryClient);
                 </DialogContent>
             </Dialog>
 
-            <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={importError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
-            {settlementDebt && <ReceivableSettlementDialog key={settlementDebt.id} debt={settlementDebt} saving={isSavingSettlement} error={importError} onClose={() => setSettlementDebt(null)} onSubmit={handleReceivableSettlement} />}
-            {paymentToEdit && <ReceivablePaymentEditDialog key={paymentToEdit.payment.id} debt={paymentToEdit.debt} payment={paymentToEdit.payment} accounts={financialAccounts?.accounts || []} saving={isEditingPayment} error={importError} onClose={() => setPaymentToEdit(null)} onSubmit={handleEditPayment} />}
-            {isLoanDialogOpen && <ReceivableLoanDialog open clients={clientTargetChoices} accounts={financialAccounts?.accounts || []} saving={isSavingLoan} error={importError} onClose={() => setIsLoanDialogOpen(false)} onSubmit={handleCreateLoan} />}
+            <ReceivablePaymentDialog key={paymentDebt?.id || "closed"} debt={paymentDebt} form={paymentForm} setForm={setPaymentForm} accounts={financialAccounts?.accounts || []} saving={isSavingPayment} error={noticeError} onClose={() => setPaymentDebt(null)} onSubmit={handleReceivablePayment} />
+            {settlementDebt && <ReceivableSettlementDialog key={settlementDebt.id} debt={settlementDebt} saving={isSavingSettlement} error={noticeError} onClose={() => setSettlementDebt(null)} onSubmit={handleReceivableSettlement} />}
+            {paymentToEdit && <ReceivablePaymentEditDialog key={paymentToEdit.payment.id} debt={paymentToEdit.debt} payment={paymentToEdit.payment} accounts={financialAccounts?.accounts || []} saving={isEditingPayment} error={noticeError} onClose={() => setPaymentToEdit(null)} onSubmit={handleEditPayment} />}
+            {isLoanDialogOpen && <ReceivableLoanDialog open clients={clientTargetChoices} accounts={financialAccounts?.accounts || []} saving={isSavingLoan} error={noticeError} onClose={() => setIsLoanDialogOpen(false)} onSubmit={handleCreateLoan} />}
             {statementClient && <ClientFinancialStatementDialog key={`${statementClient.id}-${selectedYear}`} client={statementClient} year={selectedYear} onClose={() => setStatementClient(null)} onOpenDocument={openClientStatementDocument} openingDocument={downloadingDocumentId === `statement:${statementClient.id}`} />}
 
             {documentPreview && (
@@ -2485,7 +2024,7 @@ await invalidateFinancialQueries(queryClient);
                             placeholder="Fue una prueba"
                             className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
                     </label>
-                    {importError && <p role="alert" className="text-sm text-destructive">{importError}</p>}
+                    {noticeError && <p role="alert" className="text-sm text-destructive">{noticeError}</p>}
                     <DialogFooter>
                         <button type="button" onClick={() => { setDebtToDelete(null); setDeleteReason(''); }} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button>
                         <button type="button" onClick={handleDeleteReceivable} disabled={isDeletingReceivable}
@@ -2653,7 +2192,7 @@ await invalidateFinancialQueries(queryClient);
                                     className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
                             </label>
                         )}
-                        {importError && <p role="alert" className="text-sm text-destructive">{importError}</p>}
+                        {noticeError && <p role="alert" className="text-sm text-destructive">{noticeError}</p>}
                         <DialogFooter>
                             <button type="button" onClick={() => { setDebtToIssue(null); setIssueForm(null); setIsCorrecting(false); }} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button>
                             <button type="submit" disabled={isIssuing || issueTotal <= 0 || !issueIdentityReady || !issueMoneyReady} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">
@@ -2690,7 +2229,7 @@ await invalidateFinancialQueries(queryClient);
                                 placeholder="Ej.: el valor se digitó mal, eran 500.000 y quedó en 500."
                                 className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm dark:border-white/10 dark:bg-zinc-950 dark:text-white" />
                         </label>
-                        {importError && <p role="alert" className="text-sm text-destructive">{importError}</p>}
+                        {noticeError && <p role="alert" className="text-sm text-destructive">{noticeError}</p>}
                         <DialogFooter>
                             <button type="button" onClick={() => setPaymentToReverse(null)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm dark:border-white/10">Cancelar</button>
                             <button type="submit" disabled={isReversingPayment || !reversalReason.trim()} className="inline-flex items-center justify-center gap-2 rounded-lg bg-destructive px-4 py-2 text-sm font-semibold text-white hover:bg-destructive/90 disabled:opacity-50">

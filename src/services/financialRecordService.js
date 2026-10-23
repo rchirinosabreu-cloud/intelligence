@@ -1,4 +1,4 @@
-import { withFinancialSearch, activeFinancialSource } from './financialQueryFilters.js';
+import { withFinancialSearch } from './financialQueryFilters.js';
 import { isLoanUntouched, loanFromRecord } from '../lib/receivableLoans.js';
 import { syncLoanWithRecord } from './loanRecordSyncService.js';
 
@@ -209,8 +209,7 @@ const recordSourceRelations = {
     loanReceivable: { select: { id: true, status: true, payments: { where: { reversedAt: null }, select: { id: true } } } },
     payrollTransaction: { select: { id: true } },
     payrollPayment: { select: { id: true } },
-    payablePayment: { select: { id: true, payableId: true } },
-    bankMatches: { where: { status: 'APPROVED' }, select: { id: true, status: true } }
+    payablePayment: { select: { id: true, payableId: true } }
 };
 
 export const listFinancialRecords = async (prismaClient, filters = {}) => {
@@ -271,12 +270,8 @@ export const listFinancialRecords = async (prismaClient, filters = {}) => {
         });
     }
 
-    if (filters.scope === 'active') {
-        const batch = await prismaClient.financialImportBatch.findFirst({
-            where: { year, status: 'IMPORTED' }, orderBy: { createdAt: 'desc' }, select: { id: true }
-        });
-        Object.assign(where, activeFinancialSource(batch?.id), { status: 'POSTED' });
-    }
+    // «Vigente»: lo registrado. Las cargas del Excel ya no existen; lo que quedó de ellas es historia.
+    if (filters.scope === 'active') where.status = 'POSTED';
     where = withFinancialSearch(where, filters.q);
 
     const [items, total, sums] = await Promise.all([
@@ -345,9 +340,6 @@ export const financialRecordLockReason = (record) => {
     if (record?.payrollPayment || record?.payrollTransaction) {
         return 'Este movimiento es un pago de nómina y su valor no se edita a mano. Usa el lápiz de este mismo movimiento en Movimientos —o la liquidación en Nómina Operativa, eligiendo arriba el mes de esa liquidación— para desglosarlo, subirle el comprobante, cambiar la referencia o revertirlo.';
     }
-    if (record?.bankMatches?.some((match) => match.status === 'APPROVED')) {
-        return 'Este movimiento tiene una conciliación bancaria aprobada. Primero hay que deshacer esa conciliación; mientras siga aprobada no se puede editar ni anular aquí.';
-    }
     if (record?.origin === 'SYSTEM') {
         return 'Este movimiento lo generó otro proceso de la plataforma, no se registró a mano. Se corrige desde donde se originó, no desde Movimientos.';
     }
@@ -356,7 +348,7 @@ export const financialRecordLockReason = (record) => {
 
 const assertIndependentFinancialRecord = (record) => {
     const lockedLoan = record.loanReceivable && !isLoanUntouched(record.loanReceivable);
-    if (record.receivablePayment || lockedLoan || record.payablePayment || record.payrollTransaction || record.payrollPayment || record.bankMatches?.some((match) => match.status === 'APPROVED')) {
+    if (record.receivablePayment || lockedLoan || record.payablePayment || record.payrollTransaction || record.payrollPayment) {
         throw new FinancialDomainError('FINANCIAL_RECORD_LINKED', financialRecordLockReason(record), 409);
     }
     if (record.origin === 'SYSTEM') {
@@ -365,7 +357,7 @@ const assertIndependentFinancialRecord = (record) => {
 };
 
 // The source links, period checks and write must use the same snapshot. A competing
-// bank approval or ledger edit must fail rather than silently disconnecting money.
+// edit must fail rather than silently disconnecting money.
 const mutateIndependentFinancialRecord = async (prismaClient, mutation) => {
     try {
         return await prismaClient.$transaction(mutation, { isolationLevel: 'Serializable' });

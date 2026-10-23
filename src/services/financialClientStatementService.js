@@ -51,11 +51,8 @@ export async function getClientFinancialStatement(prismaClient, clientId, query 
   return prismaClient.$transaction(async tx => {
     const client = await tx.client.findUnique({ where: { id: clientId }, select: { id: true, name: true, slug: true } });
     if (!client) throw new FinancialDomainError('FINANCIAL_CLIENT_NOT_FOUND', 'El cliente no existe.', 404);
-    const batch = await tx.financialImportBatch.findFirst({ where: { year, status: 'IMPORTED' }, orderBy: { createdAt: 'desc' }, select: { id: true } });
-    const batchId = batch?.id || null;
-    if (cursor && cursor.batchId !== batchId) throw new FinancialDomainError('FINANCIAL_STATEMENT_CHANGED', 'La importación cambió. Vuelve a la primera página del estado de cuenta.', 409);
     const dateField = section === 'debts' ? 'period' : 'date';
-    const AND = [{ clientId, year }, batchId ? { OR: [{ importBatchId: batchId }, { importBatchId: null }] } : {}];
+    const AND = [{ clientId, year }];
     if (section === 'income') AND.push({ type: 'INCOME', status: 'POSTED', scenario: 'ACTUAL', isProjection: false });
     if (cursor) AND.push({ OR: [{ [dateField]: { lt: new Date(cursor.at) } }, { [dateField]: new Date(cursor.at), id: { lt: cursor.id } }] });
     const rows = await tx[section === 'debts' ? 'accountsReceivable' : 'financialRecord'].findMany({
@@ -64,9 +61,9 @@ export async function getClientFinancialStatement(prismaClient, clientId, query 
     });
     const page = rows.slice(0, 25), last = page.at(-1);
     return {
-      client, scope: { year, section, importBatchId: batchId, kind: section === 'debts' ? 'ANNUAL_OBLIGATIONS_CURRENT_BALANCE' : 'ANNUAL_REGISTERED_INCOME' },
+      client, scope: { year, section, kind: section === 'debts' ? 'ANNUAL_OBLIGATIONS_CURRENT_BALANCE' : 'ANNUAL_REGISTERED_INCOME' },
       items: section === 'debts' ? page.map(presentDebt) : page,
-      nextCursor: rows.length > 25 ? Buffer.from(JSON.stringify({ clientId, year, section, batchId, at: new Date(last[dateField]).toISOString(), id: last.id })).toString('base64url') : null
+      nextCursor: rows.length > 25 ? Buffer.from(JSON.stringify({ clientId, year, section, at: new Date(last[dateField]).toISOString(), id: last.id })).toString('base64url') : null
     };
   }, { isolationLevel: 'RepeatableRead', timeout: 10000 });
 }

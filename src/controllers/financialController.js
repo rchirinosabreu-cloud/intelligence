@@ -1,10 +1,5 @@
 import prisma from '../lib/prisma.js';
-import { withFinancialSearch, financialMonthFilter, ACTIVE_RECEIVABLE_PAYMENT } from '../services/financialQueryFilters.js';
-import {
-    buildFinancialImportPersistencePlan,
-    parseFinancialImportWorkbook,
-    persistFinancialImportPlan
-} from '../services/financialImportService.js';
+import { withFinancialSearch, financialMonthFilter, ACTIVE_RECEIVABLE_PAYMENT, LIVE_PAYROLL_CONTRACT } from '../services/financialQueryFilters.js';
 import { updateReceivable } from '../services/financialReceivableService.js';
 import { createPayrollContract, updatePayrollContract } from '../services/financialPayrollContractService.js';
 import { FINANCIAL_CATEGORIES } from '../services/financialRecordService.js';
@@ -23,102 +18,6 @@ const toNum = (val) => {
 // Formats number to 2 decimal places to prevent float rounding anomalies
 const roundFloat = (val) => {
     return Math.round((val + Number.EPSILON) * 100) / 100;
-};
-
-// Active import snapshot plus subsequent platform entries: never discard manual/SYSTEM work.
-const financialSourceScope = (batchId) => batchId
-    ? { OR: [{ importBatchId: batchId }, { importBatchId: null }] }
-    : {};
-
-const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
-
-const MONTHLY_LEDGER_FIELDS = [
-    { key: 'explicitIncome', label: 'Ingresos', tone: 'income' },
-    { key: 'explicitAdminCost', label: 'Costos administrativos', tone: 'expense' },
-    { key: 'explicitOperatingExpense', label: 'Gastos operativos', tone: 'expense' },
-    { key: 'explicitFinancing', label: 'Financiacion / inversion', tone: 'financing' },
-    { key: 'explicitDebt', label: 'Cartera / morosos', tone: 'warning' },
-    { key: 'netResult', label: 'Resultado del ejercicio', tone: 'net' }
-];
-
-const buildMonthlyLedgerPayload = (activeImportBatch, summaries) => {
-    const summaryByMonth = new Map(summaries.map((summary) => [summary.month, summary]));
-
-    return {
-        year: activeImportBatch.year,
-        importBatchId: activeImportBatch.id,
-        months: MONTH_LABELS.map((label, index) => ({
-            month: index + 1,
-            label
-        })),
-        rows: MONTHLY_LEDGER_FIELDS.map((field) => ({
-            ...field,
-            values: Array.from({ length: 12 }, (_, index) => {
-                const month = index + 1;
-                const summary = summaryByMonth.get(month);
-                return {
-                    summaryId: summary?.id || null,
-                    month,
-                    amount: summary ? toNum(summary[field.key]) : 0
-                };
-            })
-        }))
-    };
-};
-
-export const getFinancialMonthlyLedger = async (req, res, dependencies = {}) => {
-    const prismaClient = dependencies.prismaClient || prisma;
-
-    try {
-        const year = parseInt(req.query.year, 10) || 2026;
-        const activeImportBatch = await prismaClient.financialImportBatch.findFirst({
-            where: {
-                year,
-                status: 'IMPORTED'
-            },
-            orderBy: {
-                createdAt: 'desc'
-            },
-            select: {
-                id: true,
-                year: true
-            }
-        });
-
-        if (!activeImportBatch?.id) {
-            return res.json({
-                year,
-                importBatchId: null,
-                months: MONTH_LABELS.map((label, index) => ({ month: index + 1, label })),
-                rows: MONTHLY_LEDGER_FIELDS.map((field) => ({ ...field, values: [] }))
-            });
-        }
-
-        const summaries = await prismaClient.financialMonthlySummary.findMany({
-            where: {
-                year,
-                importBatchId: activeImportBatch.id
-            },
-            orderBy: {
-                month: 'asc'
-            }
-        });
-
-        return res.json(buildMonthlyLedgerPayload(activeImportBatch, summaries));
-    } catch (error) {
-        console.error('[Financials API] Monthly ledger failed:', error.response?.data || error);
-        return res.status(500).json({
-            error: 'FINANCIAL_MONTHLY_LEDGER_FAILED',
-            message: 'No fue posible cargar el editor financiero mensual.'
-        });
-    }
-};
-
-export const updateFinancialMonthlySummary = async (req, res, dependencies = {}) => {
-    return res.status(409).json({
-        error: 'FINANCIAL_SUMMARY_READ_ONLY',
-        message: 'Los resúmenes son referencias de conciliación. Registra o corrige los movimientos financieros para actualizar los resultados.'
-    });
 };
 
 const serializeReceivable = (receivable) => {
@@ -306,21 +205,6 @@ export const getFinancialClientReconciliation = async (req, res, dependencies = 
 
     try {
         const year = parseInt(req.query.year, 10) || 2026;
-        const activeImportBatch = await prismaClient.financialImportBatch.findFirst({
-            where: {
-                year,
-                status: 'IMPORTED'
-            },
-            orderBy: {
-                createdAt: 'desc'
-            },
-            select: {
-                id: true,
-                year: true
-            }
-        });
-
-        const importBatchFilter = financialSourceScope(activeImportBatch?.id);
         const [records, receivables, targets] = await Promise.all([
             prismaClient.financialRecord.findMany({
                 where: withFinancialSearch({
@@ -328,8 +212,7 @@ export const getFinancialClientReconciliation = async (req, res, dependencies = 
                     status: 'POSTED',
                     scenario: ['ACTUAL', 'FORECAST', 'BUDGET'].includes(req.query.scenario) ? req.query.scenario : 'ACTUAL',
                     ...financialMonthFilter(req.query),
-                    ...(['INCOME', 'EXPENSE'].includes(req.query.type) ? { type: req.query.type } : {}),
-                    ...importBatchFilter
+                    ...(['INCOME', 'EXPENSE'].includes(req.query.type) ? { type: req.query.type } : {})
                 }, req.query.q),
                 include: {
                     client: {
@@ -344,8 +227,7 @@ export const getFinancialClientReconciliation = async (req, res, dependencies = 
             prismaClient.accountsReceivable.findMany({
                 where: withFinancialSearch({
                     year,
-                    ...financialMonthFilter(req.query),
-                    ...importBatchFilter
+                    ...financialMonthFilter(req.query)
                 }, req.query.q, 'receivable'),
                 include: {
                     payments: { where: ACTIVE_RECEIVABLE_PAYMENT, select: { amount: true } },
@@ -375,7 +257,6 @@ export const getFinancialClientReconciliation = async (req, res, dependencies = 
 
         return res.json({
             year,
-            importBatchId: activeImportBatch?.id || null,
             clients: buildClientReconciliationRows(records, receivables),
             targets: targets.map(serializeClientTarget)
         });
@@ -484,21 +365,7 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
 
     try {
         const year = parseInt(req.query.year, 10) || 2026;
-        const activeImportBatch = await prismaClient.financialImportBatch.findFirst({
-            where: {
-                year,
-                status: 'IMPORTED'
-            },
-            orderBy: {
-                createdAt: 'desc'
-            },
-            select: {
-                id: true,
-                year: true
-            }
-        });
-
-        const where = withFinancialSearch({ year, ...financialMonthFilter(req.query), ...financialSourceScope(activeImportBatch?.id) }, req.query.q, 'receivable');
+        const where = withFinancialSearch({ year, ...financialMonthFilter(req.query) }, req.query.q, 'receivable');
         const receivables = await prismaClient.accountsReceivable.findMany({
             where,
             include: {
@@ -538,7 +405,6 @@ export const getFinancialReceivablesLedger = async (req, res, dependencies = {})
 
         return res.json({
             year,
-            importBatchId: activeImportBatch?.id || null,
             totals: buildReceivableTotals(items),
             items
         });
@@ -641,24 +507,8 @@ export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => 
 
     try {
         const year = parseInt(req.query.year, 10) || 2026;
-        const activeImportBatch = await prismaClient.financialImportBatch.findFirst({
-            where: {
-                year,
-                status: 'IMPORTED'
-            },
-            orderBy: {
-                createdAt: 'desc'
-            },
-            select: {
-                id: true,
-                year: true
-            }
-        });
-
         const contracts = await prismaClient.payrollContract.findMany({
-            where: withFinancialSearch(activeImportBatch?.id
-                ? { OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null }] }
-                : { importBatchId: null }, req.query.q, 'contract'),
+            where: withFinancialSearch({ ...LIVE_PAYROLL_CONTRACT }, req.query.q, 'contract'),
             include: {
                 collaborator: {
                     select: {
@@ -702,7 +552,6 @@ export const getFinancialPayrollLedger = async (req, res, dependencies = {}) => 
 
         return res.json({
             year,
-            importBatchId: activeImportBatch?.id || null,
             items: contracts.map(serializePayrollContract)
         });
     } catch (error) {
@@ -780,27 +629,8 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
             startMonth = selectedMonth - 1;
             endMonth = selectedMonth;
         }
-        const dateStart = new Date(Date.UTC(year, startMonth, 1));
-        const dateEnd = new Date(Date.UTC(year, endMonth, 1));
         const monthStart = startMonth + 1;
         const monthEnd = endMonth;
-
-        console.log(`[Financials API] Query bounds: ${dateStart.toISOString()} to ${dateEnd.toISOString()}`);
-
-        const activeImportBatch = await prismaClient.financialImportBatch.findFirst({
-            where: {
-                year,
-                status: 'IMPORTED'
-            },
-            orderBy: {
-                createdAt: 'desc'
-            },
-            select: {
-                id: true,
-                summary: true
-            }
-        });
-        const importedBatchFilter = financialSourceScope(activeImportBatch?.id);
 
         // --- SECTION 1: CASH FLOW & CATEGORIES DISTRIBUTION ---
         const financialRecordWhere = {
@@ -810,15 +640,7 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
                 lte: monthEnd
             },
             scenario,
-            status: 'POSTED',
-            ...(activeImportBatch?.id
-                ? { OR: [{ importBatchId: activeImportBatch.id }, { importBatchId: null }] }
-                : {
-                    date: {
-                        gte: dateStart,
-                        lt: dateEnd
-                    }
-                })
+            status: 'POSTED'
         };
 
         // La categoría llega de la barra de filtros. Se comprueba contra el catálogo:
@@ -886,8 +708,7 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
             where: withFinancialSearch({
                 status: { in: ['DEBE', 'PROMESADO'] },
                 year,
-                ...financialMonthFilter(req.query),
-                ...importedBatchFilter
+                ...financialMonthFilter(req.query)
             }, req.query.q, 'receivable'),
             include: {
                 client: {
@@ -939,8 +760,6 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
 
         // Convert receivables to array sorted by totalOutstanding descending
         const accountsReceivable = Object.values(clientReceivableMap).sort((a, b) => b.totalOutstanding - a.totalOutstanding);
-        const explicitImportTotals = activeImportBatch?.summary?.totals?.explicit || {};
-        const calculatedImportTotals = activeImportBatch?.summary?.totals?.calculated || {};
         const recordTotals = cashFlow.reduce((totals, month) => ({
             income: roundFloat(totals.income + month.income),
             expense: roundFloat(totals.expense + month.expense),
@@ -958,28 +777,15 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
         const loansGranted = roundFloat(financialRecords
             .filter((record) => record.type === 'EXPENSE' && record.category === 'PRESTAMO')
             .reduce((sum, record) => sum + toNum(record.amount), 0));
-        const importedExpense = toNum(explicitImportTotals.totalCostAndExpense) || (
-            toNum(explicitImportTotals.expense) +
-            toNum(explicitImportTotals.operatingExpense) +
-            toNum(explicitImportTotals.financing)
-        );
         const sourceSummary = {
-            importBatchId: activeImportBatch?.id || null,
             scenario,
             totals: {
                 income: recordTotals.income,
                 expense: recordTotals.expense,
                 netFlow: recordTotals.netFlow,
                 receivable: receivableTotal,
-                calculatedReceivable: toNum(calculatedImportTotals.debt),
                 loanRepayments,
                 loansGranted
-            },
-            importedTotals: {
-                income: toNum(explicitImportTotals.income),
-                expense: importedExpense,
-                netFlow: toNum(explicitImportTotals.netResult),
-                receivable: toNum(explicitImportTotals.debt)
             }
         };
 
@@ -1085,62 +891,7 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
             totalPayrollCost = roundFloat(totalPayrollCost + totalPaid);
         }
 
-        let collaborators = Object.values(collaboratorPayrollMap);
-
-        if (collaborators.length === 0 && activeImportBatch?.id) {
-            const importedPayrollContracts = await prismaClient.payrollContract.findMany({
-                where: withFinancialSearch({
-                    importBatchId: activeImportBatch.id
-                }, req.query.q, 'contract'),
-                include: {
-                    user: {
-                        select: {
-                            name: true,
-                            email: true
-                        }
-                    },
-                    collaborator: {
-                        select: {
-                            displayName: true
-                        }
-                    },
-                    position: {
-                        select: {
-                            title: true
-                        }
-                    }
-                },
-                orderBy: {
-                    sourceRow: 'asc'
-                }
-            });
-
-            collaborators = importedPayrollContracts.map((contract) => {
-                const baseSalary = toNum(contract.baseSalary);
-                const socialSecurity = toNum(contract.socialSecurity);
-                const officialMonthlyTotal = Number.isFinite(Number(contract.metadata?.monthlyTotal))
-                    ? Number(contract.metadata.monthlyTotal)
-                    : null;
-                const totalPaid = officialMonthlyTotal !== null
-                    ? officialMonthlyTotal
-                    : roundFloat(baseSalary + socialSecurity);
-                return {
-                    userId: contract.userId,
-                    collaboratorId: contract.collaboratorId,
-                    contractId: contract.id,
-                    name: contract.collaborator?.displayName || contract.user?.name || contract.sourceLabel || 'Colaborador',
-                    email: contract.user?.email || '',
-                    position: contract.position?.title || '',
-                    baseSalary,
-                    socialSecurity,
-                    adjustmentsTotal: 0,
-                    totalPaid,
-                    adjustments: []
-                };
-            });
-            totalPayrollCost = collaborators.reduce((sum, collaborator) => roundFloat(sum + collaborator.totalPaid), 0);
-        }
-
+        const collaborators = Object.values(collaboratorPayrollMap);
 
         // --- SECTION 4: UNIFIED JSON CONTRACT ---
         res.json({
@@ -1157,73 +908,5 @@ export const getFinancialDashboard = async (req, res, dependencies = {}) => {
     } catch (error) {
         console.error('[Financials API] Dashboard analytical aggregation failed:', error.response?.data || error);
         res.status(error.statusCode || 500).json({ error: error.code || 'FINANCIAL_DASHBOARD_FAILED', message: error.statusCode ? error.message : 'No fue posible cargar los indicadores financieros.' });
-    }
-};
-
-export const previewFinancialImport = async (req, res) => {
-    try {
-        if (!req.file?.buffer) {
-            return res.status(400).json({
-                error: 'FINANCIAL_IMPORT_FILE_REQUIRED',
-                message: 'Debes subir un archivo CSV o Excel para auditar la información financiera.'
-            });
-        }
-
-        const year = parseInt(req.body?.year, 10) || 2026;
-        const actualThroughMonth = parseInt(req.body?.actualThroughMonth, 10);
-        const importOptions = {
-            filename: req.file.originalname,
-            year
-        };
-        if (Number.isInteger(actualThroughMonth)) importOptions.actualThroughMonth = actualThroughMonth;
-        const preview = parseFinancialImportWorkbook(req.file.buffer, importOptions);
-
-        return res.json(preview);
-    } catch (error) {
-        console.error('[Financials API] Import preview failed:', error);
-        return res.status(500).json({
-            error: 'FINANCIAL_IMPORT_PREVIEW_FAILED',
-            message: 'No fue posible leer el archivo financiero. Revisa el formato e intenta nuevamente.'
-        });
-    }
-};
-
-export const commitFinancialImport = async (req, res, dependencies = {}) => {
-    const buildPlan = dependencies.buildPlan || buildFinancialImportPersistencePlan;
-    const persistPlan = dependencies.persistPlan || persistFinancialImportPlan;
-    const prismaClient = dependencies.prismaClient || prisma;
-
-    try {
-        if (!req.file?.buffer) {
-            return res.status(400).json({
-                error: 'FINANCIAL_IMPORT_FILE_REQUIRED',
-                message: 'Debes subir un archivo CSV o Excel para importar la información financiera.'
-            });
-        }
-
-        const year = parseInt(req.body?.year, 10) || 2026;
-        const actualThroughMonth = parseInt(req.body?.actualThroughMonth, 10);
-        const importOptions = {
-            filename: req.file.originalname,
-            year,
-            importedById: req.user?.id || null
-        };
-        if (Number.isInteger(actualThroughMonth)) importOptions.actualThroughMonth = actualThroughMonth;
-        const plan = buildPlan(req.file.buffer, importOptions);
-        const result = await persistPlan(prismaClient, plan);
-
-        return res.status(201).json({
-            message: 'Información financiera importada correctamente.',
-            importBatchId: result.importBatchId,
-            counts: result.counts,
-            warnings: plan.preview?.warnings || []
-        });
-    } catch (error) {
-        console.error('[Financials API] Import commit failed:', error.response?.data || error);
-        const statusCode = Number(error.statusCode) || 500;
-        return res.status(statusCode).json({
-            error: error.code || 'FINANCIAL_IMPORT_COMMIT_FAILED',
-            message: statusCode < 500 ? error.message : 'No fue posible guardar la importación financiera en la base de datos.'
-        });
     }
 };

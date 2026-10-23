@@ -30,7 +30,10 @@ export const financialMonthFilter = ({ month, quarter } = {}) => {
     return {};
 };
 
-export const activeFinancialSource = batchId => batchId ? { OR: [{ importBatchId: batchId }, { importBatchId: null }] } : {};
+// Los contratos de nómina vigentes son los de la plataforma. La carga del Excel, retirada el
+// 23 de octubre de 2026, dejó 20 contratos repetidos en cargas reemplazadas: siguen guardados y
+// nunca se muestran ni se liquidan.
+export const LIVE_PAYROLL_CONTRACT = Object.freeze({ importBatchId: null });
 
 // Un abono revertido se conserva como evidencia pero ya no representa dinero aplicado:
 // cualquier consulta que sume abonos o calcule saldo debe filtrarlo con esto.

@@ -1,8 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import XLSX from '../src/lib/xlsx.js';
-import { parseFinancialImportWorkbook } from '../src/services/financialImportService.js';
 import { normalizeFinancialRecordInput, updateFinancialRecord } from '../src/services/financialRecordService.js';
 
 const read = path => fs.readFileSync(new URL(path, import.meta.url), 'utf8');
@@ -13,7 +11,7 @@ const existing = {
     date: new Date('2026-08-01T05:00:00Z'), year: 2026, month: 8,
     scenario: 'ACTUAL', status: 'POSTED', section: 'ADMIN_COST',
     postedAt: new Date('2026-09-01T12:00:00Z'),
-    receivablePayment: null, payrollTransaction: null, bankMatches: []
+    receivablePayment: null, payrollTransaction: null
 };
 
 test('donations, sowing and loans are valid explicit categories without changing amounts', () => {
@@ -23,19 +21,6 @@ test('donations, sowing and loans are valid explicit categories without changing
         assert.equal(result.amount, 650000);
         assert.equal(result.type, 'EXPENSE');
     }
-});
-
-test('import preserves explicit donation and sowing categories ahead of person-name heuristics', () => {
-    const csv = 'Clientes,Enero,Febrero\nCliente,100,0\nEgresos,,\nDonaciones,650000,0\nDonación de Rodny,200000,0\nSiembra,50000,0\nSiembras,25000,0\nSiembra sin importe,,\nPréstamo a Rodny,300000,0\nCuota préstamo banco,80000,0\nUniformes,10000,0\n';
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.aoa_to_sheet(csv.trim().split('\n').map(row => row.split(','))), 'FINANZAS BRAIN STUDIO 2026');
-    const preview = parseFinancialImportWorkbook(XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' }), { filename: 'categories.xlsx', year: 2026 });
-    const expenses = preview.entries.filter(entry => entry.type === 'EXPENSE');
-    assert.deepEqual(expenses.map(({ sourceLabel, category, amount }) => [sourceLabel, category, amount]), [
-        ['Donaciones', 'DONACION', 650000], ['Donación de Rodny', 'DONACION', 200000],
-        ['Siembra', 'SIEMBRA', 50000], ['Siembras', 'SIEMBRA', 25000],
-        ['Préstamo a Rodny', 'PRESTAMO', 300000], ['Cuota préstamo banco', 'PRESTAMO', 80000], ['Uniformes', 'OPERATIVO', 10000]
-    ]);
 });
 
 test('reclassifying an existing donation preserves identity, money and provenance with an audit event', async () => {

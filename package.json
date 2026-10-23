@@ -21,7 +21,6 @@
     "preview": "vite preview --host :: --port 3000",
     "lint": "eslint . --quiet",
     "lint:warn": "eslint .",
-    "db:seed:financials": "node scripts/seed-financials.js",
     "db:seed:team": "node scripts/seed-team.js",
     "db:backfill-service-costs": "node scripts/backfill-service-costs.js",
     "db:normalize-quotation-titles": "node scripts/normalize-quotation-titles.js",

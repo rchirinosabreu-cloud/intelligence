@@ -9,7 +9,7 @@ const existingIncome = (extra = {}) => ({
   id: 'record-existing', amount: 300, date: new Date('2026-09-07T00:00:00Z'), year: 2026, month: 9,
   clientId: 'client-1', accountId: 'account-1', type: 'INCOME', scenario: 'ACTUAL', status: 'POSTED',
   category: 'SERVICIO', origin: 'MANUAL', receivablePayment: null, payrollTransaction: null,
-  bankMatches: [], ...extra
+  ...extra
 });
 
 const fixture = ({ receivable = {}, account, client, record, closed = false } = {}) => {
@@ -113,8 +113,8 @@ test('a known archived client can still pay historical debt', async () => {
   assert.equal(result.outstanding, 700);
 });
 
-test('an existing bank-matched income is applied once without creating or changing the income', async () => {
-  const record = existingIncome({ bankMatches: [{ id: 'match-1', status: 'APPROVED' }] });
+test('an existing income is applied once without creating or changing the income', async () => {
+  const record = existingIncome();
   const db = fixture({ record });
   const result = await createReceivablePayment(db.client, 'debt-1', input({ financialRecordId: record.id }), actor);
   assert.equal(result.financialRecord.id, record.id);

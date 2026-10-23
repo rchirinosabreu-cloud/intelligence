@@ -113,8 +113,6 @@ axios.defaults.adapter = async config => {
     else if(path.endsWith('/receivables-ledger')) data={items:[],totals:{total:0}};
     else if(path.endsWith('/payroll-ledger')) data={items:[]};
     else if(path.endsWith('/client-reconciliation')) data={clients:[],targets:[]};
-    else if(path.endsWith('/bank-reconciliation')) data={transactions:[],statements:[],continuityGaps:[]};
-    else if(path.endsWith('/integrity')) data={findings:[],summary:{}};
     else throw new Error(`Ruta no simulada: ${config.method} ${path}`);
     return {data,status:200,statusText:'OK',headers:{},config};
 };

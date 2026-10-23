@@ -250,10 +250,9 @@ export const reversePayablePayment = async (prismaClient, paymentId, reason, act
     const actorId = actorIdFrom(actor);
     try {
         return await prismaClient.$transaction(async (tx) => {
-            const payment = await tx.payablePayment.findUnique({ where: { id: paymentId }, include: { financialRecord: { include: { bankMatches: { where: { status: 'APPROVED' }, select: { id: true } } } } } });
+            const payment = await tx.payablePayment.findUnique({ where: { id: paymentId }, include: { financialRecord: true } });
             if (!payment) throw new FinancialDomainError('PAYABLE_PAYMENT_NOT_FOUND', 'El pago no existe.', 404);
             if (payment.reversedAt) throw new FinancialDomainError('PAYABLE_PAYMENT_ALREADY_REVERSED', 'El pago ya fue revertido.', 409);
-            if (payment.financialRecord?.bankMatches?.length) throw new FinancialDomainError('PAYABLE_PAYMENT_RECONCILED', 'El egreso de este pago tiene una conciliación bancaria aprobada. Primero hay que deshacer esa conciliación.', 409);
             const paidDate = new Date(payment.paidAt);
             await assertOpenFinancialPeriod(tx, paidDate.getUTCFullYear(), paidDate.getUTCMonth() + 1);
             const now = new Date();

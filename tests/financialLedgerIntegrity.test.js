@@ -7,7 +7,7 @@ const manualRecord = (overrides = {}) => ({
   id: 'record-1', amount: 1000, type: 'INCOME', category: 'SERVICIO', section: 'REVENUE',
   date: new Date('2026-09-01T12:00:00Z'), year: 2026, month: 9,
   scenario: 'ACTUAL', status: 'POSTED', origin: 'MANUAL', accountId: 'account-1',
-  receivablePayment: null, payrollTransaction: null, bankMatches: [], ...overrides
+  receivablePayment: null, payrollTransaction: null, ...overrides
 });
 
 // In-memory Prisma boundary: no database or credentials are loaded by this suite.
@@ -32,8 +32,7 @@ const ledgerFixture = (record, { closedMonth } = {}) => {
 for (const [label, relations, wayOut] of [
   ['receivable payment', { receivablePayment: { id: 'payment-1' } }, /Cartera[\s\S]*«Revertir»/],
   // Desde el 1 de octubre de 2026 el pago de nómina se corrige con el lápiz del propio movimiento.
-  ['payroll payment', { payrollTransaction: { id: 'payroll-1' } }, /lápiz de este mismo movimiento[\s\S]*Nómina Operativa/],
-  ['approved bank match', { bankMatches: [{ id: 'match-1', status: 'APPROVED' }] }, /deshacer esa conciliación/]
+  ['payroll payment', { payrollTransaction: { id: 'payroll-1' } }, /lápiz de este mismo movimiento[\s\S]*Nómina Operativa/]
 ]) {
   for (const operation of ['update', 'void']) {
     test(`${operation} cannot disconnect a ${label} through generic ledger CRUD`, async () => {
@@ -46,7 +45,8 @@ for (const [label, relations, wayOut] of [
       assert.equal(fixture.writes.length, 0);
       assert.ok(fixture.reads[0].include.receivablePayment);
       assert.ok(fixture.reads[0].include.payrollTransaction);
-      assert.deepEqual(fixture.reads[0].include.bankMatches.where, { status: 'APPROVED' });
+      // La conciliación bancaria se retiró el 23 de octubre de 2026: ya no bloquea nada.
+      assert.equal(fixture.reads[0].include.bankMatches, undefined);
     });
   }
 }
@@ -61,15 +61,6 @@ for (const operation of ['update', 'void']) {
     assert.equal(fixture.writes.length, 0);
   });
 }
-
-test('a proposed or rejected bank candidate does not freeze an independent manual record', async () => {
-  for (const status of ['PROPOSED', 'REJECTED']) {
-    const fixture = ledgerFixture(manualRecord({ bankMatches: [{ id: 'match-1', status }] }));
-    const result = await updateFinancialRecord(fixture.client, 'record-1', { amount: 1500 }, { id: 'user-1' });
-    assert.equal(result.amount, 1500);
-    assert.equal(fixture.writes.at(-1).action, 'UPDATE');
-  }
-});
 
 test('independent imported records remain editable without losing import provenance', async () => {
   const fixture = ledgerFixture(manualRecord({ origin: 'IMPORT', importBatchId: 'batch-1' }));
