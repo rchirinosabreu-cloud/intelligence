@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { correctionProblem, correctionPlan, formatTimeCorrectionContent, timeCorrectionPresentation, TIME_CORRECTION_EVENT_TYPE, TIME_CORRECTION_REASONS } from '../src/lib/taskWorkCorrection.js';
+import { correctionProblem, correctionPlan, formatTimeCorrectionContent, timeCorrectionPresentation, isTrustedSession, TIME_CORRECTION_EVENT_TYPE, TIME_CORRECTION_REASONS } from '../src/lib/taskWorkCorrection.js';
+import { buildClientProfitability } from '../src/lib/clientProfitability.js';
+import { reliableSpentMs } from '../src/lib/teamForecast.js';
 import { createTaskWorkCorrectionService } from '../src/services/taskWorkCorrectionService.js';
 import { getTaskSystemEventPresentation } from '../src/lib/taskTiming.js';
 
@@ -15,16 +17,34 @@ const closed = { id: 's1', taskId: 't1', startedAt: new Date('2026-10-22T14:00:0
 const running = { id: 's2', taskId: 't1', startedAt: new Date('2026-10-22T20:00:00Z'), endedAt: null, durationMs: null, closeReason: null, isCollaborator: false, originalDurationMs: null };
 const task = { id: 't1', title: 'Reel de Aristea', status: 'PENDIENTE', startedAt: null, accumulatedWorkMs: 10 * H, _count: { collaborators: 0 } };
 
-test('solo un administrador corrige, con motivo, y solo para acortar un tiempo que se pasó', () => {
+test('solo un administrador corrige, con motivo, hacia arriba o hacia abajo', () => {
   const base = { user: admin, session: closed, durationMs: 90 * M, reason: 'Se le olvidó pausar al salir', now };
   assert.equal(correctionProblem(base), null);
   assert.match(correctionProblem({ ...base, user: { ...admin, role: 'PROJECT_MANAGER' } }), /administradores/);
   assert.match(correctionProblem({ ...base, reason: ' ' }), /por qué/);
   assert.match(correctionProblem({ ...base, reason: 'x'.repeat(301) }), /300/);
   assert.match(correctionProblem({ ...base, durationMs: 30_000 }), /al menos un minuto/);
-  assert.match(correctionProblem({ ...base, durationMs: 10 * H }), /solo acorta.*9 h 12 min/);
   assert.match(correctionProblem({ ...base, session: null }), /ya no existe/);
-  assert.match(correctionProblem({ ...base, session: running, durationMs: 20 * H }), /solo acorta/, 'un reloj que corre no se alarga más de lo que lleva');
+  // Rodny, 23 de octubre de 2026: «puede ser más, no me interesan esas restricciones».
+  assert.equal(correctionProblem({ ...base, durationMs: 10 * H + 20 * M }), null);
+  assert.equal(correctionProblem({ ...base, session: running, durationMs: 20 * H }), null);
+});
+
+test('alargar cambia la duración y deja el fin donde estaba; una sesión corregida ya no es un reloj olvidado', () => {
+  const plan = correctionPlan({ task, session: closed, durationMs: 10 * H + 20 * M, reason: 'Trabajó más de lo que marcó', actorId: 'u-rodny', now });
+  assert.equal(plan.session.durationMs, 10 * H + 20 * M);
+  assert.equal(plan.session.endedAt.toISOString(), closed.endedAt.toISOString());
+  assert.deepEqual(plan.task, { accumulatedWorkMs: 10 * H + (10 * H + 20 * M - (9 * H + 12 * M)) });
+  const runningLonger = correctionPlan({ task: { ...task, status: 'EN_CURSO', startedAt: running.startedAt, accumulatedWorkMs: 0 }, session: running, durationMs: 20 * H, reason: 'x x', actorId: 'u-rodny', now });
+  assert.equal(runningLonger.session.endedAt.toISOString(), now.toISOString(), 'un reloj que corría se cierra ahora');
+  assert.equal(isTrustedSession({ correctedAt: now }), true);
+  assert.equal(isTrustedSession({ closeReason: 'DECLARED' }), true);
+  assert.equal(isTrustedSession({ closeReason: 'PAUSED' }), false);
+  const profit = buildClientProfitability({ year: 2026, month: 10, clients: [{ id: 'c1', name: 'Aristea' }], receivables: [{ clientId: 'c1', amount: 1_000_000 }], expenses: [{ amount: 500_000 }],
+    sessions: [{ clientId: 'c1', ms: 10 * H, trusted: true }, { clientId: 'c1', ms: 9 * H }] });
+  assert.equal(profit.agency.hoursMs, 10 * H, 'la corregida de 10 h cuenta; la de 9 h sin corregir sigue siendo un reloj olvidado');
+  assert.equal(profit.agency.forgottenSessions, 1);
+  assert.equal(reliableSpentMs({ personId: 'm1', workSessions: [{ workerId: 'm1', durationMs: 10 * H, endedAt: now, startedAt: closed.startedAt, correctedAt: now }] }, now), 10 * H);
 });
 
 test('una sesión cerrada se acorta y el total de la tarea baja lo mismo; la original queda guardada', () => {
@@ -104,5 +124,5 @@ test('el servicio escribe sesión, tarea y novedad en una sola transacción, y r
   const pm = createTaskWorkCorrectionService({ transaction: fakeDb().transaction, now: () => now });
   await assert.rejects(() => pm.correct({ user: { ...admin, role: 'PROJECT_MANAGER' }, taskId: 't1', sessionId: 's1', durationMinutes: 90, reason: 'x x' }), { status: 403 });
   await assert.rejects(() => pm.correct({ user: admin, taskId: 't1', sessionId: 'otra', durationMinutes: 90, reason: 'x x' }), { status: 404 });
-  await assert.rejects(() => pm.correct({ user: admin, taskId: 't1', sessionId: 's1', durationMinutes: 600, reason: 'x x' }), { status: 400, message: /solo acorta/ });
+  await assert.rejects(() => pm.correct({ user: admin, taskId: 't1', sessionId: 's1', durationMinutes: 0, reason: 'x x' }), { status: 400, message: /al menos un minuto/ });
 });

@@ -277,7 +277,7 @@ router.post('/tasks/:taskId/toggle-follow', taskController.toggleFollow);
 router.get('/tasks/:taskId/follow-status', taskController.getFollowStatus);
 router.post('/tasks/:taskId/trace-open', taskController.traceTaskOpen);
 router.get('/tasks/:taskId/work-history', guardTask, taskController.getTaskWorkHistory);
-// Corregir el tiempo de una sesión (23 de octubre de 2026): solo administradores, con motivo, solo para acortar.
+// Corregir el tiempo de una sesión (23 de octubre de 2026): solo administradores, con motivo, hacia arriba o abajo.
 router.post('/tasks/:taskId/work-sessions/:sessionId/correction', guardTask, taskController.correctTaskWorkSessionHandler);
 // Colaboradores (5 de octubre de 2026): el tiempo del equipo y el reloj propio de cada colaborador.
 router.get('/tasks/:taskId/work/team', guardTask, taskCollaboratorController.getTeamTime);

@@ -18,7 +18,8 @@ export function reliableSpentMs(task, now) {
     const elapsed = session.endedAt == null && session.startedAt
       ? new Date(now) - new Date(session.startedAt)
       : Number(session.durationMs ?? (new Date(session.endedAt) - new Date(session.startedAt)));
-    return Number.isFinite(elapsed) && elapsed > 0 && elapsed < RHYTHM_LIMITS.forgottenSessionMs ? total + elapsed : total;
+    // Una sesión corregida por un administrador cuenta aunque pase de 8 h: ya la miró una persona.
+    return Number.isFinite(elapsed) && elapsed > 0 && (elapsed < RHYTHM_LIMITS.forgottenSessionMs || session.correctedAt) ? total + elapsed : total;
   }, 0);
 }
 
@@ -28,7 +29,7 @@ function remainingEstimate(task, rhythm, now, incomplete) {
   const clockProblem = (task.workSessions || []).some(s => !s.cycle?.closedAt && (s.workerId !== task.personId || s.isOverlapping || s.isCollaborator ||
     (s.durationMs != null && (!Number.isFinite(Number(s.durationMs)) || Number(s.durationMs) < 0)) ||
     (s.startedAt && (!Number.isFinite(new Date(s.startedAt).getTime()) || new Date(s.startedAt) > new Date(now) || (s.endedAt && (!Number.isFinite(new Date(s.endedAt).getTime()) || new Date(s.endedAt) < new Date(s.startedAt))))) ||
-    Number(s.durationMs ?? (s.startedAt ? new Date(s.endedAt || now) - new Date(s.startedAt) : NaN)) >= RHYTHM_LIMITS.forgottenSessionMs));
+    (!s.correctedAt && Number(s.durationMs ?? (s.startedAt ? new Date(s.endedAt || now) - new Date(s.startedAt) : NaN)) >= RHYTHM_LIMITS.forgottenSessionMs)));
   const qualified = context?.confidence === 'suficiente';
   const needsReview = Boolean(qualified && spentMs >= context.medianMs);
   const usable = qualified && !incomplete && !needsReview && !task.sharedWork && !clockProblem;

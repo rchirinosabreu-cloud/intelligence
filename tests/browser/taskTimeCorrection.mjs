@@ -20,27 +20,29 @@ try {
     await page.getByRole('button', { name: 'Ver sesiones' }).click();
     await page.locator('[data-work-session="s1"]').waitFor();
 
-    // Una sesión cerrada que marcó 9 h 12 min: no se deja alargar, y se acorta con motivo.
+    // Una sesión cerrada que marcó 9 h 12 min se corrige hacia arriba (Rodny, 23 de octubre de 2026: «puede ser más»).
     await page.locator('[data-work-session="s1"] [data-work-session-correct]').click();
     const dialog = page.locator('[data-time-correction-dialog]');
     await dialog.waitFor();
-    await dialog.getByLabel('Horas').fill('10');
-    // El motivo más común viene elegido: no hay que escribir nada (Rodny, 23 de octubre de 2026).
+    // Sin la explicación larga a la vista; solo el título, los campos y el motivo.
+    assert.doesNotMatch(await dialog.innerText(), /solo acorta|queda en la tarea con tu nombre/);
+    assert.equal(await dialog.locator('.sr-only').filter({ hasText: 'Marca 9 h 12 min' }).count(), 1, 'lo que marca la sesión queda solo para el lector de pantalla');
+    // El motivo más común viene elegido: no hay que escribir nada.
     assert.match(await dialog.locator('#time-correction-reason').innerText().catch(() => ''), /Se le olvidó pausar al salir/);
     await dialog.getByRole('button', { name: 'Corregir tiempo' }).click();
-    assert.match(await dialog.getByRole('alert').innerText(), /solo acorta/);
-    await dialog.getByLabel('Horas').fill('1');
+    assert.match(await dialog.getByRole('alert').innerText(), /al menos un minuto/, 'sin tiempo escrito, lo dice');
+    await dialog.getByLabel('Horas').fill('10');
     assert.equal(await dialog.getByRole('alert').count(), 0, 'el motivo del error se va al corregir el campo');
-    await dialog.getByLabel('Minutos').fill('30');
+    await dialog.getByLabel('Minutos').fill('20');
     await page.screenshot({ path: shot(`dialogo-${scheme}.png`), animations: 'disabled' });
     await dialog.getByRole('button', { name: 'Corregir tiempo' }).click();
     await dialog.waitFor({ state: 'detached' });
+    assert.match(await page.locator('[data-work-session="s1"]').innerText(), /10:20:00/);
     assert.match(await page.locator('[data-work-session="s1"]').innerText(), /Corregida: marcaba 9 h 12 min · Se le olvidó pausar al salir/);
 
     // El reloj que sigue corriendo desde ayer: se detiene con el tiempo real y la tarea vuelve a Pendiente.
     await page.locator('[data-work-session="s2"] [data-work-session-correct]').click();
     await dialog.waitFor();
-    assert.match(await dialog.innerText(), /sigue corriendo/);
     await dialog.getByLabel('Horas').fill('2');
     // «Otro motivo» abre el campo para escribirlo.
     await chooseOption(dialog.locator('#time-correction-reason'), 'OTRO');

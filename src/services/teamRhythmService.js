@@ -59,7 +59,8 @@ export const buildRhythmRecords = ({ tasks = [], sessions = [], members = [] }) 
         measuredMs: durations.reduce((sum, ms) => sum + ms, 0),
         declaredMs,
         reworkMs: rows.filter((row) => row.cycle?.kind && row.cycle.kind !== 'INITIAL').reduce((sum, row) => sum + sessionMs(row), 0),
-        longestSessionMs: Math.max(0, ...rows.filter((row) => row.closeReason !== 'DECLARED').map(sessionMs)),
+        // Lo declarado y lo corregido por un administrador no cuentan como reloj olvidado (23 de octubre de 2026).
+        longestSessionMs: Math.max(0, ...rows.filter((row) => row.closeReason !== 'DECLARED' && !row.correctedAt).map(sessionMs)),
         overlappedMs: all.filter((row) => row.isOverlapping).reduce((sum, row) => sum + sessionMs(row), 0) });
     }
     // Quien la cerró sin cronómetro cuenta como cerrada sin medir; las tareas anteriores a las sesiones conservan
@@ -87,11 +88,11 @@ export const createTeamRhythmService = ({ db = prisma, now = () => new Date() } 
     const ids = tasks.map((task) => task.id);
     const sessions = ids.length ? await db.taskWorkSession.findMany({
       where: { taskId: { in: ids } },
-      select: { taskId: true, workerId: true, isCollaborator: true, isOverlapping: true, closeReason: true, durationMs: true, startedAt: true, endedAt: true, cycle: { select: { kind: true } } }
+      select: { taskId: true, workerId: true, isCollaborator: true, isOverlapping: true, closeReason: true, correctedAt: true, durationMs: true, startedAt: true, endedAt: true, cycle: { select: { kind: true } } }
     }) : [];
     const periodSessions = includeHours ? await db.taskWorkSession.findMany({
       where: { startedAt: { lt: to }, OR: [{ endedAt: { gte: from } }, { endedAt: null }] },
-      select: { id: true, workerId: true, startedAt: true, endedAt: true, durationMs: true, isOverlapping: true, closeReason: true },
+      select: { id: true, workerId: true, startedAt: true, endedAt: true, durationMs: true, isOverlapping: true, closeReason: true, correctedAt: true },
       orderBy: { startedAt: 'desc' }, take: 10001
     }) : [];
     const workerIds = [...new Set([...sessions.map((s) => s.workerId), ...periodSessions.map(s => s.workerId), ...tasks.map((t) => t.assigneeId)].filter(Boolean))];
