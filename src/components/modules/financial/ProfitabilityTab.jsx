@@ -90,7 +90,7 @@ export default function ProfitabilityTab({ enabled }) {
                       <span className="text-zinc-500 md:hidden">Horas</span><span className="text-right text-zinc-700 dark:text-zinc-200">{hours(row.hoursMs)}</span>
                       <span className="text-zinc-500 md:hidden">Costo</span><span className="text-right text-zinc-700 dark:text-zinc-200">{money(row.costCents)}</span>
                       <span className="text-zinc-500 md:hidden">Margen</span>
-                      <span className={cn('text-right font-semibold', loses ? 'text-destructive brain-destructive-text' : 'text-zinc-900 dark:text-zinc-50')}>{money(row.marginCents)}{row.marginRate !== null ? <span className="ml-1 text-xs font-normal">({percent(row.marginRate)})</span> : null}</span>
+                      <span className={cn('text-right font-semibold', loses ? 'text-destructive brain-destructive-text' : row.marginCents > 0 ? 'text-status-positive-fg' : 'text-zinc-900 dark:text-zinc-50')} data-profitability-margin={loses ? 'negativo' : row.marginCents > 0 ? 'positivo' : 'cero'}>{money(row.marginCents)}{row.marginRate !== null ? <span className="ml-1 text-xs font-normal">({percent(row.marginRate)})</span> : null}</span>
                       <span className="text-zinc-500 md:hidden">Por hora</span><span className="text-right text-zinc-700 dark:text-zinc-200">{money(row.revenuePerHourCents)}</span>
                     </div>
                     {row.reading.length > 0 && (

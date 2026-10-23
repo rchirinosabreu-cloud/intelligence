@@ -132,13 +132,13 @@ axios.defaults.adapter = async config => {
     const work = (clientId, total) => Array.from({ length: total / 2 }, () => ({ clientId, ms: 2 * 3_600_000 }));
     data = buildClientProfitability({
       year, month,
-      clients: [{ id: 'c-aristea', name: 'Aristea' }, { id: 'c-endova', name: 'Endova' }, { id: 'c-wine', name: 'Wine & Wonder' }, { id: 'c-nuva', name: 'Nuva' }, { id: 'c-pablo', name: 'Pablo Hoff' }],
+      clients: [{ id: 'c-aristea', name: 'Aristea' }, { id: 'c-endova', name: 'Endova' }, { id: 'c-wine', name: 'Wine & Wonder' }, { id: 'c-nuva', name: 'Nuva' }, { id: 'c-pablo', name: 'Pablo Hoff' }, { id: 'c-brain', name: 'Brainstudio' }],
       receivables: [{ clientId: 'c-aristea', amount: 4_500_000 }, { clientId: 'c-endova', amount: 1_800_000 }, { clientId: 'c-wine', amount: 6_000_000 }],
       // Pablo Hoff pagó directo en Movimientos, sin cuenta por cobrar del mes (23 de octubre de 2026).
       incomes: [{ clientId: 'c-pablo', amount: 2_400_000 }, { clientId: 'c-aristea', amount: 4_500_000 }],
       unlinkedIncomeCents: 85_000_000,
       expenses: [{ amount: 14_000_000 }, { amount: 2_100_000 }, { amount: 600_000, clientId: 'c-endova' }],
-      sessions: [...work('c-aristea', 36), ...work('c-endova', 34), ...work('c-wine', 40), ...work('c-nuva', 8), ...work('c-pablo', 14), ...work(null, 42)],
+      sessions: [...work('c-aristea', 36), ...work('c-endova', 34), ...work('c-wine', 40), ...work('c-nuva', 8), ...work('c-pablo', 14), ...work('c-brain', 20), ...work(null, 22)],
       closedTasks: [...Array(12).fill({ clientId: 'c-aristea', measuredMs: 3_600_000 }), ...Array(3).fill({ clientId: 'c-endova', measuredMs: 0 }), { clientId: 'c-endova', measuredMs: 3_600_000 }, ...Array(10).fill({ clientId: 'c-wine', measuredMs: 3_600_000 })]
     });
   }

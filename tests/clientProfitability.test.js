@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import express from 'express';
-import { buildClientProfitability, isOperatingExpense, isClientIncome, PROFITABILITY_LIMITS } from '../src/lib/clientProfitability.js';
+import { buildClientProfitability, isOperatingExpense, isClientIncome, isAgencyClient, PROFITABILITY_LIMITS } from '../src/lib/clientProfitability.js';
 import { createClientProfitabilityService, lastClosedMonth } from '../src/services/clientProfitabilityService.js';
 import { createClientProfitabilityRouter } from '../src/routes/api/clientProfitability.js';
 
@@ -76,6 +76,18 @@ test('sin cuenta por cobrar del mes se usa lo que entró en Movimientos, y se di
   assert.equal(isClientIncome({ type: 'INCOME', clientId: 'c1', category: 'SERVICIO' }), true);
   assert.equal(isClientIncome({ type: 'INCOME', clientId: 'c1', category: 'PRESTAMO', section: 'FINANCING' }), false, 'un reintegro de préstamo no es venta');
   assert.equal(isClientIncome({ type: 'INCOME', clientId: null, category: 'SERVICIO' }), false);
+});
+
+// Rodny, 23 de octubre de 2026: la ficha «Brainstudio» salía como una cuenta con 154 h y $0 de ingreso.
+test('la ficha de la agencia es trabajo interno, no una cuenta; lo pagado por ella es operación', () => {
+  const withAgency = { ...base, clients: [...clients, { id: 'c-brain', name: 'Brain Studio' }], sessions: [...base.sessions, ...work('c-brain', 10)], expenses: [...base.expenses, { amount: 200_000, category: 'PAUTA', clientId: 'c-brain' }] };
+  const out = buildClientProfitability(withAgency);
+  assert.equal(out.clients.some((row) => row.name === 'Brain Studio'), false);
+  assert.equal(out.agency.internalHoursMs, 30 * H, 'las 20 h sin cliente más las 10 h de la ficha de la agencia');
+  assert.equal(out.agency.directCostCents, 50_000_000, 'su pauta no es costo directo de un cliente');
+  assert.match(out.notes.join(' '), /Incluye 10 h de la ficha de la agencia/);
+  for (const name of ['Brainstudio', 'BrainStudio Agencia', 'brain studio']) assert.equal(isAgencyClient({ name }), true, name);
+  assert.equal(isAgencyClient({ name: 'Brain Health' }), false);
 });
 
 test('lo que no es operación no entra al costo: préstamos, inversiones, financiación, anulados y proyecciones se filtran antes', () => {

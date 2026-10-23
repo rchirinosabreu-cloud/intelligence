@@ -22,6 +22,12 @@ export const PROFITABILITY_LIMITS = Object.freeze({
 });
 
 const NOT_OPERATING_SECTIONS = new Set(['FINANCING', 'INVESTMENT']);
+// La ficha de la propia agencia no es una cuenta (Rodny, 23 de octubre de 2026, al verla salir con 154 h y $0 de
+// ingreso): su trabajo —contenido propio, administración— es trabajo interno, y lo que se pagó por ella es costo de
+// la operación, no costo directo de un cliente.
+const AGENCY_NAMES = new Set(['brainstudio', 'brainstudioagencia', 'brainstudioagenciacreativa']);
+export const isAgencyClient = (client) => AGENCY_NAMES.has(String(client?.name || '').normalize('NFD').replace(/[^a-z0-9]/gi, '').toLowerCase());
+
 /** Un egreso real de la operación: ni préstamos, ni inversiones, ni financiación. */
 export const isOperatingExpense = (record) => record?.type === 'EXPENSE' && record.category !== 'PRESTAMO' && !NOT_OPERATING_SECTIONS.has(record.section);
 /** Un ingreso de un cliente por su servicio: ni el reintegro de un préstamo, ni financiación. */
@@ -52,6 +58,10 @@ const FLAG_TEXT = {
  */
 export const buildClientProfitability = ({ year, month, clients = [], receivables = [], incomes = [], unlinkedIncomeCents = 0, expenses = [], sessions = [], closedTasks = [] }) => {
   const names = new Map(clients.map((client) => [client.id, client]));
+  // La ficha de la agencia se lee como «sin cliente»: sus horas son internas y lo que se pagó por ella, operación.
+  const agency = new Set(clients.filter(isAgencyClient).map((client) => client.id));
+  const account = (clientId) => (clientId && !agency.has(clientId) ? clientId : null);
+  let agencyHoursMs = 0;
   const rows = new Map();
   const row = (clientId) => {
     if (!rows.has(clientId)) {
@@ -61,13 +71,13 @@ export const buildClientProfitability = ({ year, month, clients = [], receivable
     return rows.get(clientId);
   };
 
-  for (const receivable of receivables) if (receivable.clientId) row(receivable.clientId).billedCents += cents(receivable.amount);
-  for (const income of incomes) if (income.clientId) row(income.clientId).receivedCents += cents(income.amount);
+  for (const receivable of receivables) if (account(receivable.clientId)) row(receivable.clientId).billedCents += cents(receivable.amount);
+  for (const income of incomes) if (account(income.clientId)) row(income.clientId).receivedCents += cents(income.amount);
   let costCents = 0, directCostCents = 0;
   for (const expense of expenses) {
     const value = cents(expense.amount);
     costCents += value;
-    if (expense.clientId) { directCostCents += value; row(expense.clientId).directCostCents += value; }
+    if (account(expense.clientId)) { directCostCents += value; row(expense.clientId).directCostCents += value; }
   }
   let hoursMs = 0, clientHoursMs = 0, forgottenSessions = 0;
   for (const session of sessions) {
@@ -75,7 +85,8 @@ export const buildClientProfitability = ({ year, month, clients = [], receivable
     if (ms <= 0) continue;
     if (ms > PROFITABILITY_LIMITS.forgottenSessionMs) { forgottenSessions += 1; continue; }
     hoursMs += ms;
-    if (session.clientId) { clientHoursMs += ms; row(session.clientId).hoursMs += ms; }
+    if (account(session.clientId)) { clientHoursMs += ms; row(session.clientId).hoursMs += ms; }
+    else if (session.clientId) agencyHoursMs += ms;
   }
   let closed = 0, measured = 0;
   for (const task of closedTasks) {
@@ -119,7 +130,7 @@ export const buildClientProfitability = ({ year, month, clients = [], receivable
   else notes.push(`El costo hora es ${money(hourCostCents)}: la operación del mes sin lo directo de cada cliente (${money(sharedCostCents)}) entre ${hours(hoursMs)} medidas.`);
   if (closed) notes.push(`${measured} de ${closed} tareas cerradas del mes tienen tiempo medido${coverage < PROFITABILITY_LIMITS.lowCoverage ? ': con tan poco medido, el costo hora sale inflado y lo que se asigna a cada cuenta, impreciso' : ''}.`);
   if (forgottenSessions) notes.push(`${forgottenSessions === 1 ? 'Una sesión de más de 8 horas no se contó' : `${forgottenSessions} sesiones de más de 8 horas no se contaron`}: es un reloj que nadie pausó.`);
-  if (internalHoursMs > 0) notes.push(`${hours(internalHoursMs)} fueron trabajo interno, sin cliente: ${money(internalCostCents)} que no se le carga a ninguna cuenta.`);
+  if (internalHoursMs > 0) notes.push(`${hours(internalHoursMs)} fueron trabajo interno, sin cliente: ${money(internalCostCents)} que no se le carga a ninguna cuenta.${agencyHoursMs > 0 ? ` Incluye ${hours(agencyHoursMs)} de la ficha de la agencia.` : ''}`);
   const fromIncome = result.filter((entry) => entry.revenueSource === 'INGRESOS').length;
   if (fromIncome) notes.push(`${fromIncome === 1 ? 'Para un cliente' : `Para ${fromIncome} clientes`} sin cuenta por cobrar del mes se usó lo que entró en Movimientos.`);
   // Un ingreso sin cliente no se le puede dar a ninguna cuenta: se dice cuánto es, para vincularlo.

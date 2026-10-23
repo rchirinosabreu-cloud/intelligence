@@ -30,6 +30,12 @@ try {
     assert.match(await page.locator('[data-profitability-notes]').innerText(), /no están ligados a ningún cliente/);
     assert.match(await page.locator('[data-profitability-client="Endova"]').innerText(), /tareas cerradas tienen tiempo medido/);
     assert.match(await page.locator('[data-profitability-internal]').innerText(), /Trabajo interno/);
+    // La ficha de la agencia es trabajo interno (23 de octubre de 2026), y un margen positivo va en verde.
+    assert.equal(await page.locator('[data-profitability-client="Brainstudio"]').count(), 0);
+    assert.match(await page.locator('[data-profitability-notes]').innerText(), /de la ficha de la agencia/);
+    assert.ok(await page.locator('[data-profitability-margin="positivo"]').count() > 0);
+    const green = await page.locator('[data-profitability-margin="positivo"]').first().evaluate((node) => getComputedStyle(node).color);
+    assert.match(green, scheme === 'dark' ? /rgb\(92, 201, 171\)/ : /rgb\(31, 127, 102\)/, 'el verde de la marca, legible en claro y en oscuro');
     assert.match(await page.locator('[data-profitability-notes]').innerText(), /El costo hora es/);
     const endova = await page.locator('[data-profitability-client="Endova"]').innerText();
     assert.match(endova, /-\$\d/, 'el negativo se escribe -$');
