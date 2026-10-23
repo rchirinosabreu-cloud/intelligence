@@ -62,6 +62,15 @@ CREATE TABLE IF NOT EXISTS bria_memory.daily_close_deliveries (
 );
 -- La lectura de la mañana (19 de octubre de 2026) que Bria dejó en el chat de cada persona de dirección: una fila por
 -- día hábil y persona.
+-- La revisión de las cuentas al cerrar el mes (23 de octubre de 2026): una por mes revisado y administrador.
+CREATE TABLE IF NOT EXISTS bria_memory.monthly_review_deliveries (
+  month_key TEXT NOT NULL CHECK (month_key ~ '^[0-9]{4}-[0-9]{2}$'),
+  user_ref TEXT NOT NULL,
+  conversation_id UUID NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (month_key, user_ref)
+);
+
 CREATE TABLE IF NOT EXISTS bria_memory.morning_brief_deliveries (
   day_key TEXT NOT NULL CHECK (day_key ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
   user_ref TEXT NOT NULL,

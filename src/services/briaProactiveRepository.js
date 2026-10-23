@@ -102,6 +102,16 @@ export const createBriaProactiveRepository = ({ pool }) => ({
     return { dayKey, userRef, conversationId };
   },
 
+  /* ---- La revisión de las cuentas al cerrar el mes (23 de octubre de 2026) ---- */
+  async monthlyReviewDelivery(monthKey, userRef) {
+    const { rows } = await pool.query('SELECT conversation_id, created_at FROM bria_memory.monthly_review_deliveries WHERE month_key=$1 AND user_ref=$2', [monthKey, userRef]);
+    return rows[0] ? { monthKey, userRef, conversationId: rows[0].conversation_id, createdAt: rows[0].created_at } : null;
+  },
+  async recordMonthlyReviewDelivery(monthKey, userRef, conversationId) {
+    await pool.query('INSERT INTO bria_memory.monthly_review_deliveries(month_key,user_ref,conversation_id) VALUES($1,$2,$3) ON CONFLICT (month_key,user_ref) DO NOTHING', [monthKey, userRef, conversationId]);
+    return { monthKey, userRef, conversationId };
+  },
+
   /* ---- La lectura de la mañana (19 de octubre de 2026) ---- */
 
   async morningBriefDelivery(dayKey, userRef) {
