@@ -54,6 +54,27 @@ try {
   await pm.getByRole('button', { name: 'Ver sesiones' }).click();
   await pm.locator('[data-work-session="s1"]').waitFor();
   assert.equal(await pm.locator('[data-work-session-correct]').count(), 0, 'un project manager no corrige');
+
+  // Rodny, 23 de octubre de 2026: en el historial de logros (las tareas ya cerradas) no aparecía «Corregir».
+  const { createRecognitionPreview } = await import('../../scripts/preview-recognitions.js');
+  const lab = await createRecognitionPreview({ port: 0, role: 'ADMIN' });
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1080 } });
+    await page.goto(`${lab.origin}/?admin`);
+    await page.getByRole('heading', { name: 'Logros recientes', exact: true }).waitFor({ timeout: 60000 });
+    await page.getByRole('button', { name: /Ver historial completo/ }).click();
+    const history = page.getByRole('dialog');
+    await history.locator('[data-completed-task-toggle]').first().click();
+    await history.locator('[data-completed-task-details] [data-task-work-history]').waitFor();
+    await history.getByRole('button', { name: 'Ver sesiones' }).click();
+    await history.locator('[data-work-session-correct]').first().waitFor();
+    await history.locator('[data-completed-task-details]').first().screenshot({ path: shot('historial-de-logros.png'), animations: 'disabled' });
+    await history.locator('[data-work-session-correct]').first().click();
+    await page.locator('[data-time-correction-dialog]').waitFor();
+    const onTop = await page.evaluate(() => { const box = document.querySelector('[data-time-correction-dialog]').getBoundingClientRect(); return Boolean(document.elementFromPoint(box.x + box.width / 2, box.y + 30)?.closest('[data-time-correction-dialog]')); });
+    assert.ok(onTop, 'el diálogo queda encima del historial de logros');
+    await page.screenshot({ path: shot('historial-de-logros-dialogo.png'), animations: 'disabled' });
+  } finally { await lab.close(); }
   console.log('Corregir tiempo: OK');
 } finally {
   await browser.close();

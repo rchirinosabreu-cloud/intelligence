@@ -4,7 +4,9 @@ import { createServer } from 'vite';
 import { recognitionDemoCompletedTasks, recognitionDemoDashboard, recognitionDemoMember, recognitionDemoTasks, recognitionDemoUser } from '../tests/fixtures/recognitionData.js';
 
 // No dotenv, production server, database, storage, scheduler or proxy in this local laboratory.
-export async function createRecognitionPreview({ port = 3000 } = {}) {
+// `role`: con quién entra la muestra; por defecto la cuenta de ejemplo (EDITOR). `ADMIN` corrige tiempos.
+export async function createRecognitionPreview({ port = 3000, role = null } = {}) {
+  const demoUser = role ? { ...recognitionDemoUser, role } : recognitionDemoUser;
   const server = await createServer({
     configFile: false,
     root: path.resolve(import.meta.dirname, '..'),
@@ -38,8 +40,8 @@ export async function createRecognitionPreview({ port = 3000 } = {}) {
             return !date || new Date(task.completedAt).toLocaleDateString('en-CA', { timeZone: 'America/Bogota' }) === date;
           });
           const routes = {
-            '/api/auth/me': recognitionDemoUser,
-            '/api/user/profile': recognitionDemoUser,
+            '/api/auth/me': demoUser,
+            '/api/user/profile': demoUser,
             '/api/team': [recognitionDemoMember],
             '/api/clients': [], '/api/db/clients': [],
             '/api/notifications': [],
@@ -50,6 +52,16 @@ export async function createRecognitionPreview({ port = 3000 } = {}) {
             '/api/tasks/completed': completedTasks,
             [`/api/dashboard/personal/${recognitionDemoUser.id}`]: recognitionDemoDashboard(),
           };
+          // El tiempo de una tarea cerrada, con una sesión que se le puede corregir (23 de octubre de 2026).
+          const workHistory = pathname.match(/^\/api\/tasks\/([^/]+)\/work-history$/);
+          if (workHistory) {
+            const completed = recognitionDemoCompletedTasks().find(task => task.id === workHistory[1]);
+            const endedAt = completed?.completedAt || new Date().toISOString();
+            const startedAt = new Date(new Date(endedAt).getTime() - 5 * 3_600_000).toISOString();
+            res.end(JSON.stringify({ task: { id: workHistory[1], status: 'REALIZADA', startedAt: null, accumulatedWorkMs: 5 * 3_600_000 }, recordedSessionMs: 5 * 3_600_000, historicalBaselineMs: 0,
+              cycles: [{ id: 'c1', sequence: 1, kind: 'INITIAL', closedAt: endedAt, closeReason: 'COMPLETED', sessions: [{ id: 's1', startedAt, endedAt, durationMs: 5 * 3_600_000, closeReason: 'COMPLETED', isOverlapping: false, isCollaborator: false }] }] }));
+            return;
+          }
           if (Object.hasOwn(routes, pathname)) res.end(JSON.stringify(routes[pathname]));
           else { res.statusCode = 404; res.end(JSON.stringify({ error: `Consulta no disponible en esta muestra local: ${pathname}` })); }
           return;

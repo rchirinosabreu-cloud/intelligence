@@ -395,6 +395,13 @@ const CompletedTasksHistoryModal = ({ isOpen, onClose }) => {
                                                     status={task.status}
                                                     startedAt={task.startedAt}
                                                     accumulatedWorkMs={task.accumulatedWorkMs}
+                                                    // Corregir el tiempo también desde aquí (23 de octubre de 2026): una tarea
+                                                    // cerrada solo se consulta en este historial, así que es donde se corrige.
+                                                    currentUser={currentUser}
+                                                    onCorrected={(result) => {
+                                                        if (result?.task) setTasks(current => current.map(row => (row.id === task.id ? { ...row, ...result.task } : row)));
+                                                        queryClient.invalidateQueries({ queryKey: ['personalDashboard'] });
+                                                    }}
                                                 />
                                             ) : (
                                                 <div className="border-y border-zinc-200/70 py-3 dark:border-zinc-800/70">
