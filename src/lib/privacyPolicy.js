@@ -41,4 +41,6 @@
 // corto aprobado por Meta y el aviso entero al tocarlo. Los avisos enviados se guardan 14 días.
 // 2.17 (22 de octubre de 2026): por WhatsApp también entran fotos, documentos y notas de voz; las notas de voz se
 // transcriben con el mismo servicio del dictado y todo queda en el historial de Bria, como los mensajes.
-export const PRIVACY_POLICY_VERSION = '2.17 · 2026-10-22';
+// 2.18 (22 de octubre de 2026): por WhatsApp también entran videos, que se guardan como los demás archivos del chat y,
+// si la persona lo confirma, pasan a ser la pieza final de una pieza de la parrilla.
+export const PRIVACY_POLICY_VERSION = '2.18 · 2026-10-22';
