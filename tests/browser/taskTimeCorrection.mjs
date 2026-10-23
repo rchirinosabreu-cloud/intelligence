@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
+import { chooseOption } from './selectHelpers.mjs';
 const base = process.env.TIME_CORRECTION_DEMO_URL || 'http://127.0.0.1:3006/tests/fixtures/task-time-correction-preview.html';
 const outDir = new URL('../../output/task-time-correction/', import.meta.url);
 const shot = name => fileURLToPath(new URL(name, outDir));
@@ -24,7 +25,8 @@ try {
     const dialog = page.locator('[data-time-correction-dialog]');
     await dialog.waitFor();
     await dialog.getByLabel('Horas').fill('10');
-    await dialog.getByLabel('Motivo').fill('Se le olvidó pausar al salir');
+    // El motivo más común viene elegido: no hay que escribir nada (Rodny, 23 de octubre de 2026).
+    assert.match(await dialog.locator('#time-correction-reason').innerText().catch(() => ''), /Se le olvidó pausar al salir/);
     await dialog.getByRole('button', { name: 'Corregir tiempo' }).click();
     assert.match(await dialog.getByRole('alert').innerText(), /solo acorta/);
     await dialog.getByLabel('Horas').fill('1');
@@ -40,7 +42,10 @@ try {
     await dialog.waitFor();
     assert.match(await dialog.innerText(), /sigue corriendo/);
     await dialog.getByLabel('Horas').fill('2');
-    await dialog.getByLabel('Motivo').fill('Se fue sin pausar');
+    // «Otro motivo» abre el campo para escribirlo.
+    await chooseOption(dialog.locator('#time-correction-reason'), 'OTRO');
+    await dialog.getByLabel('¿Cuál?').fill('Se fue sin pausar');
+    await page.screenshot({ path: shot(`otro-motivo-${scheme}.png`), animations: 'disabled' });
     await dialog.getByRole('button', { name: 'Corregir tiempo' }).click();
     await dialog.waitFor({ state: 'detached' });
     assert.match(await page.locator('[data-preview-status]').innerText(), /Pendiente/);

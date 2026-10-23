@@ -2,8 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { formatElapsedTime, getTaskElapsedMs, REOPEN_REASONS } from '@/lib/taskTiming';
-import { correctionProblem, formatCorrectionSpan, sessionCurrentMs, TIME_CORRECTION_REASON_MAX } from '@/lib/taskWorkCorrection';
+import { correctionProblem, formatCorrectionSpan, sessionCurrentMs, TIME_CORRECTION_REASON_MAX, TIME_CORRECTION_REASONS, TIME_CORRECTION_OTHER } from '@/lib/taskWorkCorrection';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import Select from '@/components/ui/Select';
 
 const cycleLabels = { INITIAL: 'Producción inicial', REWORK: 'Retrabajo' };
 const closeLabels = {
@@ -27,11 +28,13 @@ const sessionElapsed = (session, now) => session.endedAt
 function TimeCorrectionDialog({ taskId, session, user, onClose, onCorrected }) {
   const [hours, setHours] = useState('');
   const [minutes, setMinutes] = useState('');
-  const [reason, setReason] = useState('');
+  const [choice, setChoice] = useState(TIME_CORRECTION_REASONS[0]);
+  const [otherReason, setOtherReason] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const current = sessionCurrentMs(session);
   const durationMs = (Number(hours || 0) * 60 + Number(minutes || 0)) * 60_000;
+  const reason = choice === TIME_CORRECTION_OTHER ? otherReason : choice;
   const submit = async (event) => {
     event.preventDefault();
     const problem = correctionProblem({ user, session, durationMs, reason });
@@ -72,9 +75,17 @@ function TimeCorrectionDialog({ taskId, session, user, onClose, onCorrected }) {
               <input type="number" min="0" max="59" step="1" inputMode="numeric" className={field} value={minutes} onChange={(event) => { setMinutes(event.target.value); setError(''); }} />
             </label>
           </div>
-          <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Motivo</span>
-            <textarea required rows={3} maxLength={TIME_CORRECTION_REASON_MAX} className={field} value={reason} onChange={(event) => { setReason(event.target.value); setError(''); }} placeholder="Se le olvidó pausar al salir" aria-describedby={error ? 'time-correction-error' : undefined} />
+          <label htmlFor="time-correction-reason" className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Motivo</span>
+            <Select id="time-correction-reason" aria-label="Motivo" className={field} value={choice} onChange={(event) => { setChoice(event.target.value); setError(''); }}>
+              {TIME_CORRECTION_REASONS.map((option) => <option key={option} value={option}>{option}</option>)}
+              <option value={TIME_CORRECTION_OTHER}>Otro motivo</option>
+            </Select>
           </label>
+          {choice === TIME_CORRECTION_OTHER && (
+            <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">¿Cuál?</span>
+              <textarea required rows={2} maxLength={TIME_CORRECTION_REASON_MAX} className={field} value={otherReason} onChange={(event) => { setOtherReason(event.target.value); setError(''); }} aria-describedby={error ? 'time-correction-error' : undefined} autoFocus />
+            </label>
+          )}
           {error && <p id="time-correction-error" role="alert" className="text-sm text-destructive brain-destructive-text">{error}</p>}
           <DialogFooter>
             <button type="button" className="min-h-11 rounded-lg px-4 text-sm text-zinc-700 dark:text-zinc-200" onClick={onClose} disabled={saving}>Cancelar</button>
