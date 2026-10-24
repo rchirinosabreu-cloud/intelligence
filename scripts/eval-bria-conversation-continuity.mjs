@@ -1,6 +1,7 @@
 // Evaluación multivuelta con proveedor real, servicios de conversación/borrador reales y datos ficticios.
 // Inyectar OPENAI_API_KEY y BRIA_EVAL_OUTPUT; no lee .env, no usa una base real ni envía mensajes.
 // node scripts/eval-bria-conversation-continuity.mjs --repeticiones 2
+// Añade --solo <id> para ejecutar un recorrido reservado por separado.
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
@@ -8,24 +9,9 @@ import { loadCaseEvalConfig, createCaseEvalProvider } from './lib/briaResearchRu
 import { createConversationContinuityFixture, assertContinuityDraft, assertContinuityClarification, assertContinuityCreated, continuityInitial, CONTINUITY_URL, CONTINUITY_TITLE, CONTINUITY_CLIENT, CONTINUITY_PERSON } from '../tests/evals/briaConversationContinuityFixture.js';
 import { runWithAiContext } from '../src/lib/aiRequestContext.js';
 
-const output = process.env.BRIA_EVAL_OUTPUT;
-if (!output) throw new Error('Indica BRIA_EVAL_OUTPUT para conservar la evidencia.');
-if (process.env.DATABASE_URL || process.env.DIRECT_URL) throw new Error('La evaluación ficticia no admite conexiones de base de datos.');
-const config = await loadCaseEvalConfig({ load: async () => { throw new Error('Inyecta la credencial del modelo; esta evaluación no abre archivos de entorno.'); } });
-if (!config.OPENAI_API_KEY) throw new Error('Falta la credencial del modelo.');
-const { AI_MODELS } = await import('../src/config/aiConfig.js');
-const usage = [], results = [];
-const ai = await createCaseEvalProvider({ apiKey: config.OPENAI_API_KEY, models: AI_MODELS, usage, fetchImpl: (url, init) => {
-  const target = new URL(url);
-  if (target.origin !== 'https://api.openai.com' || target.pathname !== '/v1/responses') throw new Error('La evaluación solo permite contactar al proveedor del modelo.');
-  return fetch(url, init);
-} });
 const index = process.argv.indexOf('--repeticiones');
 const repetitions = index < 0 ? 1 : Number(process.argv[index + 1]);
 if (!Number.isSafeInteger(repetitions) || repetitions < 1 || repetitions > 10) throw new Error('Usa entre 1 y 10 repeticiones.');
-await mkdir(path.dirname(path.resolve(output)), { recursive: true });
-const createdAt = new Date().toISOString();
-const save = () => writeFile(output, JSON.stringify({ fictional: true, createdAt, model: AI_MODELS.chat, results, usage }, null, 2));
 const expected = f => ({ title: CONTINUITY_TITLE, client: 'aurora', assignee: f.person.memberId, dueDate: '2026-10-29', priority: 'NORMAL', inputs: [], references: [], stage: 'READY' });
 const unchanged = (answer, f) => {
   const trace = f.traces.at(-1);
@@ -83,11 +69,39 @@ const scenarios = [
   { id: 'misma-url-sin-borrador-no-inicia-trabajo', steps: f => [
     [CONTINUITY_URL, answer => { assert.equal(answer.pendingAction, undefined); assert.equal(f.created.length, 0); assert.equal(f.platformAttempts.length, 0); }],
     ['Solo quería saber para qué sirve compartir una carpeta; no prepares ni publiques nada.', answer => { assert.equal(answer.pendingAction, undefined); assert.equal(f.created.length, 0); assert.equal(f.platformAttempts.length, 0); }]
+  ] },
+  { id: 'proposito-material-y-acabado-sin-etiquetas', steps: f => [
+    [continuityInitial, answer => complete(answer, f)],
+    ['En una carpeta están los archivos originales con los que el equipo debe producir el folleto; quiero que puedan abrirla desde el pendiente.', answer => { unchanged(answer, f); asksFor(answer, /enlace|direcci[oó]n|url/i); }],
+    [CONTINUITY_URL, answer => complete(answer, f, { inputs: [CONTINUITY_URL] })],
+    ['Añade también https://example.invalid/acabado-folleto: muestra el acabado y el estilo que me gustaría conseguir. Conserva lo anterior y todavía no crees la tarea.', answer => complete(answer, f, { inputs: [CONTINUITY_URL], references: ['https://example.invalid/acabado-folleto'] })],
+    ['Cancelar pendiente', answer => cancelled(answer, f)]
   ] }
 ];
 
+const onlyIndex = process.argv.indexOf('--solo');
+const only = onlyIndex < 0 ? null : process.argv[onlyIndex + 1];
+const selected = onlyIndex < 0 ? scenarios : scenarios.filter(scenario => scenario.id === only);
+if (!selected.length) throw new Error(`Caso desconocido para --solo: ${only || '(falta id)'}.`);
+
+const output = process.env.BRIA_EVAL_OUTPUT;
+if (!output) throw new Error('Indica BRIA_EVAL_OUTPUT para conservar la evidencia.');
+if (process.env.DATABASE_URL || process.env.DIRECT_URL) throw new Error('La evaluación ficticia no admite conexiones de base de datos.');
+const config = await loadCaseEvalConfig({ load: async () => { throw new Error('Inyecta la credencial del modelo; esta evaluación no abre archivos de entorno.'); } });
+if (!config.OPENAI_API_KEY) throw new Error('Falta la credencial del modelo.');
+const { AI_MODELS } = await import('../src/config/aiConfig.js');
+const usage = [], results = [];
+const ai = await createCaseEvalProvider({ apiKey: config.OPENAI_API_KEY, models: AI_MODELS, usage, fetchImpl: (url, init) => {
+  const target = new URL(url);
+  if (target.origin !== 'https://api.openai.com' || target.pathname !== '/v1/responses') throw new Error('La evaluación solo permite contactar al proveedor del modelo.');
+  return fetch(url, init);
+} });
+await mkdir(path.dirname(path.resolve(output)), { recursive: true });
+const createdAt = new Date().toISOString();
+const save = () => writeFile(output, JSON.stringify({ fictional: true, createdAt, model: AI_MODELS.chat, results, usage }, null, 2));
+
 for (let repeat = 1; repeat <= repetitions; repeat++) {
-  for (const scenario of scenarios) {
+  for (const scenario of selected) {
     const fixture = createConversationContinuityFixture({ ai });
     const entry = { case: scenario.id, repeat, pass: true, failures: [] };
     let draftId;

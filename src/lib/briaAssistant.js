@@ -299,7 +299,7 @@ export const runAssistant = async ({
       governanceContext,
       // La selección de herramientas y de sus campos necesita interpretar el diálogo; no heredar
       // el modo sin razonamiento del cliente genérico. Se conserva el modelo configurado.
-      reasoningEffort: 'low',
+      reasoningEffort: 'medium',
       maxOutputTokens: MAX_ANSWER_TOKENS,
       ...(onEvent ? {
         onTextDelta: (text) => { streamed = true; emit({ type: 'delta', text }); },

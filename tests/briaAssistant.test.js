@@ -88,7 +88,7 @@ test('only the tools the person may use are offered, and a call to any other one
   const result = await runAssistant({ question: '¿Cuánto debe Mimas y qué tengo pendiente?', user, person, tools, ai, today: TODAY, logger: { error() {} } });
 
   assert.deepEqual(ai.calls[0].tools.map((t) => t.name), ['mis_tareas'], 'el modelo solo ve las herramientas permitidas');
-  assert.ok(ai.calls.every(call => call.reasoningEffort === 'low'), 'interpretar y continuar después de una herramienta conserva el esfuerzo de razonamiento de Bria');
+  assert.ok(ai.calls.every(call => call.reasoningEffort === 'medium'), 'interpretar y continuar después de una herramienta conserva el esfuerzo de razonamiento de Bria');
   assert.equal(carteraRuns.length, 0, 'la herramienta vedada nunca corre');
   const [carteraOutput, tareasOutput] = outputsOf(ai.calls[1]);
   assert.match(carteraOutput.error, /no tiene permiso/i);
