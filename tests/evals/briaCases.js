@@ -95,7 +95,8 @@ export const EVAL_CASES = [
     id: 'como-viene-cuenta',
     question: '¿Cómo viene Aristea?',
     requiredTools: ['lectura_de_la_agencia'],
-    mustSay: ['re:\\b(6|seis) días', 'aprobación'],
+    // La serie ficticia conserva rojo desde el 10 hasta el 15: dar la fecha de inicio también describe la historia.
+    mustSay: ['re:(\\b(6|seis) días|rojo desde (?:el )?(?:sábado )?10 de octubre)', 'aprobación'],
     mustNotSay: ['re:\\b(lent[oa]|floj[oa])\\b'],
     why: 'La memoria del tiempo (19 de octubre de 2026): «cómo viene» se responde con la historia de la cuenta (desde cuándo está en rojo, qué no se mueve), no solo con el estado de hoy.'
   },
@@ -170,7 +171,7 @@ export const EVAL_CASES = [
     id: 'lectura-sin-evidencia',
     question: '¿Cómo vas acertando con las decisiones de la lectura? Si no hay evidencia suficiente o un registro antiguo dice YA_NO_SE_VE, ¿eso demuestra que se resolvió? Dime cuántas siguen sin evidencia.',
     requiredTools: ['lectura_de_la_agencia'],
-    mustSay: ['re:(2|dos).{0,70}sin evidencia', 're:(no.{0,70}(acierto|resuelt|resolvi|demuestra)|sin evidencia.{0,70}no)'],
+    mustSay: ['re:(\\b(2|dos)\\b.{0,70}sin evidencia|sin evidencia[^\\n.!?]{0,30}\\b(2|dos)\\b)', 're:(no.{0,70}(acierto|resuelt|resolvi|demuestra)|sin evidencia.{0,70}no)'],
     mustNotSay: ['100%', '100 %', 'se resolvieron solas', '2 de 2 se resolvieron'],
     forbidPendingAction: true,
     why: 'Los resultados desconocidos y YA_NO_SE_VE histórico no acreditan resolución ni acierto; se comprueba con el balance calculado por el servicio real.'
@@ -199,7 +200,7 @@ export const EVAL_CASES = [
 ];
 
 const plain = (value) => String(value || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-const says = (answer, expected) => expected.startsWith('re:') ? new RegExp(expected.slice(3), 'i').test(String(answer || '')) : plain(answer).includes(plain(expected));
+const says = (answer, expected) => expected.startsWith('re:') ? new RegExp(expected.slice(3), 'i').test(String(answer || '').replace(/[*_`]/g, '')) : plain(answer).includes(plain(expected));
 
 const MONTHS = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
 const WEEKDAYS = ['domingo', 'lunes', 'martes', 'miercoles', 'jueves', 'viernes', 'sabado'];
