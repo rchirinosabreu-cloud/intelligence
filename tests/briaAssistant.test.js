@@ -52,6 +52,26 @@ const scriptedAi = (responses) => {
 
 const outputsOf = (request) => request.input.filter((item) => item.type === 'function_call_output').map((item) => JSON.parse(item.output));
 
+test('dos adjuntos con el mismo nombre llegan al modelo con sus identidades distintas para poder elegir uno', async () => {
+  const attachments = [
+    { id: 'foto-primera-id', name: 'foto.jpg', status: 'IMAGE', text: 'Borrador inicial', current: false },
+    { id: 'foto-segunda-id', name: 'foto.jpg', status: 'IMAGE', text: 'Fecha corregida', current: true }
+  ];
+  const ai = scriptedAi([request => {
+    const parts = request.input.at(-1).content.filter(part => part.type === 'input_text');
+    const first = parts.find(part => part.text.includes('Borrador inicial'));
+    const second = parts.find(part => part.text.includes('Fecha corregida'));
+    assert.ok(first.text.includes(attachments[0].id), 'la primera foto conserva su id');
+    assert.ok(second.text.includes(attachments[1].id), 'la segunda foto conserva otro id');
+    assert.ok(!second.text.includes(attachments[0].id), 'el nombre compartido no mezcla identidades');
+    assert.match(first.text, /archivo anterior del chat/);
+    assert.match(second.text, /adjunto de este mensaje/);
+    return reply({ text: 'La segunda captura muestra la fecha corregida.' });
+  }]);
+  const result = await runAssistant({ question: 'Distingue las dos fotos', user, person, tools: [], attachments, ai, today: TODAY });
+  assert.match(result.answer, /fecha corregida/);
+});
+
 test('only the tools the person may use are offered, and a call to any other one runs nothing', async () => {
   const carteraRuns = [];
   const tools = [

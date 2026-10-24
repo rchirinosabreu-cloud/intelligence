@@ -164,6 +164,18 @@ Decisiones de Rodny ese día: llegan **los pedidos de acceso, la lectura de la m
 
 ## Contratos
 
+### Piloto: dos fotos y comentario revisable
+
+El piloto del 23 de octubre mostró una pérdida al preparar la acción: ambas fotos estaban guardadas en el turno del chat, con identificadores diferentes, pero compartían el nombre generado desde el último mensaje del lote. La selección por nombre conservaba solo la primera. La propuesta afirmaba «las dos» usando la descripción del modelo, aunque su selección real contenía un solo archivo.
+
+Los adjuntos se distinguen por identidad, también ante nombres repetidos. La preparación de comentarios presenta el texto que se enviará y la cantidad y nombres de los archivos seleccionados. Ajustar solo el texto conserva los adjuntos del mismo borrador y destino; una selección ambigua o incompleta pide aclaración. Confirmar usa esa selección y la revisión actual, con los permisos y la ruta de comentarios existentes.
+
+El aviso inicial de formato no compatible correspondía a un evento entrante `unsupported`. El registro disponible no contiene el formato original ni permite identificar su causa. Las dos imágenes posteriores sí llegaron: no atribuirles ese aviso ni afirmar que se corrigió un formato de Meta desconocido. El diagnóstico nuevo conserva únicamente tipo y códigos numéricos, sin contenido, nombres o identificadores de mensajes.
+
+El contexto del modelo distingue los adjuntos del mensaje actual de los anteriores. Los identificadores viajan a la herramienta, pero las preguntas a la persona usan descripciones reconocibles de las imágenes. Los enlaces internos se convierten al dominio oficial al salir por WhatsApp.
+
+Evaluación ficticia con el modelo real configurado `gpt-5.6-terra`: **6/6 recorridos, 18 turnos**. `scripts/eval-bria-comment-pilot.mjs` prueba dos imágenes homónimas actuales junto a dos históricas, corrección del texto conservando los dos archivos, confirmación repetida sin duplicar, cancelación y elección natural entre imágenes antiguas. Compara las identidades y los bytes distintos del formulario enviado. Usa servicios reales con repositorio y API ficticios; las imágenes de evaluación son muestras sintéticas y no certifican toda interpretación visual ni transporte de Meta. La primera ejecución detectó la falta de procedencia actual/anterior y una selección histórica arbitraria: se corrigieron antes de repetir, sin relajar los criterios. Informe local: `output/bria-project/comment-pilot-real.json`.
+
 - `tests/whatsappBridge.test.js`: firma, verificación, lectura del aviso, código, traducción y partición del texto, respuestas fijas.
 - `tests/whatsappBridgeService.test.js`: webhook (503/401/200 antes de trabajar), vínculo por código, puente al motor con identidad y sin sesión, bóveda, fallos, conversación por día, rutas.
 - `tests/whatsappLinkUi.test.js`: la tarjeta del perfil y sus interruptores de avisos.

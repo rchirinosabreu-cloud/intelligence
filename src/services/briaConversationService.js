@@ -99,9 +99,9 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         validateAttachmentSelection(files);
         const prepared = []; for (const file of files) { await resolveActor(user); prepared.push(await prepareAttachment(file)); }
         const previous = repository.attachments ? await repository.attachments(await resolveActor(user), id) : [];
-        const relevant = [...prepared, ...previous].slice(0, 5);
+        const relevant = [...prepared.map(file => ({ ...file, current: true })), ...previous.map(file => ({ ...file, current: false }))].slice(0, 5);
         let availableText = 60000;
-        const attachments = relevant.map(file => { const content = String(file.text || '').slice(0, availableText); availableText -= content.length; return { id: file.id, name: file.name, text: content, status: file.status, warning: content.length < String(file.text || '').length ? `${file.warning || ''} Contexto parcial del adjunto en esta respuesta.` : file.warning, modelPart: attachmentModelPart(file) }; });
+        const attachments = relevant.map(file => { const content = String(file.text || '').slice(0, availableText); availableText -= content.length; return { id: file.id, name: file.name, current: file.current, text: content, status: file.status, warning: content.length < String(file.text || '').length ? `${file.warning || ''} Contexto parcial del adjunto en esta respuesta.` : file.warning, modelPart: attachmentModelPart(file) }; });
         const revalidateConversation = async () => { if (!await repository.get(await resolveActor(user), id)) throw knowledgeError('La conversación fue eliminada.', 404); };
         // Acciones de Bria en la plataforma (10 de octubre de 2026): solo la de la respuesta inmediatamente anterior se
         // puede confirmar o cancelar, y se ejecuta dentro de append, con la conversación bloqueada y su revisión comprobada.

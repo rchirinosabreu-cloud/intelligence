@@ -230,7 +230,7 @@ export const createWhatsAppBridgeService = ({
     const row = await loadUser(link.userId);
     if (!allowed(row)) { await sendText(replyTo(message), REPLIES.notAllowed); return { outcome: 'not-allowed' }; }
     const medias = message.medias || (message.media ? [message.media] : []);
-    if (!message.text && !medias.length) { await sendText(replyTo(message), REPLIES.onlyText); return { outcome: 'only-text' }; }
+    if (!message.text && !medias.length) { await sendText(replyTo(message), message.type === 'unsupported' ? REPLIES.unsupported : REPLIES.onlyText); return { outcome: 'only-text' }; }
     await markRead(message.messageId);
     const user = sessionUser(row);
     let question = message.text || '';
@@ -369,7 +369,10 @@ export const createWhatsAppBridgeService = ({
       return { status: 200, body: { accepted: true, ignored: messages.length } };
     }
     // Se responde a Meta antes de trabajar: un webhook que espera al modelo vence y Meta lo reenvía.
-    for (const message of messages) accept(message);
+    for (const message of messages) {
+      if (message.type === 'unsupported') logger.warn?.(`[WhatsApp] Contenido no entregado por Meta: tipo=unsupported errores=${message.errorCodes?.join(',') || 'sin código'}.`);
+      accept(message);
+    }
     return { status: 200, body: { accepted: true, messages: messages.length } };
   };
 
