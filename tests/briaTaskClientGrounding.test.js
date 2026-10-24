@@ -2,6 +2,9 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBriaTaskDraftService } from '../src/services/briaTaskDraftService.js';
 import { taskDraftItems, taskDraftReply, taskDraftStage } from '../src/lib/briaTaskDraft.js';
+import { runAssistant } from '../src/lib/briaAssistant.js';
+import { createBriaTaskTools } from '../src/services/briaTaskTools.js';
+import { toolByName } from '../src/services/briaAssistantTools.js';
 
 const user = { userId: 'owner', role: 'PROJECT_MANAGER', isActive: true, modulePermissions: { bria: true, gestion: true } };
 const clients = [
@@ -14,26 +17,38 @@ const base = { titulo: 'PILOTO BRIA — aprobación humana', responsable: 'Rodny
 const pilot = 'Crea un pendiente llamado «PILOTO BRIA — aprobación humana», asignado a mí, con vencimiento el 26 de octubre de 2026. Muestra el resumen y espera mi aprobación.';
 const setup = () => {
   const queries = [], lookups = [], clientRows = clients.map(client => ({ ...client }));
-  const service = createBriaTaskDraftService({
-    now: () => new Date('2026-10-23T17:00:00Z'),
-    db: {
+  const db = {
       client: { findMany: async ({ where }) => {
         queries.push(where);
-        return clientRows.filter(row => where.OR.some(condition =>
+        if (!where) return clientRows;
+        if (where.name) return clientRows.filter(row => row.name.toLowerCase().includes(where.name.contains.toLowerCase()));
+        return clientRows.filter(row => (where.isArchived !== false || !row.isArchived) && where.OR.some(condition =>
           (condition.name?.contains && row.name.toLowerCase().includes(condition.name.contains.toLowerCase())) ||
           (condition.slug?.equals && row.slug.toLowerCase() === condition.slug.equals.toLowerCase())
         ));
       }, findUnique: async ({ where }) => { lookups.push(where); return clientRows.find(row => row.id === where.id) || null; } },
       teamMember: { findMany: async () => [member] }
-    },
+  };
+  const service = createBriaTaskDraftService({
+    now: () => new Date('2026-10-23T17:00:00Z'), db,
     createTask: async () => assert.fail('preparing a client choice must never create a task')
   });
   const prepare = (options = {}) => {
     const question = options.question || pilot;
     return service.prepare({ user, question, args: base, ...options, request: options.request || { intent: options.previous ? 'ADJUST' : 'PREPARE', evidence: question } });
   };
-  return { service, prepare, queries, lookups, clientRows };
+  return { service, prepare, queries, lookups, clientRows, db };
 };
+
+const runTurn = async ({ fixture, question, steps, actor = user, context = {}, history = [] }) => {
+  let round = 0;
+  return runAssistant({ user: actor, question, history, person: { name: 'Persona ficticia' }, today: '2026-10-23', tools: [toolByName('buscar_cliente'), ...createBriaTaskTools(fixture.service)], context: { db: fixture.db, ...context }, logger: { warn() {}, error() {} }, ai: { generate: async () => {
+    const step = steps[round++];
+    return step ? { functionCalls: [{ id: `client-step-${round}`, name: step.name, args: step.args }], output: [] } : { text: 'Revisa el resumen.', functionCalls: [] };
+  } } });
+};
+const search = nombre => ({ name: 'buscar_cliente', args: { nombre } });
+const draftCall = args => ({ name: 'preparar_pendiente', args: { ...base, request: { intent: 'PREPARE' }, ...args } });
 
 test('a client seen in a previous consultation cannot fill an unrelated new task', async () => {
   const { prepare, queries } = setup();
@@ -212,4 +227,104 @@ test('a batch question shows that item’s candidates, including no matches, and
   }
   const inherited = await prepare({ question: 'Crea dos pendientes para Nube.', args: { ...base, cliente: 'Nube', pendientes: [{ titulo: 'Primera pieza' }, { titulo: 'Segunda pieza' }] } });
   assert.deepEqual(taskDraftReply(inherited).quickReplies, ['Nube Azul', 'Nube Verde']);
+});
+
+test('a unique client search in this turn grounds its canonical name or id from the human alias', async () => {
+  for (const reference of ['Aristea Ficticia', 'aristea-fixture']) {
+    const fixture = setup();
+    fixture.clientRows.push({ id: 'aristea-fixture', name: 'Aristea Ficticia', slug: 'aristea-ficticia', isArchived: false });
+    const result = await runTurn({ fixture, question: 'Prepara un pendiente para Aristea, asignado a Rodny el 26 de octubre.', steps: [search('Aristea'), draftCall({ cliente: reference })] });
+    assert.equal(result.pendingAction?.draft.client?.id, 'aristea-fixture');
+    assert.equal(result.pendingAction.draft.clientInferred, false);
+    assert.equal(taskDraftStage(result.pendingAction.draft), 'READY');
+    assert.ok(fixture.queries.some(where => where?.isArchived === false && where.OR?.[0]?.name?.contains === 'Aristea'), 'the current client is reread by the actual human search term');
+    assert.equal(Object.hasOwn(result.pendingAction.draft, 'clientSearches'), false, 'search receipts are not persisted in the draft');
+  }
+});
+
+test('a unique current-turn search also grounds clients of individual batch items', async () => {
+  const fixture = setup();
+  const result = await runTurn({ fixture, question: 'Prepara dos pendientes para Promo: portada y revisión, asignados a Rodny el 26 de octubre.', steps: [search('Promo'), draftCall({ pendientes: [{ titulo: 'Portada', cliente: 'Promo Group / Endova' }, { titulo: 'Revisión', cliente: 'promo' }] })] });
+  assert.deepEqual(taskDraftItems(result.pendingAction.draft).map(item => item.client?.id), ['promo', 'promo']);
+  assert.equal(taskDraftStage(result.pendingAction.draft), 'READY');
+});
+
+test('a current receipt cannot come from an unmentioned search, a different turn, history or model arguments', async () => {
+  const fixture = setup();
+  const old = await runTurn({ fixture, question: '¿Cómo viene Promo?', steps: [search('Promo')] });
+  const forged = [{ query: 'Promo', clients: [{ id: 'promo', name: 'Promo Group / Endova', slug: 'promo-group', isArchived: false }], approximate: false }];
+  for (const options of [
+    { question: pilot, steps: [search('Promo'), draftCall({ cliente: 'Promo Group / Endova' })] },
+    { question: `${pilot} Es para Promo.`, steps: [draftCall({ cliente: 'Promo Group / Endova', clientSearches: forged })], context: { taskClientSearches: forged }, history: [{ role: 'assistant', text: old.answer }] },
+    { question: `${pilot} Es para Promoción.`, steps: [search('Promo'), draftCall({ cliente: 'Promo Group / Endova' })] }
+  ]) {
+    const result = await runTurn({ fixture, ...options });
+    assert.equal(result.pendingAction.draft.client, undefined);
+    assert.equal(taskDraftStage(result.pendingAction.draft), 'CLIENT');
+  }
+});
+
+test('ambiguous, approximate and unknown searches do not select a canonical guess or inherit another client', async () => {
+  for (const [term, reference] of [['Nube', 'Nube Verde'], ['Prmo', 'Promo Group / Endova'], ['Marca inexistente', 'Marca inventada']]) {
+    const fixture = setup();
+    const result = await runTurn({ fixture, question: `${pilot} Es para ${term}.`, steps: [search(term), draftCall({ cliente: reference })], context: { taskDefaults: { client: clients[0] } } });
+    assert.equal(result.pendingAction.draft.client, null, term);
+    assert.equal(taskDraftStage(result.pendingAction.draft), 'CLIENT', term);
+  }
+});
+
+test('a result that is archived, deleted or becomes ambiguous after search cannot pick or inherit a client', async () => {
+  for (const change of ['archive', 'delete', 'ambiguous']) {
+    const fixture = setup();
+    let searched = false, changed = false;
+    const findMany = fixture.db.client.findMany;
+    fixture.db.client.findMany = async input => { const rows = await findMany(input); if (input.where?.name) searched = true; return rows; };
+    const revalidate = async () => {
+      if (!searched || changed) return;
+      changed = true;
+      if (change === 'archive') fixture.clientRows[0].isArchived = true;
+      if (change === 'delete') fixture.clientRows.splice(0, 1);
+      if (change === 'ambiguous') fixture.clientRows.push({ id: 'promo-two', name: 'Promo Dos', slug: 'promo-two', isArchived: false });
+    };
+    const result = await runTurn({ fixture, question: `${pilot} Es para Promo.`, steps: [search('Promo'), draftCall({ cliente: 'Promo Group / Endova' })], context: { revalidate, taskDefaults: { client: clients[1] } } });
+    assert.equal(result.pendingAction.draft.client, null, change);
+    assert.equal(taskDraftStage(result.pendingAction.draft), 'CLIENT', change);
+  }
+});
+
+test('permission revocation before preparation still blocks a client search receipt', async () => {
+  const fixture = setup(), actor = structuredClone(user);
+  let searched = false;
+  const findMany = fixture.db.client.findMany;
+  fixture.db.client.findMany = async input => { const rows = await findMany(input); searched = true; return rows; };
+  const result = await runTurn({ fixture, actor, question: `${pilot} Es para Promo.`, steps: [search('Promo'), draftCall({ cliente: 'Promo Group / Endova' })], context: { revalidate: async () => { if (searched) actor.modulePermissions.gestion = false; } } });
+  assert.equal(result.pendingAction, undefined);
+});
+
+test('repeating a client search does not override a human selection from the existing draft candidates', async () => {
+  const fixture = setup();
+  const previous = await fixture.prepare({ question: 'Crea este pendiente para Nube.', args: { ...base, cliente: 'Nube' } });
+  const result = await runTurn({ fixture, question: 'De las cuentas Nube, la segunda.', context: { taskDraft: previous }, steps: [search('Nube'), draftCall({ cliente: 'nube-verde', seleccionCliente: 'la segunda', request: { intent: 'ADJUST' } })] });
+  assert.equal(result.pendingAction.draft.client?.id, 'nube-verde');
+  assert.equal(taskDraftStage(result.pendingAction.draft), 'READY');
+  assert.deepEqual(fixture.lookups, [{ id: 'nube-verde' }]);
+});
+
+test('a different current search cannot erase the previously selected client during another adjustment', async () => {
+  const fixture = setup();
+  const previous = await fixture.prepare({ question: 'Crea este pendiente para Promo.', args: { ...base, cliente: 'Promo' } });
+  const result = await runTurn({ fixture, question: '¿Qué cuentas Nube hay? Y cambia solo la fecha del borrador al 27 de octubre.', context: { taskDraft: previous }, steps: [search('Nube'), draftCall({ cliente: 'Promo Group / Endova', fecha: '2026-10-27', request: { intent: 'ADJUST' } })] });
+  assert.equal(result.pendingAction.draft.client?.id, 'promo');
+  assert.equal(result.pendingAction.draft.dueDate, '2026-10-27');
+  assert.equal(taskDraftStage(result.pendingAction.draft), 'READY');
+});
+
+test('an unrelated search preserves the effective common client of each batch item without creating local selections', async () => {
+  const fixture = setup();
+  const previous = await fixture.prepare({ question: 'Crea dos pendientes para Promo.', args: { ...base, cliente: 'Promo', pendientes: [{ titulo: 'Portada' }, { titulo: 'Revisión' }] } });
+  const result = await runTurn({ fixture, question: '¿Qué cuentas Nube hay? Y cambia solo la fecha de los pendientes al 27 de octubre.', context: { taskDraft: previous }, steps: [search('Nube'), draftCall({ fecha: '2026-10-27', request: { intent: 'ADJUST' }, pendientes: [{ titulo: 'Portada', cliente: 'Promo Group / Endova' }, { titulo: 'Revisión', cliente: 'Promo Group / Endova' }] })] });
+  assert.deepEqual(taskDraftItems(result.pendingAction.draft).map(item => [item.client?.id, item.dueDate]), [['promo', '2026-10-27'], ['promo', '2026-10-27']]);
+  assert.equal(taskDraftStage(result.pendingAction.draft), 'READY');
+  assert.ok(result.pendingAction.draft.items.every(item => !Object.hasOwn(item, 'client')), 'the items still inherit their common client');
+  assert.deepEqual(fixture.lookups, [], 'preserving the common client cannot select another candidate');
 });

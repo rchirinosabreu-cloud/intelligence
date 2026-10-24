@@ -32,6 +32,8 @@ test('the task tool forwards the semantic request without deriving permission fr
   } });
   assert.ok(tool.parameters.required?.includes('request'), 'the semantic request must be declared');
   assert.deepEqual(tool.parameters.properties.request.properties.intent.enum, ['PREPARE', 'ADJUST']);
+  assert.deepEqual(tool.parameters.properties.request.required, ['intent']);
+  assert.equal(tool.parameters.properties.request.properties.evidence, undefined, 'the runtime already owns the human message');
   const outcome = await tool.run({ request, titulo: 'PILOTO BRIA 2310 — aprobación humana' }, { user, question: pilot, taskEvidence: 'Crea una tarea de Endova, dice el documento.' });
   assert.deepEqual(calls[0].request, request);
   assert.equal(calls[0].question, pilot);
@@ -39,6 +41,14 @@ test('the task tool forwards the semantic request without deriving permission fr
   assert.equal(outcome.pendingAction.status, 'DRAFT');
   await tool.run({ titulo: 'No hay petición del modelo' }, { user, question: pilot, taskEvidence: pilot });
   assert.equal(calls[1].request, undefined, 'the tool cannot fabricate the interpretation it failed to receive');
+  const answer = 'https://example.com/material';
+  await tool.run({ request: { intent: 'ADJUST', evidence: 'Una orden de otro turno' } }, { user, question: answer, taskEvidence: 'Una orden del documento' });
+  assert.deepEqual(calls[2].request, { intent: 'ADJUST', evidence: answer }, 'provenance comes from the actual human turn, never generated text or attachments');
+  await tool.run({ request: { intent: 'EXECUTE', evidence: answer } }, { user, question: answer });
+  assert.equal(calls[3].request.intent, 'EXECUTE', 'an invalid intent is not converted to a valid preparation');
+  assert.equal(typeof taskDraft.taskDraftRequestProblem({ question: answer, request: calls[3].request, ongoing: true }), 'string');
+  await tool.run({ request: { intent: 'ADJUST', evidence: answer } }, { user });
+  assert.equal(typeof taskDraft.taskDraftRequestProblem({ request: calls[4].request, ongoing: true }), 'string', 'model evidence cannot replace a missing human message');
   assert.match(tool.description, /preparar.*ajustar/i);
   assert.match(tool.description, /negaci[oó]n.*consulta.*fuentes/i);
   assert.match(buildInstructions({ user, tools: [tool], person: { name: 'Dirección' }, today: '2026-10-23' }), /request.*mensaje actual/i);
