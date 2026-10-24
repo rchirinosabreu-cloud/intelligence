@@ -6,8 +6,8 @@ import { knowledgeError } from '../lib/briaKnowledge.js';
 import { resolveTaskDate, taskDraftStage, taskDraftItems, taskDraftRequestProblem, materialDeclined, isTaskConfirmation, TASK_PRIORITIES, MAX_TASKS_PER_DRAFT } from '../lib/briaTaskDraft.js';
 const tidy = value => String(value || '').normalize('NFKC').trim();
 const clientWords = value => tidy(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-// El modelo pasa el nombre o alias que dijo la persona. Las consultas anteriores y los resultados de
-// herramientas no eligen una cuenta para un pendiente nuevo; una selección del borrador propio se conserva.
+// El modelo pasa el nombre o alias que dijo la persona. Una búsqueda única del turno puede resolverlo;
+// las consultas anteriores no eligen cuenta y una selección del borrador propio se conserva.
 const mentionsClient = (question, reference) => {
   const words = clientWords(reference);
   return Boolean(words) && ` ${clientWords(question)} `.includes(` ${words} `);
@@ -36,18 +36,33 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
     const rows = term ? await db.client.findMany({ where: { isArchived: false, OR: [{ name: { contains: term, mode: 'insensitive' } }, { slug: { equals: term, mode: 'insensitive' } }] }, select: { id: true, name: true, slug: true, isArchived: true }, orderBy: { name: 'asc' }, take: 6 }) : [];
     return { chosen: pick(rows.filter(row => !row.isArchived), term), candidates: rows.map(({ id, name, slug }) => ({ id, name, slug })) };
   };
-  const resolveClient = async ({ reference, selection, question, request, prior }) => {
+  const resolveClient = async ({ reference, selection, question, request, prior, clientSearches, user }) => {
     if (mentionsClient(question, reference)) return findClient(reference);
     // La selección natural la interpreta Bria, pero solo puede elegir entre las opciones que ya tenía
-    // este borrador. La cita acredita su origen; no convierte un ajuste de fecha en una elección de cuenta.
-    if (request.intent !== 'ADJUST' || !prior || taskDraftRequestProblem({ request: { intent: 'ADJUST', evidence: selection }, question, ongoing: true })) return null;
-    const matches = (prior.clientCandidates || []).filter(row => [row.id, row.name, row.slug].some(value => value && tidy(value).toLowerCase() === tidy(reference).toLowerCase()));
-    if (matches.length !== 1) return null;
-    const selected = matches[0];
-    const client = await db.client.findUnique({ where: { id: selected.id }, select: { id: true, name: true, slug: true, isArchived: true } });
-    return client && !client.isArchived
-      ? { chosen: client, candidates: [] }
-      : { chosen: null, candidates: prior.clientCandidates.filter(row => row.id !== selected.id) };
+    // este borrador. Volver a buscar no invalida esa elección ni los datos que ya había confirmado.
+    if (request.intent === 'ADJUST' && prior && !taskDraftRequestProblem({ request: { intent: 'ADJUST', evidence: selection }, question, ongoing: true })) {
+      const matches = (prior.clientCandidates || []).filter(row => [row.id, row.name, row.slug].some(value => value && tidy(value).toLowerCase() === tidy(reference).toLowerCase()));
+      if (matches.length === 1) {
+        const selected = matches[0];
+        const client = await db.client.findUnique({ where: { id: selected.id }, select: { id: true, name: true, slug: true, isArchived: true } });
+        return client && !client.isArchived
+          ? { chosen: client, candidates: [] }
+          : { chosen: null, candidates: prior.clientCandidates.filter(row => row.id !== selected.id) };
+      }
+    }
+    if (prior?.client && [prior.client.id, prior.client.name, prior.client.slug].some(value => value && tidy(value).toLowerCase() === tidy(reference).toLowerCase())) return null;
+    // Una búsqueda de este turno puede resolver el nombre abreviado que sí dijo la persona. El recibo
+    // solo acredita ese resultado; se vuelve a consultar antes de elegir y nunca habilita un homónimo.
+    const searches = (clientSearches || []).filter(search => mentionsClient(question, search.query));
+    if (searches.length) {
+      const matching = searches.filter(search => search.clients?.some(row => [row.id, row.name, row.slug].some(value => value && tidy(value).toLowerCase() === tidy(reference).toLowerCase())));
+      const receipt = matching.length === 1 ? matching[0] : null;
+      if (!receipt || receipt.approximate || receipt.clients.length !== 1 || receipt.clients[0].isArchived || !receipt.clients[0].id) return { chosen: null, candidates: [] };
+      const current = await findClient(receipt.query);
+      authorize(user);
+      return { chosen: current.candidates.length === 1 && current.chosen?.id === receipt.clients[0].id ? current.chosen : null, candidates: current.candidates };
+    }
+    return null;
   };
   const findMember = async (term, user) => {
     if (tidy(term).toLowerCase() === 'yo') {
@@ -64,7 +79,7 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
      * persona no nombra otro, se asume (Rodny, 20 de octubre de 2026: «si lleva cinco pendientes de Nattal, el sexto
      * es de Nattal»). Varios pendientes en un mensaje llegan en `args.pendientes` y viven en `draft.items`.
      */
-    async prepare({ user, args = {}, request, question, previous, attachments = [], evidence = question || '', defaults = {} }) {
+    async prepare({ user, args = {}, request, question, previous, attachments = [], evidence = question || '', defaults = {}, clientSearches = [] }) {
       authorize(user);
       const ongoing = previous && !['CREATED','CANCELLED'].includes(previous.status);
       if (ongoing && previous.ownerId !== (user.userId || user.id)) throw knowledgeError('Este borrador pertenece a otra persona.', 403);
@@ -80,7 +95,7 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
       if (args.contexto != null) draft.context = bounded(args.contexto, 8000, 'El contexto');
       if (args.cliente != null) {
         const reference = bounded(args.cliente, 160, 'El nombre del cliente');
-        const resolved = await resolveClient({ reference, selection: args.seleccionCliente, question, request, prior });
+        const resolved = await resolveClient({ reference, selection: args.seleccionCliente, question, request, prior, clientSearches, user });
         if (resolved) {
           const { chosen, candidates } = resolved;
           draft.client = chosen; draft.clientCandidates = candidates; draft.clientInferred = false;
@@ -118,8 +133,12 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
           if (row?.contexto != null) item.context = bounded(row.contexto, 8000, `El contexto del pendiente ${index + 1}`);
           if (row?.cliente != null) {
             const reference = bounded(row.cliente, 160, 'El nombre del cliente');
-            const itemPrior = prior?.items?.[index] || (args.pendientes.length === 1 && !prior?.items?.length ? prior : null);
-            const resolved = await resolveClient({ reference, selection: row.seleccionCliente, question, request, prior: itemPrior });
+            // Para conservar la cuenta se considera su cliente efectivo, pero nunca se heredan candidatos
+            // del borrador común ni de otro ítem para autorizar una selección nueva.
+            const itemPrior = prior?.items?.[index]
+              ? { ...prior.items[index], client: taskDraftItems(prior)[index].client }
+              : (args.pendientes.length === 1 && !prior?.items?.length ? prior : null);
+            const resolved = await resolveClient({ reference, selection: row.seleccionCliente, question, request, prior: itemPrior, clientSearches, user });
             if (resolved) {
               const { chosen, candidates } = resolved;
               item.client = chosen || null; item.clientReference = reference; item.clientCandidates = candidates; item.clientInferred = false;
