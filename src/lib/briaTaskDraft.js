@@ -43,12 +43,15 @@ export const taskDraftItems = draft => {
   if (!draft) return [];
   const base = {
     id: draft.id, title: draft.title || null, context: draft.context || null, client: draft.client || null, assignee: draft.assignee || null, dueDate: draft.dueDate || null,
-    priority: TASK_PRIORITIES.includes(draft.priority) ? draft.priority : 'NORMAL', references: draft.references || [], inputs: draft.inputs || [], files: draft.files || []
+    priority: TASK_PRIORITIES.includes(draft.priority) ? draft.priority : 'NORMAL', references: draft.references || [], inputs: draft.inputs || [], files: draft.files || [],
+    isSpecial: draft.isSpecial === true, collaborators: draft.collaborators || [], collaboratorMissing: draft.collaboratorMissing || [], unresolved: draft.unresolved || []
   };
   if (!Array.isArray(draft.items) || !draft.items.length) return [base];
   return draft.items.map(item => {
-    const own = Object.fromEntries(Object.entries(item || {}).filter(([key, value]) => (['client', 'assignee'].includes(key) && value === null) || (value != null && !(Array.isArray(value) && !value.length))));
-    return { ...base, ...own, priority: TASK_PRIORITIES.includes(item?.priority) ? item.priority : base.priority };
+    const own = Object.fromEntries(Object.entries(item || {}).filter(([key, value]) => (['client', 'assignee'].includes(key) && value === null) || (value != null && (['collaborators', 'collaboratorMissing', 'unresolved'].includes(key) || !(Array.isArray(value) && !value.length)))));
+    const result = { ...base, ...own, priority: TASK_PRIORITIES.includes(item?.priority) ? item.priority : base.priority };
+    result.collaborators = result.collaborators.filter(member => member.id !== result.assignee?.id);
+    return result;
   });
 };
 // El título ya dice qué hay que hacer: el contexto es un detalle más, nunca una parada («historias de la semana para
@@ -60,7 +63,7 @@ export const isPlaceholderTaskTitle = title => {
   const words = clean(title).replace(/[^a-z0-9ñ ]+/g, ' ').split(/\s+/).filter(Boolean);
   return words.length > 0 && words.some(word => ['pendiente', 'pendientes', 'tarea', 'tareas'].includes(word)) && words.every(word => PLACEHOLDER_WORDS.has(word));
 };
-const itemStage = item => !item.client ? 'CLIENT' : !item.assignee ? 'ASSIGNEE' : !item.dueDate ? 'DATE' : (!item.title || isPlaceholderTaskTitle(item.title)) ? 'CONTEXT' : 'READY';
+const itemStage = item => !item.client ? 'CLIENT' : !item.assignee ? 'ASSIGNEE' : !item.dueDate ? 'DATE' : (!item.title || isPlaceholderTaskTitle(item.title)) ? 'CONTEXT' : item.collaboratorMissing?.length ? 'COLLABORATORS' : item.unresolved?.length ? 'UNRESOLVED' : 'READY';
 /** El primer pendiente al que le falta algo, con su posición (1 en adelante) para nombrarlo en un lote. */
 export const taskDraftMissing = draft => {
   const items = taskDraftItems(draft);
@@ -75,8 +78,16 @@ export const taskDraftStage = draft => {
 const materialLines = item => [...(item.references || []).map(row => `Referencia: ${row.url}`), ...(item.inputs || []).map(row => `Insumo: ${row.url}`), ...(item.files || []).map(row => `Archivo: ${row.name}`)];
 // Los insumos ya no son una parada (Rodny, 20 de octubre de 2026): se nombran en el resumen y se pueden añadir después.
 const NO_MATERIAL = 'Sin referencias ni insumos todavía: puedes adjuntarlos ahora o después en la tarea.';
+const capabilityLines = item => `- Proyecto especial: ${item.isSpecial ? 'Sí' : 'No'}\n- Colaboradores: ${item.collaborators?.length ? item.collaborators.map(member => member.name).join(', ') : 'Ninguno'}`;
 export const taskDraftReply = draft => {
   const stage = taskDraftStage(draft);
+  if (stage === 'COLLABORATORS' || stage === 'UNRESOLVED') {
+    const { item, index, batch } = taskDraftMissing(draft);
+    const prefix = batch ? `Del pendiente ${index} («${item.title}»): ` : '';
+    if (stage === 'UNRESOLVED') return { answer: `${prefix}El borrador aún no cubre todo el pedido:\n${item.unresolved.map(text => `- ${text}`).join('\n')}\n\nConservo los demás datos. Falta resolver esto antes de ofrecer la creación.`, quickReplies: [] };
+    const missing = item.collaboratorMissing[0];
+    return { answer: `${prefix}${missing.candidates?.length ? `Encontré varias personas para «${missing.reference}». ¿Cuál será colaborador?` : `No encontré un colaborador activo para «${missing.reference}». ¿A quién te refieres?`}`, quickReplies: normalizeQuickReplies(missing.candidates?.map(member => member.name)) };
+  }
   if (['CLIENT','ASSIGNEE','DATE','CONTEXT'].includes(stage)) {
     const missing = taskDraftMissing(draft);
     const about = missing.batch ? `Del pendiente ${missing.index}${missing.item.title ? ` («${missing.item.title}»)` : ''}: ` : '';
@@ -94,12 +105,12 @@ export const taskDraftReply = draft => {
     const items = taskDraftItems(draft);
     if (items.length === 1) {
       const [item] = items, materials = materialLines(item);
-      return { answer: `Así quedaría el pendiente:\n\n**${item.title}**\n- Cliente: ${item.client.name}${draft.clientInferred ? ' (el mismo del pendiente anterior)' : ''}\n- Responsable: ${item.assignee.name}\n- Fecha: ${humanDate(item.dueDate)}\n- Prioridad: ${PRIORITY_LABEL[item.priority]}\n\n${item.context ? `**Contexto que guardaré como comentario**\n\n${item.context}\n\n` : ''}${materials.length ? materials.map(row => `- ${row}`).join('\n') : NO_MATERIAL}\n\n¿Lo creo así? También puedes indicarme cualquier ajuste.`, quickReplies: ['Crear pendiente', 'Cancelar pendiente'] };
+      return { answer: `Así quedaría el pendiente:\n\n**${item.title}**\n- Cliente: ${item.client.name}${draft.clientInferred ? ' (el mismo del pendiente anterior)' : ''}\n- Responsable: ${item.assignee.name}\n- Fecha: ${humanDate(item.dueDate)}\n- Prioridad: ${PRIORITY_LABEL[item.priority]}\n${capabilityLines(item)}\n\n${item.context ? `**Contexto que guardaré como comentario**\n\n${item.context}\n\n` : ''}${materials.length ? materials.map(row => `- ${row}`).join('\n') : NO_MATERIAL}\n\n¿Lo creo así? También puedes indicarme cualquier ajuste.`, quickReplies: ['Crear pendiente', 'Cancelar pendiente'] };
     }
     const sameClient = items.every(item => item.client.id === items[0].client.id);
     const rows = items.map((item, index) => {
       const materials = materialLines(item);
-      return `${index + 1}. **${item.title}** — ${item.assignee.name} · ${humanDate(item.dueDate)} · ${PRIORITY_LABEL[item.priority]}${sameClient ? '' : ` · ${item.client.name}`}${item.context ? `\n   ${item.context}` : ''}${materials.length ? `\n   ${materials.join(' · ')}` : ''}`;
+      return `${index + 1}. **${item.title}** — ${item.assignee.name} · ${humanDate(item.dueDate)} · ${PRIORITY_LABEL[item.priority]}${sameClient ? '' : ` · ${item.client.name}`}\n${capabilityLines(item)}${item.context ? `\n   ${item.context}` : ''}${materials.length ? `\n   ${materials.join(' · ')}` : ''}`;
     });
     const anyWithout = items.some(item => !materialLines(item).length);
     return { answer: `Así quedarían los ${items.length} pendientes${sameClient ? ` de ${items[0].client.name}${draft.clientInferred ? ' (el mismo del pendiente anterior)' : ''}` : ''}:\n\n${rows.join('\n\n')}${anyWithout ? `\n\n${NO_MATERIAL}` : ''}\n\n¿Los creo así? También puedes indicarme cualquier ajuste («el 2 para el viernes», «el 3 a Melissa»).`, quickReplies: ['Crear pendientes', 'Cancelar pendiente'] };

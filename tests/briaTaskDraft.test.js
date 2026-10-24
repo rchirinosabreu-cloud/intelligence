@@ -43,9 +43,9 @@ test('several tasks in one message are one draft, one summary and one confirmati
   assert.equal(taskDraftStage(ready), 'READY');
   const reply = taskDraftReply(ready);
   assert.match(reply.answer, /Así quedarían los 3 pendientes/);
-  assert.match(reply.answer, /1\. \*\*Historias de la semana\*\*[^\n]*Lucía demo[^\n]*9 de octubre de 2026[^\n]*\n   Tres historias/);
+  assert.match(reply.answer, /1\. \*\*Historias de la semana\*\*[^\n]*Lucía demo[^\n]*9 de octubre de 2026[^\n]*\n- Proyecto especial: No\n- Colaboradores: Ninguno\n   Tres historias/);
   assert.match(reply.answer, /2\. \*\*Carrusel de datos\*\*[^\n]*Melissa demo[^\n]*12 de octubre de 2026[^\n]*Alta/);
-  assert.match(reply.answer, /3\. \*\*Post de cierre\*\*[^\n]*Normal\n\n/, 'sin contexto no hay línea de contexto');
+  assert.match(reply.answer, /3\. \*\*Post de cierre\*\*[^\n]*Normal\n- Proyecto especial: No\n- Colaboradores: Ninguno\n\n/, 'sin contexto no hay línea de contexto');
   assert.deepEqual(reply.quickReplies, ['Crear pendientes', 'Cancelar pendiente']);
   assert.equal(taskDraftItems(draft).length, 1, 'un borrador sin ítems sigue siendo un solo pendiente');
   const titleOnly = taskDraftReply({ ...draft, context: null });

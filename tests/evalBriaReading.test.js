@@ -1,6 +1,20 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { EVAL_CASES, checkEvalAnswer } from './evals/briaCases.js';
+
+test('reading evaluation accepts equivalent source-backed wording, but still rejects missing history and wrong unknown counts', () => {
+  const history = EVAL_CASES.find(row => row.id === 'como-viene-cuenta');
+  const unknown = EVAL_CASES.find(row => row.id === 'lectura-sin-evidencia');
+  const evaluate = (item, answer) => checkEvalAnswer(item, { answer, toolsUsed: ['lectura_de_la_agencia'], today: '2026-10-15' }).pass;
+  assert.equal(evaluate(history, 'Está en rojo desde el sábado 10 de octubre de 2026; hoy es jueves 15 de octubre. El bloqueo es la aprobación.'), true);
+  assert.equal(evaluate(history, 'Está en rojo desde el **sábado 10 de octubre de 2026**; el bloqueo es la aprobación.'), true);
+  assert.equal(evaluate(history, 'Está en rojo y espera aprobación.'), false);
+  assert.equal(evaluate(history, 'Está en rojo desde el 11 de octubre; espera aprobación.'), false);
+  assert.equal(evaluate(unknown, 'Siguen sin evidencia: 2 decisiones. Eso no demuestra que se resolvió.'), true);
+  assert.equal(evaluate(unknown, 'Hay 2 decisiones sin evidencia. Eso no demuestra que se resolvió.'), true);
+  assert.equal(evaluate(unknown, 'Siguen sin evidencia: 3 decisiones. Eso no demuestra que se resolvió.'), false);
+  assert.equal(evaluate(unknown, 'Hay 2 decisiones. No sabemos si se resolvieron.'), false);
+});
 import { createReadingEvalFixture } from './evals/briaReadingFixture.js';
 import { createDailyReadingTools } from '../src/services/dailyReadingTools.js';
 

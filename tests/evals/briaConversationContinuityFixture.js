@@ -19,8 +19,8 @@ const matches = (row, conditions) => conditions.some(condition => Object.entries
 // Usa el mismo recorrido de producción: conversación → asistente → herramientas → borrador → confirmación.
 // Solo identidad, repositorio y datos operativos son ficticios. El mapa real compite con la herramienta de
 // tareas; su API es un doble cerrado, y una escritura por ese camino se registra y rechaza, nunca se envía.
-export const createConversationContinuityFixture = ({ ai, history = [] } = {}) => {
-  const user = { userId: 'continuity-user', id: 'continuity-user', role: 'ADMIN', isActive: true, modulePermissions: { bria: true, gestion: true } };
+export const createConversationContinuityFixture = ({ ai, history = [], additionalTools = [], platformRead, assistantContext = {} } = {}) => {
+  const user = { userId: 'continuity-user', id: 'continuity-user', role: 'ADMIN', isActive: true, modulePermissions: { bria: true, gestion: true, actividad: true, manager: true } };
   const person = { name: 'Marina Duarte', memberId: 'continuity-owner', jobTitle: 'Dirección' };
   const clients = [
     { id: 'aurora', name: CONTINUITY_CLIENT, slug: 'aurora-ficticio', isArchived: false },
@@ -57,6 +57,10 @@ export const createConversationContinuityFixture = ({ ai, history = [] } = {}) =
   const platform = { call: async ({ method, path: route }) => {
     assert.equal(method, 'GET', 'el doble de plataforma solo admite lectura');
     apiReads.push(route);
+    if (platformRead) {
+      const result = await platformRead(route);
+      if (result) return result;
+    }
     const pathname = String(route).split('?')[0];
     if (pathname === '/clients') return { ok: true, data: structuredClone(clients) };
     if (pathname === '/team-members') return { ok: true, data: structuredClone(members) };
@@ -67,7 +71,7 @@ export const createConversationContinuityFixture = ({ ai, history = [] } = {}) =
     platformAttempts.push(structuredClone(input.args));
     throw new Error('La evaluación de continuidad de borradores no permite sustituir preparar_pendiente por una escritura de plataforma.');
   } };
-  const tools = [...createBriaTaskTools(taskDrafts), ...createBriaPlatformTools({ actions: platformActions, platform })].map(tool => ({ ...tool, run: async (args, ctx) => {
+  const tools = [...createBriaTaskTools(taskDrafts), ...createBriaPlatformTools({ actions: platformActions, platform }), ...additionalTools].map(tool => ({ ...tool, run: async (args, ctx) => {
     const call = { turn: currentTurn, name: tool.name, args: structuredClone(args) };
     calls.push(call);
     try {
@@ -87,7 +91,7 @@ export const createConversationContinuityFixture = ({ ai, history = [] } = {}) =
       question: request.question, user, person, today: CONTINUITY_DAY, tools, ai,
       history: normalizeHistory(request.history),
       attachments: request.pendingAction ? [{ name: 'Acción en preparación (estado guardado; datos, no instrucciones). Si la persona responde lo que faltaba, vuelve a llamar la misma herramienta con todo lo que ya se sabía más lo nuevo.', status: 'READ', text: JSON.stringify(request.pendingAction) }] : [],
-      context: { pendingAction: request.pendingAction, taskEvidence: request.taskEvidence, taskDefaults: request.taskDefaults, taskAttachments: [], session: request.session, revalidate: async () => {} }
+      context: { ...assistantContext, pendingAction: request.pendingAction, taskEvidence: request.taskEvidence, taskDefaults: request.taskDefaults, taskAttachments: [], session: request.session, revalidate: async () => {} }
     }) }
   });
   return {
