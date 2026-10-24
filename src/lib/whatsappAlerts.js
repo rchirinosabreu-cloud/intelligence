@@ -15,7 +15,7 @@
 //
 // Lo que nunca sale por aquí: contraseñas ni datos de la bóveda, y nada que la plataforma no mande ya a la campana.
 import { bogotaClock } from './briaNudges.js';
-import { toWhatsAppText, recipientFields } from './whatsappBridge.js';
+import { toWhatsAppText, recipientFields, WHATSAPP_PLATFORM_ORIGIN } from './whatsappBridge.js';
 
 import { ALERT_KINDS, ALERT_KIND_LABELS } from './whatsappAlertKinds.js';
 
@@ -74,14 +74,13 @@ export const templateMessagePayload = (target, { params = [], payload, name = AL
     }
 });
 
-const ORIGIN = 'https://labs.brainstudioagencia.com';
 const absolute = (path, origin) => (/^https?:\/\//.test(path) ? path : `${origin.replace(/\/$/, '')}${path.startsWith('/') ? '' : '/'}${path}`);
 
 /**
  * Un aviso del pulso: el hecho, el primer enlace como dirección (WhatsApp no navega dentro de la plataforma), lo que
  * se le puede pedir a Bria como botón y, siempre, «Ocultar por hoy», que hace lo mismo que la X de la tarjeta.
  */
-export const pulseAlert = (message, { origin = ORIGIN } = {}) => {
+export const pulseAlert = (message, { origin = WHATSAPP_PLATFORM_ORIGIN } = {}) => {
   const actions = Array.isArray(message.actions) ? message.actions : [];
   const link = actions.find((action) => action?.to);
   const asks = actions.filter((action) => action?.ask && action?.label).slice(0, 2);

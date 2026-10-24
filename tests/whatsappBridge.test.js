@@ -135,6 +135,28 @@ test('el Markdown de Bria se traduce a lo que WhatsApp sabe pintar', () => {
   assert.equal(toWhatsAppText(''), '');
 });
 
+test('el enlace interno de Gestión se abre en el origen oficial por WhatsApp', () => {
+  assert.equal(toWhatsAppText('Listo. [Abrir en Gestión](/gestion?taskId=tarea-1&tab=comments#comentario)'), 'Listo. Abrir en Gestión: https://labs.brainstudioagencia.com/gestion?taskId=tarea-1&tab=comments#comentario');
+  assert.equal(toWhatsAppText('[Inicio](/)'), 'Inicio: https://labs.brainstudioagencia.com/');
+});
+
+test('un destino interno no puede convertirse en otro host ni activar un protocolo ajeno', () => {
+  for (const target of ['//evil.example/gestion', '/\\evil.example/gestion', '/\t/evil.example/gestion', 'javascript:document.cookie', 'data:text/html,private', 'gestion?taskId=1']) {
+    assert.equal(toWhatsAppText(`[Abrir](${target})`), 'Abrir', target);
+  }
+  assert.equal(toWhatsAppText('[Fuente](https://example.org/documento)'), 'Fuente: https://example.org/documento', 'los enlaces externos HTTPS ya existentes siguen siendo referencias explícitas');
+});
+
+test('los escapes literales se quitan al final sin reinterpretar enlaces, HTML, entidades ni formato', () => {
+  const markdown = String.raw`\<p\>Conserva \*\*esto\*\* y &amp;lt;original&amp;gt;.\</p\>
+\[Abrir literal\](/gestion?taskId=literal) y \!\[imagen\](https://example.test/a.png)
+\# Título literal
+\- Lista literal
+1\. Paso literal
+Ruta C:\\referencias\\foto.png`;
+  assert.equal(toWhatsAppText(markdown), '<p>Conserva **esto** y &lt;original&gt;.</p>\n[Abrir literal](/gestion?taskId=literal) y ![imagen](https://example.test/a.png)\n# Título literal\n- Lista literal\n1. Paso literal\nRuta C:\\referencias\\foto.png');
+});
+
 test('por WhatsApp, un monto de ocho cifras o más se dice en millones para que no salga como teléfono', () => {
   // La revisión de septiembre (23 de octubre de 2026): WhatsApp pintó «$51.307.715» como un número para llamar.
   const md = 'Ingreso de clientes $51.307.715 y costo de operación $31.916.303: quedaron $19.391.412. Antes, -$24.190.808.';

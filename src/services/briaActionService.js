@@ -615,18 +615,31 @@ const executeEditItem = async ({ action, updateContentItem }) => {
 // que el editor (`uploadContentItemFinalAssets`, `addContentItemDriveAsset`), con su lectura del contenido de cada
 // archivo y la ronda de revisión que se le pide al cliente cuando ya había aprobado.
 const isFinalAssetFile = (file) => /^(image|video)\//.test(String(file?.mime || ''));
-const LAST_FILE = /\b(ultim[oa]s?|anterior)\b/;
+const LAST_FILE = /^(?:(?:el|la) )?(?:ultim[oa]|anterior)(?: archivo)?$/;
 // Qué archivos del chat quiere la persona: los de este mensaje si no dice nada, «el último», o por su nombre.
 const pickChatFiles = (usable, wanted) => {
+  if (wanted === '') return [];
+  const files = [...new Map(usable.map(file => [file.id, file])).values()];
   const text = fold(wanted);
-  if (!text) return usable.filter((file) => file.current);
-  if (LAST_FILE.test(text)) return usable.slice(0, 1);
-  const picked = [];
-  for (const term of text.split(/\s*(?:,|\by\b)\s*/).filter(Boolean)) {
-    const hit = usable.find((file) => fold(file.name).includes(term) && !picked.includes(file));
-    if (hit) picked.push(hit);
-  }
-  return picked;
+  if (!text) return files.filter(file => file.current);
+  const select = term => {
+    const id = files.find(file => file.id === tidy(term));
+    if (id) return [id];
+    const exact = files.filter(file => fold(file.name) === fold(term));
+    if (!exact.length && LAST_FILE.test(fold(term)) && files.length) return [files[0]];
+    if (!exact.length && /\bultim[oa]s\b/.test(fold(term))) throw knowledgeError('Precisa cuáles archivos quieres por su nombre o una descripción; «últimos» no indica cuántos.', 400, 'BRIA_ACTION_FILE_SELECTION');
+    const matches = exact.length ? exact : files.filter(file => fold(file.name).includes(fold(term)));
+    const current = matches.filter(file => file.current);
+    const chosen = current.length ? current : matches;
+    if (!chosen.length) throw knowledgeError(`No encuentro «${tidy(term)}» entre los archivos del chat.`, 404, 'BRIA_ACTION_FILE_SELECTION');
+    // Un nombre compartido por el lote actual conserva todas sus identidades. Fuera de ese lote,
+    // o con nombres distintos, no se elige el primero ni se añade un homónimo histórico en silencio.
+    if (new Set(matches.map(file => fold(file.name))).size > 1 || (chosen.length > 1 && !current.length)) throw knowledgeError(`Hay varios archivos que coinciden con «${tidy(term)}»; precisa cuáles quieres usar.`, 400, 'BRIA_ACTION_FILE_SELECTION');
+    return chosen;
+  };
+  if (files.some(file => file.id === tidy(wanted) || fold(file.name) === text)) return select(wanted);
+  const selected = tidy(wanted).split(/\s*(?:,|\by\b)\s*/).filter(Boolean).flatMap(select);
+  return [...new Map(selected.map(file => [file.id, file])).values()];
 };
 const pickFinalAssets = (files, wanted) => pickChatFiles(files.filter(isFinalAssetFile), wanted);
 // El archivo como lo recibe la ruta: el tipo sale del contenido, porque el chat guarda las fotos como «image/jpeg»
@@ -1167,6 +1180,12 @@ const platformPermissionProblem = (user, permission) => {
   return null;
 };
 
+// La vista de aprobación usa Markdown. El texto que se enviará y los nombres de archivo son literales:
+// una etiqueta HTML, imagen o énfasis no puede ocultar ni sustituir parte de lo que se está aprobando.
+const literalMarkdown = value => String(value ?? '').replaceAll('&', '&amp;')
+  .replace(/[\\`*_[\]<>!~|#]/g, '\\$&')
+  .replace(/(^|\n)([ \t]{0,3})([-+]|\d+[.)])(?=\s)/g, (_, start, space, marker) => `${start}${space}${marker.replace(/[-+.)]/g, '\\$&')}`);
+
 const preparePlatform = async ({ user, args, previous, routePermissions, routeUploads, attachments = [] }) => {
   const method = tidy(args.metodo || args.method).toUpperCase();
   const path = tidy(args.ruta || args.path);
@@ -1182,6 +1201,7 @@ const preparePlatform = async ({ user, args, previous, routePermissions, routeUp
   const problem = platformPermissionProblem(user, permission);
   if (problem) throw knowledgeError(problem, 403, 'BRIA_PLATFORM_FORBIDDEN');
   const body = args.cuerpo && typeof args.cuerpo === 'object' && !Array.isArray(args.cuerpo) ? args.cuerpo : (args.body && typeof args.body === 'object' ? args.body : null);
+  const ongoing = previous?.type === 'PLATFORM' && previous.status === 'DRAFT' && previous.ownerId === (user.userId || user.id) && args.nuevo !== true && previous.payload?.method === method && previous.payload?.path === path.split('?')[0] ? previous : null;
   const intent = tidy(args.que_hace || args.intent).slice(0, 500);
   if (!intent) throw knowledgeError('Dime en un párrafo corto qué va a hacer esta operación, en palabras normales (que_hace).', 400, 'BRIA_PLATFORM_INTENT');
   // El resumen es el párrafo de que_hace y nada más (Rodny, 22 de octubre de 2026: «nada de startAt, endAt, id … en
@@ -1194,7 +1214,12 @@ const preparePlatform = async ({ user, args, previous, routePermissions, routeUp
   // los del mensaje si la persona no nombró otros; una pantalla que solo recibe un archivo lo pide si no llegó.
   const upload = (await routeUploads?.(operation.key)) || null;
   const wantedFiles = args.archivos ?? null;
-  const picked = upload ? pickChatFiles(attachments, wantedFiles) : [];
+  const kept = wantedFiles === null && !attachments.some(file => file.current) ? ongoing?.payload.files : null;
+  const picked = upload ? (kept ? kept.map(file => {
+    const available = attachments.find(candidate => candidate.id === file.id);
+    if (!available) throw knowledgeError(`«${file.name}» ya no está en el chat: vuelve a mandarlo.`, 409, 'BRIA_ACTION_FILE_GONE');
+    return available;
+  }) : pickChatFiles(attachments, wantedFiles)) : [];
   const missing = [];
   if (!upload && tidy(wantedFiles)) throw knowledgeError('Esa operación no recibe archivos; súbelos donde la plataforma los pide, o dime para qué son.', 400, 'BRIA_PLATFORM_FILES');
   if (upload && picked.length > upload.max) throw knowledgeError(upload.max === 1 ? 'Esa pantalla recibe un archivo por vez: dime cuál.' : `Esa pantalla recibe hasta ${upload.max} archivos a la vez.`, 400, 'BRIA_PLATFORM_FILES');
@@ -1206,11 +1231,19 @@ const preparePlatform = async ({ user, args, previous, routePermissions, routeUp
       : { field: 'archivos', question: `Mándame ${operation.archivo || 'el archivo'} por aquí (hasta 20 MB).` });
   }
   const names = picked.map((file) => `«${file.name}»`);
-  const title = names.length ? `${intent.replace(/\.?$/, '.')} ${names.length === 1 ? `Va con ${names[0]}.` : `Van ${names.length} archivos: ${joinParts(names)}.`}` : intent;
+  let title = names.length ? `${intent.replace(/\.?$/, '.')} ${names.length === 1 ? `Va con ${names[0]}.` : `Van ${names.length} archivos: ${joinParts(names)}.`}` : intent;
+  if (operation.key === 'POST /tasks/:taskId/comments') {
+    // La persona aprueba el comentario que se enviará, no una paráfrasis del modelo que pueda prometer
+    // más archivos o un texto distinto. El conteo siempre sale de la selección real del payload.
+    const taskId = path.split('?')[0].split('/').at(-2);
+    const content = typeof body?.content === 'string' ? body.content : '';
+    const fileNames = picked.map(file => `«${literalMarkdown(file.name)}»`);
+    title = `Añadiré a [esta tarea](/gestion?taskId=${encodeURIComponent(taskId)}) ${content ? `este comentario: «${literalMarkdown(content)}».` : 'un comentario sin texto.'} ${fileNames.length ? `Adjuntaré ${fileNames.length} ${fileNames.length === 1 ? 'archivo' : 'archivos'}: ${joinParts(fileNames)}.` : 'Sin archivos adjuntos.'}`;
+  }
   if (!upload && attachments.some((file) => file.current)) warnings.push('El archivo que mandaste no va en este paso: si es su soporte, lo adjunto después.');
   if (operation.campos && !body && !picked.length && ['POST', 'PUT', 'PATCH'].includes(method)) warnings.push(`Va sin cuerpo; esta operación suele llevar: ${operation.campos}.`);
   return {
-    id: previous?.id || randomUUID(), ownerId: user.userId || user.id, type: 'PLATFORM', status: 'DRAFT',
+    id: ongoing?.id || randomUUID(), ownerId: user.userId || user.id, type: 'PLATFORM', status: 'DRAFT',
     title, target: { key: operation.key, path: path.split('?')[0] }, wanted: {}, permission,
     payload: { method, path: path.split('?')[0], body, ...(picked.length ? { files: picked.map((file) => ({ id: file.id, name: file.name })) } : {}) }, ...(upload ? { upload } : {}), summary, warnings, missing
   };

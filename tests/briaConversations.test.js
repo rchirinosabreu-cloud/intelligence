@@ -25,6 +25,21 @@ test('server-owned history is used and another user cannot open a conversation',
   assert.equal(request.history[0].text, 'Contexto guardado'); assert.equal(result.turns.at(-1).text, 'Respuesta real');
   await assert.rejects(() => service.read({ id: 'other' }, 'chat'), { status: 404 });
 });
+
+test('el contexto distingue archivos del mensaje actual y del historial aunque compartan nombre', async () => {
+  const older = { id: 'old', name: 'foto.png', status: 'READ', text: 'Anterior', buffer: Buffer.from('older') };
+  const current = { ...older, id: 'current', text: 'Actual', buffer: Buffer.from('current') };
+  let sent;
+  const service = createBriaConversationService({
+    resolveActor: async () => ({ ref: 'owner', role: 'ADMIN' }),
+    prepareAttachment: async () => current,
+    repository: { get: async () => ({ id: 'chat', revision: 0, turns: [] }), attachments: async () => [older], append: async () => ({ id: 'chat', turns: [] }) },
+    assistant: { ask: async request => { sent = request; return { answer: 'Revisado' }; } }
+  });
+  await service.send({ user: {}, id: 'chat', question: 'Usa la foto de este mensaje', files: [{ buffer: current.buffer }] });
+  assert.deepEqual(sent.attachments.map(({ id, current }) => ({ id, current })), [{ id: 'current', current: true }, { id: 'old', current: false }]);
+  assert.deepEqual(sent.chatAttachments.map(({ id, current }) => ({ id, current })), [{ id: 'current', current: true }, { id: 'old', current: false }]);
+});
 test('history and an in-flight answer are suppressed when current source access is revoked', async () => {
   let allowed = true;
   const service = createBriaConversationService({ resolveActor: async () => ({ ref: 'owner' }), authorizeTurn: async () => allowed, repository: { get: async () => ({ id: 'chat', revision: 0, turns: [{ role: 'assistant', text: 'Private', sources: [{ kind: 'tarea', id: 'private' }] }] }), append: async () => assert.fail('Revoked data was saved') }, assistant: { ask: async () => { allowed = false; return { answer: 'Must not escape', sources: [] }; } } });

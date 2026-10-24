@@ -19,6 +19,7 @@ import crypto from 'node:crypto';
 
 /** Meta admite 4.096 caracteres por mensaje de texto; se deja margen. */
 export const WHATSAPP_TEXT_MAX = 4000;
+export const WHATSAPP_PLATFORM_ORIGIN = 'https://labs.brainstudioagencia.com';
 export const LINK_CODE_TTL_MS = 10 * 60 * 1000;
 export const LINK_CODE_PREFIX = 'BRIA';
 /** A un número que no es del equipo se le explica una vez al día qué es este número, y nada más. */
@@ -118,7 +119,9 @@ export const parseInboundMessages = (body) => {
         const timestamp = Number(message.timestamp);
         const replyId = replyIdOf(message);
         const media = mediaOf(message);
-        out.push({ messageId: String(message.id), from, phone: resolvedPhone, userId, profileName: contact?.profile?.name || null, timestamp: Number.isFinite(timestamp) ? timestamp : null, type: String(message.type || 'unknown'), text: media ? captionOf(message) : replyText(message, replyId), replyId, media, phoneNumberId });
+        // Solo códigos numéricos para diagnosticar lo que Meta no entregó: nunca títulos, detalles ni cuerpos.
+        const errorCodes = [...new Set((Array.isArray(message.errors) ? message.errors : []).map((error) => String(error?.code ?? '')).filter((code) => /^\d{1,9}$/.test(code)))].slice(0, 5);
+        out.push({ messageId: String(message.id), from, phone: resolvedPhone, userId, profileName: contact?.profile?.name || null, timestamp: Number.isFinite(timestamp) ? timestamp : null, type: String(message.type || 'unknown'), text: media ? captionOf(message) : replyText(message, replyId), replyId, media, phoneNumberId, ...(errorCodes.length ? { errorCodes } : {}) });
       }
     }
   }
@@ -192,6 +195,17 @@ const pesosForWhatsApp = (text) => text.replace(LONG_PESOS, (match, digits) => {
   return value >= 10_000_000 ? `$${MILLIONS.format(value / 1_000_000)} millones` : match;
 });
 
+const linkForWhatsApp = (label, target) => {
+  if (/[\s\\\x00-\x1f\x7f]/.test(target)) return label;
+  if (/^https?:\/\//.test(target)) return `${label}: ${target}`;
+  // Solo rutas internas absolutas: // y las barras inversas pueden cambiar de host al resolver una URL.
+  if (!target.startsWith('/') || target.startsWith('//')) return label;
+  try {
+    const url = new URL(target, WHATSAPP_PLATFORM_ORIGIN);
+    return url.origin === WHATSAPP_PLATFORM_ORIGIN ? `${label}: ${url.href}` : label;
+  } catch { return label; }
+};
+
 /** Lo que WhatsApp pinta: *negrita*, ```código```, viñetas con punto; títulos, enlaces y citas se aplanan. */
 export const toWhatsAppText = (markdown) => {
   let text = String(markdown || '').replace(/\r\n/g, '\n');
@@ -199,12 +213,14 @@ export const toWhatsAppText = (markdown) => {
   text = text.replace(/^#{1,6}\s+(.+)$/gm, (_, heading) => `*${heading.trim().replace(/\*+/g, '')}*`);
   text = text.replace(/\*\*(.+?)\*\*/g, '*$1*');
   text = text.replace(/__(.+?)__/g, '*$1*');
-  text = text.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '$1: $2');
+  text = text.replace(/(?<!\\)\[([^\]]+)\]\(([^)]+)\)/g, (_, label, target) => linkForWhatsApp(label, target));
   // Solo espacios de la propia línea: `\s` se comería la línea en blanco anterior.
   text = text.replace(/^([ \t]*)[-*•][ \t]+/gm, '$1• ');
   text = text.replace(/^[ \t]*>[ \t]?/gm, '');
   text = text.replace(/\n{3,}/g, '\n\n');
-  return pesosForWhatsApp(text).trim();
+  // Lo escapado en un resumen es texto literal de la persona. Se recupera al final, sin volver a interpretar
+  // enlaces, HTML o formato: un enlace escrito dentro de un comentario no es el enlace de la acción.
+  return pesosForWhatsApp(text).replace(/\\([\\`*_[\]<>!~|#+.)-])/g, '$1').replace(/&amp;/g, '&').trim();
 };
 
 const cutPoint = (rest, max) => {
@@ -237,6 +253,7 @@ export const REPLIES = Object.freeze({
   invalidCode: 'Ese código no sirve o ya venció. Pide otro en tu perfil de la plataforma, en «Bria en WhatsApp».',
   notAllowed: 'Tu cuenta ya no tiene a Bria activa. Habla con administración.',
   onlyText: 'Por WhatsApp leo texto, notas de voz, fotos, videos y documentos. Ese tipo de mensaje todavía no: escríbeme lo que necesitas.',
+  unsupported: 'WhatsApp no me entregó el contenido de uno de los mensajes. Si era un archivo o una instrucción que necesitas que use, vuelve a enviarlo por separado.',
   mediaTooBig: 'Ese archivo pesa más de 20 MB y no lo puedo abrir por aquí. Súbelo desde la plataforma o mándame una foto más liviana.',
   mediaFailed: 'No pude abrir ese archivo. Mándamelo otra vez, por favor.',
   noSpeech: 'No alcancé a entender la nota de voz. ¿Me la repites o me lo escribes?',
@@ -364,6 +381,8 @@ export const isCompressedByWhatsApp = (name) => /^(foto|video)-whatsapp-/.test(S
 export const mediaFileName = (media, messageId) => {
   if (media.filename) return media.filename.replace(/[\\/\x00-\x1f]/g, '').slice(0, 180) || 'documento';
   const extension = EXTENSIONS[String(media.mimeType || '').split(';')[0].trim()] || 'bin';
-  const tag = String(messageId || '').replace(/^wamid\./, '').replace(/[^A-Za-z0-9]/g, '').slice(-12) || 'archivo';
+  // Un lote comparte el último messageId: cada archivo mantiene su propio nombre por el id de media completo.
+  const tag = media.id ? crypto.createHash('sha256').update(String(media.id)).digest('hex').slice(0, 16)
+    : String(messageId || '').replace(/^wamid\./, '').replace(/[^A-Za-z0-9]/g, '').slice(-12) || 'archivo';
   return `${MEDIA_PREFIX[media.kind] || 'documento'}-${tag}.${extension}`;
 };
