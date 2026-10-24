@@ -30,23 +30,28 @@ test('native PostgreSQL task creation preserves trusted id, human context commen
   const db = new PrismaClient({ datasources: { db: { url } } });
   globalThis.prisma = db; process.env.DATABASE_URL = url; process.env.NODE_ENV = 'test';
   const { createTask } = await import('../src/services/nativeTaskService.js');
-  const taskId = randomUUID(); let account, member, client;
+  const taskId = randomUUID(); let account, member, collaborator, client;
   try {
     account = await db.user.create({ data: { name: 'Bria prueba aislada', email: `${randomUUID()}@example.invalid`, password: 'not-a-login', role: 'ADMIN', modulePermissions: { bria: true, gestion: true } } });
     member = await db.teamMember.create({ data: { name: 'Persona de prueba', role: 'Diseño', userId: account.id } });
+    collaborator = await db.teamMember.create({ data: { name: 'Colaborador de prueba', role: 'Diseño' } });
     client = await db.client.create({ data: { name: 'Cliente ficticio Bria', slug: randomUUID() } });
-    const task = await createTask({ id: 'ignored-untrusted-id', title: 'Preparar tres piezas', dueDate: '2026-10-09T12:00:00.000Z', assigneeId: member.id, creatorId: account.id, clientId: client.id, status: 'PENDIENTE', priority: 'ALTA', isPriority: true, comments: '', initial_comments: [{ content: 'Síntesis del contexto de prueba.' }], initial_references: [{ url: 'https://example.invalid/reference' }], initial_inputs: [{ url: 'https://example.invalid/input', name: 'brief.pdf' }] }, { taskId, requireActiveClient: true });
+    const task = await createTask({ id: 'ignored-untrusted-id', title: 'Preparar tres piezas', dueDate: '2026-10-09T12:00:00.000Z', assigneeId: member.id, collaboratorIds: [collaborator.id], isSpecial: true, creatorId: account.id, clientId: client.id, status: 'PENDIENTE', priority: 'ALTA', isPriority: true, comments: '', initial_comments: [{ content: 'Síntesis del contexto de prueba.' }], initial_references: [{ url: 'https://example.invalid/reference' }], initial_inputs: [{ url: 'https://example.invalid/input', name: 'brief.pdf' }] }, { taskId, requireActiveClient: true });
     assert.equal(task.id, taskId); assert.equal(task.completedAt, null);
     assert.equal(task.dueDate.toISOString(), '2026-10-09T12:00:00.000Z');
     assert.equal(task.taskComments[0].content, 'Síntesis del contexto de prueba.'); assert.equal(task.taskComments[0].authorId, account.id);
     assert.deepEqual(task.taskAttachments.map(row => row.category).sort(), ['INSUMO','REFERENCIA']);
     assert.equal(task.priority, 'ALTA');
+    const stored = await db.task.findUnique({ where: { id: taskId }, select: { isSpecial: true, collaborators: { select: { memberId: true } } } });
+    assert.equal(stored.isSpecial, true);
+    assert.deepEqual(stored.collaborators.map(row => row.memberId), [collaborator.id]);
     await db.client.update({ where: { id: client.id }, data: { isArchived: true } });
     await assert.rejects(() => createTask({ title: 'Cuenta archivada', assigneeId: member.id, creatorId: account.id, clientId: client.id }, { taskId: randomUUID(), requireActiveClient: true }), { status: 409 });
   } finally {
     await db.task.deleteMany({ where: { id: taskId } });
     if (client) await db.client.delete({ where: { id: client.id } });
     if (member) await db.teamMember.delete({ where: { id: member.id } });
+    if (collaborator) await db.teamMember.delete({ where: { id: collaborator.id } });
     if (account) await db.user.delete({ where: { id: account.id } });
     await db.$disconnect();
   }

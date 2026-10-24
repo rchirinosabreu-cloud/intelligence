@@ -107,11 +107,11 @@ export const PLATFORM_OPERATIONS = {
   'GET /tasks/work-alerts': { que: 'Alertas de muchas horas en una tarea, de la persona.' },
   'GET /tasks/returned-alerts': { que: 'Avisos de tareas devueltas, de la persona.' },
   'GET /tasks': { que: 'Las tareas del tablero, opcionalmente de un cliente.', campos: 'clientId (consulta)' },
-  'POST /tasks': { que: 'Crea una tarea en Gestión (mejor con preparar_pendiente, que pregunta lo que falta).', campos: 'title, clientId, assigneeId, dueDate, priority (NORMAL|ALTA|URGENTE), comments, collaboratorIds, isPrivate, viewerIds, referenceUrl' },
+  'POST /tasks': { que: 'Crea una tarea en Gestión; preparar_pendiente conserva el borrador y sus aclaraciones.', campos: 'title, clientId, assigneeId, dueDate, priority (NORMAL|ALTA|URGENTE), isSpecial (estrella de proyecto especial; foco al trabajar en curso, no inicia trabajo), comments, collaboratorIds (personas que participan además del responsable), isPrivate, viewerIds, referenceUrl' },
   'POST /tasks/reorder': { que: 'Reordena las tarjetas del tablero.', campos: 'reorderList[{id, sortOrder}]' },
   'POST /tasks/:taskId/focus-extension': { que: 'Pide más tiempo para un compromiso con hora.', campos: 'minutes (15|30|60|120|240), reason' },
   'POST /tasks/:taskId/declared-time': { que: 'Declara cuánto tomó una tarea cerrada sin cronómetro.', campos: 'minutes' },
-  'PATCH /tasks/:taskId': { que: 'Cambia una tarea (mejor con cambiar_pendiente, que avisa y resume).', campos: 'status, assigneeId, dueDate, priority, title, comments, focusDeadlineAt, collaboratorIds, isPrivate, viewerIds, returnReason, returnNote, reopenReason, reopenNote' },
+  'PATCH /tasks/:taskId': { que: 'Cambia una tarea existente. cambiar_pendiente cubre sus campos declarados; para otros campos usa esta operación con aprobación.', campos: 'status, assigneeId, dueDate, priority, title, comments, isSpecial (estrella de proyecto especial), focusDeadlineAt, collaboratorIds (personas que participan además del responsable), isPrivate, viewerIds, returnReason, returnNote, reopenReason, reopenNote' },
   'DELETE /tasks/:taskId': { que: 'Elimina una tarea (mejor con preparar_eliminacion).', campos: 'reason' },
   'POST /tasks/:taskId/toggle-follow': { que: 'Sigue o deja de seguir una tarea.' },
   'GET /tasks/:taskId/follow-status': { que: 'Si la persona sigue una tarea.' },
@@ -226,7 +226,7 @@ export const PLATFORM_OPERATIONS = {
   'POST /social/accounts/link': { que: 'Conecta una página de Meta a un cliente.', campos: 'clientId, pageId' },
   'DELETE /social/accounts/:accountId': { que: 'Desconecta una cuenta de redes.' },
   // Actividad y calendario
-  'GET /activity/status': { que: 'El estado del módulo de Actividad.' },
+  'GET /activity/status': { que: 'Estado actual registrado de las personas del equipo en Actividad: reunión, ausencia, producción, foco o trabajo, con tarea y evento actuales. Combina tareas en curso y eventos vigentes del calendario. Describe lo registrado ahora, no certifica presencia física ni atención; una lista de pendientes o tiempos históricos no lo sustituye.' },
   'GET /activity/events': { que: 'Los eventos de Actividad en un rango.', campos: 'from, to (consulta)' },
   // 22 de octubre de 2026: sin `type` ni cuenta de Google la plataforma lo rechaza («El tipo de evento no es válido»).
   'POST /activity/events': { que: 'Crea un evento en el calendario elegido. Obligatorios: title, type, startAt, endAt y googleConnectionId.', campos: 'title, type (PRODUCTION|PROJECT|MEETING|ABSENCE|BREAK; una ausencia, permiso o incapacidad es ABSENCE), startAt y endAt (ISO con -05:00), isAllDay (true para todo el día: startAt el día a las 00:00 y endAt el día siguiente a las 00:00), googleConnectionId (obligatorio: el id de la primera cuenta activa de GET /activity/google-calendar/connections; no preguntes en cuál, porque el evento queda siempre en todos los calendarios conectados), description, memberIds (ids de TeamMember), attendeeEmails, recurrence (NONE|WEEKLY), recurrenceEnd', requestId: true },
@@ -392,6 +392,17 @@ export const findOperations = (query, { limit = 12, writesOnly = false } = {}) =
     .slice(0, limit)
     .map(({ score, ...row }) => row);
 };
+
+// Directorio derivado del catálogo, sin clasificar frases del usuario. El modelo puede recorrer una familia
+// completa aunque una búsqueda léxica no encuentre nada; nuevas rutas se incorporan automáticamente.
+const operationFamily = key => key.split(' ')[1].split('/')[1];
+export const platformFamilies = () => [...new Set(Object.keys(PLATFORM_OPERATIONS).map(operationFamily))].sort().map(familia => {
+  const entries = Object.entries(PLATFORM_OPERATIONS).filter(([key]) => operationFamily(key) === familia);
+  return { familia, operaciones: entries.length, alcance: entries.filter(([key]) => key.startsWith('GET ')).slice(0, 2).map(([, op]) => op.que).join(' ') || entries[0][1].que };
+});
+export const familyOperations = (family, { writesOnly = false } = {}) => Object.entries(PLATFORM_OPERATIONS)
+  .filter(([key]) => operationFamily(key) === family && (!writesOnly || WRITE.has(key.split(' ')[0])))
+  .map(([key, op]) => ({ key, write: WRITE.has(key.split(' ')[0]), ...op }));
 
 /** Qué pide la ruta, leído de sus guardianes reales; `null` si solo pide sesión. */
 export const describeGuards = (guards = []) => {

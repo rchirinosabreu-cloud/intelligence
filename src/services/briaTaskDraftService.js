@@ -73,6 +73,28 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
     const rows = term ? await db.teamMember.findMany({ where: { isActive: true, OR: [{ name: { contains: term, mode: 'insensitive' } }, { email: { equals: term, mode: 'insensitive' } }] }, select: { id: true, name: true, role: true, email: true, isActive: true, userId: true }, orderBy: { name: 'asc' }, take: 6 }) : [];
     return { chosen: pick(rows.filter(row => row.isActive), term), candidates: rows.map(({ id, name, role }) => ({ id, name, role })) };
   };
+  const applyCapabilities = async (target, args, user) => {
+    if (args.especial != null) {
+      if (typeof args.especial !== 'boolean') throw knowledgeError('La marca de proyecto especial debe ser sí o no.');
+      target.isSpecial = args.especial;
+    }
+    if (args.sinResolver != null) {
+      if (!Array.isArray(args.sinResolver) || args.sinResolver.length > 15) throw knowledgeError('Divide el pedido en hasta quince aspectos por revisar.');
+      target.unresolved = args.sinResolver.map(value => bounded(value, 500, 'El aspecto pendiente')).filter(Boolean);
+    }
+    if (args.colaboradores != null) {
+      if (!Array.isArray(args.colaboradores) || args.colaboradores.length > 20) throw knowledgeError('Usa hasta veinte colaboradores por pendiente.');
+      const chosen = new Map(), missing = [];
+      for (const value of args.colaboradores) {
+        const reference = bounded(value, 160, 'El nombre del colaborador');
+        const resolved = await findMember(reference, user);
+        if (resolved.chosen) chosen.set(resolved.chosen.id, resolved.chosen);
+        else missing.push({ reference, candidates: resolved.candidates });
+      }
+      target.collaborators = [...chosen.values()];
+      target.collaboratorMissing = missing;
+    }
+  };
   return {
     /**
      * Prepara o ajusta el borrador. `defaults.client` es el cliente del último pendiente creado en este chat: si la
@@ -109,6 +131,7 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
         const { chosen, candidates } = await findMember(bounded(args.responsable, 160, 'El nombre del responsable'), user);
         draft.assignee = chosen; draft.assigneeCandidates = candidates;
       }
+      await applyCapabilities(draft, args, user);
       const dateInput = args.fecha ?? (stage === 'DATE' ? question : null);
       if (dateInput != null) draft.dueDate = resolveTaskDate(dateInput, today);
       const priority = readPriority(args.prioridad, args.prioridad != null);
@@ -145,6 +168,7 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
             }
           }
           if (row?.responsable != null) { const { chosen } = await findMember(bounded(row.responsable, 160, 'El nombre del responsable'), user); item.assignee = chosen || null; }
+          await applyCapabilities(item, row || {}, user);
           if (row?.fecha != null) item.dueDate = resolveTaskDate(row.fecha, today);
           const own = readPriority(row?.prioridad, row?.prioridad != null);
           if (own) item.priority = own;
@@ -155,11 +179,14 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
           const item = items[0];
           Object.assign(draft, { title: item.title ?? draft.title, context: item.context ?? draft.context, dueDate: item.dueDate ?? draft.dueDate, priority: item.priority ?? draft.priority });
           if (Object.hasOwn(item, 'assignee')) draft.assignee = item.assignee;
+          for (const key of ['isSpecial', 'collaborators', 'collaboratorMissing', 'unresolved']) if (Object.hasOwn(item, key)) draft[key] = item[key];
           if (Object.hasOwn(item, 'client')) Object.assign(draft, { client: item.client, clientReference: item.clientReference, clientCandidates: item.clientCandidates, clientInferred: item.clientInferred });
           delete draft.items;
         }
         else draft.items = items;
       }
+      // El responsable ya participa por su rol; la lista efectiva no lo duplica.
+      if (draft.assignee) draft.collaborators = (draft.collaborators || []).filter(member => member.id !== draft.assignee.id);
       return draft;
     },
     /**
@@ -190,6 +217,12 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
     }
     const [client, member] = await Promise.all([db.client.findUnique({ where: { id: item.client.id } }), db.teamMember.findUnique({ where: { id: item.assignee.id } })]);
     if (!client || client.isArchived || !member?.isActive) throw knowledgeError('La cuenta o el responsable cambiaron. Ajusta el pendiente antes de crearlo.', 409);
+    const collaboratorIds = [];
+    for (const collaborator of item.collaborators || []) {
+      const current = await db.teamMember.findUnique({ where: { id: collaborator.id } });
+      if (!current?.isActive || current.name !== collaborator.name) throw knowledgeError('Un colaborador cambió. Revisa el pendiente antes de crearlo.', 409);
+      if (current.id !== member.id && !collaboratorIds.includes(current.id)) collaboratorIds.push(current.id);
+    }
     const copies = [];
     try {
       for (const file of item.files || []) {
@@ -200,7 +233,7 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
         copies.push(stored);
       }
       await revalidate?.(); authorize(user);
-      const task = await createTask({ title: item.title, clientId: client.id, assigneeId: member.id, creatorId: user.userId || user.id, dueDate: `${item.dueDate}T12:00:00.000Z`, status: 'PENDIENTE', priority: item.priority, isPriority: item.priority !== 'NORMAL', comments: '', initial_comments: item.context ? [{ content: item.context }] : [], initial_references: item.references || [], initial_inputs: [...(item.inputs || []), ...copies.map(({ url, name }) => ({ url, name }))] }, { taskId: item.id, requireActiveClient: true });
+      const task = await createTask({ title: item.title, clientId: client.id, assigneeId: member.id, creatorId: user.userId || user.id, dueDate: `${item.dueDate}T12:00:00.000Z`, status: 'PENDIENTE', priority: item.priority, isPriority: item.priority !== 'NORMAL', isSpecial: item.isSpecial === true, collaboratorIds, comments: '', initial_comments: item.context ? [{ content: item.context }] : [], initial_references: item.references || [], initial_inputs: [...(item.inputs || []), ...copies.map(({ url, name }) => ({ url, name }))] }, { taskId: item.id, requireActiveClient: true });
       if (member.userId && member.userId !== (user.userId || user.id) && notify) {
         try { await notify({ userId: member.userId, type: 'TASK_ASSIGNED', relatedId: task.id, message: `Se te asignó un pendiente: ${item.title}` }); }
         catch (failure) { console.error('[BriaTask] Assignment notification failed:', failure?.message || failure); }

@@ -122,7 +122,7 @@ test('the tools: the map searches, reading goes straight to the API with the ses
   assert.deepEqual(tools.map((t) => t.name), ['mapa_de_plataforma', 'consultar_plataforma', 'operar_en_plataforma']);
   const map = await tools[0].run({ busqueda: 'oportunidad etapa' });
   assert.ok(map.data.operaciones.some((row) => row.operacion === 'POST /crm/leads/:leadId/stage'));
-  assert.match((await tools[0].run({ busqueda: 'zzzz' })).data.instruccion, /No hay ninguna operación/);
+  assert.ok((await tools[0].run({ busqueda: 'zzzz' })).data.familias.length > 0, 'a failed word search returns discovery, never a claim that a capability does not exist');
   const read = await tools[1].run({ ruta: '/crm/leads?stage=PROPUESTA_ENVIADA' }, { user: admin, session });
   assert.deepEqual(calls[0], { token: 'token-de-la-persona', method: 'GET', path: '/crm/leads?stage=PROPUESTA_ENVIADA' });
   assert.equal(read.data.operacion, 'GET /crm/leads');
