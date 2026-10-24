@@ -133,7 +133,8 @@ test('the tools: the map searches, reading goes straight to the API with the ses
   assert.equal(calls.length, 1, 'preparing never calls the API');
   assert.equal(createBriaPlatformTools({ actions: null, platform }).length, 0);
   const text = buildInstructions({ person: { name: 'Rodny', jobTitle: 'Director' }, today: '2026-10-10', tools });
-  assert.match(text, /Tienes las manos de la persona en toda la plataforma/);
+  assert.match(text, /operaciones expuestas de la plataforma con los permisos de la persona/);
+  assert.match(text, /verifica la cobertura de cada efecto solicitado/);
   assert.match(text, /Nunca digas que hiciste un cambio/);
   // 22 de octubre de 2026: Bria escribió su propio «El evento está preparado… confirma con Confirmar» sin llamar a
   // operar_en_plataforma, y Rodny tuvo que confirmar dos veces.

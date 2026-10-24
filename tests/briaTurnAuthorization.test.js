@@ -122,3 +122,40 @@ test('un rechazo durante la respuesta deja un diagnóstico acotado sin texto, id
   assert.deepEqual(logs[0][1], { phase: 'response', sourceKinds: ['tarea'], actionType: 'TASK_CREATE', toolsUsed: ['buscar_pendientes'] });
   assert.doesNotMatch(JSON.stringify(logs), /SECRETO|SECRETA|private-task|pilot-user|pilot-draft|chat-sensible|PILOTO BRIA/);
 });
+
+test('eliminar una fuente histórica durante el turno conserva el pedido humano sin publicar la respuesta ni ejecutar', async () => {
+  const { rows, authorize } = fixture();
+  rows[0].isPrivate = false;
+  const who = user();
+  let chat = { id: 'chat', revision: 1, turns: [{ role: 'assistant', text: 'DETALLE ANTERIOR', sources: [{ kind: 'tarea', id: 'private-task' }] }] };
+  const requests = [];
+  const service = createBriaConversationService({
+    authorizeTurn: authorize, resolveActor: async () => ({ ref: who.userId, role: who.role }), logger: { warn() {} },
+    repository: {
+      get: async () => structuredClone(chat),
+      append: async (_actor, _id, revision, question, result) => {
+        assert.equal(revision, chat.revision);
+        assert.notEqual(typeof result, 'function');
+        chat = { ...chat, revision: revision + 1, turns: [...chat.turns, { role: 'user', text: question }, { role: 'assistant', ...result, text: result.answer }] };
+        return structuredClone(chat);
+      }
+    },
+    assistant: { ask: async request => {
+      requests.push(request);
+      if (requests.length === 1) {
+        rows.length = 0;
+        return { answer: 'RESPUESTA CONTAMINADA', sources: [], pendingAction: wrapLegacyAction('TASK_CREATE', draft()) };
+      }
+      return { answer: 'Retomemos el pedido y revisemos un nuevo borrador.', sources: [] };
+    } }
+  });
+  const question = 'Prepara otro proyecto especial con colaborador y entrega hoy';
+  const interrupted = await service.send({ user: who, id: 'chat', question });
+  assert.equal(interrupted.turns.at(-2).text, question);
+  assert.match(interrupted.turns.at(-1).text, /conserv|guard/i);
+  assert.equal(interrupted.turns.at(-1).pendingAction, undefined);
+  assert.doesNotMatch(JSON.stringify(interrupted), /DETALLE ANTERIOR|RESPUESTA CONTAMINADA|pilot-draft/);
+  await service.send({ user: who, id: 'chat', question: 'Le subes también esta imagen' });
+  assert.ok(requests[1].history.some(turn => turn.role === 'user' && turn.text === question));
+  assert.equal(requests[1].pendingAction, null);
+});

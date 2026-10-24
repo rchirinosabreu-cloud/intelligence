@@ -12,7 +12,8 @@ import { canUseBria } from '../lib/briaLivingMemory.js';
 import { hasModulePermission } from '../config/security.js';
 import { canOpenTask } from '../lib/taskPrivacy.js';
 import { knowledgeError } from '../lib/briaKnowledge.js';
-import { resolveTaskDate } from '../lib/briaTaskDraft.js';
+import { resolveTaskDate, taskDraftItems } from '../lib/briaTaskDraft.js';
+import { taskFileLabel } from '../lib/briaTaskMaterials.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { RETURN_REASONS, REOPEN_REASONS } from '../lib/taskTiming.js';
 import { humanDate } from '../lib/briaAssistant.js';
@@ -842,11 +843,13 @@ const executeTaskCreate = async ({ user, action, taskDrafts, loadAttachment, rev
   const link = (id) => `/gestion?taskId=${encodeURIComponent(id)}`;
   const tasks = receipt.tasks || [{ taskId: receipt.taskId, alreadyCreated: receipt.alreadyCreated, title: draft.title, assignee: draft.assignee?.name, error: null }];
   const created = tasks.filter((row) => row.taskId);
+  const items = taskDraftItems(draft);
+  const materialReceipt = item => [item?.context ? 'Guardé el comentario aprobado.' : '', ...(item?.files || []).map(file => `- ${taskFileLabel(file)}`)].filter(Boolean).join('\n');
   // Un lote (Rodny, 20 de octubre de 2026: «créame estos cinco») se cuenta de una vez; lo que no se pudo crear se dice con su motivo.
   const text = tasks.length === 1
-    ? `${receipt.alreadyCreated ? 'El pendiente ya estaba creado' : 'Pendiente creado'} para ${tasks[0].assignee}. Guardé el contexto como comentario${draft.files?.length ? ' y los archivos como insumos' : ''}.\n\n[Abrir en Gestión](${link(receipt.taskId)})`
+    ? [`${receipt.alreadyCreated ? 'El pendiente ya estaba creado' : 'Pendiente creado'} para ${tasks[0].assignee}.`, receipt.alreadyCreated ? '' : materialReceipt(items[0]), `[Abrir en Gestión](${link(receipt.taskId)})`].filter(Boolean).join('\n\n')
     : [`${receipt.alreadyCreated ? 'Esos pendientes ya estaban creados' : `${created.length === tasks.length ? 'Listo, creé' : 'Creé'} ${created.length} de ${tasks.length} pendientes`}:`, '',
-      ...created.map((row) => `- [${row.title}](${link(row.taskId)}) para ${row.assignee}${row.alreadyCreated && !receipt.alreadyCreated ? ' (ya estaba)' : ''}`),
+      ...created.map((row) => [`- [${row.title}](${link(row.taskId)}) para ${row.assignee}${row.alreadyCreated && !receipt.alreadyCreated ? ' (ya estaba)' : ''}`, row.alreadyCreated ? '' : materialReceipt(items.find(item => item.id === row.taskId))].filter(Boolean).join('\n')),
       ...tasks.filter((row) => !row.taskId).map((row) => `- No pude crear «${row.title}»: ${row.error}`)].join('\n');
   return {
     text, sources: created.map((row) => ({ kind: 'tarea', id: row.taskId })), toolsUsed: ['crear_pendiente'],

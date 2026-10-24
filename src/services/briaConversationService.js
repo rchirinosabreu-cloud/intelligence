@@ -160,7 +160,12 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           // La lectura pertenece a una fecha concreta, aunque su nota ya no quepa en los últimos diez turnos.
           // `read` saneó antes los turnos: una nota que perdió acceso no puede aportar este contexto.
           const readingDay = chat.turns.find(turn => turn.role === 'assistant' && turn.note === 'LECTURA_MANANA')?.dayKey || null;
-          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), readingDay, attachments, chatAttachments, pendingAction: open(pendingAction) ? pendingAction : null, session, taskAttachments: prepared, taskDefaults, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
+          // Solo contexto de turnos ya saneados por permisos. Una operación terminada no vuelve a ser
+          // confirmable; sigue siendo visible aunque después haya respuestas sin ninguna acción.
+          const latest = [...chat.turns].reverse().map(turn => pendingActionOf([turn])).find(Boolean);
+          const lastOperation = latest && ['DONE', 'CANCELLED'].includes(latest.status)
+            ? { id: latest.id, type: latest.type, status: latest.status, title: latest.title, result: latest.result || null } : null;
+          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), readingDay, attachments, chatAttachments, lastOperation, pendingAction: open(pendingAction) ? pendingAction : null, session, taskAttachments: prepared, taskDefaults, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
           // Un borrador de pendiente, despacho o eliminación sobrevive a una pregunta suelta, como siempre; las demás
           // acciones solo valen sobre la respuesta inmediatamente anterior.
           if (!result.pendingAction && open(pendingAction) && isLegacyAction(pendingAction)) result.pendingAction = pendingAction;
@@ -171,6 +176,17 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         const deniedIndex = (await Promise.all(checks.map(turn => authorizeTurn(user, turn)))).findIndex(allowed => !allowed);
         if (deniedIndex !== -1) {
           logger.warn?.('[BriaConversation] BRIA_SOURCE_ACCESS_CHANGED', deniedTurnDiagnostic(checks[deniedIndex], deniedIndex < authorizedHistory.length ? 'history' : 'response'));
+          if (deniedIndex < authorizedHistory.length) {
+            // El historial pudo perder una fuente mientras el modelo respondía. No guardar nada
+            // de esa respuesta (ni ejecutar su función), pero conservar el pedido de la persona.
+            // El último turno sin acción obliga a preparar y revisar otra versión, incluso si
+            // el mensaje interrumpido era una confirmación. WhatsApp solo retoma tras entregarlo.
+            const interrupted = { answer: 'Una fuente de una respuesta anterior dejó de estar disponible mientras respondía. No ejecuté esta solicitud. Conservé tu mensaje para retomarlo; antes de cualquier cambio debemos revisar un nuevo resumen.', sources: [], failures: [], toolsUsed: [], quickReplies: [] };
+            if (await authorizeTurn(user, interrupted)) {
+              const saved = await repository.append(await resolveActor(user), id, chat.revision, text, interrupted, prepared);
+              return sanitize(user, saved);
+            }
+          }
           throw knowledgeError('Tu acceso a las fuentes cambió durante la consulta.', 403, 'BRIA_SOURCE_ACCESS_CHANGED');
         }
         const saved = await repository.append(fresh, id, chat.revision, text, result, prepared);

@@ -50,7 +50,7 @@ test('several tasks in one message are one draft, one summary and one confirmati
   assert.equal(taskDraftItems(draft).length, 1, 'un borrador sin ítems sigue siendo un solo pendiente');
   const titleOnly = taskDraftReply({ ...draft, context: null });
   assert.equal(taskDraftStage({ ...draft, context: null }), 'READY');
-  assert.doesNotMatch(titleOnly.answer, /Contexto que guardaré/);
+  assert.doesNotMatch(titleOnly.answer, /Comentario que publicaré/);
 });
 test('only explicit standalone user confirmation creates a reviewed task; choices remain bounded text', () => {
   assert.equal(isTaskConfirmation('Crear pendiente'), true);
