@@ -3,6 +3,7 @@ import { canUseBria } from '../lib/briaLivingMemory.js';
 import { hasModulePermission, isManagerRole } from '../config/security.js';
 import { focusDeadlineIso } from '../lib/taskFocus.js';
 import { selectTaskFiles, taskFileDestination } from '../lib/briaTaskMaterials.js';
+import { readTaskComment } from '../lib/briaTaskComment.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { knowledgeError } from '../lib/briaKnowledge.js';
 import { resolveTaskDate, taskDraftStage, taskDraftItems, taskDraftRequestProblem, materialDeclined, isTaskConfirmation, TASK_PRIORITIES, MAX_TASKS_PER_DRAFT } from '../lib/briaTaskDraft.js';
@@ -121,7 +122,9 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
       const stage = taskDraftStage(draft);
       const today = bogotaDate(now());
       if (args.titulo != null) draft.title = bounded(args.titulo, 180, 'El título');
+      if (Object.hasOwn(args, 'comentario') && Object.hasOwn(args, 'contexto')) throw knowledgeError('El comentario debe tener un único contenido.');
       if (args.contexto != null) draft.context = bounded(args.contexto, 8000, 'El contexto');
+      if (Object.hasOwn(args, 'comentario')) draft.context = readTaskComment(args.comentario, evidence);
       if (args.cliente != null) {
         const reference = bounded(args.cliente, 160, 'El nombre del cliente');
         const resolved = await resolveClient({ reference, selection: args.seleccionCliente, question, request, prior, clientSearches, user });
@@ -161,7 +164,9 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
           const before = previousItems[index] || {};
           const item = { ...before, id: before.id || randomUUID() };
           if (row?.titulo != null) item.title = bounded(row.titulo, 180, `El título del pendiente ${index + 1}`);
+          if (Object.hasOwn(row || {}, 'comentario') && Object.hasOwn(row || {}, 'contexto')) throw knowledgeError('El comentario debe tener un único contenido.');
           if (row?.contexto != null) item.context = bounded(row.contexto, 8000, `El contexto del pendiente ${index + 1}`);
+          if (Object.hasOwn(row || {}, 'comentario')) item.context = readTaskComment(row.comentario, evidence);
           if (row?.cliente != null) {
             const reference = bounded(row.cliente, 160, 'El nombre del cliente');
             // Para conservar la cuenta se considera su cliente efectivo, pero nunca se heredan candidatos

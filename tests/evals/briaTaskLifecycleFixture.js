@@ -78,12 +78,15 @@ export const runTaskLifecycleScenario = async fixture => {
   assert.deepEqual(corrected.files.map(f => [f.id, f.destination]), [['lifecycle-photo', 'COMENTARIO']]);
   const removed = check(await fixture.send('Dejemos fuera la foto y ese comentario. Conserva todo lo demás y muéstramelo antes de crear.'));
   assert.equal(removed.dueDate, '2026-10-25'); assert.deepEqual(removed.files, []); assert.ok(!removed.context);
+  const final = check(await fixture.send('Comentario final: «Listo para revisión interna». Conserva la tarea sin la imagen; enséñame el resumen.'));
+  assert.equal(final.context, 'Listo para revisión interna');
+  assert.deepEqual(final.files, []);
   await fixture.send('Crear pendiente');
   assert.equal(fixture.created.length, 1);
   assert.equal(fixture.created[0].focusDeadlineAt, '2026-10-25T20:00:00.000Z');
   assert.deepEqual(fixture.created[0].initial_inputs, []);
   assert.deepEqual(fixture.created[0].tempAttachments, []);
-  assert.deepEqual(fixture.created[0].initial_comments, []);
+  assert.deepEqual(fixture.created[0].initial_comments, [{ content: 'Listo para revisión interna' }]);
   const closed = await fixture.send('Gracias, con eso terminamos.');
   assert.equal(fixture.created.length, 1);
   assert.equal(closed.pendingAction, undefined);

@@ -6,10 +6,12 @@ const scripted = (close = 'A la orden.') => {
   const answers = [
     { request: { intent: 'PREPARE' }, titulo: 'Ensayo de entrega', cliente: 'Taller Aurora Ficticio', responsable: 'yo', fecha: '2026-10-24', horaLimite: '15:00', especial: true, prioridad: 'urgente', colaboradores: ['Nora Sáenz'], archivos: [{ id: 'lifecycle-photo', destino: 'INSUMO' }] },
     'Listo el resumen.',
-    { request: { intent: 'ADJUST' }, fecha: '2026-10-25', contexto: 'Dos variantes para revisión', archivos: [{ id: 'lifecycle-photo', destino: 'COMENTARIO' }] },
+    { request: { intent: 'ADJUST' }, fecha: '2026-10-25', comentario: { tipo: 'LITERAL', texto: 'Dos variantes para revisión' }, archivos: [{ id: 'lifecycle-photo', destino: 'COMENTARIO' }] },
     'Listo el ajuste.',
-    { request: { intent: 'ADJUST' }, archivos: [], contexto: '' },
-    'Listo el ajuste.', close
+    { request: { intent: 'ADJUST' }, archivos: [], comentario: { tipo: 'RETIRAR' } },
+    'Listo el ajuste.',
+    { request: { intent: 'ADJUST' }, comentario: { tipo: 'LITERAL', texto: 'Listo para revisión interna' } },
+    'Listo el resumen.', close
   ];
   let index = 0;
   return { generate: async () => {
@@ -21,8 +23,8 @@ const scripted = (close = 'A la orden.') => {
 test('lifecycle evaluation runs actual conversation and assistant services, preserving edits through human approval', async () => {
   const fixture = createTaskLifecycleFixture(scripted());
   await runTaskLifecycleScenario(fixture);
-  assert.equal(fixture.modelRequests.length, 7);
-  assert.equal(fixture.traces.length, 5);
+  assert.equal(fixture.modelRequests.length, 9);
+  assert.equal(fixture.traces.length, 6);
   assert.equal(fixture.created.length, 1);
 });
 test('lifecycle evaluation rejects reopening completed work in the closing response', async () => {

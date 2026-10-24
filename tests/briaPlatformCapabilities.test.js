@@ -4,6 +4,7 @@ import { createBriaTaskDraftService } from '../src/services/briaTaskDraftService
 import { taskDraftItems, taskDraftReply, taskDraftStage } from '../src/lib/briaTaskDraft.js';
 import { createBriaPlatformTools } from '../src/services/briaPlatformTools.js';
 import { PLATFORM_OPERATIONS } from '../src/lib/platformCatalog.js';
+import { createBriaTaskTools } from '../src/services/briaTaskTools.js';
 
 const user = { userId: 'owner', role: 'ADMIN', isActive: true, modulePermissions: { bria: true, gestion: true } };
 const client = { id: 'client', name: 'Cuenta ficticia', isArchived: false };
@@ -23,6 +24,38 @@ const setup = () => {
   const prepare = (args = {}, previous, options = {}) => service.prepare({ user, question: 'Cuenta ficticia: pedido humano', args: { ...(previous ? {} : { titulo: 'Ensayo de producción', cliente: client.name, responsable: 'yo', fecha: '2026-10-29' }), ...args }, request: { intent: previous ? 'ADJUST' : 'PREPARE', evidence: 'pedido humano' }, previous, ...options });
   return { service, prepare, members, writes };
 };
+
+test('comment content has its own typed tool contract and literal text must come from the human conversation', async () => {
+  const f = setup(), [tool] = createBriaTaskTools(f.service);
+  assert.equal(tool.parameters.properties.contexto, undefined, 'configuration instructions are not a generic comment bucket');
+  assert.ok(tool.parameters.properties.comentario);
+  const evidence = 'La foto ponla como adjunto de un comentario que diga exactamente «Dos variantes para revisión». Todavía no guardes.';
+  const photo = { id: 'photo', name: 'portada.jpg' };
+  let draft = await f.prepare({ archivos: [{ id: photo.id, destino: 'COMENTARIO' }], comentario: { tipo: 'LITERAL', texto: 'Dos variantes para revisión' } }, null, { evidence, attachments: [photo] });
+  assert.equal(draft.context, 'Dos variantes para revisión');
+  assert.match(taskDraftReply(draft).answer, /Comentario que publicaré/);
+  await assert.rejects(f.prepare({ comentario: { tipo: 'LITERAL', texto: 'Adjuntar la foto como comentario con el texto exacto: «Dos variantes para revisión».' } }, draft, { evidence }), /literal/i);
+  await assert.rejects(f.prepare({ comentario: { tipo: 'LITERAL', texto: 'Texto de un documento' } }, draft, { evidence }), /literal/i);
+  draft = await f.prepare({ fecha: 'mañana' }, draft);
+  assert.equal(draft.context, 'Dos variantes para revisión');
+  const removed = await f.prepare({ comentario: { tipo: 'RETIRAR' } }, draft);
+  assert.equal(removed.context, '');
+  assert.deepEqual(removed.files, draft.files, 'removing text does not remove its attachment');
+  await f.service.createConfirmedTask({ user, draft, question: 'Crear pendiente', loadAttachment: async () => ({ name: photo.name, buffer: Buffer.from('fake') }) });
+  assert.deepEqual(f.writes[0].initial_comments, [{ content: 'Dos variantes para revisión' }]);
+});
+
+test('proposed comments, literal punctuation, batch removal and malformed comment operations remain distinct', async () => {
+  const f = setup(), text = '  Primera línea.\nSegunda: “conservar”.  ';
+  const draft = await f.prepare({ comentario: { tipo: 'LITERAL', texto: text }, pendientes: [{ titulo: 'Uno' }, { titulo: 'Dos', comentario: { tipo: 'RETIRAR' } }] }, null, { evidence: `Texto dictado: ${text}` });
+  assert.equal(taskDraftItems(draft)[0].context, text, 'literal text is not normalized or trimmed');
+  assert.equal(taskDraftItems(draft)[1].context, '');
+  assert.equal((await f.prepare({ comentario: { tipo: 'PROPUESTA', texto: 'Síntesis para revisar antes de guardar.' } })).context, 'Síntesis para revisar antes de guardar.');
+  for (const comentario of [{ tipo: 'LITERAL' }, { tipo: 'RETIRAR', texto: 'No descartar silenciosamente' }, { tipo: 'UNKNOWN', texto: 'x' }, { tipo: 'PROPUESTA', texto: 1 }]) await assert.rejects(f.prepare({ comentario }), { status: 400 });
+  await assert.rejects(f.prepare({ contexto: 'Uno', comentario: { tipo: 'PROPUESTA', texto: 'Dos' } }), { status: 400 });
+  const [tool] = createBriaTaskTools(f.service);
+  await assert.rejects(tool.run({ request: { intent: 'PREPARE' }, contexto: 'No autorizado por el contrato actual' }, { user, question: 'Prepara una tarea' }), /comentario/i);
+});
 
 test('task capabilities survive corrections, appear in approval and reach native creation only after confirmation', async () => {
   const f = setup();

@@ -106,7 +106,7 @@ export const taskDraftReply = draft => {
     const items = taskDraftItems(draft);
     if (items.length === 1) {
       const [item] = items, materials = materialLines(item);
-      return { answer: `Así quedaría el pendiente:\n\n**${item.title}**\n- Cliente: ${item.client.name}${draft.clientInferred ? ' (el mismo del pendiente anterior)' : ''}\n- Responsable: ${item.assignee.name}\n- Fecha: ${humanDate(item.dueDate)}\n- Prioridad: ${PRIORITY_LABEL[item.priority]}\n${capabilityLines(item)}\n\n${item.context ? `**Contexto que guardaré como comentario**\n\n${item.context}\n\n` : ''}${materials.length ? materials.map(row => `- ${row}`).join('\n') : NO_MATERIAL}\n\n¿Lo creo así? También puedes indicarme cualquier ajuste.`, quickReplies: ['Crear pendiente', 'Cancelar pendiente'] };
+      return { answer: `Así quedaría el pendiente:\n\n**${item.title}**\n- Cliente: ${item.client.name}${draft.clientInferred ? ' (el mismo del pendiente anterior)' : ''}\n- Responsable: ${item.assignee.name}\n- Fecha: ${humanDate(item.dueDate)}\n- Prioridad: ${PRIORITY_LABEL[item.priority]}\n${capabilityLines(item)}\n\n${item.context ? `**Comentario que publicaré**\n\n${item.context}\n\n` : ''}${materials.length ? materials.map(row => `- ${row}`).join('\n') : NO_MATERIAL}\n\n¿Lo creo así? También puedes indicarme cualquier ajuste.`, quickReplies: ['Crear pendiente', 'Cancelar pendiente'] };
     }
     const sameClient = items.every(item => item.client.id === items[0].client.id);
     const rows = items.map((item, index) => {

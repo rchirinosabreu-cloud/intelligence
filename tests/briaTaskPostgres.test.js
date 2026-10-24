@@ -36,11 +36,15 @@ test('native PostgreSQL task creation preserves trusted id, human context commen
     member = await db.teamMember.create({ data: { name: 'Persona de prueba', role: 'Diseño', userId: account.id } });
     collaborator = await db.teamMember.create({ data: { name: 'Colaborador de prueba', role: 'Diseño' } });
     client = await db.client.create({ data: { name: 'Cliente ficticio Bria', slug: randomUUID() } });
-    const task = await createTask({ id: 'ignored-untrusted-id', title: 'Preparar tres piezas', dueDate: '2026-10-09T12:00:00.000Z', assigneeId: member.id, collaboratorIds: [collaborator.id], isSpecial: true, creatorId: account.id, clientId: client.id, status: 'PENDIENTE', priority: 'ALTA', isPriority: true, comments: '', initial_comments: [{ content: 'Síntesis del contexto de prueba.' }], initial_references: [{ url: 'https://example.invalid/reference' }], initial_inputs: [{ url: 'https://example.invalid/input', name: 'brief.pdf' }] }, { taskId, requireActiveClient: true });
+    const task = await createTask({ id: 'ignored-untrusted-id', title: 'Preparar tres piezas', dueDate: '2026-10-09T12:00:00.000Z', focusDeadlineAt: '2026-10-09T20:00:00.000Z', assigneeId: member.id, collaboratorIds: [collaborator.id], isSpecial: true, creatorId: account.id, clientId: client.id, status: 'PENDIENTE', priority: 'ALTA', isPriority: true, comments: '', initial_comments: [{ content: 'Síntesis del contexto de prueba.' }], initial_references: [{ url: 'https://example.invalid/reference' }], initial_inputs: [{ url: 'https://example.invalid/input', name: 'brief.pdf' }], tempAttachments: [{ url: 'https://example.invalid/comment-photo', name: 'foto.jpg' }] }, { taskId, requireActiveClient: true });
     assert.equal(task.id, taskId); assert.equal(task.completedAt, null);
     assert.equal(task.dueDate.toISOString(), '2026-10-09T12:00:00.000Z');
+    assert.equal(task.focusDeadlineAt.toISOString(), '2026-10-09T20:00:00.000Z');
+    assert.equal(task.focusSetById, account.id);
     assert.equal(task.taskComments[0].content, 'Síntesis del contexto de prueba.'); assert.equal(task.taskComments[0].authorId, account.id);
-    assert.deepEqual(task.taskAttachments.map(row => row.category).sort(), ['INSUMO','REFERENCIA']);
+    assert.deepEqual(task.taskAttachments.map(row => row.category).sort(), ['INSUMO','REFERENCIA','REFERENCIA']);
+    assert.equal(task.taskAttachments.find(row => row.url === 'https://example.invalid/comment-photo').commentId, task.taskComments[0].id);
+    assert.ok(task.taskAttachments.filter(row => row.url !== 'https://example.invalid/comment-photo').every(row => !row.commentId));
     assert.equal(task.priority, 'ALTA');
     const stored = await db.task.findUnique({ where: { id: taskId }, select: { isSpecial: true, collaborators: { select: { memberId: true } } } });
     assert.equal(stored.isSpecial, true);
