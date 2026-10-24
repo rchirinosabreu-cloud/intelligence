@@ -113,3 +113,11 @@ test('generic operations cannot silently replace a task draft, including its unr
   assert.equal(reply.data.done, false);
   assert.match(reply.data.error, /borrador/);
 });
+
+test('platform read provenance uses the server clock supplied for the turn, not a different clock', async () => {
+  const instant = new Date('2026-10-26T15:30:00Z');
+  const tools = createBriaPlatformTools({ actions: {}, platform: { call: async () => ({ ok: true, data: [] }) } });
+  const result = await tools[1].run({ ruta: '/activity/status' }, { user, session: { token: 'fictional' }, now: () => instant });
+  assert.equal(result.data.consultadoEn, instant.toISOString());
+  assert.equal(result.data.operacion, 'GET /activity/status');
+});
