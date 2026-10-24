@@ -98,7 +98,7 @@ export const createBriaAssistantService = ({
 
   return {
     // `taskDraft` suelto lo sigue mandando la vista de investigación; aquí se envuelve en la base común.
-    async ask({ user, question, history, attachments = [], chatAttachments = [], revalidateConversation, taskDraft, pendingAction, lastOperation = null, session = null, taskAttachments = [], taskEvidence, taskDefaults = {}, readingDay = null, onEvent } = {}) {
+    async ask({ user, question, history, attachments = [], chatAttachments = [], revalidateConversation, taskDraft, pendingAction, lastOperation = null, selectionTurn = null, session = null, taskAttachments = [], taskEvidence, taskDefaults = {}, readingDay = null, onEvent } = {}) {
       if (!pendingAction && taskDraft) pendingAction = wrapLegacyAction('TASK_CREATE', taskDraft);
       if (!canUseBria(user)) throw httpError(403, 'Bria no está activada para tu cuenta.', 'BRIA_DISABLED');
       const text = normalizeQuestion(question);
@@ -122,7 +122,7 @@ export const createBriaAssistantService = ({
         logger,
         onEvent,
         // `session` es el token con el que la persona abrió el chat: sin él, consultar_plataforma no tiene manos.
-        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, ...context, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session }
+        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, ...context, selectionTurn, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session }
       });
       // El motivo técnico de un fallo se queda en el registro del servidor; al navegador solo va qué falló.
       await revalidate();

@@ -101,7 +101,7 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         const previous = repository.attachments ? await repository.attachments(await resolveActor(user), id) : [];
         const relevant = [...prepared.map(file => ({ ...file, current: true })), ...previous.map(file => ({ ...file, current: false }))].slice(0, 5);
         let availableText = 60000;
-        const attachments = relevant.map(file => { const content = String(file.text || '').slice(0, availableText); availableText -= content.length; return { id: file.id, name: file.name, current: file.current, text: content, status: file.status, warning: content.length < String(file.text || '').length ? `${file.warning || ''} Contexto parcial del adjunto en esta respuesta.` : file.warning, modelPart: attachmentModelPart(file) }; });
+        const attachments = relevant.map(file => { const content = String(file.text || '').slice(0, availableText); availableText -= content.length; return { id: file.id, name: file.name, current: file.current, createdAt: file.createdAt || null, text: content, status: file.status, warning: content.length < String(file.text || '').length ? `${file.warning || ''} Contexto parcial del adjunto en esta respuesta.` : file.warning, modelPart: attachmentModelPart(file) }; });
         const revalidateConversation = async () => { if (!await repository.get(await resolveActor(user), id)) throw knowledgeError('La conversación fue eliminada.', 404); };
         // Acciones de Bria en la plataforma (10 de octubre de 2026): solo la de la respuesta inmediatamente anterior se
         // puede confirmar o cancelar, y se ejecuta dentro de append, con la conversación bloqueada y su revisión comprobada.
@@ -156,7 +156,7 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         } else {
           // Los archivos del chat, del más reciente al más viejo: el comprobante de un movimiento puede haber llegado antes.
           // Con su tipo: la pieza final de una pieza solo puede ser una foto o un video.
-          const chatAttachments = [...prepared.map(file => ({ id: file.id, name: file.name, mime: file.mime, status: file.status, current: true })), ...previous.map(file => ({ id: file.id, name: file.name, mime: file.mime, status: file.status, current: false }))];
+          const chatAttachments = [...prepared.map(file => ({ id: file.id, name: file.name, mime: file.mime, status: file.status, createdAt: file.createdAt || null, current: true })), ...previous.map(file => ({ id: file.id, name: file.name, mime: file.mime, status: file.status, createdAt: file.createdAt || null, current: false }))];
           // La lectura pertenece a una fecha concreta, aunque su nota ya no quepa en los últimos diez turnos.
           // `read` saneó antes los turnos: una nota que perdió acceso no puede aportar este contexto.
           const readingDay = chat.turns.find(turn => turn.role === 'assistant' && turn.note === 'LECTURA_MANANA')?.dayKey || null;
@@ -165,7 +165,7 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           const latest = [...chat.turns].reverse().map(turn => pendingActionOf([turn])).find(Boolean);
           const lastOperation = latest && ['DONE', 'CANCELLED'].includes(latest.status)
             ? { id: latest.id, type: latest.type, status: latest.status, title: latest.title, result: latest.result || null } : null;
-          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), readingDay, attachments, chatAttachments, lastOperation, pendingAction: open(pendingAction) ? pendingAction : null, session, taskAttachments: prepared, taskDefaults, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
+          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), readingDay, attachments, chatAttachments, selectionTurn: `${id}:${chat.revision}`, lastOperation, pendingAction: open(pendingAction) ? pendingAction : null, session, taskAttachments: prepared, taskDefaults, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
           // Un borrador de pendiente, despacho o eliminación sobrevive a una pregunta suelta, como siempre; las demás
           // acciones solo valen sobre la respuesta inmediatamente anterior.
           if (!result.pendingAction && open(pendingAction) && isLegacyAction(pendingAction)) result.pendingAction = pendingAction;

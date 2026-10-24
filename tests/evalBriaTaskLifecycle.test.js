@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createTaskLifecycleFixture, runTaskLifecycleScenario } from './evals/briaTaskLifecycleFixture.js';
+import { createTaskLifecycleFixture, runTaskLifecycleScenario, historicalTaskFiles, runHistoricalTaskFilesScenario } from './evals/briaTaskLifecycleFixture.js';
 
 const scripted = (close = 'A la orden.') => {
   const answers = [
@@ -31,4 +31,21 @@ test('lifecycle evaluation rejects reopening completed work in the closing respo
   const fixture = createTaskLifecycleFixture(scripted('El borrador no está disponible. Dime el cliente.'));
   await assert.rejects(runTaskLifecycleScenario(fixture), { code: 'ERR_ASSERTION' });
   assert.equal(fixture.created.length, 1);
+});
+
+test('historical-image evaluation blocks implicit selection and completes only with the new image', async () => {
+  const answers = [
+    { request: { intent: 'PREPARE' }, titulo: 'Ensayo sin imagen nueva', cliente: 'Taller Aurora Ficticio', responsable: 'yo', fecha: '2026-10-25', horaLimite: '15:00', archivos: historicalTaskFiles.map(file => ({ id: file.id, destino: 'INSUMO' })) },
+    'Falta elegir la imagen.',
+    { request: { intent: 'ADJUST' }, archivos: [{ id: 'lifecycle-photo', destino: 'INSUMO' }] },
+    'Listo el resumen.', 'A la orden.'
+  ];
+  let index = 0;
+  const fixture = createTaskLifecycleFixture({ generate: async () => {
+    assert.ok(index < answers.length);
+    const answer = answers[index++];
+    return typeof answer === 'string' ? { text: answer } : { output: [], functionCalls: [{ id: `call-${index}`, name: 'preparar_pendiente', args: answer }] };
+  } }, { historicalFiles: historicalTaskFiles });
+  await runHistoricalTaskFilesScenario(fixture);
+  assert.match(JSON.stringify(fixture.modelRequests[0].input), /2026-10-24T13:00:00/);
 });

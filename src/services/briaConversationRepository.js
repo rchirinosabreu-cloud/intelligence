@@ -33,7 +33,7 @@ export const createBriaConversationRepository = ({ pool, workspace, storage, req
     const rows = (await pool.query('SELECT a.* FROM bria_memory.conversation_attachments a JOIN bria_memory.conversations c ON c.id=a.conversation_id WHERE c.workspace=$1 AND c.actor_ref=$2 AND c.id=$3 ORDER BY a.position DESC,a.created_at DESC LIMIT 5', [workspace, actor.ref, id])).rows;
     return Promise.all(rows.map(async row => {
       if (row.storage_key && !storage) throw knowledgeError('Los adjuntos no están disponibles ahora.', 503);
-      return { id: row.id, name: row.name, mime: row.mime, text: row.extracted_text, status: row.status, warning: row.warning,
+      return { id: row.id, name: row.name, createdAt: row.created_at, mime: row.mime, text: row.extracted_text, status: row.status, warning: row.warning,
         buffer: row.original_bytes || (row.status === 'PDF' ? await storage.read(workspace, actor, id, row.storage_key, row.original_sha256) : null),
         analysisData: row.analysis_bytes || (row.analysis_key ? await storage.read(workspace, actor, id, row.analysis_key, row.analysis_sha256) : null) };
     }));

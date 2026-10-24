@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { hasModulePermission, isManagerRole } from '../config/security.js';
 import { focusDeadlineIso } from '../lib/taskFocus.js';
-import { selectTaskFiles, taskFileDestination } from '../lib/briaTaskMaterials.js';
+import { applyTaskFiles, taskFileDestination } from '../lib/briaTaskMaterials.js';
 import { readTaskComment } from '../lib/briaTaskComment.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { knowledgeError } from '../lib/briaKnowledge.js';
@@ -109,7 +109,7 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
      * persona no nombra otro, se asume (Rodny, 20 de octubre de 2026: «si lleva cinco pendientes de Nattal, el sexto
      * es de Nattal»). Varios pendientes en un mensaje llegan en `args.pendientes` y viven en `draft.items`.
      */
-    async prepare({ user, args = {}, request, question, previous, attachments = [], availableAttachments = [], evidence = question || '', defaults = {}, clientSearches = [] }) {
+    async prepare({ user, args = {}, request, question, previous, attachments = [], availableAttachments = [], selectionTurn = null, evidence = question || '', defaults = {}, clientSearches = [] }) {
       authorize(user);
       const ongoing = previous && !['CREATED','CANCELLED'].includes(previous.status);
       if (ongoing && previous.ownerId !== (user.userId || user.id)) throw knowledgeError('Este borrador pertenece a otra persona.', 403);
@@ -151,9 +151,7 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
       if (args.referencias != null) draft.references = links(args.referencias, evidence);
       if (args.insumos != null) draft.inputs = links(args.insumos, evidence);
       const inventory = new Map([...availableAttachments, ...(draft.files || []), ...(draft.items || []).flatMap(item => item.files || []), ...attachments].map(file => [file.id, file]));
-      const byId = new Map([...(draft.files || []), ...attachments].map(file => [file.id, { id: file.id, name: file.name, destination: file.destination || 'INSUMO' }]));
-      draft.files = Object.hasOwn(args, 'archivos') ? selectTaskFiles(args.archivos, inventory) : [...byId.values()];
-      if (draft.files.length > 5) throw knowledgeError('Usa hasta cinco archivos en el pendiente. No se descartó ningún insumo.');
+      applyTaskFiles({ target: draft, args, inventory, attachments, selectionTurn });
       if (materialDeclined(question, stage) || args.sinMaterial === true) draft.withoutMaterials = true;
       if (draft.references.length || draft.inputs.length || draft.files.length) draft.withoutMaterials = false;
       if (Array.isArray(args.pendientes) && args.pendientes.length) {
@@ -182,7 +180,12 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
           }
           if (row?.responsable != null) { const { chosen } = await findMember(bounded(row.responsable, 160, 'El nombre del responsable'), user); item.assignee = chosen || null; }
           await applyCapabilities(item, row || {}, user);
-          if (Object.hasOwn(row || {}, 'archivos')) item.files = selectTaskFiles(row.archivos, inventory);
+          if (Object.hasOwn(row || {}, 'archivos') || item.fileSelection && attachments.length) {
+            // Un ítem sin selección propia hereda la del mismo borrador, nunca la de otra tarea.
+            if (!Object.hasOwn(item, 'files')) item.files = draft.files;
+            if (!Object.hasOwn(item, 'fileSelection')) item.fileSelection = draft.fileSelection;
+            applyTaskFiles({ target: item, args: row, inventory, attachments, selectionTurn });
+          }
           if (row?.fecha != null) item.dueDate = resolveTaskDate(row.fecha, today);
           const own = readPriority(row?.prioridad, row?.prioridad != null);
           if (own) item.priority = own;
@@ -193,7 +196,7 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
           const item = items[0];
           Object.assign(draft, { title: item.title ?? draft.title, context: item.context ?? draft.context, dueDate: item.dueDate ?? draft.dueDate, priority: item.priority ?? draft.priority });
           if (Object.hasOwn(item, 'assignee')) draft.assignee = item.assignee;
-          for (const key of ['isSpecial', 'collaborators', 'collaboratorMissing', 'unresolved', 'focusTime', 'files']) if (Object.hasOwn(item, key)) draft[key] = item[key];
+          for (const key of ['isSpecial', 'collaborators', 'collaboratorMissing', 'unresolved', 'focusTime', 'files', 'fileSelection']) if (Object.hasOwn(item, key)) draft[key] = item[key];
           if (Object.hasOwn(item, 'client')) Object.assign(draft, { client: item.client, clientReference: item.clientReference, clientCandidates: item.clientCandidates, clientInferred: item.clientInferred });
           delete draft.items;
         }
