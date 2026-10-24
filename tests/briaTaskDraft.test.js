@@ -60,3 +60,23 @@ test('only explicit standalone user confirmation creates a reviewed task; choice
   assert.equal(isTaskConfirmation('Quiero modificar el pendiente antes de crearlo'), false);
   assert.deepEqual(normalizeQuickReplies(['Normal', 'Normal', ' Alta ', '', 'x'.repeat(200)]), ['Normal', 'Alta']);
 });
+
+test('an explicitly unresolved client in a batch never inherits the shared client', () => {
+  const batch = { ...draft, items: [
+    { id: 'first', title: 'Cuenta común' },
+    { id: 'second', title: 'Cliente que no se encontró', client: null }
+  ] };
+  assert.equal(taskDraftItems(batch)[0].client.id, draft.client.id);
+  assert.equal(taskDraftItems(batch)[1].client, null);
+  assert.equal(taskDraftStage(batch), 'CLIENT');
+});
+
+test('an explicitly unresolved assignee in a batch never inherits another person', () => {
+  const batch = { ...draft, items: [
+    { id: 'first', title: 'Responsable común' },
+    { id: 'second', title: 'Asignar a mi cuenta', assignee: null }
+  ] };
+  assert.equal(taskDraftItems(batch)[0].assignee.id, draft.assignee.id);
+  assert.equal(taskDraftItems(batch)[1].assignee, null);
+  assert.equal(taskDraftStage(batch), 'ASSIGNEE');
+});

@@ -87,7 +87,7 @@ test('buscar_pendientes answers «cuántos están sin asignar» with the real co
   assert.deepEqual(out.data.tareas.map((t) => t.id).sort(), ['b4', 'b5']);
   assert.equal(out.data.descripcion, '2 pendientes abiertos sin responsable');
   assert.equal(JSON.stringify(out).includes('SECRETO'), false, 'el cuerpo nunca viaja');
-  assert.deepEqual(out.sources[0], { kind: 'tarea', id: out.data.tareas[0].id, label: out.data.tareas[0].titulo, url: `/gestion?taskId=${out.data.tareas[0].id}` });
+  assert.deepEqual(out.sources[0], { kind: 'tarea_resumen', id: out.data.tareas[0].id, label: out.data.tareas[0].titulo, url: `/gestion?taskId=${out.data.tareas[0].id}` });
   assert.equal(toolByName('buscar_pendientes').allowed({ ...pm, modulePermissions: { bria: true } }), false, 'needs Gestión, like the board');
   assert.equal(toolByName('buscar_pendientes').allowed(pm), true);
 });

@@ -5,6 +5,8 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { toolByName } from '../src/services/briaAssistantTools.js';
 import { createTeamRhythmHandler } from '../src/controllers/teamRhythmController.js';
+import { createBriaTurnAuthorizer } from '../src/services/briaTurnAuthorization.js';
+import { createBriaConversationService } from '../src/services/briaConversationService.js';
 
 const H = 3_600_000;
 const manager = { userId: 'u1', role: 'PROJECT_MANAGER', modulePermissions: { manager: true, bria: true } };
@@ -12,7 +14,31 @@ const manager = { userId: 'u1', role: 'PROJECT_MANAGER', modulePermissions: { ma
 test('the route sits behind the Manager module and a leadership role', () => {
   const routes = readFileSync('src/routes/index.js', 'utf8');
   assert.match(routes, /'\/manager\/rhythm',\s*requireModulePermission\('manager'\),\s*requireManagerRole,\s*teamRhythmController\.getTeamRhythm/);
-  assert.match(readFileSync('src/services/briaConversationApplication.js', 'utf8'), /\['minuta', 'ritmo'\]\.includes\(source\.kind\)/, 'an old answer stops showing to someone who lost access');
+  const application = readFileSync('src/services/briaConversationApplication.js', 'utf8');
+  assert.match(application, /import \{ createBriaTurnAuthorizer \} from '\.\/briaTurnAuthorization\.js'/);
+  assert.match(application, /const authorizeTurn = createBriaTurnAuthorizer\(\{ db: prisma, canReadAgencyMemory, knowledge: getApplicationKnowledgeService \}\)/);
+  assert.match(application, /createBriaConversationService\(\{[^;]*\bauthorizeTurn\s*\}\)/, 'the application must use the shared authorizer');
+  assert.match(readFileSync('src/services/briaTurnAuthorization.js', 'utf8'), /\['minuta', 'ritmo'\]\.includes\(source\.kind\)/, 'an old answer stops showing to someone who lost access');
+});
+
+test('reopening a saved rhythm or minute answer rechecks both module and leadership role', async () => {
+  const authorizeTurn = createBriaTurnAuthorizer({});
+  for (const kind of ['ritmo', 'minuta']) {
+    const turn = { id: 'saved-turn', role: 'assistant', text: 'INFORMACIÓN DEL EQUIPO', sources: [{ kind, id: 'saved-source' }] };
+    const service = createBriaConversationService({
+      authorizeTurn,
+      resolveActor: async user => ({ ref: user.userId, role: user.role }),
+      repository: { get: async () => ({ id: 'saved-chat', revision: 1, turns: [turn] }) }
+    });
+    const allowed = await service.read(manager, 'saved-chat');
+    assert.equal(allowed.turns[0].text, turn.text);
+    for (const revoked of [{ ...manager, modulePermissions: { bria: true, manager: false } }, { ...manager, role: 'EDITOR' }]) {
+      const denied = await service.read(revoked, 'saved-chat');
+      assert.doesNotMatch(JSON.stringify(denied), /INFORMACIÓN DEL EQUIPO|saved-source/);
+      assert.deepEqual(denied.turns[0].sources, []);
+      assert.match(denied.turns[0].text, /acceso a las fuentes cambió/);
+    }
+  }
 });
 
 test('a failure answers in words, never with the technical cause', async () => {

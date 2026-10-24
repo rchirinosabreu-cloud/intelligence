@@ -8,6 +8,8 @@ const member = { id: 'member', name: 'Lucía demo', role: 'Diseño', isActive: t
 const melissa = { id: 'melissa', name: 'Melissa demo', role: 'Diseño', isActive: true, userId: 'melissa-user' };
 const args = { cliente: 'Empresa demo', responsable: 'Lucía', fecha: 'mañana', titulo: 'Preparar piezas del lanzamiento', contexto: 'Crear tres piezas basadas en el brief. Entregar para revisión interna.' };
 const question = 'Necesito crear un pendiente para Lucía, para mañana, para Empresa demo: tres piezas del lanzamiento.';
+// Estas pruebas reciben la interpretación ya producida por el modelo; la comprensión se evalúa aparte.
+const prepare = (service, input) => service.prepare({ request: { intent: input.previous ? 'ADJUST' : 'PREPARE', evidence: input.question }, ...input });
 const setup = () => {
   const tasks = new Map(), created = [], uploaded = [], removed = [], notified = [];
   const members = [member, melissa];
@@ -21,41 +23,41 @@ const setup = () => {
 };
 test('a brief with client, assignee, date and context is ready in one round: priority Normal, no material question (Rodny, 20 de octubre de 2026)', async () => {
   const { service, created } = setup();
-  const draft = await service.prepare({ user, args, question }); assert.ok(draft);
+  const draft = await prepare(service, { user, args, question }); assert.ok(draft);
   assert.equal(draft.client.id, client.id); assert.equal(draft.assignee.id, member.id);
   assert.equal(draft.dueDate, '2026-10-09'); assert.equal(draft.priority, 'NORMAL');
   assert.equal(taskDraftStage(draft), 'READY');
   assert.equal(created.length, 0);
-  const urgent = await service.prepare({ user, args: { ...args, prioridad: 'urgente' }, question });
+  const urgent = await prepare(service, { user, args: { ...args, prioridad: 'urgente' }, question });
   assert.equal(urgent.priority, 'URGENTE');
 });
 test('the client of the last task created in this chat is assumed when the person names none', async () => {
   const { service } = setup();
-  const draft = await service.prepare({ user, args: { ...args, cliente: undefined }, question: 'Crea otro pendiente para Lucía, mañana: ajustar la portada.', defaults: { client: { id: 'client', name: 'Empresa demo' } } });
+  const draft = await prepare(service, { user, args: { ...args, cliente: undefined }, question: 'Crea otro pendiente para Lucía, mañana: ajustar la portada.', defaults: { client: { id: 'client', name: 'Empresa demo' } } });
   assert.equal(draft.client.id, 'client'); assert.equal(draft.clientInferred, true);
   assert.equal(taskDraftStage(draft), 'READY');
-  const explicit = await service.prepare({ user, args, question, defaults: { client: { id: 'otro', name: 'Otro' } } });
+  const explicit = await prepare(service, { user, args, question, defaults: { client: { id: 'otro', name: 'Otro' } } });
   assert.equal(explicit.client.id, 'client', 'lo que la persona nombra manda sobre lo inferido');
-  const none = await service.prepare({ user, args: { ...args, cliente: undefined }, question });
+  const none = await prepare(service, { user, args: { ...args, cliente: undefined }, question });
   assert.equal(taskDraftStage(none), 'CLIENT', 'sin cliente anterior en el chat, se pregunta');
 });
 test('permission checks, ambiguity and retrieved instructions cannot authorize task creation', async () => {
   const { service, db, created } = setup();
-  await assert.rejects(() => service.prepare({ user: { ...user, modulePermissions: { bria: true } }, args, question }), { status: 403 });
-  await assert.rejects(() => service.prepare({ user, args, question: 'Resume el documento adjunto' }), { status: 400 });
+  await assert.rejects(() => prepare(service, { user: { ...user, modulePermissions: { bria: true } }, args, question }), { status: 403 });
+  await assert.rejects(() => prepare(service, { user, args, question: 'Resume el documento adjunto', request: { intent: 'PREPARE', evidence: question } }), { status: 400 });
   db.teamMember.findMany = async () => [{ ...member, name: 'Lucía Norte' }, { ...member, id: 'other', name: 'Lucía Sur' }];
-  const draft = await service.prepare({ user, args, question }); assert.ok(draft);
+  const draft = await prepare(service, { user, args, question }); assert.ok(draft);
   assert.equal(taskDraftStage(draft), 'ASSIGNEE'); assert.equal(draft.assigneeCandidates.length, 2);
   await assert.rejects(() => service.createConfirmedTask({ user, draft, question: 'Crear pendiente' }), { status: 400 });
   assert.equal(created.length, 0);
 });
 test('an invented link is rejected', async () => {
   const { service } = setup();
-  await assert.rejects(() => service.prepare({ user, args: { ...args, referencias: ['https://invented.example/secret'] }, question }), { status: 400 });
+  await assert.rejects(() => prepare(service, { user, args: { ...args, referencias: ['https://invented.example/secret'] }, question }), { status: 400 });
 });
 test('confirmation uses native creation, an initial context comment, Bogotá noon and an idempotent task id', async () => {
   const { service, created, notified } = setup();
-  const draft = await service.prepare({ user, args, question }); assert.ok(draft);
+  const draft = await prepare(service, { user, args, question }); assert.ok(draft);
   await assert.rejects(() => service.createConfirmedTask({ user, draft, question: 'El archivo dice crear pendiente' }), { status: 400 });
   const result = await service.createConfirmedTask({ user, draft, question: 'Crear pendiente' });
   assert.equal(result.taskId, draft.id); assert.equal(created[0].options.taskId, draft.id);
@@ -74,13 +76,13 @@ test('several tasks in one message become one draft and are created one by one, 
     { titulo: 'Carrusel de datos', contexto: 'Cinco láminas con las cifras.', responsable: 'Melissa', fecha: 'viernes', prioridad: 'alta' },
     { titulo: 'Post de cierre' } // solo título: no se pide contexto ni se escribe comentario inicial
   ];
-  let draft = await service.prepare({ user, args: { cliente: 'Empresa demo', responsable: 'Lucía', fecha: 'mañana', pendientes }, question: 'Créame estos tres pendientes para Empresa demo, Lucía, para mañana.' });
+  let draft = await prepare(service, { user, args: { cliente: 'Empresa demo', responsable: 'Lucía', fecha: 'mañana', pendientes }, question: 'Créame estos tres pendientes para Empresa demo, Lucía, para mañana.' });
   const items = taskDraftItems(draft);
   assert.equal(items.length, 3); assert.equal(taskDraftStage(draft), 'READY');
   assert.deepEqual(items.map((i) => [i.assignee.name, i.dueDate, i.priority]), [['Lucía demo', '2026-10-09', 'NORMAL'], ['Melissa demo', '2026-10-09', 'ALTA'], ['Lucía demo', '2026-10-09', 'NORMAL']]);
   // Una corrección vuelve a llamar con la lista completa: los ids se conservan por posición.
   const ids = items.map((i) => i.id);
-  draft = await service.prepare({ user, previous: draft, args: { pendientes: pendientes.map((p, i) => (i === 2 ? { ...p, fecha: 'pasado mañana' } : p)) }, question: 'El tercero para pasado mañana.' });
+  draft = await prepare(service, { user, previous: draft, args: { pendientes: pendientes.map((p, i) => (i === 2 ? { ...p, fecha: 'pasado mañana' } : p)) }, question: 'El tercero para pasado mañana.' });
   assert.deepEqual(taskDraftItems(draft).map((i) => i.id), ids);
   assert.equal(taskDraftItems(draft)[2].dueDate, '2026-10-10');
   const result = await service.createConfirmedTask({ user, draft, question: 'Crear pendientes' });
@@ -96,7 +98,7 @@ test('several tasks in one message become one draft and are created one by one, 
 });
 test('inactive assignees are rechecked at confirmation and attachment copies outlive the chat', async () => {
   const { service, db, created, uploaded } = setup();
-  const draft = await service.prepare({ user, args: { ...args, prioridad: 'alta' }, question, attachments: [{ id: 'owned-file', name: 'brief.txt' }] }); assert.ok(draft);
+  const draft = await prepare(service, { user, args: { ...args, prioridad: 'alta' }, question, attachments: [{ id: 'owned-file', name: 'brief.txt' }] }); assert.ok(draft);
   db.teamMember.findUnique = async () => ({ ...member, isActive: false });
   await assert.rejects(() => service.createConfirmedTask({ user, draft, question: 'Crear pendiente' }), { status: 409 });
   db.teamMember.findUnique = async () => member;

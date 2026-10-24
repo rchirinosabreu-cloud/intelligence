@@ -3,8 +3,15 @@ import { canUseBria } from '../lib/briaLivingMemory.js';
 import { hasModulePermission } from '../config/security.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { knowledgeError } from '../lib/briaKnowledge.js';
-import { resolveTaskDate, taskDraftStage, taskDraftItems, taskCreationIntent, materialDeclined, isTaskConfirmation, TASK_PRIORITIES, MAX_TASKS_PER_DRAFT } from '../lib/briaTaskDraft.js';
+import { resolveTaskDate, taskDraftStage, taskDraftItems, taskDraftRequestProblem, materialDeclined, isTaskConfirmation, TASK_PRIORITIES, MAX_TASKS_PER_DRAFT } from '../lib/briaTaskDraft.js';
 const tidy = value => String(value || '').normalize('NFKC').trim();
+const clientWords = value => tidy(value).normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+// El modelo pasa el nombre o alias que dijo la persona. Las consultas anteriores y los resultados de
+// herramientas no eligen una cuenta para un pendiente nuevo; una selección del borrador propio se conserva.
+const mentionsClient = (question, reference) => {
+  const words = clientWords(reference);
+  return Boolean(words) && ` ${clientWords(question)} `.includes(` ${words} `);
+};
 export const canCreateBriaTask = user => canUseBria(user) && hasModulePermission(user, 'gestion');
 const authorize = user => { if (!canCreateBriaTask(user)) throw knowledgeError('Necesitas acceso a Gestión para crear pendientes con Bria.', 403); };
 const bounded = (value, length, label) => { const text = tidy(value); if (text.length > length) throw knowledgeError(`${label} es demasiado largo. Divídelo en partes.`); return text; };
@@ -29,7 +36,25 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
     const rows = term ? await db.client.findMany({ where: { isArchived: false, OR: [{ name: { contains: term, mode: 'insensitive' } }, { slug: { equals: term, mode: 'insensitive' } }] }, select: { id: true, name: true, slug: true, isArchived: true }, orderBy: { name: 'asc' }, take: 6 }) : [];
     return { chosen: pick(rows.filter(row => !row.isArchived), term), candidates: rows.map(({ id, name, slug }) => ({ id, name, slug })) };
   };
-  const findMember = async (term) => {
+  const resolveClient = async ({ reference, selection, question, request, prior }) => {
+    if (mentionsClient(question, reference)) return findClient(reference);
+    // La selección natural la interpreta Bria, pero solo puede elegir entre las opciones que ya tenía
+    // este borrador. La cita acredita su origen; no convierte un ajuste de fecha en una elección de cuenta.
+    if (request.intent !== 'ADJUST' || !prior || taskDraftRequestProblem({ request: { intent: 'ADJUST', evidence: selection }, question, ongoing: true })) return null;
+    const matches = (prior.clientCandidates || []).filter(row => [row.id, row.name, row.slug].some(value => value && tidy(value).toLowerCase() === tidy(reference).toLowerCase()));
+    if (matches.length !== 1) return null;
+    const selected = matches[0];
+    const client = await db.client.findUnique({ where: { id: selected.id }, select: { id: true, name: true, slug: true, isArchived: true } });
+    return client && !client.isArchived
+      ? { chosen: client, candidates: [] }
+      : { chosen: null, candidates: prior.clientCandidates.filter(row => row.id !== selected.id) };
+  };
+  const findMember = async (term, user) => {
+    if (tidy(term).toLowerCase() === 'yo') {
+      const userId = user?.userId || user?.id;
+      const member = userId ? await db.teamMember.findUnique({ where: { userId }, select: { id: true, name: true, role: true, email: true, isActive: true, userId: true } }) : null;
+      return { chosen: member?.isActive ? member : null, candidates: [] };
+    }
     const rows = term ? await db.teamMember.findMany({ where: { isActive: true, OR: [{ name: { contains: term, mode: 'insensitive' } }, { email: { equals: term, mode: 'insensitive' } }] }, select: { id: true, name: true, role: true, email: true, isActive: true, userId: true }, orderBy: { name: 'asc' }, take: 6 }) : [];
     return { chosen: pick(rows.filter(row => row.isActive), term), candidates: rows.map(({ id, name, role }) => ({ id, name, role })) };
   };
@@ -39,23 +64,34 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
      * persona no nombra otro, se asume (Rodny, 20 de octubre de 2026: «si lleva cinco pendientes de Nattal, el sexto
      * es de Nattal»). Varios pendientes en un mensaje llegan en `args.pendientes` y viven en `draft.items`.
      */
-    async prepare({ user, args = {}, question, previous, attachments = [], evidence = question || '', defaults = {} }) {
+    async prepare({ user, args = {}, request, question, previous, attachments = [], evidence = question || '', defaults = {} }) {
       authorize(user);
       const ongoing = previous && !['CREATED','CANCELLED'].includes(previous.status);
-      if ((!ongoing || args.nuevo === true) && !taskCreationIntent(question)) throw knowledgeError('Pide explícitamente crear un pendiente para preparar su borrador.');
       if (ongoing && previous.ownerId !== (user.userId || user.id)) throw knowledgeError('Este borrador pertenece a otra persona.', 403);
+      // La cita acredita procedencia del mensaje actual, no interpreta por sí sola su intención ni autoriza
+      // ejecutar. El modelo solo prepara; la creación sigue exigiendo el resumen y una confirmación posterior.
+      const requestProblem = taskDraftRequestProblem({ request, question, ongoing: Boolean(ongoing), newDraft: args.nuevo === true });
+      if (requestProblem) throw knowledgeError(requestProblem);
+      const prior = ongoing && args.nuevo !== true ? previous : null;
       const draft = ongoing && args.nuevo !== true ? structuredClone(previous) : { id: randomUUID(), ownerId: user.userId || user.id, status: 'DRAFT', references: [], inputs: [], files: [] };
       const stage = taskDraftStage(draft);
       const today = bogotaDate(now());
       if (args.titulo != null) draft.title = bounded(args.titulo, 180, 'El título');
       if (args.contexto != null) draft.context = bounded(args.contexto, 8000, 'El contexto');
       if (args.cliente != null) {
-        const { chosen, candidates } = await findClient(bounded(args.cliente, 160, 'El nombre del cliente'));
-        draft.client = chosen; draft.clientCandidates = candidates; draft.clientInferred = false;
+        const reference = bounded(args.cliente, 160, 'El nombre del cliente');
+        const resolved = await resolveClient({ reference, selection: args.seleccionCliente, question, request, prior });
+        if (resolved) {
+          const { chosen, candidates } = resolved;
+          draft.client = chosen; draft.clientCandidates = candidates; draft.clientInferred = false;
+          draft.clientReference = reference;
+        }
       }
-      if (!draft.client && !draft.clientCandidates?.length && defaults.client?.id) { draft.client = { id: defaults.client.id, name: defaults.client.name, slug: defaults.client.slug || null }; draft.clientInferred = true; }
+      // Una cuenta expresamente pedida pero aún no resuelta debe seguir siendo una pregunta, también en el
+      // siguiente turno. Reenviar desde el modelo el nombre heredado no lo convierte en elección explícita.
+      if (!draft.client && !draft.clientReference && !draft.clientCandidates?.length && defaults.client?.id) { draft.client = { id: defaults.client.id, name: defaults.client.name, slug: defaults.client.slug || null }; draft.clientInferred = true; }
       if (args.responsable != null) {
-        const { chosen, candidates } = await findMember(bounded(args.responsable, 160, 'El nombre del responsable'));
+        const { chosen, candidates } = await findMember(bounded(args.responsable, 160, 'El nombre del responsable'), user);
         draft.assignee = chosen; draft.assigneeCandidates = candidates;
       }
       const dateInput = args.fecha ?? (stage === 'DATE' ? question : null);
@@ -80,15 +116,29 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
           const item = { ...before, id: before.id || randomUUID() };
           if (row?.titulo != null) item.title = bounded(row.titulo, 180, `El título del pendiente ${index + 1}`);
           if (row?.contexto != null) item.context = bounded(row.contexto, 8000, `El contexto del pendiente ${index + 1}`);
-          if (row?.cliente != null) { const { chosen } = await findClient(bounded(row.cliente, 160, 'El nombre del cliente')); item.client = chosen || null; }
-          if (row?.responsable != null) { const { chosen } = await findMember(bounded(row.responsable, 160, 'El nombre del responsable')); item.assignee = chosen || null; }
+          if (row?.cliente != null) {
+            const reference = bounded(row.cliente, 160, 'El nombre del cliente');
+            const itemPrior = prior?.items?.[index] || (args.pendientes.length === 1 && !prior?.items?.length ? prior : null);
+            const resolved = await resolveClient({ reference, selection: row.seleccionCliente, question, request, prior: itemPrior });
+            if (resolved) {
+              const { chosen, candidates } = resolved;
+              item.client = chosen || null; item.clientReference = reference; item.clientCandidates = candidates; item.clientInferred = false;
+            }
+          }
+          if (row?.responsable != null) { const { chosen } = await findMember(bounded(row.responsable, 160, 'El nombre del responsable'), user); item.assignee = chosen || null; }
           if (row?.fecha != null) item.dueDate = resolveTaskDate(row.fecha, today);
           const own = readPriority(row?.prioridad, row?.prioridad != null);
           if (own) item.priority = own;
           items.push(item);
         }
         // Un solo pendiente en la lista es el pendiente de siempre.
-        if (items.length === 1) { Object.assign(draft, { title: items[0].title ?? draft.title, context: items[0].context ?? draft.context, client: items[0].client ?? draft.client, assignee: items[0].assignee ?? draft.assignee, dueDate: items[0].dueDate ?? draft.dueDate, priority: items[0].priority ?? draft.priority }); delete draft.items; }
+        if (items.length === 1) {
+          const item = items[0];
+          Object.assign(draft, { title: item.title ?? draft.title, context: item.context ?? draft.context, dueDate: item.dueDate ?? draft.dueDate, priority: item.priority ?? draft.priority });
+          if (Object.hasOwn(item, 'assignee')) draft.assignee = item.assignee;
+          if (Object.hasOwn(item, 'client')) Object.assign(draft, { client: item.client, clientReference: item.clientReference, clientCandidates: item.clientCandidates, clientInferred: item.clientInferred });
+          delete draft.items;
+        }
         else draft.items = items;
       }
       return draft;
