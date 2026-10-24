@@ -25,6 +25,50 @@ const setup = () => {
   return { service, prepare, members, writes };
 };
 
+test('historical files require a separate human selection before entering a new draft', async () => {
+  const f = setup(), old = [{ id: 'old1', name: 'foto.jpg', current: false }, { id: 'old2', name: 'foto.jpg', current: false }];
+  const args = { archivos: old.map(file => ({ id: file.id, destino: 'INSUMO' })) };
+  let draft = await f.prepare(args, null, { availableAttachments: old, selectionTurn: 'chat:1' });
+  assert.deepEqual(draft.files, []);
+  assert.equal(taskDraftStage(draft), 'FILES');
+  assert.doesNotMatch(taskDraftReply(draft).answer, /¿Lo creo así/);
+  await assert.rejects(f.service.createConfirmedTask({ user, draft, question: 'Crear pendiente' }), { status: 400 });
+  draft = await f.prepare({ ...args, confirmarArchivosAnteriores: true }, draft, { availableAttachments: old, selectionTurn: 'chat:1' });
+  assert.equal(taskDraftStage(draft), 'FILES', 'a second model tool call in the same human turn is not a selection');
+  draft = await f.prepare({ fecha: 'mañana' }, draft, { availableAttachments: old, selectionTurn: 'chat:2' });
+  assert.equal(taskDraftStage(draft), 'FILES', 'an unrelated correction does not resolve the missing choice');
+  draft = await f.prepare({ archivos: [{ id: 'old2', destino: 'INSUMO' }], confirmarArchivosAnteriores: true }, draft, { availableAttachments: old, selectionTurn: 'chat:3' });
+  assert.deepEqual(draft.files.map(file => file.id), ['old2']);
+  assert.equal(taskDraftStage(draft), 'READY');
+  draft = await f.prepare({ prioridad: 'urgente' }, draft, { availableAttachments: old, selectionTurn: 'chat:4' });
+  assert.deepEqual(draft.files.map(file => file.id), ['old2'], 'a selected file survives later edits');
+});
+
+test('new upload or explicit removal resolves a historical-file question without reviving old images', async () => {
+  const f = setup(), old = { id: 'old', name: 'foto.jpg', current: false };
+  const draft = await f.prepare({ archivos: [{ id: old.id, destino: 'INSUMO' }] }, null, { availableAttachments: [old], selectionTurn: 'chat:1' });
+  const fresh = await f.prepare({}, draft, { attachments: [{ id: 'new', name: 'foto.jpg' }], availableAttachments: [old], selectionTurn: 'chat:2' });
+  assert.deepEqual(fresh.files.map(file => file.id), ['new']);
+  assert.equal(taskDraftStage(fresh), 'READY');
+  assert.equal(taskDraftStage(await f.prepare({ archivos: [] }, draft)), 'READY');
+  const blocked = await f.prepare({ archivos: [{ id: old.id, destino: 'INSUMO' }], confirmarArchivosAnteriores: true }, null, { availableAttachments: [old], selectionTurn: 'chat:3' });
+  assert.equal(taskDraftStage(blocked), 'FILES', 'claiming selection without a preceding question never selects history');
+});
+
+test('batch file choices use the same draft boundary and a new draft cannot inherit the previous selection', async () => {
+  const f = setup(), file = { id: 'photo', name: 'foto.jpg' }, options = { availableAttachments: [file], selectionTurn: 'chat:1' };
+  let draft = await f.prepare({ pendientes: [{ titulo: 'Primero', archivos: [{ id: file.id, destino: 'INSUMO' }] }, { titulo: 'Segundo' }] }, null, options);
+  assert.equal(taskDraftStage(draft), 'FILES');
+  draft = await f.prepare({ pendientes: [{ titulo: 'Primero', archivos: [{ id: file.id, destino: 'INSUMO' }], confirmarArchivosAnteriores: true }, { titulo: 'Segundo' }] }, draft, { ...options, selectionTurn: 'chat:2' });
+  assert.equal(taskDraftStage(draft), 'READY');
+  assert.deepEqual(taskDraftItems(draft).map(item => item.files.map(f => f.id)), [['photo'], []]);
+  const fresh = await f.prepare({ nuevo: true, titulo: 'Otro trabajo', cliente: client.name, responsable: 'yo', fecha: 'mañana', archivos: [{ id: file.id, destino: 'INSUMO' }] }, draft, { ...options, request: { intent: 'PREPARE', evidence: 'pedido humano' } });
+  assert.equal(taskDraftStage(fresh), 'FILES');
+  let selected = await f.prepare({}, null, { attachments: [file] });
+  selected = await f.prepare({ pendientes: [{ titulo: 'Uno', archivos: [{ id: file.id, destino: 'REFERENCIA' }] }] }, selected, options);
+  assert.equal(taskDraftStage(selected), 'READY', 'a single-item list still edits the same selected file');
+});
+
 test('comment content has its own typed tool contract and literal text must come from the human conversation', async () => {
   const f = setup(), [tool] = createBriaTaskTools(f.service);
   assert.equal(tool.parameters.properties.contexto, undefined, 'configuration instructions are not a generic comment bucket');
@@ -96,7 +140,7 @@ test('file destinations shown for approval match the native inputs, references a
   const available = ['input', 'reference', 'comment'].map(id => ({ id, name: 'foto.jpg' }));
   const draft = await f.prepare({ contexto: 'Evidencia del ensayo', archivos: [
     { id: 'input', destino: 'INSUMO' }, { id: 'reference', destino: 'REFERENCIA' }, { id: 'comment', destino: 'COMENTARIO' }
-  ] }, null, { availableAttachments: available });
+  ] }, null, { availableAttachments: available, attachments: available });
   assert.equal(draft.files.length, 3);
   const reply = taskDraftReply(draft).answer;
   assert.match(reply, /Insumo \(archivo\): foto.jpg/);

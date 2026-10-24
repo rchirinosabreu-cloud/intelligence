@@ -4,12 +4,12 @@ import { createBriaAssistantService } from '../../src/services/briaAssistantServ
 import { createBriaTaskDraftService } from '../../src/services/briaTaskDraftService.js';
 
 // Servicios de producción, datos y almacenamiento cerrados y ficticios. No evalúa visión ni transporte Meta.
-export const createTaskLifecycleFixture = ai => {
+export const createTaskLifecycleFixture = (ai, { historicalFiles = [] } = {}) => {
   const user = { id: 'lifecycle-user', userId: 'lifecycle-user', name: 'Marina Duarte', role: 'ADMIN', isActive: true, sessionVersion: 0, modulePermissions: { bria: true, gestion: true } };
   const member = { id: 'lifecycle-member', userId: user.id, name: user.name, isActive: true };
   const collaborator = { id: 'lifecycle-nora', name: 'Nora Sáenz', isActive: true };
   const client = { id: 'lifecycle-client', name: 'Taller Aurora Ficticio', isArchived: false };
-  const created = [], traces = [], modelRequests = [], files = new Map(), tasks = new Map();
+  const created = [], traces = [], modelRequests = [], files = new Map(historicalFiles.map(file => [file.id, file])), tasks = new Map();
   let locked = false, chat = { id: 'lifecycle-chat', revision: 0, turns: [] };
   const db = {
     user: { findUnique: async () => ({ ...user, teamMember: member }) },
@@ -53,6 +53,35 @@ export const createTaskLifecycleFixture = ai => {
       return answer;
     }
   };
+};
+
+export const historicalTaskFiles = [
+  { id: 'old-kitchen-one', name: 'foto-anterior-1.jpg', mime: 'image/jpeg', status: 'READ', text: 'Imagen anterior de una cocina remodelada.', createdAt: '2026-10-24T13:00:00Z' },
+  { id: 'old-kitchen-two', name: 'foto-anterior-2.jpg', mime: 'image/jpeg', status: 'READ', text: 'Otra foto anterior de la misma cocina.', createdAt: '2026-10-24T13:01:00Z' }
+];
+
+export const runHistoricalTaskFilesScenario = async fixture => {
+  const initial = await fixture.send('Prepara una tarea llamada «Ensayo sin imagen nueva», para Taller Aurora Ficticio, asignada a mí para mañana a las 3 p. m. Usa esta imagen como insumo. Muéstrame cómo quedaría y espera mi aprobación.');
+  assert.equal(fixture.created.length, 0);
+  assert.equal(initial.pendingAction?.type, 'TASK_CREATE', 'the missing file must not lose the task request');
+  assert.deepEqual(initial.pendingAction.draft.files, [], 'old images cannot substitute for a missing new upload');
+  assert.ok(initial.pendingAction.missing.length, 'creation remains blocked until the image is clarified');
+  assert.ok(!initial.quickReplies?.includes('Crear pendiente'));
+  const next = await fixture.send('Esta es la imagen que quiero usar. Conserva los demás datos y espera mi aprobación.', [{ originalname: 'portada.jpg', buffer: Buffer.from('fictional-new-image') }]);
+  assert.equal(next.pendingAction?.draft.id, initial.pendingAction.draft.id);
+  assert.deepEqual(next.pendingAction.draft.files.map(file => file.id), ['lifecycle-photo']);
+  assert.equal(next.pendingAction.draft.focusTime, '15:00');
+  assert.equal(next.pendingAction.draft.dueDate, '2026-10-25');
+  assert.deepEqual(next.pendingAction.missing, []);
+  assert.equal(fixture.created.length, 0);
+  await fixture.send('Crear pendiente');
+  assert.equal(fixture.created.length, 1);
+  assert.equal(fixture.created[0].initial_inputs.length, 1);
+  assert.equal(fixture.created[0].initial_inputs[0].name, 'portada.jpg');
+  const last = await fixture.send('Gracias.');
+  assert.equal(last.pendingAction, undefined);
+  assert.deepEqual(last.toolsUsed, []);
+  assert.equal(fixture.created.length, 1);
 };
 
 export const runTaskLifecycleScenario = async fixture => {

@@ -2,7 +2,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createCaseEvalProvider } from './lib/briaResearchRuntime.js';
-import { createTaskLifecycleFixture, runTaskLifecycleScenario } from '../tests/evals/briaTaskLifecycleFixture.js';
+import { createTaskLifecycleFixture, runTaskLifecycleScenario, historicalTaskFiles, runHistoricalTaskFilesScenario } from '../tests/evals/briaTaskLifecycleFixture.js';
 import { runWithAiContext } from '../src/lib/aiRequestContext.js';
 
 if (process.env.DATABASE_URL || process.env.DIRECT_URL) throw new Error('Esta evaluación no admite base de datos.');
@@ -17,15 +17,16 @@ const provider = await createCaseEvalProvider({ apiKey, models: { chat: model },
 } });
 // El runtime real puede intentar recuperarse de un 429/5xx: esta evaluación cierra el proveedor
 // al primer error, para que ningún reintento vuelva a la red ni consuma presupuesto.
+const historical = process.env.BRIA_EVAL_SCENARIO === 'historical';
 const fixture = createTaskLifecycleFixture({ generate: async request => {
   if (stopped) throw new Error('Proveedor detenido tras el primer fallo; no se reintenta.');
   try { return await provider.generate(request); } catch (error) { stopped = true; throw error; }
-} });
+} }, { historicalFiles: historical ? historicalTaskFiles : [] });
 let failure = null;
-try { await runWithAiContext({ actorId: 'lifecycle-user', module: 'bria', route: 'MAINTENANCE FICTIONAL TASK LIFECYCLE' }, () => runTaskLifecycleScenario(fixture)); }
+try { await runWithAiContext({ actorId: 'lifecycle-user', module: 'bria', route: 'MAINTENANCE FICTIONAL TASK LIFECYCLE' }, () => (historical ? runHistoricalTaskFilesScenario : runTaskLifecycleScenario)(fixture)); }
 catch (error) { failure = String(error.message).replaceAll(apiKey, '[REDACTADO]'); }
 await mkdir(path.dirname(path.resolve(output)), { recursive: true });
-await writeFile(output, JSON.stringify({ fictional: true, model, effort, pass: !failure, failure, limits: {
+await writeFile(output, JSON.stringify({ fictional: true, scenario: historical ? 'historical' : 'lifecycle', model, effort, pass: !failure, failure, limits: {
   calls: Number(process.env.BRIA_EVAL_MAX_CALLS), inputBytes: Number(process.env.BRIA_EVAL_MAX_INPUT_BYTES), outputTokens: Number(process.env.BRIA_EVAL_MAX_OUTPUT_TOKENS)
 }, turns: fixture.traces, modelRequests: fixture.modelRequests, created: fixture.created, usage }, null, 2));
 console.log(failure ? `FALLA: ${failure}` : 'OK: recorrido de hora, archivos, corrección, aprobación y cierre.');

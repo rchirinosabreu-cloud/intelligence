@@ -45,11 +45,11 @@ export const taskDraftItems = draft => {
   const base = {
     id: draft.id, title: draft.title || null, context: draft.context || null, client: draft.client || null, assignee: draft.assignee || null, dueDate: draft.dueDate || null,
     priority: TASK_PRIORITIES.includes(draft.priority) ? draft.priority : 'NORMAL', references: draft.references || [], inputs: draft.inputs || [], files: draft.files || [],
-    isSpecial: draft.isSpecial === true, collaborators: draft.collaborators || [], collaboratorMissing: draft.collaboratorMissing || [], unresolved: draft.unresolved || [], focusTime: draft.focusTime || null
+    isSpecial: draft.isSpecial === true, collaborators: draft.collaborators || [], collaboratorMissing: draft.collaboratorMissing || [], unresolved: draft.unresolved || [], focusTime: draft.focusTime || null, fileSelection: draft.fileSelection || null
   };
   if (!Array.isArray(draft.items) || !draft.items.length) return [base];
   return draft.items.map(item => {
-    const own = Object.fromEntries(Object.entries(item || {}).filter(([key, value]) => (['client', 'assignee', 'focusTime'].includes(key) && value === null) || (value != null && (['collaborators', 'collaboratorMissing', 'unresolved', 'files'].includes(key) || !(Array.isArray(value) && !value.length)))));
+    const own = Object.fromEntries(Object.entries(item || {}).filter(([key, value]) => (['client', 'assignee', 'focusTime', 'fileSelection'].includes(key) && value === null) || (value != null && (['collaborators', 'collaboratorMissing', 'unresolved', 'files'].includes(key) || !(Array.isArray(value) && !value.length)))));
     const result = { ...base, ...own, priority: TASK_PRIORITIES.includes(item?.priority) ? item.priority : base.priority };
     result.collaborators = result.collaborators.filter(member => member.id !== result.assignee?.id);
     return result;
@@ -64,7 +64,7 @@ export const isPlaceholderTaskTitle = title => {
   const words = clean(title).replace(/[^a-z0-9ñ ]+/g, ' ').split(/\s+/).filter(Boolean);
   return words.length > 0 && words.some(word => ['pendiente', 'pendientes', 'tarea', 'tareas'].includes(word)) && words.every(word => PLACEHOLDER_WORDS.has(word));
 };
-const itemStage = item => !item.client ? 'CLIENT' : !item.assignee ? 'ASSIGNEE' : !item.dueDate ? 'DATE' : (!item.title || isPlaceholderTaskTitle(item.title)) ? 'CONTEXT' : item.collaboratorMissing?.length ? 'COLLABORATORS' : item.unresolved?.length ? 'UNRESOLVED' : 'READY';
+const itemStage = item => !item.client ? 'CLIENT' : !item.assignee ? 'ASSIGNEE' : !item.dueDate ? 'DATE' : (!item.title || isPlaceholderTaskTitle(item.title)) ? 'CONTEXT' : item.collaboratorMissing?.length ? 'COLLABORATORS' : item.fileSelection ? 'FILES' : item.unresolved?.length ? 'UNRESOLVED' : 'READY';
 /** El primer pendiente al que le falta algo, con su posición (1 en adelante) para nombrarlo en un lote. */
 export const taskDraftMissing = draft => {
   const items = taskDraftItems(draft);
@@ -82,6 +82,11 @@ const NO_MATERIAL = 'Sin referencias ni insumos todavía: puedes adjuntarlos aho
 const capabilityLines = item => `- Proyecto especial: ${item.isSpecial ? 'Sí' : 'No'}\n- Colaboradores: ${item.collaborators?.length ? item.collaborators.map(member => member.name).join(', ') : 'Ninguno'}${item.focusTime ? `\n- Hora límite: ${item.focusTime} (Bogotá)` : ''}`;
 export const taskDraftReply = draft => {
   const stage = taskDraftStage(draft);
+  if (stage === 'FILES') {
+    const { item } = taskDraftMissing(draft);
+    const candidates = item.fileSelection.files.map((file, index) => `${index + 1}. ${file.name}`).join('\n');
+    return { answer: `Conservé los datos de «${item.title}», pero falta elegir la imagen o el archivo. Estos archivos son de mensajes anteriores y todavía no los incorporé a esta tarea:\n\n${candidates}\n\nPuedes enviar uno nuevo, elegir uno de los anteriores o dejar la tarea sin ellos. Si tienen el mismo nombre y no puedes distinguirlos, vuelve a enviar el que quieres usar.`, quickReplies: [] };
+  }
   if (stage === 'COLLABORATORS' || stage === 'UNRESOLVED') {
     const { item, index, batch } = taskDraftMissing(draft);
     const prefix = batch ? `Del pendiente ${index} («${item.title}»): ` : '';
