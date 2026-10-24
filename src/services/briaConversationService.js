@@ -2,7 +2,7 @@ import { normalizeQuestion, MAX_QUESTION_LENGTH } from '../lib/briaAssistant.js'
 import { knowledgeError } from '../lib/briaKnowledge.js';
 import { validateAttachmentSelection, BRIA_AUDIO_MAX_BYTES } from '../lib/briaAttachments.js';
 import { readBriaAttachment, attachmentModelPart } from './briaAttachmentReader.js';
-import { taskCreationIntent, isTaskConfirmation, materialDeclined } from '../lib/briaTaskDraft.js';
+import { isTaskDraftStarter, materialDeclined } from '../lib/briaTaskDraft.js';
 import { DELETE_REASON_OPTIONS } from '../lib/briaDeleteDraft.js';
 import { actionReply, actionStage, confirmsAction, cancelsAction, alreadyDoneReply, pendingActionOf, wrapLegacyAction, isLegacyAction, LEGACY_ACTIONS } from '../lib/briaActions.js';
 import { createBriaActionService } from './briaActionService.js';
@@ -10,6 +10,13 @@ import { normalizeRating, turnPosition } from '../lib/briaRating.js';
 // Una sola base (10 de octubre de 2026): crear pendiente, despachar y eliminar se resuelven aquí como cualquier otra
 // acción. Sin `actions` propio, la base se arma con los tres servicios que lleguen (las vistas de prueba y de muestra).
 const LEGACY_TOOL = { TASK_CREATE: 'preparar_pendiente', DISPATCH: 'preparar_despacho', TASK_DELETE: 'preparar_eliminacion' };
+// Solo categorías conocidas, nunca texto, identificadores, argumentos ni títulos del chat.
+const deniedTurnDiagnostic = (turn, phase) => ({
+  phase,
+  sourceKinds: [...new Set((turn.sources || []).map(source => ['tarea', 'tarea_resumen', 'documento', 'pieza', 'parrilla', 'minuta', 'ritmo', 'aprendizaje', 'cliente'].includes(source.kind) ? source.kind : 'otra'))],
+  actionType: turn.pendingAction ? (Object.hasOwn(LEGACY_ACTIONS, turn.pendingAction.type) ? turn.pendingAction.type : 'OTHER') : null,
+  toolsUsed: [...new Set((turn.toolsUsed || []).map(name => ['mis_tareas', 'buscar_pendientes', 'tareas_de_cliente', 'preparar_pendiente', 'preparar_despacho', 'preparar_eliminacion'].includes(name) ? name : 'otra'))]
+});
 /** El cliente del último pendiente creado en este chat (o del lote, si todos eran del mismo), leído de los turnos guardados. */
 export const lastCreatedTaskClient = (turns = []) => {
   for (const turn of [...turns].reverse()) {
@@ -21,7 +28,7 @@ export const lastCreatedTaskClient = (turns = []) => {
   }
   return null;
 };
-export const createBriaConversationService = ({ repository, resolveActor, assistant, ai, taskDrafts, dispatchDrafts, deleteDrafts, actions = createBriaActionService({ taskDrafts, dispatchDrafts, deleteDrafts }), prepareAttachment = readBriaAttachment, authorizeTurn = async () => true }) => {
+export const createBriaConversationService = ({ repository, resolveActor, assistant, ai, taskDrafts, dispatchDrafts, deleteDrafts, actions = createBriaActionService({ taskDrafts, dispatchDrafts, deleteDrafts }), prepareAttachment = readBriaAttachment, authorizeTurn = async () => true, logger = console }) => {
   const pending = new Set();
   const authorizeInput = async user => { const actor = await resolveActor(user); if (!['ADMIN', 'PROJECT_MANAGER'].includes(actor.role)) throw knowledgeError('Solo Admin y Project Manager pueden adjuntar o dictar.', 403); return actor; };
   const permitted = async (user, turn) => !turn.permissionChanged && await authorizeTurn(user, turn);
@@ -106,8 +113,8 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         // (Rodny, 20 de octubre de 2026): la plataforma lo lee de los turnos guardados, nunca lo adivina el modelo.
         const taskDefaults = { client: lastCreatedTaskClient(chat.turns) };
         // «Crear un pendiente» arranca el borrador sin pasar por el modelo, como siempre.
-        if (taskDrafts && !(open(pendingAction) && pendingAction.type === 'TASK_CREATE') && taskCreationIntent(text) && !isTaskConfirmation(text)) {
-          pendingAction = wrapLegacyAction('TASK_CREATE', await taskDrafts.prepare({ user, question: text, attachments: prepared, defaults: taskDefaults }));
+        if (taskDrafts && !(open(pendingAction) && pendingAction.type === 'TASK_CREATE') && isTaskDraftStarter(text)) {
+          pendingAction = wrapLegacyAction('TASK_CREATE', await taskDrafts.prepare({ user, question: text, request: { intent: 'PREPARE', evidence: text }, attachments: prepared, defaults: taskDefaults }));
         }
         const actionState = actionStage(pendingAction);
         const legacyStage = isLegacyAction(pendingAction) && open(pendingAction) ? LEGACY_ACTIONS[pendingAction.type].stage(pendingAction.draft) : null;
@@ -142,7 +149,7 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         } else if (taskDrafts && legacyStage && pendingAction.type === 'TASK_CREATE' && ((legacyStage === 'PRIORITY' && /^(normal|alta|urgente)$/i.test(text)) || (legacyStage === 'DATE' && /^(hoy|mañana|pasado mañana)$/i.test(text)) || (legacyStage === 'MATERIAL' && materialDeclined(text, legacyStage)))) {
           // Los botones del borrador se responden sin pasar por el modelo.
           await revalidateAction();
-          result = prepared_(wrapLegacyAction('TASK_CREATE', await taskDrafts.prepare({ user, previous: pendingAction.draft, question: text, attachments: prepared, defaults: taskDefaults })));
+          result = prepared_(wrapLegacyAction('TASK_CREATE', await taskDrafts.prepare({ user, previous: pendingAction.draft, question: text, request: { intent: 'ADJUST', evidence: text }, attachments: prepared, defaults: taskDefaults })));
         } else if (deleteDrafts && legacyStage === 'REASON' && pendingAction.type === 'TASK_DELETE' && DELETE_REASON_OPTIONS.some(option => option.toLowerCase() === text.toLowerCase())) {
           await revalidateAction();
           result = prepared_(wrapLegacyAction('TASK_DELETE', await deleteDrafts.prepare({ user, previous: pendingAction.draft, question: text, args: { tareas: [], motivo: text } }), { title: pendingAction.title }));
@@ -159,7 +166,13 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           if (!result.pendingAction && open(pendingAction) && isLegacyAction(pendingAction)) result.pendingAction = pendingAction;
         }
         const fresh = await resolveActor(user);
-        if (!(await Promise.all([...chat.turns.filter(turn => turn.role === 'assistant'), { role: 'assistant', ...(typeof result === 'function' ? { pendingAction } : result) }].map(turn => authorizeTurn(user, turn)))).every(Boolean)) throw knowledgeError('Tu acceso a las fuentes cambió durante la consulta.', 403);
+        const authorizedHistory = chat.turns.filter(turn => turn.role === 'assistant');
+        const checks = [...authorizedHistory, { role: 'assistant', ...(typeof result === 'function' ? { pendingAction } : result) }];
+        const deniedIndex = (await Promise.all(checks.map(turn => authorizeTurn(user, turn)))).findIndex(allowed => !allowed);
+        if (deniedIndex !== -1) {
+          logger.warn?.('[BriaConversation] BRIA_SOURCE_ACCESS_CHANGED', deniedTurnDiagnostic(checks[deniedIndex], deniedIndex < authorizedHistory.length ? 'history' : 'response'));
+          throw knowledgeError('Tu acceso a las fuentes cambió durante la consulta.', 403, 'BRIA_SOURCE_ACCESS_CHANGED');
+        }
         const saved = await repository.append(fresh, id, chat.revision, text, result, prepared);
         return sanitize(user, saved);
       } finally { pending.delete(key); }

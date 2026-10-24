@@ -21,7 +21,17 @@ export const resolveTaskDate = (value, today) => {
 };
 export const isTaskConfirmation = question => /^(?:(?:si|ok|vale)[,. ]+)?(?:crear (?:el |los )?pendientes?|crea (?:el |los )?(?:pendientes?|tareas?)|confirmo|procede|adelante|confirmar creacion)[.! ]*$/.test(clean(question));
 export const isTaskCancellation = question => /^(?:cancelar (?:el |los )?pendientes?|cancela (?:el |los )?(?:pendientes?|tareas?)|descarta (?:el |este |los )?pendientes?)[.! ]*$/.test(clean(question));
-export const taskCreationIntent = question => /\b(?:crea(?:r|me)?|asigna(?:r|le)?|registr(?:a|ar)|pon(?:le|me)?|nuevo|nueva|nuevos|nuevas)\b[^.!?]{0,140}\b(?:pendientes?|tareas?)\b/.test(clean(question));
+// Solo el atajo exacto de la pantalla inicia un borrador sin interpretación. El texto libre lo entiende Bria.
+export const isTaskDraftStarter = question => clean(question) === 'crear un pendiente';
+/** Comprueba procedencia, no semántica ni aprobación: la interpretación solo permite preparar un borrador. */
+export const taskDraftRequestProblem = ({ request, question, ongoing = false, newDraft = false } = {}) => {
+  if (!request || !['PREPARE', 'ADJUST'].includes(request.intent)) return 'Hace falta identificar el pedido de preparar o ajustar este borrador.';
+  const normalize = value => typeof value === 'string' ? value.normalize('NFKC').replace(/\s+/g, ' ').trim() : '';
+  const quote = normalize(request.evidence), current = normalize(question);
+  if (!quote || !current || !current.includes(quote)) return 'El pedido debe estar citado en tu mensaje actual, no en un documento ni en otra fuente.';
+  if (request.intent === 'ADJUST' && (!ongoing || newDraft)) return 'Primero prepara un borrador antes de ajustarlo.';
+  return null;
+};
 export const materialDeclined = (question, stage) => /\b(?:sin|no (?:hay|tengo|tenemos|anadire|voy a anadir|quiero anadir|necesito))\b[^.!?]{0,50}\b(?:insumos|referencias|material)\b/.test(clean(question)) || (stage === 'MATERIAL' && /^(?:no|no gracias|procede|si,? procede|continua|continuar sin insumos|no,? procede)[.! ]*$/.test(clean(question)));
 
 /**
@@ -37,7 +47,7 @@ export const taskDraftItems = draft => {
   };
   if (!Array.isArray(draft.items) || !draft.items.length) return [base];
   return draft.items.map(item => {
-    const own = Object.fromEntries(Object.entries(item || {}).filter(([, value]) => value != null && !(Array.isArray(value) && !value.length)));
+    const own = Object.fromEntries(Object.entries(item || {}).filter(([key, value]) => (['client', 'assignee'].includes(key) && value === null) || (value != null && !(Array.isArray(value) && !value.length))));
     return { ...base, ...own, priority: TASK_PRIORITIES.includes(item?.priority) ? item.priority : base.priority };
   });
 };
@@ -70,7 +80,12 @@ export const taskDraftReply = draft => {
   if (['CLIENT','ASSIGNEE','DATE','CONTEXT'].includes(stage)) {
     const missing = taskDraftMissing(draft);
     const about = missing.batch ? `Del pendiente ${missing.index}${missing.item.title ? ` («${missing.item.title}»)` : ''}: ` : '';
-    if (stage === 'CLIENT') return { answer: `${about}${draft.clientCandidates?.length ? 'encontré estas cuentas. ¿Para cuál es el pendiente?' : '¿para qué cliente es el pendiente?'}`.replace(/^(\p{L})/u, m => m.toUpperCase()), quickReplies: normalizeQuickReplies(draft.clientCandidates?.map(row => row.name)) };
+    if (stage === 'CLIENT') {
+      const own = missing.batch ? draft.items[missing.index - 1] : null;
+      // Una lista propia vacía significa que ese cliente no se encontró; no ofrece las opciones de otro.
+      const candidates = own && (Object.hasOwn(own, 'clientCandidates') || Object.hasOwn(own, 'client')) ? own.clientCandidates : draft.clientCandidates;
+      return { answer: `${about}${candidates?.length ? 'encontré estas cuentas. ¿Para cuál es el pendiente?' : '¿para qué cliente es el pendiente?'}`.replace(/^(\p{L})/u, m => m.toUpperCase()), quickReplies: normalizeQuickReplies(candidates?.map(row => row.name)) };
+    }
     if (stage === 'ASSIGNEE') return { answer: `${about}${draft.assigneeCandidates?.length ? 'encontré estas personas. ¿A quién se lo asignamos?' : '¿quién será responsable del pendiente?'}`.replace(/^(\p{L})/u, m => m.toUpperCase()), quickReplies: normalizeQuickReplies(draft.assigneeCandidates?.map(row => row.name)) };
     if (stage === 'DATE') return { answer: `${about}¿para qué fecha lo necesitas? Dime un día concreto.`.replace(/^(\p{L})/u, m => m.toUpperCase()), quickReplies: ['Hoy', 'Mañana', 'Pasado mañana'] };
     return { answer: `${about}¿qué hay que hacer? Dímelo en una frase y la pongo como título.`.replace(/^(\p{L})/u, m => m.toUpperCase()), quickReplies: [] };

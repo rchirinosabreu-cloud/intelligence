@@ -828,7 +828,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | typedarray | 0.0.6 | MIT |  |
 | uc.micro | 2.1.0 | MIT |  |
 | underscore | 1.13.8 | MIT |  |
-| undici | 7.30.0 | MIT |  |
+| undici | 7.30.1 | MIT |  |
 | undici-types | 6.21.0 | MIT |  |
 | unified | 11.0.5 | MIT |  |
 | unist-util-is | 6.0.1 | MIT |  |

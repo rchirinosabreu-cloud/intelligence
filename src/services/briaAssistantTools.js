@@ -36,7 +36,9 @@ const bogotaClock = (value) => (value ? bogota(value).slice(11, 16) : null);
 const bogotaStamp = (value) => (value ? `${bogota(value).slice(0, 10)} ${bogota(value).slice(11, 16)}` : null);
 const monthLabel = (month, year) => `${MONTHS[month - 1]} de ${year}`;
 
-const taskSource = (task) => ({ kind: 'tarea', id: task.id, label: task.title, url: `/gestion?taskId=${task.id}` });
+// Las listas de Gestión solo leen la cabecera pública. Distinguirla del detalle evita exigir
+// abrir un pendiente privado para poder resumir lo mismo que ya se ve en el tablero.
+const taskSource = (task) => ({ kind: 'tarea_resumen', id: task.id, label: task.title, url: `/gestion?taskId=${task.id}` });
 const SEVERITY_ORDER = ['CRITICAL', 'WARNING', 'INFO'];
 const LEVEL_ORDER = ['red', 'yellow', 'gray', 'green'];
 const fold = (value) => text(value).normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
@@ -128,7 +130,9 @@ const misTareas = {
         privada: base.privada
       };
     });
-    return { data: { tareas }, sources: rows.map(taskSource) };
+    // Mis tareas también está disponible sin Gestión. Su autoría/asignación se revalida
+    // con el permiso estricto de tarea; no abre cabeceras de tareas ajenas sin el módulo.
+    return { data: { tareas }, sources: rows.map(task => ({ ...taskSource(task), kind: 'tarea' })) };
   }
 };
 
