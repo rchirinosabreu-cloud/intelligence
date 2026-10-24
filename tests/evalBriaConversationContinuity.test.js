@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createConversationContinuityFixture, assertContinuityDraft, assertContinuityCreated, continuityInitial, CONTINUITY_URL, CONTINUITY_TITLE, CONTINUITY_CLIENT } from './evals/briaConversationContinuityFixture.js';
+import { createConversationContinuityFixture, assertContinuityDraft, assertContinuityClarification, assertContinuityCreated, continuityInitial, CONTINUITY_URL, CONTINUITY_TITLE, CONTINUITY_CLIENT, CONTINUITY_PERSON } from './evals/briaConversationContinuityFixture.js';
 
 const scripted = responses => {
   let round = 0;
@@ -60,6 +60,43 @@ test('a date-only answer is not rejected because the model cites the earlier req
   const first = await fixture.send(question);
   assertContinuityDraft(first, fixture, { stage: 'DATE' });
   assertContinuityDraft(await fixture.send('30 de octubre de 2026'), fixture, { id: first.pendingAction.draft.id, title: CONTINUITY_TITLE, client: 'aurora', assignee: fixture.person.memberId, dueDate: '2026-10-30', stage: 'READY' });
+});
+
+test('omitting the partial draft is a model protocol failure: historical client text cannot authorize the final draft', async () => {
+  const fixture = createConversationContinuityFixture({ ai: scripted([
+    '¿Quién será responsable de revisar la composición del folleto y para qué fecha lo dejamos previsto?',
+    '¿Para qué fecha dejamos el pendiente de Nora?',
+    { ...initialArgs, responsable: CONTINUITY_PERSON, fecha: '2026-10-30' }, 'Revisa el resumen antes de crearlo.'
+  ]) });
+  const question = `Vamos a dejar preparado «${CONTINUITY_TITLE}» para ${CONTINUITY_CLIENT}. Te digo quién lo hará y la fecha cuando me preguntes; no lo crees todavía.`;
+  const first = await fixture.send(question);
+  assertContinuityClarification(first, fixture, { title: CONTINUITY_TITLE, client: 'aurora', assignee: null, stage: 'ASSIGNEE' }, /qui[eé]n|responsable|asign/i);
+  assert.equal(first.pendingAction, undefined, 'el evaluador deja continuar esta pregunta y comprobará el resultado completo');
+  assertContinuityClarification(await fixture.send(CONTINUITY_PERSON), fixture, { title: CONTINUITY_TITLE, client: 'aurora', assignee: 'continuity-nora', stage: 'DATE' }, /cu[aá]ndo|fecha|d[ií]a/i);
+  const complete = await fixture.send('30 de octubre de 2026');
+  const expected = { title: CONTINUITY_TITLE, client: 'aurora', assignee: 'continuity-nora', dueDate: '2026-10-30', priority: 'NORMAL', inputs: [], references: [], stage: 'READY' };
+  // El modelo no acreditó el cliente cuando la persona lo nombró. El motor conserva esa frontera;
+  // el evaluador real debe rechazar el recorrido final, aunque haya aceptado las preguntas iniciales.
+  assertContinuityDraft(complete, fixture, { ...expected, client: null, stage: 'CLIENT' });
+  assert.throws(() => assertContinuityDraft(complete, fixture, expected), /CLIENT.*READY|READY/s);
+});
+
+test('accepting a clarification never hides writes, lost draft data or a missing completed draft', () => {
+  const fixture = { created: [], platformAttempts: [] };
+  const answer = { text: '¿Para qué fecha dejamos el pendiente?' };
+  const expected = { title: CONTINUITY_TITLE, client: 'aurora', assignee: 'continuity-nora', stage: 'DATE' };
+  assertContinuityClarification(answer, fixture, expected, /fecha/i);
+  assert.throws(() => assertContinuityClarification(answer, { ...fixture, created: [{ id: 'premature' }] }, expected, /fecha/i), /no crea/);
+  assert.throws(() => assertContinuityClarification(answer, { ...fixture, platformAttempts: [{}] }, expected, /fecha/i), /otra escritura/);
+  assert.throws(() => assertContinuityClarification({ text: 'Queda listo.' }, fixture, expected, /fecha/i), /aclaración/);
+  const partial = { ...answer, pendingAction: { type: 'TASK_CREATE', status: 'DRAFT', draft: { title: CONTINUITY_TITLE, client: { id: 'aurora' }, assignee: { id: 'continuity-nora' }, priority: 'NORMAL' } } };
+  assertContinuityClarification(partial, fixture, expected, /fecha/i);
+  const lost = structuredClone(partial); lost.pendingAction.draft.assignee = null;
+  assert.throws(() => assertContinuityClarification(lost, fixture, expected, /fecha/i));
+  const changed = structuredClone(partial); changed.pendingAction.draft.client.id = 'bosque';
+  assert.throws(() => assertContinuityClarification(changed, fixture, expected, /fecha/i), /client/);
+  assert.throws(() => assertContinuityDraft(answer, fixture, { ...expected, dueDate: '2026-10-30', stage: 'READY' }), /TASK_CREATE/);
+  assert.throws(() => assertContinuityDraft(partial, fixture, { ...expected, dueDate: '2026-10-30', stage: 'READY' }));
 });
 
 test('platform discovery uses the real tool with fictional reads and cannot write outside the draft', async () => {

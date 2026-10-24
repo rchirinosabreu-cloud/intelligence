@@ -121,6 +121,15 @@ export const assertContinuityDraft = (answer, fixture, expected = {}) => {
   return draft;
 };
 
+export const assertContinuityClarification = (answer, fixture, expected, topic) => {
+  // Aclarar datos aún desconocidos puede preceder al borrador parcial. Cuando existe, sus datos
+  // siguen siendo estrictos; completar el pedido siempre se verifica con assertContinuityDraft.
+  if (answer.pendingAction) assertContinuityDraft(answer, fixture, expected);
+  assert.equal(fixture.created.length, 0, 'responder una aclaración no crea la tarea');
+  assert.equal(fixture.platformAttempts.length, 0, 'la aclaración no se sustituye por otra escritura');
+  assert.match(answer.text, topic, 'la respuesta debe plantear la aclaración correspondiente');
+};
+
 export const assertContinuityCreated = (answer, fixture, expected) => {
   assert.equal(answer.pendingAction?.status, 'DONE');
   assert.equal(fixture.created.length, 1, 'confirmar otra vez no duplica');

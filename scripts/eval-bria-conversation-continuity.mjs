@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { loadCaseEvalConfig, createCaseEvalProvider } from './lib/briaResearchRuntime.js';
-import { createConversationContinuityFixture, assertContinuityDraft, assertContinuityCreated, continuityInitial, CONTINUITY_URL, CONTINUITY_TITLE, CONTINUITY_CLIENT, CONTINUITY_PERSON } from '../tests/evals/briaConversationContinuityFixture.js';
+import { createConversationContinuityFixture, assertContinuityDraft, assertContinuityClarification, assertContinuityCreated, continuityInitial, CONTINUITY_URL, CONTINUITY_TITLE, CONTINUITY_CLIENT, CONTINUITY_PERSON } from '../tests/evals/briaConversationContinuityFixture.js';
 import { runWithAiContext } from '../src/lib/aiRequestContext.js';
 
 const output = process.env.BRIA_EVAL_OUTPUT;
@@ -52,8 +52,8 @@ const scenarios = [
     ['Confirmar', answer => assertContinuityCreated(answer, f, { ...expected(f), id: f.traces[0].after.draft.id, dueDate: '2026-10-30', inputs: [CONTINUITY_URL] })]
   ] },
   { id: 'nombre-y-fecha-completan-preguntas', steps: f => [
-    [`Vamos a dejar preparado «${CONTINUITY_TITLE}» para ${CONTINUITY_CLIENT}. Te digo quién lo hará y la fecha cuando me preguntes; no lo crees todavía.`, answer => { assertContinuityDraft(answer, f, { title: CONTINUITY_TITLE, client: 'aurora', assignee: null, stage: 'ASSIGNEE' }); asksFor(answer, /qui[eé]n|responsable|asign/i); }],
-    [CONTINUITY_PERSON, answer => { assertContinuityDraft(answer, f, { title: CONTINUITY_TITLE, client: 'aurora', assignee: 'continuity-nora', stage: 'DATE' }); asksFor(answer, /cu[aá]ndo|fecha|d[ií]a/i); }],
+    [`Vamos a dejar preparado «${CONTINUITY_TITLE}» para ${CONTINUITY_CLIENT}. Te digo quién lo hará y la fecha cuando me preguntes; no lo crees todavía.`, answer => assertContinuityClarification(answer, f, { title: CONTINUITY_TITLE, client: 'aurora', assignee: null, stage: 'ASSIGNEE' }, /qui[eé]n|responsable|asign/i)],
+    [CONTINUITY_PERSON, answer => assertContinuityClarification(answer, f, { title: CONTINUITY_TITLE, client: 'aurora', assignee: 'continuity-nora', stage: 'DATE' }, /cu[aá]ndo|fecha|d[ií]a/i)],
     ['30 de octubre de 2026', answer => complete(answer, f, { assignee: 'continuity-nora', dueDate: '2026-10-30' })],
     ['Cancelar pendiente', answer => cancelled(answer, f)]
   ] },
