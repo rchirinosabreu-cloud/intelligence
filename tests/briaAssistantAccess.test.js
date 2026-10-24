@@ -3,6 +3,22 @@ import assert from 'node:assert/strict';
 import { createBriaAssistantService } from '../src/services/briaAssistantService.js';
 const actor = () => ({ userId: 'u', role: 'PROJECT_MANAGER', sessionVersion: 1, modulePermissions: { bria: true, gestion: true } });
 const row = () => ({ id: 'u', name: 'Persona', role: 'PROJECT_MANAGER', isActive: true, sessionVersion: 1, modulePermissions: { bria: true, gestion: true }, teamMember: { id: 'm', isActive: true } });
+
+test('the model receives the completed operation separately from historical files and open drafts', async () => {
+  let seen;
+  const service = createBriaAssistantService({
+    db: { user: { findUnique: async () => row() } }, tools: [], mail: null, vault: null,
+    ai: { generate: async request => { seen = request; return { text: 'A la orden.' }; } }
+  });
+  await service.ask({ user: actor(), question: 'Gracias', pendingAction: null,
+    lastOperation: { id: 'finished', type: 'TASK_CREATE', status: 'DONE', title: 'Ensayo' },
+    attachments: [{ id: 'old', name: 'foto.jpg', current: false, status: 'READ', text: 'Una cocina' }] });
+  const terminal = seen.input.flatMap(message => message.content || []).find(part => part.text?.includes('finished'));
+  assert.ok(terminal, 'the completion must reach the model, not just the conversation service');
+  assert.match(terminal.text, /"status":"DONE"/);
+  assert.match(seen.instructions, /históricos/);
+  assert.match(seen.instructions, /terminada/);
+});
 test('the assistant checks the fresh roster and activation before calling a model', async () => {
   let calls = 0;
   const service = createBriaAssistantService({

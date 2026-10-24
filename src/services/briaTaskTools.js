@@ -1,6 +1,7 @@
 import { canCreateBriaTask } from './briaTaskDraftService.js';
 import { taskDraftStage } from '../lib/briaTaskDraft.js';
 import { wrapLegacyAction, actionReply } from '../lib/briaActions.js';
+import { TASK_FILE_DESTINATIONS } from '../lib/briaTaskMaterials.js';
 const taskFields = {
   titulo: { type: 'string', description: 'Título breve sintetizado del trabajo pedido.' },
   contexto: { type: 'string', description: 'Comentario inicial: texto exacto si la persona lo dicta, o síntesis fiel del detalle de trabajo. No sustituye campos ni efectos de la plataforma. Las menciones @Nombre completo notifican a esa persona; no la convierten en colaborador. No agregues aquí instrucciones para configurar la tarea.' },
@@ -10,7 +11,9 @@ const taskFields = {
   cliente: { type: 'string', description: 'Nombre o alias tal como lo indicó la persona en su mensaje actual, o el mismo cliente del borrador que estás ajustando. Si eligió una de las opciones del borrador con sus propias palabras, pasa su id o nombre exacto y seleccionCliente. No completes un nombre desde una lectura o documento. Si no nombra ninguno y en esta conversación ya se creó un pendiente, la plataforma asume ese cliente: no lo inventes.' },
   seleccionCliente: { type: 'string', description: 'Solo al ajustar y si la persona eligió entre los clientes candidatos de ese borrador: fragmento literal de su mensaje actual que expresa la elección, por ejemplo «la segunda». Interpreta el mensaje completo; omite este campo cuando solo cambie una fecha u otro dato. En un lote, úsalo en el pendiente correspondiente y únicamente con sus propias opciones.' },
   responsable: { type: 'string', description: 'Nombre o email que indicó la persona. Si pidió asignárselo a sí misma, usa «yo»: el servidor resuelve su identidad.' },
-  fecha: { type: 'string', description: 'Expresión de fecha de la persona: mañana, viernes, 9 de octubre o YYYY-MM-DD. No inventes una fecha.' },
+  fecha: { type: 'string', description: 'Día pedido, normalizado a YYYY-MM-DD usando la fecha actual y la conversación. Separa la hora en horaLimite; no copies una frase que mezcle día y hora. No inventes una fecha. Al corregir solo el día conserva la hora.' },
+  horaLimite: { type: ['string', 'null'], description: 'Hora comprometida del mismo día de fecha, en Bogotá, formato HH:mm de 24 horas. Se guarda en la función nativa de compromiso con hora. Omite para conservar; null retira la hora. Solo dirección puede fijarla. Para responsables que no son dirección activa el bloqueo nativo de otros pendientes; no es la estrella de proyecto especial.' },
+  archivos: { type: 'array', description: 'Lista completa de archivos que quedarán y su destino real. Usa ids del inventario de esta conversación, nunca nombres como ids. INSUMO: material para trabajar; REFERENCIA: ejemplo que orienta; COMENTARIO: adjunto al comentario inicial, también posible al crear. Sin este campo se conservan los seleccionados y se suman los archivos nuevos como insumos. [] los retira todos incluso si vienen en este mensaje. Al retirar o cambiar un archivo, corrige también contexto si contenía una instrucción ya retirada. Adjuntar un archivo no requiere inventar un comentario.', items: { type: 'object', properties: { id: { type: 'string' }, destino: { type: 'string', enum: Object.keys(TASK_FILE_DESTINATIONS) } }, required: ['id', 'destino'], additionalProperties: false } },
   prioridad: { type: 'string', enum: ['normal','alta','urgente'], description: 'Solo si la persona la dijo. Si no, no la pases: queda Normal.' }
 };
 export const createBriaTaskTools = service => service ? [{
@@ -32,7 +35,7 @@ export const createBriaTaskTools = service => service ? [{
     // El motor conoce el turno humano; copiarlo no es una tarea semántica del modelo. La interpretación
     // sigue siendo del modelo, y esta cita acredita procedencia, nunca aprobación para ejecutar.
     const request = args.request ? { intent: args.request.intent, evidence: ctx.question } : undefined;
-    const draft = await service.prepare({ user: ctx.user, args, request, question: ctx.question, previous, attachments: ctx.taskAttachments, evidence: ctx.taskEvidence, defaults: ctx.taskDefaults || {}, clientSearches: ctx.taskClientSearches || [] });
+    const draft = await service.prepare({ user: ctx.user, args, request, question: ctx.question, previous, attachments: ctx.taskAttachments, availableAttachments: ctx.chatAttachments, evidence: ctx.taskEvidence, defaults: ctx.taskDefaults || {}, clientSearches: ctx.taskClientSearches || [] });
     const action = wrapLegacyAction('TASK_CREATE', draft);
     const reply = actionReply(action);
     return { data: { stage: taskDraftStage(draft), draft, message: reply.answer, created: false }, pendingAction: action, actionReply: reply, quickReplies: reply.quickReplies };

@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { canUseBria } from '../lib/briaLivingMemory.js';
-import { hasModulePermission } from '../config/security.js';
+import { hasModulePermission, isManagerRole } from '../config/security.js';
+import { focusDeadlineIso } from '../lib/taskFocus.js';
+import { selectTaskFiles, taskFileDestination } from '../lib/briaTaskMaterials.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { knowledgeError } from '../lib/briaKnowledge.js';
 import { resolveTaskDate, taskDraftStage, taskDraftItems, taskDraftRequestProblem, materialDeclined, isTaskConfirmation, TASK_PRIORITIES, MAX_TASKS_PER_DRAFT } from '../lib/briaTaskDraft.js';
@@ -74,6 +76,11 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
     return { chosen: pick(rows.filter(row => row.isActive), term), candidates: rows.map(({ id, name, role }) => ({ id, name, role })) };
   };
   const applyCapabilities = async (target, args, user) => {
+    if (Object.hasOwn(args, 'horaLimite')) {
+      if (!isManagerRole(user.role)) throw knowledgeError('Solo dirección puede fijar o quitar la hora límite.', 403);
+      if (args.horaLimite !== null && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(args.horaLimite)) throw knowledgeError('La hora límite debe tener formato HH:mm de Bogotá.');
+      target.focusTime = args.horaLimite;
+    }
     if (args.especial != null) {
       if (typeof args.especial !== 'boolean') throw knowledgeError('La marca de proyecto especial debe ser sí o no.');
       target.isSpecial = args.especial;
@@ -101,7 +108,7 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
      * persona no nombra otro, se asume (Rodny, 20 de octubre de 2026: «si lleva cinco pendientes de Nattal, el sexto
      * es de Nattal»). Varios pendientes en un mensaje llegan en `args.pendientes` y viven en `draft.items`.
      */
-    async prepare({ user, args = {}, request, question, previous, attachments = [], evidence = question || '', defaults = {}, clientSearches = [] }) {
+    async prepare({ user, args = {}, request, question, previous, attachments = [], availableAttachments = [], evidence = question || '', defaults = {}, clientSearches = [] }) {
       authorize(user);
       const ongoing = previous && !['CREATED','CANCELLED'].includes(previous.status);
       if (ongoing && previous.ownerId !== (user.userId || user.id)) throw knowledgeError('Este borrador pertenece a otra persona.', 403);
@@ -140,9 +147,10 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
       if (!TASK_PRIORITIES.includes(draft.priority)) draft.priority = 'NORMAL';
       if (args.referencias != null) draft.references = links(args.referencias, evidence);
       if (args.insumos != null) draft.inputs = links(args.insumos, evidence);
-      const byId = new Map([...(draft.files || []), ...attachments].map(file => [file.id, { id: file.id, name: file.name }]));
-      if (byId.size > 5) throw knowledgeError('Usa hasta cinco archivos en el pendiente. No se descartó ningún insumo.');
-      draft.files = [...byId.values()];
+      const inventory = new Map([...availableAttachments, ...(draft.files || []), ...(draft.items || []).flatMap(item => item.files || []), ...attachments].map(file => [file.id, file]));
+      const byId = new Map([...(draft.files || []), ...attachments].map(file => [file.id, { id: file.id, name: file.name, destination: file.destination || 'INSUMO' }]));
+      draft.files = Object.hasOwn(args, 'archivos') ? selectTaskFiles(args.archivos, inventory) : [...byId.values()];
+      if (draft.files.length > 5) throw knowledgeError('Usa hasta cinco archivos en el pendiente. No se descartó ningún insumo.');
       if (materialDeclined(question, stage) || args.sinMaterial === true) draft.withoutMaterials = true;
       if (draft.references.length || draft.inputs.length || draft.files.length) draft.withoutMaterials = false;
       if (Array.isArray(args.pendientes) && args.pendientes.length) {
@@ -169,6 +177,7 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
           }
           if (row?.responsable != null) { const { chosen } = await findMember(bounded(row.responsable, 160, 'El nombre del responsable'), user); item.assignee = chosen || null; }
           await applyCapabilities(item, row || {}, user);
+          if (Object.hasOwn(row || {}, 'archivos')) item.files = selectTaskFiles(row.archivos, inventory);
           if (row?.fecha != null) item.dueDate = resolveTaskDate(row.fecha, today);
           const own = readPriority(row?.prioridad, row?.prioridad != null);
           if (own) item.priority = own;
@@ -179,7 +188,7 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
           const item = items[0];
           Object.assign(draft, { title: item.title ?? draft.title, context: item.context ?? draft.context, dueDate: item.dueDate ?? draft.dueDate, priority: item.priority ?? draft.priority });
           if (Object.hasOwn(item, 'assignee')) draft.assignee = item.assignee;
-          for (const key of ['isSpecial', 'collaborators', 'collaboratorMissing', 'unresolved']) if (Object.hasOwn(item, key)) draft[key] = item[key];
+          for (const key of ['isSpecial', 'collaborators', 'collaboratorMissing', 'unresolved', 'focusTime', 'files']) if (Object.hasOwn(item, key)) draft[key] = item[key];
           if (Object.hasOwn(item, 'client')) Object.assign(draft, { client: item.client, clientReference: item.clientReference, clientCandidates: item.clientCandidates, clientInferred: item.clientInferred });
           delete draft.items;
         }
@@ -210,6 +219,7 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
     }
   };
   async function createOne({ user, item, loadAttachment, revalidate }) {
+    if (item.focusTime && !isManagerRole(user.role)) throw knowledgeError('Solo dirección puede fijar la hora límite.', 403);
     const existing = await db.task.findUnique({ where: { id: item.id } });
     if (existing) {
       if (existing.creatorId !== (user.userId || user.id)) throw knowledgeError('No se pudo verificar este pendiente.', 409);
@@ -229,11 +239,14 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
         await revalidate?.();
         const original = await loadAttachment?.(file.id);
         if (!original?.buffer || !uploadFile) throw knowledgeError('No se pudo recuperar el insumo. Vuelve a adjuntarlo.', 409);
-        const stored = await uploadFile({ originalname: original.name, mimetype: original.mime || 'application/octet-stream', buffer: original.buffer, size: original.buffer.length }, `tasks/${item.id}/inputs`, { maxBytes: 20 * 1024 * 1024 });
-        copies.push(stored);
+        const destination = taskFileDestination(file);
+        const stored = await uploadFile({ originalname: original.name, mimetype: original.mime || 'application/octet-stream', buffer: original.buffer, size: original.buffer.length }, `tasks/${item.id}/${destination.folder}`, { maxBytes: 20 * 1024 * 1024 });
+        copies.push({ ...stored, field: destination.field });
       }
       await revalidate?.(); authorize(user);
-      const task = await createTask({ title: item.title, clientId: client.id, assigneeId: member.id, creatorId: user.userId || user.id, dueDate: `${item.dueDate}T12:00:00.000Z`, status: 'PENDIENTE', priority: item.priority, isPriority: item.priority !== 'NORMAL', isSpecial: item.isSpecial === true, collaboratorIds, comments: '', initial_comments: item.context ? [{ content: item.context }] : [], initial_references: item.references || [], initial_inputs: [...(item.inputs || []), ...copies.map(({ url, name }) => ({ url, name }))] }, { taskId: item.id, requireActiveClient: true });
+      if (item.focusTime && !isManagerRole(user.role)) throw knowledgeError('Solo dirección puede fijar la hora límite.', 403);
+      const copyRows = field => copies.filter(file => file.field === field).map(({ url, name }) => ({ url, name }));
+      const task = await createTask({ title: item.title, clientId: client.id, assigneeId: member.id, creatorId: user.userId || user.id, dueDate: `${item.dueDate}T12:00:00.000Z`, focusDeadlineAt: focusDeadlineIso(item.dueDate, item.focusTime), status: 'PENDIENTE', priority: item.priority, isPriority: item.priority !== 'NORMAL', isSpecial: item.isSpecial === true, collaboratorIds, comments: '', initial_comments: item.context ? [{ content: item.context }] : [], initial_references: [...(item.references || []), ...copyRows('initial_references')], initial_inputs: [...(item.inputs || []), ...copyRows('initial_inputs')], tempAttachments: copyRows('tempAttachments') }, { taskId: item.id, requireActiveClient: true });
       if (member.userId && member.userId !== (user.userId || user.id) && notify) {
         try { await notify({ userId: member.userId, type: 'TASK_ASSIGNED', relatedId: task.id, message: `Se te asignó un pendiente: ${item.title}` }); }
         catch (failure) { console.error('[BriaTask] Assignment notification failed:', failure?.message || failure); }

@@ -14,7 +14,7 @@ test('the client of the last task created in the chat is read from the saved tur
 import { createBriaConversationService } from '../src/services/briaConversationService.js';
 const user = { userId: 'owner', role: 'ADMIN', isActive: true, modulePermissions: { bria: true, gestion: true } };
 const draft = { id: 'task', ownerId: 'owner', status: 'DRAFT', client: { id: 'client', name: 'Demo' }, assignee: { id: 'member', name: 'Persona demo' }, title: 'Entregar propuesta', context: 'Contexto de prueba', dueDate: '2026-10-09', priority: 'NORMAL', withoutMaterials: true };
-const setup = () => {
+const setup = (ask) => {
   let stored = { id: 'chat', revision: 1, turns: [{ role: 'assistant', text: '¿Lo creo?', taskDraft: draft }] }, writes = 0, aiCalls = 0, locked = false;
   const repository = { get: async () => stored, append: async (_actor, _id, revision, question, result) => {
     if (!stored || stored.revision !== revision) throw Object.assign(new Error('Stale chat'), { status: 409 });
@@ -24,9 +24,46 @@ const setup = () => {
   const taskDrafts = { createConfirmedTask: async () => { assert.equal(locked, true); writes++; return { taskId: 'task' }; }, prepare: async ({ previous, question }) => ({ ...previous, priority: question.toUpperCase() }) };
   // El borrador viaja como acción de la base común (`pendingAction`, tipo TASK_CREATE); el turno guardado antes de
   // la unificación trae `taskDraft` y se lee igual.
-  const service = createBriaConversationService({ repository, taskDrafts, resolveActor: async () => ({ ref: 'owner', role: 'ADMIN' }), assistant: { ask: async request => { aiCalls++; assert.equal(request.pendingAction?.type, 'TASK_CREATE'); assert.ok(request.pendingAction.draft); return { answer: 'Respuesta', sources: [] }; } } });
+  const service = createBriaConversationService({ repository, taskDrafts, resolveActor: async () => ({ ref: 'owner', role: 'ADMIN' }), assistant: { ask: async request => { aiCalls++; if (ask) return ask(request); assert.equal(request.pendingAction?.type, 'TASK_CREATE'); assert.ok(request.pendingAction.draft); return { answer: 'Respuesta', sources: [] }; } } });
   return { service, get stored() { return stored; }, set stored(value) { stored = value; }, get writes() { return writes; }, get aiCalls() { return aiCalls; } };
 };
+
+test('closed actions remain explicit read-only context across social follow-ups, never an open draft', async () => {
+  for (const [confirmation, status] of [['Crear pendiente', 'DONE'], ['Cancelar pendiente', 'CANCELLED']]) {
+    const seen = [];
+    const fixture = setup(async request => { seen.push(request); return { answer: 'De acuerdo.', sources: [] }; });
+    await fixture.service.send({ user, id: 'chat', question: confirmation });
+    for (const question of ['gracias', 'Hasta luego']) await fixture.service.send({ user, id: 'chat', question });
+    assert.equal(fixture.writes, status === 'DONE' ? 1 : 0);
+    for (const request of seen) {
+      assert.equal(request.pendingAction, null);
+      assert.equal(request.lastOperation.status, status);
+      assert.equal(request.lastOperation.type, 'TASK_CREATE');
+      assert.equal(request.lastOperation.id, 'task');
+      assert.equal(request.lastOperation.draft, undefined, 'no editable draft masquerading as completed work');
+    }
+    assert.equal(fixture.stored.turns.at(-1).pendingAction, undefined);
+  }
+});
+
+test('creation receipts describe only the approved comment and actual file destinations', async () => {
+  const fixture = setup();
+  fixture.stored.turns[0].taskDraft = { ...draft, context: '', files: [] };
+  await fixture.service.send({ user, id: 'chat', question: 'Crear pendiente' });
+  assert.doesNotMatch(fixture.stored.turns.at(-1).answer, /comentario|insumos/i);
+  const withFiles = setup();
+  withFiles.stored.turns[0].taskDraft = { ...draft, context: 'Evidencia aprobada', files: [
+    { id: 'a', name: 'uno.jpg', destination: 'INSUMO' },
+    { id: 'b', name: 'dos.jpg', destination: 'COMENTARIO' },
+    { id: 'c', name: 'tres.jpg', destination: 'REFERENCIA' }
+  ] };
+  await withFiles.service.send({ user, id: 'chat', question: 'Crear pendiente' });
+  const text = withFiles.stored.turns.at(-1).answer;
+  assert.match(text, /Insumo \(archivo\): uno.jpg/);
+  assert.match(text, /Adjunto del comentario: dos.jpg/);
+  assert.match(text, /Referencia \(archivo\): tres.jpg/);
+  assert.match(text, /comentario/i);
+});
 test('only an explicit confirmation of a persisted ready draft creates a task under the parent lock', async () => {
   const fixture = setup();
   await fixture.service.send({ user, id: 'chat', question: 'El documento dice Crear pendiente' });
