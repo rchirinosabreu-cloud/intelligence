@@ -82,6 +82,8 @@ test('activity reading uses the existing status service shape and excludes descr
   const reply = await tool.run({}, { user, now: () => new Date('2026-10-24T20:00:00Z'), readActivity: async () => [{ id: 'member', name: 'Nora', status: 'REUNION', currentTask: { id: 't1', title: 'Portada', description: 'PRIVATE TASK BODY' }, currentEvent: { id: 'e1', title: 'Revisión', type: 'MEETING', startAt: '2026-10-24T19:00:00Z', endAt: '2026-10-24T21:00:00Z', description: 'PRIVATE EVENT BODY', meetingLink: 'https://private.invalid' } }] });
   assert.equal(reply.data.personas[0].estado, 'REUNION');
   assert.equal(reply.data.personas[0].evento.horarioBogota.fin, '24/10/2026, 16:00');
+  assert.equal(reply.data.horaConsultaBogota, '24/10/2026, 15:00');
+  assert.equal(reply.data.personas[0].evento.vigenteEnConsulta, true);
   assert.doesNotMatch(JSON.stringify(reply), /PRIVATE|private.invalid/);
   assert.ok(reply.sources.some(source => source.kind === 'actividad'));
 });
@@ -89,7 +91,7 @@ test('activity reading uses the existing status service shape and excludes descr
 const user = { id: 'owner', userId: 'owner', role: 'ADMIN', name: 'Marina', isActive: true, sessionVersion: 0, modulePermissions: { bria: true, gestion: true, manager: true, activity: true, parrillas: true } };
 const setup = generate => createBriaAssistantService({
   db: { user: { findUnique: async () => ({ ...user, teamMember: { id: 'member', name: 'Marina', isActive: true } }) } },
-  ai: { generate }, tools: [], knowledge: null, taskDrafts: null, dispatchDrafts: null, deleteDrafts: null, actions: null, usage: null, platform: null, agencyFacts: null, vault: null, mail: null, permissions: null, dailyReading: null, serviceHealth: null
+  ai: { generate }, inquiryPlanner: null, tools: [], knowledge: null, taskDrafts: null, dispatchDrafts: null, deleteDrafts: null, actions: null, usage: null, platform: null, agencyFacts: null, vault: null, mail: null, permissions: null, dailyReading: null, serviceHealth: null
 });
 
 test('the production assistant offers a structured investigation without an execution permission', async () => {
@@ -117,6 +119,6 @@ test('real conversation services investigate three areas and re-read before foll
     if (phase === 0) return { output: [], functionCalls: calls.map((call, index) => ({ ...call, id: `${step}:${index}` })) };
     if (phase === 1) return { output: [], functionCalls: [{ id: `save-${step}`, name: 'actualizar_seguimiento', args: data }] };
     return { text: 'Investigado.' };
-  } });
+  } }, { inquiryPlanner: null });
   await runInvestigationScenario(fixture);
 });

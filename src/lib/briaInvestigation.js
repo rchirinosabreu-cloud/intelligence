@@ -3,7 +3,7 @@ import { knowledgeError } from './briaKnowledge.js';
 
 // Capacidades de lectura, no frases del usuario. El modelo decide qué necesita investigar.
 export const INVESTIGATION_READS = {
-  tareas_de_cliente: 'TAREAS', buscar_pendientes: 'TAREAS', mis_tareas: 'TAREAS',
+  tareas_de_cliente: 'TAREAS', buscar_pendientes: 'TAREAS', mis_tareas: 'TAREAS', leer_pendiente: 'TAREAS',
   parrilla_de_cliente: 'CONTENIDO', leer_piezas_de_parrilla: 'CONTENIDO', criterios_y_hallazgos: 'CONTENIDO', publicaciones_programadas: 'CONTENIDO',
   actividad_del_equipo: 'ACTIVIDAD',
   operacion_de_cliente: 'CONTEXTO', memoria_de_reuniones: 'CONTEXTO',
@@ -23,6 +23,7 @@ const unique = sources => [...new Map(sources.map(source => [`${source.kind}:${s
 export const buildInvestigation = (args, { previous, receipts = [], now = new Date(), action } = {}) => {
   const prior = args.nueva === true ? null : previous;
   const byId = new Map(receipts.map(receipt => [receipt.id, receipt]));
+  if (args.incertidumbres?.some(value => byId.has(value))) throw knowledgeError('Las incertidumbres deben explicar qué falta saber, no contener identificadores de consultas.');
   const selected = ids => list(ids).map(id => {
     const receipt = byId.get(id);
     if (!receipt) throw knowledgeError('Una fuente citada no fue consultada en este turno. Vuelve a leerla antes de actualizar el seguimiento.');
@@ -84,6 +85,7 @@ export const investigationReply = record => {
   const pending = record.cobertura.filter(row => row.estado === 'PENDIENTE');
   return [
     `**${record.asunto}**`, record.objetivo,
+    ...(record.pendientesDelRecorrido?.length ? ['La investigación quedó incompleta. Conservé el asunto para retomarlo.', ...record.pendientesDelRecorrido.map(text => `- ${text}`)] : []),
     ...record.consultas.map(row => `Consultado en ${labels[row.area]}: ${new Date(row.consultadoEn).toLocaleString('es-CO', { timeZone: 'America/Bogota' })} (Bogotá)${row.partial ? ' · lectura parcial' : ''}.`),
     ...record.hallazgos.map(row => `- ${row.texto}`),
     ...(pending.length ? ['**Falta comprobar**', ...pending.map(row => `- ${labels[row.area]}: ${row.motivo}`)] : []),

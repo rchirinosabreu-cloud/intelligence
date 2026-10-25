@@ -67,7 +67,7 @@ const normalizeTools = (tools = []) => {
       name: tool.name,
       description: tool.description || '',
       parameters: normalizeSchema(tool.parameters || { type: 'object', properties: {} }),
-      strict: false
+      strict: tool.strict === true
     }));
 };
 

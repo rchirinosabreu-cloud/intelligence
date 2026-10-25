@@ -19,6 +19,7 @@ import { normalizeAiUsage, summarizeAiCalls } from './aiUsage.js';
 import { normalizeQuickReplies } from './briaQuickReplies.js';
 import { missingModules } from './modulePermissionRequests.js';
 import { INVESTIGATION_READS, investigationReply } from './briaInvestigation.js';
+import { INQUIRY_READS, HISTORICAL_READS, inquiryGaps, incompleteInquiry, inquiryDeclarations } from './briaInquiry.js';
 
 export const MAX_TOOL_ROUNDS = 6;
 export const MAX_ANSWER_TOKENS = 2400;
@@ -61,10 +62,11 @@ export const visibleTools = (tools = [], user) => tools.filter((tool) => {
   try { return tool?.allowed?.(user) === true; } catch { return false; }
 });
 
-export const toolDeclarations = (tools = []) => tools.map(({ name, description, parameters }) => ({
+export const toolDeclarations = (tools = []) => tools.map(({ name, description, parameters, strict }) => ({
   name,
   description: description || '',
-  parameters: parameters || { type: 'object', properties: {} }
+  parameters: parameters || { type: 'object', properties: {} },
+  ...(strict === true ? { strict: true } : {})
 }));
 
 export const buildInstructions = ({ person, today, tools = [], user = null }) => {
@@ -72,7 +74,7 @@ export const buildInstructions = ({ person, today, tools = [], user = null }) =>
   const missing = tools.some((tool) => tool.name === 'pedir_permiso') && user ? missingModules(user).map((module) => module.label) : [];
   const who = [person?.name || 'colega', person?.jobTitle].filter(Boolean).join(', ');
   const toolLines = tools.length
-    ? tools.map((tool) => `- ${tool.name}: ${tool.description}`).join('\n')
+    ? tools.map((tool) => `- ${tool.name}`).join('\n')
     : '- (ninguna: esta persona no tiene permisos para consultar datos; responde solo con lo que ella misma te cuente y dile qué pantallas podría pedir que le habiliten)';
   return [
     // Lo fijo va primero y lo que cambia por día o por persona al final (9 de octubre de 2026): OpenAI reutiliza el
@@ -244,6 +246,23 @@ export const runAssistant = async ({
   const taskClientSearches = new Map();
   const investigationReceipts = [];
   let investigation = null;
+  const previousInvestigation = context.investigation;
+  let inquiry = null, nudgedInquiry = false;
+  if (context.inquiryPlanner && byName.has('actualizar_seguimiento')) {
+    await context.revalidate?.();
+    const planned = await context.inquiryPlanner({ ai, question, history, investigation: previousInvestigation, today });
+    inquiry = planned.plan;
+    if (planned.modelCall) modelCalls.push(planned.modelCall);
+    if (inquiry?.investigar) input.push({ role: 'developer', content: `Plan interpretado del pedido (no autoriza cambios): ${JSON.stringify(inquiry)}. Localiza el trabajo por su significado, no por coincidencia literal de título. Para trabajo actual revisa Gestión y abre el detalle con leer_pendiente antes de usar documentos históricos como explicación. Consulta en paralelo las áreas independientes; reserva una ronda para actualizar_seguimiento. Si hay dudas entre candidatos, pregunta; no elijas por cercanía del nombre. Guarda solo el análisis solicitado y declara cualquier impedimento comprobado. No sustituyas una lectura pendiente por ausencia de datos.` });
+  }
+  const finish = (text = '') => ({
+    answer: actionAnswer?.answer || (investigation ? investigationReply(investigation) : null) || String(text).trim() || FALLBACK_ANSWER,
+    sources: [...sources.values()], toolsUsed, failures,
+    ...(learningProposals.length ? { learningProposals } : {}), ...(pendingAction ? { pendingAction } : {}), ...(investigation ? { investigation } : {}),
+    ...(accessCards.size ? { accessCards: [...accessCards.values()].slice(0, 8) } : {}), ...(accessCapture ? { accessCapture } : {}),
+    ...((actionAnswer?.quickReplies || quickReplies).length ? { quickReplies: normalizeQuickReplies(actionAnswer?.quickReplies || quickReplies) } : {}),
+    rounds, usage: summarizeAiCalls(modelCalls)
+  });
 
   const execute = async (call) => {
     const tool = byName.get(call.name);
@@ -252,13 +271,18 @@ export const runAssistant = async ({
     }
     await context.revalidate?.();
     if (!tool.allowed(user)) return { error: 'Esta información ya no está disponible para esta persona.' };
+    if (inquiry?.investigar) {
+      if (!INQUIRY_READS.has(call.name) && !(inquiry.prepararCambios && ACTION_TOOLS.has(call.name))) return { error: 'Este recorrido es de investigación. No autoriza esa modificación ni contacto. Conserva el análisis sin actuar.' };
+      if (inquiry.actualidad && inquiry.localizarTrabajo && HISTORICAL_READS.has(call.name) && !investigationReceipts.some(row => row.area === 'TAREAS')) return { error: 'Falta consultar el trabajo actual en Gestión. Identifica la cuenta, busca los pendientes pertinentes y abre su detalle antes de recurrir al histórico. Una referencia antigua no acredita el estado vigente.' };
+    }
     emit({ type: 'status', label: toolProgressLabel(call.name) });
     const clientQuery = call.name === 'buscar_cliente' && typeof call.args?.nombre === 'string' ? call.args.nombre.trim() : null;
     const clientKey = clientQuery?.normalize('NFKC').replace(/\s+/g, ' ').toLowerCase();
     if (clientKey) taskClientSearches.delete(clientKey);
     try {
       const previousAnswer = [...history].reverse().find((turn) => turn.role === 'assistant')?.text || null;
-      const outcome = await tool.run(call.args || {}, { user, person, today, ...context, investigationReceipts: structuredClone(investigationReceipts), question, previousAnswer, taskClientSearches: structuredClone([...taskClientSearches.values()]) });
+      const args = inquiry?.investigar && call.name === 'actualizar_seguimiento' ? { ...call.args, nueva: !inquiry.continuar } : call.args || {};
+      const outcome = await tool.run(args, { user, person, today, ...context, investigationReceipts: structuredClone(investigationReceipts), question, previousAnswer, taskClientSearches: structuredClone([...taskClientSearches.values()]) });
       if (clientKey && Array.isArray(outcome?.data?.clientes)) taskClientSearches.set(clientKey, {
         query: clientQuery, approximate: outcome.data.aproximado === true,
         clients: outcome.data.clientes.map(row => ({ id: row.id, name: row.nombre, slug: row.slug, isArchived: row.archivado === true }))
@@ -295,7 +319,8 @@ export const runAssistant = async ({
       // el modelo recibe el motivo con sus palabras para poder preguntar, en vez de un «esa parte falló».
       if (Number(error?.status) >= 400 && Number(error?.status) < 500 && typeof error.message === 'string') {
         (logger.warn || logger.error)(`[BriaAssistant] ${call.name} no se ejecutó:`, error.code || error.status, error.message);
-        return { error: error.message, ...(error.code ? { code: error.code } : {}) };
+        return { error: error.message, ...(error.code ? { code: error.code } : {}),
+          ...(call.name === 'actualizar_seguimiento' ? { consultasDisponibles: investigationReceipts.map(({ id, area, herramienta, partial }) => ({ id, area, herramienta, parcial: partial })) } : {}) };
       }
       logger.error(`[BriaAssistant] La herramienta ${call.name} falló:`, error?.response?.data || describeError(error));
       failures.push({ tool: call.name, message: describeError(error) });
@@ -307,19 +332,20 @@ export const runAssistant = async ({
   while (true) {
     await context.revalidate?.();
     const lastRound = rounds >= maxRounds;
+    if (inquiry?.investigar && rounds === maxRounds - 1) input.push({ role: 'developer', content: 'Última ronda disponible de herramientas. Guarda ahora el análisis con actualizar_seguimiento, usando las consultas reales; declara la cobertura pendiente y conserva las condiciones del seguimiento. No inventes datos para completarlo.' });
     const startedAt = Date.now();
     let streamed = false;
     const result = await ai.generate({
       // Una copia por llamada: lo que se añade después (llamadas y resultados) no cambia lo ya enviado.
       input: [...input],
       instructions,
-      tools: lastRound ? [] : declarations,
+      tools: lastRound ? [] : inquiryDeclarations(inquiry?.investigar && !inquiry.prepararCambios && rounds > 0 ? declarations.filter(tool => INQUIRY_READS.has(tool.name)) : declarations, investigationReceipts),
       governanceContext,
       // La selección de herramientas y de sus campos necesita interpretar el diálogo; no heredar
       // el modo sin razonamiento del cliente genérico. Se conserva el modelo configurado.
       reasoningEffort: 'medium',
       maxOutputTokens: MAX_ANSWER_TOKENS,
-      ...(onEvent ? {
+      ...(onEvent && !inquiry?.investigar ? {
         onTextDelta: (text) => { streamed = true; emit({ type: 'delta', text }); },
         // Un reintento empieza de cero: lo que alcanzó a verse se borra.
         onRetry: () => { if (streamed) { streamed = false; emit({ type: 'reset' }); } }
@@ -329,6 +355,13 @@ export const runAssistant = async ({
     const calls = lastRound ? [] : (result?.functionCalls || []);
     // Lo que el modelo escribió antes de pedir una herramienta no es la respuesta: se borra de la pantalla.
     if (calls.length && streamed) emit({ type: 'reset' });
+    const gaps = inquiryGaps(inquiry, investigation, investigationReceipts);
+    if (!calls.length && gaps.length && !lastRound && !nudgedInquiry) {
+      nudgedInquiry = true;
+      rounds += 1;
+      input.push(...(result.output || []), { role: 'developer', content: `El recorrido solicitado aún no está completo: ${gaps.join(' ')}. Continúa con las herramientas, no repitas una conclusión sin esas comprobaciones. Si hay un impedimento real, guárdalo como incertidumbre y cobertura pendiente.` });
+      continue;
+    }
     // Pedir «Confirmar» sin haber preparado la acción obliga a confirmar dos veces (22 de octubre de 2026): ese mensaje
     // no sale; se le pide a Bria, una sola vez, que la prepare en este mismo turno.
     if (!calls.length && !lastRound && canPrepare && !pendingAction && !context.pendingAction && !nudgedToPrepare && asksToConfirm(result?.text)) {
@@ -339,21 +372,13 @@ export const runAssistant = async ({
       continue;
     }
     if (!calls.length) {
-      return {
-        // El resumen de un borrador lo escribe la plataforma, no el modelo: es exactamente lo que se confirmará.
-        answer: actionAnswer?.answer || (investigation ? investigationReply(investigation) : null) || String(result?.text || '').trim() || FALLBACK_ANSWER,
-        sources: [...sources.values()],
-        toolsUsed,
-        failures,
-        ...(learningProposals.length ? { learningProposals } : {}),
-        ...(pendingAction ? { pendingAction } : {}),
-        ...(investigation ? { investigation } : {}),
-        ...(accessCards.size ? { accessCards: [...accessCards.values()].slice(0, 8) } : {}),
-        ...(accessCapture ? { accessCapture } : {}),
-        ...((actionAnswer?.quickReplies || quickReplies).length ? { quickReplies: normalizeQuickReplies(actionAnswer?.quickReplies || quickReplies) } : {}),
-        rounds,
-        usage: summarizeAiCalls(modelCalls)
-      };
+      if (inquiry?.investigar && inquiry.guardarSeguimiento && gaps.length) {
+        await context.revalidate?.();
+        if (!byName.get('actualizar_seguimiento').allowed(user)) throw Object.assign(new Error('Ya no tienes acceso al seguimiento.'), { status: 403 });
+        investigation = incompleteInquiry(inquiry, { previous: previousInvestigation, record: investigation, receipts: investigationReceipts, now: context.now?.() || new Date(), gaps });
+        for (const source of investigation.sources) sources.set(`${source.kind}:${source.id}`, source);
+      }
+      return finish(result?.text);
     }
     rounds += 1;
     input.push(...(result.output || []));
@@ -361,5 +386,7 @@ export const runAssistant = async ({
       const output = await execute(call);
       input.push({ type: 'function_call_output', call_id: call.id, output: JSON.stringify(output) });
     }
+    // El resumen ya deriva del registro validado: otra generación solo lo repite.
+    if (inquiry?.investigar && !inquiry.prepararCambios && investigation && !inquiryGaps(inquiry, investigation, investigationReceipts).length) return finish();
   }
 };

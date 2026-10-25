@@ -4,7 +4,7 @@ import { createBriaAssistantService } from '../../src/services/briaAssistantServ
 import { createBriaTaskDraftService } from '../../src/services/briaTaskDraftService.js';
 
 // Servicios de producción, datos y almacenamiento cerrados y ficticios. No evalúa visión ni transporte Meta.
-export const createTaskLifecycleFixture = (ai, { historicalFiles = [], assistantTools = [], assistantContext = {}, extraDb = {}, knowledge = null } = {}) => {
+export const createTaskLifecycleFixture = (ai, { historicalFiles = [], assistantTools = [], assistantContext = {}, extraDb = {}, knowledge = null, assistantOptions = {}, session = null } = {}) => {
   const user = { id: 'lifecycle-user', userId: 'lifecycle-user', name: 'Marina Duarte', role: 'ADMIN', isActive: true, sessionVersion: 0, modulePermissions: { bria: true, gestion: true } };
   const member = { id: 'lifecycle-member', userId: user.id, name: user.name, isActive: true };
   const collaborator = { id: 'lifecycle-nora', name: 'Nora Sáenz', isActive: true };
@@ -23,9 +23,9 @@ export const createTaskLifecycleFixture = (ai, { historicalFiles = [], assistant
     uploadFile: async file => ({ name: file.originalname, url: `https://storage.invalid/${encodeURIComponent(file.originalname)}`, key: file.originalname })
   });
   const assistant = createBriaAssistantService({ db, now, taskDrafts, tools: assistantTools, context: assistantContext,
-    ai: { generate: async request => { modelRequests.push(structuredClone({ input: request.input, model: request.model, reasoningEffort: request.reasoningEffort })); return ai.generate(request); } },
+    ai: { generate: async request => { modelRequests.push(structuredClone({ input: request.input, model: request.model, reasoningEffort: request.reasoningEffort, tools: request.tools?.map(tool => tool.name), planning: Boolean(request.responseSchema) })); return ai.generate(request); } },
     dispatchDrafts: null, deleteDrafts: null, actions: null, usage: null, platform: null, knowledge,
-    agencyFacts: null, vault: null, mail: null, permissions: null, dailyReading: null, serviceHealth: null
+    agencyFacts: null, vault: null, mail: null, permissions: null, dailyReading: null, serviceHealth: null, ...assistantOptions
   });
   const repository = {
     get: async () => structuredClone(chat), attachments: async () => [...files.values()].reverse(),
@@ -47,7 +47,7 @@ export const createTaskLifecycleFixture = (ai, { historicalFiles = [], assistant
   });
   return { created, traces, modelRequests,
     async send(question, attached = []) {
-      const result = await service.send({ user, id: chat.id, question, files: attached, expectedRevision: chat.revision });
+      const result = await service.send({ user, id: chat.id, question, files: attached, expectedRevision: chat.revision, session });
       const answer = result.turns.at(-1);
       traces.push({ question, answer, writes: created.length });
       return answer;
