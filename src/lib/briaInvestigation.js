@@ -43,6 +43,9 @@ export const buildInvestigation = (args, { previous, receipts = [], now = new Da
   const areas = INVESTIGATION_AREAS.map(area => coverage.get(area) || { area, estado: 'PENDIENTE', consultas: [], motivo: 'Falta revisar su pertinencia y consultar si corresponde.' });
   const findings = list(args.hallazgos).map(row => ({ texto: string(row.texto), consultas: selected(row.consultas).map(read => read.id) }));
   if (findings.some(row => !row.consultas.length)) throw knowledgeError('Cada hallazgo necesita al menos una consulta real. Las hipótesis van en las incertidumbres.');
+  const narrative = list(args.relato || [], 6).map(row => ({ texto: string(row.texto), consultas: selected(row.consultas).map(read => read.id) }));
+  if (narrative.some(row => !row.consultas.length)) throw knowledgeError('Cada párrafo del relato necesita una consulta real que sustente su análisis.');
+  if (narrative.reduce((length, row) => length + row.texto.length, 0) > 4000) throw knowledgeError('Resume el relato en un máximo de 4000 caracteres; conserva el detalle en el registro.');
   const alternatives = list(args.alternativas, 4).map((row, index) => ({ id: String(index + 1), propuesta: string(row.propuesta), beneficio: string(row.beneficio), costo: string(row.costo), incertidumbre: string(row.incertidumbre), consultas: selected(row.consultas).map(read => read.id) }));
   if (alternatives.some(row => !row.consultas.length)) throw knowledgeError('Cada alternativa necesita evidencia consultada; declara sus supuestos por separado.');
   const recommended = args.recomendada == null ? null : String(args.recomendada);
@@ -60,7 +63,7 @@ export const buildInvestigation = (args, { previous, receipts = [], now = new Da
   if (prior && (prior.comprobaciones.length !== checks.length || prior.comprobaciones.some(old => !checks.some(row => row.id === old.id)))) throw knowledgeError('Conserva las condiciones del asunto que estamos siguiendo. Un objetivo distinto requiere una investigación nueva.');
   const complete = areas.every(row => row.estado !== 'PENDIENTE');
   const resolved = Boolean(prior) && complete && checks.every(row => row.resultado === 'CUMPLIDO');
-  const usedIds = new Set([...areas.flatMap(row => row.consultas), ...findings.flatMap(row => row.consultas), ...alternatives.flatMap(row => row.consultas), ...checks.flatMap(row => row.consultas)]);
+  const usedIds = new Set([...areas.flatMap(row => row.consultas), ...findings.flatMap(row => row.consultas), ...narrative.flatMap(row => row.consultas), ...alternatives.flatMap(row => row.consultas), ...checks.flatMap(row => row.consultas)]);
   const used = receipts.filter(read => usedIds.has(read.id));
   let linkedAction = prior?.accion || null;
   if (args.accionPreparada != null) {
@@ -72,7 +75,7 @@ export const buildInvestigation = (args, { previous, receipts = [], now = new Da
     id: prior?.id || randomUUID(), revision: (prior?.revision || 0) + 1,
     asunto: prior?.asunto || string(args.asunto, 200), objetivo: prior?.objetivo || string(args.objetivo),
     revisadaEn: now.toISOString(), estado: resolved ? 'RESUELTO' : checks.some(row => row.resultado === 'CUMPLIDO') ? 'MEJORA_PARCIAL' : 'ABIERTO',
-    cobertura: areas, hallazgos: findings, alternativas: alternatives, recomendada: recommended,
+    cobertura: areas, hallazgos: findings, alternativas: alternatives, recomendada: recommended, relato: narrative,
     incertidumbres: list(args.incertidumbres || []).map(value => string(value)),
     comprobaciones: checks, proximaRevision: string(args.proximaRevision),
     consultas: used, sources: unique([...(prior?.sources || []), ...used.flatMap(read => read.sources)]), accion: linkedAction,
@@ -83,6 +86,20 @@ export const buildInvestigation = (args, { previous, receipts = [], now = new Da
 export const investigationReply = record => {
   const labels = { TAREAS: 'Gestión', CONTENIDO: 'Contenido y aprobaciones', ACTIVIDAD: 'Actividad', CONTEXTO: 'Contexto del cliente', CARGA: 'Carga del equipo' };
   const pending = record.cobertura.filter(row => row.estado === 'PENDIENTE');
+  // La síntesis se escribe junto al análisis, sin una segunda generación. Estado,
+  // cobertura incompleta y límites del seguimiento siguen viniendo del servidor.
+  if (record.relato?.length && !record.pendientesDelRecorrido?.length) {
+    const times = record.consultas.map(row => new Date(row.consultadoEn).getTime()).sort((a, b) => a - b);
+    const format = time => new Date(time).toLocaleString('es-CO', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', minute: '2-digit' });
+    const range = times.length ? format(times[0]) + (Math.floor(times[0] / 60000) !== Math.floor(times.at(-1) / 60000) ? ` — ${format(times.at(-1))}` : '') : '';
+    const state = record.estado === 'RESUELTO' ? 'resuelto según las condiciones comprobadas' : record.estado === 'MEJORA_PARCIAL' ? 'abierto, con avances parciales' : 'abierto';
+    return [
+      ...record.relato.map(row => row.texto),
+      ...(pending.length ? [`Queda por comprobar: ${pending.map(row => `${labels[row.area]}: ${row.motivo}`).join('; ')}`] : []),
+      `El seguimiento queda ${state} en esta conversación. Próxima revisión propuesta: ${record.proximaRevision.replace(/[.\s]+$/u, '')}. No hay un aviso automático programado; cualquier cambio requiere tu aprobación.`,
+      times.length ? `Fuentes: ${[...new Set(record.consultas.map(row => labels[row.area]))].join(', ')} · ${range} (Bogotá)${record.consultas.some(row => row.partial) ? ' · incluye lecturas parciales' : ''}.` : null
+    ].filter(Boolean).join('\n\n');
+  }
   return [
     `**${record.asunto}**`, record.objetivo,
     ...(record.pendientesDelRecorrido?.length ? ['La investigación quedó incompleta. Conservé el asunto para retomarlo.', ...record.pendientesDelRecorrido.map(text => `- ${text}`)] : []),

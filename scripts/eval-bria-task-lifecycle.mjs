@@ -1,5 +1,5 @@
 // Una sola conversación, proveedor real; servicios de producción con identidad y persistencia ficticias.
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { createCaseEvalProvider } from './lib/briaResearchRuntime.js';
 import { createTaskLifecycleFixture, runTaskLifecycleScenario, historicalTaskFiles, runHistoricalTaskFilesScenario } from '../tests/evals/briaTaskLifecycleFixture.js';
@@ -26,12 +26,20 @@ const evaluatedAi = { generate: async request => {
   if (stopped) throw new Error('Proveedor detenido tras el primer fallo; no se reintenta.');
   try { return await provider.generate(request); } catch (error) { stopped = true; throw error; }
 } };
-const fixture = fullInquiry ? createFullInquiryFixture(evaluatedAi) : investigation ? createInvestigationFixture(evaluatedAi) : createTaskLifecycleFixture(evaluatedAi, { historicalFiles: historical ? historicalTaskFiles : [] });
+const resumedFrom = process.env.BRIA_EVAL_RESUME_REPORT || null;
+let first = null, initialTurns = [];
+if (resumedFrom) {
+  const prior = JSON.parse(await readFile(resumedFrom, 'utf8'));
+  if (!fullInquiry || prior.fictional !== true || prior.scenario !== 'full-inquiry' || prior.model !== model || prior.effort !== effort || prior.turns.length !== 1 || !prior.turns[0].answer.investigation) throw new Error('Solo se puede retomar el primer turno guardado de esta evaluación ficticia y configuración.');
+  first = prior.turns[0].answer;
+  initialTurns = [{ role: 'user', text: prior.turns[0].question }, first];
+}
+const fixture = fullInquiry ? createFullInquiryFixture(evaluatedAi, { initialTurns }) : investigation ? createInvestigationFixture(evaluatedAi) : createTaskLifecycleFixture(evaluatedAi, { historicalFiles: historical ? historicalTaskFiles : [] });
 let failure = null;
-try { await runWithAiContext({ actorId: 'lifecycle-user', module: 'bria', route: 'MAINTENANCE FICTIONAL TASK LIFECYCLE' }, () => (fullInquiry ? runFullInquiryScenario : investigation ? runInvestigationScenario : historical ? runHistoricalTaskFilesScenario : runTaskLifecycleScenario)(fixture)); }
+try { await runWithAiContext({ actorId: 'lifecycle-user', module: 'bria', route: 'MAINTENANCE FICTIONAL TASK LIFECYCLE' }, () => (fullInquiry ? runFullInquiryScenario : investigation ? runInvestigationScenario : historical ? runHistoricalTaskFilesScenario : runTaskLifecycleScenario)(fixture, { first })); }
 catch (error) { failure = String(error.message).replaceAll(apiKey, '[REDACTADO]'); }
 await mkdir(path.dirname(path.resolve(output)), { recursive: true });
-await writeFile(output, JSON.stringify({ fictional: true, scenario: fullInquiry ? 'full-inquiry' : investigation ? 'investigation' : historical ? 'historical' : 'lifecycle', model, effort, pass: !failure, failure, limits: {
+await writeFile(output, JSON.stringify({ fictional: true, scenario: fullInquiry ? 'full-inquiry' : investigation ? 'investigation' : historical ? 'historical' : 'lifecycle', resumedFrom, model, effort, pass: !failure, failure, limits: {
   calls: Number(process.env.BRIA_EVAL_MAX_CALLS), inputBytes: Number(process.env.BRIA_EVAL_MAX_INPUT_BYTES), outputTokens: Number(process.env.BRIA_EVAL_MAX_OUTPUT_TOKENS)
 }, turns: fixture.traces, modelRequests: fixture.modelRequests, created: fixture.created, reads: fixture.reads, writes: fixture.writes, usage }, null, 2));
 console.log(failure ? `FALLA: ${failure}` : `OK: recorrido ${investigation || fullInquiry ? 'de investigación y seguimiento sin ejecutar cambios' : 'de hora, archivos, corrección, aprobación y cierre'}.`);

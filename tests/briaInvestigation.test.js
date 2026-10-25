@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBriaAssistantService } from '../src/services/briaAssistantService.js';
-import { buildInvestigation } from '../src/lib/briaInvestigation.js';
+import { buildInvestigation, investigationReply } from '../src/lib/briaInvestigation.js';
+import { incompleteInquiry } from '../src/lib/briaInquiry.js';
 import { createBriaConversationService } from '../src/services/briaConversationService.js';
 import { createBriaTurnAuthorizer } from '../src/services/briaTurnAuthorization.js';
 import { createInvestigationFixture, runInvestigationScenario } from './evals/briaInvestigationFixture.js';
@@ -14,6 +15,47 @@ const analysis = () => ({ asunto: 'Entrega Aurora', objetivo: 'Entregar la pieza
   hallazgos: [{ texto: 'La entrega sigue abierta.', consultas: ['consulta-1'] }],
   alternativas: [{ propuesta: 'Mantener la entrega', beneficio: 'Conservar el acuerdo', costo: 'Revisar el bloqueo', incertidumbre: 'Falta confirmar el insumo', consultas: ['consulta-1'] }, { propuesta: 'Proponer otro plazo', beneficio: 'Dar margen de revisión', costo: 'Cambiar el acuerdo', incertidumbre: 'Debe aceptarlo el cliente', consultas: ['consulta-1'] }], recomendada: '1',
   comprobaciones: [{ id: 'entrega', criterio: 'La pieza aprobada está entregada', resultado: 'PENDIENTE', consultas: [] }], proximaRevision: 'cuando llegue el insumo', incertidumbres: ['Falta el insumo'] });
+
+const relato = [{ texto: 'Encontré la entrega abierta. Falta el insumo, así que todavía no puedo confirmar que lleguemos a tiempo.', consultas: ['consulta-1'] },
+  { texto: 'Te recomiendo aclarar primero cuándo llegará. Cambiar el plazo daría margen, pero requiere acordarlo con el cliente.', consultas: ['consulta-1'] }];
+
+test('the conversational answer leads with grounded prose while preserving the complete internal investigation', () => {
+  const record = buildInvestigation({ ...analysis(), relato }, { receipts });
+  const reply = investigationReply(record);
+  assert.deepEqual(record.relato, relato);
+  assert.ok(reply.startsWith(relato[0].texto));
+  assert.ok(reply.includes(relato[1].texto));
+  assert.doesNotMatch(reply, /Opción 1|Beneficio:|Por aclarar:|Consultado en/);
+  assert.match(reply, /Gestión/);
+  assert.match(reply, /24\/10\/2026/);
+  assert.match(reply, /abierto/);
+  assert.match(reply, /cuando llegue el insumo/);
+  assert.match(reply, /aprobación/);
+  assert.equal(record.alternativas.length, 2);
+  assert.equal(record.comprobaciones[0].criterio, 'La pieza aprobada está entregada');
+  assert.equal(record.ejecucionAutorizada, false);
+});
+
+test('narrative cannot cite invented evidence or survive into a new revision by inheritance', () => {
+  assert.throws(() => buildInvestigation({ ...analysis(), relato: [{ texto: 'Falso', consultas: ['inventada'] }] }, { receipts }), /no fue consultada/);
+  assert.throws(() => buildInvestigation({ ...analysis(), relato: [{ texto: 'Falso', consultas: [] }] }, { receipts }), /consulta/);
+  const first = buildInvestigation({ ...analysis(), relato }, { receipts });
+  const next = buildInvestigation(analysis(), { previous: first, receipts });
+  assert.deepEqual(next.relato, []);
+  assert.doesNotMatch(investigationReply(next), /Te recomiendo aclarar primero/);
+});
+
+test('partial coverage remains visible and an incomplete workflow discards its premature narrative', () => {
+  const args = { ...analysis(), relato };
+  args.cobertura[0].estado = 'PENDIENTE';
+  args.cobertura[0].motivo = 'Falta leer el documento adjunto.';
+  const record = buildInvestigation(args, { receipts });
+  assert.match(investigationReply(record), /Falta leer el documento adjunto/);
+  const unfinished = incompleteInquiry({ investigar: true }, { record, receipts, gaps: ['Abrir el detalle autorizado.'] });
+  assert.deepEqual(unfinished.relato, []);
+  assert.match(investigationReply(unfinished), /incompleta/);
+  assert.doesNotMatch(investigationReply(unfinished), /Te recomiendo aclarar primero/);
+});
 
 test('evidence must come from this turn, partial or absent evidence cannot close the original issue', () => {
   assert.throws(() => buildInvestigation(analysis(), { receipts: [] }), /no fue consultada/);
