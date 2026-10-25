@@ -23,6 +23,8 @@ test('binding receipt ids never constrains uncertainty prose through a shared sc
   const declarations = toolDeclarations(briaInvestigationTools);
   const tool = inquiryDeclarations(declarations, [{ id: 'consulta-actual' }]).find(tool => tool.name === 'actualizar_seguimiento');
   assert.deepEqual(tool.parameters.properties.alternativas.items.properties.consultas.items.enum, ['consulta-actual']);
+  assert.deepEqual(tool.parameters.properties.relato.items.properties.consultas.items.enum, ['consulta-actual']);
+  assert.equal(tool.parameters.properties.relato.items.properties.texto.enum, undefined);
   assert.equal(tool.parameters.properties.incertidumbres.items.enum, undefined);
   assert.equal(declarations.find(tool => tool.name === 'actualizar_seguimiento').parameters.properties.alternativas.items.properties.consultas.items.enum, undefined);
 });
@@ -89,6 +91,7 @@ test('full production catalog resolves the target, preserves checks and reads it
         nueva: turn === 1, asunto: plan.asunto, objetivo: plan.objetivo,
         cobertura: ['TAREAS', 'ACTIVIDAD', 'CARGA', 'CONTEXTO'].map((area, i) => ({ area, estado: 'CONSULTADA', consultas: [`consulta-${i + 1}`, ...(i === 0 ? ['consulta-5'] : [])], motivo: '' })).concat({ area: 'CONTENIDO', estado: 'NO_APLICA', consultas: [], motivo: 'Es desarrollo interno, no una pieza editorial.' }),
         hallazgos: [{ texto: 'La entrega vencía el 20 de octubre; la exportación falla con cuentas sin movimientos.', consultas: ['consulta-5'] }],
+        relato: [{ texto: 'La entrega vencía el 20 de octubre y la exportación sigue fallando. Recomiendo validar el caso sin movimientos antes de proponer otro compromiso; dividir la entrega permitiría avanzar con permisos, pero dejaría la exportación pendiente.', consultas: ['consulta-5'] }],
         alternativas: [{ propuesta: 'Validar exportación', beneficio: 'Resolver el fallo', costo: 'Tiempo de pruebas no estimado', incertidumbre: 'Falta estimación', consultas: ['consulta-5'] }, { propuesta: 'Separar entregas', beneficio: 'Entregar permisos antes', costo: 'La exportación espera', incertidumbre: 'Falta aprobación del alcance', consultas: ['consulta-5'] }], recomendada: '1',
         comprobaciones: [{ id: '1', criterio: turn > 1 ? null : 'La entrega pasa las pruebas de aceptación', resultado: 'NO_CUMPLIDO', consultas: ['consulta-5'] }], proximaRevision: 'Cuando se valide el caso sin movimientos'
       }]]);

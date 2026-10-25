@@ -4,13 +4,13 @@ import { createBriaAssistantService } from '../../src/services/briaAssistantServ
 import { createBriaTaskDraftService } from '../../src/services/briaTaskDraftService.js';
 
 // Servicios de producción, datos y almacenamiento cerrados y ficticios. No evalúa visión ni transporte Meta.
-export const createTaskLifecycleFixture = (ai, { historicalFiles = [], assistantTools = [], assistantContext = {}, extraDb = {}, knowledge = null, assistantOptions = {}, session = null } = {}) => {
+export const createTaskLifecycleFixture = (ai, { historicalFiles = [], assistantTools = [], assistantContext = {}, extraDb = {}, knowledge = null, assistantOptions = {}, session = null, initialTurns = [] } = {}) => {
   const user = { id: 'lifecycle-user', userId: 'lifecycle-user', name: 'Marina Duarte', role: 'ADMIN', isActive: true, sessionVersion: 0, modulePermissions: { bria: true, gestion: true } };
   const member = { id: 'lifecycle-member', userId: user.id, name: user.name, isActive: true };
   const collaborator = { id: 'lifecycle-nora', name: 'Nora Sáenz', isActive: true };
   const client = { id: 'lifecycle-client', name: 'Taller Aurora Ficticio', isArchived: false };
   const created = [], traces = [], modelRequests = [], files = new Map(historicalFiles.map(file => [file.id, file])), tasks = new Map();
-  let locked = false, chat = { id: 'lifecycle-chat', revision: 0, turns: [] };
+  let locked = false, chat = { id: 'lifecycle-chat', revision: initialTurns.length / 2, turns: structuredClone(initialTurns) };
   const db = {
     user: { findUnique: async () => ({ ...user, teamMember: member }) },
     client: { findMany: async () => [client], findUnique: async () => client },

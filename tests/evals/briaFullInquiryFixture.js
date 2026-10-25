@@ -4,7 +4,7 @@ import { createTaskLifecycleFixture } from './briaTaskLifecycleFixture.js';
 
 // Catálogo completo del servicio real. Solo datos y fronteras externas simulados.
 // Ninguna frase del caso forma parte de las instrucciones de producción.
-export const createFullInquiryFixture = ai => {
+export const createFullInquiryFixture = (ai, { initialTurns = [] } = {}) => {
   const client = { id: 'lifecycle-client', name: 'Taller Aurora Ficticio', slug: 'aurora', isArchived: false };
   const base = { clientId: client.id, client, assignee: { id: 'lifecycle-member', name: 'Marina Duarte', userId: 'lifecycle-user' }, isPrivate: false, collaborators: [], viewers: [], accumulatedWorkMs: 0 };
   const target = { ...base, id: 'feature-delivery', title: 'Solicitud de actualizaciones y nuevas funcionalidades de la plataforma de gestión', status: 'PENDIENTE', dueDate: '2026-10-20T17:00:00Z', comments: 'Entrega del portal interno: permisos de clientes y exportación de reportes. Falta validar la exportación en staging.', updatedAt: '2026-10-24T15:00:00Z', taskComments: [{ id: 'blocker', content: 'La exportación falla con cuentas sin movimientos. Nora debe revisar el caso; las pruebas de aceptación siguen pendientes. No hay una nueva fecha acordada.', createdAt: '2026-10-24T15:00:00Z', author: { name: 'Marina Duarte' } }] };
@@ -20,6 +20,7 @@ export const createFullInquiryFixture = ai => {
   const matches = where => tasks.filter(task => (!where?.clientId || task.clientId === where.clientId) && (!where?.status?.in || where.status.in.includes(task.status)));
   const history = [{ id: 'old-invoice', title: 'Aviso de facturación de febrero', content: 'Aviso de renovación de febrero de 2026; no demuestra la vigencia del servicio de hoy.', authority: 'HISTORICO' }];
   const fixture = createTaskLifecycleFixture(ai, {
+    initialTurns,
     assistantTools: briaAssistantTools,
     session: { token: 'fictional-no-network' },
     knowledge: service({ list: record('knowledge', []) }),
@@ -53,8 +54,8 @@ export const createFullInquiryFixture = ai => {
   return { ...fixture, reads, writes };
 };
 
-export const runFullInquiryScenario = async fixture => {
-  const first = await fixture.send('Me preocupa que no lleguemos a tiempo con la entrega de nuevas funcionalidades de la plataforma del Taller Aurora Ficticio. Investiga cómo está realmente la situación, qué puede impedir cumplir y qué información falta. Propón alternativas, explícame cuál recomiendas y por qué. Deja el asunto en seguimiento con condiciones claras para saber cuándo está resuelto. Por ahora no prepares ni ejecutes cambios ni contactes a nadie.');
+export const runFullInquiryScenario = async (fixture, { first: priorFirst } = {}) => {
+  const first = priorFirst || await fixture.send('Me preocupa que no lleguemos a tiempo con la entrega de nuevas funcionalidades de la plataforma del Taller Aurora Ficticio. Investiga cómo está realmente la situación, qué puede impedir cumplir y qué información falta. Propón alternativas, explícame cuál recomiendas y por qué. Deja el asunto en seguimiento con condiciones claras para saber cuándo está resuelto. Por ahora no prepares ni ejecutes cambios ni contactes a nadie.');
   const check = result => {
     assert.deepEqual(fixture.writes, [], 'no side effects while investigating');
     assert.equal(result.pendingAction, undefined);
@@ -63,6 +64,10 @@ export const runFullInquiryScenario = async fixture => {
     assert.ok(result.investigation.sources.some(source => source.kind === 'tarea' && source.id === 'feature-delivery'), 'semantic target matched and private detail authorized');
     assert.ok(result.investigation.alternativas.length >= 2 && result.investigation.recomendada);
     assert.notEqual(result.investigation.estado, 'RESUELTO');
+    assert.ok(result.investigation.relato?.length, 'the real model must compose a conversational synthesis, not use the legacy field dump');
+    assert.ok(result.text.startsWith(result.investigation.relato[0].texto));
+    assert.doesNotMatch(result.text, /Consultado en|Beneficio:|Costo o efecto:|Por aclarar:/u, 'internal record labels should not be repeated to the person');
+    assert.ok(result.text.length < 5500, 'a concise explanation while retaining the complete internal record');
     assert.match(result.text, /exportaci[oó]n/iu, 'must discuss the actual blocker, not just list source headers');
     assert.match(result.text, /20 de octubre|20\/10\/2026/iu, 'must report the registered deadline');
     assert.doesNotMatch(result.text, /18:00|6\s*(?:p\.?\s*m\.?|de la tarde)/iu);

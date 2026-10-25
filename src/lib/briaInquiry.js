@@ -42,7 +42,7 @@ export const HISTORICAL_READS = new Set(['memoria_de_agencia', 'leer_documento_d
 export const inquiryDeclarations = (declarations, receipts) => declarations.map(tool => {
   if (tool.name !== 'actualizar_seguimiento' || !receipts.length) return tool;
   const bound = structuredClone(tool);
-  for (const field of ['cobertura', 'hallazgos', 'alternativas', 'comprobaciones']) {
+  for (const field of ['cobertura', 'hallazgos', 'alternativas', 'comprobaciones', 'relato']) {
     const properties = bound.parameters.properties[field].items.properties;
     // structuredClone conserva aliases: reemplazar el campo, no mutar el esquema
     // compartido con incertidumbres u otras listas de texto.
@@ -73,5 +73,5 @@ export const incompleteInquiry = (plan, { previous, record, receipts, now, gaps 
     comprobaciones: (plan.continuar && previous ? previous.comprobaciones : plan.condiciones.map((criterio, i) => ({ id: String(i + 1), criterio }))).map(row => ({ ...row, resultado: 'DESCONOCIDO', consultas: [] })),
     proximaRevision: 'Retomar las comprobaciones pendientes de esta investigación'
   }, { previous, receipts, now });
-  return { ...investigation, estado: 'ABIERTO', pendientesDelRecorrido: gaps };
+  return { ...investigation, relato: [], estado: 'ABIERTO', pendientesDelRecorrido: gaps };
 };
