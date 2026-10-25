@@ -25,7 +25,9 @@ test('PostgreSQL rechaza la aprobación anterior y solo ejecuta una vez dos conf
     await pool.query(await readFile(new URL('../scripts/sql/bria-conversations.sql', import.meta.url), 'utf8'));
     const actor = { ref: 'owner', role: 'ADMIN' }, repository = createBriaConversationRepository({ pool, workspace: 'revision-test' });
     const chat = await repository.create(actor);
-    await repository.append(actor, chat.id, 0, 'Prepara', { answer: 'Mover al lunes' });
+    const investigation = { id: 'case-1', revision: 1, asunto: 'Entrega', comprobaciones: [{ id: 'check-1', resultado: 'PENDIENTE' }], ejecucionAutorizada: false };
+    await repository.append(actor, chat.id, 0, 'Prepara', { answer: 'Mover al lunes', investigation });
+    assert.deepEqual((await repository.get(actor, chat.id)).turns.at(-1).investigation, investigation);
     await repository.append(actor, chat.id, 1, 'Cambia la fecha', { answer: 'Mover al viernes' });
     const execute = async () => { calls++; return { answer: 'Listo' }; };
     await assert.rejects(repository.append(actor, chat.id, 1, 'Confirmar', execute), { status: 409, code: 'BRIA_CONVERSATION_STALE' });

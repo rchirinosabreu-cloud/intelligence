@@ -22,6 +22,9 @@ La evaluación real distingue una propuesta de la petición humana actual: `pedi
 
 ## 1. Base de Datos (Prisma)
 
+**Investigación operativa conversacional (24 de octubre de 2026):** `actualizar_seguimiento` organiza hallazgos, alternativas y condiciones de resolución en los metadatos del chat existente; no concede permiso de ejecución. Los recibos de lectura los genera el servidor en el turno actual. Cobertura consultada no significa problema resuelto; una lectura parcial no acredita cierre. `actividad_del_equipo` comparte el servicio de Actividad, sus permisos y horario de Bogotá; no devuelve cuerpos ni enlaces privados. Al retomar, los criterios se conservan por id en el servidor y se vuelven a leer fuentes; una tarea creada o una acción DONE no cierran el asunto. Se conserva fuera del recorte de diez turnos, con autorización de todas sus fuentes. El siguiente momento de revisión es una propuesta: este incremento no programa avisos ni recupera investigaciones automáticamente entre chats/días. Detalle y límites en `docs/BRIA_PROJECT_MANAGER_PLAN.md`; contratos `tests/briaInvestigation.test.js` y `tests/briaConversationRevisionPostgres.test.js`. No sustituir esto por listas de frases ni declarar completas las etapas 2/3.
+
+
 - **Proveedor:** El proyecto utiliza `postgresql` en producción (Railway). **NUNCA** cambies el provider a `sqlite` ni a ningún otro en `prisma/schema.prisma`.
 - **Sincronización:** No se utilizan archivos de migración locales (carpeta `prisma/migrations`). Las actualizaciones de esquema se aplican directamente con `npx prisma db push` o scripts de post-instalación en producción.
 - **Modelo `Task`:** Debe contener siempre la columna `completedAt DateTime?` para evitar pérdida de datos en el historial.
