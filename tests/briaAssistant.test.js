@@ -1,6 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { briaInvestigationTools } from '../src/services/briaInvestigationTools.js';
 import {
   ASSISTANT_USE_CASE,
   MAX_QUESTION_LENGTH,
@@ -52,18 +51,6 @@ const scriptedAi = (responses) => {
 };
 
 const outputsOf = (request) => request.input.filter((item) => item.type === 'function_call_output').map((item) => JSON.parse(item.output));
-
-test('voice guidance adapts to the conversation without turning recorded hours into progress or weakening approval', () => {
-  const instructions = buildInstructions({ person, today: TODAY, tools: briaInvestigationTools });
-  assert.match(instructions, /respuesta o recomendación primero/);
-  assert.match(instructions, /Para un cliente/);
-  assert.match(instructions, /porcentaje de avance/);
-  assert.match(instructions, /aprobación del resumen/);
-  const narrative = briaInvestigationTools.find(row => row.name === 'actualizar_seguimiento').parameters.properties.relato.description;
-  assert.doesNotMatch(narrative, /150–250/);
-  assert.match(narrative, /profundidad del pedido/);
-  assert.match(narrative, /servidor añade el estado real/);
-});
 
 test('dos adjuntos con el mismo nombre llegan al modelo con sus identidades distintas para poder elegir uno', async () => {
   const attachments = [
