@@ -6,6 +6,16 @@ Este plan amplía lo construido en [Ojos y cerebro](BRIA_OJOS_Y_CEREBRO.md), [au
 
 ## Punto de partida
 
+### Voz propia basada en la comunicación del equipo — 25 de octubre de 2026
+
+El informe privado de voz aportado por Rodny se usa como evidencia de diseño, sin copiar al repositorio sus citas, chats ni ejemplos. La guía general pide responder primero, unir recomendación y motivo, adaptar el detalle al pedido, preguntar solo lo necesario y retomar desde lo que cambió. Distingue la conversación interna del texto destinado a un cliente. No imita muletillas ni añade frases disparadoras, respuestas prefabricadas, autonomía o una generación extra. El relato de investigación deja de tener un objetivo fijo de 150–250 palabras; conserva el máximo, las citas y el estado agregado por el servidor.
+
+Se distingue tiempo registrado, progreso documentado y resultado validado. Las horas no se convierten en porcentaje de avance, esfuerzo restante ni dedicación exclusiva. Este cambio orienta la explicación, **no amplía la lectura de sesiones de `leer_pendiente` ni la lectura del PDF de la tarea**: esas capacidades siguen pendientes. Tampoco entrena pesos del modelo ni importa conversaciones privadas a la memoria productiva.
+
+Validación acotada: `scripts/eval-bria-voice.mjs` usa las instrucciones productivas y el contrato de relato sobre lecturas ficticias ya resueltas; no evalúa búsqueda, persistencia ni transporte WhatsApp. Se revisaron seis situaciones con `gpt-6-luna/low`: tiempo, recomendación, seguimiento, corrección, borrador para cliente y ambigüedad. Tras ajustar la separación del borrador y el foco de la continuación se volvieron a comprobar solo esos dos casos. Las ocho respuestas conservaron los hechos y los límites de acción; el borrador quedó separado. El seguimiento aún puede incluir una aclaración redundante sobre horas: es una mejora de voz, no una garantía de estilo uniforme. No se oculta esa observación ni se repite la prueba hasta obtener una frase deseada.
+
+Informes locales ignorados `output/bria-project/lifecycle-budgeted-13.json` y `lifecycle-budgeted-14.json`. Ocho llamadas: **US$0,002637 estimados sin caché**, no importe confirmado de factura. Reservas preventivas de US$0,035 y US$0,013, conciliadas solo con uso completo; acumulado conservador **US$0,182185**, saldo **US$0,067815** del tope autorizado de US$0,25. La reserva anterior de resultado incierto sigue intacta. Contratos locales: asistente, investigación, recorrido y confirmación; la aceptación de integración sigue requiriendo CI verde.
+
 ### Relato conversacional del análisis — 25 de octubre de 2026
 
 La investigación conservaba un registro estructurado pero lo publicaba entero como una ficha. `actualizar_seguimiento` ahora redacta párrafos conectados en `relato`, junto al registro y sin una generación adicional. Se valida tamaño y procedencia de las consultas; los hallazgos, alternativas y condiciones siguen guardados completos. El servidor añade estado real, cobertura pendiente, revisión propuesta y una sola línea de fuentes con fecha/hora de Bogotá. Las investigaciones antiguas sin relato conservan su representación; al retomar se genera prosa nueva. Si el recorrido termina incompleto se elimina cualquier síntesis prematura y se conserva el bloqueo explícito.
