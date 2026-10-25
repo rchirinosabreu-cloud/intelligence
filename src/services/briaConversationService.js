@@ -165,7 +165,14 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           const latest = [...chat.turns].reverse().map(turn => pendingActionOf([turn])).find(Boolean);
           const lastOperation = latest && ['DONE', 'CANCELLED'].includes(latest.status)
             ? { id: latest.id, type: latest.type, status: latest.status, title: latest.title, result: latest.result || null } : null;
-          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), readingDay, attachments, chatAttachments, selectionTurn: `${id}:${chat.revision}`, lastOperation, pendingAction: open(pendingAction) ? pendingAction : null, session, taskAttachments: prepared, taskDefaults, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
+          // Se conserva fuera del resumen de diez turnos, solo desde turnos autorizados del mismo chat.
+          const savedInvestigation = [...chat.turns].reverse().find(turn => turn.role === 'assistant' && turn.investigation)?.investigation;
+          const investigation = savedInvestigation ? structuredClone(savedInvestigation) : null;
+          if (investigation?.accion) {
+            const linked = [...chat.turns].reverse().map(turn => pendingActionOf([turn])).find(action => action?.id === investigation.accion.id);
+            if (linked) investigation.accion.status = linked.status;
+          }
+          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), readingDay, investigation, attachments, chatAttachments, selectionTurn: `${id}:${chat.revision}`, lastOperation, pendingAction: open(pendingAction) ? pendingAction : null, session, taskAttachments: prepared, taskDefaults, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
           // Un borrador de pendiente, despacho o eliminación sobrevive a una pregunta suelta, como siempre; las demás
           // acciones solo valen sobre la respuesta inmediatamente anterior.
           if (!result.pendingAction && open(pendingAction) && isLegacyAction(pendingAction)) result.pendingAction = pendingAction;

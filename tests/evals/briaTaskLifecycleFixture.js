@@ -4,7 +4,7 @@ import { createBriaAssistantService } from '../../src/services/briaAssistantServ
 import { createBriaTaskDraftService } from '../../src/services/briaTaskDraftService.js';
 
 // Servicios de producción, datos y almacenamiento cerrados y ficticios. No evalúa visión ni transporte Meta.
-export const createTaskLifecycleFixture = (ai, { historicalFiles = [] } = {}) => {
+export const createTaskLifecycleFixture = (ai, { historicalFiles = [], assistantTools = [], assistantContext = {}, extraDb = {}, knowledge = null } = {}) => {
   const user = { id: 'lifecycle-user', userId: 'lifecycle-user', name: 'Marina Duarte', role: 'ADMIN', isActive: true, sessionVersion: 0, modulePermissions: { bria: true, gestion: true } };
   const member = { id: 'lifecycle-member', userId: user.id, name: user.name, isActive: true };
   const collaborator = { id: 'lifecycle-nora', name: 'Nora Sáenz', isActive: true };
@@ -15,16 +15,16 @@ export const createTaskLifecycleFixture = (ai, { historicalFiles = [] } = {}) =>
     user: { findUnique: async () => ({ ...user, teamMember: member }) },
     client: { findMany: async () => [client], findUnique: async () => client },
     teamMember: { findMany: async ({ where }) => [member, collaborator].filter(m => where.OR.some(c => c.name?.contains && m.name.toLowerCase().includes(c.name.contains.toLowerCase()))), findUnique: async ({ where }) => [member, collaborator].find(m => m.id === where.id || where.userId && m.userId === where.userId) },
-    task: { findUnique: async ({ where }) => tasks.get(where.id) || null }
+    task: { findUnique: async ({ where }) => tasks.get(where.id) || null }, ...extraDb
   };
   const now = () => new Date('2026-10-24T17:00:00Z');
   const taskDrafts = createBriaTaskDraftService({ db, now,
     createTask: async (data, { taskId }) => { assert.equal(locked, true); const task = { ...data, id: taskId }; tasks.set(taskId, task); created.push(task); return task; },
     uploadFile: async file => ({ name: file.originalname, url: `https://storage.invalid/${encodeURIComponent(file.originalname)}`, key: file.originalname })
   });
-  const assistant = createBriaAssistantService({ db, now, taskDrafts, tools: [],
+  const assistant = createBriaAssistantService({ db, now, taskDrafts, tools: assistantTools, context: assistantContext,
     ai: { generate: async request => { modelRequests.push(structuredClone({ input: request.input, model: request.model, reasoningEffort: request.reasoningEffort })); return ai.generate(request); } },
-    dispatchDrafts: null, deleteDrafts: null, actions: null, usage: null, platform: null, knowledge: null,
+    dispatchDrafts: null, deleteDrafts: null, actions: null, usage: null, platform: null, knowledge,
     agencyFacts: null, vault: null, mail: null, permissions: null, dailyReading: null, serviceHealth: null
   });
   const repository = {

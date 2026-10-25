@@ -18,6 +18,7 @@ export const MAX_HISTORY_TURN_LENGTH = 2000;
 import { normalizeAiUsage, summarizeAiCalls } from './aiUsage.js';
 import { normalizeQuickReplies } from './briaQuickReplies.js';
 import { missingModules } from './modulePermissionRequests.js';
+import { INVESTIGATION_READS, investigationReply } from './briaInvestigation.js';
 
 export const MAX_TOOL_ROUNDS = 6;
 export const MAX_ANSWER_TOKENS = 2400;
@@ -78,6 +79,7 @@ export const buildInstructions = ({ person, today, tools = [], user = null }) =>
     // principio idéntico entre preguntas (caché de prompt) y la respuesta empieza antes.
     'Eres Bria, la asistente de Brainstudio Intelligence, la plataforma interna de la agencia Brain Studio.',
     'Reglas:',
+    ...(tools.some(tool => tool.name === 'actualizar_seguimiento') ? ['Para investigar y dar seguimiento a un asunto operativo, elige las fuentes por el propósito y alcance temporal del pedido. Revisa tareas, contenido y aprobaciones, Actividad actual, contexto y carga cuando sean pertinentes; explica lo no consultado o no aplicable. Usa el mapa para descubrir capacidades que te falten. Construye alternativas con sus beneficios, efectos, costos y datos inciertos, sin inventar duración, causalidad ni disponibilidad. Guarda la síntesis con actualizar_seguimiento citando comprobantes de consultas de este turno. Una corrección del análisis no modifica la plataforma. Elegir una opción permite preparar su cambio solo si la persona lo pide; la ejecución siempre espera la aprobación del resumen. Para retomar un seguimiento, conserva su objetivo y condiciones de resolución, consulta evidencia nueva y distingue acción ejecutada de problema resuelto.'] : []),
     '1. Escribe en español de Latinoamérica: trata de tú y, en plural, de ustedes. Nunca uses la forma peninsular de la segunda persona del plural.',
     '2. Conversa como una colega estratégica, analítica y propositiva. Responde directamente y con el detalle que requiere el trabajo: una revisión necesita observaciones concretas, razones y propuestas. Usa negritas, listas o tablas cuando ayuden a leer, sin títulos de relleno ni tecnicismos sobre las herramientas.',
     '3. Solo sabes lo que devuelven las herramientas de esta conversación. Nunca inventes nombres, fechas, cifras, estados ni citas. Antes de declarar que falta información, comprueba la cobertura de las capacidades disponibles. Elige fuentes por el hecho y el momento que pregunta la persona: un inventario de trabajo, un histórico, una previsión y un estado actual contestan preguntas distintas. Consulta la fuente operativa adecuada aunque otra herramienta ya haya devuelto datos relacionados. Distingue consulta fallida, permiso denegado, respuesta parcial y ausencia comprobada. Si no lo puedes verificar, dilo sin convertir una suposición ni la sugerencia del usuario en un hecho. No afirmes haber consultado ni no haber consultado una fuente si no tienes evidencia de ese turno; vuelve a consultarla para resolver contradicciones.',
@@ -226,6 +228,7 @@ export const runAssistant = async ({
   const governanceContext = { useCase: ASSISTANT_USE_CASE };
   const input = [...history.map(turnToInput), { role: 'user', content: [{ type: 'input_text', text: question }, ...attachments.flatMap(file => [{ type: 'input_text', text: `ADJUNTO (evidencia): ${file.name}\n${file.id ? `Identificador del archivo: ${file.id}\n` : ''}${typeof file.current === 'boolean' ? `Origen: ${file.current ? 'adjunto de este mensaje' : 'archivo anterior del chat'}\n` : ''}${file.createdAt ? `Recibido: ${file.createdAt}\n` : ''}Estado: ${file.status}. ${file.warning || ''}\n${file.text || ''}` }, ...(file.modelPart ? [file.modelPart] : [])])] }];
   const sources = new Map();
+  for (const source of context.investigation?.sources || []) sources.set(`${source.kind}:${source.id}`, source);
   const toolsUsed = [];
   const failures = [];
   const learningProposals = [];
@@ -239,6 +242,8 @@ export const runAssistant = async ({
   const modelCalls = [];
   // Recibos del turno actual, nunca del historial ni de argumentos generados. No se guardan en el borrador.
   const taskClientSearches = new Map();
+  const investigationReceipts = [];
+  let investigation = null;
 
   const execute = async (call) => {
     const tool = byName.get(call.name);
@@ -253,7 +258,7 @@ export const runAssistant = async ({
     if (clientKey) taskClientSearches.delete(clientKey);
     try {
       const previousAnswer = [...history].reverse().find((turn) => turn.role === 'assistant')?.text || null;
-      const outcome = await tool.run(call.args || {}, { user, person, today, ...context, question, previousAnswer, taskClientSearches: structuredClone([...taskClientSearches.values()]) });
+      const outcome = await tool.run(call.args || {}, { user, person, today, ...context, investigationReceipts: structuredClone(investigationReceipts), question, previousAnswer, taskClientSearches: structuredClone([...taskClientSearches.values()]) });
       if (clientKey && Array.isArray(outcome?.data?.clientes)) taskClientSearches.set(clientKey, {
         query: clientQuery, approximate: outcome.data.aproximado === true,
         clients: outcome.data.clientes.map(row => ({ id: row.id, name: row.nombre, slug: row.slug, isArchived: row.archivado === true }))
@@ -265,9 +270,21 @@ export const runAssistant = async ({
       learningProposals.push(...(outcome?.learningProposals || []));
       if (outcome?.quickReplies) quickReplies = normalizeQuickReplies(outcome.quickReplies);
       if (outcome?.pendingAction) { pendingAction = outcome.pendingAction; context.pendingAction = pendingAction; actionAnswer = outcome.actionReply; }
+      if (outcome?.investigation) { investigation = outcome.investigation; context.investigation = investigation; }
       for (const card of outcome?.accessCards || []) if (card?.id) accessCards.set(card.id, { id: card.id, cliente: card.cliente, plataforma: card.plataforma, nombre: card.nombre });
       if (outcome?.accessCapture) accessCapture = outcome.accessCapture;
-      const data = outcome?.data ?? null;
+      let data = outcome?.data ?? null;
+      const area = INVESTIGATION_READS[call.name];
+      const readArgumentsPresent = (tool.parameters?.required || []).every(key => call.args?.[key] != null && (typeof call.args[key] !== 'string' || call.args[key].trim()));
+      if (area && byName.has('actualizar_seguimiento') && readArgumentsPresent && data && !data.error) {
+        const receipt = { id: `consulta-${investigationReceipts.length + 1}`, herramienta: call.name, area,
+          consultadoEn: (context.now?.() || new Date()).toISOString(),
+          partial: Boolean(data.recortada || data.nextOffset != null || data.piezas?.some(row => row.textoRecortado) || Array.isArray(data.tareas) && data.total > data.tareas.length),
+          sources: outcome.sources?.length ? outcome.sources : [{ kind: 'investigacion', id: call.name }]
+        };
+        investigationReceipts.push(receipt);
+        data = { ...data, comprobanteConsulta: { id: receipt.id, area, consultadoEn: receipt.consultadoEn, parcial: receipt.partial } };
+      }
       const calendarioFechas = calendarHints(data);
       if (!Object.keys(calendarioFechas).length) return data;
       return data && typeof data === 'object' && !Array.isArray(data)
@@ -324,12 +341,13 @@ export const runAssistant = async ({
     if (!calls.length) {
       return {
         // El resumen de un borrador lo escribe la plataforma, no el modelo: es exactamente lo que se confirmará.
-        answer: actionAnswer?.answer || String(result?.text || '').trim() || FALLBACK_ANSWER,
+        answer: actionAnswer?.answer || (investigation ? investigationReply(investigation) : null) || String(result?.text || '').trim() || FALLBACK_ANSWER,
         sources: [...sources.values()],
         toolsUsed,
         failures,
         ...(learningProposals.length ? { learningProposals } : {}),
         ...(pendingAction ? { pendingAction } : {}),
+        ...(investigation ? { investigation } : {}),
         ...(accessCards.size ? { accessCards: [...accessCards.values()].slice(0, 8) } : {}),
         ...(accessCapture ? { accessCapture } : {}),
         ...((actionAnswer?.quickReplies || quickReplies).length ? { quickReplies: normalizeQuickReplies(actionAnswer?.quickReplies || quickReplies) } : {}),
