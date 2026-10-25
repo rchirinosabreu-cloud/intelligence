@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createBriaAssistantService } from '../src/services/briaAssistantService.js';
+import { createBriaAssistantService as createService } from '../src/services/briaAssistantService.js';
+// Access tests isolate authorization; semantic planning is covered by briaInquiryWorkflow.
+const createBriaAssistantService = options => createService({ inquiryPlanner: null, ...options });
 const actor = () => ({ userId: 'u', role: 'PROJECT_MANAGER', sessionVersion: 1, modulePermissions: { bria: true, gestion: true } });
 const row = () => ({ id: 'u', name: 'Persona', role: 'PROJECT_MANAGER', isActive: true, sessionVersion: 1, modulePermissions: { bria: true, gestion: true }, teamMember: { id: 'm', isActive: true } });
 

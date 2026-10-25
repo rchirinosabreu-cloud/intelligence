@@ -2,10 +2,11 @@ import assert from 'node:assert/strict';
 import { briaAssistantTools } from '../../src/services/briaAssistantTools.js';
 import { createTaskLifecycleFixture } from './briaTaskLifecycleFixture.js';
 
-export const createInvestigationFixture = ai => {
+export const createInvestigationFixture = (ai, assistantOptions = {}) => {
   let consultedTasks = 0, consultedContent = 0, consultedActivity = 0;
   const piece = { id: 'piece-aurora', objective: 'Portada del taller', format: 'Post', publishDate: '2026-10-25T12:00:00Z', status: 'APROBADO', revisionRequestedAt: '2026-10-24T16:00:00Z', copyText: 'Portada', captionText: 'Taller Aurora', finalAssetKey: 'new-cover', _count: { finalAssets: 1 }, publications: [], tasks: [] };
   const fixture = createTaskLifecycleFixture(ai, {
+    assistantOptions,
     knowledge: { list: async () => [], propose: async () => assert.fail('Investigation must not write knowledge') },
     assistantTools: briaAssistantTools.filter(tool => ['buscar_cliente', 'tareas_de_cliente', 'parrilla_de_cliente'].includes(tool.name)),
     assistantContext: {

@@ -213,7 +213,8 @@ test('the instructions name the person, the day and exactly the tools she can us
   const text = buildInstructions({ person, today: TODAY, tools: [tool('mis_tareas'), tool('buscar_cliente')] });
   assert.match(text, /Kamila, Project manager/);
   assert.match(text, /6 de octubre de 2026/);
-  assert.match(text, /- mis_tareas: Consulta mis_tareas/);
+  assert.match(text, /- mis_tareas\n/);
+  assert.doesNotMatch(text, /Consulta mis_tareas/, 'descriptions travel in native declarations, not twice in the prompt');
   assert.match(text, /- buscar_cliente/);
   assert.match(text, /Nunca inventes/);
   assert.doesNotMatch(text, /vosotros|\bos\b/);

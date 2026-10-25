@@ -41,6 +41,7 @@ import { teamLoadService } from './teamLoadService.js';
 import { createDailyReadingTools } from './dailyReadingTools.js';
 import { getDailyReadingService } from './dailyReadingService.js';
 import { briaInvestigationTools } from './briaInvestigationTools.js';
+import { planInquiry } from '../lib/briaInquiry.js';
 
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
 const ACTION_ATTACHMENT_NAME = { TASK_CREATE: 'Borrador del pendiente', DISPATCH: 'Borrador del despacho a producción', TASK_DELETE: 'Eliminación de pendientes en preparación' };
@@ -64,7 +65,8 @@ export const createBriaAssistantService = ({
   mail = getMailboxService,
   permissions = getPermissionRequestService,
   dailyReading = getDailyReadingService,
-  serviceHealth = serviceHealthService
+  serviceHealth = serviceHealthService,
+  inquiryPlanner = planInquiry
 } = {}) => {
   // Sin clave de cifrado la bóveda queda apagada, pero Bria sigue respondiendo con todo lo demás.
   const vaultFor = () => {
@@ -124,7 +126,7 @@ export const createBriaAssistantService = ({
         logger,
         onEvent,
         // `session` es el token con el que la persona abrió el chat: sin él, consultar_plataforma no tiene manos.
-        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session }
+        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, inquiryPlanner, ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session }
       });
       // El motivo técnico de un fallo se queda en el registro del servidor; al navegador solo va qué falló.
       await revalidate();
