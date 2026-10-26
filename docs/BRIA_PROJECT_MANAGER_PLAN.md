@@ -6,6 +6,19 @@ Este plan amplía lo construido en [Ojos y cerebro](BRIA_OJOS_Y_CEREBRO.md), [au
 
 ## Punto de partida
 
+### Fechas, cifras y prioridades sustentadas — 26 de octubre de 2026
+
+El nuevo piloto detectó una fecha de hoy presentada como futura, un total financiero que no coincidía con los importes enumerados y una opción pospuesta sin investigar su efecto. Se refuerza la evidencia que recibe el modelo y su criterio general de respuesta, sin nombres de clientes, disparadores lingüísticos ni respuestas de plantilla.
+
+- `briaTemporalEvidence` calcula por separado la relación del día con hoy en Bogotá y la del instante con la hora de consulta. Una hora posterior del mismo día sigue siendo HOY; una fecha sin hora no permite inventar un vencimiento intradía. Los plazos nativos, sus estados y permisos se conservan. `contextoTemporal` solo clasifica días estructurados completos; no toma un prefijo UTC ni una cita en prosa como fecha nativa.
+- `briaFinancialEvidence` acompaña lecturas financieras autorizadas con sumas exactas en centavos, importes decimales, moneda y alcance. Distingue total de la fuente, página y selección; conserva nulos, recortes y discrepancias. No modifica la contabilidad, convierte monedas ni restaura precisión perdida antes de la consulta. La moneda documental de una cuenta no sustituye el COP de su saldo contable.
+- Las instrucciones comparan la opción recomendada y la aplazada con el mismo examen: compromiso, plazo, bloqueo y consecuencia de esperar. Tener menos datos no demuestra menor prioridad; primero se consulta el detalle pertinente y, si la incertidumbre persiste, la recomendación se declara provisional. Este criterio lo interpreta el modelo, no una regla de frases o puntuaciones.
+- La voz prioriza una respuesta breve con la razón y la incertidumbre que pueden cambiar la decisión. Investigar mucho no exige narrar todas las lecturas. No se trunca la prosa ni se añade otra generación para el tono; los documentos de aprobación conservan sus datos completos.
+
+La aceptación usa cuentas y persistencia ficticias con herramientas reales: comparar dos trabajos bajo una restricción de tiempo, consultar total y subtotal de cobros, y retomar la decisión después del cambio de tema. El subtotal exige un recibo del cálculo sobre las filas seleccionadas mediante `idsParaSumar` o una lectura completa equivalente; una cifra correcta redactada sin cálculo verificable no basta. El preflight local ejerce Carga, Ritmo y los lectores nativos de movimientos, tablero, cartera y proveedores, conservando filtros, paginación y alcances distintos.
+
+Validación local: **88 pruebas dirigidas**, lint, auditoría de código muerto y compilación en verde. Los contratos verifican fechas, sumas, permisos, lecturas y ausencia de efectos; no acreditan por sí solos criterio ni naturalidad. La nueva evaluación pagada sigue pendiente de autorización: las dos respuestas autorizadas anteriormente ya se consumieron aunque queden US$0,0125461 del tope global. Una medición local de las solicitudes mostró que ese saldo no permite reservar con seguridad la conversación completa. Se solicitaron hasta US$0,03 adicionales para una sola conversación de tres mensajes, sin reintentos automáticos; no se ha gastado en este bloque ni se ha modificado producción.
+
 ### Investigar el foco y acompañar la decisión — 26 de octubre de 2026
 
 El piloto ya aplicó la aclaración contractual al panorama sin que Rodny la repitiera. El siguiente límite era el salto del resumen a una recomendación: la previsión mostraba trabajo futuro sin estimación junto a contadores de vencidos, no explicaba el origen de cada límite y faltaba la relación consultable desde una tarea hacia su pieza. Una respuesta podía quedarse en pedir que se revisaran aprobaciones o insumos que la plataforma ya describía.

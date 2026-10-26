@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { toolByName } from '../src/services/briaAssistantTools.js';
 import { createTeamLoadService } from '../src/services/teamLoadService.js';
+import * as temporal from '../src/lib/briaTemporalEvidence.js';
 
 const today = '2026-10-26';
 const now = () => new Date('2026-10-26T15:00:00.000Z');
@@ -123,4 +124,67 @@ test('native load metadata does not expand Manager access into the linked editor
   assert.equal(metadata.dueDate, '2026-10-30');
   assert.equal(metadata.contentItem, undefined);
   assert.doesNotMatch(JSON.stringify(metadata), /21:47|APROBADO/);
+});
+
+test('a publication dated today in Bogotá is today even when the UTC date is tomorrow', () => {
+  const at = new Date('2026-10-27T02:00:00Z'); // 26 October, 21:00 Bogotá
+  const sameDay = temporal.publicationTemporalEvidence({ publishDate: '2026-10-26', status: 'APROBADO' }, { now: at });
+  assert.equal(sameDay.fecha, '2026-10-26');
+  assert.equal(sameDay.relacionConHoy, 'HOY');
+  assert.equal(sameDay.relacionConAhora, null, 'a calendar day has no exact deadline hour');
+  assert.equal(sameDay.instante, null);
+  assert.equal(sameDay.vencida, false);
+  const nextDay = temporal.publicationTemporalEvidence({ publishDate: '2026-10-27', status: 'APROBADO' }, { now: at });
+  assert.equal(nextDay.relacionConHoy, 'FUTURO');
+});
+
+test('relative task days change at Bogotá midnight and never manufacture a time', () => {
+  const rows = ['2026-10-26', '2026-10-27', '2026-10-28'].map(dueDate => ({ dueDate, status: 'PENDIENTE' }));
+  const before = rows.map(row => temporal.taskTemporalEvidence(row, { now: new Date('2026-10-27T04:59:59.999Z') }));
+  const after = rows.map(row => temporal.taskTemporalEvidence(row, { now: new Date('2026-10-27T05:00:00Z') }));
+  assert.deepEqual(before.map(row => row.entrega.relacionConHoy), ['HOY', 'FUTURO', 'FUTURO']);
+  assert.deepEqual(after.map(row => row.entrega.relacionConHoy), ['PASADO', 'HOY', 'FUTURO']);
+  assert.ok([...before, ...after].every(row => row.entrega.relacionConAhora === null));
+  assert.deepEqual(after.map(row => row.entrega.fecha), rows.map(row => row.dueDate));
+});
+
+test('today has past, current and future instants without becoming a future calendar day', () => {
+  const at = new Date('2026-10-27T02:00:00Z');
+  const rows = ['20:00', '21:00', '22:00'].map(publishTime => temporal.publicationTemporalEvidence({ publishDate: '2026-10-26', publishTime, status: 'APROBADO' }, { now: at }));
+  assert.deepEqual(rows.map(row => row.relacionConHoy), ['HOY', 'HOY', 'HOY']);
+  assert.deepEqual(rows.map(row => row.relacionConAhora), ['PASADO', 'AHORA', 'FUTURO']);
+  assert.deepEqual(rows.map(row => row.vencida), [true, false, false]);
+  const commitment = temporal.taskTemporalEvidence({ dueDate: '2026-10-26', focusDeadlineAt: '2026-10-27T03:00:00Z', status: 'PENDIENTE' }, { now: at }).compromiso;
+  assert.equal(commitment.fecha, '2026-10-26');
+  assert.equal(commitment.hora, '22:00');
+  assert.equal(commitment.relacionConHoy, 'HOY');
+  assert.equal(commitment.relacionConAhora, 'FUTURO');
+});
+
+test('relative evidence describes time independently of whether the work is already complete', () => {
+  const at = new Date('2026-10-27T17:00:00Z');
+  const closed = temporal.taskTemporalEvidence({ dueDate: '2026-10-26', focusDeadlineAt: '2026-10-26T20:00:00Z', status: 'REALIZADA' }, { now: at });
+  assert.equal(closed.entrega.relacionConHoy, 'PASADO');
+  assert.equal(closed.entrega.vencida, false);
+  assert.equal(closed.compromiso.relacionConAhora, 'PASADO');
+  assert.equal(closed.compromiso.vencido, false);
+  const published = temporal.publicationTemporalEvidence({ publishDate: '2026-10-26', publishTime: '15:00', status: 'PUBLICADO' }, { now: at });
+  assert.equal(published.relacionConHoy, 'PASADO');
+  assert.equal(published.vencida, false);
+});
+
+test('the reusable relation distinguishes explicit calendar days from zoned instants', () => {
+  const options = { now: new Date('2027-01-01T04:00:00Z') }; // still 31 December in Bogotá
+  assert.deepEqual(temporal.temporalRelation({ fecha: '2027-01-01' }, options), { relacionConHoy: 'FUTURO', relacionConAhora: null });
+  assert.deepEqual(temporal.temporalRelation({ instante: '2027-01-01T04:00:00Z' }, options), { relacionConHoy: 'HOY', relacionConAhora: 'AHORA' });
+  assert.deepEqual(temporal.temporalRelation({ instante: '2026-12-31T22:00:00-05:00' }, options), { relacionConHoy: 'HOY', relacionConAhora: 'PASADO' });
+  assert.deepEqual(temporal.temporalRelation({ instante: '2027-01-01T12:00:00+09:00' }, options), { relacionConHoy: 'HOY', relacionConAhora: 'PASADO' });
+});
+
+test('missing or ambiguous temporal inputs do not become confident relative evidence', () => {
+  const options = { now: new Date('2026-10-26T17:00:00Z') };
+  for (const value of [{}, { fecha: '2026-02-30' }, { instante: '2026-02-30T12:00:00Z' }, { instante: '2026-10-26' }, { instante: '2026-10-26T12:00:00' }, { instante: 'invalid' }]) {
+    assert.deepEqual(temporal.temporalRelation(value, options), { relacionConHoy: null, relacionConAhora: null });
+  }
+  assert.deepEqual(temporal.temporalRelation({ fecha: '2026-10-26' }, { now: new Date('invalid') }), { relacionConHoy: null, relacionConAhora: null });
 });
