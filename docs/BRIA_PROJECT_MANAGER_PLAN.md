@@ -6,6 +6,22 @@ Este plan amplía lo construido en [Ojos y cerebro](BRIA_OJOS_Y_CEREBRO.md), [au
 
 ## Punto de partida
 
+### Investigar el foco y acompañar la decisión — 26 de octubre de 2026
+
+El piloto ya aplicó la aclaración contractual al panorama sin que Rodny la repitiera. El siguiente límite era el salto del resumen a una recomendación: la previsión mostraba trabajo futuro sin estimación junto a contadores de vencidos, no explicaba el origen de cada límite y faltaba la relación consultable desde una tarea hacia su pieza. Una respuesta podía quedarse en pedir que se revisaran aprobaciones o insumos que la plataforma ya describía.
+
+Se conservan el motor conversacional y la voz del modelo. La instrucción es investigar los detalles que puedan cambiar la decisión, distinguir fechas y comparar formas de resolver el mismo objetivo. No se añade un clasificador, una llamada para cambiar el tono, un formato obligatorio ni frases de activación. Una consulta general no obliga a elegir una tarea arbitraria ni a guardar seguimiento.
+
+- `leer_pendiente` expone la relación nativa con una pieza solo cuando se puede abrir la tarea y leer Parrillas. No revive piezas/parrillas eliminadas; las cabeceras públicas conservan su autorización independiente.
+- `leer_piezas_de_parrilla` permite seleccionar hasta seis ids de esa parrilla, preserva la paginación para revisiones completas y declara ids no disponibles. Devuelve aprobación nativa y presencia de material final: disponer del archivo no equivale a aprobarlo ni a haber visto su contenido.
+- Entrega interna, compromiso con hora y publicación son datos separados en Bogotá. La previsión conserva su cálculo, declara el origen del límite y entrega las fechas propias de la tarea. Su lista de riesgos no convierte una tarea futura sin estimación en vencida.
+- Los recibos indican herramienta, resumen/detalle, recursos realmente devueltos y recorte. Una cartera parcial sigue siendo parcial; una consulta de memoria con selectores nullable válidos recibe su comprobante. Los recibos verifican procedencia, no verdad semántica ni comprensión.
+- El seguimiento conserva sus condiciones por id, relee evidencia y explica qué cambió. Obtener un insumo o una aprobación no demuestra que se publicó; una recomendación no prepara ni ejecuta cambios.
+
+Contratos nuevos: `tests/briaTemporalEvidence.test.js`, `tests/briaSelectiveInvestigation.test.js`, `tests/evalBriaDecisionInvestigation.test.js`. La aceptación ficticia conecta los servicios reales de conversación, memoria y herramientas sin sesión de navegador, como WhatsApp: una cuenta sin compromiso, otra con una tarea interna vencida y publicación futura, una pieza fuera de la primera página, material cambiado y ficha técnica pendiente. La continuación recibe aprobación e insumo, pero sigue sin publicación. La prueba determinista verifica integración, permisos y efectos; no acredita por sí sola comprensión del modelo.
+
+Evaluación con proveedor: `scripts/eval-bria-decision-investigation.mjs`, sin producción ni transporte Meta. Rodny autorizó **US$0,03 adicionales** al máximo anterior de US$0,25. El ledger conserva las reservas inciertas y exige saldo antes de la red. La primera corrida real consultó las evidencias pertinentes, pero el adaptador ficticio de Carga estaba incompleto: **no se cuenta como aceptación aprobada**. Su resultado se conserva para validar la continuación sin repetir lo ya pagado. La verificación completa y el resultado de la continuación se registrarán antes de fusionar.
+
 ### Aprender correcciones y aplicarlas antes de decidir — 26 de octubre de 2026
 
 La reincidencia del informe matinal mostró una separación: el chat podía recuperar una aclaración, pero la generación automática recibía solo señales y criterios generales. Además, el guardado de memoria conservaba detectores de frases, una investigación podía impedir guardar una corrección del mismo turno y la extracción nocturna descartaba negaciones por parecido de palabras.

@@ -123,13 +123,13 @@ test('mis_tareas returns only what the person is responsible for or collaborates
     { id: 't1', title: 'Subir videos', status: 'PENDIENTE', dueDate: noon('2026-10-02'), focusDeadlineAt: null, priority: 'ALTA', isPriority: false, isPrivate: false, comments: 'SECRETO', client: { name: 'Nattal' }, assignee: { name: 'Sara' } },
     { id: 't2', title: 'Reel de octubre', status: 'EN_CURSO', dueDate: null, focusDeadlineAt: new Date('2026-10-06T20:00:00.000Z'), priority: null, isPriority: true, isPrivate: true, comments: 'SECRETO', client: { name: 'Mimas' }, assignee: { name: 'Jarlan' } }
   ]; } } };
-  const result = await toolByName('mis_tareas').run({ estado: 'todas' }, { db, user: editor, person, today: TODAY });
+  const result = await toolByName('mis_tareas').run({ estado: 'todas' }, { db, user: editor, person, today: TODAY, now: () => NOW });
   const where = queries[0].where;
   assert.deepEqual(where.status, { in: ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'] });
   assert.deepEqual(where.OR, [{ assigneeId: 'm-sara' }, { collaborators: { some: { memberId: 'm-sara' } } }]);
   assert.equal(JSON.stringify(result).includes('SECRETO'), false, 'la descripción nunca sale');
-  assert.deepEqual(result.data.tareas[0], { id: 't1', titulo: 'Subir videos', estado: 'PENDIENTE', cliente: 'Nattal', responsable: 'Sara', vence: '2026-10-02', vencida: true, horaCompromiso: null, prioridad: 'ALTA', privada: false });
-  assert.deepEqual(result.data.tareas[1], { id: 't2', titulo: 'Reel de octubre', estado: 'EN_CURSO', cliente: 'Mimas', responsable: 'Jarlan', vence: null, vencida: false, horaCompromiso: '15:00', prioridad: 'Destacada', privada: true });
+  assert.deepEqual(result.data.tareas[0], { id: 't1', titulo: 'Subir videos', estado: 'PENDIENTE', cliente: 'Nattal', responsable: 'Sara', vence: '2026-10-02', vencida: true, plazos: { zonaHoraria: 'America/Bogota', entrega: { fecha: '2026-10-02', vencida: true }, compromiso: null, publicacion: null }, horaCompromiso: null, prioridad: 'ALTA', privada: false });
+  assert.deepEqual(result.data.tareas[1], { id: 't2', titulo: 'Reel de octubre', estado: 'EN_CURSO', cliente: 'Mimas', responsable: 'Jarlan', vence: null, vencida: false, plazos: { zonaHoraria: 'America/Bogota', entrega: { fecha: null, vencida: false }, compromiso: { fecha: '2026-10-06', hora: '15:00', instante: '2026-10-06T20:00:00.000Z', vencido: false }, publicacion: null }, horaCompromiso: '15:00', prioridad: 'Destacada', privada: true });
   assert.deepEqual(result.sources[0], { kind: 'tarea', id: 't1', label: 'Subir videos', url: '/gestion?taskId=t1' });
 
   await toolByName('mis_tareas').run({ estado: 'devueltas' }, { db, user: editor, person, today: TODAY });
@@ -147,7 +147,7 @@ test('tareas_de_cliente goes through the same privacy-filtered reading as the bo
   const result = await toolByName('tareas_de_cliente').run({ clientId: 'c1', estado: 'todas' }, { getTasks, user: editorWithModules, person, today: TODAY });
   assert.deepEqual(calls, [['c1', 'u-sara']]);
   assert.deepEqual(result.data.tareas.map((t) => t.id), ['t1'], 'las cerradas no entran salvo que se pidan');
-  assert.deepEqual(result.data.tareas[0], { id: 't1', titulo: 'Guion', estado: 'PENDIENTE', cliente: 'Nattal', responsable: 'Sara', vence: '2026-10-09', vencida: false, privada: false });
+  assert.deepEqual(result.data.tareas[0], { id: 't1', titulo: 'Guion', estado: 'PENDIENTE', cliente: 'Nattal', responsable: 'Sara', vence: '2026-10-09', vencida: false, plazos: { zonaHoraria: 'America/Bogota', entrega: { fecha: '2026-10-09', vencida: false }, compromiso: null, publicacion: null }, privada: false });
   const closed = await toolByName('tareas_de_cliente').run({ clientId: 'c1', estado: 'realizadas' }, { getTasks, user: editorWithModules, person, today: TODAY });
   assert.deepEqual(closed.data.tareas.map((t) => t.id), ['t9']);
   assert.equal(closed.data.tareas[0].responsable, null);
@@ -174,7 +174,7 @@ test('parrilla_de_cliente reads the month of the question, computes the stage of
     ['i3', 'aprobada', 'MATERIAL_NUEVO'],
     ['i2', 'sin texto', 'POR_REVISAR']
   ]);
-  assert.deepEqual(result.data.parrilla.piezas[0], { id: 'i1', titulo: 'Lanzamiento', formato: 'Reel', fecha: '2026-10-03', hora: '09:00', estado: 'APROBADO', etapa: 'programada', aprobacion: 'APROBADA', tieneTexto: true, tieneMaterial: true, pedidoDelCliente: null, enProduccion: null, referencias: 0 });
+  assert.deepEqual(result.data.parrilla.piezas[0], { id: 'i1', titulo: 'Lanzamiento', formato: 'Reel', fecha: '2026-10-03', hora: '09:00', estado: 'APROBADO', plazos: { fecha: '2026-10-03', hora: '09:00', instante: '2026-10-03T14:00:00.000Z', estado: 'APROBADO', vencida: true }, etapa: 'programada', aprobacion: 'APROBADA', tieneTexto: true, tieneMaterial: true, pedidoDelCliente: null, enProduccion: null, referencias: 0 });
   assert.deepEqual(result.data.parrilla.resumen, { piezas: 3, porFormato: { Reel: 1, Carrusel: 1, Post: 1 }, sinTexto: 1, sinMaterial: 1, porAprobar: 2, devueltas: 0, enProduccion: 0, vencidas: 1 });
   assert.deepEqual(result.sources[0], { kind: 'pieza', id: 'i1', label: 'Lanzamiento (3 oct)', url: '/parrillas/p-oct?item=i1' });
   assert.equal(JSON.stringify(result).includes('ESCENA 1'), false, 'el guion no viaja al modelo');

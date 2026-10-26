@@ -61,7 +61,7 @@ export function buildTeamForecast({ people = [], tasks = [], rhythm = {}, now = 
   const rows = people.map((person) => {
     const own = tasks.filter((task) => task.personId === person.personId).map((task) => ({
       id: task.id, title: task.title, clientId: task.clientId || null, clientName: task.clientName, workType: task.workType, dueDay: task.dueDay,
-      status: task.status, scheduledDay: task.deadlineAt ? bogotaDate(task.deadlineAt) : task.dueDay || null,
+      status: task.status, temporal: task.temporal || null, scheduledDay: task.deadlineAt ? bogotaDate(task.deadlineAt) : task.dueDay || null,
       deadlineAt: task.deadlineAt ? new Date(task.deadlineAt).toISOString() : null, deadlineSource: task.deadlineSource || 'fecha',
       ...remainingEstimate(task, rhythm, now, incomplete)
     })).sort((a, b) => (a.deadlineAt || `${a.scheduledDay || '9999'}T23:00:00Z`).localeCompare(b.deadlineAt || `${b.scheduledDay || '9999'}T23:00:00Z`) || a.id.localeCompare(b.id));
@@ -101,7 +101,7 @@ export function buildTeamForecast({ people = [], tasks = [], rhythm = {}, now = 
       hoursIncomplete: Boolean(rhythm.hoursIncomplete),
       dueCount: week.filter((task) => task.scheduledDay >= (days[0] || today)).length, nextDueDay: dated.find((task) => task.scheduledDay >= today)?.scheduledDay || null };
   });
-  return { policy: RHYTHM_POLICY, today, days, weekEnd, window, nextWeek: window === 'next_week', incomplete, capacityMs, periodCapacityMs, people: rows,
+  return { policy: RHYTHM_POLICY, generatedAt: new Date(now).toISOString(), today, days, weekEnd, window, nextWeek: window === 'next_week', incomplete, capacityMs, periodCapacityMs, people: rows,
     summary: { dueCount: sum(rows, 'dueCount'), overdueCount: sum(rows, 'overdueCount'), riskCount: sum(rows, 'riskCount'),
       attentionCount: rows.reduce((n, p) => n + p.overdueCount + p.riskCount + p.tightCount, 0),
       withSpace: rows.filter((p) => p.canReceive).length, undatedCount: sum(rows, 'undatedCount'), unknownCount: sum(rows, 'unknownCount') } };
