@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createGroundedAnswersFixture, runGroundedAnswersScenario, assertGroundedAnswer, runGroundedReadPreflight, GROUNDED_QUESTIONS } from './evals/briaGroundedAnswersFixture.js';
+import { createGroundedAnswersFixture, runGroundedAnswersScenario, assertGroundedAnswer, assertGroundedRecovery, runGroundedReadPreflight, GROUNDED_QUESTIONS, GROUNDED_RECOVERY_QUESTION } from './evals/briaGroundedAnswersFixture.js';
 
 const plan = () => ({ investigar: false, continuar: false, actualidad: true, localizarTrabajo: false, guardarSeguimiento: false, prepararCambios: false, compararAlternativas: true, soloConversacion: false, propositoMemoria: 'NINGUNO', asunto: '', objetivo: '', areas: [], condiciones: [] });
 const answers = [
@@ -9,7 +9,7 @@ const answers = [
   'Volviendo a tus 30 minutos, mantendría primero la revisión de Cobalto: todavía vence hoy, 26 de octubre, a las 11:00 y quedan unos 20 minutos de revisión según su comentario. Cometa sigue sin publicación verificada, con publicación prevista para el 27; revisaría eso después. Los cobros no cambian esa comparación. No ejecuté cambios.'
 ];
 
-const scripted = ({ skipAlternative = false, skipServerSubtotal = false, firstAnswer = answers[0], financeAnswer = answers[1], initialTurn = 0 } = {}) => {
+const scripted = ({ skipAlternative = false, skipServerSubtotal = false, firstAnswer = answers[0], financeAnswer = answers[1], initialTurn = 0, recovery = false, recoveryAnswer = `Cometa y Órbita juntas suman $3.575.500 COP. ${answers[2]}` } = {}) => {
   let turn = initialTurn - 1, step = 0;
   return { generate: async request => {
     if (request.responseSchema) { turn++; step = 0; return { text: JSON.stringify(plan()) }; }
@@ -19,10 +19,10 @@ const scripted = ({ skipAlternative = false, skipServerSubtotal = false, firstAn
       if (step === 2 && !skipServerSubtotal) return call([['consultar_plataforma', { ruta: '/financials/receivables-ledger', idsParaSumar: ['receivable-0', 'receivable-2'] }]]);
       return { text: financeAnswer };
     }
-    if (step++ === 0) return call([['cartera_de_operacion', {}], ['buscar_pendientes', { estado: 'todas' }]]);
+    if (step++ === 0) return call([['cartera_de_operacion', {}], ['buscar_pendientes', { estado: 'todas' }], ...(recovery && !skipServerSubtotal ? [['consultar_plataforma', { ruta: '/financials/receivables-ledger', idsParaSumar: ['receivable-0', 'receivable-2'] }]] : [])]);
     if (step === 2) return call([['leer_pendiente', { id: 'cometa-task' }], ...(!skipAlternative ? [['leer_pendiente', { id: 'cobalto-task' }]] : [])]);
     if (step === 3) return call([['leer_piezas_de_parrilla', { planId: 'cometa-plan', ids: ['cometa-piece'] }], ...(!skipAlternative ? [['leer_piezas_de_parrilla', { planId: 'cobalto-plan', ids: ['cobalto-piece'] }]] : []), ['publicaciones_programadas', { dias: 7 }]]);
-    return { text: turn === 0 ? firstAnswer : answers[2] };
+    return { text: recovery ? recoveryAnswer : turn === 0 ? firstAnswer : answers[2] };
   } };
 };
 
@@ -78,6 +78,14 @@ test('acceptance rejects a wrong total, treating an issue date as overdue, and a
 test('acceptance measures actual reads and semantic bounds, not an expected winning client or exact prose', async () => {
   const fixture = createGroundedAnswersFixture(scripted({ firstAnswer: 'Con tus treinta minutos, primero contrastaría la falta de prueba de publicación de Cometa, aunque la memoria diga mes listo. La entrega interna de esa tarea era el 23 de octubre; publicar corresponde al 27. En Cobalto revisé el detalle: vence hoy 26 de octubre y una revisión de 20 minutos permite liberar la entrega de las 11:00. Cometa reduciría incertidumbre; Cobalto protege un compromiso de hoy. Son dos efectos distintos, y no hice cambios.' }));
   await runGroundedAnswersScenario(fixture);
+});
+
+test('contrasting remembered readiness does not require a prescribed memory label in the narrative', async () => {
+  const fixture = createGroundedAnswersFixture(scripted({ firstAnswer: 'Usaría los 30 minutos para Cobalto: la entrega es hoy a las 11:00 y la revisión está estimada en 20 minutos. En Cometa, octubre sí aparece listo en cuanto a materiales: la pieza está aprobada y tiene material final. Pero eso no confirma que esté programada ni publicada; su publicación es mañana, martes 27 de octubre. Dejaríamos esperando comprobar su programación.' }));
+  await runGroundedAnswersScenario(fixture);
+  const withoutMemory = structuredClone(fixture.outcomes[0]);
+  withoutMemory.reads = withoutMemory.reads.filter(row => row.name !== 'account-memory');
+  assert.throws(() => assertGroundedAnswer(withoutMemory, fixture, 0), /remembered claim must be available/iu);
 });
 
 test('a resumed recommendation must refresh both alternatives and retain the time constraint', async () => {
@@ -187,5 +195,32 @@ test('cash read evidence does not invent a currency absent from the native proje
   for (const operation of ['GET /financials/receivables-ledger', 'GET /financials/payables-ledger']) {
     const evidence = reads.find(result => result.operacion === operation && result.respuesta.items.length > 0).evidenciaNumerica;
     assert.ok(evidence.sumasFilasVisibles.every(sum => sum.moneda === 'COP'), 'native obligation currencies must remain intact');
+  }
+});
+
+test('one recovery turn supplies the missing combined subtotal and refreshes both options without accepting the earlier partial answer', async () => {
+  const original = createGroundedAnswersFixture(scripted({ skipServerSubtotal: true, financeAnswer: 'La cartera de las seis cuentas suma $6.612.000 COP. Cometa tiene $1.275.500 y Órbita $2.300.000. Ninguna tiene vencimiento informado, así que no puedo llamarlas vencidas.' }));
+  await assert.rejects(runGroundedAnswersScenario(original), /server-calculated subtotal/iu);
+  const saved = JSON.stringify(original.outcomes);
+  const initialTurns = original.outcomes.flatMap(outcome => [{ role: 'user', text: outcome.question }, { role: 'assistant', ...outcome.answer }]);
+  const fixture = createGroundedAnswersFixture(scripted({ initialTurn: 2, recovery: true }), { initialTurns });
+  await fixture.send(GROUNDED_RECOVERY_QUESTION);
+  assertGroundedRecovery(fixture.outcomes[0], fixture);
+  assert.equal(fixture.outcomes.length, 1);
+  assert.ok(fixture.requests.every(request => request.turn === 2), 'only the new recovery message can call the provider');
+  assert.doesNotMatch(fixture.outcomes[0].answer.text, /6\.612\.000/u, 'recovery does not require repeating the already known general total');
+  assert.equal(JSON.stringify(original.outcomes), saved, 'original partial evidence remains unchanged');
+  assert.throws(() => assertGroundedAnswer(original.outcomes[1], original, 1), /server-calculated subtotal/iu);
+});
+
+test('recovery rejects a missing computed subtotal, missing prose subtotal or a competing option without a fresh detail read', async () => {
+  for (const [options, expected] of [
+    [{ skipServerSubtotal: true }, /server-calculated subtotal/iu],
+    [{ recoveryAnswer: answers[2] }, /exact two-client subtotal/iu],
+    [{ skipAlternative: true }, /both alternatives.*detail/iu]
+  ]) {
+    const fixture = createGroundedAnswersFixture(scripted({ initialTurn: 2, recovery: true, ...options }));
+    await fixture.send(GROUNDED_RECOVERY_QUESTION);
+    assert.throws(() => assertGroundedRecovery(fixture.outcomes[0], fixture), expected);
   }
 });

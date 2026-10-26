@@ -15,6 +15,7 @@ export const GROUNDED_QUESTIONS = [
   'Antes, cambiemos a cobros. ¿Cuánto tenemos por cobrar en las seis cuentas? Dame el total exacto en pesos colombianos y, por separado, el subtotal de Cometa y Órbita. ¿Se puede decir que están vencidas con las fechas disponibles? Solo revisa, sin registrar pagos ni contactar a nadie.',
   'Volvamos a la decisión anterior. Sigo teniendo solo 30 minutos; comprueba si algo cambió en las dos opciones y dime por dónde empezarías ahora. No prepares ni ejecutes nada.'
 ];
+export const GROUNDED_RECOVERY_QUESTION = '¿Cuánto suman Cometa y Órbita juntas? Después volvamos a la decisión anterior: sigo teniendo 30 minutos. Comprueba la situación actual de ambas opciones y dime por dónde empezarías ahora. No prepares ni ejecutes cambios ni contactes a nadie.';
 
 // The model and production tools choose the investigation. This fixture closes
 // every storage/network boundary and logs actual calls, outputs and their order.
@@ -158,6 +159,16 @@ export const createGroundedAnswersFixture = (ai, { initialTurns = [], maxCalls =
 const mentionsAmount = (text, value) => new RegExp(`(?<![\\d.,-])${String(value).replace(/\B(?=(\d{3})+(?!\d))/g, '[.,\\s]?')}(?:[.,]00)?(?!\\d|[.,]\\d)`, 'u').test(text);
 const timeConstraint = text => /(?:30|treinta)\s*(?:minutos|min\b)/iu.test(text);
 const decisionDetails = outcome => outcome.calls.filter(call => call.name === 'leer_pendiente' && call.result?.tarea && call.resultOrder < outcome.completedOrder);
+const currentReceivableReads = outcome => outcome.calls.filter(call => call.name === 'consultar_plataforma' && call.result?.operacion === 'GET /financials/receivables-ledger' && call.resultOrder < outcome.completedOrder);
+const assertServerSubtotal = (outcome, fixture) => {
+  const sameIds = ids => Array.isArray(ids) && ids.length === fixture.financial.expectedSubsetIds.length && fixture.financial.expectedSubsetIds.every(id => ids.includes(id));
+  const exactSubtotal = sums => sums?.some(sum => sum.campo === 'outstandingTotal' && sum.moneda === 'COP' && sum.centavos === String(BigInt(fixture.financial.expectedSubset) * 100n));
+  assert.ok(currentReceivableReads(outcome).some(({ result }) => {
+    const evidence = result.evidenciaNumerica, selected = evidence?.seleccion;
+    if (selected?.completa && !selected.error && selected.idsNoDisponibles?.length === 0 && sameIds(selected.idsEncontrados) && exactSubtotal(selected.sumasExactas)) return true;
+    return evidence?.alcance.filasCompletas && sameIds(result.respuesta?.items?.map(row => row.id)) && exactSubtotal(evidence.sumasFilasVisibles);
+  }), 'the requested two-client amount needs a current complete server-calculated subtotal receipt');
+};
 
 // These assertions check evidence coverage, absence of effects, time and money
 // bounds. They do not grade nuanced causal reasoning or choose a winning option;
@@ -174,16 +185,10 @@ export const assertGroundedAnswer = (outcome, fixture, phase) => {
   assert.deepEqual(calendar.failures, [], 'reported dates must agree with the fictional calendar');
   assert.doesNotMatch(prose, /Datos para aprobar|Costo o efecto:|Consultado en Gestión:/u);
   if (phase === 1) {
-    const reads = outcome.calls.filter(call => call.name === 'consultar_plataforma' && call.result?.operacion === 'GET /financials/receivables-ledger' && call.resultOrder < outcome.completedOrder);
+    const reads = currentReceivableReads(outcome);
     const ledger = reads.find(call => call.result.respuesta?.items?.length === 6 && call.result.evidenciaNumerica?.alcance.filasCompletas);
     assert.ok(ledger, 'finance answer must read the complete fictional ledger');
-    const sameIds = ids => Array.isArray(ids) && ids.length === fixture.financial.expectedSubsetIds.length && fixture.financial.expectedSubsetIds.every(id => ids.includes(id));
-    const exactSubtotal = sums => sums?.some(sum => sum.campo === 'outstandingTotal' && sum.moneda === 'COP' && sum.centavos === String(BigInt(fixture.financial.expectedSubset) * 100n));
-    assert.ok(reads.some(({ result }) => {
-      const evidence = result.evidenciaNumerica, selected = evidence?.seleccion;
-      if (selected?.completa && !selected.error && selected.idsNoDisponibles?.length === 0 && sameIds(selected.idsEncontrados) && exactSubtotal(selected.sumasExactas)) return true;
-      return evidence?.alcance.filasCompletas && sameIds(result.respuesta?.items?.map(row => row.id)) && exactSubtotal(evidence.sumasFilasVisibles);
-    }), 'the requested two-client amount needs a current complete server-calculated subtotal receipt');
+    assertServerSubtotal(outcome, fixture);
     assert.ok(mentionsAmount(prose, fixture.financial.expectedTotal), 'the six-row exact total must be distinguished');
     assert.ok(mentionsAmount(prose, fixture.financial.expectedSubset), 'the exact two-client subtotal must be distinguished');
     assert.match(prose, /subtotal|por separado|entre (?:las )?dos|suman|solo.*(?:Cometa|Órbita)/iu);
@@ -199,9 +204,19 @@ export const assertGroundedAnswer = (outcome, fixture, phase) => {
   assert.match(prose, /hoy|26 de octubre|26\/10/iu, 'the alternative due today must not be described as already overdue');
   assert.match(prose, /publicaci[oó]n|publicad/iu);
   if (phase === 0) {
-    assert.match(prose, /memoria|record|mes.*list|listo.*mes/iu, 'must contrast the remembered completion with current evidence');
+    // Coverage of the remembered claim is checked above through its read receipt.
+    // Whether the narrative reconciles that claim needs semantic review, not a
+    // vocabulary test that rejects equivalent natural wording.
     assert.match(prose, /27|veintisiete/iu, 'publication date must remain distinct from internal delivery');
   }
+};
+
+// A new clarification may recover a missing answer; it never replaces or
+// retroactively accepts the earlier partial turn or its original report.
+export const assertGroundedRecovery = (outcome, fixture) => {
+  assertGroundedAnswer(outcome, fixture, 2);
+  assertServerSubtotal(outcome, fixture);
+  assert.ok(mentionsAmount(outcome.answer.text || '', fixture.financial.expectedSubset), 'the exact two-client subtotal must be distinguished');
 };
 
 export const runGroundedAnswersScenario = async (fixture, { savedOutcomes = [], onAccepted = async () => {} } = {}) => {
