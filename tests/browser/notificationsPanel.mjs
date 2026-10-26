@@ -142,6 +142,16 @@ try {
       0,
       `${name}: en Perfil no se descarta nada, se enciende o se apaga`
     );
+    // Y aquí los dos llevan su línea, siempre: la sección se lee igual de arriba abajo.
+    for (const control of ['push', 'team-completions']) {
+      const nota = page.locator(`[data-notification-toggle="${control}"] [data-notification-toggle-note]`);
+      assert.equal(await nota.count(), 1, `${name}: en Perfil «${control}» lleva su descripción`);
+      assert.equal(
+        (await nota.evaluate((element) => element.getClientRects().length)),
+        1,
+        `${name}: la descripción de «${control}» cabe en una línea`
+      );
+    }
     await page.evaluate(() => document.fonts.ready);
     await page.screenshot({ path: `output/notificaciones-perfil-${name}.png`, fullPage: true });
 

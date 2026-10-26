@@ -76,13 +76,17 @@ const PushNotificationControl = ({ variant = 'row', onDismiss = null }) => {
   if (!status?.enabled) return null;
   if (variant === 'row' && (blocked || subscribed)) return null;
 
-  const note = variant === 'settings' && blocked
-    ? (denied
-        ? 'Permiso bloqueado en los ajustes del dispositivo.'
-        : needsIosInstall
-          ? 'Instala Brainstudio para activar los avisos en iPhone.'
-          : 'Este navegador no admite notificaciones web.')
-    : null;
+  // En Perfil cada interruptor lleva su línea, siempre, para que la sección se lea igual
+  // (Rodny, 26 de octubre de 2026: «así es 100% consistente»). En la campana, ninguna.
+  const note = variant !== 'settings'
+    ? null
+    : denied
+      ? 'Permiso bloqueado en los ajustes del dispositivo.'
+      : needsIosInstall
+        ? 'Instala Brainstudio para activar los avisos en iPhone.'
+        : !supported
+          ? 'Este navegador no admite notificaciones web.'
+          : 'Tareas, menciones y anuncios importantes en este navegador.';
 
   return (
     <NotificationToggleRow
