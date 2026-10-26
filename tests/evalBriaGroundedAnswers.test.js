@@ -173,3 +173,19 @@ test('each accepted phase is checkpointed before a later failure, without accept
   assert.deepEqual(accepted, [{ phase: 0, question: GROUNDED_QUESTIONS[0] }]);
   assert.equal(fixture.outcomes.length, 2);
 });
+
+test('cash read evidence does not invent a currency absent from the native projection', async () => {
+  const fixture = await runGroundedReadPreflight();
+  const reads = fixture.calls.filter(call => call.name === 'consultar_plataforma').map(call => call.result);
+  const cash = reads.filter(result => result.operacion === 'GET /financials/records');
+  assert.ok(cash.some(result => result.respuesta.items.length === 3));
+  for (const result of cash) {
+    assert.ok(result.respuesta.items.every(row => !Object.hasOwn(row, 'currency') && !Object.hasOwn(row.account || {}, 'currency')));
+    const evidence = result.evidenciaNumerica;
+    assert.ok([...evidence.totalesFuente, ...evidence.sumasFilasVisibles].every(sum => sum.moneda === null), 'cash currency must remain unknown when the native read omits it');
+  }
+  for (const operation of ['GET /financials/receivables-ledger', 'GET /financials/payables-ledger']) {
+    const evidence = reads.find(result => result.operacion === operation && result.respuesta.items.length > 0).evidenciaNumerica;
+    assert.ok(evidence.sumasFilasVisibles.every(sum => sum.moneda === 'COP'), 'native obligation currencies must remain intact');
+  }
+});

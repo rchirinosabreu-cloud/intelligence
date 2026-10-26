@@ -78,7 +78,7 @@ export const createGroundedAnswersFixture = (ai, { initialTurns = [], maxCalls =
     { id: 'cash-income', type: 'INCOME', category: 'SERVICIO', amount: 900000, clientId: 'finance-client-0', client: ledger.items[0].client, description: 'Pago recibido por servicio de septiembre de Cometa' },
     { id: 'cash-supplier', type: 'EXPENSE', category: 'SERVICIO', amount: 100000, description: 'Pago a Taller Pliegue Ficticio' },
     { id: 'cash-admin', type: 'EXPENSE', category: 'ADMINISTRATIVO', amount: 150000, description: 'Servicio administrativo pagado' }
-  ].map(row => ({ ...row, year: 2026, month: 10, date: new Date('2026-10-25T17:00:00Z'), createdAt: new Date('2026-10-25T17:00:00Z'), status: 'POSTED', scenario: 'ACTUAL', origin: 'MANUAL', isProjection: false, currency: 'COP', accountId: 'cash-account', account: { id: 'cash-account', name: 'Cuenta ficticia', currency: 'COP', isActive: true }, allocations: [], documents: [] }));
+  ].map(row => ({ ...row, year: 2026, month: 10, date: new Date('2026-10-25T17:00:00Z'), createdAt: new Date('2026-10-25T17:00:00Z'), status: 'POSTED', scenario: 'ACTUAL', origin: 'MANUAL', isProjection: false, accountId: 'cash-account', account: { id: 'cash-account', name: 'Cuenta ficticia', type: 'BANK' }, allocations: [], documents: [] }));
   const suppliers = [
     { id: 'payable-marea', thirdPartyId: 'vendor-marea', thirdParty: { id: 'vendor-marea', name: 'Papelería Marea Ficticia' }, amount: 500000, status: 'POR_PAGAR', payments: [] },
     { id: 'payable-azul', thirdPartyId: 'vendor-azul', thirdParty: { id: 'vendor-azul', name: 'Estudio Azul Ficticio' }, amount: 275000, status: 'POR_PAGAR', payments: [] },
