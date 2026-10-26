@@ -6,6 +6,18 @@ Este plan amplía lo construido en [Ojos y cerebro](BRIA_OJOS_Y_CEREBRO.md), [au
 
 ## Punto de partida
 
+### Consultas generales que no crean un seguimiento — 25 de octubre de 2026
+
+Tres mensajes reales de panorama/cumplimiento llegaron desde WhatsApp, pero la validación del plan los cortó antes de investigar. El plan exigía condiciones de resolución aun cuando nadie había pedido guardar seguimiento. El rechazo se convertía en un aviso genérico que invitaba a repetir la misma pregunta. Es una regresión del motor compartido, no un fallo de transporte de Meta.
+
+Se separan análisis, preparación y seguimiento persistente. Un análisis general puede tener condiciones vacías; guardar un caso nuevo sigue exigiendo condiciones y continuar uno conserva las originales. El catálogo y el ejecutor impiden que el análisis sin seguimiento lo cree por iniciativa propia. La última ronda y la comprobación de alternativas tampoco fuerzan ese registro. El alcance general no exige seleccionar una tarea individual.
+
+Ante JSON inválido o campos incompatibles, se descarta el plan completo, incluidas sus supuestas autorizaciones. La respuesta continúa con las lecturas permitidas y aclara que no preparó cambios ni actualizó seguimiento. El ejecutor bloquea escrituras incluso si el modelo intenta llamarlas; se mantienen las comprobaciones de permisos en cada lectura. El registro recibe solo código/motivo, sin cuerpos de conversación, y se conserva el consumo de la llamada descartada. Los fallos de identidad, permisos y proveedor no se convierten en autorización ni se ocultan como planes válidos.
+
+Regresiones locales: consulta general sin condiciones, continuación con criterios originales, JSON cercado, tipos incompatibles, rechazo de escrituras en recuperación, acceso revocado y respuesta por el puente WhatsApp con Meta simulado. El caso `agency-overview` usa conversación/asistente reales y catálogo completo sobre datos ficticios; no contacta personas ni la base productiva. El piloto humano de WhatsApp sigue siendo la comprobación del canal real.
+
+Validación: 40 pruebas del motor/investigación y 11 del puente WhatsApp en verde; compilación y lint correctos. La primera evaluación real encontró una contradicción en la muestra ficticia (resumen sin tareas vencidas frente a detalle con una); se corrigió la muestra y se repitió una sola vez el caso. La segunda respuesta conservó los hechos, consultó cartera, parrillas, tareas, Actividad y carga, sin escrituras, borrador ni seguimiento nuevo. Informes locales ignorados `lifecycle-budgeted-15.json` y `lifecycle-budgeted-16.json`: diez llamadas en total, **US$0,011542 estimados sin caché**; acumulado conservador **US$0,193727**, saldo **US$0,056273** del tope de US$0,25, conservando la reserva anterior incierta. Esto comprueba el recorrido ficticio con proveedor real, no sustituye el piloto productivo ni garantiza que cualquier análisis futuro sea correcto.
+
 ### Voz propia basada en la comunicación del equipo — 25 de octubre de 2026
 
 El informe privado de voz aportado por Rodny se usa como evidencia de diseño, sin copiar al repositorio sus citas, chats ni ejemplos. La guía general pide responder primero, unir recomendación y motivo, adaptar el detalle al pedido, preguntar solo lo necesario y retomar desde lo que cambió. Distingue la conversación interna del texto destinado a un cliente. No imita muletillas ni añade frases disparadoras, respuestas prefabricadas, autonomía o una generación extra. El relato de investigación deja de tener un objetivo fijo de 150–250 palabras; conserva el máximo, las citas y el estado agregado por el servidor.

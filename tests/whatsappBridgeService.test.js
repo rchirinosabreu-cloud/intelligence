@@ -5,6 +5,8 @@ import express from 'express';
 import { createWhatsAppBridgeService } from '../src/services/whatsappBridgeService.js';
 import { createWhatsAppWebhookRouter, createBriaWhatsAppRouter } from '../src/routes/api/whatsapp.js';
 import { REPLIES } from '../src/lib/whatsappBridge.js';
+import { runAssistant } from '../src/lib/briaAssistant.js';
+import { planInquiry } from '../src/lib/briaInquiry.js';
 
 // Bria en WhatsApp (20 de octubre de 2026): el webhook firmado, el vínculo por código y el puente al motor de Bria
 // de siempre. Sin red ni base de datos: repositorio, conversaciones y Meta son dobles.
@@ -67,6 +69,32 @@ const build = ({ repository = fakeRepository(), conversations = fakeConversation
 };
 
 const camila = { id: 'u-camila', name: 'Camila Pérez', email: 'camila@brainstudio.co', role: 'PROJECT_MANAGER', isActive: true, modulePermissions: { bria: true, gestion: true }, sessionVersion: 3, teamMember: { isActive: true } };
+
+test('WhatsApp delivers a general overview and a safe recovery instead of the generic failure', async () => {
+  for (const incomplete of [false, true]) {
+    let reads = 0, step = 0;
+    const conversations = fakeConversations();
+    conversations.send = async ({ user, id, question }) => {
+      const answer = await runAssistant({ user, question, context: { inquiryPlanner: planInquiry }, logger: { warn() {}, error() {} },
+        tools: [{ name: 'actualizar_seguimiento', allowed: () => true, run: async () => { throw new Error('No se pidió seguimiento'); } },
+          { name: 'buscar_pendientes', allowed: () => true, parameters: {}, run: async () => { reads++; return { data: { abiertas: 2 } }; } }],
+        ai: { generate: async request => request.responseSchema ? { text: incomplete ? '{}' : JSON.stringify({ investigar: true, continuar: false, actualidad: true, localizarTrabajo: false, guardarSeguimiento: false, prepararCambios: false, compararAlternativas: false, asunto: 'Panorama', objetivo: 'Revisar entregas', areas: ['TAREAS'], condiciones: [] }) }
+          : step++ === 0 ? { output: [], functionCalls: [{ id: 'read', name: 'buscar_pendientes', args: {} }] } : { text: 'Hay dos entregas abiertas.' } } });
+      const chat = conversations.chats.get(id);
+      chat.turns.push({ role: 'assistant', text: answer.answer }); chat.revision++;
+      return chat;
+    };
+    const { service, sent, repository } = build({ conversations, users: { [camila.id]: camila } });
+    repository.links.set(camila.id, { userId: camila.id, waId: '573001234567', conversationId: null });
+    const result = await service.processMessage({ messageId: `overview-${incomplete}`, from: '573001234567', type: 'text', text: '¿Cómo ves el panorama general y el cumplimiento de las parrillas?' });
+    assert.equal(result.outcome, 'answered');
+    assert.equal(reads, 1);
+    const delivered = sent.map(row => row.body.text?.body || '').join('\n');
+    assert.match(delivered, /dos entregas abiertas/);
+    assert.ok(!delivered.includes(REPLIES.failed));
+    assert.ok(repository.links.get(camila.id).conversationId, 'successful read keeps the WhatsApp conversation linked');
+  }
+});
 
 test('el webhook: sin secreto no abre, una firma mala es 401, y un aviso firmado responde 200 antes de trabajar', async () => {
   const closed = build({ env: { ...ENV, META_APP_SECRET: '' } });

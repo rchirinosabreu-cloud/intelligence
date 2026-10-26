@@ -3,13 +3,25 @@ import assert from 'node:assert/strict';
 import { runAssistant } from '../src/lib/briaAssistant.js';
 import { briaInvestigationTools } from '../src/services/briaInvestigationTools.js';
 import { planInquiry, inquiryDeclarations } from '../src/lib/briaInquiry.js';
-import { createFullInquiryFixture, runFullInquiryScenario } from './evals/briaFullInquiryFixture.js';
+import { createFullInquiryFixture, runFullInquiryScenario, runAgencyOverviewScenario } from './evals/briaFullInquiryFixture.js';
 import { normalizeTools } from '../src/services/openAIClient.js';
 import { toolDeclarations } from '../src/lib/briaAssistant.js';
 
 const user = { id: 'u', userId: 'u', role: 'ADMIN' };
 const plan = { investigar: true, continuar: false, actualidad: true, localizarTrabajo: true, guardarSeguimiento: true, prepararCambios: false, asunto: 'Entrega del portal', objetivo: 'Determinar riesgo y opciones de la entrega', areas: ['TAREAS'], condiciones: ['La entrega está verificada'] };
 const context = { inquiryPlanner: async () => ({ plan }), now: () => new Date('2026-10-24T20:00:00Z') };
+
+test('full catalog and conversation answer an agency overview without inventing a saved case', async () => {
+  let step = 0;
+  const fixture = createFullInquiryFixture({ generate: async request => {
+    if (request.responseSchema) return { text: JSON.stringify({ ...plan, localizarTrabajo: false, guardarSeguimiento: false, compararAlternativas: false, areas: ['CONTEXTO', 'CONTENIDO'], condiciones: [] }) };
+    const calls = list => ({ output: [], functionCalls: list.map(([name, args], i) => ({ id: `${step}-${i}`, name, args })) });
+    if (step++ === 0) return calls([['cartera_de_operacion', {}], ['buscar_cliente', { nombre: 'Aurora' }]]);
+    if (step === 2) return calls([['operacion_de_cliente', { slug: 'aurora' }], ['parrilla_de_cliente', { clientId: 'lifecycle-client' }]]);
+    return { text: 'Hay una cuenta con dos piezas aprobadas: una publicada y otra con fecha vencida que aún no se ha publicado. Conviene revisar por qué quedó pendiente.' };
+  } }, { overview: true });
+  await runAgencyOverviewScenario(fixture);
+});
 
 test('saving investigation requires the provider to include every evidence field, including alternative citations', () => {
   const [tool] = normalizeTools(toolDeclarations(briaInvestigationTools.filter(tool => tool.name === 'actualizar_seguimiento')));
@@ -72,7 +84,9 @@ test('semantic planning is structured, accounts for usage, and never interprets 
   } } });
   assert.equal(result.plan.investigar, true);
   assert.ok(result.modelCall.usage);
-  await assert.rejects(planInquiry({ ...args, ai: { generate: async () => ({ text: '{}' }) } }));
+  const discarded = await planInquiry({ ...args, ai: { generate: async () => ({ text: '{}' }) } });
+  assert.equal(discarded.plan, null);
+  assert.equal(discarded.diagnostic.code, 'BRIA_INQUIRY_PLAN_INVALID');
 });
 
 test('full production catalog resolves the target, preserves checks and reads it again without writes', async () => {

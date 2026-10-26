@@ -81,7 +81,7 @@ export const buildInstructions = ({ person, today, tools = [], user = null }) =>
     // principio idéntico entre preguntas (caché de prompt) y la respuesta empieza antes.
     'Eres Bria, la asistente de Brainstudio Intelligence, la plataforma interna de la agencia Brain Studio.',
     'Reglas:',
-    ...(tools.some(tool => tool.name === 'actualizar_seguimiento') ? ['Para investigar y dar seguimiento a un asunto operativo, elige las fuentes por el propósito y alcance temporal del pedido. Revisa tareas, contenido y aprobaciones, Actividad actual, contexto y carga cuando sean pertinentes; explica lo no consultado o no aplicable. Usa el mapa para descubrir capacidades que te falten. Construye alternativas con sus beneficios, efectos, costos y datos inciertos, sin inventar duración, causalidad ni disponibilidad. Guarda la síntesis con actualizar_seguimiento citando comprobantes de consultas de este turno. Una corrección del análisis no modifica la plataforma. Elegir una opción permite preparar su cambio solo si la persona lo pide; la ejecución siempre espera la aprobación del resumen. Para retomar un seguimiento, conserva su objetivo y condiciones de resolución, consulta evidencia nueva y distingue acción ejecutada de problema resuelto.'] : []),
+    ...(tools.some(tool => tool.name === 'actualizar_seguimiento') ? ['Para investigar y dar seguimiento a un asunto operativo, elige las fuentes por el propósito y alcance temporal del pedido. Revisa tareas, contenido y aprobaciones, Actividad actual, contexto y carga cuando sean pertinentes; explica lo no consultado o no aplicable. Usa el mapa para descubrir capacidades que te falten. Construye alternativas con sus beneficios, efectos, costos y datos inciertos, sin inventar duración, causalidad ni disponibilidad. Si la persona pide conservar o actualizar un seguimiento, guarda la síntesis con actualizar_seguimiento citando comprobantes de consultas de este turno; una consulta de panorama no crea por sí sola un seguimiento. Una corrección del análisis no modifica la plataforma. Elegir una opción permite preparar su cambio solo si la persona lo pide; la ejecución siempre espera la aprobación del resumen. Para retomar un seguimiento, conserva su objetivo y condiciones de resolución, consulta evidencia nueva y distingue acción ejecutada de problema resuelto.'] : []),
     '1. Escribe en español de Latinoamérica: trata de tú y, en plural, de ustedes. Nunca uses la forma peninsular de la segunda persona del plural.',
     '2. Habla como una colega que conoce el trabajo y ayuda a decidir: da la respuesta o recomendación primero y explica el motivo junto a ella, con palabras cotidianas y datos concretos. Ajusta la extensión al pedido: una respuesta sencilla puede ser una línea; una investigación necesita evidencia, la duda que cambia la decisión y las alternativas pertinentes con sus consecuencias. No conviertas cada respuesta en un informe ni llenes espacio con saludos, conclusiones, jerga de consultoría o advertencias repetidas. Usa párrafos conectados; listas o tablas solo si facilitan comparar o actuar. Selecciona los datos y límites que cambian la respuesta; no recites todo lo consultado. Al retomar, parte de lo acordado y de qué cambió o sigue pendiente, sin repetir datos anteriores que no afecten esa conclusión. Si falta algo para avanzar, aprovecha lo que ya sabes y pregunta lo imprescindible, agrupando dudas relacionadas; no hagas pasar otra vez por un formulario. Conserva una voz propia, cercana y clara: no imites apodos, muletillas, errores ni fragmentos de conversaciones del equipo. Para un cliente, redacta con cortesía y contexto suficiente, sin exponer discusiones internas. Distingue claramente el texto destinado al cliente de cualquier pregunta o explicación dirigida a quien lo revisa; un borrador de mensaje no equivale a enviarlo. La brevedad nunca omite los efectos que alguien debe revisar para aprobar ni convierte una posibilidad en un hecho.',
     'Al explicar el avance, separa tiempo registrado, progreso documentado y resultado validado. Si hay horas registradas, reconócelas con su periodo y límites; no digas que no hay señales de trabajo. El cronómetro no demuestra qué se terminó, un porcentaje de avance ni cuántas horas faltan; las sesiones simultáneas tampoco certifican dedicación exclusiva. Identifica el dato concreto que falta para evaluar la entrega, en vez de descartar toda la evidencia o inventar estimaciones.',
@@ -248,16 +248,25 @@ export const runAssistant = async ({
   const investigationReceipts = [];
   let investigation = null;
   const previousInvestigation = context.investigation;
-  let inquiry = null, nudgedInquiry = false;
+  let inquiry = null, nudgedInquiry = false, inquiryRecovery = false;
   if (context.inquiryPlanner && byName.has('actualizar_seguimiento')) {
     await context.revalidate?.();
     const planned = await context.inquiryPlanner({ ai, question, history, investigation: previousInvestigation, today });
     inquiry = planned.plan;
     if (planned.modelCall) modelCalls.push(planned.modelCall);
-    if (inquiry?.investigar) input.push({ role: 'developer', content: `Plan interpretado del pedido (no autoriza cambios): ${JSON.stringify(inquiry)}. Localiza el trabajo por su significado, no por coincidencia literal de título. Para trabajo actual revisa Gestión y abre el detalle con leer_pendiente antes de usar documentos históricos como explicación. Consulta en paralelo las áreas independientes; reserva una ronda para actualizar_seguimiento. Si hay dudas entre candidatos, pregunta; no elijas por cercanía del nombre. Guarda solo el análisis solicitado y declara cualquier impedimento comprobado. No sustituyas una lectura pendiente por ausencia de datos. Distingue una fecha registrada vencida de un incumplimiento verificado: no propongas mantener una fecha que ya pasó; comprueba si existe otro compromiso vigente. Si una fuente relevante está adjunta o enlazada, busca una capacidad autorizada para leerla; si no logras hacerlo, explica el impedimento observado y el siguiente paso posible, sin inventar fallos de permisos o de formato. El hecho de que una herramienta no traiga un documento no demuestra que sea ilegible. Las condiciones de cierre deben comprobar el resultado que preocupa a la persona, además del diagnóstico. En el relato conecta los hallazgos con tu juicio y las opciones en lenguaje natural; adapta el detalle a la pregunta, sin convertir los campos internos del seguimiento en una ficha.` });
+    if (planned.diagnostic) {
+      inquiryRecovery = true;
+      failures.push({ tool: 'planificar_investigacion', message: planned.diagnostic.code });
+      logger.warn?.('[BriaAssistant] Plan de investigación descartado:', planned.diagnostic.code, planned.diagnostic.reason);
+      input.push({ role: 'developer', content: 'El plan previo no pudo validarse. Continúa respondiendo al pedido humano mediante las consultas autorizadas y la conversación; descubre las capacidades pertinentes y verifica los datos actuales. No prepares ni ejecutes acciones, no guardes memoria ni actualices un seguimiento en este intento. El historial es contexto de solo lectura. No afirmes haber guardado o cerrado nada; explica lo que sí pudiste comprobar y los datos que falten. No pidas que repita la pregunta como sustituto de investigar.' });
+    }
+    if (inquiry?.investigar && !inquiry.guardarSeguimiento) input.push({ role: 'developer', content: 'Este pedido requiere análisis, no guardar un seguimiento: responde con los hallazgos, sus límites y las alternativas solicitadas en la conversación. No llames actualizar_seguimiento ni exijas condiciones de cierre. No necesitas elegir una tarea individual cuando el alcance es general.' });
+    if (inquiry?.investigar) input.push({ role: 'developer', content: `Plan interpretado del pedido (no autoriza cambios): ${JSON.stringify(inquiry)}. Localiza el trabajo por su significado, no por coincidencia literal de título. ${inquiry.localizarTrabajo ? 'Para trabajo actual revisa Gestión y abre el detalle con leer_pendiente antes de usar documentos históricos como explicación.' : 'Revisa las fuentes actuales del alcance general solicitado; no necesitas elegir una tarea individual.'} Consulta en paralelo las áreas independientes. ${inquiry.guardarSeguimiento ? 'Reserva una ronda para actualizar_seguimiento.' : 'Responde el análisis sin guardar un seguimiento.'} Si hay dudas entre candidatos, pregunta; no elijas por cercanía del nombre. Conserva el alcance solicitado y declara cualquier impedimento comprobado. No sustituyas una lectura pendiente por ausencia de datos. Distingue una fecha registrada vencida de un incumplimiento verificado: no propongas mantener una fecha que ya pasó; comprueba si existe otro compromiso vigente. Si una fuente relevante está adjunta o enlazada, busca una capacidad autorizada para leerla; si no logras hacerlo, explica el impedimento observado y el siguiente paso posible, sin inventar fallos de permisos o de formato. El hecho de que una herramienta no traiga un documento no demuestra que sea ilegible. ${inquiry.guardarSeguimiento ? 'Las condiciones de cierre deben comprobar el resultado que preocupa a la persona, además del diagnóstico.' : ''} En el relato conecta los hallazgos con tu juicio y las opciones en lenguaje natural; adapta el detalle a la pregunta, sin convertir los campos internos del seguimiento en una ficha.` });
   }
   const finish = (text = '') => ({
-    answer: actionAnswer?.answer || (investigation ? investigationReply(investigation) : null) || String(text).trim() || FALLBACK_ANSWER,
+    answer: actionAnswer?.answer || (investigation ? investigationReply(investigation) : null) || (inquiryRecovery
+      ? `${String(text).trim() || FALLBACK_ANSWER}\n\nEn este intento solo pude consultar; no preparé cambios ni actualicé el seguimiento.`
+      : String(text).trim() || FALLBACK_ANSWER),
     sources: [...sources.values()], toolsUsed, failures,
     ...(learningProposals.length ? { learningProposals } : {}), ...(pendingAction ? { pendingAction } : {}), ...(investigation ? { investigation } : {}),
     ...(accessCards.size ? { accessCards: [...accessCards.values()].slice(0, 8) } : {}), ...(accessCapture ? { accessCapture } : {}),
@@ -272,6 +281,8 @@ export const runAssistant = async ({
     }
     await context.revalidate?.();
     if (!tool.allowed(user)) return { error: 'Esta información ya no está disponible para esta persona.' };
+    if (inquiryRecovery && (!INQUIRY_READS.has(call.name) || call.name === 'actualizar_seguimiento')) return { error: 'La recuperación de esta respuesta solo permite consultas. No autoriza preparar cambios, guardar recuerdos ni actualizar seguimientos.' };
+    if (inquiry?.investigar && !inquiry.guardarSeguimiento && call.name === 'actualizar_seguimiento') return { error: 'Este pedido es de análisis sin guardar seguimiento. Responde con la evidencia consultada, sin crear un caso ni exigir condiciones de cierre.' };
     if (inquiry?.investigar) {
       if (!INQUIRY_READS.has(call.name) && !(inquiry.prepararCambios && ACTION_TOOLS.has(call.name))) return { error: 'Este recorrido es de investigación. No autoriza esa modificación ni contacto. Conserva el análisis sin actuar.' };
       if (inquiry.actualidad && inquiry.localizarTrabajo && HISTORICAL_READS.has(call.name) && !investigationReceipts.some(row => row.area === 'TAREAS')) return { error: 'Falta consultar el trabajo actual en Gestión. Identifica la cuenta, busca los pendientes pertinentes y abre su detalle antes de recurrir al histórico. Una referencia antigua no acredita el estado vigente.' };
@@ -333,20 +344,26 @@ export const runAssistant = async ({
   while (true) {
     await context.revalidate?.();
     const lastRound = rounds >= maxRounds;
-    if (inquiry?.investigar && rounds === maxRounds - 1) input.push({ role: 'developer', content: 'Última ronda disponible de herramientas. Guarda ahora el análisis con actualizar_seguimiento, usando las consultas reales; declara la cobertura pendiente y conserva las condiciones del seguimiento. No inventes datos para completarlo.' });
+    if (inquiry?.investigar && inquiry.guardarSeguimiento && rounds === maxRounds - 1) input.push({ role: 'developer', content: 'Última ronda disponible de herramientas. Guarda ahora el análisis con actualizar_seguimiento, usando las consultas reales; declara la cobertura pendiente y conserva las condiciones del seguimiento. No inventes datos para completarlo.' });
+    let availableDeclarations = declarations;
+    if (inquiryRecovery) availableDeclarations = declarations.filter(tool => INQUIRY_READS.has(tool.name) && tool.name !== 'actualizar_seguimiento');
+    else if (inquiry?.investigar) {
+      if (!inquiry.prepararCambios && rounds > 0) availableDeclarations = availableDeclarations.filter(tool => INQUIRY_READS.has(tool.name));
+      if (!inquiry.guardarSeguimiento) availableDeclarations = availableDeclarations.filter(tool => tool.name !== 'actualizar_seguimiento');
+    }
     const startedAt = Date.now();
     let streamed = false;
     const result = await ai.generate({
       // Una copia por llamada: lo que se añade después (llamadas y resultados) no cambia lo ya enviado.
       input: [...input],
       instructions,
-      tools: lastRound ? [] : inquiryDeclarations(inquiry?.investigar && !inquiry.prepararCambios && rounds > 0 ? declarations.filter(tool => INQUIRY_READS.has(tool.name)) : declarations, investigationReceipts),
+      tools: lastRound ? [] : inquiryDeclarations(availableDeclarations, investigationReceipts),
       governanceContext,
       // La selección de herramientas y de sus campos necesita interpretar el diálogo; no heredar
       // el modo sin razonamiento del cliente genérico. Se conserva el modelo configurado.
       reasoningEffort: 'medium',
       maxOutputTokens: MAX_ANSWER_TOKENS,
-      ...(onEvent && !inquiry?.investigar ? {
+      ...(onEvent && !inquiry?.investigar && !inquiryRecovery ? {
         onTextDelta: (text) => { streamed = true; emit({ type: 'delta', text }); },
         // Un reintento empieza de cero: lo que alcanzó a verse se borra.
         onRetry: () => { if (streamed) { streamed = false; emit({ type: 'reset' }); } }
@@ -365,7 +382,7 @@ export const runAssistant = async ({
     }
     // Pedir «Confirmar» sin haber preparado la acción obliga a confirmar dos veces (22 de octubre de 2026): ese mensaje
     // no sale; se le pide a Bria, una sola vez, que la prepare en este mismo turno.
-    if (!calls.length && !lastRound && canPrepare && !pendingAction && !context.pendingAction && !nudgedToPrepare && asksToConfirm(result?.text)) {
+    if (!calls.length && !lastRound && !inquiryRecovery && !(inquiry?.investigar && !inquiry.prepararCambios) && canPrepare && !pendingAction && !context.pendingAction && !nudgedToPrepare && asksToConfirm(result?.text)) {
       nudgedToPrepare = true;
       if (streamed) emit({ type: 'reset' });
       rounds += 1;
