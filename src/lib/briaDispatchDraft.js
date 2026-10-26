@@ -3,7 +3,7 @@
 // solo una confirmación escrita por la persona lo ejecuta, pieza por pieza, por la misma vía que el botón
 // «Despachar a Kanban» de la parrilla. Lógica pura, compartida por el servicio y la conversación.
 
-import { humanDate } from './briaAssistant.js';
+import { humanDate } from './briaDate.js';
 
 const fold = (value) => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
 

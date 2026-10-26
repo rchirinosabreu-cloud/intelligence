@@ -149,8 +149,9 @@ test('in conversation: only an explicit confirmation of a persisted ready deleti
   assert.match(stored.turns.at(-1).answer, /ya se hizo/);
   stored = { ...stored, turns: [...stored.turns, { role: 'assistant', text: '¿Por qué?', deleteDraft: { ...ready, reason: null } }] };
   await service.send({ user, id: 'chat', question: 'Ya no aplica' });
-  assert.equal(stored.turns.at(-1).pendingAction.draft.reason, 'Ya no aplica', 'a reason button fills the reason without the model');
-  assert.deepEqual(stored.turns.at(-1).quickReplies, ['Eliminar pendiente', 'No eliminar']);
+  assert.equal(aiCalls, 2, 'the reason is interpreted in conversation, not by a phrase shortcut');
+  assert.equal(stored.turns.at(-1).pendingAction.draft.reason, null, 'the fake model did not prepare a new deletion');
+  assert.equal(stored.turns.at(-1).quickReplies, undefined);
   await service.send({ user, id: 'chat', question: 'No eliminar' });
   assert.equal(stored.turns.at(-1).pendingAction.status, 'CANCELLED');
   assert.equal(writes, 1);

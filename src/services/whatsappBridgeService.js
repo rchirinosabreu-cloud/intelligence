@@ -13,7 +13,7 @@ import { signWhatsAppSession } from '../lib/whatsappSession.js';
 import {
   verifyMetaSignature, webhookChallenge, parseInboundMessages, describeNotice, isStatusOnlyNotice, maskWaId, linkCodeIn, generateLinkCode, linkMessage, displayPhone, waMeLink,
   splitForWhatsApp, replyForWhatsApp, textWithOptions, optionsMessagePayload, textMessagePayload, typingPayload, REPLIES, LINK_CODE_TTL_MS, UNKNOWN_SENDER_REPLIES_PER_DAY,
-  INTERACTIVE_BODY_MAX, OPTIONS_PROMPT, isMetaMediaUrl, mediaFileName, WHATSAPP_MEDIA_MAX_BYTES
+  INTERACTIVE_BODY_MAX, isMetaMediaUrl, mediaFileName, WHATSAPP_MEDIA_MAX_BYTES
 } from '../lib/whatsappBridge.js';
 /** Cuánto se espera a que la persona termine de mandar lo que manda seguido (la foto y luego el texto). */
 export const WHATSAPP_BATCH_WINDOW_MS = 2500;
@@ -100,15 +100,14 @@ export const createWhatsAppBridgeService = ({
     return { buffer, originalname: mediaFileName({ ...media, mimeType: mimetype }, messageId), mimetype: media.kind === 'audio' ? mimetype : mimetype.split(';')[0].trim(), size: buffer.length };
   };
   const sendText = async (to, text) => { for (const part of splitForWhatsApp(text)) await messages(textMessagePayload(to, part)); };
-  // Texto y opciones: lo largo sale antes en texto y las opciones van con el último trozo (o con una línea corta si
-  // ese trozo no cabe en un mensaje con botones). Si Meta no acepta los botones, las opciones se dicen en texto.
+  // Las opciones acompañan el último trozo de la respuesta, sin añadir una voz del transporte.
+  // Si Meta no acepta los botones, las opciones se dicen en texto.
   const sendReply = async (to, { text, options = [], optionsUnavailable = null }) => {
     const parts = splitForWhatsApp(text);
     if (!options.length || !parts.length) { for (const part of parts) await messages(textMessagePayload(to, part)); return; }
-    const last = parts.at(-1);
-    const fits = last.length <= INTERACTIVE_BODY_MAX;
-    for (const part of fits ? parts.slice(0, -1) : parts) await messages(textMessagePayload(to, part));
-    const body = fits ? last : OPTIONS_PROMPT;
+    parts.push(...splitForWhatsApp(parts.pop(), INTERACTIVE_BODY_MAX));
+    for (const part of parts.slice(0, -1)) await messages(textMessagePayload(to, part));
+    const body = parts.at(-1);
     const payload = optionsMessagePayload(to, body, options);
     const fallback = optionsUnavailable ? `${body}\n\n${optionsUnavailable}` : textWithOptions({ text: body, options });
     if (!payload) { await sendText(to, fallback); return; }

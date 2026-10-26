@@ -5,6 +5,7 @@ import { readFile } from 'node:fs/promises';
 import pg from 'pg';
 import { briaTestDatabaseUrl } from './support/briaTestDatabase.js';
 import { createBriaConversationRepository } from '../src/services/briaConversationRepository.js';
+import { reviewedResponse, hasCurrentApprovalReview } from '../src/lib/briaResponse.js';
 
 const connectionString = briaTestDatabaseUrl();
 test('PostgreSQL rechaza la aprobación anterior y solo ejecuta una vez dos confirmaciones simultáneas de la revisión actual', { skip: !connectionString }, async () => {
@@ -26,9 +27,16 @@ test('PostgreSQL rechaza la aprobación anterior y solo ejecuta una vez dos conf
     const actor = { ref: 'owner', role: 'ADMIN' }, repository = createBriaConversationRepository({ pool, workspace: 'revision-test' });
     const chat = await repository.create(actor);
     const investigation = { id: 'case-1', revision: 1, asunto: 'Entrega', comprobaciones: [{ id: 'check-1', resultado: 'PENDIENTE' }], ejecucionAutorizada: false };
-    await repository.append(actor, chat.id, 0, 'Prepara', { answer: 'Mover al lunes', investigation });
+    const pendingAction = { id: 'reviewed-action', title: 'Entrega', type: 'TASK_UPDATE', status: 'DRAFT', summary: ['Mover al lunes'], missing: [] };
+    const reviewed = reviewedResponse('Mover al lunes', pendingAction);
+    const { approvalReview } = reviewed;
+    await repository.append(actor, chat.id, 0, 'Prepara', { ...reviewed, investigation, pendingAction });
     assert.deepEqual((await repository.get(actor, chat.id)).turns.at(-1).investigation, investigation);
+    assert.deepEqual((await repository.get(actor, chat.id)).turns.at(-1).approvalReview, approvalReview);
+    const stored = (await repository.get(actor, chat.id)).turns.at(-1);
+    assert.equal(hasCurrentApprovalReview(stored, stored.pendingAction), true);
     await repository.append(actor, chat.id, 1, 'Cambia la fecha', { answer: 'Mover al viernes' });
+    assert.equal((await repository.get(actor, chat.id)).turns.at(-1).approvalReview, undefined);
     const execute = async () => { calls++; return { answer: 'Listo' }; };
     await assert.rejects(repository.append(actor, chat.id, 1, 'Confirmar', execute), { status: 409, code: 'BRIA_CONVERSATION_STALE' });
     assert.equal(calls, 0);

@@ -4,12 +4,12 @@ import { createBriaAssistantService } from '../../src/services/briaAssistantServ
 import { createBriaTaskDraftService } from '../../src/services/briaTaskDraftService.js';
 
 // Servicios de producción, datos y almacenamiento cerrados y ficticios. No evalúa visión ni transporte Meta.
-export const createTaskLifecycleFixture = (ai, { historicalFiles = [], assistantTools = [], assistantContext = {}, extraDb = {}, knowledge = null, assistantOptions = {}, session = null, initialTurns = [] } = {}) => {
+export const createTaskLifecycleFixture = (ai, { historicalFiles = [], assistantTools = [], assistantContext = {}, extraDb = {}, knowledge = null, assistantOptions = {}, session = null, initialTurns = [], initialCreated = [] } = {}) => {
   const user = { id: 'lifecycle-user', userId: 'lifecycle-user', name: 'Marina Duarte', role: 'ADMIN', isActive: true, sessionVersion: 0, modulePermissions: { bria: true, gestion: true } };
   const member = { id: 'lifecycle-member', userId: user.id, name: user.name, isActive: true };
   const collaborator = { id: 'lifecycle-nora', name: 'Nora Sáenz', isActive: true };
   const client = { id: 'lifecycle-client', name: 'Taller Aurora Ficticio', isArchived: false };
-  const created = [], traces = [], modelRequests = [], files = new Map(historicalFiles.map(file => [file.id, file])), tasks = new Map();
+  const created = structuredClone(initialCreated), traces = [], modelRequests = [], files = new Map(historicalFiles.map(file => [file.id, file])), tasks = new Map(created.map(task => [task.id, task]));
   let locked = false, chat = { id: 'lifecycle-chat', revision: initialTurns.length / 2, turns: structuredClone(initialTurns) };
   const db = {
     user: { findUnique: async () => ({ ...user, teamMember: member }) },
@@ -59,6 +59,49 @@ export const historicalTaskFiles = [
   { id: 'old-kitchen-one', name: 'foto-anterior-1.jpg', mime: 'image/jpeg', status: 'READ', text: 'Imagen anterior de una cocina remodelada.', createdAt: '2026-10-24T13:00:00Z' },
   { id: 'old-kitchen-two', name: 'foto-anterior-2.jpg', mime: 'image/jpeg', status: 'READ', text: 'Otra foto anterior de la misma cocina.', createdAt: '2026-10-24T13:01:00Z' }
 ];
+
+// Evalúa continuidad y voz, con respuestas a aclaraciones y una interrupción real.
+// Las comprobaciones observan estado y efectos, no exigen una frase del modelo.
+export const runConversationalTaskScenario = async (fixture, { savedTurns = [] } = {}) => {
+  if (savedTurns.length === 5) {
+    assert.deepEqual(savedTurns.map(turn => turn.writes), [0, 0, 0, 0, 1]);
+    assert.equal(fixture.created.length, 1);
+    assert.equal(fixture.created[0].focusDeadlineAt, '2026-10-25T22:00:00.000Z');
+    assert.deepEqual(fixture.created[0].initial_comments, [{ content: 'Validar la portada con el equipo' }]);
+    const closed = await fixture.send('Gracias, eso era todo.');
+    assert.equal(closed.pendingAction, undefined);
+    assert.deepEqual(closed.toolsUsed, []);
+    assert.equal(fixture.created.length, 1);
+    return;
+  }
+  const first = savedTurns[0]?.answer || await fixture.send('Ayúdame a dejar preparada una tarea llamada «Revisión de portada», para Taller Aurora Ficticio, a mi cargo. Todavía no sé el día. No la crees.');
+  assert.equal(first.pendingAction?.type, 'TASK_CREATE');
+  assert.ok(first.pendingAction.missing.length);
+  assert.equal(first.approvalReview, undefined);
+  const draftId = first.pendingAction.id;
+  if (!savedTurns[1]) await fixture.send('Antes, explícame brevemente qué diferencia hay entre una referencia y un insumo. La tarea la seguimos enseguida.');
+  assert.equal(fixture.created.length, 0);
+  const ready = savedTurns[2]?.answer || await fixture.send('Ya decidí: mañana a las cuatro y media de la tarde. Conserva el nombre y lo demás; espera mi aprobación.');
+  assert.equal(ready.pendingAction?.id, draftId);
+  assert.equal(ready.pendingAction.draft.title, 'Revisión de portada');
+  assert.equal(ready.pendingAction.draft.dueDate, '2026-10-25');
+  assert.equal(ready.pendingAction.draft.focusTime, '16:30');
+  assert.equal(ready.approvalReview?.actionId, draftId);
+  assert.equal(fixture.created.length, 0);
+  const corrected = await fixture.send('Mejor a las cinco. Añade este comentario literal: «Validar la portada con el equipo». Enséñame cómo queda.');
+  assert.equal(corrected.pendingAction?.draft.focusTime, '17:00');
+  assert.equal(corrected.pendingAction?.draft.context, 'Validar la portada con el equipo');
+  assert.notEqual(corrected.approvalReview?.state, ready.approvalReview.state);
+  assert.equal(fixture.created.length, 0);
+  await fixture.send('dale, así está bien');
+  assert.equal(fixture.created.length, 1);
+  assert.equal(fixture.created[0].focusDeadlineAt, '2026-10-25T22:00:00.000Z');
+  assert.deepEqual(fixture.created[0].initial_comments, [{ content: 'Validar la portada con el equipo' }]);
+  const closed = await fixture.send('Gracias, eso era todo.');
+  assert.equal(closed.pendingAction, undefined);
+  assert.deepEqual(closed.toolsUsed, []);
+  assert.equal(fixture.created.length, 1);
+};
 
 export const runHistoricalTaskFilesScenario = async fixture => {
   const initial = await fixture.send('Prepara una tarea llamada «Ensayo sin imagen nueva», para Taller Aurora Ficticio, asignada a mí para mañana a las 3 p. m. Usa esta imagen como insumo. Muéstrame cómo quedaría y espera mi aprobación.');

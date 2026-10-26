@@ -4,7 +4,7 @@
 // que se lee antes de confirmar. La acción (preparar y registrar) vive en briaActionService.
 import { FINANCIAL_CATEGORY_OPTIONS } from './financialCategories.js';
 import { parseAmountText } from './amountInput.js';
-import { humanDate } from './briaAssistant.js';
+import { humanDate } from './briaDate.js';
 
 const fold = (value) => String(value ?? '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
 

@@ -26,11 +26,9 @@ test('the conversational answer leads with grounded prose while preserving the c
   assert.ok(reply.startsWith(relato[0].texto));
   assert.ok(reply.includes(relato[1].texto));
   assert.doesNotMatch(reply, /Opción 1|Beneficio:|Por aclarar:|Consultado en/);
-  assert.match(reply, /Gestión/);
-  assert.match(reply, /24\/10\/2026/);
-  assert.match(reply, /abierto/);
-  assert.match(reply, /cuando llegue el insumo/);
-  assert.match(reply, /aprobación/);
+  assert.equal(reply, relato.map(row => row.texto).join('\n\n'), 'no server-authored closing or internal audit fields');
+  assert.equal(record.estado, 'ABIERTO');
+  assert.equal(record.proximaRevision, 'cuando llegue el insumo');
   assert.equal(record.alternativas.length, 2);
   assert.equal(record.comprobaciones[0].criterio, 'La pieza aprobada está entregada');
   assert.equal(record.ejecucionAutorizada, false);
@@ -50,7 +48,7 @@ test('partial coverage remains visible and an incomplete workflow discards its p
   args.cobertura[0].estado = 'PENDIENTE';
   args.cobertura[0].motivo = 'Falta leer el documento adjunto.';
   const record = buildInvestigation(args, { receipts });
-  assert.match(investigationReply(record), /Falta leer el documento adjunto/);
+  assert.equal(record.cobertura[0].motivo, 'Falta leer el documento adjunto.');
   const unfinished = incompleteInquiry({ investigar: true }, { record, receipts, gaps: ['Abrir el detalle autorizado.'] });
   assert.deepEqual(unfinished.relato, []);
   assert.match(investigationReply(unfinished), /incompleta/);
