@@ -71,8 +71,9 @@ const PushNotificationControl = () => {
   const supported = clientState?.supported !== false && isPushSupported();
   const subscribed = Boolean(clientState?.subscribed);
 
+  // Morado heredado migrado al cian de la marca al tocar esta pantalla (26 de octubre de 2026).
   return (
-    <div className="border-b border-zinc-100 bg-violet-50/60 p-3 dark:border-zinc-800 dark:bg-violet-950/20">
+    <div className="border-b border-zinc-100 bg-cyan-50/60 p-3 dark:border-zinc-800 dark:bg-cyan-950/20">
       <div className="flex items-center gap-3">
         <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-primary shadow-sm dark:bg-zinc-900">
           {subscribed ? <CheckCircle2 className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}

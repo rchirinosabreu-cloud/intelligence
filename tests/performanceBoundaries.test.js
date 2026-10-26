@@ -27,7 +27,11 @@ test('kanban query keeps active work and bounds completed history without loadin
 test('notification header derives unread count from one query', async () => {
   const layout = await read('src/components/layout/AppLayout.jsx');
   assert.doesNotMatch(layout, /api\/notifications\/unread-count/);
-  assert.match(layout, /notifications\.filter\(\(notification\) => !notification\.isRead\)\.length/);
+  // El contador viaja en la misma respuesta de la lista: una sola consulta, como antes.
+  // Antes se contaba sobre la página visible, que solo traía 20, así que con 30 sin leer
+  // la campana mentía y diez no se podían alcanzar (26 de octubre de 2026).
+  assert.match(layout, /notificationsData\?\.pages\?\.\[0\]\?\.unreadCount/);
+  assert.doesNotMatch(layout, /notifications\.filter\(\(notification\) => !notification\.isRead\)\.length/);
 });
 
 test('high frequency polling is slowed and pauses while the document is hidden', async () => {
