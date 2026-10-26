@@ -4,6 +4,7 @@ import {
     DEFAULT_NOTIFICATION_PREFERENCES,
     TEAM_COMPLETION_NOTIFICATION_TYPE,
     normalizeNotificationPreferences,
+    notificationPanelControls,
     teamCompletionMessage,
     teamCompletionRecipients,
     wantsTeamCompletions
@@ -17,7 +18,11 @@ const persona = (id, teamCompletions) => ({ id, notificationPreferences: { teamC
 const tareaAbierta = { id: 'tarea', isPrivate: false };
 
 test('el interruptor nace apagado y solo lo enciende un sí explícito', () => {
-    assert.deepEqual(DEFAULT_NOTIFICATION_PREFERENCES, { teamCompletions: false });
+    assert.deepEqual(DEFAULT_NOTIFICATION_PREFERENCES, {
+        teamCompletions: false,
+        pushDismissed: false,
+        teamCompletionsDismissed: false
+    });
     assert.equal(wantsTeamCompletions(undefined), false);
     assert.equal(wantsTeamCompletions({}), false);
     assert.equal(wantsTeamCompletions({ teamCompletions: 'true' }), false, 'un texto no es un sí');
@@ -28,11 +33,35 @@ test('el interruptor nace apagado y solo lo enciende un sí explícito', () => {
 test('solo se guardan las claves conocidas', () => {
     assert.deepEqual(
         normalizeNotificationPreferences({ teamCompletions: true, loQueSea: true, __proto__: {} }),
-        { teamCompletions: true }
+        { teamCompletions: true, pushDismissed: false, teamCompletionsDismissed: false }
     );
+    const apagado = { teamCompletions: false, pushDismissed: false, teamCompletionsDismissed: false };
     for (const valor of [null, 'texto', 42, []]) {
-        assert.deepEqual(normalizeNotificationPreferences(valor), { teamCompletions: false }, `«${valor}»`);
+        assert.deepEqual(normalizeNotificationPreferences(valor), apagado, `«${valor}»`);
     }
+});
+
+// La campana es para leer avisos, no para configurarlos (Rodny, 26 de octubre de 2026).
+test('un interruptor se ofrece en la campana solo mientras está apagado y sin descartar', () => {
+    assert.deepEqual(
+        notificationPanelControls({ preferences: {} }),
+        { push: true, teamCompletions: true },
+        'sin decidir nada, se ofrecen los dos'
+    );
+    assert.deepEqual(notificationPanelControls(), { push: true, teamCompletions: true });
+});
+
+test('encenderlo lo retira del panel: ya está decidido', () => {
+    assert.equal(notificationPanelControls({ preferences: { teamCompletions: true } }).teamCompletions, false);
+});
+
+test('descartarlo lo retira del panel sin encender nada', () => {
+    const preferences = { pushDismissed: true, teamCompletionsDismissed: true };
+    assert.deepEqual(
+        notificationPanelControls({ preferences }),
+        { push: false, teamCompletions: false }
+    );
+    assert.equal(wantsTeamCompletions(preferences), false, 'descartar no enciende');
 });
 
 test('avisa a quien lo encendió', () => {

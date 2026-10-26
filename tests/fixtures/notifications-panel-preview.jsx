@@ -2,7 +2,9 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import PushNotificationControl from '../../src/components/notifications/PushNotificationControl';
 import TeamCompletionsControl from '../../src/components/notifications/TeamCompletionsControl';
+import NotificationSettings from '../../src/components/notifications/NotificationSettings';
 import BrainToaster from '../../src/components/ui/BrainToaster';
+import { notificationPanelControls } from '../../src/lib/teamNotifications';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -33,6 +35,7 @@ const Panel = () => {
   const mostrados = visibles.slice(0, page * 20);
   const hayMas = mostrados.length < visibles.length;
   const sinLeer = AVISOS.filter((aviso) => !aviso.isRead).length;
+  const controles = notificationPanelControls({ preferences });
 
   // Va dentro del `DropdownMenu` de verdad: es donde vive en la plataforma y donde un
   // botón que no es un ítem del menú podría cerrarlo al pulsarlo.
@@ -41,8 +44,8 @@ const Panel = () => {
       <DropdownMenuTrigger asChild>
         <button type="button" aria-label="Abrir notificaciones" className="h-11 w-11 rounded-full bg-white shadow-sm dark:bg-zinc-800" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
-      <div className="border-b border-zinc-100 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
+      <DropdownMenuContent align="end" className="flex w-80 flex-col overflow-y-hidden p-0 max-h-[min(78vh,40rem)]">
+      <div className="shrink-0 border-b border-zinc-100 bg-zinc-50/50 p-4 dark:border-zinc-800 dark:bg-zinc-900/50">
         <div className="flex items-center justify-between gap-2">
           <h4 className="flex items-center gap-2 text-sm font-bold text-zinc-900 dark:text-white">Notificaciones</h4>
           {sinLeer > 0 && (
@@ -65,9 +68,17 @@ const Panel = () => {
           ))}
         </div>
       </div>
-      <PushNotificationControl />
-      <TeamCompletionsControl preferences={preferences} onSaved={(saved) => setPreferences(saved || preferences)} />
-      <div className="max-h-[min(60vh,32rem)] overflow-y-auto">
+      {controles.push && (
+        <PushNotificationControl onDismiss={() => setPreferences((p) => ({ ...p, pushDismissed: true }))} />
+      )}
+      {controles.teamCompletions && (
+        <TeamCompletionsControl
+          preferences={preferences}
+          onSaved={(saved) => setPreferences(saved || preferences)}
+          onDismiss={() => setPreferences((p) => ({ ...p, teamCompletionsDismissed: true }))}
+        />
+      )}
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {mostrados.map((aviso) => (
           <DropdownMenuItem key={aviso.id} className={`flex gap-3 border-b border-zinc-50 p-4 dark:border-zinc-900 ${aviso.isRead ? '' : 'bg-primary/5'}`}>
             <div className="h-9 w-9 shrink-0 rounded-lg bg-primary/10" />
@@ -94,10 +105,13 @@ const Panel = () => {
   );
 };
 
+// `?perfil` muestra la sección de Perfil, donde los dos interruptores están siempre.
+const vistaDePerfil = new URLSearchParams(window.location.search).has('perfil');
+
 createRoot(document.getElementById('root')).render(
-  // El visor de avisos vive arriba al centro, así que el panel baja para no quedar debajo.
+  // El visor de avisos vive arriba al centro, así que el contenido baja para no quedar debajo.
   <main className="flex min-h-screen items-start justify-center bg-zinc-100 px-8 pb-8 pt-24 dark:bg-zinc-900">
     <BrainToaster />
-    <Panel />
+    {vistaDePerfil ? <div className="w-full max-w-md"><NotificationSettings /></div> : <Panel />}
   </main>
 );
