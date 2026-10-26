@@ -4,7 +4,7 @@ import { createTaskLifecycleFixture } from './briaTaskLifecycleFixture.js';
 
 // Catálogo completo del servicio real. Solo datos y fronteras externas simulados.
 // Ninguna frase del caso forma parte de las instrucciones de producción.
-export const createFullInquiryFixture = (ai, { initialTurns = [] } = {}) => {
+export const createFullInquiryFixture = (ai, { initialTurns = [], overview = false } = {}) => {
   const client = { id: 'lifecycle-client', name: 'Taller Aurora Ficticio', slug: 'aurora', isArchived: false };
   const base = { clientId: client.id, client, assignee: { id: 'lifecycle-member', name: 'Marina Duarte', userId: 'lifecycle-user' }, isPrivate: false, collaborators: [], viewers: [], accumulatedWorkMs: 0 };
   const target = { ...base, id: 'feature-delivery', title: 'Solicitud de actualizaciones y nuevas funcionalidades de la plataforma de gestión', status: 'PENDIENTE', dueDate: '2026-10-20T17:00:00Z', comments: 'Entrega del portal interno: permisos de clientes y exportación de reportes. Falta validar la exportación en staging.', updatedAt: '2026-10-24T15:00:00Z', taskComments: [{ id: 'blocker', content: 'La exportación falla con cuentas sin movimientos. Nora debe revisar el caso; las pruebas de aceptación siguen pendientes. No hay una nueva fecha acordada.', createdAt: '2026-10-24T15:00:00Z', author: { name: 'Marina Duarte' } }] };
@@ -13,6 +13,12 @@ export const createFullInquiryFixture = (ai, { initialTurns = [] } = {}) => {
     target,
     { ...base, id: 'invoice', title: 'Actualizar datos de facturación', status: 'PENDIENTE', dueDate: '2026-10-27T17:00:00Z', taskComments: [] }
   ];
+  const operation = { ...client, agency: 'BRAIN', cycles: overview ? { current: { label: 'Octubre de 2026', quota: 2, created: 2, reached: { aprobada: 2, publicada: 1 }, overdueItems: 1 } } : {}, contract: null, openTasks: [], evaluation: overview ? { level: 'red', reasons: [{ text: 'Una pieza aprobada sigue sin publicar tras su fecha prevista.' }] } : { level: 'gray', reasons: [] } };
+  const editorialPlan = overview ? { id: 'overview-plan', month: 10, year: 2026, status: 'EN_PROCESO', client, contentItems: [
+    { id: 'published', objective: 'Presentación del taller', format: 'Post', publishDate: '2026-10-22', status: 'PUBLICADO', copyText: 'Texto validado', captionText: 'Texto público', finalAssetKey: 'fixture-one', comments: [], publications: [{ status: 'PUBLISHED' }], tasks: [] },
+    { id: 'overdue', objective: 'Servicios del taller', format: 'Post', publishDate: '2026-10-23', status: 'APROBADO', copyText: 'Texto validado', captionText: 'Texto público', finalAssetKey: 'fixture-two', comments: [], publications: [], tasks: [] }
+  ] } : null;
+  if (overview) operation.openTasks = tasks.map(task => ({ ...task, overdue: String(task.dueDate).slice(0, 10) < '2026-10-24' }));
   const reads = [], writes = [];
   const record = (name, value) => async () => { reads.push(name); return structuredClone(value); };
   const forbidden = name => async () => { writes.push(name); throw new Error(`Unexpected mutation: ${name}`); };
@@ -36,7 +42,7 @@ export const createFullInquiryFixture = (ai, { initialTurns = [] } = {}) => {
       readActivity: record('activity', [{ id: 'lifecycle-nora', name: 'Nora Sáenz', status: 'REUNION', currentEvent: { id: 'meeting', title: 'Revisión interna', type: 'MEETING', startAt: '2026-10-24T16:00:00Z', endAt: '2026-10-24T18:00:00Z' } }]),
       load: service({ get: record('load', { today: '2026-10-24', days: [], capacityMs: 28800000, people: [{ personId: 'lifecycle-member', personName: 'Marina Duarte', overdue: { count: 1 }, undated: { count: 0 }, cells: [] }], forecast: null }) }),
       rhythm: service({ get: record('rhythm', { period: { days: 30 }, team: { closed: 0, measured: 0, coverage: 0 }, people: [], profiles: [], hours: [] }) }),
-      operations: service({ getOperation: record('operation', { ...client, cycles: {}, contract: null, openTasks: [], evaluation: { level: 'gray', reasons: [] } }), listOperations: record('portfolio', []) }),
+      operations: service({ getOperation: record('operation', operation), listOperations: record('portfolio', overview ? [operation] : []) }),
       searchMemory: record('minutes', [{ sourceRecordId: 'old-meeting', title: 'Reunión del 19 de octubre', subtitle: '2026-10-19', section: 'Resumen', content: 'Se habló de centralizar archivos; no se acordaron fechas de desarrollo.' }]),
       searchAgency: record('history', history), readAgency: record('document', history[0])
     },
@@ -47,11 +53,26 @@ export const createFullInquiryFixture = (ai, { initialTurns = [] } = {}) => {
       }, findUnique: record('client', client) },
       task: { findMany: async ({ where }) => { reads.push('tasks'); return structuredClone(matches(where)); }, count: async ({ where }) => matches(where).length,
         findUnique: async ({ where }) => { reads.push(`detail:${where.id}`); return structuredClone(tasks.find(row => row.id === where.id) || null); } },
-      contentPlan: { findFirst: record('content', null), findMany: record('content-list', []) },
+      contentPlan: { findFirst: record('content', editorialPlan), findMany: record('content-list', editorialPlan ? [editorialPlan] : []) },
       clientEditorialCriterion: { findMany: record('criteria', []) }, contentPlanReviewFinding: { findMany: record('findings', []) }, socialPublication: { findMany: record('publications', []) }
     }
   });
   return { ...fixture, reads, writes };
+};
+
+export const runAgencyOverviewScenario = async fixture => {
+  const answer = await fixture.send('¿Cómo ves el panorama general de la agencia y el cumplimiento de las parrillas?');
+  assert.deepEqual(fixture.writes, []);
+  assert.equal(fixture.created.length, 0);
+  assert.equal(answer.pendingAction, undefined);
+  assert.equal(answer.investigation, undefined, 'an overview does not request a saved follow-up');
+  assert.deepEqual(answer.failures, []);
+  assert.ok(fixture.reads.includes('portfolio'), 'must read agency-wide operational data');
+  assert.ok(fixture.reads.includes('content'), 'must verify the editorial plan');
+  assert.ok(answer.text.length > 50);
+  assert.match(answer.text, /publica|publicó|publicaci/iu, 'the answer must discuss publication compliance');
+  assert.doesNotMatch(answer.text, /No pude responder ahora|No se pudo interpretar el alcance/);
+  assert.ok(fixture.modelRequests.find(request => request.tools?.length)?.tools.length >= 50);
 };
 
 export const runFullInquiryScenario = async (fixture, { first: priorFirst } = {}) => {
