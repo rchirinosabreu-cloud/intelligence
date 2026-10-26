@@ -4,7 +4,7 @@
 //
 // Un préstamo es una cuenta por cobrar de otra clase (`AccountsReceivable.kind = PRESTAMO`): a
 // quién se le prestó puede ser un colaborador, un socio, un cliente (con su ficha), un proveedor
-// u otro tercero. Nace con el egreso que sacó el dinero (categoría PRESTAMO, sección FINANCING)
+// o un particular. Nace con el egreso que sacó el dinero (categoría PRESTAMO, sección FINANCING)
 // y su devolución entra como reintegro con esa misma categoría y sección, nunca como venta.
 // Esta regla la leen la pantalla (para frenar antes de enviar) y el servidor (la cerradura).
 
@@ -16,7 +16,9 @@ export const LOAN_COUNTERPARTY_TYPES = Object.freeze([
     { value: 'SOCIO', label: 'Socio' },
     { value: 'CLIENTE', label: 'Cliente' },
     { value: 'PROVEEDOR', label: 'Proveedor' },
-    { value: 'OTRO', label: 'Otro tercero' }
+    // «Particular» (Rodny, 26 de octubre de 2026): una persona o empresa sin otra relación con Brain Studio. Antes
+    // «Otro tercero», que no decía nada; el valor guardado sigue siendo OTRO, así que lo ya registrado no cambia.
+    { value: 'OTRO', label: 'Particular' }
 ]);
 
 export const LOAN_NAME_MAX = 120;
