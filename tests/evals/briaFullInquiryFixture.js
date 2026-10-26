@@ -4,7 +4,7 @@ import { createTaskLifecycleFixture } from './briaTaskLifecycleFixture.js';
 
 // Catálogo completo del servicio real. Solo datos y fronteras externas simulados.
 // Ninguna frase del caso forma parte de las instrucciones de producción.
-export const createFullInquiryFixture = (ai, { initialTurns = [], overview = false } = {}) => {
+export const createFullInquiryFixture = (ai, { initialTurns = [], overview = false, assistantOptions = {}, conversationOptions = {}, members = [] } = {}) => {
   const client = { id: 'lifecycle-client', name: 'Taller Aurora Ficticio', slug: 'aurora', isArchived: false };
   const base = { clientId: client.id, client, assignee: { id: 'lifecycle-member', name: 'Marina Duarte', userId: 'lifecycle-user' }, isPrivate: false, collaborators: [], viewers: [], accumulatedWorkMs: 0 };
   const target = { ...base, id: 'feature-delivery', title: 'Solicitud de actualizaciones y nuevas funcionalidades de la plataforma de gestión', status: 'PENDIENTE', dueDate: '2026-10-20T17:00:00Z', comments: 'Entrega del portal interno: permisos de clientes y exportación de reportes. Falta validar la exportación en staging.', updatedAt: '2026-10-24T15:00:00Z', taskComments: [{ id: 'blocker', content: 'La exportación falla con cuentas sin movimientos. Nora debe revisar el caso; las pruebas de aceptación siguen pendientes. No hay una nueva fecha acordada.', createdAt: '2026-10-24T15:00:00Z', author: { name: 'Marina Duarte' } }] };
@@ -23,10 +23,10 @@ export const createFullInquiryFixture = (ai, { initialTurns = [], overview = fal
   const record = (name, value) => async () => { reads.push(name); return structuredClone(value); };
   const forbidden = name => async () => { writes.push(name); throw new Error(`Unexpected mutation: ${name}`); };
   const service = methods => new Proxy(methods, { get: (object, key) => key in object ? object[key] : forbidden(String(key)) });
-  const matches = where => tasks.filter(task => (!where?.clientId || task.clientId === where.clientId) && (!where?.status?.in || where.status.in.includes(task.status)));
+  const matches = where => tasks.filter(task => (!where?.clientId || task.clientId === where.clientId) && (!where?.status?.in || where.status.in.includes(task.status)) && (!where?.id?.in || where.id.in.includes(task.id)) && (where?.assigneeId === undefined || task.assigneeId === where.assigneeId));
   const history = [{ id: 'old-invoice', title: 'Aviso de facturación de febrero', content: 'Aviso de renovación de febrero de 2026; no demuestra la vigencia del servicio de hoy.', authority: 'HISTORICO' }];
   const fixture = createTaskLifecycleFixture(ai, {
-    initialTurns,
+    initialTurns, conversationOptions,
     assistantTools: briaAssistantTools,
     session: { token: 'fictional-no-network' },
     knowledge: service({ list: record('knowledge', []) }),
@@ -35,7 +35,7 @@ export const createFullInquiryFixture = (ai, { initialTurns = [], overview = fal
       usage: service({ summary: record('usage', {}) }), platform: service({ call: async ({ method }) => { assert.equal(method, 'GET'); return { ok: false, status: 404, error: 'No hay información adicional en esa ruta de esta cuenta ficticia. Usa las lecturas propias de Gestión, Actividad y Carga.' }; } }),
       agencyFacts: service({ contextForClients: async (_user, clients) => { reads.push('account-context'); return { cuentas: clients.map(row => ({ clientId: row.id, estado: 'CONSULTADO', parcial: false, hechos: [] })) }; }, consult: record('facts', { hechos: [], dudas: [] }), howToWorkWith: record('person-context', { hechos: [] }) }),
       vault: service({ list: record('vault', []) }), mail: service({ recentImportant: record('mail', []), readMessage: record('message', null) }),
-      permissions: service({}), dailyReading: service({ explain: record('daily', { propuestas: [] }) }), serviceHealth: service({ getSummary: record('health', { overall: 'GREEN', troubled: [] }) })
+      permissions: service({}), dailyReading: service({ explain: record('daily', { propuestas: [] }) }), serviceHealth: service({ getSummary: record('health', { overall: 'GREEN', troubled: [] }) }), ...assistantOptions
     },
     assistantContext: {
       getTasks: async id => { assert.equal(id, client.id); reads.push('tasks'); return structuredClone(tasks); },
@@ -51,13 +51,14 @@ export const createFullInquiryFixture = (ai, { initialTurns = [], overview = fal
         const term = where?.name?.contains || where?.OR?.find(row => row.name)?.name.contains || '';
         return client.name.toLowerCase().includes(term.toLowerCase()) || where?.OR?.some(row => row.id === client.id) ? [client] : [];
       }, findUnique: record('client', client) },
-      task: { findMany: async ({ where }) => { reads.push('tasks'); return structuredClone(matches(where)); }, count: async ({ where }) => matches(where).length,
+      ...(members.length ? { teamMember: { findMany: async ({ where }) => members.filter(member => !where?.OR || where.OR.some(clause => member.name.toLowerCase().includes(String(clause.name?.contains || clause.email?.equals || '\u0000').toLowerCase()))), findUnique: async ({ where }) => members.find(member => member.id === where.id || where.userId && member.userId === where.userId) } } : {}),
+      task: { findMany: async ({ where, take }) => { reads.push('tasks'); return structuredClone(matches(where).slice(0, take)); }, count: async ({ where }) => matches(where).length,
         findUnique: async ({ where }) => { reads.push(`detail:${where.id}`); return structuredClone(tasks.find(row => row.id === where.id) || null); } },
       contentPlan: { findFirst: record('content', editorialPlan), findMany: record('content-list', editorialPlan ? [editorialPlan] : []) },
       clientEditorialCriterion: { findMany: record('criteria', []) }, contentPlanReviewFinding: { findMany: record('findings', []) }, socialPublication: { findMany: record('publications', []) }
     }
   });
-  return { ...fixture, reads, writes };
+  return { ...fixture, reads, writes, tasks, client };
 };
 
 export const runAgencyOverviewScenario = async fixture => {

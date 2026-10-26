@@ -7,17 +7,22 @@ const fold = (value) => String(value || '').normalize('NFD').replace(/\p{M}/gu, 
 
 export const DELETE_CONFIRM = 'Eliminar pendiente';
 export const DELETE_CANCEL = 'No eliminar';
-export const DELETE_MAX_ITEMS = 10;
+export const DELETE_MAX_ITEMS = 200;
 export const DELETE_REASON_OPTIONS = ['Se creó por error', 'Ya no aplica', 'Está repetido'];
-
-/** Pedir que un pendiente desaparezca. Cerrarlo, devolverlo o preguntar por él no lo es. */
-export const deleteIntent = (question) => /((elimina|eliminar|borra|borrar|quita|quitar|descarta|descartar|suprime|suprimir)(me|lo|la|los|las)?\b[^.!?]{0,60}\b(pendiente|tarea)s?|\b(pendiente|tarea)s?\b[^.!?]{0,40}\b(elimin|borr))/.test(fold(question));
 
 /** La confirmación es una frase corta y completa; dentro de un texto más largo no cuenta. */
 export const isDeleteConfirmation = (question) => /^(?:(?:si|ok|vale|dale)[,. ]+)?(?:eliminar(?: (?:el |los |la |las )?(?:pendientes?|tareas?))?|borrar(?: (?:el |los |la |las )?(?:pendientes?|tareas?))?|eliminalos?|eliminalas?|borralos?|borralas?|confirmo la eliminacion)[.! ]*$/.test(fold(question));
 export const isDeleteCancellation = (question) => /^(?:no eliminar|no borrar|no (?:lo|los|la|las) (?:elimines|borres)|cancelar (?:la )?eliminacion|cancela la eliminacion|dejalo|dejalos)[.! ]*$/.test(fold(question));
 
 const active = (draft) => (draft?.items || []).filter((item) => !item.skip);
+
+export const deleteScope = draft => ({
+  matched: draft?.selection?.matched ?? draft?.items?.length ?? 0,
+  selected: active(draft).length,
+  excluded: (draft?.items || []).filter(item => item.skip).length,
+  complete: (draft?.selection?.matched ?? draft?.items?.length ?? 0) === (draft?.items?.length || 0),
+  description: draft?.selection?.description || null
+});
 
 export const deleteStage = (draft) => {
   if (!draft) return null;

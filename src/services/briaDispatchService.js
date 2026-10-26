@@ -9,7 +9,8 @@ import { hasModulePermission } from '../config/security.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import { knowledgeError } from '../lib/briaKnowledge.js';
 import { resolveTaskDate } from '../lib/briaTaskDraft.js';
-import { dispatchIntent, dispatchStage, isDispatchConfirmation, DISPATCH_MAX_ITEMS } from '../lib/briaDispatchDraft.js';
+import { dispatchStage, isDispatchConfirmation, DISPATCH_MAX_ITEMS } from '../lib/briaDispatchDraft.js';
+import { preparationRequestProblem } from '../lib/briaPreparation.js';
 
 export const canDispatch = (user) => canUseBria(user) && hasModulePermission(user, 'gestion') && hasModulePermission(user, 'parrillas');
 const authorize = (user) => { if (!canDispatch(user)) throw knowledgeError('Necesitas acceso a Gestión y a Parrillas para despachar a producción con Bria.', 403, 'BRIA_DISPATCH_FORBIDDEN'); };
@@ -32,18 +33,20 @@ const humanReason = (failure) => {
 };
 
 export const createBriaDispatchService = ({ db, dispatchItem, now = () => new Date(), readOnly = false } = {}) => ({
-  async prepare({ user, args = {}, question, previous }) {
+  async prepare({ user, args = {}, request, question, previous }) {
     authorize(user);
     const owner = user.userId || user.id;
     const ongoing = previous && previous.status === 'DRAFT';
     if (ongoing && previous.ownerId !== owner) throw knowledgeError('Este despacho pertenece a otra persona.', 403);
-    if ((!ongoing || args.nuevo === true) && !dispatchIntent(question)) throw knowledgeError('Pide explícitamente despachar piezas a producción para preparar el despacho.', 400, 'BRIA_DISPATCH_NO_INTENT');
+    const problem = preparationRequestProblem({ request, question, ongoing: Boolean(ongoing), newDraft: args.nuevo === true });
+    if (problem) throw knowledgeError(problem, 400, 'BRIA_DISPATCH_REQUEST');
     const fresh = !ongoing || args.nuevo === true;
     const planId = tidy(args.planId) || (fresh ? '' : previous.planId);
     if (!planId) throw knowledgeError('Falta la parrilla: búscala primero con parrilla_de_cliente.', 400, 'BRIA_DISPATCH_PLAN');
     if (!fresh && planId !== previous.planId) throw knowledgeError('Un despacho es de una sola parrilla. Pide uno nuevo para la otra.', 400, 'BRIA_DISPATCH_PLAN');
     const draft = fresh ? { id: randomUUID(), ownerId: owner, status: 'DRAFT', planId, client: null, items: [] } : structuredClone(previous);
-    const requested = (Array.isArray(args.piezas) ? args.piezas : []).slice(0, DISPATCH_MAX_ITEMS);
+    const requested = Array.isArray(args.piezas) ? args.piezas : [];
+    if (requested.length > DISPATCH_MAX_ITEMS) throw knowledgeError(`El despacho admite hasta ${DISPATCH_MAX_ITEMS} piezas; no se preparó un subconjunto. Divide el alcance con la persona.`, 400, 'BRIA_DISPATCH_SIZE');
     const ids = [...new Set(requested.map((row) => tidy(row.pieza)).filter(Boolean))];
     const rows = ids.length ? await db.contentItem.findMany({
       where: { id: { in: ids }, planId, deletedAt: null, plan: { deletedAt: null } },

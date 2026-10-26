@@ -4,7 +4,7 @@ import { createBriaAssistantService } from '../../src/services/briaAssistantServ
 import { createBriaTaskDraftService } from '../../src/services/briaTaskDraftService.js';
 
 // Servicios de producción, datos y almacenamiento cerrados y ficticios. No evalúa visión ni transporte Meta.
-export const createTaskLifecycleFixture = (ai, { historicalFiles = [], assistantTools = [], assistantContext = {}, extraDb = {}, knowledge = null, assistantOptions = {}, session = null, initialTurns = [], initialCreated = [] } = {}) => {
+export const createTaskLifecycleFixture = (ai, { historicalFiles = [], assistantTools = [], assistantContext = {}, extraDb = {}, knowledge = null, assistantOptions = {}, conversationOptions = {}, session = null, initialTurns = [], initialCreated = [] } = {}) => {
   const user = { id: 'lifecycle-user', userId: 'lifecycle-user', name: 'Marina Duarte', role: 'ADMIN', isActive: true, sessionVersion: 0, modulePermissions: { bria: true, gestion: true } };
   const member = { id: 'lifecycle-member', userId: user.id, name: user.name, isActive: true };
   const collaborator = { id: 'lifecycle-nora', name: 'Nora Sáenz', isActive: true };
@@ -40,7 +40,7 @@ export const createTaskLifecycleFixture = (ai, { historicalFiles = [], assistant
       return structuredClone(chat);
     }
   };
-  const service = createBriaConversationService({ repository, assistant, taskDrafts,
+  const service = createBriaConversationService({ repository, assistant, taskDrafts, ...conversationOptions,
     resolveActor: async () => ({ ref: user.id, role: user.role }),
     // Lectura simulada de un adjunto ficticio: no manda píxeles ni datos privados.
     prepareAttachment: async file => ({ id: 'lifecycle-photo', name: file.originalname, mime: 'image/jpeg', buffer: file.buffer, size: file.buffer.length, status: 'READ', text: 'Imagen ficticia: dos variantes de una portada del taller.' })

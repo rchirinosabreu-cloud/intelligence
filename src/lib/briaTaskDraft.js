@@ -25,14 +25,7 @@ export const isTaskCancellation = question => /^(?:cancelar (?:el |los )?pendien
 // Solo el atajo exacto de la pantalla inicia un borrador sin interpretación. El texto libre lo entiende Bria.
 export const isTaskDraftStarter = question => clean(question) === 'crear un pendiente';
 /** Comprueba procedencia, no semántica ni aprobación: la interpretación solo permite preparar un borrador. */
-export const taskDraftRequestProblem = ({ request, question, ongoing = false, newDraft = false } = {}) => {
-  if (!request || !['PREPARE', 'ADJUST'].includes(request.intent)) return 'Hace falta identificar el pedido de preparar o ajustar este borrador.';
-  const normalize = value => typeof value === 'string' ? value.normalize('NFKC').replace(/\s+/g, ' ').trim() : '';
-  const quote = normalize(request.evidence), current = normalize(question);
-  if (!quote || !current || !current.includes(quote)) return 'El pedido debe estar citado en tu mensaje actual, no en un documento ni en otra fuente.';
-  if (request.intent === 'ADJUST' && (!ongoing || newDraft)) return 'Primero prepara un borrador antes de ajustarlo.';
-  return null;
-};
+export { preparationRequestProblem as taskDraftRequestProblem } from './briaPreparation.js';
 export const materialDeclined = (question, stage) => /\b(?:sin|no (?:hay|tengo|tenemos|anadire|voy a anadir|quiero anadir|necesito))\b[^.!?]{0,50}\b(?:insumos|referencias|material)\b/.test(clean(question)) || (stage === 'MATERIAL' && /^(?:no|no gracias|procede|si,? procede|continua|continuar sin insumos|no,? procede)[.! ]*$/.test(clean(question)));
 
 /**
