@@ -2024,7 +2024,7 @@ model FinancialAccount {
 // aditivas con `scripts/ensure-accounts-payable-schema.js`.
 model ThirdParty {
   id                String            @id @default(uuid())
-  kind              String // PROVEEDOR, COLABORADOR, ARRENDADOR, SOCIO, OTRO
+  kind              String // PROVEEDOR, CONTRATISTA, OUTSOURCING, COLABORADOR, ARRENDADOR, SOCIO, OTRO (src/lib/accountsPayable.js)
   name              String
   legalName         String?
   documentType      String?

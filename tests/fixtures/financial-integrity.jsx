@@ -105,7 +105,17 @@ const settlePayrollTx = (tx) => {
 // Préstamos a terceros (20 de octubre de 2026): viven en la cartera junto a lo de los clientes.
 let loans = [];
 // Terceros y cuentas por pagar (20 de octubre de 2026): un arrendador con el arriendo de octubre vencido.
-let thirdParties = [{ id: 'tp-arrendador', kind: 'ARRENDADOR', name: 'Inmobiliaria Norte', legalName: null, documentType: 'NIT', documentNumber: '900123456', bankName: 'Bancolombia', bankAccountType: 'AHORROS', bankAccountNumber: '123-456', isActive: true }];
+let thirdParties = [
+  { id: 'tp-arrendador', kind: 'ARRENDADOR', name: 'Inmobiliaria Norte', legalName: null, documentType: 'NIT', documentNumber: '900123456', bankName: 'Bancolombia', bankAccountType: 'AHORROS', bankAccountNumber: '123-456', isActive: true },
+  // Un contratista y la ficha de pago de alguien del equipo (26 de octubre de 2026).
+  { id: 'tp-foto', kind: 'CONTRATISTA', name: 'Andrés Fotografía', documentType: 'CC', documentNumber: '1047123456', bankName: 'Nequi', bankAccountType: 'NEQUI', bankAccountNumber: '3001234567', isActive: true },
+  { id: 'tp-jarlan', kind: 'COLABORADOR', name: 'Jarlan Pérez', teamMemberId: 'tm-jarlan', documentType: 'CC', documentNumber: '1143000111', bankName: 'Bancolombia', bankAccountType: 'AHORROS', bankAccountNumber: '987-654', isActive: true }
+];
+// El equipo activo de Equipo: Melissa todavía no tiene ficha de pago; la de Jarlan ya está ligada.
+const team = [
+  { id: 'tm-melissa', name: 'Melissa Rodríguez', role: 'Community manager', email: 'melissa@brainstudio.co', avatarUrl: null, isActive: true },
+  { id: 'tm-jarlan', name: 'Jarlan Pérez', role: 'Diseñador', email: 'jarlan@brainstudio.co', avatarUrl: null, isActive: true }
+];
 let payables = [{ id: 'payable-arriendo', thirdPartyId: 'tp-arrendador', concept: 'Arriendo de octubre', category: 'ADMINISTRATIVO', amount: 1500000, receivedAt: '2026-10-01T12:00:00Z', dueDate: '2026-10-05T12:00:00Z', documentNumber: 'F-2026-10', notes: null, status: 'POR_PAGAR', payments: [], documents: [] }];
 let prospectClientId = null;
 const createdReceivables = window.__createdReceivables = [];
@@ -304,6 +314,7 @@ axios.defaults.adapter = async config => {
   }
   // Lo comercial de los terceros (23 de octubre de 2026): un cliente potencial con su cotización enviada
   // y las cotizaciones del cliente de muestra. Unir el potencial a una ficha lo pasa a cliente.
+  else if (path === '/api/financials/parties/team') data = { team };
   else if (path === '/api/financials/parties/commercial') {
     const clientQuotations = [{ id: 'q-demo-2', code: 'COT-0038', status: 'APROBADA', total: 2400000, currency: 'COP', createdAt: '2026-08-02T15:00:00Z', acceptedAt: '2026-08-05T15:00:00Z' }];
     const prospectQuotations = [{ id: 'q-cafe-1', code: 'COT-0042', status: 'ACTIVA', total: 3200000, currency: 'COP', createdAt: '2026-10-15T15:00:00Z', acceptedAt: null }];

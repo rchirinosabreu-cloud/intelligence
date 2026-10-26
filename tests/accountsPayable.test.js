@@ -17,7 +17,7 @@ import { isExcludedOperation, PLATFORM_OPERATIONS } from '../src/lib/platformCat
 const read = (relative) => fs.readFileSync(new URL(relative, import.meta.url), 'utf8');
 
 test('la regla: clases de tercero, categorías sin préstamo, estados por números y vencimientos en palabras', () => {
-    assert.deepEqual(THIRD_PARTY_KINDS.map((item) => item.value), ['PROVEEDOR', 'COLABORADOR', 'ARRENDADOR', 'SOCIO', 'OTRO']);
+    assert.deepEqual(THIRD_PARTY_KINDS.map((item) => item.value), ['PROVEEDOR', 'CONTRATISTA', 'OUTSOURCING', 'COLABORADOR', 'ARRENDADOR', 'SOCIO', 'OTRO']);
     assert.ok(!PAYABLE_CATEGORY_OPTIONS.some(([value]) => value === 'PRESTAMO'), 'un préstamo es una cuenta por cobrar, no por pagar');
     assert.equal(thirdPartyProblem({ kind: 'PROVEEDOR', name: 'Papelería El Punto' }), null);
     assert.match(thirdPartyProblem({ kind: 'X', name: 'a' }), /clase/i);

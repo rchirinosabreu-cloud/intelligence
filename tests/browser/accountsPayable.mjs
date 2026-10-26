@@ -102,10 +102,12 @@ try {
   await page.locator('[data-third-parties-open]').click();
   await page.locator('[data-financial-parties]').waitFor();
   await page.getByRole('combobox', { name: 'Rol' }).waitFor();
-  // Los dos tienen rol de pago; el arrendador comparte NIT con el cliente de muestra y va en su fila.
+  // El proveedor que se acaba de crear y el arrendador, que comparte NIT con el cliente de muestra y va en su fila;
+  // además, desde el 26 de octubre de 2026, el equipo: Jarlan con su ficha y Melissa sin ella.
   const payees = page.locator('[data-party-roles]').filter({ hasText: /Proveedor|Arrendador|Colaborador|Socio|Otro tercero/ });
   await payees.first().waitFor();
-  assert.equal(await payees.count(), 2);
+  assert.equal(await payees.count(), 4);
+  assert.equal(await page.locator('[data-party-row]').filter({ hasText: 'Melissa Rodríguez' }).count(), 1);
   await page.screenshot({ path: shot('terceros-oscuro.png'), animations: 'disabled' });
 
   assert.deepEqual(errors, []);

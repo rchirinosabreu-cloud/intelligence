@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
-import { buildClientDirectoryRows, buildPartyRows, filterPartyRows, isPartyActive, partyContact, partyDocument, summarizeParties } from '../src/lib/clientDirectoryRows.js';
-import { createThirdParty, updateThirdParty } from '../src/services/thirdPartyService.js';
+import { PARTY_ROLES, buildClientDirectoryRows, buildPartyRows, filterPartyRows, isPartyActive, partyContact, partyDocument, partyRoleLabel, summarizeParties } from '../src/lib/clientDirectoryRows.js';
+import { THIRD_PARTY_KINDS } from '../src/lib/accountsPayable.js';
+import { createThirdParty, listPartyTeam, updateThirdParty } from '../src/services/thirdPartyService.js';
 
 // Terceros (Elisa, 23 de octubre de 2026: «el tema de terceros, nos gusta como lo hacen acá»): una sola
 // lista con los clientes y a quienes se les paga, con sus roles; una ficha por tercero.
@@ -48,7 +49,27 @@ test('documento, contacto y estado salen de la ficha que los tenga', () => {
 });
 
 test('las cifras de arriba cuentan terceros con ficha, por rol', () => {
-    assert.deepEqual(summarizeParties(rows()), { total: 5, clients: 3, prospects: 0, suppliers: 2, team: 1, others: 1, active: 3, unlinked: 1 });
+    assert.deepEqual(summarizeParties(rows()), { total: 5, clients: 3, prospects: 0, suppliers: 2, contractors: 0, outsourcing: 0, team: 1, others: 1, active: 3, unlinked: 1 });
+});
+
+// Punto 1 de la solicitud de Elisa: un tercero puede ser «cliente, cliente potencial, proveedor, empleado, contratista,
+// outsourcing u otros». Contratistas y outsourcing son a quienes se les paga un servicio: cuentan con los proveedores.
+test('contratista y outsourcing son roles propios y cuentan con quienes prestan un servicio', () => {
+    const extra = [
+        { id: 'tp-foto', kind: 'CONTRATISTA', name: 'Fotógrafo freelance', isActive: true },
+        { id: 'tp-conta', kind: 'OUTSOURCING', name: 'Contabilidad externa', isActive: true }
+    ];
+    const list = buildPartyRows(buildClientDirectoryRows(directory, reconciliation), [...thirdParties, ...extra]);
+    assert.deepEqual(byName(list, 'Fotógrafo freelance').roles, ['CONTRATISTA']);
+    const summary = summarizeParties(list);
+    assert.equal(summary.suppliers, 4);
+    assert.equal(summary.contractors, 1);
+    assert.equal(summary.outsourcing, 1);
+    assert.deepEqual(filterPartyRows(list, { role: 'OUTSOURCING' }).map((row) => row.name), ['Contabilidad externa']);
+    assert.equal(partyRoleLabel('CONTRATISTA'), 'Contratista');
+    assert.equal(partyRoleLabel('OUTSOURCING'), 'Outsourcing');
+    // Una sola lista: los roles de Terceros salen de las clases de tercero, más cliente y cliente potencial.
+    assert.deepEqual(PARTY_ROLES.map((role) => role.value), ['CLIENTE', 'CLIENTE_POTENCIAL', ...THIRD_PARTY_KINDS.map((kind) => kind.value)]);
 });
 
 test('se filtra por rol, por estado y por búsqueda, también en la ficha de pago', () => {
@@ -109,4 +130,70 @@ test('la pantalla: Terceros en Financiero, por rol y estado, y Por pagar lleva a
     const payables = fs.readFileSync(new URL('../src/components/modules/financial/PayablesTab.jsx', import.meta.url), 'utf8');
     assert.match(payables, /onClick=\{\(\) => onOpenThirdParties\?\.\(\)\}/);
     assert.doesNotMatch(payables, /ThirdPartiesDialog/);
+});
+
+// El equipo en Terceros (Rodny, 26 de octubre de 2026: «tienes razón, implementa ese tema de los terceros también»):
+// cada persona activa de Equipo es un tercero con el rol Colaborador sin registrarla a mano; su ficha de pago, si la
+// tiene, es la misma fila.
+const team = [
+    { id: 'tm-melissa', name: 'Melissa', role: 'Community manager', email: 'melissa@brain.co', isActive: true },
+    { id: 'tm-jarlan', name: 'Jarlan Pérez', role: 'Diseñador', email: 'jarlan@brain.co', isActive: true },
+    { id: 'tm-kamila', name: 'Kamila', role: 'Editora', email: null, isActive: true }
+];
+const teamThirdParties = [
+    ...thirdParties.filter((item) => item.id !== 'tp-melissa'),
+    { id: 'tp-jarlan', kind: 'COLABORADOR', name: 'Jarlan Pérez Gómez', teamMemberId: 'tm-jarlan', bankName: 'Nequi', isActive: true },
+    // Una ficha anterior sin vínculo, con el mismo nombre: se une por nombre.
+    { id: 'tp-kamila', kind: 'COLABORADOR', name: 'kamila', isActive: true }
+];
+const teamRows = () => buildPartyRows(buildClientDirectoryRows(directory, reconciliation), teamThirdParties, {}, team);
+
+test('cada persona del equipo es un tercero, una sola vez, con o sin ficha de pago', () => {
+    const list = teamRows();
+    const jarlan = list.filter((row) => row.teamMember?.id === 'tm-jarlan');
+    assert.equal(jarlan.length, 1, 'la ficha de pago ligada y la persona son una fila');
+    assert.equal(jarlan[0].thirdParty.id, 'tp-jarlan');
+    assert.deepEqual(jarlan[0].roles, ['COLABORADOR']);
+    assert.equal(list.find((row) => row.teamMember?.id === 'tm-kamila').thirdParty.id, 'tp-kamila', 'una ficha sin vínculo con el mismo nombre');
+    const melissa = list.find((row) => row.teamMember?.id === 'tm-melissa');
+    assert.equal(melissa.sourceId, 'equipo:tm-melissa');
+    assert.equal(melissa.thirdParty, null, 'sin ficha de pago todavía');
+    assert.deepEqual(melissa.roles, ['COLABORADOR']);
+    assert.equal(isPartyActive(melissa), true);
+    assert.equal(partyContact(melissa), 'melissa@brain.co');
+    assert.equal(list.filter((row) => row.name === 'kamila' || row.name === 'Kamila').length, 1);
+    assert.equal(summarizeParties(list).team, 3);
+    assert.deepEqual(filterPartyRows(list, { search: 'diseñador' }).map((row) => row.teamMember?.id), ['tm-jarlan']);
+});
+
+const teamDb = ({ members = [{ id: 'tm-melissa', name: 'Melissa' }], linked = null } = {}) => {
+    const tx = {
+        teamMember: { findUnique: async ({ where }) => members.find((member) => member.id === where.id) || null },
+        client: { findUnique: async () => null },
+        thirdParty: {
+            findFirst: async ({ where }) => (where.teamMemberId ? linked : null),
+            findUnique: async () => ({ id: 'tp-1', kind: 'COLABORADOR', name: 'Melissa', teamMemberId: null, isActive: true }),
+            create: async ({ data }) => ({ id: 'tp-new', ...data }),
+            update: async ({ data }) => ({ id: 'tp-1', kind: 'COLABORADOR', name: 'Melissa', ...data })
+        },
+        financialAuditEvent: { create: async () => ({}) }
+    };
+    return { $transaction: async (fn) => fn(tx) };
+};
+
+test('la ficha de pago de alguien del equipo queda ligada a esa persona, una sola vez', async () => {
+    assert.equal((await createThirdParty(teamDb(), { kind: 'COLABORADOR', name: 'Melissa', teamMemberId: 'tm-melissa' }, { id: 'u' })).teamMemberId, 'tm-melissa');
+    await assert.rejects(createThirdParty(teamDb({ members: [] }), { kind: 'COLABORADOR', name: 'X', teamMemberId: 'tm-x' }, { id: 'u' }),
+        (error) => error.code === 'THIRD_PARTY_TEAM_MEMBER_NOT_FOUND' && error.statusCode === 404);
+    await assert.rejects(updateThirdParty(teamDb({ linked: { name: 'Melissa (Nequi)' } }), 'tp-1', { teamMemberId: 'tm-melissa' }, { id: 'u' }),
+        (error) => error.code === 'THIRD_PARTY_TEAM_MEMBER_TAKEN' && /Melissa \(Nequi\)/.test(error.message));
+});
+
+test('Terceros lee el equipo activo de Equipo, con lo justo para la fila', async () => {
+    const db = { teamMember: { findMany: async ({ where, select }) => {
+        assert.deepEqual(where, { isActive: true });
+        assert.equal(select.email, true);
+        return [{ id: 'tm-1', name: 'Melissa', role: 'CM', email: 'm@b.co', avatarUrl: null, isActive: true }];
+    } } };
+    assert.deepEqual(await listPartyTeam(db), { team: [{ id: 'tm-1', name: 'Melissa', role: 'CM', email: 'm@b.co', avatarUrl: null, isActive: true }] });
 });
