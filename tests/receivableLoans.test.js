@@ -234,7 +234,9 @@ test('registrar en Movimientos un egreso de categoría Préstamo crea el présta
 
     const other = buildLedgerTx({ members: [] });
     await createFinancialRecord(other.prisma, { amount: 200000, type: 'EXPENSE', category: 'PRESTAMO', date: '2026-09-28', accountId: 'acc-1', description: 'Prestamos Fancisco', counterparty: 'Francisco' }, { id: 'u' });
-    assert.equal(other.calls.find(([name]) => name === 'receivable.create')[1].data.counterpartyType, 'OTRO', 'si no es del equipo, queda como otro tercero');
+    assert.equal(other.calls.find(([name]) => name === 'receivable.create')[1].data.counterpartyType, 'OTRO', 'si no es del equipo, queda como particular');
+    // Rodny, 26 de octubre de 2026: «Particular», no «Otro tercero»; el valor guardado no cambia.
+    assert.equal(LOAN_COUNTERPARTY_TYPES.find((type) => type.value === 'OTRO').label, 'Particular');
 
     const expense = buildLedgerTx();
     await createFinancialRecord(expense.prisma, { amount: 90000, type: 'EXPENSE', category: 'OPERATIVO', date: '2026-09-28', accountId: 'acc-1', description: 'Papelería' }, { id: 'u' });
