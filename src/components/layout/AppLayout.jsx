@@ -6,7 +6,7 @@ import BriaAssistant from '@/components/bria/BriaAssistant';
 import { Menu, Bell, Search, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye, Clock, Users, Activity, AlertTriangle } from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, useQueryClient } from '@tanstack/react-query';
 import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -14,6 +14,7 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { openBriaConversation } from '@/lib/briaAsk';
 import { getNotificationDisplayParts } from '@/utils/notificationUtils';
 import PushNotificationControl from '@/components/notifications/PushNotificationControl';
+import TeamCompletionsControl from '@/components/notifications/TeamCompletionsControl';
 import ExcessiveTaskAlertDialog from '@/components/tasks/ExcessiveTaskAlertDialog';
 import DeclaredTimeDialog from '@/components/tasks/DeclaredTimeDialog';
 import ReturnedTaskAlertDialog from '@/components/tasks/ReturnedTaskAlertDialog';
@@ -101,25 +102,69 @@ const AppLayout = ({ children }) => {
     : null;
 
   // --- REACT QUERY: NOTIFICATIONS ---
+  // El panel traía los últimos 20 y nada más, así que con 30 sin leer diez no se podían
+  // alcanzar (Rodny, 26 de octubre de 2026). Ahora se pide de 20 en 20, se puede ver solo
+  // lo que falta por leer, y el contador lo cuenta el servidor sobre todo el historial.
+  const [unreadOnly, setUnreadOnly] = useState(false);
+  const notificationsKey = React.useMemo(() => ['notifications', unreadOnly ? 'unread' : 'all'], [unreadOnly]);
+
   const {
-    data: notifications = [],
+    data: notificationsData,
     isLoading: loadingNotifications,
-    refetch: refetchNotifications
-  } = useQuery({
-    queryKey: ['notifications'],
-    queryFn: async () => {
-      const res = await fetch(`${getApiBaseUrl()}/api/notifications`, { cache: 'no-store' });
+    refetch: refetchNotifications,
+    fetchNextPage: fetchMoreNotifications,
+    hasNextPage: hasMoreNotifications,
+    isFetchingNextPage: loadingMoreNotifications
+  } = useInfiniteQuery({
+    queryKey: notificationsKey,
+    initialPageParam: null,
+    queryFn: async ({ pageParam }) => {
+      const params = new URLSearchParams();
+      if (pageParam) params.set('cursor', pageParam);
+      if (unreadOnly) params.set('unread', '1');
+      const res = await fetch(`${getApiBaseUrl()}/api/notifications?${params.toString()}`, { cache: 'no-store' });
       if (!res.ok) throw new Error("Failed to fetch notifications");
       const data = await res.json();
-      return Array.isArray(data) ? data : [];
+      // Las muestras locales responden con un arreglo suelto; se acepta sin romper.
+      if (Array.isArray(data)) {
+        return { items: data, nextCursor: null, unreadCount: data.filter((n) => !n.isRead).length, preferences: null };
+      }
+      return {
+        items: Array.isArray(data?.items) ? data.items : [],
+        nextCursor: data?.nextCursor ?? null,
+        unreadCount: Number(data?.unreadCount) || 0,
+        preferences: data?.preferences ?? null
+      };
     },
+    getNextPageParam: (lastPage) => lastPage?.nextCursor ?? undefined,
     enabled: !!currentUser?.id,
     refetchInterval: currentUser?.id ? () => (document.hidden ? false : 60000) : false,
     refetchIntervalInBackground: false,
     refetchOnWindowFocus: true,
   });
 
-  const unreadCount = notifications.filter((notification) => !notification.isRead).length;
+  const notifications = React.useMemo(
+    () => (notificationsData?.pages || []).flatMap((page) => page?.items || []),
+    [notificationsData]
+  );
+  const unreadCount = notificationsData?.pages?.[0]?.unreadCount ?? 0;
+  const notificationPreferences = notificationsData?.pages?.[0]?.preferences ?? null;
+
+  /**
+   * Corrige lo que se ve mientras el servidor confirma; el refetch trae la verdad. El
+   * contador se corrige con la misma mano: si no, al marcar todas como leídas la campana
+   * seguía diciendo «Sin leer (30)» hasta el siguiente refetch.
+   */
+  const patchNotifications = useCallback((patch, nextUnreadCount) => {
+    queryClient.setQueryData(notificationsKey, (prev) => (prev ? {
+      ...prev,
+      pages: prev.pages.map((page, index) => ({
+        ...page,
+        items: (page?.items || []).map(patch),
+        ...(index === 0 && typeof nextUnreadCount === 'number' ? { unreadCount: Math.max(0, nextUnreadCount) } : {})
+      }))
+    } : prev));
+  }, [queryClient, notificationsKey]);
 
   useEffect(() => {
     if (!currentUser?.id) return;
@@ -135,7 +180,6 @@ const AppLayout = ({ children }) => {
         const nextSearch = params.toString();
         window.history.replaceState({}, '', `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`);
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
-        queryClient.invalidateQueries({ queryKey: ['unreadNotificationsCount'] });
       } catch (error) {
         console.error('[AppLayout] Could not mark opened push as read:', error);
       }
@@ -155,7 +199,6 @@ const AppLayout = ({ children }) => {
 
   useEffect(() => {
     const handleNotificationsRead = () => {
-        queryClient.invalidateQueries({ queryKey: ['unreadNotificationsCount'] });
         queryClient.invalidateQueries({ queryKey: ['notifications'] });
     };
 
@@ -167,15 +210,13 @@ const AppLayout = ({ children }) => {
 
   const markAllAsRead = async () => {
       if (unreadCount === 0) return;
-
-      // Optimistic update
-      queryClient.setQueryData(['unreadNotificationsCount'], { count: 0 });
-      queryClient.setQueryData(['notifications'], (prev) => prev?.map(n => ({ ...n, isRead: true })));
-
+      patchNotifications((n) => ({ ...n, isRead: true }), 0);
       try {
           await fetch(`${getApiBaseUrl()}/api/notifications/read-all`, { method: 'POST' });
       } catch (error) {
           console.error("Error marking as read:", error);
+      } finally {
+          queryClient.invalidateQueries({ queryKey: ['notifications'] });
       }
   };
 
@@ -185,10 +226,8 @@ const AppLayout = ({ children }) => {
     if (!notif.isRead) {
         try {
             await fetch(`${getApiBaseUrl()}/api/notifications/${notif.id}/read`, { method: 'PATCH' });
-            queryClient.invalidateQueries({ queryKey: ['unreadNotificationsCount'] });
-            queryClient.setQueryData(['notifications'], (prev) =>
-                prev?.map(n => n.id === notif.id ? { ...n, isRead: true } : n)
-            );
+            patchNotifications((n) => (n.id === notif.id ? { ...n, isRead: true } : n));
+            queryClient.invalidateQueries({ queryKey: ['notifications'] });
         } catch (e) {
             console.error("Error marking notification as read:", e);
         }
@@ -314,13 +353,53 @@ const AppLayout = ({ children }) => {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
                 <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
-                    <h4 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
-                        <Bell className="w-4 h-4 text-primary" />
-                        Notificaciones
-                    </h4>
+                    <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
+                            <Bell className="w-4 h-4 text-primary" />
+                            Notificaciones
+                        </h4>
+                        {unreadCount > 0 && (
+                            <button
+                                type="button"
+                                data-notifications-mark-all
+                                onClick={(event) => { event.preventDefault(); markAllAsRead(); }}
+                                className="rounded-lg px-2 py-1 text-[11px] font-semibold text-primary hover:bg-primary/10"
+                            >
+                                Marcar todas como leídas
+                            </button>
+                        )}
+                    </div>
+                    {/* El contador lo cuenta el servidor sobre todo el historial, no sobre la página visible. */}
+                    <div className="mt-3 flex items-center gap-1" role="group" aria-label="Filtrar notificaciones">
+                        {[
+                            { id: 'all', label: 'Todas', active: !unreadOnly },
+                            { id: 'unread', label: unreadCount > 0 ? `Sin leer (${unreadCount})` : 'Sin leer', active: unreadOnly }
+                        ].map((tab) => (
+                            <button
+                                key={tab.id}
+                                type="button"
+                                data-notifications-filter={tab.id}
+                                aria-pressed={tab.active}
+                                onClick={(event) => { event.preventDefault(); setUnreadOnly(tab.id === 'unread'); }}
+                                className={cn(
+                                    'rounded-lg px-2.5 py-1 text-[11px] font-semibold transition',
+                                    tab.active
+                                        ? 'bg-primary/10 text-primary'
+                                        : 'text-zinc-500 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-800'
+                                )}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
                 <PushNotificationControl />
-                <div className="max-h-96 overflow-y-auto">
+                <TeamCompletionsControl
+                    preferences={notificationPreferences}
+                    onSaved={() => queryClient.invalidateQueries({ queryKey: ['notifications'] })}
+                />
+                {/* El alto lo manda la ventana: en un portátil bajo `max-h-96` dejaba ver cuatro avisos. */}
+                <div className="max-h-[min(60vh,32rem)] overflow-y-auto">
                     {loadingNotifications && notifications.length === 0 ? (
                         <div className="p-8 text-center"><Loader2 className="w-5 h-5 animate-spin text-zinc-400 mx-auto" /></div>
                     ) : notifications.length === 0 ? (
@@ -328,7 +407,9 @@ const AppLayout = ({ children }) => {
                             <div className="w-12 h-12 rounded-full bg-zinc-50 dark:bg-zinc-800/50 flex items-center justify-center mx-auto mb-3">
                                 <Bell className="w-6 h-6 text-zinc-300 dark:text-zinc-600" />
                             </div>
-                            <p className="text-xs text-zinc-400">No hay notificaciones nuevas</p>
+                            <p className="text-xs text-zinc-400">
+                                {unreadOnly ? 'No te queda nada por leer' : 'No hay notificaciones nuevas'}
+                            </p>
                         </div>
                     ) : (
                         notifications.map((notif) => {
@@ -466,10 +547,8 @@ const AppLayout = ({ children }) => {
                                                     e.preventDefault();
                                                     try {
                                                         await fetch(`${getApiBaseUrl()}/api/notifications/${notif.id}/read`, { method: 'PATCH' });
-                                                        queryClient.invalidateQueries({ queryKey: ['unreadNotificationsCount'] });
-                                                        queryClient.setQueryData(['notifications'], (prev) =>
-                                                            prev?.map(n => n.id === notif.id ? { ...n, isRead: true } : n)
-                                                        );
+                                                        patchNotifications((n) => (n.id === notif.id ? { ...n, isRead: true } : n));
+                                                        queryClient.invalidateQueries({ queryKey: ['notifications'] });
                                                     } catch (err) {
                                                         console.error("Error marking as read:", err);
                                                     }
@@ -483,6 +562,17 @@ const AppLayout = ({ children }) => {
                                 </DropdownMenuItem>
                             );
                         })
+                    )}
+                    {hasMoreNotifications && (
+                        <button
+                            type="button"
+                            data-notifications-load-more
+                            disabled={loadingMoreNotifications}
+                            onClick={(event) => { event.preventDefault(); fetchMoreNotifications(); }}
+                            className="min-h-11 w-full border-t border-zinc-100 px-4 py-3 text-xs font-semibold text-primary hover:bg-primary/5 disabled:opacity-60 dark:border-zinc-800"
+                        >
+                            {loadingMoreNotifications ? 'Cargando…' : 'Ver más'}
+                        </button>
                     )}
                 </div>
               </DropdownMenuContent>

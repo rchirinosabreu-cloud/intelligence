@@ -2,6 +2,7 @@ import webpush from 'web-push';
 import prisma from '../lib/prisma.js';
 import { findActiveTeamUser } from './teamRosterService.js';
 import { getNotificationDisplayParts } from '../utils/notificationUtils.js';
+import { TEAM_COMPLETION_NOTIFICATION_TYPE } from '../lib/teamNotifications.js';
 
 const DEFAULT_PREFERENCES = Object.freeze({
   tasks: true,
@@ -61,7 +62,16 @@ const normalizePreferences = (preferences) => ({
   announcements: preferences?.announcements !== false
 });
 
+/**
+ * Avisos que son de campana y nunca de celular. Quien enciende «avísame cuando el equipo
+ * termine un pendiente» pidió verlo al abrir la plataforma, no que le vibre el teléfono
+ * con cada cierre del día (26 de octubre de 2026). Puede encenderlo por dispositivo si lo
+ * quiere, pero nunca por defecto: `getCategory` cae en `tasks`, que viene encendida.
+ */
+const BELL_ONLY_TYPES = new Set([TEAM_COMPLETION_NOTIFICATION_TYPE]);
+
 const getCategory = (type = '') => {
+  if (BELL_ONLY_TYPES.has(type)) return null;
   if (type.includes('MENTION') || type === 'TASK_COMMENT_REPLY') return 'mentions';
   if (type.startsWith('TASK_')) return 'tasks';
   if (type.includes('ANNOUNCEMENT')) return 'announcements';
@@ -204,11 +214,14 @@ export const sendPushForNotification = async (
     return { attempted: 0, delivered: 0, removed: 0 };
   }
 
+  // Sin categoría es un aviso de campana: ni se consultan los dispositivos.
+  const category = getCategory(notification.type);
+  if (!category) return { attempted: 0, delivered: 0, removed: 0 };
+
   const subscriptions = await db.pushSubscription.findMany({
     where: { userId: notification.userId, isActive: true },
     select: { id: true, endpoint: true, p256dh: true, auth: true, preferences: true }
   });
-  const category = getCategory(notification.type);
   const eligible = subscriptions.filter((subscription) => normalizePreferences(subscription.preferences)[category]);
   if (eligible.length === 0) return { attempted: 0, delivered: 0, removed: 0 };
 

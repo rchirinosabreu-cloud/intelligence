@@ -4,6 +4,8 @@ import { activeTeamUserWhere, findActiveTeamUser } from './teamRosterService.js'
 import { cleanNotificationPreview } from '../utils/notificationUtils.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
 import { sendPushForNotification } from './pushNotificationService.js';
+import { notificationPage, notificationPageArgs } from '../lib/notificationFeed.js';
+import { normalizeNotificationPreferences } from '../lib/teamNotifications.js';
 
 export const createNotification = async (
     data,
@@ -164,18 +166,41 @@ export const markAllNotificationsAsRead = async (userId) => {
     }
 };
 
-export const getNotifications = async (userId) => {
+/**
+ * Una página del historial más el conteo real de lo que falta por leer.
+ *
+ * Antes eran los últimos 20 y nada más, así que con 30 sin leer diez quedaban fuera de
+ * alcance para siempre: no había scroll que las trajera porque nunca salían de la base
+ * (Rodny, 26 de octubre de 2026). El conteo se hace aparte, sobre todo el historial, para
+ * que la campana diga la verdad y no lo que cupo en la página.
+ */
+export const getNotifications = async (userId, { cursor = null, unreadOnly = false, limit } = {}) => {
     try {
-        const notifications = await prisma.notification.findMany({
-            where: { userId },
-            orderBy: { createdAt: 'desc' },
-            take: 20
-        });
-        return notifications;
+        const [rows, unreadCount] = await Promise.all([
+            prisma.notification.findMany(notificationPageArgs({ userId, cursor, unreadOnly, limit })),
+            prisma.notification.count({ where: { userId, isRead: false } })
+        ]);
+        return { ...notificationPage(rows, limit), unreadCount };
     } catch (error) {
         console.error(`[${new Date().toISOString()}] [NotificationService] Error fetching notifications:`, error?.message || error);
         throw error;
     }
+};
+
+/** Lo que esa persona decidió sobre los avisos del equipo. Sin fila guardada, lo de fábrica. */
+export const getNotificationPreferences = async (userId, { db = prisma } = {}) => {
+    const user = await db.user.findUnique({
+        where: { id: userId },
+        select: { notificationPreferences: true }
+    });
+    return normalizeNotificationPreferences(user?.notificationPreferences);
+};
+
+/** Cada quien cambia las suyas: la ruta siempre pasa el usuario autenticado. */
+export const saveNotificationPreferences = async (userId, preferences, { db = prisma } = {}) => {
+    const normalized = normalizeNotificationPreferences(preferences);
+    await db.user.update({ where: { id: userId }, data: { notificationPreferences: normalized } });
+    return normalized;
 };
 
 export const markAsRead = async (notificationId, userId) => {

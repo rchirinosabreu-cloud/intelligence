@@ -3,6 +3,7 @@ import prisma from '../lib/prisma.js';
 import { assertActiveTeamMembers } from './teamRosterService.js';
 import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, attachTaskRecognitions, recordPlanRecognition } from './recognitionService.js';
 import { createNotification, processMentionsAndNotifications } from './notificationService.js';
+import { notifyTeamCompletion } from './teamCompletionNoticeService.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
 import { classifyTaskDeterministically } from './deterministicTaskClassifier.js';
 import { pickAllowedTaskUpdates } from '../config/security.js';
@@ -1179,6 +1180,14 @@ export const updateTask = async (id, data, updaterId = null) => {
                         });
                     }
                 }
+
+                // Y quien sigue todo sin haber pulsado la campana una por una (26 de
+                // octubre de 2026). Va después para no repetirle el aviso a un seguidor.
+                await notifyTeamCompletion({
+                    taskId: id,
+                    completedById: updaterId,
+                    followerIds: followers.map((follower) => follower.userId)
+                });
             } catch (followNotifyErr) {
                 console.error("[nativeTaskService] Follower notification failed:", followNotifyErr);
             }

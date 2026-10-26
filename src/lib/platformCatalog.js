@@ -148,6 +148,7 @@ export const PLATFORM_OPERATIONS = {
   'POST /notifications': { que: 'Envía una notificación a una persona del equipo.', campos: 'userId, message, type, relatedId' },
   'PATCH /notifications/:id/read': { que: 'Marca una notificación como leída.' },
   'POST /notifications/read-all': { que: 'Marca todas como leídas.' },
+  'PATCH /notifications/preferences': { que: 'Enciende o apaga el aviso de cuando el equipo termina un pendiente.', campos: 'teamCompletions' },
   'GET /global-announcements': { que: 'Los anuncios generales del dashboard.' },
   'POST /global-announcements': { que: 'Publica un anuncio general para todo el equipo.', campos: 'content, type' },
   'DELETE /global-announcements/:id': { que: 'Retira un anuncio general.' },

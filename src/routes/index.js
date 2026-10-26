@@ -312,6 +312,8 @@ router.get('/notifications', notificationController.listNotifications);
 router.post('/notifications', requireManagerRole, notificationController.addNotification);
 router.patch('/notifications/:id/read', notificationController.markRead);
 router.post('/notifications/read-all', notificationController.markAllRead);
+// Las preferencias de avisos son siempre las de quien pregunta: no llevan id en la ruta.
+router.patch('/notifications/preferences', notificationController.updateNotificationPreferences);
 
 // Native device notifications. All ownership comes from the authenticated session.
 router.get('/push/status', pushNotificationController.status);
