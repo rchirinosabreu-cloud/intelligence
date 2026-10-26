@@ -9,7 +9,7 @@ import { FINANCIAL_CATEGORY_OPTIONS } from './financialCategories.js';
 
 // Las clases que pide la solicitud de Elisa (punto 1): proveedor, contratista (presta un servicio por contrato,
 // como un fotógrafo o un editor por proyecto), outsourcing (una empresa a la que se le delega una función que no
-// se hace en casa, como la contabilidad), el equipo, el arrendador, un socio u otro. `role` es como se nombra en
+// se hace en casa, como la contabilidad), el equipo, el arrendador o un socio. `role` es como se nombra en
 // Terceros, donde la fila ya dice que es de un tercero.
 export const THIRD_PARTY_KINDS = Object.freeze([
     { value: 'PROVEEDOR', label: 'Proveedor' },
@@ -17,8 +17,9 @@ export const THIRD_PARTY_KINDS = Object.freeze([
     { value: 'OUTSOURCING', label: 'Outsourcing' },
     { value: 'COLABORADOR', label: 'Colaborador del equipo', role: 'Colaborador' },
     { value: 'ARRENDADOR', label: 'Arrendador' },
-    { value: 'SOCIO', label: 'Socio' },
-    { value: 'OTRO', label: 'Otro tercero' }
+    { value: 'SOCIO', label: 'Socio' }
+    // Sin «Otro tercero» (Rodny, 26 de octubre de 2026: «tampoco tiene sentido que sea un rol»): una clase que no
+    // dice qué es el tercero no sirve; un banco o la DIAN son proveedores.
 ]);
 // A quienes se les paga un servicio: cuentan juntos en las cifras de Terceros.
 export const SERVICE_PROVIDER_KINDS = Object.freeze(['PROVEEDOR', 'CONTRATISTA', 'OUTSOURCING']);
