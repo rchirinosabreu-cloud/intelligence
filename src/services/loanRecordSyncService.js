@@ -55,7 +55,7 @@ export const createLoanReceivableFor = async (tx, {
 };
 
 // A quién se le prestó, cuando el movimiento no lo dice: un cliente si lo tiene; alguien del
-// equipo si el nombre coincide con una persona activa de Equipo; si no, otro tercero.
+// equipo si el nombre coincide con una persona activa de Equipo; si no, un particular.
 const inferCounterpartyType = async (tx, counterpartyName, clientId) => {
     if (clientId) return 'CLIENTE';
     const firstWord = String(counterpartyName || '').split(/\s+/)[0] || '';
