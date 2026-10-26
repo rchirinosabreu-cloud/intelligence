@@ -13,8 +13,10 @@ import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { openBriaConversation } from '@/lib/briaAsk';
 import { getNotificationDisplayParts } from '@/utils/notificationUtils';
+import toast from 'react-hot-toast';
 import PushNotificationControl from '@/components/notifications/PushNotificationControl';
 import TeamCompletionsControl from '@/components/notifications/TeamCompletionsControl';
+import { notificationPanelControls } from '@/lib/teamNotifications';
 import ExcessiveTaskAlertDialog from '@/components/tasks/ExcessiveTaskAlertDialog';
 import DeclaredTimeDialog from '@/components/tasks/DeclaredTimeDialog';
 import ReturnedTaskAlertDialog from '@/components/tasks/ReturnedTaskAlertDialog';
@@ -149,6 +151,30 @@ const AppLayout = ({ children }) => {
   );
   const unreadCount = notificationsData?.pages?.[0]?.unreadCount ?? 0;
   const notificationPreferences = notificationsData?.pages?.[0]?.preferences ?? null;
+
+  // La campana es para leer avisos, no para configurarlos (Rodny, 26 de octubre de 2026).
+  // Cada interruptor se ofrece aquí **una vez**: en cuanto se enciende o se descarta, pasa
+  // a vivir en Perfil y el panel se queda con las notificaciones.
+  const panelControls = React.useMemo(
+    () => notificationPanelControls({ preferences: notificationPreferences }),
+    [notificationPreferences]
+  );
+
+  const dismissNotificationControl = useCallback(async (key) => {
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/api/notifications/preferences`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...(notificationPreferences || {}), [key]: true })
+      });
+      if (!response.ok) throw new Error(`Preferences failed with ${response.status}`);
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
+      toast.success('Listo. Lo encuentras en tu perfil');
+    } catch (error) {
+      console.error('[AppLayout] Could not dismiss notification control:', error);
+      toast.error('No se pudo guardar tu preferencia de avisos');
+    }
+  }, [notificationPreferences, queryClient]);
 
   /**
    * Corrige lo que se ve mientras el servidor confirma; el refetch trae la verdad. El
@@ -351,8 +377,19 @@ const AppLayout = ({ children }) => {
                     )}
                 </Button>
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
-                <div className="p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
+              {/*
+                * El menú compartido limita a 360 px de alto, y la cabecera más los
+                * interruptores dejaban la lista en una franja recortada (Rodny, 26 de
+                * octubre de 2026: «se ve incompleto el panel»). Aquí el alto lo manda la
+                * ventana, el contenedor no se desplaza y la lista se queda con lo que
+                * sobre: sin `min-h-0` un hijo flexible no se encoge por debajo de su
+                * contenido y vuelve a desbordar.
+                */}
+              <DropdownMenuContent
+                align="end"
+                className="flex w-80 flex-col overflow-y-hidden p-0 max-h-[min(78vh,40rem)]"
+              >
+                <div className="shrink-0 p-4 border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-900/50">
                     <div className="flex items-center justify-between gap-2">
                         <h4 className="text-sm font-bold text-zinc-900 dark:text-white flex items-center gap-2">
                             <Bell className="w-4 h-4 text-primary" />
@@ -393,13 +430,18 @@ const AppLayout = ({ children }) => {
                         ))}
                     </div>
                 </div>
-                <PushNotificationControl />
-                <TeamCompletionsControl
-                    preferences={notificationPreferences}
-                    onSaved={() => queryClient.invalidateQueries({ queryKey: ['notifications'] })}
-                />
-                {/* El alto lo manda la ventana: en un portátil bajo `max-h-96` dejaba ver cuatro avisos. */}
-                <div className="max-h-[min(60vh,32rem)] overflow-y-auto">
+                {/* Se ofrecen solo mientras la persona no ha decidido; después viven en Perfil. */}
+                {panelControls.push && (
+                    <PushNotificationControl onDismiss={() => dismissNotificationControl('pushDismissed')} />
+                )}
+                {panelControls.teamCompletions && (
+                    <TeamCompletionsControl
+                        preferences={notificationPreferences}
+                        onSaved={() => queryClient.invalidateQueries({ queryKey: ['notifications'] })}
+                        onDismiss={() => dismissNotificationControl('teamCompletionsDismissed')}
+                    />
+                )}
+                <div className="min-h-0 flex-1 overflow-y-auto">
                     {loadingNotifications && notifications.length === 0 ? (
                         <div className="p-8 text-center"><Loader2 className="w-5 h-5 animate-spin text-zinc-400 mx-auto" /></div>
                     ) : notifications.length === 0 ? (

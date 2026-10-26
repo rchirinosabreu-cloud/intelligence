@@ -43,7 +43,11 @@ test('the mobile notification prompt is user initiated and reports blocked permi
   const shell = await read('src/components/layout/AppLayout.jsx');
 
   assert.match(helper, /Notification\.requestPermission\(\)/);
-  assert.match(control, /onClick=\{handleEnable\}/);
+  // Activar el push lo tiene que disparar la persona: el navegador no concede el permiso
+  // sin un gesto suyo. Desde el 26 de octubre de 2026 el gesto es el interruptor de la
+  // fila, no un botón «Activar», pero sigue siendo un gesto y nunca un efecto.
+  assert.match(control, /onToggle=\{subscribed \? handleDisable : handleEnable\}/);
+  assert.doesNotMatch(control, /useEffect\([^)]*handleEnable/s);
   assert.match(control, /Permiso bloqueado/);
   assert.match(shell, /<PushNotificationControl/);
 });

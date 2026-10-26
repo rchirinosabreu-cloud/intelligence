@@ -17,7 +17,9 @@ test('el perfil monta la tarjeta solo en el perfil propio, en la tercera columna
   assert.match(profile, /grid grid-cols-1 lg:grid-cols-3 gap-8 items-stretch" data-profile-general-grid/);
   assert.equal((profile.slice(profile.indexOf('data-profile-general-grid'), profile.indexOf('data-profile-security-column')).match(/<div className="min-w-0 flex flex-col">\s*(?:\{isOwnProfile \? \()?\s*<Card className="flex-1 /g) || []).length, 2);
   assert.doesNotMatch(profile.slice(profile.indexOf('data-profile-general-grid'), profile.indexOf('data-profile-security-column')), /lg:col-span-2/);
-  assert.match(profile, /\{isOwnProfile && \(\s*<div className="min-w-0 space-y-6" data-profile-security-column>\s*<MfaSettings \/>\s*<WhatsAppLink \/>\s*<\/div>\s*\)\}/);
+  // La columna la comparte con los avisos desde el 26 de octubre de 2026: verificación,
+  // avisos y Bria en WhatsApp, en ese orden y solo en el perfil propio.
+  assert.match(profile, /\{isOwnProfile && \(\s*<div className="min-w-0 space-y-6" data-profile-security-column>\s*<MfaSettings \/>\s*<NotificationSettings \/>\s*<WhatsAppLink \/>\s*<\/div>\s*\)\}/);
 });
 
 test('solo quien tiene Bria la ve, y el vínculo nace de la plataforma: código, número de Bria y enlace a WhatsApp', () => {

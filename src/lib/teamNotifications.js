@@ -12,8 +12,19 @@ import { canOpenTask } from './taskPrivacy.js';
 // (nació, arrancó, se devolvió, se reabrió, se cerró): eso es justo el seguimiento que
 // ella dijo que no quiere.
 
-/** Lo que cada quien decide sobre los avisos del equipo. Apagado salvo que lo encienda. */
-export const DEFAULT_NOTIFICATION_PREFERENCES = Object.freeze({ teamCompletions: false });
+/**
+ * Lo que cada quien decide sobre sus avisos. Todo apagado salvo que lo encienda.
+ *
+ * Los `…Dismissed` son «no me lo ofrezcas más en la campana» (Rodny, 26 de octubre de
+ * 2026: «nunca lo he querido activar pero aparece siempre de forma persistente»). No
+ * apagan nada: solo retiran la fila del panel, que es para leer avisos, no para
+ * configurarlos. El interruptor sigue en Perfil, siempre.
+ */
+export const DEFAULT_NOTIFICATION_PREFERENCES = Object.freeze({
+    teamCompletions: false,
+    pushDismissed: false,
+    teamCompletionsDismissed: false
+});
 
 /** Solo las claves conocidas y solo booleanos: lo demás se descarta sin romper. */
 export const normalizeNotificationPreferences = (value) => {
@@ -27,6 +38,25 @@ export const normalizeNotificationPreferences = (value) => {
 
 export const wantsTeamCompletions = (preferences) =>
     normalizeNotificationPreferences(preferences).teamCompletions === true;
+
+/**
+ * Qué interruptores sigue ofreciendo la campana **según lo que decidió la persona**: uno
+ * se ofrece solo mientras está apagado y no se ha descartado; en cuanto lo enciende o lo
+ * retira, deja de ocupar el panel y vive en Perfil.
+ *
+ * Esto no sabe nada del aparato, y es a propósito: si este dispositivo puede recibir
+ * avisos —no un iPhone sin instalar, ni un permiso bloqueado, ni un navegador que no los
+ * admite— solo lo sabe el propio control, que se retira callado cuando no hay nada que
+ * ofrecer y explica el motivo en Perfil, que es donde se va a leerlo. Mezclarlo aquí
+ * dejaba al panel decidiendo si montar al único que podía informarle.
+ */
+export const notificationPanelControls = ({ preferences } = {}) => {
+    const settings = normalizeNotificationPreferences(preferences);
+    return {
+        push: !settings.pushDismissed,
+        teamCompletions: !settings.teamCompletions && !settings.teamCompletionsDismissed
+    };
+};
 
 /**
  * A quién le toca el aviso de un pendiente que acaba de cerrarse.
