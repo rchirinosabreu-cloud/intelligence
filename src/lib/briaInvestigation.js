@@ -82,7 +82,7 @@ export const buildInvestigation = (args, { previous, receipts = [], now = new Da
     id: prior?.id || randomUUID(), revision: (prior?.revision || 0) + 1,
     asunto: prior?.asunto || string(args.asunto, 200), objetivo: prior?.objetivo || string(args.objetivo),
     revisadaEn: now.toISOString(), estado: resolved ? 'RESUELTO' : checks.some(row => row.resultado === 'CUMPLIDO') ? 'MEJORA_PARCIAL' : 'ABIERTO',
-    cobertura: areas, hallazgos: findings, alternativas: alternatives, recomendada: recommended, relato: narrative,
+    cobertura: areas, hallazgos: findings, decision: args.decision == null ? null : string(args.decision), alternativas: alternatives, recomendada: recommended, relato: narrative,
     incertidumbres: list(args.incertidumbres || []).map(value => string(value)),
     comprobaciones: checks, proximaRevision: string(args.proximaRevision),
     consultas: used, sources: unique([...(prior?.sources || []), ...used.flatMap(read => read.sources)]), accion: linkedAction,

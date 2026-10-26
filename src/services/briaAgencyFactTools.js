@@ -15,7 +15,7 @@ export const createAgencyFactTools = (service) => service ? [
       consulta: { type: 'string', description: 'Qué quieres saber, con las palabras del tema.' },
       clientId: { type: ['string', 'null'], description: 'El id de buscar_cliente, si es de un cliente.' },
       entidad: { type: ['string', 'null'], description: 'Nombre de la marca, el proceso o «Brain Studio» para toda la agencia.' }
-    }, required: ['consulta', 'clientId', 'entidad'], additionalProperties: false },
+    }, required: ['consulta'], additionalProperties: false },
     allowed: canUseBria,
     async run(args, { user }) {
       const result = await service.consult(user, { consulta: args.consulta, clientId: args.clientId || null, entidad: args.entidad || null });

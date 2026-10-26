@@ -43,6 +43,22 @@ test('narrative cannot cite invented evidence or survive into a new revision by 
   assert.doesNotMatch(investigationReply(next), /Te recomiendo aclarar primero/);
 });
 
+test('the decision under comparison is distinct from the persistent objective and is not inherited by a progress update', () => {
+  const decision = '¿Conservar la fecha de entrega o proponer otra mientras falta el insumo?';
+  const first = buildInvestigation({ ...analysis(), decision, relato }, { receipts });
+  assert.equal(first.decision, decision);
+  assert.equal(first.objetivo, analysis().objetivo);
+  const next = buildInvestigation({ ...analysis(), decision: null, alternativas: [], recomendada: null, relato }, { previous: first, receipts });
+  assert.equal(next.decision, null);
+  assert.deepEqual(next.alternativas, []);
+  assert.equal(next.objetivo, first.objetivo);
+  assert.deepEqual(next.comprobaciones.map(row => row.criterio), first.comprobaciones.map(row => row.criterio));
+  assert.equal(next.ejecucionAutorizada, false);
+  const legacy = buildInvestigation({ ...analysis(), relato }, { receipts });
+  assert.equal(legacy.decision, null, 'old records still preserve their supported diagnosis');
+  assert.equal(investigationReply(legacy), relato.map(row => row.texto).join('\n\n'));
+});
+
 test('partial coverage remains visible and an incomplete workflow discards its premature narrative', () => {
   const args = { ...analysis(), relato };
   args.cobertura[0].estado = 'PENDIENTE';

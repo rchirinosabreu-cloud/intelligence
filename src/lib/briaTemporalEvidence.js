@@ -42,4 +42,3 @@ export const taskTemporalEvidence = (task, { today, now = new Date() } = {}) => 
     publicacion: publicationTemporalEvidence(task.contentItem, { today: day, now })
   };
 };
-

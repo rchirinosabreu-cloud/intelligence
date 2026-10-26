@@ -115,7 +115,7 @@ export const createDecisionInvestigationFixture = (ai, { initialTurns = [] } = {
   };
 };
 
-export const assertDecisionInvestigationAnswer = (fixture, answer) => {
+export const assertDecisionInvestigationAnswer = (fixture, answer, { compareAlternatives = true } = {}) => {
     assert.deepEqual(answer.failures, []);
     assert.equal(answer.pendingAction, undefined);
     assert.deepEqual(fixture.writes, []);
@@ -124,7 +124,9 @@ export const assertDecisionInvestigationAnswer = (fixture, answer) => {
     assert.deepEqual(answer.investigation.pendientesDelRecorrido || [], []);
     assert.equal(answer.investigation.ejecucionAutorizada, false);
     assert.equal(answer.investigation.seguimientoAutomatico, false);
-    assert.ok(answer.investigation.alternativas.length >= 2 && answer.investigation.recomendada);
+    if (compareAlternatives) assert.ok(answer.investigation.alternativas.length >= 2 && answer.investigation.recomendada);
+    // Quantity checks are contracts only. Comparable objectives and consequences
+    // still need semantic review; a continuation need not invent another choice.
     assert.ok(answer.investigation.sources.some(source => source.kind === 'hecho_agencia' && source.id === 'cedro-october'));
     assert.ok(answer.investigation.sources.some(source => source.kind === 'tarea' && source.id === 'nacar-production'));
     assert.ok(answer.investigation.sources.some(source => source.kind === 'pieza' && source.id === 'nacar-launch'));
@@ -154,7 +156,7 @@ export const runDecisionInvestigationContinuation = async (fixture, first) => {
   const firstReads = fixture.reads.length;
   fixture.advanceEvidence();
   const second = await fixture.send(DECISION_INVESTIGATION_QUESTIONS[1]);
-  assertDecisionInvestigationAnswer(fixture, second);
+  assertDecisionInvestigationAnswer(fixture, second, { compareAlternatives: false });
   assert.equal(second.investigation.id, first.investigation.id);
   assert.equal(second.investigation.revision, first.investigation.revision + 1);
   assert.deepEqual(second.investigation.comprobaciones.map(row => [row.id, row.criterio]), first.investigation.comprobaciones.map(row => [row.id, row.criterio]));
