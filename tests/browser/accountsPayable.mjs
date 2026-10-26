@@ -104,7 +104,7 @@ try {
   await page.getByRole('combobox', { name: 'Rol' }).waitFor();
   // El proveedor que se acaba de crear y el arrendador, que comparte NIT con el cliente de muestra y va en su fila;
   // además, desde el 26 de octubre de 2026, el equipo: Jarlan con su ficha y Melissa sin ella.
-  const payees = page.locator('[data-party-roles]').filter({ hasText: /Proveedor|Arrendador|Colaborador|Socio|Otro tercero/ });
+  const payees = page.locator('[data-party-roles]').filter({ hasText: /Proveedor|Arrendador|Colaborador|Socio/ });
   await payees.first().waitFor();
   assert.equal(await payees.count(), 4);
   assert.equal(await page.locator('[data-party-row]').filter({ hasText: 'Melissa Rodríguez' }).count(), 1);

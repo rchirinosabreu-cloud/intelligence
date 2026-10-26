@@ -42,7 +42,7 @@ try {
   assert.equal(await page.getByRole('combobox', { name: /Cliente real para/ }).count(), 0);
   assert.equal(await page.getByRole('button', { name: 'Vincular', exact: true }).count(), 0);
   // Una fila que solo existe en el Excel lo dice, que es la que pide conexión.
-  await page.getByText('Solo en el Excel · sin ficha', { exact: false }).waitFor();
+  await page.getByText('Nombre del Excel sin ficha', { exact: false }).waitFor();
   await reconciliationRow.click();
   await page.getByText('Ficha del cliente', { exact: true }).waitFor();
   await page.getByText('Conexión con otra ficha', { exact: true }).waitFor();
