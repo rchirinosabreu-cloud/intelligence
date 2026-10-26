@@ -318,6 +318,8 @@ export const PLATFORM_OPERATIONS = {
   'POST /financials/payable-payments/:paymentId/reverse': { que: 'Revierte un pago de una cuenta por pagar; su egreso se anula.', campos: 'reason' },
   // CRM
   'GET /crm/catalogs': { que: 'Etapas, fuentes y catálogos del CRM.' },
+  'GET /crm/follow-up-alerts': { que: 'Los días de las alertas comerciales: los recordatorios al responsable de una oportunidad sin respuesta y el día de la revisión.' },
+  'PUT /crm/follow-up-alerts': { que: 'Cambia los días de las alertas comerciales (solo administradores).', campos: 'reminders (lista de días, hasta seis), review (día de la revisión, después del último recordatorio)' },
   'GET /crm/metrics': { que: 'Indicadores del CRM.' },
   'GET /crm/followups': { que: 'Seguimientos vencidos y de hoy.' },
   'GET /crm/leads': { que: 'Las oportunidades del CRM.', campos: 'stage, ownerId, q (consulta)' },

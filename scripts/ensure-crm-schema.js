@@ -87,7 +87,24 @@ export async function ensureCrmSchema(client) {
       "createdAt" TIMESTAMPTZ NOT NULL DEFAULT now()
     );
     ALTER TABLE "Quotation" ADD COLUMN IF NOT EXISTS "lead_id" TEXT REFERENCES "CrmLead"(id);
-    CREATE INDEX IF NOT EXISTS "Quotation_lead_idx" ON "Quotation"("lead_id");`);
+    CREATE INDEX IF NOT EXISTS "Quotation_lead_idx" ON "Quotation"("lead_id");
+    CREATE TABLE IF NOT EXISTS "CrmFollowUpAlert" (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "leadId" TEXT NOT NULL REFERENCES "CrmLead"(id),
+      "cycleStart" TIMESTAMPTZ NOT NULL,
+      step INTEGER NOT NULL,
+      kind TEXT NOT NULL,
+      "sentAt" TIMESTAMPTZ NOT NULL DEFAULT now(),
+      UNIQUE("leadId", "cycleStart", step)
+    );
+    CREATE INDEX IF NOT EXISTS "CrmFollowUpAlert_lead_idx" ON "CrmFollowUpAlert"("leadId");
+    CREATE TABLE IF NOT EXISTS "CrmSetting" (
+      id TEXT PRIMARY KEY DEFAULT 'global',
+      "followUpReminderDays" INTEGER[] NOT NULL DEFAULT ARRAY[5,10,15,20],
+      "followUpReviewDay" INTEGER NOT NULL DEFAULT 30,
+      "updatedById" TEXT,
+      "updatedAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );`);
     await client.query('COMMIT');
   } catch (error) {
     await client.query('ROLLBACK').catch(rollbackError => console.error('[CRM schema] Rollback failed:', rollbackError.message));

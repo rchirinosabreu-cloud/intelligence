@@ -8,6 +8,8 @@ import {
 import { assertActiveTeamMembers } from './teamRosterService.js';
 import { parseAmountText } from '../lib/amountInput.js';
 import { partyNameKey } from '../lib/quotationParty.js';
+import { followUpSilence } from '../lib/crmFollowUpAlerts.js';
+import { readFollowUpAlertDays } from './crmFollowUpAlertService.js';
 
 export class CrmValidationError extends Error {
   constructor(message) {
@@ -139,6 +141,8 @@ export const serializeLead = (lead, now = new Date()) => {
     nextAction: normalized.nextAction ?? null,
     nextFollowUpAt: normalized.nextFollowUpAt,
     followUpBucket: followUpBucket(normalized, now),
+    // Días sin una gestión con el cliente desde la propuesta (alertas comerciales, 26 de octubre de 2026); null si no se espera nada.
+    silentDays: followUpSilence(normalized, activities, now)?.days ?? null,
     ownerId: normalized.ownerId ?? null,
     owner: normalized.owner ? { id: normalized.owner.id, name: normalized.owner.name, avatarUrl: normalized.owner.avatarUrl ?? null } : null,
     quotedValue: normalized.quotedValue,
@@ -456,7 +460,16 @@ const urgencySort = (a, b) => {
 
 const list = value => (value === undefined || value === null || value === '') ? [] : String(value).split(',').map(item => item.trim()).filter(Boolean);
 
-const matchesFilters = (lead, query) => {
+// «Sin respuesta»: desde el primer recordatorio, o ya en la revisión (los días los fija un administrador).
+const matchesSilence = (lead, value, alertDays) => {
+  if (!value || !alertDays) return true;
+  if (lead.silentDays === null || lead.silentDays === undefined) return false;
+  if (value === 'REVISION') return lead.silentDays >= alertDays.review;
+  return lead.silentDays >= alertDays.reminders[0];
+};
+
+const matchesFilters = (lead, query, alertDays = null) => {
+  if (!matchesSilence(lead, text(query.silence), alertDays)) return false;
   const stages = list(query.stage);
   if (stages.length && !stages.includes(lead.stage)) return false;
   const groups = list(query.group);
@@ -497,7 +510,8 @@ const fetchLeads = async (db, { includeArchived = false } = {}) => {
 export const listLeads = async (db, query = {}, now = new Date()) => {
   const includeArchived = query.includeArchived === true || query.includeArchived === 'true';
   const raw = await fetchLeads(db, { includeArchived });
-  const items = raw.map(lead => serializeLead(lead, now)).filter(lead => matchesFilters(lead, query)).sort(urgencySort);
+  const alertDays = await readFollowUpAlertDays(db);
+  const items = raw.map(lead => serializeLead(lead, now)).filter(lead => matchesFilters(lead, query, alertDays)).sort(urgencySort);
   const pageSize = Math.min(Math.max(Number(query.pageSize) || 200, 1), 500);
   const page = Math.max(Number(query.page) || 1, 1);
   const start = (page - 1) * pageSize;
@@ -505,7 +519,8 @@ export const listLeads = async (db, query = {}, now = new Date()) => {
     items: items.slice(start, start + pageSize).map(lead => ({ ...lead, activities: undefined, request: undefined })),
     total: items.length,
     page,
-    pageSize
+    pageSize,
+    alertDays
   };
 };
 

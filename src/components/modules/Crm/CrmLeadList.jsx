@@ -4,7 +4,7 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { Plus, AlertCircle, ChevronRight } from '@/components/ui/icons';
 import CrmFilters from './CrmFilters';
 import { useCrmLeads } from './crmApi';
-import { StageBadge, TrafficLightBadge, PriorityBadge, FollowUpLabel, OriginBadge, RequestBadge, leadTitle, leadSubtitle } from './crmPresentation';
+import { StageBadge, TrafficLightBadge, PriorityBadge, FollowUpLabel, OriginBadge, RequestBadge, SilenceBadge, leadTitle, leadSubtitle } from './crmPresentation';
 
 const Empty = ({ onCreate, filtered }) => (
   <div className="px-6 py-14 text-center">
@@ -78,7 +78,7 @@ const CrmLeadList = ({ filters, onFiltersChange, team, onOpenLead, onCreate }) =
                     ) : <span className="text-xs text-zinc-400">Sin asignar</span>}
                   </td>
                   <td className="max-w-[16rem] px-3 py-3 text-zinc-700 dark:text-zinc-200"><p className="line-clamp-2 text-xs leading-5">{lead.nextAction || <span className="text-zinc-400">Sin próxima acción</span>}</p></td>
-                  <td className="px-3 py-3"><FollowUpLabel lead={lead} /></td>
+                  <td className="px-3 py-3"><FollowUpLabel lead={lead} /><SilenceBadge lead={lead} alertDays={data?.alertDays} className="mt-1" /></td>
                   <td className="px-3 py-3 text-zinc-300 group-hover:text-primary dark:text-zinc-600"><ChevronRight className="h-4 w-4" /></td>
                 </tr>
               ))}
@@ -107,6 +107,7 @@ const CrmLeadList = ({ filters, onFiltersChange, team, onOpenLead, onCreate }) =
                   <PriorityBadge priority={lead.priority} />
                   <OriginBadge origin={lead.origin} />
                   <RequestBadge lead={lead} />
+                  <SilenceBadge lead={lead} alertDays={data?.alertDays} />
                 </div>
                 <div className="flex items-end justify-between gap-3">
                   <p className="line-clamp-2 text-xs leading-5 text-zinc-600 dark:text-zinc-300">{lead.nextAction || 'Sin próxima acción'}</p>
