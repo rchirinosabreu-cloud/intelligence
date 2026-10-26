@@ -36,7 +36,9 @@ try {
     page.on('pageerror', (error) => errors.push(error.message));
 
     let guardadas = null;
-    await page.route('**/api/push/status', (route) => route.fulfill({ json: { enabled: false } }));
+    // Un dispositivo que sí puede recibir avisos: así el panel ofrece los dos interruptores.
+    await page.route('**/api/push/status', (route) => route.fulfill({ json: { enabled: true, publicKey: 'clave-de-prueba' } }));
+    await page.route('**/api/notifications?**', (route) => route.fulfill({ json: { items: [], nextCursor: null, unreadCount: 0, preferences: { teamCompletions: false } } }));
     await page.route('**/api/notifications/preferences', async (route) => {
       guardadas = route.request().postDataJSON();
       return route.fulfill({ json: { preferences: { teamCompletions: guardadas.teamCompletions === true } } });
@@ -55,9 +57,31 @@ try {
     }));
     assert.ok(alto.visible > 0 && alto.visible <= alto.ventana, `${name}: la lista no cabe en la ventana (${JSON.stringify(alto)})`);
     assert.ok(alto.contenido > alto.visible, `${name}: la lista tiene que poder desplazarse`);
+    // Al abrir, el primer aviso se ve entero: nada de empezar a media tarjeta.
+    assert.equal(
+      await rail.evaluate((element) => Math.round(element.scrollTop)),
+      0,
+      `${name}: el panel abre con la lista arriba del todo`
+    );
 
     // El contador lo dice el servidor, no la página visible.
     await page.getByRole('button', { name: 'Sin leer (7)', exact: true }).waitFor({ timeout: 5000 });
+
+    // Cada interruptor es una línea, sin descripción (Rodny, 26 de octubre de 2026).
+    const filaEquipo = page.locator('[data-notification-toggle="team-completions"]');
+    const filaDispositivo = page.locator('[data-notification-toggle="push"]');
+    await filaEquipo.waitFor({ timeout: 5000 });
+    assert.equal(await filaDispositivo.count(), 1, `${name}: se ofrece el del dispositivo`);
+    for (const [etiqueta, fila] of [['equipo', filaEquipo], ['dispositivo', filaDispositivo]]) {
+      const alto = Math.round((await fila.boundingBox()).height);
+      // Una línea con su área táctil de 44 px; la versión con descripción pasaba de 70.
+      assert.ok(alto <= 50, `${name}: la fila del ${etiqueta} mide una línea (${alto}px)`);
+      assert.equal(
+        await fila.locator('[data-notification-toggle-note]').count(),
+        0,
+        `${name}: en la campana la fila del ${etiqueta} no lleva descripción`
+      );
+    }
     await page.screenshot({ path: `output/notificaciones-panel-${name}.png`, fullPage: true });
 
     // «Ver más» trae las que faltan.
@@ -81,35 +105,47 @@ try {
     await page.getByRole('button', { name: 'Todas', exact: true }).click();
     await page.waitForFunction(() => document.querySelectorAll('[class*="border-b"] p.truncate').length === 20, null, { timeout: 5000 });
 
-    // El interruptor del equipo: se pinta lo que confirmó el servidor.
-    const interruptor = page.locator('[data-team-completions-switch]');
+    // Encenderlo lo retira del panel en el acto: ya está decidido y su sitio es Perfil.
+    const interruptor = page.locator('[data-notification-toggle-switch="team-completions"]');
     assert.equal(await interruptor.getAttribute('aria-checked'), 'false', `${name}: nace apagado`);
-    const caja = await interruptor.boundingBox();
-    assert.ok(caja.width >= 44 && caja.height >= 44, `${name}: el interruptor es alcanzable con el dedo (${JSON.stringify(caja)})`);
     await interruptor.click();
     await page.waitForFunction(
-      () => document.querySelector('[data-team-completions-switch]')?.getAttribute('aria-checked') === 'true',
+      () => !document.querySelector('[data-notification-toggle="team-completions"]'),
       null,
       { timeout: 5000 }
     );
-    assert.deepEqual(guardadas, { teamCompletions: true }, `${name}: se guarda lo que se encendió`);
-    await page.getByText('Recibes un aviso aquí cada vez que alguien termina uno.', { exact: true }).waitFor({ timeout: 5000 });
-    await page.screenshot({ path: `output/notificaciones-equipo-${name}.png`, fullPage: true });
+    assert.equal(guardadas.teamCompletions, true, `${name}: se guarda lo que se encendió`);
+    assert.equal(guardadas.teamCompletionsDismissed, false, `${name}: encenderlo limpia el descarte`);
 
-    await interruptor.click();
+    // Y el del dispositivo se puede descartar sin encender nada.
+    await page.locator('[data-notification-toggle-dismiss="push"]').click();
     await page.waitForFunction(
-      () => document.querySelector('[data-team-completions-switch]')?.getAttribute('aria-checked') === 'false',
+      () => !document.querySelector('[data-notification-toggle="push"]'),
       null,
       { timeout: 5000 }
     );
-    assert.deepEqual(guardadas, { teamCompletions: false }, `${name}: también se apaga`);
+    await page.screenshot({ path: `output/notificaciones-sin-interruptores-${name}.png`, fullPage: true });
 
     assert.deepEqual(errors, [], `${name}: sin errores de página`);
     assert.ok(
       await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth),
       `${name}: el panel no desborda a lo ancho`
     );
-    console.log(`${name}: contador real, filtro de sin leer, «Ver más» y el interruptor confirmado por el servidor`);
+
+    // En Perfil los dos están siempre, decididos o no, y ahí sí se explican.
+    await page.goto(`http://127.0.0.1:${port}/tests/fixtures/notifications-panel-preview.html?perfil`);
+    await page.evaluate((isDark) => document.documentElement.classList.toggle('dark', isDark), dark);
+    await page.locator('[data-notification-toggle="team-completions"]').waitFor({ timeout: 5000 });
+    await page.locator('[data-notification-toggle="push"]').waitFor({ timeout: 5000 });
+    assert.equal(
+      await page.locator('[data-notification-toggle="team-completions"] [data-notification-toggle-dismiss]').count(),
+      0,
+      `${name}: en Perfil no se descarta nada, se enciende o se apaga`
+    );
+    await page.evaluate(() => document.fonts.ready);
+    await page.screenshot({ path: `output/notificaciones-perfil-${name}.png`, fullPage: true });
+
+    console.log(`${name}: contador real, filtro, «Ver más», interruptores de una línea y Perfil con los dos`);
     await page.close();
   }
 } finally {

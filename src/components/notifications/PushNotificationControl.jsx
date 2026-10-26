@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { CheckCircle2, Loader2, Smartphone } from '@/components/ui/icons';
-import { Button } from '@/components/ui/button';
+import { CheckCircle2, Smartphone } from '@/components/ui/icons';
+import NotificationToggleRow from '@/components/notifications/NotificationToggleRow';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import {
   disablePushNotifications,
@@ -12,7 +12,7 @@ import {
   isPushSupported
 } from '@/pwa/pushNotifications';
 
-const PushNotificationControl = () => {
+const PushNotificationControl = ({ variant = 'row', onDismiss = null }) => {
   const [status, setStatus] = useState(null);
   const [clientState, setClientState] = useState(null);
   const [isBusy, setIsBusy] = useState(false);
@@ -64,60 +64,38 @@ const PushNotificationControl = () => {
     }
   };
 
-  if (!status?.enabled) return null;
-
   const denied = clientState?.permission === 'denied';
   const needsIosInstall = isIosDevice() && !isInstalledApp();
   const supported = clientState?.supported !== false && isPushSupported();
   const subscribed = Boolean(clientState?.subscribed);
+  const blocked = !supported || denied || needsIosInstall;
 
-  // Morado heredado migrado al cian de la marca al tocar esta pantalla (26 de octubre de 2026).
+  // Solo el dispositivo sabe si hay algo que ofrecer: que la plataforma tenga push, que
+  // este aparato pueda recibirlo y que todavía no esté encendido aquí. Por eso el control
+  // se retira callado en la campana, en vez de que el panel lo adivine.
+  if (!status?.enabled) return null;
+  if (variant === 'row' && (blocked || subscribed)) return null;
+
+  const note = variant === 'settings' && blocked
+    ? (denied
+        ? 'Permiso bloqueado en los ajustes del dispositivo.'
+        : needsIosInstall
+          ? 'Instala Brainstudio para activar los avisos en iPhone.'
+          : 'Este navegador no admite notificaciones web.')
+    : null;
+
   return (
-    <div className="border-b border-zinc-100 bg-cyan-50/60 p-3 dark:border-zinc-800 dark:bg-cyan-950/20">
-      <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white text-primary shadow-sm dark:bg-zinc-900">
-          {subscribed ? <CheckCircle2 className="h-4 w-4" /> : <Smartphone className="h-4 w-4" />}
-        </div>
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-bold text-zinc-900 dark:text-zinc-50">
-            {subscribed ? 'Avisos del celular activos' : 'Avisos en este dispositivo'}
-          </p>
-          <p className="mt-0.5 text-[11px] leading-snug text-zinc-500 dark:text-zinc-400">
-            {denied
-              ? 'Permiso bloqueado en los ajustes del dispositivo.'
-              : needsIosInstall
-                ? 'Instala Brainstudio para activar los avisos en iPhone.'
-                : supported
-                  ? 'Tareas, menciones y anuncios importantes.'
-                  : 'Este navegador no admite notificaciones web.'}
-          </p>
-        </div>
-        {supported && !denied && !needsIosInstall && !subscribed && (
-          <Button
-            type="button"
-            size="sm"
-            variant="default"
-            className="h-9 shrink-0 px-3 text-[11px]"
-            disabled={isBusy}
-            onClick={handleEnable}
-          >
-            {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Activar'}
-          </Button>
-        )}
-        {supported && !denied && !needsIosInstall && subscribed && (
-          <Button
-            type="button"
-            size="sm"
-            variant="ghost"
-            className="h-9 shrink-0 px-3 text-[11px]"
-            disabled={isBusy}
-            onClick={handleDisable}
-          >
-            {isBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Desactivar'}
-          </Button>
-        )}
-      </div>
-    </div>
+    <NotificationToggleRow
+      testId="push"
+      icon={subscribed ? CheckCircle2 : Smartphone}
+      label={subscribed ? 'Avisos en este dispositivo' : 'Avisos en este dispositivo'}
+      checked={subscribed}
+      busy={isBusy}
+      disabled={blocked}
+      note={note}
+      onToggle={subscribed ? handleDisable : handleEnable}
+      onDismiss={onDismiss}
+    />
   );
 };
 
