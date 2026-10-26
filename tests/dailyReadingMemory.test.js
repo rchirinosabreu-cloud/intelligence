@@ -180,6 +180,45 @@ test('access revoked during the context read prevents both delivery and reopenin
   assert.equal(delivered, false);
 });
 
+for (const operation of ['explain', 'deliver']) test(`an authenticated ${operation} cannot restore old admin access after a context outage`, async () => {
+  const saved = reading();
+  let criteriaReads = 0, delivered = 0, authorizationReads = 0;
+  const user = { id: 'owner', role: 'ADMIN', isActive: true, sessionVersion: 0, modulePermissions: { bria: true, manager: true }, teamMember: { id: 'member', isActive: true } };
+  const currentUser = { ...user, role: 'PROJECT_MANAGER', modulePermissions: { bria: true } };
+  const db = { user: { findUnique: async () => { authorizationReads++; return currentUser; } }, client: { findMany: async () => [] } };
+  const service = createDailyReadingService({ db,
+    repository: { latestReading: async () => saved, snapshot: async () => ({ clients: [], people: [] }) },
+    memoryContext: args => readDailyMemoryContext({ ...args,
+      operations: { listOperations: async () => [] },
+      factRepository: { search: async () => { throw new Error('Temporary source outage'); } },
+      knowledgeRepository: { businessContext: async () => [] }
+    }),
+    criteria: async () => { criteriaReads++; return [{ id: 'restricted', text: 'Private direction criterion', purpose: 'direccion', sensitivity: 'restringida' }]; },
+    proactive: { morningBriefDelivery: async () => null, recordMorningBriefDelivery: async () => ({}) },
+    conversations: { postAssistantNote: async () => { delivered++; return { id: 'chat' }; } },
+    notify: async () => {}, whatsapp: () => {}, logger: { error() {} }
+  });
+  await assert.rejects(operation === 'explain' ? service.explain({ user }) : service.deliver(user, saved), { status: 503, code: 'BRIA_READING_CONTEXT_UNAVAILABLE' });
+  assert.ok(authorizationReads >= 2, 'the real context service observed the current role before and after the read failed');
+  assert.equal(criteriaReads, 0, 'do not fetch privileged criteria after losing the authenticated context');
+  assert.equal(delivered, 0);
+});
+
+test('unauthenticated scheduled generation retains its safe fallback when context is unavailable', async () => {
+  let criteriaReads = 0;
+  const service = createDailyReadingService({
+    repository: { reading: async () => null, snapshot: async () => ({ clients: [], people: [] }), history: async () => [], saveReading: async (_day, result) => result },
+    memoryContext: async ({ user }) => { assert.equal(user, null); throw new Error('Temporary source outage'); },
+    criteria: async () => { criteriaReads++; return []; },
+    generate: async () => assert.fail('No model is needed for an empty snapshot'),
+    now: () => new Date('2026-10-26T12:30:00Z'), logger: { error() {} }
+  });
+  const result = await service.generateReading();
+  assert.equal(result.source, 'REGLA');
+  assert.equal(result.context.agency.state, 'NO_DISPONIBLE');
+  assert.equal(criteriaReads, 1);
+});
+
 test('missing or partial context is observable and cannot support a definitive action recommendation', () => {
   for (const current of [
     { ...context, accounts: [{ ...context.accounts[0], state: 'NO_DISPONIBLE', partial: true }] },

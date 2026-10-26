@@ -175,6 +175,10 @@ export const createDailyReadingService = ({
     try { context = await memoryContext({ clients, user, db, operations, sourceContext }); }
     catch (error) {
       if ([401, 403].includes(error?.status) || error?.code === 'BRIA_READING_ACCESS_UNAVAILABLE') throw error;
+      // Scheduled generation can describe missing context. An authenticated
+      // delivery cannot recover using the caller's possibly stale permissions
+      // after the current viewer and its revalidation callback were lost.
+      if (user) throw factError('No se pudo consultar el contexto de esta lectura. Inténtalo nuevamente.', 503, 'BRIA_READING_CONTEXT_UNAVAILABLE');
       logger.error('[DailyReading] BRIA_CONTEXT_UNAVAILABLE');
       context = { agency: { state: 'NO_DISPONIBLE', partial: true, facts: [], learnings: [] }, accounts: clients.map(client => ({ clientId: client.id, state: 'NO_DISPONIBLE', partial: true, contract: null, facts: [], learnings: [] })) };
     }
