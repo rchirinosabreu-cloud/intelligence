@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   replyForWhatsApp, optionsMessagePayload, textWithOptions, parseInboundMessages, answerForWhatsApp, REPLIES,
-  OPTIONS_FOOTER, OPTIONS_LIST_BUTTON
+  OPTIONS_LIST_BUTTON
 } from '../src/lib/whatsappBridge.js';
 import {
   ALERT_KINDS, isWindowOpen, alertsEnabled, withinAlertHours, alertReplyId, parseAlertReplyId, alertOptions,
@@ -20,7 +20,7 @@ test('las opciones de Bria salen como botones con su texto completo en el identi
   assert.equal(payload.to, '573001234567');
   assert.equal(payload.type, 'interactive');
   assert.equal(payload.interactive.type, 'button');
-  assert.equal(payload.interactive.footer.text, OPTIONS_FOOTER, 'el pie recuerda que también puede escribir');
+  assert.equal(payload.interactive.footer, undefined, 'no añade una coletilla a la conversación');
   assert.deepEqual(payload.interactive.action.buttons, [
     { type: 'reply', reply: { id: 'q:Crear pendiente', title: 'Crear pendiente' } },
     { type: 'reply', reply: { id: 'q:Cancelar pendiente', title: 'Cancelar pendiente' } }

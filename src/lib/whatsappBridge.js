@@ -278,9 +278,7 @@ export const LIST_ROWS_MAX = 10;
 export const INTERACTIVE_BODY_MAX = 1024;
 const REPLY_ID_MAX = 256;
 const FOOTER_MAX = 60;
-export const OPTIONS_FOOTER = 'O escríbeme con tus palabras';
 export const OPTIONS_LIST_BUTTON = 'Ver opciones';
-export const OPTIONS_PROMPT = 'Elige una opción o escríbeme.';
 const QUICK_REPLY_PREFIX = 'q:';
 
 const clip = (text, max) => (text.length <= max ? text : `${text.slice(0, max - 1).trimEnd()}…`);
@@ -324,7 +322,7 @@ export const wordFit = (value, max) => {
   return cut.length >= 4 ? cut : text.slice(0, max);
 };
 
-export const optionsMessagePayload = (target, body, options, { footer = OPTIONS_FOOTER } = {}) => {
+export const optionsMessagePayload = (target, body, options, { footer = '' } = {}) => {
   const rows = [];
   for (const option of options || []) {
     const label = String(option?.label || '').trim();

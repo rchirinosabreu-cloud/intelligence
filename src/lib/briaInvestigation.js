@@ -83,34 +83,8 @@ export const buildInvestigation = (args, { previous, receipts = [], now = new Da
   };
 };
 
-export const investigationReply = record => {
-  const labels = { TAREAS: 'Gestión', CONTENIDO: 'Contenido y aprobaciones', ACTIVIDAD: 'Actividad', CONTEXTO: 'Contexto del cliente', CARGA: 'Carga del equipo' };
-  const pending = record.cobertura.filter(row => row.estado === 'PENDIENTE');
-  // La síntesis se escribe junto al análisis, sin una segunda generación. Estado,
-  // cobertura incompleta y límites del seguimiento siguen viniendo del servidor.
-  if (record.relato?.length && !record.pendientesDelRecorrido?.length) {
-    const times = record.consultas.map(row => new Date(row.consultadoEn).getTime()).sort((a, b) => a - b);
-    const format = time => new Date(time).toLocaleString('es-CO', { timeZone: 'America/Bogota', year: 'numeric', month: '2-digit', day: '2-digit', hour: 'numeric', minute: '2-digit' });
-    const range = times.length ? format(times[0]) + (Math.floor(times[0] / 60000) !== Math.floor(times.at(-1) / 60000) ? ` — ${format(times.at(-1))}` : '') : '';
-    const state = record.estado === 'RESUELTO' ? 'resuelto según las condiciones comprobadas' : record.estado === 'MEJORA_PARCIAL' ? 'abierto, con avances parciales' : 'abierto';
-    return [
-      ...record.relato.map(row => row.texto),
-      ...(pending.length ? [`Queda por comprobar: ${pending.map(row => `${labels[row.area]}: ${row.motivo}`).join('; ')}`] : []),
-      `El seguimiento queda ${state} en esta conversación. Próxima revisión propuesta: ${record.proximaRevision.replace(/[.\s]+$/u, '')}. No hay un aviso automático programado; cualquier cambio requiere tu aprobación.`,
-      times.length ? `Fuentes: ${[...new Set(record.consultas.map(row => labels[row.area]))].join(', ')} · ${range} (Bogotá)${record.consultas.some(row => row.partial) ? ' · incluye lecturas parciales' : ''}.` : null
-    ].filter(Boolean).join('\n\n');
-  }
-  return [
-    `**${record.asunto}**`, record.objetivo,
-    ...(record.pendientesDelRecorrido?.length ? ['La investigación quedó incompleta. Conservé el asunto para retomarlo.', ...record.pendientesDelRecorrido.map(text => `- ${text}`)] : []),
-    ...record.consultas.map(row => `Consultado en ${labels[row.area]}: ${new Date(row.consultadoEn).toLocaleString('es-CO', { timeZone: 'America/Bogota' })} (Bogotá)${row.partial ? ' · lectura parcial' : ''}.`),
-    ...record.hallazgos.map(row => `- ${row.texto}`),
-    ...(pending.length ? ['**Falta comprobar**', ...pending.map(row => `- ${labels[row.area]}: ${row.motivo}`)] : []),
-    ...record.alternativas.map(row => `**Opción ${row.id}${record.recomendada === row.id ? ' · recomendada' : ''}: ${row.propuesta}**\nBeneficio: ${row.beneficio}\nCosto o efecto: ${row.costo}\nIncertidumbre: ${row.incertidumbre}`),
-    ...record.incertidumbres.map(text => `Por aclarar: ${text}`),
-    `**Seguimiento: ${record.estado === 'RESUELTO' ? 'resuelto según lo consultado' : record.estado === 'MEJORA_PARCIAL' ? 'mejora parcial' : 'abierto'}**`,
-    ...record.comprobaciones.map(row => `- ${row.criterio}: ${{ PENDIENTE: 'pendiente', CUMPLIDO: 'comprobado', NO_CUMPLIDO: 'aún no se cumple', DESCONOCIDO: 'sin evidencia suficiente' }[row.resultado]}`),
-    `Próxima revisión propuesta: ${record.proximaRevision}. Se retoma en esta conversación; todavía no hay un aviso programado.`,
-    'Este análisis no ejecuta cambios. Cualquier acción requiere revisar y aprobar su resumen.'
-  ].join('\n\n');
-};
+// La redacción del modelo es la respuesta. Un recorrido sin evidencia suficiente
+// conserva un aviso técnico recuperable; nunca se publica una conclusión prematura.
+export const investigationReply = record => record.pendientesDelRecorrido?.length
+  ? `La investigación quedó incompleta. Falta comprobar:\n${record.pendientesDelRecorrido.map(item => `- ${item}`).join('\n')}`
+  : (record.relato || []).map(row => row.texto).join('\n\n');

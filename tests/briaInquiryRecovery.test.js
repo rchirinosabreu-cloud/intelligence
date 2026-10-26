@@ -60,7 +60,7 @@ test('recovery reads through native permissions and blocks writes even if the mo
   assert.deepEqual(requests[1].tools.map(row => row.name), ['buscar_pendientes']);
   assert.equal(result.pendingAction, undefined); assert.equal(result.investigation, undefined);
   assert.match(result.answer, /dos entregas abiertas/);
-  assert.match(result.answer, /solo.*consulta|solo pude consultar/);
+  assert.equal(result.answer, 'Hay dos entregas abiertas; una espera revisión del cliente.', 'no generic suffix replaces or extends the model answer');
   assert.deepEqual(result.toolsUsed, ['buscar_pendientes']);
   assert.equal(result.failures[0].tool, 'planificar_investigacion');
   assert.equal(warnings.length, 1);

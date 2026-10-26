@@ -8,7 +8,7 @@ import { runAssistant, asksToConfirm } from '../src/lib/briaAssistant.js';
 
 const user = { userId: 'u', role: 'ADMIN', modulePermissions: { bria: true } };
 const actionReply = { answer: 'Creo la ausencia de Helen para hoy.\n\n¿Lo hago así? También puedes pedirme cualquier ajuste.', quickReplies: ['Confirmar', 'Cancelar'] };
-const operar = { name: 'operar_en_plataforma', description: 'x', parameters: { type: 'object', properties: {} }, allowed: () => true, run: async () => ({ data: { stage: 'READY' }, pendingAction: { id: 'a1', type: 'PLATFORM', status: 'DRAFT' }, actionReply, quickReplies: actionReply.quickReplies }) };
+const operar = { name: 'operar_en_plataforma', description: 'x', parameters: { type: 'object', properties: {} }, allowed: () => true, run: async () => ({ data: { stage: 'READY' }, pendingAction: { id: 'a1', type: 'PLATFORM', status: 'DRAFT', title: 'Ausencia de Helen para hoy' }, actionReply, quickReplies: actionReply.quickReplies }) };
 
 test('qué cuenta como pedir confirmación', () => {
   for (const text of ['Para crearlo, confirma con «Confirmar».', '¿Lo hago así?', 'Escribe Confirmar y lo creo', 'Confírmame y lo registro']) assert.equal(asksToConfirm(text), true, text);
@@ -83,7 +83,9 @@ test('un «confirma» sin acción preparada no sale: Bria la prepara en el mismo
   assert.match(JSON.stringify(requests[1].input), /sin preparar la acción/);
   assert.match(JSON.stringify(requests[1].input), /Solo prepara si la persona pidió ese cambio/);
   assert.match(JSON.stringify(requests[1].input), /consulta o revisión.*sin preparar una acción/);
-  assert.equal(result.answer, actionReply.answer, 'lo que sale es el resumen de la plataforma, con sus botones');
+  assert.ok(result.answer.startsWith('Te dejo el resumen.'));
+  assert.match(result.answer, /Datos para aprobar[\s\S]*Ausencia de Helen para hoy/);
+  assert.equal(result.approvalReview.actionId, 'a1');
   assert.deepEqual(result.quickReplies, ['Confirmar', 'Cancelar']);
 });
 

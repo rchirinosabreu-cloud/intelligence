@@ -2,14 +2,13 @@ import { normalizeQuestion, MAX_QUESTION_LENGTH } from '../lib/briaAssistant.js'
 import { knowledgeError } from '../lib/briaKnowledge.js';
 import { validateAttachmentSelection, BRIA_AUDIO_MAX_BYTES } from '../lib/briaAttachments.js';
 import { readBriaAttachment, attachmentModelPart } from './briaAttachmentReader.js';
-import { isTaskDraftStarter, materialDeclined } from '../lib/briaTaskDraft.js';
-import { DELETE_REASON_OPTIONS } from '../lib/briaDeleteDraft.js';
+import { isTaskDraftStarter } from '../lib/briaTaskDraft.js';
 import { actionReply, actionStage, confirmsAction, cancelsAction, alreadyDoneReply, pendingActionOf, wrapLegacyAction, isLegacyAction, LEGACY_ACTIONS } from '../lib/briaActions.js';
 import { createBriaActionService } from './briaActionService.js';
 import { normalizeRating, turnPosition } from '../lib/briaRating.js';
+import { hasCurrentApprovalReview } from '../lib/briaResponse.js';
 // Una sola base (10 de octubre de 2026): crear pendiente, despachar y eliminar se resuelven aquí como cualquier otra
 // acción. Sin `actions` propio, la base se arma con los tres servicios que lleguen (las vistas de prueba y de muestra).
-const LEGACY_TOOL = { TASK_CREATE: 'preparar_pendiente', DISPATCH: 'preparar_despacho', TASK_DELETE: 'preparar_eliminacion' };
 // Solo categorías conocidas, nunca texto, identificadores, argumentos ni títulos del chat.
 const deniedTurnDiagnostic = (turn, phase) => ({
   phase,
@@ -117,18 +116,18 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
           pendingAction = wrapLegacyAction('TASK_CREATE', await taskDrafts.prepare({ user, question: text, request: { intent: 'PREPARE', evidence: text }, attachments: prepared, defaults: taskDefaults }));
         }
         const actionState = actionStage(pendingAction);
-        const legacyStage = isLegacyAction(pendingAction) && open(pendingAction) ? LEGACY_ACTIONS[pendingAction.type].stage(pendingAction.draft) : null;
         const revalidateAction = async () => {
           await resolveActor(user);
           if (!await authorizeTurn(user, { pendingAction })) throw knowledgeError('Tu acceso para esta acción cambió.', 403);
         };
         const closeAction = (action, status) => ({ ...action, status, ...(action.draft ? { draft: { ...action.draft, status } } : {}) });
-        const prepared_ = action => ({ ...actionReply(action), sources: [], failures: [], toolsUsed: [LEGACY_TOOL[action.type] || `accion:${action.type}`], pendingAction: action });
         // Un sí o un no dicho con naturalidad («dale, así está bien») solo cuenta si lo último que dijo Bria es el
         // resumen de esta acción. Un borrador de pendiente sobrevive a preguntas sueltas, y un «ok, gracias» varios
         // mensajes después no puede crear nada.
         const lastAssistant = [...chat.turns].reverse().find(turn => turn.role === 'assistant');
-        const naturalReply = actionState === 'READY' && open(pendingAction) && Boolean(lastAssistant) && String(lastAssistant.text || '').trim() === String(actionReply(pendingAction).answer || '').trim();
+        const naturalReply = actionState === 'READY' && open(pendingAction) && Boolean(lastAssistant) && (hasCurrentApprovalReview(lastAssistant, pendingAction) || !lastAssistant.approvalReview && String(lastAssistant.text || '').trim() === String(actionReply(pendingAction).answer || '').trim());
+        const reviewedConversation = chat.turns.some(turn => turn.approvalReview?.actionId === pendingAction?.id);
+        const reviewRequested = reviewedConversation && !naturalReply && actionState === 'READY' && confirmsAction(pendingAction, text) && !files.length;
         let result;
         if (pendingAction && cancelsAction(pendingAction, text, { natural: naturalReply }) && open(pendingAction)) {
           await revalidateAction();
@@ -137,7 +136,7 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
         } else if (actionState === 'DONE' && confirmsAction(pendingAction, text)) {
           await revalidateAction();
           result = { answer: alreadyDoneReply(pendingAction), sources: pendingAction.type === 'TASK_CREATE' && pendingAction.draft?.taskId ? [{ kind: 'tarea', id: pendingAction.draft.taskId }] : [], failures: [], pendingAction };
-        } else if (actionState === 'READY' && confirmsAction(pendingAction, text, { natural: naturalReply }) && !files.length) {
+        } else if (actionState === 'READY' && (!reviewedConversation || naturalReply) && confirmsAction(pendingAction, text, { natural: naturalReply }) && !files.length) {
           await revalidateAction();
           // La escritura corre dentro de append, después del bloqueo de la conversación y de comprobar su revisión.
           result = async () => {
@@ -146,13 +145,6 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
             const done = { ...pendingAction, status: 'DONE', result: outcome.text, ...(outcome.patch || {}) };
             return { answer: outcome.text, sources: outcome.sources || [], failures: [], toolsUsed: outcome.toolsUsed || [`accion:${pendingAction.type}`], pendingAction: done };
           };
-        } else if (taskDrafts && legacyStage && pendingAction.type === 'TASK_CREATE' && ((legacyStage === 'PRIORITY' && /^(normal|alta|urgente)$/i.test(text)) || (legacyStage === 'DATE' && /^(hoy|mañana|pasado mañana)$/i.test(text)) || (legacyStage === 'MATERIAL' && materialDeclined(text, legacyStage)))) {
-          // Los botones del borrador se responden sin pasar por el modelo.
-          await revalidateAction();
-          result = prepared_(wrapLegacyAction('TASK_CREATE', await taskDrafts.prepare({ user, previous: pendingAction.draft, question: text, request: { intent: 'ADJUST', evidence: text }, attachments: prepared, defaults: taskDefaults })));
-        } else if (deleteDrafts && legacyStage === 'REASON' && pendingAction.type === 'TASK_DELETE' && DELETE_REASON_OPTIONS.some(option => option.toLowerCase() === text.toLowerCase())) {
-          await revalidateAction();
-          result = prepared_(wrapLegacyAction('TASK_DELETE', await deleteDrafts.prepare({ user, previous: pendingAction.draft, question: text, args: { tareas: [], motivo: text } }), { title: pendingAction.title }));
         } else {
           // Los archivos del chat, del más reciente al más viejo: el comprobante de un movimiento puede haber llegado antes.
           // Con su tipo: la pieza final de una pieza solo puede ser una foto o un video.
@@ -172,10 +164,10 @@ export const createBriaConversationService = ({ repository, resolveActor, assist
             const linked = [...chat.turns].reverse().map(turn => pendingActionOf([turn])).find(action => action?.id === investigation.accion.id);
             if (linked) investigation.accion.status = linked.status;
           }
-          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), readingDay, investigation, attachments, chatAttachments, selectionTurn: `${id}:${chat.revision}`, lastOperation, pendingAction: open(pendingAction) ? pendingAction : null, session, taskAttachments: prepared, taskDefaults, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
-          // Un borrador de pendiente, despacho o eliminación sobrevive a una pregunta suelta, como siempre; las demás
-          // acciones solo valen sobre la respuesta inmediatamente anterior.
-          if (!result.pendingAction && open(pendingAction) && isLegacyAction(pendingAction)) result.pendingAction = pendingAction;
+          result = await assistant.ask({ user, question: text, history: chat.turns.slice(-10), readingDay, investigation, reviewRequested, attachments, chatAttachments, selectionTurn: `${id}:${chat.revision}`, lastOperation, pendingAction: open(pendingAction) ? pendingAction : null, session, taskAttachments: prepared, taskDefaults, taskEvidence: [...chat.turns.filter(turn => turn.role === 'user').map(turn => turn.text), text].join('\n'), revalidateConversation, ...(onEvent ? { onEvent } : {}) });
+          // Una interrupción conserva también un pedido incompleto. Conservarlo no lo aprueba:
+          // solo los datos mostrados en la última respuesta habilitan la confirmación nueva.
+          if (!result.pendingAction && open(pendingAction) && (actionState === 'MISSING' || isLegacyAction(pendingAction) || reviewedConversation)) result.pendingAction = pendingAction;
         }
         const fresh = await resolveActor(user);
         const authorizedHistory = chat.turns.filter(turn => turn.role === 'assistant');

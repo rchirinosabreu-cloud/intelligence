@@ -70,6 +70,19 @@ const build = ({ repository = fakeRepository(), conversations = fakeConversation
 
 const camila = { id: 'u-camila', name: 'Camila Pérez', email: 'camila@brainstudio.co', role: 'PROJECT_MANAGER', isActive: true, modulePermissions: { bria: true, gestion: true }, sessionVersion: 3, teamMember: { isActive: true } };
 
+test('long conversational replies keep their own closing beside the buttons', async () => {
+  const answer = Array.from({ length: 35 }, (_, i) => `Hallazgo ${i}: conservamos la evidencia de la entrega.`).join('\n');
+  const { service, sent, repository } = build({ conversations: fakeConversations({ answer, extra: { quickReplies: ['Revisar entrega', 'Revisar capacidad'] } }), users: { [camila.id]: camila } });
+  repository.links.set(camila.id, { userId: camila.id, waId: '573001234567', conversationId: null });
+  await service.processMessage({ messageId: 'long-options', from: '573001234567', type: 'text', text: 'Cuéntame lo que encontraste' });
+  const bodies = sent.filter(row => row.body.type === 'text' || row.body.type === 'interactive').map(row => row.body.text?.body || row.body.interactive.body.text);
+  assert.equal(bodies.join('\n'), answer);
+  const interactive = sent.at(-1).body.interactive;
+  assert.ok(interactive.body.text.length <= 1024);
+  assert.ok(answer.endsWith(interactive.body.text));
+  assert.equal(interactive.footer, undefined);
+});
+
 test('WhatsApp delivers a general overview and a safe recovery instead of the generic failure', async () => {
   for (const incomplete of [false, true]) {
     let reads = 0, step = 0;

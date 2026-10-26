@@ -1,4 +1,4 @@
-import { humanDate } from './briaAssistant.js';
+import { humanDate } from './briaDate.js';
 import { normalizeQuickReplies } from './briaQuickReplies.js';
 import { taskFileLabel } from './briaTaskMaterials.js';
 export { normalizeQuickReplies } from './briaQuickReplies.js';
