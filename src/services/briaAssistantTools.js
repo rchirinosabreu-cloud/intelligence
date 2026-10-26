@@ -18,6 +18,7 @@ import { getTaskElapsedMs } from '../lib/taskTiming.js';
 import { taskPrivacyFilter } from '../lib/taskPrivacy.js';
 import { searchTasks, statusesFor } from './taskSearch.js';
 import { profilePredictionProblem, RHYTHM_POLICY } from '../lib/workPrediction.js';
+import { readDecisionContext, decisionContract } from './briaDecisionContext.js';
 
 const STAGE_LABELS = ['sin texto', 'redactada', 'diseñada', 'aprobada', 'programada', 'publicada'];
 const LEVEL_LABELS = { red: 'rojo', yellow: 'amarillo', green: 'verde', gray: 'gris' };
@@ -210,7 +211,8 @@ const parrillaDeCliente = {
   description: 'La parrilla de contenido de un cliente (por su id) en un mes: cada pieza con formato, fecha, estado, hasta qué etapa llegó (sin texto, redactada, diseñada, aprobada, programada, publicada), si el cliente la aprobó, lo último que el cliente pidió cambiar, si ya está en producción y con quién, y cuántas referencias tiene; el resumen cuenta piezas por formato para compararlas con el contrato. Sin mes y año, la del mes actual.',
   parameters: { type: 'object', properties: { clientId: { type: 'string' }, mes: { type: 'integer', minimum: 1, maximum: 12 }, anio: { type: 'integer' } }, required: ['clientId'] },
   allowed: (user) => hasModulePermission(user, 'parrillas'),
-  async run({ clientId, mes, anio } = {}, { db, today }) {
+  async run({ clientId, mes, anio } = {}, context) {
+    const { db, today } = context;
     const id = text(clientId);
     if (!id) return { data: { parrilla: null, mensaje: 'Falta el id del cliente: búscalo primero con buscar_cliente.' } };
     const [todayYear, todayMonth] = String(today).split('-').map(Number);
@@ -260,9 +262,10 @@ const parrillaDeCliente = {
       enProduccion: piezas.filter((p) => p.enProduccion).length,
       vencidas: piezas.filter((p) => p.fecha && p.fecha < today && p.estado !== 'PUBLICADO').length
     };
+    const decision = await readDecisionContext(context, [{ id, name: plan.client?.name }]);
     return {
-      data: { parrilla: { id: plan.id, cliente: plan.client?.name || null, mes: monthLabel(plan.month, plan.year), estado: plan.status, resumen, piezas } },
-      sources: piezas.map((p) => ({ kind: 'pieza', id: p.id, label: `${p.titulo} (${shortDate(p.fecha)})`, url: `/parrillas/${plan.id}?item=${p.id}` }))
+      data: { contextoParcial: decision.partial, parrilla: { id: plan.id, clientId: id, cliente: plan.client?.name || null, mes: monthLabel(plan.month, plan.year), estado: plan.status, resumen, piezas, contexto: decision.forClient(id) } },
+      sources: [...piezas.map((p) => ({ kind: 'pieza', id: p.id, label: `${p.titulo} (${shortDate(p.fecha)})`, url: `/parrillas/${plan.id}?item=${p.id}` })), ...decision.sources]
     };
   }
 };
@@ -285,7 +288,8 @@ const operacionDeCliente = {
   description: 'La operación de un cliente (por su slug): semáforo con sus motivos, contrato operativo (piezas por formato, historias por semana, jornadas por mes, notas; registrar el contrato aquí no prueba que esté firmado), avance del mes contra lo contratado, tareas abiertas y observaciones recientes del equipo. Solo administradores y project managers.',
   parameters: { type: 'object', properties: { slug: { type: 'string' } }, required: ['slug'] },
   allowed: (user) => isManagerRole(user?.role),
-  async run({ slug } = {}, { operations }) {
+  async run({ slug } = {}, context) {
+    const { operations } = context;
     const key = text(slug);
     if (!key) return { data: { operacion: null, mensaje: 'Falta el slug del cliente: búscalo primero con buscar_cliente.' } };
     let row;
@@ -297,8 +301,9 @@ const operacionDeCliente = {
     }
     const current = row.cycles?.current || null;
     const contract = row.contract || null;
+    const decision = await readDecisionContext(context, [row]);
     const operacion = {
-      cliente: row.name, slug: row.slug, agencia: row.agency || null, complejidad: row.complexity || null,
+      clientId: row.id, cliente: row.name, slug: row.slug, agencia: row.agency || null, complejidad: row.complexity || null, contexto: decision.forClient(row.id),
       projectManager: row.projectManager?.name || null, communityManager: row.communityManager?.name || null,
       semaforo: LEVEL_LABELS[row.evaluation?.level] || row.evaluation?.level || null,
       motivos: (row.evaluation?.reasons || []).map((reason) => reason.text),
@@ -320,7 +325,7 @@ const operacionDeCliente = {
       ultimaObservacion: row.latestObservation ? `${row.latestObservation.text} (${[row.latestObservation.by, row.latestObservation.date].filter(Boolean).join(', ')})` : null,
       observacionesRecientes: (row.observations || []).slice(0, 5).map((o) => `${String(o.text || '').slice(0, 400)} (${[o.by, o.date].filter(Boolean).join(', ')})`)
     };
-    return { data: { operacion }, sources: [{ kind: 'cliente', id: row.id, label: row.name, url: `/clientes/operacion/${row.slug}` }] };
+    return { data: { operacion, contextoParcial: decision.partial }, sources: [{ kind: 'cliente', id: row.id, label: row.name, url: `/clientes/operacion/${row.slug}` }, ...decision.sources] };
   }
 };
 
@@ -333,30 +338,33 @@ const carteraDeOperacion = {
     responsable: { type: ['string', 'null'], description: 'Parte del nombre del PM o del community manager' }
   } },
   allowed: (user) => isManagerRole(user?.role),
-  async run({ semaforo = null, agencia = null, responsable = null } = {}, { operations }) {
+  async run({ semaforo = null, agencia = null, responsable = null } = {}, context) {
+    const { operations } = context;
     const rows = await operations.listOperations();
     const wantedLevel = Object.entries(LEVEL_LABELS).find(([, label]) => label === semaforo)?.[0] || null;
     const who = fold(responsable);
-    const cuentas = rows
+    const eligible = rows
       .filter((row) => !wantedLevel || row.evaluation?.level === wantedLevel)
       .filter((row) => !agencia || fold(row.agency) === fold(agencia))
       .filter((row) => !who || [row.projectManager?.name, row.communityManager?.name].some((name) => fold(name).includes(who)))
-      .sort((a, b) => LEVEL_ORDER.indexOf(a.evaluation?.level) - LEVEL_ORDER.indexOf(b.evaluation?.level) || String(a.name).localeCompare(String(b.name), 'es'))
-      .slice(0, 60)
-      .map((row) => {
+      .sort((a, b) => LEVEL_ORDER.indexOf(a.evaluation?.level) - LEVEL_ORDER.indexOf(b.evaluation?.level) || String(a.name).localeCompare(String(b.name), 'es'));
+    const selected = eligible.slice(0, 60);
+    const decision = await readDecisionContext(context, selected);
+    const cuentas = selected.map((row) => {
         const current = row.cycles?.current;
         return {
-          cliente: row.name, slug: row.slug, agencia: row.agency || null,
+          clientId: row.id, cliente: row.name, slug: row.slug, agencia: row.agency || null,
+          contrato: decisionContract(row.contract), contexto: decision.forClient(row.id),
           projectManager: row.projectManager?.name || null, communityManager: row.communityManager?.name || null,
           semaforo: LEVEL_LABELS[row.evaluation?.level] || null,
           motivos: (row.evaluation?.reasons || []).slice(0, 2).map((reason) => reason.text),
-          mesActual: current ? { contratadas: current.quota ?? 0, creadas: current.created ?? 0, aprobadas: current.reached?.aprobada ?? 0, publicadas: current.reached?.publicada ?? 0, vencidas: current.overdueItems ?? 0 } : null,
+          mesActual: current ? { nombre: current.label, contratadas: current.quota ?? 0, creadas: current.created ?? 0, aprobadas: current.reached?.aprobada ?? 0, publicadas: current.reached?.publicada ?? 0, vencidas: current.overdueItems ?? 0 } : null,
           tareasVencidas: (row.openTasks || []).filter((task) => task.overdue).length
         };
       });
     const porSemaforo = { rojo: 0, amarillo: 0, verde: 0, gris: 0 };
     for (const row of rows) { const label = LEVEL_LABELS[row.evaluation?.level]; if (label in porSemaforo) porSemaforo[label] += 1; }
-    return { data: { cuentas, porSemaforo, total: rows.length }, sources: cuentas.map((row) => ({ kind: 'cliente', id: row.slug, label: row.cliente, url: `/clientes/operacion/${row.slug}` })) };
+    return { data: { cuentas, porSemaforo, total: rows.length, parcial: eligible.length > cuentas.length, contextoParcial: decision.partial, alcance: 'Semáforos y fechas registrados. Contrasta contrato, periodo y contexto de cada cuenta antes de atribuir incumplimiento o recomendar prioridad.' }, sources: [...cuentas.map((row) => ({ kind: 'cliente', id: row.clientId, label: row.cliente, url: `/clientes/operacion/${row.slug}` })), ...decision.sources] };
   }
 };
 

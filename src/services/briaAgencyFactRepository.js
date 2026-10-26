@@ -52,6 +52,23 @@ export const createBriaAgencyFactRepository = ({ pool, workspace }) => {
   return {
     workspace,
 
+    // Una consulta para las cuentas leídas. Filtra permisos antes del límite por
+    // cuenta. Un homónimo ligado a otra ficha nunca se hereda por su nombre.
+    async searchClients(access, clients, limit = 7) {
+      if (!access?.purposes?.length || !clients.length) return [];
+      const requested = clients.slice(0, 60).map(client => ({ id: client.id, entity_key: factKey(client.name) }));
+      // Sin vínculo nativo, un nombre ambiguo requiere aclaración, no duplicar el hecho.
+      for (const row of requested) if (requested.filter(other => other.entity_key === row.entity_key).length > 1) row.ambiguous = true;
+      const rows = (await pool.query(`SELECT scoped.*, c.id AS context_client_id
+        FROM jsonb_to_recordset($4::jsonb) AS c(id text, entity_key text, ambiguous boolean)
+        CROSS JOIN LATERAL (${SELECT}
+          WHERE f.workspace=$1 AND f.status='ACTIVE' AND ${VISIBLE}
+            AND (f.client_id=c.id OR (f.client_id IS NULL AND NOT coalesce(c.ambiguous, false) AND f.entity_key=c.entity_key AND f.entity_type='cliente'))
+          ORDER BY CASE WHEN f.origin='EQUIPO' THEN 0 ELSE 1 END, ${CERTAINTY_ORDER}, f.updated_at DESC, f.id
+          LIMIT $5) scoped`, [workspace, access.purposes, access.restricted, JSON.stringify(requested), Math.min(Math.max(Number(limit) || 7, 1), 31)])).rows;
+      return rows.map(row => ({ ...present(row), contextClientId: row.context_client_id })).filter(row => factVisible(row, access));
+    },
+
     /** Hechos vigentes de una cuenta o de un tema, ya filtrados por lo que la persona puede ver. */
     async search(access, { query = '', clientId = null, entity = null, topic = null, limit = 25 } = {}) {
       if (!access?.purposes?.length) return [];
@@ -80,6 +97,12 @@ export const createBriaAgencyFactRepository = ({ pool, workspace }) => {
     async get(access, id) {
       const row = present((await pool.query(`${SELECT} WHERE f.workspace=$1 AND f.id=$2`, [workspace, id])).rows[0]);
       return factVisible(row, access) ? row : null;
+    },
+
+    async getMany(access, ids) {
+      if (!access?.purposes?.length || !ids.length) return [];
+      const rows = (await pool.query(`${SELECT} WHERE f.workspace=$1 AND ${VISIBLE} AND f.id=ANY($4::text[])`, [workspace, access.purposes, access.restricted, ids])).rows;
+      return rows.map(present).filter(row => factVisible(row, access));
     },
 
     /** Dudas abiertas de una cuenta, las más importantes y menos ofrecidas primero. Marca que se ofrecieron. */

@@ -66,7 +66,9 @@ export const inquiryDeclarations = (declarations, receipts) => declarations.map(
 export const inquiryGaps = (plan, record, receipts) => {
   if (!plan?.investigar) return [];
   const missing = [];
-  if (plan.localizarTrabajo && !receipts.some(row => row.herramienta === 'leer_pendiente' && !row.partial)) missing.push('Identificar el trabajo pertinente y leer su detalle autorizado; si no se puede, aclarar el impedimento.');
+  const taskSearches = receipts.filter(row => ['tareas_de_cliente', 'buscar_pendientes'].includes(row.herramienta));
+  const noCandidates = taskSearches.length > 0 && taskSearches.every(row => row.taskCount === 0 && !row.partial);
+  if (plan.localizarTrabajo && !noCandidates && !receipts.some(row => row.herramienta === 'leer_pendiente' && !row.partial)) missing.push('Identificar el trabajo pertinente y leer su detalle autorizado; si no se puede, aclarar el impedimento.');
   for (const area of plan.areas) {
     if (!receipts.some(row => row.area === area && !row.partial) && record?.cobertura.find(row => row.area === area)?.estado !== 'NO_APLICA') missing.push(`Comprobar ${area} con una lectura actual o explicar por qué no aplica.`);
   }

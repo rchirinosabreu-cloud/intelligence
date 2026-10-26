@@ -16,7 +16,7 @@ test('the route sits behind the Manager module and a leadership role', () => {
   assert.match(routes, /'\/manager\/rhythm',\s*requireModulePermission\('manager'\),\s*requireManagerRole,\s*teamRhythmController\.getTeamRhythm/);
   const application = readFileSync('src/services/briaConversationApplication.js', 'utf8');
   assert.match(application, /import \{ createBriaTurnAuthorizer \} from '\.\/briaTurnAuthorization\.js'/);
-  assert.match(application, /const authorizeTurn = createBriaTurnAuthorizer\(\{ db: prisma, canReadAgencyMemory, knowledge: getApplicationKnowledgeService \}\)/);
+  assert.match(application, /const authorizeTurn = createBriaTurnAuthorizer\(\{ db: prisma, canReadAgencyMemory, knowledge: getApplicationKnowledgeService, agencyFacts: getAgencyFactService \}\)/);
   assert.match(application, /createBriaConversationService\(\{[^;]*\bauthorizeTurn\s*\}\)/, 'the application must use the shared authorizer');
   assert.match(readFileSync('src/services/briaTurnAuthorization.js', 'utf8'), /\['minuta', 'ritmo'\]\.includes\(source\.kind\)/, 'an old answer stops showing to someone who lost access');
 });

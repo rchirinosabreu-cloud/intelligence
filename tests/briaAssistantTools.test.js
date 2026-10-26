@@ -196,6 +196,7 @@ test('operacion_de_cliente compacts the traffic light with its reasons, for mana
   }) };
   const result = await toolByName('operacion_de_cliente').run({ slug: 'nattal' }, { operations, user: pm, person, today: TODAY });
   assert.deepEqual(result.data.operacion, {
+    clientId: 'c1', contexto: { clientId: 'c1', estado: 'NO_DISPONIBLE', parcial: true, hechos: [], nota: 'No se pudo contrastar la memoria de esta cuenta. Los contadores no prueban por sí solos un compromiso vigente.' },
     cliente: 'Nattal', slug: 'nattal', agencia: 'BRAIN', complejidad: 'MEDIA', projectManager: 'Kamila', communityManager: 'Jarlan',
     semaforo: 'amarillo', motivos: ['1 tarea vencida en Gestión.'],
     contrato: { tipo: 'PARRILLA', estado: 'ACTIVO', inicio: '2026-01-01', fin: null, diaDeCorte: 1, piezasPorMes: 4, entregablesPorFormato: [{ formato: 'Post', cantidad: 4 }], historiasPorSemana: 0, jornadasPorMes: 0, notas: null, informeMensual: true },
