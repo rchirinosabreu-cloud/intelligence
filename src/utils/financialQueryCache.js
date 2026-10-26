@@ -11,5 +11,7 @@ export const invalidateFinancialQueries = (queryClient) => Promise.all([
   // Terceros y cuentas por pagar (20 de octubre de 2026).
   'financial-payables-ledger', 'financial-third-parties',
   // Clientes potenciales y cotizaciones de cada tercero (23 de octubre de 2026).
-  'financial-party-commercial'
+  'financial-party-commercial',
+  // El equipo como terceros (26 de octubre de 2026).
+  'financial-party-team'
 ].map(key => queryClient.invalidateQueries({ queryKey: [key] })));

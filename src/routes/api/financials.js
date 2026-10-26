@@ -67,6 +67,7 @@ import {
     createThirdPartyHandler,
     linkProspectClientHandler,
     listPartyCommercialHandler,
+    listPartyTeamHandler,
     listPayablesLedgerHandler,
     listThirdPartiesHandler,
     payPayableHandler,
@@ -156,6 +157,7 @@ router.patch('/receivable-payments/:paymentId', requireFinancialWrite, updateRec
 // egreso en Movimientos ligado al pago; el soporte del tercero se guarda como evidencia.
 router.get('/third-parties', requireFinancialAccess, listThirdPartiesHandler);
 router.get('/parties/commercial', requireFinancialAccess, listPartyCommercialHandler);
+router.get('/parties/team', requireFinancialAccess, listPartyTeamHandler);
 router.post('/parties/prospects/:leadId/client', requireFinancialWrite, linkProspectClientHandler);
 router.post('/third-parties', requireFinancialWrite, createThirdPartyHandler);
 router.patch('/third-parties/:id', requireFinancialWrite, updateThirdPartyHandler);
