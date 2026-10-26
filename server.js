@@ -23,6 +23,7 @@ import { initDailyCloseScheduler } from './src/services/dailyCloseService.js';
 import { initMonthlyReviewScheduler } from './src/services/monthlyReviewService.js';
 import { initDailyReadingScheduler } from './src/services/dailyReadingService.js';
 import { initConversationLearningScheduler } from './src/services/conversationLearningService.js';
+import { initCrmFollowUpAlertScheduler } from './src/services/crmFollowUpAlertService.js';
 import { getAIHealth } from './src/services/aiService.js';
 import { configureS3Cors } from './src/services/s3Service.js';
 import { loggerMiddleware } from './src/middlewares/logger.js';
@@ -225,6 +226,7 @@ async function bootstrap() {
         initMonthlyReviewScheduler();
         initDailyReadingScheduler();
         initConversationLearningScheduler();
+        initCrmFollowUpAlertScheduler();
         startTaskAttachmentRetention();
         startTempUploadSweep();
         console.log("[Service: Cron] Tareas en segundo plano inicializadas.");

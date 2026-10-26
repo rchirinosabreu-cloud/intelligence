@@ -29,8 +29,12 @@ export const crmKeys = {
   leads: filters => ['crm', 'leads', activeCrmFilters(filters)],
   lead: id => ['crm', 'lead', id],
   followUps: filters => ['crm', 'followups', activeCrmFilters(filters)],
-  metrics: filters => ['crm', 'metrics', activeCrmFilters(filters)]
+  metrics: filters => ['crm', 'metrics', activeCrmFilters(filters)],
+  followUpAlertDays: ['crm', 'follow-up-alerts']
 };
+
+// Los días de las alertas comerciales (26 de octubre de 2026): los lee quien usa el CRM, los cambia un administrador.
+export const useCrmFollowUpAlertDays = () => useQuery({ queryKey: crmKeys.followUpAlertDays, queryFn: () => crmRequest('/follow-up-alerts'), staleTime: 60_000 });
 
 export const useCrmTeam = () => useQuery({
   queryKey: crmKeys.team,
@@ -66,4 +70,5 @@ export const useChangeStage = options => useCrmMutation(({ id, ...payload }) => 
 export const useAddActivity = options => useCrmMutation(({ id, ...payload }) => crmRequest(`/leads/${id}/activities`, { method: 'POST', body: payload }), options);
 export const useSetTrafficLight = options => useCrmMutation(({ id, ...payload }) => crmRequest(`/leads/${id}/traffic-light`, { method: 'POST', body: payload }), options);
 export const useArchiveLead = options => useCrmMutation(({ id }) => crmRequest(`/leads/${id}/archive`, { method: 'POST' }), options);
-export const useCreateQuotationDraft = options => useCrmMutation(({ id }) => crmRequest(`/leads/${id}/quotations`, { method: 'POST' }), options);
+export const useSaveFollowUpAlertDays = options => useCrmMutation(payload => crmRequest('/follow-up-alerts', { method: 'PUT', body: payload }), options);
+export const useCreateQuotationDraft =options => useCrmMutation(({ id }) => crmRequest(`/leads/${id}/quotations`, { method: 'POST' }), options);

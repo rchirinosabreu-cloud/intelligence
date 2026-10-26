@@ -2670,12 +2670,38 @@ model CrmLead {
   activities           CrmActivity[]
   request              CrmRequest?
   quotations           Quotation[]   @relation("QuotationLead")
+  followUpAlertLog     CrmFollowUpAlert[]
 
   @@index([stage, archivedAt], map: "CrmLead_stage_idx")
   @@index([ownerId, nextFollowUpAt], map: "CrmLead_followup_idx")
   @@index([origin], map: "CrmLead_origin_idx")
   @@index([companyKey], map: "CrmLead_company_idx")
   @@index([enteredAt], map: "CrmLead_entered_idx")
+}
+
+// Alertas comerciales (punto 2 de la solicitud de Elisa, 26 de octubre de 2026): lo ya avisado, una fila por
+// oportunidad, ciclo de silencio y día. La fila única es la cerradura contra avisar dos veces.
+// Regla en src/lib/crmFollowUpAlerts.js; tabla aditiva en scripts/ensure-crm-schema.js.
+model CrmFollowUpAlert {
+  id         String   @id @default(uuid())
+  leadId     String
+  lead       CrmLead  @relation(fields: [leadId], references: [id])
+  cycleStart DateTime @db.Timestamptz()
+  step       Int
+  kind       String // REMINDER, REVIEW o SKIPPED (un paso que el reloj se saltó y quedó cubierto)
+  sentAt     DateTime @default(now()) @db.Timestamptz()
+
+  @@unique([leadId, cycleStart, step])
+  @@index([leadId], map: "CrmFollowUpAlert_lead_idx")
+}
+
+// Ajustes del CRM que cambia un administrador: los días de las alertas comerciales.
+model CrmSetting {
+  id                   String   @id @default("global")
+  followUpReminderDays Int[]    @default([5, 10, 15, 20])
+  followUpReviewDay    Int      @default(30)
+  updatedById          String?
+  updatedAt            DateTime @default(now()) @updatedAt @db.Timestamptz()
 }
 
 model CrmActivity {

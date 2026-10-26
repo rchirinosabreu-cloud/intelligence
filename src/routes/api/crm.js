@@ -2,9 +2,10 @@ import express from 'express';
 import prisma from '../../lib/prisma.js';
 import * as crmService from '../../services/crmService.js';
 import * as quotationDrafts from '../../services/quotationDraftService.js';
+import * as crmFollowUpAlerts from '../../services/crmFollowUpAlertService.js';
 
 // Mounted in src/routes/index.js behind authenticateToken + requireModulePermission('crm').
-export const createCrmRouter = ({ service = crmService, drafts = quotationDrafts, db = prisma } = {}) => {
+export const createCrmRouter = ({ service = crmService, drafts = quotationDrafts, followUpAlerts = crmFollowUpAlerts, db = prisma } = {}) => {
   const router = express.Router();
 
   const send = (res, error, fallback) => {
@@ -24,6 +25,15 @@ export const createCrmRouter = ({ service = crmService, drafts = quotationDrafts
   };
 
   router.get('/catalogs', (_req, res) => res.json(service.catalogs()));
+
+  // Los días de las alertas comerciales: los lee quien usa el CRM y solo un administrador los cambia.
+  router.get('/follow-up-alerts', handle('No pudimos cargar los días de las alertas.', async (_req, res) => {
+    res.json(await followUpAlerts.readFollowUpAlertDays(db));
+  }));
+
+  router.put('/follow-up-alerts', handle('No pudimos guardar los días de las alertas.', async (req, res) => {
+    res.json(await followUpAlerts.saveFollowUpAlertDays(db, req.body || {}, req.user));
+  }));
 
   router.get('/metrics', handle('No pudimos calcular las métricas.', async (req, res) => {
     res.json(await service.metricsFor(db, req.query));

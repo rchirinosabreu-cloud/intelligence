@@ -71,6 +71,23 @@ export const TrafficLightDot = ({ value, className }) => (
   <span aria-hidden="true" className={cn('inline-block h-2.5 w-2.5 shrink-0 rounded-full', lightStyles[value]?.dot || 'bg-zinc-300 dark:bg-zinc-600', className)} />
 );
 
+/**
+ * Los días sin respuesta desde la propuesta (alertas comerciales, 26 de octubre de 2026): aparece desde el primer
+ * recordatorio, en ámbar, y en el color de alerta desde la revisión. Antes del primer recordatorio no dice nada.
+ */
+export const SilenceBadge = ({ lead, alertDays, className }) => {
+  const days = lead?.silentDays;
+  if (days === null || days === undefined || !alertDays?.reminders?.length || days < alertDays.reminders[0]) return null;
+  const review = days >= alertDays.review;
+  return (
+    <span data-crm-silence={review ? 'REVISION' : 'SIN_RESPUESTA'} title={review ? 'Toca revisar si sigue o se cierra.' : 'Hace falta un seguimiento.'}
+      className={cn('inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold',
+        review ? 'border-destructive/30 bg-destructive/10 text-destructive brain-destructive-text' : 'border-brand-yellow/40 bg-brand-yellow/15 text-brand-yellow-deep dark:text-brand-yellow', className)}>
+      {days} {days === 1 ? 'día' : 'días'} sin respuesta
+    </span>
+  );
+};
+
 export const TrafficLightBadge = ({ light, className, showMode = true }) => {
   const value = light?.value;
   const style = lightStyles[value] || {};

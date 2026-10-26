@@ -4,10 +4,11 @@ import PageHeader from '@/components/ui/PageHeader';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { toast } from 'react-hot-toast';
-import { LayoutDashboard, ListTodo, CalendarClock, BarChart3, Plus, Link2 } from '@/components/ui/icons';
+import { LayoutDashboard, ListTodo, CalendarClock, BarChart3, Plus, Link2, Bell } from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
 import { readCrmFilters, writeCrmFilters } from '@/lib/crmFilterSession';
-import { useCrmTeam } from './crmApi';
+import { useCrmFollowUpAlertDays, useCrmTeam } from './crmApi';
+import CrmFollowUpAlertSettings from './CrmFollowUpAlertSettings';
 import CrmDashboard from './CrmDashboard';
 import CrmLeadList from './CrmLeadList';
 import CrmFollowUps from './CrmFollowUps';
@@ -22,7 +23,11 @@ const CrmLayout = () => {
   const tab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'dashboard';
   const [filters, setFilters] = useState(() => readCrmFilters(window.sessionStorage, currentUser));
   const [creating, setCreating] = useState(false);
+  const [alertSettingsOpen, setAlertSettingsOpen] = useState(false);
   const { data: team = [] } = useCrmTeam();
+  // Los días de las alertas comerciales los cambia un administrador (el servidor lo vuelve a comprobar).
+  const isAdmin = currentUser?.role === 'ADMIN';
+  const { data: alertDays } = useCrmFollowUpAlertDays();
 
   useEffect(() => { writeCrmFilters(window.sessionStorage, currentUser, filters); }, [filters, currentUser]);
 
@@ -48,6 +53,11 @@ const CrmLayout = () => {
         <Button variant="outline" onClick={copyRequestLink} className="flex items-center gap-2 rounded-xl" title={requestLink} data-crm-copy-link>
           <Link2 className="h-4 w-4" /> Copiar enlace del formulario
         </Button>
+        {isAdmin && (
+          <Button variant="outline" onClick={() => setAlertSettingsOpen(true)} className="flex items-center gap-2 rounded-xl" data-crm-alert-settings-open>
+            <Bell className="h-4 w-4" /> Alertas
+          </Button>
+        )}
         <Button onClick={() => setCreating(true)} className="flex items-center gap-2 rounded-xl">
           <Plus className="h-4 w-4" /> Nueva oportunidad
         </Button>
@@ -75,7 +85,8 @@ const CrmLayout = () => {
         </TabsContent>
       </Tabs>
 
-      <CrmLeadForm open={creating} onOpenChange={setCreating} team={team} onSaved={lead => { setCreating(false); navigate(`/crm/oportunidades/${lead.id}`); }} />
+      {alertSettingsOpen && <CrmFollowUpAlertSettings open onOpenChange={setAlertSettingsOpen} current={alertDays} />}
+      <CrmLeadForm open={creating}onOpenChange={setCreating} team={team} onSaved={lead => { setCreating(false); navigate(`/crm/oportunidades/${lead.id}`); }} />
     </div>
   );
 };

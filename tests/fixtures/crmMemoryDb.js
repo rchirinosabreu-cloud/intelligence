@@ -85,6 +85,11 @@ export function createCrmMemoryDb({ leads = [], activities = [], members = [], u
     },
     teamMember: {
       findMany: async ({ where = {} } = {}) => state.members.filter(member => (!where.id?.in || where.id.in.includes(member.id)) && (where.isActive === undefined || member.isActive === where.isActive))
+    },
+    // Los días de las alertas comerciales (26 de octubre de 2026).
+    crmSetting: {
+      findUnique: async () => state.setting || null,
+      upsert: async ({ create, update }) => { state.setting = state.setting ? { ...state.setting, ...update } : { ...create }; return state.setting; }
     }
   };
   return { ...tx, $transaction: async callback => callback(tx), state };

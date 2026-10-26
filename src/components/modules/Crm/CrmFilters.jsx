@@ -19,7 +19,7 @@ const selectClass = 'w-full rounded-xl border border-zinc-200 bg-white px-3 py-2
  * Shared filter bar for the dashboard, the list and the follow-ups.
  * `show` limits which controls render; the same `filters` object feeds every CRM query.
  */
-const CrmFilters = ({ filters, onChange, team = [], show = ['search', 'stage', 'origin', 'priority', 'ownerId', 'trafficLight', 'request', 'dates'], className }) => {
+const CrmFilters = ({ filters, onChange, team = [], show = ['search', 'stage', 'origin', 'priority', 'ownerId', 'trafficLight', 'request', 'silence', 'dates'], className }) => {
   const [expanded, setExpanded] = useState(false);
   const set = (key, value) => onChange({ ...filters, [key]: value });
   const has = key => show.includes(key);
@@ -97,6 +97,15 @@ const CrmFilters = ({ filters, onChange, team = [], show = ['search', 'stage', '
               <option value="">Todas</option>
               <option value="NUEVAS">Nuevas sin contactar</option>
               <option value="FORMULARIO">Llegaron por el formulario</option>
+            </Select>
+          </Field>
+        )}
+        {has('silence') && (
+          <Field label="Sin respuesta">
+            <Select value={filters.silence || ''} onChange={event => set('silence', event.target.value)} className={selectClass}>
+              <option value="">Todas</option>
+              <option value="SIN_RESPUESTA">Piden seguimiento</option>
+              <option value="REVISION">Para revisar si siguen</option>
             </Select>
           </Field>
         )}
