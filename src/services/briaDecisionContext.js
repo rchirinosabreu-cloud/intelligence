@@ -3,14 +3,14 @@
 export const readDecisionContext = async (context, clients) => {
   const unique = [...new Map(clients.filter(row => row.id).map(row => [row.id, { id: row.id, name: row.name }])).values()];
   let result;
+  await context.revalidate?.();
   try {
-    await context.revalidate?.();
     if (context.agencyFacts?.contextForClients) result = await context.agencyFacts.contextForClients(context.user, unique);
-    await context.revalidate?.();
   } catch (error) {
     if ([401, 403].includes(error?.status)) throw error;
     (context.logger || console).warn('[BriaDecisionContext] BRIA_CONTEXT_UNAVAILABLE');
   }
+  await context.revalidate?.();
   const accounts = new Map((result?.cuentas || []).map(row => [row.clientId, row]));
   return {
     partial: unique.some(client => !accounts.has(client.id) || accounts.get(client.id).parcial || accounts.get(client.id).estado !== 'CONSULTADO'),

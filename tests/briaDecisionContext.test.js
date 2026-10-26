@@ -54,6 +54,7 @@ test('unavailable memory is explicit, while authorization loss stops the read', 
   assert.doesNotMatch(JSON.stringify(result), /PRIVATE/);
   ctx.agencyFacts.contextForClients = async () => { throw Object.assign(new Error('revoked'), { status: 403 }); };
   await assert.rejects(tool('cartera_de_operacion').run({}, ctx), { status: 403 });
+  await assert.rejects(tool('cartera_de_operacion').run({}, { ...context(), revalidate: async () => { throw Object.assign(new Error('conversation deleted'), { status: 404 }); } }), { status: 404 });
 });
 
 test('context service batches reads, exposes truncation and retains evidence metadata without offering questions', async () => {
