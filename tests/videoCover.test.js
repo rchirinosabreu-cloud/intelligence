@@ -2,7 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  COVER_MAX_BYTES, COVER_RATIO, coverFileProblem, coverImagePlan, hasCover, kindAcceptsCover, publicCover
+  COVER_MAX_BYTES, COVER_RATIO, coverFileProblem, coverImagePlan, hasCover, kindAcceptsCover, publicCover,
+  withPublicCover
 } from '../src/lib/videoCover.js';
 import { describeMetaMedia } from '../src/lib/socialPublishing.js';
 import { createSocialPublishingService } from '../src/services/socialPublishingService.js';
@@ -65,10 +66,48 @@ test('la pantalla ve el nombre de la portada, nunca su clave en el almacenamient
   assert.equal(hasCover(item), true);
   assert.equal(hasCover({}), false);
 
+  // La clave se saca de lo que se entrega, y eso lo hace la regla, no cada servicio.
+  const rule = readFileSync('src/lib/videoCover.js', 'utf8');
+  assert.match(rule, /const \{ coverKey: _key[^}]*\} = item;/);
+  assert.match(rule, /cover: publicCover\(item\)/);
+
   // Y el servicio tampoco la deja salir en la pieza.
   const service = readFileSync('src/services/contentService.js', 'utf8');
-  assert.match(service, /coverKey: _coverKey/, 'la clave se saca de lo que se entrega');
-  assert.match(service, /cover: publicCover\(item\)/);
+  assert.match(service, /\.\.\.withPublicCover\(item\)/);
+});
+
+// «La subo y me dice guardada pero no aparece» (Rodny, 26 de octubre de 2026). La portada se guardaba
+// bien —el aviso de éxito sale después de la respuesta del servidor—, pero las piezas que viajan dentro
+// de una parrilla salían sin `cover`: el editor lee `item.cover` y leía vacío, así que el panel seguía
+// diciendo «Sin portada» después de guardarla. Y la clave del almacenamiento sí viajaba al navegador.
+test('una pieza que viene dentro de una parrilla también trae su portada, y nunca la clave', () => {
+  const item = {
+    id: 'i1', objective: 'Reel de la semana', format: 'Reel',
+    coverKey: 'content-plans/x/2026-10/i1/cover/abc.jpg', coverName: 'portada.jpg',
+    coverMimeType: 'image/jpeg', coverSize: 1234
+  };
+  const shown = withPublicCover(item);
+  assert.deepEqual(shown.cover, { name: 'portada.jpg', mimeType: 'image/jpeg', size: 1234 });
+  for (const column of ['coverKey', 'coverName', 'coverMimeType', 'coverSize']) {
+    assert.equal(column in shown, false, `${column} se queda en el servidor`);
+  }
+  assert.equal(JSON.stringify(shown).includes('content-plans'), false);
+  assert.equal(shown.objective, 'Reel de la semana', 'lo demás de la pieza no se toca');
+  assert.equal(withPublicCover({ id: 'i2' }).cover, null, 'sin portada, `cover` es nulo, no indefinido');
+  assert.equal(withPublicCover(null), null);
+
+  // Los tres caminos que leen una parrilla entera pasan sus piezas por ahí: el editor, el carril y el
+  // portal se alimentan de `items`, no de la pieza suelta.
+  const service = readFileSync('src/services/contentService.js', 'utf8');
+  assert.match(service, /const planItems = \(plan\) => \(plan\?\.contentItems \|\| \[\]\)\.map\(withPublicCover\)/);
+  assert.equal(
+    (service.match(/const items = planItems\(plan\);/g) || []).length,
+    3,
+    'getContentPlanById, getContentPlanBySlugAndPeriod y getContentPlanByToken'
+  );
+  // La fusión de la pieza final antigua se queda en la pieza suelta: el portal la entrega aparte
+  // (`finalAsset` además de `finalAssets`) y normalizar ahí se la mostraría dos veces al cliente.
+  assert.equal(service.includes('contentItems.map(normalizeContentItem)'), false);
 });
 
 test('las columnas son aditivas y las crea el arranque', () => {

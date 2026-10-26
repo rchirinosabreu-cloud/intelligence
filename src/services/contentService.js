@@ -4,7 +4,7 @@ import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, 
 import { createTask } from './nativeTaskService.js';
 import { uploadToS3, deleteFromS3, createSignedUpload, headS3Object, getS3ObjectBuffer } from './s3Service.js';
 import { derivedKeyFor } from './socialImageDerivativeService.js';
-import { COVER_MAX_BYTES, coverFileProblem, publicCover } from '../lib/videoCover.js';
+import { COVER_MAX_BYTES, coverFileProblem, publicCover, withPublicCover } from '../lib/videoCover.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { buildLinkedTaskUpdates } from '../lib/contentTaskReciprocity.js';
 import {
@@ -195,17 +195,26 @@ const normalizeContentItem = (item) => {
   const finalAssets = [...legacyFinalAsset, ...(item.finalAssets || [])];
   // La portada se entrega como `cover` (nombre, tipo y peso) y su clave de almacenamiento se queda
   // aquí: la pantalla la pide por la API, nunca por una URL del bucket.
-  const { coverKey: _coverKey, coverName: _coverName, coverMimeType: _coverMimeType, coverSize: _coverSize, ...rest } = item;
   return {
-    ...rest,
+    ...withPublicCover(item),
     finalAssetKey: item.finalAssetKey ?? null,
     finalAssetName: item.finalAssetName ?? null,
     finalAssetMimeType: item.finalAssetMimeType ?? null,
     finalAssetSize: item.finalAssetSize ?? null,
-    cover: publicCover(item),
     finalAssets
   };
 };
+
+/**
+ * Las piezas que viajan dentro de una parrilla salen con la misma portada que una pieza suelta
+ * (Rodny, 26 de octubre de 2026: «la subo y me dice guardada pero no aparece»). El editor lee
+ * `item.cover` y aquí nunca se construía, así que una portada recién guardada no aparecía jamás
+ * —y la clave del almacenamiento sí viajaba al navegador—.
+ *
+ * La fusión de la pieza final antigua se queda en `normalizeContentItem`: el portal del cliente la
+ * entrega aparte (`finalAsset` además de `finalAssets`) y el cliente la vería dos veces.
+ */
+const planItems = (plan) => (plan?.contentItems || []).map(withPublicCover);
 
 const filterContentItemData = async (data) => {
   if (!data) return data;
@@ -288,9 +297,11 @@ export const getContentPlanById = async (id) => {
 
   // Frontend Compatibility: items -> contentItems
   if (plan) {
+    const items = planItems(plan);
     return {
       ...normalizeContentPlan(plan),
-      items: plan.contentItems || []
+      contentItems: items,
+      items
     };
   }
 
@@ -323,9 +334,11 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
 
   // Frontend Compatibility: items -> contentItems
   if (plan) {
+    const items = planItems(plan);
     return {
       ...normalizeContentPlan(plan),
-      items: plan.contentItems || []
+      contentItems: items,
+      items
     };
   }
 
@@ -450,9 +463,11 @@ export const getContentPlanByToken = async (token) => {
   if (plan && plan.deletedAt) return null;
 
   if (plan) {
+    const items = planItems(plan);
     return {
       ...normalizeContentPlan(plan),
-      items: plan.contentItems || []
+      contentItems: items,
+      items
     };
   }
 
