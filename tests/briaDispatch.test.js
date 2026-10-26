@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dispatchStage, dispatchReply, isDispatchConfirmation, isDispatchCancellation, dispatchIntent } from '../src/lib/briaDispatchDraft.js';
+import { dispatchStage, dispatchReply, isDispatchConfirmation, isDispatchCancellation } from '../src/lib/briaDispatchDraft.js';
 import { createBriaDispatchService, canDispatch } from '../src/services/briaDispatchService.js';
 import { createBriaConversationService } from '../src/services/briaConversationService.js';
 
@@ -12,9 +12,7 @@ const TODAY = '2026-10-09';
 const noon = (key) => new Date(`${key}T12:00:00.000Z`);
 const pm = { userId: 'u-pm', role: 'PROJECT_MANAGER', isActive: true, modulePermissions: { bria: true, gestion: true, parrillas: true } };
 
-test('dispatch intent, confirmation and cancellation are explicit sentences', () => {
-  for (const q of ['Prepara los pendientes para llegar a tiempo', 'Despacha a producción las piezas de octubre', 'Manda a producción el reel y el carrusel', 'Pasa estas piezas a Kanban']) assert.equal(dispatchIntent(q), true, q);
-  for (const q of ['¿Cómo va Aristea?', 'Revisa la parrilla']) assert.equal(dispatchIntent(q), false, q);
+test('dispatch confirmation and cancellation keep their explicit approval boundary', () => {
   for (const q of ['Despachar a producción', 'Sí, despachar', 'despachalos', 'Confirmo el despacho']) assert.equal(isDispatchConfirmation(q), true, q);
   for (const q of ['Despachar a producción el lunes que viene y luego…', 'El documento dice despachar a producción', 'procede']) assert.equal(isDispatchConfirmation(q), false, q);
   assert.equal(isDispatchCancellation('Cancelar despacho'), true);
@@ -55,8 +53,8 @@ const fakeDb = () => {
 test('preparing resolves people, skips what is already in production or published, and never writes', async () => {
   const db = fakeDb();
   const service = createBriaDispatchService({ db, dispatchItem: async () => { throw new Error('No debe escribir'); }, now: () => noon(TODAY) });
-  await assert.rejects(() => service.prepare({ user: pm, question: '¿Cómo va Aristea?', args: { planId: 'p1', piezas: [{ pieza: 'i1' }] } }), /despachar/i);
-  const draft = await service.prepare({ user: pm, question: 'Prepara los pendientes de producción', args: { planId: 'p1', piezas: [{ pieza: 'i1', responsable: 'Melissa', fecha: '2026-10-12', prioridad: 'alta' }, { pieza: 'i2', responsable: 'Brayan' }, { pieza: 'i3', responsable: 'Brayan' }, { pieza: 'otra', responsable: 'Brayan' }] } });
+  await assert.rejects(() => service.prepare({ user: pm, question: '¿Cómo va Aristea?', args: { planId: 'p1', piezas: [{ pieza: 'i1' }] } }), /pedido/i);
+  const draft = await service.prepare({ user: pm, question: 'Prepara los pendientes de producción', request: { intent: 'PREPARE', evidence: 'Prepara los pendientes de producción' }, args: { planId: 'p1', piezas: [{ pieza: 'i1', responsable: 'Melissa', fecha: '2026-10-12', prioridad: 'alta' }, { pieza: 'i2', responsable: 'Brayan' }, { pieza: 'i3', responsable: 'Brayan' }, { pieza: 'otra', responsable: 'Brayan' }] } });
   const [i1, i2, i3, missing] = draft.items;
   assert.equal(i1.assignee, null, 'two people called Melissa: ask, never pick');
   assert.deepEqual(i1.assigneeCandidates.map((c) => c.name), ['Melissa Castaño', 'Melissa Rojas']);
@@ -66,11 +64,11 @@ test('preparing resolves people, skips what is already in production or publishe
   assert.match(i3.skip, /publicó/);
   assert.match(missing.skip, /no está en esa parrilla/i);
   assert.equal(dispatchStage(draft), 'ASSIGNEE');
-  const fixed = await service.prepare({ user: pm, question: 'Melissa Castaño', previous: draft, args: { planId: 'p1', piezas: [{ pieza: 'i1', responsable: 'Melissa Castaño' }] } });
+  const fixed = await service.prepare({ user: pm, question: 'Melissa Castaño', request: { intent: 'ADJUST', evidence: 'Melissa Castaño' }, previous: draft, args: { planId: 'p1', piezas: [{ pieza: 'i1', responsable: 'Melissa Castaño' }] } });
   assert.equal(fixed.items[0].assignee.name, 'Melissa Castaño');
   assert.equal(fixed.items[0].dueDate, '2026-10-12', 'what was already decided is kept');
   assert.equal(dispatchStage(fixed), 'READY');
-  const defaulted = await service.prepare({ user: pm, question: 'Despacha el reel a producción', args: { planId: 'p1', piezas: [{ pieza: 'i1', responsable: 'Brayan' }] } });
+  const defaulted = await service.prepare({ user: pm, question: 'Despacha el reel a producción', request: { intent: 'PREPARE', evidence: 'Despacha el reel a producción' }, args: { planId: 'p1', piezas: [{ pieza: 'i1', responsable: 'Brayan' }] } });
   assert.equal(defaulted.items[0].dueDate, '2026-10-14', 'without a date, the publication day, like the grid button');
   assert.equal(defaulted.items[0].priority, 'NORMAL');
 });

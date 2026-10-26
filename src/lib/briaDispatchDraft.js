@@ -11,9 +11,6 @@ export const DISPATCH_CONFIRM = 'Despachar a producción';
 export const DISPATCH_CANCEL = 'Cancelar despacho';
 export const DISPATCH_MAX_ITEMS = 20;
 
-/** Pedir que piezas pasen a producción. Revisar o preguntar por una cuenta no lo es. */
-export const dispatchIntent = (question) => /(despach|(manda|mandar|envia|enviar|pasa|pasar)\b[^.!?]{0,60}\b(produccion|kanban)|prepara(r|me)? (los |las )?(pendientes|tareas)( de produccion)?)/.test(fold(question));
-
 /** La confirmación es una frase corta y completa; dentro de un texto más largo no cuenta. */
 export const isDispatchConfirmation = (question) => /^(?:(?:si|ok|vale|dale)[,. ]+)?(?:despachar(?: a produccion)?|despachalos|despachalas|confirmo el despacho)[.! ]*$/.test(fold(question));
 export const isDispatchCancellation = (question) => /^(?:cancelar (?:el )?despacho|cancela el despacho|no despachar)[.! ]*$/.test(fold(question));

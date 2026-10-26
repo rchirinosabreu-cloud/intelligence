@@ -1,6 +1,7 @@
 import { canDispatch } from './briaDispatchService.js';
 import { dispatchStage } from '../lib/briaDispatchDraft.js';
 import { wrapLegacyAction, actionReply } from '../lib/briaActions.js';
+import { PREPARATION_REQUEST_SCHEMA } from '../lib/briaPreparation.js';
 
 // La herramienta solo prepara: el modelo no tiene forma de despachar. El servidor despacha cuando la persona
 // escribe «Despachar a producción» sobre el resumen guardado (ver briaConversationService).
@@ -9,6 +10,7 @@ export const createBriaDispatchTools = (service) => service ? [{
   description: 'Prepara o ajusta un despacho a producción: varias piezas de una misma parrilla, cada una con responsable, fecha de entrega y prioridad. NO crea tareas: muestra el resumen y la persona confirma. Úsala cuando la persona pida despachar, mandar a producción o preparar los pendientes de producción de una parrilla. Antes localiza la parrilla con parrilla_de_cliente y usa los ids de sus piezas; no incluyas las que ya están en producción ni las publicadas. Una corrección en el chat ajusta el mismo despacho.',
   allowed: canDispatch,
   parameters: { type: 'object', properties: {
+    request: PREPARATION_REQUEST_SCHEMA,
     planId: { type: 'string', description: 'Id de la parrilla, de parrilla_de_cliente.' },
     piezas: { type: 'array', maxItems: 20, items: { type: 'object', properties: {
       pieza: { type: 'string', description: 'Id de la pieza.' },
@@ -17,10 +19,10 @@ export const createBriaDispatchTools = (service) => service ? [{
       prioridad: { type: ['string', 'null'], enum: ['normal', 'alta', null] }
     }, required: ['pieza', 'responsable', 'fecha', 'prioridad'], additionalProperties: false } },
     nuevo: { type: 'boolean', description: 'Solo si la persona pide otro despacho distinto.' }
-  }, required: ['planId', 'piezas'], additionalProperties: false },
+  }, required: ['request', 'planId', 'piezas'], additionalProperties: false },
   async run(args, ctx) {
     const previous = ctx.pendingAction?.type === 'DISPATCH' ? ctx.pendingAction.draft : ctx.dispatchDraft;
-    const draft = await service.prepare({ user: ctx.user, args, question: ctx.question, previous });
+    const draft = await service.prepare({ user: ctx.user, args, request: args.request ? { intent: args.request.intent, evidence: ctx.question } : undefined, question: ctx.question, previous });
     const action = wrapLegacyAction('DISPATCH', draft, { title: `Despacho a producción de ${draft.client?.name || 'la cuenta'}` });
     const reply = actionReply(action);
     return { data: { stage: dispatchStage(draft), draft, message: reply.answer, created: false }, pendingAction: action, actionReply: reply, quickReplies: reply.quickReplies };

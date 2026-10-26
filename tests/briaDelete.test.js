@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { deleteStage, deleteReply, isDeleteConfirmation, isDeleteCancellation, deleteIntent, deleteResultText } from '../src/lib/briaDeleteDraft.js';
+import { deleteStage, deleteReply, isDeleteConfirmation, isDeleteCancellation, deleteResultText } from '../src/lib/briaDeleteDraft.js';
 import { createBriaDeleteService, canDeleteWithBria, deleteProblem } from '../src/services/briaDeleteService.js';
 import { createBriaConversationService } from '../src/services/briaConversationService.js';
 import { createBriaDeleteTools } from '../src/services/briaDeleteTools.js';
@@ -13,9 +13,7 @@ import { buildInstructions } from '../src/lib/briaAssistant.js';
 const pm = { userId: 'u-pm', role: 'PROJECT_MANAGER', isActive: true, modulePermissions: { bria: true, gestion: true } };
 const otherPm = { userId: 'u-sara', role: 'PROJECT_MANAGER', isActive: true, modulePermissions: { bria: true, gestion: true } };
 
-test('intent, confirmation and cancellation are explicit sentences', () => {
-  for (const q of ['Elimina el pendiente de la portada', 'Borra esa tarea', 'Quítame el pendiente repetido', 'Ese pendiente hay que eliminarlo']) assert.equal(deleteIntent(q), true, q);
-  for (const q of ['¿Qué tengo pendiente hoy?', 'Cierra la tarea', 'Devuelve el pendiente a Sara']) assert.equal(deleteIntent(q), false, q);
+test('confirmation and cancellation keep their explicit approval boundary', () => {
   for (const q of ['Eliminar pendiente', 'Eliminar', 'Sí, eliminar', 'elimínalo', 'Borrar los pendientes', 'Confirmo la eliminación']) assert.equal(isDeleteConfirmation(q), true, q);
   for (const q of ['Eliminar pendiente de la semana que viene cuando…', 'El documento dice eliminar', 'procede', 'ok']) assert.equal(isDeleteConfirmation(q), false, q);
   for (const q of ['No eliminar', 'No lo elimines', 'Cancelar eliminación', 'Déjalo']) assert.equal(isDeleteCancellation(q), true, q);
@@ -60,9 +58,9 @@ const fakeDb = () => {
 test('preparing resolves each task, says why one cannot be deleted, and never writes', async () => {
   const db = fakeDb();
   const service = createBriaDeleteService({ db, deleteTask: async () => { throw new Error('No debe escribir'); } });
-  await assert.rejects(() => service.prepare({ user: pm, question: '¿Cómo va Aristea?', args: { tareas: ['t1'], motivo: null } }), /eliminar/i);
+  await assert.rejects(() => service.prepare({ user: pm, question: '¿Cómo va Aristea?', args: { tareas: ['t1'], motivo: null } }), /pedido/i);
   await assert.rejects(() => service.prepare({ user: { ...pm, modulePermissions: { bria: true } }, question: 'Elimina el pendiente', args: { tareas: ['t1'], motivo: null } }), { status: 403 });
-  const draft = await service.prepare({ user: pm, question: 'Elimina estos pendientes, están repetidos', args: { tareas: ['t1', 't2', 't3', 't4', 'nada'], motivo: null } });
+  const draft = await service.prepare({ user: pm, question: 'Elimina estos pendientes, están repetidos', request: { intent: 'PREPARE', evidence: 'Elimina estos pendientes, están repetidos' }, args: { tareas: ['t1', 't2', 't3', 't4', 'nada'], motivo: null } });
   const [t1, t2, t3, t4, missing] = draft.items;
   assert.deepEqual([t1.title, t1.client, t1.assignee, t1.status, t1.skip], ['Portada de octubre', 'Aristea', 'Sara', 'PENDIENTE', undefined], 'a project manager deletes anyone’s open task');
   assert.equal(t2.skip, undefined);
@@ -70,7 +68,7 @@ test('preparing resolves each task, says why one cannot be deleted, and never wr
   assert.match(t4.skip, /privado que no puedes abrir/, 'a manager role does not open a private task');
   assert.equal(missing.skip, 'Ya no existe.');
   assert.equal(deleteStage(draft), 'REASON');
-  const withReason = await service.prepare({ user: pm, previous: draft, question: 'Está repetido', args: { tareas: [], motivo: 'Está repetido' } });
+  const withReason = await service.prepare({ user: pm, previous: draft, question: 'Está repetido', request: { intent: 'ADJUST', evidence: 'Está repetido' }, args: { motivo: 'Está repetido' } });
   assert.equal(withReason.reason, 'Está repetido');
   assert.equal(withReason.items.length, 5, 'what was already prepared is kept');
   assert.equal(deleteStage(withReason), 'READY');
@@ -165,7 +163,7 @@ test('the tool only prepares, needs Bria and Gestión, and Bria is told never to
   assert.equal(canDeleteWithBria({ ...pm, modulePermissions: { bria: true } }), false);
   const [tool] = createBriaDeleteTools({ prepare: async ({ args }) => ({ id: 'd', ownerId: 'u-pm', status: 'DRAFT', reason: args.motivo, items: [{ taskId: 't1', title: 'Portada' }] }) });
   assert.equal(tool.name, 'preparar_eliminacion');
-  assert.deepEqual(tool.parameters.required, ['tareas', 'motivo']);
+  assert.deepEqual(tool.parameters.required, ['request', 'motivo']);
   const out = await tool.run({ tareas: ['t1'], motivo: null }, { user: pm, question: 'Elimina la portada', deleteDraft: null });
   assert.equal(out.data.deleted, false);
   assert.equal(out.data.stage, 'REASON');

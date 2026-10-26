@@ -11,6 +11,28 @@ const user = { id: 'u', userId: 'u', role: 'ADMIN' };
 const plan = { investigar: true, continuar: false, actualidad: true, localizarTrabajo: true, guardarSeguimiento: true, prepararCambios: false, asunto: 'Entrega del portal', objetivo: 'Determinar riesgo y opciones de la entrega', areas: ['TAREAS'], condiciones: ['La entrega está verificada'] };
 const context = { inquiryPlanner: async () => ({ plan }), now: () => new Date('2026-10-24T20:00:00Z') };
 
+test('a semantic conversation-only turn needs neither an operational catalog nor tool execution', async () => {
+  let calls = 0, modelCalls = 0;
+  const result = await runAssistant({ user, question: 'Gracias, con eso cerramos.', tools: [...briaInvestigationTools, { name: 'consultar_datos', allowed: () => true, parameters: {}, run: async () => { calls++; return { data: {} }; } }],
+    context: { inquiryPlanner: async () => ({ plan: { ...plan, investigar: false, guardarSeguimiento: false, soloConversacion: true } }) },
+    ai: { generate: async request => { assert.deepEqual(request.tools, []); return modelCalls++ === 0 ? { functionCalls: [{ id: 'unexpected', name: 'consultar_datos', args: {} }] } : { text: 'Listo, quedó cerrado.' }; } }
+  });
+  assert.equal(result.answer, 'Listo, quedó cerrado.');
+  assert.equal(calls, 0);
+  assert.equal(result.pendingAction, undefined);
+});
+
+test('the intent planner sees the active draft as data so a scope question can stay in its conversation', async () => {
+  const pendingAction = { id: 'review-1', status: 'DRAFT', type: 'TASK_DELETE', draft: { reason: 'Trabajo descartado', items: [{ taskId: 't', title: 'Trabajo' }], selection: { filters: { responsable: 'Alex' }, matched: 1 } } };
+  let received;
+  await runAssistant({ user, question: '¿Incluye lo que no tiene fecha?', tools: briaInvestigationTools, context: { pendingAction, inquiryPlanner: async args => { received = args.pendingAction; return { plan: { investigar: false } }; } }, ai: { generate: async () => ({ text: 'El filtro no excluye los trabajos sin fecha.' }) } });
+  assert.deepEqual(received, pendingAction);
+  await planInquiry({ question: '¿Incluye lo que no tiene fecha?', pendingAction, history: [], today: '2026-10-26', ai: { generate: async request => {
+    assert.deepEqual(JSON.parse(request.input[0].content).borradorActual, pendingAction);
+    return { text: JSON.stringify({ ...plan, investigar: false, guardarSeguimiento: false }) };
+  } } });
+});
+
 test('full catalog and conversation answer an agency overview without inventing a saved case', async () => {
   let step = 0;
   const fixture = createFullInquiryFixture({ generate: async request => {

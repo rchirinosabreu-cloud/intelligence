@@ -2,6 +2,7 @@ import { actionStage, LEGACY_ACTIONS } from './briaActions.js';
 import { taskDraftItems } from './briaTaskDraft.js';
 import { taskFileLabel } from './briaTaskMaterials.js';
 import { humanDate } from './briaDate.js';
+import { deleteScope } from './briaDeleteDraft.js';
 
 // Documento de aprobación, separado de la voz del modelo. No interpreta mensajes.
 // Se obtiene del estado efectivo; la prosa nunca elige qué campos se ejecutarán.
@@ -22,7 +23,8 @@ export const actionReviewText = action => {
     ].join('\n'));
   } else if (action.type === 'DISPATCH' || action.type === 'TASK_DELETE') {
     const draft = action.draft;
-    lines = [action.title, draft.client?.name ? `Cliente: ${draft.client.name}` : null, ...draft.items.map(item => item.skip ? `${item.title}: excluido (${item.skip})` :
+    const scope = action.type === 'TASK_DELETE' ? deleteScope(draft) : null;
+    lines = [action.title, ...(scope ? [`Para eliminar: ${scope.selected} · Excluidas: ${scope.excluded}`, scope.description] : []), draft.client?.name ? `Cliente: ${draft.client.name}` : null, ...draft.items.map(item => item.skip ? `${item.title}: excluido (${item.skip})` :
       action.type === 'DISPATCH' ? `${item.title}${item.format ? ` · ${item.format}` : ''}${item.publishDay ? ` · Publicación: ${humanDate(item.publishDay)}` : ''} → ${item.assignee?.name} · Entrega: ${humanDate(item.dueDate)} · ${item.priority}` :
         `${item.title}${item.client ? ` · ${item.client}` : ''}${item.assignee ? ` · ${item.assignee}` : ''}${item.status ? ` · ${item.status}` : ''}`),
     ...(action.type === 'TASK_DELETE' ? [`Motivo: ${draft.reason}`, 'Eliminación definitiva de la tarea, conversación y adjuntos; conserva el registro de eliminación.'] : [])];
