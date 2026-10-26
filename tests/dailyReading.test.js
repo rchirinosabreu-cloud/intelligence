@@ -57,7 +57,8 @@ test('the manual of criteria goes into the digest, each decision keeps the rule 
   const { text } = buildMorningBrief({ recipientName: 'Rodny', reading, scope: { clientIds: null, people: true } });
   // Rodny, 20 de octubre de 2026: «no quiero que debajo de ningún mensaje aparezcan los criterios o reglas, eso le resta
   // naturalidad». La regla guía la decisión y queda guardada; el mensaje no la recita, ni a la dirección ni a nadie.
-  assert.match(text, /1\. \*\*Destrabar las aprobaciones de Foobespain\.\*\*[^\n]*\n   - Se ve en: [^\n]*\n   - Pídemelo así/);
+  assert.match(text, /1\. \*\*Destrabar las aprobaciones de Foobespain\.\*\*/);
+  assert.doesNotMatch(text, /Se ve en:|Pídemelo así/);
   assert.doesNotMatch(text, /Regla \d|criterio/i);
   assert.equal(reading.decisions[0].rule.id, 'equipo-r4');
   const direction = validateDailyReading({ ...modelAnswer, decisiones: [{ ...modelAnswer.decisiones[0], regla: 'equipo-r6' }] }, { signals: SIGNALS, clients: CLIENTS, day: DAY, criteria: CRITERIA });
@@ -106,10 +107,11 @@ test('the model proposes, the code keeps only what a real signal backs, and drop
 
 test('without the model, Bria still reads: the strongest signals with the platform’s own words', () => {
   const out = fallbackDailyReading({ signals: SIGNALS, summary: SUMMARY, day: DAY });
-  assert.deepEqual(out.decisions.map((d) => d.title), ['Destrabar las aprobaciones de Foobespain', 'Conversar con Melissa sobre sus vencidas', 'Revisar la cuenta de Aristea']);
+  assert.deepEqual(out.decisions.map((d) => d.title), ['Revisar el compromiso de Foobespain', 'Conversar con Melissa sobre sus vencidas', 'Revisar el compromiso de Aristea']);
   assert.equal(out.decisions[1].kind, 'CONVERSAR');
-  assert.equal(out.decisions[0].why, SIGNALS[0].text);
-  assert.match(out.decisions[0].ask, /Redáctame un mensaje por WhatsApp para Foobespain/);
+  assert.equal(out.decisions[0].kind, 'VIGILAR');
+  assert.deepEqual(out.decisions[0].evidence, [SIGNALS[0].id]);
+  assert.equal(out.decisions[0].ask, null, 'rules preserve the signal without prescribing work from a semaphore');
   assert.equal(out.overview, codeOverview(SUMMARY));
   assert.equal(codeOverview(SUMMARY), 'Hoy hay 1 cuenta en rojo y 1 en amarillo de 3 con contrato medible; el equipo tiene 6 tareas vencidas y 2 devueltas.');
   assert.deepEqual(fallbackDailyReading({ signals: [SIGNALS[3]], summary: SUMMARY, day: DAY }).decisions, [], 'an improvement is not a decision');
@@ -136,7 +138,7 @@ test('what direction keeps declining is left out and the rest is renumbered, unl
   const milder = composeReading({ day: DAY, baseDay: '2026-10-19', summary: SUMMARY, signals: SIGNALS.map((s) => (s.id === 'APROBACION_DETENIDA:c1' ? { ...s, severity: 2 } : s)), clients: CLIENTS, model, suppressed });
   assert.deepEqual(milder.decisions.map((d) => [d.id, d.title]), [['2026-10-20:1', 'No cargarle más trabajo a Melissa esta semana'], ['2026-10-20:2', 'Completar la parrilla de Aristea']]);
   const brief = buildMorningBrief({ recipientName: 'Rodny', reading: milder, scope: { clientIds: null, people: true }, log: { decided: [], undecided: [{ id: '2026-10-19:1', title: 'Revisar Endova' }] } });
-  assert.match(brief.text, /registraron 30 h\.\n\nDe ayer no supe qué pasó con «Revisar Endova».*\n\n\*\*Lo que haría hoy\*\*/s, 'yesterday’s decisions go before today’s');
+  assert.ok(brief.text.indexOf('De ayer no supe qué pasó') < brief.text.indexOf('**Completar la parrilla'), 'yesterday’s decisions go before today’s');
 });
 
 const READING = composeReading({ day: DAY, baseDay: '2026-10-19', summary: SUMMARY, signals: SIGNALS, clients: CLIENTS, model: validateDailyReading(modelAnswer, { signals: SIGNALS, clients: CLIENTS, day: DAY }) });
@@ -146,19 +148,17 @@ test('the morning message for direction: the day, what to do, what not to do, wh
   assert.equal(title, 'Lectura de la mañana · martes 20 de octubre');
   assert.match(text, /^Buenos días, Rodny\. Así amaneció la agencia este martes 20 de octubre\./);
   assert.match(text, /La semana arranca con Foobespain detenida/);
-  assert.match(text, /- Cuentas: 1 en rojo, 1 en amarillo \(antes 0\) y 1 en verde \(antes 2\)\./);
-  assert.match(text, /- Equipo: 6 tareas vencidas \(antes 4\), 2 devueltas y 40 abiertas\./);
-  assert.match(text, /- Desde la lectura del lunes 19 de octubre se cerraron 9 tareas y se registraron 30 h\./);
-  assert.match(text, /\*\*Lo que haría hoy\*\*\n\n1\. \*\*Destrabar las aprobaciones de Foobespain\.\*\* Cuatro piezas/);
-  assert.match(text, /   - Se ve en: Foobespain lleva 8 días seguidos con piezas esperando su aprobación \(hoy 4\)\.\n/);
+  assert.equal(READING.summary.team.overdue, 6, 'counters remain in the full reading');
+  assert.equal(READING.summary.sinceBase.closedTasks, 9);
+  assert.match(text, /1\. \*\*Destrabar las aprobaciones de Foobespain\.\*\* Cuatro piezas/);
+  assert.doesNotMatch(text, /- Cuentas:|- Equipo:|Se ve en:|Pídemelo así/);
   // Rodny, 20 de octubre de 2026, al leer la primera lectura real: «estos links de “ver” no me sirven de nada … con el
   // informe que tengo es suficiente». El mensaje no lleva enlaces; la url se queda en la señal para el pulso.
   assert.doesNotMatch(text, /\[Ver\]|\]\(\//);
-  assert.match(text, /   - Pídemelo así: «Redáctame un mensaje por WhatsApp para Foobespain/);
-  assert.match(text, /\*\*Lo que no haría\*\*\n\n- \*\*No cargarle más trabajo a Melissa esta semana\.\*\* Acumula vencidas/);
-  assert.match(text, /\*\*Lo que mejoró\*\*\n\n- Endova volvió a verde: estaba en rojo\./);
+  assert.match(text, /\*\*No cargarle más trabajo a Melissa esta semana\.\*\* Acumula vencidas/);
+  assert.ok(READING.signals.some(signal => signal.direction === 'mejor'), 'improvements remain available in the full reading');
   assert.doesNotMatch(text, /\*\*También cambió\*\*/, 'every worse signal is already behind a decision');
-  assert.match(text, /Empecé a guardar la foto diaria el 8 de octubre/);
+  assert.doesNotMatch(text, /Empecé a guardar la foto diaria/);
   assert.doesNotMatch(text, /\n{3,}/);
 });
 
@@ -229,7 +229,7 @@ test('a model abstention covers its problem without adding a contradictory fallb
   const model = validateDailyReading({ decisiones: [{ titulo: 'No insistir por aprobaciones hasta revisar', porque: signals[0].text, tipo: 'NO_HACER', evidencia: [signals[0].id] }] }, { signals, day: DAY });
   const reading = composeReading({ day: DAY, summary: SUMMARY, signals, model });
   assert.deepEqual(reading.decisions.map((decision) => [decision.kind, decision.source, decision.evidence]), [
-    ['NO_HACER', 'MODELO', ['APROBACION_DETENIDA:c1']], ['HACER', 'REGLA', ['DEVOLUCIONES:c1']]
+    ['NO_HACER', 'MODELO', ['APROBACION_DETENIDA:c1']], ['VIGILAR', 'REGLA', ['DEVOLUCIONES:c1']]
   ]);
   assert.equal(reading.coverage.representedSignals, 2);
 });

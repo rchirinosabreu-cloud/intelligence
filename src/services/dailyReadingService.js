@@ -18,8 +18,15 @@ import { clientSnapshot, personSnapshot, readSignals, levelLabel } from '../lib/
 import { buildDailyDigest, buildDailyReadingRequest, parseDailyReading, validateDailyReading, composeReading, buildMorningBrief, visibleReadingDecisions } from '../lib/dailyReading.js';
 import { suppressedDecisions, decisionOutcome, scorecard, resolveDecisionRef, normalizeVerdict, VERDICTS, SUPPRESS_DAYS, OUTCOME_AFTER_DAYS, OUTCOME_UNTIL_DAYS } from '../lib/decisionLog.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
-import { factAccess, AGENCY_ENTITY } from '../lib/briaAgencyFacts.js';
+import { factAccess, factError, factVisible, factKey, AGENCY_ENTITY } from '../lib/briaAgencyFacts.js';
+import { canUseBria } from '../lib/briaLivingMemory.js';
+import { projectReadingContext, dailyContextSources } from '../lib/dailyReadingContext.js';
+import { decisionContract } from './briaDecisionContext.js';
 import { createBriaAgencyFactRepository } from './briaAgencyFactRepository.js';
+import { createBriaKnowledgeRepository } from './briaKnowledgeRepository.js';
+import { resolveKnowledgeActor } from './briaKnowledgeApplication.js';
+import { buildBusinessMemoryContext, isBusinessLearning } from '../lib/briaBusinessMemory.js';
+import { learningVisible } from '../lib/briaKnowledge.js';
 import { createDailyReadingRepository } from './dailyReadingRepository.js';
 import { createBriaProactiveRepository } from './briaProactiveRepository.js';
 import { createBriaConversationRepository } from './briaConversationRepository.js';
@@ -56,7 +63,8 @@ const reviewDecision = (decision, index, { reading, signalsById, entry, user }) 
     id: decision.id, numero: index + 1, fecha: reading.day,
     titulo: decision.title, porque: decision.why, tipo: decision.kind, sobre: decision.subjectName,
     pedido: decision.ask, seVeEn: evidence.map(row => row.text), anotada: entry?.verdict || null,
-    origen: ['MODELO', 'REGLA'].includes(decision.source) ? decision.source : 'NO_REGISTRADO',
+    origen: decision.originalSource || (['MODELO', 'REGLA'].includes(decision.source) ? decision.source : 'NO_REGISTRADO'),
+    requiereContraste: Boolean(decision.needsContextReview),
     alcance: [...subjects.values()],
     fuentes: evidence.map(row => ({ id: row.id, fecha: reading.day, comparadaCon: reading.baseDay || null, sobre: row.subjectName, texto: row.text, enlace: row.url || null })),
     fuentesFaltantes: (decision.evidence || []).filter(id => !signalsById.has(id)),
@@ -64,9 +72,9 @@ const reviewDecision = (decision, index, { reading, signalsById, entry, user }) 
     cambioPreparado: false, ejecucionAutorizada: false,
     quienDecide: user.teamMember?.name || user.name || 'La persona que revisa esta propuesta',
     anotacion: entry ? {
-      veredicto: entry.verdict, nota: entry.note || null, revision: entry.revision || 1, fecha: entry.decidedAt,
-      desenlace: entry.outcome || null, fechaDesenlace: entry.outcomeDay || null, evidenciaDesenlace: entry.outcomeText || null,
-      historia: entry.history || []
+      veredicto: entry.verdict, nota: decision.needsContextReview ? null : entry.note || null, revision: entry.revision || 1, fecha: entry.decidedAt,
+      desenlace: entry.outcome || null, fechaDesenlace: entry.outcomeDay || null, evidenciaDesenlace: decision.needsContextReview ? null : entry.outcomeText || null,
+      historia: decision.needsContextReview ? [] : entry.history || []
     } : null
   };
 };
@@ -83,22 +91,103 @@ const awaitsClient = (item) => item.status === 'EN_REVISION' || approvalState(it
 // Studio», tema «criterio»). Se lee con acceso de administración para que el modelo vea el criterio entero; en el
 // mensaje de cada persona, una regla de dirección se cita solo a quien puede verla.
 const SYSTEM_READER = { role: 'ADMIN', isActive: true, modulePermissions: { bria: true, financiero: true } };
-const defaultCriteria = async () => {
-  const facts = createBriaAgencyFactRepository({ pool: getSidecarPool(), workspace: 'application' });
+export const readDailyCriteria = async ({ factRepository } = {}) => {
+  const facts = factRepository || createBriaAgencyFactRepository({ pool: getSidecarPool(), workspace: 'application' });
   const rows = await facts.search(factAccess(SYSTEM_READER), { entity: AGENCY_ENTITY, topic: 'criterio', limit: 60 });
-  return rows.filter((row) => row.origin === 'EQUIPO').map((row) => ({ id: row.id, text: row.statement, purpose: row.purpose }))
+  return rows.filter((row) => row.origin === 'EQUIPO' && row.certainty === 'CONFIRMADO').map((row) => ({ id: row.id, text: row.statement, purpose: row.purpose, sensitivity: row.sensitivity, revision: row.revision }))
     .sort((a, b) => (Number(/Regla (\d+)/.exec(a.text)?.[1]) || 99) - (Number(/Regla (\d+)/.exec(b.text)?.[1]) || 99));
+};
+
+export const readDailyMemoryContext = async ({ clients, user, db, operations, sourceContext = null,
+  factRepository, knowledgeRepository, resolveBusinessActor = resolveKnowledgeActor }) => {
+  let access = factAccess(SYSTEM_READER);
+  const authorize = user ? async () => {
+    let current;
+    try { current = await db.user.findUnique({ where: { id: user.userId || user.id }, select: { id: true, name: true, role: true, isActive: true, modulePermissions: true, financialRole: true, sessionVersion: true, teamMember: { select: { id: true, name: true, isActive: true } } } }); }
+    catch { throw factError('No se pudo comprobar el acceso a esta lectura.', 503, 'BRIA_READING_ACCESS_UNAVAILABLE'); }
+    if ((Number.isInteger(user.sessionVersion) && current?.sessionVersion !== user.sessionVersion) || (user.exp && user.exp * 1000 <= Date.now())) throw factError('Tu sesión ya no está activa.', 401, 'TOKEN_REVOKED');
+    if (!current?.isActive || !current.teamMember?.isActive || !canUseBria(current)) throw factError('Bria ya no está disponible para esta cuenta.', 403, 'BRIA_DISABLED');
+    return { access: factAccess(current), viewer: current };
+  } : null;
+  if (authorize) access = (await authorize()).access;
+  const facts = factRepository || createBriaAgencyFactRepository({ pool: getSidecarPool(), workspace: 'application' });
+  const knowledge = knowledgeRepository || createBriaKnowledgeRepository({ pool: getSidecarPool(), workspace: 'application' });
+  const accountFacts = async () => {
+    const catalog = await db.client.findMany({ select: { id: true, name: true } });
+    const names = new Map();
+    for (const client of catalog) names.set(factKey(client.name), (names.get(factKey(client.name)) || 0) + 1);
+    const requested = clients.map(client => ({ ...client, ambiguous: (names.get(factKey(client.name)) || 0) !== 1 }));
+    return (await Promise.all(Array.from({ length: Math.ceil(requested.length / 60) }, (_, index) => facts.searchClients(factAccess(SYSTEM_READER), requested.slice(index * 60, (index + 1) * 60), 7)))).flat();
+  };
+  // The global analysis has administration access. Delivery reauthorizes all
+  // of those sources for its recipient before exposing any generated prose.
+  let operationsNow, rows, agencyFacts, businessRows;
+  try { [operationsNow, rows, agencyFacts, businessRows] = await Promise.all([
+    operations.listOperations(),
+    accountFacts(),
+    facts.search(factAccess(SYSTEM_READER), { entity: AGENCY_ENTITY, excludeTopics: ['criterio'], excludeEntityTypes: ['persona'], limit: 13 }),
+    knowledge.businessContext({ ref: 'bria-daily-reading', role: 'ADMIN', accountIds: [] }, clients, 7)
+  ]); }
+  catch (error) { await authorize?.(); throw error; }
+  const contracts = new Map(operationsNow.map(client => [client.id, decisionContract(client.contract)]));
+  const business = buildBusinessMemoryContext(businessRows, clients);
+  const describeFact = fact => ({ id: fact.id, revision: fact.revision, statement: fact.statement, topic: fact.topic, certainty: fact.certainty,
+    purpose: fact.purpose, sensitivity: fact.sensitivity, validFrom: fact.validFrom, validUntil: fact.validUntil,
+    observedOn: fact.observedOn, asOf: fact.asOf, origin: fact.origin, actorName: fact.actorName, sources: fact.sources });
+  const context = { access, agency: { state: 'CONSULTADO', partial: agencyFacts.length > 12 || business.agency.partial, facts: agencyFacts.slice(0, 12).map(describeFact), learnings: business.agency.learnings }, accounts: clients.map(client => {
+    const found = rows.filter(fact => (fact.contextClientId || fact.clientId) === client.id);
+    const previous = business.accounts.find(account => account.clientId === client.id);
+    return {
+      clientId: client.id, state: contracts.has(client.id) ? 'CONSULTADO' : 'NO_DISPONIBLE', partial: found.length > 6 || previous?.partial,
+      contract: contracts.get(client.id) || null,
+      facts: found.slice(0, 6).map(describeFact), learnings: previous?.learnings || []
+    };
+  }) };
+  // Re-read every historical dependency under its original ACL too. A source
+  // newly hidden from the bounded context must not survive in cached prose.
+  context.revalidate = authorize ? async (criteria = []) => {
+    let authorized = await authorize();
+    const actor = await resolveBusinessActor(authorized.viewer, db);
+    const sources = [...dailyContextSources(sourceContext), ...dailyContextSources({ ...context, criteria })];
+    const [readableFacts, readableBusiness] = await Promise.all([
+      facts.getMany(authorized.access, sources.filter(source => source.kind === 'hecho_agencia').map(source => source.id)),
+      knowledge.getBusinessMany(actor, sources.filter(source => source.kind === 'aprendizaje').map(source => source.id))
+    ]);
+    authorized = await authorize();
+    const currentActor = await resolveBusinessActor(authorized.viewer, db);
+    return { ...authorized, factSourceIds: readableFacts.filter(row => factVisible(row, authorized.access)).map(row => row.id),
+      businessAccess: { readableIds: readableBusiness.filter(row => isBusinessLearning(row) && learningVisible(row, currentActor)).map(row => row.id) } };
+  } : null;
+  return context;
 };
 
 export const createDailyReadingService = ({
   db = prisma, repository, proactive, conversations, operations = clientOperationsService, generate = defaultGenerate,
-  criteria = defaultCriteria, now = () => new Date(), notify = createNotification, listPeople = listBriaPeople, logger = console,
-  whatsapp = alertByWhatsApp
+  criteria = readDailyCriteria, now = () => new Date(), notify = createNotification, listPeople = listBriaPeople, logger = console,
+  whatsapp = alertByWhatsApp, memoryContext = readDailyMemoryContext
 } = {}) => {
   const repo = repository || createDailyReadingRepository({ pool: getSidecarPool() });
   const deliveries = proactive || createBriaProactiveRepository({ pool: getSidecarPool() });
   const chats = () => conversations || createBriaConversationRepository({ pool: getSidecarPool(), workspace: 'application' });
   const actorOf = (user) => ({ ref: user.id, name: user.name, role: user.role, permissions: user.modulePermissions || {} });
+  const readContext = async (clients, user = null, sourceContext = null) => {
+    let context, rules = [], criteriaState = 'CONSULTADO';
+    try { context = await memoryContext({ clients, user, db, operations, sourceContext }); }
+    catch (error) {
+      if ([401, 403].includes(error?.status) || error?.code === 'BRIA_READING_ACCESS_UNAVAILABLE') throw error;
+      logger.error('[DailyReading] BRIA_CONTEXT_UNAVAILABLE');
+      context = { agency: { state: 'NO_DISPONIBLE', partial: true, facts: [], learnings: [] }, accounts: clients.map(client => ({ clientId: client.id, state: 'NO_DISPONIBLE', partial: true, contract: null, facts: [], learnings: [] })) };
+    }
+    try { rules = await criteria(); }
+    catch { criteriaState = 'NO_DISPONIBLE'; logger.error('[DailyReading] BRIA_CRITERIA_UNAVAILABLE'); }
+    const authorized = await context.revalidate?.(rules);
+    return { ...context, ...authorized, criteria: rules, criteriaState };
+  };
+  const currentView = async (user, reading) => {
+    const snapshot = await repo.snapshot(reading.day);
+    const context = await readContext(snapshot.clients, user, reading.context);
+    return { reading: projectReadingContext(reading, context, context.access || factAccess(user)), viewer: context.viewer || user };
+  };
 
   /** Un project manager lee sus cuentas (si no tiene ninguna asignada, la agencia); la carga del equipo, quien tiene Manager. */
   const scopeFor = (user, reading) => {
@@ -168,23 +257,24 @@ export const createDailyReadingService = ({
       }
       const [current, history] = await Promise.all([repo.snapshot(today), repo.history(today, HISTORY_DAYS)]);
       const { baseDay, signals, summary } = readSignals({ today, current, history });
+      const context = await readContext(current.clients);
       let model = null, usage = null, modelName = null, digestText = null;
       if (signals.length) {
         // El manual de criterio: si la memoria no responde, la lectura sale sin él y se anota; nunca se frena por eso.
-        let rules = [];
-        try { rules = await criteria(); } catch (error) { logger.error('[DailyReading] Sin el manual de criterio esta vez:', error?.message || error); }
-        const digest = buildDailyDigest({ today, baseDay, summary, signals, clients: current.clients, criteria: rules });
+        const rules = context.criteria;
+        const digest = buildDailyDigest({ today, baseDay, summary, signals, clients: current.clients, criteria: rules, context });
         digestText = digest.text;
         try {
           const answer = await generate(buildDailyReadingRequest({ digest, today }));
           modelName = answer.model || null; usage = answer.usage || null;
-          model = validateDailyReading(parseDailyReading(answer.text), { signals, clients: current.clients, day: today, criteria: rules });
+          model = validateDailyReading(parseDailyReading(answer.text), { signals, clients: current.clients, day: today, criteria: rules, context });
+          if (model.diagnostics.rejected.length) logger.warn?.('[DailyReading] BRIA_RECOMMENDATIONS_REJECTED', model.diagnostics);
         } catch (error) { logger.error('[DailyReading] El modelo no respondió; Bria lee con las reglas:', error?.message || error); }
       }
       // El libro de decisiones: lo que la dirección descartó tres veces en 30 días no se vuelve a proponer.
       const recent = typeof repo.recentDecisions === 'function' ? await repo.recentDecisions(today, { days: SUPPRESS_DAYS }) : [];
       const suppressed = suppressedDecisions(recent, { today });
-      const reading = composeReading({ day: today, baseDay, summary, signals, clients: current.clients, model, usage, modelName, suppressed });
+      const reading = composeReading({ day: today, baseDay, summary, signals, clients: current.clients, model, usage, modelName, suppressed, context });
       const saved = await repo.saveReading(today, reading, { digest: digestText });
       await this.settleOutcomes(today, signals, current);
       return saved;
@@ -204,14 +294,18 @@ export const createDailyReadingService = ({
     /** Lo que esta persona decidió sobre la lectura anterior y qué pasó, y lo que quedó sin contar, para su mensaje de la mañana. */
     async decisionsFor(user, reading) {
       if (typeof repo.readingsBefore !== 'function') return null;
-      const previous = (await repo.readingsBefore(reading.day, 7))[0];
+      let previous = (await repo.readingsBefore(reading.day, 7))[0];
       if (!previous?.decisions?.length) return null;
+      ({ reading: previous, viewer: user } = await currentView(user, previous));
       const scope = scopeFor(user, previous);
       const visible = visibleReadingDecisions(previous, scope);
       const visibleIds = new Set(visible.map(decision => decision.id));
-      const entries = (await repo.recentDecisions(reading.day, { days: 8, userRef: user.id })).filter((e) => e.dayKey === previous.day && visibleIds.has(e.decisionId));
+      const entries = (await repo.recentDecisions(reading.day, { days: 8, userRef: user.id })).filter((e) => e.dayKey === previous.day && visibleIds.has(e.decisionId)).map(entry => {
+        const decision = visible.find(row => row.id === entry.decisionId);
+        return decision.needsContextReview ? { ...entry, title: decision.title, note: null, outcomeText: null, history: [] } : entry;
+      });
       const noted = new Set(entries.map((e) => e.decisionId));
-      return { decided: entries, undecided: visible.filter((d) => !noted.has(d.id)) };
+      return { decided: entries, undecided: visible.filter((d) => !noted.has(d.id)), sources: dailyContextSources({ ...previous.context, accounts: previous.context.accounts.filter(account => !scope.clientIds || scope.clientIds.has(account.clientId)) }) };
     },
 
     /**
@@ -219,8 +313,9 @@ export const createDailyReadingService = ({
      * «eso no», «la semana que viene»). Si no se entiende a cuál o qué decidió, no se anota y se dice por qué.
      */
     async recordVerdict({ user, ref, veredicto, nota = null, dia = null }) {
-      const reading = dia ? await repo.reading(dia) : await repo.latestReading();
+      let reading = dia ? await repo.reading(dia) : await repo.latestReading();
       if (!reading) return { saved: false, motivo: 'Todavía no hay una lectura con decisiones.' };
+      ({ reading, viewer: user } = await currentView(user, reading));
       const scope = scopeFor(user, reading);
       const visible = visibleReadingDecisions(reading, scope);
       const decision = resolveDecisionRef(ref, visible);
@@ -235,11 +330,14 @@ export const createDailyReadingService = ({
     async deliver(user, reading) {
       const existing = await deliveries.morningBriefDelivery(reading.day, user.id);
       if (existing) return { ...existing, already: true };
+      ({ reading, viewer: user } = await currentView(user, reading));
       let decisions = null;
       try { decisions = await this.decisionsFor(user, reading); }
       catch (error) { logger.error('[DailyReading] Sin el libro de decisiones esta vez:', error?.message || error); }
       const { title, text } = buildMorningBrief({ recipientName: user.teamMember?.name || user.name, reading, scope: scopeFor(user, reading), log: decisions });
-      const chat = await chats().postAssistantNote(actorOf(user), { title, text, metadata: { note: 'LECTURA_MANANA', dayKey: reading.day } });
+      const scope = scopeFor(user, reading);
+      const sources = [...new Map([...dailyContextSources({ ...reading.context, accounts: (reading.context?.accounts || []).filter(account => !scope.clientIds || scope.clientIds.has(account.clientId)) }), ...(decisions?.sources || [])].map(source => [`${source.kind}:${source.id}`, source])).values()];
+      const chat = await chats().postAssistantNote(actorOf(user), { title, text, metadata: { note: 'LECTURA_MANANA', dayKey: reading.day, sources } });
       const delivery = await deliveries.recordMorningBriefDelivery(reading.day, user.id, chat.id);
       try { await notify({ userId: user.id, type: MORNING_BRIEF_NOTIFICATION, message: 'Bria dejó tu lectura de la mañana en el chat.', relatedId: chat.id }); }
       catch (error) { logger.error('[DailyReading] No se pudo avisar a una persona:', error?.message || error); }
@@ -271,8 +369,9 @@ export const createDailyReadingService = ({
      * Respeta el mismo alcance que el mensaje de la mañana.
      */
     async explain({ user, cliente = '', persona = '', days = 14, day = null } = {}) {
-      const reading = day ? await repo.reading(day) : await repo.latestReading();
+      let reading = day ? await repo.reading(day) : await repo.latestReading();
       if (!reading) return { mensaje: 'Todavía no hay una lectura guardada: la primera foto se toma a las 6:00 y la primera lectura sale el siguiente día hábil a las 6:30.' };
+      ({ reading, viewer: user } = await currentView(user, reading));
       const scope = scopeFor(user, reading);
       const visible = (row) => (row.subjectType === 'PERSON' ? scope.people : !scope.clientIds || scope.clientIds.has(row.subjectId));
       const signalsById = new Map(reading.signals.map((row) => [row.id, row]));
@@ -295,6 +394,8 @@ export const createDailyReadingService = ({
         fecha: reading.day, comparadaCon: reading.baseDay, escritaPor: reading.source === 'MODELO' ? 'Bria' : 'las reglas de la plataforma (el modelo no estaba disponible o no hacía falta)',
         historia: `${reading.summary.historyDays} ${reading.summary.historyDays === 1 ? 'foto' : 'fotos'} diarias desde el ${reading.summary.firstDay}`,
         resumen: scope.clientIds ? null : reading.overview,
+        contexto: { accounts: (reading.context?.accounts || []).filter(account => !scope.clientIds || scope.clientIds.has(account.clientId)), agency: reading.context?.agency || null, criteria: reading.context?.criteria || [], criteriaState: reading.context?.criteriaState },
+        contextoActualizado: reading.contextChanged, contextoAviso: reading.contextNotice,
         decisiones: decisions.map((decision, index) => reviewDecision(decision, index, { reading, signalsById, entry: noted.get(decision.id), user })),
         // La lista completa no se recorta al tamaño del saludo. Estos conteos se calculan DESPUÉS del alcance,
         // sin revelar a un PM las cifras de señales o propuestas de las cuentas de otra persona.

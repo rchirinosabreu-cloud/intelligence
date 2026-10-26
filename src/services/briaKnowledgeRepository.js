@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { learningKey, learningVisible, knowledgeError, validateLearning } from '../lib/briaKnowledge.js';
 import { publicEvidence } from '../lib/briaLivingMemory.js';
 import { sourceSearchChunks } from '../lib/briaSourceChunks.js';
+import { businessMemoryClientKeys } from '../lib/briaBusinessMemory.js';
 const selectLearning = "SELECT l.*,to_char(valid_from,'YYYY-MM-DD') AS from_key,to_char(valid_until,'YYYY-MM-DD') AS until_key FROM bria_memory.learnings l";
 const present = row => row && ({ id: row.id, scope: row.scope, entity: row.entity, topic: row.topic, text: row.content, kind: row.kind, status: row.status, validFrom: row.from_key, validUntil: row.until_key, revision: row.revision, subjectRef: row.subject_ref, author: row.actor_name, updatedAt: row.updated_at });
 const searchableText = text => learningKey(String(text).replace(/[\p{L}\p{N}_]{81,}/gu, ' ')).replace(/\u0000/g, '');
@@ -28,6 +29,42 @@ export const createBriaKnowledgeRepository = ({ pool, workspace }) => {
   };
   return {
     workspace,
+    // Lectura compartida con la mañana: solo registros de negocio y con su ACL
+    // original, antes de aplicar límites. El catálogo completo evita atribuir
+    // una enseñanza por nombre a uno de dos homónimos seleccionados parcialmente.
+    async businessContext(actor, clients = [], limit = 7) {
+      const catalog = (await pool.query('SELECT id,name,slug FROM public."Client"')).rows;
+      const requested = businessMemoryClientKeys(clients, catalog);
+      const args = [workspace, actor.role === 'ADMIN', actor.accountIds || [], JSON.stringify(requested), Math.min(Math.max(Number(limit) || 7, 1), 31)];
+      const rows = (await pool.query(`SELECT scoped.*, c.id AS context_client_id
+        FROM jsonb_to_recordset($4::jsonb) AS c(id text, keys text[])
+        CROSS JOIN LATERAL (${selectLearning} WHERE l.workspace=$1 AND l.scope='ACCOUNT' AND l.status='ACTIVE'
+          AND ($2 OR l.entity=ANY($3::text[])) AND l.entity_key=ANY(c.keys)
+          ORDER BY l.updated_at DESC,l.id LIMIT $5) scoped
+        UNION ALL
+        SELECT agency.*, NULL::text AS context_client_id FROM (${selectLearning}
+          WHERE l.workspace=$1 AND l.scope='AGENCY' AND l.status='ACTIVE'
+          ORDER BY l.updated_at DESC,l.id LIMIT $5) agency`, args)).rows;
+      return rows.map(row => ({ ...present(row), contextClientId: row.context_client_id })).filter(row => access(row, actor));
+    },
+    async getBusinessMany(actor, ids = []) {
+      if (!ids.length) return [];
+      const rows = (await pool.query(`${selectLearning} WHERE l.workspace=$1 AND l.id=ANY($2::uuid[]) AND l.status='ACTIVE'
+        AND (l.scope='AGENCY' OR (l.scope='ACCOUNT' AND ($3 OR l.entity=ANY($4::text[]))))`,
+      [workspace, [...new Set(ids)], actor.role === 'ADMIN', actor.accountIds || []])).rows;
+      return rows.map(present).filter(row => access(row, actor));
+    },
+    // Reauthorize exact sources from a conversation without the search cap.
+    // Retired memories remain historical evidence; current business context
+    // has its own ACTIVE-only path and never includes personal preferences.
+    async getMany(actor, ids = []) {
+      if (!ids.length) return [];
+      const rows = (await pool.query(`${selectLearning} WHERE l.workspace=$1 AND l.id=ANY($2::uuid[])
+        AND ((l.scope='PERSONAL' AND l.subject_ref=$3) OR l.scope='AGENCY'
+          OR (l.scope='ACCOUNT' AND ($4 OR l.entity=ANY($5::text[]))))`,
+      [workspace, [...new Set(ids)], actor.ref, actor.role === 'ADMIN', actor.accountIds || []])).rows;
+      return rows.map(present).filter(row => access(row, actor));
+    },
     async list(actor, query = '') {
       // Visibility is enforced before the limit, including personal knowledge hidden from other admins.
       const args = [workspace, actor.ref, actor.role === 'ADMIN', actor.accountIds || []];

@@ -19,7 +19,7 @@ import { normalizeAiUsage, summarizeAiCalls } from './aiUsage.js';
 import { normalizeQuickReplies } from './briaQuickReplies.js';
 import { missingModules } from './modulePermissionRequests.js';
 import { INVESTIGATION_READS, investigationReply } from './briaInvestigation.js';
-import { INQUIRY_READS, HISTORICAL_READS, inquiryGaps, incompleteInquiry, inquiryDeclarations } from './briaInquiry.js';
+import { INQUIRY_READS, HISTORICAL_READS, MEMORY_WRITES, memoryPurposeAllows, inquiryGaps, incompleteInquiry, inquiryDeclarations } from './briaInquiry.js';
 import { reviewedResponse, approvalOptions, conversationalInvestigation } from './briaResponse.js';
 import { humanDate } from './briaDate.js';
 export { humanDate } from './briaDate.js';
@@ -250,7 +250,12 @@ export const runAssistant = async ({
   let investigation = null;
   const previousInvestigation = context.investigation;
   let inquiry = null, nudgedInquiry = false, inquiryRecovery = false;
-  if (context.inquiryPlanner && byName.has('actualizar_seguimiento')) {
+  let memoryAttempted = false, memoryPersisted = false, nudgedMemory = false;
+  const memoryReadSubjects = new Map();
+  const memorySubject = args => args.clientId ? `client:${args.clientId}` : args.entidad || args.entity
+    ? `entity:${String(args.entidad || args.entity).normalize('NFKC').trim().toLowerCase()}` : null;
+  const memoryReads = new Set(['memoria_de_la_agencia', 'consultar_aprendizajes']);
+  if (context.inquiryPlanner && (byName.has('actualizar_seguimiento') || offered.some(tool => MEMORY_WRITES.has(tool.name)))) {
     await context.revalidate?.();
     const planned = await context.inquiryPlanner({ ai, question, history, investigation: previousInvestigation, pendingAction: context.pendingAction, today });
     inquiry = planned.plan;
@@ -264,6 +269,11 @@ export const runAssistant = async ({
     if (inquiry?.investigar && !inquiry.guardarSeguimiento) input.push({ role: 'developer', content: 'Este pedido requiere análisis, no guardar un seguimiento: responde con los hallazgos, sus límites y las alternativas solicitadas en la conversación. No llames actualizar_seguimiento ni exijas condiciones de cierre. No necesitas elegir una tarea individual cuando el alcance es general.' });
     if (inquiry?.investigar) input.push({ role: 'developer', content: `Plan interpretado del pedido (no autoriza cambios): ${JSON.stringify(inquiry)}. Localiza el trabajo por su significado, no por coincidencia literal de título. ${inquiry.localizarTrabajo ? 'Para trabajo actual revisa Gestión y abre el detalle con leer_pendiente antes de usar documentos históricos como explicación.' : 'Revisa las fuentes actuales del alcance general solicitado; no necesitas elegir una tarea individual.'} Consulta en paralelo las áreas independientes. ${inquiry.guardarSeguimiento ? 'Reserva una ronda para actualizar_seguimiento.' : 'Responde el análisis sin guardar un seguimiento.'} Si hay dudas entre candidatos, pregunta; no elijas por cercanía del nombre. Conserva el alcance solicitado y declara cualquier impedimento comprobado. No sustituyas una lectura pendiente por ausencia de datos. Distingue una fecha registrada vencida de un incumplimiento verificado: no propongas mantener una fecha que ya pasó; comprueba si existe otro compromiso vigente. Si una fuente relevante está adjunta o enlazada, busca una capacidad autorizada para leerla; si no logras hacerlo, explica el impedimento observado y el siguiente paso posible, sin inventar fallos de permisos o de formato. El hecho de que una herramienta no traiga un documento no demuestra que sea ilegible. ${inquiry.guardarSeguimiento ? 'Las condiciones de cierre deben comprobar el resultado que preocupa a la persona, además del diagnóstico.' : ''} En el relato conecta los hallazgos con tu juicio y las opciones en lenguaje natural; adapta el detalle a la pregunta, sin convertir los campos internos del seguimiento en una ficha.` });
   }
+  // Propósito interpretado por el plan del servidor; no se acepta un permiso
+  // aportado en argumentos de herramienta o en el contexto de un adjunto.
+  const memoryIntent = inquiryRecovery ? 'NINGUNO' : inquiry?.propositoMemoria || 'NINGUNO';
+  const memoryRequested = memoryIntent !== 'NINGUNO';
+  if (memoryRequested) input.push({ role: 'developer', content: `El mensaje humano tiene propósito de memoria ${memoryIntent}. Consulta lo ya guardado para resolver sujeto, periodo y revisiones. Conserva esta corrección o enseñanza mediante la herramienta pertinente en este turno; si falta precisar su alcance, pregunta solo ese dato. Esto no autoriza ninguna acción operativa. Reconoce el guardado únicamente si devuelve saved=true o retired=true. La afirmación nueva no borra automáticamente compromisos de otros periodos.` });
   const finish = (text = '') => ({
     ...reviewedResponse(investigation?.pendientesDelRecorrido?.length ? investigationReply(investigation) : String(text).trim() || conversationalInvestigation(investigation) || FALLBACK_ANSWER, pendingAction),
     sources: [...sources.values()], toolsUsed, failures,
@@ -281,11 +291,14 @@ export const runAssistant = async ({
     await context.revalidate?.();
     if (!tool.allowed(user)) return { error: 'Esta información ya no está disponible para esta persona.' };
     if (inquiry?.soloConversacion) return { error: 'Este turno solo responde con el diálogo y el estado guardado; no autoriza consultas ni preparaciones nuevas.' };
+    if (MEMORY_WRITES.has(call.name) && !memoryPurposeAllows(call.name, memoryIntent)) return { error: 'El propósito del mensaje actual no autoriza esta escritura de memoria. Una consulta, un documento o un análisis no son una corrección humana ni un pedido de olvidar.' };
+    if (memoryIntent === 'CORREGIR' && ['guardar_en_memoria', 'recordar_aprendizaje'].includes(call.name)
+      && memorySubject(call.args || {}) && (memoryReadSubjects.get(memorySubject(call.args)) ?? Infinity) >= rounds) return { error: 'Antes de guardar esta corrección consulta la memoria del mismo sujeto en este turno y espera a recibir su resultado. Emitir lectura y escritura juntas no permite contrastar lo que devolvió la consulta. Contrasta periodos y revisiones; reemplaza solo lo que el nuevo hecho corrige íntegramente. La fecha de recepción no es el inicio del acuerdo ni sustituye el periodo que la persona aclaró.' };
     if (inquiryRecovery && (!INQUIRY_READS.has(call.name) || call.name === 'actualizar_seguimiento')) return { error: 'La recuperación de esta respuesta solo permite consultas. No autoriza preparar cambios, guardar recuerdos ni actualizar seguimientos.' };
     if (inquiry?.investigar && !inquiry.guardarSeguimiento && call.name === 'actualizar_seguimiento') return { error: 'Este pedido es de análisis sin guardar seguimiento. Responde con la evidencia consultada, sin crear un caso ni exigir condiciones de cierre.' };
     if (inquiry?.investigar) {
-      if (!INQUIRY_READS.has(call.name) && !(inquiry.prepararCambios && ACTION_TOOLS.has(call.name))) return { error: 'Este recorrido es de investigación. No autoriza esa modificación ni contacto. Conserva el análisis sin actuar.' };
-      if (inquiry.actualidad && inquiry.localizarTrabajo && HISTORICAL_READS.has(call.name) && !investigationReceipts.some(row => row.area === 'TAREAS')) return { error: 'Falta consultar el trabajo actual en Gestión. Identifica la cuenta, busca los pendientes pertinentes y abre su detalle antes de recurrir al histórico. Una referencia antigua no acredita el estado vigente.' };
+      if (!INQUIRY_READS.has(call.name) && !memoryPurposeAllows(call.name, memoryIntent) && !(inquiry.prepararCambios && ACTION_TOOLS.has(call.name))) return { error: 'Este recorrido es de investigación. No autoriza esa modificación ni contacto. Conserva el análisis sin actuar.' };
+      if (inquiry.actualidad && inquiry.localizarTrabajo && HISTORICAL_READS.has(call.name) && !(memoryRequested && memoryReads.has(call.name)) && !investigationReceipts.some(row => row.area === 'TAREAS')) return { error: 'Falta consultar el trabajo actual en Gestión. Identifica la cuenta, busca los pendientes pertinentes y abre su detalle antes de recurrir al histórico. Una referencia antigua no acredita el estado vigente.' };
     }
     emit({ type: 'status', label: toolProgressLabel(call.name) });
     const clientQuery = call.name === 'buscar_cliente' && typeof call.args?.nombre === 'string' ? call.args.nombre.trim() : null;
@@ -294,7 +307,16 @@ export const runAssistant = async ({
     try {
       const previousAnswer = [...history].reverse().find((turn) => turn.role === 'assistant')?.text || null;
       const args = inquiry?.investigar && call.name === 'actualizar_seguimiento' ? { ...call.args, nueva: !inquiry.continuar } : call.args || {};
-      const outcome = await tool.run(args, { user, person, today, ...context, investigationReceipts: structuredClone(investigationReceipts), question, previousAnswer, taskClientSearches: structuredClone([...taskClientSearches.values()]) });
+      if (MEMORY_WRITES.has(call.name)) memoryAttempted = true;
+      const outcome = await tool.run(args, { user, person, today, ...context, memoryIntent, investigationReceipts: structuredClone(investigationReceipts), question, previousAnswer, taskClientSearches: structuredClone([...taskClientSearches.values()]) });
+      if (MEMORY_WRITES.has(call.name) && (outcome?.data?.saved === true || outcome?.data?.retired === true || outcome?.data?.withdrawn === true)) memoryPersisted = true;
+      if (memoryReads.has(call.name) && outcome?.data && !outcome.data.error) {
+        const rows = Array.isArray(outcome.data) ? outcome.data : outcome.data.hechos || [];
+        // Tool calls in one response execute sequentially, but the model only
+        // receives their results on its next round. A same-batch write has not
+        // considered the freshly retrieved memory yet.
+        for (const subject of [memorySubject(args), ...rows.map(memorySubject)]) if (subject) memoryReadSubjects.set(subject, rounds);
+      }
       if (clientKey && Array.isArray(outcome?.data?.clientes)) taskClientSearches.set(clientKey, {
         query: clientQuery, approximate: outcome.data.aproximado === true,
         clients: outcome.data.clientes.map(row => ({ id: row.id, name: row.nombre, slug: row.slug, isArchived: row.archivado === true }))
@@ -358,9 +380,10 @@ export const runAssistant = async ({
     }
     if (inquiry?.investigar && inquiry.guardarSeguimiento && rounds === maxRounds - 1) input.push({ role: 'developer', content: 'Última ronda disponible de herramientas. Guarda ahora el análisis con actualizar_seguimiento, usando las consultas reales; declara la cobertura pendiente y conserva las condiciones del seguimiento. No inventes datos para completarlo.' });
     let availableDeclarations = inquiry?.soloConversacion ? [] : declarations;
+    if (!inquiry?.investigar || rounds > 0) availableDeclarations = availableDeclarations.filter(tool => !MEMORY_WRITES.has(tool.name) || memoryPurposeAllows(tool.name, memoryIntent));
     if (inquiryRecovery) availableDeclarations = declarations.filter(tool => INQUIRY_READS.has(tool.name) && tool.name !== 'actualizar_seguimiento');
     else if (inquiry?.investigar) {
-      if (!inquiry.prepararCambios && rounds > 0) availableDeclarations = availableDeclarations.filter(tool => INQUIRY_READS.has(tool.name));
+      if (!inquiry.prepararCambios && rounds > 0) availableDeclarations = availableDeclarations.filter(tool => INQUIRY_READS.has(tool.name) || memoryPurposeAllows(tool.name, memoryIntent));
       if (!inquiry.guardarSeguimiento) availableDeclarations = availableDeclarations.filter(tool => tool.name !== 'actualizar_seguimiento');
     }
     const startedAt = Date.now();
@@ -386,6 +409,13 @@ export const runAssistant = async ({
     // Lo que el modelo escribió antes de pedir una herramienta no es la respuesta: se borra de la pantalla.
     if (calls.length && streamed) emit({ type: 'reset' });
     const gaps = inquiryGaps(inquiry, investigation, investigationReceipts);
+    if (!calls.length && memoryRequested && !memoryAttempted && !nudgedMemory && !lastRound) {
+      nudgedMemory = true;
+      if (streamed) emit({ type: 'reset' });
+      rounds += 1;
+      input.push(...(result.output || []).filter(item => item.type !== 'message'), { role: 'developer', content: 'Aún no hay un recibo de memoria persistente para la enseñanza o corrección humana de este turno. La respuesta provisional no se entregó. Usa la herramienta con el sujeto y periodo correctos; si falta una aclaración real, solicítala y explica que todavía no quedó guardado. No basta prometer recordarlo. No prepares ni ejecutes acciones por este aviso.' });
+      continue;
+    }
     if (!calls.length && gaps.length && !lastRound && !nudgedInquiry) {
       nudgedInquiry = true;
       rounds += 1;
@@ -418,6 +448,6 @@ export const runAssistant = async ({
       input.push({ type: 'function_call_output', call_id: call.id, output: JSON.stringify(output) });
     }
     // El resumen ya deriva del registro validado: otra generación solo lo repite.
-    if (inquiry?.investigar && !inquiry.prepararCambios && conversationalInvestigation(investigation) && !inquiryGaps(inquiry, investigation, investigationReceipts).length) return finish();
+    if (inquiry?.investigar && !inquiry.prepararCambios && (!memoryRequested || memoryPersisted) && conversationalInvestigation(investigation) && !inquiryGaps(inquiry, investigation, investigationReceipts).length) return finish();
   }
 };

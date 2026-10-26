@@ -264,7 +264,7 @@ const parrillaDeCliente = {
     };
     const decision = await readDecisionContext(context, [{ id, name: plan.client?.name }]);
     return {
-      data: { contextoParcial: decision.partial, parrilla: { id: plan.id, clientId: id, cliente: plan.client?.name || null, mes: monthLabel(plan.month, plan.year), estado: plan.status, resumen, piezas, contexto: decision.forClient(id) } },
+      data: { contextoParcial: decision.partial, contextoAgencia: decision.agency, parrilla: { id: plan.id, clientId: id, cliente: plan.client?.name || null, mes: monthLabel(plan.month, plan.year), estado: plan.status, resumen, piezas, contexto: decision.forClient(id) } },
       sources: [...piezas.map((p) => ({ kind: 'pieza', id: p.id, label: `${p.titulo} (${shortDate(p.fecha)})`, url: `/parrillas/${plan.id}?item=${p.id}` })), ...decision.sources]
     };
   }
@@ -325,7 +325,7 @@ const operacionDeCliente = {
       ultimaObservacion: row.latestObservation ? `${row.latestObservation.text} (${[row.latestObservation.by, row.latestObservation.date].filter(Boolean).join(', ')})` : null,
       observacionesRecientes: (row.observations || []).slice(0, 5).map((o) => `${String(o.text || '').slice(0, 400)} (${[o.by, o.date].filter(Boolean).join(', ')})`)
     };
-    return { data: { operacion, contextoParcial: decision.partial }, sources: [{ kind: 'cliente', id: row.id, label: row.name, url: `/clientes/operacion/${row.slug}` }, ...decision.sources] };
+    return { data: { operacion, contextoParcial: decision.partial, contextoAgencia: decision.agency }, sources: [{ kind: 'cliente', id: row.id, label: row.name, url: `/clientes/operacion/${row.slug}` }, ...decision.sources] };
   }
 };
 
@@ -364,7 +364,7 @@ const carteraDeOperacion = {
       });
     const porSemaforo = { rojo: 0, amarillo: 0, verde: 0, gris: 0 };
     for (const row of rows) { const label = LEVEL_LABELS[row.evaluation?.level]; if (label in porSemaforo) porSemaforo[label] += 1; }
-    return { data: { cuentas, porSemaforo, total: rows.length, parcial: eligible.length > cuentas.length, contextoParcial: decision.partial, alcance: 'Semáforos y fechas registrados. Contrasta contrato, periodo y contexto de cada cuenta antes de atribuir incumplimiento o recomendar prioridad.' }, sources: [...cuentas.map((row) => ({ kind: 'cliente', id: row.clientId, label: row.cliente, url: `/clientes/operacion/${row.slug}` })), ...decision.sources] };
+    return { data: { cuentas, porSemaforo, total: rows.length, parcial: eligible.length > cuentas.length, contextoParcial: decision.partial, contextoAgencia: decision.agency, alcance: 'Semáforos y fechas registrados. Contrasta contrato, periodo y contexto de cada cuenta antes de atribuir incumplimiento o recomendar prioridad.' }, sources: [...cuentas.map((row) => ({ kind: 'cliente', id: row.clientId, label: row.cliente, url: `/clientes/operacion/${row.slug}` })), ...decision.sources] };
   }
 };
 

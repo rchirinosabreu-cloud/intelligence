@@ -11,6 +11,7 @@ import { bogotaClock } from '../lib/briaNudges.js';
 import { runWithAiContext } from '../lib/aiRequestContext.js';
 import { summarizeAiCalls, normalizeAiUsage } from '../lib/aiUsage.js';
 import { factAccess } from '../lib/briaAgencyFacts.js';
+import { canUseBria } from '../lib/briaLivingMemory.js';
 import { createBriaAgencyFactRepository } from './briaAgencyFactRepository.js';
 import { createBriaConversationRepository } from './briaConversationRepository.js';
 import { buildLearningDigest, buildLearningRequest, parseLearnings, validateLearnings, LEARNING_ORIGIN, CONVERSATION_LEARNING_USE_CASE } from '../lib/conversationLearning.js';
@@ -19,7 +20,6 @@ export const LEARNING_FROM = 22 * 60;          // 22:00 de Bogotá: el día ya t
 export const LEARNING_CHECK_MS = 10 * 60 * 1000;
 export const MAX_CHATS_PER_NIGHT = 60;
 const ACTOR = { ref: 'bria', name: 'Bria' };
-const READER = { role: 'ADMIN', isActive: true, modulePermissions: { bria: true, financiero: true } };
 const DAY = 86_400_000;
 const bogotaWindow = (day) => { const from = new Date(`${day}T05:00:00.000Z`); return { fromIso: from.toISOString(), toIso: new Date(from.getTime() + DAY).toISOString() }; };
 const plusDays = (day, amount) => new Date(Date.parse(`${day}T12:00:00Z`) + amount * DAY).toISOString().slice(0, 10);
@@ -45,8 +45,8 @@ export const createConversationLearningService = ({
 
   const people = async (refs) => {
     if (!refs.length) return new Map();
-    const rows = await db.user.findMany({ where: { id: { in: refs } }, select: { id: true, name: true, teamMember: { select: { name: true } } } });
-    return new Map(rows.map((row) => [row.id, row.teamMember?.name || row.name || null]));
+    const rows = await db.user.findMany({ where: { id: { in: refs } }, select: { id: true, name: true, role: true, isActive: true, modulePermissions: true, financialRole: true, teamMember: { select: { name: true, isActive: true } } } });
+    return new Map(rows.map((row) => [row.id, row]));
   };
 
   return {
@@ -56,27 +56,33 @@ export const createConversationLearningService = ({
       if (force) await sidecar().query('INSERT INTO bria_memory.conversation_learning_runs(day_key) VALUES ($1) ON CONFLICT (day_key) DO UPDATE SET started_at = now(), finished_at = NULL', [day]);
       const { fromIso, toIso } = bogotaWindow(day);
       const all = (await chats().conversationsBetween(fromIso, toIso)).filter((chat) => chat.turns.some((turn) => turn.role === 'user'));
-      const names = await people([...new Set(all.map((chat) => chat.actorRef))]);
+      const authors = await people([...new Set(all.map((chat) => chat.actorRef))]);
       const [clients, members] = await Promise.all([
         db.client.findMany({ where: { isArchived: false }, select: { id: true, name: true } }),
         db.teamMember.findMany({ where: { isActive: true }, select: { id: true, name: true } })
       ]);
-      const access = factAccess(READER), repo = memory();
+      const repo = memory();
       const calls = [], learned = [], dropped = [];
       for (const chat of all.slice(0, MAX_CHATS_PER_NIGHT)) {
-        const conversation = { id: chat.id, personName: names.get(chat.actorRef) || null, turns: chat.turns };
+        const author = authors.get(chat.actorRef);
+        if (!author || !canUseBria(author) || !author.teamMember?.isActive) continue;
+        const access = factAccess(author);
+        const conversation = { id: chat.id, personName: author.teamMember.name || author.name || null, turns: chat.turns };
         const digest = buildLearningDigest({ day, conversation });
         if (!digest.userTurns || digest.personText.trim().length < 40) continue;
-        let raw;
+        let raw, recalled;
         try {
+          // La memoria entra antes de interpretar. Se filtra por el acceso actual
+          // del autor; no mezclar hechos privilegiados con lo que él escribió.
+          recalled = await repo.search(access, { query: digest.personText, limit: 60 });
           const started = Date.now();
-          const answer = await runWithAiContext({ actorId: chat.actorRef || null, module: 'bria', route: 'SCHEDULER conversation-learning' }, () => generate(buildLearningRequest({ digest, day })));
+          const answer = await runWithAiContext({ actorId: chat.actorRef || null, module: 'bria', route: 'SCHEDULER conversation-learning' }, () => generate(buildLearningRequest({ digest, day, known: recalled })));
           calls.push({ model: answer.model || null, latencyMs: Date.now() - started, usage: normalizeAiUsage(answer.usage) });
           raw = parseLearnings(answer.text);
         } catch (error) { logger.error('[ConversationLearning] Un chat no se pudo leer; sigo con los demás:', error?.message || error); continue; }
         // Lo ya sabido de las entidades que el modelo nombró, para no repetirlo.
         const entities = [...new Set((raw?.aprendizajes || []).map((row) => String(row?.entidad || '').trim()).filter(Boolean))].slice(0, 12);
-        const known = (await Promise.all(entities.map((entity) => repo.search(access, { entity, limit: 40 }).catch(() => [])))).flat();
+        const known = [...recalled, ...(await Promise.all(entities.map((entity) => repo.search(access, { entity, limit: 40 }).catch(() => [])))).flat()];
         const { facts: valid, dropped: out } = validateLearnings(raw, { day, conversation, personText: digest.personText, clients, members, known });
         learned.push(...valid); dropped.push(...out);
       }

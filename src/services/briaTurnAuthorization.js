@@ -8,9 +8,15 @@ import { canUseVault } from '../lib/vaultAccess.js';
 // verificar fuentes y revocaciones con la regla real sin consultar datos de producción.
 export const createBriaTurnAuthorizer = ({ db, canReadAgencyMemory, knowledge, agencyFacts }) => async (user, turn) => {
   if (turn.investigation && !isManagerRole(user.role)) return false;
-  const factIds = [...new Set([...(turn.sources || []), ...(turn.investigation?.sources || [])].filter(row => row.kind === 'hecho_agencia').map(row => row.id))];
+  const sources = [...(turn.sources || []), ...(turn.investigation?.sources || [])];
+  const factIds = [...new Set(sources.filter(row => row.kind === 'hecho_agencia').map(row => row.id))];
   if (factIds.length && !(await agencyFacts?.().canReadMany(user, factIds))) return false;
-  for (const source of [...(turn.sources || []), ...(turn.investigation?.sources || [])]) {
+  const learningIds = [...new Set(sources.filter(row => row.kind === 'aprendizaje').map(row => row.id))];
+  if (learningIds.length) {
+    const readable = new Set(await knowledge?.()?.readableIds?.(user, learningIds) || []);
+    if (learningIds.some(id => !readable.has(id))) return false;
+  }
+  for (const source of sources) {
     if (source.kind === 'actividad' && !hasModulePermission(user, 'actividad')) return false;
     if (source.kind === 'investigacion' && !isManagerRole(user.role)) return false;
     if (source.kind === 'documento' && !await canReadAgencyMemory(user)) return false;
@@ -23,7 +29,6 @@ export const createBriaTurnAuthorizer = ({ db, canReadAgencyMemory, knowledge, a
       // Una cabecera no da acceso al cuerpo ni rebaja una fuente histórica de detalle.
       if (!task || (!summary && !canOpenTask(task, user.userId || user.id))) return false;
     }
-    if (source.kind === 'aprendizaje' && !(await knowledge().list(user)).some(row => row.id === source.id)) return false;
   }
   if (turn.taskDraft && !hasModulePermission(user, 'gestion')) return false;
   if (turn.dispatchDraft && !(hasModulePermission(user, 'gestion') && hasModulePermission(user, 'parrillas'))) return false;
