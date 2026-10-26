@@ -10,7 +10,7 @@ import { ThirdPartyDialog } from './ThirdParties';
 import { FinancialSectionHeader, FinancialSummaryCard } from './FinancialSectionParts';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { partyDocumentType } from '@/lib/partyIdentity';
-import { thirdPartyKindLabel } from '@/lib/accountsPayable';
+import { THIRD_PARTY_KINDS, thirdPartyKindLabel } from '@/lib/accountsPayable';
 import { CRM_STAGES } from '@/lib/crmRules';
 import { cn } from '@/lib/utils';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
@@ -73,7 +73,16 @@ const PartyQuotations = ({ quotations }) => (
     </section>
 );
 
-const ROW_GRID = 'md:grid md:grid-cols-[9rem_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.4fr)_5.5rem_1.25rem] md:items-center md:gap-4';
+// Proveedores cuenta a quienes se les paga un servicio; contratistas y outsourcing se dicen aparte.
+const providerHint = ({ contractors = 0, outsourcing = 0 }) => {
+    const parts = [
+        contractors ? `${contractors} contratista${contractors === 1 ? '' : 's'}` : null,
+        outsourcing ? `${outsourcing} outsourcing` : null
+    ].filter(Boolean);
+    return parts.length ? `Incluye ${parts.join(' y ')}` : 'Se les paga';
+};
+
+const ROW_GRID ='md:grid md:grid-cols-[9rem_minmax(0,1.6fr)_minmax(0,1fr)_minmax(0,1.4fr)_5.5rem_1.25rem] md:items-center md:gap-4';
 
 export default function FinancialPartiesDirectory({
     reconciliation,
@@ -121,7 +130,15 @@ export default function FinancialPartiesDirectory({
         staleTime: 30000
     });
 
-    const rows = useMemo(() => buildPartyRows(buildClientDirectoryRows(directory, reconciliation?.clients || []), thirdParties, commercial), [directory, reconciliation, thirdParties, commercial]);
+    // El equipo activo de Equipo: cada persona es un tercero con el rol Colaborador, sin registrarla a mano.
+    const { data: teamData, isLoading: isTeamLoading, error: teamError } = useQuery({
+        queryKey: ['financial-party-team'],
+        queryFn: async () => (await axios.get(apiUrl('/parties/team'), authed())).data,
+        staleTime: 30000
+    });
+    const team = useMemo(() => (Array.isArray(teamData?.team) ? teamData.team : []), [teamData]);
+
+    const rows = useMemo(() => buildPartyRows(buildClientDirectoryRows(directory, reconciliation?.clients || []), thirdParties, commercial, team), [directory, reconciliation, thirdParties, commercial, team]);
     const summary = useMemo(() => summarizeParties(rows), [rows]);
     const visible = useMemo(() => filterPartyRows(rows, { search, role, status }), [rows, search, role, status]);
 
@@ -188,7 +205,7 @@ export default function FinancialPartiesDirectory({
         await afterSave(client?.id, message || 'Ficha del cliente creada. Sus cotizaciones quedaron con ella.');
     };
 
-    const isLoading = isDirectoryLoading || isReconciliationLoading || isThirdPartiesLoading || isCommercialLoading;
+    const isLoading = isDirectoryLoading || isReconciliationLoading || isThirdPartiesLoading || isCommercialLoading || isTeamLoading;
     const filtersActive = Boolean(search.trim() || role || status);
 
     return (
@@ -206,8 +223,9 @@ export default function FinancialPartiesDirectory({
                             <DropdownMenuLabel>¿Qué es?</DropdownMenuLabel>
                             <DropdownMenuItem onSelect={() => setDialog({ kind: 'client', client: null })}>Cliente</DropdownMenuItem>
                             <DropdownMenuSeparator />
-                            {PARTY_ROLES.filter((item) => item.value !== 'CLIENTE').map((item) => (
-                                <DropdownMenuItem key={item.value} onSelect={() => setDialog({ kind: 'third-party', thirdParty: { kind: item.value } })}>{item.label}</DropdownMenuItem>
+                            {/* A quienes se les paga: un cliente potencial nace de una cotización, no se crea aquí. */}
+                            {THIRD_PARTY_KINDS.map((item) => (
+                                <DropdownMenuItem key={item.value} onSelect={() => setDialog({ kind: 'third-party', thirdParty: { kind: item.value } })}>{item.role || item.label}</DropdownMenuItem>
                             ))}
                         </DropdownMenuContent>
                     </DropdownMenu>
@@ -217,7 +235,7 @@ export default function FinancialPartiesDirectory({
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" data-party-summary>
                 <FinancialSummaryCard label="Total" value={summary.total} hint={summary.unlinked ? `${summary.unlinked} nombre${summary.unlinked === 1 ? '' : 's'} solo en el Excel` : 'Con ficha'} />
                 <FinancialSummaryCard label="Clientes" value={summary.clients} hint={summary.prospects ? `Y ${summary.prospects} potencial${summary.prospects === 1 ? '' : 'es'}` : 'Se les cobra'} />
-                <FinancialSummaryCard label="Proveedores" value={summary.suppliers} hint="Se les paga" />
+                <FinancialSummaryCard label="Proveedores" value={summary.suppliers} hint={providerHint(summary)} />
                 <FinancialSummaryCard label="Colaboradores" value={summary.team} hint={summary.others ? `Y ${summary.others} arrendador, socio u otro` : 'Del equipo'} />
                 <FinancialSummaryCard label="Activos" value={summary.active} hint={`${summary.total - summary.active} inactivo${summary.total - summary.active === 1 ? '' : 's'}`} />
             </div>
@@ -244,7 +262,7 @@ export default function FinancialPartiesDirectory({
             </Card>
 
             <Card className="overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-sm dark:border-white/10 dark:bg-zinc-900">
-                {(directoryError || thirdPartiesError || commercialError) &&<p role="alert" className="border-b border-zinc-200 px-4 py-3 text-sm text-destructive brain-destructive-text dark:border-white/10">No fue posible cargar todas las fichas. Lo que sí cargó sigue abajo.</p>}
+                {(directoryError || thirdPartiesError || commercialError || teamError) && <p role="alert" className="border-b border-zinc-200 px-4 py-3 text-sm text-destructive brain-destructive-text dark:border-white/10">No fue posible cargar todas las fichas. Lo que sí cargó sigue abajo.</p>}
                 <div className={cn('hidden border-b border-zinc-200 bg-zinc-50/80 px-4 py-3 text-xs font-medium text-zinc-500 dark:border-white/10 dark:bg-white/5 dark:text-zinc-400', ROW_GRID)} aria-hidden="true">
                     <span>NIT / CC</span><span>Nombre</span><span>Roles</span><span>Contacto</span><span>Estado</span><span />
                 </div>
@@ -271,7 +289,8 @@ export default function FinancialPartiesDirectory({
                                             <span className="block truncate text-sm font-semibold text-zinc-900 dark:text-white">{row.name}</span>
                                             {row.unlinked
                                                 ? <span className="block truncate text-xs text-zinc-500">Solo en el Excel · sin ficha{row.recordCount ? ` · ${row.recordCount} ${row.recordCount === 1 ? 'registro' : 'registros'}` : ''}</span>
-                                                : legalName && legalName !== row.name ? <span className="block truncate text-xs text-zinc-500">{legalName}</span> : null}
+                                                : row.teamMember?.role ? <span className="block truncate text-xs text-zinc-500">{row.teamMember.role}</span>
+                                                    : legalName && legalName !== row.name ? <span className="block truncate text-xs text-zinc-500">{legalName}</span> : null}
                                         </span>
                                         <span className="order-2 flex flex-wrap gap-1 md:order-none" data-party-roles>
                                             {row.unlinked ? <RoleChip tone="muted">Sin ficha</RoleChip>
@@ -369,7 +388,7 @@ export default function FinancialPartiesDirectory({
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="min-w-0">
                                                             <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Ficha de pago</h3>
-                                                            <p className="text-xs text-zinc-500">{thirdPartyKindLabel(thirdParty.kind)}: a quién y cómo le paga Brain Studio.</p>
+                                                            <p className="text-xs text-zinc-500">{row.teamMember ? `${thirdPartyKindLabel(thirdParty.kind)} · del equipo` : thirdPartyKindLabel(thirdParty.kind)}: a quién y cómo le paga Brain Studio.</p>
                                                         </div>
                                                         {canWriteFinancials && (
                                                             <button type="button" onClick={() => setDialog({ kind: 'third-party', thirdParty })}
@@ -402,9 +421,28 @@ export default function FinancialPartiesDirectory({
                                                         También se le paga
                                                     </button>
                                                 </section>
+                                            ) : row.teamMember ? (
+                                                // Alguien del equipo sin ficha de pago: está en Terceros por ser del equipo; sus datos de pago se completan una vez.
+                                                <section className="min-w-0 space-y-3 rounded-lg border border-zinc-200 bg-white p-4 dark:border-white/10 dark:bg-zinc-900 lg:col-span-2" data-team-member-card>
+                                                    <div className="min-w-0">
+                                                        <h3 className="text-sm font-semibold text-zinc-900 dark:text-white">Del equipo</h3>
+                                                        <p className="text-xs text-zinc-500">Está en Terceros por ser parte del equipo. Sus tareas y permisos siguen en Equipo; aquí va lo de dinero: documento, banco, préstamos y lo que se le paga.</p>
+                                                    </div>
+                                                    <dl className="grid gap-3 sm:grid-cols-2">
+                                                        <ProfileLine label="Cargo" value={row.teamMember.role} />
+                                                        <ProfileLine label="Correo" value={row.teamMember.email} />
+                                                    </dl>
+                                                    {canWriteFinancials && (
+                                                        <button type="button" data-team-member-add-payment
+                                                            onClick={() => setDialog({ kind: 'third-party', thirdParty: { kind: 'COLABORADOR', name: row.teamMember.name, email: row.teamMember.email || '', teamMemberId: row.teamMember.id } })}
+                                                            className="min-h-11 text-sm font-medium text-primary underline underline-offset-2">
+                                                            Completar datos de pago
+                                                        </button>
+                                                    )}
+                                                </section>
                                             ) : null}
 
-                                            {thirdParty && !row.clientId && canWriteFinancials && (
+                                            {thirdParty && !row.clientId && !row.teamMember && canWriteFinancials && (
                                                 <section className="min-w-0 space-y-2 rounded-lg border border-dashed border-zinc-300 p-4 text-sm text-zinc-600 dark:border-white/15 dark:text-zinc-300">
                                                     <p>Si además es cliente, créale su ficha de cobro: queda unida a esta.</p>
                                                     <button type="button" data-party-add-client onClick={() => setDialog({ kind: 'client', client: null, initialName: row.name, linkThirdPartyId: thirdParty.id })}

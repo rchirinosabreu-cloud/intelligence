@@ -21,6 +21,25 @@ const assertClientLink = async (tx, clientId, thirdPartyId = null) => {
     if (taken) throw new FinancialDomainError('THIRD_PARTY_CLIENT_TAKEN', `«${client.name}» ya tiene su ficha de pago como «${taken.name}». Edita esa en vez de crear otra.`, 409);
 };
 
+// El equipo (26 de octubre de 2026): la ficha de pago de alguien del equipo queda ligada a esa persona, una sola
+// vez. Igual que con el cliente, se comprueba aquí para decir el motivo.
+const assertTeamMemberLink = async (tx, teamMemberId, thirdPartyId = null) => {
+    if (!teamMemberId) return;
+    const member = await tx.teamMember.findUnique({ where: { id: teamMemberId }, select: { id: true, name: true } });
+    if (!member) throw new FinancialDomainError('THIRD_PARTY_TEAM_MEMBER_NOT_FOUND', 'La persona del equipo que se quiere ligar no existe.', 404);
+    const taken = await tx.thirdParty.findFirst({ where: { teamMemberId, ...(thirdPartyId ? { id: { not: thirdPartyId } } : {}) }, select: { name: true } });
+    if (taken) throw new FinancialDomainError('THIRD_PARTY_TEAM_MEMBER_TAKEN', `${member.name} ya tiene su ficha de pago como «${taken.name}». Edita esa en vez de crear otra.`, 409);
+};
+
+/** El equipo activo, con lo justo para su fila en Terceros: la lista de Equipo, no una copia. */
+export const listPartyTeam = async (prismaClient) => ({
+    team: await prismaClient.teamMember.findMany({
+        where: { isActive: true },
+        orderBy: { name: 'asc' },
+        select: { id: true, name: true, role: true, email: true, avatarUrl: true, isActive: true }
+    })
+});
+
 const normalize = (input) => {
     const data = {};
     for (const field of FIELDS) if (input[field] !== undefined) data[field] = text(input[field]);
@@ -50,6 +69,7 @@ export const createThirdParty = async (prismaClient, input = {}, actor) => {
         const duplicate = await tx.thirdParty.findFirst({ where: { name: { equals: data.name, mode: 'insensitive' }, kind: data.kind, isActive: true }, select: { id: true, name: true } });
         if (duplicate) throw new FinancialDomainError('THIRD_PARTY_DUPLICATE', `Ya existe «${duplicate.name}» como ${data.kind.toLowerCase()}. Úsalo o edítalo en vez de crear otro.`, 409);
         await assertClientLink(tx, data.clientId);
+        await assertTeamMemberLink(tx, data.teamMemberId);
         const thirdParty = await tx.thirdParty.create({ data: { ...data, createdById: actorId } });
         await tx.financialAuditEvent.create({ data: { entityType: 'ThirdParty', entityId: thirdParty.id, action: 'CREATE', after: cloneForAudit(thirdParty), actorId } });
         return thirdParty;
@@ -67,6 +87,7 @@ export const updateThirdParty = async (prismaClient, thirdPartyId, patch = {}, a
         const problem = thirdPartyProblem(merged);
         if (problem) throw new FinancialDomainError('THIRD_PARTY_INVALID', problem);
         if (data.clientId && data.clientId !== existing.clientId) await assertClientLink(tx, data.clientId, thirdPartyId);
+        if (data.teamMemberId && data.teamMemberId !== existing.teamMemberId) await assertTeamMemberLink(tx, data.teamMemberId, thirdPartyId);
         const updated = await tx.thirdParty.update({ where: { id: thirdPartyId }, data });
         await tx.financialAuditEvent.create({ data: { entityType: 'ThirdParty', entityId: thirdPartyId, action: 'UPDATE', before: cloneForAudit(existing), after: cloneForAudit(updated), actorId } });
         return updated;

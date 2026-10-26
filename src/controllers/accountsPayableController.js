@@ -1,5 +1,5 @@
 import prisma from '../lib/prisma.js';
-import { createThirdParty, listThirdParties, updateThirdParty } from '../services/thirdPartyService.js';
+import { createThirdParty, listPartyTeam, listThirdParties, updateThirdParty } from '../services/thirdPartyService.js';
 import { createPayable, listPayablesLedger, payPayable, reversePayablePayment, updatePayable, voidPayable } from '../services/accountsPayableService.js';
 import { attachPayableDocument, openPayableDocument } from '../services/payableDocumentService.js';
 import { financialEvidenceStorage } from '../services/financialRecordDocumentService.js';
@@ -30,6 +30,16 @@ export const listPartyCommercialHandler = async (req, res, dependencies = {}) =>
     try { return res.json(await list(prismaClient)); } catch (error) {
         console.error('[Third parties API] Commercial list failed:', error.response?.data || error);
         return respondWithError(res, error, 'PARTY_COMMERCIAL_LIST_FAILED', 'No fue posible cargar las cotizaciones de los terceros.');
+    }
+};
+
+// El equipo activo para Terceros: cada persona es un tercero con el rol Colaborador (26 de octubre de 2026).
+export const listPartyTeamHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const list = dependencies.listPartyTeam || listPartyTeam;
+    try { return res.json(await list(prismaClient)); } catch (error) {
+        console.error('[Third parties API] Team list failed:', error.response?.data || error);
+        return respondWithError(res, error, 'PARTY_TEAM_LIST_FAILED', 'No fue posible cargar el equipo.');
     }
 };
 

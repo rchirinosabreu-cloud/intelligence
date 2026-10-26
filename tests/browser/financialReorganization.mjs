@@ -91,6 +91,30 @@ try {
   assert.equal(await page.locator('[data-party-row="prospecto:lead-cafe"]').count(), 0, 'deja de ser potencial: es una sola ficha');
   assert.match(await converted.locator('[data-party-quotations]').innerText(), /COT-0042/);
 
+  // El equipo en Terceros (26 de octubre de 2026): Melissa aparece sola, como colaboradora; completar sus datos de
+  // pago la deja en una sola fila con su ficha. Y «Nuevo tercero» ofrece contratista y outsourcing.
+  await page.locator('[data-party-new]').click();
+  const newMenu = await page.getByRole('menu').innerText();
+  assert.match(newMenu, /Contratista[\s\S]*Outsourcing/);
+  assert.doesNotMatch(newMenu, /Cliente potencial/, 'un cliente potencial nace de una cotización');
+  await page.keyboard.press('Escape');
+  const melissa = page.locator('[data-party-row="equipo:tm-melissa"]');
+  assert.equal(await melissa.locator('[data-party-roles]').innerText(), 'Colaborador');
+  await melissa.locator('button[aria-expanded]').click();
+  await page.locator('[data-team-member-card]').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: shot('terceros-equipo.png'), animations: 'disabled', fullPage: true });
+  await page.locator('[data-team-member-add-payment]').click();
+  const paymentDialog = page.locator('[data-third-party-dialog]');
+  await paymentDialog.waitFor();
+  assert.equal(await paymentDialog.getByRole('textbox').first().inputValue(), 'Melissa Rodríguez');
+  await paymentDialog.getByRole('button', { name: 'Guardar tercero' }).click();
+  await paymentDialog.waitFor({ state: 'detached' });
+  assert.equal((await page.evaluate(() => window.__thirdPartyBody)).teamMemberId, 'tm-melissa');
+  await page.locator('[data-party-row="equipo:tm-melissa"]').waitFor({ state: 'detached' });
+  const melissaRows = page.locator('[data-party-row]').filter({ hasText: 'Melissa Rodríguez' });
+  assert.equal(await melissaRows.count(), 1, 'la persona y su ficha de pago son una sola fila');
+  assert.match(await melissaRows.locator('[data-third-party-card]').innerText(), /del equipo/);
+
   // Análisis: el flujo de caja; Rentabilidad solo para administración.
   await page.getByRole('tab', { name: 'Análisis' }).click();
   await page.getByText('Flujo de Caja Histórico').waitFor();
