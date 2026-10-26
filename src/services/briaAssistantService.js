@@ -110,6 +110,7 @@ export const createBriaAssistantService = ({
       if (!client) throw httpError(503, 'Bria no está disponible en este momento.', 'OPENAI_NOT_AVAILABLE');
       const person = await loadPerson(user);
       const facts = typeof agencyFacts === 'function' ? agencyFacts() : agencyFacts;
+      const remembered = typeof knowledge === 'function' ? knowledge() : knowledge;
       const revalidate = async () => { await loadPerson(user); await revalidateConversation?.(); };
       const result = await runAssistant({
         question: text,
@@ -121,13 +122,13 @@ export const createBriaAssistantService = ({
         user,
         person,
         // Las manos de la plataforma usan la sesión del navegador: por WhatsApp no la hay y no se ofrecen (22 de octubre de 2026).
-        tools: [...tools, ...briaInvestigationTools, conversationChoiceTool, ...createBriaTaskTools(taskDrafts), ...createBriaDispatchTools(dispatchDrafts), ...createBriaDeleteTools(deleteDrafts), ...createBriaActionTools(actions), ...createBriaUsageTools(typeof usage === 'function' ? usage() : usage), ...(session?.token ? createBriaPlatformTools({ actions, platform: typeof platform === 'function' ? platform() : platform }) : []), ...createKnowledgeTools(typeof knowledge === 'function' ? knowledge() : knowledge), ...createAgencyFactTools(typeof agencyFacts === 'function' ? agencyFacts() : agencyFacts), ...createVaultTools(vaultFor()), ...createBriaMailTools(mailFor()), ...briaClientUpdateTools, ...createPermissionRequestTools(typeof permissions === 'function' ? permissions() : permissions), ...createDailyReadingTools(typeof dailyReading === 'function' ? dailyReading() : dailyReading, { readingDay }), ...createServiceHealthTools(typeof serviceHealth === 'function' ? serviceHealth() : serviceHealth)],
+        tools: [...tools, ...briaInvestigationTools, conversationChoiceTool, ...createBriaTaskTools(taskDrafts), ...createBriaDispatchTools(dispatchDrafts), ...createBriaDeleteTools(deleteDrafts), ...createBriaActionTools(actions), ...createBriaUsageTools(typeof usage === 'function' ? usage() : usage), ...(session?.token ? createBriaPlatformTools({ actions, platform: typeof platform === 'function' ? platform() : platform }) : []), ...createKnowledgeTools(remembered, { personalOnly: Boolean(facts) }), ...createAgencyFactTools(facts), ...createVaultTools(vaultFor()), ...createBriaMailTools(mailFor()), ...briaClientUpdateTools, ...createPermissionRequestTools(typeof permissions === 'function' ? permissions() : permissions), ...createDailyReadingTools(typeof dailyReading === 'function' ? dailyReading() : dailyReading, { readingDay }), ...createServiceHealthTools(typeof serviceHealth === 'function' ? serviceHealth() : serviceHealth)],
         ai: createBriaModelRuntime({ ai: client, user }),
         today: bogotaDate(now()),
         logger,
         onEvent,
         // `session` es el token con el que la persona abrió el chat: sin él, consultar_plataforma no tiene manos.
-        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, inquiryPlanner, agencyFacts: facts, logger, ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session, reviewRequested }
+        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, inquiryPlanner, agencyFacts: facts, knowledge: remembered, logger, ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session, reviewRequested }
       });
       // El motivo técnico de un fallo se queda en el registro del servidor; al navegador solo va qué falló.
       await revalidate();

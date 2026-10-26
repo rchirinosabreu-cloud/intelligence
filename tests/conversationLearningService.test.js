@@ -5,8 +5,8 @@ import { createConversationLearningService, LEARNING_FROM } from '../src/service
 const at = (iso) => new Date(iso);
 const chat = (id, actorRef, texts) => ({ id, actorRef, turns: texts.map((text, position) => ({ position, role: position % 2 ? 'assistant' : 'user', text, note: null, createdAt: new Date('2026-10-20T15:00:00Z') })) });
 
-const setup = ({ answer, chats = [] } = {}) => {
-  const runs = new Map(), imported = [], requests = [], queries = [];
+const setup = ({ answer, chats = [], authorActive = true } = {}) => {
+  const runs = new Map(), imported = [], requests = [], queries = [], searches = [];
   const pool = { async query(sql, args) {
     queries.push(sql);
     if (/INSERT INTO bria_memory.conversation_learning_runs/.test(sql)) {
@@ -20,18 +20,42 @@ const setup = ({ answer, chats = [] } = {}) => {
   } };
   const conversations = { async conversationsBetween(fromIso, toIso) { queries.push(`between ${fromIso} ${toIso}`); return chats; } };
   const facts = {
-    async search() { return [{ id: 'k1', entity: 'Mimas Kitchen', statement: 'Publica martes y jueves.' }]; },
+    async search(access, options) { searches.push({ access, options }); return [{ id: 'k1', entity: 'Mimas Kitchen', statement: 'Publica martes y jueves.', certainty: 'CONFIRMADO', origin: 'EQUIPO', validFrom: '2026-10-01' }]; },
     async importReading(args) { imported.push(args); return { create: args.facts.length, update: 0, unchanged: 0, keptByTeam: 0 }; }
   };
   const db = {
-    user: { findMany: async () => [{ id: 'u-fran', name: 'Francisco', teamMember: { name: 'Francisco Villa' } }] },
+    user: { findMany: async () => [{ id: 'u-fran', name: 'Francisco', role: 'PROJECT_MANAGER', isActive: authorActive, modulePermissions: { bria: true }, teamMember: { name: 'Francisco Villa', isActive: true } }] },
     client: { findMany: async () => [{ id: 'c-mimas', name: 'Mimas Kitchen' }] },
     teamMember: { findMany: async () => [{ id: 'm-kamila', name: 'Kamila del Toro' }] }
   };
   const generate = async (request) => { requests.push(request); return { text: JSON.stringify(answer || { aprendizajes: [] }), model: 'ficticio', usage: { input_tokens: 10, output_tokens: 5 } }; };
   const service = createConversationLearningService({ db, pool, conversations, facts, generate, now: () => at('2026-10-21T03:30:00Z'), logger: { log() {}, error() {} } });
-  return { service, runs, imported, requests, queries };
+  return { service, runs, imported, requests, queries, searches };
 };
+
+test('the model compares existing authorized memory before extracting without replacing confirmed facts', async () => {
+  const statement = 'Mimas no renovó el contrato para octubre y la parrilla no está aprobada.';
+  const fixture = setup({ chats: [chat('changed-agreement', 'u-fran', [statement])], answer: { aprendizajes: [{ entidad: 'Mimas', tipoEntidad: 'cliente', tema: 'acuerdo', afirmacion: statement, certeza: 'CONFIRMADO', proposito: 'operacion', quienLoDijo: 'Francisco', evidencia: statement }] } });
+  await fixture.service.learnDay('2026-10-20');
+  assert.match(fixture.requests[0].prompt, /Publica martes y jueves/);
+  assert.match(fixture.requests[0].prompt, /CONFIRMADO/);
+  assert.match(fixture.requests[0].prompt, /2026-10-01/);
+  assert.equal(fixture.searches[0].options.query, statement, 'recall precedes the model, from the person’s message');
+  assert.equal(fixture.searches[0].access.purposes.includes('direccion'), false, 'the author’s current access bounds recalled context');
+  assert.equal(fixture.searches[0].access.purposes.includes('financiero'), false);
+  assert.equal(fixture.imported[0].origin, 'CONVERSACION');
+  assert.equal(fixture.imported[0].facts[0].certeza, 'PROPUESTA');
+  assert.equal(fixture.imported[0].facts[0].reemplaza, undefined);
+});
+
+test('nightly learning does not recall or process a conversation after its author loses active access', async () => {
+  const fixture = setup({ authorActive: false, chats: [chat('revoked-author', 'u-fran', ['La cuenta Mimas no contrató publicaciones para octubre.'])] });
+  const result = await fixture.service.learnDay('2026-10-20');
+  assert.equal(result.facts, 0);
+  assert.deepEqual(fixture.searches, []);
+  assert.deepEqual(fixture.requests, []);
+  assert.deepEqual(fixture.imported, []);
+});
 
 test('at night Bria reads the day’s chats once, asks the model per chat, and writes only validated facts with origin CONVERSACION', async () => {
   const answer = { aprendizajes: [

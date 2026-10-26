@@ -63,7 +63,8 @@ test('without a browser session the platform hands are not offered', async () =>
   });
   await service.ask({ user: actor(), question: 'Crea un evento para Helen', session: null });
   for (const name of ['mapa_de_plataforma', 'consultar_plataforma', 'operar_en_plataforma']) assert.equal(offered.includes(name), false, name);
-  assert.equal(offered.includes('guardar_en_memoria'), true, 'lo demás sigue igual');
+  assert.equal(offered.includes('memoria_de_la_agencia'), true, 'la lectura de memoria conserva su acceso');
+  assert.equal(offered.includes('guardar_en_memoria'), false, 'crear un evento no autoriza enseñar un recuerdo');
 });
 test('a revoked module is refreshed and no longer offered as a tool', async () => {
   const user = actor();
@@ -82,7 +83,7 @@ test('a revoked module is refreshed and no longer offered as a tool', async () =
   // La bóveda solo aparece donde hay clave de cifrado (en local sí, en CI no): no entra en la comparación.
   // Sin Gestión, Bria ofrece pedirla a un administrador (15 de octubre de 2026): pedir_permiso, nunca la herramienta de tareas.
   // La memoria del tiempo (19 de octubre de 2026) es de dirección: un project manager la lee, con el alcance de sus cuentas.
-  assert.deepEqual(offered.map(tool => tool.name).filter(name => !/_acceso$/.test(name)), ['actualizar_seguimiento', 'ofrecer_opciones', 'mapa_de_plataforma', 'consultar_plataforma', 'operar_en_plataforma', 'consultar_aprendizajes', 'recordar_aprendizaje', 'retirar_recuerdo', 'memoria_de_la_agencia', 'guardar_en_memoria', 'retirar_de_memoria', 'pedir_permiso', 'lectura_de_la_agencia', 'anotar_decision']);
+  assert.deepEqual(offered.map(tool => tool.name).filter(name => !/_acceso$/.test(name)), ['actualizar_seguimiento', 'ofrecer_opciones', 'mapa_de_plataforma', 'consultar_plataforma', 'operar_en_plataforma', 'consultar_aprendizajes', 'memoria_de_la_agencia', 'pedir_permiso', 'lectura_de_la_agencia', 'anotar_decision']);
   assert.deepEqual(answer.sources, []);
 });
 

@@ -40,7 +40,7 @@ test('the code keeps only what a person literally said, about a real entity, wit
     { entidad: 'Kamila', tipoEntidad: 'persona', tema: 'costumbre', afirmacion: 'Francisco le pide a Kamila los reels de Mimas con prioridad alta.', certeza: 'PRACTICA', proposito: 'operacion', quienLoDijo: 'Francisco', evidencia: 'el reel del menú, para Kamila, mañana, prioridad alta' },
     { entidad: 'Nattal', tipoEntidad: 'cliente', tema: 'x', afirmacion: 'Nattal pide todo para ayer.', certeza: 'PRACTICA', proposito: 'editorial', quienLoDijo: 'Francisco', evidencia: 'el cliente pide todo para ayer' },
     { entidad: 'Mimas', tipoEntidad: 'cliente', tema: 'inventado', afirmacion: 'Mimas aprobó la parrilla de noviembre.', certeza: 'PRACTICA', proposito: 'operacion', quienLoDijo: 'Bria', evidencia: 'Anotado. ¿Lo creo así?' },
-    { entidad: 'Mimas', tipoEntidad: 'cliente', tema: 'prioridad', afirmacion: 'Mimas: todo con prioridad alta porque el cliente pide todo para ayer.', certeza: 'PRACTICA', proposito: 'operacion', quienLoDijo: 'Francisco', evidencia: 'Con Mimas siempre va alta' }
+    { entidad: 'Mimas', tipoEntidad: 'cliente', tema: 'prioridad', afirmacion: 'Los pendientes de Mimas van con prioridad alta: el cliente pide todo para ayer.', certeza: 'PRACTICA', proposito: 'operacion', quienLoDijo: 'Francisco', evidencia: 'Con Mimas siempre va alta' }
   ] }) + '\n```');
   const { facts, dropped } = validateLearnings(raw, { day: DAY, conversation, personText: digest.personText, clients, members, known: [{ entity: 'Mimas Kitchen', statement: 'Publica martes y jueves.' }] });
   assert.deepEqual(facts.map((f) => [f.entidad, f.tipoEntidad, f.proposito, f.certeza]), [
@@ -52,8 +52,23 @@ test('the code keeps only what a person literally said, about a real entity, wit
   assert.match(facts[0].fuentes[0].ref, /^Chat con Bria de Francisco Villa \(Francisco\): «Con Mimas siempre va alta/);
   assert.equal(facts[0].id, learningId({ day: DAY, conversationId: 'chat-1', entity: 'Mimas Kitchen', statement: facts[0].afirmacion }));
   assert.deepEqual(dropped.map((d) => d.why).sort(), ['cliente desconocido', 'credencial', 'juicio sobre una persona', 'repetido en el mismo chat', 'sin cita literal de la persona'], 'cada descarte dice por qué');
-  const alreadyKnown = validateLearnings(raw, { day: DAY, conversation, personText: digest.personText, clients, members, known: [{ entity: 'Mimas Kitchen', statement: 'Mimas: todo con prioridad alta porque el cliente pide todo para ayer.' }] });
-  assert.equal(alreadyKnown.facts.some((f) => f.entidad === 'Mimas Kitchen'), false, 'lo parecido a lo ya sabido no se repite');
+  const alreadyKnown = validateLearnings(raw, { day: DAY, conversation, personText: digest.personText, clients, members, known: [{ entity: 'Mimas Kitchen', statement: 'Los pendientes de Mimas van con prioridad alta: el cliente pide todo para ayer.' }] });
+  assert.equal(alreadyKnown.facts.some((f) => f.entidad === 'Mimas Kitchen'), false, 'una repetición exacta de lo conocido no se guarda otra vez');
+});
+
+test('a changed agreement is not discarded for sharing words with a confirmed memory', () => {
+  const affirmative = 'Mimas renovó el contrato para octubre y la parrilla está aprobada.';
+  const correction = 'Mimas no renovó el contrato para octubre y la parrilla no está aprobada.';
+  const known = [{ id: 'confirmed-october', entity: 'Mimas Kitchen', statement: affirmative, certainty: 'CONFIRMADO', origin: 'EQUIPO' }];
+  const item = statement => ({ entidad: 'Mimas', tipoEntidad: 'cliente', tema: 'acuerdo', afirmacion: statement, certeza: 'CONFIRMADO', proposito: 'operacion', quienLoDijo: 'Francisco', evidencia: statement });
+  const result = validateLearnings({ aprendizajes: [item(correction)] }, { day: DAY, conversation, personText: correction, clients, members, known });
+  assert.equal(result.facts.length, 1, 'the contradiction must remain available for reconciliation');
+  assert.equal(result.facts[0].afirmacion, correction);
+  assert.equal(result.facts[0].certeza, 'PROPUESTA', 'a nightly extraction cannot confirm or supersede a human agreement');
+  assert.equal(known[0].statement, affirmative);
+  assert.equal(result.facts[0].reemplaza, undefined);
+  const sameChat = validateLearnings({ aprendizajes: [item(affirmative), item(correction)] }, { day: DAY, conversation, personText: `${affirmative}\n${correction}`, clients, members });
+  assert.equal(sameChat.facts.length, 2, 'opposite statements in one chat are not a lexical duplicate');
 });
 
 test('quotes are compared without accents, case or punctuation, and short ones never count', () => {

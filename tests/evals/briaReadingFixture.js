@@ -14,6 +14,7 @@ export const createReadingEvalFixture = ({ today = '2026-10-15', userRef = 'eval
     ...Array.from({ length: 52 }, (_, index) => ({ id: `cli-eval-${index + 1}`, name: `Cuenta Eval ${index + 1} Ficticia`, slug: `cuenta-eval-${index + 1}`, metrics: { ...metrics, level: 'yellow', reasons: ['Esperan aprobación.'], awaitingApproval: 1 } }))
   ];
   const people = [{ id: 'm-jarlan', name: 'Jarlan Ficticio', metrics: { open: 8, inProgress: 2, overdue: 5, returned: 0, closedTasks: 1, hoursMs: 3_600_000 } }];
+  const context = { accounts: clients.map(client => ({ clientId: client.id, state: 'CONSULTADO', partial: false, facts: [], contract: null })), criteria: [] };
   const signal = (row) => ({ direction: 'peor', severity: 2, evidence: [], ...row });
   const signals = [
     signal({ id: 'APROBACION_DETENIDA:cli-aristea', kind: 'APROBACION_DETENIDA', subjectType: 'CLIENT', subjectId: 'cli-aristea', subjectName: 'Aristea Ficticia', url: '/clientes/operacion/aristea-ficticia', text: 'Aristea Ficticia lleva 8 días seguidos con piezas esperando su aprobación (hoy 4).' }),
@@ -22,7 +23,7 @@ export const createReadingEvalFixture = ({ today = '2026-10-15', userRef = 'eval
     ...clients.slice(1).map((client) => signal({ id: `APROBACION_DETENIDA:${client.id}`, kind: 'APROBACION_DETENIDA', subjectType: 'CLIENT', subjectId: client.id, subjectName: client.name, url: `/clientes/operacion/${client.slug}`, text: `${client.name} tiene una pieza esperando aprobación desde hace tres días.` }))
   ];
   const makeReading = (day) => composeReading({
-    day, baseDay: before(day, 1), signals, clients,
+    day, baseDay: before(day, 1), signals, clients, context,
     summary: { historyDays: 12, firstDay: before(day, 11), clients: { red: 1, yellow: 52, green: 0, gray: 0 }, team: { open: 8, overdue: 5, returned: 0 } },
     model: validateDailyReading({
       resumen: 'Aristea Ficticia sigue en rojo y sus aprobaciones no se mueven; Jarlan Ficticio acumula vencidas.',
@@ -64,6 +65,7 @@ export const createReadingEvalFixture = ({ today = '2026-10-15', userRef = 'eval
   const service = createDailyReadingService({
     db: {}, repository, proactive: {}, conversations: {}, operations: { listOperations: rejectEffect },
     generate: rejectEffect, notify: rejectEffect, whatsapp: rejectEffect, listPeople: rejectEffect, criteria: async () => [],
+    memoryContext: async () => context,
     now: () => new Date(`${today}T17:00:00Z`)
   });
   return { service, records, clients };

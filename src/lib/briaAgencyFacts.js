@@ -73,7 +73,9 @@ export const validateFact = (input = {}) => {
   const validUntil = date(input.hasta ?? input.validUntil ?? null, 'hasta');
   if (validFrom && validUntil && validUntil < validFrom) throw factError('La vigencia termina antes de empezar.');
   const sources = (Array.isArray(input.fuentes ?? input.sources) ? (input.fuentes ?? input.sources) : [])
-    .slice(0, 3).map((s) => ({ tipo: String(s?.tipo || ''), ref: String(s?.ref || '').slice(0, 300), fecha: s?.fecha || null }));
+    .slice(0, 3).map((s) => ({ tipo: String(s?.tipo || ''), ref: String(s?.ref || '').slice(0, 300), fecha: s?.fecha || null,
+      ...(typeof s?.turno === 'string' ? { turno: s.turno.slice(0, 200) } : {}),
+      ...(typeof s?.huellaMensaje === 'string' && /^[a-f0-9]{64}$/.test(s.huellaMensaje) ? { huellaMensaje: s.huellaMensaje } : {}) }));
   const sensitivity = purpose === 'direccion' || entityType === 'persona' ? 'restringida' : (input.sensibilidad ?? input.sensitivity) === 'restringida' ? 'restringida' : 'normal';
   return {
     ...(input.id ? { id: String(input.id).slice(0, 120) } : {}),
@@ -111,31 +113,18 @@ export const factVisible = (fact, access) => Boolean(fact && access?.purposes?.i
 export const canWriteFact = (user, fact) => factVisible(fact, factAccess(user))
   && (factKey(fact.entity) !== factKey(AGENCY_ENTITY) || String(user?.role).toUpperCase() === 'ADMIN');
 
-// Una corrección, una confirmación o una enseñanza dicha por la persona en este mensaje. Las preguntas y los
-// pedidos de trabajo no lo son; lo que diga un archivo o un correo nunca cuenta.
-//
-// Se lee sobre el texto doblado (sin tildes ni mayúsculas): WhatsApp manda a veces la tilde descompuesta («a» más
-// la tilde aparte) y «guárdalo» no coincidía (Rodny, 22 de octubre de 2026: enseñó los apodos del equipo tres veces
-// y las tres se rechazaron). Y vale como se dice de verdad: «debes tenerlo presente», «obvio, guárdalo»,
-// «acuérdate», «anótalo», «siempre le decimos». Lo único que nunca cuenta es negarse: «no lo guardes».
-const fold = (value) => String(value || '').normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/\s+/g, ' ').trim();
-const words = (value) => ` ${fold(value).replace(/[^\p{L}\p{N}]+/gu, ' ').trim()} `;
-const TEACHING = / (te corrijo|corrige(lo|la)?|corrijo|correccion|esta mal|no es asi|es incorrecto|ya no|ya cambio|cambio|en realidad|recuerda(lo|la)?|acuerdate|no (lo |la )?olvides|aprende(te|telo|lo|la)?|guarda(lo|la|r|rlo|rla)?|guardes|anota(lo|la|r|rlo)?|registra(lo|la|r|rlo)?|ten(lo|la)? (en cuenta|presente)|tener(lo|la)? (en cuenta|presente)|debes saber(lo)?|para que sepas|confirmo|confirmado|asi es|actualiza(lo|la)?|siempre (usamos|decimos|le decimos|les decimos|llamamos)|le decimos|les decimos|no es .+ sino) /;
-const REFUSAL = / no (lo |la |me |te )?(guardes|guarde|anotes|registres|recuerdes|aprendas) /;
-export const correctionIntent = (text) => {
-  const value = words(text);
-  if (!value.trim()) return false;
-  if (REFUSAL.test(value)) return false;
-  return TEACHING.test(value);
+// Reemplazar retira todo el hecho previo. Una corrección de alcance más corto se
+// guarda por separado: no puede borrar obligaciones de otro sujeto o periodo.
+export const factReplacementProblem = (fact, before, clientId) => {
+  const sameSubject = fact.entityType === before.entityType && (clientId && before.clientId
+    ? clientId === before.clientId
+    : factKey(fact.entity) === factKey(before.entity));
+  if (!sameSubject) return 'La corrección y el recuerdo anterior pertenecen a sujetos o cuentas distintos.';
+  const coversStart = !fact.validFrom || before.validFrom && fact.validFrom <= before.validFrom;
+  const coversEnd = !fact.validUntil || before.validUntil && fact.validUntil >= before.validUntil;
+  if (!coversStart || !coversEnd) return 'La corrección cubre solo parte del periodo anterior. Guarda el nuevo hecho sin reemplazar la historia de otros periodos.';
+  return null;
 };
-
-// Un «sí» solo es permiso si llega justo después de que Bria ofreció guardar (Rodny, 9 de octubre de 2026:
-// contestó «Listo» a esa oferta y el guardado se rechazó). Vale como lo diga, aunque siga hablando («obvio, esto
-// es algo global…», 22 de octubre de 2026); un «no» al principio nunca. La aceptación la escribe la persona; la
-// respuesta anterior de Bria solo dice qué está aceptando.
-const AFFIRMATIVE = /^ (si|obvio|claro|dale|listo|ok|okay|vale|de acuerdo|hazlo|perfecto|adelante|va|correcto|exacto|asi es|por supuesto|por favor|guardalo|guardala|hagale|de una) /;
-const SAVE_OFFER = /(guard|record|anot|registr|memoria)[^?]*\?/;
-export const acceptsSaveOffer = (question, previousAnswer) => AFFIRMATIVE.test(words(question)) && SAVE_OFFER.test(fold(previousAnswer));
 
 /** Qué hacer con cada hecho de una nueva lectura. Lo que el equipo tocó o retiró, no se pisa ni revive. */
 export const planFactImport = (existing = [], incoming = []) => {
@@ -195,6 +184,8 @@ export const presentFact = (row) => ({
   fuente: (row.sources || []).map((s) => [s.ref, s.fecha && humanDay(s.fecha)].filter(Boolean).join(', ')).join(' · ') || null,
   origen: row.origin === 'EQUIPO'
     ? `Confirmado por ${row.actorName || 'el equipo'}${row.updatedAt ? ` el ${humanDay(new Date(row.updatedAt).toISOString())}` : ''}`
-    : `Lectura del negocio${row.asOf ? ` (${humanDay(row.asOf)})` : ''}`,
+    : row.origin === 'CONVERSACION'
+      ? `Aprendizaje extraído de conversación${row.asOf ? ` (${humanDay(row.asOf)})` : ''}; conserva la certeza indicada`
+      : `Lectura del negocio${row.asOf ? ` (${humanDay(row.asOf)})` : ''}`,
   ...(row.revision ? { revision: row.revision } : {})
 });

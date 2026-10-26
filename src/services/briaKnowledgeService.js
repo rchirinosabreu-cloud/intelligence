@@ -1,10 +1,35 @@
 import { validateLearning, learningVisible, knowledgeError } from '../lib/briaKnowledge.js';
+import { buildBusinessMemoryContext, isBusinessLearning } from '../lib/briaBusinessMemory.js';
 export const createBriaKnowledgeService = ({ repository, resolveActor }) => {
   const authorize = (actor, row, write = false) => {
     if (!['ADMIN', 'PROJECT_MANAGER'].includes(actor?.role) || !learningVisible(row, actor)) throw knowledgeError('No tienes acceso a este aprendizaje.', 403, 'BRIA_KNOWLEDGE_FORBIDDEN');
     if (write && row.scope === 'AGENCY' && actor.role !== 'ADMIN') throw knowledgeError('Las reglas generales las confirma un administrador.', 403, 'BRIA_KNOWLEDGE_FORBIDDEN');
   };
   return {
+    async businessContext(user, clients = []) {
+      const actor = await resolveActor(user);
+      if (!['ADMIN', 'PROJECT_MANAGER'].includes(actor?.role)) throw knowledgeError('No tienes acceso a estos aprendizajes.', 403, 'BRIA_KNOWLEDGE_FORBIDDEN');
+      const rows = await repository.businessContext(actor, clients, 7);
+      const current = await resolveActor(user);
+      if (!['ADMIN', 'PROJECT_MANAGER'].includes(current?.role)) throw knowledgeError('No tienes acceso a estos aprendizajes.', 403, 'BRIA_KNOWLEDGE_FORBIDDEN');
+      return buildBusinessMemoryContext(rows.filter(row => isBusinessLearning(row) && learningVisible(row, current)), clients);
+    },
+    async readableBusinessIds(user, ids = []) {
+      const actor = await resolveActor(user);
+      if (!['ADMIN', 'PROJECT_MANAGER'].includes(actor?.role)) throw knowledgeError('No tienes acceso a estos aprendizajes.', 403, 'BRIA_KNOWLEDGE_FORBIDDEN');
+      const rows = await repository.getBusinessMany(actor, ids);
+      const current = await resolveActor(user);
+      if (!['ADMIN', 'PROJECT_MANAGER'].includes(current?.role)) throw knowledgeError('No tienes acceso a estos aprendizajes.', 403, 'BRIA_KNOWLEDGE_FORBIDDEN');
+      return rows.filter(row => isBusinessLearning(row) && learningVisible(row, current)).map(row => row.id);
+    },
+    async readableIds(user, ids = []) {
+      const actor = await resolveActor(user);
+      if (!['ADMIN', 'PROJECT_MANAGER'].includes(actor?.role)) throw knowledgeError('No tienes acceso a estos aprendizajes.', 403, 'BRIA_KNOWLEDGE_FORBIDDEN');
+      const rows = await repository.getMany(actor, ids);
+      const current = await resolveActor(user);
+      if (!['ADMIN', 'PROJECT_MANAGER'].includes(current?.role)) throw knowledgeError('No tienes acceso a estos aprendizajes.', 403, 'BRIA_KNOWLEDGE_FORBIDDEN');
+      return rows.filter(row => learningVisible(row, current)).map(row => row.id);
+    },
     async registryHistory(user, id) {
       if ((await resolveActor(user)).role !== 'ADMIN') throw knowledgeError('El Registro está disponible solo para administradores.', 403);
       const rows = await this.history(user, id);

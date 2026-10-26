@@ -4,7 +4,7 @@
 
 import { randomUUID } from 'node:crypto';
 import {
-  FACT_CERTAINTIES, canWriteFact, factDigest, factError, factKey, factVisible, planFactImport, validateFact
+  FACT_CERTAINTIES, canWriteFact, factDigest, factError, factKey, factVisible, factReplacementProblem, planFactImport, validateFact
 } from '../lib/briaAgencyFacts.js';
 
 const STOP = new Set(['que', 'para', 'como', 'con', 'del', 'una', 'los', 'las', 'quien', 'tiene', 'desde', 'este', 'esta', 'mes', 'cual', 'cuales', 'sobre', 'hay', 'nos', 'les', 'por', 'pero', 'mas', 'muy', 'sus', 'son', 'fue', 'ser']);
@@ -56,7 +56,7 @@ export const createBriaAgencyFactRepository = ({ pool, workspace }) => {
     // cuenta. Un homónimo ligado a otra ficha nunca se hereda por su nombre.
     async searchClients(access, clients, limit = 7) {
       if (!access?.purposes?.length || !clients.length) return [];
-      const requested = clients.slice(0, 60).map(client => ({ id: client.id, entity_key: factKey(client.name) }));
+      const requested = clients.slice(0, 60).map(client => ({ id: client.id, entity_key: factKey(client.name), ambiguous: Boolean(client.ambiguous) }));
       // Sin vínculo nativo, un nombre ambiguo requiere aclaración, no duplicar el hecho.
       for (const row of requested) if (requested.filter(other => other.entity_key === row.entity_key).length > 1) row.ambiguous = true;
       const rows = (await pool.query(`SELECT scoped.*, c.id AS context_client_id
@@ -70,11 +70,16 @@ export const createBriaAgencyFactRepository = ({ pool, workspace }) => {
     },
 
     /** Hechos vigentes de una cuenta o de un tema, ya filtrados por lo que la persona puede ver. */
-    async search(access, { query = '', clientId = null, entity = null, topic = null, limit = 25 } = {}) {
+    async search(access, { query = '', clientId = null, entity = null, unlinkedEntity = null, topic = null, excludeTopics = [], excludeEntityTypes = [], limit = 25 } = {}) {
       if (!access?.purposes?.length) return [];
       const args = [workspace, access.purposes, access.restricted];
       const filters = [];
-      if (clientId) { args.push(clientId); filters.push(`f.client_id = $${args.length}`); }
+      if (clientId) {
+        args.push(clientId);
+        const linked = `f.client_id = $${args.length}`;
+        if (unlinkedEntity) { args.push(factKey(unlinkedEntity)); filters.push(`(${linked} OR (f.client_id IS NULL AND f.entity_type='cliente' AND f.entity_key=$${args.length}))`); }
+        else filters.push(linked);
+      }
       if (entity) { args.push(factKey(entity)); filters.push(`f.entity_key = $${args.length}`); }
       const words = searchTerms(query);
       let rank = 'NULL::real'; // Un literal numérico en ORDER BY sería una posición de columna.
@@ -88,6 +93,8 @@ export const createBriaAgencyFactRepository = ({ pool, workspace }) => {
       }
       if (!filters.length) return [];
       if (topic) { args.push(topic); filters.push(`f.topic = $${args.length}`); }
+      if (excludeTopics.length) { args.push(excludeTopics); filters.push(`NOT(f.topic = ANY($${args.length}::text[]))`); }
+      if (excludeEntityTypes.length) { args.push(excludeEntityTypes); filters.push(`NOT(f.entity_type = ANY($${args.length}::text[]))`); }
       args.push(Math.min(Math.max(Number(limit) || 25, 1), 60));
       const rows = (await pool.query(`${SELECT} WHERE f.workspace = $1 AND f.status = 'ACTIVE' AND ${VISIBLE} AND (${filters.join(' AND ')})
         ORDER BY ${rank} DESC, ${CERTAINTY_ORDER}, f.updated_at DESC, f.id LIMIT $${args.length}`, args)).rows;
@@ -181,18 +188,39 @@ export const createBriaAgencyFactRepository = ({ pool, workspace }) => {
       const fact = validateFact({ ...raw, certeza: raw.certeza ?? raw.certainty ?? 'CONFIRMADO' });
       if (!canWriteFact(user, fact)) throw factError('No puedes guardar este conocimiento: su propósito no está disponible para tu cuenta, o es de toda la agencia y lo confirma un administrador.', 403, 'BRIA_FACT_FORBIDDEN');
       return transaction(async (db) => {
+        // El mismo hecho confirmado no ocupa otro lugar en contexto por repetir
+        // la llamada o enseñarlo de nuevo. La identidad incluye alcance y certeza;
+        // no interpreta paráfrasis ni confunde una propuesta con un acuerdo.
+        const digest = factDigest({ ...fact, sources: [] });
+        let existing = null;
+        if (!replaces.length) {
+          await db.query('SELECT pg_advisory_xact_lock(hashtextextended($1,0))', [`${workspace}:${clientId || ''}:${digest}`]);
+          // A delayed retry is still the original human turn. If a later
+          // correction retired that teaching, it must not resurrect it. A new
+          // human turn remains free to confirm the same content again.
+          for (const source of fact.sources.filter(row => row.tipo === 'equipo' && row.turno && /^[a-f0-9]{64}$/.test(row.huellaMensaje || ''))) {
+            const provenance = [{ tipo: source.tipo, turno: source.turno, huellaMensaje: source.huellaMensaje }];
+            const replays = (await db.query(`${SELECT} WHERE f.workspace=$1 AND f.digest=$2 AND f.client_id IS NOT DISTINCT FROM $3::text
+              AND f.origin='EQUIPO' AND f.actor_ref=$4 AND f.sources @> $5::jsonb FOR UPDATE`, [workspace, digest, clientId, actor.ref, JSON.stringify(provenance)])).rows;
+            if (replays.some(row => row.status !== 'ACTIVE')) throw factError('Ese mensaje ya guardó un recuerdo que después fue corregido o retirado. Vuelve a consultar la memoria actual antes de cambiarla.', 409, 'BRIA_FACT_CHANGED');
+          }
+          existing = present((await db.query(`${SELECT} WHERE f.workspace=$1 AND f.digest=$2 AND f.client_id IS NOT DISTINCT FROM $3::text AND f.status='ACTIVE' AND f.origin='EQUIPO' LIMIT 1 FOR UPDATE`, [workspace, digest, clientId])).rows[0]);
+        }
         const replaced = [];
         for (const { id, revision } of replaces) {
           const before = present((await db.query(`${SELECT} WHERE f.workspace=$1 AND f.id=$2 FOR UPDATE`, [workspace, id])).rows[0]);
           if (!factVisible(before, access)) throw factError('Ese hecho no está disponible.', 404, 'BRIA_FACT_NOT_FOUND');
+          if (!canWriteFact(user, before)) throw factError('Ese conocimiento lo corrige un administrador.', 403, 'BRIA_FACT_FORBIDDEN');
           if (before.status !== 'ACTIVE') throw factError('Ese hecho ya fue reemplazado o retirado. Vuelve a consultarlo.', 409, 'BRIA_FACT_CHANGED');
           if (revision != null && before.revision !== revision) throw factError('Ese hecho cambió mientras conversábamos. Vuelve a consultarlo.', 409, 'BRIA_FACT_CHANGED');
+          const problem = factReplacementProblem(fact, before, clientId || replaced.find(row => row.clientId)?.clientId);
+          if (problem) throw factError(problem, 400, 'BRIA_FACT_REPLACEMENT_SCOPE');
           replaced.push(before);
         }
-        const id = `equipo-${randomUUID()}`;
+        const id = existing?.id || `equipo-${randomUUID()}`;
         const link = clientId || replaced.find((row) => row.clientId)?.clientId || null;
-        const row = present(await insertFact(db, fact, { id, clientId: link, origin: 'EQUIPO', asOf: null, actor, digest: factDigest(fact) }));
-        await event(db, id, 1, replaced.length ? 'CORRECT' : 'CONFIRM', null, row, actor, reason || (replaced.length ? 'Corrección del equipo en conversación' : 'Enseñanza del equipo en conversación'));
+        const row = existing || present(await insertFact(db, fact, { id, clientId: link, origin: 'EQUIPO', asOf: null, actor, digest }));
+        if (!existing) await event(db, id, 1, replaced.length ? 'CORRECT' : 'CONFIRM', null, row, actor, reason || (replaced.length ? 'Corrección del equipo en conversación' : 'Enseñanza del equipo en conversación'));
         for (const before of replaced) {
           const after = (await db.query("UPDATE bria_memory.agency_facts SET status='SUPERSEDED', superseded_by=$3, revision=revision+1, updated_at=now() WHERE workspace=$1 AND id=$2 RETURNING revision", [workspace, before.id, id])).rows[0];
           await event(db, before.id, after.revision, 'SUPERSEDE', before, { ...before, status: 'SUPERSEDED', supersededBy: id, revision: after.revision }, actor, `Reemplazado por lo que dijo ${actor.name}`);

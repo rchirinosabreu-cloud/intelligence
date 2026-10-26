@@ -29,7 +29,10 @@ export const createFullInquiryFixture = (ai, { initialTurns = [], overview = fal
     initialTurns, conversationOptions,
     assistantTools: briaAssistantTools,
     session: { token: 'fictional-no-network' },
-    knowledge: service({ list: record('knowledge', []) }),
+    knowledge: service({ list: record('knowledge', []), businessContext: async (_user, clients) => {
+      reads.push('business-context');
+      return { agency: { state: 'CONSULTADO', partial: false, learnings: [] }, accounts: clients.map(client => ({ clientId: client.id, state: 'CONSULTADO', partial: false, learnings: [] })) };
+    } }),
     assistantOptions: {
       taskDrafts: service({}), dispatchDrafts: service({}), deleteDrafts: service({}), actions: service({}),
       usage: service({ summary: record('usage', {}) }), platform: service({ call: async ({ method }) => { assert.equal(method, 'GET'); return { ok: false, status: 404, error: 'No hay información adicional en esa ruta de esta cuenta ficticia. Usa las lecturas propias de Gestión, Actividad y Carga.' }; } }),

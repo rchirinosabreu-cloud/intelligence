@@ -38,6 +38,13 @@ test('real PostgreSQL preserves corrections, detects concurrent writes and undoe
     const personal = await repo.save({ actor, learning: { ...input, scope: 'PERSONAL', entity: 'Personal', topic: 'Preferencia' } });
     assert.equal((await repo.list({ ...actor, ref: 'another-admin' })).some(row => row.id === personal.id), false);
     await assert.rejects(() => repo.undo({ actor: { ...actor, ref: 'another-admin' }, id: personal.id, expectedRevision: 1 }), { status: 404 });
+    for (let i = 0; i < 101; i++) await repo.save({ actor, learning: { ...input, scope: 'AGENCY', topic: `Tema posterior ${i}` } });
+    assert.equal((await repo.list(actor)).some(row => row.id === created.id), false, 'the old cited source falls outside the search window');
+    assert.deepEqual((await repo.getMany(actor, [created.id, personal.id])).map(row => row.id).sort(), [created.id, personal.id].sort());
+    assert.deepEqual((await repo.getMany({ ...actor, ref: 'another-admin' }, [created.id, personal.id])).map(row => row.id), [created.id]);
+    assert.deepEqual(await repo.getMany({ ...actor, role: 'PROJECT_MANAGER', accountIds: [] }, [created.id]), []);
+    assert.equal((await repo.getMany({ ...actor, role: 'PROJECT_MANAGER', accountIds: [input.entity] }, [created.id]))[0].status, 'REVOKED', 'history remains readable while account access remains valid');
+    assert.deepEqual(await repo.getBusinessMany(actor, [created.id, personal.id]), [], 'business context still excludes retired and personal records');
     const source = { id: 'drive:test', kind: 'drive', title: 'Cuenta de prueba', date: '2026-10-07', locator: null, digest: 'one', body: 'Texto de prueba de coordinación y producción.', status: 'indexed' };
     assert.equal((await repo.importSource(source)).changed, true);
     assert.equal((await repo.importSource(source)).changed, false);

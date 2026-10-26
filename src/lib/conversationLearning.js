@@ -83,7 +83,8 @@ export const buildLearningRequest = ({ digest, day, known = [], signal }) => ({
     'proposito: operacion (coordinación, fechas, piezas), editorial (marca, tono, contenido), personas (cómo trabaja alguien del equipo), comercial (precios, propuestas, prospectos), financiero (cobros, pagos) o direccion (decisiones de la dirección).',
     'quienLoDijo: el nombre de la persona del chat. evidencia: la frase literal de la persona que lo sostiene, copiada tal cual, sin resumir ni unir frases.',
     'Nunca anotes contraseñas, correos, teléfonos, números de cuenta o de documento, nada de salud, ausencias, familia o dinero de una persona, ni juicios sobre alguien («lento», «flojo», «desempeño»). Una costumbre de trabajo se dice como hecho («pide los videos de Mimas con prioridad alta»), nunca como calificación.',
-    known.length ? `Ya sé esto (no lo repitas, salvo que la persona lo haya cambiado):\n${known.map((row) => `- ${row}`).join('\n')}` : '',
+    'Contrasta los recuerdos recuperados por cuenta, periodo y certeza. Son contexto parcial, no nuevas afirmaciones de la persona. No extraigas de ellos otro aprendizaje ni interpretes una ausencia como desconocimiento. Una corrección, negación o cambio de periodo no es repetición aunque comparta palabras. Si contradice algo confirmado, conserva lo que la persona dijo con su cita y certeza permitida; esta lectura nocturna no confirma, reemplaza ni resuelve el conflicto por su cuenta.',
+    known.length ? `Ya sé esto (no lo repitas, salvo que la persona lo haya cambiado):\n${known.map((row) => `- ${typeof row === 'string' ? row : JSON.stringify({ id: row.id, entidad: row.entity, afirmacion: row.statement, certeza: row.certainty, origen: row.origin, desde: row.validFrom, hasta: row.validUntil, revision: row.revision })}`).join('\n')}` : '',
     '',
     '=== CHAT ===',
     digest.text
@@ -98,13 +99,6 @@ export const parseLearnings = (rawText) => {
 };
 
 const text = (value, max) => clip(value, max);
-const similar = (a, b) => {
-  const wa = new Set(comparable(a).split(' ').filter((w) => w.length > 3)), wb = new Set(comparable(b).split(' ').filter((w) => w.length > 3));
-  if (!wa.size || !wb.size) return false;
-  let shared = 0; for (const w of wa) if (wb.has(w)) shared += 1;
-  return shared / Math.min(wa.size, wb.size) >= 0.8;
-};
-
 export const learningId = ({ day, conversationId, entity, statement }) => `charla-${createHash('sha256').update([day, conversationId, factKey(entity), factKey(statement)].join('|')).digest('hex').slice(0, 24)}`;
 
 /**
@@ -141,9 +135,11 @@ export const validateLearnings = (raw, { day, conversation, personText, clients 
     else if (type === 'persona') { const row = byMember.get(factKey(entity)) || byFirst.get(factKey(entity).split(' ')[0]) || null; if (!row) { drop('persona desconocida'); continue; } entity = row.name; purpose = 'personas'; }
     else if (type === 'agencia') { entity = 'Brain Studio'; }
     const key = `${factKey(entity)}|${factKey(statement)}`;
-    if (seen.has(key)) continue;
-    if (known.some((row) => factKey(row.entity) === factKey(entity) && (factKey(row.statement) === factKey(statement) || similar(row.statement, statement)))) { drop('ya sabido'); continue; }
-    if (out.some((row) => factKey(row.entidad) === factKey(entity) && similar(row.afirmacion, statement))) { drop('repetido en el mismo chat'); continue; }
+    if (seen.has(key)) { drop('repetido en el mismo chat'); continue; }
+    // Coincidir en palabras no demuestra equivalencia: una negación o una fecha
+    // distinta puede cambiar el acuerdo. La interpretación la hace el modelo;
+    // aquí solo se evita guardar de nuevo una afirmación exactamente igual.
+    if (known.some((row) => factKey(row.entity) === factKey(entity) && factKey(row.statement) === factKey(statement))) { drop('ya sabido'); continue; }
     const fact = {
       id: learningId({ day, conversationId: conversation.id, entity, statement }),
       entidad: entity, tipoEntidad: entityType, tema: text(item?.tema, 60) || 'conversacion', afirmacion: statement,

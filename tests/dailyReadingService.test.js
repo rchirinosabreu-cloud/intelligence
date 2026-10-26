@@ -109,7 +109,7 @@ const fakeDb = () => {
     ] }
   };
 };
-const RODNY = { id: 'u-rodny', name: 'Rodny Chirinos', role: 'ADMIN', modulePermissions: {}, teamMember: { id: 'admin-member', name: 'Rodny Chirinos' } };
+const RODNY = { id: 'u-rodny', name: 'Rodny Chirinos', role: 'ADMIN', modulePermissions: { bria: true }, teamMember: { id: 'admin-member', name: 'Rodny Chirinos' } };
 const CAMILA = { id: 'u-camila', name: 'Camila Torres', role: 'PROJECT_MANAGER', modulePermissions: { manager: false, bria: true }, teamMember: { id: 'pm-camila', name: 'Camila Torres' } };
 
 const setup = ({ generate, seed } = {}) => {
@@ -121,6 +121,7 @@ const setup = ({ generate, seed } = {}) => {
     db: fakeDb(), repository, proactive,
     conversations: { postAssistantNote: async (actor, note) => { notes.push({ actor, note }); return { id: `chat-${notes.length}` }; } },
     operations: { listOperations: async () => OPERATIONS },
+    memoryContext: async ({ clients }) => ({ accounts: clients.map(client => ({ clientId: client.id, state: 'CONSULTADO', partial: false, facts: [], contract: null })) }),
     // El manual de criterio (20 de octubre de 2026), como lo entrega la memoria de la agencia.
     criteria: async () => [{ id: 'equipo-r4', text: 'Regla 4. Días sin publicar: 3 días es alerta para cualquier cliente; 6 días es grave.', purpose: 'operacion' }],
     generate: generate || (async (request) => { requests.push(request); return { text: JSON.stringify({ resumen: 'Foobespain se puso en rojo desde ayer.', decisiones: [
@@ -270,9 +271,11 @@ test('6:00 photo every day, 6:30 reading and 7:30 message on business days, each
 
   const rodny = notes.find((n) => n.actor.ref === 'u-rodny').note;
   assert.equal(rodny.title, 'Lectura de la mañana · martes 20 de octubre');
-  assert.deepEqual(rodny.metadata, { note: 'LECTURA_MANANA', dayKey: '2026-10-20' });
+  assert.equal(rodny.metadata.note, 'LECTURA_MANANA');
+  assert.equal(rodny.metadata.dayKey, '2026-10-20');
+  assert.ok(rodny.metadata.sources.some(source => source.kind === 'hecho_agencia' && source.id === 'equipo-r4'));
   assert.match(rodny.text, /Foobespain se puso en rojo desde ayer\./);
-  assert.match(rodny.text, /- Equipo: /, 'an admin sees the team');
+  assert.equal(service.scopeFor(RODNY, await repository.latestReading()).people, true, 'an admin can review team data even when the brief does not repeat its counters');
   const camila = notes.find((n) => n.actor.ref === 'u-camila').note;
   assert.match(camila.text, /Así amanecieron tus cuentas/);
   assert.match(camila.text, /- Tus cuentas: 1 en rojo y 1 en amarillo\./, 'Foobespain and Endova are hers; Aristea is not');
@@ -518,7 +521,8 @@ test('if the model fails, Bria reads with the platform’s rules instead of goin
   await service.runAutomatic();
   const reading = repository.readings.get('2026-10-20');
   assert.equal(reading.source, 'REGLA');
-  assert.equal(reading.decisions[0].title, 'Revisar la cuenta de Foobespain');
+  assert.equal(reading.decisions[0].title, 'Revisar el compromiso de Foobespain');
+  assert.equal(reading.decisions[0].kind, 'VIGILAR');
 });
 
 test('in the chat, Bria reads the day and a history, inside the same scope as the morning message', async () => {

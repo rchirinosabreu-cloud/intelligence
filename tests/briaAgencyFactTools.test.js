@@ -91,32 +91,31 @@ test('consulting passes the account and the question through and never writes', 
 test('saving needs a correction, confirmation or teaching in the human message itself', async () => {
   const service = fakeService();
   const save = byName(createAgencyFactTools(service), 'guardar_en_memoria');
-  const args = { afirmacion: 'Caribbean Drive terminó en agosto de 2026.', entidad: 'Caribbean Drive', clientId: null, tema: 'relacion', tipoEntidad: 'cliente', proposito: 'operacion', certeza: 'CONFIRMADO', desde: '2026-08-31', hasta: null, reemplaza: [], respondeDuda: null };
-  await assert.rejects(() => save.run(args, { user: pm, question: '¿Caribbean sigue activo?' }), /corrección|enseñanza/i);
+  const args = { request: { intent: 'TEACH' }, afirmacion: 'Caribbean Drive terminó en agosto de 2026.', entidad: 'Caribbean Drive', clientId: null, tema: 'relacion', tipoEntidad: 'cliente', proposito: 'operacion', certeza: 'CONFIRMADO', desde: '2026-08-31', hasta: null, reemplaza: [], respondeDuda: null };
+  await assert.rejects(() => save.run(args, { user: pm, question: '¿Caribbean sigue activo?', memoryIntent: 'NINGUNO' }), { code: 'BRIA_FACT_NO_INTENT' });
   assert.equal(service.calls.length, 0);
-  const out = await save.run(args, { user: pm, question: 'Ya no trabajamos con Caribbean, terminó en agosto' });
+  const out = await save.run(args, { user: pm, question: 'Ya no trabajamos con Caribbean, terminó en agosto', memoryIntent: 'GUARDAR' });
   assert.equal(out.data.saved, true);
   assert.equal(service.calls[0][0], 'record');
 });
 
-test('a short yes counts only right after Bria offered to save (Rodny, 9 de octubre de 2026: «Listo» no se guardó)', async () => {
+test('acceptance uses the actual previous offer, not an affirmative-word detector', async () => {
   const service = fakeService();
   const save = byName(createAgencyFactTools(service), 'guardar_en_memoria');
   const args = { afirmacion: 'Aristea no confirmará el contrato de octubre por falta de flujo de caja.', entidad: 'Aristea', clientId: 'c1', tema: 'acuerdo', tipoEntidad: 'cliente', proposito: 'operacion', certeza: 'CONFIRMADO', desde: '2026-10-09', hasta: null, reemplaza: [], respondeDuda: null };
   const offer = 'Lo dejo así en la memoria de Aristea: el contrato de octubre no se confirmará. ¿Quieres que lo guarde?';
-  for (const yes of ['Listo', 'Sí', 'si, dale', 'Ok', 'De acuerdo', 'Hazlo', 'Sí, guárdalo', 'Perfecto']) {
-    assert.equal((await save.run(args, { user: pm, question: yes, previousAnswer: offer })).data.saved, true, yes);
-  }
-  await assert.rejects(() => save.run(args, { user: pm, question: 'Listo', previousAnswer: 'Aristea está en rojo por dos frentes.' }), /pregúntale/i);
-  await assert.rejects(() => save.run(args, { user: pm, question: 'Listo' }), /pregúntale/i);
-  await assert.rejects(() => save.run(args, { user: pm, question: 'No, mejor no', previousAnswer: offer }), /pregúntale/i);
+  args.request = { intent: 'ACCEPT', offerEvidence: offer };
+  assert.equal((await save.run(args, { user: pm, question: 'Listo', previousAnswer: offer, memoryIntent: 'GUARDAR' })).data.saved, true);
+  await assert.rejects(() => save.run(args, { user: pm, question: 'Listo', previousAnswer: 'Aristea está en rojo por dos frentes.', memoryIntent: 'GUARDAR' }), { code: 'BRIA_FACT_NO_INTENT' });
+  await assert.rejects(() => save.run(args, { user: pm, question: 'Listo', memoryIntent: 'GUARDAR' }), { code: 'BRIA_FACT_NO_INTENT' });
+  await assert.rejects(() => save.run(args, { user: pm, question: 'No, mejor no', previousAnswer: offer, memoryIntent: 'NINGUNO' }), { code: 'BRIA_FACT_NO_INTENT' });
 });
 
 test('forgetting needs an explicit request to forget', async () => {
   const service = fakeService();
   const retire = byName(createAgencyFactTools(service), 'retirar_de_memoria');
-  await assert.rejects(() => retire.run({ id: 'x', revision: 1 }, { user: admin, question: 'Revisa esto' }), /olvidar/i);
-  assert.equal((await retire.run({ id: 'x', revision: 1 }, { user: admin, question: 'Olvida ese dato, ya no aplica' })).data.retired, true);
+  await assert.rejects(() => retire.run({ id: 'x', revision: 1, request: { intent: 'RETIRE' } }, { user: admin, question: 'Revisa esto', memoryIntent: 'NINGUNO' }), { code: 'BRIA_FACT_NO_INTENT' });
+  assert.equal((await retire.run({ id: 'x', revision: 1, request: { intent: 'RETIRE' } }, { user: admin, question: 'Olvida ese dato, ya no aplica', memoryIntent: 'RETIRAR' })).data.retired, true);
 });
 
 test('the service resolves the person again and hides purposes the account cannot read', async () => {
