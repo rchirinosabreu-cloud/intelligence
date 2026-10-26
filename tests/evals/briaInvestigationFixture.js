@@ -10,6 +10,7 @@ export const createInvestigationFixture = (ai, assistantOptions = {}) => {
     knowledge: { list: async () => [], propose: async () => assert.fail('Investigation must not write knowledge') },
     assistantTools: briaAssistantTools.filter(tool => ['buscar_cliente', 'tareas_de_cliente', 'parrilla_de_cliente'].includes(tool.name)),
     assistantContext: {
+      agencyFacts: { contextForClients: async (_user, clients) => ({ cuentas: clients.map(row => ({ clientId: row.id, estado: 'CONSULTADO', parcial: false, hechos: [] })) }) },
       getTasks: async () => { consultedTasks++; return [{ id: 'task-aurora', title: 'Entregar portada del taller', status: 'PENDIENTE', dueDate: '2026-10-25T12:00:00Z', client: { name: 'Taller Aurora Ficticio' }, assignee: { name: 'Nora Sáenz' }, accumulatedWorkMs: 0 }]; },
       readActivity: async () => { consultedActivity++; return [{ id: 'lifecycle-nora', name: 'Nora Sáenz', status: 'REUNION', currentTask: null, currentEvent: { id: 'meeting', title: 'Revisión creativa', type: 'MEETING', startAt: '2026-10-24T16:00:00Z', endAt: '2026-10-24T18:00:00Z' } }]; }
     },

@@ -6,8 +6,10 @@ import { canUseVault } from '../lib/vaultAccess.js';
 
 // La misma comprobación al leer y al terminar una respuesta. Las dependencias se inyectan para
 // verificar fuentes y revocaciones con la regla real sin consultar datos de producción.
-export const createBriaTurnAuthorizer = ({ db, canReadAgencyMemory, knowledge }) => async (user, turn) => {
+export const createBriaTurnAuthorizer = ({ db, canReadAgencyMemory, knowledge, agencyFacts }) => async (user, turn) => {
   if (turn.investigation && !isManagerRole(user.role)) return false;
+  const factIds = [...new Set([...(turn.sources || []), ...(turn.investigation?.sources || [])].filter(row => row.kind === 'hecho_agencia').map(row => row.id))];
+  if (factIds.length && !(await agencyFacts?.().canReadMany(user, factIds))) return false;
   for (const source of [...(turn.sources || []), ...(turn.investigation?.sources || [])]) {
     if (source.kind === 'actividad' && !hasModulePermission(user, 'actividad')) return false;
     if (source.kind === 'investigacion' && !isManagerRole(user.role)) return false;

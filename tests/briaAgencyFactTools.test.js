@@ -135,11 +135,12 @@ test('the service resolves the person again and hides purposes the account canno
   await assert.rejects(() => revoked.consult({ ...pm }, { consulta: 'x' }), { status: 403 });
 });
 
-test('Bria is told how to use the agency memory and that the team and the platform outrank the reading', () => {
+test('Bria weighs current records and remembered agreements by scope instead of absolute precedence', () => {
   const tools = createAgencyFactTools(fakeService()).map(({ name, description }) => ({ name, description }));
   const text = buildInstructions({ person: { name: 'Camila' }, today: '2026-10-09', tools });
   assert.match(text, /memoria_de_la_agencia/);
-  assert.match(text, /lo que el equipo confirm/i);
-  assert.match(text, /plataforma actual/i);
+  assert.match(text, /cuenta, periodo, certeza y procedencia/i);
+  assert.match(text, /memoria histórica tampoco anula un acuerdo posterior/i);
+  assert.match(text, /reconstruye el orden/i);
   assert.match(text, /una sola duda/i);
 });

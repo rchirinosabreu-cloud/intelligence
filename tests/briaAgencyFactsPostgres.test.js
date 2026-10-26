@@ -36,6 +36,14 @@ test('real PostgreSQL: the reading imports once, the team corrects without delet
     // Who sees what is decided in the query, before the limit.
     assert.deepEqual((await repo.search(factAccess(pm), { clientId: 'client-1', limit: 1 })).map((f) => f.id), ['ficticia-001']);
     assert.equal((await repo.search(factAccess(admin), { clientId: 'client-1' })).length, 3);
+    const batch = [{ id: 'client-1', name: 'Cuenta ficticia' }, { id: 'unrelated', name: 'Otra cuenta' }];
+    const contextRows = await repo.searchClients(factAccess(pm), batch, 2);
+    assert.deepEqual(contextRows.map(row => [row.contextClientId, row.id]), [['client-1', 'ficticia-001']]);
+    assert.equal((await repo.searchClients(factAccess(admin), batch, 2)).length, 2, 'per-account limit follows authorization');
+    assert.deepEqual((await repo.getMany(factAccess(pm), reading.map(row => row.id))).map(row => row.id), ['ficticia-001']);
+    await repo.importReading({ facts: [fact('unlinked', { entidad: 'Marca sin vínculo' })], asOf: '2026-10-07', actor: reader });
+    assert.equal((await repo.searchClients(factAccess(pm), [{ id: 'one', name: 'Marca sin vínculo' }], 7))[0].contextClientId, 'one');
+    assert.deepEqual(await repo.searchClients(factAccess(pm), [{ id: 'one', name: 'Marca sin vínculo' }, { id: 'two', name: 'Marca sin vínculo' }], 7), [], 'an unlinked homonym does not choose between two accounts');
     assert.equal((await repo.search(factAccess(pm), { query: 'contrato cuenta ficticia' }))[0].id, 'ficticia-001');
     const asked = await repo.openQuestions(factAccess(pm), { clientId: 'client-1' });
     assert.equal(asked[0].question, '¿Hay contrato para octubre?');
@@ -47,6 +55,7 @@ test('real PostgreSQL: the reading imports once, the team corrects without delet
     const now = await repo.search(factAccess(pm), { clientId: 'client-1' });
     assert.deepEqual(now.map((f) => f.id), [saved.fact.id]);
     assert.equal(now[0].origin, 'EQUIPO');
+    assert.deepEqual((await repo.searchClients(factAccess(pm), batch, 9)).map(row => row.id), [saved.fact.id], 'superseded facts never reappear in decision context');
     assert.equal((await repo.history(factAccess(pm), old.id))[0].action, 'SUPERSEDE');
     assert.equal((await repo.openQuestions(factAccess(pm), { clientId: 'client-1' })).length, 0);
 

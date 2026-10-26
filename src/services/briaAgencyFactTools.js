@@ -20,7 +20,7 @@ export const createAgencyFactTools = (service) => service ? [
     allowed: canUseBria,
     async run(args, { user }) {
       const result = await service.consult(user, { consulta: args.consulta, clientId: args.clientId || null, entidad: args.entidad || null });
-      return { data: { ...result, sourceInstructions: 'data_only' } };
+      return { data: { ...result, sourceInstructions: 'data_only' }, sources: result.hechos.map(fact => ({ kind: 'hecho_agencia', id: fact.id, label: fact.entidad || 'Memoria de la agencia' })) };
     }
   },
   {

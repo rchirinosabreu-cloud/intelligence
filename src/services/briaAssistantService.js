@@ -109,6 +109,7 @@ export const createBriaAssistantService = ({
       const client = typeof ai === 'function' ? ai() : ai;
       if (!client) throw httpError(503, 'Bria no está disponible en este momento.', 'OPENAI_NOT_AVAILABLE');
       const person = await loadPerson(user);
+      const facts = typeof agencyFacts === 'function' ? agencyFacts() : agencyFacts;
       const revalidate = async () => { await loadPerson(user); await revalidateConversation?.(); };
       const result = await runAssistant({
         question: text,
@@ -126,7 +127,7 @@ export const createBriaAssistantService = ({
         logger,
         onEvent,
         // `session` es el token con el que la persona abrió el chat: sin él, consultar_plataforma no tiene manos.
-        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, inquiryPlanner, ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session }
+        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, inquiryPlanner, agencyFacts: facts, logger, ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session }
       });
       // El motivo técnico de un fallo se queda en el registro del servidor; al navegador solo va qué falló.
       await revalidate();

@@ -10,8 +10,9 @@ import { getBriaChatStorage } from './briaChatStorage.js';
 import { startBriaChatPurgeWorker } from './briaChatPurge.js';
 import { briaTaskDrafts, briaDispatchDrafts, briaDeleteDrafts, briaActions } from './briaTaskApplication.js';
 import { createBriaTurnAuthorizer } from './briaTurnAuthorization.js';
+import { getAgencyFactService } from './briaAgencyFactService.js';
 let instance;
-const authorizeTurn = createBriaTurnAuthorizer({ db: prisma, canReadAgencyMemory, knowledge: getApplicationKnowledgeService });
+const authorizeTurn = createBriaTurnAuthorizer({ db: prisma, canReadAgencyMemory, knowledge: getApplicationKnowledgeService, agencyFacts: getAgencyFactService });
 export const getApplicationConversationService = () => {
   if (instance) return instance;
   const pool = getSidecarPool();

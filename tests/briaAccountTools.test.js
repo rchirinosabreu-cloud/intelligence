@@ -74,7 +74,7 @@ test('the account operation brings the contract per format, stories, production 
 
 test('the portfolio answers «which accounts are in red and why» in one call, for managers only', async () => {
   const operations = { listOperations: async () => [
-    { id: 'c1', name: 'Aristea', slug: 'aristea', agency: 'BRAIN', projectManager: { name: 'Camila' }, communityManager: { name: 'Helen' }, evaluation: { level: 'red', reasons: [{ text: 'Piezas con fecha pasada sin publicar.' }, { text: 'Ritmo atrasado.' }, { text: 'Otro.' }] }, cycles: { current: { quota: 12, created: 12, reached: { aprobada: 4, publicada: 2 }, overdueItems: 3 } }, openTasks: [{ overdue: true }] },
+    { id: 'c1', name: 'Aristea', slug: 'aristea', agency: 'BRAIN', projectManager: { name: 'Camila' }, communityManager: { name: 'Helen' }, evaluation: { level: 'red', reasons: [{ text: 'Piezas con fecha pasada sin publicar.' }, { text: 'Ritmo atrasado.' }, { text: 'Otro.' }] }, cycles: { current: { label: 'Octubre de 2026', quota: 12, created: 12, reached: { aprobada: 4, publicada: 2 }, overdueItems: 3 } }, openTasks: [{ overdue: true }] },
     { id: 'c2', name: 'Bonsai', slug: 'bonsai', agency: 'BRAIN', projectManager: { name: 'Camila' }, communityManager: null, evaluation: { level: 'green', reasons: [] }, cycles: {}, openTasks: [] },
     { id: 'c3', name: 'Verona', slug: 'verona', agency: 'MIO', projectManager: { name: 'Rodny' }, communityManager: { name: 'Sara' }, evaluation: { level: 'yellow', reasons: [{ text: 'Informe sin entregar.' }] }, cycles: {}, openTasks: [] }
   ] };
@@ -86,7 +86,7 @@ test('the portfolio answers «which accounts are in red and why» in one call, f
   assert.deepEqual(all.porSemaforo, { rojo: 1, amarillo: 1, verde: 1, gris: 0 });
   assert.equal(all.cuentas[0].cliente, 'Aristea', 'red first');
   assert.deepEqual(all.cuentas[0].motivos, ['Piezas con fecha pasada sin publicar.', 'Ritmo atrasado.']);
-  assert.deepEqual(all.cuentas[0].mesActual, { contratadas: 12, creadas: 12, aprobadas: 4, publicadas: 2, vencidas: 3 });
+  assert.deepEqual(all.cuentas[0].mesActual, { nombre: 'Octubre de 2026', contratadas: 12, creadas: 12, aprobadas: 4, publicadas: 2, vencidas: 3 });
   assert.equal(all.cuentas[0].tareasVencidas, 1);
   const red = (await tool.run({ semaforo: 'rojo' }, { operations, user: pm, person, today: TODAY })).data;
   assert.deepEqual(red.cuentas.map((c) => c.cliente), ['Aristea']);
