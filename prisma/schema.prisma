@@ -242,6 +242,7 @@ model User {
   mfaRecoveryCodes            Json?
   mfaFailedAttempts           Int                     @default(0)
   mfaLockedUntil              DateTime?
+  notificationPreferences     Json?
   authoredFeedback           FeedbackRecord[]        @relation("AuthoredFeedback")
   receivedFeedback            FeedbackRecord[]        @relation("ReceivedFeedback")
   generalChatMessages         GeneralChatMessage[]
