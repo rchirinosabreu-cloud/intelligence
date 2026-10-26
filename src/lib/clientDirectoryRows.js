@@ -168,15 +168,19 @@ export const summarizeParties = (rows = []) => {
         contractors: withRole('CONTRATISTA'),
         outsourcing: withRole('OUTSOURCING'),
         team: withRole('COLABORADOR'),
-        others: real.filter((row) => row.roles.some((role) => ['ARRENDADOR', 'SOCIO', 'OTRO'].includes(role))).length,
+        others: real.filter((row) => row.roles.some((role) => ['ARRENDADOR', 'SOCIO'].includes(role))).length,
         active: real.filter(isPartyActive).length,
         unlinked: rows.length - real.length
     };
 };
 
-/** Rol (o «SIN_FICHA» para las etiquetas del Excel), estado y búsqueda. */
+/**
+ * Rol, estado y búsqueda. Un nombre que solo está en el Excel no tiene rol —«solo en el Excel» dice de dónde viene,
+ * no qué es (Rodny, 26 de octubre de 2026)—: se encuentra por su estado, «Por vincular».
+ */
 export const filterPartyRows = (rows = [], { search = '', role = '', status = '' } = {}) => filterClientDirectoryRows(rows, search).filter((row) => {
-    if (role === 'SIN_FICHA') { if (!row.unlinked) return false; } else if (role && !row.roles.includes(role)) return false;
+    if (role && !row.roles.includes(role)) return false;
+    if (status === 'POR_VINCULAR') return Boolean(row.unlinked);
     if (status === 'ACTIVO' && (row.unlinked || !isPartyActive(row))) return false;
     if (status === 'INACTIVO' && (row.unlinked || isPartyActive(row))) return false;
     return true;

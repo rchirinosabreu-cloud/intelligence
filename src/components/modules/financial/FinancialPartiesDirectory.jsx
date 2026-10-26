@@ -233,10 +233,10 @@ export default function FinancialPartiesDirectory({
             </FinancialSectionHeader>
 
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-5" data-party-summary>
-                <FinancialSummaryCard label="Total" value={summary.total} hint={summary.unlinked ? `${summary.unlinked} nombre${summary.unlinked === 1 ? '' : 's'} solo en el Excel` : 'Con ficha'} />
+                <FinancialSummaryCard label="Total" value={summary.total} hint={summary.unlinked ? `Y ${summary.unlinked} nombre${summary.unlinked === 1 ? '' : 's'} del Excel por vincular` : 'Con ficha'} />
                 <FinancialSummaryCard label="Clientes" value={summary.clients} hint={summary.prospects ? `Y ${summary.prospects} potencial${summary.prospects === 1 ? '' : 'es'}` : 'Se les cobra'} />
                 <FinancialSummaryCard label="Proveedores" value={summary.suppliers} hint={providerHint(summary)} />
-                <FinancialSummaryCard label="Colaboradores" value={summary.team} hint={summary.others ? `Y ${summary.others} arrendador, socio u otro` : 'Del equipo'} />
+                <FinancialSummaryCard label="Colaboradores" value={summary.team} hint={summary.others ? `Y ${summary.others} arrendador o socio` : 'Del equipo'} />
                 <FinancialSummaryCard label="Activos" value={summary.active} hint={`${summary.total - summary.active} inactivo${summary.total - summary.active === 1 ? '' : 's'}`} />
             </div>
 
@@ -251,13 +251,13 @@ export default function FinancialPartiesDirectory({
                     className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 dark:border-white/10 dark:bg-zinc-950 dark:text-white">
                     <option value="">Todos los roles</option>
                     {PARTY_ROLES.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                    <option value="SIN_FICHA">Solo en el Excel</option>
                 </Select>
                 <Select aria-label="Estado" value={status} onChange={(event) => setStatus(event.target.value)}
                     className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 dark:border-white/10 dark:bg-zinc-950 dark:text-white">
                     <option value="">Activos e inactivos</option>
                     <option value="ACTIVO">Activos</option>
                     <option value="INACTIVO">Inactivos</option>
+                    <option value="POR_VINCULAR">Por vincular</option>
                 </Select>
             </Card>
 
@@ -288,17 +288,20 @@ export default function FinancialPartiesDirectory({
                                         <span className="order-1 min-w-0 md:order-none">
                                             <span className="block truncate text-sm font-semibold text-zinc-900 dark:text-white">{row.name}</span>
                                             {row.unlinked
-                                                ? <span className="block truncate text-xs text-zinc-500">Solo en el Excel · sin ficha{row.recordCount ? ` · ${row.recordCount} ${row.recordCount === 1 ? 'registro' : 'registros'}` : ''}</span>
+                                                ? <span className="block truncate text-xs text-zinc-500">Nombre del Excel sin ficha{row.recordCount ? ` · ${row.recordCount} ${row.recordCount === 1 ? 'registro' : 'registros'}` : ''}</span>
                                                 : row.teamMember?.role ? <span className="block truncate text-xs text-zinc-500">{row.teamMember.role}</span>
                                                     : legalName && legalName !== row.name ? <span className="block truncate text-xs text-zinc-500">{legalName}</span> : null}
                                         </span>
                                         <span className="order-2 flex flex-wrap gap-1 md:order-none" data-party-roles>
-                                            {row.unlinked ? <RoleChip tone="muted">Sin ficha</RoleChip>
+                                            {/* De dónde viene un nombre no es un rol: un nombre del Excel sin ficha no tiene ninguno todavía. */}
+                                            {row.unlinked ? <span className="text-sm text-zinc-400">—</span>
                                                 : row.roles.map((item) => <RoleChip key={item} tone={roleTone(item)}>{partyRoleLabel(item)}</RoleChip>)}
                                         </span>
                                         <span className="order-4 hidden truncate text-sm text-zinc-600 dark:text-zinc-300 md:order-none md:block">{partyContact(row) || '—'}</span>
                                         <span className="order-5 hidden md:order-none md:block">
-                                            {!row.unlinked && <span className={cn('inline-flex rounded-full px-2 py-0.5 text-xs font-medium', active ? 'bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan' : 'bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-300')}>{active ? 'Activo' : 'Inactivo'}</span>}
+                                            {row.unlinked
+                                                ? <span className="inline-flex rounded-full bg-zinc-100 px-2 py-0.5 text-xs font-medium text-zinc-600 dark:bg-white/10 dark:text-zinc-300">Por vincular</span>
+                                                : <span className={cn('inline-flex rounded-full px-2 py-0.5 text-xs font-medium', active ? 'bg-brand-cyan/10 text-brand-cyan-deep dark:text-brand-cyan' : 'bg-zinc-100 text-zinc-500 dark:bg-white/10 dark:text-zinc-300')}>{active ? 'Activo' : 'Inactivo'}</span>}
                                         </span>
                                         <span className="hidden md:block">{isOpen ? <ChevronUp className="h-4 w-4 text-zinc-400" /> : <ChevronDown className="h-4 w-4 text-zinc-400" />}</span>
                                     </button>

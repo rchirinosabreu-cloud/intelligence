@@ -75,7 +75,11 @@ test('contratista y outsourcing son roles propios y cuentan con quienes prestan 
 test('se filtra por rol, por estado y por búsqueda, también en la ficha de pago', () => {
     const list = rows();
     assert.deepEqual(filterPartyRows(list, { role: 'PROVEEDOR' }).map((row) => row.name).sort(), ['La Sazón de Iris', 'Papelería El Punto']);
-    assert.deepEqual(filterPartyRows(list, { role: 'SIN_FICHA' }).map((row) => row.name), ['PAGO ELVIRA U.']);
+    // Rodny, 26 de octubre de 2026: «solo en el Excel» dice de dónde viene un nombre, no qué rol tiene. Se encuentra
+    // por su estado, «Por vincular», y no tiene rol.
+    assert.deepEqual(filterPartyRows(list, { status: 'POR_VINCULAR' }).map((row) => row.name), ['PAGO ELVIRA U.']);
+    assert.deepEqual(filterPartyRows(list, { role: 'SIN_FICHA' }), [], 'ya no es un rol');
+    assert.equal(PARTY_ROLES.some((item) => ['SIN_FICHA', 'OTRO'].includes(item.value)), false);
     assert.deepEqual(filterPartyRows(list, { status: 'INACTIVO' }).map((row) => row.name).sort(), ['Archivado', 'Melissa']);
     assert.equal(filterPartyRows(list, { status: 'ACTIVO' }).some((row) => row.unlinked), false);
     assert.deepEqual(filterPartyRows(list, { search: 'ventas@punto' }).map((row) => row.name), ['Papelería El Punto']);
