@@ -81,4 +81,16 @@ export const publicCover = (item) => (item?.coverKey ? {
   size: item.coverSize || null
 } : null);
 
+/**
+ * La pieza tal como sale hacia la pantalla: la portada como `cover` y las cuatro columnas del
+ * almacenamiento fuera. Es la misma forma para una pieza suelta y para una que viaja dentro de una
+ * parrilla; el editor lee `item.cover`, así que una pieza sin pasar por aquí se ve «Sin portada»
+ * aunque la portada esté guardada (Rodny, 26 de octubre de 2026).
+ */
+export const withPublicCover = (item) => {
+  if (!item) return item;
+  const { coverKey: _key, coverName: _name, coverMimeType: _mimeType, coverSize: _size, ...rest } = item;
+  return { ...rest, cover: publicCover(item) };
+};
+
 export const hasCover = (item) => Boolean(item?.coverKey);
