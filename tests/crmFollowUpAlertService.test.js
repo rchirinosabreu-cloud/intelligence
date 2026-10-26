@@ -77,6 +77,30 @@ test('nada se repite: un paso ya anotado no se vuelve a avisar, aunque el reloj 
     assert.deepEqual(again, { checked: 1, sent: 0 });
 });
 
+// El 26 de octubre de 2026, al estrenarse, el primer pase habría mandado 62 avisos: 55 oportunidades llevaban más de
+// 30 días sin respuesta, y la revisión también les llega a los administradores. Más de 3 del mismo tipo para la misma
+// persona van en un solo aviso que los resume y abre el CRM filtrado en ellos.
+test('muchos avisos del mismo tipo para la misma persona salen en uno solo que los resume', async () => {
+    const stale = Array.from({ length: 5 }, (_, index) => lead({ id: `old-${index}`, company: `Viejo ${index}`, proposalSentAt: day('2026-06-01') }));
+    const fresh = [lead({ id: 'f1', proposalSentAt: day('2026-10-15') }), lead({ id: 'f2', company: 'Nautical Eventos', proposalSentAt: day('2026-10-15') })];
+    const db = fakeDb({ leads: [...stale, ...fresh] });
+    const sent = [];
+    const result = await runFollowUpAlerts(db, { now: day('2026-10-26'), notify: async (data) => sent.push(data) });
+    assert.equal(result.sent, 7, 'las siete quedan anotadas: ninguna se vuelve a avisar');
+    const francys = sent.filter((item) => item.userId === 'u-francys');
+    assert.deepEqual(francys.map((item) => item.type), ['CRM_FOLLOW_UP_REVIEW', 'CRM_FOLLOW_UP_REMINDER', 'CRM_FOLLOW_UP_REMINDER']);
+    assert.equal(francys[0].message, '5 oportunidades llevan 30 días o más sin respuesta: revisa cuáles siguen y cuáles se cierran.');
+    assert.equal(francys[0].url, '/crm?tab=oportunidades&silence=REVISION');
+    assert.match(francys[1].message, /Café Altura lleva 11 días/);
+    // Los administradores reciben el resumen de la revisión, no cinco avisos.
+    assert.deepEqual(sent.filter((item) => item.userId === 'u-rodny').map((item) => item.type), ['CRM_FOLLOW_UP_REVIEW']);
+});
+
+test('el CRM abre con el filtro que trae el enlace del resumen', () => {
+    const layout = fs.readFileSync(new URL('../src/components/modules/Crm/CrmLayout.jsx', import.meta.url), 'utf8');
+    assert.match(layout, /searchParams\.get\('silence'\)/);
+});
+
 test('un aviso que no sale no frena a los demás', async () => {
     const db = fakeDb({ leads: [lead(), lead({ id: 'l2', company: 'Nautical Eventos' })] });
     const sent = [];

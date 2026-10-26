@@ -21,7 +21,12 @@ const CrmLayout = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const tab = TABS.includes(searchParams.get('tab')) ? searchParams.get('tab') : 'dashboard';
-  const [filters, setFilters] = useState(() => readCrmFilters(window.sessionStorage, currentUser));
+  const [filters, setFilters] = useState(() => {
+    const saved = readCrmFilters(window.sessionStorage, currentUser);
+    // El aviso que resume varias alertas comerciales abre el CRM filtrado en ellas (?silence=SIN_RESPUESTA|REVISION).
+    const silence = searchParams.get('silence');
+    return ['SIN_RESPUESTA', 'REVISION'].includes(silence) ? { ...saved, silence } : saved;
+  });
   const [creating, setCreating] = useState(false);
   const [alertSettingsOpen, setAlertSettingsOpen] = useState(false);
   const { data: team = [] } = useCrmTeam();

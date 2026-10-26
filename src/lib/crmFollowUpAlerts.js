@@ -79,6 +79,15 @@ export const markFollowUpAlertSent = (previous, alert) => {
     return { since: alert.since.toISOString(), steps: [...new Set([...kept, ...alert.steps])].sort((a, b) => a - b) };
 };
 
+// Más de tres avisos del mismo tipo para la misma persona en un pase salen en uno solo que los resume (al estrenarse,
+// el 26 de octubre de 2026, el primer pase habría mandado 62 avisos de golpe).
+export const FOLLOW_UP_DIGEST_THRESHOLD = 3;
+
+/** El aviso que resume varios: cuántas oportunidades y qué hacer, con el CRM filtrado en ellas. */
+export const followUpDigest = (kind, count, settings = DEFAULT_FOLLOW_UP_ALERT_DAYS) => (kind === 'REVIEW'
+    ? { message: `${count} oportunidades llevan ${settings.review} días o más sin respuesta: revisa cuáles siguen y cuáles se cierran.`, url: '/crm?tab=oportunidades&silence=REVISION' }
+    : { message: `${count} oportunidades piden seguimiento: llevan ${settings.reminders[0]} días o más sin respuesta.`, url: '/crm?tab=oportunidades&silence=SIN_RESPUESTA' });
+
 /** La línea del aviso: quién, cuántos días y qué cotización. */
 export const followUpAlertMessage = (lead, alert, quotationCode = null) => {
     const who = lead.company || lead.contactName || 'La oportunidad';

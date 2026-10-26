@@ -7,7 +7,8 @@ import { createNotification } from './notificationService.js';
 import { CRM_ACTIVITY_TYPES } from '../lib/crmRules.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
 import {
-    DEFAULT_FOLLOW_UP_ALERT_DAYS, FOLLOW_UP_ALERT_STAGES, dueFollowUpAlert, followUpAlertMessage, normalizeFollowUpAlertDays
+    DEFAULT_FOLLOW_UP_ALERT_DAYS, FOLLOW_UP_ALERT_STAGES, FOLLOW_UP_DIGEST_THRESHOLD, dueFollowUpAlert, followUpAlertMessage,
+    followUpDigest, normalizeFollowUpAlertDays
 } from '../lib/crmFollowUpAlerts.js';
 
 export const FOLLOW_UP_REMINDER_TYPE = 'CRM_FOLLOW_UP_REMINDER';
@@ -68,6 +69,12 @@ export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify 
     });
     let admins = null;
     let sent = 0;
+    // Lo que le toca a cada persona en este pase, por tipo: se reparte al final para poder resumir.
+    const outbox = new Map();
+    const queue = (userId, kind, item) => {
+        if (!outbox.has(userId)) outbox.set(userId, { REVIEW: [], REMINDER: [] });
+        outbox.get(userId)[kind].push(item);
+    };
     for (const lead of leads) {
         const alert = dueFollowUpAlert({ ...lead, followUpAlerts: sentInLatestCycle(lead.followUpAlertLog) }, lead.activities, now, settings);
         if (!alert) continue;
@@ -91,13 +98,25 @@ export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify 
         const recipients = [...new Set([ownerId, ...(needsAdmins ? admins : [])].filter(Boolean))];
         const code = lead.quotations?.[0] ? `COT-${String(lead.quotations[0].consecutive).padStart(4, '0')}` : null;
         const message = followUpAlertMessage(lead, alert, code);
-        const type = alert.kind === 'REVIEW' ? FOLLOW_UP_REVIEW_TYPE : FOLLOW_UP_REMINDER_TYPE;
-        for (const userId of recipients) {
-            try {
-                await notify({ userId, type, relatedId: lead.id, url: `/crm/oportunidades/${lead.id}`, message });
-            } catch (error) {
-                log('[CRM] Alerta comercial no entregada:', error?.message || error);
+        for (const userId of recipients) queue(userId, alert.kind, { leadId: lead.id, message });
+    }
+    const deliver = async (data) => {
+        try {
+            await notify(data);
+        } catch (error) {
+            log('[CRM] Alerta comercial no entregada:', error?.message || error);
+        }
+    };
+    for (const [userId, byKind] of outbox) {
+        for (const kind of ['REVIEW', 'REMINDER']) {
+            const items = byKind[kind];
+            const type = kind === 'REVIEW' ? FOLLOW_UP_REVIEW_TYPE : FOLLOW_UP_REMINDER_TYPE;
+            if (items.length > FOLLOW_UP_DIGEST_THRESHOLD) {
+                const digest = followUpDigest(kind, items.length, settings);
+                await deliver({ userId, type, url: digest.url, message: digest.message });
+                continue;
             }
+            for (const item of items) await deliver({ userId, type, relatedId: item.leadId, url: `/crm/oportunidades/${item.leadId}`, message: item.message });
         }
     }
     return { checked: leads.length, sent };
