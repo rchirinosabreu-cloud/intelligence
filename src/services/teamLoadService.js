@@ -10,12 +10,13 @@ import { classifyTaskDeterministically } from './deterministicTaskClassifier.js'
 import { publishAtIso } from '../lib/socialPublishing.js';
 import { canOpenTask, TASK_PRIVACY_SELECT } from '../lib/taskPrivacy.js';
 import { RHYTHM_POLICY } from '../lib/workPrediction.js';
+import { taskCalendarDay } from '../lib/briaTemporalEvidence.js';
 
 const OPEN_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 const invalid = (message, status = 400) => Object.assign(new Error(message), { status });
 
 function loadTask(task) {
-  const dueDay = task.dueDate ? bogotaDate(task.dueDate) : null;
+  const dueDay = taskCalendarDay(task.dueDate);
   const piece = !task.isPrivate && task.contentItem?.status !== 'PUBLICADO' ? task.contentItem : null;
   const publishAt = piece ? publishAtIso(piece.publishDate, piece.publishTime) : null;
   const publishDay = piece ? publishAtIso(piece.publishDate, '00:00')?.slice(0, 10) : null;
@@ -28,6 +29,7 @@ function loadTask(task) {
   return { id: task.id, title: task.title, status: task.status, personId: task.assigneeId, clientId: task.clientId || null,
     workType: workTypeOf(task.isPrivate ? { title: task.title } : task), complexity: task.isPrivate ? null : task.aiComplexity || null,
     sharedWork: Boolean(task.collaborators?.length),
+    temporal: { dueDate: dueDay, focusDeadlineAt: task.focusDeadlineAt || null },
     workSessions: task.workSessions || [], dueDay: instant ? bogotaDate(instant) : coarseDay,
     deadlineAt: instant, deadlineSource: instant ? publishAt && instant === new Date(publishAt).toISOString() ? 'publicacion' : 'compromiso' : publishDay && coarseDay === publishDay ? 'publicacion_fecha' : 'fecha',
     clientName: task.client?.name || null };

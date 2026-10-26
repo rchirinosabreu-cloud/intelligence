@@ -1,3 +1,4 @@
+import * as inquiryModule from '../src/lib/briaInquiry.js';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { runAssistant } from '../src/lib/briaAssistant.js';
@@ -138,4 +139,44 @@ test('full production catalog resolves the target, preserves checks and reads it
   assert.equal(fixture.modelRequests.length, 10, 'two plans and eight useful tool rounds; no redundant final generation');
   assert.ok(fixture.modelRequests[1].tools.includes('preparar_pendiente'), 'first selection uses the whole catalog');
   assert.ok(!fixture.modelRequests[2].tools.includes('preparar_pendiente'), 'read-only investigation narrows effects after initial selection');
+});
+
+
+const readyReceipts = [{ id: 'current-task', herramienta: 'leer_pendiente', area: 'TAREAS', partial: false }];
+const readyToRecord = (...args) => inquiryModule.isInquiryReadyToRecord?.(...args);
+
+test('a covered investigation can reserve its last round for recording and comparing alternatives', () => {
+  assert.equal(readyToRecord({ ...plan, compararAlternativas: true }, null, readyReceipts), true);
+  assert.equal(readyToRecord({ ...plan, compararAlternativas: true }, { cobertura: [{ area: 'TAREAS', estado: 'CONSULTADA' }], alternativas: [], recomendada: null, relato: [] }, readyReceipts), true, 'missing interpretation or prose can be repaired by the recording tool');
+});
+
+test('record-only mode cannot hide unread, partial or merely summarized required evidence', () => {
+  assert.equal(readyToRecord(plan, null, [{ herramienta: 'buscar_pendientes', area: 'TAREAS', taskCount: 3, partial: false }]), false);
+  assert.equal(readyToRecord(plan, null, [{ ...readyReceipts[0], partial: true }]), false);
+  assert.equal(readyToRecord({ ...plan, areas: ['TAREAS', 'CONTENIDO'] }, null, readyReceipts), false);
+  assert.equal(readyToRecord({ ...plan, areas: ['TAREAS', 'CONTENIDO'] }, { cobertura: [{ area: 'CONTENIDO', estado: 'PENDIENTE' }] }, readyReceipts), false);
+  assert.equal(readyToRecord({ ...plan, areas: ['TAREAS', 'CONTENIDO'] }, null, [...readyReceipts, { herramienta: 'leer_piezas_de_parrilla', area: 'CONTENIDO', partial: true }]), false);
+});
+
+test('readiness preserves verified empty searches and an explicitly inapplicable area without inventing a task', () => {
+  assert.equal(readyToRecord(plan, null, [{ herramienta: 'buscar_pendientes', area: 'TAREAS', taskCount: 0, partial: false }]), true);
+  assert.equal(readyToRecord(plan, null, [{ herramienta: 'buscar_pendientes', area: 'TAREAS', taskCount: 0, partial: true }]), false);
+  assert.equal(readyToRecord({ ...plan, areas: ['TAREAS', 'CONTENIDO'] }, { cobertura: [{ area: 'CONTENIDO', estado: 'NO_APLICA' }] }, readyReceipts), true);
+});
+
+test('a pending human memory correction keeps its tools available even when all inquiry reads are covered', () => {
+  for (const purpose of ['GUARDAR', 'CORREGIR', 'RETIRAR']) {
+    assert.equal(readyToRecord({ ...plan, propositoMemoria: purpose }, null, readyReceipts), false);
+    assert.equal(readyToRecord({ ...plan, propositoMemoria: purpose }, null, readyReceipts, { memoryPersisted: false }), false);
+    assert.equal(readyToRecord({ ...plan, propositoMemoria: purpose }, null, readyReceipts, { memoryPersisted: true }), true);
+  }
+  assert.equal(readyToRecord({ ...plan, propositoMemoria: 'NINGUNO' }, null, readyReceipts), true);
+});
+
+test('readiness does not narrow conversations, operational preparations, failed plans or an evidence-free first round', () => {
+  for (const candidate of [null, { ...plan, investigar: false }, { ...plan, guardarSeguimiento: false }, { ...plan, prepararCambios: true }, { ...plan, soloConversacion: true }, { ...plan, propositoMemoria: 'INVALID' }]) {
+    assert.equal(readyToRecord(candidate, null, readyReceipts), false);
+  }
+  assert.equal(readyToRecord({ ...plan, localizarTrabajo: false, areas: [] }, null, []), false);
+  assert.equal(readyToRecord({ ...plan, areas: null }, null, readyReceipts), false);
 });

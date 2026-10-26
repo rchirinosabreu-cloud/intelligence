@@ -38,7 +38,7 @@ test('the grid tells what the client asked to change, what is already in product
   assert.deepEqual(i1.pedidoDelCliente, { fecha: '05/10/2026', texto: 'Cambien la música' });
   assert.equal(i1.referencias, 1);
   assert.equal(i1.enProduccion, null);
-  assert.deepEqual(i2.enProduccion, { tareaId: 't9', responsable: 'Melissa', vence: '2026-10-08', estado: 'EN_CURSO', vencida: true });
+  assert.deepEqual(i2.enProduccion, { tareaId: 't9', responsable: 'Melissa', vence: '2026-10-08', estado: 'EN_CURSO', vencida: true, plazos: { zonaHoraria: 'America/Bogota', entrega: { fecha: '2026-10-08', vencida: true }, compromiso: null, publicacion: null } });
   assert.deepEqual(result.data.parrilla.resumen.porFormato, { Reel: 1, Carrusel: 1, Post: 1 });
   assert.equal(result.data.parrilla.resumen.devueltas, 1);
   assert.equal(result.data.parrilla.resumen.enProduccion, 1);

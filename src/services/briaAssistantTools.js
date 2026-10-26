@@ -10,7 +10,7 @@ import { hasModulePermission, isManagerRole } from '../config/security.js';
 import { pieceStage, shortDate } from '../lib/clientOperations.js';
 import { approvalState, APPROVAL_STATES } from '../lib/contentApproval.js';
 import { lastClientRequest } from '../lib/clientUpdate.js';
-import { bogotaDate } from '../lib/colombiaBusinessDays.js';
+
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { rankByName } from '../lib/fuzzyMatch.js';
 import { formatDuration } from '../lib/teamRhythm.js';
@@ -19,6 +19,7 @@ import { taskPrivacyFilter } from '../lib/taskPrivacy.js';
 import { searchTasks, statusesFor } from './taskSearch.js';
 import { profilePredictionProblem, RHYTHM_POLICY } from '../lib/workPrediction.js';
 import { readDecisionContext, decisionContract } from './briaDecisionContext.js';
+import { taskCalendarDay, taskTemporalEvidence, publicationTemporalEvidence } from '../lib/briaTemporalEvidence.js';
 
 const STAGE_LABELS = ['sin texto', 'redactada', 'diseñada', 'aprobada', 'programada', 'publicada'];
 const LEVEL_LABELS = { red: 'rojo', yellow: 'amarillo', green: 'verde', gray: 'gris' };
@@ -29,7 +30,7 @@ const DAY_MS = 86_400_000;
 
 const text = (value) => String(value ?? '').trim();
 const hasText = (value) => text(value).length > 0;
-const dayOf = (value) => (value ? bogotaDate(value) : null);
+const dayOf = taskCalendarDay;
 // La fecha de publicación de una pieza se guarda al mediodía UTC para que el día no se corra.
 const pieceDay = (value) => (value ? new Date(value).toISOString().slice(0, 10) : null);
 const bogota = (value) => new Date(new Date(value).getTime() - 5 * 3600000).toISOString();
@@ -64,6 +65,7 @@ const compactTask = (task, today, now = new Date()) => {
     responsable: task.assignee?.name || null,
     vence,
     vencida: Boolean(vence && vence < today && task.status !== 'REALIZADA'),
+    plazos: taskTemporalEvidence({ dueDate: task.dueDate, focusDeadlineAt: task.focusDeadlineAt, status: task.status }, { today, now }),
     privada: Boolean(task.isPrivate),
     ...(task.completedAt ? { cerrada: dayOf(task.completedAt) } : {}),
     ...(ms === null ? {} : { tiempoRegistrado: ms >= 60_000 ? formatDuration(ms) : 'sin tiempo registrado', minutosRegistrados: Math.round(ms / 60_000) })
@@ -113,7 +115,7 @@ const misTareas = {
   description: 'Las tareas de la persona que pregunta: las que tiene como responsable y en las que colabora. Por defecto las que no están cerradas (pendientes, en proceso y devueltas).',
   parameters: { type: 'object', properties: { estado: { type: 'string', enum: ['pendientes', 'en_proceso', 'devueltas', 'realizadas', 'todas'], description: '«todas» son las no cerradas' } } },
   allowed: () => true,
-  async run({ estado } = {}, { db, person, today }) {
+  async run({ estado } = {}, { db, person, today, now }) {
     if (!person?.memberId) return { data: { tareas: [], mensaje: 'Tu cuenta no está vinculada a una persona del equipo, así que no hay tareas que mostrar.' } };
     const rows = await db.task.findMany({
       where: { status: { in: statusesFor(estado) }, OR: [{ assigneeId: person.memberId }, { collaborators: { some: { memberId: person.memberId } } }] },
@@ -122,10 +124,10 @@ const misTareas = {
       take: 50
     });
     const tareas = rows.map((task) => {
-      const base = compactTask(task, today);
+      const base = compactTask(task, today, now?.() || new Date());
       return {
         id: base.id, titulo: base.titulo, estado: base.estado, cliente: base.cliente, responsable: base.responsable,
-        vence: base.vence, vencida: base.vencida,
+        vence: base.vence, vencida: base.vencida, plazos: base.plazos,
         horaCompromiso: bogotaClock(task.focusDeadlineAt),
         prioridad: task.priority || (task.isPriority ? 'Destacada' : null),
         privada: base.privada
@@ -174,7 +176,7 @@ const tareasDeCliente = {
 // que resuelve el lote de cambiar_pendientes: lo que se cuenta aquí es lo que se cambia allá. Solo la cabecera de
 // cada tarea; la reserva de los pendientes privados se aplica como en el tablero.
 const SEARCH_SELECT = {
-  id: true, title: true, status: true, dueDate: true, isPrivate: true, creatorId: true, completedAt: true, startedAt: true, accumulatedWorkMs: true,
+  id: true, title: true, status: true, dueDate: true, focusDeadlineAt: true, isPrivate: true, creatorId: true, completedAt: true, startedAt: true, accumulatedWorkMs: true,
   client: { select: { name: true } }, assignee: { select: { id: true, name: true, userId: true } },
   collaborators: { select: { member: { select: { userId: true } } } }, viewers: { select: { userId: true } }
 };
@@ -189,13 +191,14 @@ const buscarPendientes = {
     vencidas: { type: 'boolean', description: 'Solo las que tienen fecha anterior a hoy y no están cerradas.' }
   } },
   allowed: (user) => hasModulePermission(user, 'gestion'),
-  async run(args = {}, { db, user, today }) {
+  async run(args = {}, { db, user, today, now }) {
     const { total, rows, resolved, approximate, descripcion } = await searchTasks({ db, filters: args, today, select: SEARCH_SELECT });
     const viewer = user?.userId || user?.id || null;
-    const tareas = rows.map(taskPrivacyFilter(viewer)).map((task) => compactTask(task, today));
+    const at = now?.() || new Date();
+    const tareas = rows.map(taskPrivacyFilter(viewer)).map((task) => compactTask(task, today, at));
     return {
       data: {
-        total, descripcion, tareas, ...timeTotal(rows, new Date()),
+        total, descripcion, tareas, ...timeTotal(rows, at),
         ...(resolved.responsable ? { responsable: resolved.responsable } : {}),
         ...(resolved.cliente ? { cliente: resolved.cliente } : {}),
         ...(approximate ? { aproximado: true, instruccion: 'No había nadie con ese nombre exacto; se buscó el más parecido. Di a quién se refiere el resultado y, si no era esa persona, pregunta.' } : {}),
@@ -212,7 +215,8 @@ const parrillaDeCliente = {
   parameters: { type: 'object', properties: { clientId: { type: 'string' }, mes: { type: 'integer', minimum: 1, maximum: 12 }, anio: { type: 'integer' } }, required: ['clientId'] },
   allowed: (user) => hasModulePermission(user, 'parrillas'),
   async run({ clientId, mes, anio } = {}, context) {
-    const { db, today } = context;
+    const { db, today, now } = context;
+    const at = now?.() || new Date();
     const id = text(clientId);
     if (!id) return { data: { parrilla: null, mensaje: 'Falta el id del cliente: búscalo primero con buscar_cliente.' } };
     const [todayYear, todayMonth] = String(today).split('-').map(Number);
@@ -227,7 +231,7 @@ const parrillaDeCliente = {
           select: {
             id: true, objective: true, format: true, publishDate: true, publishTime: true, status: true, copyText: true, captionText: true, finalAssetKey: true, revisionRequestedAt: true,
             comments: true, assetsLinks: true, mediaUrl: true, _count: { select: { finalAssets: true } }, publications: { select: { status: true } },
-            tasks: { where: { status: { not: 'REALIZADA' } }, orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true, dueDate: true, assignee: { select: { name: true } } } }
+            tasks: { where: { status: { not: 'REALIZADA' } }, orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true, dueDate: true, focusDeadlineAt: true, assignee: { select: { name: true } } } }
           }
         }
       }
@@ -244,11 +248,11 @@ const parrillaDeCliente = {
       const task = item.tasks?.[0];
       const due = task ? dayOf(task.dueDate) : null;
       return {
-        id: item.id, titulo: item.objective, formato: item.format, fecha: pieceDay(item.publishDate), hora: item.publishTime || null, estado: item.status,
+        id: item.id, titulo: item.objective, formato: item.format, fecha: pieceDay(item.publishDate), hora: item.publishTime || null, estado: item.status, plazos: publicationTemporalEvidence(item, { today, now: at }),
         etapa: STAGE_LABELS[pieceStage(facts)], aprobacion: approvalState(item),
         tieneTexto: hasText(item.copyText) || hasText(item.captionText), tieneMaterial: facts.hasFinalAsset,
         pedidoDelCliente: lastClientRequest(item.comments),
-        enProduccion: task ? { tareaId: task.id, responsable: task.assignee?.name || null, vence: due, estado: task.status, vencida: Boolean(due && due < today) } : null,
+        enProduccion: task ? { tareaId: task.id, responsable: task.assignee?.name || null, vence: due, estado: task.status, vencida: Boolean(due && due < today), plazos: taskTemporalEvidence(task, { today, now: at }) } : null,
         referencias: referenceLinks(item).length
       };
     });
@@ -272,14 +276,17 @@ const parrillaDeCliente = {
 
 const leerPiezasDeParrilla = {
   name: 'leer_piezas_de_parrilla',
-  description: 'Lee el contenido actual de una parrilla de la plataforma: objetivos, guiones internos, textos de publicación, notas, lo que el cliente pidió cambiar, enlaces de referencia y fechas. Devuelve hasta seis piezas por llamada; continúa con nextOffset. Para revisar contenido usa esta lectura después de localizar la parrilla, no documentos históricos.',
-  parameters: { type: 'object', properties: { planId: { type: 'string' }, desde: { type: 'integer', minimum: 0 } }, required: ['planId'] },
+  description: 'Lee el detalle actual de piezas de una parrilla: aprobación vigente del material, presencia de archivo final, objetivos, guiones, textos, notas, pedidos del cliente y fecha/hora de publicación. Para comprobar un bloqueo concreto usa ids de las piezas pertinentes obtenidos en la parrilla o tarea vinculada; no hace falta recorrer todo el mes. Sin ids, pagina hasta seis piezas con nextOffset. Los ids no encontrados se declaran; nunca equivalen a piezas revisadas.',
+  parameters: { type: 'object', properties: { planId: { type: 'string' }, desde: { type: 'integer', minimum: 0 }, ids: { type: 'array', minItems: 1, maxItems: 6, items: { type: 'string' }, description: 'Selección de piezas de esta parrilla para investigar; omitir para paginar el mes. No combinar con desde distinto de cero.' } }, required: ['planId'] },
   allowed: user => hasModulePermission(user, 'parrillas'),
-  async run({ planId, desde = 0 }, { db }) {
+  async run({ planId, desde = 0, ids }, { db, today, now }) {
+    if (!text(planId) || ids != null && (!Array.isArray(ids) || !ids.length || ids.length > 6 || ids.some(id => typeof id !== 'string' || !id.trim()) || new Set(ids.map(text)).size !== ids.length || desde !== 0)) throw Object.assign(new Error('Indica la parrilla y hasta seis piezas distintas, sin combinar selección con paginación.'), { status: 400 });
+    const selected = ids?.map(text) || null;
     const offset = Number.isSafeInteger(desde) && desde >= 0 ? desde : 0;
-    const rows = await db.contentItem.findMany({ where: { planId: text(planId), deletedAt: null, plan: { deletedAt: null } }, select: { id: true, objective: true, format: true, publishDate: true, status: true, copyText: true, captionText: true, internalNotes: true, comments: true, assetsLinks: true, mediaUrl: true, plan: { select: { id: true, strategicObjectives: true, client: { select: { name: true } } } } }, orderBy: [{ publishDate: 'asc' }, { id: 'asc' }], skip: offset, take: 7 });
+    const rows = await db.contentItem.findMany({ where: { planId: text(planId), deletedAt: null, plan: { deletedAt: null }, ...(selected ? { id: { in: selected } } : {}) }, select: { id: true, objective: true, format: true, publishDate: true, publishTime: true, status: true, revisionRequestedAt: true, finalAssetKey: true, _count: { select: { finalAssets: true } }, copyText: true, captionText: true, internalNotes: true, comments: true, assetsLinks: true, mediaUrl: true, plan: { select: { id: true, strategicObjectives: true, client: { select: { name: true } } } } }, orderBy: [{ publishDate: 'asc' }, { id: 'asc' }], skip: offset, take: selected ? selected.length : 7 });
     const pieces = rows.slice(0, 6), limit = value => String(value || '').slice(0, 4000);
-    return { data: { source: 'platform_current', readAt: new Date().toISOString(), cliente: pieces[0]?.plan?.client?.name || null, objetivos: limit(pieces[0]?.plan?.strategicObjectives), piezas: pieces.map(row => ({ id: row.id, titulo: row.objective, formato: row.format, fecha: pieceDay(row.publishDate), estado: row.status, guion: limit(row.copyText), textoPublicacion: limit(row.captionText), notaInterna: limit(row.internalNotes), comentariosDelCliente: limit(row.comments), referencias: referenceLinks(row), textoRecortado: [row.copyText, row.captionText, row.internalNotes, row.comments].some(value => String(value || '').length > 4000) })), nextOffset: rows.length > 6 ? offset + 6 : null }, sources: pieces.map(row => ({ kind: 'pieza', id: row.id, label: row.objective, url: `/parrillas/${planId}?item=${row.id}`, authority: 'Plataforma actual' })) };
+    const at = now?.() || new Date(), idsNoDisponibles = (selected || []).filter(id => !pieces.some(row => row.id === id));
+    return { data: { source: 'platform_current', readAt: at.toISOString(), cliente: pieces[0]?.plan?.client?.name || null, objetivos: limit(pieces[0]?.plan?.strategicObjectives), piezas: pieces.map(row => ({ id: row.id, titulo: row.objective, formato: row.format, fecha: pieceDay(row.publishDate), estado: row.status, aprobacion: approvalState(row), tieneMaterialFinal: Boolean(row.finalAssetKey || row._count?.finalAssets), plazos: publicationTemporalEvidence(row, { today, now: at }), guion: limit(row.copyText), textoPublicacion: limit(row.captionText), notaInterna: limit(row.internalNotes), comentariosDelCliente: limit(row.comments), referencias: referenceLinks(row), textoRecortado: [row.copyText, row.captionText, row.internalNotes, row.comments].some(value => String(value || '').length > 4000) })), idsNoDisponibles, recortada: idsNoDisponibles.length > 0, nextOffset: !selected && rows.length > 6 ? offset + 6 : null }, sources: pieces.map(row => ({ kind: 'pieza', id: row.id, label: row.objective, url: `/parrillas/${planId}?item=${row.id}`, authority: 'Plataforma actual' })) };
   }
 };
 
@@ -466,10 +473,11 @@ const cargaDelEquipo = {
     horizonte: { type: 'string', description: 'hoy, manana, semana o proxima_semana. Por defecto semana.' }
   } },
   allowed: (user) => hasModulePermission(user, 'manager') && isManagerRole(user?.role),
-  async run({ persona, horizonte } = {}, { load }) {
+  async run({ persona, horizonte } = {}, { load, now }) {
     const window = { hoy: 'today', manana: 'tomorrow', semana: 'week', proxima_semana: 'next_week' }[fold(horizonte)] || 'week';
     const map = await load.get({ window });
     const reliablePolicy = map.forecast?.policy === RHYTHM_POLICY;
+    const at = map.forecast?.generatedAt || now?.() || new Date();
     const estimated = ms => reliablePolicy && ms != null ? formatDuration(ms) : null;
     const wanted = fold(persona).split(/\s+/).filter(Boolean);
     const people = wanted.length ? map.people.filter((p) => wanted.every((word) => fold(p.personName).includes(word))) : map.people;
@@ -512,10 +520,10 @@ const cargaDelEquipo = {
             historial: p.confidence, puedeRecibir: p.canReceive, vencidas: p.overdueCount, enRiesgo: p.riskCount, ajustadas: p.tightCount, sinFecha: p.undatedCount, sinEstimacion: p.unknownCount,
             horasCronometradasHoy: formatDuration(p.recordedTodayMs || 0), horasCronometradasSemana: formatDuration(p.recordedWeekMs || 0),
             tareas: p.tasks.filter(t => t.risk !== 'ok').slice(0, 6).map(t => ({ id: t.id, titulo: t.title, fecha: t.dueDay ? dayName(t.dueDay) : null, limite: t.deadlineAt || null,
-              estado: t.risk || 'sin_prevision', restante: t.remainingMs == null ? null : formatDuration(t.remainingMs), muestra: t.sample, alcanceMuestra: t.basis, complejidad: t.complexity, colaCompleta: t.queueComplete, capacidadHastaElLimite: t.capacityToDeadlineMs == null ? null : formatDuration(t.capacityToDeadlineMs) }))
+              estado: t.risk || 'sin_prevision', vencida: t.risk === 'vencida', origenLimite: t.deadlineSource || null, plazos: taskTemporalEvidence({ ...t.temporal, status: t.status }, { today: map.today, now: at }), restante: t.remainingMs == null ? null : formatDuration(t.remainingMs), muestra: t.sample, alcanceMuestra: t.basis, complejidad: t.complexity, colaCompleta: t.queueComplete, capacidadHastaElLimite: t.capacityToDeadlineMs == null ? null : formatDuration(t.capacityToDeadlineMs) }))
           }))
         } } : {}),
-        instruccion: 'Empieza por la prevision validada. Un valor null significa que no se sabe, nunca cero minutos ni una hora supuesta. No derives tiempos futuros de otros clientes, categorías generales, ni del promedio del equipo. El mapa solo muestra concentración de entregas, no demuestra saturación ni espacio libre. No afirmes que alguien puede recibir trabajo si puedeRecibir es false o falta parte de la cola. La capacidad es nominal y no descuenta reuniones ni ausencias. Sin previsión, describe únicamente tareas y fechas. Habla de trabajo, nunca de desempeño. Si nadie coincide con el nombre, dilo.'
+        instruccion: 'La previsión es la fuente para estimar capacidad. La lista de tareas mezcla vencidas y futuras sin estimación: usa vencida y origenLimite de cada fila, no el contador global. Los plazos de entrega, compromiso y publicación son distintos; una tarea atrasada no demuestra que la publicación futura esté vencida. Un valor null significa que no se sabe, nunca cero minutos ni una hora supuesta. No derives tiempos futuros de otros clientes, categorías generales, ni del promedio del equipo. El mapa solo muestra concentración de entregas, no demuestra saturación ni espacio libre. No afirmes que alguien puede recibir trabajo si puedeRecibir es false o falta parte de la cola. La capacidad es nominal y no descuenta reuniones ni ausencias. Sin previsión, describe únicamente tareas y fechas. Habla de trabajo, nunca de desempeño. Si nadie coincide con el nombre, dilo.'
       },
       sources: [{ kind: 'ritmo', id: `carga-${map.today}`, label: 'Mapa de carga', url: '/manager?tab=ritmo' }]
     };

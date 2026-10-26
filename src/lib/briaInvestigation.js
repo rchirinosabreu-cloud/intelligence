@@ -7,9 +7,16 @@ export const INVESTIGATION_READS = {
   parrilla_de_cliente: 'CONTENIDO', leer_piezas_de_parrilla: 'CONTENIDO', criterios_y_hallazgos: 'CONTENIDO', publicaciones_programadas: 'CONTENIDO',
   actividad_del_equipo: 'ACTIVIDAD',
   operacion_de_cliente: 'CONTEXTO', memoria_de_reuniones: 'CONTEXTO',
+  cartera_de_operacion: 'CONTEXTO', lectura_de_la_agencia: 'CONTEXTO',
+  memoria_de_la_agencia: 'CONTEXTO', consultar_aprendizajes: 'CONTEXTO',
   carga_del_equipo: 'CARGA', ritmo_del_equipo: 'CARGA'
 };
 export const INVESTIGATION_AREAS = ['TAREAS', 'CONTENIDO', 'ACTIVIDAD', 'CONTEXTO', 'CARGA'];
+const DETAIL_READS = new Set(['leer_pendiente', 'leer_piezas_de_parrilla']);
+export const investigationScope = (name, sources = []) => {
+  const resources = [...new Map(sources.filter(source => source?.kind && source?.id).map(source => [`${source.kind}:${source.id}`, { tipo: source.kind, id: source.id }])).values()];
+  return { nivel: DETAIL_READS.has(name) ? 'DETALLE' : 'RESUMEN', recursos: resources.slice(0, 60), recursosParciales: resources.length > 60 };
+};
 const string = (value, limit = 1200) => {
   if (typeof value !== 'string' || !value.trim() || value.length > limit) throw knowledgeError('Falta un texto válido en la investigación.');
   return value.trim();
@@ -75,7 +82,7 @@ export const buildInvestigation = (args, { previous, receipts = [], now = new Da
     id: prior?.id || randomUUID(), revision: (prior?.revision || 0) + 1,
     asunto: prior?.asunto || string(args.asunto, 200), objetivo: prior?.objetivo || string(args.objetivo),
     revisadaEn: now.toISOString(), estado: resolved ? 'RESUELTO' : checks.some(row => row.resultado === 'CUMPLIDO') ? 'MEJORA_PARCIAL' : 'ABIERTO',
-    cobertura: areas, hallazgos: findings, alternativas: alternatives, recomendada: recommended, relato: narrative,
+    cobertura: areas, hallazgos: findings, decision: args.decision == null ? null : string(args.decision), alternativas: alternatives, recomendada: recommended, relato: narrative,
     incertidumbres: list(args.incertidumbres || []).map(value => string(value)),
     comprobaciones: checks, proximaRevision: string(args.proximaRevision),
     consultas: used, sources: unique([...(prior?.sources || []), ...used.flatMap(read => read.sources)]), accion: linkedAction,

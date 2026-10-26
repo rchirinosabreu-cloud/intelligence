@@ -85,6 +85,18 @@ export const inquiryGaps = (plan, record, receipts) => {
   return missing;
 };
 
+// Reducir el catálogo para redactar el registro no declara resuelto el asunto.
+// Reutiliza las mismas obligaciones de lectura y sus recibos del turno actual;
+// comparar alternativas o reparar el relato corresponde a actualizar_seguimiento.
+export const isInquiryReadyToRecord = (plan, record, receipts, { memoryPersisted = false } = {}) => {
+  if (plan?.investigar !== true || plan.guardarSeguimiento !== true || plan.prepararCambios || plan.soloConversacion
+    || !Array.isArray(plan.areas) || !Array.isArray(receipts) || !receipts.length
+    || record && !Array.isArray(record.cobertura)) return false;
+  const purpose = plan.propositoMemoria || 'NINGUNO';
+  if (!MEMORY_PURPOSES.includes(purpose) || purpose !== 'NINGUNO' && memoryPersisted !== true) return false;
+  return inquiryGaps({ ...plan, guardarSeguimiento: false }, record, receipts).length === 0;
+};
+
 // Cuando se agota el recorrido se conserva lo pendiente, sin inventar hallazgos ni
 // convertir una respuesta libre del modelo en una investigación terminada.
 export const incompleteInquiry = (plan, { previous, record, receipts, now, gaps }) => {
