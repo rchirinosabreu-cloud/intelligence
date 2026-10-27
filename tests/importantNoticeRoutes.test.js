@@ -41,6 +41,22 @@ test('el aviso actual, y las tres decisiones, con la identidad de la sesión', a
   } finally { await close(); }
 });
 
+test('la banda reporta que mostró un aviso, siempre a nombre de la sesión', async () => {
+  const calls = [];
+  const service = {
+    markNoticeShown: async (_db, id, actor) => { calls.push([id, actor.userId]); return { ok: true, recorded: true }; }
+  };
+  const { call, close } = await serve(service);
+  try {
+    assert.equal((await call('POST', '/n1/shown', { userId: 'forjado' })).status, 200);
+    assert.equal((await call('POST', '/n1/shown', null, null)).status, 401);
+    assert.deepEqual(calls, [['n1', 'u-francys']]);
+  } finally { await close(); }
+  // Es una señal de la pantalla: no se describe en el mapa de Bria.
+  const catalog = readFileSync(new URL('../src/lib/platformCatalog.js', import.meta.url), 'utf8');
+  assert.match(catalog, /important-notices\\\/:id\\\/shown/);
+});
+
 test('los errores se dicen en palabras y uno interno no filtra detalles', async () => {
   const fail = (error) => async () => { throw error; };
   const service = {

@@ -6,26 +6,45 @@ import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
 import {
   Activity,
+  Archive,
   Bell,
   CheckCircle2,
+  Clock,
   Edit2,
   Eye,
   List,
   Plus,
   RefreshCw,
-  User
+  User,
+  X
 } from '@/components/ui/icons';
 
+// Tonos de la paleta oficial (los violetas y fucsias heredados se migraron al tocar la pantalla, 27 de octubre de 2026).
+const TONES = {
+  cyan: 'text-brand-cyan-deep bg-brand-cyan-soft dark:bg-brand-cyan/10 dark:text-brand-cyan',
+  green: 'text-brand-green-deep bg-brand-green-soft dark:bg-brand-green/10 dark:text-brand-green',
+  magenta: 'text-brand-magenta-deep bg-brand-magenta-soft dark:bg-brand-magenta/15 dark:text-brand-magenta-soft',
+  coral: 'text-brand-coral-deep bg-brand-coral-soft dark:bg-brand-coral/10 dark:text-brand-coral',
+  yellow: 'text-brand-yellow-deep bg-brand-yellow-soft dark:bg-brand-yellow/10 dark:text-brand-yellow'
+};
+
 const eventConfig = {
-  TASK_CREATED: { label: 'Tarea creada', icon: Plus, tone: 'text-violet-600 bg-violet-50 dark:bg-violet-500/10 dark:text-violet-300' },
-  TASK_ASSIGNED: { label: 'Tarea asignada', icon: User, tone: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-500/10 dark:text-cyan-300' },
-  TASK_UPDATED: { label: 'Tarea actualizada', icon: Edit2, tone: 'text-amber-600 bg-amber-50 dark:bg-amber-500/10 dark:text-amber-300' },
-  TASK_OPENED: { label: 'Tarea abierta', icon: Eye, tone: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-300' },
-  TASK_LIST_SYNCED: { label: 'Lista de tareas actualizada', icon: RefreshCw, tone: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-300' },
-  NOTIFICATION_CREATED: { label: 'Notificación emitida', icon: Bell, tone: 'text-fuchsia-600 bg-fuchsia-50 dark:bg-fuchsia-500/10 dark:text-fuchsia-300' },
-  NOTIFICATION_READ: { label: 'Marcada como leída', icon: CheckCircle2, tone: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-500/10 dark:text-emerald-300' },
-  SESSION_STARTED: { label: 'Inicio de sesión', icon: User, tone: 'text-cyan-600 bg-cyan-50 dark:bg-cyan-500/10 dark:text-cyan-300' },
-  PLATFORM_MUTATION: { label: 'Acción registrada', icon: Activity, tone: 'text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-300' }
+  TASK_CREATED: { label: 'Tarea creada', icon: Plus, tone: TONES.magenta },
+  TASK_ASSIGNED: { label: 'Tarea asignada', icon: User, tone: TONES.cyan },
+  TASK_UPDATED: { label: 'Tarea actualizada', icon: Edit2, tone: TONES.yellow },
+  TASK_OPENED: { label: 'Tarea abierta', icon: Eye, tone: TONES.green },
+  TASK_LIST_SYNCED: { label: 'Lista de tareas actualizada', icon: RefreshCw, tone: TONES.cyan },
+  NOTIFICATION_CREATED: { label: 'Notificación emitida', icon: Bell, tone: TONES.magenta },
+  NOTIFICATION_READ: { label: 'Marcada como leída', icon: CheckCircle2, tone: TONES.green },
+  SESSION_STARTED: { label: 'Inicio de sesión', icon: User, tone: TONES.cyan },
+  PLATFORM_MUTATION: { label: 'Acción registrada', icon: Activity, tone: TONES.cyan },
+  // Alertas comerciales y la banda de avisos importantes: salmón lo que la plataforma avisa, verde lo que la persona decide.
+  CRM_FOLLOW_UP_ALERTS_SENT: { label: 'Alertas comerciales', icon: Bell, tone: TONES.coral },
+  IMPORTANT_NOTICE_SHOWN: { label: 'Aviso en la banda', icon: Eye, tone: TONES.coral },
+  IMPORTANT_NOTICE_FOLLOWED_UP: { label: 'Ya hice seguimiento', icon: CheckCircle2, tone: TONES.green },
+  IMPORTANT_NOTICE_SNOOZED: { label: 'Recordarme', icon: Clock, tone: TONES.yellow },
+  IMPORTANT_NOTICE_CLOSED: { label: 'No sigue', icon: X, tone: TONES.magenta },
+  IMPORTANT_NOTICE_CLEARED: { label: 'Aviso atendido', icon: Archive, tone: TONES.cyan }
 };
 
 const formatDateTime = (value) => value
@@ -63,7 +82,7 @@ const OperationalTracePanel = () => {
       <div className="border-b border-zinc-100 p-5 dark:border-zinc-800 sm:p-6">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
           <div>
-            <div className="flex items-center gap-2 text-xs font-bold uppercase text-violet-600 dark:text-violet-400">
+            <div className="flex items-center gap-2 text-xs font-bold uppercase text-brand-cyan-deep dark:text-brand-cyan">
               <Activity className="h-4 w-4" /> Actividad del equipo
             </div>
             <h2 className="mt-2 text-xl font-bold text-zinc-950 dark:text-white">Historial de actividad</h2>
@@ -78,7 +97,7 @@ const OperationalTracePanel = () => {
               id="trace-user"
               value={userId}
               onChange={(event) => setUserId(event.target.value)}
-              className="h-10 min-w-52 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-700 outline-none focus:border-violet-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
+              className="h-10 min-w-52 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-700 outline-none focus:border-brand-cyan dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
             >
               <option value="">Todo el equipo</option>
               {(data?.users || []).map((user) => <option key={user.id} value={user.id}>{user.name}</option>)}
@@ -89,7 +108,7 @@ const OperationalTracePanel = () => {
               id="trace-period"
               value={days}
               onChange={(event) => setDays(event.target.value)}
-              className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-700 outline-none focus:border-violet-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
+              className="h-10 rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-700 outline-none focus:border-brand-cyan dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200"
             >
               <option value="1">Últimas 24 horas</option>
               <option value="7">Últimos 7 días</option>
@@ -102,7 +121,7 @@ const OperationalTracePanel = () => {
               disabled={isFetching}
               aria-label="Actualizar trazabilidad"
               title="Actualizar trazabilidad"
-              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 hover:border-violet-300 hover:text-violet-700 disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
+              className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-zinc-200 text-zinc-500 hover:border-brand-cyan hover:text-brand-cyan-deep disabled:opacity-50 dark:border-zinc-700 dark:text-zinc-300"
             >
               <RefreshCw className={cn('h-4 w-4', isFetching && 'animate-spin')} />
             </button>
@@ -151,8 +170,13 @@ const OperationalTracePanel = () => {
                       <div className="flex flex-wrap items-center gap-2">
                         <span className="text-xs font-bold uppercase text-zinc-500 dark:text-zinc-400">{event.displayLabel || config.label}</span>
                         {event.task && (
-                          <Link to={`/gestion?taskId=${event.task.id}`} className="truncate text-xs font-semibold text-violet-600 hover:underline dark:text-violet-400">
+                          <Link to={`/gestion?taskId=${event.task.id}`} className="truncate text-xs font-semibold text-brand-cyan-deep hover:underline dark:text-brand-cyan">
                             {event.task.clientName ? `${event.task.clientName} · ` : ''}{event.task.title}
+                          </Link>
+                        )}
+                        {event.link && (
+                          <Link to={event.link.url} className="truncate text-xs font-semibold text-brand-cyan-deep hover:underline dark:text-brand-cyan">
+                            {event.link.label}
                           </Link>
                         )}
                       </div>

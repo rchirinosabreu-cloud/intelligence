@@ -23,7 +23,9 @@ export function createImportantNoticeRouter({ service = importantNotices, db = p
       res.status(500).json({ error: fallback });
     }
   };
-  router.get('/current', handle('No pudimos cargar el aviso.', (req) => service.currentImportantNotice(db, req.user.userId, clock())));
+  router.get('/current', handle('No pudimos cargar el aviso.', (req) => service.currentImportantNotice(db, req.user.userId, clock(), { who: req.user.name || null })));
+  // Señal de la pantalla: el aviso está a la vista. Queda en la trazabilidad una vez por aparición.
+  router.post('/:id/shown', handle('No pudimos registrar el aviso.', (req) => service.markNoticeShown(db, req.params.id, req.user, { now: clock() })));
   router.post('/:id/follow-up', handle('No pudimos registrar el seguimiento.', (req) => service.followUpNotice(db, req.params.id, req.body || {}, req.user, { now: clock() })));
   router.post('/:id/snooze', handle('No pudimos posponer el aviso.', (req) => service.snoozeNotice(db, req.params.id, req.body || {}, req.user, { now: clock() })));
   router.post('/:id/close', handle('No pudimos cerrar la oportunidad.', (req) => service.closeReviewNotice(db, req.params.id, req.body || {}, req.user, { now: clock() })));

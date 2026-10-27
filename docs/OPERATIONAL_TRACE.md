@@ -20,6 +20,26 @@
 - PostgreSQL real: `tests/recognitionPostgres.integration.mjs` comprueba el filtrado antes del límite, peticiones simultáneas, rollback de reconocimiento/historial y entrega autenticada. Solo permite `TEST_DATABASE_URL` en `127.0.0.1:55448/recognition_test`, con usuario `recognition_test`; valida el destino antes de importar servicios con cliente compartido. No usar `.env` productivo ni otro clúster para estas pruebas.
 - No requiere cambios de esquema. Verificación local no equivale a despliegue productivo; nuevos eventos de concesión/visibilidad empiezan al publicar esta versión.
 
+## Alertas comerciales y la banda de avisos importantes (27 de octubre de 2026)
+
+Rodny: «quiero que los logs guarden todos esos eventos». Seis eventos propios, con sus frases en un solo sitio, `src/lib/importantNoticeTrace.js`, que leen el servidor al registrar y el panel al mostrar:
+
+| Evento | Autor | Cuándo |
+| --- | --- | --- |
+| `CRM_FOLLOW_UP_ALERTS_SENT` | la plataforma | Una entrada por persona y pase del reloj: cuántas revisiones y recordatorios, cuántos avisos salieron en la campana y cuántos quedaron en la banda. |
+| `IMPORTANT_NOTICE_SHOWN` | la plataforma | La banda lo reporta con la pestaña visible (`POST /api/important-notices/:id/shown`). Una vez por aparición: la primera y cada vuelta después de «Recordarme» (llave fija por aviso y hora de vuelta). |
+| `IMPORTANT_NOTICE_FOLLOWED_UP` | quien decide | «Ya hice seguimiento», con el canal. |
+| `IMPORTANT_NOTICE_SNOOZED` | quien decide | «Recordarme», con la opción y la hora de vuelta. |
+| `IMPORTANT_NOTICE_CLOSED` | quien decide | «No sigue», perdida o descartada. |
+| `IMPORTANT_NOTICE_CLEARED` | la plataforma | El aviso salió solo de la banda, con el motivo: una gestión registrada en el CRM, la oportunidad ya no espera al cliente, o ya no está activa. |
+
+- Cada entrada nombra la oportunidad y enlaza a ella en el CRM (`noticeTraceLink`, solo rutas `/crm/`). La metadata guarda aviso, tipo, oportunidad, texto del aviso y lo decidido; nada más.
+- Las rutas de la banda están en `isInternalTraceRequest`: no dejan además un cambio genérico sin frase.
+- «Se le mostró» acredita que la pantalla lo reportó con la pestaña visible, no que la persona lo leyó; lo que hizo queda aparte, con su decisión.
+- Cada evento escribe también una línea en los registros de Railway (`[Avisos importantes] …` y, por pase, `[CRM] Alertas comerciales: …`). Un pase sin nada que avisar no escribe nada.
+- Una traza que no se guarda nunca deshace una decisión ni frena las alertas: se anota en consola y sigue.
+- Pruebas: `tests/importantNoticeTrace.test.js`; interfaz: `tests/browser/operationalTrace.mjs` (capturas `avisos-light.png` y `avisos-dark.png`) y `tests/browser/importantNotices.mjs`.
+
 ## Inmutabilidad en la base de datos (12 de octubre de 2026)
 
 - `OperationalTraceEvent` está protegida por un trigger (`scripts/ensure-audit-immutability.js`, AGENTS.md §22): la base rechaza editar o borrar una entrada. La purga de 365 días sigue igual, pero corre en su propia transacción marcada con `SET LOCAL brainstudio.audit_purge = 'on'` (`purgeAuditRowsWithPrisma`) y la base solo le deja borrar lo vencido. Borrar a una persona sigue dejando sus entradas sin autor (`SetNull`), sin tocar nada más de la fila.

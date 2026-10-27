@@ -3,13 +3,17 @@ import { activeTeamUserWhere } from './teamRosterService.js';
 import { presentPlatformMutation, humanMutationWhere } from '../lib/operationalMutationLabels.js';
 import { recognitionLabels } from '../lib/recognitionPresentation.js';
 import { purgeAuditRowsWithPrisma } from '../lib/auditImmutability.js';
+import {
+  NOTICE_SYSTEM_TRACE_TYPES, NOTICE_TRACE_LABELS, NOTICE_TRACE_TYPES, noticeTraceDescription, noticeTraceLink
+} from '../lib/importantNoticeTrace.js';
 
 export const TRACE_RETENTION_DAYS = 365;
 
+// Las alertas comerciales y la banda de avisos importantes también se leen aquí (Rodny, 27 de octubre de 2026).
 const humanEventTypes = ['TASK_CREATED', 'TASK_ASSIGNED', 'TASK_UPDATED', 'TASK_OPENED', 'SESSION_STARTED',
   'NOTIFICATION_READ', 'RECOGNITION_GRANTED', 'TASK_ALERT_SHOWN', 'TASK_ALERT_REVIEWED', 'TASK_ALERT_DISMISSED',
-  'TASK_EXCESSIVE_WORK_CONFIRMED', 'TASK_RETURNED_REMINDER_SNOOZED'];
-const personalSystemEvents = ['RECOGNITION_GRANTED', 'TASK_ALERT_SHOWN'];
+  'TASK_EXCESSIVE_WORK_CONFIRMED', 'TASK_RETURNED_REMINDER_SNOOZED', ...NOTICE_TRACE_TYPES];
+const personalSystemEvents = ['RECOGNITION_GRANTED', 'TASK_ALERT_SHOWN', ...NOTICE_SYSTEM_TRACE_TYPES];
 const humanEventWhere = () => ({ OR: [
   { eventType: { in: humanEventTypes }, OR: [
     { actorId: { not: null } }, { eventType: { in: personalSystemEvents }, subjectUserId: { not: null } },
@@ -31,7 +35,8 @@ const knownEventTypes = new Set([
   'SESSION_STARTED',
   'PLATFORM_MUTATION',
   'NOTIFICATION_CREATED',
-  'NOTIFICATION_READ'
+  'NOTIFICATION_READ',
+  ...NOTICE_TRACE_TYPES
 ]);
 
 let lastPruneAt = 0;
@@ -79,7 +84,9 @@ const maybePruneExpiredTrace = async ({ now, db }) => {
   await purgeAuditRowsWithPrisma(db, (tx) => tx.operationalTraceEvent.deleteMany({ where: { occurredAt: { lt: cutoff } } }));
 };
 
+// `id` fijo cuando el mismo hecho puede llegar dos veces (que la banda se mostró): la llave única lo deja una sola vez.
 export const recordOperationalTrace = async ({
+  id = null,
   eventType,
   actorId = null,
   subjectUserId = null,
@@ -94,6 +101,7 @@ export const recordOperationalTrace = async ({
 
   const event = await db.operationalTraceEvent.create({
     data: {
+      ...(cleanId(id) ? { id: cleanId(id) } : {}),
       eventType,
       actorId: cleanId(actorId),
       subjectUserId: cleanId(subjectUserId),
@@ -149,7 +157,11 @@ const eventDescription = (event, task) => {
     case 'PLATFORM_MUTATION': return presentPlatformMutation(event.metadata, actor).description;
     case 'NOTIFICATION_CREATED': return `Se generó una notificación para ${subject || 'un miembro del equipo'}.`;
     case 'NOTIFICATION_READ': return `${subject || actor} marcó una notificación como leída${task ? ` de ${taskName}` : ''}.`;
-    default: return 'Actividad operativa registrada.';
+    default:
+      if (NOTICE_TRACE_TYPES.includes(event.eventType)) {
+        return noticeTraceDescription(event.eventType, event.metadata, { actor: event.actor?.name || 'Alguien', subject: subject || actor });
+      }
+      return 'Actividad operativa registrada.';
   }
 };
 
@@ -237,8 +249,10 @@ export const getOperationalTrace = async ({
           : ({ TASK_LIST_SYNCED: 'Lista de tareas actualizada', RECOGNITION_GRANTED: 'Reconocimiento recibido',
             TASK_ALERT_SHOWN: 'Aviso mostrado', TASK_ALERT_REVIEWED: 'Revisar tarea', TASK_ALERT_DISMISSED: 'Aviso cerrado',
             TASK_EXCESSIVE_WORK_CONFIRMED: 'Sigo trabajando', TASK_RETURNED_REMINDER_SNOOZED: 'Recordarme más tarde',
+            ...NOTICE_TRACE_LABELS,
           }[event.eventType] || null),
         task: task ? { id: task.id, title: task.title, clientName: task.client?.name || null } : null,
+        link: NOTICE_TRACE_TYPES.includes(event.eventType) ? noticeTraceLink(event.metadata) : null,
         description: eventDescription(event, task)
       };
     })
