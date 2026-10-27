@@ -4,7 +4,7 @@ import * as importantNotices from '../../services/importantNoticeService.js';
 
 /**
  * Avisos importantes (26 de octubre de 2026): la banda de abajo. Montada para todo el equipo autenticado; cada aviso
- * es de una persona y el servicio comprueba que sea suyo. Registrar la gestión o cerrar la oportunidad pide además el
+ * es de una persona y el servicio comprueba que sea suyo. Registrar la gestión o descartar la oportunidad pide además el
  * permiso del CRM, también en el servicio.
  */
 export function createImportantNoticeRouter({ service = importantNotices, db = prisma, clock = () => new Date() } = {}) {
@@ -26,6 +26,6 @@ export function createImportantNoticeRouter({ service = importantNotices, db = p
   router.get('/current', handle('No pudimos cargar el aviso.', (req) => service.currentImportantNotice(db, req.user.userId, clock())));
   router.post('/:id/follow-up', handle('No pudimos registrar el seguimiento.', (req) => service.followUpNotice(db, req.params.id, req.body || {}, req.user, { now: clock() })));
   router.post('/:id/snooze', handle('No pudimos posponer el aviso.', (req) => service.snoozeNotice(db, req.params.id, req.body || {}, req.user, { now: clock() })));
-  router.post('/:id/close-lost', handle('No pudimos cerrar la oportunidad.', (req) => service.closeNoticeAsLost(db, req.params.id, req.user, { now: clock() })));
+  router.post('/:id/discard', handle('No pudimos descartar la oportunidad.', (req) => service.discardNotice(db, req.params.id, req.user, { now: clock() })));
   return router;
 }

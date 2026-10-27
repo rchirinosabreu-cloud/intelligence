@@ -32,14 +32,15 @@ test('cúpula radial sin borde, de borde a borde, encima del menú y debajo de l
 
 test('los botones: seguimiento primero, «Abrir» como botón y «Recordarme» siempre al final', () => {
     const base = band.slice(band.indexOf("{mode === 'base' && ("), band.indexOf("{mode === 'channels' && FOLLOW_UP_CHANNELS"));
-    const order = ['data-notice-action="follow-up"', 'data-notice-action="close-lost"', 'data-notice-action="open"', 'data-notice-action="snooze"']
+    const order = ['data-notice-action="follow-up"', 'data-notice-action="discard"', 'data-notice-action="open"', 'data-notice-action="snooze"']
         .map((marker) => base.indexOf(marker));
     assert.ok(order.every((index) => index >= 0));
     assert.deepEqual([...order].sort((a, b) => a - b), order);
     assert.match(base, /<NoticeButton disabled=\{busy\} data-notice-action="open"/, '«Abrir» es un botón como los demás, no un enlace');
     assert.doesNotMatch(band, />\s*Volver|Nota opcional|<textarea|<input/);
-    // En la revisión: «Ya hice seguimiento», «Cerrar» y «Recordarme»; sin «Abrir».
-    assert.doesNotMatch(band, /Sigue: ya hice seguimiento|Cerrar como perdida/);
+    // En la revisión: «Ya hice seguimiento», «Descartar» y «Recordarme»; sin «Abrir». «Cerrar» se confundía con cerrar el aviso.
+    assert.doesNotMatch(band, /Sigue: ya hice seguimiento|Cerrar como perdida|>\s*Cerrar\s*</);
+    assert.match(base, />\s*Descartar\s*</);
     assert.match(base, /\{!isReview && notice\.url && \(/);
 });
 

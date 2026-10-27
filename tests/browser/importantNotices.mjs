@@ -37,7 +37,7 @@ test('la revisión sale primero, se decide sin salir de la pantalla y el seguimi
     assert.equal(await band(page).getAttribute('data-level'), 'IMPORTANTE');
     assert.match(await band(page).innerText(), /Centro Andino lleva 30 días sin responder: ¿sigue o se cierra\?/);
     const labels = await band(page).locator('[data-notice-action]').allInnerTexts();
-    assert.deepEqual(labels.map((label) => label.trim()), ['Ya hice seguimiento', 'Cerrar', 'Recordarme']);
+    assert.deepEqual(labels.map((label) => label.trim()), ['Ya hice seguimiento', 'Descartar', 'Recordarme']);
     // Encima del menú lateral y de borde a borde; debajo de los diálogos.
     const box = await band(page).evaluate((node) => ({ z: getComputedStyle(node).zIndex, left: node.getBoundingClientRect().left, width: node.getBoundingClientRect().width }));
     assert.deepEqual(box, { z: '65', left: 0, width: 1440 });

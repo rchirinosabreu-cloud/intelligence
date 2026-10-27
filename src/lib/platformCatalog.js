@@ -152,7 +152,7 @@ export const PLATFORM_OPERATIONS = {
   'GET /important-notices/current': { que: 'El aviso importante que la persona tiene en la banda de abajo (uno a la vez).' },
   'POST /important-notices/:id/follow-up': { que: 'Registra en el CRM el seguimiento de un aviso y lo cierra.', campos: 'channel (WHATSAPP, LLAMADA, CORREO, REUNION o RESPUESTA_CLIENTE)' },
   'POST /important-notices/:id/snooze': { que: 'Pospone un aviso importante.', campos: 'option (10m, 1h o tomorrow)' },
-  'POST /important-notices/:id/close-lost': { que: 'Cierra como perdida la oportunidad de una revisión de 30 días.' },
+  'POST /important-notices/:id/discard': { que: 'Descarta la oportunidad de una revisión de 30 días (pasa a Descartado).' },
   'GET /global-announcements': { que: 'Los anuncios generales del dashboard.' },
   'POST /global-announcements': { que: 'Publica un anuncio general para todo el equipo.', campos: 'content, type' },
   'DELETE /global-announcements/:id': { que: 'Retira un anuncio general.' },

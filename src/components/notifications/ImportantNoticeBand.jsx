@@ -90,11 +90,12 @@ function NoticeBody({ notice, onDecided }) {
                 <NoticeButton primary disabled={busy} data-notice-action="follow-up" onClick={() => setMode('channels')}>
                   Ya hice seguimiento
                 </NoticeButton>
-                {/* En la revisión, «Cerrar» la deja como perdida y no hay «Abrir» (Rodny, 26 de octubre de 2026). */}
+                {/* En la revisión, «Descartar» la pasa a Descartado y no hay «Abrir» (Rodny, 26 de octubre de 2026):
+                    «Cerrar» se confundía con cerrar el aviso. */}
                 {isReview && (
-                  <NoticeButton disabled={busy} data-notice-action="close-lost"
-                    onClick={() => decide('close-lost', {}, 'Oportunidad cerrada como perdida')}>
-                    Cerrar
+                  <NoticeButton disabled={busy} data-notice-action="discard"
+                    onClick={() => decide('discard', {}, 'Oportunidad descartada')}>
+                    Descartar
                   </NoticeButton>
                 )}
                 {!isReview && notice.url && (

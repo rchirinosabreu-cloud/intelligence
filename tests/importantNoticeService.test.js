@@ -2,12 +2,12 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
-    closeNoticeAsLost, currentImportantNotice, followUpNotice, queueImportantNotice, snoozeNotice
+    discardNotice, currentImportantNotice, followUpNotice, queueImportantNotice, snoozeNotice
 } from '../src/services/importantNoticeService.js';
 import { runFollowUpAlerts } from '../src/services/crmFollowUpAlertService.js';
 
 // Avisos importantes (Rodny, 26 de octubre de 2026): «Ya hice seguimiento» registra la gestión en el CRM y reinicia la
-// cuenta; «Recordarme» lo pospone; en la revisión de los 30 días, «Cerrar como perdida» cierra la oportunidad. Un aviso
+// cuenta; «Recordarme» lo pospone; en la revisión de los 30 días, «Descartar» la pasa a Descartado. Un aviso
 // que ya se atendió por otro lado no se queda en la banda.
 
 const at = (iso) => new Date(iso);
@@ -104,14 +104,14 @@ test('«Recordarme» lo pospone sin cerrarlo, y vuelve a su hora', async () => {
     await assert.rejects(snoozeNotice(db, 'n1', { option: 'para siempre' }, crmUser, { now: NOW }), { statusCode: 400 });
 });
 
-test('«Cerrar como perdida» solo existe en la revisión y pasa la oportunidad a Perdido con su motivo', async () => {
+test('«Descartar» solo existe en la revisión y pasa la oportunidad a Descartado con la nota de por qué', async () => {
     const calls = [];
     const crm = { changeStage: async (...args) => { calls.push(args); return {}; } };
-    await assert.rejects(closeNoticeAsLost(fakeDb({ notices: [notice()] }), 'n1', crmUser, { crm, now: NOW }), { statusCode: 409 });
+    await assert.rejects(discardNotice(fakeDb({ notices: [notice()] }), 'n1', crmUser, { crm, now: NOW }), { statusCode: 409 });
     const db = fakeDb({ notices: [notice({ kind: 'CRM_REVIEW', level: 'IMPORTANTE' })] });
-    await closeNoticeAsLost(db, 'n1', crmUser, { crm, now: NOW });
-    assert.deepEqual(calls[0].slice(1, 3), ['l1', { stage: 'PERDIDO', lostReason: 'Sin respuesta del cliente.' }]);
-    assert.equal(db.rows[0].resolution, 'CERRADA_PERDIDA');
+    await discardNotice(db, 'n1', crmUser, { crm, now: NOW });
+    assert.deepEqual(calls[0].slice(1, 3), ['l1', { stage: 'DESCARTADO', note: 'Descartada desde el aviso de revisión: sin respuesta del cliente.' }]);
+    assert.equal(db.rows[0].resolution, 'DESCARTADA');
 });
 
 test('un aviso nuevo de la misma oportunidad reemplaza al que seguía abierto', async () => {
