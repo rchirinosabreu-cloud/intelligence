@@ -23,6 +23,7 @@ import { INQUIRY_READS, HISTORICAL_READS, MEMORY_WRITES, memoryPurposeAllows, in
 import { reviewedResponse, approvalOptions, conversationalInvestigation } from './briaResponse.js';
 import { humanDate } from './briaDate.js';
 import { temporalRelation } from './briaTemporalEvidence.js';
+import { calculationDeclarations, calculationReceipt } from './briaCalculationCoverage.js';
 export { humanDate } from './briaDate.js';
 
 export const MAX_TOOL_ROUNDS = 6;
@@ -269,6 +270,11 @@ export const runAssistant = async ({
   let investigation = null;
   const previousInvestigation = context.investigation;
   let inquiry = null, nudgedInquiry = false, inquiryRecovery = false;
+  const calculationReceipts = new Map();
+  let requiredCalculations = [];
+  const calculationRequirements = () => requiredCalculations;
+  const missingCalculations = () => calculationRequirements().filter(row => !calculationReceipts.has(row.id));
+  let nudgedCalculations = false;
   let memoryAttempted = false, memoryPersisted = false, nudgedMemory = false;
   const memoryReadSubjects = new Map();
   const memorySubject = args => args.clientId ? `client:${args.clientId}` : args.entidad || args.entity
@@ -278,6 +284,7 @@ export const runAssistant = async ({
     await context.revalidate?.();
     const planned = await context.inquiryPlanner({ ai, question, history, investigation: previousInvestigation, pendingAction: context.pendingAction, today });
     inquiry = planned.plan;
+    requiredCalculations = structuredClone(planned.calculationRequirements || inquiry?.calculosFinancieros || []);
     if (planned.modelCall) modelCalls.push(planned.modelCall);
     if (planned.diagnostic) {
       inquiryRecovery = true;
@@ -296,6 +303,7 @@ export const runAssistant = async ({
   const finish = (text = '') => ({
     ...reviewedResponse(investigation?.pendientesDelRecorrido?.length ? investigationReply(investigation) : String(text).trim() || conversationalInvestigation(investigation) || FALLBACK_ANSWER, pendingAction),
     sources: [...sources.values()], toolsUsed, failures,
+    ...(calculationReceipts.size ? { calculos: [...calculationReceipts.values()] } : {}),
     ...(learningProposals.length ? { learningProposals } : {}), ...(pendingAction ? { pendingAction } : {}), ...(investigation ? { investigation } : {}),
     ...(accessCards.size ? { accessCards: [...accessCards.values()].slice(0, 8) } : {}), ...(accessCapture ? { accessCapture } : {}),
     ...((approvalOptions(pendingAction).length ? approvalOptions(pendingAction) : quickReplies).length ? { quickReplies: normalizeQuickReplies(approvalOptions(pendingAction).length ? approvalOptions(pendingAction) : quickReplies) } : {}),
@@ -310,6 +318,7 @@ export const runAssistant = async ({
     await context.revalidate?.();
     if (!tool.allowed(user)) return { error: 'Esta información ya no está disponible para esta persona.' };
     if (inquiry?.soloConversacion) return { error: 'Este turno solo responde con el diálogo y el estado guardado; no autoriza consultas ni preparaciones nuevas.' };
+    if (call.name === 'actualizar_seguimiento' && missingCalculations().length) return { error: 'Antes de guardar conclusiones comprueba los cálculos pendientes con consultar_plataforma. No guardes cifras sin sus recibos actuales.' };
     if (MEMORY_WRITES.has(call.name) && !memoryPurposeAllows(call.name, memoryIntent)) return { error: 'El propósito del mensaje actual no autoriza esta escritura de memoria. Una consulta, un documento o un análisis no son una corrección humana ni un pedido de olvidar.' };
     if (memoryIntent === 'CORREGIR' && ['guardar_en_memoria', 'recordar_aprendizaje'].includes(call.name)
       && memorySubject(call.args || {}) && (memoryReadSubjects.get(memorySubject(call.args)) ?? Infinity) >= rounds) return { error: 'Antes de guardar esta corrección consulta la memoria del mismo sujeto en este turno y espera a recibir su resultado. Emitir lectura y escritura juntas no permite contrastar lo que devolvió la consulta. Contrasta periodos y revisiones; reemplaza solo lo que el nuevo hecho corrige íntegramente. La fecha de recepción no es el inicio del acuerdo ni sustituye el periodo que la persona aclaró.' };
@@ -351,6 +360,11 @@ export const runAssistant = async ({
       for (const card of outcome?.accessCards || []) if (card?.id) accessCards.set(card.id, { id: card.id, cliente: card.cliente, plataforma: card.plataforma, nombre: card.nombre });
       if (outcome?.accessCapture) accessCapture = outcome.accessCapture;
       let data = outcome?.data ?? null;
+      const calculation = calculationReceipt({ requirements: calculationRequirements(), call, data, now: context.now?.() || new Date() });
+      if (calculation) {
+        calculationReceipts.set(calculation.id, calculation);
+        data = { ...data, comprobanteCalculo: calculation };
+      }
       if (outcome?.pendingAction && data && typeof data === 'object') {
         const facts = { ...data }; delete facts.message;
         data = { ...facts, instruccionRespuesta: 'Redacta la respuesta a este mensaje con el estado devuelto. Si falta algo, pregunta solo lo que permita avanzar, conservando lo conocido. No copies una pregunta de formulario. Si está listo, explica lo relevante sin repetir todos los datos: el servidor adjunta los datos exactos para aprobar. Nada está ejecutado.' };
@@ -396,6 +410,12 @@ export const runAssistant = async ({
   while (true) {
     await context.revalidate?.();
     const lastRound = rounds >= maxRounds;
+    const remainingCalculations = missingCalculations();
+    if (lastRound && remainingCalculations.length) {
+      failures.push({ tool: 'consultar_plataforma', code: 'BRIA_CALCULATION_INCOMPLETE', message: 'No se obtuvo el cálculo verificable solicitado.' });
+      // Error controlado: nunca entregar la cifra provisional como un resultado.
+      return finish('No pude comprobar el cálculo solicitado con las fuentes autorizadas. Quedó pendiente; todavía no tengo una cifra verificada para darte.');
+    }
     if (lastRound && inquiry?.investigar && inquiry.guardarSeguimiento) {
       const remaining = inquiryGaps(inquiry, investigation, investigationReceipts);
       if (remaining.length) {
@@ -411,23 +431,23 @@ export const runAssistant = async ({
       if (!inquiry.prepararCambios && rounds > 0) availableDeclarations = availableDeclarations.filter(tool => INQUIRY_READS.has(tool.name) || memoryPurposeAllows(tool.name, memoryIntent));
       if (!inquiry.guardarSeguimiento) availableDeclarations = availableDeclarations.filter(tool => tool.name !== 'actualizar_seguimiento');
     }
-    if (rounds === maxRounds - 1 && isInquiryReadyToRecord(inquiry, investigation, investigationReceipts, { memoryPersisted })) {
+    if (!remainingCalculations.length && rounds === maxRounds - 1 && isInquiryReadyToRecord(inquiry, investigation, investigationReceipts, { memoryPersisted })) {
       availableDeclarations = availableDeclarations.filter(tool => tool.name === 'actualizar_seguimiento');
     }
     const startedAt = Date.now();
     let streamed = false;
-    const roundDeclarations = lastRound ? [] : inquiryDeclarations(availableDeclarations, investigationReceipts);
+    const roundDeclarations = lastRound ? [] : calculationDeclarations(inquiryDeclarations(availableDeclarations, investigationReceipts), calculationRequirements());
     const result = await ai.generate({
       // Una copia por llamada: lo que se añade después (llamadas y resultados) no cambia lo ya enviado.
       input: [...input],
-      instructions: instructionsFor(roundDeclarations),
+      instructions: [instructionsFor(roundDeclarations), ...(remainingCalculations.length ? [`Cálculos solicitados aún sin comprobación: ${JSON.stringify(remainingCalculations)}. Resuélvelos con consultar_plataforma: descubre la ruta si falta, identifica las filas pertinentes y vincula calculo.id, campo y moneda a cada resultado. Para SELECCION usa idsParaSumar con todas las filas del subconjunto; para TOTAL usa el agregado del filtro completo. Dos saldos individuales no son su suma conjunta. El historial ayuda a localizar, pero no acredita un cálculo actual. Esto no prepara ni ejecuta cambios.`] : [])].join('\n'),
       tools: roundDeclarations,
       governanceContext,
       // La selección de herramientas y de sus campos necesita interpretar el diálogo; no heredar
       // el modo sin razonamiento del cliente genérico. Se conserva el modelo configurado.
       reasoningEffort: 'medium',
       maxOutputTokens: MAX_ANSWER_TOKENS,
-      ...(onEvent && !inquiry?.investigar && !inquiryRecovery ? {
+      ...(onEvent && !inquiry?.investigar && !inquiryRecovery && !remainingCalculations.length ? {
         onTextDelta: (text) => { streamed = true; emit({ type: 'delta', text }); },
         // Un reintento empieza de cero: lo que alcanzó a verse se borra.
         onRetry: () => { if (streamed) { streamed = false; emit({ type: 'reset' }); } }
@@ -438,6 +458,16 @@ export const runAssistant = async ({
     // Lo que el modelo escribió antes de pedir una herramienta no es la respuesta: se borra de la pantalla.
     if (calls.length && streamed) emit({ type: 'reset' });
     const gaps = inquiryGaps(inquiry, investigation, investigationReceipts);
+    if (!calls.length && missingCalculations().length) {
+      if (nudgedCalculations) {
+        failures.push({ tool: 'consultar_plataforma', code: 'BRIA_CALCULATION_INCOMPLETE', message: 'No se obtuvo el cálculo verificable solicitado.' });
+        return finish('No pude comprobar el cálculo solicitado con las fuentes autorizadas. Quedó pendiente; todavía no tengo una cifra verificada para darte.');
+      }
+      nudgedCalculations = true;
+      rounds += 1;
+      input.push(...(result.output || []).filter(item => item.type !== 'message'), { role: 'developer', content: 'La respuesta provisional no se entregó: faltan los recibos de los cálculos solicitados. Consulta el cálculo con la herramienta; no sustituyas la comprobación por una suma redactada desde el historial.' });
+      continue;
+    }
     if (!calls.length && memoryRequested && !memoryAttempted && !nudgedMemory && !lastRound) {
       nudgedMemory = true;
       if (streamed) emit({ type: 'reset' });
@@ -477,6 +507,6 @@ export const runAssistant = async ({
       input.push({ type: 'function_call_output', call_id: call.id, output: JSON.stringify(output) });
     }
     // El resumen ya deriva del registro validado: otra generación solo lo repite.
-    if (inquiry?.investigar && !inquiry.prepararCambios && (!memoryRequested || memoryPersisted) && conversationalInvestigation(investigation) && !inquiryGaps(inquiry, investigation, investigationReceipts).length) return finish();
+    if (!missingCalculations().length && inquiry?.investigar && !inquiry.prepararCambios && (!memoryRequested || memoryPersisted) && conversationalInvestigation(investigation) && !inquiryGaps(inquiry, investigation, investigationReceipts).length) return finish();
   }
 };

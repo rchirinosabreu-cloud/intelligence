@@ -9,7 +9,7 @@ const answers = [
   'Volviendo a tus 30 minutos, mantendría primero la revisión de Cobalto: todavía vence hoy, 26 de octubre, a las 11:00 y quedan unos 20 minutos de revisión según su comentario. Cometa sigue sin publicación verificada, con publicación prevista para el 27; revisaría eso después. Los cobros no cambian esa comparación. No ejecuté cambios.'
 ];
 
-const scripted = ({ skipAlternative = false, skipServerSubtotal = false, firstAnswer = answers[0], financeAnswer = answers[1], initialTurn = 0, recovery = false, recoveryAnswer = `Cometa y Órbita juntas suman $3.575.500 COP. ${answers[2]}` } = {}) => {
+const scripted = ({ directMemory = false, skipAlternative = false, skipServerSubtotal = false, firstAnswer = answers[0], financeAnswer = answers[1], initialTurn = 0, recovery = false, recoveryAnswer = `Cometa y Órbita juntas suman $3.575.500 COP. ${answers[2]}` } = {}) => {
   let turn = initialTurn - 1, step = 0;
   return { generate: async request => {
     if (request.responseSchema) { turn++; step = 0; return { text: JSON.stringify(plan()) }; }
@@ -19,7 +19,7 @@ const scripted = ({ skipAlternative = false, skipServerSubtotal = false, firstAn
       if (step === 2 && !skipServerSubtotal) return call([['consultar_plataforma', { ruta: '/financials/receivables-ledger', idsParaSumar: ['receivable-0', 'receivable-2'] }]]);
       return { text: financeAnswer };
     }
-    if (step++ === 0) return call([['cartera_de_operacion', {}], ['buscar_pendientes', { estado: 'todas' }], ...(recovery && !skipServerSubtotal ? [['consultar_plataforma', { ruta: '/financials/receivables-ledger', idsParaSumar: ['receivable-0', 'receivable-2'] }]] : [])]);
+    if (step++ === 0) return call([directMemory ? ['memoria_de_la_agencia', { cliente: 'cometa', consulta: 'Compromisos de publicación' }] : ['cartera_de_operacion', {}], ['buscar_pendientes', { estado: 'todas' }], ...(recovery && !skipServerSubtotal ? [['consultar_plataforma', { ruta: '/financials/receivables-ledger', idsParaSumar: ['receivable-0', 'receivable-2'] }]] : [])]);
     if (step === 2) return call([['leer_pendiente', { id: 'cometa-task' }], ...(!skipAlternative ? [['leer_pendiente', { id: 'cobalto-task' }]] : [])]);
     if (step === 3) return call([['leer_piezas_de_parrilla', { planId: 'cometa-plan', ids: ['cometa-piece'] }], ...(!skipAlternative ? [['leer_piezas_de_parrilla', { planId: 'cobalto-plan', ids: ['cobalto-piece'] }]] : []), ['publicaciones_programadas', { dias: 7 }]]);
     return { text: recovery ? recoveryAnswer : turn === 0 ? firstAnswer : answers[2] };
@@ -99,6 +99,19 @@ test('a resumed recommendation must refresh both alternatives and retain the tim
   assert.throws(() => assertGroundedAnswer(resumed, fixture, 2), /thirty-minute/iu);
 });
 
+test('acceptance recognizes a current direct memory read and rejects empty or unrelated evidence', async () => {
+  const fixture = createGroundedAnswersFixture(scripted({ directMemory: true }));
+  await runGroundedAnswersScenario(fixture);
+  const outcome = fixture.outcomes[0];
+  assert.ok(outcome.reads.some(read => read.name === 'memory' && read.result.some(fact => fact.id === 'cometa-ready')));
+  assert.ok(!outcome.reads.some(read => read.name === 'account-memory'));
+  for (const replacement of [[], [{ id: 'unrelated-fact' }]]) {
+    const missing = structuredClone(outcome);
+    missing.reads = missing.reads.map(read => read.name === 'memory' ? { ...read, result: replacement } : read);
+    assert.throws(() => assertGroundedAnswer(missing, fixture, 0), /remembered claim must be available/iu);
+  }
+});
+
 test('acceptance rejects a contradictory weekday rather than checking only the date number', async () => {
   const fixture = createGroundedAnswersFixture(scripted({ firstAnswer: answers[0].replace('lunes 26', 'martes 26') }));
   await assert.rejects(runGroundedAnswersScenario(fixture), /día de la semana/iu);
@@ -133,7 +146,7 @@ test('offline preflight exercises plausible production reads including load, rhy
   assert.equal(outputs('ritmo_del_equipo')[0].personas[0].nombre, 'Marina Duarte');
   const financial = outputs('consultar_plataforma').filter(result => result.operacion === 'GET /financials/receivables-ledger');
   assert.equal(financial.find(result => result.respuesta.items.length === 6).respuesta.totals.outstandingTotal, 6612000);
-  const cometa = financial.find(result => result.respuesta.items.length === 1 && result.respuesta.items[0].clientId === 'finance-client-0');
+  const cometa = financial.find(result => result.respuesta.items.length === 1 && result.respuesta.items[0].clientId === 'cometa');
   assert.equal(cometa.respuesta.totals.outstandingTotal, 1275500);
   assert.equal(cometa.evidenciaNumerica.alcance.filtrosSolicitados.q, 'Cometa');
   assert.equal(financial.filter(result => result.respuesta.items.length === 0).length, 3, 'unknown q, another month and another quarter must not impersonate a full ledger');
@@ -196,6 +209,33 @@ test('cash read evidence does not invent a currency absent from the native proje
     const evidence = reads.find(result => result.operacion === operation && result.respuesta.items.length > 0).evidenciaNumerica;
     assert.ok(evidence.sumasFilasVisibles.every(sum => sum.moneda === 'COP'), 'native obligation currencies must remain intact');
   }
+});
+
+test('all six receivable accounts resolve through the native directory with the same identity', async () => {
+  let sent = false;
+  const fixture = createGroundedAnswersFixture({ generate: async request => {
+    if (request.responseSchema) return { text: JSON.stringify(plan()) };
+    if (!sent) {
+      sent = true;
+      const reads = fixture.financial.ledger.items.map(row => ['buscar_cliente', { nombre: row.client.name }]);
+      reads.push(['cartera_de_operacion', {}], ['consultar_plataforma', { ruta: '/financials/receivables-ledger' }], ['consultar_plataforma', { ruta: '/financials/records' }]);
+      return { functionCalls: reads.map(([name, args], index) => ({ id: `identity-${index}`, name, args })) };
+    }
+    return { text: 'Consulté el directorio y las cuentas actuales sin preparar ni ejecutar cambios.' };
+  } });
+  const answer = await fixture.send('Comprueba la identidad de las seis cuentas de cartera en el directorio y sus movimientos, sin cambiar nada.');
+  assert.deepEqual(answer.failures, []);
+  for (const obligation of fixture.financial.ledger.items) {
+    const search = fixture.calls.find(call => call.name === 'buscar_cliente' && call.args.nombre === obligation.client.name).result;
+    assert.notEqual(search.aproximado, true);
+    assert.deepEqual(search.clientes.map(client => ({ id: client.id, name: client.nombre, slug: client.slug })), [{ id: obligation.clientId, name: obligation.client.name, slug: obligation.client.slug }]);
+  }
+  assert.deepEqual(fixture.tasks.map(task => task.clientId), ['cometa', 'cobalto']);
+  assert.equal(fixture.pieces.length, 2);
+  assert.deepEqual(fixture.reads.find(read => read.name === 'portfolio').result.map(client => client.id), ['cometa', 'cobalto']);
+  const cash = fixture.calls.find(call => call.args.ruta === '/financials/records').result.respuesta.items;
+  assert.equal(cash.find(row => row.id === 'cash-income').clientId, fixture.financial.ledger.items[0].clientId);
+  assert.deepEqual(fixture.writes, []);
 });
 
 test('one recovery turn supplies the missing combined subtotal and refreshes both options without accepting the earlier partial answer', async () => {

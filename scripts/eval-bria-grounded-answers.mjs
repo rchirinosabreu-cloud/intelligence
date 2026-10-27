@@ -9,11 +9,29 @@ import { runWithAiContext } from '../src/lib/aiRequestContext.js';
 
 if (process.env.DATABASE_URL || process.env.DIRECT_URL) throw new Error('La evaluación no admite base de producción.');
 const model = process.env.BRIA_EVAL_MODEL, effort = process.env.BRIA_CHAT_REASONING_EFFORT, output = process.env.BRIA_EVAL_OUTPUT;
+const turnOutputTokens = Number(process.env.BRIA_EVAL_TURN_OUTPUT_TOKENS || 2800);
+if (!Number.isSafeInteger(turnOutputTokens) || turnOutputTokens < 128 || turnOutputTokens > 2800) throw new Error('Límite de salida por llamada inválido.');
 if (!process.env.OPENAI_API_KEY || !output || !model || !['low', 'medium'].includes(effort)) throw new Error('Faltan modelo, esfuerzo, credencial o destino explícitos.');
 await runGroundedReadPreflight();
 const usage = [];
 let stopped = false;
-const budget = createSettledEvalFetch({ model, maxUsd: Number(process.env.BRIA_EVAL_MAX_USD), inputUsdPerMillion: Number(process.env.BRIA_EVAL_INPUT_USD_PER_MILLION), outputUsdPerMillion: Number(process.env.BRIA_EVAL_OUTPUT_USD_PER_MILLION), fetchImpl: async (url, init) => {
+const countedInputs = [];
+const exactCounting = process.env.BRIA_EVAL_EXACT_INPUT_COUNT === '1';
+const countInputTokens = async (body, init) => {
+  if (stopped) throw new Error('Evaluación detenida; no se repite la red.');
+  const fields = ['model', 'input', 'instructions', 'text', 'tools', 'tool_choice', 'parallel_tool_calls', 'conversation', 'previous_response_id'];
+  const payload = Object.fromEntries(fields.filter(key => Object.hasOwn(body, key)).map(key => [key, body[key]]));
+  try {
+    const response = await fetch('https://api.openai.com/v1/responses/input_tokens', { method: 'POST', headers: init.headers, body: JSON.stringify(payload) });
+    if (!response.ok) throw new Error(`Conteo previo no disponible (${response.status}); no se generó respuesta.`);
+    const count = await response.json();
+    if (count.object !== 'response.input_tokens' || !Number.isSafeInteger(count.input_tokens) || count.input_tokens < 0) throw new Error('Conteo previo inválido.');
+    countedInputs.push(count.input_tokens);
+    return count.input_tokens + 256; // margen adicional, sin estimar caracteres/tokens
+  } catch (error) { stopped = true; throw error; }
+};
+const budget = createSettledEvalFetch({ model, maxUsd: Number(process.env.BRIA_EVAL_MAX_USD), inputUsdPerMillion: Number(process.env.BRIA_EVAL_INPUT_USD_PER_MILLION), outputUsdPerMillion: Number(process.env.BRIA_EVAL_OUTPUT_USD_PER_MILLION),
+  ...(exactCounting ? { countInputTokens, cachedInputUsdPerMillion: Number(process.env.BRIA_EVAL_CACHED_INPUT_USD_PER_MILLION), cacheWriteUsdPerMillion: Number(process.env.BRIA_EVAL_CACHE_WRITE_USD_PER_MILLION) } : {}), fetchImpl: async (url, init) => {
   if (stopped) throw new Error('Evaluación detenida: no se reintenta.');
   if (String(url) !== 'https://api.openai.com/v1/responses' || JSON.parse(init.body).reasoning?.effort !== effort) throw new Error('Destino o esfuerzo diferentes de la configuración evaluada.');
   try {
@@ -42,7 +60,7 @@ const fixture = createGroundedAnswersFixture({ generate: async request => {
   try { return await provider.generate(request); } catch (error) { stopped = true; throw error; }
 } }, {
   initialTurns: savedOutcomes.flatMap(row => [{ role: 'user', text: row.question }, row.answer]),
-  maxCalls: Number(process.env.BRIA_EVAL_MAX_CALLS), maxOutputTokens: 2800
+  maxCalls: Number(process.env.BRIA_EVAL_MAX_CALLS), maxOutputTokens: turnOutputTokens
 });
 let failure = null, acceptedTurns = acceptedBefore;
 try {
@@ -57,7 +75,7 @@ await mkdir(path.dirname(path.resolve(output)), { recursive: true });
 await writeFile(output, JSON.stringify({ fictional: true, scenario: 'grounded-answers', model, effort, pass: !failure, failure, acceptedTurns,
   semanticAcceptance: 'PENDIENTE_REVISION_DEL_RELATO', resumedFrom,
   ...(recoverSubtotal ? { initiallyPartialTurns: [1], recovery: { phase: 2, pass: !failure, priorPartialResultPreserved: true } } : {}),
-  budget: { maxUsd: Number(process.env.BRIA_EVAL_MAX_USD), committedUsd: budget.committedUsd() },
+  budget: { maxUsd: Number(process.env.BRIA_EVAL_MAX_USD), committedUsd: budget.committedUsd(), countedInputs },
   outcomes: [...savedOutcomes, ...fixture.outcomes], requests: fixture.requests, calls: fixture.calls, reads: fixture.reads, operationalWrites: fixture.writes, usage }, null, 2));
 console.log(JSON.stringify({ pass: !failure, failure, calls: usage.length, committedUsd: budget.committedUsd(), turns: savedOutcomes.length + fixture.outcomes.length }));
 process.exitCode = failure ? 1 : 0;

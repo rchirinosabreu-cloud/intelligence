@@ -1,6 +1,7 @@
 import { INVESTIGATION_AREAS, buildInvestigation } from './briaInvestigation.js';
 import { normalizeAiUsage } from './aiUsage.js';
 import { parseJsonFromAiResponse } from '../utils/jsonParser.js';
+import { calculationRequirementsSchema, validCalculationRequirements } from './briaCalculationCoverage.js';
 
 const boolean = { type: 'boolean' }, text = { type: 'string' };
 export const MEMORY_PURPOSES = ['NINGUNO', 'GUARDAR', 'CORREGIR', 'RETIRAR'];
@@ -12,6 +13,7 @@ const properties = {
   investigar: boolean, continuar: { type: 'boolean', description: 'Retoma el mismo seguimiento persistido disponible en el servidor. Solo puede ser true si seguimientoPersistidoDisponible es true y el pedido corresponde a ese asunto; retomar el diálogo o un análisis anterior sin caso guardado usa false.' }, actualidad: boolean, localizarTrabajo: boolean,
   guardarSeguimiento: boolean, prepararCambios: boolean, compararAlternativas: boolean, soloConversacion: boolean,
   propositoMemoria: { type: 'string', enum: MEMORY_PURPOSES },
+  calculosFinancieros: calculationRequirementsSchema,
   asunto: text, objetivo: text,
   areas: { type: 'array', items: { type: 'string', enum: INVESTIGATION_AREAS } },
   condiciones: { type: 'array', items: text }
@@ -32,13 +34,18 @@ export const planInquiry = async ({ ai, question, history, investigation, pendin
   const modelCall = { model: result.model, latencyMs: Date.now() - startedAt, usage: normalizeAiUsage(result.usage) };
   // Un plan descartado no es un permiso ni debe impedir la lectura normal. Se
   // conserva su uso y solo un motivo acotado; nunca el cuerpo del modelo en logs.
-  const discarded = reason => ({ plan: null, modelCall, diagnostic: { code: 'BRIA_INQUIRY_PLAN_INVALID', reason } });
+  const discarded = reason => ({ plan: null, modelCall, diagnostic: { code: 'BRIA_INQUIRY_PLAN_INVALID', reason },
+    // Restricciones de evidencia no conceden ningún permiso del plan descartado.
+    ...(Array.isArray(plan?.calculosFinancieros) && validCalculationRequirements(plan.calculosFinancieros)
+      ? { calculationRequirements: structuredClone(plan.calculosFinancieros) } : {}) });
   let plan;
   try { plan = parseJsonFromAiResponse(result.text); } catch { return discarded('INVALID_JSON'); }
   if (!plan || typeof plan !== 'object' || Array.isArray(plan)
     || Object.entries(properties).some(([key, schema]) => schema.type === 'boolean' && !(key === 'soloConversacion' && plan[key] === undefined) && typeof plan[key] !== 'boolean')
     || typeof plan.asunto !== 'string' || typeof plan.objetivo !== 'string'
     || plan.propositoMemoria !== undefined && !MEMORY_PURPOSES.includes(plan.propositoMemoria)
+    || !validCalculationRequirements(plan.calculosFinancieros)
+    || plan.soloConversacion && plan.calculosFinancieros?.length
     || !Array.isArray(plan.areas) || plan.areas.some(area => !INVESTIGATION_AREAS.includes(area))
     || !Array.isArray(plan.condiciones) || plan.condiciones.length > 10 || plan.condiciones.some(value => typeof value !== 'string' || !value.trim())
     || plan.investigar && (!plan.asunto.trim() || !plan.objetivo.trim())
