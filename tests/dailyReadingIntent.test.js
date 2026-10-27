@@ -66,9 +66,13 @@ test('the model receives derived calendar hints only for data returned by an aut
     assert.deepEqual(outputs[0], { ...data, calendarioFechas: {
       '2026-10-06': 'martes 6 de octubre de 2026',
       '2026-10-13': 'martes 13 de octubre de 2026'
-    } });
+    }, contextoTemporal: { hoy: '2026-10-15', zonaHoraria: 'America/Bogota', fechas: {
+      '2026-10-06': { relacionConHoy: 'PASADO' },
+      '2026-10-13': { relacionConHoy: 'PASADO' }
+    } } });
     assert.match(outputs[1].error, /permiso/);
     assert.equal(outputs[1].calendarioFechas, undefined);
+    assert.equal(outputs[1].contextoTemporal, undefined);
     assert.doesNotMatch(JSON.stringify(outputs), /2031-12-31/);
     return { text: 'Desde el martes 6 de octubre.' };
   } };
