@@ -6,6 +6,39 @@ import { createServer } from 'vite';
 import { createCrmRouter } from '../src/routes/api/crm.js';
 import { createCrmMemoryDb } from '../tests/fixtures/crmMemoryDb.js';
 import { crmDemoLeads, crmDemoActivities, crmDemoMembers, crmDemoUsers, crmDemoUser, crmDemoRequests } from '../tests/fixtures/crmData.js';
+import { createImportantNoticeRouter } from '../src/routes/api/importantNotices.js';
+
+// Two notices for the demo user: the coral review goes first; the green follow-up comes five minutes after deciding.
+const createImportantNoticeMemory = (crmDb, userId) => {
+  let offset = 0;
+  const clock = () => new Date(Date.now() + offset);
+  const rows = [
+    { id: 'aviso-revision', kind: 'CRM_REVIEW', level: 'IMPORTANTE', subjectId: 'lead-centro', label: 'Revisión · 30 días', message: 'Centro Andino lleva 30 días sin responder: ¿sigue o no?' },
+    { id: 'aviso-seguimiento', kind: 'CRM_FOLLOW_UP', level: 'SEGUIMIENTO', subjectId: 'lead-calzado', label: 'Seguimiento comercial', message: 'Calzado Andino lleva 10 días sin responder la propuesta' }
+  ].map((row) => ({ userId, url: `/crm/oportunidades/${row.subjectId}`, createdAt: clock(), snoozedUntil: null, decidedAt: null, resolvedAt: null, resolution: null, notificationId: null, ...row }));
+  const matches = (row, where = {}) => Object.entries(where).every(([key, value]) => (value && typeof value === 'object' && 'not' in value ? row[key] !== value.not : row[key] === value));
+  const contact = new Set(['LLAMADA', 'CORREO', 'WHATSAPP', 'MENSAJE_LINKEDIN', 'REUNION', 'PROPUESTA_ENVIADA', 'RESPUESTA_CLIENTE']);
+  const db = Object.create(crmDb);
+  Object.assign(db, {
+    importantNotice: {
+      findMany: async ({ where }) => rows.filter((row) => matches(row, where)),
+      findFirst: async ({ where, orderBy }) => rows.filter((row) => matches(row, where)).sort((a, b) => (orderBy?.decidedAt ? b.decidedAt - a.decidedAt : 0))[0] || null,
+      update: async ({ where, data }) => Object.assign(rows.find((row) => row.id === where.id), data)
+    },
+    // The memory CRM ignores relation filters: only contact activities after the notice count as «already handled».
+    crmLead: {
+      ...crmDb.crmLead,
+      findUnique: async (args) => {
+        const lead = await crmDb.crmLead.findUnique(args);
+        const after = args.select?.activities?.where?.occurredAt?.gt;
+        if (!lead || !after) return lead;
+        return { ...lead, activities: (lead.activities || []).filter((item) => contact.has(item.type) && new Date(item.occurredAt) > new Date(after)) };
+      }
+    },
+    notification: { updateMany: async () => ({ count: 0 }) }
+  });
+  return { db, clock, advance: (minutes) => { offset += minutes * 60 * 1000; } };
+};
 
 // Local laboratory for the CRM screens: the real router and service run over an in-memory store.
 // No dotenv, no database, no production server, no external calls.
@@ -16,8 +49,13 @@ export async function createCrmPreview({ port = 3100 } = {}) {
   const db = createCrmMemoryDb({ leads: crmDemoLeads, activities: crmDemoActivities, members: crmDemoMembers, users: crmDemoUsers, requests: crmDemoRequests, catalog });
   const api = express();
   api.use(express.json());
-  api.use((req, _res, next) => { req.user = { userId: crmDemoUser.id, role: crmDemoUser.role }; next(); });
+  api.use((req, _res, next) => { req.user = { userId: crmDemoUser.id, role: crmDemoUser.role, modulePermissions: crmDemoUser.modulePermissions }; next(); });
   api.use('/api/crm', createCrmRouter({ db }));
+  // La banda de avisos importantes, con el servicio real sobre la misma memoria. El reloj se puede adelantar
+  // (POST /api/__preview/clock?minutes=5) para ver salir el siguiente aviso sin esperar los cinco minutos.
+  const notices = createImportantNoticeMemory(db, crmDemoUser.id);
+  api.post('/api/__preview/clock', (req, res) => { notices.advance(Number(req.query.minutes || 0)); res.json({ now: notices.clock() }); });
+  api.use('/api/important-notices', createImportantNoticeRouter({ db: notices.db, clock: notices.clock }));
   api.get('/api/auth/me', (_req, res) => res.json(crmDemoUser));
   api.get('/api/user/profile', (_req, res) => res.json(crmDemoUser));
   api.get('/api/team', (_req, res) => res.json(crmDemoMembers));

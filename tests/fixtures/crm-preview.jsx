@@ -6,6 +6,7 @@ import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from '@/context/AuthContext';
 import { ConfirmDialogProvider } from '@/components/ui/ConfirmDialog';
 import Sidebar from '@/components/layout/Sidebar';
+import ImportantNoticeBand from '@/components/notifications/ImportantNoticeBand';
 import { ThemeProvider } from '@/context/ThemeContext';
 import 'react-datepicker/dist/react-datepicker.css';
 import '@/index.css';
@@ -39,6 +40,7 @@ createRoot(document.getElementById('root')).render(
                   </Routes>
                 </Suspense>
               </main>
+              <ImportantNoticeBand />
             </div>
             <Toaster position="top-right" />
           </BrowserRouter>

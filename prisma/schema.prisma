@@ -254,6 +254,7 @@ model User {
   authoredGlobalAnnouncements GlobalAnnouncement[]
   createdOperationalEvents    OperationalEvent[]      @relation("OperationalEventCreator")
   notifications               Notification[]
+  importantNotices            ImportantNotice[]
   pushSubscriptions           PushSubscription[]
   operationalTraceActions     OperationalTraceEvent[] @relation("OperationalTraceActor")
   operationalTraceSubjects    OperationalTraceEvent[] @relation("OperationalTraceSubject")
@@ -465,6 +466,29 @@ model Notification {
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId, isRead, createdAt])
+}
+
+// Avisos importantes: la banda de abajo, uno a la vez (26 de octubre de 2026). La crea
+// scripts/ensure-important-notices-schema.js, con un índice parcial único: un aviso abierto por persona y asunto.
+model ImportantNotice {
+  id             String    @id @default(uuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  kind           String // CRM_FOLLOW_UP o CRM_REVIEW
+  level          String // SEGUIMIENTO (verde) o IMPORTANTE (salmón)
+  subjectId      String // la oportunidad del CRM
+  label          String
+  message        String
+  url            String?
+  notificationId String?
+  createdAt      DateTime  @default(now()) @db.Timestamptz()
+  snoozedUntil   DateTime? @db.Timestamptz()
+  decidedAt      DateTime? @db.Timestamptz()
+  resolvedAt     DateTime? @db.Timestamptz()
+  resolution     String? // SEGUIMIENTO, CERRADA_PERDIDA, YA_ATENDIDO o REEMPLAZADO
+
+  @@index([userId, resolvedAt], map: "ImportantNotice_user_open_idx")
+  @@index([userId, decidedAt], map: "ImportantNotice_user_decided_idx")
 }
 
 model PushSubscription {

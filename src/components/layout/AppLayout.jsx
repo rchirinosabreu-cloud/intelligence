@@ -16,6 +16,7 @@ import { getNotificationDisplayParts } from '@/utils/notificationUtils';
 import toast from 'react-hot-toast';
 import PushNotificationControl from '@/components/notifications/PushNotificationControl';
 import TeamCompletionsControl from '@/components/notifications/TeamCompletionsControl';
+import ImportantNoticeBand from '@/components/notifications/ImportantNoticeBand';
 import { notificationPanelControls } from '@/lib/teamNotifications';
 import ExcessiveTaskAlertDialog from '@/components/tasks/ExcessiveTaskAlertDialog';
 import DeclaredTimeDialog from '@/components/tasks/DeclaredTimeDialog';
@@ -44,6 +45,7 @@ const AppLayout = ({ children }) => {
     if (open) { setIsSidebarCollapsed(true); setIsSidebarOpen(false); }
   }, []);
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [hasImportantNotice, setHasImportantNotice] = useState(false);
   const [isReturnedTaskAlertBlocking, setIsReturnedTaskAlertBlocking] = useState(true);
   const [isOnboardingBlocking, setIsOnboardingBlocking] = useState(true);
   const { currentUser } = useAuth();
@@ -634,7 +636,8 @@ const AppLayout = ({ children }) => {
       )}
 
       {/* Main Content Area - z-0 (above background) */}
-      <main className={cn("relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8", isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64')} style={{ marginRight: Math.max(chatDockWidth, briaDockWidth) }}>
+      {/* Con un aviso importante abajo, la página guarda espacio al final para que nada quede tapado. */}
+      <main className={cn("relative z-0 min-h-screen min-w-0 overflow-x-clip px-4 pb-4 pt-20 transition-all md:px-8 md:pb-8", isSidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64', hasImportantNotice && 'pb-56 md:pb-48')} style={{ marginRight: Math.max(chatDockWidth, briaDockWidth) }}>
         {/* A short entrance, not a 700ms wash: the page should look loaded, not fading in (Rodny, 21 September 2026). */}
         <div className="mx-auto min-w-0 max-w-7xl space-y-8 animate-in fade-in duration-200">
           {recognitionExperience?.controls}
@@ -647,6 +650,8 @@ const AppLayout = ({ children }) => {
           </RouteErrorBoundary>
         </div>
       </main>
+      {/* Avisos importantes: abajo, de borde a borde, por encima del menú y por debajo de los diálogos (z 65). */}
+      {currentUser?.id && <ImportantNoticeBand key={`notice-${currentUser.id}`} enabled={!isOnboardingBlocking} onVisibleChange={setHasImportantNotice} />}
       {currentUser?.id && <TeamChat key={currentUser.id} currentUser={displayUser} onDockWidthChange={setChatDockWidth} triggerContainer={chatTriggerContainer}
         blocked={isSidebarOpen || isNotificationsOpen || isOnboardingBlocking || isReturnedTaskAlertBlocking} />}
     </div>

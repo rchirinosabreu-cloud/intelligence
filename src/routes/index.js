@@ -67,6 +67,7 @@ import socialPublishingRouter from './api/socialPublishing.js';
 import clientOperationsRouter from './api/clientOperations.js';
 import { createAiGovernanceRouter } from './api/aiGovernance.js';
 import { createIncidentReportRouter } from './api/incidentReports.js';
+import { createImportantNoticeRouter } from './api/importantNotices.js';
 import { createServiceHealthRouter } from './api/serviceHealth.js';
 import { createClientProfitabilityRouter } from './api/clientProfitability.js';
 import { createTeamChatRouter, createTeamChatMediaRouter } from './api/teamChat.js';
@@ -361,6 +362,8 @@ router.use('/financials', financialsRouter);
 router.use('/crm', requireModulePermission('crm'), crmRouter);
 // Reportar un incidente de seguridad (12 de octubre de 2026): cualquier persona activa del equipo, solo escribe.
 router.use('/incident-reports', createIncidentReportRouter());
+// Avisos importantes: la banda de abajo, de cada persona (el servicio comprueba que el aviso sea suyo).
+router.use('/important-notices', createImportantNoticeRouter());
 router.use('/ai-governance', createAiGovernanceRouter());
 router.use('/service-health', createServiceHealthRouter());
 // Rentabilidad por cliente (22 de octubre de 2026): solo administradores, solo lectura.
