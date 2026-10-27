@@ -64,6 +64,9 @@ export const createBriaPlatformClient = ({ baseUrl = `http://127.0.0.1:${process
     const raw = data !== null ? JSON.stringify(data) : text;
     return {
       ok, status: response.status, data,
+      // Successful JSON parsing preserves the entire HTTP body. This does not
+      // assert that the endpoint returned every page or every requested row.
+      jsonBodyComplete: data !== null,
       text: raw.length > limit ? `${raw.slice(0, limit)}… [respuesta recortada: ${raw.length} caracteres]` : raw,
       truncated: raw.length > limit,
       error: ok ? null : humanStatus(response.status, data)
