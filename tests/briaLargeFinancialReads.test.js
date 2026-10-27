@@ -62,6 +62,13 @@ test('malformed JSON cannot attest a complete body or satisfy a calculation', as
   assert.equal(receipt(data), null);
 });
 
+test('the catalog exposes native ledger filters so a clipped preview can be narrowed without inventing routes', async () => {
+  const tools = createBriaPlatformTools({ actions: {}, platform: {} });
+  const { data } = await tools.find(tool => tool.name === 'mapa_de_plataforma').run({ busqueda: 'receivables-ledger' });
+  const ledgerOperation = data.operaciones.find(row => row.operacion === 'GET /financials/receivables-ledger');
+  for (const field of ['year', 'month', 'quarter', 'q']) assert.ok(ledgerOperation.campos?.includes(field));
+});
+
 test('the assistant completes both current calculation requirements using large native reads without forwarding the full ledger', async () => {
   const client = createBriaPlatformClient({ fetchFn: async () => response(ledger) });
   const requirements = [
