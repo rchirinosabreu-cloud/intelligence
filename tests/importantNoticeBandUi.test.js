@@ -38,6 +38,9 @@ test('los botones: seguimiento primero, «Abrir» como botón y «Recordarme» s
     assert.deepEqual([...order].sort((a, b) => a - b), order);
     assert.match(base, /<NoticeButton disabled=\{busy\} data-notice-action="open"/, '«Abrir» es un botón como los demás, no un enlace');
     assert.doesNotMatch(band, />\s*Volver|Nota opcional|<textarea|<input/);
+    // En la revisión: «Ya hice seguimiento», «Cerrar» y «Recordarme»; sin «Abrir».
+    assert.doesNotMatch(band, /Sigue: ya hice seguimiento|Cerrar como perdida/);
+    assert.match(base, /\{!isReview && notice\.url && \(/);
 });
 
 test('Esc o tocar fuera devuelve a los botones, y el éxito se dice después de la respuesta del servidor', () => {

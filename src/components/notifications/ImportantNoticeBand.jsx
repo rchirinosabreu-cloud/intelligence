@@ -88,15 +88,16 @@ function NoticeBody({ notice, onDecided }) {
             {mode === 'base' && (
               <>
                 <NoticeButton primary disabled={busy} data-notice-action="follow-up" onClick={() => setMode('channels')}>
-                  {isReview ? 'Sigue: ya hice seguimiento' : 'Ya hice seguimiento'}
+                  Ya hice seguimiento
                 </NoticeButton>
+                {/* En la revisión, «Cerrar» la deja como perdida y no hay «Abrir» (Rodny, 26 de octubre de 2026). */}
                 {isReview && (
                   <NoticeButton disabled={busy} data-notice-action="close-lost"
                     onClick={() => decide('close-lost', {}, 'Oportunidad cerrada como perdida')}>
-                    Cerrar como perdida
+                    Cerrar
                   </NoticeButton>
                 )}
-                {notice.url && (
+                {!isReview && notice.url && (
                   <NoticeButton disabled={busy} data-notice-action="open" onClick={() => navigate(notice.url)}>Abrir</NoticeButton>
                 )}
                 <NoticeButton disabled={busy} data-notice-action="snooze" aria-haspopup="true" onClick={() => setMode('snooze')}>
