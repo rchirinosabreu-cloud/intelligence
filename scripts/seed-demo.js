@@ -1,12 +1,13 @@
 // Siembra la agencia inventada de la versión «Demo» (Rodny, 26 de octubre de 2026). Por defecto SIMULA: dice
 // a qué base iría y cuánto escribiría, sin tocar nada. Escribe solo con `--confirmar SEMBRAR`.
 //
-//   node scripts/seed-demo.js [--reiniciar] [--railway[=demo]] [--confirmar SEMBRAR]
+//   node scripts/seed-demo.js [--reiniciar] [--railway[=demo]] [--postgres=<servicio>] [--confirmar SEMBRAR]
 //
 // Dos candados, los dos a la vez (`src/lib/demoMode.js`): `DEMO_MODE=true` y una base cuyo nombre diga «demo».
 // Este archivo NO carga el `.env` a propósito: el `.env` local apunta a producción. La base llega por la
 // variable `DATABASE_URL` puesta a mano o, con `--railway`, leída del entorno de Railway que se nombre
-// (la URL pública del Postgres de ese entorno y el `DEMO_MODE` del servicio Intelligence de ese mismo entorno).
+// (la URL pública del Postgres de ese entorno —`--postgres=<servicio>`, por defecto «Postgres»— y el
+// `DEMO_MODE` del servicio Intelligence de ese mismo entorno).
 //
 // `--reiniciar` borra los tres esquemas (public, bria_memory, vault), vuelve a crear el esquema con
 // `prisma db push` y los `ensure-*` de `npm start`, y siembra desde cero: la base de demo es desechable y
@@ -40,8 +41,9 @@ if (flag('railway') || option('railway')) {
             return fail(`No pude leer las variables de «${service}» en el entorno «${environment}» de Railway: ${String(error.stderr || error.message).trim()}`);
         }
     };
-    const intelligence = variablesOf('Intelligence');
-    const postgres = variablesOf('Postgres');
+    // El servicio de Postgres del entorno demo se llama como lo bautizó Railway (`--postgres=Postgres-LNoV`).
+    const intelligence = variablesOf(option('service') || 'Intelligence');
+    const postgres = variablesOf(option('postgres') || 'Postgres');
     process.env.DEMO_MODE = String(intelligence.DEMO_MODE ?? '');
     process.env.DATABASE_URL = postgres.DATABASE_PUBLIC_URL || '';
     if (!process.env.DATABASE_URL) fail(`El Postgres del entorno «${environment}» no expone DATABASE_PUBLIC_URL.`);
