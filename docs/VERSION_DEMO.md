@@ -72,10 +72,11 @@ Variables de `Intelligence-demo`:
 | `DATABASE_URL` | `postgresql://${{Postgres-LNoV.PGUSER}}:${{Postgres-LNoV.POSTGRES_PASSWORD}}@${{Postgres-LNoV.RAILWAY_PRIVATE_DOMAIN}}:5432/intelligence_demo` |
 | `JWT_SECRET`, `ENCRYPTION_KEY` | Nuevos, nunca los de producción: con la misma llave una sesión de un lado valdría en el otro |
 | `NODE_ENV` | `production` |
+| `CORS_ORIGINS` | `https://intelligence-demo-demo.up.railway.app`: la lista fija del servidor solo trae `*.brainstudioagencia.com` y localhost, y sin esto el propio `index.js` del frontend responde 500 («Origin not allowed by CORS», porque Vite lo pide con `crossorigin`) |
 | `DEMO_PASSWORD` | **Pendiente de Rodny**: la contraseña de las ocho cuentas; sin ella vale la del archivo |
 | `OPENAI_API_KEY` | **Pendiente de Rodny**, solo si quiere a Bria viva (gasta de la cuenta de Brain Studio) |
 
-`MFA_REQUIRED_ROLES` no existe en demo (vacío = nadie obligado). Y **nada** de Fireflies, Meta, WhatsApp, Google, IMAP, push ni SMTP. El dominio `*.up.railway.app` ya pasa el CORS del servidor (la regex de despliegues de Railway); `labs.brainstudioagencia.com` sigue siendo solo producción.
+`MFA_REQUIRED_ROLES` no existe en demo (vacío = nadie obligado). Y **nada** de Fireflies, Meta, WhatsApp, Google, IMAP, push ni SMTP. Si el dominio de la demo cambia (uno propio, por ejemplo `demo.brainstudioagencia.com`, que la regex del servidor ya admite), `CORS_ORIGINS` cambia con él; `labs.brainstudioagencia.com` sigue siendo solo producción.
 
 **Desplegar:** GitHub está desconectado en Railway, así que el código sube desde el checkout con `railway up -s Intelligence-demo -e demo --detach` (sube el árbol de trabajo tal como está). La cadena de `npm start` crea el esquema lateral al arrancar, pero el esquema de Prisma no: la primera vez, y en cada reinicio, se corre la semilla con `--railway` desde una máquina con la CLI enlazada al proyecto. El servicio se puede apagar entre demos y volver a encender.
 
