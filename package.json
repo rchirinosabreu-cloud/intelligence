@@ -22,6 +22,8 @@
     "lint": "eslint . --quiet",
     "lint:warn": "eslint .",
     "db:seed:team": "node scripts/seed-team.js",
+    "demo:seed": "node scripts/seed-demo.js --confirmar SEMBRAR",
+    "demo:reset": "node scripts/seed-demo.js --reiniciar --confirmar SEMBRAR",
     "db:backfill-service-costs": "node scripts/backfill-service-costs.js",
     "db:normalize-quotation-titles": "node scripts/normalize-quotation-titles.js",
     "db:format-catalog-descriptions": "node scripts/format-service-catalog-descriptions.js",

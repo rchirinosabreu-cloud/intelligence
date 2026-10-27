@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, Suspense } from 'react';
 import { RouteErrorBoundary } from '@/components/errors/ApplicationErrorBoundary';
 import TeamChat from '@/components/chat/TeamChat';
 import Sidebar from './Sidebar';
+import DemoBadge from './DemoBadge';
 import BriaAssistant from '@/components/bria/BriaAssistant';
 import { Menu, Bell, Search, MessageSquare, Loader2, RotateCcw, CheckCircle2, Zap, Star, Check, Eye, Clock, Users, Activity, AlertTriangle } from '@/components/ui/icons';
 import { useAuth } from '@/context/AuthContext';
@@ -342,6 +343,8 @@ const AppLayout = ({ children }) => {
             >
               <Menu className="w-5 h-5" />
             </Button>
+
+            <DemoBadge />
 
             <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-100 dark:bg-white/5 text-zinc-400 border border-transparent focus-within:border-primary/20 transition-all">
               <Search className="w-4 h-4" />
