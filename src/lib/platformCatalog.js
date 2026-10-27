@@ -294,7 +294,7 @@ export const PLATFORM_OPERATIONS = {
   'POST /financials/clients': { que: 'Crea una ficha de cliente desde el financiero.', campos: 'name, legalName, documentType, documentNumber, email, phone' },
   'PATCH /financials/clients/:id': { que: 'Edita una ficha desde el financiero.', campos: 'los mismos de crear' },
   'PATCH /financials/client-links/:sourceClientId': { que: 'Une una ficha sobrante a la ficha real del cliente.', campos: 'targetClientId' },
-  'GET /financials/receivables-ledger': { que: 'La cartera: cuentas por cobrar y sus abonos.' },
+  'GET /financials/receivables-ledger': { que: 'La cartera: cuentas por cobrar y sus abonos.', campos: 'year, month, quarter, q (consulta). month prevalece sobre quarter. q busca en cliente, origen, notas y comentarios; combina términos con AND, no une clientes con OR. Verifica la identidad de las filas; un resultado de búsqueda no acredita por sí solo que pertenezca al cliente solicitado.' },
   'PATCH /financials/receivables/:id': { que: 'Corrige una cuenta por cobrar no emitida.', campos: 'amount, dueDate, concept, status' },
   'POST /financials/receivables': { que: 'Crea una cuenta por cobrar.', campos: 'clientId, amount, dueDate, concept, currency, foreignAmount, exchangeRate' },
   'DELETE /financials/receivables/:id': { que: 'Elimina una cuenta por cobrar sin abonos vigentes.', campos: 'reason' },
