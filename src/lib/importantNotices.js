@@ -31,6 +31,15 @@ export const FOLLOW_UP_CHANNELS = Object.freeze([
 
 export const isFollowUpChannel = (value) => FOLLOW_UP_CHANNELS.some((channel) => channel.value === value);
 
+// «No sigue», en la revisión: las dos etapas de cierre del CRM. Perdida, el cliente no la tomó; descartada, no sigue por
+// decisión nuestra (Rodny, 26 de octubre de 2026).
+export const REVIEW_OUTCOMES = Object.freeze([
+    Object.freeze({ value: 'PERDIDO', label: 'Perdida', stage: 'Perdido' }),
+    Object.freeze({ value: 'DESCARTADO', label: 'Descartada', stage: 'Descartado' })
+]);
+
+export const isReviewOutcome = (value) => REVIEW_OUTCOMES.some((outcome) => outcome.value === value);
+
 const toDate = (value) => {
     if (!value) return null;
     const date = value instanceof Date ? value : new Date(value);
@@ -71,6 +80,6 @@ export const followUpNoticeText = (lead, alert, quotationCode = null) => {
     const who = lead.company || lead.contactName || 'La oportunidad';
     const what = quotationCode ? `la ${quotationCode}` : 'la propuesta';
     return alert.kind === 'REVIEW'
-        ? { kind: 'CRM_REVIEW', level: 'IMPORTANTE', label: `Revisión · ${alert.step ?? alert.days} días`, message: `${who} lleva ${alert.days} días sin responder: ¿sigue o se cierra?` }
+        ? { kind: 'CRM_REVIEW', level: 'IMPORTANTE', label: `Revisión · ${alert.step ?? alert.days} días`, message: `${who} lleva ${alert.days} días sin responder: ¿sigue o no?` }
         : { kind: 'CRM_FOLLOW_UP', level: 'SEGUIMIENTO', label: 'Seguimiento comercial', message: `${who} lleva ${alert.days} días sin responder ${what}` };
 };

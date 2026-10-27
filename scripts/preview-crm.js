@@ -13,7 +13,7 @@ const createImportantNoticeMemory = (crmDb, userId) => {
   let offset = 0;
   const clock = () => new Date(Date.now() + offset);
   const rows = [
-    { id: 'aviso-revision', kind: 'CRM_REVIEW', level: 'IMPORTANTE', subjectId: 'lead-centro', label: 'Revisión · 30 días', message: 'Centro Andino lleva 30 días sin responder: ¿sigue o se cierra?' },
+    { id: 'aviso-revision', kind: 'CRM_REVIEW', level: 'IMPORTANTE', subjectId: 'lead-centro', label: 'Revisión · 30 días', message: 'Centro Andino lleva 30 días sin responder: ¿sigue o no?' },
     { id: 'aviso-seguimiento', kind: 'CRM_FOLLOW_UP', level: 'SEGUIMIENTO', subjectId: 'lead-calzado', label: 'Seguimiento comercial', message: 'Calzado Andino lleva 10 días sin responder la propuesta' }
   ].map((row) => ({ userId, url: `/crm/oportunidades/${row.subjectId}`, createdAt: clock(), snoozedUntil: null, decidedAt: null, resolvedAt: null, resolution: null, notificationId: null, ...row }));
   const matches = (row, where = {}) => Object.entries(where).every(([key, value]) => (value && typeof value === 'object' && 'not' in value ? row[key] !== value.not : row[key] === value));

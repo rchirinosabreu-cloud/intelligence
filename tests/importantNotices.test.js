@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    DECISION_GAP_MS, FOLLOW_UP_CHANNELS, NOTICE_LEVELS, SNOOZE_OPTIONS, followUpNoticeText, pickCurrentNotice, snoozeUntil
+    DECISION_GAP_MS, FOLLOW_UP_CHANNELS, NOTICE_LEVELS, REVIEW_OUTCOMES, SNOOZE_OPTIONS, followUpNoticeText, pickCurrentNotice, snoozeUntil
 } from '../src/lib/importantNotices.js';
 
 // El segundo nivel de avisos (Rodny, 26 de octubre de 2026): una banda abajo, de borde a borde, con un aviso a la vez.
@@ -74,6 +74,10 @@ test('el aviso dice quién, cuántos días y qué cotización, sin la orden del 
         kind: 'CRM_FOLLOW_UP', level: 'SEGUIMIENTO', label: 'Seguimiento comercial', message: 'Café Altura lleva 10 días sin responder la COT-0042'
     });
     assert.deepEqual(followUpNoticeText({ contactName: 'Laura' }, { kind: 'REVIEW', days: 30 }, null), {
-        kind: 'CRM_REVIEW', level: 'IMPORTANTE', label: 'Revisión · 30 días', message: 'Laura lleva 30 días sin responder: ¿sigue o se cierra?'
+        kind: 'CRM_REVIEW', level: 'IMPORTANTE', label: 'Revisión · 30 días', message: 'Laura lleva 30 días sin responder: ¿sigue o no?'
     });
+});
+
+test('«No sigue» ofrece las dos etapas de cierre del CRM: perdida o descartada', () => {
+    assert.deepEqual(REVIEW_OUTCOMES.map((outcome) => [outcome.value, outcome.label]), [['PERDIDO', 'Perdida'], ['DESCARTADO', 'Descartada']]);
 });

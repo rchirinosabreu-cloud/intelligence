@@ -1,6 +1,6 @@
 // Avisos importantes (Rodny, 26 de octubre de 2026): lo que sale en la banda de abajo, uno a la vez. Cada aviso es de una
 // persona y se queda hasta que decide: «Ya hice seguimiento» registra la gestión en el CRM (y con eso se reinicia la
-// cuenta de días), «Recordarme» lo pospone y, en la revisión de los 30 días, «Descartar» la pasa a Descartado.
+// cuenta de días), «Recordarme» lo pospone y, en la revisión de los 30 días, «No sigue» la cierra como perdida o descartada.
 // Lo que se atendió por otro lado —una gestión registrada en el CRM, una oportunidad que ya no espera al cliente— sale
 // solo de la banda, sin contar como decisión.
 import prisma from '../lib/prisma.js';
@@ -8,9 +8,10 @@ import * as crmService from './crmService.js';
 import { hasModulePermission } from '../config/security.js';
 import { CRM_ACTIVITY_TYPES } from '../lib/crmRules.js';
 import { FOLLOW_UP_ALERT_STAGES } from '../lib/crmFollowUpAlerts.js';
-import { isFollowUpChannel, pickCurrentNotice, snoozeUntil } from '../lib/importantNotices.js';
+import { isFollowUpChannel, isReviewOutcome, pickCurrentNotice, snoozeUntil } from '../lib/importantNotices.js';
 
 const CONTACT_TYPES = CRM_ACTIVITY_TYPES.filter((type) => type.contact).map((type) => type.value);
+const LOST_REASON = 'Sin respuesta del cliente.';
 const DISCARD_NOTE = 'Descartada desde el aviso de revisión: sin respuesta del cliente.';
 // Cuántos avisos ya atendidos se descartan en una sola lectura antes de rendirse (una cola enorme no puede colgar la página).
 const MAX_STALE_PER_READ = 25;
@@ -104,15 +105,23 @@ export const snoozeNotice = async (db = prisma, id, body = {}, actor, { now = ne
     return { ok: true, snoozedUntil: until };
 };
 
+// Cómo queda la oportunidad en el CRM según lo que se eligió en «No sigue».
+const CLOSE_STAGES = {
+    PERDIDO: { payload: { stage: 'PERDIDO', lostReason: LOST_REASON }, resolution: 'PERDIDA' },
+    DESCARTADO: { payload: { stage: 'DESCARTADO', note: DISCARD_NOTE }, resolution: 'DESCARTADA' }
+};
+
 /**
- * «Descartar», solo en la revisión: la oportunidad pasa a Descartado por el mismo camino del CRM, con la nota de por qué.
- * Descartado y no Perdido: lo decidimos nosotros al no tener respuesta (Rodny, 26 de octubre de 2026).
+ * «No sigue», solo en la revisión: la oportunidad pasa a Perdido (el cliente no la tomó) o a Descartado (no sigue por
+ * decisión nuestra), por el mismo camino del CRM (Rodny, 26 de octubre de 2026).
  */
-export const discardNotice = async (db = prisma, id, actor, { crm = crmService, now = new Date() } = {}) => {
+export const closeReviewNotice = async (db = prisma, id, body = {}, actor, { crm = crmService, now = new Date() } = {}) => {
     const notice = await ownOpenNotice(db, id, actor);
-    if (notice.kind !== 'CRM_REVIEW') throw httpError(409, 'Solo la revisión de una oportunidad se descarta desde el aviso.');
+    if (notice.kind !== 'CRM_REVIEW') throw httpError(409, 'Solo la revisión de una oportunidad se cierra desde el aviso.');
+    if (!isReviewOutcome(body.outcome)) throw httpError(400, 'Elige si quedó perdida o descartada.');
     requireCrm(actor);
-    await crm.changeStage(db, notice.subjectId, { stage: 'DESCARTADO', note: DISCARD_NOTE }, actor, now);
-    await resolve(db, notice, 'DESCARTADA', now);
+    const { payload, resolution } = CLOSE_STAGES[body.outcome];
+    await crm.changeStage(db, notice.subjectId, payload, actor, now);
+    await resolve(db, notice, resolution, now);
     return { ok: true };
 };
