@@ -30,6 +30,7 @@ import { loggerMiddleware } from './src/middlewares/logger.js';
 import { operationalAuditMiddleware } from './src/middlewares/operationalAuditMiddleware.js';
 import apiRouter from './src/routes/index.js';
 import { createAuthRateLimiters } from './src/lib/authRateLimit.js';
+import { assertDemoDatabase, isDemoMode } from './src/lib/demoMode.js';
 import {
   configureSecurityHeaders,
   createRateLimiter,
@@ -73,7 +74,9 @@ app.options("*", cors(corsOptions));
 app.get('/api/health', (_req, res) => res.json({
   status: 'ok',
   timestamp: new Date().toISOString(),
-  ai: getAIHealth()
+  ai: getAIHealth(),
+  // La versión «Demo» (26 de octubre de 2026): el distintivo del header lo lee de aquí, sin sesión.
+  demo: isDemoMode()
 }));
 app.get('/api/health/ai', (_req, res) => {
   const health = getAIHealth();
@@ -170,6 +173,9 @@ async function bootstrap() {
     console.log("--- INICIANDO BRAINSTUDIO INTELLIGENCE BACKEND ---");
 
     validateSecurityEnvironment(process.env);
+    // Con DEMO_MODE=true la base tiene que llamarse «demo»: producción nunca arranca en modo demo por una variable mal puesta.
+    assertDemoDatabase(process.env);
+    if (isDemoMode()) console.log('[Modo demo] Esta instancia enseña una agencia inventada; no es producción.');
 
     // 1. System Checklist & Configuration
     const ESSENTIAL_KEYS = ['DATABASE_URL', 'JWT_SECRET', 'OPENAI_API_KEY'];
