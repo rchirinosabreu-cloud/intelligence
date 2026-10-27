@@ -10,6 +10,8 @@ import {
     DEFAULT_FOLLOW_UP_ALERT_DAYS, FOLLOW_UP_ALERT_STAGES, FOLLOW_UP_DIGEST_THRESHOLD, dueFollowUpAlert, followUpAlertMessage,
     followUpDigest, normalizeFollowUpAlertDays
 } from '../lib/crmFollowUpAlerts.js';
+import { followUpNoticeText } from '../lib/importantNotices.js';
+import { queueImportantNotice } from './importantNoticeService.js';
 
 export const FOLLOW_UP_REMINDER_TYPE = 'CRM_FOLLOW_UP_REMINDER';
 export const FOLLOW_UP_REVIEW_TYPE = 'CRM_FOLLOW_UP_REVIEW';
@@ -55,7 +57,7 @@ const isUniqueViolation = (error) => error?.code === 'P2002';
  * Una pasada del reloj: avisa lo que toca y lo anota. Primero se anota el paso (la fila única es la cerradura) y después
  * se avisa; un aviso que no sale se registra y no frena a los demás.
  */
-export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify = createNotification, log = console.error } = {}) => {
+export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify = createNotification, queueNotice = queueImportantNotice, log = console.error } = {}) => {
     const settings = await readFollowUpAlertDays(db);
     const leads = await db.crmLead.findMany({
         where: { archivedAt: null, stage: { in: FOLLOW_UP_ALERT_STAGES }, proposalSentAt: { not: null } },
@@ -98,13 +100,26 @@ export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify 
         const recipients = [...new Set([ownerId, ...(needsAdmins ? admins : [])].filter(Boolean))];
         const code = lead.quotations?.[0] ? `COT-${String(lead.quotations[0].consecutive).padStart(4, '0')}` : null;
         const message = followUpAlertMessage(lead, alert, code);
-        for (const userId of recipients) queue(userId, alert.kind, { leadId: lead.id, message });
+        const notice = followUpNoticeText(lead, alert, code);
+        // La banda es de quien hace el seguimiento: el responsable, o los administradores si no hay responsable. A los
+        // administradores la revisión de una oportunidad ajena les llega solo a la campana.
+        const bandUserIds = new Set(ownerId ? [ownerId] : admins);
+        for (const userId of recipients) queue(userId, alert.kind, { leadId: lead.id, message, notice: bandUserIds.has(userId) ? notice : null });
     }
     const deliver = async (data) => {
         try {
-            await notify(data);
+            return await notify(data);
         } catch (error) {
             log('[CRM] Alerta comercial no entregada:', error?.message || error);
+            return null;
+        }
+    };
+    const toBand = async (userId, item, notificationId) => {
+        if (!item.notice || typeof db.importantNotice?.create !== 'function') return;
+        try {
+            await queueNotice(db, { userId, subjectId: item.leadId, url: `/crm/oportunidades/${item.leadId}`, notificationId, ...item.notice }, now);
+        } catch (error) {
+            log('[CRM] Aviso importante no guardado:', error?.message || error);
         }
     };
     for (const [userId, byKind] of outbox) {
@@ -114,9 +129,14 @@ export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify 
             if (items.length > FOLLOW_UP_DIGEST_THRESHOLD) {
                 const digest = followUpDigest(kind, items.length, settings);
                 await deliver({ userId, type, url: digest.url, message: digest.message });
+                // La campana los resume, pero la banda los muestra de a uno: cada oportunidad pide su decisión.
+                for (const item of items) await toBand(userId, item, null);
                 continue;
             }
-            for (const item of items) await deliver({ userId, type, relatedId: item.leadId, url: `/crm/oportunidades/${item.leadId}`, message: item.message });
+            for (const item of items) {
+                const created = await deliver({ userId, type, relatedId: item.leadId, url: `/crm/oportunidades/${item.leadId}`, message: item.message });
+                await toBand(userId, item, created?.id || null);
+            }
         }
     }
     return { checked: leads.length, sent };
