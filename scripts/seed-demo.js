@@ -35,8 +35,10 @@ const fail = (message) => { console.error(`[Demo] ${message}`); process.exit(1);
 if (flag('railway') || option('railway')) {
     const environment = option('railway') || 'demo';
     const variablesOf = (service) => {
+        // Nombres de servicio y entorno acotados: van a una línea de shell (en Windows la CLI es `railway.cmd`).
+        for (const name of [service, environment]) if (!/^[\w.-]{1,64}$/.test(name)) fail(`Nombre no válido para Railway: ${name}`);
         try {
-            return JSON.parse(execFileSync('railway', ['variables', '--service', service, '--environment', environment, '--json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
+            return JSON.parse(execSync(`railway variables --service ${service} --environment ${environment} --json`, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }));
         } catch (error) {
             return fail(`No pude leer las variables de «${service}» en el entorno «${environment}» de Railway: ${String(error.stderr || error.message).trim()}`);
         }
@@ -45,8 +47,16 @@ if (flag('railway') || option('railway')) {
     const intelligence = variablesOf(option('service') || 'Intelligence');
     const postgres = variablesOf(option('postgres') || 'Postgres');
     process.env.DEMO_MODE = String(intelligence.DEMO_MODE ?? '');
-    process.env.DATABASE_URL = postgres.DATABASE_PUBLIC_URL || '';
-    if (!process.env.DATABASE_URL) fail(`El Postgres del entorno «${environment}» no expone DATABASE_PUBLIC_URL.`);
+    // El host público lo da el Postgres (su proxy TCP); la base la dice el servicio Intelligence, porque el
+    // Postgres de Railway nace con la base «railway» y la de demo se crea aparte (ver más abajo).
+    const publicUrl = postgres.DATABASE_PUBLIC_URL
+        || (postgres.RAILWAY_TCP_PROXY_DOMAIN && postgres.RAILWAY_TCP_PROXY_PORT
+            ? `postgresql://${encodeURIComponent(postgres.PGUSER)}:${encodeURIComponent(postgres.POSTGRES_PASSWORD)}@${postgres.RAILWAY_TCP_PROXY_DOMAIN}:${postgres.RAILWAY_TCP_PROXY_PORT}/${postgres.POSTGRES_DB}`
+            : '');
+    if (!publicUrl) fail(`El Postgres del entorno «${environment}» no tiene proxy TCP: actívalo en Railway (Settings → Networking → TCP Proxy, puerto 5432).`);
+    const url = new URL(publicUrl);
+    try { url.pathname = new URL(intelligence.DATABASE_URL).pathname; } catch { fail('El servicio Intelligence del entorno no tiene un DATABASE_URL legible.'); }
+    process.env.DATABASE_URL = url.toString();
     if (intelligence.DEMO_PASSWORD) process.env.DEMO_PASSWORD = intelligence.DEMO_PASSWORD;
 }
 
@@ -70,8 +80,19 @@ if (!confirmed) {
 
 // --- Reinicio: la base de demo es desechable. ---
 if (reset) {
-    const client = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 15000 });
-    await client.connect();
+    // Si la base de demo todavía no existe en ese servidor (el Postgres de Railway nace solo con «railway»),
+    // se crea desde la base de mantenimiento `postgres`. Solo con el nombre que ya pasó el candado.
+    const connectDemo = () => { const c = new pg.Client({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 15000 }); return c.connect().then(() => c); };
+    let client;
+    try { client = await connectDemo(); } catch (error) {
+        if (error.code !== '3D000') throw error;
+        const database = new URL(process.env.DATABASE_URL).pathname.replace(/^\//, '');
+        const maintenance = new URL(process.env.DATABASE_URL); maintenance.pathname = '/postgres';
+        const admin = new pg.Client({ connectionString: maintenance.toString(), connectionTimeoutMillis: 15000 });
+        await admin.connect();
+        try { console.log(`[Demo] La base ${database} no existía: se crea.`); await admin.query(`CREATE DATABASE "${database.replace(/"/g, '""')}"`); } finally { await admin.end(); }
+        client = await connectDemo(); // un pg.Client que falló al conectar no se reutiliza
+    }
     try {
         console.log('[Demo] Borrando los esquemas public, bria_memory y vault…');
         // Borrar `public` se lleva también la extensión pgvector, que el esquema de Prisma necesita antes del push.
