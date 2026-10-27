@@ -36,11 +36,13 @@ Los tres leen `DEMO_MODE` y `DATABASE_URL` del entorno. En PowerShell:
 $env:DEMO_MODE='true'; $env:DATABASE_URL='postgresql://demo:demo@127.0.0.1:55450/intelligence_demo'; npm run demo:reset
 ```
 
-Con `--railway` (o `--railway=<entorno>`, por defecto `demo`) el script le pide a la CLI de Railway la `DATABASE_PUBLIC_URL` del servicio **Postgres** y el `DEMO_MODE` (y `DEMO_PASSWORD`, si está) del servicio **Intelligence** de ese entorno, y con eso pasa por los mismos candados:
+Con `--railway` (o `--railway=<entorno>`, por defecto `demo`) el script le pide a la CLI de Railway las variables del Postgres (`--postgres=<servicio>`) y del servicio de la aplicación (`--service=<servicio>`) de ese entorno: del Postgres toma el **host público** (su `DATABASE_PUBLIC_URL` o, si no la tiene, su proxy TCP), y de Intelligence el **nombre de la base** y el `DEMO_MODE` (y `DEMO_PASSWORD`, si está). Si la base no existe en ese servidor —el Postgres de Railway nace solo con `railway`— la crea desde la base de mantenimiento `postgres`, y después pasa por los mismos candados:
 
 ```powershell
-node scripts/seed-demo.js --railway --reiniciar --confirmar SEMBRAR
+node scripts/seed-demo.js --railway --service=Intelligence-demo --postgres=Postgres-LNoV --reiniciar --confirmar SEMBRAR
 ```
+
+Tarda unos tres minutos por el proxy (`prisma db push` solo, minuto y medio).
 
 Las cuentas comparten una contraseña: la de `DEMO_AGENCY.defaultPassword` en `scripts/demo/agenciaFicticia.js`, o la variable `DEMO_PASSWORD` si existe. **En Railway hay que ponerla**: el enlace de la demo es público y Bria gasta créditos de OpenAI.
 
@@ -54,23 +56,30 @@ docker run -d --name intelligence-demo-db -e POSTGRES_USER=demo -e POSTGRES_PASS
 
 Después de sembrar, `scripts/demo-local-server.mjs --base=<url>` arranca el servidor en modo demo con las integraciones vacías (`JWT_SECRET` y `ENCRYPTION_KEY` aleatorios por corrida, `MFA_REQUIRED_ROLES` vacío) y `npm run dev` sirve el frontend en el 3000, que reenvía `/api` al 8080. Las dos configuraciones están en `.claude/launch.json` (`demo-backend`, `demo-frontend`). Si el cliente de Prisma de `node_modules` es anterior al esquema (una pantalla responde 500 con «reading 'findMany'»), `npx prisma generate`.
 
-## El entorno en Railway
+## El entorno en Railway (creado el 26 de octubre de 2026)
 
-Un entorno `demo` en el proyecto «Brainstudio Lab», con un servicio Intelligence apuntando a la misma rama `main` y un Postgres nuevo. Cuidado con «duplicar» el entorno de producción: copia **todas** las variables, incluidos el `DATABASE_URL` de producción, los tokens de Meta y WhatsApp y las llaves de los buckets. Se crea vacío y se pone solo lo necesario:
+En el proyecto «Brainstudio Lab», el entorno **`demo`** con dos servicios: **`Intelligence-demo`** (la aplicación) y **`Postgres-LNoV`** (su base). Dominio: `https://intelligence-demo-demo.up.railway.app`. Tres cosas que no se ven a simple vista:
+
+- **Se creó vacío, no duplicado.** «Duplicar» el entorno de producción copia **todas** las variables, incluidos el `DATABASE_URL` de producción, los tokens de Meta y WhatsApp y las llaves de los buckets.
+- **El servicio no se llama `Intelligence`** porque los servicios son del proyecto y ese nombre ya es el de producción (sin instancia en demo). `railway add --service Intelligence` choca; por eso `Intelligence-demo`.
+- **El Postgres nace con la base `railway`** aunque se le pase `POSTGRES_DB`; la base `intelligence_demo` (el candado exige «demo» en el nombre) la crea el script de semilla. Su proxy TCP (`tokaido.proxy.rlwy.net:51311`) se creó con `railway api` (`tcpProxyCreate`), porque la plantilla no lo trae.
+
+Variables de `Intelligence-demo`:
 
 | Variable | Valor |
 |---|---|
 | `DEMO_MODE` | `true` |
-| `DATABASE_URL` | `${{Postgres.DATABASE_URL}}` del Postgres del entorno demo, creado con `POSTGRES_DB=intelligence_demo` (el candado exige «demo» en el nombre) |
+| `DATABASE_URL` | `postgresql://${{Postgres-LNoV.PGUSER}}:${{Postgres-LNoV.POSTGRES_PASSWORD}}@${{Postgres-LNoV.RAILWAY_PRIVATE_DOMAIN}}:5432/intelligence_demo` |
 | `JWT_SECRET`, `ENCRYPTION_KEY` | Nuevos, nunca los de producción: con la misma llave una sesión de un lado valdría en el otro |
-| `DEMO_PASSWORD` | La contraseña de las ocho cuentas |
-| `OPENAI_API_KEY` | Para que Bria conteste (gasta de la cuenta de Brain Studio) |
-| `MFA_REQUIRED_ROLES` | Vacío |
 | `NODE_ENV` | `production` |
+| `DEMO_PASSWORD` | **Pendiente de Rodny**: la contraseña de las ocho cuentas; sin ella vale la del archivo |
+| `OPENAI_API_KEY` | **Pendiente de Rodny**, solo si quiere a Bria viva (gasta de la cuenta de Brain Studio) |
 
-Y **nada** de Fireflies, Meta, WhatsApp, Google, IMAP, push ni SMTP. El dominio `*.up.railway.app` que da Railway ya pasa el CORS del servidor (la regex de despliegues de Railway); `labs.brainstudioagencia.com` sigue siendo solo producción.
+`MFA_REQUIRED_ROLES` no existe en demo (vacío = nadie obligado). Y **nada** de Fireflies, Meta, WhatsApp, Google, IMAP, push ni SMTP. El dominio `*.up.railway.app` ya pasa el CORS del servidor (la regex de despliegues de Railway); `labs.brainstudioagencia.com` sigue siendo solo producción.
 
-La cadena de `npm start` crea el esquema lateral al arrancar, pero el esquema de Prisma no: por eso la primera vez (y cada reinicio) se corre `node scripts/seed-demo.js --railway --reiniciar --confirmar SEMBRAR` desde una máquina con la CLI de Railway enlazada al proyecto. El servicio se puede apagar entre demos y volver a encender.
+**Desplegar:** GitHub está desconectado en Railway, así que el código sube desde el checkout con `railway up -s Intelligence-demo -e demo --detach` (sube el árbol de trabajo tal como está). La cadena de `npm start` crea el esquema lateral al arrancar, pero el esquema de Prisma no: la primera vez, y en cada reinicio, se corre la semilla con `--railway` desde una máquina con la CLI enlazada al proyecto. El servicio se puede apagar entre demos y volver a encender.
+
+**Al pasar variables por la CLI:** `railway add --variables` **imprime en pantalla** cada variable que recibe. Un secreto va con la salida suprimida o con `railway variable set CLAVE --stdin`.
 
 ## Qué se ve en la pantalla
 
