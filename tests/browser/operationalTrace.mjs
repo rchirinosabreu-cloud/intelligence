@@ -18,7 +18,18 @@ async function setup({ mobile = false, dark = false, fail = false } = {}) {
   page.setDefaultTimeout(5000);
   const requests = [], errors = [];
   page.on('pageerror', error => errors.push(error.message));
-  const users = [{ id: 'rodny', name: 'Rodny Chirinos', role: 'ADMIN', avatarUrl: null }, { id: 'francisco', name: 'Francisco Villa', role: 'EDITOR', avatarUrl: null }];
+  const users = [{ id: 'rodny', name: 'Rodny Chirinos', role: 'ADMIN', avatarUrl: null }, { id: 'francisco', name: 'Francisco Villa', role: 'EDITOR', avatarUrl: null }, { id: 'francys', name: 'Francys Caballero', role: 'EDITOR', avatarUrl: null }];
+  const francys = users[2];
+  const lead = { url: '/crm/oportunidades/l1', subject: 'Centro Andino', kind: 'CRM_REVIEW' };
+  // Las alertas comerciales y la banda de avisos importantes (27 de octubre de 2026).
+  const noticeRows = [
+    { id: 'n-sent', eventType: 'CRM_FOLLOW_UP_ALERTS_SENT', actor: null, metadata: { reviews: 55, reminders: 7, bell: 2, band: 62 } },
+    { id: 'n-shown', eventType: 'IMPORTANT_NOTICE_SHOWN', actor: null, metadata: { ...lead, message: 'Centro Andino lleva 30 días sin responder: ¿sigue o no?' } },
+    { id: 'n-snooze', eventType: 'IMPORTANT_NOTICE_SNOOZED', actor: francys, metadata: { ...lead, option: '1h' } },
+    { id: 'n-close', eventType: 'IMPORTANT_NOTICE_CLOSED', actor: francys, metadata: { ...lead, outcome: 'PERDIDO' } },
+    { id: 'n-follow', eventType: 'IMPORTANT_NOTICE_FOLLOWED_UP', actor: francys, metadata: { url: '/crm/oportunidades/l2', subject: 'Café Altura', channel: 'WHATSAPP' } },
+    { id: 'n-cleared', eventType: 'IMPORTANT_NOTICE_CLEARED', actor: null, metadata: { url: '/crm/oportunidades/l3', subject: 'Calzado Andino', reason: 'GESTION' } },
+  ].map(row => ({ taskId: null, occurredAt: new Date('2026-09-14T12:30:00Z'), ...row, actorId: row.actor?.id || null, subjectUserId: francys.id, subjectUser: francys }));
   const rows = [
     { id: 'check', actor: users[0], metadata: { path: '/api/recognitions/claim', method: 'POST', module: 'recognitions' } },
     { id: 'minutes', actor: users[1], metadata: { path: '/api/fireflies/graphql', method: 'POST', module: 'fireflies' } },
@@ -28,7 +39,8 @@ async function setup({ mobile = false, dark = false, fail = false } = {}) {
     { id: 'award', actor: users[1], eventType: 'RECOGNITION_GRANTED', metadata: { kind: 'FIRST_TASK' } },
     { id: 'shown', actor: users[0], eventType: 'TASK_ALERT_SHOWN', metadata: { kind: 'EXCESSIVE', taskTitle: 'Diseñar parrilla' } },
     { id: 'review', actor: users[0], eventType: 'TASK_ALERT_REVIEWED', metadata: { kind: 'EXCESSIVE', taskTitle: 'Diseñar parrilla' } },
-  ].map(row => ({ eventType: 'PLATFORM_MUTATION', taskId: null, occurredAt: new Date('2026-09-14T12:17:00Z'), ...row, actorId: row.actor.id, subjectUserId: row.actor.id, subjectUser: row.actor }));
+  ].map(row => ({ eventType: 'PLATFORM_MUTATION', taskId: null, occurredAt: new Date('2026-09-14T12:17:00Z'), ...row, actorId: row.actor.id, subjectUserId: row.actor.id, subjectUser: row.actor }))
+    .concat(noticeRows);
   await page.route('**/api/**', async route => {
     const url = new URL(route.request().url());
     if (url.pathname !== '/api/dashboard/operational-trace') return route.fulfill({ status: 404, json: {} });
@@ -36,7 +48,7 @@ async function setup({ mobile = false, dark = false, fail = false } = {}) {
     if (fail) return route.fulfill({ status: 500, json: { error: 'No fue posible cargar la trazabilidad.' } });
     const data = await getOperationalTrace({ requester: users[0], filters: Object.fromEntries(url.searchParams), now: new Date('2026-09-14T13:00:00Z'), db: {
       user: { findMany: async () => users },
-      operationalTraceEvent: { findMany: async () => rows.filter(row => !url.searchParams.get('userId') || row.actorId === url.searchParams.get('userId')) },
+      operationalTraceEvent: { findMany: async () => rows.filter(row => !url.searchParams.get('userId') || [row.actorId, row.subjectUserId].includes(url.searchParams.get('userId'))) },
       task: { findMany: async () => [] },
     } });
     return route.fulfill({ json: data });
@@ -94,6 +106,29 @@ test('trace fits mobile dark mode and retains the native touch selectors', async
     await page.screenshot({ path: 'output/operational-trace/mobile-dark.png' });
     assert.deepEqual(errors, []);
   } finally { await page.close(); }
+});
+
+test('las alertas comerciales y la banda de avisos quedan en el historial, con su enlace al CRM', async () => {
+  for (const dark of [false, true]) {
+    const { page, errors } = await setup({ dark });
+    try {
+      await page.getByRole('combobox', { name: 'Miembro del equipo' }).click();
+      await page.getByRole('option', { name: 'Francys Caballero' }).click();
+      const section = page.locator('section');
+      for (const line of [
+        'Le llegaron a Francys Caballero 62 alertas comerciales (55 revisiones y 7 recordatorios): 2 avisos en la campana y 62 en la banda.',
+        'Se le mostró a Francys Caballero en la banda: «Centro Andino lleva 30 días sin responder: ¿sigue o no?».',
+        'Francys Caballero pospuso el aviso de Centro Andino por 1 hora.',
+        'Francys Caballero marcó Centro Andino como perdida desde el aviso de revisión.',
+        'Francys Caballero registró un seguimiento por WhatsApp desde el aviso de Café Altura.',
+        'Salió de la banda de Francys Caballero el aviso de Calzado Andino: ya se registró una gestión con el cliente en el CRM.',
+      ]) await section.getByText(line, { exact: true }).waitFor();
+      assert.equal(await section.getByText('Francisco Villa recibió', { exact: false }).count(), 0);
+      assert.equal(await section.getByRole('link', { name: 'Centro Andino' }).first().getAttribute('href'), '/crm/oportunidades/l1');
+      await section.screenshot({ path: `output/operational-trace/avisos-${dark ? 'dark' : 'light'}.png` });
+      assert.deepEqual(errors, []);
+    } finally { await page.close(); }
+  }
 });
 
 test('a trace API error is not presented as an empty or successful history', async () => {

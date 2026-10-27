@@ -142,7 +142,7 @@ test('el reloj de alertas deja el aviso en la banda del responsable, ligado a su
         user: { findMany: async () => [{ id: 'u-rodny' }] }
     });
     let bell = 0;
-    await runFollowUpAlerts(db, { now: day('2026-10-11'), notify: async () => ({ id: `bell-${++bell}` }) });
+    await runFollowUpAlerts(db, { now: day('2026-10-11'), notify: async () => ({ id: `bell-${++bell}` }), info: () => {} });
     assert.deepEqual(db.rows.map((row) => [row.userId, row.subjectId, row.kind, row.level, row.notificationId, row.message]), [
         ['u-francys', 'l1', 'CRM_FOLLOW_UP', 'SEGUIMIENTO', 'bell-1', 'Café Altura lleva 10 días sin responder la COT-0042'],
         ['u-rodny', 'l2', 'CRM_FOLLOW_UP', 'SEGUIMIENTO', 'bell-2', 'Sin dueño lleva 10 días sin responder la COT-0042']

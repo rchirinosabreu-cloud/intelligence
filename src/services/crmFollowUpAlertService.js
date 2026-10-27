@@ -11,7 +11,9 @@ import {
     followUpDigest, normalizeFollowUpAlertDays
 } from '../lib/crmFollowUpAlerts.js';
 import { followUpNoticeText } from '../lib/importantNotices.js';
+import { NOTICE_TRACE_EVENTS, noticeTraceDescription } from '../lib/importantNoticeTrace.js';
 import { queueImportantNotice } from './importantNoticeService.js';
+import { recordOperationalTrace } from './operationalTraceService.js';
 
 export const FOLLOW_UP_REMINDER_TYPE = 'CRM_FOLLOW_UP_REMINDER';
 export const FOLLOW_UP_REVIEW_TYPE = 'CRM_FOLLOW_UP_REVIEW';
@@ -53,11 +55,31 @@ const sentInLatestCycle = (log = []) => {
 
 const isUniqueViolation = (error) => error?.code === 'P2002';
 
+// Lo que le llegó a cada persona en el pase queda en la trazabilidad de Salud operativa y en los registros de Railway
+// (Rodny, 27 de octubre de 2026). Ninguna de las dos cosas puede frenar las alertas.
+const reportPass = async (db, delivered, sent, now, { log, info }) => {
+    if (!sent) return;
+    info(`[CRM] Alertas comerciales: ${sent} ${sent === 1 ? 'oportunidad avisada' : 'oportunidades avisadas'}.`);
+    let names = new Map();
+    try {
+        const users = await db.user.findMany({ where: { id: { in: [...delivered.keys()] } }, select: { id: true, name: true } });
+        names = new Map(users.map((user) => [user.id, user.name]));
+    } catch (error) {
+        log('[CRM] Nombres de las alertas no leídos:', error?.message || error);
+    }
+    for (const [userId, metadata] of delivered) {
+        info(`[CRM] ${noticeTraceDescription(NOTICE_TRACE_EVENTS.ALERTS_SENT, metadata, { subject: names.get(userId) || 'un miembro del equipo' })}`);
+        if (typeof db.operationalTraceEvent?.create !== 'function') continue;
+        await recordOperationalTrace({ eventType: NOTICE_TRACE_EVENTS.ALERTS_SENT, subjectUserId: userId, metadata, occurredAt: now, db })
+            .catch((error) => log('[CRM] Traza de alertas no guardada:', error?.message || error));
+    }
+};
+
 /**
  * Una pasada del reloj: avisa lo que toca y lo anota. Primero se anota el paso (la fila única es la cerradura) y después
  * se avisa; un aviso que no sale se registra y no frena a los demás.
  */
-export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify = createNotification, queueNotice = queueImportantNotice, log = console.error } = {}) => {
+export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify = createNotification, queueNotice = queueImportantNotice, log = console.error, info = console.log } = {}) => {
     const settings = await readFollowUpAlertDays(db);
     const leads = await db.crmLead.findMany({
         where: { archivedAt: null, stage: { in: FOLLOW_UP_ALERT_STAGES }, proposalSentAt: { not: null } },
@@ -104,7 +126,8 @@ export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify 
         // La banda es de quien hace el seguimiento: el responsable, o los administradores si no hay responsable. A los
         // administradores la revisión de una oportunidad ajena les llega solo a la campana.
         const bandUserIds = new Set(ownerId ? [ownerId] : admins);
-        for (const userId of recipients) queue(userId, alert.kind, { leadId: lead.id, message, notice: bandUserIds.has(userId) ? notice : null });
+        const who = lead.company || lead.contactName || null;
+        for (const userId of recipients) queue(userId, alert.kind, { leadId: lead.id, who, message, notice: bandUserIds.has(userId) ? notice : null });
     }
     const deliver = async (data) => {
         try {
@@ -115,30 +138,40 @@ export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify 
         }
     };
     const toBand = async (userId, item, notificationId) => {
-        if (!item.notice || typeof db.importantNotice?.create !== 'function') return;
+        if (!item.notice || typeof db.importantNotice?.create !== 'function') return false;
         try {
             await queueNotice(db, { userId, subjectId: item.leadId, url: `/crm/oportunidades/${item.leadId}`, notificationId, ...item.notice }, now);
+            return true;
         } catch (error) {
             log('[CRM] Aviso importante no guardado:', error?.message || error);
+            return false;
         }
     };
+    // Por persona: cuántas revisiones y recordatorios, cuántos avisos salieron en la campana y cuántos en la banda.
+    const delivered = new Map();
     for (const [userId, byKind] of outbox) {
+        const tally = { reviews: byKind.REVIEW.length, reminders: byKind.REMINDER.length, bell: 0, band: 0 };
+        const only = [...byKind.REVIEW, ...byKind.REMINDER];
+        if (only.length === 1) Object.assign(tally, { subject: only[0].who, url: `/crm/oportunidades/${only[0].leadId}` });
         for (const kind of ['REVIEW', 'REMINDER']) {
             const items = byKind[kind];
             const type = kind === 'REVIEW' ? FOLLOW_UP_REVIEW_TYPE : FOLLOW_UP_REMINDER_TYPE;
             if (items.length > FOLLOW_UP_DIGEST_THRESHOLD) {
                 const digest = followUpDigest(kind, items.length, settings);
-                await deliver({ userId, type, url: digest.url, message: digest.message });
+                if (await deliver({ userId, type, url: digest.url, message: digest.message })) tally.bell += 1;
                 // La campana los resume, pero la banda los muestra de a uno: cada oportunidad pide su decisión.
-                for (const item of items) await toBand(userId, item, null);
+                for (const item of items) if (await toBand(userId, item, null)) tally.band += 1;
                 continue;
             }
             for (const item of items) {
                 const created = await deliver({ userId, type, relatedId: item.leadId, url: `/crm/oportunidades/${item.leadId}`, message: item.message });
-                await toBand(userId, item, created?.id || null);
+                if (created) tally.bell += 1;
+                if (await toBand(userId, item, created?.id || null)) tally.band += 1;
             }
         }
+        delivered.set(userId, tally);
     }
+    await reportPass(db, delivered, sent, now, { log, info });
     return { checked: leads.length, sent };
 };
 

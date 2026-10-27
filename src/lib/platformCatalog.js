@@ -34,6 +34,7 @@ export const PLATFORM_EXCLUDED = [
   { match: /^\w+ \/financials\/payroll(-|\/)/, reason: 'nómina: datos de salario de personas, nunca pasan por el modelo' },
   { match: /^\w+ \/(drive\/upload|tasks\/upload-temp|drive\/managed-files)/, reason: 'subir o descargar archivos' },
   { match: /^\w+ \/tasks\/:taskId\/(trace-open|alert-interaction|work-confirmation|returned-reminder\/snooze)$/, reason: 'señales de la pantalla' },
+  { match: /^POST \/important-notices\/:id\/shown$/, reason: 'señales de la pantalla' },
   { match: /^GET \/tasks\/:taskId\/(attachments|comments)\/[^/]+\/(file|download)$/, reason: 'descarga de archivos' },
   // Subir una pieza final, su portada o un enlace de Drive sí se hace desde el chat (22 de octubre de 2026); bajar o
   // borrar archivos, la subida directa al almacenamiento y la ruta antigua de un solo archivo, no.

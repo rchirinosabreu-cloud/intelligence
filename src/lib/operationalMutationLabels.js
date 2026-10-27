@@ -99,4 +99,6 @@ export const humanMutationWhere = () => ({ eventType: 'PLATFORM_MUTATION', actor
 
 export const isInternalTraceRequest = pathname => /^\/api\/(recognitions(?:\/|$)|fireflies\/graphql$|push\/subscriptions(?:\/|$))/.test(routePath(pathname))
   || /^\/api\/tasks\/[^/]+\/(trace-open|alert-interaction|work-confirmation|returned-reminder\/snooze)$/.test(routePath(pathname))
-  || /^\/api\/notifications(?:\/|$)/.test(routePath(pathname));
+  || /^\/api\/notifications(?:\/|$)/.test(routePath(pathname))
+  // La banda de avisos importantes deja su propia traza con la oportunidad y lo decidido (27 de octubre de 2026).
+  || /^\/api\/important-notices(?:\/|$)/.test(routePath(pathname));

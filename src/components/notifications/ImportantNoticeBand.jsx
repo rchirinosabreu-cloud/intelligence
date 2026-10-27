@@ -53,6 +53,20 @@ function NoticeBody({ notice, onDecided }) {
   const contentRef = useRef(null);
   const isReview = notice.kind === 'CRM_REVIEW';
 
+  // Que el aviso estuvo a la vista queda en la trazabilidad de Salud operativa (27 de octubre de 2026). Solo con la
+  // pestaña visible: una pestaña de fondo no le muestra nada a nadie. El servidor lo anota una vez por aparición.
+  useEffect(() => {
+    let reported = false;
+    const report = () => {
+      if (reported || document.visibilityState !== 'visible') return;
+      reported = true;
+      post(`${notice.id}/shown`).catch(() => {});
+    };
+    report();
+    document.addEventListener('visibilitychange', report);
+    return () => document.removeEventListener('visibilitychange', report);
+  }, [notice.id]);
+
   // Esc o tocar fuera del aviso devuelve a sus botones; el aviso no se va.
   useEffect(() => {
     if (mode === 'base') return undefined;

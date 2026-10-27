@@ -20,10 +20,12 @@ const open = async (preview, { width = 1440, height = 900, dark = false, mobile 
   page.setDefaultTimeout(10000);
   page.setDefaultNavigationTimeout(60000);
   const errors = [];
+  const shown = [];
   page.on('pageerror', (error) => errors.push(error.message));
+  page.on('response', (response) => { if (response.url().endsWith('/shown')) shown.push([new URL(response.url()).pathname, response.status()]); });
   await page.goto(`${preview.origin}/crm?tab=oportunidades${dark ? '&dark' : ''}`);
   await page.getByText('Calzado Andino').locator('visible=true').first().waitFor();
-  return { page, errors };
+  return { page, errors, shown };
 };
 const band = (page) => page.locator('[data-important-notice]');
 // La banda entra con una animación corta: la captura se toma ya asentada.
@@ -31,9 +33,12 @@ const settled = (page) => page.waitForTimeout(500);
 
 test('la revisión sale primero, se decide sin salir de la pantalla y el seguimiento llega cinco minutos después', async () => {
   const preview = await createCrmPreview({ port: 0 });
-  const { page, errors } = await open(preview);
+  const { page, errors, shown } = await open(preview);
   try {
     await band(page).waitFor();
+    // La banda le dice al servidor que el aviso está a la vista, para la trazabilidad de Salud operativa.
+    for (let tries = 0; tries < 50 && !shown.length; tries += 1) await page.waitForTimeout(100);
+    assert.deepEqual(shown, [['/api/important-notices/aviso-revision/shown', 200]]);
     assert.equal(await band(page).getAttribute('data-level'), 'IMPORTANTE');
     assert.match(await band(page).innerText(), /Centro Andino lleva 30 días sin responder: ¿sigue o no\?/);
     const labels = await band(page).locator('[data-notice-action]').allInnerTexts();
