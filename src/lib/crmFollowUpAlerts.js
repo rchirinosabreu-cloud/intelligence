@@ -5,6 +5,7 @@
 //
 // Lógica pura: la usan el reloj que avisa, la lista del CRM y las pruebas.
 import { CRM_ACTIVITY_TYPES, daysBetween } from './crmRules.js';
+import { inferAreasFromCargo } from './teamAreas.js';
 
 export const DEFAULT_FOLLOW_UP_ALERT_DAYS = Object.freeze({ reminders: Object.freeze([5, 10, 15, 20]), review: 30 });
 
@@ -80,15 +81,12 @@ export const markFollowUpAlertSent = (previous, alert) => {
 };
 
 // A quién le llegan (Rodny, 28 de octubre de 2026: «la alerta del CRM solo debe aparecerle a Francys o a quien tenga rol
-// textual de Comercial, Relaciones Públicas o Comercial y Relaciones Públicas»). El rol textual es el de Equipo
-// (`TeamMember.role`), no el de la cuenta: ni la dirección ni los project managers reciben alertas comerciales.
-const plainText = (value) => String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+// textual de Comercial, Relaciones Públicas o Comercial y Relaciones Públicas»). Manda el área de Equipo
+// (`memberHasArea(member, 'COMERCIAL')`, `src/lib/teamAreas.js`), no el rol de la cuenta: ni la dirección ni los
+// project managers reciben alertas comerciales. Sin área elegida, se deduce del cargo escrito.
 
-/** ¿El rol de Equipo es comercial? Comercial o Relaciones Públicas, con o sin tilde. */
-export const isCommercialRole = (role) => {
-    const text = plainText(role);
-    return /\bcomercial\b/.test(text) || text.includes('relaciones publicas');
-};
+/** ¿El cargo escrito es comercial? Comercial o Relaciones Públicas, con o sin tilde. */
+export const isCommercialRole = (role) => inferAreasFromCargo(role).includes('COMERCIAL');
 
 /** El responsable si es comercial; si no lo es, o no hay, todo el equipo comercial. Sin equipo comercial, nadie. */
 export const followUpRecipients = (ownerUserId, commercialUserIds = []) => (

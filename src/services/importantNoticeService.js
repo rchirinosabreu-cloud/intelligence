@@ -12,7 +12,8 @@ import * as crmService from './crmService.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
 import { hasModulePermission } from '../config/security.js';
 import { CRM_ACTIVITY_TYPES } from '../lib/crmRules.js';
-import { FOLLOW_UP_ALERT_STAGES, followUpRecipients, isCommercialRole } from '../lib/crmFollowUpAlerts.js';
+import { FOLLOW_UP_ALERT_STAGES, followUpRecipients } from '../lib/crmFollowUpAlerts.js';
+import { userHasArea } from './teamAreaService.js';
 import { isFollowUpChannel, isReviewOutcome, pickCurrentNotice, snoozeUntil } from '../lib/importantNotices.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription, noticeTraceMetadata } from '../lib/importantNoticeTrace.js';
 
@@ -90,11 +91,7 @@ const whyNotNeeded = async (db, notice) => {
 // Los avisos del CRM son del equipo comercial (Rodny, 28 de octubre de 2026). A quien no lo es la banda no se los
 // muestra; el reloj de alertas se los pasa a los comerciales en su siguiente pase.
 const isCrmNotice = (notice) => String(notice.kind || '').startsWith('CRM_');
-const seesCrmNotices = async (db, userId) => {
-    if (typeof db.teamMember?.findFirst !== 'function') return true;
-    const member = await db.teamMember.findFirst({ where: { userId }, select: { role: true } });
-    return isCommercialRole(member?.role);
-};
+const seesCrmNotices = (db, userId) => userHasArea(db, userId, 'COMERCIAL');
 
 /** El aviso que le toca ver a esa persona ahora y cuándo volver a preguntar. `who` nombra a la persona en la traza. */
 export const currentImportantNotice = async (db = prisma, userId, now = new Date(), { who = null, log } = {}) => {

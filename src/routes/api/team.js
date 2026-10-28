@@ -4,6 +4,7 @@ import { createInitialCredential, prepareInitialAccess } from '../../services/in
 import { isManagerRole } from '../../config/security.js';
 import { setLinkedAccountStatus } from '../../services/teamRosterService.js';
 import { sanitizeModulePermissions } from '../../lib/platformModules.js';
+import { normalizeTeamAreas } from '../../lib/teamAreas.js';
 
 const router = express.Router();
 
@@ -61,7 +62,7 @@ router.post('/', async (req, res) => {
     return res.status(403).json({ error: 'Solo los administradores pueden gestionar miembros del equipo' });
   }
   try {
-    const { name, role, email, avatarUrl, systemRole, modulePermissions, financialRole } = req.body;
+    const { name, role, email, avatarUrl, systemRole, modulePermissions, financialRole, areas } = req.body;
 
     if (!name || !role) {
       return res.status(400).json({ error: 'Name and role are required' });
@@ -108,6 +109,7 @@ router.post('/', async (req, res) => {
             data: {
                 name,
                 role,
+                areas: normalizeTeamAreas(areas),
                 email,
                 avatarUrl,
                 userId: associatedUserId,
@@ -148,7 +150,7 @@ router.put('/:id', async (req, res) => {
   }
   try {
     const { id } = req.params;
-    const { name, role, email, avatarUrl, isActive, systemRole, modulePermissions, financialRole } = req.body;
+    const { name, role, email, avatarUrl, isActive, systemRole, modulePermissions, financialRole, areas } = req.body;
 
     if (isActive !== undefined && typeof isActive !== 'boolean') {
       return res.status(400).json({ error: 'El estado del miembro debe ser activo o inactivo.' });
@@ -169,6 +171,8 @@ router.put('/:id', async (req, res) => {
             data: {
                 name,
                 role,
+                // Sin `areas` en el cuerpo (activar o desactivar desde la tarjeta) no se tocan.
+                areas: areas === undefined ? undefined : normalizeTeamAreas(areas),
                 email,
                 avatarUrl,
                 isActive: isActive !== undefined ? isActive : undefined
