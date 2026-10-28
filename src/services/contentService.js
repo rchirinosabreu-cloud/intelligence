@@ -39,7 +39,6 @@ const clientWithSocialAccounts = {
 };
 
 let strategicObjectivesColumnExists = null;
-let contentItemFinalAssetColumnsExist = null;
 
 const contentPlanBaseSelect = {
   id: true,
@@ -123,20 +122,19 @@ const contentItemBaseSelect = {
   publications: publicationSelect
 };
 
-const hasContentItemFinalAssetColumns = async () => {
-  if (contentItemFinalAssetColumnsExist !== null) return contentItemFinalAssetColumnsExist;
-
-  const result = await prisma.$queryRaw`
-    SELECT COUNT(*)::int AS "count"
-    FROM information_schema.columns
-    WHERE table_schema = 'public'
-      AND table_name = 'ContentItem'
-      AND column_name IN ('finalAssetKey', 'finalAssetName', 'finalAssetMimeType', 'finalAssetSize')
-  `;
-
-  const hasColumns = Number(result?.[0]?.count || 0) === 4;
-  if (hasColumns) contentItemFinalAssetColumnsExist = true;
-  return hasColumns;
+/**
+ * El archivo único de antes de los carruseles se retiró (Rodny, 28 de octubre de 2026): en producción no
+ * quedaba ninguna pieza con esas cuatro columnas puestas (`npm run parrillas:pieza-final-antigua`). Siguen
+ * en la base, en desuso y sin lectores, así que un `PATCH` con esos campos las escribiría y nadie las
+ * mostraría nunca: se quitan de lo que entra.
+ */
+const RETIRED_FINAL_ASSET_FIELDS = ['finalAssetKey', 'finalAssetName', 'finalAssetMimeType', 'finalAssetSize'];
+const withoutRetiredFields = (data) => {
+  if (!data || typeof data !== 'object') return data;
+  if (!RETIRED_FINAL_ASSET_FIELDS.some((field) => field in data)) return data;
+  const safe = { ...data };
+  for (const field of RETIRED_FINAL_ASSET_FIELDS) delete safe[field];
+  return safe;
 };
 
 /** Las columnas de la portada son aditivas, así que se leen solo si el arranque ya las creó. */
@@ -156,16 +154,9 @@ const hasContentItemCoverColumns = async () => {
 };
 
 const getContentItemSelect = async (extra = {}) => {
-  const hasFinalAssetColumns = await hasContentItemFinalAssetColumns();
   const hasCoverColumns = await hasContentItemCoverColumns();
   return {
     ...contentItemBaseSelect,
-    ...(hasFinalAssetColumns ? {
-      finalAssetKey: true,
-      finalAssetName: true,
-      finalAssetMimeType: true,
-      finalAssetSize: true
-    } : {}),
     ...(hasCoverColumns ? {
       coverKey: true,
       coverName: true,
@@ -179,57 +170,23 @@ const getContentItemSelect = async (extra = {}) => {
   };
 };
 
+/**
+ * La pieza tal como sale hacia la pantalla: la portada como `cover` —su clave de almacenamiento se queda
+ * aquí, la pantalla la pide por la API— y sus archivos finales en una sola lista, que es la que define el
+ * orden del carrusel publicado.
+ */
 const normalizeContentItem = (item) => {
   if (!item) return item;
-  const legacyFinalAsset = item.finalAssetKey
-    ? [{
-          id: 'legacy',
-          storageKey: item.finalAssetKey,
-          name: item.finalAssetName,
-          mimeType: item.finalAssetMimeType,
-          size: item.finalAssetSize,
-          position: 0,
-          isLegacy: true
-        }]
-    : [];
-  const finalAssets = [...legacyFinalAsset, ...(item.finalAssets || [])];
-  // La portada se entrega como `cover` (nombre, tipo y peso) y su clave de almacenamiento se queda
-  // aquí: la pantalla la pide por la API, nunca por una URL del bucket.
-  return {
-    ...withPublicCover(item),
-    finalAssetKey: item.finalAssetKey ?? null,
-    finalAssetName: item.finalAssetName ?? null,
-    finalAssetMimeType: item.finalAssetMimeType ?? null,
-    finalAssetSize: item.finalAssetSize ?? null,
-    finalAssets
-  };
+  return { ...withPublicCover(item), finalAssets: item.finalAssets || [] };
 };
 
 /**
- * Las piezas que viajan dentro de una parrilla salen con la misma portada que una pieza suelta
+ * Las piezas que viajan dentro de una parrilla salen con la misma forma que una pieza suelta
  * (Rodny, 26 de octubre de 2026: «la subo y me dice guardada pero no aparece»). El editor lee
  * `item.cover` y aquí nunca se construía, así que una portada recién guardada no aparecía jamás
  * —y la clave del almacenamiento sí viajaba al navegador—.
- *
- * La fusión de la pieza final antigua se queda en `normalizeContentItem`: el portal del cliente la
- * entrega aparte (`finalAsset` además de `finalAssets`) y el cliente la vería dos veces.
  */
-const planItems = (plan) => (plan?.contentItems || []).map(withPublicCover);
-
-const filterContentItemData = async (data) => {
-  if (!data) return data;
-  if (await hasContentItemFinalAssetColumns()) return data;
-
-  const {
-    finalAssetKey,
-    finalAssetName,
-    finalAssetMimeType,
-    finalAssetSize,
-    ...safeData
-  } = data;
-
-  return safeData;
-};
+const planItems = (plan) => (plan?.contentItems || []).map(normalizeContentItem);
 
 const getPlanContentItemsSelect = async () => ({
   where: { deletedAt: null },
@@ -599,7 +556,7 @@ export const getContentItemsByPlan = async (planId) => {
 
 export const createContentItem = async (data) => {
   const item = await prisma.contentItem.create({
-    data: await filterContentItemData(data),
+    data: withoutRetiredFields(data),
     select: await getContentItemSelect()
   });
 
@@ -651,7 +608,7 @@ export const updateContentItem = async (id, data, { fromClientReview = false } =
     if (queueProblem) throw Object.assign(new Error(queueProblem), { status: 409, statusCode: 409 });
   }
 
-  const safeData = await filterContentItemData(normalizedData);
+  const safeData = withoutRetiredFields(normalizedData);
   const itemSelect = await getContentItemSelect();
   const updatedItem = await recognitionTransaction(prisma, async (tx) => {
     const previousItem = await tx.contentItem.findUnique({
@@ -752,103 +709,6 @@ export const deleteContentItem = async (id) => {
     });
     await markContentPlanReviewPending(item.planId, { db: tx });
     return item;
-  });
-};
-
-export const uploadContentItemFinalAsset = async (itemId, file) => {
-  if (!file) throw new Error('No file uploaded');
-  if (!/^image\/|^video\//.test(file.mimetype || '')) {
-    throw new Error('Solo se permiten imagenes o videos para la pieza final');
-  }
-  if (!(await hasContentItemFinalAssetColumns())) {
-    throw new Error('La base de datos aun no tiene habilitados los adjuntos finales');
-  }
-
-  const item = await prisma.contentItem.findUnique({
-    where: { id: itemId },
-    select: {
-      id: true,
-      planId: true,
-      finalAssetKey: true,
-      plan: {
-        select: {
-          id: true,
-          month: true,
-          year: true,
-          client: { select: { slug: true } }
-        }
-      }
-    }
-  });
-
-  if (!item) throw new Error('Content item not found');
-  const previousAssetKey = item.finalAssetKey;
-
-  const upload = await uploadToS3(
-    file,
-    `content-plans/${item.plan.client.slug}/${item.plan.year}-${String(item.plan.month).padStart(2, '0')}/${item.id}/final`,
-    { maxBytes: FINAL_ASSET_MAX_BYTES }
-  );
-
-  const updatedItem = await updateContentItem(itemId, {
-    finalAssetKey: upload.key,
-    finalAssetName: upload.name,
-    finalAssetMimeType: upload.mimeType,
-    finalAssetSize: upload.size
-  });
-  await requestRevisionIfApproved(itemId);
-
-  if (previousAssetKey && previousAssetKey !== upload.key) {
-    deleteFromS3(previousAssetKey).catch(error => {
-      console.error('[Service] Failed to delete replaced final asset:', error.message);
-    });
-  }
-
-  return updatedItem;
-};
-
-export const getContentItemFinalAsset = async (itemId) => {
-  if (!(await hasContentItemFinalAssetColumns())) return null;
-
-  const item = await prisma.contentItem.findUnique({
-    where: { id: itemId },
-    select: {
-      id: true,
-      finalAssetKey: true,
-      finalAssetName: true,
-      finalAssetMimeType: true,
-      finalAssetSize: true
-    }
-  });
-
-  if (!item?.finalAssetKey) return null;
-  return item;
-};
-
-export const deleteContentItemFinalAsset = async (itemId) => {
-  if (!(await hasContentItemFinalAssetColumns())) {
-    throw new Error('La base de datos aun no tiene habilitados los adjuntos finales');
-  }
-
-  const item = await prisma.contentItem.findUnique({
-    where: { id: itemId },
-    select: {
-      id: true,
-      finalAssetKey: true
-    }
-  });
-
-  if (!item) throw new Error('Content item not found');
-
-  if (item.finalAssetKey) {
-    await deleteFromS3(item.finalAssetKey);
-  }
-
-  return await updateContentItem(itemId, {
-    finalAssetKey: null,
-    finalAssetName: null,
-    finalAssetMimeType: null,
-    finalAssetSize: null
   });
 };
 
@@ -1167,13 +1027,11 @@ export const confirmContentItemFinalAssets = async (itemId, uploads = []) => {
   return listFinalAssets(item.id);
 };
 
-export const getContentItemFinalAssetById = async (itemId, assetId) => {
-  if (assetId === 'legacy') return getContentItemFinalAsset(itemId);
-  return prisma.contentItemFinalAsset.findFirst({ where: { id: assetId, contentItemId: itemId } });
-};
+export const getContentItemFinalAssetById = async (itemId, assetId) => (
+  prisma.contentItemFinalAsset.findFirst({ where: { id: assetId, contentItemId: itemId } })
+);
 
 export const deleteContentItemFinalAssetById = async (itemId, assetId) => {
-  if (assetId === 'legacy') return deleteContentItemFinalAsset(itemId);
   const asset = await prisma.contentItemFinalAsset.findFirst({ where: { id: assetId, contentItemId: itemId } });
   if (!asset) throw new Error('Archivo final no encontrado');
 

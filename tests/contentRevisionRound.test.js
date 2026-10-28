@@ -68,12 +68,13 @@ test('la marca la pone el servidor cuando llega material a una pieza aprobada', 
   const service = await read('src/services/contentService.js');
 
   assert.match(service, /const requestRevisionIfApproved = async \(itemId\)/);
-  // Los tres caminos que añaden material —formulario, subida directa y enlace de Drive— más el
-  // adjunto único antiguo. Si uno se queda fuera, esa vía deja la pieza en verde con material nuevo.
+  // Los tres caminos que añaden material: formulario, subida directa y enlace de Drive. Si uno se queda
+  // fuera, esa vía deja la pieza en verde con material nuevo. (El cuarto, el adjunto único antiguo, se
+  // retiró el 28 de octubre de 2026.)
   assert.equal(
     (service.match(/await requestRevisionIfApproved\(/g) || []).length,
-    4,
-    'los cuatro caminos que añaden material piden la revisión'
+    3,
+    'los tres caminos que añaden material piden la revisión'
   );
   // Marcar la revisión no puede tumbar una subida que sí funcionó.
   assert.match(service, /catch \(error\) \{\s*console\.error\('\[Service\] No se pudo marcar la pieza para una revisión nueva/);

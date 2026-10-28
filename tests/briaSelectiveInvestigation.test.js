@@ -7,7 +7,7 @@ import { runAssistant } from '../src/lib/briaAssistant.js';
 
 const user = { id: 'reader', userId: 'reader', role: 'ADMIN', isActive: true };
 const now = () => new Date('2026-10-26T15:00:00Z');
-const piece = { id: 'relevant', objective: 'Presentación', format: 'Reel', publishDate: '2026-10-30', publishTime: '15:00', status: 'APROBADO', revisionRequestedAt: '2026-10-25T12:00:00Z', finalAssetKey: 'final-file', internalNotes: 'Falta la ficha técnica', comments: 'Revisar el dato del producto', plan: { id: 'plan', strategicObjectives: 'Lanzamiento', client: { name: 'Cuenta ficticia' } } };
+const piece = { id: 'relevant', objective: 'Presentación', format: 'Reel', publishDate: '2026-10-30', publishTime: '15:00', status: 'APROBADO', revisionRequestedAt: '2026-10-25T12:00:00Z', _count: { finalAssets: 1 }, internalNotes: 'Falta la ficha técnica', comments: 'Revisar el dato del producto', plan: { id: 'plan', strategicObjectives: 'Lanzamiento', client: { name: 'Cuenta ficticia' } } };
 const readPieces = toolByName('leer_piezas_de_parrilla');
 const readTask = briaInvestigationTools.find(tool => tool.name === 'leer_pendiente');
 

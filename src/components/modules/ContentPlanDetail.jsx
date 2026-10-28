@@ -442,16 +442,14 @@ const FinalAssetGrid = ({ item, finalAssets, isEditing, onDelete, isDeleting, on
   const [preview, setPreview] = useState(null);
   const [saving, setSaving] = useState(null);
 
-  const legacy = finalAssets.filter(asset => asset.isLegacy);
-  const movable = finalAssets.filter(asset => !asset.isLegacy);
-  const ids = movable.map(asset => asset.id);
+  const ids = finalAssets.map(asset => asset.id);
   const canReorder = isEditing && ids.length > 1 && typeof onReorder === 'function';
   // Si mientras se arrastraba o se guardaba alguien añadió o quitó un archivo, ese orden ya no vale.
   const pending = saving && !finalAssetOrderProblem(ids, saving.order) ? saving : null;
   const live = !pending && preview && !finalAssetOrderProblem(ids, preview) ? preview : null;
   const shownOrder = pending?.order || live;
   const shown = shownOrder
-    ? [...legacy, ...shownOrder.map(id => movable.find(asset => asset.id === id))]
+    ? shownOrder.map(id => finalAssets.find(asset => asset.id === id))
     : finalAssets;
   const orderKey = shown.map(asset => asset.id).join('|');
 
@@ -535,7 +533,7 @@ const FinalAssetGrid = ({ item, finalAssets, isEditing, onDelete, isDeleting, on
       }}
     >
       {shown.map((asset, position) => {
-        const canDrag = canReorder && !asset.isLegacy && !saving;
+        const canDrag = canReorder && !saving;
         return (
           <FinalAssetTile
             key={asset.id}

@@ -887,6 +887,11 @@ model ContentItem {
   assetsLinks        String[]                   @default([])
   internalNotes      String?
   comments           String?
+  /// El archivo único de antes de los carruseles, **en desuso desde el 28 de octubre de 2026 y sin
+  /// ningún lector**: `npm run parrillas:pieza-final-antigua` contra producción no encontró ninguna
+  /// pieza con estas columnas puestas, así que se retiraron la ruta, la fusión y las lecturas. Se
+  /// conservan en la base como `ClientHealth`: borrarlas es una decisión aparte. La pieza final vive
+  /// en `finalAssets`, cuyo orden es el del carrusel que sale publicado.
   finalAssetKey      String?
   finalAssetName     String?
   finalAssetMimeType String?

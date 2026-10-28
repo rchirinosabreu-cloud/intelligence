@@ -16,11 +16,8 @@ import {
   generateShareToken,
   requestContentItemRevision,
   requestContentPlanRevision,
-  uploadContentItemFinalAsset,
   uploadContentItemFinalAssets,
-  getContentItemFinalAsset,
   getContentItemFinalAssetById,
-  deleteContentItemFinalAsset,
   deleteContentItemFinalAssetById,
   addContentItemDriveAsset,
   createFinalAssetUploadTickets,
@@ -299,42 +296,6 @@ router.patch('/items/:id', async (req, res) => {
   }
 });
 
-router.post('/items/:id/final-asset', receivesFiles(receiveFinalAssets(upload.single('file')), { field: 'file' }), async (req, res) => {
-  try {
-    const item = await uploadContentItemFinalAsset(req.params.id, req.file);
-    return res.json(item);
-  } catch (error) {
-    console.error('[API] Error uploading final content asset:', error.response?.data || error);
-    return res.status(500).json({ error: error.message || 'Failed to upload final asset', details: error.message });
-  }
-});
-
-router.get('/items/:id/final-asset', async (req, res) => {
-  try {
-    const item = await getContentItemFinalAsset(req.params.id);
-    if (!item) return res.status(404).json({ error: 'Final asset not found' });
-
-    const object = await getFromS3Stream(item.finalAssetKey);
-    res.setHeader('Content-Type', item.finalAssetMimeType || object.ContentType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(item.finalAssetName || 'pieza-final')}"`);
-    res.setHeader('Cache-Control', 'private, max-age=300');
-    return object.Body.pipe(res);
-  } catch (error) {
-    console.error('[API] Error streaming final content asset:', error.response?.data || error);
-    return res.status(500).json({ error: 'Failed to load final asset', details: error.message });
-  }
-});
-
-router.delete('/items/:id/final-asset', async (req, res) => {
-  try {
-    const item = await deleteContentItemFinalAsset(req.params.id);
-    return res.json(item);
-  } catch (error) {
-    console.error('[API] Error deleting final content asset:', error.response?.data || error);
-    return res.status(500).json({ error: error.message || 'Failed to delete final asset', details: error.message });
-  }
-});
-
 // La portada de un video (Rodny, 15 de octubre de 2026). Una por pieza, aparte de la rejilla de
 // archivos finales, y solo tiene sentido en un reel: lo único a lo que Meta le admite portada.
 router.post('/items/:id/cover', receivesFiles(receiveFinalAssets(upload.single('file')), { field: 'file' }), async (req, res) => {
@@ -442,9 +403,9 @@ router.get('/items/:id/final-assets/:assetId', async (req, res) => {
     if (!asset) return res.status(404).json({ error: 'Final asset not found' });
     // Un enlace de Drive no tiene bytes nuestros que servir: se abre en Drive, no por aquí.
     if (isDriveAsset(asset)) return res.status(409).json({ error: 'Esa pieza final es un enlace de Drive.' });
-    const object = await getFromS3Stream(asset.storageKey || asset.finalAssetKey);
-    res.setHeader('Content-Type', asset.mimeType || asset.finalAssetMimeType || object.ContentType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(asset.name || asset.finalAssetName || 'pieza-final')}"`);
+    const object = await getFromS3Stream(asset.storageKey);
+    res.setHeader('Content-Type', asset.mimeType || object.ContentType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(asset.name || 'pieza-final')}"`);
     res.setHeader('Cache-Control', 'private, max-age=300');
     return object.Body.pipe(res);
   } catch (error) {

@@ -37,6 +37,8 @@ export const humanMutationCatalog = [
   ...crud('/api/content/items', 'Contenido', 'una pieza de contenido'),
   entry('POST', '/api/content/plans/:id/share-token', 'Enlace de parrilla', 'creó un enlace para revisar una parrilla'),
   entry('POST', '/api/content/items/:id/send-to-kanban', 'Contenido a producción', 'envió una pieza a producción'),
+  // La ruta se retiró el 28 de octubre de 2026, pero la traza es inmutable: los eventos de cuando se
+  // usaba siguen ahí y tienen que seguir leyéndose en español.
   entry('POST', '/api/content/items/:id/final-asset', 'Archivo añadido', 'adjuntó un archivo a una pieza'),
   entry('POST', '/api/content/items/:id/final-assets', 'Archivos añadidos', 'adjuntó archivos a una pieza'),
   ...crud('/api/activity/events', 'Calendario', 'un evento del calendario'),

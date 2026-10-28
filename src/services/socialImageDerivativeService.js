@@ -18,7 +18,7 @@ const JPEG_QUALITIES = [92, 86, 80, 72, 64];
 const WHITE = { r: 255, g: 255, b: 255 };
 
 const isImage = (asset) => String(asset?.mimeType || '').toLowerCase().startsWith('image/');
-const originalKeyOf = (asset) => asset.storageKey || asset.finalAssetKey;
+const originalKeyOf = (asset) => asset.storageKey;
 
 /** `…/final-assets/derived/<id>-instagram.jpg` (o `-facebook.jpg`), al lado del original. */
 export const derivedKeyFor = (asset, platform = 'INSTAGRAM') => {

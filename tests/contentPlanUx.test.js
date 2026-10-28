@@ -70,21 +70,15 @@ test('content pieces support persistent multi-file carousel assets internally', 
   const s3Service = await read('src/services/s3Service.js');
   const service = await read('src/services/contentService.js');
 
-  assert.match(schema, /model ContentItem[\s\S]*finalAssetKey\s+String\?/);
-  assert.match(schema, /model ContentItem[\s\S]*finalAssetMimeType\s+String\?/);
+  // El archivo único de antes de los carruseles se retiró el 28 de octubre de 2026, con cero piezas en
+  // producción: lo vigila `tests/legacyFinalAssetRetired.test.js`. Aquí queda el camino vivo.
   assert.match(schema, /finalAssets\s+ContentItemFinalAsset\[\]/);
   assert.match(schema, /model ContentItemFinalAsset/);
-  assert.match(contentRoutes, /upload\.single\('file'\)[\s\S]*uploadContentItemFinalAsset/);
-  assert.match(contentRoutes, /deleteContentItemFinalAsset/);
-  assert.match(contentRoutes, /router\.delete\('\/items\/:id\/final-asset'/);
-  assert.match(contentRoutes, /items\/:id\/final-asset/);
+  assert.match(contentRoutes, /deleteContentItemFinalAssetById/);
   // Desde el 24 de septiembre de 2026 el número vive en `src/lib/uploadLimits.js`, no suelto en la ruta.
   assert.match(contentRoutes, /carouselUpload\.array\('files', FINAL_ASSET_MAX_FILES\)/);
   assert.match(contentRoutes, /items\/:id\/final-assets\/:assetId/);
-  assert.match(publicRoutes, /public\/parrilla\/:token\/items\/:id\/final-asset/);
   assert.match(publicRoutes, /public\/parrilla\/:token\/items\/:id\/final-assets\/:assetId/);
-  assert.match(publicController, /finalAsset:\s*item\.finalAssetKey/);
-  assert.match(publicController, /version:\s*item\.finalAssetKey/);
   assert.match(publicController, /finalAssets:\s*\(item\.finalAssets \|\| \[\]\)\.map/);
   assert.match(publicController, /getPublicFinalAssetById/);
   assert.match(editor, /handleFinalAssetUpload/);
@@ -101,12 +95,9 @@ test('content pieces support persistent multi-file carousel assets internally', 
   assert.match(shared, /<video/);
   assert.match(shared, /<img/);
   assert.match(s3Service, /DeleteObjectCommand/);
-  assert.match(service, /deleteContentItemFinalAsset/);
-  assert.match(service, /finalAssetKey:\s*null/);
+  assert.match(service, /deleteContentItemFinalAssetById/);
   assert.match(service, /uploadContentItemFinalAssets/);
   assert.match(service, /prisma\.contentItemFinalAsset\.create/);
-  assert.match(service, /if \(hasColumns\) contentItemFinalAssetColumnsExist = true/);
-  assert.doesNotMatch(service, /contentItemFinalAssetColumnsExist\s*=\s*Number\(result\?\.\[0\]\?\.count/);
 });
 
 test('DatePicker instances use the global Brainstudio calendar chrome', async () => {
