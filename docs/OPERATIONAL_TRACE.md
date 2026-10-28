@@ -31,7 +31,7 @@ Rodny: «quiero que los logs guarden todos esos eventos». Seis eventos propios,
 | `IMPORTANT_NOTICE_FOLLOWED_UP` | quien decide | «Ya hice seguimiento», con el canal. |
 | `IMPORTANT_NOTICE_SNOOZED` | quien decide | «Recordarme», con la opción y la hora de vuelta. |
 | `IMPORTANT_NOTICE_CLOSED` | quien decide | «No sigue», perdida o descartada. |
-| `IMPORTANT_NOTICE_CLEARED` | la plataforma | El aviso salió solo de la banda, con el motivo: una gestión registrada en el CRM, la oportunidad ya no espera al cliente, o ya no está activa. |
+| `IMPORTANT_NOTICE_CLEARED` | la plataforma | El aviso salió solo de la banda, con el motivo: una gestión registrada en el CRM, la oportunidad ya no espera al cliente, ya no está activa, o pasó al equipo comercial (`REASIGNADO`, 28 de octubre de 2026: las alertas del CRM son solo de quien tiene rol comercial). |
 
 - Cada entrada nombra la oportunidad y enlaza a ella en el CRM (`noticeTraceLink`, solo rutas `/crm/`). La metadata guarda aviso, tipo, oportunidad, texto del aviso y lo decidido; nada más.
 - Las rutas de la banda están en `isInternalTraceRequest`: no dejan además un cambio genérico sin frase.

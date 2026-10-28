@@ -33,7 +33,9 @@ const OUTCOME_PHRASES = { PERDIDO: 'perdida', DESCARTADO: 'descartada' };
 const CLEARED_REASONS = {
     GESTION: 'ya se registró una gestión con el cliente en el CRM',
     ETAPA: 'la oportunidad ya no espera respuesta del cliente',
-    INACTIVA: 'la oportunidad ya no está activa en el CRM'
+    INACTIVA: 'la oportunidad ya no está activa en el CRM',
+    // Rodny, 28 de octubre de 2026: las alertas del CRM son solo del equipo comercial.
+    REASIGNADO: 'el seguimiento le corresponde al equipo comercial'
 };
 
 const count = (value) => Math.max(0, Number(value) || 0);

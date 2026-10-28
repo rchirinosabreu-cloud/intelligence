@@ -42,6 +42,8 @@ test('cada evento se dice en una frase, con la persona y la oportunidad', () => 
         'Francys Caballero marcó Centro Andino como descartada desde el aviso de revisión.');
     assert.equal(noticeTraceDescription(E.CLEARED, { subject: 'Café Altura', reason: 'GESTION' }, who),
         'Salió de la banda de Francys Caballero el aviso de Café Altura: ya se registró una gestión con el cliente en el CRM.');
+    assert.equal(noticeTraceDescription(E.CLEARED, { subject: 'ARISTEA', reason: 'REASIGNADO' }, { subject: 'Rodny Chirinos' }),
+        'Salió de la banda de Rodny Chirinos el aviso de ARISTEA: el seguimiento le corresponde al equipo comercial.');
     // Sin nombre de la oportunidad, la frase sigue en pie.
     assert.equal(noticeTraceDescription(E.SNOOZED, { option: '1h' }, who), 'Francys Caballero pospuso el aviso de la oportunidad por 1 hora.');
     assert.deepEqual(Object.keys(NOTICE_TRACE_LABELS).sort(), Object.values(E).sort());
@@ -171,23 +173,23 @@ test('cada pase de las alertas deja una línea por persona en la traza y en los 
         crmLead: { findMany: async () => [crmLead(), crmLead({ id: 'l2', company: 'Sin dueño', owner: null })] },
         crmFollowUpAlert: { create: async ({ data }) => data, createMany: async () => ({ count: 0 }) },
         user: {
-            findMany: async ({ where }) => (where?.id?.in
-                ? [{ id: 'u-francys', name: 'Francys Caballero' }, { id: 'u-rodny', name: 'Rodny Chirinos' }]
-                : [{ id: 'u-rodny' }])
+            findMany: async () => [
+                { id: 'u-francys', name: 'Francys Caballero', teamMember: { role: 'Comercial y Relaciones Públicas' } },
+                { id: 'u-rodny', name: 'Rodny Chirinos', teamMember: { role: 'Project Manager' } }
+            ]
         }
     });
     const lines = [];
     let bell = 0;
     const result = await runFollowUpAlerts(db, { now: day('2026-10-11'), notify: async () => ({ id: `bell-${++bell}` }), info: (line) => lines.push(line) });
     assert.equal(result.sent, 2);
+    // Las dos son del equipo comercial, también la que no tiene responsable.
     assert.deepEqual(db.traces.map((row) => [row.eventType, row.subjectUserId, row.actorId, row.metadata.reminders, row.metadata.bell, row.metadata.band, row.metadata.subject]), [
-        [NOTICE_TRACE_EVENTS.ALERTS_SENT, 'u-francys', null, 1, 1, 1, 'Café Altura'],
-        [NOTICE_TRACE_EVENTS.ALERTS_SENT, 'u-rodny', null, 1, 1, 1, 'Sin dueño']
+        [NOTICE_TRACE_EVENTS.ALERTS_SENT, 'u-francys', null, 2, 2, 2, undefined]
     ]);
     assert.deepEqual(lines, [
         '[CRM] Alertas comerciales: 2 oportunidades avisadas.',
-        '[CRM] Le llegó a Francys Caballero la alerta comercial de Café Altura (recordatorio): 1 aviso en la campana y 1 en la banda.',
-        '[CRM] Le llegó a Rodny Chirinos la alerta comercial de Sin dueño (recordatorio): 1 aviso en la campana y 1 en la banda.'
+        '[CRM] Le llegaron a Francys Caballero 2 alertas comerciales (2 recordatorios): 2 avisos en la campana y 2 en la banda.'
     ]);
     // Un pase sin nada que avisar no escribe nada.
     lines.length = 0;

@@ -12,7 +12,7 @@ import * as crmService from './crmService.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
 import { hasModulePermission } from '../config/security.js';
 import { CRM_ACTIVITY_TYPES } from '../lib/crmRules.js';
-import { FOLLOW_UP_ALERT_STAGES } from '../lib/crmFollowUpAlerts.js';
+import { FOLLOW_UP_ALERT_STAGES, followUpRecipients, isCommercialRole } from '../lib/crmFollowUpAlerts.js';
 import { isFollowUpChannel, isReviewOutcome, pickCurrentNotice, snoozeUntil } from '../lib/importantNotices.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription, noticeTraceMetadata } from '../lib/importantNoticeTrace.js';
 
@@ -87,13 +87,23 @@ const whyNotNeeded = async (db, notice) => {
     return null;
 };
 
+// Los avisos del CRM son del equipo comercial (Rodny, 28 de octubre de 2026). A quien no lo es la banda no se los
+// muestra; el reloj de alertas se los pasa a los comerciales en su siguiente pase.
+const isCrmNotice = (notice) => String(notice.kind || '').startsWith('CRM_');
+const seesCrmNotices = async (db, userId) => {
+    if (typeof db.teamMember?.findFirst !== 'function') return true;
+    const member = await db.teamMember.findFirst({ where: { userId }, select: { role: true } });
+    return isCommercialRole(member?.role);
+};
+
 /** El aviso que le toca ver a esa persona ahora y cuándo volver a preguntar. `who` nombra a la persona en la traza. */
 export const currentImportantNotice = async (db = prisma, userId, now = new Date(), { who = null, log } = {}) => {
-    const [pending, lastDecision] = await Promise.all([
+    const [pending, lastDecision, commercial] = await Promise.all([
         db.importantNotice.findMany({ where: { userId, resolvedAt: null } }),
-        db.importantNotice.findFirst({ where: { userId, decidedAt: { not: null } }, orderBy: { decidedAt: 'desc' }, select: { decidedAt: true } })
+        db.importantNotice.findFirst({ where: { userId, decidedAt: { not: null } }, orderBy: { decidedAt: 'desc' }, select: { decidedAt: true } }),
+        seesCrmNotices(db, userId)
     ]);
-    let candidates = pending;
+    let candidates = commercial ? pending : pending.filter((notice) => !isCrmNotice(notice));
     for (let discarded = 0; discarded <= MAX_STALE_PER_READ; discarded += 1) {
         const { notice, nextAt } = pickCurrentNotice(candidates, lastDecision?.decidedAt || null, now);
         if (!notice) return { notice: null, nextAt };
@@ -125,6 +135,39 @@ const resolve = async (db, notice, resolution, now) => {
         await db.notification.updateMany({ where: { id: notice.notificationId, userId: notice.userId, isRead: false }, data: { isRead: true, readAt: now } })
             .catch((error) => console.error('[Avisos importantes] Notificación sin marcar:', error?.message || error));
     }
+};
+
+/**
+ * Lo que una persona que no es comercial tenía abierto del CRM pasa al equipo comercial: al responsable si lo es o, si
+ * no, a todos los comerciales, con el mismo texto, la misma antigüedad y la misma pausa. A quien ya tenía abierto el
+ * aviso de esa oportunidad no se le repite. El original se cierra como `REASIGNADO`, sin contar como decisión, y deja
+ * su traza. Sin nadie comercial no se mueve nada: el aviso no se pierde. Devuelve cuántos se movieron.
+ */
+export const reassignCrmNotices = async (db = prisma, { commercialIds = [], now = new Date(), log } = {}) => {
+    if (!commercialIds.length) return 0;
+    const stray = (await db.importantNotice.findMany({ where: { resolvedAt: null } }))
+        .filter((notice) => isCrmNotice(notice) && !commercialIds.includes(notice.userId));
+    let moved = 0;
+    for (const notice of stray) {
+        const lead = await db.crmLead.findUnique({ where: { id: notice.subjectId }, select: { company: true, contactName: true, owner: { select: { userId: true } } } });
+        for (const userId of followUpRecipients(lead?.owner?.userId || null, commercialIds)) {
+            const already = await db.importantNotice.findFirst({ where: { userId, subjectId: notice.subjectId, resolvedAt: null } });
+            if (already) continue;
+            await db.importantNotice.create({
+                data: {
+                    userId, kind: notice.kind, level: notice.level, subjectId: notice.subjectId, label: notice.label, message: notice.message,
+                    url: notice.url || null, notificationId: null, createdAt: notice.createdAt, snoozedUntil: notice.snoozedUntil || null
+                }
+            });
+        }
+        await db.importantNotice.update({ where: { id: notice.id }, data: { resolvedAt: now, resolution: 'REASIGNADO' } });
+        const holder = typeof db.user?.findUnique === 'function'
+            ? await db.user.findUnique({ where: { id: notice.userId }, select: { name: true } }).catch(() => null)
+            : null;
+        await traceNotice(db, NOTICE_TRACE_EVENTS.CLEARED, { notice, subject: leadName(lead), subjectName: holder?.name, extra: { reason: 'REASIGNADO' }, now, log });
+        moved += 1;
+    }
+    return moved;
 };
 
 /**
