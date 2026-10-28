@@ -1,7 +1,7 @@
 import Select from '@/components/ui/Select';
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useEffect } from 'react';
-import { Plus, MoreVertical, Edit2, UserX, UserCheck, Eye, Users } from '@/components/ui/icons';
+import { Plus, MoreVertical, Edit2, UserX, UserCheck, Eye, Users, ChevronDown } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { getApiBaseUrl } from '../../lib/apiBaseUrl';
@@ -26,6 +26,7 @@ export default function Team() {
   const [pendingAccessMember, setPendingAccessMember] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
 
   // Modal Form State
   const [name, setName] = useState('');
@@ -171,6 +172,79 @@ export default function Team() {
     }
   };
 
+  // Los inactivos van aparte, plegados (Rodny, 28 de octubre de 2026: «que no se vean ahí mezclados»).
+  const activeTeam = team.filter((member) => member.isActive);
+  const inactiveTeam = team.filter((member) => !member.isActive);
+  const memberCard = (member) => (
+    <div
+      key={member.id}
+      className={cn(
+        "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-2xl p-6 relative group transition-all",
+        member.isActive ? "" : "border-destructive/30 opacity-60 grayscale"
+      )}
+    >
+      {/* Dropdown Menu Toggle (Hover Actions for now to keep it simple without full Radix Dropdown) */}
+      {isAdmin && (
+        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-2">
+          {member.userId && (
+            <button
+              onClick={() => navigate(`/perfil/${member.userId}`)}
+              className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
+              title="Ver Perfil y Desempeño"
+            >
+              <Eye size={16} />
+            </button>
+          )}
+          <button
+            onClick={() => handleOpenModal(member)}
+            className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
+            title="Editar"
+          >
+            <Edit2 size={16} />
+          </button>
+          <button
+            onClick={() => handleToggleActive(member)}
+            className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400"
+            title={member.isActive ? "Desactivar" : "Reactivar"}
+          >
+            {member.isActive ? <UserX size={16} className="text-destructive hover:text-destructive/80" /> : <UserCheck size={16} className="text-status-positive hover:text-status-positive/80" />}
+          </button>
+        </div>
+      )}
+
+      <div className="flex items-center space-x-4">
+        <div
+          className={cn("cursor-pointer transition-transform hover:scale-105", !member.userId && "cursor-default hover:scale-100")}
+          onClick={() => member.userId && navigate(`/perfil/${member.userId}`)}
+        >
+          <TeamAvatar member={member} className="w-16 h-16 text-xl [&>span]:text-lg" ring />
+        </div>
+        <div>
+          <h3
+            className={cn("text-lg font-semibold text-slate-900 dark:text-slate-50", member.userId && "cursor-pointer hover:text-primary transition-colors")}
+            onClick={() => member.userId && navigate(`/perfil/${member.userId}`)}
+          >
+            {member.name}
+          </h3>
+          <span className="text-sm px-2 py-0.5 bg-primary/10 text-primary rounded-full inline-block mt-1">
+            {member.role}
+          </span>
+          {!member.isActive && (
+            <span className="text-xs text-destructive block mt-2 font-medium uppercase tracking-wider">
+              Inactivo
+            </span>
+          )}
+        </div>
+      </div>
+      {member.email && (
+        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+          <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{member.email}</p>
+        </div>
+      )}
+      {isAdmin && member.isActive && member.user?.isActive && member.user?.mustChangePassword && member.user?.passwordChangedAt === null && <Button variant="link" size="lg" className="mt-3 px-0" onClick={() => { setSaveError(''); setPendingAccessMember(member); }}>Preparar acceso inicial</Button>}
+    </div>
+  );
+
   return (
     <div className="w-full max-w-7xl mx-auto animate-fade-in font-sans">
       <PageHeader
@@ -195,86 +269,29 @@ export default function Team() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {team.map((member) => (
-            <div
-              key={member.id}
-              className={cn(
-                "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-2xl p-6 relative group transition-all",
-                member.isActive ? "" : "border-destructive/30 opacity-60 grayscale"
-              )}
-            >
-              {/* Dropdown Menu Toggle (Hover Actions for now to keep it simple without full Radix Dropdown) */}
-              {isAdmin && (
-                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-2">
-                  {member.userId && (
-                    <button
-                      onClick={() => navigate(`/perfil/${member.userId}`)}
-                      className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
-                      title="Ver Perfil y Desempeño"
-                    >
-                      <Eye size={16} />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleOpenModal(member)}
-                    className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
-                    title="Editar"
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleToggleActive(member)}
-                    className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400"
-                    title={member.isActive ? "Desactivar" : "Reactivar"}
-                  >
-                    {member.isActive ? <UserX size={16} className="text-destructive hover:text-destructive/80" /> : <UserCheck size={16} className="text-status-positive hover:text-status-positive/80" />}
-                  </button>
-                </div>
-              )}
-
-              <div className="flex items-center space-x-4">
-                <div
-                  className={cn("cursor-pointer transition-transform hover:scale-105", !member.userId && "cursor-default hover:scale-100")}
-                  onClick={() => member.userId && navigate(`/perfil/${member.userId}`)}
-                >
-                  <TeamAvatar member={member} className="w-16 h-16 text-xl [&>span]:text-lg" ring />
-                </div>
-                <div>
-                  <h3
-                    className={cn("text-lg font-semibold text-slate-900 dark:text-slate-50", member.userId && "cursor-pointer hover:text-primary transition-colors")}
-                    onClick={() => member.userId && navigate(`/perfil/${member.userId}`)}
-                  >
-                    {member.name}
-                  </h3>
-                  <span className="text-sm px-2 py-0.5 bg-primary/10 text-primary rounded-full inline-block mt-1">
-                    {member.role}
-                  </span>
-                  {!member.isActive && (
-                    <span className="text-xs text-destructive block mt-2 font-medium uppercase tracking-wider">
-                      Inactivo
-                    </span>
-                  )}
-                </div>
-              </div>
-              {member.email && (
-                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{member.email}</p>
-                </div>
-              )}
-              {isAdmin && member.isActive && member.user?.isActive && member.user?.mustChangePassword && member.user?.passwordChangedAt === null && <Button variant="link" size="lg" className="mt-3 px-0" onClick={() => { setSaveError(''); setPendingAccessMember(member); }}>Preparar acceso inicial</Button>}
-            </div>
-          ))}
-          {team.length === 0 && (
+          {activeTeam.map(memberCard)}
+          {activeTeam.length === 0 && (
             <div className="col-span-full text-center py-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 border-dashed shadow-sm">
-              <p className="text-zinc-500 dark:text-slate-400">No hay miembros del equipo registrados.</p>
+              <p className="text-zinc-500 dark:text-slate-400">No hay miembros activos en el equipo.</p>
             </div>
           )}
         </div>
       )}
 
+      {!loading && inactiveTeam.length > 0 && (
+        <section className="mt-8">
+          <button type="button" data-team-inactive-toggle aria-expanded={showInactive} aria-controls="team-inactive" onClick={() => setShowInactive((open) => !open)}
+            className="flex min-h-11 items-center gap-2 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
+            <ChevronDown className={cn('h-4 w-4 transition-transform', showInactive && 'rotate-180')} aria-hidden="true" />
+            Miembros inactivos ({inactiveTeam.length})
+          </button>
+          {showInactive && <div id="team-inactive" className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">{inactiveTeam.map(memberCard)}</div>}
+        </section>
+      )}
+
       {/* Modal - Shadcn Dialog */}
       <Dialog open={isModalOpen} onOpenChange={value => { if (!saving) setIsModalOpen(value); }}>
-        <DialogContent className="bg-white dark:bg-zinc-900 rounded-2xl max-w-md p-6 border border-zinc-200 dark:border-zinc-800">
+        <DialogContent className="bg-white dark:bg-zinc-900 rounded-2xl w-[calc(100vw-2rem)] max-w-4xl p-6 border border-zinc-200 dark:border-zinc-800">
           <DialogHeader className="mb-4">
             <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-white">
               {editingMember ? 'Editar miembro' : 'Añadir miembro'}
@@ -286,76 +303,52 @@ export default function Team() {
 
           <form onSubmit={handleSave} className="space-y-4">
             {saveError && <p role="alert" className="text-sm leading-6 text-destructive">{saveError}</p>}
-            <div>
-              <label htmlFor="team-name" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Nombre completo</label>
-              <input
-                id="team-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="team-role" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Cargo</label>
-              <input
-                id="team-role"
-                type="text"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                placeholder="Ej. Director general, Community Manager"
-                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
-                required
-              />
+            {/* Ventana ancha (Rodny, 28 de octubre de 2026: «quedó muy alto … menos alto y más ancho»): los datos en
+                dos columnas, el área en tres y los módulos en cuatro. */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label htmlFor="team-name" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Nombre completo</label>
+                <input id="team-name" type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white" required />
+              </div>
+              <div>
+                <label htmlFor="team-role" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Cargo</label>
+                <input id="team-role" type="text" value={role} onChange={(e) => setRole(e.target.value)} placeholder="Ej. Director general, Community Manager" className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white" required />
+              </div>
+              <div>
+                <label htmlFor="team-email" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Correo electrónico (opcional)</label>
+                <input id="team-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white" />
+              </div>
+              <div>
+                <label htmlFor="team-avatar-url" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">URL de avatar (opcional)</label>
+                <input id="team-avatar-url" type="text" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://... o ruta relativa /api/..." className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white" />
+              </div>
             </div>
 
             <fieldset>
               <legend className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Área</legend>
               <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">Define qué avisos recibe. Puede ser más de una.</p>
-              <div className="grid grid-cols-2 gap-2">
-                {TEAM_AREAS.map(({ key, label }) => (
-                  <label key={key} data-team-area={key} className="flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-2 transition-colors hover:bg-zinc-100/60 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/60">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {TEAM_AREAS.map(({ key, label, receives }) => (
+                  <label key={key} data-team-area={key} className="flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-1.5 transition-colors hover:bg-zinc-100/60 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/60">
                     <input
                       type="checkbox"
                       checked={areas.includes(key)}
                       onChange={(e) => setAreas((prev) => e.target.checked ? [...prev, key] : prev.filter((area) => area !== key))}
-                      className="h-4 w-4 cursor-pointer rounded text-primary focus:ring-primary"
+                      className="h-4 w-4 shrink-0 cursor-pointer rounded text-primary focus:ring-primary"
                     />
-                    <span className="text-xs text-zinc-700 dark:text-zinc-300">{label}</span>
+                    <span className="min-w-0 leading-tight">
+                      <span className="block text-xs text-zinc-700 dark:text-zinc-300">{label}</span>
+                      {receives && <span className="block text-[11px] text-zinc-500 dark:text-zinc-400">{receives}</span>}
+                    </span>
                   </label>
                 ))}
               </div>
             </fieldset>
 
-            <div>
-              <label htmlFor="team-email" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Correo electrónico (opcional)</label>
-              <input
-                id="team-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="team-avatar-url" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">URL de avatar (opcional)</label>
-              <input
-                id="team-avatar-url"
-                type="text"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                placeholder="https://... o ruta relativa /api/..."
-                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
-              />
-            </div>
-
             {/* System Role & Permissions managed by Admins */}
             {email && email.trim() !== '' && (
               <div className="space-y-4 p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-                <div>
+                <div className="md:max-w-sm">
                   <label htmlFor="team-system-role" className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Rol de Permisos del Sistema</label>
                   <Select
                     id="team-system-role"
@@ -372,7 +365,7 @@ export default function Team() {
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Permisos por Módulo</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                     {PLATFORM_MODULES.map(({ key: module, label }) => {
                       return (
                         <label key={module} className="flex items-center gap-2 p-2 bg-white dark:bg-zinc-900 border border-zinc-150 dark:border-zinc-800/60 rounded-xl cursor-pointer hover:bg-zinc-100/50 transition-colors select-none">

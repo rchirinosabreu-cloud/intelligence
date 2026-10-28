@@ -11,7 +11,9 @@ localStorage.setItem('currentUser', JSON.stringify({ id: 'demo-admin', name: 'Ad
 const pending = { id: 'demo-member', name: 'Persona de prueba', role: 'Editor', email: 'persona@example.test', isActive: true, userId: 'demo-user', user: { role: 'EDITOR', isActive: true, mustChangePassword: true, passwordChangedAt: null, sessionVersion: 0, modulePermissions: {} } };
 // ?modules: una editora que tenía Minutas antes de que Drive tuviera su propia casilla.
 const editor = { id: 'demo-editor', name: 'Editora de prueba', role: 'Diseñadora', email: 'editora@example.test', isActive: true, userId: 'demo-editor-user', user: { role: 'EDITOR', isActive: true, mustChangePassword: false, passwordChangedAt: '2026-09-01T12:00:00.000Z', sessionVersion: 1, modulePermissions: { dashboard: true, gestion: true, minutas: true, parrillas: true } } };
-let members = params.has('modules') ? [editor] : params.has('pending') ? [pending] : [];
+// Alguien que ya no está: va plegado en «Miembros inactivos» (28 de octubre de 2026).
+const retired = { id: 'demo-retired', name: 'Persona inactiva', role: 'Community Manager', email: 'inactiva@example.test', isActive: false, userId: null, user: null };
+let members = params.has('modules') ? [editor, retired] : params.has('pending') ? [pending] : [];
 window.__savedBodies = [];
 window.fetch = async (input, options = {}) => {
   const url = new URL(String(input), location.origin);
@@ -22,7 +24,7 @@ window.fetch = async (input, options = {}) => {
   const body = JSON.parse(options.body);
   window.__savedBodies.push(body);
   if (params.has('modules')) {
-    members = [{ ...editor, areas: body.areas, user: { ...editor.user, modulePermissions: body.modulePermissions } }];
+    members = [{ ...editor, areas: body.areas, user: { ...editor.user, modulePermissions: body.modulePermissions } }, retired];
     return Response.json(members[0]);
   }
   const member = url.pathname.endsWith('/initial-access') ? pending : { ...pending, ...body };
