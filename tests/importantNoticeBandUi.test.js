@@ -44,7 +44,16 @@ test('los botones: seguimiento primero, «Abrir» como botón y «Recordarme» s
     assert.match(base, />\s*No sigue\s*</);
     assert.match(band, /¿Cómo la cerramos\?/);
     assert.match(band, /mode === 'close' && REVIEW_OUTCOMES\.map/);
-    assert.match(base, /\{!isReview && notice\.url && \(/);
+    assert.match(base, /\{!isReview && !isCollection && notice\.url && \(/);
+});
+
+test('cartera vencida: «Ya le escribí», «Registrar pago» y «Recordarme», sin «Abrir» (28 de octubre de 2026)', () => {
+    const base = band.slice(band.indexOf("{mode === 'base' && ("), band.indexOf("{mode === 'channels' && FOLLOW_UP_CHANNELS"));
+    assert.match(band, /const isCollection = String\(notice\.kind \|\| ''\)\.startsWith\('CARTERA_'\)/);
+    assert.match(base, /isCollection \? 'Ya le escribí' : 'Ya hice seguimiento'/);
+    assert.ok(base.indexOf('data-notice-action="pay"') > base.indexOf('data-notice-action="follow-up"'));
+    assert.ok(base.indexOf('data-notice-action="pay"') < base.indexOf('data-notice-action="snooze"'), '«Recordarme» sigue al final');
+    assert.match(band, /'Gestión de cobro registrada'/);
 });
 
 test('Esc o tocar fuera devuelve a los botones, y el éxito se dice después de la respuesta del servidor', () => {

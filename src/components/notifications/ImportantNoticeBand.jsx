@@ -52,6 +52,9 @@ function NoticeBody({ notice, onDecided }) {
   const [busy, setBusy] = useState(false);
   const contentRef = useRef(null);
   const isReview = notice.kind === 'CRM_REVIEW';
+  // Cartera vencida (28 de octubre de 2026): la decide Elisa. «Ya le escribí» deja la gestión de cobro en la
+  // trazabilidad y «Registrar pago» abre Cuentas por cobrar; el aviso sale solo cuando el cliente se pone al día.
+  const isCollection = String(notice.kind || '').startsWith('CARTERA_');
 
   // Que el aviso estuvo a la vista queda en la trazabilidad de Salud operativa (27 de octubre de 2026). Solo con la
   // pestaña visible: una pestaña de fondo no le muestra nada a nadie. El servidor lo anota una vez por aparición.
@@ -96,15 +99,18 @@ function NoticeBody({ notice, onDecided }) {
         <section ref={contentRef} role="region" aria-label="Aviso importante" aria-live="polite" className="mx-auto max-w-3xl">
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-white/90">{notice.label}</p>
           <p className="brain-notice-title mb-4 text-[22px] font-bold leading-tight text-white">{notice.message}</p>
-          {mode === 'channels' && <p className="-mt-1.5 mb-3 text-[15px] font-medium text-white/95">¿Cómo hiciste el seguimiento?</p>}
+          {mode === 'channels' && <p className="-mt-1.5 mb-3 text-[15px] font-medium text-white/95">{isCollection ? '¿Cómo le escribiste?' : '¿Cómo hiciste el seguimiento?'}</p>}
           {mode === 'snooze' && <p className="-mt-1.5 mb-3 text-[15px] font-medium text-white/95">¿Cuándo te lo recuerdo?</p>}
           {mode === 'close' && <p className="-mt-1.5 mb-3 text-[15px] font-medium text-white/95">¿Cómo la cerramos?</p>}
           <div className="flex flex-wrap justify-center gap-2.5" aria-busy={busy}>
             {mode === 'base' && (
               <>
                 <NoticeButton primary disabled={busy} data-notice-action="follow-up" onClick={() => setMode('channels')}>
-                  Ya hice seguimiento
+                  {isCollection ? 'Ya le escribí' : 'Ya hice seguimiento'}
                 </NoticeButton>
+                {isCollection && notice.url && (
+                  <NoticeButton disabled={busy} data-notice-action="pay" onClick={() => navigate(notice.url)}>Registrar pago</NoticeButton>
+                )}
                 {/* En la revisión, «No sigue» pregunta si quedó perdida o descartada, y no hay «Abrir» (Rodny, 26 de
                     octubre de 2026). «Cerrar» se confundía con cerrar el aviso y «Descartar» elegía una de las dos. */}
                 {isReview && (
@@ -112,7 +118,7 @@ function NoticeBody({ notice, onDecided }) {
                     No sigue
                   </NoticeButton>
                 )}
-                {!isReview && notice.url && (
+                {!isReview && !isCollection && notice.url && (
                   <NoticeButton disabled={busy} data-notice-action="open" onClick={() => navigate(notice.url)}>Abrir</NoticeButton>
                 )}
                 <NoticeButton disabled={busy} data-notice-action="snooze" aria-haspopup="true" onClick={() => setMode('snooze')}>
@@ -122,7 +128,7 @@ function NoticeBody({ notice, onDecided }) {
             )}
             {mode === 'channels' && FOLLOW_UP_CHANNELS.map((channel) => (
               <NoticeButton key={channel.value} disabled={busy} data-notice-channel={channel.value}
-                onClick={() => decide('follow-up', { channel: channel.value }, 'Seguimiento registrado en el CRM')}>
+                onClick={() => decide('follow-up', { channel: channel.value }, isCollection ? 'Gestión de cobro registrada' : 'Seguimiento registrado en el CRM')}>
                 {channel.label}
               </NoticeButton>
             ))}

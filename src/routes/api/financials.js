@@ -56,6 +56,8 @@ import {
 } from '../../controllers/financialRecordController.js';
 import { FINANCIAL_DOCUMENT_MAX_BYTES } from '../../services/financialRecordDocumentService.js';
 import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
+import prisma from '../../lib/prisma.js';
+import { readCollectionSettings, saveCollectionSettings } from '../../services/collectionState.js';
 
 import {
     createDirectoryClientHandler,
@@ -141,6 +143,24 @@ router.post('/receivables/:id/settlements', requireFinancialWrite, settleReceiva
 // Resumen de ajustes de cartera (Rodny, 20 de octubre de 2026): cierres sin dinero y
 // diferencia en cambio del periodo. Solo lee.
 router.get('/receivable-adjustments', requireFinancialAccess, listReceivableAdjustmentsHandler);
+// Los plazos de los avisos de cartera (punto 7 de la solicitud de Elisa, 28 de octubre de 2026): los ve quien entra a
+// Financiero y los cambia solo un administrador (lo comprueba el servicio).
+router.get('/collection-alerts', requireFinancialAccess, async (_req, res) => {
+    try {
+        res.json(await readCollectionSettings(prisma));
+    } catch (error) {
+        console.error('[Cartera] Plazos no leídos:', error?.message || error);
+        res.status(500).json({ error: 'No pudimos cargar los plazos de los avisos de cartera.' });
+    }
+});
+router.put('/collection-alerts', requireFinancialAccess, async (req, res) => {
+    try {
+        res.json(await saveCollectionSettings(prisma, req.body, req.user));
+    } catch (error) {
+        if (!error.statusCode) console.error('[Cartera] Plazos no guardados:', error?.message || error);
+        res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No pudimos guardar los plazos de los avisos de cartera.' });
+    }
+});
 // Préstamos a terceros (Rodny, 20 de octubre de 2026): el egreso y la cuenta por cobrar de
 // una vez; la devolución entra como reintegro por «Registrar pago» de siempre.
 router.post('/loans', requireFinancialWrite, createLoanHandler);

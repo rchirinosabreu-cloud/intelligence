@@ -6,6 +6,8 @@
 
 export const NOTICE_TRACE_EVENTS = Object.freeze({
     ALERTS_SENT: 'CRM_FOLLOW_UP_ALERTS_SENT',
+    // Avisos de cartera (punto 7 de la solicitud de Elisa, 28 de octubre de 2026).
+    COLLECTION_ALERTS_SENT: 'COLLECTION_ALERTS_SENT',
     SHOWN: 'IMPORTANT_NOTICE_SHOWN',
     FOLLOWED_UP: 'IMPORTANT_NOTICE_FOLLOWED_UP',
     SNOOZED: 'IMPORTANT_NOTICE_SNOOZED',
@@ -16,10 +18,13 @@ export const NOTICE_TRACE_EVENTS = Object.freeze({
 export const NOTICE_TRACE_TYPES = Object.freeze(Object.values(NOTICE_TRACE_EVENTS));
 
 // Los que no tienen autor: los hace la plataforma y se leen por la persona a la que le pasaron.
-export const NOTICE_SYSTEM_TRACE_TYPES = Object.freeze([NOTICE_TRACE_EVENTS.ALERTS_SENT, NOTICE_TRACE_EVENTS.SHOWN, NOTICE_TRACE_EVENTS.CLEARED]);
+export const NOTICE_SYSTEM_TRACE_TYPES = Object.freeze([
+    NOTICE_TRACE_EVENTS.ALERTS_SENT, NOTICE_TRACE_EVENTS.COLLECTION_ALERTS_SENT, NOTICE_TRACE_EVENTS.SHOWN, NOTICE_TRACE_EVENTS.CLEARED
+]);
 
 export const NOTICE_TRACE_LABELS = Object.freeze({
     [NOTICE_TRACE_EVENTS.ALERTS_SENT]: 'Alertas comerciales',
+    [NOTICE_TRACE_EVENTS.COLLECTION_ALERTS_SENT]: 'Avisos de cartera',
     [NOTICE_TRACE_EVENTS.SHOWN]: 'Aviso en la banda',
     [NOTICE_TRACE_EVENTS.FOLLOWED_UP]: 'Ya hice seguimiento',
     [NOTICE_TRACE_EVENTS.SNOOZED]: 'Recordarme',
@@ -35,7 +40,20 @@ const CLEARED_REASONS = {
     ETAPA: 'la oportunidad ya no espera respuesta del cliente',
     INACTIVA: 'la oportunidad ya no está activa en el CRM',
     // Rodny, 28 de octubre de 2026: las alertas del CRM son solo del equipo comercial.
-    REASIGNADO: 'el seguimiento le corresponde al equipo comercial'
+    REASIGNADO: 'el seguimiento le corresponde al equipo comercial',
+    AL_DIA: 'el cliente se puso al día con lo que tenía vencido'
+};
+
+const isCollectionNotice = (meta) => String(meta?.kind || '').startsWith('CARTERA_');
+
+const collectionAlertsSent = (metadata, subject) => {
+    const total = count(metadata.alerts);
+    const delivery = joinAnd([
+        count(metadata.bell) && plural(count(metadata.bell), 'aviso en la campana', 'avisos en la campana'),
+        count(metadata.band) && `${count(metadata.band)} en la banda`
+    ]) || 'no se pudieron entregar';
+    if (total === 1 && metadata.subject) return `Le llegó a ${subject} el aviso de cartera de ${metadata.subject}: ${delivery}.`;
+    return `Le ${total === 1 ? 'llegó' : 'llegaron'} a ${subject} ${plural(total, 'aviso de cartera', 'avisos de cartera')}: ${delivery}.`;
 };
 
 const count = (value) => Math.max(0, Number(value) || 0);
@@ -67,8 +85,15 @@ export const noticeTraceDescription = (eventType, metadata = {}, { actor = 'Algu
     const who = meta.subject || 'la oportunidad';
     switch (eventType) {
         case NOTICE_TRACE_EVENTS.ALERTS_SENT: return alertsSent(meta, subject);
+        case NOTICE_TRACE_EVENTS.COLLECTION_ALERTS_SENT: return collectionAlertsSent(meta, subject);
         case NOTICE_TRACE_EVENTS.SHOWN: return `Se le mostró a ${subject} en la banda: «${meta.message || who}».`;
         case NOTICE_TRACE_EVENTS.FOLLOWED_UP:
+            if (isCollectionNotice(meta)) {
+                const client = meta.subject || 'el cliente';
+                return meta.channel === 'RESPUESTA_CLIENTE'
+                    ? `${actor} anotó desde el aviso de cartera que ${client} respondió.`
+                    : `${actor} registró una gestión de cobro${CHANNEL_PHRASES[meta.channel] ? ` ${CHANNEL_PHRASES[meta.channel]}` : ''} con ${client}.`;
+            }
             return meta.channel === 'RESPUESTA_CLIENTE'
                 ? `${actor} anotó desde el aviso que ${who} respondió.`
                 : `${actor} registró un seguimiento${CHANNEL_PHRASES[meta.channel] ? ` ${CHANNEL_PHRASES[meta.channel]}` : ''} desde el aviso de ${who}.`;
@@ -80,11 +105,13 @@ export const noticeTraceDescription = (eventType, metadata = {}, { actor = 'Algu
     }
 };
 
-/** El enlace del evento: solo a una oportunidad del CRM. */
+/** El enlace del evento: a una oportunidad del CRM o a Cuentas por cobrar. */
 export const noticeTraceLink = (metadata) => {
     const url = metadata?.url;
-    if (typeof url !== 'string' || !url.startsWith('/crm/')) return null;
-    return { url, label: metadata.subject || 'Abrir en el CRM' };
+    if (typeof url !== 'string') return null;
+    if (url.startsWith('/crm/')) return { url, label: metadata.subject || 'Abrir en el CRM' };
+    if (url.startsWith('/financiero')) return { url, label: metadata.subject || 'Abrir Cuentas por cobrar' };
+    return null;
 };
 
 /** Lo que se guarda de un aviso en la traza: nunca más que esto. */

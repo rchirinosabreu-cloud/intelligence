@@ -2727,6 +2727,34 @@ model CrmFollowUpAlert {
   @@index([leadId], map: "CrmFollowUpAlert_lead_idx")
 }
 
+// Avisos de cartera (punto 7 de la solicitud de Elisa, 28 de octubre de 2026): lo ya avisado, una fila por asunto
+// —el cliente de fee mensual o la cuenta de un servicio puntual—, ciclo y paso. La fila única es la cerradura contra
+// avisar dos veces. Regla en src/lib/receivableCollections.js; tablas aditivas en scripts/ensure-collection-alerts-schema.js.
+model CollectionAlert {
+  id        String   @id @default(uuid())
+  subjectId String
+  kind      String // MENSUAL o UNICO
+  cycle     String
+  step      Int
+  sentAt    DateTime @default(now()) @db.Timestamptz()
+
+  @@unique([subjectId, cycle, step])
+  @@index([subjectId], map: "CollectionAlert_subject_idx")
+}
+
+// Los plazos de los avisos de cartera, que cambia un administrador (Rodny: «dejar las fechas flexibles»).
+// Nacen apagados: un administrador los enciende cuando Administración haya revisado la cartera.
+model CollectionSetting {
+  id                   String   @id @default("global")
+  enabled              Boolean  @default(false)
+  paymentTermDays      Int      @default(15)
+  monthlyAlertCount    Int      @default(2)
+  oneOffFirstAlertDays Int      @default(15)
+  repeatDays           Int      @default(7)
+  updatedById          String?
+  updatedAt            DateTime @default(now()) @updatedAt @db.Timestamptz()
+}
+
 // Ajustes del CRM que cambia un administrador: los días de las alertas comerciales.
 model CrmSetting {
   id                   String   @id @default("global")
