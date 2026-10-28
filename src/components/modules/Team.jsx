@@ -11,6 +11,7 @@ import { cn } from '../../lib/utils';
 import { effectiveFinancialRole } from '../../utils/financialPermissions';
 import { PLATFORM_MODULES, presetModulePermissions, readModulePermissions } from '../../lib/platformModules';
 import InitialAccessDialog from '@/components/team/InitialAccessDialog';
+import { TEAM_AREAS, memberAreas, normalizeTeamAreas } from '../../lib/teamAreas';
 
 export default function Team() {
   const navigate = useNavigate();
@@ -29,6 +30,7 @@ export default function Team() {
   // Modal Form State
   const [name, setName] = useState('');
   const [role, setRole] = useState('');
+  const [areas, setAreas] = useState([]);
   const [email, setEmail] = useState('');
   const [avatarUrl, setAvatarUrl] = useState('');
 
@@ -70,6 +72,8 @@ export default function Team() {
       setEditingMember(member);
       setName(member.name);
       setRole(member.role);
+      // Sin área elegida se muestra la que se deduce del cargo, que es la que ya están leyendo los avisos.
+      setAreas(memberAreas(member));
       setEmail(member.email || '');
       setAvatarUrl(member.avatarUrl || '');
 
@@ -82,6 +86,7 @@ export default function Team() {
       setEditingMember(null);
       setName('');
       setRole('');
+      setAreas([]);
       setEmail('');
       setAvatarUrl('');
       setSystemRole('VIEWER');
@@ -100,6 +105,7 @@ export default function Team() {
     const payload = {
       name,
       role,
+      areas: normalizeTeamAreas(areas),
       email,
       avatarUrl,
       systemRole,
@@ -293,17 +299,35 @@ export default function Team() {
             </div>
 
             <div>
-              <label htmlFor="team-role" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Rol</label>
+              <label htmlFor="team-role" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Cargo</label>
               <input
                 id="team-role"
                 type="text"
                 value={role}
                 onChange={(e) => setRole(e.target.value)}
-                placeholder="Ej. Desarrollador, Diseñador, Project Manager"
+                placeholder="Ej. Director general, Community Manager"
                 className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
                 required
               />
             </div>
+
+            <fieldset>
+              <legend className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Área</legend>
+              <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">Define qué avisos recibe. Puede ser más de una.</p>
+              <div className="grid grid-cols-2 gap-2">
+                {TEAM_AREAS.map(({ key, label }) => (
+                  <label key={key} data-team-area={key} className="flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-2 transition-colors hover:bg-zinc-100/60 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/60">
+                    <input
+                      type="checkbox"
+                      checked={areas.includes(key)}
+                      onChange={(e) => setAreas((prev) => e.target.checked ? [...prev, key] : prev.filter((area) => area !== key))}
+                      className="h-4 w-4 cursor-pointer rounded text-primary focus:ring-primary"
+                    />
+                    <span className="text-xs text-zinc-700 dark:text-zinc-300">{label}</span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
 
             <div>
               <label htmlFor="team-email" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Correo electrónico (opcional)</label>

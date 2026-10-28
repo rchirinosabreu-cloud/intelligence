@@ -22,7 +22,7 @@ window.fetch = async (input, options = {}) => {
   const body = JSON.parse(options.body);
   window.__savedBodies.push(body);
   if (params.has('modules')) {
-    members = [{ ...editor, user: { ...editor.user, modulePermissions: body.modulePermissions } }];
+    members = [{ ...editor, areas: body.areas, user: { ...editor.user, modulePermissions: body.modulePermissions } }];
     return Response.json(members[0]);
   }
   const member = url.pathname.endsWith('/initial-access') ? pending : { ...pending, ...body };

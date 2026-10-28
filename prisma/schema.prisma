@@ -1158,6 +1158,9 @@ model TeamMember {
   id                 String        @id @default(uuid())
   name               String
   role               String
+  // Áreas del equipo (28 de octubre de 2026): lista cerrada de `src/lib/teamAreas.js`, lo que leen las reglas;
+  // `role` es el cargo libre que se muestra. Vacía = se deduce del cargo. Aditiva con ensure-team-areas-schema.js.
+  areas              String[]      @default([])
   email              String?
   avatarUrl          String?
   isActive           Boolean       @default(true)
