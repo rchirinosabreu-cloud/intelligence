@@ -39,6 +39,7 @@ import ClientFinancialStatementDialog from './financial/ClientFinancialStatement
 import PayablesTab from './financial/PayablesTab';
 import DebtAgingSummary from './financial/DebtAgingSummary';
 import CollectionAlertSettings from './financial/CollectionAlertSettings';
+import { CollectionActivityPanel, useCollectionActivities } from './financial/CollectionActivities';
 import { FinancialSectionHeader, FinancialSubTabs } from './financial/FinancialSectionParts';
 import { financialTabOfView, viewForFinancialTab, visibleFinancialTabs } from '@/lib/financialTabs';
 import { agingBucketLabel, agingBucketOf, agingBucketTone } from '@/lib/debtAging';
@@ -250,6 +251,8 @@ const FinancialDashboard = () => {
     const canWriteFinancials = hasFinancialPermission(currentUser, 'write');
     const canApproveFinancials = hasFinancialPermission(currentUser, 'approve');
     const isAdminUser = String(currentUser?.role || '').toUpperCase() === 'ADMIN';
+    // Gestiones de cobro de cada cliente, en su tarjeta de Cuentas por cobrar (28 de octubre de 2026).
+    const collectionActivities = useCollectionActivities(!!currentUser && canAccessFinancials && activeTab === 'receivables');
     // Quien no administra y llega con el enlace de la revisión del mes ve Movimientos, no una pestaña vacía.
     useEffect(() => { if (activeTab === 'profitability' && currentUser && !isAdminUser) setActiveTab('records'); }, [activeTab, currentUser, isAdminUser]);
 
@@ -1472,6 +1475,9 @@ await invalidateFinancialQueries(queryClient);
                                                             </button>
                                                         )}
                                                     </div>
+                                                    {client.kind !== 'PRESTAMO' && client.clientId && !String(client.clientId).includes(':') && (
+                                                        <CollectionActivityPanel clientId={client.clientId} items={collectionActivities.get(client.clientId)} canWrite={canWriteFinancials} />
+                                                    )}
                                                     <div className="grid grid-cols-1 gap-4">
                                                         {client.debts?.map((debt) => (
                                                             <div key={debt.id} className="p-3 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5 flex flex-col justify-between gap-3">

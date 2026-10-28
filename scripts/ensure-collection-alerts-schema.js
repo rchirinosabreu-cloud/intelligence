@@ -19,6 +19,18 @@ try {
       UNIQUE("subjectId", cycle, step)
     );
     CREATE INDEX IF NOT EXISTS "CollectionAlert_subject_idx" ON "CollectionAlert"("subjectId");
+    CREATE TABLE IF NOT EXISTS "CollectionActivity" (
+      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "clientId" TEXT NOT NULL,
+      "receivableId" TEXT,
+      channel TEXT NOT NULL,
+      source TEXT NOT NULL DEFAULT 'MANUAL',
+      "noticeId" TEXT UNIQUE,
+      "authorId" TEXT,
+      "authorName" TEXT,
+      "occurredAt" TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+    CREATE INDEX IF NOT EXISTS "CollectionActivity_client_idx" ON "CollectionActivity"("clientId", "occurredAt");
     CREATE TABLE IF NOT EXISTS "CollectionSetting" (
       id TEXT PRIMARY KEY DEFAULT 'global',
       enabled BOOLEAN NOT NULL DEFAULT false,

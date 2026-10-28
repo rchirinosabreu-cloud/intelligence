@@ -2742,6 +2742,22 @@ model CollectionAlert {
   @@index([subjectId], map: "CollectionAlert_subject_idx")
 }
 
+// Gestiones de cobro (28 de octubre de 2026: «debe haber un registro»): lo que se hizo para cobrarle a un cliente,
+// desde el aviso de la banda (`source` AVISO, una por aviso) o a mano desde Cuentas por cobrar (MANUAL).
+model CollectionActivity {
+  id           String   @id @default(uuid())
+  clientId     String
+  receivableId String?
+  channel      String
+  source       String   @default("MANUAL")
+  noticeId     String?  @unique
+  authorId     String?
+  authorName   String?
+  occurredAt   DateTime @default(now()) @db.Timestamptz()
+
+  @@index([clientId, occurredAt], map: "CollectionActivity_client_idx")
+}
+
 // Los plazos de los avisos de cartera, que cambia un administrador (Rodny: «dejar las fechas flexibles»).
 // Nacen apagados: un administrador los enciende cuando Administración haya revisado la cartera.
 model CollectionSetting {

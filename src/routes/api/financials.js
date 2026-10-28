@@ -58,6 +58,7 @@ import { FINANCIAL_DOCUMENT_MAX_BYTES } from '../../services/financialRecordDocu
 import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
 import prisma from '../../lib/prisma.js';
 import { readCollectionSettings, saveCollectionSettings } from '../../services/collectionState.js';
+import { listCollectionActivities, recordCollectionActivity } from '../../services/collectionActivityService.js';
 
 import {
     createDirectoryClientHandler,
@@ -151,6 +152,23 @@ router.get('/collection-alerts', requireFinancialAccess, async (_req, res) => {
     } catch (error) {
         console.error('[Cartera] Plazos no leídos:', error?.message || error);
         res.status(500).json({ error: 'No pudimos cargar los plazos de los avisos de cartera.' });
+    }
+});
+// Gestiones de cobro (28 de octubre de 2026): las ve quien entra a Financiero; las registra quien puede escribir.
+router.get('/collection-activities', requireFinancialAccess, async (_req, res) => {
+    try {
+        res.json(await listCollectionActivities(prisma));
+    } catch (error) {
+        console.error('[Cartera] Gestiones no leídas:', error?.message || error);
+        res.status(500).json({ error: 'No pudimos cargar las gestiones de cobro.' });
+    }
+});
+router.post('/collection-activities', requireFinancialWrite, async (req, res) => {
+    try {
+        res.status(201).json(await recordCollectionActivity(prisma, { clientId: req.body?.clientId, channel: req.body?.channel }, req.user));
+    } catch (error) {
+        if (!error.statusCode) console.error('[Cartera] Gestión no guardada:', error?.message || error);
+        res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No pudimos guardar la gestión de cobro.' });
     }
 });
 router.put('/collection-alerts', requireFinancialAccess, async (req, res) => {

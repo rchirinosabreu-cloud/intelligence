@@ -99,8 +99,10 @@ export const noticeTraceDescription = (eventType, metadata = {}, { actor = 'Algu
                 : `${actor} registró un seguimiento${CHANNEL_PHRASES[meta.channel] ? ` ${CHANNEL_PHRASES[meta.channel]}` : ''} desde el aviso de ${who}.`;
         case NOTICE_TRACE_EVENTS.SNOOZED: return `${actor} pospuso el aviso de ${who} ${SNOOZE_PHRASES[meta.option] || 'para más tarde'}.`;
         case NOTICE_TRACE_EVENTS.CLOSED: return `${actor} marcó ${who} como ${OUTCOME_PHRASES[meta.outcome] || 'cerrada'} desde el aviso de revisión.`;
-        case NOTICE_TRACE_EVENTS.CLEARED:
-            return `Salió de la banda de ${subject} el aviso de ${who}: ${CLEARED_REASONS[meta.reason] || 'ya no hacía falta'}.`;
+        case NOTICE_TRACE_EVENTS.CLEARED: {
+            const reason = isCollectionNotice(meta) && meta.reason === 'GESTION' ? 'ya se registró una gestión de cobro con el cliente' : CLEARED_REASONS[meta.reason];
+            return `Salió de la banda de ${subject} el aviso de ${who}: ${reason || 'ya no hacía falta'}.`;
+        }
         default: return 'Actividad registrada.';
     }
 };
