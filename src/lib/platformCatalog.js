@@ -38,7 +38,6 @@ export const PLATFORM_EXCLUDED = [
   { match: /^GET \/tasks\/:taskId\/(attachments|comments)\/[^/]+\/(file|download)$/, reason: 'descarga de archivos' },
   // Subir una pieza final, su portada o un enlace de Drive sí se hace desde el chat (22 de octubre de 2026); bajar o
   // borrar archivos, la subida directa al almacenamiento y la ruta antigua de un solo archivo, no.
-  { match: /^\w+ \/content\/items\/:id\/final-asset(\/|$)/, reason: 'la ruta antigua de un solo archivo' },
   { match: /^(GET|DELETE) \/content\/items\/:id\/(final-assets\/:assetId|cover)$/, reason: 'bajar o borrar archivos de una pieza se hace en el editor' },
   { match: /^POST \/content\/items\/:id\/final-assets\/(direct-upload|confirm)$/, reason: 'la subida directa va del navegador al almacenamiento' },
   { match: /^\w+ \/clients\/:\w+\/(logo-image|storage\/signed-url|files)(\/|$)/, reason: 'archivos y logos' },

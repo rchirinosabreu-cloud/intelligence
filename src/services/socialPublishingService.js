@@ -77,7 +77,7 @@ export const publicSocialAccount = (account) => account && ({
  * dentro de la proporción del feed en Instagram, JPEG de hasta 4 MB en Facebook. Los videos van tal cual.
  */
 const defaultMediaUrlFor = async (asset, { platform, kind } = {}) => {
-  let key = asset.storageKey || asset.finalAssetKey;
+  let key = asset.storageKey;
   if (platform === 'INSTAGRAM') key = (await imageDerivativeService.prepareForInstagram(asset, { kind })).key;
   else if (platform === 'FACEBOOK') key = (await imageDerivativeService.prepareForFacebook(asset)).key;
   const { url } = await createSignedDownload({ key, expiresIn: MEDIA_URL_TTL_SECONDS });

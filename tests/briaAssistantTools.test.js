@@ -160,7 +160,7 @@ test('parrilla_de_cliente reads the month of the question, computes the stage of
     contentItems: [
       { id: 'i1', objective: 'Lanzamiento', format: 'Reel', publishDate: noon('2026-10-03'), publishTime: '09:00', status: 'APROBADO', copyText: 'ESCENA 1', captionText: 'Hola', finalAssetKey: null, revisionRequestedAt: null, _count: { finalAssets: 1 }, publications: [{ status: 'SCHEDULED' }] },
       { id: 'i2', objective: 'Promo', format: 'Post', publishDate: noon('2026-10-20'), publishTime: null, status: 'BORRADOR', copyText: '', captionText: '', finalAssetKey: null, revisionRequestedAt: null, _count: { finalAssets: 0 }, publications: [] },
-      { id: 'i3', objective: 'Detrás de cámaras', format: 'Carrusel', publishDate: noon('2026-10-12'), publishTime: null, status: 'APROBADO', copyText: 'x', captionText: 'y', finalAssetKey: 'k', revisionRequestedAt: new Date(), _count: { finalAssets: 0 }, publications: [] }
+      { id: 'i3', objective: 'Detrás de cámaras', format: 'Carrusel', publishDate: noon('2026-10-12'), publishTime: null, status: 'APROBADO', copyText: 'x', captionText: 'y', revisionRequestedAt: new Date(), _count: { finalAssets: 1 }, publications: [] }
     ]
   }; } } };
   const result = await toolByName('parrilla_de_cliente').run({ clientId: 'c1' }, { db, user: editorWithModules, person, today: TODAY, now: () => NOW });

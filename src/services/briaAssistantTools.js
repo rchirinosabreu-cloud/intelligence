@@ -229,7 +229,7 @@ const parrillaDeCliente = {
         contentItems: {
           where: { deletedAt: null },
           select: {
-            id: true, objective: true, format: true, publishDate: true, publishTime: true, status: true, copyText: true, captionText: true, finalAssetKey: true, revisionRequestedAt: true,
+            id: true, objective: true, format: true, publishDate: true, publishTime: true, status: true, copyText: true, captionText: true, revisionRequestedAt: true,
             comments: true, assetsLinks: true, mediaUrl: true, _count: { select: { finalAssets: true } }, publications: { select: { status: true } },
             tasks: { where: { status: { not: 'REALIZADA' } }, orderBy: { createdAt: 'desc' }, take: 1, select: { id: true, status: true, dueDate: true, focusDeadlineAt: true, assignee: { select: { name: true } } } }
           }
@@ -242,7 +242,7 @@ const parrillaDeCliente = {
     const piezas = items.map((item) => {
       const facts = {
         status: item.status, copyText: item.copyText, captionText: item.captionText,
-        hasFinalAsset: Boolean(item.finalAssetKey) || (item._count?.finalAssets || 0) > 0,
+        hasFinalAsset: (item._count?.finalAssets || 0) > 0,
         hasActivePublication: (item.publications || []).some((p) => ['SCHEDULED', 'PUBLISHING', 'PUBLISHED'].includes(p.status))
       };
       const task = item.tasks?.[0];
@@ -283,10 +283,10 @@ const leerPiezasDeParrilla = {
     if (!text(planId) || ids != null && (!Array.isArray(ids) || !ids.length || ids.length > 6 || ids.some(id => typeof id !== 'string' || !id.trim()) || new Set(ids.map(text)).size !== ids.length || desde !== 0)) throw Object.assign(new Error('Indica la parrilla y hasta seis piezas distintas, sin combinar selección con paginación.'), { status: 400 });
     const selected = ids?.map(text) || null;
     const offset = Number.isSafeInteger(desde) && desde >= 0 ? desde : 0;
-    const rows = await db.contentItem.findMany({ where: { planId: text(planId), deletedAt: null, plan: { deletedAt: null }, ...(selected ? { id: { in: selected } } : {}) }, select: { id: true, objective: true, format: true, publishDate: true, publishTime: true, status: true, revisionRequestedAt: true, finalAssetKey: true, _count: { select: { finalAssets: true } }, copyText: true, captionText: true, internalNotes: true, comments: true, assetsLinks: true, mediaUrl: true, plan: { select: { id: true, strategicObjectives: true, client: { select: { name: true } } } } }, orderBy: [{ publishDate: 'asc' }, { id: 'asc' }], skip: offset, take: selected ? selected.length : 7 });
+    const rows = await db.contentItem.findMany({ where: { planId: text(planId), deletedAt: null, plan: { deletedAt: null }, ...(selected ? { id: { in: selected } } : {}) }, select: { id: true, objective: true, format: true, publishDate: true, publishTime: true, status: true, revisionRequestedAt: true, _count: { select: { finalAssets: true } }, copyText: true, captionText: true, internalNotes: true, comments: true, assetsLinks: true, mediaUrl: true, plan: { select: { id: true, strategicObjectives: true, client: { select: { name: true } } } } }, orderBy: [{ publishDate: 'asc' }, { id: 'asc' }], skip: offset, take: selected ? selected.length : 7 });
     const pieces = rows.slice(0, 6), limit = value => String(value || '').slice(0, 4000);
     const at = now?.() || new Date(), idsNoDisponibles = (selected || []).filter(id => !pieces.some(row => row.id === id));
-    return { data: { source: 'platform_current', readAt: at.toISOString(), cliente: pieces[0]?.plan?.client?.name || null, objetivos: limit(pieces[0]?.plan?.strategicObjectives), piezas: pieces.map(row => ({ id: row.id, titulo: row.objective, formato: row.format, fecha: pieceDay(row.publishDate), estado: row.status, aprobacion: approvalState(row), tieneMaterialFinal: Boolean(row.finalAssetKey || row._count?.finalAssets), plazos: publicationTemporalEvidence(row, { today, now: at }), guion: limit(row.copyText), textoPublicacion: limit(row.captionText), notaInterna: limit(row.internalNotes), comentariosDelCliente: limit(row.comments), referencias: referenceLinks(row), textoRecortado: [row.copyText, row.captionText, row.internalNotes, row.comments].some(value => String(value || '').length > 4000) })), idsNoDisponibles, recortada: idsNoDisponibles.length > 0, nextOffset: !selected && rows.length > 6 ? offset + 6 : null }, sources: pieces.map(row => ({ kind: 'pieza', id: row.id, label: row.objective, url: `/parrillas/${planId}?item=${row.id}`, authority: 'Plataforma actual' })) };
+    return { data: { source: 'platform_current', readAt: at.toISOString(), cliente: pieces[0]?.plan?.client?.name || null, objetivos: limit(pieces[0]?.plan?.strategicObjectives), piezas: pieces.map(row => ({ id: row.id, titulo: row.objective, formato: row.format, fecha: pieceDay(row.publishDate), estado: row.status, aprobacion: approvalState(row), tieneMaterialFinal: Boolean(row._count?.finalAssets), plazos: publicationTemporalEvidence(row, { today, now: at }), guion: limit(row.copyText), textoPublicacion: limit(row.captionText), notaInterna: limit(row.internalNotes), comentariosDelCliente: limit(row.comments), referencias: referenceLinks(row), textoRecortado: [row.copyText, row.captionText, row.internalNotes, row.comments].some(value => String(value || '').length > 4000) })), idsNoDisponibles, recortada: idsNoDisponibles.length > 0, nextOffset: !selected && rows.length > 6 ? offset + 6 : null }, sources: pieces.map(row => ({ kind: 'pieza', id: row.id, label: row.objective, url: `/parrillas/${planId}?item=${row.id}`, authority: 'Plataforma actual' })) };
   }
 };
 

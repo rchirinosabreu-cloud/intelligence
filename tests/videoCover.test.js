@@ -98,16 +98,15 @@ test('una pieza que viene dentro de una parrilla también trae su portada, y nun
 
   // Los tres caminos que leen una parrilla entera pasan sus piezas por ahí: el editor, el carril y el
   // portal se alimentan de `items`, no de la pieza suelta.
+  // Desde que se retiró el archivo único (28 de octubre de 2026), una pieza dentro de una parrilla y una
+  // pieza suelta se arman con la misma función: no queda nada que el portal pudiera mostrar dos veces.
   const service = readFileSync('src/services/contentService.js', 'utf8');
-  assert.match(service, /const planItems = \(plan\) => \(plan\?\.contentItems \|\| \[\]\)\.map\(withPublicCover\)/);
+  assert.match(service, /const planItems = \(plan\) => \(plan\?\.contentItems \|\| \[\]\)\.map\(normalizeContentItem\)/);
   assert.equal(
     (service.match(/const items = planItems\(plan\);/g) || []).length,
     3,
     'getContentPlanById, getContentPlanBySlugAndPeriod y getContentPlanByToken'
   );
-  // La fusión de la pieza final antigua se queda en la pieza suelta: el portal la entrega aparte
-  // (`finalAsset` además de `finalAssets`) y normalizar ahí se la mostraría dos veces al cliente.
-  assert.equal(service.includes('contentItems.map(normalizeContentItem)'), false);
 });
 
 test('las columnas son aditivas y las crea el arranque', () => {

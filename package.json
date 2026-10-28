@@ -35,6 +35,7 @@
     "eval:bria-casos": "node scripts/eval-bria-casos.mjs",
     "storage:retention-report": "node scripts/report-task-attachment-retention.js",
     "financial:cartera-report": "node scripts/report-receivable-cleanup.js",
+    "parrillas:pieza-final-antigua": "node scripts/report-legacy-final-assets.js",
     "clients:footprint": "node scripts/report-client-footprint.js",
     "storage:retention-sweep": "node scripts/run-task-attachment-retention.js",
     "audit:dead-code": "knip --no-progress --no-config-hints --include files,dependencies,optionalPeerDependencies,unlisted,unresolved,binaries && knip --production --include files --no-progress --no-config-hints",

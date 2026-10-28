@@ -1,4 +1,4 @@
-import { getContentPlanByToken, updateContentItem, addClientComment, getContentItemFinalAsset, getContentItemFinalAssetById } from '../services/contentService.js';
+import { getContentPlanByToken, updateContentItem, addClientComment, getContentItemFinalAssetById } from '../services/contentService.js';
 import { getFromS3Stream } from '../services/s3Service.js';
 import { driveAssetUrls, isDriveAsset } from '../lib/finalAssetShape.js';
 import { clientCommentProblem, normalizeClientComment } from '../lib/clientComment.js';
@@ -40,13 +40,6 @@ export const getPublicPlan = async (req, res) => {
         captionText: item.captionText,
         publishDate: item.publishDate,
         mediaUrl: item.mediaUrl,
-        finalAsset: item.finalAssetKey ? {
-          name: item.finalAssetName,
-          mimeType: item.finalAssetMimeType,
-          size: item.finalAssetSize,
-          version: item.finalAssetKey,
-          url: `/api/public/parrilla/${encodeURIComponent(req.params.token)}/items/${item.id}/final-asset`
-        } : null,
         finalAssets: (item.finalAssets || []).map(asset => {
           // Un enlace de Drive no viaja por nuestra API: el cliente lo ve desde Google.
           const drive = driveAssetUrls(asset);
@@ -124,28 +117,9 @@ export const commentPublicItem = async (req, res) => {
 };
 
 /**
- * GET /api/public/items/:id/final-asset
- * Streams the final image/video for client preview without exposing bucket URLs.
+ * GET /api/public/parrilla/:token/items/:id/final-assets/:assetId
+ * Sirve un archivo final al cliente sin exponer ninguna URL del bucket.
  */
-export const getPublicFinalAsset = async (req, res) => {
-  try {
-    const authorizedItem = await getAuthorizedPublicItem(req.params.token, req.params.id);
-    if (!authorizedItem) return res.status(404).json({ error: 'Archivo final no encontrado' });
-    const item = await getContentItemFinalAsset(req.params.id);
-    if (!item) return res.status(404).json({ error: 'Archivo final no encontrado' });
-
-    const object = await getFromS3Stream(item.finalAssetKey);
-    res.setHeader('Content-Type', item.finalAssetMimeType || object.ContentType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(item.finalAssetName || 'pieza-final')}"`);
-    res.setHeader('Cache-Control', 'private, max-age=300');
-
-    return object.Body.pipe(res);
-  } catch (error) {
-    console.error('[API] Public final asset error:', error);
-    return res.status(500).json({ error: 'Failed to load final asset' });
-  }
-};
-
 export const getPublicFinalAssetById = async (req, res) => {
   try {
     const authorizedItem = await getAuthorizedPublicItem(req.params.token, req.params.id);
@@ -155,9 +129,9 @@ export const getPublicFinalAssetById = async (req, res) => {
     // Un enlace de Drive lo sirve Google, no nosotros: el portal lo muestra con `embedUrl`.
     if (isDriveAsset(asset)) return res.status(409).json({ error: 'Esa pieza final es un enlace de Drive.' });
 
-    const object = await getFromS3Stream(asset.storageKey || asset.finalAssetKey);
-    res.setHeader('Content-Type', asset.mimeType || asset.finalAssetMimeType || object.ContentType || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(asset.name || asset.finalAssetName || 'pieza-final')}"`);
+    const object = await getFromS3Stream(asset.storageKey);
+    res.setHeader('Content-Type', asset.mimeType || object.ContentType || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${encodeURIComponent(asset.name || 'pieza-final')}"`);
     res.setHeader('Cache-Control', 'private, max-age=300');
     return object.Body.pipe(res);
   } catch (error) {

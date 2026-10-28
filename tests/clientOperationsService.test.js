@@ -11,7 +11,7 @@ const member = (id, name, isActive = true) => ({ id, name, avatarUrl: null, isAc
 
 const item = (id, date, status, extra = {}) => ({
   id, status, publishDate: noon(date), format: 'Post', objective: `Pieza ${id}`, copyText: '', captionText: '',
-  finalAssetKey: null, _count: { finalAssets: 0 }, publications: [], ...extra,
+  _count: { finalAssets: 0 }, publications: [], ...extra,
 });
 
 function fixture() {
@@ -26,7 +26,7 @@ function fixture() {
         { id: 'p-sep', year: 2026, month: 9, contentItems: [item('s1', '2026-09-02', 'PUBLICADO'), item('s2', '2026-09-09', 'PUBLICADO'), item('s3', '2026-09-16', 'PUBLICADO'), item('s4', '2026-09-23', 'PUBLICADO')] },
         { id: 'p-oct', year: 2026, month: 10, contentItems: [
           item('o1', '2026-10-01', 'APROBADO', { publications: [{ status: 'SCHEDULED' }] }),
-          item('o2', '2026-10-05', 'BORRADOR', { copyText: 'ESCENA 1', finalAssetKey: 'k' }),
+          item('o2', '2026-10-05', 'BORRADOR', { copyText: 'ESCENA 1', _count: { finalAssets: 1 } }),
           item('o3', '2026-10-08', 'BORRADOR'),
         ] },
       ],

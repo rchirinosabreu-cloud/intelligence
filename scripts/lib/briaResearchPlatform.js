@@ -11,7 +11,7 @@ export const createResearchPlatformReadAdapter = ({ pool }) => ({
   contentPlan: { async findFirst({ where }) {
     const plan = (await pool.query(`SELECT p.id,p.month,p.year,p.status,json_build_object('name',c.name,'slug',c.slug) AS client FROM "ContentPlan" p JOIN "Client" c ON c.id=p."clientId" WHERE p."clientId"=$1 AND p.month=$2 AND p.year=$3 AND p."deletedAt" IS NULL ORDER BY p."updatedAt" DESC LIMIT 1`, [where.clientId, where.month, where.year])).rows[0];
     if (!plan) return null;
-    plan.contentItems = (await pool.query(`SELECT i.id,i.objective,i.format,i."publishDate",i."publishTime",i.status,i."copyText",i."captionText",i."finalAssetKey",i."revisionRequestedAt",json_build_object('finalAssets',(SELECT count(*) FROM "ContentItemFinalAsset" a WHERE a."contentItemId"=i.id)) AS _count,COALESCE((SELECT json_agg(json_build_object('status',s.status)) FROM "SocialPublication" s WHERE s."contentItemId"=i.id),'[]') AS publications FROM "ContentItem" i WHERE i."planId"=$1 AND i."deletedAt" IS NULL ORDER BY i."publishDate",i.id`, [plan.id])).rows;
+    plan.contentItems = (await pool.query(`SELECT i.id,i.objective,i.format,i."publishDate",i."publishTime",i.status,i."copyText",i."captionText",i."revisionRequestedAt",json_build_object('finalAssets',(SELECT count(*) FROM "ContentItemFinalAsset" a WHERE a."contentItemId"=i.id)) AS _count,COALESCE((SELECT json_agg(json_build_object('status',s.status)) FROM "SocialPublication" s WHERE s."contentItemId"=i.id),'[]') AS publications FROM "ContentItem" i WHERE i."planId"=$1 AND i."deletedAt" IS NULL ORDER BY i."publishDate",i.id`, [plan.id])).rows;
     return plan;
   } },
   contentItem: { async findMany({ where, skip, take }) {

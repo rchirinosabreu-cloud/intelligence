@@ -85,7 +85,8 @@ test('the limit lives in one place: the route, the storage and the screen read t
   assert.match(storage, /validateUploadFile\(file, \{ maxBytes \}\)/);
 
   const service = await read('src/services/contentService.js');
-  assert.equal((service.match(/maxBytes: FINAL_ASSET_MAX_BYTES/g) || []).length, 2, 'la pieza suelta y el carrusel');
+  // Una sola subida de pieza final desde que se retiró el archivo único (28 de octubre de 2026).
+  assert.equal((service.match(/maxBytes: FINAL_ASSET_MAX_BYTES/g) || []).length, 1, 'la subida del carrusel');
   assert.match(service, /throw new Error\(fileTooLargeMessage\(oversized\)\)/);
 
   const screen = await read('src/components/modules/ContentPlanDetail.jsx');
