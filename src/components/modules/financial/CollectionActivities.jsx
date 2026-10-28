@@ -4,6 +4,8 @@ import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { COLLECTION_CHANNELS, collectionActivityLine } from '@/lib/collectionActivities';
+import { ChevronDown } from '@/components/ui/icons';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 
 // Gestiones de cobro en Cuentas por cobrar (Rodny, 28 de octubre de 2026: «eso debe quedar guardado en algún lugar,
 // esas elecciones de gestión. Debe haber un registro»). Lo que se registró desde la banda («Ya le escribí») y lo que
@@ -32,7 +34,6 @@ export function useCollectionActivities(enabled) {
 
 export function CollectionActivityPanel({ clientId, items = [], canWrite }) {
     const queryClient = useQueryClient();
-    const [choosing, setChoosing] = useState(false);
     const [showAll, setShowAll] = useState(false);
     const save = useMutation({
         mutationFn: async (channel) => (await axios.post(`${getApiBaseUrl()}/api/financials/collection-activities`, { clientId, channel }, auth())).data,
@@ -40,7 +41,6 @@ export function CollectionActivityPanel({ clientId, items = [], canWrite }) {
             queryClient.invalidateQueries({ queryKey: KEY });
             queryClient.invalidateQueries({ queryKey: ['important-notice'] });
             toast.success('Gestión de cobro registrada');
-            setChoosing(false);
         },
         onError: (error) => {
             console.error('[Cartera] Gestión no guardada:', error.response?.data || error.message);
@@ -52,25 +52,26 @@ export function CollectionActivityPanel({ clientId, items = [], canWrite }) {
         <div data-collection-activities className="rounded-xl border border-zinc-100 p-3 dark:border-white/5">
             <div className="flex flex-wrap items-center justify-between gap-2">
                 <p className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">Gestiones de cobro</p>
-                {canWrite && !choosing && (
-                    <button type="button" data-collection-activity-add onClick={() => setChoosing(true)}
-                        className="min-h-11 rounded-lg px-2 text-xs font-semibold text-primary transition hover:bg-primary/5">
-                        Registrar gestión
-                    </button>
+                {/* Un menú pequeño, como «Recordarme» en la banda (Rodny, 28 de octubre de 2026): la tarjeta no se ensancha. */}
+                {canWrite && (
+                    <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                            <button type="button" data-collection-activity-add disabled={save.isPending}
+                                className="inline-flex min-h-11 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-primary transition hover:bg-primary/5 disabled:opacity-50">
+                                {save.isPending ? 'Guardando…' : 'Registrar gestión'} <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                            </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="min-w-48">
+                            <DropdownMenuLabel className="text-xs font-medium text-zinc-500 dark:text-zinc-400">¿Cómo fue?</DropdownMenuLabel>
+                            {COLLECTION_CHANNELS.map((channel) => (
+                                <DropdownMenuItem key={channel.value} data-collection-channel={channel.value} onSelect={() => save.mutate(channel.value)} className="min-h-11 cursor-pointer text-sm">
+                                    {channel.label}
+                                </DropdownMenuItem>
+                            ))}
+                        </DropdownMenuContent>
+                    </DropdownMenu>
                 )}
             </div>
-            {choosing && (
-                <div className="mt-2 flex flex-wrap items-center gap-2" aria-busy={save.isPending}>
-                    <span className="text-xs text-zinc-500 dark:text-zinc-400">¿Cómo fue?</span>
-                    {COLLECTION_CHANNELS.map((channel) => (
-                        <button key={channel.value} type="button" disabled={save.isPending} data-collection-channel={channel.value} onClick={() => save.mutate(channel.value)}
-                            className="min-h-11 rounded-full border border-zinc-200 px-3 text-xs font-semibold text-zinc-700 transition hover:border-primary/40 hover:text-primary disabled:opacity-50 dark:border-white/10 dark:text-zinc-200">
-                            {channel.label}
-                        </button>
-                    ))}
-                    <button type="button" disabled={save.isPending} onClick={() => setChoosing(false)} className="min-h-11 px-2 text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200">Cancelar</button>
-                </div>
-            )}
             {items.length === 0
                 ? <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Todavía no hay gestiones registradas.</p>
                 : (

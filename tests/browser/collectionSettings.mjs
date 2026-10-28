@@ -36,9 +36,13 @@ test('«Registrar pago» lleva aquí: el cliente muestra sus gestiones de cobro 
   assert.match(await panel.innerText(), /WhatsApp · 27 oct 2026 · Elisa Mestra · desde el aviso/);
   await shot(page, '10-cliente-con-sus-gestiones');
 
+  // Un menú pequeño que se abre desde «Registrar gestión», no una fila de botones en la tarjeta.
   await panel.locator('[data-collection-activity-add]').click();
+  const menu = page.getByRole('menu');
+  await menu.waitFor();
+  assert.deepEqual((await menu.getByRole('menuitem').allInnerTexts()).map((t) => t.trim()), ['WhatsApp', 'Llamada', 'Correo', 'Reunión', 'El cliente respondió']);
   await shot(page, '11-registrar-gestion');
-  await panel.locator('[data-collection-channel="LLAMADA"]').click();
+  await menu.locator('[data-collection-channel="LLAMADA"]').click();
   await page.getByText('Gestión de cobro registrada').waitFor();
   await panel.locator('[data-collection-activity="LLAMADA"]').waitFor();
   await shot(page, '12-gestion-a-mano-registrada');
