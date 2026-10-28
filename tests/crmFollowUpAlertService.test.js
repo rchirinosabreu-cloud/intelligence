@@ -3,9 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { readFollowUpAlertDays, runFollowUpAlerts, saveFollowUpAlertDays } from '../src/services/crmFollowUpAlertService.js';
 import { listLeads } from '../src/services/crmService.js';
+import { followUpRecipients, isCommercialRole } from '../src/lib/crmFollowUpAlerts.js';
 
-// Punto 2 de la solicitud de Elisa: los recordatorios al responsable y la revisión a los 30 días, que les llega
-// también a los administradores (Rodny, 26 de octubre de 2026).
+// Punto 2 de la solicitud de Elisa: los recordatorios y la revisión a los 30 días. Rodny, 28 de octubre de 2026: «la
+// alerta del CRM solo debe aparecerle a Francys o a quien tenga rol textual de Comercial, Relaciones Públicas o Comercial
+// y Relaciones Públicas». Ni los administradores ni los project managers: el seguimiento es del equipo comercial.
 
 const day = (iso) => new Date(`${iso}T15:00:00Z`);
 const lead = (patch = {}) => ({
@@ -32,10 +34,28 @@ const fakeDb = ({ leads = [lead()], settings = null, taken = new Set() } = {}) =
             },
             createMany: async ({ data }) => { created.push(...data.map((item) => ({ ...item, skipped: true }))); return { count: data.length }; }
         },
-        user: { findMany: async () => [{ id: 'u-rodny' }, { id: 'u-elisa' }] }
+        user: { findMany: async () => team }
     };
     return db;
 };
+// El equipo con su rol textual de Equipo: solo Francys es comercial.
+const team = [
+    { id: 'u-francys', name: 'Francys Caballero', teamMember: { role: 'Comercial y Relaciones Públicas' } },
+    { id: 'u-rodny', name: 'Rodny Chirinos', teamMember: { role: 'Project Manager' } },
+    { id: 'u-elisa', name: 'Elisa Mestra', teamMember: { role: 'Coordinadora Administrativa y Contable' } }
+];
+
+test('es comercial quien tiene Comercial o Relaciones Públicas en su rol, con o sin tilde', () => {
+    for (const role of ['Comercial y Relaciones Públicas', 'Comercial', 'relaciones publicas', 'Directora comercial']) assert.equal(isCommercialRole(role), true, role);
+    for (const role of ['Project Manager', 'Director general ', 'Coordinadora Administrativa y Contable', '', null]) assert.equal(isCommercialRole(role), false, String(role));
+});
+
+test('a quién le llega: al responsable si es comercial; si no, a todo el equipo comercial', () => {
+    assert.deepEqual(followUpRecipients('u-francys', ['u-francys', 'u-ana']), ['u-francys']);
+    assert.deepEqual(followUpRecipients('u-elisa', ['u-francys', 'u-ana']), ['u-francys', 'u-ana']);
+    assert.deepEqual(followUpRecipients(null, ['u-francys']), ['u-francys']);
+    assert.deepEqual(followUpRecipients('u-elisa', []), []);
+});
 
 test('el recordatorio le llega al responsable, con quién, cuántos días y qué cotización', async () => {
     const db = fakeDb();
@@ -50,19 +70,29 @@ test('el recordatorio le llega al responsable, con quién, cuántos días y qué
     assert.deepEqual(db.created.map((row) => [row.step, Boolean(row.skipped)]), [[10, false], [5, true]]);
 });
 
-test('la revisión de los 30 días también les llega a los administradores', async () => {
+test('la revisión de los 30 días le llega solo al equipo comercial, no a la dirección', async () => {
     const sent = [];
-    await runFollowUpAlerts(fakeDb(), { now: day('2026-10-31'), notify: async (data) => sent.push(data) });
-    assert.deepEqual(sent.map((item) => [item.userId, item.type]), [
-        ['u-francys', 'CRM_FOLLOW_UP_REVIEW'], ['u-rodny', 'CRM_FOLLOW_UP_REVIEW'], ['u-elisa', 'CRM_FOLLOW_UP_REVIEW']
-    ]);
+    await runFollowUpAlerts(fakeDb(), { now: day('2026-10-31'), notify: async (data) => sent.push(data), info: () => {} });
+    assert.deepEqual(sent.map((item) => [item.userId, item.type]), [['u-francys', 'CRM_FOLLOW_UP_REVIEW']]);
     assert.match(sent[0].message, /revisa si sigue o se cierra/);
 });
 
-test('una oportunidad sin responsable no se queda sin aviso: va a los administradores', async () => {
+test('una oportunidad sin responsable, o con uno que no es comercial, va al equipo comercial', async () => {
     const sent = [];
-    await runFollowUpAlerts(fakeDb({ leads: [lead({ owner: null })] }), { now: day('2026-10-06'), notify: async (data) => sent.push(data) });
-    assert.deepEqual(sent.map((item) => item.userId), ['u-rodny', 'u-elisa']);
+    const leads = [lead({ owner: null }), lead({ id: 'l2', company: 'De Elisa', owner: { userId: 'u-elisa' } })];
+    await runFollowUpAlerts(fakeDb({ leads }), { now: day('2026-10-06'), notify: async (data) => sent.push(data), info: () => {} });
+    assert.deepEqual(sent.map((item) => [item.userId, item.relatedId]), [['u-francys', 'l1'], ['u-francys', 'l2']]);
+});
+
+test('sin nadie con rol comercial la alerta no se manda a otros, y queda dicho en los registros', async () => {
+    const db = fakeDb();
+    db.user.findMany = async () => team.filter((user) => user.id !== 'u-francys');
+    const sent = [];
+    const errors = [];
+    const result = await runFollowUpAlerts(db, { now: day('2026-10-11'), notify: async (data) => sent.push(data), log: (...args) => errors.push(args.join(' ')), info: () => {} });
+    assert.equal(result.sent, 1, 'el paso queda anotado para no repetirlo');
+    assert.deepEqual(sent, []);
+    assert.match(errors.join('\n'), /Nadie del equipo tiene rol comercial/);
 });
 
 test('nada se repite: un paso ya anotado no se vuelve a avisar, aunque el reloj corra dos veces', async () => {
@@ -78,22 +108,22 @@ test('nada se repite: un paso ya anotado no se vuelve a avisar, aunque el reloj 
 });
 
 // El 26 de octubre de 2026, al estrenarse, el primer pase habría mandado 62 avisos: 55 oportunidades llevaban más de
-// 30 días sin respuesta, y la revisión también les llega a los administradores. Más de 3 del mismo tipo para la misma
-// persona van en un solo aviso que los resume y abre el CRM filtrado en ellos.
+// 30 días sin respuesta. Más de 3 del mismo tipo para la misma persona van en un solo aviso que los resume y abre el CRM
+// filtrado en ellos.
 test('muchos avisos del mismo tipo para la misma persona salen en uno solo que los resume', async () => {
     const stale = Array.from({ length: 5 }, (_, index) => lead({ id: `old-${index}`, company: `Viejo ${index}`, proposalSentAt: day('2026-06-01') }));
     const fresh = [lead({ id: 'f1', proposalSentAt: day('2026-10-15') }), lead({ id: 'f2', company: 'Nautical Eventos', proposalSentAt: day('2026-10-15') })];
     const db = fakeDb({ leads: [...stale, ...fresh] });
     const sent = [];
-    const result = await runFollowUpAlerts(db, { now: day('2026-10-26'), notify: async (data) => sent.push(data) });
+    const result = await runFollowUpAlerts(db, { now: day('2026-10-26'), notify: async (data) => sent.push(data), info: () => {} });
     assert.equal(result.sent, 7, 'las siete quedan anotadas: ninguna se vuelve a avisar');
     const francys = sent.filter((item) => item.userId === 'u-francys');
     assert.deepEqual(francys.map((item) => item.type), ['CRM_FOLLOW_UP_REVIEW', 'CRM_FOLLOW_UP_REMINDER', 'CRM_FOLLOW_UP_REMINDER']);
     assert.equal(francys[0].message, '5 oportunidades llevan 30 días o más sin respuesta: revisa cuáles siguen y cuáles se cierran.');
     assert.equal(francys[0].url, '/crm?tab=oportunidades&silence=REVISION');
     assert.match(francys[1].message, /Café Altura lleva 11 días/);
-    // Los administradores reciben el resumen de la revisión, no cinco avisos.
-    assert.deepEqual(sent.filter((item) => item.userId === 'u-rodny').map((item) => item.type), ['CRM_FOLLOW_UP_REVIEW']);
+    // A la dirección no le llega nada: el seguimiento es del equipo comercial.
+    assert.deepEqual(sent.filter((item) => item.userId !== 'u-francys'), []);
 });
 
 test('el CRM abre con el filtro que trae el enlace del resumen', () => {

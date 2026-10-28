@@ -79,6 +79,22 @@ export const markFollowUpAlertSent = (previous, alert) => {
     return { since: alert.since.toISOString(), steps: [...new Set([...kept, ...alert.steps])].sort((a, b) => a - b) };
 };
 
+// A quién le llegan (Rodny, 28 de octubre de 2026: «la alerta del CRM solo debe aparecerle a Francys o a quien tenga rol
+// textual de Comercial, Relaciones Públicas o Comercial y Relaciones Públicas»). El rol textual es el de Equipo
+// (`TeamMember.role`), no el de la cuenta: ni la dirección ni los project managers reciben alertas comerciales.
+const plainText = (value) => String(value || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+/** ¿El rol de Equipo es comercial? Comercial o Relaciones Públicas, con o sin tilde. */
+export const isCommercialRole = (role) => {
+    const text = plainText(role);
+    return /\bcomercial\b/.test(text) || text.includes('relaciones publicas');
+};
+
+/** El responsable si es comercial; si no lo es, o no hay, todo el equipo comercial. Sin equipo comercial, nadie. */
+export const followUpRecipients = (ownerUserId, commercialUserIds = []) => (
+    ownerUserId && commercialUserIds.includes(ownerUserId) ? [ownerUserId] : [...commercialUserIds]
+);
+
 // Más de tres avisos del mismo tipo para la misma persona en un pase salen en uno solo que los resume (al estrenarse,
 // el 26 de octubre de 2026, el primer pase habría mandado 62 avisos de golpe).
 export const FOLLOW_UP_DIGEST_THRESHOLD = 3;

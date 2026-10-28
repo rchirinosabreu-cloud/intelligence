@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {
-    closeReviewNotice, currentImportantNotice, followUpNotice, queueImportantNotice, snoozeNotice
+    closeReviewNotice, currentImportantNotice, followUpNotice, queueImportantNotice, reassignCrmNotices, snoozeNotice
 } from '../src/services/importantNoticeService.js';
 import { runFollowUpAlerts } from '../src/services/crmFollowUpAlertService.js';
 
@@ -128,6 +128,54 @@ test('un aviso nuevo de la misma oportunidad reemplaza al que seguía abierto', 
     assert.deepEqual(db.rows.map((row) => [row.id, row.resolution]), [['n1', 'REEMPLAZADO'], ['n2', null]]);
 });
 
+// Rodny, 28 de octubre de 2026: «la alerta del CRM solo debe aparecerle a Francys o a quien tenga rol textual de
+// Comercial, Relaciones Públicas o Comercial y Relaciones Públicas». La banda de quien no es comercial no muestra avisos
+// del CRM, y lo que la dirección tenía abierto pasa al equipo comercial en el siguiente pase.
+const commercialTeam = [
+    { id: 'u-francys', name: 'Francys Caballero', teamMember: { role: 'Comercial y Relaciones Públicas' } },
+    { id: 'u-rodny', name: 'Rodny Chirinos', teamMember: { role: 'Project Manager' } }
+];
+
+test('a quien no es comercial la banda no le muestra avisos del CRM', async () => {
+    const db = fakeDb({ notices: [notice({ userId: 'u-rodny' })], leads: { l1: waitingLead } });
+    db.teamMember = { findFirst: async ({ where }) => ({ role: commercialTeam.find((user) => user.id === where.userId)?.teamMember.role }) };
+    assert.deepEqual(await currentImportantNotice(db, 'u-rodny', NOW), { notice: null, nextAt: null });
+    assert.equal(db.rows[0].resolvedAt, null, 'no lo cierra: lo pasa el reloj al equipo comercial');
+    db.rows[0].userId = 'u-francys';
+    assert.equal((await currentImportantNotice(db, 'u-francys', NOW)).notice.id, 'n1');
+});
+
+test('lo que la dirección tenía abierto pasa al equipo comercial, sin repetirlo y diciendo por qué', async () => {
+    const leads = {
+        l1: { ...waitingLead, company: 'ARISTEA', owner: null },
+        l2: { ...waitingLead, company: 'Café Altura', owner: { userId: 'u-francys' } }
+    };
+    const db = fakeDb({
+        notices: [
+            notice({ id: 'n1', userId: 'u-rodny', subjectId: 'l1', snoozedUntil: at('2026-10-26T16:00:00Z') }),
+            notice({ id: 'n2', userId: 'u-rodny', subjectId: 'l2' }),
+            notice({ id: 'n3', userId: 'u-francys', subjectId: 'l2' })
+        ],
+        leads
+    });
+    const traces = [];
+    db.operationalTraceEvent = { create: async ({ data }) => { traces.push(data); return data; } };
+    const moved = await reassignCrmNotices(db, { commercialIds: ['u-francys'], now: NOW, log: () => {} });
+    assert.equal(moved, 2);
+    assert.deepEqual(db.rows.filter((row) => row.userId === 'u-rodny').map((row) => [row.id, row.resolution]), [['n1', 'REASIGNADO'], ['n2', 'REASIGNADO']]);
+    // ARISTEA le llega a Francys con su texto y su pausa; Café Altura ya lo tenía, no se duplica.
+    const francys = db.rows.filter((row) => row.userId === 'u-francys' && !row.resolvedAt);
+    assert.deepEqual(francys.map((row) => [row.subjectId, row.message]), [['l2', notice().message], ['l1', notice().message]]);
+    assert.equal(francys[1].snoozedUntil.toISOString(), '2026-10-26T16:00:00.000Z');
+    assert.deepEqual(traces.map((row) => [row.eventType, row.subjectUserId, row.metadata.reason]), [
+        ['IMPORTANT_NOTICE_CLEARED', 'u-rodny', 'REASIGNADO'], ['IMPORTANT_NOTICE_CLEARED', 'u-rodny', 'REASIGNADO']
+    ]);
+    // Sin nadie comercial no se mueve nada: no se pierde el aviso.
+    const lonely = fakeDb({ notices: [notice({ userId: 'u-rodny' })], leads });
+    assert.equal(await reassignCrmNotices(lonely, { commercialIds: [], now: NOW, log: () => {} }), 0);
+    assert.equal(lonely.rows[0].resolvedAt, null);
+});
+
 test('el reloj de alertas deja el aviso en la banda del responsable, ligado a su notificación de la campana', async () => {
     const day = (iso) => new Date(`${iso}T15:00:00Z`);
     const lead = (patch = {}) => ({
@@ -139,13 +187,14 @@ test('el reloj de alertas deja el aviso en la banda del responsable, ligado a su
         crmSetting: { findUnique: async () => null },
         crmLead: { findMany: async () => [lead(), lead({ id: 'l2', company: 'Sin dueño', owner: null })] },
         crmFollowUpAlert: { create: async ({ data }) => data, createMany: async () => ({ count: 0 }) },
-        user: { findMany: async () => [{ id: 'u-rodny' }] }
+        user: { findMany: async () => commercialTeam }
     });
     let bell = 0;
     await runFollowUpAlerts(db, { now: day('2026-10-11'), notify: async () => ({ id: `bell-${++bell}` }), info: () => {} });
+    // La oportunidad sin responsable también es del equipo comercial, nunca de la dirección.
     assert.deepEqual(db.rows.map((row) => [row.userId, row.subjectId, row.kind, row.level, row.notificationId, row.message]), [
         ['u-francys', 'l1', 'CRM_FOLLOW_UP', 'SEGUIMIENTO', 'bell-1', 'Café Altura lleva 10 días sin responder la COT-0042'],
-        ['u-rodny', 'l2', 'CRM_FOLLOW_UP', 'SEGUIMIENTO', 'bell-2', 'Sin dueño lleva 10 días sin responder la COT-0042']
+        ['u-francys', 'l2', 'CRM_FOLLOW_UP', 'SEGUIMIENTO', 'bell-2', 'Sin dueño lleva 10 días sin responder la COT-0042']
     ]);
 });
 

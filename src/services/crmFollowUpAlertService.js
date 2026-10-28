@@ -1,6 +1,7 @@
 // Alertas comerciales (punto 2 de la solicitud de Elisa; Rodny, 26 de octubre de 2026). Un reloj en horario hábil mira
-// cada oportunidad que espera respuesta y avisa al responsable en los días que toca; la revisión del final les llega
-// también a los administradores. Lo que ya se avisó queda en `CrmFollowUpAlert`, una fila por oportunidad, ciclo y día:
+// cada oportunidad que espera respuesta y avisa en los días que toca, solo al equipo comercial (Rodny, 28 de octubre de
+// 2026): el responsable si es comercial y, si no, todos los comerciales; nunca la dirección ni los project managers.
+// Lo que ya se avisó queda en `CrmFollowUpAlert`, una fila por oportunidad, ciclo y día:
 // nada se repite aunque el reloj corra dos veces, y queda el historial de lo avisado.
 import prisma from '../lib/prisma.js';
 import { createNotification } from './notificationService.js';
@@ -8,11 +9,11 @@ import { CRM_ACTIVITY_TYPES } from '../lib/crmRules.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
 import {
     DEFAULT_FOLLOW_UP_ALERT_DAYS, FOLLOW_UP_ALERT_STAGES, FOLLOW_UP_DIGEST_THRESHOLD, dueFollowUpAlert, followUpAlertMessage,
-    followUpDigest, normalizeFollowUpAlertDays
+    followUpDigest, followUpRecipients, isCommercialRole, normalizeFollowUpAlertDays
 } from '../lib/crmFollowUpAlerts.js';
 import { followUpNoticeText } from '../lib/importantNotices.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription } from '../lib/importantNoticeTrace.js';
-import { queueImportantNotice } from './importantNoticeService.js';
+import { queueImportantNotice, reassignCrmNotices } from './importantNoticeService.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
 
 export const FOLLOW_UP_REMINDER_TYPE = 'CRM_FOLLOW_UP_REMINDER';
@@ -41,10 +42,11 @@ export const saveFollowUpAlertDays = async (db, input, actor) => {
     return value;
 };
 
-const activeAdminIds = async (db) => (await db.user.findMany({
-    where: { role: 'ADMIN', isActive: true, teamMember: { is: { isActive: true } } },
-    select: { id: true }
-})).map((user) => user.id);
+// Las cuentas activas cuyo rol de Equipo es comercial: las únicas que reciben alertas comerciales.
+const activeCommercialIds = async (db) => (await db.user.findMany({
+    where: { isActive: true, teamMember: { is: { isActive: true } } },
+    select: { id: true, teamMember: { select: { role: true } } }
+})).filter((user) => isCommercialRole(user.teamMember?.role)).map((user) => user.id);
 
 // Lo ya avisado del ciclo más reciente, en la forma que lee la regla.
 const sentInLatestCycle = (log = []) => {
@@ -91,7 +93,13 @@ export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify 
             followUpAlertLog: { select: { cycleStart: true, step: true } }
         }
     });
-    let admins = null;
+    const commercial = await activeCommercialIds(db);
+    // Lo que la dirección tenía abierto en la banda de antes de esta regla pasa al equipo comercial.
+    if (typeof db.importantNotice?.findMany === 'function') {
+        await reassignCrmNotices(db, { commercialIds: commercial, now, log: info })
+            .catch((error) => log('[CRM] Avisos de la banda no reasignados:', error?.message || error));
+    }
+    let missingCommercial = false;
     let sent = 0;
     // Lo que le toca a cada persona en este pase, por tipo: se reparte al final para poder resumir.
     const outbox = new Map();
@@ -116,19 +124,16 @@ export const runFollowUpAlerts = async (db = prisma, { now = new Date(), notify 
             });
         }
         sent += 1;
-        const ownerId = lead.owner?.userId || null;
-        const needsAdmins = alert.kind === 'REVIEW' || !ownerId;
-        if (needsAdmins && admins === null) admins = await activeAdminIds(db);
-        const recipients = [...new Set([ownerId, ...(needsAdmins ? admins : [])].filter(Boolean))];
+        // Solo el equipo comercial: el responsable si lo es; si no, todos los comerciales. Campana y banda, igual.
+        const recipients = followUpRecipients(lead.owner?.userId || null, commercial);
+        if (!recipients.length) { missingCommercial = true; continue; }
         const code = lead.quotations?.[0] ? `COT-${String(lead.quotations[0].consecutive).padStart(4, '0')}` : null;
         const message = followUpAlertMessage(lead, alert, code);
         const notice = followUpNoticeText(lead, alert, code);
-        // La banda es de quien hace el seguimiento: el responsable, o los administradores si no hay responsable. A los
-        // administradores la revisión de una oportunidad ajena les llega solo a la campana.
-        const bandUserIds = new Set(ownerId ? [ownerId] : admins);
         const who = lead.company || lead.contactName || null;
-        for (const userId of recipients) queue(userId, alert.kind, { leadId: lead.id, who, message, notice: bandUserIds.has(userId) ? notice : null });
+        for (const userId of recipients) queue(userId, alert.kind, { leadId: lead.id, who, message, notice });
     }
+    if (missingCommercial) log('[CRM] Nadie del equipo tiene rol comercial: las alertas comerciales de este pase quedaron anotadas sin enviarse.');
     const deliver = async (data) => {
         try {
             return await notify(data);
