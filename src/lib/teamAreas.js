@@ -4,10 +4,11 @@
 // (quién recibe las alertas comerciales, las de cartera, …). Una persona puede tener varias.
 // Mientras nadie la elija en Equipo, se deduce del cargo escrito, así que desplegar esto no exige
 // tocar datos de producción.
+// `receives` dice, en la ventana de Equipo, qué avisos trae hoy cada área; las que no traen ninguno todavía no lo dicen.
 export const TEAM_AREAS = [
-    { key: 'DIRECCION', label: 'Dirección' },
-    { key: 'ADMINISTRATIVA', label: 'Administrativa y contable' },
-    { key: 'COMERCIAL', label: 'Comercial y relaciones públicas' },
+    { key: 'DIRECCION', label: 'Dirección', receives: 'Cartera vencida (campana)' },
+    { key: 'ADMINISTRATIVA', label: 'Administrativa y contable', receives: 'Cartera vencida (banda)' },
+    { key: 'COMERCIAL', label: 'Comercial y relaciones públicas', receives: 'Alertas del CRM' },
     { key: 'PROJECT_MANAGEMENT', label: 'Project management' },
     { key: 'ESTRATEGIA', label: 'Estrategia y planeación' },
     { key: 'COMMUNITY', label: 'Community management' },

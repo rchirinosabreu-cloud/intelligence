@@ -274,7 +274,7 @@ export default function Team() {
 
       {/* Modal - Shadcn Dialog */}
       <Dialog open={isModalOpen} onOpenChange={value => { if (!saving) setIsModalOpen(value); }}>
-        <DialogContent className="bg-white dark:bg-zinc-900 rounded-2xl max-w-md p-6 border border-zinc-200 dark:border-zinc-800">
+        <DialogContent className="bg-white dark:bg-zinc-900 rounded-2xl w-[calc(100vw-2rem)] max-w-4xl p-6 border border-zinc-200 dark:border-zinc-800">
           <DialogHeader className="mb-4">
             <DialogTitle className="text-lg font-bold text-zinc-900 dark:text-white">
               {editingMember ? 'Editar miembro' : 'Añadir miembro'}
@@ -286,76 +286,52 @@ export default function Team() {
 
           <form onSubmit={handleSave} className="space-y-4">
             {saveError && <p role="alert" className="text-sm leading-6 text-destructive">{saveError}</p>}
-            <div>
-              <label htmlFor="team-name" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Nombre completo</label>
-              <input
-                id="team-name"
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="team-role" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Cargo</label>
-              <input
-                id="team-role"
-                type="text"
-                value={role}
-                onChange={(e) => setRole(e.target.value)}
-                placeholder="Ej. Director general, Community Manager"
-                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
-                required
-              />
+            {/* Ventana ancha (Rodny, 28 de octubre de 2026: «quedó muy alto … menos alto y más ancho»): los datos en
+                dos columnas, el área en tres y los módulos en cuatro. */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <label htmlFor="team-name" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Nombre completo</label>
+                <input id="team-name" type="text" value={name} onChange={(e) => setName(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white" required />
+              </div>
+              <div>
+                <label htmlFor="team-role" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Cargo</label>
+                <input id="team-role" type="text" value={role} onChange={(e) => setRole(e.target.value)} placeholder="Ej. Director general, Community Manager" className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white" required />
+              </div>
+              <div>
+                <label htmlFor="team-email" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Correo electrónico (opcional)</label>
+                <input id="team-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white" />
+              </div>
+              <div>
+                <label htmlFor="team-avatar-url" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">URL de avatar (opcional)</label>
+                <input id="team-avatar-url" type="text" value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} placeholder="https://... o ruta relativa /api/..." className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white" />
+              </div>
             </div>
 
             <fieldset>
               <legend className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Área</legend>
               <p className="mb-2 text-xs text-zinc-500 dark:text-zinc-400">Define qué avisos recibe. Puede ser más de una.</p>
-              <div className="grid grid-cols-2 gap-2">
-                {TEAM_AREAS.map(({ key, label }) => (
-                  <label key={key} data-team-area={key} className="flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-2 transition-colors hover:bg-zinc-100/60 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/60">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                {TEAM_AREAS.map(({ key, label, receives }) => (
+                  <label key={key} data-team-area={key} className="flex min-h-11 cursor-pointer select-none items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2.5 py-1.5 transition-colors hover:bg-zinc-100/60 dark:border-zinc-800 dark:bg-zinc-900 dark:hover:bg-zinc-800/60">
                     <input
                       type="checkbox"
                       checked={areas.includes(key)}
                       onChange={(e) => setAreas((prev) => e.target.checked ? [...prev, key] : prev.filter((area) => area !== key))}
-                      className="h-4 w-4 cursor-pointer rounded text-primary focus:ring-primary"
+                      className="h-4 w-4 shrink-0 cursor-pointer rounded text-primary focus:ring-primary"
                     />
-                    <span className="text-xs text-zinc-700 dark:text-zinc-300">{label}</span>
+                    <span className="min-w-0 leading-tight">
+                      <span className="block text-xs text-zinc-700 dark:text-zinc-300">{label}</span>
+                      {receives && <span className="block text-[11px] text-zinc-500 dark:text-zinc-400">{receives}</span>}
+                    </span>
                   </label>
                 ))}
               </div>
             </fieldset>
 
-            <div>
-              <label htmlFor="team-email" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Correo electrónico (opcional)</label>
-              <input
-                id="team-email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
-              />
-            </div>
-
-            <div>
-              <label htmlFor="team-avatar-url" className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">URL de avatar (opcional)</label>
-              <input
-                id="team-avatar-url"
-                type="text"
-                value={avatarUrl}
-                onChange={(e) => setAvatarUrl(e.target.value)}
-                placeholder="https://... o ruta relativa /api/..."
-                className="w-full bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50 text-zinc-900 dark:text-white"
-              />
-            </div>
-
             {/* System Role & Permissions managed by Admins */}
             {email && email.trim() !== '' && (
               <div className="space-y-4 p-4 bg-zinc-50 dark:bg-zinc-950 border border-zinc-200 dark:border-zinc-800 rounded-2xl">
-                <div>
+                <div className="md:max-w-sm">
                   <label htmlFor="team-system-role" className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-1.5">Rol de Permisos del Sistema</label>
                   <Select
                     id="team-system-role"
@@ -372,7 +348,7 @@ export default function Team() {
 
                 <div>
                   <label className="block text-xs font-bold uppercase tracking-wider text-zinc-500 mb-2">Permisos por Módulo</label>
-                  <div className="grid grid-cols-2 gap-2">
+                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
                     {PLATFORM_MODULES.map(({ key: module, label }) => {
                       return (
                         <label key={module} className="flex items-center gap-2 p-2 bg-white dark:bg-zinc-900 border border-zinc-150 dark:border-zinc-800/60 rounded-xl cursor-pointer hover:bg-zinc-100/50 transition-colors select-none">

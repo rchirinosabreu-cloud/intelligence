@@ -32,8 +32,8 @@ test('el área deducida del cargo viene marcada y se guarda lo que se marque', a
 
     assert.equal(await dialog.getByLabel('Cargo').inputValue(), 'Diseñadora');
     assert.equal(await dialog.getByLabel('Diseño gráfico', { exact: true }).isChecked(), true, 'deducida del cargo');
-    assert.equal(await dialog.getByLabel('Dirección', { exact: true }).isChecked(), false);
-    await dialog.getByLabel('Dirección', { exact: true }).check();
+    assert.equal(await dialog.locator('[data-team-area="DIRECCION"] input').isChecked(), false);
+    await dialog.locator('[data-team-area="DIRECCION"] input').check();
     await dialog.screenshot({ path: `${OUT}/01-areas-claro.png` });
 
     await dialog.getByRole('button', { name: 'Guardar', exact: true }).click();
@@ -44,7 +44,7 @@ test('el área deducida del cargo viene marcada y se guarda lo que se marque', a
     await page.getByTitle('Editar').first().click();
     const reopened = page.getByRole('dialog', { name: 'Editar miembro' });
     await reopened.waitFor();
-    assert.equal(await reopened.getByLabel('Dirección', { exact: true }).isChecked(), true, 'al volver a abrir');
+    assert.equal(await reopened.locator('[data-team-area="DIRECCION"] input').isChecked(), true, 'al volver a abrir');
     await page.close();
 });
 
