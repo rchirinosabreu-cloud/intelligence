@@ -1,7 +1,7 @@
 import Select from '@/components/ui/Select';
 import TeamAvatar from "../../components/ui/TeamAvatar";
 import React, { useState, useEffect } from 'react';
-import { Plus, MoreVertical, Edit2, UserX, UserCheck, Eye, Users } from '@/components/ui/icons';
+import { Plus, MoreVertical, Edit2, UserX, UserCheck, Eye, Users, ChevronDown } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
 import { getApiBaseUrl } from '../../lib/apiBaseUrl';
@@ -26,6 +26,7 @@ export default function Team() {
   const [pendingAccessMember, setPendingAccessMember] = useState(null);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
+  const [showInactive, setShowInactive] = useState(false);
 
   // Modal Form State
   const [name, setName] = useState('');
@@ -171,6 +172,79 @@ export default function Team() {
     }
   };
 
+  // Los inactivos van aparte, plegados (Rodny, 28 de octubre de 2026: «que no se vean ahí mezclados»).
+  const activeTeam = team.filter((member) => member.isActive);
+  const inactiveTeam = team.filter((member) => !member.isActive);
+  const memberCard = (member) => (
+    <div
+      key={member.id}
+      className={cn(
+        "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-2xl p-6 relative group transition-all",
+        member.isActive ? "" : "border-destructive/30 opacity-60 grayscale"
+      )}
+    >
+      {/* Dropdown Menu Toggle (Hover Actions for now to keep it simple without full Radix Dropdown) */}
+      {isAdmin && (
+        <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-2">
+          {member.userId && (
+            <button
+              onClick={() => navigate(`/perfil/${member.userId}`)}
+              className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
+              title="Ver Perfil y Desempeño"
+            >
+              <Eye size={16} />
+            </button>
+          )}
+          <button
+            onClick={() => handleOpenModal(member)}
+            className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
+            title="Editar"
+          >
+            <Edit2 size={16} />
+          </button>
+          <button
+            onClick={() => handleToggleActive(member)}
+            className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400"
+            title={member.isActive ? "Desactivar" : "Reactivar"}
+          >
+            {member.isActive ? <UserX size={16} className="text-destructive hover:text-destructive/80" /> : <UserCheck size={16} className="text-status-positive hover:text-status-positive/80" />}
+          </button>
+        </div>
+      )}
+
+      <div className="flex items-center space-x-4">
+        <div
+          className={cn("cursor-pointer transition-transform hover:scale-105", !member.userId && "cursor-default hover:scale-100")}
+          onClick={() => member.userId && navigate(`/perfil/${member.userId}`)}
+        >
+          <TeamAvatar member={member} className="w-16 h-16 text-xl [&>span]:text-lg" ring />
+        </div>
+        <div>
+          <h3
+            className={cn("text-lg font-semibold text-slate-900 dark:text-slate-50", member.userId && "cursor-pointer hover:text-primary transition-colors")}
+            onClick={() => member.userId && navigate(`/perfil/${member.userId}`)}
+          >
+            {member.name}
+          </h3>
+          <span className="text-sm px-2 py-0.5 bg-primary/10 text-primary rounded-full inline-block mt-1">
+            {member.role}
+          </span>
+          {!member.isActive && (
+            <span className="text-xs text-destructive block mt-2 font-medium uppercase tracking-wider">
+              Inactivo
+            </span>
+          )}
+        </div>
+      </div>
+      {member.email && (
+        <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
+          <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{member.email}</p>
+        </div>
+      )}
+      {isAdmin && member.isActive && member.user?.isActive && member.user?.mustChangePassword && member.user?.passwordChangedAt === null && <Button variant="link" size="lg" className="mt-3 px-0" onClick={() => { setSaveError(''); setPendingAccessMember(member); }}>Preparar acceso inicial</Button>}
+    </div>
+  );
+
   return (
     <div className="w-full max-w-7xl mx-auto animate-fade-in font-sans">
       <PageHeader
@@ -195,81 +269,24 @@ export default function Team() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {team.map((member) => (
-            <div
-              key={member.id}
-              className={cn(
-                "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-sm rounded-2xl p-6 relative group transition-all",
-                member.isActive ? "" : "border-destructive/30 opacity-60 grayscale"
-              )}
-            >
-              {/* Dropdown Menu Toggle (Hover Actions for now to keep it simple without full Radix Dropdown) */}
-              {isAdmin && (
-                <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-opacity flex space-x-2">
-                  {member.userId && (
-                    <button
-                      onClick={() => navigate(`/perfil/${member.userId}`)}
-                      className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
-                      title="Ver Perfil y Desempeño"
-                    >
-                      <Eye size={16} />
-                    </button>
-                  )}
-                  <button
-                    onClick={() => handleOpenModal(member)}
-                    className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-primary dark:hover:bg-primary hover:text-white transition-colors text-slate-500 dark:text-slate-400"
-                    title="Editar"
-                  >
-                    <Edit2 size={16} />
-                  </button>
-                  <button
-                    onClick={() => handleToggleActive(member)}
-                    className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors text-slate-500 dark:text-slate-400"
-                    title={member.isActive ? "Desactivar" : "Reactivar"}
-                  >
-                    {member.isActive ? <UserX size={16} className="text-destructive hover:text-destructive/80" /> : <UserCheck size={16} className="text-status-positive hover:text-status-positive/80" />}
-                  </button>
-                </div>
-              )}
-
-              <div className="flex items-center space-x-4">
-                <div
-                  className={cn("cursor-pointer transition-transform hover:scale-105", !member.userId && "cursor-default hover:scale-100")}
-                  onClick={() => member.userId && navigate(`/perfil/${member.userId}`)}
-                >
-                  <TeamAvatar member={member} className="w-16 h-16 text-xl [&>span]:text-lg" ring />
-                </div>
-                <div>
-                  <h3
-                    className={cn("text-lg font-semibold text-slate-900 dark:text-slate-50", member.userId && "cursor-pointer hover:text-primary transition-colors")}
-                    onClick={() => member.userId && navigate(`/perfil/${member.userId}`)}
-                  >
-                    {member.name}
-                  </h3>
-                  <span className="text-sm px-2 py-0.5 bg-primary/10 text-primary rounded-full inline-block mt-1">
-                    {member.role}
-                  </span>
-                  {!member.isActive && (
-                    <span className="text-xs text-destructive block mt-2 font-medium uppercase tracking-wider">
-                      Inactivo
-                    </span>
-                  )}
-                </div>
-              </div>
-              {member.email && (
-                <div className="mt-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-                  <p className="text-sm text-slate-500 dark:text-slate-400 truncate">{member.email}</p>
-                </div>
-              )}
-              {isAdmin && member.isActive && member.user?.isActive && member.user?.mustChangePassword && member.user?.passwordChangedAt === null && <Button variant="link" size="lg" className="mt-3 px-0" onClick={() => { setSaveError(''); setPendingAccessMember(member); }}>Preparar acceso inicial</Button>}
-            </div>
-          ))}
-          {team.length === 0 && (
+          {activeTeam.map(memberCard)}
+          {activeTeam.length === 0 && (
             <div className="col-span-full text-center py-12 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 border-dashed shadow-sm">
-              <p className="text-zinc-500 dark:text-slate-400">No hay miembros del equipo registrados.</p>
+              <p className="text-zinc-500 dark:text-slate-400">No hay miembros activos en el equipo.</p>
             </div>
           )}
         </div>
+      )}
+
+      {!loading && inactiveTeam.length > 0 && (
+        <section className="mt-8">
+          <button type="button" data-team-inactive-toggle aria-expanded={showInactive} aria-controls="team-inactive" onClick={() => setShowInactive((open) => !open)}
+            className="flex min-h-11 items-center gap-2 text-sm font-semibold text-slate-600 transition-colors hover:text-slate-900 dark:text-slate-300 dark:hover:text-white">
+            <ChevronDown className={cn('h-4 w-4 transition-transform', showInactive && 'rotate-180')} aria-hidden="true" />
+            Miembros inactivos ({inactiveTeam.length})
+          </button>
+          {showInactive && <div id="team-inactive" className="mt-4 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">{inactiveTeam.map(memberCard)}</div>}
+        </section>
       )}
 
       {/* Modal - Shadcn Dialog */}

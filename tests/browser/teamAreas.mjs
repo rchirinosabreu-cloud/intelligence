@@ -48,6 +48,24 @@ test('el área deducida del cargo viene marcada y se guarda lo que se marque', a
     await page.close();
 });
 
+test('los inactivos van plegados aparte, no mezclados con el equipo', async () => {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    page.setDefaultTimeout(10000);
+    page.setDefaultNavigationTimeout(60000);
+    await page.goto(`${preview.origin}/tests/fixtures/team-access.html?modules`);
+    await page.getByText('Editora de prueba').waitFor();
+    assert.equal(await page.getByText('Persona inactiva').count(), 0, 'plegados al entrar');
+    const toggle = page.locator('[data-team-inactive-toggle]');
+    assert.equal((await toggle.innerText()).trim(), 'Miembros inactivos (1)');
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'false');
+    await page.screenshot({ path: `${OUT}/03-inactivos-plegados.png` });
+    await toggle.click();
+    await page.getByText('Persona inactiva').waitFor();
+    assert.equal(await toggle.getAttribute('aria-expanded'), 'true');
+    await page.screenshot({ path: `${OUT}/04-inactivos-abiertos.png` });
+    await page.close();
+});
+
 test('se ve bien en el celular en oscuro', async () => {
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, reducedMotion: 'reduce' });
     page.setDefaultTimeout(10000);
