@@ -40,6 +40,7 @@ const eventConfig = {
   PLATFORM_MUTATION: { label: 'Acción registrada', icon: Activity, tone: TONES.cyan },
   // Alertas comerciales y la banda de avisos importantes: salmón lo que la plataforma avisa, verde lo que la persona decide.
   CRM_FOLLOW_UP_ALERTS_SENT: { label: 'Alertas comerciales', icon: Bell, tone: TONES.coral },
+  COLLECTION_ALERTS_SENT: { label: 'Avisos de cartera', icon: Bell, tone: TONES.coral },
   IMPORTANT_NOTICE_SHOWN: { label: 'Aviso en la banda', icon: Eye, tone: TONES.coral },
   IMPORTANT_NOTICE_FOLLOWED_UP: { label: 'Ya hice seguimiento', icon: CheckCircle2, tone: TONES.green },
   IMPORTANT_NOTICE_SNOOZED: { label: 'Recordarme', icon: Clock, tone: TONES.yellow },

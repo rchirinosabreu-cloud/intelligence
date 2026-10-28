@@ -7,6 +7,7 @@ import axios from 'axios';
 import { AuthProvider } from '../../src/context/AuthContext';
 import FinancialDashboard from '../../src/components/modules/FinancialDashboard';
 import { buildClientProfitability } from '../../src/lib/clientProfitability.js';
+import { DEFAULT_COLLECTION_SETTINGS, normalizeCollectionSettings } from '../../src/lib/receivableCollections.js';
 import '../../src/index.css';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -152,6 +153,13 @@ axios.defaults.adapter = async config => {
       sessions: [...work('c-aristea', 36), ...work('c-endova', 34), ...work('c-wine', 40), ...work('c-nuva', 8), ...work('c-pablo', 14), ...work('c-brain', 20), ...work(null, 22)],
       closedTasks: [...Array(12).fill({ clientId: 'c-aristea', measuredMs: 3_600_000 }), ...Array(3).fill({ clientId: 'c-endova', measuredMs: 0 }), { clientId: 'c-endova', measuredMs: 3_600_000 }, ...Array(10).fill({ clientId: 'c-wine', measuredMs: 3_600_000 })]
     });
+  }
+  // Los plazos de los avisos de cartera (28 de octubre de 2026), con la misma regla del servidor.
+  else if (path === '/api/financials/collection-alerts' && config.method === 'get') data = window.__collectionSettings || DEFAULT_COLLECTION_SETTINGS;
+  else if (path === '/api/financials/collection-alerts' && config.method === 'put') {
+    const { value, problem } = normalizeCollectionSettings(body);
+    if (problem) throw Object.assign(new Error(problem), { response: { status: 400, data: { error: problem } } });
+    data = window.__collectionSettings = value;
   }
   else if (path === '/api/financials/clients' && config.method === 'get') data = { clients: directoryClients };
   else if (path === '/api/financials/clients' && config.method === 'post') {

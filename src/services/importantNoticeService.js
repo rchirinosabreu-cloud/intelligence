@@ -14,6 +14,7 @@ import { hasModulePermission } from '../config/security.js';
 import { CRM_ACTIVITY_TYPES } from '../lib/crmRules.js';
 import { FOLLOW_UP_ALERT_STAGES, followUpRecipients } from '../lib/crmFollowUpAlerts.js';
 import { userHasArea } from './teamAreaService.js';
+import { collectionStillDue } from './collectionState.js';
 import { isFollowUpChannel, isReviewOutcome, pickCurrentNotice, snoozeUntil } from '../lib/importantNotices.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription, noticeTraceMetadata } from '../lib/importantNoticeTrace.js';
 
@@ -30,9 +31,14 @@ const serialize = (notice) => ({
 });
 
 const leadName = (lead) => lead?.company || lead?.contactName || null;
-const readLeadName = async (db, id) => {
+// Los avisos de cartera (28 de octubre de 2026) son de un cliente de fee mensual o de una cuenta de un servicio puntual.
+const isCollectionNotice = (notice) => String(notice.kind || '').startsWith('CARTERA_');
+// De quién es el aviso, para nombrarlo en la traza: la oportunidad o el cliente.
+const readSubjectName = async (db, notice) => {
     try {
-        return leadName(await db.crmLead.findUnique({ where: { id }, select: { company: true, contactName: true } }));
+        if (notice.kind === 'CARTERA_MENSUAL') return (await db.client.findUnique({ where: { id: notice.subjectId }, select: { name: true } }))?.name || null;
+        if (isCollectionNotice(notice)) return (await db.accountsReceivable.findUnique({ where: { id: notice.subjectId }, select: { client: { select: { name: true } } } }))?.client?.name || null;
+        return leadName(await db.crmLead.findUnique({ where: { id: notice.subjectId }, select: { company: true, contactName: true } }));
     } catch {
         return null;
     }
@@ -73,7 +79,9 @@ export const queueImportantNotice = async (db, data, now = new Date()) => db.$tr
 });
 
 // ¿La oportunidad sigue esperando al cliente y nadie registró una gestión desde que salió el aviso? Si no, por qué.
-const whyNotNeeded = async (db, notice) => {
+// En cartera: ¿el cliente sigue con lo vencido?
+const whyNotNeeded = async (db, notice, now) => {
+    if (isCollectionNotice(notice)) return collectionStillDue(db, notice, now);
     const lead = await db.crmLead.findUnique({
         where: { id: notice.subjectId },
         select: {
@@ -90,21 +98,26 @@ const whyNotNeeded = async (db, notice) => {
 
 // Los avisos del CRM son del equipo comercial (Rodny, 28 de octubre de 2026). A quien no lo es la banda no se los
 // muestra; el reloj de alertas se los pasa a los comerciales en su siguiente pase.
+// Los de cartera, del área Administrativa y contable (Rodny, 28 de octubre de 2026: «esas bandas y decisiones las toma Elisa»).
 const isCrmNotice = (notice) => String(notice.kind || '').startsWith('CRM_');
 const seesCrmNotices = (db, userId) => userHasArea(db, userId, 'COMERCIAL');
+const seesCollectionNotices = (db, userId) => userHasArea(db, userId, 'ADMINISTRATIVA');
 
 /** El aviso que le toca ver a esa persona ahora y cuándo volver a preguntar. `who` nombra a la persona en la traza. */
 export const currentImportantNotice = async (db = prisma, userId, now = new Date(), { who = null, log } = {}) => {
-    const [pending, lastDecision, commercial] = await Promise.all([
+    const [pending, lastDecision, commercial, administrative] = await Promise.all([
         db.importantNotice.findMany({ where: { userId, resolvedAt: null } }),
         db.importantNotice.findFirst({ where: { userId, decidedAt: { not: null } }, orderBy: { decidedAt: 'desc' }, select: { decidedAt: true } }),
-        seesCrmNotices(db, userId)
+        seesCrmNotices(db, userId),
+        seesCollectionNotices(db, userId)
     ]);
-    let candidates = commercial ? pending : pending.filter((notice) => !isCrmNotice(notice));
+    let candidates = pending
+        .filter((notice) => commercial || !isCrmNotice(notice))
+        .filter((notice) => administrative || !isCollectionNotice(notice));
     for (let discarded = 0; discarded <= MAX_STALE_PER_READ; discarded += 1) {
         const { notice, nextAt } = pickCurrentNotice(candidates, lastDecision?.decidedAt || null, now);
         if (!notice) return { notice: null, nextAt };
-        const cleared = await whyNotNeeded(db, notice);
+        const cleared = await whyNotNeeded(db, notice, now);
         if (!cleared) return { notice: serialize(notice), nextAt };
         await db.importantNotice.update({ where: { id: notice.id }, data: { resolvedAt: now, resolution: 'YA_ATENDIDO' } });
         await traceNotice(db, NOTICE_TRACE_EVENTS.CLEARED, { notice, subject: cleared.subject, subjectName: who, extra: { reason: cleared.reason }, now, log });
@@ -123,6 +136,9 @@ const ownOpenNotice = async (db, id, actor) => {
 
 const requireCrm = (actor) => {
     if (!hasModulePermission(actor, 'crm')) throw httpError(403, 'Para registrar la gestión necesitas acceso al CRM.');
+};
+const requireFinancial = (actor) => {
+    if (!hasModulePermission(actor, 'financiero')) throw httpError(403, 'Para registrar la gestión de cobro necesitas acceso a Financiero.');
 };
 
 // Decidir cierra el aviso y deja leída su notificación de la campana: es el mismo asunto.
@@ -177,7 +193,7 @@ export const markNoticeShown = async (db = prisma, id, actor, { now = new Date()
     if (snoozed && snoozed > now) throw httpError(409, 'Ese aviso está pospuesto.');
     const appearance = snoozed ? snoozed.toISOString() : 'inicial';
     const traceId = createHash('sha256').update(`${notice.id}:SHOWN:${appearance}`).digest('hex');
-    const subject = await readLeadName(db, notice.subjectId);
+    const subject = await readSubjectName(db, notice);
     const recorded = await traceNotice(db, NOTICE_TRACE_EVENTS.SHOWN, { notice, subject, subjectName: actor?.name, id: traceId, now, log });
     return { ok: true, recorded };
 };
@@ -186,10 +202,15 @@ export const markNoticeShown = async (db = prisma, id, actor, { now = new Date()
 export const followUpNotice = async (db = prisma, id, body = {}, actor, { crm = crmService, now = new Date(), log } = {}) => {
     const notice = await ownOpenNotice(db, id, actor);
     if (!isFollowUpChannel(body.channel)) throw httpError(400, 'Elige cómo hiciste el seguimiento.');
-    requireCrm(actor);
-    await crm.addActivity(db, notice.subjectId, { type: body.channel, note: 'Registrado desde el aviso de seguimiento.', requestId: `aviso-${notice.id}` }, actor, now);
+    // En cartera la gestión de cobro queda en la trazabilidad; en el CRM, además, como gestión de la oportunidad.
+    if (isCollectionNotice(notice)) {
+        requireFinancial(actor);
+    } else {
+        requireCrm(actor);
+        await crm.addActivity(db, notice.subjectId, { type: body.channel, note: 'Registrado desde el aviso de seguimiento.', requestId: `aviso-${notice.id}` }, actor, now);
+    }
     await resolve(db, notice, 'SEGUIMIENTO', now);
-    const subject = await readLeadName(db, notice.subjectId);
+    const subject = await readSubjectName(db, notice);
     await traceNotice(db, NOTICE_TRACE_EVENTS.FOLLOWED_UP, { notice, subject, actor, extra: { channel: body.channel }, now, log });
     return { ok: true };
 };
@@ -200,7 +221,7 @@ export const snoozeNotice = async (db = prisma, id, body = {}, actor, { now = ne
     const until = snoozeUntil(body.option, now);
     if (!until) throw httpError(400, 'Elige cuándo te lo recuerdo.');
     await db.importantNotice.update({ where: { id: notice.id }, data: { snoozedUntil: until, decidedAt: now } });
-    const subject = await readLeadName(db, notice.subjectId);
+    const subject = await readSubjectName(db, notice);
     await traceNotice(db, NOTICE_TRACE_EVENTS.SNOOZED, { notice, subject, actor, extra: { option: body.option, until: until.toISOString() }, now, log });
     return { ok: true, snoozedUntil: until };
 };
@@ -223,7 +244,7 @@ export const closeReviewNotice = async (db = prisma, id, body = {}, actor, { crm
     const { payload, resolution } = CLOSE_STAGES[body.outcome];
     await crm.changeStage(db, notice.subjectId, payload, actor, now);
     await resolve(db, notice, resolution, now);
-    const subject = await readLeadName(db, notice.subjectId);
+    const subject = await readSubjectName(db, notice);
     await traceNotice(db, NOTICE_TRACE_EVENTS.CLOSED, { notice, subject, actor, extra: { outcome: body.outcome }, now, log });
     return { ok: true };
 };

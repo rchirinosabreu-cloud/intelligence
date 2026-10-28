@@ -38,6 +38,7 @@ import { isLoanReceivable, loanCounterpartyLabel } from '@/lib/receivableLoans';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
 import PayablesTab from './financial/PayablesTab';
 import DebtAgingSummary from './financial/DebtAgingSummary';
+import CollectionAlertSettings from './financial/CollectionAlertSettings';
 import { FinancialSectionHeader, FinancialSubTabs } from './financial/FinancialSectionParts';
 import { financialTabOfView, viewForFinancialTab, visibleFinancialTabs } from '@/lib/financialTabs';
 import { agingBucketLabel, agingBucketOf, agingBucketTone } from '@/lib/debtAging';
@@ -162,7 +163,8 @@ const FinancialDashboard = () => {
     const linkParams = new URLSearchParams(location.search);
     const linkedMonth = linkParams.get('tab') === 'rentabilidad' && /^\d{4}$/.test(linkParams.get('year') || '') && /^\d{1,2}$/.test(linkParams.get('month') || '')
         ? `${linkParams.get('year')}-${String(linkParams.get('month')).padStart(2, '0')}-01` : '';
-    const [activeTab, setActiveTab] = useState(() => (linkParams.get('tab') === 'rentabilidad' ? 'profitability' : 'records'));
+    // `?tab=cartera` (28 de octubre de 2026): los avisos de cartera vencida abren Cuentas por cobrar.
+    const [activeTab, setActiveTab] = useState(() => ({ rentabilidad: 'profitability', cartera: 'receivables' }[linkParams.get('tab')] || 'records'));
     const [expandedClients, setExpandedClients] = useState({});
     // Filtros de Cuentas por cobrar (23 de octubre de 2026): a quién se le cobra y cuánto lleva esperando.
     const [receivableKind, setReceivableKind] = useState(null);
@@ -1387,6 +1389,7 @@ await invalidateFinancialQueries(queryClient);
                     <div className="space-y-4 animate-in slide-in-from-left-4 duration-300">
                         <FinancialSectionHeader title="Cuentas por cobrar"
                             description="Lo que les deben a Brain Studio sus clientes y los terceros a quienes les prestó. Los pagos no alteran el valor original.">
+                            {isAdminUser && <CollectionAlertSettings />}
                             {canWriteFinancials && <>
                                 <button type="button" onClick={() => { setNoticeError(''); setIsLoanDialogOpen(true); }} className="min-h-11 rounded-lg border border-zinc-200 px-4 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Registrar préstamo</button>
                                 <button type="button" onClick={openNewReceivable} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">Nueva cuenta por cobrar</button>
