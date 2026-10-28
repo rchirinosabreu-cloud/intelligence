@@ -154,6 +154,15 @@ axios.defaults.adapter = async config => {
       closedTasks: [...Array(12).fill({ clientId: 'c-aristea', measuredMs: 3_600_000 }), ...Array(3).fill({ clientId: 'c-endova', measuredMs: 0 }), { clientId: 'c-endova', measuredMs: 3_600_000 }, ...Array(10).fill({ clientId: 'c-wine', measuredMs: 3_600_000 })]
     });
   }
+  // Gestiones de cobro (28 de octubre de 2026): una ya registrada desde el aviso de la banda.
+  else if (path === '/api/financials/collection-activities' && config.method === 'get') {
+    window.__collectionActivities ||= [{ id: 'ga-1', clientId: client.id, receivableId: null, channel: 'WHATSAPP', channelLabel: 'WhatsApp', source: 'AVISO', authorName: 'Elisa Mestra', occurredAt: '2026-10-27T15:00:00.000Z' }];
+    data = { items: window.__collectionActivities };
+  } else if (path === '/api/financials/collection-activities' && config.method === 'post') {
+    const item = { id: `ga-${Date.now()}`, clientId: body.clientId, receivableId: null, channel: body.channel, source: 'MANUAL', authorName: 'Demo', occurredAt: '2026-10-28T15:00:00.000Z' };
+    window.__collectionActivities = [item, ...(window.__collectionActivities || [])];
+    data = item;
+  }
   // Los plazos de los avisos de cartera (28 de octubre de 2026), con la misma regla del servidor.
   else if (path === '/api/financials/collection-alerts' && config.method === 'get') data = window.__collectionSettings || DEFAULT_COLLECTION_SETTINGS;
   else if (path === '/api/financials/collection-alerts' && config.method === 'put') {

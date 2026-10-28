@@ -15,6 +15,7 @@ import { CRM_ACTIVITY_TYPES } from '../lib/crmRules.js';
 import { FOLLOW_UP_ALERT_STAGES, followUpRecipients } from '../lib/crmFollowUpAlerts.js';
 import { userHasArea } from './teamAreaService.js';
 import { collectionStillDue } from './collectionState.js';
+import { recordCollectionActivity } from './collectionActivityService.js';
 import { isFollowUpChannel, isReviewOutcome, pickCurrentNotice, snoozeUntil } from '../lib/importantNotices.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription, noticeTraceMetadata } from '../lib/importantNoticeTrace.js';
 
@@ -202,9 +203,17 @@ export const markNoticeShown = async (db = prisma, id, actor, { now = new Date()
 export const followUpNotice = async (db = prisma, id, body = {}, actor, { crm = crmService, now = new Date(), log } = {}) => {
     const notice = await ownOpenNotice(db, id, actor);
     if (!isFollowUpChannel(body.channel)) throw httpError(400, 'Elige cómo hiciste el seguimiento.');
-    // En cartera la gestión de cobro queda en la trazabilidad; en el CRM, además, como gestión de la oportunidad.
+    // En cartera queda como gestión de cobro del cliente (28 de octubre de 2026: «debe haber un registro»), que se ve en
+    // Cuentas por cobrar; en el CRM, como gestión de la oportunidad. Las dos, además, en la trazabilidad.
     if (isCollectionNotice(notice)) {
         requireFinancial(actor);
+        if (typeof db.collectionActivity?.create === 'function') {
+            const oneOff = notice.kind !== 'CARTERA_MENSUAL';
+            const clientId = oneOff
+                ? (await db.accountsReceivable.findUnique({ where: { id: notice.subjectId }, select: { clientId: true } }))?.clientId
+                : notice.subjectId;
+            await recordCollectionActivity(db, { clientId, receivableId: oneOff ? notice.subjectId : null, channel: body.channel, noticeId: notice.id, source: 'AVISO' }, actor, { now });
+        }
     } else {
         requireCrm(actor);
         await crm.addActivity(db, notice.subjectId, { type: body.channel, note: 'Registrado desde el aviso de seguimiento.', requestId: `aviso-${notice.id}` }, actor, now);

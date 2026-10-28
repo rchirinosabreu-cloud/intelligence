@@ -4,6 +4,7 @@ import prisma from '../lib/prisma.js';
 import {
     DEFAULT_COLLECTION_SETTINGS, monthlyCollectionAlert, normalizeCollectionSettings, openBalanceCents
 } from '../lib/receivableCollections.js';
+import { hasCollectionActivitySince } from './collectionActivityService.js';
 
 const SETTINGS_ID = 'global';
 const httpError = (statusCode, message) => Object.assign(new Error(message), { statusCode });
@@ -46,16 +47,20 @@ export const isMonthlyClient = (contracts = []) => {
  */
 export const collectionStillDue = async (db, notice, now = new Date()) => {
     const settings = await readCollectionSettings(db);
+    // Como en el CRM (28 de octubre de 2026): una gestión de cobro registrada después del aviso lo saca de la banda.
+    const handled = async (clientId, subject) => (await hasCollectionActivitySince(db, clientId, notice.createdAt) ? { reason: 'GESTION', subject } : null);
     if (notice.kind === 'CARTERA_MENSUAL') {
         const client = await db.client.findUnique({
             where: { id: notice.subjectId },
             select: { name: true, accountsReceivables: { where: OPEN_CLIENT_RECEIVABLES, select: RECEIVABLE_FIELDS } }
         });
         const still = client && monthlyCollectionAlert({ clientId: notice.subjectId, receivables: client.accountsReceivables, today: bogotaToday(now), settings });
-        return still ? null : { reason: 'AL_DIA', subject: client?.name || null };
+        return still ? handled(notice.subjectId, client.name) : { reason: 'AL_DIA', subject: client?.name || null };
     }
     const receivable = await db.accountsReceivable.findUnique({
-        where: { id: notice.subjectId }, select: { ...RECEIVABLE_FIELDS, client: { select: { name: true } } }
+        where: { id: notice.subjectId }, select: { ...RECEIVABLE_FIELDS, clientId: true, client: { select: { name: true } } }
     });
-    return receivable && openBalanceCents(receivable) > 0 ? null : { reason: 'AL_DIA', subject: receivable?.client?.name || null };
+    return receivable && openBalanceCents(receivable) > 0
+        ? handled(receivable.clientId, receivable.client?.name || null)
+        : { reason: 'AL_DIA', subject: receivable?.client?.name || null };
 };
