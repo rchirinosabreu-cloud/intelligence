@@ -1,4 +1,4 @@
-import React, { useLayoutEffect } from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import { CalendarDays, CheckCircle2, CheckSquare, Edit, ExternalLink, FileBarChart, Instagram, LayoutGrid, Plus, RotateCcw, Video } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,8 @@ import {
 import { LEVEL_META, PIECE_STATUS, STAGE_TONE } from './operationTones';
 import CycleBar from './CycleBar';
 import ClientObservations from './ClientObservations';
+import { CloseDialog, ReportDialog } from './MonthlyCloseDialogs';
+import { canConfirmClose, closeOpensOn, closeSummaryText, reportStatusLabel } from '@/lib/monthlyClose';
 
 // Página completa de un cliente en «Operación» (borrador del 2 de octubre de 2026). Todo lo que la fila
 // del Excel tenía de ese cliente, más lo que se trabaja desde aquí: marcar lo publicado por fuera,
@@ -55,7 +57,38 @@ function Attention({ evaluation }) {
   );
 }
 
-function CurrentCycle({ cycle, today, onMarkPublished, onUndoPublished, onOpenPlan }) {
+// El informe del mes y su estado (29 de octubre de 2026): solo «Enviado» cuenta como entregado.
+function ReportStatus({ report }) {
+  const status = report?.status || 'PENDIENTE';
+  const sent = status === 'ENVIADO';
+  return (
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5" data-report-status={status}>
+      <span className={cn('rounded-md px-2 py-0.5 text-xs font-semibold', sent ? 'bg-status-positive/10 text-status-positive-fg' : 'bg-zinc-100 text-zinc-700 dark:bg-white/5 dark:text-zinc-200')}>{reportStatusLabel(status)}</span>
+      {sent && report?.deliveredAt && <span className="text-xs text-zinc-500">el {shortDate(report.deliveredAt)}{report.by ? ` · ${report.by}` : ''}</span>}
+      {!sent && report?.updatedAt && <span className="text-xs text-zinc-500">desde el {shortDate(report.updatedAt)}</span>}
+      {report?.link && <a href={report.link} target="_blank" rel="noreferrer" className="text-xs font-medium text-brand-cyan-deep hover:underline dark:text-brand-cyan">Ver informe</a>}
+    </span>
+  );
+}
+
+// El cierre del mes, confirmado o por confirmar (29 de octubre de 2026).
+function CloseStatus({ cycle, today, onClose, compact = false }) {
+  if (cycle.close) {
+    const summary = closeSummaryText(cycle.close.snapshot);
+    return (
+      <span className="text-xs text-zinc-600 dark:text-zinc-300" data-close-status="confirmed" title={compact ? summary : undefined}>
+        Cerrado el {shortDate(cycle.close.closedAt)}{cycle.close.by ? ` · ${cycle.close.by}` : ''}{compact ? '' : `. ${summary}`}
+        {!compact && cycle.close.note && <span className="text-zinc-500"> {cycle.close.note}</span>}
+      </span>
+    );
+  }
+  if (canConfirmClose(cycle, today)) {
+    return <button type="button" onClick={() => onClose(cycle)} data-close-open className={cn(TEXT_ACTION, '-ml-3 min-h-9')}><CheckCircle2 className="h-4 w-4" />Confirmar cierre</button>;
+  }
+  return <span className="text-xs text-zinc-500" data-close-status="later">Se confirma desde el {shortDate(closeOpensOn(cycle))}</span>;
+}
+
+function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onMarkPublished, onUndoPublished, onOpenPlan }) {
   return (
     <section className={CARD} aria-label={`Parrilla de ${cycle.label}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -113,16 +146,32 @@ function CurrentCycle({ cycle, today, onMarkPublished, onUndoPublished, onOpenPl
       ) : (
         <p className="mt-6 rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-white/15">{cycle.label} todavía no tiene parrilla.</p>
       )}
+
+      <div className="mt-5 grid gap-3 border-t border-zinc-100 pt-4 sm:grid-cols-2 dark:border-white/5" data-cycle-close>
+        {monthlyReport && (
+          <div className="min-w-0">
+            <p className={LABEL}>Informe del mes</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <ReportStatus report={cycle.report} />
+              <button type="button" onClick={() => onReport(cycle)} data-report-open className={cn(TEXT_ACTION, 'min-h-9 px-2 text-xs')}>Actualizar</button>
+            </div>
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className={LABEL}>Cierre del mes</p>
+          <div className="mt-1"><CloseStatus cycle={cycle} today={today} onClose={onClose} /></div>
+        </div>
+      </div>
     </section>
   );
 }
 
-function History({ months, monthlyReport, onMarkReport }) {
+function History({ months, monthlyReport, today, onReport, onClose }) {
   return (
     <section className={CARD} aria-label="Meses anteriores">
       <h2 className={cn(CARD_TITLE, 'mb-3')}>Meses anteriores</h2>
       <table className="w-full text-left text-sm">
-        <thead className="text-xs text-zinc-500"><tr><th className="py-2 font-medium">Mes</th><th className="py-2 font-medium">Publicadas</th>{monthlyReport && <th className="py-2 font-medium">Informe</th>}</tr></thead>
+        <thead className="text-xs text-zinc-500"><tr><th className="py-2 font-medium">Mes</th><th className="py-2 font-medium">Publicadas</th>{monthlyReport && <th className="py-2 font-medium">Informe</th>}<th className="py-2 font-medium">Cierre</th></tr></thead>
         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
           {months.map((month) => {
             const closed = month.reached.publicada >= month.quota;
@@ -135,12 +184,15 @@ function History({ months, monthlyReport, onMarkReport }) {
                   </span>
                 </td>
                 {monthlyReport && (
-                  <td className="py-1">
-                    {month.report?.deliveredAt
-                      ? <span className="text-zinc-600 dark:text-zinc-300">Entregado el {shortDate(month.report.deliveredAt)}{month.report.by && <span className="text-zinc-400"> · {month.report.by}</span>}</span>
-                      : <button type="button" onClick={() => onMarkReport(month)} className={cn(TEXT_ACTION, '-ml-3 min-h-9')}><FileBarChart className="h-4 w-4" />Marcar entregado</button>}
+                  <td className="py-1" data-history-report={month.label}>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <ReportStatus report={month.report} />
+                      <button type="button" onClick={() => onReport(month)} aria-label={`Actualizar el informe de ${month.label.toLowerCase()}`}
+                        className={cn(TEXT_ACTION, 'min-h-9 px-2 text-xs')}><FileBarChart className="h-4 w-4" />Actualizar</button>
+                    </div>
                   </td>
                 )}
+                <td className="py-1" data-history-close={month.label}><CloseStatus cycle={month} today={today} onClose={onClose} compact /></td>
               </tr>
             );
           })}
@@ -232,11 +284,15 @@ function Tasks({ tasks, onNewTask, onOpenTask }) {
 
 export default function ClientOperationPage({
   client, evaluation, today, canManage, currentUserId, isAdmin,
-  onEditProfile, onMarkPublished, onUndoPublished, onMarkReport, onOpenPlan, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
+  onEditProfile, onMarkPublished, onUndoPublished, onSaveReport, onConfirmClose, onOpenPlan, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
 }) {
   const measured = isMeasured(client);
   const { current } = client.cycles || {};
   const history = client.history || [];
+  const monthlyReport = Boolean(client.contract?.monthlyReport);
+  // El mes cuyo informe o cierre se está editando; el diálogo se cierra solo cuando el servidor confirma.
+  const [reportFor, setReportFor] = useState(null);
+  const [closeFor, setCloseFor] = useState(null);
   // Entrar a un cliente es entrar a una página: arriba del todo, no donde iba la lista.
   useLayoutEffect(() => { window.scrollTo(0, 0); }, [client.id]);
   return (
@@ -255,15 +311,20 @@ export default function ClientOperationPage({
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
           <ClientObservations observations={client.observations || []} currentUserId={currentUserId} isAdmin={isAdmin}
             onAdd={onAddObservation} onDelete={onDeleteObservation} />
-          {measured && current && <CurrentCycle cycle={current} today={today} onMarkPublished={onMarkPublished} onUndoPublished={onUndoPublished} onOpenPlan={onOpenPlan} />}
+          {measured && current && <CurrentCycle cycle={current} today={today} monthlyReport={monthlyReport} onReport={setReportFor} onClose={setCloseFor}
+            onMarkPublished={onMarkPublished} onUndoPublished={onUndoPublished} onOpenPlan={onOpenPlan} />}
           {!measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
-          {measured && history.length > 0 && <History months={history} monthlyReport={client.contract.monthlyReport} onMarkReport={onMarkReport} />}
+          {measured && history.length > 0 && <History months={history} monthlyReport={monthlyReport} today={today} onReport={setReportFor} onClose={setCloseFor} />}
         </div>
         <div className="flex min-w-0 flex-col gap-6">
           <Profile client={client} canManage={canManage} onEdit={onEditProfile} />
           {measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
         </div>
       </div>
+      {reportFor && <ReportDialog month={reportFor} onClose={() => setReportFor(null)}
+        onSave={async (data) => { await onSaveReport(reportFor, data); setReportFor(null); }} />}
+      {closeFor && <CloseDialog month={closeFor} monthlyReport={monthlyReport} onClose={() => setCloseFor(null)}
+        onConfirm={async (note) => { await onConfirmClose(closeFor, note); setCloseFor(null); }} />}
     </div>
   );
 }

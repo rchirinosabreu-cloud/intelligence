@@ -9,7 +9,7 @@ import TaskSidePanel from '../../TaskSidePanel';
 import ClientOperationPage from './ClientOperationPage';
 import ClientOperationDialog from './ClientOperationDialog';
 import {
-  useAddObservation, useClientOperation, useDeleteObservation, useMarkPiecePublished, useSaveOperationProfile, useSetMonthlyReport,
+  useAddObservation, useClientOperation, useConfirmMonthlyClose, useDeleteObservation, useMarkPiecePublished, useSaveOperationProfile, useSetMonthlyReport,
   useUndoPiecePublished,
 } from './clientOperationsApi';
 import { bogotaDate } from '@/lib/colombiaBusinessDays';
@@ -37,6 +37,7 @@ export default function ClientOperationRoute() {
   });
   const saveProfile = useSaveOperationProfile();
   const setReport = useSetMonthlyReport();
+  const confirmClose = useConfirmMonthlyClose();
   const markPublished = useMarkPiecePublished();
   const undoPublished = useUndoPiecePublished();
   const addObservation = useAddObservation();
@@ -88,14 +89,16 @@ export default function ClientOperationRoute() {
             toast.error(failure.message);
           }
         }}
-        onMarkReport={async (month) => {
-          try {
-            await setReport.mutateAsync({ clientId: client.id, year: month.year, month: month.month, delivered: true });
-            await refetch();
-            toast.success(`Informe de ${month.label.toLowerCase()} marcado como entregado.`);
-          } catch (failure) {
-            toast.error(failure.message);
-          }
+        // Un error vuelve al diálogo, que lo muestra y conserva lo escrito.
+        onSaveReport={async (month, data) => {
+          await setReport.mutateAsync({ clientId: client.id, year: month.year, month: month.month, ...data });
+          await refetch();
+          toast.success(`Informe de ${month.label.toLowerCase()} actualizado.`);
+        }}
+        onConfirmClose={async (month, note) => {
+          await confirmClose.mutateAsync({ clientId: client.id, year: month.year, month: month.month, note });
+          await refetch();
+          toast.success(`Cierre de ${month.label.toLowerCase()} confirmado.`);
         }}
         onOpenPlan={() => navigate(planId ? `/parrillas/${planId}` : '/parrillas')}
         onNewTask={() => setCreatingTask(true)}

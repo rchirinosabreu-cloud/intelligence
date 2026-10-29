@@ -71,8 +71,30 @@ function fixture() {
       update: async (args) => { writes.push(['contract.update', args]); return args.data; },
     },
     clientMonthlyReport: {
-      upsert: async (args) => { writes.push(['report.upsert', args]); return args.create; },
+      findFirst: async ({ where }) => clients.find((c) => c.id === where.clientId)?.monthlyReports.find((r) => r.year === where.year && r.month === where.month) || null,
+      create: async (args) => {
+        writes.push(['report.create', args]);
+        const row = { id: `r-${writes.length}`, deliveredAt: NOW, ...args.data };
+        clients.find((c) => c.id === args.data.clientId).monthlyReports.push(row);
+        return row;
+      },
+      update: async (args) => {
+        writes.push(['report.update', args]);
+        const row = clients.flatMap((c) => c.monthlyReports).find((r) => r.id === args.where.id);
+        return Object.assign(row, args.data);
+      },
       deleteMany: async (args) => { writes.push(['report.delete', args]); return { count: 1 }; },
+    },
+    clientMonthlyClose: {
+      create: async (args) => {
+        const client = clients.find((c) => c.id === args.data.clientId);
+        client.monthlyCloses ||= [];
+        if (client.monthlyCloses.some((r) => r.year === args.data.year && r.month === args.data.month)) throw Object.assign(new Error('duplicada'), { code: 'P2002' });
+        writes.push(['close.create', args]);
+        const row = { id: `close-${writes.length}`, closedAt: NOW, ...args.data };
+        client.monthlyCloses.push(row);
+        return row;
+      },
     },
     $transaction: async (run) => run(db),
   };
@@ -204,15 +226,44 @@ test('la pieza marcada a mano lo dice en el detalle, para ofrecer «Deshacer»',
   assert.deepEqual(nattal.cycles.current.pieces.map((p) => [p.id, p.markedByHand]), [['o1', false], ['o2', false], ['o3', false], ['o4', true]]);
 });
 
-test('el informe del mes se marca y se desmarca, con quién lo hizo', async () => {
+test('el informe del mes pasa por sus estados; solo «enviado» cuenta como entregado', async () => {
   const { service, writes } = fixture();
-  await service.setMonthlyReport({ clientId: 'c-nattal', year: 2026, month: 9, delivered: true, actorUserId: 'u1' });
-  const [, upsert] = writes.at(-1);
-  assert.deepEqual(upsert.where, { clientId_year_month: { clientId: 'c-nattal', year: 2026, month: 9 } });
-  assert.equal(upsert.create.deliveredById, 'u1');
+  // Lo marcado antes de los estados era un informe entregado: se lee como enviado.
+  const before = await service.getOperation('nattal');
+  assert.equal(before.cycles.previous.report.status, 'ENVIADO');
+  assert.equal(before.cycles.previous.report.deliveredAt, '2026-10-01');
+
+  await service.setMonthlyReport({ clientId: 'c-nattal', year: 2026, month: 10, status: 'EN_ELABORACION', actorUserId: 'u-kamila' });
+  assert.equal(writes.at(-1)[0], 'report.create');
+  let nattal = await service.getOperation('nattal');
+  assert.equal(nattal.cycles.current.report.status, 'EN_ELABORACION');
+  assert.equal(nattal.cycles.current.report.deliveredAt, null, 'en elaboración no es entregado');
+
+  await service.setMonthlyReport({ clientId: 'c-nattal', year: 2026, month: 10, status: 'ENVIADO', link: 'https://drive.google.com/informe-octubre', note: 'Va con la pauta', actorUserId: 'u-kamila' });
+  nattal = await service.getOperation('nattal');
+  assert.deepEqual(
+    { status: nattal.cycles.current.report.status, sent: nattal.cycles.current.report.deliveredAt, link: nattal.cycles.current.report.link, by: nattal.cycles.current.report.by },
+    { status: 'ENVIADO', sent: '2026-10-02', link: 'https://drive.google.com/informe-octubre', by: 'Kamila' }
+  );
+
+  await assert.rejects(() => service.setMonthlyReport({ clientId: 'c-nattal', year: 2026, month: 10, status: 'LISTO', actorUserId: 'u1' }), { status: 422 });
+  await assert.rejects(() => service.setMonthlyReport({ clientId: 'c-nattal', year: 2026, month: 10, status: 'ENVIADO', link: 'javascript:alert(1)', actorUserId: 'u1' }), { status: 422 });
+  await assert.rejects(() => service.setMonthlyReport({ clientId: 'c-nattal', year: 2026, month: 13, delivered: true, actorUserId: 'u1' }), { status: 400 });
+  // Lo de antes sigue valiendo: entregado es enviado, y desmarcarlo lo devuelve a pendiente.
   await service.setMonthlyReport({ clientId: 'c-nattal', year: 2026, month: 9, delivered: false, actorUserId: 'u1' });
   assert.equal(writes.at(-1)[0], 'report.delete');
-  await assert.rejects(() => service.setMonthlyReport({ clientId: 'c-nattal', year: 2026, month: 13, delivered: true, actorUserId: 'u1' }), { status: 400 });
+});
+
+test('el cierre del mes se confirma desde tres días antes y guarda lo que quedó pendiente', async () => {
+  const { service } = fixture();
+  // Hoy es 2 de octubre: septiembre ya terminó; octubre se confirma desde el 28.
+  await assert.rejects(() => service.confirmMonthlyClose({ clientId: 'c-nattal', year: 2026, month: 10, actorUserId: 'u-kamila' }), { status: 409 });
+  const closed = await service.confirmMonthlyClose({ clientId: 'c-nattal', year: 2026, month: 9, note: 'Todo salió a tiempo', actorUserId: 'u-kamila' });
+  const september = closed.cycles.previous;
+  assert.equal(september.close.closedAt, '2026-10-02');
+  assert.equal(september.close.by, 'Kamila');
+  assert.deepEqual(september.close.snapshot, { quota: 4, published: 4, missing: 0, overdue: 0, report: 'ENVIADO' });
+  await assert.rejects(() => service.confirmMonthlyClose({ clientId: 'c-nattal', year: 2026, month: 9, actorUserId: 'u-kamila' }), { status: 409 });
 });
 
 test('la página del cliente trae sus observaciones, las del Excel con su hoja', async () => {

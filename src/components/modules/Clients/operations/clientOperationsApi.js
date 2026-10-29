@@ -45,11 +45,25 @@ export function useSaveOperationProfile() {
   });
 }
 
+// El informe del mes: estado, enlace y nota (29 de octubre de 2026).
 export function useSetMonthlyReport() {
   const refresh = useRefresh();
   return useMutation({
-    mutationFn: ({ clientId, year, month, delivered }) => request(`/${clientId}/reports/${year}/${month}`, { method: 'PUT', body: JSON.stringify({ delivered }) }),
+    mutationFn: ({ clientId, year, month, status, link, note }) => request(`/${clientId}/reports/${year}/${month}`, { method: 'PUT', body: JSON.stringify({ status, link, note }) }),
     onSuccess: refresh,
+  });
+}
+
+// El project manager confirma el cierre del mes; responde la operación ya actualizada.
+export function useConfirmMonthlyClose() {
+  const refresh = useRefresh();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clientId, year, month, note }) => request(`/${clientId}/closes/${year}/${month}`, { method: 'POST', body: JSON.stringify({ note }) }),
+    onSuccess: (saved) => {
+      if (saved?.slug) queryClient.setQueryData(clientKey(saved.slug), saved);
+      refresh();
+    },
   });
 }
 

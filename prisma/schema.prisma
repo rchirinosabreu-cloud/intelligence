@@ -720,6 +720,7 @@ model Client {
   observations        ClientObservation[]
   financialRecords    FinancialRecord[]
   accountsReceivables AccountsReceivable[]
+  monthlyCloses       ClientMonthlyClose[]
   metricReports       MetricReport[]
   crmLeads            CrmLead[]
 
@@ -763,7 +764,30 @@ model ClientMonthlyReport {
   deliveredAt   DateTime @default(now()) @db.Timestamptz(3)
   deliveredById String?
   createdAt     DateTime @default(now())
+  // Estados del informe (29 de octubre de 2026): PENDIENTE, EN_ELABORACION, EN_REVISION o ENVIADO; solo ENVIADO es
+  // entregado y `deliveredAt` es cuándo se envió. `link` es el soporte de entrega. Regla en src/lib/monthlyClose.js.
+  status        String    @default("ENVIADO")
+  link          String?
+  note          String?
+  updatedAt     DateTime? @db.Timestamptz(3)
+  updatedById   String?
   client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, year, month])
+}
+
+/// El cierre de un mes que confirma el project manager (29 de octubre de 2026). Confirmar no borra nada: `snapshot`
+/// guarda lo que quedó pendiente en ese momento (piezas, vencidas, estado del informe).
+model ClientMonthlyClose {
+  id         String   @id @default(uuid())
+  clientId   String
+  year       Int
+  month      Int
+  closedAt   DateTime @default(now()) @db.Timestamptz(3)
+  closedById String?
+  note       String?
+  snapshot   Json     @default("{}")
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([clientId, year, month])
 }

@@ -105,7 +105,9 @@ export function evaluateClientOperation(client, { today }) {
     reasons.push({ level: 'red', text: `${previous.label} cerró con ${previous.reached.publicada} de ${previous.quota} publicadas: faltaron ${pieces(missing)}.` });
   }
   if (contract.monthlyReport && previous && !previous.report?.deliveredAt) {
-    reasons.push({ level: 'yellow', text: `Falta entregar el informe de ${previous.label.toLowerCase()}.` });
+    // Con los estados del informe (29 de octubre de 2026) se dice en qué va, si ya empezó.
+    const stage = { EN_ELABORACION: 'va en elaboración', EN_REVISION: 'va en revisión' }[previous.report?.status];
+    reasons.push({ level: 'yellow', text: `Falta enviar el informe de ${previous.label.toLowerCase()}${stage ? `: ${stage}` : ''}.` });
   }
 
   if (current) {
