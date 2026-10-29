@@ -24,6 +24,7 @@ import { isLoanReceivable } from '../lib/receivableLoans.js';
 import { paymentKindLabel } from '../lib/receivableSettlement.js';
 import { attachReceivablePaymentDocument, openReceivablePaymentDocument } from '../services/receivablePaymentDocumentService.js';
 import { createReceivable, deleteReceivable } from '../services/financialReceivableService.js';
+import { refreshFormalizationsForReceivable } from '../services/projectFormalizationService.js';
 import { issueReceivableDocument, correctReceivableDocument } from '../services/receivableDocumentService.js';
 import { openReceivablePdf, RECEIVABLE_PDF_MIME } from '../services/receivablePdfService.js';
 import { fetchOfficialUsdCopRate } from '../services/exchangeRateService.js';
@@ -245,11 +246,22 @@ export const reopenFinancialPeriodHandler = async (req, res, dependencies = {}) 
     }
 };
 
+// Pagar el anticipo puede dejar habilitado un proyecto (formalización, 29 de octubre de 2026). Un fallo aquí se anota y
+// nunca tumba un pago que sí se registró: el reloj de formalizaciones lo vuelve a mirar.
+const refreshFormalizationAfterPayment = async (prismaClient, receivableId) => {
+    try {
+        await refreshFormalizationsForReceivable(prismaClient, receivableId);
+    } catch (error) {
+        console.error('[Formalización] No se pudo revisar tras el pago:', error?.message || error);
+    }
+};
+
 export const createReceivablePaymentHandler = async (req, res, dependencies = {}) => {
     const prismaClient = dependencies.prismaClient || prisma;
     const createPayment = dependencies.createPayment || createReceivablePayment;
     try {
         const result = await createPayment(prismaClient, req.params.id, req.body || {}, req.user);
+        await refreshFormalizationAfterPayment(prismaClient, req.params.id);
         const pesos = (value) => `$ ${Number(value || 0).toLocaleString('es-CO', { maximumFractionDigits: 2 })}`;
         return res.status(201).json({
             message: isLoanReceivable(result.receivable)
@@ -341,6 +353,7 @@ export const settleReceivableHandler = async (req, res, dependencies = {}) => {
     const settle = dependencies.settleReceivable || settleReceivable;
     try {
         const result = await settle(prismaClient, req.params.id, req.body || {}, req.user);
+        await refreshFormalizationAfterPayment(prismaClient, req.params.id);
         // Una retención cierra la cuenta como pagada: el cliente pagó todo, una parte a la DIAN.
         const label = paymentKindLabel(result.payment);
         const retention = result.payment?.kind === 'RETENCION';

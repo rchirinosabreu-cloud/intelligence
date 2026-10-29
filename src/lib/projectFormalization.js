@@ -1,0 +1,82 @@
+// Formalización y habilitación de un proyecto (punto 3 de la solicitud de Elisa; Rodny, 29 de octubre de 2026). Una
+// cotización aprobada abre su formalización: Administración carga el contrato firmado y se confirma el anticipo, o
+// Dirección o Administración autorizan empezar sin él. Con las dos cosas el proyecto queda «Habilitado para iniciar» y
+// el project manager recibe el aviso. La misma regla la leen la pantalla y el servidor.
+//
+// - Quién formaliza: las áreas Dirección y Administrativa y contable. Son las únicas que ven el contrato y las cifras.
+// - El anticipo es la primera cuota del plan de pagos de la cotización; está confirmado cuando su cuenta por cobrar
+//   quedó pagada. Un pago a medias no habilita.
+// - La excepción no borra la deuda: el anticipo sigue en Cuentas por cobrar con la fecha de pago acordada.
+
+export const FORMALIZATION_AREAS = Object.freeze(['DIRECCION', 'ADMINISTRATIVA']);
+export const FORMALIZATION_REASON_MAX = 300;
+export const FORMALIZATION_CONDITIONS_MAX = 500;
+
+const DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+export const quotationCode = (quotation) => `COT-${String(quotation?.consecutive ?? 0).padStart(4, '0')}`;
+
+const toCents = (value) => Math.round((Number(value) || 0) * 100);
+
+/**
+ * En qué va el anticipo, leyendo su cuenta por cobrar: `SIN_CUENTA` si no hay ninguna ligada, `PAGADO` si quedó
+ * cubierta, `PARCIAL` si ya entró dinero pero no todo, y `PENDIENTE` si no ha entrado nada.
+ */
+export const advanceState = (receivable) => {
+    if (!receivable) return 'SIN_CUENTA';
+    if (receivable.status === 'PAGADO' || receivable.status === 'SALDADO') return 'PAGADO';
+    const paid = (receivable.payments || []).reduce((sum, payment) => (
+        payment.reversedAt || (payment.kind && payment.kind !== 'PAGO') ? sum : sum + toCents(payment.amount)
+    ), 0);
+    if (paid >= toCents(receivable.amount) && paid > 0) return 'PAGADO';
+    return paid > 0 ? 'PARCIAL' : 'PENDIENTE';
+};
+
+/**
+ * Lo que tiene y lo que le falta a una formalización. `ready` es la condición para habilitar el proyecto: contrato
+ * cargado y anticipo pagado, o contrato y excepción autorizada.
+ */
+export const formalizationState = ({ documents = [], advance = null, exceptionAt = null } = {}) => {
+    const contract = documents.length > 0;
+    const advanceStatus = advanceState(advance);
+    const advanceCovered = advanceStatus === 'PAGADO' || Boolean(exceptionAt);
+    const missing = [];
+    if (!contract) missing.push('CONTRATO');
+    if (!advanceCovered) missing.push('ANTICIPO');
+    return { contract, advance: advanceStatus, exception: Boolean(exceptionAt), advanceCovered, ready: missing.length === 0, missing };
+};
+
+const MISSING_TEXT = { CONTRATO: 'el contrato firmado', ANTICIPO: 'el anticipo' };
+
+/** «Falta el contrato firmado y el anticipo», para la pantalla. Vacío si no falta nada. */
+export const missingText = (missing = []) => {
+    const parts = missing.map((key) => MISSING_TEXT[key]).filter(Boolean);
+    if (!parts.length) return '';
+    return `Falta ${parts.length === 2 ? `${parts[0]} y ${parts[1]}` : parts[0]}`;
+};
+
+/** El aviso a Administración: sin cifras, porque la campana también llega al celular. */
+export const formalizationRequestText = (clientName, code) => (
+    `${clientName || 'Un cliente'} aprobó la ${code}: falta el contrato firmado y el anticipo para habilitar el proyecto.`
+);
+
+/** El aviso al project manager: solo que puede empezar. Nunca cifras ni condiciones. */
+export const formalizationEnabledText = (clientName) => (
+    `El proyecto de ${clientName || 'un cliente'} quedó habilitado para iniciar: asigna responsables y programa el inicio.`
+);
+
+/**
+ * Valida la autorización para empezar sin el anticipo: motivo obligatorio, condiciones opcionales y la fecha de pago
+ * acordada, que no puede quedar en el pasado. Devuelve el mensaje del primer problema o null.
+ */
+export const exceptionProblem = ({ reason, conditions, paymentDate } = {}, today) => {
+    const why = String(reason ?? '').trim();
+    if (!why) return 'Escribe el motivo de la excepción.';
+    if (why.length > FORMALIZATION_REASON_MAX) return `El motivo admite como máximo ${FORMALIZATION_REASON_MAX} caracteres.`;
+    if (String(conditions ?? '').trim().length > FORMALIZATION_CONDITIONS_MAX) return `Las condiciones admiten como máximo ${FORMALIZATION_CONDITIONS_MAX} caracteres.`;
+    const day = String(paymentDate ?? '').trim();
+    if (!day) return 'Elige la fecha de pago acordada.';
+    if (!DAY.test(day) || Number.isNaN(Date.parse(`${day}T12:00:00Z`)) || new Date(`${day}T12:00:00Z`).toISOString().slice(0, 10) !== day) return 'La fecha de pago acordada no es válida.';
+    if (today && day < today) return 'La fecha de pago acordada no puede estar en el pasado.';
+    return null;
+};

@@ -2771,6 +2771,49 @@ model CollectionSetting {
   updatedAt            DateTime @default(now()) @updatedAt @db.Timestamptz()
 }
 
+// Formalización de un proyecto (punto 3 de la solicitud de Elisa; Rodny, 29 de octubre de 2026): una por cotización
+// aprobada. Administración carga el contrato firmado y se confirma el anticipo —o Dirección o Administración autorizan
+// empezar sin él—; con las dos cosas el proyecto queda habilitado y se le avisa al project manager. Regla en
+// src/lib/projectFormalization.js; tablas aditivas en scripts/ensure-project-formalization-schema.js.
+model ProjectFormalization {
+  id                     String    @id @default(uuid())
+  quotationId            String    @unique
+  clientId               String?
+  // La cuenta por cobrar del anticipo: la primera cuota del plan de pagos, o la que Administración ligue a mano.
+  advanceReceivableId    String?
+  status                 String    @default("PENDIENTE") // PENDIENTE o HABILITADO
+  requestedAt            DateTime  @default(now()) @db.Timestamptz()
+  requestedById          String?
+  exceptionAt            DateTime? @db.Timestamptz()
+  exceptionById          String?
+  exceptionByName        String?
+  exceptionReason        String?
+  exceptionConditions    String?
+  exceptionPaymentDate   String? // AAAA-MM-DD, la fecha de pago acordada
+  enabledAt              DateTime? @db.Timestamptz()
+  projectManagerNotified Boolean   @default(false)
+  updatedAt              DateTime  @default(now()) @updatedAt @db.Timestamptz()
+
+  @@index([status], map: "ProjectFormalization_status_idx")
+  @@index([clientId], map: "ProjectFormalization_client_idx")
+}
+
+// El contrato firmado o el soporte verificable de una formalización. Mismo bucket y mismas reglas que los comprobantes:
+// se detecta por bytes, se sirve solo por la API a Dirección y Administración, y nunca se borra.
+model ProjectFormalizationDocument {
+  id              String   @id @default(uuid())
+  formalizationId String
+  storageKey      String   @unique
+  name            String
+  mimeType        String
+  size            Int
+  sha256          String
+  uploadedById    String?
+  uploadedAt      DateTime @default(now()) @db.Timestamptz()
+
+  @@index([formalizationId, uploadedAt], map: "ProjectFormalizationDocument_formalization_idx")
+}
+
 // Ajustes del CRM que cambia un administrador: los días de las alertas comerciales.
 model CrmSetting {
   id                   String   @id @default("global")

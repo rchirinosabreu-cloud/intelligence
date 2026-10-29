@@ -59,6 +59,9 @@ export const receivableDueDate = (receivable, settings = DEFAULT_COLLECTION_SETT
     if (manual) return { date: manual, source: 'VENCIMIENTO' };
     const issued = bogotaKey(receivable?.issuedAt);
     if (issued) return { date: addDays(issued, settings.paymentTermDays), source: 'EMISION' };
+    // Una cuota de una cotización aprobada que vence con un hito («al finalizar») o tras el inicio todavía no tiene fecha:
+    // no vence hasta que se emita su cuenta de cobro (formalización, 29 de octubre de 2026).
+    if (receivable?.metadata?.waitsForMilestone) return null;
     const period = civilKey(receivable?.period);
     if (period) return { date: addDays(period, settings.paymentTermDays), source: 'PERIODO' };
     return null;

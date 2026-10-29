@@ -44,6 +44,7 @@ import { FinancialSectionHeader, FinancialSubTabs } from './financial/FinancialS
 import { financialTabOfView, viewForFinancialTab, visibleFinancialTabs } from '@/lib/financialTabs';
 import { agingBucketLabel, agingBucketOf, agingBucketTone } from '@/lib/debtAging';
 import ProfitabilityTab from './financial/ProfitabilityTab';
+import FormalizationsTab from './financial/FormalizationsTab';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
@@ -165,7 +166,8 @@ const FinancialDashboard = () => {
     const linkedMonth = linkParams.get('tab') === 'rentabilidad' && /^\d{4}$/.test(linkParams.get('year') || '') && /^\d{1,2}$/.test(linkParams.get('month') || '')
         ? `${linkParams.get('year')}-${String(linkParams.get('month')).padStart(2, '0')}-01` : '';
     // `?tab=cartera` (28 de octubre de 2026): los avisos de cartera vencida abren Cuentas por cobrar.
-    const [activeTab, setActiveTab] = useState(() => ({ rentabilidad: 'profitability', cartera: 'receivables' }[linkParams.get('tab')] || 'records'));
+    // `?tab=formalizacion` (29 de octubre de 2026): la solicitud de formalización abre su vista.
+    const [activeTab, setActiveTab] = useState(() => ({ rentabilidad: 'profitability', cartera: 'receivables', formalizacion: 'formalizations' }[linkParams.get('tab')] || 'records'));
     const [expandedClients, setExpandedClients] = useState({});
     // Filtros de Cuentas por cobrar (23 de octubre de 2026): a quién se le cobra y cuánto lleva esperando.
     const [receivableKind, setReceivableKind] = useState(null);
@@ -255,6 +257,15 @@ const FinancialDashboard = () => {
     const collectionActivities = useCollectionActivities(!!currentUser && canAccessFinancials && activeTab === 'receivables');
     // Quien no administra y llega con el enlace de la revisión del mes ve Movimientos, no una pestaña vacía.
     useEffect(() => { if (activeTab === 'profitability' && currentUser && !isAdminUser) setActiveTab('records'); }, [activeTab, currentUser, isAdminUser]);
+    // La formalización de proyectos la ven Dirección y Administrativa y contable (29 de octubre de 2026); lo decide el servidor.
+    const { data: formalizationAccess, isFetched: formalizationAccessChecked } = useQuery({
+        queryKey: ['financial-formalization-access'],
+        enabled: !!(currentUser && canAccessFinancials),
+        staleTime: 5 * 60_000,
+        queryFn: async () => (await axios.get(`${getApiBaseUrl()}/api/financials/formalizations/access`, { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } })).data
+    });
+    const canFormalize = formalizationAccess?.canManage === true;
+    useEffect(() => { if (activeTab === 'formalizations' && formalizationAccessChecked && !canFormalize) setActiveTab('receivables'); }, [activeTab, formalizationAccessChecked, canFormalize]);
 
     // Fetch analytical aggregation from protected backend endpoint
     const { data, isLoading, isFetching, error, refetch } = useQuery({
@@ -1127,7 +1138,7 @@ await invalidateFinancialQueries(queryClient);
         { key: 'CLIENTE', title: 'Clientes', groups: receivablesByClient.filter((group) => group.kind !== 'PRESTAMO') },
         { key: 'PRESTAMO', title: 'Préstamos a terceros', groups: receivablesByClient.filter((group) => group.kind === 'PRESTAMO') }
     ].filter((section) => section.groups.length > 0), [receivablesByClient]);
-    const financialTabs = useMemo(() => visibleFinancialTabs({ isAdmin: isAdminUser }), [isAdminUser]);
+    const financialTabs = useMemo(() => visibleFinancialTabs({ isAdmin: isAdminUser, canFormalize }), [isAdminUser, canFormalize]);
     const activeFinancialTab = financialTabOfView(activeTab);
     const activeTabViews = financialTabs.find((group) => group.key === activeFinancialTab)?.views || [];
 
@@ -1260,7 +1271,7 @@ await invalidateFinancialQueries(queryClient);
                 <div role="tablist" aria-label="Secciones de Financiero" className="flex items-center overflow-x-auto border-b border-zinc-200 pb-px dark:border-white/5">
                     {financialTabs.map((group) => (
                         <button key={group.key} type="button" role="tab" data-financial-tab={group.key} aria-selected={activeFinancialTab === group.key}
-                            onClick={() => setActiveTab(viewForFinancialTab(group.key, activeTab, { isAdmin: isAdminUser }))}
+                            onClick={() => setActiveTab(viewForFinancialTab(group.key, activeTab, { isAdmin: isAdminUser, canFormalize }))}
                             className={cn(
                                 "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
                                 activeFinancialTab === group.key ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
@@ -1688,6 +1699,10 @@ await invalidateFinancialQueries(queryClient);
 
                 {/* PESTAÑA 3: NOMINA OPERATIVA */}
                 {/* Cuentas por pagar y terceros (Rodny, 20 de octubre de 2026): el espejo de Cartera. */}
+                {activeTab === 'formalizations' && canFormalize && (
+                    <FormalizationsTab enabled={!!currentUser} onOpenReceivables={() => setActiveTab('receivables')} />
+                )}
+
                 {activeTab === 'profitability' && isAdminUser && (
                     <ProfitabilityTab enabled={!!currentUser} initialMonth={linkedMonth} />
                 )}
