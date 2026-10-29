@@ -7,7 +7,7 @@ import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 import {
   CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_STATUSES, OPERATION_STAGES, SERVICE_TYPES, STORY_FREQUENCIES,
-  contractQuota, isMeasured, labelOf, shortDate,
+  canMarkPublished, contractQuota, isMeasured, labelOf, shortDate,
 } from '@/lib/clientOperations';
 import { LEVEL_META, PIECE_STATUS, STAGE_TONE } from './operationTones';
 import CycleBar from './CycleBar';
@@ -136,6 +136,7 @@ function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onReopen
             <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
               {cycle.pieces.map((piece) => {
                 const late = piece.date < today && piece.status !== 'PUBLICADO';
+                const canMark = canMarkPublished(piece, today);
                 const status = PIECE_STATUS[piece.status];
                 return (
                   <tr key={piece.id} className={cn(late && 'bg-destructive/[0.04]')}>
@@ -143,7 +144,7 @@ function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onReopen
                     <td className="px-3 py-2.5"><span className="text-zinc-500">{piece.format} · </span><span className="text-zinc-800 dark:text-zinc-100">{piece.title}</span></td>
                     <td className="px-3 py-2.5"><span className={cn('inline-flex rounded-md px-2 py-0.5 text-xs font-semibold', status.chip)}>{status.label}</span></td>
                     <td className="px-3 py-1 text-right">
-                      {late && !piece.external && <button type="button" onClick={() => onMarkPublished(piece)} className={cn(TEXT_ACTION, 'min-h-9 text-xs')}><CheckCircle2 className="h-4 w-4" />Ya se publicó</button>}
+                      {canMark && <button type="button" onClick={() => onMarkPublished(piece)} className={cn(TEXT_ACTION, 'min-h-9 text-xs')}><CheckCircle2 className="h-4 w-4" />Ya se publicó</button>}
                       {/* Lo marcado a mano se puede deshacer: vuelve al estado que tenía antes del clic. */}
                       {piece.markedByHand && onUndoPublished && (
                         <button type="button" onClick={() => onUndoPublished(piece)} title="Marcada a mano como publicada: vuelve al estado que tenía"
