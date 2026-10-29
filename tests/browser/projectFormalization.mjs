@@ -75,12 +75,48 @@ test('Administración carga el contrato, autoriza empezar sin anticipo y liga el
   await page.waitForTimeout(300);
   await shot(page, '05-formalizacion');
 
-  await cafe.locator('input[type="file"]').setInputFiles({ name: 'Contrato Café Altura firmado.pdf', mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF\n') });
-  await page.getByText('Contrato guardado.').waitFor();
-  await cafe.getByText('Contrato Café Altura firmado.pdf').waitFor();
+  const pdf = (name) => ({ name, mimeType: 'application/pdf', buffer: Buffer.from('%PDF-1.4\n%%EOF\n') });
+  const upload = page.locator('[data-formalization-upload]');
+  await cafe.locator('[data-formalization-upload-open]').click();
+  await upload.waitFor();
+  assert.equal((await upload.locator('[data-brain-select="true"]').innerText()).trim(), 'Contrato', 'sin contrato, lo primero es el contrato');
+  await upload.locator('[data-formalization-upload-save]').click();
+  assert.match(await upload.getByRole('alert').innerText(), /Elige el archivo/);
+  await upload.locator('[data-formalization-file]').setInputFiles(pdf('Contrato Café Altura firmado.pdf'));
+  await page.waitForTimeout(250);
+  await shot(page, '06-subir-contrato');
+  await upload.locator('[data-formalization-upload-save]').click();
+  await page.getByText('Contrato guardado').waitFor();
+  await cafe.locator('[data-formalization-document="CONTRATO"]').waitFor();
   assert.equal(await cafe.getAttribute('data-formalization-status'), 'PENDIENTE', 'el contrato solo no basta');
   assert.match(await cafe.innerText(), /Falta el anticipo para habilitarlo/);
-  await shot(page, '06-contrato-cargado');
+
+  // Con el contrato ya cargado, lo que sigue son otrosí y anexos; uno subido por error se anula con motivo.
+  assert.match(await cafe.locator('[data-formalization-upload-open]').innerText(), /Subir otrosí o anexo/);
+  await cafe.locator('[data-formalization-upload-open]').click();
+  await upload.waitFor();
+  assert.equal((await upload.locator('[data-brain-select="true"]').innerText()).trim(), 'Otrosí');
+  await upload.locator('[data-formalization-note]').fill('Otrosí 1: se suman 4 reels al mes');
+  await upload.locator('[data-formalization-file]').setInputFiles(pdf('Otrosí 1 Café Altura.pdf'));
+  await upload.locator('[data-formalization-upload-save]').click();
+  await page.getByText('Otrosí guardado').waitFor();
+  await cafe.getByText('Otrosí 1: se suman 4 reels al mes').waitFor();
+  await shot(page, '07-contrato-y-otrosi');
+
+  await cafe.locator('[data-formalization-document="OTROSI"] [data-formalization-void-open]').click();
+  const voidDialog = page.locator('[data-formalization-void]');
+  await voidDialog.waitFor();
+  await voidDialog.locator('[data-formalization-void-save]').click();
+  assert.match(await voidDialog.getByRole('alert').innerText(), /Escribe por qué/);
+  await voidDialog.locator('[data-formalization-void-reason]').fill('Se subió la versión sin firmar.');
+  await page.waitForTimeout(250);
+  await shot(page, '08-anular-documento');
+  await voidDialog.locator('[data-formalization-void-save]').click();
+  await page.getByText('Documento anulado').waitFor();
+  await cafe.locator('[data-formalization-document="OTROSI"]').waitFor({ state: 'detached' });
+  await cafe.locator('[data-formalization-voided-toggle]').click();
+  assert.match(await cafe.locator('[data-formalization-voided]').innerText(), /Otrosí · Otrosí 1 Café Altura\.pdf · anulado el .*: Se subió la versión sin firmar\./);
+  await shot(page, '09-documento-anulado');
 
   await cafe.locator('[data-formalization-exception-open]').click();
   const dialog = page.locator('[data-formalization-exception]');
@@ -92,14 +128,14 @@ test('Administración carga el contrato, autoriza empezar sin anticipo y liga el
   await dialog.getByLabel('Fecha de pago acordada').fill('15/11/2026');
   await dialog.getByLabel('Fecha de pago acordada').press('Enter');
   await page.waitForTimeout(250);
-  await shot(page, '07-empezar-sin-anticipo');
+  await shot(page, '10-empezar-sin-anticipo');
   await dialog.locator('[data-exception-save]').click();
   await page.getByText('Autorización guardada').waitFor();
   const enabled = page.locator('[data-formalization-section="done"] [data-formalization="f-cafe"]');
   await enabled.waitFor();
   assert.match(await enabled.innerText(), /Elisa Mestra autorizó empezar sin el anticipo el 29 de oct de 2026: Cliente referido por Hotel Bahía; arranca la campaña de diciembre\. Paga el anticipo con la primera entrega\. Pago acordado para el 15 de nov de 2026\./);
   assert.match(await enabled.innerText(), /Se le avisó a Kamila del Toro/);
-  await shot(page, '08-proyecto-habilitado');
+  await shot(page, '11-proyecto-habilitado');
 
   const norte = page.locator('[data-formalization="f-norte"]');
   await norte.locator('[data-brain-select="true"]').click();
@@ -107,7 +143,27 @@ test('Administración carga el contrato, autoriza empezar sin anticipo y liga el
   await norte.getByRole('button', { name: 'Ligar' }).click();
   await page.getByText('Cuenta del anticipo ligada').waitFor();
   await norte.locator('[data-formalization-advance="PENDIENTE"]').waitFor();
-  await shot(page, '09-anticipo-ligado');
+  await shot(page, '12-anticipo-ligado');
+
+  // Un cliente de siempre que suma un servicio: no se le pide anticipo ni contrato nuevo.
+  const foobe = page.locator('[data-formalization="f-foobe"]');
+  assert.match(await foobe.locator('[data-formalization-requirements]').innerText(), /Se pide el contrato firmado y el anticipo/);
+  await foobe.locator('[data-formalization-requirements-open]').click();
+  const requirements = page.locator('[data-formalization-requirements-dialog]');
+  await requirements.waitFor();
+  await requirements.locator('[data-requirement="contract"]').uncheck();
+  await requirements.locator('[data-requirement="advance"]').uncheck();
+  await requirements.locator('[data-requirement="note"]').fill('Cliente activo: el servicio va con su contrato vigente y se cobra con la mensualidad');
+  await page.waitForTimeout(250);
+  await shot(page, '13-que-se-pide');
+  await requirements.locator('[data-requirements-save]').click();
+  await page.getByText('Requisitos guardados').waitFor();
+  const foobeDone = page.locator('[data-formalization-section="done"] [data-formalization="f-foobe"]');
+  await foobeDone.waitFor();
+  assert.match(await foobeDone.innerText(), /No se pide ni contrato ni anticipo\.\s+Elisa Mestra lo ajustó el 29 de oct de 2026: Cliente activo/);
+  assert.equal(await foobeDone.locator('[data-formalization-requirements-open]').count(), 0, 'un proyecto habilitado ya no se cambia');
+  await foobeDone.scrollIntoViewIfNeeded();
+  await shot(page, '14-habilitado-sin-requisitos');
   assert.deepEqual(errors, []);
   await page.close();
 });
@@ -118,14 +174,14 @@ test('en oscuro y en el celular se lee entero; quien no es de Dirección ni Admi
   await dark.page.locator('[data-financial-view="formalizations"]').click();
   await dark.page.locator('[data-formalization="f-cafe"]').waitFor();
   await dark.page.waitForTimeout(300);
-  await shot(dark.page, '10-formalizacion-oscuro');
+  await shot(dark.page, '15-formalizacion-oscuro');
   await dark.page.close();
 
   const phone = await openFormalizations('', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await phone.page.locator('[data-financial-view="formalizations"]').click();
   await phone.page.locator('[data-formalization="f-cafe"]').waitFor();
   assert.equal(await phone.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'sin desplazamiento horizontal');
-  await shot(phone.page, '11-formalizacion-celular');
+  await shot(phone.page, '16-formalizacion-celular');
   await phone.page.close();
 
   const reader = await openFormalizations('?viewer=reader');

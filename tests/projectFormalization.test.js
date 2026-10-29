@@ -5,8 +5,8 @@ import {
 } from '../src/lib/projectFormalization.js';
 import { receivableDueDate } from '../src/lib/receivableCollections.js';
 import {
-    attachFormalizationContract, canManageFormalizations, linkFormalizationAdvance, listFormalizations, quotationInstallments,
-    refreshFormalizationsForReceivable, registerFormalizationException, startFormalization, sweepFormalizations
+    attachFormalizationDocument, canManageFormalizations, voidFormalizationDocument, linkFormalizationAdvance, listFormalizations, quotationInstallments,
+    refreshFormalizationsForReceivable, registerFormalizationException, setFormalizationRequirements, startFormalization, sweepFormalizations
 } from '../src/services/projectFormalizationService.js';
 
 // Punto 3 de la solicitud de Elisa (Rodny, 29 de octubre de 2026): la solicitud de formalización le llega al área
@@ -81,7 +81,12 @@ const fakeDb = ({ quotation = quotationFixture(), lead = { id: 'lead-1', clientI
         projectFormalizationDocument: {
             create: async ({ data }) => { const row = { id: `d-${db.rows.documents.length + 1}`, uploadedAt: NOW, ...data }; db.rows.documents.push(row); return row; },
             findMany: async ({ where }) => db.rows.documents.filter((item) => item.formalizationId === where.formalizationId),
-            findFirst: async ({ where }) => db.rows.documents.find((item) => item.id === where.id && item.formalizationId === where.formalizationId) || null
+            findFirst: async ({ where }) => db.rows.documents.find((item) => item.id === where.id && item.formalizationId === where.formalizationId) || null,
+            updateMany: async ({ where, data }) => {
+                const rows = db.rows.documents.filter((item) => item.id === where.id && !item.voidedAt);
+                rows.forEach((row) => Object.assign(row, data));
+                return { count: rows.length };
+            }
         },
         user: { findMany: async () => people },
         teamMember: { findFirst: async ({ where }) => people.find((item) => item.id === where.userId)?.teamMember || null }
@@ -188,7 +193,7 @@ test('contrato y anticipo pagado habilitan el proyecto y avisan al project manag
     const { bells, notify, log } = collect();
     const formalization = await startFormalization(db, 'q-1', null, { now: NOW, notify, log });
 
-    const { status } = await attachFormalizationContract(db, storage(), formalization.id, PDF, { userId: 'u-elisa' }, { now: NOW, notify, log });
+    const { status } = await attachFormalizationDocument(db, storage(), formalization.id, PDF, { kind: 'CONTRATO' }, { userId: 'u-elisa' }, { now: NOW, notify, log });
     assert.equal(status, 'PENDIENTE', 'el contrato solo no basta');
 
     db.rows.receivables[0].status = 'PAGADO';
@@ -210,7 +215,7 @@ test('la excepción la registra Dirección o Administrativa con motivo y fecha; 
     const db = fakeDb();
     const { bells, notify, log } = collect();
     const formalization = await startFormalization(db, 'q-1', null, { now: NOW, notify, log });
-    await attachFormalizationContract(db, storage(), formalization.id, PDF, { userId: 'u-elisa' }, { now: NOW, notify, log });
+    await attachFormalizationDocument(db, storage(), formalization.id, PDF, { kind: 'CONTRATO' }, { userId: 'u-elisa' }, { now: NOW, notify, log });
 
     await assert.rejects(registerFormalizationException(db, formalization.id, { reason: '' }, { userId: 'u-francisco' }, { now: NOW, notify, log }), { statusCode: 400 });
     await registerFormalizationException(db, formalization.id, { reason: 'Cliente de hace tres años', conditions: 'Paga con la primera entrega', paymentDate: '2026-11-15' }, { userId: 'u-francisco', name: 'Francisco Villa' }, { now: NOW, notify, log });
@@ -240,6 +245,59 @@ test('sin plan de pagos, Administración liga la cuenta del anticipo; solo una d
     await assert.rejects(linkFormalizationAdvance(db, formalization.id, other.id, {}, collect()), { statusCode: 400 });
     await linkFormalizationAdvance(db, formalization.id, own.id, {}, collect());
     assert.equal(db.rows.formalizations[0].advanceReceivableId, own.id);
+});
+
+test('otrosí y anexos se guardan con su tipo; solo un contrato vigente habilita y lo anulado deja de contar', async () => {
+    assert.equal(formalizationState({ documents: [{ kind: 'ANEXO' }], advance: { amount: 1, status: 'PAGADO' } }).ready, false, 'un anexo suelto no formaliza');
+    assert.equal(formalizationState({ documents: [{ kind: 'CONTRATO', voidedAt: NOW }], advance: { amount: 1, status: 'PAGADO' } }).ready, false, 'un contrato anulado no cuenta');
+    assert.equal(formalizationState({ documents: [{}], advance: { amount: 1, status: 'PAGADO' } }).ready, true, 'lo subido antes de los tipos era un contrato');
+
+    const db = fakeDb();
+    const { notify, log } = collect();
+    const formalization = await startFormalization(db, 'q-1', null, { now: NOW, notify, log });
+    db.rows.receivables[0].status = 'PAGADO';
+    await assert.rejects(attachFormalizationDocument(db, storage(), formalization.id, PDF, { kind: 'OTRO' }, {}, { now: NOW, notify, log }), { statusCode: 400 });
+
+    const anexo = await attachFormalizationDocument(db, storage(), formalization.id, PDF, { kind: 'ANEXO', note: 'Cronograma' }, { userId: 'u-elisa' }, { now: NOW, notify, log });
+    assert.equal(anexo.status, 'PENDIENTE', 'con el anticipo pagado, un anexo todavía no habilita');
+    assert.equal(anexo.document.kind, 'ANEXO');
+    assert.equal(anexo.document.note, 'Cronograma');
+
+    const wrong = await attachFormalizationDocument(db, storage(), formalization.id, PDF, { kind: 'CONTRATO' }, { userId: 'u-elisa' }, { now: NOW, notify, log });
+    assert.equal(wrong.status, 'HABILITADO');
+    await assert.rejects(voidFormalizationDocument(db, formalization.id, wrong.document.id, ' ', { userId: 'u-elisa' }), { statusCode: 400 });
+    const voided = await voidFormalizationDocument(db, formalization.id, wrong.document.id, 'Era el contrato de otro cliente', { userId: 'u-elisa' }, { now: NOW });
+    assert.equal(voided.voidReason, 'Era el contrato de otro cliente');
+    assert.equal(db.rows.documents.length, 2, 'nada se borra');
+    assert.equal(db.rows.formalizations[0].status, 'HABILITADO', 'anular no deshace una habilitación ya avisada');
+    await assert.rejects(voidFormalizationDocument(db, formalization.id, wrong.document.id, 'otra vez', {}), { statusCode: 409 });
+    assert.ok(db.rows.audits.some((item) => item.after?.operation === 'DOCUMENT_VOID'));
+});
+
+test('un otrosí cumple el contrato; a un cliente de siempre se le puede dejar de pedir contrato o anticipo', async () => {
+    assert.equal(formalizationState({ documents: [{ kind: 'OTROSI' }], advance: { amount: 1, status: 'PAGADO' } }).ready, true, 'un otrosí es un acuerdo firmado');
+    assert.equal(formalizationState({ documents: [], advance: null, requiresContract: false, requiresAdvance: false }).ready, true);
+    assert.deepEqual(formalizationState({ documents: [], advance: { amount: 1, status: 'DEBE' }, requiresAdvance: false }).missing, ['CONTRATO']);
+
+    const db = fakeDb({ lead: { id: 'lead-1', clientId: 'c-1' }, clients: [{ id: 'c-1', name: 'Foobespain', slug: 'foobespain', projectManager: { userId: 'u-kamila', isActive: true } }] });
+    const { bells, notify, log } = collect();
+    const formalization = await startFormalization(db, 'q-1', null, { now: NOW, notify, log });
+    await assert.rejects(setFormalizationRequirements(db, formalization.id, { requiresContract: 'no' }, {}, { now: NOW, notify, log }), { statusCode: 400 });
+
+    const partial = await setFormalizationRequirements(db, formalization.id, { requiresContract: true, requiresAdvance: false, note: 'Cliente activo, se cobra con la mensualidad' }, { userId: 'u-elisa', name: 'Elisa Mestra' }, { now: NOW, notify, log });
+    assert.equal(partial.status, 'PENDIENTE', 'sin anticipo, todavía falta el contrato');
+    assert.equal(partial.requirementsChangedByName, 'Elisa Mestra');
+    assert.equal(db.rows.receivables[0].status, 'DEBE', 'dejar de pedirlo no toca la cuenta por cobrar');
+
+    const { items } = await listFormalizations(db);
+    assert.deepEqual(items[0].state.missing, ['CONTRATO']);
+    assert.equal(items[0].requirements.note, 'Cliente activo, se cobra con la mensualidad');
+
+    const done = await setFormalizationRequirements(db, formalization.id, { requiresContract: false, requiresAdvance: false }, { userId: 'u-elisa' }, { now: NOW, notify, log });
+    assert.equal(done.status, 'HABILITADO', 'si ya cumple, se habilita en el acto');
+    assert.deepEqual(bells.filter((bell) => bell.type === 'PROYECTO_HABILITADO').map((bell) => bell.userId), ['u-kamila']);
+    assert.ok(db.rows.audits.some((item) => item.after?.operation === 'REQUIREMENTS'));
+    await assert.rejects(setFormalizationRequirements(db, formalization.id, { requiresContract: true, requiresAdvance: true }, {}, { now: NOW, notify, log }), { statusCode: 409 });
 });
 
 test('solo Dirección y Administrativa gestionan la formalización', async () => {

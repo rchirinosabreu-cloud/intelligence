@@ -2792,6 +2792,14 @@ model ProjectFormalization {
   exceptionPaymentDate   String? // AAAA-MM-DD, la fecha de pago acordada
   enabledAt              DateTime? @db.Timestamptz()
   projectManagerNotified Boolean   @default(false)
+  // Qué se pide en este proyecto (Rodny, 29 de octubre de 2026): a un cliente de siempre que suma un servicio quizá no
+  // se le pide anticipo ni contrato nuevo. Lo cambian Dirección o Administración; queda quién, cuándo y una nota.
+  requiresContract          Boolean   @default(true)
+  requiresAdvance           Boolean   @default(true)
+  requirementsNote          String?
+  requirementsChangedAt     DateTime? @db.Timestamptz()
+  requirementsChangedById   String?
+  requirementsChangedByName String?
   updatedAt              DateTime  @default(now()) @updatedAt @db.Timestamptz()
 
   @@index([status], map: "ProjectFormalization_status_idx")
@@ -2810,6 +2818,13 @@ model ProjectFormalizationDocument {
   sha256          String
   uploadedById    String?
   uploadedAt      DateTime @default(now()) @db.Timestamptz()
+  // CONTRATO, OTROSI o ANEXO (29 de octubre de 2026), con una nota opcional. Un archivo subido por error se anula con
+  // motivo: sigue guardado, deja de contar.
+  kind            String    @default("CONTRATO")
+  note            String?
+  voidedAt        DateTime? @db.Timestamptz()
+  voidReason      String?
+  voidedById      String?
 
   @@index([formalizationId, uploadedAt], map: "ProjectFormalizationDocument_formalization_idx")
 }

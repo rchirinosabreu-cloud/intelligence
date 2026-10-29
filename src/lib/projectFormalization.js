@@ -11,6 +11,23 @@
 export const FORMALIZATION_AREAS = Object.freeze(['DIRECCION', 'ADMINISTRATIVA']);
 export const FORMALIZATION_REASON_MAX = 300;
 export const FORMALIZATION_CONDITIONS_MAX = 500;
+export const FORMALIZATION_NOTE_MAX = 300;
+
+// Lo que se carga a una formalización (Rodny, 29 de octubre de 2026: el otrosí y los anexos). Solo un contrato vigente
+// habilita el proyecto; un otrosí o un anexo suelto no lo dan por formalizado.
+export const FORMALIZATION_DOCUMENT_KINDS = Object.freeze([
+    { value: 'CONTRATO', label: 'Contrato' },
+    { value: 'OTROSI', label: 'Otrosí' },
+    { value: 'ANEXO', label: 'Anexo' }
+]);
+export const isFormalizationDocumentKind = (value) => FORMALIZATION_DOCUMENT_KINDS.some((kind) => kind.value === value);
+export const formalizationDocumentKindLabel = (value) => FORMALIZATION_DOCUMENT_KINDS.find((kind) => kind.value === (value || 'CONTRATO'))?.label || 'Documento';
+/** Los documentos que cuentan: los que no se anularon. */
+export const currentDocuments = (documents = []) => documents.filter((document) => !document.voidedAt);
+// Un otrosí también es un acuerdo firmado (Rodny, 29 de octubre de 2026): a un cliente que suma un servicio le basta.
+// Un anexo, no.
+const SIGNED_KINDS = new Set(['CONTRATO', 'OTROSI']);
+const isCurrentContract = (document) => !document.voidedAt && SIGNED_KINDS.has(document.kind || 'CONTRATO');
 
 const DAY = /^\d{4}-\d{2}-\d{2}$/;
 
@@ -33,17 +50,23 @@ export const advanceState = (receivable) => {
 };
 
 /**
- * Lo que tiene y lo que le falta a una formalización. `ready` es la condición para habilitar el proyecto: contrato
- * cargado y anticipo pagado, o contrato y excepción autorizada.
+ * Lo que tiene y lo que le falta a una formalización. `ready` es la condición para habilitar el proyecto: lo que se pide
+ * en ese proyecto, cumplido. Por defecto se piden el contrato (o un otrosí) y el anticipo pagado, o la excepción
+ * autorizada; Dirección o Administración pueden dejar de pedir cualquiera de los dos en un proyecto (Rodny, 29 de
+ * octubre de 2026: un cliente de siempre que suma un servicio).
  */
-export const formalizationState = ({ documents = [], advance = null, exceptionAt = null } = {}) => {
-    const contract = documents.length > 0;
+export const formalizationState = ({ documents = [], advance = null, exceptionAt = null, requiresContract = true, requiresAdvance = true } = {}) => {
+    const signed = documents.some(isCurrentContract);
+    const contract = signed || requiresContract === false;
     const advanceStatus = advanceState(advance);
-    const advanceCovered = advanceStatus === 'PAGADO' || Boolean(exceptionAt);
+    const advanceCovered = requiresAdvance === false || advanceStatus === 'PAGADO' || Boolean(exceptionAt);
     const missing = [];
     if (!contract) missing.push('CONTRATO');
     if (!advanceCovered) missing.push('ANTICIPO');
-    return { contract, advance: advanceStatus, exception: Boolean(exceptionAt), advanceCovered, ready: missing.length === 0, missing };
+    return {
+        contract, signed, advance: advanceStatus, exception: Boolean(exceptionAt), advanceCovered,
+        requiresContract: requiresContract !== false, requiresAdvance: requiresAdvance !== false, ready: missing.length === 0, missing
+    };
 };
 
 const MISSING_TEXT = { CONTRATO: 'el contrato firmado', ANTICIPO: 'el anticipo' };
@@ -53,6 +76,36 @@ export const missingText = (missing = []) => {
     const parts = missing.map((key) => MISSING_TEXT[key]).filter(Boolean);
     if (!parts.length) return '';
     return `Falta ${parts.length === 2 ? `${parts[0]} y ${parts[1]}` : parts[0]}`;
+};
+
+/** El tipo y la nota de un documento que se sube: el tipo es obligatorio y la nota opcional. Devuelve el problema o null. */
+export const documentUploadProblem = ({ kind, note } = {}) => {
+    if (!isFormalizationDocumentKind(kind)) return 'Elige si es el contrato, un otrosí o un anexo.';
+    if (String(note ?? '').trim().length > FORMALIZATION_NOTE_MAX) return `La nota admite como máximo ${FORMALIZATION_NOTE_MAX} caracteres.`;
+    return null;
+};
+
+/** Lo que se pide en un proyecto: las dos casillas son booleanas y la nota opcional. Devuelve el problema o null. */
+export const requirementsProblem = ({ requiresContract, requiresAdvance, note } = {}) => {
+    if (typeof requiresContract !== 'boolean' || typeof requiresAdvance !== 'boolean') return 'Marca si se pide el contrato y si se pide el anticipo.';
+    if (String(note ?? '').trim().length > FORMALIZATION_NOTE_MAX) return `La nota admite como máximo ${FORMALIZATION_NOTE_MAX} caracteres.`;
+    return null;
+};
+
+/** «Se pide el contrato y el anticipo», para la tarjeta. */
+export const requirementsText = ({ requiresContract = true, requiresAdvance = true } = {}) => {
+    if (requiresContract && requiresAdvance) return 'Se pide el contrato firmado y el anticipo.';
+    if (requiresContract) return 'Se pide el contrato firmado; el anticipo no.';
+    if (requiresAdvance) return 'Se pide el anticipo; el contrato no.';
+    return 'No se pide ni contrato ni anticipo.';
+};
+
+/** El motivo para anular un documento subido por error: obligatorio, porque el archivo se conserva. */
+export const documentVoidProblem = (reason) => {
+    const why = String(reason ?? '').trim();
+    if (!why) return 'Escribe por qué se anula el documento.';
+    if (why.length > FORMALIZATION_REASON_MAX) return `El motivo admite como máximo ${FORMALIZATION_REASON_MAX} caracteres.`;
+    return null;
 };
 
 /** El aviso a Administración: sin cifras, porque la campana también llega al celular. */
