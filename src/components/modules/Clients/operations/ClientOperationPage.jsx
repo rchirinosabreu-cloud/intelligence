@@ -12,7 +12,8 @@ import {
 import { LEVEL_META, PIECE_STATUS, STAGE_TONE } from './operationTones';
 import CycleBar from './CycleBar';
 import ClientObservations from './ClientObservations';
-import { CloseDialog, ReportDialog } from './MonthlyCloseDialogs';
+import { CloseDialog, ReportDialog, WorkAuthorizationDialog } from './MonthlyCloseDialogs';
+import { unbackedWork } from '@/lib/unbackedWork';
 import { canConfirmClose, closeOpensOn, closeSummaryText, reportStatusLabel } from '@/lib/monthlyClose';
 
 // Página completa de un cliente en «Operación» (borrador del 2 de octubre de 2026). Todo lo que la fila
@@ -202,7 +203,29 @@ function History({ months, monthlyReport, today, onReport, onClose }) {
   );
 }
 
-function Profile({ client, canManage, onEdit }) {
+// Trabajo en curso sin propuesta aprobada (29 de octubre de 2026): qué pasa y, para Dirección o Administración, la
+// autorización para seguir. La salida normal es renovar el contrato con «Editar».
+function UnbackedWork({ client, today, onAuthorize }) {
+  const finding = unbackedWork({ contract: client.contract, work: client.work, authorization: client.workAuthorization }, today);
+  if (!finding) return null;
+  return (
+    <div data-unbacked-work={finding.authorized ? 'authorized' : 'open'}
+      className={cn('mb-4 rounded-xl border p-3 text-sm', finding.authorized
+        ? 'border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300'
+        : 'border-brand-yellow/40 bg-brand-yellow/10 text-zinc-800 dark:text-zinc-100')}>
+      <p className="font-semibold">{finding.authorized ? 'Trabajo autorizado sin propuesta' : 'Trabajo sin propuesta aprobada'}</p>
+      <p className="mt-1">{finding.text}</p>
+      {!finding.authorized && <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Renueva el contrato con «Editar» o aprueba una cotización nueva.</p>}
+      {client.canAuthorizeWork && onAuthorize && (
+        <button type="button" onClick={onAuthorize} data-work-authorization-open className={cn(TEXT_ACTION, '-ml-3 mt-1 min-h-9')}>
+          {finding.authorized ? 'Cambiar la autorización' : 'Autorizar seguir'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function Profile({ client, canManage, onEdit, today, onAuthorizeWork }) {
   const { contract } = client;
   const quota = contractQuota(contract);
   return (
@@ -211,6 +234,7 @@ function Profile({ client, canManage, onEdit }) {
         <h2 className={CARD_TITLE}>Ficha operativa</h2>
         {canManage && <button type="button" onClick={onEdit} className={cn(TEXT_ACTION, '-mr-2 -mt-2')}><Edit className="h-4 w-4" />Editar</button>}
       </div>
+      <UnbackedWork client={client} today={today} onAuthorize={onAuthorizeWork} />
       {client.description && <p className="mb-4 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{client.description}</p>}
       {client.instagramUrl && (
         <a href={client.instagramUrl} target="_blank" rel="noreferrer" className="mb-4 inline-flex min-h-9 items-center gap-2 text-sm font-medium text-brand-cyan-deep hover:underline dark:text-brand-cyan">
@@ -284,7 +308,7 @@ function Tasks({ tasks, onNewTask, onOpenTask }) {
 
 export default function ClientOperationPage({
   client, evaluation, today, canManage, currentUserId, isAdmin,
-  onEditProfile, onMarkPublished, onUndoPublished, onSaveReport, onConfirmClose, onOpenPlan, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
+  onEditProfile, onMarkPublished, onUndoPublished, onSaveReport, onConfirmClose, onAuthorizeWork, onOpenPlan, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
 }) {
   const measured = isMeasured(client);
   const { current } = client.cycles || {};
@@ -293,6 +317,7 @@ export default function ClientOperationPage({
   // El mes cuyo informe o cierre se está editando; el diálogo se cierra solo cuando el servidor confirma.
   const [reportFor, setReportFor] = useState(null);
   const [closeFor, setCloseFor] = useState(null);
+  const [authorizing, setAuthorizing] = useState(false);
   // Entrar a un cliente es entrar a una página: arriba del todo, no donde iba la lista.
   useLayoutEffect(() => { window.scrollTo(0, 0); }, [client.id]);
   return (
@@ -317,7 +342,7 @@ export default function ClientOperationPage({
           {measured && history.length > 0 && <History months={history} monthlyReport={monthlyReport} today={today} onReport={setReportFor} onClose={setCloseFor} />}
         </div>
         <div className="flex min-w-0 flex-col gap-6">
-          <Profile client={client} canManage={canManage} onEdit={onEditProfile} />
+          <Profile client={client} canManage={canManage} onEdit={onEditProfile} today={today} onAuthorizeWork={onAuthorizeWork ? () => setAuthorizing(true) : null} />
           {measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
         </div>
       </div>
@@ -325,6 +350,8 @@ export default function ClientOperationPage({
         onSave={async (data) => { await onSaveReport(reportFor, data); setReportFor(null); }} />}
       {closeFor && <CloseDialog month={closeFor} monthlyReport={monthlyReport} onClose={() => setCloseFor(null)}
         onConfirm={async (note) => { await onConfirmClose(closeFor, note); setCloseFor(null); }} />}
+      {authorizing && <WorkAuthorizationDialog clientName={client.name} today={today} onClose={() => setAuthorizing(false)}
+        onSave={async (data) => { await onAuthorizeWork(data); setAuthorizing(false); }} />}
     </div>
   );
 }

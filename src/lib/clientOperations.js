@@ -4,6 +4,8 @@
 // las piezas, sus fechas y las tareas. Lo único que se escribe es lo que nadie más sabe: el contrato.
 // Las mismas reglas las usan la pantalla y el servidor.
 
+import { unbackedWork } from './unbackedWork.js';
+
 // Etapas de una pieza, en orden. Cada una cuenta las piezas que llegaron *al menos* hasta ahí.
 export const OPERATION_STAGES = [
   { key: 'redactada', label: 'Redactada', hint: 'Tiene guion y texto escritos' },
@@ -79,17 +81,28 @@ function finish(reasons) {
  */
 export function evaluateClientOperation(client, { today }) {
   const { contract } = client;
-  if (!contract) return { level: 'gray', reasons: [{ level: 'gray', text: 'Sin contrato cargado: no hay contra qué medir el avance.' }] };
+  // Trabajo en curso sin propuesta aprobada (29 de octubre de 2026): un motivo propio, nunca un gris callado.
+  const unbacked = unbackedWork({ contract, work: client.work, authorization: client.workAuthorization }, today);
+  const unbackedReason = unbacked && { level: unbacked.authorized ? 'gray' : 'yellow', text: unbacked.text };
+  if (!contract) {
+    if (unbackedReason) return { level: unbackedReason.level, reasons: [unbackedReason] };
+    return { level: 'gray', reasons: [{ level: 'gray', text: 'Sin contrato cargado: no hay contra qué medir el avance.' }] };
+  }
   if (contract.status === 'STAND_BY') {
     return { level: 'gray', reasons: [{ level: 'gray', text: contract.standBySince ? `En stand by desde el ${shortDate(contract.standBySince)}.` : 'En stand by.' }] };
   }
-  if (contract.status === 'TERMINADO') return { level: 'gray', reasons: [{ level: 'gray', text: 'Contrato terminado.' }] };
+  if (contract.status === 'TERMINADO') {
+    if (unbackedReason) return { level: unbackedReason.level, reasons: [unbackedReason] };
+    return { level: 'gray', reasons: [{ level: 'gray', text: 'Contrato terminado.' }] };
+  }
 
   const reasons = [];
+  if (unbacked && !unbacked.authorized) reasons.push(unbackedReason);
   if (contract.endDate) {
     const left = daysBetween(today, contract.endDate);
-    if (left < 0) reasons.push({ level: 'yellow', text: `El contrato venció el ${shortDate(contract.endDate)}: renovarlo o cerrarlo.` });
-    else if (left <= CONTRACT_WARNING_DAYS) reasons.push({ level: 'yellow', text: `El contrato vence el ${shortDate(contract.endDate)}.` });
+    // Vencido y con trabajo lo dice el motivo de arriba; con autorización vigente, no se insiste.
+    if (left < 0 && !unbacked) reasons.push({ level: 'yellow', text: `El contrato venció el ${shortDate(contract.endDate)}: renovarlo o cerrarlo.` });
+    else if (left >= 0 && left <= CONTRACT_WARNING_DAYS) reasons.push({ level: 'yellow', text: `El contrato vence el ${shortDate(contract.endDate)}.` });
   }
 
   // Servicios: sin cupo de piezas, lo que dice si va bien son sus tareas.

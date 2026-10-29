@@ -9,9 +9,11 @@ import prisma from '../lib/prisma.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import {
   cycleForDate, cycleOf, previousCycle, summarizeCycle, evaluateClientOperation, isMeasured,
-  normalizeOperationProfile,
+  normalizeOperationProfile, MONTH_NAMES,
 } from '../lib/clientOperations.js';
 import { CLOSE_NOTE_MAX, canConfirmClose, closeSnapshot, reportProblem } from '../lib/monthlyClose.js';
+import { authorizationProblem } from '../lib/unbackedWork.js';
+import { userHasArea } from './teamAreaService.js';
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { status, ...extra });
 
@@ -27,8 +29,9 @@ const OBSERVATIONS_SHOWN = 100;
 // parrilla en curso puede ser la del mes pasado, así que se lee un mes más.
 function monthWindow(todayKey) {
   const [year, month] = todayKey.split('-').map(Number);
-  return Array.from({ length: HISTORY_MONTHS + 2 }, (_, back) => {
-    const index = year * 12 + (month - 1) - back;
+  // Desde el mes siguiente: una parrilla ya armada para el próximo mes también es trabajo en curso.
+  return Array.from({ length: HISTORY_MONTHS + 3 }, (_, offset) => {
+    const index = year * 12 + (month - 1) + 1 - offset;
     return { year: Math.floor(index / 12), month: (index % 12) + 1 };
   });
 }
@@ -42,6 +45,7 @@ const clientSelect = (window) => ({
   contracts: { orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }], take: 1 },
   monthlyReports: { where: { OR: window } },
   monthlyCloses: { where: { OR: window } },
+  workAuthorizations: { orderBy: { createdAt: 'desc' }, take: 1 },
   contentPlans: {
     where: { deletedAt: null, OR: window },
     select: {
@@ -113,6 +117,22 @@ function cycleSummary(client, cycle, quota, today, reporters) {
   return summary;
 }
 
+// Las parrillas con piezas del mes en curso o del siguiente (mes calendario), y las tareas abiertas.
+function currentWork(client, today) {
+  const [year, month] = today.split('-').map(Number);
+  const next = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+  const plans = (client.contentPlans || [])
+    .filter((plan) => (plan.year === year && plan.month === month) || (plan.year === next.year && plan.month === next.month))
+    .filter((plan) => (plan.contentItems || []).length > 0)
+    .sort((a, b) => a.year - b.year || a.month - b.month)
+    .map((plan) => MONTH_NAMES[plan.month - 1].toLowerCase());
+  return { openTasks: (client.nativeTasks || []).length, plans: [...new Set(plans)] };
+}
+
+const publicAuthorization = (row) => (row ? {
+  until: row.until, reason: row.reason, byName: row.authorizedByName ?? null, at: row.createdAt ? bogotaDate(row.createdAt) : null,
+} : null);
+
 function buildOperation(client, { today, reporters, detail }) {
   const observations = (client.observations || []).map((row) => publicObservation(row, reporters));
   const contract = publicContract(client.contracts?.[0]);
@@ -128,6 +148,9 @@ function buildOperation(client, { today, reporters, detail }) {
     }),
     cycles: {},
     history: [],
+    // Lo que se está trabajando, con o sin contrato: tareas abiertas y parrillas del mes en curso o del siguiente.
+    work: currentWork(client, today),
+    workAuthorization: publicAuthorization(client.workAuthorizations?.[0]),
     observations,
     latestObservation: observations[0] ? { text: observations[0].text, date: observations[0].date, by: observations[0].by } : null,
   };
@@ -186,12 +209,38 @@ export const createClientOperationsService = ({
     return clients.map((client) => buildOperation(client, { today, reporters, detail: false }));
   };
 
-  const getOperation = async (slug) => {
+  // Autorizar trabajo sin propuesta aprobada es de Dirección o Administrativa y contable (29 de octubre de 2026).
+  const canAuthorizeWork = async (userId) => {
+    if (!userId) return false;
+    for (const area of ['DIRECCION', 'ADMINISTRATIVA']) if (await userHasArea(db, userId, area)) return true;
+    return false;
+  };
+
+  const getOperation = async (slug, { viewerUserId = null } = {}) => {
     const today = todayKey();
     const client = await db.client.findFirst({ where: { slug: String(slug || '') }, select: clientSelect(monthWindow(today)) });
     if (!client) throw httpError(404, 'No encontramos ese cliente.');
     const reporters = await reporterNames([client]);
-    return buildOperation(client, { today, reporters, detail: true });
+    const operation = buildOperation(client, { today, reporters, detail: true });
+    if (viewerUserId) operation.canAuthorizeWork = await canAuthorizeWork(viewerUserId);
+    return operation;
+  };
+
+  /**
+   * Autoriza seguir trabajando sin propuesta aprobada hasta una fecha, con motivo. Queda quién y cuándo; una
+   * autorización nueva no borra las anteriores.
+   */
+  const authorizeWork = async ({ clientId, until, reason, actorUserId }) => {
+    if (!(await canAuthorizeWork(actorUserId))) throw httpError(403, 'Autorizar trabajo sin propuesta aprobada es de Dirección o Administración.');
+    const problem = authorizationProblem({ until, reason }, todayKey());
+    if (problem) throw httpError(422, problem);
+    const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { id: true, slug: true } });
+    if (!client) throw httpError(404, 'No encontramos ese cliente.');
+    const actor = await db.user.findUnique({ where: { id: actorUserId }, select: { name: true } }).catch(() => null);
+    await db.clientWorkAuthorization.create({
+      data: { clientId: client.id, until: String(until).trim(), reason: String(reason).trim(), authorizedById: actorUserId, authorizedByName: actor?.name || null },
+    });
+    return getOperation(client.slug, { viewerUserId: actorUserId });
   };
 
   const saveProfile = async ({ clientId, input = {}, actorUserId }) => {
@@ -367,7 +416,7 @@ export const createClientOperationsService = ({
     return db.teamMember.update({ where: { id: member.id }, data: { highlightedAction: value } });
   };
 
-  return { listOperations, getOperation, saveProfile, setMonthlyReport, confirmMonthlyClose, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
+  return { listOperations, getOperation, authorizeWork, saveProfile, setMonthlyReport, confirmMonthlyClose, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
 };
 
 export const clientOperationsService = createClientOperationsService();

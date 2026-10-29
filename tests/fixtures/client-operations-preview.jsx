@@ -143,6 +143,10 @@ function ClientPage() {
           toast.success(`«${piece.title}» volvió a su estado anterior (solo en la muestra).`);
         }}
         onSaveReport={async (month, data) => { saveReport(month, data); toast.success(`Informe de ${month.label.toLowerCase()} actualizado.`); }}
+        onAuthorizeWork={async ({ until, reason }) => {
+          update(client.id, (c) => ({ ...c, workAuthorization: { until, reason, byName: dashboardDemoUser.name, at: TODAY } }));
+          toast.success('Autorización guardada.');
+        }}
         onConfirmClose={async (month, note) => { confirmClose(month, note); toast.success(`Cierre de ${month.label.toLowerCase()} confirmado.`); }}
         onOpenPlan={() => toast(`Abriría la parrilla de ${client.name}.`)}
         onNewTask={() => toast(`Abriría «Nueva tarea» con ${client.name} ya elegido.`)}

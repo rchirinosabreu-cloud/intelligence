@@ -721,6 +721,7 @@ model Client {
   financialRecords    FinancialRecord[]
   accountsReceivables AccountsReceivable[]
   monthlyCloses       ClientMonthlyClose[]
+  workAuthorizations  ClientWorkAuthorization[]
   metricReports       MetricReport[]
   crmLeads            CrmLead[]
 
@@ -774,6 +775,31 @@ model ClientMonthlyReport {
   client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([clientId, year, month])
+}
+
+/// Autorización para seguir trabajando con un cliente sin propuesta aprobada (29 de octubre de 2026): hasta una fecha,
+/// con motivo y quién la dio. Vale la más reciente; las anteriores se conservan. Regla en src/lib/unbackedWork.js.
+model ClientWorkAuthorization {
+  id               String   @id @default(uuid())
+  clientId         String
+  until            String // AAAA-MM-DD
+  reason           String
+  authorizedById   String?
+  authorizedByName String?
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  client           Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+}
+
+/// Lo ya avisado a Dirección por trabajo sin propuesta aprobada: una vez por cliente y mes. La fila única es la cerradura.
+model UnbackedWorkAlert {
+  id       String   @id @default(uuid())
+  clientId String
+  monthKey String
+  sentAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([clientId, monthKey])
 }
 
 /// El cierre de un mes que confirma el project manager (29 de octubre de 2026). Confirmar no borra nada: `snapshot`

@@ -254,5 +254,9 @@ export const clients = [
     contract: contract({ serviceType: 'SERVICIOS', startDate: '2026-01-19', endDate: '2026-11-18', deliverables: [], storiesPerWeek: 0, monthlyReport: false, notes: 'Sin cupo fijo: lo que salga en el mes. Elisa hace el arqueo del fee contra las jornadas.' }),
     openTasks: [task('t22', 'Recibir el contenido que debe enviar el cliente', helen, '2026-10-05')],
   }),
-  client('promo-group', 'Promo Group · Endova', { communityManager: sara, complexity: 'ALTA', contract: null }),
+  // Trabajo sin propuesta aprobada (29 de octubre de 2026): sin contrato cargado y con tareas y parrilla del mes.
+  client('promo-group', 'Promo Group · Endova', {
+    communityManager: sara, complexity: 'ALTA', contract: null, work: { openTasks: 9, plans: ['octubre'] }, workAuthorization: null, canAuthorizeWork: true,
+    openTasks: [task('pg1', 'Diseñar los carruseles de Endova', sara, '2026-10-05'), task('pg2', 'Programar las piezas de la semana', sara, '2026-10-06')],
+  }),
 ];
