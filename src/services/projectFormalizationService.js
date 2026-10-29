@@ -19,7 +19,7 @@ import { normalizeClientProfile } from '../lib/clientProfile.js';
 import { pesosFromRate } from '../lib/receivableCurrency.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
 import {
-    FORMALIZATION_AREAS, FORMALIZATION_CONDITIONS_MAX, documentUploadProblem, documentVoidProblem, exceptionProblem,
+    FORMALIZATION_AREAS, FORMALIZATION_CONDITIONS_MAX, documentUploadProblem, documentVoidProblem, exceptionProblem, requirementsProblem,
     formalizationEnabledText, formalizationRequestText, formalizationState, quotationCode
 } from '../lib/projectFormalization.js';
 
@@ -209,6 +209,13 @@ export const startFormalization = async (db = prisma, quotationId, actor = null,
     return created.formalization;
 };
 
+// Lo que la regla necesita de una formalización, además de sus documentos y su anticipo.
+const stateInput = (formalization) => ({
+    exceptionAt: formalization.exceptionAt,
+    requiresContract: formalization.requiresContract !== false,
+    requiresAdvance: formalization.requiresAdvance !== false
+});
+
 const formalizationInclude = async (db, formalization) => {
     const [documents, advance] = await Promise.all([
         db.projectFormalizationDocument.findMany({ where: { formalizationId: formalization.id }, orderBy: { uploadedAt: 'asc' } }),
@@ -228,7 +235,7 @@ export const refreshFormalization = async (db = prisma, formalizationId, { now =
     const formalization = await db.projectFormalization.findUnique({ where: { id: formalizationId } });
     if (!formalization || formalization.status === 'HABILITADO') return formalization;
     const { documents, advance } = await formalizationInclude(db, formalization);
-    const state = formalizationState({ documents, advance, exceptionAt: formalization.exceptionAt });
+    const state = formalizationState({ documents, advance, ...stateInput(formalization) });
     if (!state.ready) return formalization;
     const update = await db.projectFormalization.updateMany({ where: { id: formalization.id, status: 'PENDIENTE' }, data: { status: 'HABILITADO', enabledAt: now } });
     if (!update.count) return db.projectFormalization.findUnique({ where: { id: formalization.id } });
@@ -263,7 +270,7 @@ const serializeDocument = (document) => ({
 });
 
 const serializeFormalization = (formalization, { quotation, client, documents, advance, clientReceivables }) => {
-    const state = formalizationState({ documents, advance, exceptionAt: formalization.exceptionAt });
+    const state = formalizationState({ documents, advance, ...stateInput(formalization) });
     return {
         id: formalization.id,
         status: formalization.status,
@@ -283,6 +290,13 @@ const serializeFormalization = (formalization, { quotation, client, documents, a
             at: formalization.exceptionAt, byName: formalization.exceptionByName, reason: formalization.exceptionReason,
             conditions: formalization.exceptionConditions, paymentDate: formalization.exceptionPaymentDate
         } : null,
+        requirements: {
+            requiresContract: formalization.requiresContract !== false,
+            requiresAdvance: formalization.requiresAdvance !== false,
+            note: formalization.requirementsNote || null,
+            changedAt: formalization.requirementsChangedAt || null,
+            changedByName: formalization.requirementsChangedByName || null
+        },
         clientReceivables
     };
 };
@@ -391,6 +405,35 @@ export const registerFormalizationException = async (db, id, input = {}, actor =
     const update = await db.projectFormalization.updateMany({ where: { id: formalization.id, exceptionAt: null, status: 'PENDIENTE' }, data });
     if (!update.count) throw httpError(409, 'La formalización cambió mientras tanto. Recarga y vuelve a intentarlo.');
     await audit(db, formalization.id, 'UPDATE', { operation: 'EXCEPTION', ...data }, actor);
+    return refreshFormalization(db, formalization.id, options);
+};
+
+/**
+ * Cambia lo que se pide en un proyecto (Rodny, 29 de octubre de 2026): a un cliente de siempre que suma un servicio
+ * quizá no se le pide anticipo ni contrato nuevo. Queda quién, cuándo y una nota opcional; si con eso ya cumple, el
+ * proyecto queda habilitado en el acto. Un proyecto ya habilitado no se cambia.
+ */
+export const setFormalizationRequirements = async (db, id, input = {}, actor = {}, options = {}) => {
+    const now = options.now || new Date();
+    const problem = requirementsProblem(input);
+    if (problem) throw httpError(400, problem);
+    const formalization = await loadFormalization(db, id);
+    if (formalization.status === 'HABILITADO') throw httpError(409, 'Este proyecto ya está habilitado.');
+    const data = {
+        requiresContract: input.requiresContract,
+        requiresAdvance: input.requiresAdvance,
+        requirementsNote: String(input.note ?? '').trim() || null,
+        requirementsChangedAt: now,
+        requirementsChangedById: actorIdOf(actor),
+        requirementsChangedByName: actor?.name || null
+    };
+    const update = await db.projectFormalization.updateMany({ where: { id: formalization.id, status: 'PENDIENTE' }, data });
+    if (!update.count) throw httpError(409, 'La formalización cambió mientras tanto. Recarga y vuelve a intentarlo.');
+    await audit(db, formalization.id, 'UPDATE', {
+        operation: 'REQUIREMENTS',
+        from: { requiresContract: formalization.requiresContract !== false, requiresAdvance: formalization.requiresAdvance !== false },
+        ...data
+    }, actor);
     return refreshFormalization(db, formalization.id, options);
 };
 

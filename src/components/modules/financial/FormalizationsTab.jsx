@@ -9,7 +9,7 @@ import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import { CheckCircle2, Clock, Loader2 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { FORMALIZATION_CONDITIONS_MAX, FORMALIZATION_REASON_MAX, exceptionProblem, missingText } from '@/lib/projectFormalization';
+import { FORMALIZATION_CONDITIONS_MAX, FORMALIZATION_NOTE_MAX, FORMALIZATION_REASON_MAX, exceptionProblem, missingText, requirementsText } from '@/lib/projectFormalization';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import FormalizationDocuments from './FormalizationDocuments';
 import { FinancialSectionHeader, FinancialSummaryCard } from './FinancialSectionParts';
@@ -127,7 +127,64 @@ function AdvanceLink({ item, onSaved }) {
     );
 }
 
-function FormalizationCard({ item, onSaved, onError, onOpenReceivables, onException }) {
+// Qué se pide en este proyecto (Rodny, 29 de octubre de 2026): a un cliente de siempre que suma un servicio quizá no se
+// le pide anticipo ni contrato nuevo. Sin motivo obligatorio: queda quién lo cambió, cuándo y la nota si la hay.
+function RequirementsDialog({ item, onClose, onSaved }) {
+    const [form, setForm] = useState({ requiresContract: item.state.requiresContract, requiresAdvance: item.state.requiresAdvance, note: item.requirements?.note || '' });
+    const [problem, setProblem] = useState('');
+    const [saving, setSaving] = useState(false);
+    const set = (patch) => { setForm((current) => ({ ...current, ...patch })); setProblem(''); };
+    const save = async () => {
+        setSaving(true);
+        try {
+            await axios.put(`${getApiBaseUrl()}/api/financials/formalizations/${item.id}/requirements`, form, auth());
+            await onSaved('Requisitos guardados');
+        } catch (error) {
+            console.error('[Formalización] Requisitos no guardados:', error.response?.data || error.message);
+            setProblem(error.response?.data?.error || 'No pudimos guardar lo que se pide.');
+        } finally {
+            setSaving(false);
+        }
+    };
+    const box = 'flex min-h-11 cursor-pointer items-center gap-3 rounded-lg border border-zinc-200 px-3 text-sm dark:border-white/10';
+    return (
+        <Dialog open onOpenChange={(next) => !next && !saving && onClose()}>
+            <DialogContent data-formalization-requirements-dialog className="sm:max-w-md dark:bg-zinc-900">
+                <DialogHeader>
+                    <DialogTitle>Qué se pide para empezar</DialogTitle>
+                    <DialogDescription>{item.client?.name || item.quotation?.company || item.quotation?.clientName} · {item.quotation?.code}. Se habilita en cuanto se cumpla lo marcado.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                    <label className={box}>
+                        <input type="checkbox" className="h-4 w-4 accent-primary" checked={form.requiresContract} data-requirement="contract"
+                            onChange={(event) => set({ requiresContract: event.target.checked })} />
+                        Contrato firmado u otrosí
+                    </label>
+                    <label className={box}>
+                        <input type="checkbox" className="h-4 w-4 accent-primary" checked={form.requiresAdvance} data-requirement="advance"
+                            onChange={(event) => set({ requiresAdvance: event.target.checked })} />
+                        Anticipo pagado
+                    </label>
+                    <label className="block space-y-1.5 text-sm"><span className="block">Nota <span className="text-zinc-400">(opcional)</span></span>
+                        <input className={field} maxLength={FORMALIZATION_NOTE_MAX} value={form.note} data-requirement="note"
+                            placeholder="Por ejemplo: cliente activo, se cobra con la mensualidad"
+                            onChange={(event) => set({ note: event.target.value })} />
+                    </label>
+                    {problem && <p role="alert" className="brain-destructive-text text-destructive text-sm">{problem}</p>}
+                </div>
+                <DialogFooter>
+                    <button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose} disabled={saving}>Cancelar</button>
+                    <button type="button" onClick={save} disabled={saving} data-requirements-save
+                        className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">
+                        {saving ? 'Guardando…' : 'Guardar'}
+                    </button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+function FormalizationCard({ item, onSaved, onError, onOpenReceivables, onException, onRequirements }) {
     const enabled = item.status === 'HABILITADO';
     const { state } = item;
     const name = item.client?.name || item.quotation?.company || item.quotation?.clientName || 'Cliente';
@@ -146,13 +203,27 @@ function FormalizationCard({ item, onSaved, onError, onOpenReceivables, onExcept
                     {enabled ? 'Habilitado para iniciar' : 'Por formalizar'}
                 </span>
             </div>
-            <div className="mt-2 divide-y divide-zinc-100 dark:divide-white/5">
+            <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-zinc-600 dark:text-zinc-300" data-formalization-requirements>
+                <span>{requirementsText(state)}</span>
+                {item.requirements?.changedAt && (
+                    <span className="text-zinc-500 dark:text-zinc-400">
+                        {item.requirements.changedByName || 'Administración'} lo ajustó el {day(item.requirements.changedAt)}{item.requirements.note ? `: ${sentence(item.requirements.note)}` : ''}.
+                    </span>
+                )}
+                {!enabled && (
+                    <button type="button" onClick={() => onRequirements(item)} data-formalization-requirements-open
+                        className="min-h-8 rounded-md px-1 font-semibold text-primary hover:bg-primary/5">Cambiar lo que se pide</button>
+                )}
+            </div>
+            <div className="mt-1 divide-y divide-zinc-100 dark:divide-white/5">
                 <Step done={state.contract} title="Contrato firmado">
-                    {!state.contract && <p className="text-xs text-zinc-500 dark:text-zinc-400">El contrato firmado o un soporte verificable: PDF, JPG o PNG. Después, los otrosí y los anexos.</p>}
+                    {!state.requiresContract && !state.signed && <p className="text-xs text-zinc-500 dark:text-zinc-400">No se pide en este proyecto.</p>}
+                    {state.requiresContract && !state.signed && <p className="text-xs text-zinc-500 dark:text-zinc-400">El contrato firmado o un otrosí: PDF, JPG o PNG. Los anexos se suben aparte.</p>}
                     <FormalizationDocuments formalizationId={item.id} documents={item.documents} onSaved={onSaved} onError={onError} />
                 </Step>
                 <Step done={state.advanceCovered} title="Anticipo">
-                    {item.advance && (
+                    {!state.requiresAdvance && <p className="text-xs text-zinc-500 dark:text-zinc-400" data-formalization-advance-not-required>No se pide en este proyecto.</p>}
+                    {state.requiresAdvance && item.advance && (
                         <p className="text-xs text-zinc-600 dark:text-zinc-300" data-formalization-advance={state.advance}>
                             {ADVANCE_TEXT[state.advance]} · {money(item.advance.amount)}{item.advance.number ? ` · cuenta de cobro No. ${String(item.advance.number).padStart(4, '0')}` : ' · sin emitir'}
                             {!enabled && state.advance !== 'PAGADO' && (
@@ -160,14 +231,14 @@ function FormalizationCard({ item, onSaved, onError, onOpenReceivables, onExcept
                             )}
                         </p>
                     )}
-                    {!item.advance && !enabled && <AdvanceLink item={item} onSaved={onSaved} />}
+                    {state.requiresAdvance && !item.advance && !enabled && <AdvanceLink item={item} onSaved={onSaved} />}
                     {item.exception && (
                         <p className="text-xs text-zinc-600 dark:text-zinc-300" data-formalization-exception-detail>
                             {item.exception.byName || 'Dirección'} autorizó empezar sin el anticipo el {day(item.exception.at)}: {sentence(item.exception.reason)}.
                             {item.exception.conditions ? ` ${sentence(item.exception.conditions)}.` : ''} Pago acordado para el {civilDay(item.exception.paymentDate)}.
                         </p>
                     )}
-                    {!enabled && !item.exception && state.advance !== 'PAGADO' && (
+                    {state.requiresAdvance && !enabled && !item.exception && state.advance !== 'PAGADO' && (
                         <button type="button" onClick={() => onException(item)} data-formalization-exception-open
                             className="min-h-11 rounded-lg px-2 text-xs font-semibold text-primary hover:bg-primary/5">
                             Autorizar empezar sin el anticipo
@@ -189,6 +260,7 @@ function FormalizationCard({ item, onSaved, onError, onOpenReceivables, onExcept
 export default function FormalizationsTab({ enabled, onOpenReceivables }) {
     const queryClient = useQueryClient();
     const [exceptionFor, setExceptionFor] = useState(null);
+    const [requirementsFor, setRequirementsFor] = useState(null);
     const { data, isLoading, error } = useQuery({
         queryKey: FORMALIZATIONS_KEY,
         enabled,
@@ -201,6 +273,7 @@ export default function FormalizationsTab({ enabled, onOpenReceivables }) {
         await queryClient.invalidateQueries({ queryKey: FORMALIZATIONS_KEY });
         invalidateFinancialQueries(queryClient);
         setExceptionFor(null);
+        setRequirementsFor(null);
         if (message) toast.success(message);
     };
     const failed = (message) => toast.error(message);
@@ -224,11 +297,12 @@ export default function FormalizationsTab({ enabled, onOpenReceivables }) {
                 <section key={section.key} className="space-y-3" data-formalization-section={section.key}>
                     <h3 className="text-sm font-semibold text-zinc-600 dark:text-zinc-300">{section.title}</h3>
                     {section.list.map((item) => (
-                        <FormalizationCard key={item.id} item={item} onSaved={saved} onError={failed} onOpenReceivables={onOpenReceivables} onException={setExceptionFor} />
+                        <FormalizationCard key={item.id} item={item} onSaved={saved} onError={failed} onOpenReceivables={onOpenReceivables} onException={setExceptionFor} onRequirements={setRequirementsFor} />
                     ))}
                 </section>
             ))}
             {exceptionFor && <ExceptionDialog item={exceptionFor} onClose={() => setExceptionFor(null)} onSaved={saved} />}
+            {requirementsFor && <RequirementsDialog item={requirementsFor} onClose={() => setRequirementsFor(null)} onSaved={saved} />}
         </div>
     );
 }

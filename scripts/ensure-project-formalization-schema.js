@@ -46,7 +46,14 @@ try {
     ALTER TABLE "ProjectFormalizationDocument" ADD COLUMN IF NOT EXISTS note TEXT;
     ALTER TABLE "ProjectFormalizationDocument" ADD COLUMN IF NOT EXISTS "voidedAt" TIMESTAMPTZ;
     ALTER TABLE "ProjectFormalizationDocument" ADD COLUMN IF NOT EXISTS "voidReason" TEXT;
-    ALTER TABLE "ProjectFormalizationDocument" ADD COLUMN IF NOT EXISTS "voidedById" TEXT;`);
+    ALTER TABLE "ProjectFormalizationDocument" ADD COLUMN IF NOT EXISTS "voidedById" TEXT;
+    -- Qué se pide en cada proyecto (29 de octubre de 2026). Lo que ya existía pedía las dos cosas.
+    ALTER TABLE "ProjectFormalization" ADD COLUMN IF NOT EXISTS "requiresContract" BOOLEAN NOT NULL DEFAULT true;
+    ALTER TABLE "ProjectFormalization" ADD COLUMN IF NOT EXISTS "requiresAdvance" BOOLEAN NOT NULL DEFAULT true;
+    ALTER TABLE "ProjectFormalization" ADD COLUMN IF NOT EXISTS "requirementsNote" TEXT;
+    ALTER TABLE "ProjectFormalization" ADD COLUMN IF NOT EXISTS "requirementsChangedAt" TIMESTAMPTZ;
+    ALTER TABLE "ProjectFormalization" ADD COLUMN IF NOT EXISTS "requirementsChangedById" TEXT;
+    ALTER TABLE "ProjectFormalization" ADD COLUMN IF NOT EXISTS "requirementsChangedByName" TEXT;`);
   console.log('[Project formalization] tables ready.');
 } catch (error) {
   console.error('[Project formalization] Failed to ensure the schema:', error.message);

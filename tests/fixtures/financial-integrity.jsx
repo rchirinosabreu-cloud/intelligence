@@ -139,7 +139,13 @@ const formalizations = [
     ],
     advance: { id: 'r-bahia-1', amount: 3000000, status: 'PAGADO', number: 401, currency: 'COP', payments: [] }, exception: null, clientReceivables: [] }
 ];
-const serializeFormalization = (item) => ({ ...item, state: formalizationState({ documents: item.documents, advance: item.advance, exceptionAt: item.exception?.at || null }) });
+// Un cliente de siempre que suma un servicio (29 de octubre de 2026): ahí se ajusta lo que se pide.
+formalizations.splice(2, 0, { id: 'f-foobe', status: 'PENDIENTE', requestedAt: '2026-10-29T13:00:00Z', enabledAt: null, projectManagerNotified: false,
+  quotation: { id: 'q-44', code: 'COT-0044', clientName: 'Equipo Foobespain', company: 'Foobespain', total: 1800000, currency: 'COP', acceptedAt: '2026-10-29T13:00:00Z' },
+  client: { id: 'c-foobe', name: 'Foobespain', slug: 'foobespain', projectManager: 'Kamila del Toro' }, documents: [],
+  advance: { id: 'r-foobe-1', amount: 900000, status: 'DEBE', number: null, currency: 'COP', payments: [] }, exception: null, clientReceivables: [] });
+for (const item of formalizations) item.requirements ||= { requiresContract: true, requiresAdvance: true, note: null, changedAt: null, changedByName: null };
+const serializeFormalization = (item) => ({ ...item, state: formalizationState({ documents: item.documents, advance: item.advance, exceptionAt: item.exception?.at || null, ...item.requirements }) });
 const enableIfReady = (item) => {
   if (item.status === 'HABILITADO' || !serializeFormalization(item).state.ready) return;
   Object.assign(item, { status: 'HABILITADO', enabledAt: '2026-10-29T15:00:00Z', projectManagerNotified: Boolean(item.client?.projectManager) });
@@ -213,6 +219,11 @@ axios.defaults.adapter = async config => {
   } else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/exception')) {
     const item = formalizations.find((row) => path.includes(row.id));
     item.exception = { at: '2026-10-29T15:00:00Z', byName: 'Elisa Mestra', reason: body.reason, conditions: body.conditions || null, paymentDate: body.paymentDate };
+    enableIfReady(item);
+    data = item;
+  } else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/requirements')) {
+    const item = formalizations.find((row) => path.includes(row.id));
+    item.requirements = { requiresContract: body.requiresContract, requiresAdvance: body.requiresAdvance, note: body.note || null, changedAt: '2026-10-29T15:00:00Z', changedByName: 'Elisa Mestra' };
     enableIfReady(item);
     data = item;
   } else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/advance')) {

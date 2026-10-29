@@ -62,7 +62,7 @@ import { listCollectionActivities, recordCollectionActivity } from '../../servic
 import { contentDisposition } from '../../controllers/financialRecordController.js';
 import {
     attachFormalizationDocument, canManageFormalizations, linkFormalizationAdvance, listFormalizations, openFormalizationDocument,
-    registerFormalizationException, requireFormalizationAccess, voidFormalizationDocument
+    registerFormalizationException, requireFormalizationAccess, setFormalizationRequirements, voidFormalizationDocument
 } from '../../services/projectFormalizationService.js';
 
 import {
@@ -248,6 +248,14 @@ router.post('/formalizations/:id/exception', requireFinancialAccess, formalizati
         res.json(await registerFormalizationException(prisma, req.params.id, req.body || {}, req.user));
     } catch (error) {
         formalizationError(res, error, 'No pudimos guardar la autorización.');
+    }
+});
+router.put('/formalizations/:id/requirements', requireFinancialAccess, formalizationAccess, async (req, res) => {
+    try {
+        const body = req.body || {};
+        res.json(await setFormalizationRequirements(prisma, req.params.id, { requiresContract: body.requiresContract, requiresAdvance: body.requiresAdvance, note: body.note }, req.user));
+    } catch (error) {
+        formalizationError(res, error, 'No pudimos guardar lo que se pide.');
     }
 });
 router.put('/formalizations/:id/advance', requireFinancialAccess, formalizationAccess, async (req, res) => {

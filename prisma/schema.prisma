@@ -2792,6 +2792,14 @@ model ProjectFormalization {
   exceptionPaymentDate   String? // AAAA-MM-DD, la fecha de pago acordada
   enabledAt              DateTime? @db.Timestamptz()
   projectManagerNotified Boolean   @default(false)
+  // Qué se pide en este proyecto (Rodny, 29 de octubre de 2026): a un cliente de siempre que suma un servicio quizá no
+  // se le pide anticipo ni contrato nuevo. Lo cambian Dirección o Administración; queda quién, cuándo y una nota.
+  requiresContract          Boolean   @default(true)
+  requiresAdvance           Boolean   @default(true)
+  requirementsNote          String?
+  requirementsChangedAt     DateTime? @db.Timestamptz()
+  requirementsChangedById   String?
+  requirementsChangedByName String?
   updatedAt              DateTime  @default(now()) @updatedAt @db.Timestamptz()
 
   @@index([status], map: "ProjectFormalization_status_idx")

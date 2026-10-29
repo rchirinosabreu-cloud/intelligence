@@ -144,6 +144,26 @@ test('Administración carga el contrato, autoriza empezar sin anticipo y liga el
   await page.getByText('Cuenta del anticipo ligada').waitFor();
   await norte.locator('[data-formalization-advance="PENDIENTE"]').waitFor();
   await shot(page, '12-anticipo-ligado');
+
+  // Un cliente de siempre que suma un servicio: no se le pide anticipo ni contrato nuevo.
+  const foobe = page.locator('[data-formalization="f-foobe"]');
+  assert.match(await foobe.locator('[data-formalization-requirements]').innerText(), /Se pide el contrato firmado y el anticipo/);
+  await foobe.locator('[data-formalization-requirements-open]').click();
+  const requirements = page.locator('[data-formalization-requirements-dialog]');
+  await requirements.waitFor();
+  await requirements.locator('[data-requirement="contract"]').uncheck();
+  await requirements.locator('[data-requirement="advance"]').uncheck();
+  await requirements.locator('[data-requirement="note"]').fill('Cliente activo: el servicio va con su contrato vigente y se cobra con la mensualidad');
+  await page.waitForTimeout(250);
+  await shot(page, '13-que-se-pide');
+  await requirements.locator('[data-requirements-save]').click();
+  await page.getByText('Requisitos guardados').waitFor();
+  const foobeDone = page.locator('[data-formalization-section="done"] [data-formalization="f-foobe"]');
+  await foobeDone.waitFor();
+  assert.match(await foobeDone.innerText(), /No se pide ni contrato ni anticipo\.\s+Elisa Mestra lo ajustó el 29 de oct de 2026: Cliente activo/);
+  assert.equal(await foobeDone.locator('[data-formalization-requirements-open]').count(), 0, 'un proyecto habilitado ya no se cambia');
+  await foobeDone.scrollIntoViewIfNeeded();
+  await shot(page, '14-habilitado-sin-requisitos');
   assert.deepEqual(errors, []);
   await page.close();
 });
@@ -154,14 +174,14 @@ test('en oscuro y en el celular se lee entero; quien no es de Dirección ni Admi
   await dark.page.locator('[data-financial-view="formalizations"]').click();
   await dark.page.locator('[data-formalization="f-cafe"]').waitFor();
   await dark.page.waitForTimeout(300);
-  await shot(dark.page, '13-formalizacion-oscuro');
+  await shot(dark.page, '15-formalizacion-oscuro');
   await dark.page.close();
 
   const phone = await openFormalizations('', { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
   await phone.page.locator('[data-financial-view="formalizations"]').click();
   await phone.page.locator('[data-formalization="f-cafe"]').waitFor();
   assert.equal(await phone.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, 'sin desplazamiento horizontal');
-  await shot(phone.page, '14-formalizacion-celular');
+  await shot(phone.page, '16-formalizacion-celular');
   await phone.page.close();
 
   const reader = await openFormalizations('?viewer=reader');
