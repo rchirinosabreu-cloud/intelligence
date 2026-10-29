@@ -52,11 +52,18 @@ function piecesFor(slug, cycle, deliverables) {
   });
 }
 
-const month = (label, quota, published, report) => ({ label, quota, created: quota, reached: reached([quota, quota, quota, published, published]), report });
-const delivered = (deliveredAt, by = 'Kamila Ortiz') => ({ deliveredAt, by });
+// Cada mes lleva su año, número y último día, como los manda el servidor: el cierre del mes los necesita.
+const MONTH_INDEX = { Enero: 1, Febrero: 2, Marzo: 3, Abril: 4, Mayo: 5, Junio: 6, Julio: 7, Agosto: 8, Septiembre: 9, Octubre: 10, Noviembre: 11, Diciembre: 12 };
+const monthBounds = (label) => {
+  const m = MONTH_INDEX[label];
+  return { year: 2026, month: m, start: `2026-${String(m).padStart(2, '0')}-01`, end: new Date(Date.UTC(2026, m, 0)).toISOString().slice(0, 10) };
+};
+const month = (label, quota, published, report) => ({ label, ...monthBounds(label), quota, created: quota, reached: reached([quota, quota, quota, published, published]), report, close: null });
+const delivered = (deliveredAt, by = 'Kamila Ortiz') => ({ status: 'ENVIADO', deliveredAt, by });
 
 function cycleOf({ label = 'Octubre', start = '2026-10-01', end = '2026-10-31', quota, created, stages, overdueItems = 0, longestGap = null, sameDay = [] }) {
-  return { label, start, end, day: span(start, TODAY) + 1, length: span(start, end) + 1, quota, created, reached: reached(stages), overdueItems, longestGap, sameDay };
+  const [year, monthNumber] = start.split('-').map(Number);
+  return { label, year, month: monthNumber, start, end, day: span(start, TODAY) + 1, length: span(start, end) + 1, quota, created, reached: reached(stages), overdueItems, longestGap, sameDay, report: null, close: null };
 }
 
 const task = (id, title, assignee, dueDate, overdue = false) => ({ id, title, assignee, dueDate, overdue });

@@ -43,11 +43,24 @@ export const createClientOperationsRouter = ({ service = clientOperationsService
     } catch (error) { return reply(res, error, logger); }
   });
 
+  // El informe del mes: su estado (pendiente, en elaboración, en revisión, enviado), el enlace y una nota. `delivered`
+  // sigue valiendo para quien lo marcaba como entregado.
   router.put('/:clientId/reports/:year/:month', async (req, res) => {
     try {
-      if (typeof req.body?.delivered !== 'boolean') return res.status(400).json({ error: 'Falta indicar si el informe se entregó.' });
+      const body = req.body || {};
+      if (body.status === undefined && typeof body.delivered !== 'boolean') return res.status(400).json({ error: 'Falta el estado del informe.' });
       return res.json(await service.setMonthlyReport({
-        clientId: req.params.clientId, year: Number(req.params.year), month: Number(req.params.month), delivered: req.body.delivered, actorUserId: req.user.userId,
+        clientId: req.params.clientId, year: Number(req.params.year), month: Number(req.params.month),
+        delivered: body.delivered, status: body.status, link: body.link, note: body.note, actorUserId: req.user.userId,
+      }));
+    } catch (error) { return reply(res, error, logger); }
+  });
+
+  // El project manager confirma el cierre del mes; lo pendiente se conserva.
+  router.post('/:clientId/closes/:year/:month', async (req, res) => {
+    try {
+      return res.status(201).json(await service.confirmMonthlyClose({
+        clientId: req.params.clientId, year: Number(req.params.year), month: Number(req.params.month), note: req.body?.note, actorUserId: req.user.userId,
       }));
     } catch (error) { return reply(res, error, logger); }
   });

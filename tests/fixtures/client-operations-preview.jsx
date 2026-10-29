@@ -13,6 +13,7 @@ import ClientsSection from '@/components/modules/Clients/operations/ClientsSecti
 import ClientOperationPage from '@/components/modules/Clients/operations/ClientOperationPage';
 import ClientOperationDialog from '@/components/modules/Clients/operations/ClientOperationDialog';
 import { CLIENT_AGENCIES, OPERATION_LEVELS, evaluateClientOperation, labelOf } from '@/lib/clientOperations';
+import { closeSnapshot } from '@/lib/monthlyClose';
 import { markTaskTimingTutorialSeen, markTaskTimingTutorialAfternoonSeen } from '@/lib/taskTiming';
 import { dashboardDemoUser } from './dashboardPreviewData';
 import { TODAY, clients as demoClients, team } from './clientOperationsPreviewData';
@@ -100,12 +101,20 @@ function ClientPage() {
     const lift = (n) => Math.max(n, published);
     return { ...c, cycles: { ...c.cycles, current: { ...c.cycles.current, pieces, overdueItems: overdue, reached: { redactada: lift(r.redactada), disenada: lift(r.disenada), aprobada: lift(r.aprobada), programada: lift(r.programada), publicada: published } } } };
   });
-  const markReport = (month) => update(client.id, (c) => {
-    const report = { deliveredAt: TODAY, by: dashboardDemoUser.name };
-    const history = c.history.map((m) => (m.label === month.label ? { ...m, report } : m));
-    const previous = c.cycles.previous?.label === month.label ? { ...c.cycles.previous, report } : c.cycles.previous;
-    return { ...c, history, cycles: { ...c.cycles, previous } };
+  // El informe y el cierre de un mes, en el mes en curso o en el historial (29 de octubre de 2026).
+  const patchMonth = (month, patch) => update(client.id, (c) => {
+    const apply = (m) => (m && m.label === month.label ? { ...m, ...patch(m) } : m);
+    return { ...c, history: (c.history || []).map(apply), cycles: { ...c.cycles, current: apply(c.cycles.current), previous: apply(c.cycles.previous) } };
   });
+  const saveReport = (month, data) => patchMonth(month, (m) => {
+    const sent = data.status === 'ENVIADO';
+    const already = m.report?.status === 'ENVIADO';
+    return { report: { status: data.status, link: data.link || null, note: data.note || null, updatedAt: TODAY,
+      deliveredAt: sent ? (already ? m.report.deliveredAt : TODAY) : null, by: dashboardDemoUser.name } };
+  });
+  const confirmClose = (month, note) => patchMonth(month, (m) => ({
+    close: { closedAt: TODAY, by: dashboardDemoUser.name, note: note || null, snapshot: closeSnapshot(m, { monthlyReport: Boolean(client.contract?.monthlyReport) }) },
+  }));
 
   return (
     <>
@@ -133,7 +142,8 @@ function ClientPage() {
           });
           toast.success(`«${piece.title}» volvió a su estado anterior (solo en la muestra).`);
         }}
-        onMarkReport={(month) => { markReport(month); toast.success(`Informe de ${month.label.toLowerCase()} marcado como entregado.`); }}
+        onSaveReport={async (month, data) => { saveReport(month, data); toast.success(`Informe de ${month.label.toLowerCase()} actualizado.`); }}
+        onConfirmClose={async (month, note) => { confirmClose(month, note); toast.success(`Cierre de ${month.label.toLowerCase()} confirmado.`); }}
         onOpenPlan={() => toast(`Abriría la parrilla de ${client.name}.`)}
         onNewTask={() => toast(`Abriría «Nueva tarea» con ${client.name} ya elegido.`)}
         onOpenWorkspace={() => toast('Abriría el espacio de trabajo del cliente, como hoy.')} />

@@ -91,7 +91,7 @@ test('el mes anterior sin cerrar es rojo y el informe sin entregar es amarillo',
   assert.equal(result.level, 'red');
   assert.deepEqual(result.reasons.map((r) => r.text), [
     'Septiembre cerró con 10 de 12 publicadas: faltaron 2 piezas.',
-    'Falta entregar el informe de septiembre.',
+    'Falta enviar el informe de septiembre.',
   ]);
 });
 

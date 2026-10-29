@@ -11,6 +11,7 @@ import {
   cycleForDate, cycleOf, previousCycle, summarizeCycle, evaluateClientOperation, isMeasured,
   normalizeOperationProfile,
 } from '../lib/clientOperations.js';
+import { CLOSE_NOTE_MAX, canConfirmClose, closeSnapshot, reportProblem } from '../lib/monthlyClose.js';
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { status, ...extra });
 
@@ -40,6 +41,7 @@ const clientSelect = (window) => ({
   observations: { orderBy: { createdAt: 'desc' }, take: OBSERVATIONS_SHOWN, select: { id: true, text: true, source: true, sourceLabel: true, authorId: true, createdAt: true } },
   contracts: { orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }], take: 1 },
   monthlyReports: { where: { OR: window } },
+  monthlyCloses: { where: { OR: window } },
   contentPlans: {
     where: { deletedAt: null, OR: window },
     select: {
@@ -96,7 +98,18 @@ function cycleSummary(client, cycle, quota, today, reporters) {
     .flatMap((plan) => plan.contentItems.map((item) => pieceFacts(plan.id, item)));
   const summary = summarizeCycle(cycle, items, { quota, today });
   const report = client.monthlyReports.find((r) => r.year === cycle.year && r.month === cycle.month);
-  summary.report = report ? { deliveredAt: dayKey(report.deliveredAt), by: reporters.get(report.deliveredById) || null } : null;
+  // Solo «enviado» es entregado: `deliveredAt` sigue diciendo cuándo se envió, como antes de los estados.
+  const sent = report && (report.status || 'ENVIADO') === 'ENVIADO';
+  summary.report = report ? {
+    status: report.status || 'ENVIADO',
+    deliveredAt: sent ? dayKey(report.deliveredAt) : null,
+    by: reporters.get(sent ? report.deliveredById : (report.updatedById || report.deliveredById)) || null,
+    link: report.link ?? null,
+    note: report.note ?? null,
+    updatedAt: report.updatedAt ? bogotaDate(report.updatedAt) : dayKey(report.deliveredAt),
+  } : null;
+  const close = (client.monthlyCloses || []).find((row) => row.year === cycle.year && row.month === cycle.month);
+  summary.close = close ? { closedAt: bogotaDate(close.closedAt), by: reporters.get(close.closedById) || null, note: close.note ?? null, snapshot: close.snapshot || null } : null;
   return summary;
 }
 
@@ -157,7 +170,8 @@ export const createClientOperationsService = ({
 
   const reporterNames = async (clients) => {
     const ids = [...new Set([
-      ...clients.flatMap((c) => c.monthlyReports || []).map((r) => r.deliveredById),
+      ...clients.flatMap((c) => c.monthlyReports || []).flatMap((r) => [r.deliveredById, r.updatedById]),
+      ...clients.flatMap((c) => c.monthlyCloses || []).map((r) => r.closedById),
       ...clients.flatMap((c) => c.observations || []).map((o) => o.authorId),
     ].filter(Boolean))];
     if (!ids.length) return new Map();
@@ -216,22 +230,72 @@ export const createClientOperationsService = ({
     return getOperation(client.slug);
   };
 
-  const setMonthlyReport = async ({ clientId, year, month, delivered, actorUserId }) => {
+  const validMonth = (year, month) => {
     const y = Number(year);
     const m = Number(month);
     if (!Number.isInteger(y) || y < 2020 || y > 2100 || !Number.isInteger(m) || m < 1 || m > 12) throw httpError(400, 'El mes no es válido.');
+    return { y, m };
+  };
+
+  /**
+   * El informe del mes (29 de octubre de 2026): pendiente, en elaboración, en revisión o enviado, con su enlace como
+   * soporte y una nota. Pasar a «enviado» fija cuándo y quién lo envió. `delivered` sigue valiendo: true es enviado y
+   * false lo devuelve a pendiente, como el botón de antes.
+   */
+  const setMonthlyReport = async ({ clientId, year, month, delivered, status, link, note, actorUserId }) => {
+    const { y, m } = validMonth(year, month);
     const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { id: true } });
     if (!client) throw httpError(404, 'No encontramos ese cliente.');
-    if (delivered) {
-      await db.clientMonthlyReport.upsert({
-        where: { clientId_year_month: { clientId: client.id, year: y, month: m } },
-        create: { clientId: client.id, year: y, month: m, deliveredById: actorUserId || null },
-        update: {},
-      });
-    } else {
+    const label = cycleOf(y, m).label;
+    if (status === undefined && delivered === false) {
       await db.clientMonthlyReport.deleteMany({ where: { clientId: client.id, year: y, month: m } });
+      return { clientId: client.id, year: y, month: m, status: 'PENDIENTE', delivered: false, label };
     }
-    return { clientId: client.id, year: y, month: m, delivered: Boolean(delivered), label: cycleOf(y, m).label };
+    const input = { status: status === undefined ? 'ENVIADO' : status, link, note };
+    const problem = reportProblem(input);
+    if (problem) throw httpError(422, problem);
+    const current = await db.clientMonthlyReport.findFirst({ where: { clientId: client.id, year: y, month: m } });
+    const at = now();
+    const changes = {
+      status: input.status,
+      updatedAt: at,
+      updatedById: actorUserId || null,
+      ...(link !== undefined ? { link: String(link ?? '').trim() || null } : {}),
+      ...(note !== undefined ? { note: String(note ?? '').trim() || null } : {}),
+    };
+    // Enviar fija la fecha y quién; volver a guardarlo enviado no la mueve.
+    const sentNow = input.status === 'ENVIADO' && (current?.status || null) !== 'ENVIADO';
+    if (sentNow) Object.assign(changes, { deliveredAt: at, deliveredById: actorUserId || null });
+    if (current) await db.clientMonthlyReport.update({ where: { id: current.id }, data: changes });
+    else await db.clientMonthlyReport.create({ data: { clientId: client.id, year: y, month: m, deliveredById: actorUserId || null, ...changes } });
+    return { clientId: client.id, year: y, month: m, status: input.status, delivered: input.status === 'ENVIADO', label };
+  };
+
+  /**
+   * El project manager confirma el cierre de un mes (29 de octubre de 2026), desde tres días antes de que termine.
+   * Nada se borra: lo que quedó pendiente se guarda en el cierre y sigue perteneciendo a ese mes.
+   */
+  const confirmMonthlyClose = async ({ clientId, year, month, note, actorUserId }) => {
+    const { y, m } = validMonth(year, month);
+    if (String(note ?? '').trim().length > CLOSE_NOTE_MAX) throw httpError(422, `La nota admite como máximo ${CLOSE_NOTE_MAX} caracteres.`);
+    const row = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { slug: true } });
+    if (!row) throw httpError(404, 'No encontramos ese cliente.');
+    const operation = await getOperation(row.slug);
+    const cycles = [operation.cycles?.current, ...(operation.history || [])].filter(Boolean);
+    const cycle = cycles.find((item) => item.year === y && item.month === m);
+    if (!cycle) throw httpError(404, 'Ese mes no está entre los que se pueden cerrar.');
+    if (cycle.close) throw httpError(409, `El cierre de ${cycle.label.toLowerCase()} ya se confirmó.`);
+    if (!canConfirmClose(cycle, todayKey())) throw httpError(409, `El cierre de ${cycle.label.toLowerCase()} se confirma desde tres días antes de que termine.`);
+    const snapshot = closeSnapshot(cycle, { monthlyReport: Boolean(operation.contract?.monthlyReport) });
+    try {
+      await db.clientMonthlyClose.create({
+        data: { clientId, year: y, month: m, closedById: actorUserId || null, note: String(note ?? '').trim() || null, snapshot },
+      });
+    } catch (error) {
+      if (error?.code === 'P2002') throw httpError(409, `El cierre de ${cycle.label.toLowerCase()} ya se confirmó.`);
+      throw error;
+    }
+    return getOperation(row.slug);
   };
 
   const findClientPiece = (clientId, itemId) => db.contentItem.findFirst({
@@ -303,7 +367,7 @@ export const createClientOperationsService = ({
     return db.teamMember.update({ where: { id: member.id }, data: { highlightedAction: value } });
   };
 
-  return { listOperations, getOperation, saveProfile, setMonthlyReport, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
+  return { listOperations, getOperation, saveProfile, setMonthlyReport, confirmMonthlyClose, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
 };
 
 export const clientOperationsService = createClientOperationsService();

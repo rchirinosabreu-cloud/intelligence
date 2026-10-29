@@ -65,7 +65,7 @@ test('el informe del mes y «Ya se publicó»', async () => {
   const { app, calls } = buildApp();
   await withServer(app, async (base) => {
     assert.equal((await fetch(`${base}/c1/reports/2026/9`, json('PUT', { delivered: true }))).status, 200);
-    assert.deepEqual(calls.at(-1), ['setMonthlyReport', { clientId: 'c1', year: 2026, month: 9, delivered: true, actorUserId: 'actual-actor' }]);
+    assert.deepEqual(calls.at(-1), ['setMonthlyReport', { clientId: 'c1', year: 2026, month: 9, delivered: true, status: undefined, link: undefined, note: undefined, actorUserId: 'actual-actor' }]);
     assert.equal((await fetch(`${base}/c1/reports/2026/9`, json('PUT', { delivered: 'sí' }))).status, 400, 'delivered tiene que ser booleano');
     assert.equal((await fetch(`${base}/c1/pieces/item-1/published`, { method: 'POST' })).status, 200);
     assert.deepEqual(calls.at(-1), ['markPiecePublished', { clientId: 'c1', itemId: 'item-1', actorUserId: 'actual-actor' }]);
