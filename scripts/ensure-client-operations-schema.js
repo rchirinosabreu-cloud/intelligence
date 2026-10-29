@@ -100,6 +100,12 @@ try {
     );
   `);
   await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ExternalPlanSnapshot_clientId_year_month_key" ON "ExternalPlanSnapshot"("clientId", "year", "month");`);
+  // El espejo en Parrillas: pestaña, comentarios de Google y lo que cambió entre lecturas.
+  await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "gid" TEXT;`);
+  await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "comments" JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "commentsAt" TIMESTAMPTZ(3);`);
+  await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "changes" JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "changedAt" TIMESTAMPTZ(3);`);
   await client.query(`
     CREATE TABLE IF NOT EXISTS "UnbackedWorkAlert" (
       "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

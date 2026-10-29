@@ -8,6 +8,9 @@
 //   con una parrilla hecha aquí.
 // Regla pura; quien descarga la hoja es `externalPlanService.js`.
 
+/** Tope de cada texto que se guarda de una pieza: el guion entero cabe, una hoja rota no llena la base. */
+const MAX_TEXT = 4000;
+
 export const MONTH_TABS = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
 export const EXTERNAL_STAGES = ['creada', 'redactada', 'disenada', 'aprobada', 'programada', 'publicada'];
 
@@ -120,12 +123,18 @@ export const parsePlanRows = (rows, { year, month }) => {
     const statusAt = column((cell) => cell.startsWith('ESTADO'));
     const dateAt = column((cell) => cell.startsWith('FECHA'));
     const numberAt = column((cell) => cell.startsWith('N°') || cell.startsWith('NO ') || cell.startsWith('N '));
+    const objectiveAt = column((cell) => cell.startsWith('OBJETIVO'));
+    const copyAt = column((cell) => cell.startsWith('COPY') || cell.startsWith('TEXTO'));
+    const captionAt = column((cell) => cell.startsWith('CAPTION'));
+    const contentAt = column((cell) => cell.startsWith('CONTENIDO') || cell.startsWith('MATERIAL'));
+    const commentAt = column((cell) => cell.startsWith('COMENTARIO'));
+    const text = (row, at) => (at >= 0 ? String(row[at] ?? '').trim().slice(0, MAX_TEXT) || null : null);
     // Las plantillas traen filas con el formato, el número, el objetivo y las redes ya puestos y nada más: esas todavía
     // no son piezas. Una pieza tiene algo propio —fecha, estado, texto o enlace—.
-    const filler = new Set([formatAt, numberAt, column((cell) => cell.startsWith('OBJETIVO')), column((cell) => cell.startsWith('REDES'))]);
+    const filler = new Set([formatAt, numberAt, objectiveAt, column((cell) => cell.startsWith('REDES'))]);
     const pieces = [];
     let blank = 0;
-    for (const row of rows.slice(headerIndex + 1)) {
+    for (const [offset, row] of rows.slice(headerIndex + 1).entries()) {
         // Dos filas vacías seguidas cierran la parrilla: lo de abajo es otra tabla (Mari Colón pone ahí las
         // «PRIORIDADES DEL CLIENTE», numeradas en la columna del formato) y no son piezas.
         if (!row.some((cell) => String(cell ?? '').trim())) {
@@ -138,11 +147,20 @@ export const parsePlanRows = (rows, { year, month }) => {
         if (!format) continue;
         if (!row.some((cell, index) => !filler.has(index) && String(cell ?? '').trim())) continue;
         pieces.push({
+            // La fila de la hoja (1 es la primera): con ella «Abrir en la hoja» llega a la pieza.
+            row: headerIndex + 2 + offset,
             number: numberAt >= 0 ? String(row[numberAt] ?? '').trim() || null : null,
             format: formatFromText(format),
+            formatText: format.slice(0, 80),
             date: dateAt >= 0 ? pieceDate(row[dateAt], year, month) : null,
+            dateText: text(row, dateAt),
             status: String(row[statusAt] ?? '').replace(/\s+/g, ' ').trim() || null,
-            stage: stageFromStatus(row[statusAt])
+            stage: stageFromStatus(row[statusAt]),
+            objective: text(row, objectiveAt),
+            copy: text(row, copyAt),
+            caption: text(row, captionAt),
+            content: text(row, contentAt),
+            comment: text(row, commentAt)
         });
     }
     return { pieces, problem: pieces.length ? null : 'La pestaña del mes no tiene piezas todavía.' };
@@ -178,4 +196,130 @@ export const asOperationPiece = (piece, index) => {
         hasActivePublication: rank >= 4,
         markedByHand: false
     };
+};
+
+// El espejo en Parrillas (Rodny, 29 de octubre de 2026: «desde la plataforma misma podamos ver si hay comentarios nuevos
+// del cliente, correcciones, aprobaciones»). Lo que sigue compara una lectura con la anterior y junta los comentarios de
+// Google de la hoja con sus piezas.
+
+/** El enlace que abre la hoja en la fila de una pieza. */
+export const sheetCellUrl = (url, gid, row) => {
+    const id = sheetIdFromUrl(url);
+    if (!id) return null;
+    const anchor = gid != null ? `#gid=${gid}${row ? `&range=A${row}` : ''}` : '';
+    return `https://docs.google.com/spreadsheets/d/${id}/edit${anchor}`;
+};
+
+/** Cómo se nombra una pieza en un aviso: «Reel 5». */
+export const pieceLabel = (piece) => `${piece?.format || 'Pieza'}${piece?.number ? ` ${piece.number}` : piece?.row ? ` (fila ${piece.row})` : ''}`;
+
+const pieceKey = (piece) => (piece?.number ? `n:${piece.number}` : `r:${piece?.row}`);
+
+const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ' };
+const decodeEntities = (value) => String(value ?? '')
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&([a-z]+);/gi, (match, name) => ENTITIES[name.toLowerCase()] ?? match);
+
+const loose = (value) => decodeEntities(value).toLowerCase().replace(/\s+/g, ' ').trim();
+
+/**
+ * La pieza a la que se refiere un comentario de Google. Google no dice en qué celda está (su ancla es un número interno),
+ * así que se busca el texto que citó el comentario en el copy, el caption o el objetivo de cada pieza. Si no aparece, o
+ * aparece en más de una, el comentario queda suelto: nunca se adivina.
+ */
+export const matchCommentToPiece = (quoted, pieces = []) => {
+    const needle = loose(quoted).slice(0, 60);
+    if (needle.length < 6) return null;
+    const found = pieces.filter((piece) => [piece.copy, piece.caption, piece.objective, piece.comment, piece.content]
+        .some((field) => field && loose(field).includes(needle)));
+    return found.length === 1 ? found[0].row : null;
+};
+
+const TEXT_LIMIT = 1500;
+const clip = (value) => String(value ?? '').trim().slice(0, TEXT_LIMIT);
+
+/** Los comentarios de Google tal como los da la API de Drive, en la forma que guarda la plataforma. */
+export const normalizeSheetComments = (raw = []) => raw
+    .filter((comment) => comment && !comment.deleted)
+    .map((comment) => ({
+        id: String(comment.id),
+        author: comment.author?.displayName || 'Alguien',
+        mine: Boolean(comment.author?.me),
+        content: clip(comment.content),
+        quoted: clip(decodeEntities(comment.quotedFileContent?.value)).slice(0, 300),
+        createdAt: comment.createdTime || null,
+        modifiedAt: comment.modifiedTime || comment.createdTime || null,
+        resolved: Boolean(comment.resolved),
+        replies: (comment.replies || []).filter((reply) => !reply.deleted).map((reply) => ({
+            id: String(reply.id || ''),
+            author: reply.author?.displayName || 'Alguien',
+            mine: Boolean(reply.author?.me),
+            content: clip(reply.content) || (reply.action === 'resolve' ? 'Marcó el comentario como resuelto.' : reply.action === 'reopen' ? 'Reabrió el comentario.' : ''),
+            createdAt: reply.createdTime || null
+        }))
+    }));
+
+/**
+ * Los comentarios que van con un mes: los que se refieren a una de sus piezas y, si `looseSince` llega, los que no se
+ * pudieron atar a ninguna pieza, siguen abiertos y se movieron después de esa fecha (para el mes en curso).
+ */
+export const commentsForMonth = (comments = [], pieces = [], { looseSince = null, claimed = new Set() } = {}) => comments
+    .map((comment) => ({ ...comment, row: matchCommentToPiece(comment.quoted, pieces) }))
+    // Un comentario que ya es de una pieza de otro mes no se repite suelto en este.
+    .filter((comment) => comment.row != null || (looseSince && !claimed.has(comment.id) && !comment.resolved && String(comment.modifiedAt || '') >= looseSince))
+    .sort((a, b) => String(b.modifiedAt || '').localeCompare(String(a.modifiedAt || '')));
+
+/**
+ * Lo que cambió entre dos lecturas del mismo mes: estados, comentarios escritos en la hoja y comentarios o respuestas de
+ * Google que no hizo la plataforma. Las piezas se reconocen por su número (o su fila si no tienen), no por su posición.
+ */
+export const diffExternalPlan = (previous, next) => {
+    const events = [];
+    const before = new Map((previous?.pieces || []).map((piece) => [pieceKey(piece), piece]));
+    for (const piece of next?.pieces || []) {
+        const old = before.get(pieceKey(piece));
+        if (!old) continue;
+        if ((old.status || '') !== (piece.status || '')) {
+            events.push({ kind: 'STATUS', key: pieceKey(piece), row: piece.row, label: pieceLabel(piece), from: old.status || null, to: piece.status || null });
+        }
+        if (piece.comment && piece.comment !== old.comment) {
+            events.push({ kind: 'SHEET_COMMENT', key: pieceKey(piece), row: piece.row, label: pieceLabel(piece), text: piece.comment.slice(0, 300) });
+        }
+    }
+    const rowLabel = new Map((next?.pieces || []).map((piece) => [piece.row, pieceLabel(piece)]));
+    const seen = new Map((previous?.comments || []).map((comment) => [comment.id, comment]));
+    for (const comment of next?.comments || []) {
+        const old = seen.get(comment.id);
+        const label = comment.row != null ? rowLabel.get(comment.row) || null : null;
+        if (!old) {
+            if (!comment.mine && !comment.resolved) events.push({ kind: 'GOOGLE_COMMENT', row: comment.row ?? null, label, author: comment.author, text: comment.content.slice(0, 300), commentId: comment.id });
+            continue;
+        }
+        const known = new Set((old.replies || []).map((reply) => reply.id || `${reply.createdAt}|${reply.content}`));
+        for (const reply of comment.replies || []) {
+            if (reply.mine || known.has(reply.id || `${reply.createdAt}|${reply.content}`)) continue;
+            events.push({ kind: 'GOOGLE_REPLY', row: comment.row ?? null, label, author: reply.author, text: reply.content.slice(0, 300), commentId: comment.id });
+        }
+    }
+    return events;
+};
+
+/** Un cambio en una línea, para el aviso y para la pantalla. */
+export const changeLine = (event) => {
+    const where = event.label ? ` en ${event.label}` : '';
+    if (event.kind === 'STATUS') return `${event.label}: ${event.from || 'sin estado'} → ${event.to || 'sin estado'}`;
+    if (event.kind === 'SHEET_COMMENT') return `${event.label}: comentario nuevo en la hoja — «${event.text}»`;
+    if (event.kind === 'GOOGLE_COMMENT') return `${event.author} comentó${where}: «${event.text}»`;
+    if (event.kind === 'GOOGLE_REPLY') return `${event.author} respondió${where}: «${event.text}»`;
+    return '';
+};
+
+/** El aviso de la campana: corto, con el primer cambio y cuántos más hay. */
+export const changesNoticeText = (clientName, monthLabel, events = []) => {
+    if (!events.length) return null;
+    const first = changeLine(events[0]);
+    const head = `${clientName} · ${monthLabel.toLowerCase()}: `;
+    const short = first.length > 140 ? `${first.slice(0, 137)}…` : first;
+    return events.length === 1 ? `${head}${short}` : `${head}${short} (y ${events.length - 1} ${events.length === 2 ? 'cambio más' : 'cambios más'})`;
 };

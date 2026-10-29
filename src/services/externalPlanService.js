@@ -1,6 +1,7 @@
-// Lee las parrillas de MIO desde sus hojas de Google (29 de octubre de 2026). Solo lectura: descarga la vista pública de
-// la hoja para saber qué pestañas tiene, baja en texto la pestaña del mes y guarda lo leído en `ExternalPlanSnapshot`,
-// una fila por cliente y mes. Operación usa esa lectura cuando el mes no tiene parrilla en la plataforma.
+// Lee las parrillas de MIO desde sus hojas de Google (29 de octubre de 2026). Con la cuenta de servicio de la plataforma
+// lee por la API de Google (filas y comentarios de Google); sin ella, por el enlace público. Guarda lo leído en
+// `ExternalPlanSnapshot`, una fila por cliente y mes: Operación la usa cuando el mes no tiene parrilla en la plataforma y
+// Parrillas la muestra como espejo, con lo que cambió desde la lectura anterior.
 //
 // Seguridad: el enlace lo escribe una persona, pero nunca se descarga tal cual. Se saca el identificador de la hoja y
 // las direcciones las arma este servicio, siempre en docs.google.com; con tope de tamaño y de tiempo. El contenido es
@@ -8,8 +9,18 @@
 import prisma from '../lib/prisma.js';
 import XLSX from '../lib/xlsx.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
-import { MONTH_TABS, monthTab, parsePlanRows, parseSheetTabs, sheetIdFromUrl, summarizeExternalPieces } from '../lib/externalPlan.js';
+import {
+    MONTH_TABS, changesNoticeText, commentsForMonth, diffExternalPlan, matchCommentToPiece, monthTab, normalizeSheetComments, parsePlanRows,
+    parseSheetTabs, sheetCellUrl, sheetIdFromUrl, summarizeExternalPieces
+} from '../lib/externalPlan.js';
+import { MONTH_NAMES } from '../lib/clientOperations.js';
+import { createNotification } from './notificationService.js';
 
+export const EXTERNAL_PLAN_CHANGE_TYPE = 'PARRILLA_MIO_CAMBIOS';
+const SHEET_SCOPES = ['https://www.googleapis.com/auth/spreadsheets', 'https://www.googleapis.com/auth/drive'];
+const MAX_ROWS = 300;
+/** Los comentarios sueltos (sin pieza) del mes en curso: los abiertos que se movieron en los últimos 45 días. */
+const LOOSE_COMMENT_DAYS = 45;
 const MAX_BYTES = 3 * 1024 * 1024;
 const TIMEOUT_MS = 20_000;
 const CHECK_MS = 2 * 60 * 60 * 1000;
@@ -43,18 +54,95 @@ const download = async (url, fetchImpl) => {
     }
 };
 
-/** Lee la pestaña de un mes. Devuelve `{ tabName, pieces, summary, problem }`; lanza `ExternalPlanError` si no se pudo leer. */
-export const readExternalPlan = async (url, { year, month }, { fetchImpl = fetch } = {}) => {
+/**
+ * Leer la hoja por su enlace público: la vista pública dice las pestañas y cada una se baja en CSV. No ve los comentarios
+ * de Google. Es el camino cuando la plataforma no tiene cuenta de servicio (y el de las pruebas).
+ */
+export const createPublicSheetSource = (fetchImpl = fetch) => ({
+    kind: 'public',
+    tabs: async (id) => parseSheetTabs(await download(`https://docs.google.com/spreadsheets/d/${id}/htmlview`, fetchImpl)),
+    rows: async (id, tab) => {
+        const csv = await download(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${tab.gid}`, fetchImpl);
+        const sheet = XLSX.read(csv, { type: 'string', raw: true });
+        return XLSX.utils.sheet_to_json(sheet.Sheets[sheet.SheetNames[0]], { header: 1, raw: true, defval: '' });
+    },
+    comments: async () => null
+});
+
+const googleError = (error) => {
+    if (error instanceof ExternalPlanError) return error;
+    const status = Number(error?.code || error?.response?.status);
+    if (status === 403 || status === 401) return new ExternalPlanError('NOT_SHARED', 'La cuenta de la plataforma no tiene acceso a la hoja.');
+    if (status === 404) return new ExternalPlanError('NOT_FOUND', 'No encontramos esa hoja: revisa el enlace.');
+    return new ExternalPlanError('UNAVAILABLE', 'No pudimos conectarnos con Google.');
+};
+
+/**
+ * Leer la hoja con la cuenta de servicio de la plataforma, por la API de Google: trae las mismas filas y además los
+ * comentarios de Google (los de burbuja). `sheets` y `drive` son los clientes de `googleapis`.
+ */
+export const createGoogleSheetSource = ({ sheets, drive }) => ({
+    kind: 'google',
+    tabs: async (id) => {
+        try {
+            const response = await sheets.spreadsheets.get({ spreadsheetId: id, fields: 'sheets.properties(sheetId,title)' });
+            return (response.data.sheets || []).map((sheet) => ({ name: sheet.properties.title, gid: String(sheet.properties.sheetId) }));
+        } catch (error) { throw googleError(error); }
+    },
+    rows: async (id, tab) => {
+        try {
+            const range = `'${tab.name.replace(/'/g, "''")}'!A1:Z${MAX_ROWS}`;
+            const response = await sheets.spreadsheets.values.get({ spreadsheetId: id, range, valueRenderOption: 'FORMATTED_VALUE' });
+            return response.data.values || [];
+        } catch (error) { throw googleError(error); }
+    },
+    comments: async (id) => {
+        const all = [];
+        let pageToken;
+        for (let page = 0; page < 3; page += 1) {
+            const response = await drive.comments.list({
+                fileId: id, pageSize: 100, pageToken, includeDeleted: false,
+                fields: 'nextPageToken,comments(id,createdTime,modifiedTime,resolved,deleted,author(displayName,me),quotedFileContent,content,replies(id,author(displayName,me),content,createdTime,action,deleted))'
+            });
+            all.push(...(response.data.comments || []));
+            pageToken = response.data.nextPageToken;
+            if (!pageToken) break;
+        }
+        return normalizeSheetComments(all);
+    }
+});
+
+let googleSource;
+/** La fuente de siempre: la API de Google si la plataforma tiene cuenta de servicio, el enlace público si no. */
+export const defaultSheetSource = async () => {
+    if (googleSource !== undefined) return googleSource || createPublicSheetSource();
+    try {
+        const credentials = JSON.parse(process.env.GOOGLE_APPLICATION_CREDENTIALS_JSON || 'null');
+        if (!credentials?.client_email) throw new Error('sin cuenta de servicio');
+        const { google } = await import('googleapis');
+        const auth = new google.auth.GoogleAuth({ credentials, scopes: SHEET_SCOPES });
+        googleSource = createGoogleSheetSource({ sheets: google.sheets({ version: 'v4', auth }), drive: google.drive({ version: 'v3', auth }) });
+    } catch {
+        googleSource = null;
+    }
+    return googleSource || createPublicSheetSource();
+};
+
+const sourceFor = async ({ source, fetchImpl }) => source || (fetchImpl ? createPublicSheetSource(fetchImpl) : defaultSheetSource());
+
+/**
+ * Lee la pestaña de un mes. Devuelve `{ tabName, gid, pieces, summary, problem }`; lanza `ExternalPlanError` si no se pudo
+ * leer.
+ */
+export const readExternalPlan = async (url, { year, month }, { fetchImpl, source, tabs: knownTabs } = {}) => {
     const id = sheetIdFromUrl(url);
     if (!id) throw new ExternalPlanError('INVALID_URL', 'El enlace no es de una hoja de Google.');
-    const html = await download(`https://docs.google.com/spreadsheets/d/${id}/htmlview`, fetchImpl);
-    const tab = monthTab(parseSheetTabs(html), year, month);
-    if (!tab) return { tabName: null, pieces: [], summary: summarizeExternalPieces([]), problem: `La hoja no tiene una pestaña de ${MONTH_TABS[month - 1].toLowerCase()}.` };
-    const csv = await download(`https://docs.google.com/spreadsheets/d/${id}/export?format=csv&gid=${tab.gid}`, fetchImpl);
-    const sheet = XLSX.read(csv, { type: 'string', raw: true });
-    const rows = XLSX.utils.sheet_to_json(sheet.Sheets[sheet.SheetNames[0]], { header: 1, raw: true, defval: '' });
+    const reader = await sourceFor({ source, fetchImpl });
+    const tab = monthTab(knownTabs || await reader.tabs(id), year, month);
+    if (!tab) return { tabName: null, gid: null, pieces: [], summary: summarizeExternalPieces([]), problem: `La hoja no tiene una pestaña de ${MONTH_TABS[month - 1].toLowerCase()}.` };
+    const rows = await reader.rows(id, tab);
     const { pieces, problem } = parsePlanRows(rows, { year, month });
-    return { tabName: tab.name.trim(), pieces, summary: summarizeExternalPieces(pieces), problem };
+    return { tabName: tab.name.trim(), gid: tab.gid, pieces, summary: summarizeExternalPieces(pieces), problem };
 };
 
 const bogotaToday = (now) => new Date(now.getTime() - 5 * 3600 * 1000).toISOString().slice(0, 10);
@@ -78,16 +166,67 @@ export const monthsToRead = (now) => {
  * Lee y guarda los meses de un cliente. Un fallo de Google no borra lo leído antes: se guarda el problema y las piezas de
  * la última lectura buena se conservan.
  */
-export const refreshClientExternalPlan = async (db, client, { now = new Date(), fetchImpl = fetch, log = console.error } = {}) => {
+export const refreshClientExternalPlan = async (db, client, { now = new Date(), fetchImpl, source, notify = createNotification, log = console.error } = {}) => {
     if (!client?.externalPlanUrl) return [];
     const results = [];
-    for (const { year, month } of monthsToRead(now)) {
-        const key = { clientId_year_month: { clientId: client.id, year, month } };
+    const id = sheetIdFromUrl(client.externalPlanUrl);
+    // Las pestañas y los comentarios de Google se piden una vez por hoja, no una vez por mes.
+    let reader = null;
+    let tabs = null;
+    let comments = null;
+    let setupError = null;
+    try {
+        if (!id) throw new ExternalPlanError('INVALID_URL', 'El enlace no es de una hoja de Google.');
+        reader = await sourceFor({ source, fetchImpl });
+        tabs = await reader.tabs(id);
+    } catch (error) {
+        setupError = error;
+    }
+    if (!setupError) {
         try {
-            const read = await readExternalPlan(client.externalPlanUrl, { year, month }, { fetchImpl });
-            const data = { tabName: read.tabName, pieces: read.pieces, summary: read.summary, problem: read.problem, readAt: now, okAt: now };
+            comments = await reader.comments(id);
+        } catch (error) {
+            log('[Parrillas MIO] Comentarios de Google sin leer:', error?.message || error);
+        }
+    }
+    const months = monthsToRead(now);
+    const looseSince = new Date(now.getTime() - LOOSE_COMMENT_DAYS * 86400000).toISOString();
+    // Primero se leen todos los meses: un comentario atado a una pieza de un mes no puede aparecer suelto en otro.
+    const reads = [];
+    for (const { year, month } of months) {
+        try {
+            if (setupError) throw setupError;
+            reads.push({ year, month, read: await readExternalPlan(client.externalPlanUrl, { year, month }, { source: reader, tabs }) });
+        } catch (error) {
+            reads.push({ year, month, error });
+        }
+    }
+    const claimed = new Set((comments || []).filter((comment) => reads.some(({ read }) => read && matchCommentToPiece(comment.quoted, read.pieces) != null)).map((comment) => comment.id));
+    for (const [index, { year, month, read, error: readError }] of reads.entries()) {
+        const key = { clientId_year_month: { clientId: client.id, year, month } };
+        const current = index === PAST_MONTHS_READ;
+        try {
+            if (readError) throw readError;
+            const monthComments = comments ? commentsForMonth(comments, read.pieces, { looseSince: current ? looseSince : null, claimed }) : null;
+            const data = { tabName: read.tabName, gid: read.gid, pieces: read.pieces, summary: read.summary, problem: read.problem, readAt: now, okAt: now };
+            if (monthComments) Object.assign(data, { comments: monthComments, commentsAt: now });
+            // Los cambios se avisan del mes en curso y el siguiente, comparando con la última lectura buena. La primera
+            // lectura no avisa (no hay con qué comparar) y los comentarios solo se comparan si la anterior ya los leyó.
+            let events = [];
+            if (index >= PAST_MONTHS_READ) {
+                const previous = await db.externalPlanSnapshot.findUnique({ where: key, select: { pieces: true, comments: true, commentsAt: true, okAt: true } });
+                if (previous?.okAt) {
+                    const commentsComparable = Boolean(monthComments && previous.commentsAt);
+                    events = diffExternalPlan(
+                        { pieces: previous.pieces, comments: commentsComparable ? previous.comments : [] },
+                        { pieces: read.pieces, comments: commentsComparable ? monthComments : [] }
+                    );
+                }
+            }
+            if (events.length) Object.assign(data, { changes: events.map((event) => ({ ...event, at: now.toISOString() })), changedAt: now });
             await db.externalPlanSnapshot.upsert({ where: key, create: { clientId: client.id, year, month, ...data }, update: data });
-            results.push({ year, month, ok: true, ...read });
+            if (events.length) await notifyExternalChanges(db, client, { year, month, events, notify, log });
+            results.push({ year, month, ok: true, events: events.length, ...read });
         } catch (error) {
             const problem = error instanceof ExternalPlanError ? error.message : 'No pudimos leer la hoja.';
             if (!(error instanceof ExternalPlanError)) log('[Parrillas MIO] Lectura fallida:', error?.message || error);
@@ -100,6 +239,123 @@ export const refreshClientExternalPlan = async (db, client, { now = new Date(), 
         }
     }
     return results;
+};
+
+/**
+ * Avisa al community manager y al project manager del cliente de lo que cambió en su hoja: un aviso por cliente y mes en
+ * cada lectura, nunca uno por cambio. Un aviso que no sale nunca deshace la lectura.
+ */
+export const notifyExternalChanges = async (db, client, { year, month, events, notify = createNotification, log = console.error }) => {
+    try {
+        const info = await db.client.findUnique({
+            where: { id: client.id },
+            select: { name: true, slug: true, responsible: { select: { userId: true } }, projectManager: { select: { userId: true } } }
+        });
+        const recipients = [...new Set([info?.responsible?.userId, info?.projectManager?.userId].filter(Boolean))];
+        if (!recipients.length) {
+            log(`[Parrillas MIO] ${info?.name || client.id}: hay cambios en la hoja pero el cliente no tiene CM ni PM con cuenta.`);
+            return;
+        }
+        const label = MONTH_NAMES[month - 1];
+        const message = changesNoticeText(info?.name || 'Cliente', label, events);
+        const url = info?.slug ? `/parrillas/hoja/${info.slug}/${label.toLowerCase()}-${year}` : '/parrillas';
+        for (const userId of recipients) {
+            await Promise.resolve(notify({ userId, type: EXTERNAL_PLAN_CHANGE_TYPE, relatedId: client.id, url, message }))
+                .catch((error) => log('[Parrillas MIO] Aviso no entregado:', error?.message || error));
+        }
+    } catch (error) {
+        log('[Parrillas MIO] No se pudo avisar de los cambios:', error?.message || error);
+    }
+};
+
+const MONTH_SLUGS = MONTH_TABS.map((name) => name.toLowerCase());
+const currentAndNext = (now) => monthsToRead(now).slice(PAST_MONTHS_READ);
+const isoOrNull = (value) => (value ? new Date(value).toISOString() : null);
+
+/**
+ * Las parrillas de MIO para la lista de Parrillas: cada cliente con hoja vinculada y su mes en curso y el siguiente, con
+ * lo que se leyó y cuántos cambios trajo la última lectura.
+ */
+export const listExternalPlans = async (db = prisma, { now = new Date() } = {}) => {
+    const months = currentAndNext(now);
+    const clients = await db.client.findMany({
+        where: { isArchived: false, externalPlanUrl: { not: null } },
+        orderBy: { name: 'asc' },
+        select: {
+            id: true, name: true, slug: true, externalPlanUrl: true,
+            externalPlanSnapshots: {
+                where: { OR: months },
+                select: { year: true, month: true, tabName: true, summary: true, problem: true, readAt: true, okAt: true, changes: true, changedAt: true }
+            }
+        }
+    });
+    return clients.map((client) => ({
+        client: { id: client.id, name: client.name, slug: client.slug },
+        sheetUrl: client.externalPlanUrl,
+        months: months.map(({ year, month }) => {
+            const row = client.externalPlanSnapshots.find((item) => item.year === year && item.month === month);
+            return {
+                year, month, label: MONTH_NAMES[month - 1], slug: `${MONTH_SLUGS[month - 1]}-${year}`,
+                tabName: row?.tabName ?? null,
+                created: row?.summary?.created ?? 0,
+                reached: row?.summary?.reached ?? null,
+                problem: row?.problem ?? (row ? null : 'Todavía no se ha leído.'),
+                readAt: isoOrNull(row?.okAt),
+                changes: Array.isArray(row?.changes) ? row.changes.length : 0,
+                changedAt: isoOrNull(row?.changedAt)
+            };
+        })
+    }));
+};
+
+/** «noviembre-2026» → { year: 2026, month: 11 }. */
+export const parseMonthSlug = (value) => {
+    const match = String(value || '').toLowerCase().match(/^([a-z]+)-(\d{4})$/);
+    const month = match ? MONTH_SLUGS.indexOf(match[1]) + 1 : 0;
+    return month ? { year: Number(match[2]), month } : null;
+};
+
+/**
+ * Un mes de la hoja de un cliente para el espejo: sus piezas con el enlace a su fila, los comentarios de Google atados a
+ * cada pieza, los que quedaron sueltos y lo que cambió en la última lectura.
+ */
+export const getExternalPlanMonth = async (db = prisma, { slug, year, month }) => {
+    const client = await db.client.findFirst({
+        where: { slug: String(slug || ''), externalPlanUrl: { not: null } },
+        select: { id: true, name: true, slug: true, externalPlanUrl: true }
+    });
+    if (!client) return null;
+    const row = await db.externalPlanSnapshot.findUnique({ where: { clientId_year_month: { clientId: client.id, year, month } } });
+    const pieces = Array.isArray(row?.pieces) ? row.pieces : [];
+    const comments = Array.isArray(row?.comments) ? row.comments : [];
+    const changes = Array.isArray(row?.changes) ? row.changes : [];
+    return {
+        client: { id: client.id, name: client.name, slug: client.slug },
+        year, month, label: MONTH_NAMES[month - 1],
+        sheetUrl: client.externalPlanUrl,
+        tabUrl: row?.gid ? sheetCellUrl(client.externalPlanUrl, row.gid, null) : client.externalPlanUrl,
+        tabName: row?.tabName ?? null,
+        summary: row?.summary ?? null,
+        problem: row?.problem ?? (row ? null : 'Todavía no se ha leído esta hoja.'),
+        readAt: isoOrNull(row?.okAt),
+        commentsRead: Boolean(row?.commentsAt),
+        changedAt: isoOrNull(row?.changedAt),
+        changes,
+        pieces: pieces.map((piece) => ({
+            ...piece,
+            cellUrl: row?.gid ? sheetCellUrl(client.externalPlanUrl, row.gid, piece.row) : null,
+            changed: changes.filter((change) => change.row === piece.row).map((change) => change.kind),
+            comments: comments.filter((comment) => comment.row === piece.row)
+        })),
+        looseComments: comments.filter((comment) => comment.row == null)
+    };
+};
+
+/** Lee ahora la hoja de un cliente (botón «Leer ahora» del espejo). */
+export const refreshExternalPlanBySlug = async (db = prisma, slug, options = {}) => {
+    const client = await db.client.findFirst({ where: { slug: String(slug || ''), externalPlanUrl: { not: null } }, select: { id: true, name: true, externalPlanUrl: true } });
+    if (!client) return null;
+    return refreshClientExternalPlan(db, client, options);
 };
 
 /** Lee las hojas de todos los clientes que tienen una. Un cliente que falla no frena a los demás. */
