@@ -73,6 +73,10 @@ test('las piezas se toman bajo la fila de encabezados, sin importar el orden de 
     ]);
     assert.deepEqual(summarizeExternalPieces(pieces), { created: 3, reached: { redactada: 3, disenada: 3, aprobada: 2, programada: 1, publicada: 1 } });
     assert.match(parsePlanRows([['Hola']], { year: 2026, month: 10 }).problem, /Formato y Estado/);
+    // Lo que va debajo de dos filas vacías es otra tabla, aunque traiga números en la columna del formato.
+    const empty = ['', '', '', '', '', '', '', '', ''];
+    const withPriorities = parsePlanRows([...OCTOBER.slice(0, 5), empty, empty, ['', 'PRIORIDADES DEL CLIENTE', '', '', 'PRIORIDAD', '', '', '', ''], ['', '1', 'Sabanera', 'Se aceptó una oferta', 'PROMOCIONAR', '', '', '', '']], { year: 2026, month: 10 });
+    assert.equal(withPriorities.pieces.length, 3);
     // Una fila de plantilla, con el formato, el número, el objetivo y las redes ya puestos, todavía no es una pieza.
     const template = parsePlanRows([OCTOBER[1], ['POSICIONAMIENTO', 'REEL', '', '', 'Facebook', '', '', '4', '']], { year: 2026, month: 10 });
     assert.equal(template.pieces.length, 0);

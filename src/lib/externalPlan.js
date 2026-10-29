@@ -124,7 +124,16 @@ export const parsePlanRows = (rows, { year, month }) => {
     // no son piezas. Una pieza tiene algo propio —fecha, estado, texto o enlace—.
     const filler = new Set([formatAt, numberAt, column((cell) => cell.startsWith('OBJETIVO')), column((cell) => cell.startsWith('REDES'))]);
     const pieces = [];
+    let blank = 0;
     for (const row of rows.slice(headerIndex + 1)) {
+        // Dos filas vacías seguidas cierran la parrilla: lo de abajo es otra tabla (Mari Colón pone ahí las
+        // «PRIORIDADES DEL CLIENTE», numeradas en la columna del formato) y no son piezas.
+        if (!row.some((cell) => String(cell ?? '').trim())) {
+            blank += 1;
+            if (blank >= 2 && pieces.length) break;
+            continue;
+        }
+        blank = 0;
         const format = String(row[formatAt] ?? '').trim();
         if (!format) continue;
         if (!row.some((cell, index) => !filler.has(index) && String(cell ?? '').trim())) continue;
