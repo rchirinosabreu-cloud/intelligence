@@ -19,8 +19,8 @@ import { normalizeClientProfile } from '../lib/clientProfile.js';
 import { pesosFromRate } from '../lib/receivableCurrency.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
 import {
-    FORMALIZATION_AREAS, FORMALIZATION_CONDITIONS_MAX, exceptionProblem, formalizationEnabledText, formalizationRequestText,
-    formalizationState, quotationCode
+    FORMALIZATION_AREAS, FORMALIZATION_CONDITIONS_MAX, documentUploadProblem, documentVoidProblem, exceptionProblem,
+    formalizationEnabledText, formalizationRequestText, formalizationState, quotationCode
 } from '../lib/projectFormalization.js';
 
 export const FORMALIZATION_REQUEST_TYPE = 'FORMALIZACION_PENDIENTE';
@@ -257,6 +257,11 @@ export const refreshFormalizationsForReceivable = async (db = prisma, receivable
     return results;
 };
 
+const serializeDocument = (document) => ({
+    id: document.id, name: document.name, mimeType: document.mimeType, size: Number(document.size), uploadedAt: document.uploadedAt,
+    kind: document.kind || 'CONTRATO', note: document.note || null, voidedAt: document.voidedAt || null, voidReason: document.voidReason || null
+});
+
 const serializeFormalization = (formalization, { quotation, client, documents, advance, clientReceivables }) => {
     const state = formalizationState({ documents, advance, exceptionAt: formalization.exceptionAt });
     return {
@@ -272,7 +277,7 @@ const serializeFormalization = (formalization, { quotation, client, documents, a
             acceptedAt: quotation.accepted_at, emisor: quotation.emisor_type
         } : null,
         client: client ? { id: client.id, name: client.name, slug: client.slug, projectManager: client.projectManager?.name || null } : null,
-        documents: documents.map((document) => ({ id: document.id, name: document.name, mimeType: document.mimeType, size: Number(document.size), uploadedAt: document.uploadedAt })),
+        documents: documents.map(serializeDocument),
         advance: advance ? { id: advance.id, amount: Number(advance.amount) || 0, status: advance.status, number: advance.number, currency: advance.currency, foreignAmount: advance.foreignAmount == null ? null : Number(advance.foreignAmount) } : null,
         exception: formalization.exceptionAt ? {
             at: formalization.exceptionAt, byName: formalization.exceptionByName, reason: formalization.exceptionReason,
@@ -314,24 +319,50 @@ const loadFormalization = async (db, id) => {
     return formalization;
 };
 
-/** Carga el contrato firmado o su soporte. Nunca se borra; se puede cargar más de uno (anexos, otrosí). */
-export const attachFormalizationContract = async (db, storage, id, file, actor, options = {}) => {
+/**
+ * Carga el contrato firmado, un otrosí o un anexo (29 de octubre de 2026), con una nota opcional. Nunca se borra; solo
+ * un contrato vigente cuenta para habilitar el proyecto.
+ */
+export const attachFormalizationDocument = async (db, storage, id, file, details = {}, actor = {}, options = {}) => {
     const formalization = await loadFormalization(db, id);
+    const kind = String(details.kind || 'CONTRATO').trim().toUpperCase();
+    const problem = documentUploadProblem({ kind, note: details.note });
+    if (problem) throw httpError(400, problem);
     const meta = inspectFinancialDocument(file);
     const key = `formalizations/${formalization.id}/${randomUUID()}${meta.extension}`;
     await storage.upload({ key, body: meta.buffer, mimeType: meta.mimeType, size: meta.size, name: meta.name });
     const document = await db.$transaction(async (tx) => {
         const created = await tx.projectFormalizationDocument.create({
-            data: { formalizationId: formalization.id, storageKey: key, name: meta.name, mimeType: meta.mimeType, size: meta.size, sha256: meta.sha256, uploadedById: actorIdOf(actor) }
+            data: {
+                formalizationId: formalization.id, storageKey: key, name: meta.name, mimeType: meta.mimeType, size: meta.size, sha256: meta.sha256,
+                uploadedById: actorIdOf(actor), kind, note: String(details.note ?? '').trim() || null
+            }
         });
-        await audit(tx, formalization.id, 'UPDATE', { operation: 'CONTRACT', documentId: created.id, name: created.name, sha256: created.sha256 }, actor);
+        await audit(tx, formalization.id, 'UPDATE', { operation: 'DOCUMENT', documentId: created.id, kind, name: created.name, sha256: created.sha256 }, actor);
         return created;
     });
     const refreshed = await refreshFormalization(db, formalization.id, options);
-    return { document: { id: document.id, name: document.name, mimeType: document.mimeType, size: Number(document.size), uploadedAt: document.uploadedAt }, status: refreshed?.status || formalization.status };
+    return { document: serializeDocument(document), status: refreshed?.status || formalization.status };
 };
 
-export const openFormalizationContract = async (db, storage, id, documentId) => {
+/**
+ * Anula un documento subido por error: sigue guardado, con quién, cuándo y por qué, y deja de contar. Anular el único
+ * contrato no deshace una habilitación que ya se avisó: el proyecto ya pudo haber empezado.
+ */
+export const voidFormalizationDocument = async (db, id, documentId, reason, actor = {}, { now = new Date() } = {}) => {
+    const problem = documentVoidProblem(reason);
+    if (problem) throw httpError(400, problem);
+    const document = await db.projectFormalizationDocument.findFirst({ where: { id: String(documentId || ''), formalizationId: String(id || '') } });
+    if (!document) throw httpError(404, 'El documento no pertenece a esta formalización o no existe.');
+    if (document.voidedAt) throw httpError(409, 'Ese documento ya estaba anulado.');
+    const data = { voidedAt: now, voidReason: String(reason).trim(), voidedById: actorIdOf(actor) };
+    const update = await db.projectFormalizationDocument.updateMany({ where: { id: document.id, voidedAt: null }, data });
+    if (!update.count) throw httpError(409, 'Ese documento ya estaba anulado.');
+    await audit(db, document.formalizationId, 'UPDATE', { operation: 'DOCUMENT_VOID', documentId: document.id, kind: document.kind, ...data }, actor);
+    return serializeDocument({ ...document, ...data });
+};
+
+export const openFormalizationDocument = async (db, storage, id, documentId) => {
     const document = await db.projectFormalizationDocument.findFirst({ where: { id: String(documentId || ''), formalizationId: String(id || '') } });
     if (!document) throw httpError(404, 'El documento no pertenece a esta formalización o no existe.');
     const object = await storage.get(document.storageKey);

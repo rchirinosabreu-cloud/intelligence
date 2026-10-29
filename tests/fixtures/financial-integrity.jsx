@@ -133,7 +133,10 @@ const formalizations = [
   { id: 'f-bahia', status: 'HABILITADO', requestedAt: '2026-10-24T15:00:00Z', enabledAt: '2026-10-27T15:00:00Z', projectManagerNotified: true,
     quotation: { id: 'q-35', code: 'COT-0035', clientName: 'Marta Ruiz', company: 'Hotel Bahía', total: 6000000, currency: 'COP', acceptedAt: '2026-10-24T15:00:00Z' },
     client: { id: 'c-bahia', name: 'Hotel Bahía', slug: 'hotel-bahia', projectManager: 'Kamila del Toro' },
-    documents: [{ id: 'fd-bahia', name: 'Contrato Hotel Bahía firmado.pdf', mimeType: 'application/pdf', size: 1, uploadedAt: '2026-10-27T15:00:00Z' }],
+    documents: [
+      { id: 'fd-bahia', kind: 'CONTRATO', note: null, name: 'Contrato Hotel Bahía firmado.pdf', mimeType: 'application/pdf', size: 1, uploadedAt: '2026-10-27T15:00:00Z', voidedAt: null },
+      { id: 'fd-bahia-anexo', kind: 'ANEXO', note: 'Cronograma de producción de noviembre', name: 'Anexo cronograma.pdf', mimeType: 'application/pdf', size: 1, uploadedAt: '2026-10-28T15:00:00Z', voidedAt: null }
+    ],
     advance: { id: 'r-bahia-1', amount: 3000000, status: 'PAGADO', number: 401, currency: 'COP', payments: [] }, exception: null, clientReceivables: [] }
 ];
 const serializeFormalization = (item) => ({ ...item, state: formalizationState({ documents: item.documents, advance: item.advance, exceptionAt: item.exception?.at || null }) });
@@ -195,12 +198,18 @@ axios.defaults.adapter = async config => {
   // Formalización de proyectos (29 de octubre de 2026), con la misma regla del servidor. `?viewer=reader` no la ve.
   else if (path === '/api/financials/formalizations/access') data = { canManage: !viewer };
   else if (path === '/api/financials/formalizations' && config.method === 'get') data = { items: formalizations.map(serializeFormalization) };
-  else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/contract')) {
+  else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/documents')) {
     const item = formalizations.find((row) => path.includes(row.id));
-    const file = config.data instanceof FormData ? config.data.get('file') : null;
-    item.documents = [...item.documents, { id: `fd-${Date.now()}`, name: file?.name || 'contrato.pdf', mimeType: 'application/pdf', size: file?.size || 1, uploadedAt: '2026-10-29T15:00:00Z' }];
+    const form = config.data instanceof FormData ? config.data : null;
+    const file = form?.get('file');
+    item.documents = [...item.documents, { id: `fd-${Date.now()}`, kind: form?.get('kind') || 'CONTRATO', note: form?.get('note') || null, name: file?.name || 'contrato.pdf', mimeType: 'application/pdf', size: file?.size || 1, uploadedAt: '2026-10-29T15:00:00Z', voidedAt: null }];
     enableIfReady(item);
     data = { document: item.documents.at(-1), status: item.status };
+  } else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/void')) {
+    const item = formalizations.find((row) => path.includes(row.id));
+    const document = item.documents.find((row) => path.includes(`/documents/${row.id}/`));
+    Object.assign(document, { voidedAt: '2026-10-29T15:30:00Z', voidReason: body.reason });
+    data = document;
   } else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/exception')) {
     const item = formalizations.find((row) => path.includes(row.id));
     item.exception = { at: '2026-10-29T15:00:00Z', byName: 'Elisa Mestra', reason: body.reason, conditions: body.conditions || null, paymentDate: body.paymentDate };

@@ -61,8 +61,8 @@ import { readCollectionSettings, saveCollectionSettings } from '../../services/c
 import { listCollectionActivities, recordCollectionActivity } from '../../services/collectionActivityService.js';
 import { contentDisposition } from '../../controllers/financialRecordController.js';
 import {
-    attachFormalizationContract, canManageFormalizations, linkFormalizationAdvance, listFormalizations, openFormalizationContract,
-    registerFormalizationException, requireFormalizationAccess
+    attachFormalizationDocument, canManageFormalizations, linkFormalizationAdvance, listFormalizations, openFormalizationDocument,
+    registerFormalizationException, requireFormalizationAccess, voidFormalizationDocument
 } from '../../services/projectFormalizationService.js';
 
 import {
@@ -206,17 +206,26 @@ router.get('/formalizations', requireFinancialAccess, formalizationAccess, async
         formalizationError(res, error, 'No pudimos cargar las formalizaciones.');
     }
 });
-router.post('/formalizations/:id/contract', requireFinancialAccess, formalizationAccess, receiveFinancialDocument, async (req, res) => {
+// El contrato, un otrosí o un anexo: el tipo y la nota viajan como campos del formulario junto al archivo.
+router.post('/formalizations/:id/documents', requireFinancialAccess, formalizationAccess, receiveFinancialDocument, async (req, res) => {
     try {
-        if (!req.file) return res.status(400).json({ error: 'Selecciona el contrato firmado: PDF, JPG o PNG.' });
-        res.status(201).json(await attachFormalizationContract(prisma, financialEvidenceStorage(), req.params.id, req.file, req.user));
+        if (!req.file) return res.status(400).json({ error: 'Selecciona el documento: PDF, JPG o PNG.', message: 'Selecciona el documento: PDF, JPG o PNG.' });
+        const details = { kind: req.body?.kind, note: req.body?.note };
+        res.status(201).json(await attachFormalizationDocument(prisma, financialEvidenceStorage(), req.params.id, req.file, details, req.user));
     } catch (error) {
-        formalizationError(res, error, 'No pudimos guardar el contrato.');
+        formalizationError(res, error, 'No pudimos guardar el documento.');
+    }
+});
+router.post('/formalizations/:id/documents/:documentId/void', requireFinancialAccess, formalizationAccess, async (req, res) => {
+    try {
+        res.json(await voidFormalizationDocument(prisma, req.params.id, req.params.documentId, req.body?.reason, req.user));
+    } catch (error) {
+        formalizationError(res, error, 'No pudimos anular el documento.');
     }
 });
 router.get('/formalizations/:id/documents/:documentId/file', requireFinancialAccess, formalizationAccess, async (req, res) => {
     try {
-        const { document, object } = await openFormalizationContract(prisma, financialEvidenceStorage(), req.params.id, req.params.documentId);
+        const { document, object } = await openFormalizationDocument(prisma, financialEvidenceStorage(), req.params.id, req.params.documentId);
         res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
         res.setHeader('Content-Type', document.mimeType);
         res.setHeader('Content-Disposition', contentDisposition(req.query?.download === '1' ? 'attachment' : 'inline', document.name));

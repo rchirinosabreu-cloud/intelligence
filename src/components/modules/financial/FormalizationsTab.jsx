@@ -9,10 +9,9 @@ import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 import { CheckCircle2, Clock, Loader2 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { formalizationContractApi } from '@/lib/financialDocumentsClient';
 import { FORMALIZATION_CONDITIONS_MAX, FORMALIZATION_REASON_MAX, exceptionProblem, missingText } from '@/lib/projectFormalization';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
-import RecordDocumentsInline from './RecordDocumentsInline';
+import FormalizationDocuments from './FormalizationDocuments';
 import { FinancialSectionHeader, FinancialSummaryCard } from './FinancialSectionParts';
 
 // Formalización de proyectos (punto 3 de la solicitud de Elisa; Rodny, 29 de octubre de 2026). Cada cotización aprobada
@@ -149,8 +148,8 @@ function FormalizationCard({ item, onSaved, onError, onOpenReceivables, onExcept
             </div>
             <div className="mt-2 divide-y divide-zinc-100 dark:divide-white/5">
                 <Step done={state.contract} title="Contrato firmado">
-                    {!state.contract && <p className="text-xs text-zinc-500 dark:text-zinc-400">El contrato firmado o un soporte verificable: PDF, JPG o PNG.</p>}
-                    <RecordDocumentsInline recordId={item.id} documents={item.documents} canWrite api={formalizationContractApi} onChanged={onSaved} onError={onError} />
+                    {!state.contract && <p className="text-xs text-zinc-500 dark:text-zinc-400">El contrato firmado o un soporte verificable: PDF, JPG o PNG. Después, los otrosí y los anexos.</p>}
+                    <FormalizationDocuments formalizationId={item.id} documents={item.documents} onSaved={onSaved} onError={onError} />
                 </Step>
                 <Step done={state.advanceCovered} title="Anticipo">
                     {item.advance && (

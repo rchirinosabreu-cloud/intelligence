@@ -2810,6 +2810,13 @@ model ProjectFormalizationDocument {
   sha256          String
   uploadedById    String?
   uploadedAt      DateTime @default(now()) @db.Timestamptz()
+  // CONTRATO, OTROSI o ANEXO (29 de octubre de 2026), con una nota opcional. Un archivo subido por error se anula con
+  // motivo: sigue guardado, deja de contar.
+  kind            String    @default("CONTRATO")
+  note            String?
+  voidedAt        DateTime? @db.Timestamptz()
+  voidReason      String?
+  voidedById      String?
 
   @@index([formalizationId, uploadedAt], map: "ProjectFormalizationDocument_formalization_idx")
 }
