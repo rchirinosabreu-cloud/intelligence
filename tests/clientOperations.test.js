@@ -162,3 +162,16 @@ test('la ficha operativa se valida igual en la pantalla y en el servidor', () =>
 
   assert.equal(normalizeOperationProfile({ contract: null }).valid, true, 'se puede guardar la ficha sin contrato');
 });
+
+test('«Ya se publicó» se ofrece desde el mismo día de la publicación, pero no sobre lo que Meta va a publicar hoy', async () => {
+  const { canMarkPublished } = await import('../src/lib/clientOperations.js');
+  const today = '2026-10-29';
+  assert.equal(canMarkPublished({ date: '2026-10-28', status: 'APROBADO' }, today), true, 'una pieza atrasada');
+  assert.equal(canMarkPublished({ date: '2026-10-29', status: 'APROBADO' }, today), true, 'la de hoy, ya no hay que esperar a mañana');
+  assert.equal(canMarkPublished({ date: '2026-10-29', status: 'PROGRAMADO' }, today), false, 'Meta la publica hoy: marcarla cancelaría esa publicación');
+  assert.equal(canMarkPublished({ date: '2026-10-28', status: 'PROGRAMADO' }, today), true, 'programada y con la fecha pasada: no salió');
+  assert.equal(canMarkPublished({ date: '2026-10-30', status: 'APROBADO' }, today), false);
+  assert.equal(canMarkPublished({ date: '2026-10-28', status: 'PUBLICADO' }, today), false);
+  assert.equal(canMarkPublished({ date: '2026-10-28', status: 'APROBADO', external: true }, today), false, 'lo de la hoja de MIO se marca en la hoja');
+  assert.equal(canMarkPublished({ date: null, status: 'APROBADO' }, today), false);
+});
