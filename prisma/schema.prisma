@@ -2814,6 +2814,20 @@ model ProjectFormalizationDocument {
   @@index([formalizationId, uploadedAt], map: "ProjectFormalizationDocument_formalization_idx")
 }
 
+// Avisos de cierre mensual y renovación (punto 5 de la solicitud de Elisa, 29 de octubre de 2026): lo ya avisado, una
+// fila por contrato, mes (`cycleKey`, el inicio del mes del cliente, o `R:<fin>` para la renovación) y paso. La fila
+// única es la cerradura. Regla en src/lib/contractCycleAlerts.js; tabla aditiva en scripts/ensure-contract-cycle-alerts-schema.js.
+model ContractCycleAlert {
+  id         String   @id @default(uuid())
+  contractId String
+  cycleKey   String
+  step       String
+  sentAt     DateTime @default(now()) @db.Timestamptz()
+
+  @@unique([contractId, cycleKey, step])
+  @@index([contractId], map: "ContractCycleAlert_contract_idx")
+}
+
 // Ajustes del CRM que cambia un administrador: los días de las alertas comerciales.
 model CrmSetting {
   id                   String   @id @default("global")
