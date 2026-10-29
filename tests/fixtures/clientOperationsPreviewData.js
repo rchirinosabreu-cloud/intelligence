@@ -260,3 +260,16 @@ export const clients = [
     openTasks: [task('pg1', 'Diseñar los carruseles de Endova', sara, '2026-10-05'), task('pg2', 'Programar las piezas de la semana', sara, '2026-10-06')],
   }),
 ];
+
+// La parrilla de MIO leída de su hoja de Google (29 de octubre de 2026): Lettufresh no tiene parrilla aquí; su octubre
+// sale de la pestaña OCTUBRE de la hoja, y noviembre ya se está preparando allá.
+{
+  const lettufresh = clients.find((c) => c.slug === 'lettufresh');
+  lettufresh.externalPlanUrl = 'https://docs.google.com/spreadsheets/d/1WfyHG3noiWBeMwwMRBCO4U_S6hwvjhtznUYOjPHfSZY/edit';
+  lettufresh.externalPlan = [
+    { year: 2026, month: 10, label: 'Octubre', tab: 'OCTUBRE', readAt: TODAY, problem: null, summary: { created: 13, reached: { redactada: 13, disenada: 13, aprobada: 13, programada: 0, publicada: 0 } } },
+    { year: 2026, month: 11, label: 'Noviembre', tab: 'NOVIEMBRE', readAt: TODAY, problem: null, summary: { created: 12, reached: { redactada: 12, disenada: 12, aprobada: 0, programada: 0, publicada: 0 } } },
+  ];
+  lettufresh.cycles.current.source = { kind: 'HOJA_MIO', tab: 'OCTUBRE', readAt: TODAY, problem: null };
+  lettufresh.cycles.current.pieces = lettufresh.cycles.current.pieces.map((piece) => ({ ...piece, external: true }));
+}

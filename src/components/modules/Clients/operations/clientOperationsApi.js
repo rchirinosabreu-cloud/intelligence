@@ -67,6 +67,21 @@ export function useAuthorizeWork() {
   });
 }
 
+// Reabrir un cierre confirmado y leer ahora la hoja de MIO; las dos responden la operación ya actualizada.
+function useOperationAction(path, method) {
+  const refresh = useRefresh();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (args) => request(path(args), { method }),
+    onSuccess: (saved) => {
+      if (saved?.slug) queryClient.setQueryData(clientKey(saved.slug), saved);
+      refresh();
+    },
+  });
+}
+export const useReopenMonthlyClose = () => useOperationAction(({ clientId, year, month }) => `/${clientId}/closes/${year}/${month}`, 'DELETE');
+export const useRefreshExternalPlan = () => useOperationAction(({ clientId }) => `/${clientId}/external-plan/refresh`, 'POST');
+
 // El project manager confirma el cierre del mes; responde la operación ya actualizada.
 export function useConfirmMonthlyClose() {
   const refresh = useRefresh();

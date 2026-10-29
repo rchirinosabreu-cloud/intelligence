@@ -83,6 +83,23 @@ try {
     );
   `);
   await client.query(`CREATE INDEX IF NOT EXISTS "ClientWorkAuthorization_clientId_createdAt_idx" ON "ClientWorkAuthorization"("clientId", "createdAt");`);
+  // La parrilla de MIO en una hoja de Google y lo leído de ella (29 de octubre de 2026).
+  await client.query(`ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "externalPlanUrl" TEXT;`);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS "ExternalPlanSnapshot" (
+      "id" TEXT PRIMARY KEY,
+      "clientId" TEXT NOT NULL REFERENCES "Client"("id") ON DELETE CASCADE,
+      "year" INTEGER NOT NULL,
+      "month" INTEGER NOT NULL,
+      "tabName" TEXT,
+      "pieces" JSONB NOT NULL DEFAULT '[]'::jsonb,
+      "summary" JSONB NOT NULL DEFAULT '{}'::jsonb,
+      "problem" TEXT,
+      "readAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "okAt" TIMESTAMPTZ(3)
+    );
+  `);
+  await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ExternalPlanSnapshot_clientId_year_month_key" ON "ExternalPlanSnapshot"("clientId", "year", "month");`);
   await client.query(`
     CREATE TABLE IF NOT EXISTS "UnbackedWorkAlert" (
       "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

@@ -9,7 +9,7 @@ import TaskSidePanel from '../../TaskSidePanel';
 import ClientOperationPage from './ClientOperationPage';
 import ClientOperationDialog from './ClientOperationDialog';
 import {
-  useAddObservation, useAuthorizeWork, useClientOperation, useConfirmMonthlyClose, useDeleteObservation, useMarkPiecePublished, useSaveOperationProfile, useSetMonthlyReport,
+  useAddObservation, useAuthorizeWork, useClientOperation, useConfirmMonthlyClose, useRefreshExternalPlan, useReopenMonthlyClose, useDeleteObservation, useMarkPiecePublished, useSaveOperationProfile, useSetMonthlyReport,
   useUndoPiecePublished,
 } from './clientOperationsApi';
 import { bogotaDate } from '@/lib/colombiaBusinessDays';
@@ -39,6 +39,8 @@ export default function ClientOperationRoute() {
   const setReport = useSetMonthlyReport();
   const confirmClose = useConfirmMonthlyClose();
   const authorizeWork = useAuthorizeWork();
+  const reopenClose = useReopenMonthlyClose();
+  const refreshExternalPlan = useRefreshExternalPlan();
   const markPublished = useMarkPiecePublished();
   const undoPublished = useUndoPiecePublished();
   const addObservation = useAddObservation();
@@ -95,6 +97,24 @@ export default function ClientOperationRoute() {
           await setReport.mutateAsync({ clientId: client.id, year: month.year, month: month.month, ...data });
           await refetch();
           toast.success(`Informe de ${month.label.toLowerCase()} actualizado.`);
+        }}
+        onReopenClose={async (month) => {
+          try {
+            await reopenClose.mutateAsync({ clientId: client.id, year: month.year, month: month.month });
+            await refetch();
+            toast.success(`Cierre de ${month.label.toLowerCase()} reabierto.`);
+          } catch (failure) {
+            toast.error(failure.message);
+          }
+        }}
+        onRefreshExternalPlan={async () => {
+          try {
+            await refreshExternalPlan.mutateAsync({ clientId: client.id });
+            await refetch();
+            toast.success('Hoja de MIO leída.');
+          } catch (failure) {
+            toast.error(failure.message);
+          }
         }}
         onAuthorizeWork={async (data) => {
           await authorizeWork.mutateAsync({ clientId: client.id, ...data });

@@ -722,6 +722,9 @@ model Client {
   accountsReceivables AccountsReceivable[]
   monthlyCloses       ClientMonthlyClose[]
   workAuthorizations  ClientWorkAuthorization[]
+  // La parrilla de MIO en una hoja de Google (29 de octubre de 2026): la plataforma la lee, nunca escribe en ella.
+  externalPlanUrl       String?
+  externalPlanSnapshots ExternalPlanSnapshot[]
   metricReports       MetricReport[]
   crmLeads            CrmLead[]
 
@@ -790,6 +793,25 @@ model ClientWorkAuthorization {
   client           Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId, createdAt])
+}
+
+/// Lo leído de la parrilla de MIO de un cliente (29 de octubre de 2026): una fila por cliente y mes, con las piezas de la
+/// pestaña del mes y su etapa. `problem` dice por qué la última lectura no se pudo; `okAt`, cuándo fue la última buena.
+/// Regla en src/lib/externalPlan.js; lectura en src/services/externalPlanService.js.
+model ExternalPlanSnapshot {
+  id       String    @id @default(uuid())
+  clientId String
+  year     Int
+  month    Int
+  tabName  String?
+  pieces   Json      @default("[]")
+  summary  Json      @default("{}")
+  problem  String?
+  readAt   DateTime  @default(now()) @db.Timestamptz(3)
+  okAt     DateTime? @db.Timestamptz(3)
+  client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, year, month])
 }
 
 /// Lo ya avisado a Dirección por trabajo sin propuesta aprobada: una vez por cliente y mes. La fila única es la cerradura.
