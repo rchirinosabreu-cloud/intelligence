@@ -29,6 +29,7 @@ export const CLIENT_RELATIONS = Object.freeze([
   { table: 'ClientMonthlyReport', label: 'informes mensuales entregados', recent: 'createdAt' },
   { table: 'ClientObservation', label: 'observaciones', recent: 'createdAt' },
   { table: 'CollectionActivity', label: 'gestiones de cobro', recent: 'occurredAt' },
+  { table: 'ProjectFormalization', label: 'formalizaciones de proyectos', recent: 'requestedAt' },
   { table: 'ClientEditorialCriterion', label: 'criterios editoriales', recent: null },
   { table: 'ClientCriterionDiscovery', label: 'búsquedas de criterios', recent: null },
   { table: 'AgencyContext', label: 'observaciones de la bitácora', recent: 'createdAt' },

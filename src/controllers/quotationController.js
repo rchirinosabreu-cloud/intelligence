@@ -53,6 +53,26 @@ import {
     QuotationAcceptanceError,
     acceptQuotationBySlug
 } from '../services/quotationAcceptanceService.js';
+import { startFormalization } from '../services/projectFormalizationService.js';
+
+// Una cotización aprobada abre su formalización (punto 3 de la solicitud de Elisa, 29 de octubre de 2026): ficha del
+// cliente, cuotas en Cuentas por cobrar y aviso a Administración. Un fallo aquí nunca deshace la aprobación; el reloj de
+// formalizaciones lo vuelve a intentar.
+const openFormalization = async (quotation, actor) => {
+    try {
+        await startFormalization(prisma, quotation.id, actor);
+    } catch (error) {
+        console.error('[QuotationController] Formalización no abierta:', error?.message || error);
+    }
+};
+
+// Lo que pasa después de aprobar, venga del enlace del cliente o de Comercial.
+const afterAcceptance = async (quotation, actor) => {
+    const party = await linkParty(quotation, actor);
+    const linked = { ...quotation, lead_id: party?.leadId || quotation.lead_id };
+    await syncLeadStage(linked, 'ACCEPTED');
+    await openFormalization(linked, actor);
+};
 
 const EMISORES_DATA = {
     BRAIN_STUDIO: {
@@ -403,10 +423,7 @@ export const acceptPublicQuotation = async (req, res) => {
             scenarioId,
             expectedUpdatedAt
         });
-        if (!alreadyAccepted) {
-            const party = await linkParty(quotation, null);
-            await syncLeadStage({ ...quotation, lead_id: party?.leadId || quotation.lead_id }, 'ACCEPTED');
-        }
+        if (!alreadyAccepted) await afterAcceptance(quotation, null);
         const publicQuotation = serializePublicQuotation(quotation);
         const emisor_data = EMISORES_DATA[quotation.emisor_type] || {};
 
@@ -423,6 +440,27 @@ export const acceptPublicQuotation = async (req, res) => {
             return res.status(error.statusCode).json({ error: error.message });
         }
         return res.status(500).json({ error: "Error al aprobar la cotización" });
+    }
+};
+
+/**
+ * Comercial registra la aprobación (punto 3 de la solicitud de Elisa: «Comercial registra la aprobación»): el cliente
+ * aprobó por WhatsApp, por correo o en una reunión, no desde su enlace. Pasa por la misma aprobación que el enlace —la
+ * misma versión, el mismo escenario elegido, los mismos totales— y abre la misma formalización.
+ */
+export const acceptQuotationInternally = async (req, res) => {
+    try {
+        const existing = await prisma.quotation.findUnique({ where: { id: req.params.id }, select: { uuid_slug: true } });
+        if (!existing) return res.status(404).json({ error: 'Cotización no encontrada' });
+        const { scenarioId, expectedUpdatedAt } = req.body || {};
+        const { quotation, alreadyAccepted } = await acceptQuotationBySlug({ db: prisma, slug: existing.uuid_slug, scenarioId, expectedUpdatedAt });
+        if (alreadyAccepted) return res.status(409).json({ error: 'Esta cotización ya estaba aprobada.' });
+        await afterAcceptance(quotation, req.user);
+        return res.json({ id: quotation.id, status: quotation.status, accepted_at: quotation.accepted_at });
+    } catch (error) {
+        console.error('[QuotationController] Internal acceptance failed:', error?.message || error);
+        if (error instanceof QuotationAcceptanceError) return res.status(error.statusCode).json({ error: error.message });
+        return res.status(500).json({ error: 'No fue posible registrar la aprobación' });
     }
 };
 

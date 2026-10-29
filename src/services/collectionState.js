@@ -31,7 +31,7 @@ export const saveCollectionSettings = async (db, input, actor) => {
 // Solo cartera de clientes que no esté cerrada: un préstamo no es una mensualidad.
 export const OPEN_CLIENT_RECEIVABLES = Object.freeze({ kind: 'CLIENTE', status: { notIn: ['PAGADO', 'SALDADO'] } });
 export const RECEIVABLE_FIELDS = Object.freeze({
-    id: true, kind: true, status: true, amount: true, period: true, issuedAt: true, dueDate: true, number: true,
+    id: true, kind: true, status: true, amount: true, period: true, issuedAt: true, dueDate: true, number: true, metadata: true,
     payments: { select: { amount: true, reversedAt: true, kind: true } }
 });
 

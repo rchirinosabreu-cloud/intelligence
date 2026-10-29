@@ -72,6 +72,22 @@ export const fetchReceivablePaymentDocumentBlob = async (paymentId, document) =>
     return response.data instanceof Blob ? response.data : new Blob([response.data], { type: document.mimeType });
 };
 
-export const recordDocumentsApi = { upload: uploadRecordDocument, fetchBlob: fetchRecordDocumentBlob, label: 'comprobante' };
+// El contrato firmado de una formalización (29 de octubre de 2026): solo lo ven Dirección y Administración.
+const formalizationUrl = (formalizationId, path = '') => `${getApiBaseUrl()}/api/financials/formalizations/${encodeURIComponent(formalizationId)}${path}`;
+
+export const uploadFormalizationContract = async (formalizationId, file) => {
+    const body = new FormData();
+    body.append('file', file, file.name);
+    const { data } = await axios.post(formalizationUrl(formalizationId, '/contract'), body, { headers: authHeaders() });
+    return data?.document;
+};
+
+export const fetchFormalizationContractBlob = async (formalizationId, document) => {
+    const response = await axios.get(formalizationUrl(formalizationId, `/documents/${document.id}/file`), { headers: authHeaders(), responseType: 'blob' });
+    return response.data instanceof Blob ? response.data : new Blob([response.data], { type: document.mimeType });
+};
+
+export const recordDocumentsApi ={ upload: uploadRecordDocument, fetchBlob: fetchRecordDocumentBlob, label: 'comprobante' };
 export const retentionCertificateApi = { upload: uploadReceivablePaymentDocument, fetchBlob: fetchReceivablePaymentDocumentBlob, label: 'certificado' };
 export const payableDocumentsApi = { upload: uploadPayableDocument, fetchBlob: fetchPayableDocumentBlob, label: 'soporte' };
+export const formalizationContractApi = { upload: uploadFormalizationContract, fetchBlob: fetchFormalizationContractBlob, label: 'contrato' };

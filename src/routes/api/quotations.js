@@ -36,6 +36,12 @@ router.post('/', quotationController.createQuotation);
 router.put('/:id', quotationController.updateQuotation);
 
 /**
+ * POST /api/quotations/:id/accept
+ * Comercial registra que el cliente aprobó por fuera del enlace; abre la formalización del proyecto.
+ */
+router.post('/:id/accept', quotationController.acceptQuotationInternally);
+
+/**
  * GET /api/quotations/:id/pdf
  * Generates and downloads the PDF version
  */
