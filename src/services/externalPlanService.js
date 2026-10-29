@@ -59,10 +59,19 @@ export const readExternalPlan = async (url, { year, month }, { fetchImpl = fetch
 
 const bogotaToday = (now) => new Date(now.getTime() - 5 * 3600 * 1000).toISOString().slice(0, 10);
 
-/** El mes en curso y el siguiente: lo que se está publicando y lo que ya se está preparando. */
+/** Cuántos meses ya cerrados se leen: los mismos que muestra «Meses anteriores» y que mira el semáforo. */
+export const PAST_MONTHS_READ = 3;
+
+/**
+ * Los tres meses anteriores, el mes en curso y el siguiente. Los anteriores hacen falta porque el semáforo juzga el mes
+ * que acaba de cerrar y la página los muestra: sin leerlos, un cliente de MIO aparecía con 0 publicadas en septiembre.
+ */
 export const monthsToRead = (now) => {
     const [year, month] = bogotaToday(now).split('-').map(Number);
-    return [{ year, month }, month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 }];
+    return Array.from({ length: PAST_MONTHS_READ + 2 }, (_, offset) => {
+        const index = year * 12 + (month - 1) - PAST_MONTHS_READ + offset;
+        return { year: Math.floor(index / 12), month: (index % 12) + 1 };
+    });
 };
 
 /**

@@ -41,7 +41,8 @@ export const parseSheetTabs = (html) => {
 export const monthTab = (tabs, year, month) => {
     const name = MONTH_TABS[month - 1];
     const candidates = (tabs || []).filter((tab) => {
-        const folded = fold(tab.name);
+        // «JULIO 2026.» es julio: los signos sueltos no cambian el mes. «MAYO-JUNIO» no es ninguno de los dos.
+        const folded = fold(tab.name).replace(/[^A-Z0-9 -]+/g, ' ').replace(/\s+/g, ' ').trim();
         if (folded.startsWith('COPIA')) return false;
         return folded === name || folded === `${name} ${year}` || folded === `${name} DE ${year}`;
     });
