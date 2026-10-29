@@ -74,6 +74,9 @@ test('las piezas se toman bajo la fila de encabezados, sin importar el orden de 
     assert.deepEqual(['REALIZADO', 'EN REVISIÓN', 'REVISIÓN DE CLIENTE', 'EN DISEÑO', 'APROBADO', ''].map(platformStatusFromSheet),
         ['REALIZADO', 'EN_REVISION', 'EN_REVISION', 'EN_PRODUCCION', 'APROBADO', 'BORRADOR']);
     assert.equal(asOperationPiece({ format: 'Reel', number: '1', status: 'REALIZADO', stage: 'disenada' }, 0).status, 'REALIZADO');
+    // Los estados de la hoja de Mari Colón.
+    assert.deepEqual(['ENVIADO AL CLIENTE', 'EN PRODUCCIÓN', 'SIN REALIZAR'].map(stageFromStatus), ['disenada', 'redactada', 'creada']);
+    assert.deepEqual(['ENVIADO AL CLIENTE', 'EN PRODUCCIÓN', 'SIN REALIZAR'].map(platformStatusFromSheet), ['EN_REVISION', 'EN_PRODUCCION', 'BORRADOR']);
     // Con la forma que leen las reglas de Operación, cada pieza cuenta en la misma etapa.
     assert.deepEqual(pieces.map(asOperationPiece).map(pieceStage), [3, 5, 2]);
 });

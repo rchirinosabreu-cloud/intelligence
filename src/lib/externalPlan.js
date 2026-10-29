@@ -56,8 +56,8 @@ export const stageFromStatus = (status) => {
     if (text.includes('PROGRAMAD')) return 'programada';
     if (text.includes('APROBAD')) return 'aprobada';
     // En revisión del cliente o en ajustes: la pieza ya está diseñada y espera su aprobación.
-    if (text.includes('REVISION') || text.includes('AJUSTE') || text.includes('DISENAD') || text.includes('DISENO LISTO') || text.includes('REALIZAD') || text.includes('DEVUELT')) return 'disenada';
-    if (text.includes('DISENO') || text.includes('REDACTAD') || text.includes('SOLICITUD') || text.includes('PROCESO')) return 'redactada';
+    if (text.includes('REVISION') || text.includes('AJUSTE') || text.includes('DISENAD') || text.includes('DISENO LISTO') || text.includes('REALIZAD') || text.includes('DEVUELT') || text.includes('ENVIADO')) return 'disenada';
+    if (text.includes('DISENO') || text.includes('REDACTAD') || text.includes('SOLICITUD') || text.includes('PROCESO') || text.includes('PRODUCCION')) return 'redactada';
     return 'creada';
 };
 
@@ -74,7 +74,8 @@ export const platformStatusFromSheet = (status) => {
     if (text.includes('APROBAD')) return 'APROBADO';
     if (text.includes('REALIZAD') || text.includes('DISENAD') || text.includes('DISENO LISTO')) return 'REALIZADO';
     if (text.includes('DEVUELT') || text.includes('AJUSTE')) return 'DEVUELTO';
-    if (text.includes('REVISION')) return 'EN_REVISION';
+    // «Enviado al cliente» (Mari Colón) es la pieza en manos del cliente para aprobarla.
+    if (text.includes('REVISION') || text.includes('ENVIADO')) return 'EN_REVISION';
     if (text.includes('DISENO') || text.includes('PROCESO') || text.includes('PRODUCCION') || text.includes('REDACTAD') || text.includes('SOLICITUD')) return 'EN_PRODUCCION';
     return 'BORRADOR';
 };
