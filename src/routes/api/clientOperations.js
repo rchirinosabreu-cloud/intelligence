@@ -5,7 +5,7 @@ import { clientOperationsService } from '../../services/clientOperationsService.
 // Operación de clientes (2 de octubre de 2026): el tablero global, la página de cada cliente, su ficha
 // operativa y el informe del mes. Solo administradores y project managers (Rodny, 1 de octubre de 2026).
 
-const PROFILE_FIELDS = ['description', 'instagramUrl', 'agency', 'complexity', 'projectManagerId', 'communityManagerId', 'contract', 'renew'];
+const PROFILE_FIELDS = ['description', 'instagramUrl', 'agency', 'complexity', 'projectManagerId', 'communityManagerId', 'externalPlanUrl', 'contract', 'renew'];
 
 const requireManager = (req, res, next) => {
   if (!req.user) return res.status(401).json({ error: 'Usuario no autenticado' });
@@ -60,6 +60,20 @@ export const createClientOperationsRouter = ({ service = clientOperationsService
         clientId: req.params.clientId, year: Number(req.params.year), month: Number(req.params.month),
         delivered: body.delivered, status: body.status, link: body.link, note: body.note, actorUserId: req.user.userId,
       }));
+    } catch (error) { return reply(res, error, logger); }
+  });
+
+  // Reabrir un cierre confirmado por error.
+  router.delete('/:clientId/closes/:year/:month', async (req, res) => {
+    try {
+      return res.json(await service.reopenMonthlyClose({ clientId: req.params.clientId, year: Number(req.params.year), month: Number(req.params.month), viewerUserId: req.user.userId }));
+    } catch (error) { return reply(res, error, logger); }
+  });
+
+  // Leer ahora la parrilla de MIO del cliente desde su hoja de Google.
+  router.post('/:clientId/external-plan/refresh', async (req, res) => {
+    try {
+      return res.json(await service.refreshExternalPlan({ clientId: req.params.clientId, viewerUserId: req.user.userId }));
     } catch (error) { return reply(res, error, logger); }
   });
 

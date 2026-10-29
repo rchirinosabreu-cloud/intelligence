@@ -73,13 +73,17 @@ function ReportStatus({ report }) {
 }
 
 // El cierre del mes, confirmado o por confirmar (29 de octubre de 2026).
-function CloseStatus({ cycle, today, onClose, compact = false }) {
+function CloseStatus({ cycle, today, onClose, onReopen, compact = false }) {
   if (cycle.close) {
     const summary = closeSummaryText(cycle.close.snapshot);
     return (
-      <span className="text-xs text-zinc-600 dark:text-zinc-300" data-close-status="confirmed" title={compact ? summary : undefined}>
-        Cerrado el {shortDate(cycle.close.closedAt)}{cycle.close.by ? ` · ${cycle.close.by}` : ''}{compact ? '' : `. ${summary}`}
-        {!compact && cycle.close.note && <span className="text-zinc-500"> {cycle.close.note}</span>}
+      <span className="inline-flex flex-wrap items-center gap-x-1 text-xs text-zinc-600 dark:text-zinc-300" data-close-status="confirmed" title={compact ? summary : undefined}>
+        <span>
+          Cerrado el {shortDate(cycle.close.closedAt)}{cycle.close.by ? ` · ${cycle.close.by}` : ''}{compact ? '' : `. ${summary}`}
+          {!compact && cycle.close.note && <span className="text-zinc-500"> {cycle.close.note}</span>}
+        </span>
+        {/* Todo es editable (Rodny, 29 de octubre de 2026): un cierre confirmado por error se reabre. */}
+        {onReopen && <button type="button" onClick={() => onReopen(cycle)} data-close-reopen className="min-h-9 rounded-md px-1 font-medium text-brand-cyan-deep hover:underline dark:text-brand-cyan">Reabrir</button>}
       </span>
     );
   }
@@ -89,15 +93,25 @@ function CloseStatus({ cycle, today, onClose, compact = false }) {
   return <span className="text-xs text-zinc-500" data-close-status="later">Se confirma desde el {shortDate(closeOpensOn(cycle))}</span>;
 }
 
-function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onMarkPublished, onUndoPublished, onOpenPlan }) {
+function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onReopen, externalPlanUrl, onMarkPublished, onUndoPublished, onOpenPlan }) {
+  // Sin parrilla aquí, el mes sale de la hoja de MIO: sus piezas se leen, no se marcan desde la plataforma.
+  const fromSheet = cycle.source?.kind === 'HOJA_MIO';
   return (
     <section className={CARD} aria-label={`Parrilla de ${cycle.label}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">{cycle.label}{cycle.start && !cycle.start.endsWith('-01') && <span className="ml-1.5 text-sm font-normal text-zinc-500">del {shortDate(cycle.start)} al {shortDate(cycle.end)}</span>}</h2>
           <p className={LABEL}>Día {cycle.day} de {cycle.length} · {cycle.reached.publicada} de {cycle.quota} publicadas</p>
+          {fromSheet && (
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400" data-cycle-source="HOJA_MIO">
+              Leído de la hoja de MIO{cycle.source.tab ? `, pestaña ${cycle.source.tab}` : ''}{cycle.source.readAt ? ` · ${shortDate(cycle.source.readAt)}` : ''}
+              {cycle.source.problem && <span className="text-zinc-600 dark:text-zinc-300"> · {cycle.source.problem}</span>}
+            </p>
+          )}
         </div>
-        {cycle.created > 0 && <button type="button" onClick={onOpenPlan} className={cn(TEXT_ACTION, '-mr-2 -mt-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5')}>Abrir parrilla <ExternalLink className="h-4 w-4" /></button>}
+        {fromSheet && externalPlanUrl
+          ? <a href={externalPlanUrl} target="_blank" rel="noreferrer" className={cn(TEXT_ACTION, '-mr-2 -mt-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5')}>Abrir la hoja <ExternalLink className="h-4 w-4" /></a>
+          : cycle.created > 0 && <button type="button" onClick={onOpenPlan} className={cn(TEXT_ACTION, '-mr-2 -mt-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5')}>Abrir parrilla <ExternalLink className="h-4 w-4" /></button>}
       </div>
       <CycleBar cycle={cycle} className="mt-4 h-2.5" />
       <ul className="mt-4 grid gap-x-6 gap-y-2 sm:grid-cols-2">
@@ -129,7 +143,7 @@ function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onMarkPu
                     <td className="px-3 py-2.5"><span className="text-zinc-500">{piece.format} · </span><span className="text-zinc-800 dark:text-zinc-100">{piece.title}</span></td>
                     <td className="px-3 py-2.5"><span className={cn('inline-flex rounded-md px-2 py-0.5 text-xs font-semibold', status.chip)}>{status.label}</span></td>
                     <td className="px-3 py-1 text-right">
-                      {late && <button type="button" onClick={() => onMarkPublished(piece)} className={cn(TEXT_ACTION, 'min-h-9 text-xs')}><CheckCircle2 className="h-4 w-4" />Ya se publicó</button>}
+                      {late && !piece.external && <button type="button" onClick={() => onMarkPublished(piece)} className={cn(TEXT_ACTION, 'min-h-9 text-xs')}><CheckCircle2 className="h-4 w-4" />Ya se publicó</button>}
                       {/* Lo marcado a mano se puede deshacer: vuelve al estado que tenía antes del clic. */}
                       {piece.markedByHand && onUndoPublished && (
                         <button type="button" onClick={() => onUndoPublished(piece)} title="Marcada a mano como publicada: vuelve al estado que tenía"
@@ -160,14 +174,14 @@ function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onMarkPu
         )}
         <div className="min-w-0">
           <p className={LABEL}>Cierre del mes</p>
-          <div className="mt-1"><CloseStatus cycle={cycle} today={today} onClose={onClose} /></div>
+          <div className="mt-1"><CloseStatus cycle={cycle} today={today} onClose={onClose} onReopen={onReopen} /></div>
         </div>
       </div>
     </section>
   );
 }
 
-function History({ months, monthlyReport, today, onReport, onClose }) {
+function History({ months, monthlyReport, today, onReport, onClose, onReopen }) {
   return (
     <section className={CARD} aria-label="Meses anteriores">
       <h2 className={cn(CARD_TITLE, 'mb-3')}>Meses anteriores</h2>
@@ -193,7 +207,7 @@ function History({ months, monthlyReport, today, onReport, onClose }) {
                     </div>
                   </td>
                 )}
-                <td className="py-1" data-history-close={month.label}><CloseStatus cycle={month} today={today} onClose={onClose} compact /></td>
+                <td className="py-1" data-history-close={month.label}><CloseStatus cycle={month} today={today} onClose={onClose} onReopen={onReopen} compact /></td>
               </tr>
             );
           })}
@@ -225,7 +239,44 @@ function UnbackedWork({ client, today, onAuthorize }) {
   );
 }
 
-function Profile({ client, canManage, onEdit, today, onAuthorizeWork }) {
+// La parrilla de MIO en su hoja de Google (29 de octubre de 2026): lo leído del mes en curso y del siguiente, que es el
+// que ya se está preparando. Solo lectura: lo que se cambia, se cambia en la hoja.
+function ExternalPlan({ client, onRefresh }) {
+  const [reading, setReading] = useState(false);
+  if (!client.externalPlanUrl) return null;
+  const refresh = async () => {
+    setReading(true);
+    try { await onRefresh(); } finally { setReading(false); }
+  };
+  return (
+    <div className="mb-4 rounded-xl border border-zinc-200 p-3 text-sm dark:border-white/10" data-external-plan>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-semibold">Parrilla de MIO</p>
+        <div className="flex items-center gap-1">
+          <a href={client.externalPlanUrl} target="_blank" rel="noreferrer" className={cn(TEXT_ACTION, 'min-h-9 px-2 text-xs')}>Abrir la hoja</a>
+          {onRefresh && <button type="button" onClick={refresh} disabled={reading} data-external-plan-refresh className={cn(TEXT_ACTION, 'min-h-9 px-2 text-xs disabled:opacity-50')}>{reading ? 'Leyendo…' : 'Leer ahora'}</button>}
+        </div>
+      </div>
+      <ul className="mt-2 space-y-1.5">
+        {(client.externalPlan || []).map((month) => {
+          const reached = month.summary?.reached || {};
+          return (
+            <li key={`${month.year}-${month.month}`} data-external-plan-month={month.label} className="text-xs text-zinc-700 dark:text-zinc-300">
+              <span className="font-semibold">{month.label}</span>
+              {month.summary?.created
+                ? `: ${month.summary.created} piezas · ${reached.disenada || 0} diseñadas · ${reached.aprobada || 0} aprobadas · ${reached.publicada || 0} publicadas`
+                : month.readAt ? ': sin piezas en la hoja' : ': todavía no se ha leído'}
+              {month.problem && <span className="block text-zinc-500 dark:text-zinc-400">{month.problem}</span>}
+            </li>
+          );
+        })}
+      </ul>
+      {client.externalPlan?.[0]?.readAt && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Leída el {shortDate(client.externalPlan[0].readAt)}. Se vuelve a leer cada dos horas.</p>}
+    </div>
+  );
+}
+
+function Profile({ client, canManage, onEdit, today, onAuthorizeWork, onRefreshExternalPlan }) {
   const { contract } = client;
   const quota = contractQuota(contract);
   return (
@@ -235,6 +286,7 @@ function Profile({ client, canManage, onEdit, today, onAuthorizeWork }) {
         {canManage && <button type="button" onClick={onEdit} className={cn(TEXT_ACTION, '-mr-2 -mt-2')}><Edit className="h-4 w-4" />Editar</button>}
       </div>
       <UnbackedWork client={client} today={today} onAuthorize={onAuthorizeWork} />
+      <ExternalPlan client={client} onRefresh={onRefreshExternalPlan} />
       {client.description && <p className="mb-4 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{client.description}</p>}
       {client.instagramUrl && (
         <a href={client.instagramUrl} target="_blank" rel="noreferrer" className="mb-4 inline-flex min-h-9 items-center gap-2 text-sm font-medium text-brand-cyan-deep hover:underline dark:text-brand-cyan">
@@ -308,7 +360,7 @@ function Tasks({ tasks, onNewTask, onOpenTask }) {
 
 export default function ClientOperationPage({
   client, evaluation, today, canManage, currentUserId, isAdmin,
-  onEditProfile, onMarkPublished, onUndoPublished, onSaveReport, onConfirmClose, onAuthorizeWork, onOpenPlan, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
+  onEditProfile, onMarkPublished, onUndoPublished, onSaveReport, onConfirmClose, onReopenClose, onRefreshExternalPlan, onAuthorizeWork, onOpenPlan, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
 }) {
   const measured = isMeasured(client);
   const { current } = client.cycles || {};
@@ -336,13 +388,13 @@ export default function ClientOperationPage({
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
           <ClientObservations observations={client.observations || []} currentUserId={currentUserId} isAdmin={isAdmin}
             onAdd={onAddObservation} onDelete={onDeleteObservation} />
-          {measured && current && <CurrentCycle cycle={current} today={today} monthlyReport={monthlyReport} onReport={setReportFor} onClose={setCloseFor}
+          {measured && current && <CurrentCycle cycle={current} today={today} monthlyReport={monthlyReport} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} externalPlanUrl={client.externalPlanUrl}
             onMarkPublished={onMarkPublished} onUndoPublished={onUndoPublished} onOpenPlan={onOpenPlan} />}
           {!measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
-          {measured && history.length > 0 && <History months={history} monthlyReport={monthlyReport} today={today} onReport={setReportFor} onClose={setCloseFor} />}
+          {measured && history.length > 0 && <History months={history} monthlyReport={monthlyReport} today={today} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} />}
         </div>
         <div className="flex min-w-0 flex-col gap-6">
-          <Profile client={client} canManage={canManage} onEdit={onEditProfile} today={today} onAuthorizeWork={onAuthorizeWork ? () => setAuthorizing(true) : null} />
+          <Profile client={client} canManage={canManage} onEdit={onEditProfile} today={today} onAuthorizeWork={onAuthorizeWork ? () => setAuthorizing(true) : null} onRefreshExternalPlan={onRefreshExternalPlan} />
           {measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
         </div>
       </div>

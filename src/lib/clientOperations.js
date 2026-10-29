@@ -5,6 +5,7 @@
 // Las mismas reglas las usan la pantalla y el servidor.
 
 import { unbackedWork } from './unbackedWork.js';
+import { sheetIdFromUrl } from './externalPlan.js';
 
 // Etapas de una pieza, en orden. Cada una cuenta las piezas que llegaron *al menos* hasta ahí.
 export const OPERATION_STAGES = [
@@ -275,9 +276,12 @@ export function normalizeOperationProfile(input = {}) {
     complexity: input.complexity ? String(input.complexity) : null,
     projectManagerId: optionalId(input.projectManagerId),
     communityManagerId: optionalId(input.communityManagerId),
+    externalPlanUrl: optionalText(input.externalPlanUrl, 500),
     contract: null,
   };
   if (value.instagramUrl && !/^https?:\/\/\S+$/i.test(value.instagramUrl)) errors.instagramUrl = 'Escribe un enlace que empiece por https://.';
+  // La parrilla de MIO en una hoja de Google (29 de octubre de 2026): solo se aceptan hojas de Google.
+  if (value.externalPlanUrl && !sheetIdFromUrl(value.externalPlanUrl)) errors.externalPlanUrl = 'Pega el enlace de la hoja de Google (docs.google.com/spreadsheets/…).';
   if (value.agency && !CLIENT_AGENCIES.some((o) => o.value === value.agency)) errors.agency = 'Elige Brain Studio o MIO Agencia.';
   if (value.complexity && !CLIENT_COMPLEXITY.some((o) => o.value === value.complexity)) errors.complexity = 'Elige alta, media o baja.';
 

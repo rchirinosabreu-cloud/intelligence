@@ -13,6 +13,7 @@ import {
 } from '../lib/clientOperations.js';
 import { CLOSE_NOTE_MAX, canConfirmClose, closeSnapshot, reportProblem } from '../lib/monthlyClose.js';
 import { authorizationProblem } from '../lib/unbackedWork.js';
+import { asOperationPiece } from '../lib/externalPlan.js';
 import { userHasArea } from './teamAreaService.js';
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { status, ...extra });
@@ -46,6 +47,8 @@ const clientSelect = (window) => ({
   monthlyReports: { where: { OR: window } },
   monthlyCloses: { where: { OR: window } },
   workAuthorizations: { orderBy: { createdAt: 'desc' }, take: 1 },
+  externalPlanUrl: true,
+  externalPlanSnapshots: { where: { OR: window } },
   contentPlans: {
     where: { deletedAt: null, OR: window },
     select: {
@@ -97,10 +100,14 @@ function pieceFacts(planId, item) {
 }
 
 function cycleSummary(client, cycle, quota, today, reporters) {
-  const items = client.contentPlans
+  let items = client.contentPlans
     .filter((plan) => plan.year === cycle.year && plan.month === cycle.month)
     .flatMap((plan) => plan.contentItems.map((item) => pieceFacts(plan.id, item)));
+  // Sin parrilla en la plataforma, la de la hoja de MIO (29 de octubre de 2026), contada con las mismas reglas.
+  const external = !items.length && (client.externalPlanSnapshots || []).find((row) => row.year === cycle.year && row.month === cycle.month);
+  if (external) items = (Array.isArray(external.pieces) ? external.pieces : []).map(asOperationPiece);
   const summary = summarizeCycle(cycle, items, { quota, today });
+  if (external) summary.source = { kind: 'HOJA_MIO', tab: external.tabName || null, readAt: external.okAt ? bogotaDate(external.okAt) : null, problem: external.problem || null };
   const report = client.monthlyReports.find((r) => r.year === cycle.year && r.month === cycle.month);
   // Solo «enviado» es entregado: `deliveredAt` sigue diciendo cuándo se envió, como antes de los estados.
   const sent = report && (report.status || 'ENVIADO') === 'ENVIADO';
@@ -129,6 +136,23 @@ function currentWork(client, today) {
   return { openTasks: (client.nativeTasks || []).length, plans: [...new Set(plans)] };
 }
 
+// Lo leído de la hoja de MIO para el mes en curso y el siguiente: cuántas piezas y en qué etapa.
+function externalPlanMonths(client, today) {
+  if (!client.externalPlanUrl) return null;
+  const [year, month] = today.split('-').map(Number);
+  const next = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+  return [{ year, month }, next].map(({ year: y, month: m }) => {
+    const row = (client.externalPlanSnapshots || []).find((item) => item.year === y && item.month === m);
+    return {
+      year: y, month: m, label: MONTH_NAMES[m - 1],
+      tab: row?.tabName ?? null,
+      summary: row?.summary && typeof row.summary === 'object' ? row.summary : null,
+      problem: row?.problem ?? null,
+      readAt: row?.okAt ? bogotaDate(row.okAt) : null,
+    };
+  });
+}
+
 const publicAuthorization = (row) => (row ? {
   until: row.until, reason: row.reason, byName: row.authorizedByName ?? null, at: row.createdAt ? bogotaDate(row.createdAt) : null,
 } : null);
@@ -151,6 +175,9 @@ function buildOperation(client, { today, reporters, detail }) {
     // Lo que se está trabajando, con o sin contrato: tareas abiertas y parrillas del mes en curso o del siguiente.
     work: currentWork(client, today),
     workAuthorization: publicAuthorization(client.workAuthorizations?.[0]),
+    // La hoja de MIO y lo último leído de ella, mes a mes (29 de octubre de 2026).
+    externalPlanUrl: client.externalPlanUrl ?? null,
+    externalPlan: externalPlanMonths(client, today),
     observations,
     latestObservation: observations[0] ? { text: observations[0].text, date: observations[0].date, by: observations[0].by } : null,
   };
@@ -181,6 +208,7 @@ function buildOperation(client, { today, reporters, detail }) {
 // «Ya se publicó» pasa por el mismo camino que el selector de estado de la parrilla, con todo lo que este
 // hace después (cerrar la parrilla cuando todo salió); nunca por una escritura paralela.
 const updateItemThroughContent = async (id, data) => (await import('./contentService.js')).updateContentItem(id, data);
+const readThroughExternalPlan = async (...args) => (await import('./externalPlanService.js')).refreshClientExternalPlan(...args);
 const cancelThroughPublishing = async (args) => (await import('./socialPublishingService.js')).cancelItemPublications(args);
 
 export const createClientOperationsService = ({
@@ -188,6 +216,7 @@ export const createClientOperationsService = ({
   now = () => new Date(),
   updateItem = updateItemThroughContent,
   cancelItemPublications = cancelThroughPublishing,
+  readExternalPlans = readThroughExternalPlan,
 } = {}) => {
   const todayKey = () => bogotaDate(now());
 
@@ -267,6 +296,8 @@ export const createClientOperationsService = ({
         data: {
           description: profile.description, instagramUrl: profile.instagramUrl, agency: profile.agency, complexity: profile.complexity,
           projectManagerId: profile.projectManagerId, responsibleId: profile.communityManagerId,
+          // La hoja de MIO solo cambia si el formulario la manda: quien edita la ficha por otro camino no la borra.
+          ...(Object.hasOwn(input, 'externalPlanUrl') ? { externalPlanUrl: profile.externalPlanUrl } : {}),
         },
       });
       if (profile.contract) {
@@ -276,7 +307,12 @@ export const createClientOperationsService = ({
         else await tx.clientContract.create({ data: { ...data, clientId: client.id, createdById: actorUserId || null } });
       }
     });
-    return getOperation(client.slug);
+    // Con la hoja de MIO recién puesta, se lee en el acto; si Google falla, la ficha ya quedó guardada.
+    if (Object.hasOwn(input, 'externalPlanUrl') && profile.externalPlanUrl) {
+      await readExternalPlans(db, { id: client.id, externalPlanUrl: profile.externalPlanUrl }, { now: now() })
+        .catch((error) => console.error('[ClientOperations] No se pudo leer la hoja de MIO:', error?.message || error));
+    }
+    return getOperation(client.slug, { viewerUserId: actorUserId });
   };
 
   const validMonth = (year, month) => {
@@ -318,6 +354,26 @@ export const createClientOperationsService = ({
     if (current) await db.clientMonthlyReport.update({ where: { id: current.id }, data: changes });
     else await db.clientMonthlyReport.create({ data: { clientId: client.id, year: y, month: m, deliveredById: actorUserId || null, ...changes } });
     return { clientId: client.id, year: y, month: m, status: input.status, delivered: input.status === 'ENVIADO', label };
+  };
+
+  // Leer ahora la hoja de MIO del cliente, sin esperar al reloj (29 de octubre de 2026).
+  const refreshExternalPlan = async ({ clientId, viewerUserId = null }) => {
+    const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { id: true, slug: true, name: true, externalPlanUrl: true } });
+    if (!client) throw httpError(404, 'No encontramos ese cliente.');
+    if (!client.externalPlanUrl) throw httpError(409, 'Este cliente no tiene el enlace de su parrilla en una hoja de Google.');
+    await readExternalPlans(db, client, { now: now() });
+    return getOperation(client.slug, { viewerUserId });
+  };
+
+  // Reabrir un cierre confirmado por error (Rodny, 29 de octubre de 2026: «100 % editable todo»). Se puede volver a
+  // confirmar cuando se quiera.
+  const reopenMonthlyClose = async ({ clientId, year, month, viewerUserId = null }) => {
+    const { y, m } = validMonth(year, month);
+    const row = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { id: true, slug: true } });
+    if (!row) throw httpError(404, 'No encontramos ese cliente.');
+    const { count } = await db.clientMonthlyClose.deleteMany({ where: { clientId: row.id, year: y, month: m } });
+    if (!count) throw httpError(404, 'Ese mes no tenía el cierre confirmado.');
+    return getOperation(row.slug, { viewerUserId });
   };
 
   /**
@@ -416,7 +472,7 @@ export const createClientOperationsService = ({
     return db.teamMember.update({ where: { id: member.id }, data: { highlightedAction: value } });
   };
 
-  return { listOperations, getOperation, authorizeWork, saveProfile, setMonthlyReport, confirmMonthlyClose, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
+  return { listOperations, getOperation, authorizeWork, saveProfile, setMonthlyReport, confirmMonthlyClose, reopenMonthlyClose, refreshExternalPlan, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
 };
 
 export const clientOperationsService = createClientOperationsService();
