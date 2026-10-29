@@ -809,6 +809,14 @@ model ExternalPlanSnapshot {
   problem  String?
   readAt   DateTime  @default(now()) @db.Timestamptz(3)
   okAt     DateTime? @db.Timestamptz(3)
+  /// La pestaña de Google (gid): con ella «Abrir en la hoja» llega a la fila de cada pieza.
+  gid        String?
+  /// Los comentarios de Google (los de burbuja) de este mes; `commentsAt` dice que se leyeron por la API.
+  comments   Json      @default("[]")
+  commentsAt DateTime? @db.Timestamptz(3)
+  /// Lo que cambió en la última lectura que trajo algo nuevo, y cuándo.
+  changes    Json      @default("[]")
+  changedAt  DateTime? @db.Timestamptz(3)
   client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([clientId, year, month])

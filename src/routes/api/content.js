@@ -35,6 +35,7 @@ import {
 } from '../../services/briaContentPlanReviewService.js';
 import { runContentPlanReviewJob } from '../../services/briaContentPlanReviewScheduler.js';
 import { createClientCriteriaRouter } from './clientCriteria.js';
+import { createExternalPlansRouter } from './externalPlans.js';
 import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
 import {
   FINAL_ASSET_MAX_BYTES,
@@ -47,6 +48,7 @@ import {
 
 const router = express.Router();
 router.use('/plans/:planId/criteria', createClientCriteriaRouter());
+router.use('/external-plans', createExternalPlansRouter());
 const upload = multer({
   storage: uploadMemoryStorage(),
   limits: { fileSize: FINAL_ASSET_MAX_BYTES, files: 1 }

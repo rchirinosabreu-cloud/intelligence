@@ -7,7 +7,7 @@ import { getContentPlanMonthName } from '@/lib/contentPlanPeriod';
 import {
   Plus, Calendar, Filter, Search, MoreHorizontal,
   ChevronRight, ChevronDown, Loader2, Trash2, Eye,
-  Folder, Grid, List, Clock
+  Folder, Grid, List, Clock, FileSpreadsheet
 } from '@/components/ui/icons';
 import { motion, AnimatePresence } from 'framer-motion';
 import PageHeader from '@/components/ui/PageHeader';
@@ -47,6 +47,18 @@ const ContentGrids = () => {
     }
   });
 
+  // Las parrillas de MIO que viven en hojas de Google (29 de octubre de 2026): aparecen solas en la carpeta de su cliente.
+  const { data: externalPlans } = useQuery({
+    queryKey: ['external-plans'],
+    queryFn: async () => {
+      const response = await axios.get(`${getApiBaseUrl()}/api/content/external-plans`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` }
+      });
+      return response.data;
+    },
+    staleTime: 60_000
+  });
+
   // Click Outside Behavior
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -80,9 +92,9 @@ const ContentGrids = () => {
 
   // Master Grouping: Client -> Plans (Ordered by Year/Month DESC)
   const plansGroupedByClient = useMemo(() => {
-    if (!plans) return {};
+    if (!plans && !externalPlans) return [];
 
-    const grouped = plans.reduce((acc, plan) => {
+    const grouped = (plans || []).reduce((acc, plan) => {
       const clientId = plan.clientId;
       if (!acc[clientId]) {
         acc[clientId] = {
@@ -95,6 +107,12 @@ const ContentGrids = () => {
       return acc;
     }, {});
 
+    (externalPlans || []).forEach((external) => {
+      const clientId = external.client.id;
+      if (!grouped[clientId]) grouped[clientId] = { id: clientId, client: external.client, plans: [] };
+      grouped[clientId].external = external;
+    });
+
     // Sort plans within each client (Desc chronological)
     Object.values(grouped).forEach(clientGroup => {
       clientGroup.plans.sort((a, b) => {
@@ -103,13 +121,13 @@ const ContentGrids = () => {
       });
     });
 
-    // Sort clients by most recent activity
-    return Object.values(grouped).sort((a, b) => {
-      const aDate = new Date(a.plans[0].updatedAt);
-      const bDate = new Date(b.plans[0].updatedAt);
-      return bDate - aDate;
-    });
-  }, [plans]);
+    // Sort clients by most recent activity (una hoja de MIO cuenta por su última lectura)
+    const lastActivity = (group) => Math.max(
+      group.plans[0] ? new Date(group.plans[0].updatedAt).getTime() : 0,
+      ...(group.external?.months || []).map((month) => (month.readAt ? new Date(month.readAt).getTime() : 0))
+    );
+    return Object.values(grouped).sort((a, b) => lastActivity(b) - lastActivity(a));
+  }, [plans, externalPlans]);
 
   const filteredClientGroups = useMemo(() => {
     if (!searchTerm) return plansGroupedByClient;
@@ -216,8 +234,15 @@ const ContentGrids = () => {
                         <h3 className="font-bold text-zinc-900 dark:text-white leading-tight">
                           {group.client?.name}
                         </h3>
-                        <p className="text-xs text-zinc-500 flex items-center gap-1 mt-1 font-medium tracking-tight">
-                          {group.plans.length} {group.plans.length === 1 ? 'Plan' : 'Planes'} • Actividad: {new Date(group.plans[0].updatedAt).toLocaleDateString()}
+                        <p className="text-xs text-zinc-500 flex flex-wrap items-center gap-1 mt-1 font-medium tracking-tight">
+                          {group.plans.length > 0 && (
+                            <span>{group.plans.length} {group.plans.length === 1 ? 'Plan' : 'Planes'} • Actividad: {new Date(group.plans[0].updatedAt).toLocaleDateString()}</span>
+                          )}
+                          {group.external && (
+                            <span className="inline-flex items-center gap-1 rounded-md bg-brand-green-soft px-1.5 py-0.5 text-[11px] font-semibold text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green" data-external-badge>
+                              <FileSpreadsheet className="w-3 h-3" />Hoja de MIO
+                            </span>
+                          )}
                         </p>
                       </div>
                     </div>
@@ -239,6 +264,36 @@ const ContentGrids = () => {
                       className="overflow-hidden"
                     >
                       <div className="mt-2 space-y-2 px-3 pb-2 border-l-2 border-indigo-600/10 ml-6 pt-2">
+                        {group.external?.months.map((month) => (
+                          <div
+                            key={`hoja-${month.slug}`}
+                            onClick={() => navigate(`/parrillas/hoja/${group.client.slug}/${month.slug}`)}
+                            className="flex items-center justify-between p-3 rounded-xl bg-zinc-50 dark:bg-white/5 hover:bg-brand-green-soft dark:hover:bg-brand-green/10 border border-transparent hover:border-brand-green/30 transition-all cursor-pointer"
+                            data-external-month={month.slug}
+                          >
+                            <div className="flex items-center gap-3">
+                              <div className="p-2 rounded-lg bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-white/5 shadow-sm">
+                                <FileSpreadsheet className="w-3.5 h-3.5 text-brand-green-deep dark:text-brand-green" />
+                              </div>
+                              <div className="flex flex-col">
+                                <span className="text-sm font-bold text-zinc-900 dark:text-zinc-100 capitalize">
+                                  {month.label} {month.year}
+                                </span>
+                                <span className="text-[11px] font-medium text-zinc-500 dark:text-zinc-400 mt-0.5">
+                                  {month.problem && !month.created ? month.problem : `Hoja de MIO · ${month.created} ${month.created === 1 ? 'pieza' : 'piezas'}`}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {month.changes > 0 && (
+                                <span className="rounded-md bg-brand-yellow-soft px-2 py-0.5 text-[11px] font-semibold text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow" data-external-changes-count>
+                                  {month.changes} {month.changes === 1 ? 'cambio' : 'cambios'}
+                                </span>
+                              )}
+                              <ChevronRight className="w-4 h-4 text-zinc-300 dark:text-zinc-600" />
+                            </div>
+                          </div>
+                        ))}
                         {group.plans.map((plan) => (
                           <div
                             key={plan.id}
