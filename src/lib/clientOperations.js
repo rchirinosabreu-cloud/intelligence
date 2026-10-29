@@ -230,6 +230,17 @@ export function pieceStage(item) {
   return stage;
 }
 
+/**
+ * Si una pieza se puede marcar «Ya se publicó»: desde el mismo día de su publicación, no solo cuando ya pasó (Rodny,
+ * 29 de octubre de 2026). Lo que Meta tiene programado para hoy no: marcarlo cancelaría una publicación que todavía va
+ * a salir. Las piezas de la hoja de MIO se marcan en la hoja.
+ */
+export function canMarkPublished(piece, today) {
+  if (!piece?.date || piece.external || piece.status === 'PUBLICADO') return false;
+  if (piece.date > today) return false;
+  return !(piece.date === today && piece.status === 'PROGRAMADO');
+}
+
 const STAGE_KEYS = ['redactada', 'disenada', 'aprobada', 'programada', 'publicada'];
 
 /** Resume las piezas de una parrilla contra lo contratado. `items` llevan `date` como «YYYY-MM-DD». */
