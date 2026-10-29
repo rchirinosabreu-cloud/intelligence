@@ -5,7 +5,12 @@ import {
 } from '../src/lib/externalPlan.js';
 import { pieceStage } from '../src/lib/clientOperations.js';
 import { normalizeOperationProfile } from '../src/lib/clientOperations.js';
-import { ExternalPlanError, readExternalPlan, refreshClientExternalPlan } from '../src/services/externalPlanService.js';
+import { ExternalPlanError, monthsToRead, readExternalPlan, refreshClientExternalPlan } from '../src/services/externalPlanService.js';
+
+test('se leen los tres meses anteriores, el mes en curso y el siguiente: el semáforo juzga el mes que acaba de cerrar', () => {
+    assert.deepEqual(monthsToRead(new Date('2026-10-29T15:00:00Z')).map(({ year, month }) => `${year}-${month}`), ['2026-7', '2026-8', '2026-9', '2026-10', '2026-11']);
+    assert.deepEqual(monthsToRead(new Date('2027-01-10T15:00:00Z')).map(({ year, month }) => `${year}-${month}`), ['2026-10', '2026-11', '2026-12', '2027-1', '2027-2']);
+});
 
 // Lectura de las parrillas de MIO (Rodny, 29 de octubre de 2026): cada cliente de MIO tiene su parrilla en una hoja de
 // Google, una pestaña por mes. La plataforma la lee para el avance y el semáforo; nunca escribe en ella.
@@ -33,6 +38,8 @@ test('las pestañas se leen de la vista pública y el mes es la que se llama com
     assert.equal(monthTab(tabs, 2026, 11).gid, '32390049');
     assert.equal(monthTab(tabs, 2026, 12), null);
     assert.equal(monthTab([{ name: 'Octubre 2026', gid: '9' }], 2026, 10).gid, '9');
+    assert.equal(monthTab([{ name: 'JULIO 2026.', gid: '7' }], 2026, 7).gid, '7', 'un punto suelto no cambia el mes');
+    assert.equal(monthTab([{ name: 'MAYO-JUNIO 2026', gid: '5' }], 2026, 5), null, 'una pestaña de dos meses no es ninguno');
 });
 
 test('el estado de la hoja se traduce a las etapas de la plataforma', () => {
@@ -66,6 +73,10 @@ test('las piezas se toman bajo la fila de encabezados, sin importar el orden de 
     ]);
     assert.deepEqual(summarizeExternalPieces(pieces), { created: 3, reached: { redactada: 3, disenada: 3, aprobada: 2, programada: 1, publicada: 1 } });
     assert.match(parsePlanRows([['Hola']], { year: 2026, month: 10 }).problem, /Formato y Estado/);
+    // Lo que va debajo de dos filas vacías es otra tabla, aunque traiga números en la columna del formato.
+    const empty = ['', '', '', '', '', '', '', '', ''];
+    const withPriorities = parsePlanRows([...OCTOBER.slice(0, 5), empty, empty, ['', 'PRIORIDADES DEL CLIENTE', '', '', 'PRIORIDAD', '', '', '', ''], ['', '1', 'Sabanera', 'Se aceptó una oferta', 'PROMOCIONAR', '', '', '', '']], { year: 2026, month: 10 });
+    assert.equal(withPriorities.pieces.length, 3);
     // Una fila de plantilla, con el formato, el número, el objetivo y las redes ya puestos, todavía no es una pieza.
     const template = parsePlanRows([OCTOBER[1], ['POSICIONAMIENTO', 'REEL', '', '', 'Facebook', '', '', '4', '']], { year: 2026, month: 10 });
     assert.equal(template.pieces.length, 0);
@@ -74,6 +85,9 @@ test('las piezas se toman bajo la fila de encabezados, sin importar el orden de 
     assert.deepEqual(['REALIZADO', 'EN REVISIÓN', 'REVISIÓN DE CLIENTE', 'EN DISEÑO', 'APROBADO', ''].map(platformStatusFromSheet),
         ['REALIZADO', 'EN_REVISION', 'EN_REVISION', 'EN_PRODUCCION', 'APROBADO', 'BORRADOR']);
     assert.equal(asOperationPiece({ format: 'Reel', number: '1', status: 'REALIZADO', stage: 'disenada' }, 0).status, 'REALIZADO');
+    // Los estados de la hoja de Mari Colón.
+    assert.deepEqual(['ENVIADO AL CLIENTE', 'EN PRODUCCIÓN', 'SIN REALIZAR'].map(stageFromStatus), ['disenada', 'redactada', 'creada']);
+    assert.deepEqual(['ENVIADO AL CLIENTE', 'EN PRODUCCIÓN', 'SIN REALIZAR'].map(platformStatusFromSheet), ['EN_REVISION', 'EN_PRODUCCION', 'BORRADOR']);
     // Con la forma que leen las reglas de Operación, cada pieza cuenta en la misma etapa.
     assert.deepEqual(pieces.map(asOperationPiece).map(pieceStage), [3, 5, 2]);
 });

@@ -41,7 +41,8 @@ export const parseSheetTabs = (html) => {
 export const monthTab = (tabs, year, month) => {
     const name = MONTH_TABS[month - 1];
     const candidates = (tabs || []).filter((tab) => {
-        const folded = fold(tab.name);
+        // «JULIO 2026.» es julio: los signos sueltos no cambian el mes. «MAYO-JUNIO» no es ninguno de los dos.
+        const folded = fold(tab.name).replace(/[^A-Z0-9 -]+/g, ' ').replace(/\s+/g, ' ').trim();
         if (folded.startsWith('COPIA')) return false;
         return folded === name || folded === `${name} ${year}` || folded === `${name} DE ${year}`;
     });
@@ -56,8 +57,8 @@ export const stageFromStatus = (status) => {
     if (text.includes('PROGRAMAD')) return 'programada';
     if (text.includes('APROBAD')) return 'aprobada';
     // En revisión del cliente o en ajustes: la pieza ya está diseñada y espera su aprobación.
-    if (text.includes('REVISION') || text.includes('AJUSTE') || text.includes('DISENAD') || text.includes('DISENO LISTO') || text.includes('REALIZAD') || text.includes('DEVUELT')) return 'disenada';
-    if (text.includes('DISENO') || text.includes('REDACTAD') || text.includes('SOLICITUD') || text.includes('PROCESO')) return 'redactada';
+    if (text.includes('REVISION') || text.includes('AJUSTE') || text.includes('DISENAD') || text.includes('DISENO LISTO') || text.includes('REALIZAD') || text.includes('DEVUELT') || text.includes('ENVIADO')) return 'disenada';
+    if (text.includes('DISENO') || text.includes('REDACTAD') || text.includes('SOLICITUD') || text.includes('PROCESO') || text.includes('PRODUCCION')) return 'redactada';
     return 'creada';
 };
 
@@ -74,7 +75,8 @@ export const platformStatusFromSheet = (status) => {
     if (text.includes('APROBAD')) return 'APROBADO';
     if (text.includes('REALIZAD') || text.includes('DISENAD') || text.includes('DISENO LISTO')) return 'REALIZADO';
     if (text.includes('DEVUELT') || text.includes('AJUSTE')) return 'DEVUELTO';
-    if (text.includes('REVISION')) return 'EN_REVISION';
+    // «Enviado al cliente» (Mari Colón) es la pieza en manos del cliente para aprobarla.
+    if (text.includes('REVISION') || text.includes('ENVIADO')) return 'EN_REVISION';
     if (text.includes('DISENO') || text.includes('PROCESO') || text.includes('PRODUCCION') || text.includes('REDACTAD') || text.includes('SOLICITUD')) return 'EN_PRODUCCION';
     return 'BORRADOR';
 };
@@ -122,7 +124,16 @@ export const parsePlanRows = (rows, { year, month }) => {
     // no son piezas. Una pieza tiene algo propio —fecha, estado, texto o enlace—.
     const filler = new Set([formatAt, numberAt, column((cell) => cell.startsWith('OBJETIVO')), column((cell) => cell.startsWith('REDES'))]);
     const pieces = [];
+    let blank = 0;
     for (const row of rows.slice(headerIndex + 1)) {
+        // Dos filas vacías seguidas cierran la parrilla: lo de abajo es otra tabla (Mari Colón pone ahí las
+        // «PRIORIDADES DEL CLIENTE», numeradas en la columna del formato) y no son piezas.
+        if (!row.some((cell) => String(cell ?? '').trim())) {
+            blank += 1;
+            if (blank >= 2 && pieces.length) break;
+            continue;
+        }
+        blank = 0;
         const format = String(row[formatAt] ?? '').trim();
         if (!format) continue;
         if (!row.some((cell, index) => !filler.has(index) && String(cell ?? '').trim())) continue;
