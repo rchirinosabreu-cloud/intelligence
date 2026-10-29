@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    asOperationPiece, formatFromText, monthTab, parsePlanRows, parseSheetTabs, pieceDate, sheetIdFromUrl, stageFromStatus, summarizeExternalPieces
+    asOperationPiece, formatFromText, monthTab, parsePlanRows, parseSheetTabs, pieceDate, platformStatusFromSheet, sheetIdFromUrl, stageFromStatus, summarizeExternalPieces
 } from '../src/lib/externalPlan.js';
 import { pieceStage } from '../src/lib/clientOperations.js';
 import { normalizeOperationProfile } from '../src/lib/clientOperations.js';
@@ -70,6 +70,10 @@ test('las piezas se toman bajo la fila de encabezados, sin importar el orden de 
     const template = parsePlanRows([OCTOBER[1], ['POSICIONAMIENTO', 'REEL', '', '', 'Facebook', '', '', '4', '']], { year: 2026, month: 10 });
     assert.equal(template.pieces.length, 0);
     assert.equal(stageFromStatus('REALIZADO'), 'disenada');
+    // El nombre que se muestra es el de la plataforma, sea de MIO o no.
+    assert.deepEqual(['REALIZADO', 'EN REVISIÓN', 'REVISIÓN DE CLIENTE', 'EN DISEÑO', 'APROBADO', ''].map(platformStatusFromSheet),
+        ['REALIZADO', 'EN_REVISION', 'EN_REVISION', 'EN_PRODUCCION', 'APROBADO', 'BORRADOR']);
+    assert.equal(asOperationPiece({ format: 'Reel', number: '1', status: 'REALIZADO', stage: 'disenada' }, 0).status, 'REALIZADO');
     // Con la forma que leen las reglas de Operación, cada pieza cuenta en la misma etapa.
     assert.deepEqual(pieces.map(asOperationPiece).map(pieceStage), [3, 5, 2]);
 });

@@ -56,9 +56,27 @@ export const stageFromStatus = (status) => {
     if (text.includes('PROGRAMAD')) return 'programada';
     if (text.includes('APROBAD')) return 'aprobada';
     // En revisión del cliente o en ajustes: la pieza ya está diseñada y espera su aprobación.
-    if (text.includes('REVISION') || text.includes('AJUSTE') || text.includes('DISENAD') || text.includes('DISENO LISTO') || text.includes('REALIZAD')) return 'disenada';
+    if (text.includes('REVISION') || text.includes('AJUSTE') || text.includes('DISENAD') || text.includes('DISENO LISTO') || text.includes('REALIZAD') || text.includes('DEVUELT')) return 'disenada';
     if (text.includes('DISENO') || text.includes('REDACTAD') || text.includes('SOLICITUD') || text.includes('PROCESO')) return 'redactada';
     return 'creada';
+};
+
+/**
+ * El estado de la plataforma que corresponde al de la hoja, para que la pieza se nombre igual sea de MIO o no
+ * (Rodny, 29 de octubre de 2026: «ese es el nombre que usamos en la plataforma»). La etapa la sigue diciendo
+ * `stageFromStatus`; esto es solo el nombre que se muestra.
+ */
+export const platformStatusFromSheet = (status) => {
+    const text = fold(status);
+    if (!text) return 'BORRADOR';
+    if (text.includes('PUBLICAD')) return 'PUBLICADO';
+    if (text.includes('PROGRAMAD')) return 'PROGRAMADO';
+    if (text.includes('APROBAD')) return 'APROBADO';
+    if (text.includes('REALIZAD') || text.includes('DISENAD') || text.includes('DISENO LISTO')) return 'REALIZADO';
+    if (text.includes('DEVUELT') || text.includes('AJUSTE')) return 'DEVUELTO';
+    if (text.includes('REVISION')) return 'EN_REVISION';
+    if (text.includes('DISENO') || text.includes('PROCESO') || text.includes('PRODUCCION') || text.includes('REDACTAD') || text.includes('SOLICITUD')) return 'EN_PRODUCCION';
+    return 'BORRADOR';
 };
 
 /** El formato de la pieza en las palabras de la parrilla de la plataforma. */
@@ -134,7 +152,7 @@ export const summarizeExternalPieces = (pieces = []) => {
  */
 export const asOperationPiece = (piece, index) => {
     const rank = EXTERNAL_STAGES.indexOf(piece.stage);
-    const status = { publicada: 'PUBLICADO', programada: 'PROGRAMADO', aprobada: 'APROBADO' }[piece.stage] || 'BORRADOR';
+    const status = platformStatusFromSheet(piece.status);
     return {
         id: `externa-${index + 1}`,
         planId: null,
