@@ -69,6 +69,29 @@ try {
     );
   `);
   await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ClientMonthlyClose_clientId_year_month_key" ON "ClientMonthlyClose"("clientId", "year", "month");`);
+  // Trabajo sin propuesta aprobada (29 de octubre de 2026): las autorizaciones para seguir trabajando, y lo ya avisado a
+  // Dirección, una vez por cliente y mes.
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS "ClientWorkAuthorization" (
+      "id" TEXT PRIMARY KEY,
+      "clientId" TEXT NOT NULL REFERENCES "Client"("id") ON DELETE CASCADE,
+      "until" TEXT NOT NULL,
+      "reason" TEXT NOT NULL,
+      "authorizedById" TEXT,
+      "authorizedByName" TEXT,
+      "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  await client.query(`CREATE INDEX IF NOT EXISTS "ClientWorkAuthorization_clientId_createdAt_idx" ON "ClientWorkAuthorization"("clientId", "createdAt");`);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS "UnbackedWorkAlert" (
+      "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "clientId" TEXT NOT NULL,
+      "monthKey" TEXT NOT NULL,
+      "sentAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE("clientId", "monthKey")
+    );
+  `);
   await client.query(`
     CREATE TABLE IF NOT EXISTS "ClientObservation" (
       "id" TEXT PRIMARY KEY,

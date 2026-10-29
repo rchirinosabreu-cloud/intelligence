@@ -28,6 +28,8 @@ export const CLIENT_RELATIONS = Object.freeze([
   { table: 'ClientContract', label: 'contratos', recent: 'updatedAt' },
   { table: 'ClientMonthlyReport', label: 'informes mensuales', recent: 'createdAt' },
   { table: 'ClientMonthlyClose', label: 'cierres de mes confirmados', recent: 'closedAt' },
+  { table: 'ClientWorkAuthorization', label: 'autorizaciones para trabajar sin propuesta', recent: 'createdAt' },
+  { table: 'UnbackedWorkAlert', label: 'avisos de trabajo sin propuesta', recent: 'sentAt' },
   { table: 'ClientObservation', label: 'observaciones', recent: 'createdAt' },
   { table: 'CollectionActivity', label: 'gestiones de cobro', recent: 'occurredAt' },
   { table: 'ProjectFormalization', label: 'formalizaciones de proyectos', recent: 'requestedAt' },

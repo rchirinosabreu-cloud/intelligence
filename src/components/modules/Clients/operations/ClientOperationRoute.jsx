@@ -9,7 +9,7 @@ import TaskSidePanel from '../../TaskSidePanel';
 import ClientOperationPage from './ClientOperationPage';
 import ClientOperationDialog from './ClientOperationDialog';
 import {
-  useAddObservation, useClientOperation, useConfirmMonthlyClose, useDeleteObservation, useMarkPiecePublished, useSaveOperationProfile, useSetMonthlyReport,
+  useAddObservation, useAuthorizeWork, useClientOperation, useConfirmMonthlyClose, useDeleteObservation, useMarkPiecePublished, useSaveOperationProfile, useSetMonthlyReport,
   useUndoPiecePublished,
 } from './clientOperationsApi';
 import { bogotaDate } from '@/lib/colombiaBusinessDays';
@@ -38,6 +38,7 @@ export default function ClientOperationRoute() {
   const saveProfile = useSaveOperationProfile();
   const setReport = useSetMonthlyReport();
   const confirmClose = useConfirmMonthlyClose();
+  const authorizeWork = useAuthorizeWork();
   const markPublished = useMarkPiecePublished();
   const undoPublished = useUndoPiecePublished();
   const addObservation = useAddObservation();
@@ -94,6 +95,11 @@ export default function ClientOperationRoute() {
           await setReport.mutateAsync({ clientId: client.id, year: month.year, month: month.month, ...data });
           await refetch();
           toast.success(`Informe de ${month.label.toLowerCase()} actualizado.`);
+        }}
+        onAuthorizeWork={async (data) => {
+          await authorizeWork.mutateAsync({ clientId: client.id, ...data });
+          await refetch();
+          toast.success('Autorización guardada.');
         }}
         onConfirmClose={async (month, note) => {
           await confirmClose.mutateAsync({ clientId: client.id, year: month.year, month: month.month, note });

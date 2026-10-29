@@ -32,7 +32,14 @@ export const createClientOperationsRouter = ({ service = clientOperationsService
   });
 
   router.get('/:slug', async (req, res) => {
-    try { return res.json(await service.getOperation(req.params.slug)); } catch (error) { return reply(res, error, logger); }
+    try { return res.json(await service.getOperation(req.params.slug, { viewerUserId: req.user.userId })); } catch (error) { return reply(res, error, logger); }
+  });
+
+  // Seguir trabajando sin propuesta aprobada hasta una fecha (Dirección o Administración; lo comprueba el servicio).
+  router.post('/:clientId/work-authorizations', async (req, res) => {
+    try {
+      return res.status(201).json(await service.authorizeWork({ clientId: req.params.clientId, until: req.body?.until, reason: req.body?.reason, actorUserId: req.user.userId }));
+    } catch (error) { return reply(res, error, logger); }
   });
 
   router.put('/:clientId/profile', async (req, res) => {

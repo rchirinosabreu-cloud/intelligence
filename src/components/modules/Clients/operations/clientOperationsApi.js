@@ -54,6 +54,19 @@ export function useSetMonthlyReport() {
   });
 }
 
+// Seguir trabajando sin propuesta aprobada hasta una fecha (Dirección o Administración).
+export function useAuthorizeWork() {
+  const refresh = useRefresh();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clientId, until, reason }) => request(`/${clientId}/work-authorizations`, { method: 'POST', body: JSON.stringify({ until, reason }) }),
+    onSuccess: (saved) => {
+      if (saved?.slug) queryClient.setQueryData(clientKey(saved.slug), saved);
+      refresh();
+    },
+  });
+}
+
 // El project manager confirma el cierre del mes; responde la operación ya actualizada.
 export function useConfirmMonthlyClose() {
   const refresh = useRefresh();

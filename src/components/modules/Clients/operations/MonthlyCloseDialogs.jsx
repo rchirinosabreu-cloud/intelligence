@@ -3,6 +3,8 @@ import Select from '@/components/ui/Select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 import { CLOSE_NOTE_MAX, REPORT_LINK_MAX, REPORT_STATUSES, closeSnapshot, closeSummaryText, reportProblem } from '@/lib/monthlyClose';
+import { AUTHORIZATION_REASON_MAX, authorizationProblem } from '@/lib/unbackedWork';
+import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 
 // El informe del mes y el cierre del mes (punto 5 de la solicitud de Elisa, 29 de octubre de 2026).
 
@@ -52,6 +54,52 @@ export function ReportDialog({ month, onClose, onSave }) {
                 <DialogFooter>
                     <button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose} disabled={saving}>Cancelar</button>
                     <button type="button" onClick={save} disabled={saving} data-report-save className={PRIMARY}>{saving ? 'Guardando…' : 'Guardar'}</button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+// Seguir trabajando sin propuesta aprobada hasta una fecha (29 de octubre de 2026): Dirección o Administración.
+export function WorkAuthorizationDialog({ clientName, today, onClose, onSave }) {
+    const [form, setForm] = useState({ until: '', reason: '' });
+    const [problem, setProblem] = useState('');
+    const [saving, setSaving] = useState(false);
+    const set = (patch) => { setForm((current) => ({ ...current, ...patch })); setProblem(''); };
+    const save = async () => {
+        const invalid = authorizationProblem(form, today);
+        if (invalid) { setProblem(invalid); return; }
+        setSaving(true);
+        try {
+            await onSave(form);
+        } catch (error) {
+            setProblem(error.message || 'No pudimos guardar la autorización.');
+        } finally {
+            setSaving(false);
+        }
+    };
+    return (
+        <Dialog open onOpenChange={(next) => !next && !saving && onClose()}>
+            <DialogContent data-work-authorization-dialog className="sm:max-w-md dark:bg-zinc-900"
+                onOpenAutoFocus={(event) => { event.preventDefault(); event.currentTarget.focus(); }}>
+                <DialogHeader>
+                    <DialogTitle>Seguir sin propuesta aprobada</DialogTitle>
+                    <DialogDescription>{clientName}. Mientras esté vigente no se avisa a Dirección; al vencer, vuelve a avisar si sigue igual.</DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                    <label className="block space-y-1.5 text-sm"><span className="block">Motivo</span>
+                        <textarea className={cn(FIELD, 'min-h-20')} maxLength={AUTHORIZATION_REASON_MAX} value={form.reason} data-work-authorization-reason
+                            placeholder="Por ejemplo: la renovación está firmada y falta cargar el contrato"
+                            onChange={(event) => set({ reason: event.target.value })} />
+                    </label>
+                    <label className="block space-y-1.5 text-sm"><span className="block">Hasta</span>
+                        <BrainDatePicker className={FIELD} value={form.until} min={today} onChange={(until) => set({ until: until || '' })} ariaLabel="Hasta qué fecha se autoriza" />
+                    </label>
+                    {problem && <p role="alert" className="brain-destructive-text text-destructive text-sm">{problem}</p>}
+                </div>
+                <DialogFooter>
+                    <button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose} disabled={saving}>Cancelar</button>
+                    <button type="button" onClick={save} disabled={saving} data-work-authorization-save className={PRIMARY}>{saving ? 'Guardando…' : 'Autorizar'}</button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
