@@ -6,6 +6,7 @@ import { toast } from 'react-hot-toast';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
 import { changeLine, platformStatusFromSheet, sameStatus } from '@/lib/externalPlan';
+import { humanizeReviewRequestError } from '@/lib/briaReviewDiagnostics';
 import { PIECE_STATUS } from '@/components/modules/Clients/operations/operationTones';
 import ClientAvatar from '@/components/ui/ClientAvatar';
 import Select from '@/components/ui/Select';
@@ -213,7 +214,7 @@ export default function ExternalPlanView() {
     },
     onError: (failure) => {
       console.error('[Parrillas MIO] No se pudo leer la hoja:', failure?.response?.data || failure);
-      toast.error(failure?.response?.data?.error || 'No pudimos leer la hoja.');
+      toast.error(humanizeReviewRequestError(failure?.response?.data, 'No pudimos leer la hoja.'));
     },
   });
 
@@ -225,7 +226,9 @@ export default function ExternalPlanView() {
   };
   const writeFailed = (failure, fallback) => {
     console.error('[Parrillas MIO] Escritura en la hoja rechazada:', failure?.response?.data || failure);
-    toast.error(failure?.response?.data?.error || fallback);
+    // En producción un 5xx llega reducido a un código («INTERNAL_SERVER_ERROR»): un código no explica nada.
+    const why = failure?.response?.status === 502 ? `${fallback.replace(/\.$/, '')}: Google no respondió. Intenta de nuevo en un momento.` : fallback;
+    toast.error(humanizeReviewRequestError(failure?.response?.data, why));
     // Si la hoja cambió por otro lado, se vuelve a pedir la lectura guardada para no mostrar algo viejo.
     if (failure?.response?.status === 409) queryClient.invalidateQueries({ queryKey: key });
   };
