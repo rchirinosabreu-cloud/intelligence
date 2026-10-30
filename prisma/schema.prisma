@@ -817,6 +817,10 @@ model ExternalPlanSnapshot {
   /// Lo que cambió en la última lectura que trajo algo nuevo, y cuándo.
   changes    Json      @default("[]")
   changedAt  DateTime? @db.Timestamptz(3)
+  /// Dónde está cada columna en la pestaña y las opciones del desplegable de ESTADO: con esto se escribe en la hoja.
+  layout     Json?
+  /// Lo que se cambió en la hoja desde la plataforma (estado y respuestas), quién y cuándo; los 50 últimos.
+  edits      Json      @default("[]")
   client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([clientId, year, month])

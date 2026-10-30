@@ -5,17 +5,18 @@ import axios from 'axios';
 import { toast } from 'react-hot-toast';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { cn } from '@/lib/utils';
-import { changeLine, platformStatusFromSheet } from '@/lib/externalPlan';
+import { changeLine, platformStatusFromSheet, sameStatus } from '@/lib/externalPlan';
 import { PIECE_STATUS } from '@/components/modules/Clients/operations/operationTones';
 import ClientAvatar from '@/components/ui/ClientAvatar';
+import Select from '@/components/ui/Select';
 import {
   ChevronLeft, ExternalLink, FileSpreadsheet, Info, Loader2, MessageSquare, RefreshCw, Sparkles
 } from '@/components/ui/icons';
 
 // El espejo de una parrilla de MIO (Rodny, 29 de octubre de 2026: «desde la plataforma misma podamos ver si hay
 // comentarios nuevos del cliente, correcciones, aprobaciones»). La parrilla vive en la hoja de Google de MIO; aquí se lee
-// tal cual, con lo que cambió desde la lectura anterior y los comentarios de Google atados a cada pieza. Editar se hace en
-// la hoja: cada pieza abre su fila.
+// tal cual, con lo que cambió desde la lectura anterior y los comentarios de Google atados a cada pieza. Desde aquí se
+// escriben en la hoja solo el estado de una pieza y las respuestas a los comentarios; lo demás se edita en la hoja.
 
 const authHeaders = () => ({ Authorization: `Bearer ${localStorage.getItem('authToken')}` });
 const CARD = 'rounded-2xl border border-zinc-200 bg-white p-5 dark:border-white/10 dark:bg-zinc-900';
@@ -56,7 +57,46 @@ function LongText({ label, text }) {
   );
 }
 
-function CommentThread({ comment }) {
+function ReplyBox({ onSend, onCancel, sending }) {
+  const [text, setText] = useState('');
+  const [resolve, setResolve] = useState(false);
+  const tooLong = text.length > 2000;
+  return (
+    <form
+      className="mt-2 space-y-2"
+      onSubmit={(event) => { event.preventDefault(); if (text.trim() && !tooLong) onSend({ content: text, resolve }); }}
+      data-reply-form
+    >
+      <label className="sr-only" htmlFor="external-reply">Respuesta</label>
+      <textarea
+        id="external-reply"
+        value={text}
+        onChange={(event) => setText(event.target.value)}
+        rows={3}
+        placeholder="Escribe la respuesta. Se publica en la hoja con tu nombre."
+        className="w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm text-zinc-900 focus:border-brand-cyan focus:outline-none dark:border-white/10 dark:bg-zinc-950 dark:text-zinc-50"
+        aria-invalid={tooLong || undefined}
+        data-reply-text
+      />
+      {tooLong && <p role="alert" className="text-xs text-destructive">La respuesta no puede pasar de 2000 caracteres.</p>}
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="inline-flex min-h-11 items-center gap-2 text-sm text-zinc-700 dark:text-zinc-200">
+          <input type="checkbox" checked={resolve} onChange={(event) => setResolve(event.target.checked)} className="h-4 w-4 accent-brand-cyan" data-reply-resolve />
+          Marcar como resuelto
+        </label>
+        <div className="ml-auto flex gap-2">
+          <button type="button" onClick={onCancel} className="inline-flex min-h-11 items-center rounded-xl px-3 text-sm font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5">Cancelar</button>
+          <button type="submit" disabled={sending || !text.trim() || tooLong} className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-brand-cyan px-4 text-sm font-semibold text-white disabled:opacity-50" data-reply-send>
+            {sending && <Loader2 className="h-4 w-4 animate-spin" />}Responder
+          </button>
+        </div>
+      </div>
+    </form>
+  );
+}
+
+function CommentThread({ comment, onReply, sending }) {
+  const [replying, setReplying] = useState(false);
   return (
     <li className={cn('rounded-xl border p-3 text-sm', comment.resolved ? 'border-zinc-100 bg-zinc-50 dark:border-white/5 dark:bg-white/[0.03]' : 'border-brand-cyan/30 bg-brand-cyan-soft/40 dark:border-brand-cyan/20 dark:bg-brand-cyan/5')} data-google-comment={comment.id}>
       <p className="flex flex-wrap items-center gap-x-2 text-xs text-zinc-500 dark:text-zinc-400">
@@ -77,11 +117,34 @@ function CommentThread({ comment }) {
           ))}
         </ul>
       )}
+      {onReply && (replying
+        ? <ReplyBox sending={sending} onCancel={() => setReplying(false)} onSend={async (body) => { if (await onReply(comment.id, body)) setReplying(false); }} />
+        : <button type="button" onClick={() => setReplying(true)} className="mt-1 -ml-2 inline-flex min-h-9 items-center rounded-lg px-2 text-xs font-medium text-brand-cyan-deep hover:bg-brand-cyan-soft dark:text-brand-cyan dark:hover:bg-brand-cyan/10" data-reply-open>Responder</button>)}
     </li>
   );
 }
 
-function PieceCard({ piece }) {
+function StatusPicker({ piece, options, onChange, saving }) {
+  const current = options.find((option) => sameStatus(option, piece.status));
+  return (
+    <span className="inline-flex items-center gap-2" data-piece-status-picker>
+      <label className="sr-only" htmlFor={`status-${piece.row}`}>Estado de {piece.format} {piece.number || ''} en la hoja</label>
+      <Select
+        id={`status-${piece.row}`}
+        value={current || ''}
+        disabled={saving}
+        onChange={(event) => { if (event.target.value && !sameStatus(event.target.value, piece.status)) onChange(piece, event.target.value); }}
+        className="h-9 min-h-9 w-48 rounded-lg border border-zinc-200 bg-white px-2 text-xs font-semibold dark:border-white/10 dark:bg-zinc-950"
+      >
+        {!current && <option value="" disabled>{piece.status ? `En la hoja: ${piece.status}` : 'Sin estado'}</option>}
+        {options.map((option) => <option key={option} value={option}>{option}</option>)}
+      </Select>
+      {saving && <Loader2 className="h-4 w-4 animate-spin text-brand-cyan" />}
+    </span>
+  );
+}
+
+function PieceCard({ piece, editable, statusOptions, onStatus, savingRow, onReply, replying }) {
   const links = urlsIn(piece.content);
   return (
     <article className={cn(CARD, piece.changed?.length && 'ring-1 ring-brand-yellow/60')} data-external-piece={piece.row}>
@@ -89,6 +152,7 @@ function PieceCard({ piece }) {
         <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{piece.format}{piece.number ? ` ${piece.number}` : ''}</span>
         <span className="text-sm text-zinc-500 dark:text-zinc-400">{day(piece.date) || piece.dateText || 'Sin fecha'}</span>
         <StatusChip status={piece.status} />
+        {editable && <StatusPicker piece={piece} options={statusOptions} onChange={onStatus} saving={savingRow === piece.row} />}
         {piece.changed?.length > 0 && (
           <span className="inline-flex items-center gap-1 rounded-md bg-brand-yellow-soft px-2 py-0.5 text-xs font-semibold text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow" data-piece-changed>
             <Sparkles className="h-3.5 w-3.5" />{[...new Set(piece.changed.map((kind) => CHANGE_KIND_LABEL[kind]))].join(' · ')}
@@ -123,7 +187,7 @@ function PieceCard({ piece }) {
       {piece.comments?.length > 0 && (
         <div className="mt-4">
           <p className={cn(LABEL, 'flex items-center gap-1.5')}><MessageSquare className="h-3.5 w-3.5" />Comentarios de Google ({piece.comments.length})</p>
-          <ul className="mt-2 space-y-2">{piece.comments.map((comment) => <CommentThread key={comment.id} comment={comment} />)}</ul>
+          <ul className="mt-2 space-y-2">{piece.comments.map((comment) => <CommentThread key={comment.id} comment={comment} onReply={editable ? onReply : null} sending={replying} />)}</ul>
         </div>
       )}
     </article>
@@ -152,6 +216,37 @@ export default function ExternalPlanView() {
       toast.error(failure?.response?.data?.error || 'No pudimos leer la hoja.');
     },
   });
+
+  const base = `${getApiBaseUrl()}/api/content/external-plans/${encodeURIComponent(clientSlug)}/${encodeURIComponent(period)}`;
+  const afterWrite = (data, message) => {
+    queryClient.setQueryData(key, data);
+    queryClient.invalidateQueries({ queryKey: ['external-plans'] });
+    toast.success(message);
+  };
+  const writeFailed = (failure, fallback) => {
+    console.error('[Parrillas MIO] Escritura en la hoja rechazada:', failure?.response?.data || failure);
+    toast.error(failure?.response?.data?.error || fallback);
+    // Si la hoja cambió por otro lado, se vuelve a pedir la lectura guardada para no mostrar algo viejo.
+    if (failure?.response?.status === 409) queryClient.invalidateQueries({ queryKey: key });
+  };
+  const changeStatus = useMutation({
+    mutationFn: async ({ piece, status }) => (await axios.patch(`${base}/pieces/${piece.row}/status`, { status, expected: piece.status }, { headers: authHeaders() })).data,
+    onSuccess: (data, { status }) => afterWrite(data, `Estado cambiado a ${status} en la hoja.`),
+    onError: (failure) => writeFailed(failure, 'No pudimos cambiar el estado en la hoja.'),
+  });
+  const replyComment = useMutation({
+    mutationFn: async ({ commentId, content, resolve }) => (await axios.post(`${base}/comments/${encodeURIComponent(commentId)}/replies`, { content, resolve }, { headers: authHeaders() })).data,
+    onSuccess: (data) => afterWrite(data, 'Respuesta publicada en la hoja.'),
+    onError: (failure) => writeFailed(failure, 'No pudimos publicar la respuesta.'),
+  });
+  const sendReply = async (commentId, body) => {
+    try {
+      await replyComment.mutateAsync({ commentId, ...body });
+      return true;
+    } catch {
+      return false;
+    }
+  };
 
   if (isLoading) {
     return <div className="flex items-center justify-center p-20"><Loader2 className="h-8 w-8 animate-spin text-brand-cyan" /></div>;
@@ -207,7 +302,9 @@ export default function ExternalPlanView() {
       </header>
 
       <p className="text-sm text-zinc-600 dark:text-zinc-300">
-        Esta parrilla vive en la hoja de Google de MIO: aquí se lee tal cual cada dos horas. Para cambiar una pieza, ábrela en la hoja.
+        {plan.editable
+          ? 'Esta parrilla vive en la hoja de Google de MIO y se lee cada dos horas. El estado de cada pieza y las respuestas a los comentarios se escriben en la hoja desde aquí; lo demás se edita en la hoja.'
+          : 'Esta parrilla vive en la hoja de Google de MIO: aquí se lee tal cual cada dos horas. Para cambiar una pieza, ábrela en la hoja.'}
       </p>
 
       {plan.problem && (
@@ -241,8 +338,22 @@ export default function ExternalPlanView() {
         <section className={CARD} data-external-loose-comments>
           <h2 className="flex items-center gap-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50"><MessageSquare className="h-4 w-4" />Comentarios de Google sin pieza</h2>
           <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Abiertos y recientes, pero no citan el texto de ninguna pieza de este mes.</p>
-          <ul className="mt-3 space-y-2">{plan.looseComments.map((comment) => <CommentThread key={comment.id} comment={comment} />)}</ul>
+          <ul className="mt-3 space-y-2">{plan.looseComments.map((comment) => <CommentThread key={comment.id} comment={comment} onReply={plan.editable ? sendReply : null} sending={replyComment.isPending} />)}</ul>
         </section>
+      )}
+
+      {plan.edits?.length > 0 && (
+        <details className={cn(CARD, 'py-4')} data-external-edits>
+          <summary className="cursor-pointer text-sm font-semibold text-zinc-900 dark:text-zinc-50">Hecho desde la plataforma ({plan.edits.length})</summary>
+          <ul className="mt-3 space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">
+            {plan.edits.map((edit, index) => (
+              <li key={index} className="[overflow-wrap:anywhere]">
+                {edit.kind === 'STATUS' ? `${edit.by} cambió ${edit.label} a ${edit.to}` : `${edit.by} respondió un comentario${edit.resolved ? ' y lo marcó resuelto' : ''}`}
+                <span className="text-zinc-500 dark:text-zinc-400"> · {when(edit.at)}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
       )}
 
       {!plan.commentsRead && plan.readAt && (
@@ -250,7 +361,20 @@ export default function ExternalPlanView() {
       )}
 
       {pieces.length ? (
-        <div className="space-y-4">{pieces.map((piece) => <PieceCard key={piece.row} piece={piece} />)}</div>
+        <div className="space-y-4">
+          {pieces.map((piece) => (
+            <PieceCard
+              key={piece.row}
+              piece={piece}
+              editable={plan.editable}
+              statusOptions={plan.statusOptions || []}
+              onStatus={(target, status) => changeStatus.mutate({ piece: target, status })}
+              savingRow={changeStatus.isPending ? changeStatus.variables?.piece?.row : null}
+              onReply={sendReply}
+              replying={replyComment.isPending}
+            />
+          ))}
+        </div>
       ) : (
         <p className="rounded-2xl border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500 dark:border-white/15">La pestaña de {plan.label.toLowerCase()} todavía no tiene piezas.</p>
       )}

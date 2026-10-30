@@ -208,6 +208,8 @@ export const PLATFORM_OPERATIONS = {
   'GET /content/external-plans': { que: 'Las parrillas de MIO que viven en hojas de Google: cada cliente con hoja vinculada, su mes en curso y el siguiente, y cuántos cambios trajo la última lectura.' },
   'GET /content/external-plans/:slug/:period': { que: 'Un mes de la hoja de MIO de un cliente (period = «noviembre-2026»): sus piezas con estado, copy, caption, comentarios de la hoja y de Google, y lo que cambió en la última lectura.' },
   'POST /content/external-plans/:slug/refresh': { que: 'Lee ahora la hoja de MIO del cliente. Solo lectura: no cambia nada en la hoja.' },
+  'PATCH /content/external-plans/:slug/:period/pieces/:row/status': { que: 'Cambia el estado de una pieza en la hoja de Google de MIO (escribe en la hoja con la cuenta de la plataforma). Comprueba antes que la fila siga siendo la misma pieza y que el estado sea el que se vio.', campos: 'status (una opción del desplegable de la hoja), expected (el estado que se vio)' },
+  'POST /content/external-plans/:slug/:period/comments/:commentId/replies': { que: 'Responde un comentario de Google de la hoja de MIO, firmado con el nombre de quien escribe, y si se pide lo marca como resuelto.', campos: 'content, resolve (true|false)' },
   'GET /content/plans/:id': { que: 'Una parrilla con sus piezas.' },
   'GET /content/plans/:id/bria-review': { que: 'La revisión de Bria de una parrilla: puntaje y hallazgos.' },
   'POST /content/plans/:id/bria-review': { que: 'Pide revisar la parrilla de nuevo.' },

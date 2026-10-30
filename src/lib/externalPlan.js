@@ -1,7 +1,8 @@
 // Lectura de las parrillas de MIO (Rodny, 29 de octubre de 2026: «MIO pide parrillas en Excel solamente … habría que
 // tener una especie de lectura de las parrillas en Excel de cada cliente de MIO»). Cada cliente de MIO tiene su parrilla
 // en una hoja de Google, una pestaña por mes («OCTUBRE», «NOVIEMBRE»), con columnas como Formato, Fecha y ESTADO en el
-// orden que cada una quiera. La plataforma solo la lee: nunca escribe en la hoja.
+// orden que cada una quiera. La plataforma la lee y, con la cuenta de servicio, escribe solo dos cosas: el estado de una
+// pieza y la respuesta a un comentario de Google.
 //
 // - El mes de una pieza lo dice el nombre de la pestaña, no su fecha: las fechas traen errores de digitación.
 // - El estado de la hoja se traduce a las etapas de la plataforma, para que el avance y el semáforo cuenten igual que
@@ -163,8 +164,65 @@ export const parsePlanRows = (rows, { year, month }) => {
             comment: text(row, commentAt)
         });
     }
-    return { pieces, problem: pieces.length ? null : 'La pestaña del mes no tiene piezas todavía.' };
+    // Dónde está cada cosa en la pestaña: con esto la plataforma escribe el estado en la celda correcta.
+    const layout = { headerRow: headerIndex + 1, statusColumn: statusAt, numberColumn: numberAt, formatColumn: formatAt };
+    return { pieces, layout, problem: pieces.length ? null : 'La pestaña del mes no tiene piezas todavía.' };
 };
+
+/** La letra de una columna: 0 → A, 26 → AA. */
+export const columnLetter = (index) => {
+    let n = Number(index) + 1;
+    let letters = '';
+    while (n > 0) {
+        const rest = (n - 1) % 26;
+        letters = String.fromCharCode(65 + rest) + letters;
+        n = Math.floor((n - 1) / 26);
+    }
+    return letters;
+};
+
+/**
+ * Los estados que se ofrecen cuando la columna ESTADO de la hoja no tiene desplegable (Casa Bella la escribe a mano): los
+ * que ya usan las hojas de MIO, en el orden del trabajo.
+ */
+export const DEFAULT_SHEET_STATUSES = ['SIN REALIZAR', 'EN PRODUCCIÓN', 'EN REVISIÓN', 'EN AJUSTE', 'REALIZADO', 'APROBADO', 'PROGRAMADO', 'PUBLICADO'];
+
+/** Las opciones de los desplegables de una columna, sin repetir y en el orden de la hoja. */
+export const validationOptions = (rules = []) => {
+    const seen = new Set();
+    const options = [];
+    for (const rule of rules) {
+        if (!['ONE_OF_LIST'].includes(rule?.condition?.type)) continue;
+        for (const value of rule.condition.values || []) {
+            const option = String(value?.userEnteredValue ?? '').trim();
+            if (option && !seen.has(fold(option))) {
+                seen.add(fold(option));
+                options.push(option);
+            }
+        }
+    }
+    return options;
+};
+
+/**
+ * Antes de escribir, la fila de la hoja tiene que seguir siendo la misma pieza: mismo número y mismo formato. Si MIO movió
+ * o insertó filas desde la última lectura, no se escribe. Devuelve el motivo, o null si se puede.
+ */
+export const rowIdentityProblem = (rowValues = [], piece, layout) => {
+    const cell = (index) => (index >= 0 ? String(rowValues[index] ?? '').trim() : '');
+    const number = cell(layout?.numberColumn);
+    const format = cell(layout?.formatColumn);
+    if ((piece.number || '') !== number || fold(piece.formatText || '') !== fold(format)) {
+        return `La hoja cambió: la fila ${piece.row} ya no es ${pieceLabel(piece)}. Lee la hoja de nuevo antes de cambiarla.`;
+    }
+    return null;
+};
+
+/** Si el estado que hay ahora en la hoja es el que vio la persona (sin mirar tildes ni mayúsculas). */
+export const sameStatus = (a, b) => fold(a || '') === fold(b || '');
+
+/** Lo que dice la plataforma al responder un comentario de Google: con el nombre de quien lo escribe. */
+export const replyContent = (authorName, text) => `${authorName} (Brain Studio): ${String(text || '').trim()}`;
 
 /** Cuántas piezas llegaron al menos a cada etapa, como la parrilla de la plataforma. */
 export const summarizeExternalPieces = (pieces = []) => {

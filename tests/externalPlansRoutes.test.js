@@ -41,6 +41,36 @@ test('la lista, un mes y «Leer ahora»', async () => {
     assert.deepEqual(calls[0], ['get', { slug: 'villa', year: 2026, month: 11 }]);
 });
 
+test('cambiar el estado y responder: la identidad sale de la sesión y el motivo de un rechazo se dice', async () => {
+    const calls = [];
+    const router = createExternalPlansRouter({
+        updateStatus: async (_db, args) => {
+            calls.push(['status', args]);
+            if (args.status === 'MOVIDA') throw Object.assign(new Error('La hoja cambió: la fila 3 ya no es Post 1.'), { status: 409, code: 'ROW_MOVED' });
+            return { ok: true };
+        },
+        reply: async (_db, args) => { calls.push(['reply', args]); return { ok: true }; }
+    });
+    const app = express();
+    app.use(express.json());
+    app.use((req, _res, next) => { req.user = { userId: 'u-kami' }; next(); });
+    app.use('/x', router);
+    const server = await new Promise((resolve) => { const s = app.listen(0, '127.0.0.1', () => resolve(s)); });
+    const base = `http://127.0.0.1:${server.address().port}/x`;
+    const send = (method, path, body) => fetch(`${base}${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+    try {
+        assert.equal((await send('PATCH', '/villa/noviembre-2026/pieces/3/status', { status: 'APROBADO', expected: 'EN REVISIÓN', userId: 'otro' })).status, 200);
+        const moved = await send('PATCH', '/villa/noviembre-2026/pieces/3/status', { status: 'MOVIDA' });
+        assert.equal(moved.status, 409);
+        assert.match((await moved.json()).error, /ya no es Post 1/);
+        assert.equal((await send('POST', '/villa/noviembre-2026/comments/g1/replies', { content: 'Hola', resolve: 'true' })).status, 200);
+    } finally {
+        server.close();
+    }
+    assert.deepEqual(calls[0], ['status', { slug: 'villa', year: 2026, month: 11, row: 3, status: 'APROBADO', expected: 'EN REVISIÓN', userId: 'u-kami' }], 'quien cambia lo dice la sesión, nunca el cuerpo');
+    assert.equal(calls[2][1].resolve, false, 'solo un true de verdad marca resuelto');
+});
+
 test('un fallo interno no se muestra', async () => {
     const boom = async () => { throw new Error('postgres://secreto'); };
     const router = createExternalPlansRouter({ list: boom, getMonth: boom, refresh: boom });
