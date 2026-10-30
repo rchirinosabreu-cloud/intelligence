@@ -106,6 +106,9 @@ try {
   await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "commentsAt" TIMESTAMPTZ(3);`);
   await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "changes" JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "changedAt" TIMESTAMPTZ(3);`);
+  // Escribir en la hoja desde la plataforma: columnas de la pestaña y lo que se cambió desde aquí.
+  await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "layout" JSONB;`);
+  await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "edits" JSONB NOT NULL DEFAULT '[]'::jsonb;`);
   await client.query(`
     CREATE TABLE IF NOT EXISTS "UnbackedWorkAlert" (
       "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,

@@ -10,8 +10,9 @@ import prisma from '../lib/prisma.js';
 import XLSX from '../lib/xlsx.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
 import {
-    MONTH_TABS, changesNoticeText, commentsForMonth, diffExternalPlan, matchCommentToPiece, monthTab, normalizeSheetComments, parsePlanRows,
-    parseSheetTabs, sheetCellUrl, sheetIdFromUrl, summarizeExternalPieces
+    DEFAULT_SHEET_STATUSES, MONTH_TABS, changesNoticeText, columnLetter, commentsForMonth, diffExternalPlan, matchCommentToPiece, monthTab,
+    normalizeSheetComments, parsePlanRows, parseSheetTabs, pieceLabel, replyContent, rowIdentityProblem, sameStatus, sheetCellUrl,
+    sheetIdFromUrl, stageFromStatus, summarizeExternalPieces, validationOptions
 } from '../lib/externalPlan.js';
 import { MONTH_NAMES } from '../lib/clientOperations.js';
 import { createNotification } from './notificationService.js';
@@ -69,6 +70,8 @@ export const createPublicSheetSource = (fetchImpl = fetch) => ({
     comments: async () => null
 });
 
+const quoteTab = (tab) => `'${String(tab.name ?? tab).replace(/'/g, "''")}'`;
+
 const googleError = (error) => {
     if (error instanceof ExternalPlanError) return error;
     const status = Number(error?.code || error?.response?.status);
@@ -91,9 +94,37 @@ export const createGoogleSheetSource = ({ sheets, drive }) => ({
     },
     rows: async (id, tab) => {
         try {
-            const range = `'${tab.name.replace(/'/g, "''")}'!A1:Z${MAX_ROWS}`;
+            const range = `${quoteTab(tab)}!A1:Z${MAX_ROWS}`;
             const response = await sheets.spreadsheets.values.get({ spreadsheetId: id, range, valueRenderOption: 'FORMATTED_VALUE' });
             return response.data.values || [];
+        } catch (error) { throw googleError(error); }
+    },
+    /** Las opciones de los desplegables de un rango (la columna ESTADO de las piezas del mes). */
+    statusOptions: async (id, range) => {
+        try {
+            const response = await sheets.spreadsheets.get({ spreadsheetId: id, ranges: [range], fields: 'sheets.data.rowData.values.dataValidation' });
+            const rules = (response.data.sheets || []).flatMap((sheet) => (sheet.data || []).flatMap((data) => (data.rowData || []).flatMap((row) => (row.values || []).map((cell) => cell.dataValidation).filter(Boolean))));
+            return validationOptions(rules);
+        } catch (error) { throw googleError(error); }
+    },
+    readRow: async (id, tab, row) => {
+        try {
+            const response = await sheets.spreadsheets.values.get({ spreadsheetId: id, range: `${quoteTab(tab)}!A${row}:Z${row}`, valueRenderOption: 'FORMATTED_VALUE' });
+            return response.data.values?.[0] || [];
+        } catch (error) { throw googleError(error); }
+    },
+    writeCell: async (id, tab, cell, value) => {
+        try {
+            await sheets.spreadsheets.values.update({ spreadsheetId: id, range: `${quoteTab(tab)}!${cell}`, valueInputOption: 'USER_ENTERED', requestBody: { values: [[value]] } });
+        } catch (error) { throw googleError(error); }
+    },
+    reply: async (id, commentId, content, { resolve = false } = {}) => {
+        try {
+            const response = await drive.replies.create({
+                fileId: id, commentId, fields: 'id,content,createdTime,action,author(displayName,me)',
+                requestBody: { content, ...(resolve ? { action: 'resolve' } : {}) }
+            });
+            return response.data;
         } catch (error) { throw googleError(error); }
     },
     comments: async (id) => {
@@ -141,8 +172,19 @@ export const readExternalPlan = async (url, { year, month }, { fetchImpl, source
     const tab = monthTab(knownTabs || await reader.tabs(id), year, month);
     if (!tab) return { tabName: null, gid: null, pieces: [], summary: summarizeExternalPieces([]), problem: `La hoja no tiene una pestaña de ${MONTH_TABS[month - 1].toLowerCase()}.` };
     const rows = await reader.rows(id, tab);
-    const { pieces, problem } = parsePlanRows(rows, { year, month });
-    return { tabName: tab.name.trim(), gid: tab.gid, pieces, summary: summarizeExternalPieces(pieces), problem };
+    const { pieces, layout, problem } = parsePlanRows(rows, { year, month });
+    // Las opciones del desplegable de ESTADO, para ofrecer las mismas desde la plataforma. Si falla, se ofrecen las de
+    // siempre: no poder leer el desplegable no impide leer la parrilla.
+    let statusOptions = null;
+    if (reader.statusOptions && layout?.statusColumn >= 0 && pieces.length) {
+        const letter = columnLetter(layout.statusColumn);
+        const rowsSpan = `${letter}${Math.min(...pieces.map((piece) => piece.row))}:${letter}${Math.max(...pieces.map((piece) => piece.row))}`;
+        statusOptions = await reader.statusOptions(id, `${quoteTab(tab)}!${rowsSpan}`).catch(() => null);
+    }
+    return {
+        tabName: tab.name.trim(), gid: tab.gid, pieces, summary: summarizeExternalPieces(pieces), problem,
+        layout: layout ? { ...layout, statusOptions: statusOptions?.length ? statusOptions : null } : null
+    };
 };
 
 const bogotaToday = (now) => new Date(now.getTime() - 5 * 3600 * 1000).toISOString().slice(0, 10);
@@ -208,7 +250,7 @@ export const refreshClientExternalPlan = async (db, client, { now = new Date(), 
         try {
             if (readError) throw readError;
             const monthComments = comments ? commentsForMonth(comments, read.pieces, { looseSince: current ? looseSince : null, claimed }) : null;
-            const data = { tabName: read.tabName, gid: read.gid, pieces: read.pieces, summary: read.summary, problem: read.problem, readAt: now, okAt: now };
+            const data = { tabName: read.tabName, gid: read.gid, layout: read.layout, pieces: read.pieces, summary: read.summary, problem: read.problem, readAt: now, okAt: now };
             if (monthComments) Object.assign(data, { comments: monthComments, commentsAt: now });
             // Los cambios se avisan del mes en curso y el siguiente, comparando con la última lectura buena. La primera
             // lectura no avisa (no hay con qué comparar) y los comentarios solo se comparan si la anterior ya los leyó.
@@ -319,7 +361,7 @@ export const parseMonthSlug = (value) => {
  * Un mes de la hoja de un cliente para el espejo: sus piezas con el enlace a su fila, los comentarios de Google atados a
  * cada pieza, los que quedaron sueltos y lo que cambió en la última lectura.
  */
-export const getExternalPlanMonth = async (db = prisma, { slug, year, month }) => {
+export const getExternalPlanMonth = async (db = prisma, { slug, year, month }, { source } = {}) => {
     const client = await db.client.findFirst({
         where: { slug: String(slug || ''), externalPlanUrl: { not: null } },
         select: { id: true, name: true, slug: true, externalPlanUrl: true }
@@ -329,8 +371,14 @@ export const getExternalPlanMonth = async (db = prisma, { slug, year, month }) =
     const pieces = Array.isArray(row?.pieces) ? row.pieces : [];
     const comments = Array.isArray(row?.comments) ? row.comments : [];
     const changes = Array.isArray(row?.changes) ? row.changes : [];
+    // Se puede escribir en la hoja si la plataforma tiene su cuenta de Google y la pestaña ya se leyó con sus columnas.
+    const reader = source || await defaultSheetSource();
+    const editable = reader.kind === 'google' && Boolean(row?.okAt && row?.tabName && row?.layout?.statusColumn >= 0);
     return {
         client: { id: client.id, name: client.name, slug: client.slug },
+        editable,
+        statusOptions: row?.layout?.statusOptions?.length ? row.layout.statusOptions : DEFAULT_SHEET_STATUSES,
+        edits: Array.isArray(row?.edits) ? row.edits.slice(0, 10) : [],
         year, month, label: MONTH_NAMES[month - 1],
         sheetUrl: client.externalPlanUrl,
         tabUrl: row?.gid ? sheetCellUrl(client.externalPlanUrl, row.gid, null) : client.externalPlanUrl,
@@ -349,6 +397,88 @@ export const getExternalPlanMonth = async (db = prisma, { slug, year, month }) =
         })),
         looseComments: comments.filter((comment) => comment.row == null)
     };
+};
+
+const fail = (status, code, message) => Object.assign(new ExternalPlanError(code, message), { status });
+const MAX_REPLY = 2000;
+const MAX_EDITS = 50;
+
+const editableMonth = async (db, { slug, year, month }) => {
+    const client = await db.client.findFirst({ where: { slug: String(slug || ''), externalPlanUrl: { not: null } }, select: { id: true, name: true, externalPlanUrl: true } });
+    if (!client) throw fail(404, 'NOT_FOUND', 'Ese cliente no tiene una hoja de MIO vinculada.');
+    const key = { clientId_year_month: { clientId: client.id, year, month } };
+    const row = await db.externalPlanSnapshot.findUnique({ where: key });
+    if (!row?.okAt || !row.tabName) throw fail(409, 'NOT_READ', 'Esta parrilla todavía no se ha leído: lee la hoja antes de cambiarla.');
+    return { client, key, row, id: sheetIdFromUrl(client.externalPlanUrl) };
+};
+
+const writerFor = async (source) => {
+    const writer = source || await defaultSheetSource();
+    if (writer.kind !== 'google' || !writer.writeCell) throw fail(503, 'NO_SERVICE_ACCOUNT', 'La plataforma no tiene una cuenta de Google con permiso para escribir en la hoja.');
+    return writer;
+};
+
+const actorName = async (db, userId) => (userId
+    ? (await db.user.findUnique({ where: { id: userId }, select: { name: true } }).catch(() => null))?.name || 'Alguien del equipo'
+    : 'Alguien del equipo');
+
+/**
+ * Cambia el estado de una pieza en la hoja de MIO, con la cuenta de servicio (Rodny, 29 de octubre de 2026). Antes de
+ * escribir vuelve a leer la fila: tiene que seguir siendo la misma pieza y tener el estado que vio la persona; si no, no
+ * escribe y lo dice. Lo escrito queda en la lectura guardada al instante, así la próxima lectura no lo avisa como cambio.
+ */
+export const updateExternalPieceStatus = async (db = prisma, { slug, year, month, row: pieceRow, status, expected, userId = null }, { source, now = new Date() } = {}) => {
+    const value = String(status ?? '').trim();
+    if (!value || value.length > 80) throw fail(422, 'INVALID_STATUS', 'Elige un estado.');
+    const { client, key, row, id } = await editableMonth(db, { slug, year, month });
+    const pieces = Array.isArray(row.pieces) ? row.pieces : [];
+    const index = pieces.findIndex((piece) => piece.row === Number(pieceRow));
+    if (index < 0) throw fail(404, 'PIECE_NOT_FOUND', 'Esa pieza ya no está en la lectura de la hoja.');
+    const piece = pieces[index];
+    const layout = row.layout || {};
+    if (!(layout.statusColumn >= 0)) throw fail(409, 'NO_LAYOUT', 'Lee la hoja de nuevo antes de cambiarla.');
+    const options = layout.statusOptions?.length ? layout.statusOptions : DEFAULT_SHEET_STATUSES;
+    if (!options.some((option) => sameStatus(option, value))) throw fail(422, 'INVALID_STATUS', 'Ese estado no está en el desplegable de la hoja.');
+    const writer = await writerFor(source);
+    const tab = { name: row.tabName, gid: row.gid };
+    const current = await writer.readRow(id, tab, piece.row);
+    const identity = rowIdentityProblem(current, piece, layout);
+    if (identity) throw fail(409, 'ROW_MOVED', identity);
+    const sheetStatus = String(current[layout.statusColumn] ?? '').trim();
+    if (!sameStatus(sheetStatus, expected ?? piece.status)) {
+        throw fail(409, 'STATUS_CHANGED', `En la hoja, ${pieceLabel(piece)} ya dice «${sheetStatus || 'sin estado'}». Lee la hoja de nuevo antes de cambiarla.`);
+    }
+    const exact = options.find((option) => sameStatus(option, value)) || value;
+    await writer.writeCell(id, tab, `${columnLetter(layout.statusColumn)}${piece.row}`, exact);
+    const name = await actorName(db, userId);
+    const nextPieces = pieces.map((item, at) => (at === index ? { ...item, status: exact, stage: stageFromStatus(exact) } : item));
+    const edits = [{ kind: 'STATUS', row: piece.row, label: pieceLabel(piece), from: sheetStatus || null, to: exact, by: name, at: now.toISOString() }, ...(Array.isArray(row.edits) ? row.edits : [])].slice(0, MAX_EDITS);
+    await db.externalPlanSnapshot.update({ where: key, data: { pieces: nextPieces, summary: summarizeExternalPieces(nextPieces), edits } });
+    console.log(`[Parrillas MIO] ${name} cambió ${pieceLabel(piece)} de ${client.name} (${MONTH_NAMES[month - 1].toLowerCase()}) a «${exact}» en la hoja.`);
+    return getExternalPlanMonth(db, { slug, year, month }, { source: writer });
+};
+
+/**
+ * Responde un comentario de Google de la hoja desde la plataforma, y si se pide lo marca como resuelto. La respuesta la
+ * firma la cuenta de servicio, así que el texto empieza por el nombre de quien la escribe.
+ */
+export const replyToExternalComment = async (db = prisma, { slug, year, month, commentId, content, resolve = false, userId = null }, { source, now = new Date() } = {}) => {
+    const text = String(content ?? '').trim();
+    if (!text) throw fail(422, 'EMPTY_REPLY', 'Escribe la respuesta.');
+    if (text.length > MAX_REPLY) throw fail(422, 'REPLY_TOO_LONG', `La respuesta no puede pasar de ${MAX_REPLY} caracteres.`);
+    const { client, key, row, id } = await editableMonth(db, { slug, year, month });
+    const comments = Array.isArray(row.comments) ? row.comments : [];
+    const index = comments.findIndex((comment) => comment.id === String(commentId));
+    if (index < 0) throw fail(404, 'COMMENT_NOT_FOUND', 'Ese comentario ya no está en la lectura de la hoja.');
+    const writer = await writerFor(source);
+    const name = await actorName(db, userId);
+    const created = await writer.reply(id, comments[index].id, replyContent(name, text), { resolve: Boolean(resolve) });
+    const reply = { id: String(created?.id || `local-${now.getTime()}`), author: name, mine: true, content: replyContent(name, text), createdAt: created?.createdTime || now.toISOString() };
+    const nextComments = comments.map((comment, at) => (at === index ? { ...comment, resolved: comment.resolved || Boolean(resolve), replies: [...(comment.replies || []), reply] } : comment));
+    const edits = [{ kind: 'REPLY', row: comments[index].row ?? null, commentId: comments[index].id, text: text.slice(0, 300), resolved: Boolean(resolve), by: name, at: now.toISOString() }, ...(Array.isArray(row.edits) ? row.edits : [])].slice(0, MAX_EDITS);
+    await db.externalPlanSnapshot.update({ where: key, data: { comments: nextComments, edits } });
+    console.log(`[Parrillas MIO] ${name} respondió un comentario de ${client.name} en la hoja${resolve ? ' y lo marcó resuelto' : ''}.`);
+    return getExternalPlanMonth(db, { slug, year, month }, { source: writer });
 };
 
 /** Lee ahora la hoja de un cliente (botón «Leer ahora» del espejo). */

@@ -1,13 +1,15 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    asOperationPiece, changeLine, changesNoticeText, commentsForMonth, diffExternalPlan, formatFromText, matchCommentToPiece, monthTab,
+    asOperationPiece, changeLine, changesNoticeText, columnLetter, commentsForMonth, diffExternalPlan, formatFromText, matchCommentToPiece, monthTab, replyContent, validationOptions,
     normalizeSheetComments, parsePlanRows, parseSheetTabs, pieceDate, pieceLabel, platformStatusFromSheet, sheetCellUrl, sheetIdFromUrl,
     stageFromStatus, summarizeExternalPieces
 } from '../src/lib/externalPlan.js';
 import { pieceStage } from '../src/lib/clientOperations.js';
 import { normalizeOperationProfile } from '../src/lib/clientOperations.js';
-import { ExternalPlanError, monthsToRead, readExternalPlan, refreshClientExternalPlan } from '../src/services/externalPlanService.js';
+import {
+    ExternalPlanError, monthsToRead, readExternalPlan, refreshClientExternalPlan, replyToExternalComment, updateExternalPieceStatus
+} from '../src/services/externalPlanService.js';
 
 test('se leen los tres meses anteriores, el mes en curso y el siguiente: el semáforo juzga el mes que acaba de cerrar', () => {
     assert.deepEqual(monthsToRead(new Date('2026-10-29T15:00:00Z')).map(({ year, month }) => `${year}-${month}`), ['2026-7', '2026-8', '2026-9', '2026-10', '2026-11']);
@@ -243,4 +245,79 @@ test('la lectura avisa al CM y al PM de lo que cambió, una vez por cliente y me
     assert.equal(sent.length, 2);
     assert.equal(sent[0].message, 'Villa Montaña · noviembre: Villa Montaña comentó en Post 1: «Cambien la foto»');
     assert.equal(db.rows.get('2026-10').changes, undefined, 'un mes sin cambios no reescribe sus cambios');
+});
+
+// Escribir en la hoja desde la plataforma (29 de octubre de 2026): solo el estado de una pieza y la respuesta a un
+// comentario de Google, con la cuenta de servicio, comprobando antes que la fila siga siendo la misma pieza.
+
+test('las opciones del desplegable se leen de la hoja y la columna se nombra con su letra', () => {
+    assert.deepEqual(validationOptions([
+        { condition: { type: 'ONE_OF_LIST', values: [{ userEnteredValue: 'APROBADO' }, { userEnteredValue: 'EN REVISIÓN' }] } },
+        { condition: { type: 'ONE_OF_LIST', values: [{ userEnteredValue: 'aprobado' }, { userEnteredValue: 'PUBLICADO' }] } },
+        { condition: { type: 'NUMBER_GREATER', values: [{ userEnteredValue: '3' }] } }
+    ]), ['APROBADO', 'EN REVISIÓN', 'PUBLICADO']);
+    assert.deepEqual([0, 8, 25, 26, 27].map(columnLetter), ['A', 'I', 'Z', 'AA', 'AB']);
+    const { layout } = parsePlanRows(MIRROR, { year: 2026, month: 11 });
+    assert.deepEqual(layout, { headerRow: 2, statusColumn: 8, numberColumn: 7, formatColumn: 1 });
+    assert.equal(replyContent('Kamila Ortiz', ' Listo, lo cambiamos '), 'Kamila Ortiz (Brain Studio): Listo, lo cambiamos');
+});
+
+const writableSetup = (sheetRow) => {
+    const { pieces, layout } = parsePlanRows(MIRROR, { year: 2026, month: 11 });
+    const snapshot = {
+        okAt: new Date('2026-10-29T15:00:00Z'), tabName: 'NOVIEMBRE', gid: '32390049', pieces, summary: {},
+        layout: { ...layout, statusOptions: ['EN REVISIÓN', 'EN AJUSTE', 'APROBADO', 'PUBLICADO'] },
+        comments: [{ id: 'g1', author: 'Villa Montaña', content: 'Me encanta', row: 4, resolved: false, replies: [] }], edits: []
+    };
+    const writes = [];
+    const source = {
+        kind: 'google',
+        readRow: async () => sheetRow,
+        writeCell: async (...args) => { writes.push(['cell', ...args]); },
+        reply: async (...args) => { writes.push(['reply', ...args]); return { id: 'r9', createdTime: '2026-10-29T19:00:00Z' }; }
+    };
+    const db = {
+        snapshot,
+        client: { findFirst: async () => ({ id: 'c-villa', name: 'Villa Montaña', slug: 'villa-montana', externalPlanUrl: SHEET }) },
+        user: { findUnique: async () => ({ name: 'Kamila Ortiz' }) },
+        externalPlanSnapshot: {
+            findUnique: async () => db.snapshot,
+            update: async ({ data }) => { db.snapshot = { ...db.snapshot, ...data }; }
+        }
+    };
+    return { db, source, writes };
+};
+
+test('cambiar el estado escribe la celda de ESTADO de la fila, si la fila sigue siendo la pieza y nadie lo cambió antes', async () => {
+    const { db, source, writes } = writableSetup(MIRROR[2]);
+    const result = await updateExternalPieceStatus(db, { slug: 'villa-montana', year: 2026, month: 11, row: 3, status: 'aprobado', expected: 'EN REVISIÓN', userId: 'u-kami' }, { source });
+    assert.deepEqual(writes, [['cell', '1WfyHG3noiWBeMwwMRBCO4U_S6hwvjhtznUYOjPHfSZY', { name: 'NOVIEMBRE', gid: '32390049' }, 'I3', 'APROBADO']], 'la opción se escribe tal cual la tiene el desplegable');
+    assert.equal(result.pieces[0].status, 'APROBADO', 'la lectura guardada cambia al instante: la próxima lectura no lo avisa');
+    assert.equal(result.pieces[0].stage, 'aprobada');
+    assert.equal(result.edits[0].by, 'Kamila Ortiz');
+    assert.equal(result.editable, true);
+
+    await assert.rejects(updateExternalPieceStatus(db, { slug: 'villa-montana', year: 2026, month: 11, row: 3, status: 'INVENTADO', expected: 'APROBADO' }, { source }), { status: 422 });
+    await assert.rejects(updateExternalPieceStatus(db, { slug: 'villa-montana', year: 2026, month: 11, row: 99, status: 'APROBADO' }, { source }), { status: 404 });
+});
+
+test('si la hoja cambió desde la última lectura, no se escribe y se dice por qué', async () => {
+    const moved = writableSetup(['EDUCACIÓN', 'REEL', '', '', '', '', '', '3', 'EN REVISIÓN']);
+    await assert.rejects(updateExternalPieceStatus(moved.db, { slug: 'villa-montana', year: 2026, month: 11, row: 3, status: 'APROBADO', expected: 'EN REVISIÓN' }, { source: moved.source }), (error) => error.status === 409 && /ya no es Post 1/.test(error.message));
+    const changed = writableSetup([...MIRROR[2].slice(0, 8), 'EN AJUSTE']);
+    await assert.rejects(updateExternalPieceStatus(changed.db, { slug: 'villa-montana', year: 2026, month: 11, row: 3, status: 'APROBADO', expected: 'EN REVISIÓN' }, { source: changed.source }), (error) => error.status === 409 && /ya dice «EN AJUSTE»/.test(error.message));
+    assert.equal(moved.writes.length + changed.writes.length, 0);
+    const publicOnly = writableSetup(MIRROR[2]);
+    await assert.rejects(updateExternalPieceStatus(publicOnly.db, { slug: 'villa-montana', year: 2026, month: 11, row: 3, status: 'APROBADO', expected: 'EN REVISIÓN' }, { source: { kind: 'public' } }), { status: 503, code: 'NO_SERVICE_ACCOUNT' });
+});
+
+test('responder un comentario de Google lo firma con el nombre de quien escribe y puede marcarlo resuelto', async () => {
+    const { db, source, writes } = writableSetup(MIRROR[2]);
+    const result = await replyToExternalComment(db, { slug: 'villa-montana', year: 2026, month: 11, commentId: 'g1', content: 'Cambiamos la música hoy', resolve: true, userId: 'u-kami' }, { source });
+    assert.deepEqual(writes, [['reply', '1WfyHG3noiWBeMwwMRBCO4U_S6hwvjhtznUYOjPHfSZY', 'g1', 'Kamila Ortiz (Brain Studio): Cambiamos la música hoy', { resolve: true }]]);
+    const comment = result.pieces.find((piece) => piece.row === 4).comments[0];
+    assert.equal(comment.resolved, true);
+    assert.equal(comment.replies.at(-1).mine, true, 'la respuesta propia no se avisa como cambio en la próxima lectura');
+    await assert.rejects(replyToExternalComment(db, { slug: 'villa-montana', year: 2026, month: 11, commentId: 'g1', content: '   ' }, { source }), { status: 422 });
+    await assert.rejects(replyToExternalComment(db, { slug: 'villa-montana', year: 2026, month: 11, commentId: 'nope', content: 'Hola' }, { source }), { status: 404 });
 });

@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createClientOperationsService } from '../src/services/clientOperationsService.js';
+import { nativePlanProblem } from '../src/lib/externalPlan.js';
 
 // La Operación de clientes se calcula con lo que hay en la plataforma: parrillas, piezas, publicaciones y
 // tareas. El servicio solo escribe la ficha operativa, el contrato y el informe entregado.
@@ -145,6 +146,24 @@ test('la página del cliente trae las piezas y los meses anteriores con su infor
   ]);
   assert.deepEqual(nattal.history.map((m) => [m.label, m.reached.publicada, m.report?.by ?? null]), [['Septiembre', 4, 'Kamila'], ['Agosto', 0, null], ['Julio', 0, null]]);
   await assert.rejects(() => service.getOperation('no-existe'), { status: 404 });
+});
+
+test('con hoja de MIO vinculada solo cuenta la hoja: ninguna parrilla nativa', async () => {
+  const { db, service } = fixture();
+  const nattal = (await db.client.findMany()).find((c) => c.slug === 'nattal');
+  nattal.externalPlanUrl = 'https://docs.google.com/spreadsheets/d/1WfyHG3noiWBeMwwMRBCO4U_S6hwvjhtznUYOjPHfSZY/edit';
+  nattal.externalPlanSnapshots = [{
+    year: 2026, month: 10, tabName: 'OCTUBRE', okAt: NOW, problem: null,
+    pieces: [{ row: 3, number: '1', format: 'Post', date: '2026-10-01', status: 'PUBLICADO', stage: 'publicada' }, { row: 4, number: '2', format: 'Post', date: '2026-10-05', status: 'PROGRAMADO', stage: 'programada' }]
+  }];
+  const current = (await service.getOperation('nattal')).cycles.current;
+  assert.equal(current.source.kind, 'HOJA_MIO', 'la parrilla de la plataforma de ese mes (3 piezas, congelada) no cuenta');
+  assert.equal(current.created, 2);
+  assert.equal(current.reached.publicada, 1);
+  nattal.externalPlanSnapshots = [];
+  assert.equal((await service.getOperation('nattal')).cycles.current.created, 0, 'sin lectura de la hoja tampoco cuenta la parrilla nativa');
+  assert.equal(nativePlanProblem({ name: 'Verona', externalPlanUrl: 'https://docs.google.com/spreadsheets/d/x' }), 'Las parrillas de Verona viven en su hoja de MIO y se ven en Parrillas: no se crean aquí.');
+  assert.equal(nativePlanProblem({ name: 'Nattal', externalPlanUrl: null }), null);
 });
 
 test('guardar la ficha valida, crea el contrato si no hay y nunca toca otros campos', async () => {

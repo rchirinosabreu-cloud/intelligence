@@ -31,6 +31,7 @@ test('la hoja de MIO aparece sola en Parrillas y su mes muestra piezas, cambios 
   await november.waitFor();
   assert.match(await november.innerText(), /Hoja de MIO · 16 piezas/);
   assert.match(await november.locator('[data-external-changes-count]').innerText(), /3 cambios/);
+  assert.equal(await page.getByText('PLANIFICACION').count(), 0, 'un cliente con hoja de MIO no muestra parrillas nativas');
   await page.waitForTimeout(300);
   await shot(page, '01-lista');
 
@@ -52,6 +53,37 @@ test('la hoja de MIO aparece sola en Parrillas y su mes muestra piezas, cambios 
   await page.waitForTimeout(200);
   assert.deepEqual(errors, []);
   await page.close();
+});
+
+test('desde la plataforma se cambia el estado en la hoja y se responde un comentario', async () => {
+  const { page, errors } = await open('?ruta=hoja');
+  const reel = page.locator('[data-external-piece="4"]');
+  await reel.waitFor();
+  await reel.locator('[data-piece-status-picker] [data-brain-select="true"]').click();
+  await page.getByRole('option', { name: 'APROBADO' }).click();
+  await page.getByText('Estado cambiado a APROBADO en la hoja.').waitFor();
+  assert.match(await reel.innerText(), /Aprobada/, 'el estado nuevo se ve en cuanto la hoja lo confirma');
+
+  await reel.locator('[data-reply-open]').click();
+  await reel.locator('[data-reply-text]').fill('Perfecto, ya cambiamos la canción.');
+  await reel.locator('[data-reply-resolve]').check();
+  await page.waitForTimeout(200);
+  await shot(page, '05-respondiendo');
+  await reel.locator('[data-reply-send]').click();
+  await page.getByText('Respuesta publicada en la hoja.').waitFor();
+  assert.match(await reel.locator('[data-google-comment="g1"]').innerText(), /Rodny Chirinos \(Brain Studio\): Perfecto, ya cambiamos la canción\./);
+  assert.match(await reel.locator('[data-google-comment="g1"]').innerText(), /Resuelto/);
+  assert.match(await page.locator('[data-external-edits]').innerText(), /Hecho desde la plataforma \(2\)/);
+  await page.waitForTimeout(300);
+  await shot(page, '06-despues-de-escribir');
+  assert.deepEqual(errors, []);
+  await page.close();
+
+  const readOnly = await open('?ruta=hoja&soloLectura');
+  await readOnly.page.locator('[data-external-piece="4"]').waitFor();
+  assert.equal(await readOnly.page.locator('[data-piece-status-picker]').count(), 0, 'sin cuenta de Google no se ofrece escribir');
+  assert.equal(await readOnly.page.locator('[data-reply-open]').count(), 0);
+  await readOnly.page.close();
 });
 
 test('en oscuro y en el celular se lee entero', async () => {

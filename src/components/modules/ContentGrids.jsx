@@ -111,6 +111,8 @@ const ContentGrids = () => {
       const clientId = external.client.id;
       if (!grouped[clientId]) grouped[clientId] = { id: clientId, client: external.client, plans: [] };
       grouped[clientId].external = external;
+      // Con hoja de MIO, solo la hoja: un cliente de MIO no lleva parrillas nativas.
+      grouped[clientId].plans = [];
     });
 
     // Sort plans within each client (Desc chronological)

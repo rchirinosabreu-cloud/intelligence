@@ -24,7 +24,9 @@ const cell = (row) => `${SHEET}#gid=1098554346&range=A${row}`;
 
 const plans = [
   { id: 'p1', clientId: 'c-promo', client: { id: 'c-promo', name: 'Promo Group / Endova', slug: 'promogroup' }, year: 2026, month: 11, status: 'EN_PROGRESO', updatedAt: '2026-10-28T15:00:00Z', _count: { contentItems: 8 } },
-  { id: 'p2', clientId: 'c-promo', client: { id: 'c-promo', name: 'Promo Group / Endova', slug: 'promogroup' }, year: 2026, month: 10, status: 'FINALIZADO', updatedAt: '2026-10-20T15:00:00Z', _count: { contentItems: 8 } }
+  { id: 'p2', clientId: 'c-promo', client: { id: 'c-promo', name: 'Promo Group / Endova', slug: 'promogroup' }, year: 2026, month: 10, status: 'FINALIZADO', updatedAt: '2026-10-20T15:00:00Z', _count: { contentItems: 8 } },
+  // Una parrilla creada a mano en la plataforma para un mes que ya está en la hoja de MIO: no debe repetirse.
+  { id: 'p3', clientId: 'c-villa', client: { id: 'c-villa', name: 'Villa Montaña', slug: 'villa-montana' }, year: 2026, month: 11, status: 'PLANIFICACION', updatedAt: '2026-09-10T15:00:00Z', _count: { contentItems: 12 } }
 ];
 
 const months = (created, changes, readAt) => [
@@ -61,11 +63,31 @@ const villaNovember = {
   ]
 };
 
+villaNovember.editable = !params.has('soloLectura');
+villaNovember.statusOptions = ['APROBADO', 'EN REVISIÓN INTERNA', 'EN AJUSTE', 'SIN REALIZAR', 'REVISIÓN DE CLIENTE', 'PUBLICADO'];
+villaNovember.edits = [];
+
 let refreshed = 0;
 axios.defaults.adapter = async (config) => {
   const url = String(config.url || '');
   const ok = (data) => ({ data, status: 200, statusText: 'OK', headers: {}, config });
   await new Promise((resolve) => setTimeout(resolve, 150));
+  const body = config.data ? JSON.parse(config.data) : {};
+  const statusMatch = url.match(/\/pieces\/(\d+)\/status$/);
+  if (config.method === 'patch' && statusMatch) {
+    const row = Number(statusMatch[1]);
+    villaNovember.pieces = villaNovember.pieces.map((item) => (item.row === row ? { ...item, status: body.status } : item));
+    const target = villaNovember.pieces.find((item) => item.row === row);
+    villaNovember.edits = [{ kind: 'STATUS', row, label: `${target.format} ${target.number}`, to: body.status, by: 'Rodny Chirinos', at: new Date().toISOString() }, ...villaNovember.edits];
+    return ok({ ...villaNovember });
+  }
+  const replyMatch = url.match(/\/comments\/([^/]+)\/replies$/);
+  if (config.method === 'post' && replyMatch) {
+    const reply = { id: `r${Date.now()}`, author: 'Rodny Chirinos', mine: true, content: `Rodny Chirinos (Brain Studio): ${body.content}`, createdAt: new Date().toISOString() };
+    villaNovember.pieces = villaNovember.pieces.map((item) => ({ ...item, comments: item.comments.map((comment) => (comment.id === replyMatch[1] ? { ...comment, resolved: comment.resolved || body.resolve, replies: [...comment.replies, reply] } : comment)) }));
+    villaNovember.edits = [{ kind: 'REPLY', by: 'Rodny Chirinos', resolved: body.resolve, at: new Date().toISOString() }, ...villaNovember.edits];
+    return ok({ ...villaNovember });
+  }
   if (url.endsWith('/api/content/plans')) return ok(plans);
   if (url.endsWith('/api/content/external-plans')) return ok(externalPlans);
   if (url.includes('/api/content/external-plans/') && url.endsWith('/refresh')) { refreshed += 1; return ok({ ok: true, problem: null }); }
