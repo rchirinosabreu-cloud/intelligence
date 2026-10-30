@@ -55,6 +55,11 @@ function NoticeBody({ notice, onDecided }) {
   // Cartera vencida (28 de octubre de 2026): la decide Elisa. «Ya le escribí» deja la gestión de cobro en la
   // trazabilidad y «Registrar pago» abre Cuentas por cobrar; el aviso sale solo cuando el cliente se pone al día.
   const isCollection = String(notice.kind || '').startsWith('CARTERA_');
+  // Parrilla con piezas sin publicar (30 de octubre de 2026): aquí no hay seguimiento que registrar. Se abre la
+  // parrilla y se marcan las piezas una por una —que es mirarlas—, y el aviso se cae solo en cuanto están publicadas,
+  // también el de la otra persona a cargo de la cuenta: por eso no hay «avisarle a la otra».
+  const isPlan = String(notice.kind || '').startsWith('PARRILLA_');
+  const openLabel = notice.kind === 'PARRILLA_RESUMEN' ? 'Abrir Operación' : 'Abrir la parrilla';
 
   // Que el aviso estuvo a la vista queda en la trazabilidad de Salud operativa (27 de octubre de 2026). Solo con la
   // pestaña visible: una pestaña de fondo no le muestra nada a nadie. El servidor lo anota una vez por aparición.
@@ -105,9 +110,15 @@ function NoticeBody({ notice, onDecided }) {
           <div className="flex flex-wrap justify-center gap-2.5" aria-busy={busy}>
             {mode === 'base' && (
               <>
-                <NoticeButton primary disabled={busy} data-notice-action="follow-up" onClick={() => setMode('channels')}>
-                  {isCollection ? 'Ya le escribí' : 'Ya hice seguimiento'}
-                </NoticeButton>
+                {isPlan ? (
+                  <NoticeButton primary disabled={busy} data-notice-action="open-plan" onClick={() => navigate(notice.url || '/clientes')}>
+                    {openLabel}
+                  </NoticeButton>
+                ) : (
+                  <NoticeButton primary disabled={busy} data-notice-action="follow-up" onClick={() => setMode('channels')}>
+                    {isCollection ? 'Ya le escribí' : 'Ya hice seguimiento'}
+                  </NoticeButton>
+                )}
                 {isCollection && notice.url && (
                   <NoticeButton disabled={busy} data-notice-action="pay" onClick={() => navigate(notice.url)}>Registrar pago</NoticeButton>
                 )}
@@ -118,7 +129,7 @@ function NoticeBody({ notice, onDecided }) {
                     No sigue
                   </NoticeButton>
                 )}
-                {!isReview && !isCollection && notice.url && (
+                {!isReview && !isCollection && !isPlan && notice.url && (
                   <NoticeButton disabled={busy} data-notice-action="open" onClick={() => navigate(notice.url)}>Abrir</NoticeButton>
                 )}
                 <NoticeButton disabled={busy} data-notice-action="snooze" aria-haspopup="true" onClick={() => setMode('snooze')}>

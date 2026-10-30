@@ -27,6 +27,7 @@ import { initCrmFollowUpAlertScheduler } from './src/services/crmFollowUpAlertSe
 import { initCollectionAlertScheduler } from './src/services/collectionAlertService.js';
 import { initFormalizationScheduler } from './src/services/projectFormalizationService.js';
 import { initContractCycleAlertScheduler } from './src/services/contractCycleAlertService.js';
+import { initPlanCloseNoticeScheduler } from './src/services/planCloseNoticeService.js';
 import { initUnbackedWorkAlertScheduler } from './src/services/unbackedWorkAlertService.js';
 import { initExternalPlanScheduler } from './src/services/externalPlanService.js';
 import { getAIHealth } from './src/services/aiService.js';
@@ -241,6 +242,7 @@ async function bootstrap() {
         initCollectionAlertScheduler();
         initFormalizationScheduler();
         initContractCycleAlertScheduler();
+        initPlanCloseNoticeScheduler();
         initUnbackedWorkAlertScheduler();
         initExternalPlanScheduler();
         startTaskAttachmentRetention();

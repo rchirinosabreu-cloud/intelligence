@@ -9,7 +9,7 @@ import prisma from '../lib/prisma.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import {
   cycleForDate, cycleOf, previousCycle, summarizeCycle, evaluateClientOperation, isMeasured,
-  normalizeOperationProfile, MONTH_NAMES,
+  normalizeOperationProfile, contractQuota, MONTH_NAMES,
 } from '../lib/clientOperations.js';
 import { CLOSE_NOTE_MAX, canConfirmClose, closeSnapshot, reportProblem } from '../lib/monthlyClose.js';
 import { authorizationProblem } from '../lib/unbackedWork.js';
@@ -22,7 +22,8 @@ const OPEN_TASK_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 const ACTIVE_PUBLICATION = new Set(['SCHEDULED', 'PUBLISHING', 'PUBLISHED']);
 const HISTORY_MONTHS = 3;
 const PERSON = { select: { id: true, name: true, avatarUrl: true } };
-const TEAM_PERSON = { select: { id: true, name: true, avatarUrl: true, role: true, highlightedAction: true } };
+// `userId` e `isActive` no salen hacia el navegador (`teamPerson` no los copia): son para saber a quién avisar.
+const TEAM_PERSON = { select: { id: true, name: true, avatarUrl: true, role: true, highlightedAction: true, userId: true, isActive: true } };
 const OBSERVATION_MAX = 2000;
 const OBSERVATIONS_SHOWN = 100;
 
@@ -241,6 +242,35 @@ export const createClientOperationsService = ({
     const clients = await db.client.findMany({ where: { isArchived: false }, orderBy: { name: 'asc' }, select: clientSelect(monthWindow(today)) });
     const reporters = await reporterNames(clients);
     return clients.map((client) => buildOperation(client, { today, reporters, detail: false }));
+  };
+
+  /**
+   * Las cuentas con piezas que pasaron su fecha y siguen sin publicar, para los avisos de la banda
+   * (Rodny, 30 de octubre de 2026). Se lee con las mismas reglas de la pantalla —incluidas las hojas de
+   * MIO— para que el aviso y el semáforo nunca digan cosas distintas. `clientId` acota a una sola cuenta,
+   * que es lo que la banda comprueba antes de volver a mostrar un aviso.
+   */
+  const listOverduePlans = async ({ clientId = null } = {}) => {
+    const today = todayKey();
+    const where = { isArchived: false, ...(clientId ? { id: String(clientId) } : {}) };
+    const clients = await db.client.findMany({ where, orderBy: { name: 'asc' }, select: clientSelect(monthWindow(today)) });
+    const rows = [];
+    for (const client of clients) {
+      const contract = publicContract(client.contracts?.[0]);
+      if (!contract || contract.status !== 'ACTIVO') continue;
+      if (!isMeasured({ contract })) continue;
+      const cycle = cycleForDate(today, contract.cutDay);
+      const summary = cycleSummary(client, cycle, contractQuota(contract), today, new Map());
+      if (!summary.overdueItems) continue;
+      const member = (person) => (person?.userId && person.isActive !== false ? { userId: person.userId, name: person.name } : null);
+      rows.push({
+        clientId: client.id, clientName: client.name, slug: client.slug, cycle,
+        overdue: summary.overdueItems,
+        communityManager: member(client.responsible),
+        projectManager: member(client.projectManager),
+      });
+    }
+    return rows;
   };
 
   // Autorizar trabajo sin propuesta aprobada es de Dirección o Administrativa y contable (29 de octubre de 2026).
@@ -477,7 +507,7 @@ export const createClientOperationsService = ({
     return db.teamMember.update({ where: { id: member.id }, data: { highlightedAction: value } });
   };
 
-  return { listOperations, getOperation, authorizeWork, saveProfile, setMonthlyReport, confirmMonthlyClose, reopenMonthlyClose, refreshExternalPlan, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
+  return { listOperations, listOverduePlans, getOperation, authorizeWork, saveProfile, setMonthlyReport, confirmMonthlyClose, reopenMonthlyClose, refreshExternalPlan, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
 };
 
 export const clientOperationsService = createClientOperationsService();

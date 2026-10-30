@@ -35,7 +35,14 @@ export const runContractCycleAlerts = async (db = prisma, { now = new Date(), no
     const contracts = await db.clientContract.findMany({
         select: {
             id: true, clientId: true, status: true, startDate: true, endDate: true, cutDay: true, monthlyReport: true,
-            client: { select: { id: true, name: true, slug: true, isArchived: true, projectManager: { select: { userId: true, isActive: true } } } }
+            client: {
+                select: {
+                    id: true, name: true, slug: true, isArchived: true,
+                    projectManager: { select: { userId: true, isActive: true } },
+                    // El community manager de la cuenta (30 de octubre de 2026): cerrar el mes es de los dos.
+                    responsible: { select: { userId: true, isActive: true } }
+                }
+            }
         }
     });
     const administrative = await activeAreaUserIds(db, 'ADMINISTRATIVA');
@@ -70,6 +77,9 @@ export const runContractCycleAlerts = async (db = prisma, { now = new Date(), no
             const operationUrl = contract.client?.slug ? `/clientes/operacion/${contract.client.slug}` : '/clientes';
             const recipients = new Map();
             if (alert.audience.includes('PM')) for (const userId of await pmOf(contract.client)) recipients.set(userId, operationUrl);
+            // El community manager de esa cuenta, sin respaldo por área: si no lo tiene, el aviso es del PM.
+            const cm = contract.client?.responsible;
+            if (alert.audience.includes('CM') && cm?.userId && cm.isActive !== false && !recipients.has(cm.userId)) recipients.set(cm.userId, operationUrl);
             if (alert.audience.includes('ADMINISTRATIVA')) for (const userId of administrative) if (!recipients.has(userId)) recipients.set(userId, BILLING_URL);
             if (!recipients.size) log(`[Cierre mensual] ${contract.client?.name || contract.clientId}: el aviso ${alert.step} no tiene a quién llegar.`);
             for (const [userId, url] of recipients) queue(userId, alert.step, { message, url, relatedId: contract.clientId });

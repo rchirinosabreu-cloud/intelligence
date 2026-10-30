@@ -41,7 +41,9 @@ const CLEARED_REASONS = {
     INACTIVA: 'la oportunidad ya no está activa en el CRM',
     // Rodny, 28 de octubre de 2026: las alertas del CRM son solo del equipo comercial.
     REASIGNADO: 'el seguimiento le corresponde al equipo comercial',
-    AL_DIA: 'el cliente se puso al día con lo que tenía vencido'
+    AL_DIA: 'el cliente se puso al día con lo que tenía vencido',
+    // Avisos de parrilla (30 de octubre de 2026): le llegan al CM y al PM, y basta con que una marque las piezas.
+    PUBLICADAS: 'las piezas ya quedaron publicadas'
 };
 
 const isCollectionNotice = (meta) => String(meta?.kind || '').startsWith('CARTERA_');

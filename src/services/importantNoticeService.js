@@ -17,6 +17,7 @@ import { userHasArea } from './teamAreaService.js';
 import { collectionStillDue } from './collectionState.js';
 import { recordCollectionActivity } from './collectionActivityService.js';
 import { isFollowUpChannel, isReviewOutcome, pickCurrentNotice, snoozeUntil } from '../lib/importantNotices.js';
+import { isPlanNotice, parsePlanSubject } from '../lib/planCloseNotices.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription, noticeTraceMetadata } from '../lib/importantNoticeTrace.js';
 
 const CONTACT_TYPES = CRM_ACTIVITY_TYPES.filter((type) => type.contact).map((type) => type.value);
@@ -79,9 +80,34 @@ export const queueImportantNotice = async (db, data, now = new Date()) => db.$tr
     });
 });
 
+/**
+ * Los avisos de parrilla (30 de octubre de 2026) se caen solos en cuanto las piezas quedan publicadas: por eso el
+ * community manager y el project manager reciben el mismo aviso y ninguno tiene que avisarle al otro. Se relee con las
+ * mismas reglas de Operación —incluidas las hojas de MIO—, así que el aviso y el semáforo nunca dicen cosas distintas.
+ * El resumen de varias cuentas lo cierra el reloj, no la banda: comprobarlo aquí serían diez consultas por sondeo.
+ */
+const readOverduePlans = async (args) => (await import('./clientOperationsService.js')).clientOperationsService.listOverduePlans(args);
+const planStillPending = async (db, notice, overduePlans) => {
+    const subject = parsePlanSubject(notice.subjectId);
+    if (!subject) return null;
+    let rows;
+    try {
+        rows = await overduePlans({ clientId: subject.clientId });
+    } catch (error) {
+        console.error('[Avisos importantes] Parrilla no releída:', error?.message || error);
+        return null;
+    }
+    if (rows.some((row) => row.cycle?.year === subject.year && row.cycle?.month === subject.month)) return null;
+    const name = typeof db.client?.findUnique === 'function'
+        ? (await db.client.findUnique({ where: { id: subject.clientId }, select: { name: true } }).catch(() => null))?.name
+        : null;
+    return { reason: 'PUBLICADAS', subject: name || null };
+};
+
 // ¿La oportunidad sigue esperando al cliente y nadie registró una gestión desde que salió el aviso? Si no, por qué.
-// En cartera: ¿el cliente sigue con lo vencido?
-const whyNotNeeded = async (db, notice, now) => {
+// En cartera: ¿el cliente sigue con lo vencido? En parrillas: ¿quedan piezas sin publicar?
+const whyNotNeeded = async (db, notice, now, { overduePlans = readOverduePlans } = {}) => {
+    if (isPlanNotice(notice)) return planStillPending(db, notice, overduePlans);
     if (isCollectionNotice(notice)) return collectionStillDue(db, notice, now);
     const lead = await db.crmLead.findUnique({
         where: { id: notice.subjectId },
@@ -105,7 +131,7 @@ const seesCrmNotices = (db, userId) => userHasArea(db, userId, 'COMERCIAL');
 const seesCollectionNotices = (db, userId) => userHasArea(db, userId, 'ADMINISTRATIVA');
 
 /** El aviso que le toca ver a esa persona ahora y cuándo volver a preguntar. `who` nombra a la persona en la traza. */
-export const currentImportantNotice = async (db = prisma, userId, now = new Date(), { who = null, log } = {}) => {
+export const currentImportantNotice = async (db = prisma, userId, now = new Date(), { who = null, log, overduePlans = readOverduePlans } = {}) => {
     const [pending, lastDecision, commercial, administrative] = await Promise.all([
         db.importantNotice.findMany({ where: { userId, resolvedAt: null } }),
         db.importantNotice.findFirst({ where: { userId, decidedAt: { not: null } }, orderBy: { decidedAt: 'desc' }, select: { decidedAt: true } }),
@@ -118,7 +144,7 @@ export const currentImportantNotice = async (db = prisma, userId, now = new Date
     for (let discarded = 0; discarded <= MAX_STALE_PER_READ; discarded += 1) {
         const { notice, nextAt } = pickCurrentNotice(candidates, lastDecision?.decidedAt || null, now);
         if (!notice) return { notice: null, nextAt };
-        const cleared = await whyNotNeeded(db, notice, now);
+        const cleared = await whyNotNeeded(db, notice, now, { overduePlans });
         if (!cleared) return { notice: serialize(notice), nextAt };
         await db.importantNotice.update({ where: { id: notice.id }, data: { resolvedAt: now, resolution: 'YA_ATENDIDO' } });
         await traceNotice(db, NOTICE_TRACE_EVENTS.CLEARED, { notice, subject: cleared.subject, subjectName: who, extra: { reason: cleared.reason }, now, log });

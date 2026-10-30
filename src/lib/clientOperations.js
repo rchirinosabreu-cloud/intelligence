@@ -32,7 +32,15 @@ export const STORY_FREQUENCIES = [
 export const labelOf = (list, value) => list.find((option) => option.value === value)?.label || '';
 
 export const OPERATION_LEVELS = ['red', 'yellow', 'green', 'gray'];
+/**
+ * El hueco mínimo que se avisa, pase lo que pase. **Lo que decide de verdad es el contrato**
+ * (`maxGapBetweenPosts`): con cuatro piezas al mes, once días entre publicaciones es el ritmo
+ * contratado, no un atraso (Rodny, 30 de octubre de 2026, viendo a Finas Asesores en amarillo por
+ * cumplir: «la plataforma allí no está haciendo una lectura integrada»).
+ */
 export const MAX_DAYS_BETWEEN_POSTS = 3;
+/** Un contrato que da para una pieza casi diaria no se mide igual: ahí dos el mismo día es lo normal. */
+export const SAME_DAY_MIN_SPACING = 2;
 export const CONTRACT_WARNING_DAYS = 30;
 export const NO_PLAN_RED_FROM_DAY = 5;
 
@@ -55,6 +63,22 @@ export function contractQuota(contract) {
 }
 
 export const isMeasured = (client) => client.contract?.serviceType === 'PARRILLA' && contractQuota(client.contract) > 0;
+
+/**
+ * Cada cuántos días toca una pieza según el contrato: los días del ciclo entre las piezas contratadas.
+ * Con 4 piezas en 31 días, una cada 7,75; con 20, una cada día y medio. `null` si no hay contra qué medir.
+ */
+export function expectedSpacing(cycle) {
+  const quota = Number(cycle?.quota) || 0;
+  const length = Number(cycle?.length) || 0;
+  return quota > 0 && length > 0 ? length / quota : null;
+}
+
+/** A partir de cuántos días un hueco entre publicaciones sí es un hueco: el doble del ritmo contratado. */
+export function maxGapBetweenPosts(cycle) {
+  const spacing = expectedSpacing(cycle);
+  return spacing ? Math.max(MAX_DAYS_BETWEEN_POSTS, Math.round(spacing * 2)) : MAX_DAYS_BETWEEN_POSTS;
+}
 
 /** Cuántas piezas deberían ir publicadas a esta altura del ciclo, repartidas de forma pareja. */
 export function expectedPublished(cycle) {
@@ -137,7 +161,8 @@ export function evaluateClientOperation(client, { today }) {
     if (current.created && expected - current.reached.publicada >= 2 && !current.overdueItems) {
       reasons.push({ level: 'red', text: `Van ${current.reached.publicada} publicadas; a esta fecha deberían ir ${expected}.` });
     }
-    if (current.longestGap && current.longestGap.days > MAX_DAYS_BETWEEN_POSTS) {
+    // El hueco ya viene medido contra el contrato: si está, es que de verdad se pasó.
+    if (current.longestGap) {
       reasons.push({ level: 'yellow', text: `${current.longestGap.days} días entre publicaciones (del ${shortDate(current.longestGap.from)} al ${shortDate(current.longestGap.to)}).` });
     }
     for (const day of current.sameDay || []) {
@@ -250,20 +275,28 @@ export function summarizeCycle(cycle, items, { quota, today }) {
   const reached = Object.fromEntries(STAGE_KEYS.map((key, index) => [key, stages.filter((s) => s >= index + 1).length]));
   const overdueItems = sorted.filter((item) => item.date && item.date < today && item.status !== 'PUBLICADO').length;
 
+  const length = daysBetween(cycle.start, cycle.end) + 1;
+  // El ritmo sale del contrato, no de un número fijo: un cliente de cuatro piezas al mes publica cada
+  // ocho días y eso es cumplir (Rodny, 30 de octubre de 2026).
+  const maxGap = maxGapBetweenPosts({ quota, length });
+  const spacing = expectedSpacing({ quota, length });
+
   const dates = [...new Set(sorted.map((item) => item.date).filter(Boolean))];
   let longestGap = null;
   for (let i = 1; i < dates.length; i += 1) {
     const days = daysBetween(dates[i - 1], dates[i]);
-    if (days > MAX_DAYS_BETWEEN_POSTS && (!longestGap || days > longestGap.days)) longestGap = { days, from: dates[i - 1], to: dates[i] };
+    if (days > maxGap && (!longestGap || days > longestGap.days)) longestGap = { days, from: dates[i - 1], to: dates[i] };
   }
   const perDay = new Map();
   for (const item of sorted) if (item.date) perDay.set(item.date, (perDay.get(item.date) || 0) + 1);
-  const sameDay = [...perDay].filter(([, count]) => count > 1).map(([date, count]) => ({ date, count }));
+  // Con un contrato que da para una pieza casi diaria, dos el mismo día no dice nada.
+  const sameDay = spacing !== null && spacing < SAME_DAY_MIN_SPACING
+    ? []
+    : [...perDay].filter(([, count]) => count > 1).map(([date, count]) => ({ date, count }));
 
-  const length = daysBetween(cycle.start, cycle.end) + 1;
   const day = Math.min(length, Math.max(0, daysBetween(cycle.start, today) + 1));
   return {
-    ...cycle, quota, created: sorted.length, reached, overdueItems, longestGap, sameDay, day, length,
+    ...cycle, quota, created: sorted.length, reached, overdueItems, longestGap, sameDay, day, length, maxGap,
     pieces: sorted.map((item) => ({ id: item.id, date: item.date, format: item.format, title: item.title, status: item.status, planId: item.planId, markedByHand: Boolean(item.markedByHand) })),
   };
 }
