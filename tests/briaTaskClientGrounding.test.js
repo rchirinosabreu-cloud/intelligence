@@ -47,6 +47,18 @@ const runTurn = async ({ fixture, question, steps, actor = user, context = {}, h
     return step ? { functionCalls: [{ id: `client-step-${round}`, name: step.name, args: step.args }], output: [] } : { text: 'Revisa el resumen.', functionCalls: [] };
   } } });
 };
+
+test('a new multi-task request does not silently inherit the client of a previous completed task', async () => {
+  const { prepare } = setup();
+  const draft = await prepare({ question: 'Prepara los trabajos de esta semana.', defaults: { client: clients[0] }, args: {
+    responsable: 'Rodny', fecha: '2026-10-26', pendientes: [{ titulo: 'Organizar agenda' }, { titulo: 'Revisar propuesta' }]
+  } });
+  assert.equal(taskDraftStage(draft), 'CLIENT');
+  assert.ok(taskDraftItems(draft).every(item => !item.client));
+  const revised = await prepare({ previous: draft, question: 'Son para Nube Azul.', defaults: { client: clients[0] }, args: { cliente: 'Nube Azul' } });
+  assert.equal(taskDraftStage(revised), 'READY');
+  assert.ok(taskDraftItems(revised).every(item => item.client.id === 'nube-azul'));
+});
 const search = nombre => ({ name: 'buscar_cliente', args: { nombre } });
 const draftCall = args => ({ name: 'preparar_pendiente', args: { ...base, request: { intent: 'PREPARE' }, ...args } });
 

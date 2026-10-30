@@ -6,6 +6,14 @@ Este plan amplía lo construido en [Ojos y cerebro](BRIA_OJOS_Y_CEREBRO.md), [au
 
 ## Punto de partida
 
+### Corrección de cliente y título después de crear — 30 de octubre de 2026
+
+El formulario bloqueaba el cliente de todas las tareas existentes, aunque la API autorizara la edición. Las herramientas de cambios de Bria tampoco representaban el cliente de destino ni el título, y el catálogo genérico omitía `clientId`. La corrección comparte la regla de edición entre pantalla y servidor y amplía las herramientas existentes: título y cliente de una tarea, y cliente de destino de un conjunto revisado. El filtro del cliente de origen sigue separado del destino; los nombres ambiguos se aclaran. No se amplían roles ni se ejecutan correcciones históricas por inferencia.
+
+El resumen conserva las tareas seleccionadas y su cliente de origen. Al aprobar se revalidan acceso, origen y destino activo. Las tareas vinculadas a piezas conservan el cliente de la parrilla; renombrarlas usa la reciprocidad nativa del objetivo. La validación del cliente se repite dentro de la transacción que actualiza la tarea. Un lote nuevo sin cliente del pedido no hereda automáticamente la cuenta del último pendiente creado. Los errores de guardado visibles mantienen el formulario abierto con el motivo del servidor.
+
+Contratos locales: `tests/taskCorrections.test.js` (preparación, revisión, aprobación vigente, ejecución única, acceso revocado y destinos inválidos), `tests/briaTaskClientGrounding.test.js` (selección y herencia), `tests/taskUpdateGate.test.js` y `tests/briaActionService.test.js`. `tests/browser/taskCorrections.mjs` prueba cliente y título, rechazo del servidor y guardado en escritorio claro y móvil oscuro con datos ficticios. No se hicieron llamadas pagadas al modelo ni cambios de tareas en producción: los dobles conversacionales prueban el circuito, no la interpretación de un modelo real. La liberación exige el CI completo con su base aislada; el entorno local no dispone de esa base y Windows puede bloquear la regeneración de Prisma cuando otro proceso mantiene su biblioteca abierta.
+
 ### Cartera grande: datos calculados y detalle presentado — 27 de octubre de 2026
 
 El piloto de WhatsApp volvió a terminar sin cifra verificada. El diagnóstico acotado confirmó consultas nativas a cartera; no se conservaron sus argumentos ni recibos individuales, por lo que no se atribuye toda la ejecución a una causa observada directamente. Se reprodujo un defecto concreto: `briaPlatformClient` recibía el JSON completo, pero su bandera de recorte de texto se interpretaba como pérdida de datos al comprobar el cálculo. Además, `consultar_plataforma` seguía enviando el JSON completo al modelo, pese al límite de presentación.
