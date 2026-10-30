@@ -14,11 +14,14 @@
 // La regla es pura; quién recibe y qué ya se avisó lo decide `contractCycleAlertService`.
 import { MONTH_NAMES, cycleForDate, previousCycle } from './clientOperations.js';
 
+// Cerrar bien el mes es de las dos personas a cargo de la cuenta (Rodny, 30 de octubre de 2026: «debería aparecerle al
+// PM y al CM, las mismas porque, en tal caso, las dos son responsables»). El informe sigue siendo del project manager y
+// la facturación, de Administrativa.
 export const CYCLE_STEPS = Object.freeze({
-    REVISION: { before: 3, audience: ['PM'] },
+    REVISION: { before: 3, audience: ['PM', 'CM'] },
     INFORME: { before: 2, audience: ['PM'], needsReport: true },
     FACTURACION: { before: 2, audience: ['ADMINISTRATIVA'] },
-    CIERRE: { before: 0, audience: ['PM'], late: 3 }
+    CIERRE: { before: 0, audience: ['PM', 'CM'], late: 3 }
 });
 export const RENEWAL_STEPS = Object.freeze({
     RENOVACION_30: { days: 30, audience: ['PM', 'ADMINISTRATIVA'] },
