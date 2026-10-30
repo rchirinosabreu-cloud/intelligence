@@ -7,6 +7,7 @@ import { derivedKeyFor } from './socialImageDerivativeService.js';
 import { COVER_MAX_BYTES, coverFileProblem, publicCover, withPublicCover } from '../lib/videoCover.js';
 import { randomBytes, randomUUID } from 'node:crypto';
 import { buildLinkedTaskUpdates } from '../lib/contentTaskReciprocity.js';
+import { nativePlanProblem } from '../lib/externalPlan.js';
 import {
   FINAL_ASSET_MAX_BYTES, FINAL_ASSET_MAX_FILES, FINAL_ASSET_DIRECT_MAX_BYTES, FINAL_ASSETS_PER_ITEM,
   fileTooLargeMessage, tooManyFilesMessage
@@ -304,6 +305,10 @@ export const getContentPlanBySlugAndPeriod = async (clientSlug, month, year) => 
 
 export const createContentPlan = async (data) => {
   const { clientId, month, year, status, strategicObjectives } = data;
+  // Un cliente con hoja de MIO no lleva parrillas nativas, tampoco restauradas de la papelera (29 de octubre de 2026).
+  const owner = clientId ? await prisma.client.findUnique({ where: { id: clientId }, select: { name: true, externalPlanUrl: true } }) : null;
+  const sheetProblem = nativePlanProblem(owner);
+  if (sheetProblem) throw Object.assign(new Error(sheetProblem), { status: 409, code: 'PLAN_IN_SHEET' });
   const hasStrategicColumn = await hasStrategicObjectivesColumn();
 
   // Idempotency Shield: Check for existing plans for this period

@@ -221,6 +221,15 @@ export const rowIdentityProblem = (rowValues = [], piece, layout) => {
 /** Si el estado que hay ahora en la hoja es el que vio la persona (sin mirar tildes ni mayúsculas). */
 export const sameStatus = (a, b) => fold(a || '') === fold(b || '');
 
+/**
+ * Un cliente con hoja de MIO no lleva parrillas nativas (Rodny, 29 de octubre de 2026: «quedémonos solamente con las
+ * hojas de excel para las parrillas de MIO, no parrillas nativas»): su parrilla vive en la hoja y se ve en Parrillas.
+ * Devuelve el motivo para no crear una, o null.
+ */
+export const nativePlanProblem = (client) => (client?.externalPlanUrl
+    ? `Las parrillas de ${client.name || 'este cliente'} viven en su hoja de MIO y se ven en Parrillas: no se crean aquí.`
+    : null);
+
 /** Lo que dice la plataforma al responder un comentario de Google: con el nombre de quien lo escribe. */
 export const replyContent = (authorName, text) => `${authorName} (Brain Studio): ${String(text || '').trim()}`;
 

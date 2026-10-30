@@ -199,6 +199,7 @@ router.post('/plans', async (req, res) => {
     const plan = await createContentPlan(req.body);
     return res.status(201).json(plan);
   } catch (error) {
+    if (error?.code === 'PLAN_IN_SHEET') return res.status(409).json({ error: error.message, code: error.code });
     console.error('[API] Error creating content plan:', error);
     return res.status(500).json({ error: 'Failed to create content plan', details: error.message });
   }

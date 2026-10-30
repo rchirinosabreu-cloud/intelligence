@@ -106,8 +106,10 @@ function cycleSummary(client, cycle, quota, today, reporters) {
   // La hoja de MIO (29 de octubre de 2026), contada con las mismas reglas. Con hoja vinculada y pestaña del mes, la hoja
   // manda aunque haya una parrilla en la plataforma: las que se crearon a mano para Verona y Casa Bella se quedaron
   // congeladas mientras el equipo seguía en la hoja (Rodny: «deja solamente las que están alimentándose del excel»).
+  // Después, Rodny: «quedémonos solamente con las hojas … no parrillas nativas»: con hoja vinculada no cuenta ninguna.
   const sheet = (client.externalPlanSnapshots || []).find((row) => row.year === cycle.year && row.month === cycle.month);
-  const external = sheet && ((client.externalPlanUrl && sheet.tabName) || !items.length) ? sheet : null;
+  if (client.externalPlanUrl) items = [];
+  const external = sheet && (client.externalPlanUrl || !items.length) ? sheet : null;
   if (external) items = (Array.isArray(external.pieces) ? external.pieces : []).map(asOperationPiece);
   const summary = summarizeCycle(cycle, items, { quota, today });
   if (external) summary.source = { kind: 'HOJA_MIO', tab: external.tabName || null, readAt: external.okAt ? bogotaDate(external.okAt) : null, problem: external.problem || null };
