@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, FolderOpen, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign, Target, ShieldCheck, Sun, Moon } from '@/components/ui/icons';
+import { LayoutDashboard, Activity, CheckSquare, LayoutGrid, FileText, FolderOpen, Users, UserCheck, X, Zap, Map, FileBarChart, Brain, Palette, DollarSign, Wallet, Target, ShieldCheck, Sun, Moon } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { hasModuleAccess } from '@/lib/platformModules';
 import { motion } from 'framer-motion';
@@ -34,7 +34,7 @@ const Sidebar = ({ isOpen, onClose, collapsed = false }) => {
     { id: 'drive', label: 'Drive', icon: FolderOpen, path: '/drive', moduleKey: 'drive' },
     { id: 'crm', label: 'CRM', icon: Target, path: '/crm', moduleKey: 'crm' },
     { id: 'quotations', label: 'Cotizaciones', icon: DollarSign, path: '/cotizaciones', moduleKey: 'cotizaciones' },
-    { id: 'financials', label: 'Financiero', icon: DollarSign, path: '/financiero', moduleKey: 'financiero' },
+    { id: 'financials', label: 'Financiero', icon: Wallet, path: '/financiero', moduleKey: 'financiero' },
     { id: 'radar', label: 'Radar de Mérito', icon: Zap, path: '/radar', moduleKey: 'radar' },
     { id: 'clients', label: 'Clientes', icon: Users, path: '/clientes', moduleKey: 'clientes' },
     { id: 'team', label: 'Equipo', icon: UserCheck, path: '/equipo', moduleKey: 'equipo' },

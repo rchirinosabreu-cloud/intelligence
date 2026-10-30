@@ -21,7 +21,7 @@ import ClientAvatar from '@/components/ui/ClientAvatar';
  * piezas hay y cuáles faltan por revisar, y el **detalle de una pieza**, donde manda la pieza —que es
  * lo único que el cliente aprueba— y a su lado el texto que se va a publicar.
  *
- * El guion no está aquí ni llega en la respuesta: se quitó en `publicController.js`.
+ * El guion vuelve a verse (Rodny, 30 de octubre de 2026): va entre la idea y el texto de la publicación.
  */
 
 const getPublicAssetUrl = (asset) => {
@@ -288,6 +288,13 @@ const PieceDetail = ({
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-400">Idea</p>
               <h2 className="text-xl font-bold leading-snug tracking-tight text-zinc-900 dark:text-zinc-50">{item.objective}</h2>
             </div>
+
+            {item.copyText?.trim() && (
+              <div className="space-y-3" data-portal-script>
+                <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-400">Guion</p>
+                <p className="whitespace-pre-wrap text-[15px] leading-relaxed text-zinc-700 [overflow-wrap:anywhere] dark:text-zinc-300">{item.copyText}</p>
+              </div>
+            )}
 
             <div className="space-y-3">
               <p className="text-[11px] font-bold uppercase tracking-[0.12em] text-zinc-400">Texto de la publicación</p>

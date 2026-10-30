@@ -20,10 +20,9 @@ export const getPublicPlan = async (req, res) => {
 
     // Sanitize for public view: remove internal fields.
     //
-    // El guion (`copyText`) es material de producción —ESCENA 1, VOZ, CIERRE— y **no sale de aquí**
-    // (Rodny, 24 de septiembre de 2026). Esconderlo en la pantalla no bastaba: viajaba en el cuerpo de
-    // la respuesta y se leía abriendo las herramientas del navegador. El cliente ve la pieza y el texto
-    // que se va a publicar (`captionText`); lo demás es del equipo.
+    // El cliente ve la pieza, el guion (`copyText`) y el texto que se va a publicar (`captionText`). El guion
+    // se quitó el 24 de septiembre de 2026 y Rodny lo devolvió el 30 de octubre («necesito que el cliente
+    // también pueda verlo»). La nota interna y lo demás siguen siendo del equipo.
     const sanitizedPlan = {
       id: plan.id,
       month: plan.month,
@@ -37,6 +36,7 @@ export const getPublicPlan = async (req, res) => {
         id: item.id,
         objective: item.objective,
         format: item.format,
+        copyText: item.copyText,
         captionText: item.captionText,
         publishDate: item.publishDate,
         mediaUrl: item.mediaUrl,
