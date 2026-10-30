@@ -111,6 +111,9 @@ const ContentGrids = () => {
       const clientId = external.client.id;
       if (!grouped[clientId]) grouped[clientId] = { id: clientId, client: external.client, plans: [] };
       grouped[clientId].external = external;
+      // Con hoja de MIO, la hoja manda: un mes que la hoja ya tiene no se repite como parrilla de la plataforma.
+      const fromSheet = new Set(external.months.filter((month) => month.tabName).map((month) => `${month.year}-${month.month}`));
+      grouped[clientId].plans = grouped[clientId].plans.filter((plan) => !fromSheet.has(`${plan.year}-${plan.month}`));
     });
 
     // Sort plans within each client (Desc chronological)

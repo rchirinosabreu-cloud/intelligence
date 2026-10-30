@@ -147,6 +147,22 @@ test('la página del cliente trae las piezas y los meses anteriores con su infor
   await assert.rejects(() => service.getOperation('no-existe'), { status: 404 });
 });
 
+test('con hoja de MIO vinculada, la hoja manda aunque haya una parrilla vieja en la plataforma', async () => {
+  const { db, service } = fixture();
+  const nattal = (await db.client.findMany()).find((c) => c.slug === 'nattal');
+  nattal.externalPlanUrl = 'https://docs.google.com/spreadsheets/d/1WfyHG3noiWBeMwwMRBCO4U_S6hwvjhtznUYOjPHfSZY/edit';
+  nattal.externalPlanSnapshots = [{
+    year: 2026, month: 10, tabName: 'OCTUBRE', okAt: NOW, problem: null,
+    pieces: [{ row: 3, number: '1', format: 'Post', date: '2026-10-01', status: 'PUBLICADO', stage: 'publicada' }, { row: 4, number: '2', format: 'Post', date: '2026-10-05', status: 'PROGRAMADO', stage: 'programada' }]
+  }];
+  const current = (await service.getOperation('nattal')).cycles.current;
+  assert.equal(current.source.kind, 'HOJA_MIO', 'la parrilla de la plataforma de ese mes (3 piezas, congelada) no cuenta');
+  assert.equal(current.created, 2);
+  assert.equal(current.reached.publicada, 1);
+  nattal.externalPlanSnapshots[0].tabName = null;
+  assert.equal((await service.getOperation('nattal')).cycles.current.created, 3, 'si la hoja no tiene pestaña de ese mes, se usa lo de la plataforma');
+});
+
 test('guardar la ficha valida, crea el contrato si no hay y nunca toca otros campos', async () => {
   const { service, writes } = fixture();
   await service.saveProfile({

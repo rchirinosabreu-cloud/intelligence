@@ -31,6 +31,7 @@ test('la hoja de MIO aparece sola en Parrillas y su mes muestra piezas, cambios 
   await november.waitFor();
   assert.match(await november.innerText(), /Hoja de MIO · 16 piezas/);
   assert.match(await november.locator('[data-external-changes-count]').innerText(), /3 cambios/);
+  assert.equal(await page.getByText('PLANIFICACION').count(), 0, 'la parrilla creada a mano para un mes de la hoja no se repite');
   await page.waitForTimeout(300);
   await shot(page, '01-lista');
 
