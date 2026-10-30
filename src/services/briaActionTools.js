@@ -15,10 +15,12 @@ const run = (service, type) => async (args, ctx) => {
 
 export const createBriaActionTools = (service) => service ? [{
   name: 'cambiar_pendiente',
-  description: 'Prepara un cambio en una tarea de Gestión: estado (pendiente, en proceso, realizada, devuelta), responsable, fecha de entrega o prioridad. NO cambia nada: muestra el resumen y la persona confirma. Úsala cuando pidan mover, cerrar, devolver, reabrir, reasignar o reprogramar un pendiente. Antes localiza la tarea con mis_tareas o tareas_de_cliente y usa su id; si hay varias parecidas, pregunta cuál. Devolver y reabrir piden motivo y nota: pásalos si la persona los dio. Una corrección en el chat ajusta el mismo cambio: vuelve a llamarla con lo nuevo.',
+  description: 'Prepara un cambio en una tarea de Gestión: estado, responsable, fecha de entrega, prioridad, título o cliente. NO cambia nada: muestra el resumen y la persona confirma. Antes localiza la tarea y usa su id; si hay varias parecidas, pregunta cuál. Una tarea independiente puede cambiar de cliente; una vinculada a una pieza conserva el cliente de su parrilla. Devolver y reabrir piden motivo y nota. Una corrección en el chat ajusta el mismo cambio: vuelve a llamarla con lo nuevo.',
   allowed: allowedFor('TASK_UPDATE'),
   parameters: { type: 'object', properties: {
     tarea: { type: 'string', description: 'Id de la tarea.' },
+    cliente: { type: ['string', 'null'], description: 'Cliente de destino, nombre o id comprobado con buscar_cliente. No renombra la ficha del cliente. null u omitido conserva el cliente actual.' },
+    titulo: { type: ['string', 'null'], description: 'Título completo corregido. Para una tarea ligada a una pieza modifica su objetivo nativo y las tareas vinculadas. null u omitido conserva el título.' },
     estado: { type: ['string', 'null'], enum: ['pendiente', 'en proceso', 'realizada', 'devuelta', null] },
     responsable: { type: ['string', 'null'], description: 'Nombre que dio la persona; no lo inventes.' },
     fecha: { type: ['string', 'null'], description: 'Entrega: mañana, viernes, 15 de octubre o YYYY-MM-DD.' },
@@ -43,7 +45,7 @@ export const createBriaActionTools = (service) => service ? [{
   run: run(service, 'CREATE_PLAN')
 }, {
   name: 'cambiar_pendientes',
-  description: 'Prepara el mismo cambio para varias tareas de Gestión a la vez (hasta 50): estado (en proceso, realizada o pendiente), responsable y/o fecha de entrega. NO cambia nada: muestra cuáles sí y cuáles no, avisa de lo que conviene mirar (compromisos con hora, pendientes privados, tareas en proceso con otra persona) y la persona confirma. Las tareas se dan por sus ids (de mis_tareas, tareas_de_cliente o buscar_pendientes) o, mejor, con «filtro» y «tareas» vacío cuando el pedido es por persona, cliente, sin responsable o vencidas («todos los pendientes de Jarlan, pónselos a Kamila», «los que no tienen asignación, a Francisco»): el servidor resuelve el lote. Devolver o reabrir piden motivo por tarea: para eso usa cambiar_pendiente de a una.',
+  description: 'Prepara el mismo cambio para varias tareas de Gestión a la vez (hasta 50): estado, responsable, fecha de entrega y/o cliente de destino para tareas independientes. NO cambia nada: muestra cuáles sí y cuáles no, conserva permisos y la persona confirma. Usa ids para una selección concreta o filtro para el conjunto solicitado; no extiendas una corrección a otras tareas solo por compartir cliente. filtro.cliente selecciona el origen; cliente indica el destino. Devolver o reabrir piden motivo por tarea: usa cambiar_pendiente de a una.',
   allowed: allowedFor('TASKS_STATUS'),
   parameters: { type: 'object', properties: {
     tareas: { type: 'array', maxItems: 50, items: { type: 'string' }, description: 'Ids de las tareas; vacío si se usa filtro.' },
@@ -57,6 +59,7 @@ export const createBriaActionTools = (service) => service ? [{
     estado: { type: ['string', 'null'], enum: ['pendiente', 'en proceso', 'realizada', null] },
     responsable: { type: ['string', 'null'], description: 'Nuevo responsable: el nombre que dio la persona; no lo inventes.' },
     fecha: { type: ['string', 'null'], description: 'Nueva entrega: mañana, viernes, 15 de octubre o YYYY-MM-DD.' },
+    cliente: { type: ['string', 'null'], description: 'Cliente de destino, nombre o id comprobado; diferente de filtro.cliente, que selecciona el origen. null u omitido conserva el cliente.' },
     nuevo: { type: 'boolean' }
   }, required: ['tareas', 'filtro', 'estado', 'responsable', 'fecha'], additionalProperties: false },
   run: run(service, 'TASKS_STATUS')

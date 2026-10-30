@@ -19,6 +19,7 @@ import { isTaskReopenRequest } from '../lib/taskTiming.js';
 import { isPublicationTask } from '../lib/contentTaskReciprocity.js';
 import { publicationTaskCloseProblem } from '../lib/socialPublishing.js';
 import { assertTaskNotLocked } from './taskFocusService.js';
+import { assertTaskClientChange } from './taskClientChange.js';
 
 const gateError = (status, message, extra = {}) => Object.assign(new Error(message), { gateStatus: status, ...extra });
 
@@ -38,7 +39,7 @@ export const checkTaskUpdate = async ({ db = prisma, user, taskId, payload = {} 
   const task = await db.task.findUnique({
     where: { id: taskId },
     select: {
-      creatorId: true, status: true, title: true,
+      creatorId: true, status: true, title: true, clientId: true, contentItemId: true,
       assignee: { select: { userId: true } },
       collaborators: { select: { member: { select: { userId: true } } } },
       contentItem: { select: { publishDate: true, publishTime: true, publications: { select: { status: true } } } }
@@ -61,5 +62,6 @@ export const checkTaskUpdate = async ({ db = prisma, user, taskId, payload = {} 
   if (('isPrivate' in payload || 'viewerIds' in payload) && !canChangeTaskPrivacy(task, user)) {
     throw gateError(403, 'Solo quien creó este pendiente puede cambiar con quién se comparte.');
   }
+  await assertTaskClientChange(db, task, payload);
   return task;
 };

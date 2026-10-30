@@ -2,6 +2,8 @@ import { lookup } from 'node:dns/promises';
 import net from 'node:net';
 import path from 'node:path';
 import { hasModuleAccess } from '../lib/platformModules.js';
+import { isManagerRole, canUpdateTask } from '../lib/taskEditPermissions.js';
+export { isManagerRole, canUpdateTask };
 
 const DEFAULT_ALLOWED_ORIGINS = [
   'https://labs.brainstudioagencia.com',
@@ -74,22 +76,10 @@ export const getJwtSecret = (env = process.env) => {
   return secret;
 };
 
-export const isManagerRole = (role) => ['ADMIN', 'PROJECT_MANAGER'].includes(
-  String(role || '').toUpperCase()
-);
-
 // La misma regla que la pantalla, desde la lista única de módulos (`platformModules.js`).
 export const hasModulePermission = (user, moduleName) => hasModuleAccess(user, moduleName);
 
 const getUserId = (user) => user?.userId || user?.id || null;
-
-export const canUpdateTask = (user, task) => {
-  if (isManagerRole(user?.role)) return true;
-  const userId = getUserId(user);
-  return Boolean(userId && (
-    task?.creatorId === userId || task?.assignee?.userId === userId
-  ));
-};
 
 export const canDeleteTask = (user, task) => {
   if (isManagerRole(user?.role)) return true;
