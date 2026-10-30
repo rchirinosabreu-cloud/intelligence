@@ -68,7 +68,7 @@ function NativePiece({ piece }) {
     <div className="space-y-5" data-piece-peek-native>
       {item.objective && <p className="text-xs uppercase tracking-wide text-zinc-400">{item.objective}</p>}
       <div className="grid gap-4 md:grid-cols-2">
-        <LongText label="Guion · solo el equipo" text={item.copyText} />
+        <LongText label="Guion · lo ve el cliente" text={item.copyText} />
         <LongText label="Texto de la publicación · lo ve el cliente" text={item.captionText} />
       </div>
       {!item.copyText && !item.captionText && <p className="text-sm text-zinc-500">Todavía no tiene guion ni texto de publicación.</p>}

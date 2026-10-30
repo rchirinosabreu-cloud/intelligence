@@ -8,13 +8,14 @@ import '../../src/index.css';
 
 // Muestra local del portal del cliente rediseñado (Rodny, 24 de septiembre de 2026). Nada se guarda:
 // la API vive en memoria. Se monta el componente **real**, así que lo que se ve aquí es lo que se
-// despliega — incluido el hecho de que el guion no llega: la respuesta simulada tampoco lo manda,
-// igual que `publicController.js`.
+// despliega — incluido el guion, que el cliente ve desde el 30 de octubre de 2026: la respuesta simulada lo
+// manda, igual que `publicController.js`.
 
 const piece = (id, objective, format, day, status, opts = {}) => ({
   id,
   objective,
   format,
+  copyText: opts.script || null,
   captionText: opts.caption || null,
   publishDate: `2026-09-${String(day).padStart(2, '0')}T12:00:00.000Z`,
   mediaUrl: opts.mediaUrl || [],
@@ -45,6 +46,7 @@ const asset = (id, file, label) => ({
 
 const items = [
   piece('i1', 'ENDOVA, un espacio preparado para recibirte', 'Reel', 24, 'APROBADO', {
+    script: 'ESCENA 1: la llegada a ENDOVA, la recepción y la sala de espera.\nVOZ: «Hay lugares que empiezan a cuidar de ti incluso antes de la consulta».\nCIERRE: logo de ENDOVA.',
     caption: CAPTION,
     assets: [asset('a1', 'reel-llegada.svg', 'Reel · llegada'), asset('a2', 'reel-recorrido.svg', 'Reel · recorrido')],
     mediaUrl: ['https://drive.google.com/referencia'],

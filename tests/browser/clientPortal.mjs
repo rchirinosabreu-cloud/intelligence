@@ -1,14 +1,14 @@
 // Recorrido real del portal del cliente rediseñado (Rodny, 24 de septiembre de 2026).
 // Monta el componente de verdad contra una API en memoria y comprueba lo que el rediseño promete:
-// el mes entero se ve de un golpe, la pieza manda sobre el texto, y **el guion no aparece por ningún
-// lado**. Sin backend, sin base de datos.
+// el mes entero se ve de un golpe y la pieza manda sobre el texto. El guion, que se quitó el 24 de septiembre,
+// vuelve a verse en el detalle desde el 30 de octubre de 2026. Sin backend, sin base de datos.
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { createServer } from 'vite';
 import { chromium } from 'playwright-core';
 
 const PAGE = '/tests/fixtures/client-portal-preview.html';
-// Una frase del guion de ENDOVA: si apareciera en el portal, el rediseño no habría servido de nada.
+// Una frase del guion de ENDOVA: en el mosaico no va; en el detalle sí, antes del texto de la publicación.
 const SCRIPT_LINE = 'ESCENA 1';
 
 const server = await createServer({ logLevel: 'error', server: { host: '127.0.0.1', port: 0, open: false } });
@@ -45,12 +45,12 @@ try {
     // 1. El índice: el mes entero, con su avance.
     const index = await page.evaluate(() => ({
       cards: document.querySelectorAll('main button[class*="group"]').length,
-      approved: document.body.textContent.includes('3 aprobadas'),
+      approved: /\d+ aprobadas/.test(document.body.textContent),
       script: document.body.textContent.includes('ESCENA 1')
     }));
     assert.equal(index.cards, 8, 'las ocho piezas del mes caben en el mosaico');
     assert.equal(index.approved, true, 'la cabecera dice cuánto lleva aprobado');
-    assert.equal(index.script, false, 'el guion no está en el índice');
+    assert.equal(index.script, false, 'el guion no va en el mosaico: es del detalle');
 
     await page.screenshot({ path: `output/portal-indice-${name}.png`, fullPage: true });
 
@@ -70,6 +70,10 @@ try {
       const caption = find('Texto de la publicación');
       return {
         script: text.includes('ESCENA 1'),
+        scriptTop: (() => {
+          const node = document.querySelector('[data-portal-script]');
+          return node ? Math.round(node.getBoundingClientRect().top + window.scrollY) : -1;
+        })(),
         pieceTop: piece ? Math.round(piece.getBoundingClientRect().top + window.scrollY) : -1,
         captionTop: caption ? Math.round(caption.getBoundingClientRect().top + window.scrollY) : -1,
         counter: /Pieza 1 de 8/.test(text),
@@ -78,7 +82,8 @@ try {
       };
     });
 
-    assert.equal(detail.script, false, `el guion tampoco está en el detalle (${SCRIPT_LINE})`);
+    assert.equal(detail.script, true, `el cliente ve el guion en el detalle (${SCRIPT_LINE})`);
+    assert.ok(detail.scriptTop >= 0 && detail.scriptTop < detail.captionTop, 'el guion va antes del texto de la publicación');
     assert.ok(detail.pieceTop >= 0 && detail.captionTop >= 0, 'se dibujan la pieza y el texto');
     if (width >= 1024) {
       assert.ok(

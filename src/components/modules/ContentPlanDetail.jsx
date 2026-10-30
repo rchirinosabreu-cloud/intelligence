@@ -18,7 +18,7 @@ import {
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
   Calendar, User, LayoutGrid, FileText, Instagram, Facebook, Video, Image as ImageIcon,
   Edit2, Check, AlertCircle, Sparkles, Users, UserCheck, StickyNote, ChevronUp, Share2,
-  MessageSquare, Table2, UploadCloud, Link2, Lock, Eye
+  MessageSquare, Table2, UploadCloud, Link2, Eye
 } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -1133,8 +1133,9 @@ const ContentItemCard = ({
           <div className="flex min-w-0 flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <label htmlFor={`guion-${item.id}`} className={FIELD_LABEL}>Guion</label>
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-bold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
-                <Lock className="h-3 w-3" /> Solo el equipo
+              {/* El cliente ve el guion en el portal desde el 30 de octubre de 2026: se escribe sabiendo que lo lee. */}
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-brand-cyan-soft px-2 py-0.5 text-[11px] font-bold text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan">
+                <Eye className="h-3 w-3" /> Lo ve el cliente
               </span>
             </div>
             {isEditing ? (
