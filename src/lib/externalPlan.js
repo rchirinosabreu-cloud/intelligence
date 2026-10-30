@@ -253,6 +253,8 @@ export const asOperationPiece = (piece, index) => {
         id: `externa-${index + 1}`,
         planId: null,
         external: true,
+        // La fila de la hoja: la vista rápida de Operación busca por ella la pieza en el espejo (30 de octubre de 2026).
+        row: Number.isInteger(piece.row) ? piece.row : null,
         status,
         date: piece.date,
         format: piece.format,

@@ -89,6 +89,7 @@ test('las piezas se toman bajo la fila de encabezados, sin importar el orden de 
     assert.deepEqual(['REALIZADO', 'EN REVISIÓN', 'REVISIÓN DE CLIENTE', 'EN DISEÑO', 'APROBADO', ''].map(platformStatusFromSheet),
         ['REALIZADO', 'EN_REVISION', 'EN_REVISION', 'EN_PRODUCCION', 'APROBADO', 'BORRADOR']);
     assert.equal(asOperationPiece({ format: 'Reel', number: '1', status: 'REALIZADO', stage: 'disenada' }, 0).status, 'REALIZADO');
+    assert.equal(asOperationPiece({ format: 'Reel', row: 7, status: 'REALIZADO', stage: 'disenada' }, 0).row, 7, 'la vista rápida de Operación busca la pieza por su fila');
     // Los estados de la hoja de Mari Colón.
     assert.deepEqual(['ENVIADO AL CLIENTE', 'EN PRODUCCIÓN', 'SIN REALIZAR'].map(stageFromStatus), ['disenada', 'redactada', 'creada']);
     assert.deepEqual(['ENVIADO AL CLIENTE', 'EN PRODUCCIÓN', 'SIN REALIZAR'].map(platformStatusFromSheet), ['EN_REVISION', 'EN_PRODUCCION', 'BORRADOR']);

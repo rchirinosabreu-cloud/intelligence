@@ -13,6 +13,7 @@ import { LEVEL_META, PIECE_STATUS, STAGE_TONE } from './operationTones';
 import CycleBar from './CycleBar';
 import ClientObservations from './ClientObservations';
 import { CloseDialog, ReportDialog, WorkAuthorizationDialog } from './MonthlyCloseDialogs';
+import PiecePeekDialog from './PiecePeekDialog';
 import { unbackedWork } from '@/lib/unbackedWork';
 import { canConfirmClose, closeOpensOn, closeSummaryText, reportStatusLabel } from '@/lib/monthlyClose';
 
@@ -93,7 +94,7 @@ function CloseStatus({ cycle, today, onClose, onReopen, compact = false }) {
   return <span className="text-xs text-zinc-500" data-close-status="later">Se confirma desde el {shortDate(closeOpensOn(cycle))}</span>;
 }
 
-function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onReopen, externalPlanUrl, onMarkPublished, onUndoPublished, onOpenPlan }) {
+function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onReopen, externalPlanUrl, onMarkPublished, onUndoPublished, onOpenPlan, onPeek }) {
   // Sin parrilla aquí, el mes sale de la hoja de MIO: sus piezas se leen, no se marcan desde la plataforma.
   const fromSheet = cycle.source?.kind === 'HOJA_MIO';
   return (
@@ -141,7 +142,13 @@ function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onReopen
                 return (
                   <tr key={piece.id} className={cn(late && 'bg-destructive/[0.04]')}>
                     <td className={cn('whitespace-nowrap px-3 py-2.5 tabular-nums', late ? 'font-semibold text-destructive' : 'text-zinc-600 dark:text-zinc-300')}>{shortDate(piece.date)}</td>
-                    <td className="px-3 py-2.5"><span className="text-zinc-500">{piece.format} · </span><span className="text-zinc-800 dark:text-zinc-100">{piece.title}</span></td>
+                    <td className="px-1 py-1">
+                      {/* La pieza se mira aquí mismo, sin cambiar de módulo (Rodny, 30 de octubre de 2026). */}
+                      <button type="button" onClick={() => onPeek(piece)} data-piece-peek-open={piece.id} title="Ver la pieza"
+                        className="flex min-h-9 w-full min-w-0 items-center rounded-lg px-2 text-left hover:bg-brand-cyan/10 hover:text-brand-cyan-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:hover:text-brand-cyan">
+                        <span className="min-w-0"><span className="text-zinc-500">{piece.format} · </span><span className="text-zinc-800 dark:text-zinc-100">{piece.title}</span></span>
+                      </button>
+                    </td>
                     <td className="px-3 py-2.5"><span className={cn('inline-flex rounded-md px-2 py-0.5 text-xs font-semibold', status.chip)}>{status.label}</span></td>
                     <td className="px-3 py-1 text-right">
                       {canMark && <button type="button" onClick={() => onMarkPublished(piece)} className={cn(TEXT_ACTION, 'min-h-9 text-xs')}><CheckCircle2 className="h-4 w-4" />Ya se publicó</button>}
@@ -361,7 +368,7 @@ function Tasks({ tasks, onNewTask, onOpenTask }) {
 
 export default function ClientOperationPage({
   client, evaluation, today, canManage, currentUserId, isAdmin,
-  onEditProfile, onMarkPublished, onUndoPublished, onSaveReport, onConfirmClose, onReopenClose, onRefreshExternalPlan, onAuthorizeWork, onOpenPlan, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
+  onEditProfile, onMarkPublished, onUndoPublished, onSaveReport, onConfirmClose, onReopenClose, onRefreshExternalPlan, onAuthorizeWork, onOpenPlan, onOpenPiece, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
 }) {
   const measured = isMeasured(client);
   const { current } = client.cycles || {};
@@ -371,6 +378,8 @@ export default function ClientOperationPage({
   const [reportFor, setReportFor] = useState(null);
   const [closeFor, setCloseFor] = useState(null);
   const [authorizing, setAuthorizing] = useState(false);
+  // La pieza que se está mirando en la vista rápida.
+  const [peeking, setPeeking] = useState(null);
   // Entrar a un cliente es entrar a una página: arriba del todo, no donde iba la lista.
   useLayoutEffect(() => { window.scrollTo(0, 0); }, [client.id]);
   return (
@@ -390,7 +399,7 @@ export default function ClientOperationPage({
           <ClientObservations observations={client.observations || []} currentUserId={currentUserId} isAdmin={isAdmin}
             onAdd={onAddObservation} onDelete={onDeleteObservation} />
           {measured && current && <CurrentCycle cycle={current} today={today} monthlyReport={monthlyReport} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} externalPlanUrl={client.externalPlanUrl}
-            onMarkPublished={onMarkPublished} onUndoPublished={onUndoPublished} onOpenPlan={onOpenPlan} />}
+            onMarkPublished={onMarkPublished} onUndoPublished={onUndoPublished} onOpenPlan={onOpenPlan} onPeek={setPeeking} />}
           {!measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
           {measured && history.length > 0 && <History months={history} monthlyReport={monthlyReport} today={today} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} />}
         </div>
@@ -403,6 +412,8 @@ export default function ClientOperationPage({
         onSave={async (data) => { await onSaveReport(reportFor, data); setReportFor(null); }} />}
       {closeFor && <CloseDialog month={closeFor} monthlyReport={monthlyReport} onClose={() => setCloseFor(null)}
         onConfirm={async (note) => { await onConfirmClose(closeFor, note); setCloseFor(null); }} />}
+      {peeking && current && <PiecePeekDialog piece={peeking} cycle={current} clientSlug={client.slug} onClose={() => setPeeking(null)}
+        onOpenFull={(path) => { setPeeking(null); onOpenPiece?.(path); }} />}
       {authorizing && <WorkAuthorizationDialog clientName={client.name} today={today} onClose={() => setAuthorizing(false)}
         onSave={async (data) => { await onAuthorizeWork(data); setAuthorizing(false); }} />}
     </div>
