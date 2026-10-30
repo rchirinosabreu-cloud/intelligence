@@ -311,6 +311,24 @@ test('si la hoja cambió desde la última lectura, no se escribe y se dice por q
     await assert.rejects(updateExternalPieceStatus(publicOnly.db, { slug: 'villa-montana', year: 2026, month: 11, row: 3, status: 'APROBADO', expected: 'EN REVISIÓN' }, { source: { kind: 'public' } }), { status: 503, code: 'NO_SERVICE_ACCOUNT' });
 });
 
+test('la pestaña se busca por su identificador: un nombre con espacios en la hoja no impide escribir', async () => {
+    // Lettufresh, 30 de octubre de 2026: la pestaña se llama « OCTUBRE » y la lectura guarda el nombre recortado, así que
+    // Google no encontraba «OCTUBRE» al escribir y respondía que no podía leer el rango.
+    const { db, source, writes } = writableSetup(MIRROR[2]);
+    source.tabs = async () => [{ name: ' NOVIEMBRE ', gid: '32390049' }, { name: 'Copia de NOVIEMBRE', gid: '7' }];
+    await updateExternalPieceStatus(db, { slug: 'villa-montana', year: 2026, month: 11, row: 3, status: 'APROBADO', expected: 'EN REVISIÓN' }, { source });
+    assert.deepEqual(writes[0][2], { name: ' NOVIEMBRE ', gid: '32390049' });
+
+    const lost = writableSetup(MIRROR[2]);
+    lost.source.tabs = async () => [{ name: 'Otra', gid: '1' }];
+    await assert.rejects(updateExternalPieceStatus(lost.db, { slug: 'villa-montana', year: 2026, month: 11, row: 3, status: 'APROBADO', expected: 'EN REVISIÓN' }, { source: lost.source }), (error) => error.status === 409 && error.code === 'TAB_NOT_FOUND');
+    assert.equal(lost.writes.length, 0);
+
+    const down = writableSetup(MIRROR[2]);
+    down.source.readRow = async () => { throw new ExternalPlanError('UNAVAILABLE', 'No pudimos conectarnos con Google.'); };
+    await assert.rejects(updateExternalPieceStatus(down.db, { slug: 'villa-montana', year: 2026, month: 11, row: 3, status: 'APROBADO', expected: 'EN REVISIÓN' }, { source: down.source }), (error) => error.status === 502 && /Google/.test(error.message));
+});
+
 test('responder un comentario de Google lo firma con el nombre de quien escribe y puede marcarlo resuelto', async () => {
     const { db, source, writes } = writableSetup(MIRROR[2]);
     const result = await replyToExternalComment(db, { slug: 'villa-montana', year: 2026, month: 11, commentId: 'g1', content: 'Cambiamos la música hoy', resolve: true, userId: 'u-kami' }, { source });

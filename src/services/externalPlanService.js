@@ -77,6 +77,9 @@ const googleError = (error) => {
     const status = Number(error?.code || error?.response?.status);
     if (status === 403 || status === 401) return new ExternalPlanError('NOT_SHARED', 'La cuenta de la plataforma no tiene acceso a la hoja.');
     if (status === 404) return new ExternalPlanError('NOT_FOUND', 'No encontramos esa hoja: revisa el enlace.');
+    // La respuesta de Google se anota tal cual: la frase de la pantalla no dice qué pasó (30 de octubre de 2026, una
+    // pestaña con espacios en el nombre se leyó como «no pudimos conectarnos»).
+    console.error('[Parrillas MIO] Google respondió:', status || '', error?.message || error);
     return new ExternalPlanError('UNAVAILABLE', 'No pudimos conectarnos con Google.');
 };
 
@@ -418,6 +421,29 @@ const writerFor = async (source) => {
     return writer;
 };
 
+/**
+ * La pestaña donde se escribe, buscada en la hoja por su identificador (`gid`): el nombre guardado va recortado y una
+ * pestaña « OCTUBRE », con espacios, no se encuentra por él. Si la pestaña ya no existe, no se escribe.
+ */
+const liveTab = async (writer, id, row) => {
+    if (!writer.tabs) return { name: row.tabName, gid: row.gid };
+    const tabs = await writer.tabs(id);
+    const tab = tabs.find((item) => row.gid && String(item.gid) === String(row.gid))
+        || tabs.find((item) => String(item.name).trim() === String(row.tabName).trim());
+    if (!tab) throw fail(409, 'TAB_NOT_FOUND', `La pestaña ${row.tabName} ya no está en la hoja: lee la hoja de nuevo.`);
+    return { name: tab.name, gid: String(tab.gid) };
+};
+
+/** Un fallo de Google al escribir se responde con su frase y un estado propio, nunca como un error interno sin motivo. */
+const viaGoogle = async (work) => {
+    try {
+        return await work();
+    } catch (error) {
+        if (error instanceof ExternalPlanError && !error.status) error.status = error.code === 'UNAVAILABLE' ? 502 : 409;
+        throw error;
+    }
+};
+
 const actorName = async (db, userId) => (userId
     ? (await db.user.findUnique({ where: { id: userId }, select: { name: true } }).catch(() => null))?.name || 'Alguien del equipo'
     : 'Alguien del equipo');
@@ -427,7 +453,9 @@ const actorName = async (db, userId) => (userId
  * escribir vuelve a leer la fila: tiene que seguir siendo la misma pieza y tener el estado que vio la persona; si no, no
  * escribe y lo dice. Lo escrito queda en la lectura guardada al instante, así la próxima lectura no lo avisa como cambio.
  */
-export const updateExternalPieceStatus = async (db = prisma, { slug, year, month, row: pieceRow, status, expected, userId = null }, { source, now = new Date() } = {}) => {
+export const updateExternalPieceStatus = (db = prisma, input, options = {}) => viaGoogle(() => writeExternalPieceStatus(db, input, options));
+
+const writeExternalPieceStatus = async (db, { slug, year, month, row: pieceRow, status, expected, userId = null }, { source, now = new Date() } = {}) => {
     const value = String(status ?? '').trim();
     if (!value || value.length > 80) throw fail(422, 'INVALID_STATUS', 'Elige un estado.');
     const { client, key, row, id } = await editableMonth(db, { slug, year, month });
@@ -440,7 +468,7 @@ export const updateExternalPieceStatus = async (db = prisma, { slug, year, month
     const options = layout.statusOptions?.length ? layout.statusOptions : DEFAULT_SHEET_STATUSES;
     if (!options.some((option) => sameStatus(option, value))) throw fail(422, 'INVALID_STATUS', 'Ese estado no está en el desplegable de la hoja.');
     const writer = await writerFor(source);
-    const tab = { name: row.tabName, gid: row.gid };
+    const tab = await liveTab(writer, id, row);
     const current = await writer.readRow(id, tab, piece.row);
     const identity = rowIdentityProblem(current, piece, layout);
     if (identity) throw fail(409, 'ROW_MOVED', identity);
@@ -462,7 +490,9 @@ export const updateExternalPieceStatus = async (db = prisma, { slug, year, month
  * Responde un comentario de Google de la hoja desde la plataforma, y si se pide lo marca como resuelto. La respuesta la
  * firma la cuenta de servicio, así que el texto empieza por el nombre de quien la escribe.
  */
-export const replyToExternalComment = async (db = prisma, { slug, year, month, commentId, content, resolve = false, userId = null }, { source, now = new Date() } = {}) => {
+export const replyToExternalComment = (db = prisma, input, options = {}) => viaGoogle(() => writeExternalReply(db, input, options));
+
+const writeExternalReply = async (db, { slug, year, month, commentId, content, resolve = false, userId = null }, { source, now = new Date() } = {}) => {
     const text = String(content ?? '').trim();
     if (!text) throw fail(422, 'EMPTY_REPLY', 'Escribe la respuesta.');
     if (text.length > MAX_REPLY) throw fail(422, 'REPLY_TOO_LONG', `La respuesta no puede pasar de ${MAX_REPLY} caracteres.`);
