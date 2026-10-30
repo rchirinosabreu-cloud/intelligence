@@ -48,7 +48,7 @@ function piecesFor(slug, cycle, deliverables) {
       : addDays(futureFrom, Math.round((futureDays * (i - pastCount)) / Math.max(1, cycle.created - pastCount)));
     const format = formats[i % formats.length] || 'Post';
     used[format] = (used[format] || 0) + 1;
-    return { id: `${slug}-${i}`, date, format, title: TITLES[format][(used[format] - 1) % TITLES[format].length], status };
+    return { id: `${slug}-${i}`, planId: `plan-${slug}`, date, format, title: TITLES[format][(used[format] - 1) % TITLES[format].length], status };
   });
 }
 
@@ -271,5 +271,5 @@ export const clients = [
     { year: 2026, month: 11, label: 'Noviembre', tab: 'NOVIEMBRE', readAt: TODAY, problem: null, summary: { created: 12, reached: { redactada: 12, disenada: 12, aprobada: 0, programada: 0, publicada: 0 } } },
   ];
   lettufresh.cycles.current.source = { kind: 'HOJA_MIO', tab: 'OCTUBRE', readAt: TODAY, problem: null };
-  lettufresh.cycles.current.pieces = lettufresh.cycles.current.pieces.map((piece) => ({ ...piece, external: true }));
+  lettufresh.cycles.current.pieces = lettufresh.cycles.current.pieces.map((piece, index) => ({ ...piece, external: true, planId: null, row: index + 3 }));
 }

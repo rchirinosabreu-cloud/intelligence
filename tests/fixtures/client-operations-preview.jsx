@@ -12,6 +12,7 @@ import ClientAvatar from '@/components/ui/ClientAvatar';
 import ClientsSection from '@/components/modules/Clients/operations/ClientsSection';
 import ClientOperationPage from '@/components/modules/Clients/operations/ClientOperationPage';
 import ClientOperationDialog from '@/components/modules/Clients/operations/ClientOperationDialog';
+import { useNavigateFrom, usePageLabel } from '@/components/layout/BackToOrigin';
 import { CLIENT_AGENCIES, OPERATION_LEVELS, evaluateClientOperation, labelOf } from '@/lib/clientOperations';
 import { closeSnapshot } from '@/lib/monthlyClose';
 import { markTaskTimingTutorialSeen, markTaskTimingTutorialAfternoonSeen } from '@/lib/taskTiming';
@@ -89,7 +90,9 @@ function ClientPage() {
   const { slug } = useParams();
   const { evaluated, update } = useContext(ClientsContext);
   const [editing, setEditing] = useState(false);
+  const navigateFrom = useNavigateFrom();
   const found = evaluated.find(({ client }) => client.slug === slug);
+  usePageLabel(found ? `Operación · ${found.client.name}` : null);
   if (!found) return <Navigate to="/clientes" replace />;
   const { client, evaluation } = found;
 
@@ -150,7 +153,8 @@ function ClientPage() {
           toast.success('Autorización guardada.');
         }}
         onConfirmClose={async (month, note) => { confirmClose(month, note); toast.success(`Cierre de ${month.label.toLowerCase()} confirmado.`); }}
-        onOpenPlan={() => toast(`Abriría la parrilla de ${client.name}.`)}
+        onOpenPlan={() => navigateFrom(`/parrillas/plan-${client.slug}`)}
+        onOpenPiece={(path) => navigateFrom(path)}
         onNewTask={() => toast(`Abriría «Nueva tarea» con ${client.name} ya elegido.`)}
         onOpenWorkspace={() => toast('Abriría el espacio de trabajo del cliente, como hoy.')} />
       {editing && (
@@ -163,6 +167,17 @@ function ClientPage() {
           }} />
       )}
     </>
+  );
+}
+
+// El destino de un viaje (30 de octubre de 2026): en la muestra no hay editor de parrillas, solo una pantalla a la que
+// llegar para ver «Volver a …» arriba.
+function Destination() {
+  return (
+    <section data-preview-destination className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-white/10 dark:bg-zinc-900">
+      <h1 className="text-xl font-semibold">Parrilla (muestra)</h1>
+      <p className="mt-2 text-sm text-zinc-500">Aquí estaría el editor de la parrilla, con la pieza abierta.</p>
+    </section>
   );
 }
 
@@ -189,6 +204,7 @@ createRoot(document.getElementById('root')).render(
                       <Routes>
                         <Route path="/clientes" element={<ClientsPage />} />
                         <Route path="/clientes/operacion/:slug" element={<ClientPage />} />
+                        <Route path="/parrillas/*" element={<Destination />} />
                         <Route path="*" element={<Navigate to="/clientes" replace />} />
                       </Routes>
                     </AppLayout>

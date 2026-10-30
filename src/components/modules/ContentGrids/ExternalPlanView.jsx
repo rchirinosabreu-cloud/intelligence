@@ -41,7 +41,7 @@ function StatusChip({ status }) {
   );
 }
 
-function LongText({ label, text }) {
+export function LongText({ label, text }) {
   const [open, setOpen] = useState(false);
   if (!text) return null;
   const long = text.length > 320;
@@ -145,10 +145,11 @@ function StatusPicker({ piece, options, onChange, saving }) {
   );
 }
 
-function PieceCard({ piece, editable, statusOptions, onStatus, savingRow, onReply, replying }) {
+// También la usa la vista rápida de Operación, sin borde propio porque ya va dentro de una ventana (30 de octubre de 2026).
+export function PieceCard({ piece, editable, statusOptions, onStatus, savingRow, onReply, replying, className }) {
   const links = urlsIn(piece.content);
   return (
-    <article className={cn(CARD, piece.changed?.length && 'ring-1 ring-brand-yellow/60')} data-external-piece={piece.row}>
+    <article className={cn(CARD, piece.changed?.length && 'ring-1 ring-brand-yellow/60', className)} data-external-piece={piece.row}>
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <span className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">{piece.format}{piece.number ? ` ${piece.number}` : ''}</span>
         <span className="text-sm text-zinc-500 dark:text-zinc-400">{day(piece.date) || piece.dateText || 'Sin fecha'}</span>

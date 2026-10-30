@@ -25,6 +25,7 @@ import ReturnedTaskAlertDialog from '@/components/tasks/ReturnedTaskAlertDialog'
 import { useRecognitionExperience } from '@/components/recognitions/RecognitionContext';
 import RecognitionRuntime from '@/components/recognitions/RecognitionRuntime';
 import { OnboardingProvider } from '@/components/onboarding/OnboardingProvider';
+import BackToOrigin, { useNavigateFrom, useScrollMemory } from './BackToOrigin';
 
 const AppLayout = ({ children }) => {
   const recognitionExperience = useRecognitionExperience();
@@ -51,6 +52,9 @@ const AppLayout = ({ children }) => {
   const [isOnboardingBlocking, setIsOnboardingBlocking] = useState(true);
   const { currentUser } = useAuth();
   const navigate = useNavigate();
+  // Lo que se abre desde una notificación lleva de dónde se salió: la pantalla de llegada ofrece volver (30 de octubre de 2026).
+  const navigateFrom = useNavigateFrom();
+  useScrollMemory();
   const { pathname } = useLocation();
   const queryClient = useQueryClient();
 
@@ -266,28 +270,28 @@ const AppLayout = ({ children }) => {
         const chatUrl = new URL(notif.url || '/', window.location.origin);
         window.dispatchEvent(new CustomEvent('open-general-chat', { detail: { channelId: chatUrl.searchParams.get('chatChannel') || 'general', messageId: notif.relatedId } }));
     } else if (notif.type === 'CAMPFIRE_MENTION') {
-        navigate(`/cliente/${notif.relatedId}?openChat=true`);
+        navigateFrom(`/cliente/${notif.relatedId}?openChat=true`);
     } else if (notif.type === 'ANNOUNCEMENT_CLIENT') {
-        navigate(`/cliente/${notif.relatedId}`);
+        navigateFrom(`/cliente/${notif.relatedId}`);
     } else if (notif.type === 'ANNOUNCEMENT_GLOBAL') {
-        navigate(`/`);
+        navigateFrom(`/`);
     } else if (notif.type === 'TASK_RETURNED') {
-        navigate(`/gestion?showReturned=true&taskId=${notif.relatedId}`);
+        navigateFrom(`/gestion?showReturned=true&taskId=${notif.relatedId}`);
     } else if (notif.type === 'TASK_CORRECTED' || notif.type === 'TASK_UPDATED' || notif.type === 'TASK_ASSIGNED' || notif.type === 'TASK_MENTION' || notif.type === 'TASK_COMMENT' || notif.type === 'TASK_COMMENT_REPLY'
         || notif.type === 'TASK_FOCUS_SET' || notif.type === 'TASK_FOCUS_OVERDUE' || notif.type === 'TASK_FOCUS_EXTENSION'
         || notif.type === 'TASK_COLLABORATOR_ADDED') {
         // Compromiso con hora: the notice opens the task (the manager adjusts the hour there with the clock).
-        navigate(`/gestion?taskId=${notif.taskId || notif.relatedId}`);
+        navigateFrom(`/gestion?taskId=${notif.taskId || notif.relatedId}`);
     } else if (notif.type === 'SOCIAL_PUBLICATION_PUBLISHED' || notif.type === 'SOCIAL_PUBLICATION_FAILED') {
         // La publicación en redes abre la pieza en su parrilla (`resourceId` es la parrilla, `relatedId` la pieza).
         const target = notif.url && notif.url.startsWith('/') ? notif.url : (notif.resourceId ? `/parrillas/${notif.resourceId}?item=${notif.relatedId}` : '/parrillas');
-        navigate(target);
+        navigateFrom(target);
     } else if (notif.type === 'SERVICE_HEALTH_DOWN' || notif.type === 'SERVICE_HEALTH_RECOVERED') {
         // Semáforo de servicios (5 de octubre de 2026): el aviso lleva al tablero de servicios.
-        navigate('/salud-operativa');
+        navigateFrom('/salud-operativa');
     } else if (notif.type === 'SECURITY_INCIDENT_REPORTED') {
         // Reporte de incidente del equipo (12 de octubre de 2026): abre los incidentes de Gobierno de IA.
-        navigate('/gobierno-ia?tab=incidents');
+        navigateFrom('/gobierno-ia?tab=incidents');
     } else if (notif.type === 'BRIA_FOCO_SEMANAL' || notif.type === 'BRIA_CIERRE_DEL_DIA' || notif.type === 'BRIA_LECTURA_MANANA' || notif.type === 'BRIA_REVISION_MES') {
         // El foco de la semana (10 de octubre de 2026), el cierre del día (14 de octubre) y la lectura de la mañana
         // (19 de octubre): abren el chat donde Bria lo dejó.
@@ -576,7 +580,7 @@ const AppLayout = ({ children }) => {
                                                     e.stopPropagation();
                                                     e.preventDefault();
                                                     setIsNotificationsOpen(false);
-                                                    navigate(`/gestion?taskId=${notif.taskId}`);
+                                                    navigateFrom(`/gestion?taskId=${notif.taskId}`);
                                                 }}
                                                 title="Ver tarea"
                                             >
@@ -644,6 +648,8 @@ const AppLayout = ({ children }) => {
         {/* A short entrance, not a 700ms wash: the page should look loaded, not fading in (Rodny, 21 September 2026). */}
         <div className="mx-auto min-w-0 max-w-7xl space-y-8 animate-in fade-in duration-200">
           {recognitionExperience?.controls}
+          {/* «Volver a …» cuando se llegó desde otra pantalla por un enlace de la plataforma (30 de octubre de 2026). */}
+          <BackToOrigin />
           {/* Un error de una pantalla se queda en esa pantalla: el menú y el header siguen en
               pie (5 de octubre de 2026). Y mientras un módulo carga, se espera aquí dentro. */}
           <RouteErrorBoundary>

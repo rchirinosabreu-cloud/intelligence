@@ -6,6 +6,7 @@ import { askBria, openBriaConversation } from '@/lib/briaAsk';
 import { requestBriaNudges } from '@/lib/briaNudgeRequest';
 import { requestVault } from '@/lib/vaultRequest';
 import { cn } from '@/lib/utils';
+import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import toast from 'react-hot-toast';
 
 // «Bria se adelanta» (Rodny, 10 de octubre de 2026): un aviso discreto encima del botón de Bria, sin abrir el chat.
@@ -23,6 +24,8 @@ const decideAccess = ({ scope, requestId, decision }) => (scope === 'permission'
 
 export default function BriaNudge({ userId, hidden = false, request = requestBriaNudges, decide = decideAccess, refreshMs = NUDGE_REFRESH_MS, className }) {
   const [nudges, setNudges] = useState([]), [busy, setBusy] = useState(false), mounted = useRef(true);
+  // Ir a un sitio desde el aviso lleva de dónde se salió: allá se ofrece volver (30 de octubre de 2026).
+  const navigateFrom = useNavigateFrom();
   const load = async () => {
     try { const data = await request(''); if (mounted.current) setNudges(Array.isArray(data?.nudges) ? data.nudges : []); }
     catch (failure) { console.error('[BriaNudge]', failure.message); }
@@ -83,7 +86,7 @@ export default function BriaNudge({ userId, hidden = false, request = requestBri
                 ? <button key={item.label} type="button" className={action} onClick={() => askBria(item.ask)}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></button>
                 : item.to && (item.external || /^https?:\/\//.test(item.to))
                   ? <a key={item.label} href={item.to} target="_blank" rel="noopener noreferrer" className={action}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></a>
-                  : item.to ? <Link key={item.label} to={item.to} className={action}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></Link> : null)}
+                  : item.to ? <Link key={item.label} to={item.to} onClick={(event) => { event.preventDefault(); navigateFrom(item.to); }} className={action}>{item.label}<ArrowUpRight className="h-3.5 w-3.5" /></Link> : null)}
           </div>
         </div>
         <button type="button" onClick={dismiss} disabled={busy} aria-label="Ocultar por hoy" title="Ocultar por hoy" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-400 transition-colors hover:bg-zinc-200/60 hover:text-zinc-700 disabled:opacity-50 dark:hover:bg-white/10 dark:hover:text-zinc-200">

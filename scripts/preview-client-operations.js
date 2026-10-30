@@ -2,6 +2,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
 import { dashboardDemoTeam, dashboardDemoUser } from '../tests/fixtures/dashboardPreviewData.js';
+import { clients as previewClients } from '../tests/fixtures/clientOperationsPreviewData.js';
 
 // Muestra local de «Operación de clientes» (2 de octubre de 2026): la plataforma real (barra lateral y
 // header) con la pantalla propuesta de Clientes. API simulada de solo lectura: sin .env, sin base de
@@ -42,6 +43,33 @@ export async function createClientOperationsPreview({ port = 3700 } = {}) {
             '/api/push/status': { enabled: false, configured: false },
             '/api/metrics/quality-streak': { currentStreak: 12, maxStreak: 21, currentStreakDays: 12, currentReturnedTasksCount: 0 },
           };
+          // La vista rápida de una pieza (30 de octubre de 2026): la parrilla de la plataforma y el espejo de la hoja de MIO.
+          const plan = pathname.match(/^\/api\/content\/plans\/plan-([\w-]+)$/);
+          const sheet = pathname.match(/^\/api\/content\/external-plans\/([\w-]+)\/[\w-]+$/);
+          if (plan) {
+            const client = previewClients.find((c) => c.slug === plan[1]);
+            const items = (client?.cycles?.current?.pieces || []).map((piece, index) => ({
+              id: piece.id, objective: piece.title, format: piece.format, status: piece.status, finalAssets: [],
+              copyText: index % 3 === 2 ? '' : `ESCENA 1: ${piece.title}.\nVOZ: «Así se ve una tarde en el club».\nCIERRE: logo y llamado.`,
+              captionText: index % 3 === 2 ? '' : `${piece.title} 💚\n\nTe esperamos este fin de semana.\n\n#Deporte #Comunidad`,
+              comments: index === 1 ? 'Me encanta, pero cambien la canción por algo más tranquilo.' : null,
+              internalNotes: index === 0 ? 'Usar las fotos de la sesión del martes.' : null,
+            }));
+            res.end(JSON.stringify({ id: `plan-${plan[1]}`, items }));
+            return;
+          }
+          if (sheet) {
+            const client = previewClients.find((c) => c.slug === sheet[1]);
+            const sheetStatus = { EN_REVISION: 'EN REVISIÓN', BORRADOR: 'SIN REALIZAR' };
+            const pieces = (client?.cycles?.current?.pieces || []).filter((piece) => piece.row).map((piece, index) => ({
+              row: piece.row, format: piece.format, number: String(index + 1), date: piece.date, status: sheetStatus[piece.status] || piece.status,
+              objective: 'POSICIONAMIENTO', copy: `¿Quién soy?\n\n${piece.title}`, caption: 'La cocina está llena de ingredientes con personalidad. 🥬',
+              content: 'https://drive.google.com/drive/folders/muestra', comment: index === 0 ? 'Sale en Instagram y Facebook.' : '', comments: [],
+              cellUrl: `${client.externalPlanUrl}#gid=0&range=A${piece.row}`,
+            }));
+            res.end(JSON.stringify({ editable: false, pieces }));
+            return;
+          }
           if (Object.hasOwn(routes, pathname)) res.end(JSON.stringify(routes[pathname]));
           else { res.statusCode = 404; res.end(JSON.stringify({ error: `Consulta no disponible en esta muestra local: ${pathname}` })); }
           return;

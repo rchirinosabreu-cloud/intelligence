@@ -54,7 +54,7 @@ test('service status lives only in the admin-only operational health navigation 
 
 test('the service alerts open the board and read as plain Spanish', async () => {
   const layout = readFileSync(new URL('../src/components/layout/AppLayout.jsx', import.meta.url), 'utf8');
-  assert.match(layout, /notif\.type === 'SERVICE_HEALTH_DOWN' \|\| notif\.type === 'SERVICE_HEALTH_RECOVERED'\) \{[\s\S]*?navigate\('\/salud-operativa'\)/);
+  assert.match(layout, /notif\.type === 'SERVICE_HEALTH_DOWN' \|\| notif\.type === 'SERVICE_HEALTH_RECOVERED'\) \{[\s\S]*?navigate(?:From)?\('\/salud-operativa'\)/);
   const { getNotificationDisplayParts } = await import('../src/utils/notificationUtils.js');
   assert.equal(getNotificationDisplayParts({ type: 'SERVICE_HEALTH_DOWN', message: 'OpenAI está caído: Se acabó el crédito.' }).title, 'Un servicio está caído');
   assert.equal(getNotificationDisplayParts({ type: 'SERVICE_HEALTH_RECOVERED', message: 'OpenAI volvió a funcionar.' }).title, 'Un servicio volvió a funcionar');

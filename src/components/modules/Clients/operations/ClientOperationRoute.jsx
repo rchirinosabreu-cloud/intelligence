@@ -13,6 +13,7 @@ import {
   useUndoPiecePublished,
 } from './clientOperationsApi';
 import { bogotaDate } from '@/lib/colombiaBusinessDays';
+import { useNavigateFrom, usePageLabel } from '@/components/layout/BackToOrigin';
 
 // `/clientes/operacion/:slug`: la página completa de un cliente (Rodny, 2 de octubre de 2026: «necesito
 // entrar a una sección completa»). Solo administradores y project managers.
@@ -22,6 +23,8 @@ const MANAGER_ROLES = ['ADMIN', 'PROJECT_MANAGER'];
 export default function ClientOperationRoute() {
   const { slug } = useParams();
   const navigate = useNavigate();
+  // Lo que se abre desde aquí ofrece volver a esta misma página (30 de octubre de 2026).
+  const navigateFrom = useNavigateFrom();
   const { currentUser } = useAuth();
   const canManage = MANAGER_ROLES.includes(String(currentUser?.role || '').toUpperCase());
   const { data: client, isLoading, error, refetch } = useClientOperation(canManage ? slug : null);
@@ -49,6 +52,7 @@ export default function ClientOperationRoute() {
   const [creatingTask, setCreatingTask] = useState(false);
   // El día se fija una vez por visita, nunca un `new Date()` en cada render (incidente del 18 de septiembre).
   const [today] = useState(() => bogotaDate());
+  usePageLabel(client?.name ? `Operación · ${client.name}` : null);
 
   if (!canManage) return <Navigate to="/clientes" replace />;
   if (isLoading) return <div className="flex min-h-[50vh] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-brand-cyan" /></div>;
@@ -126,10 +130,11 @@ export default function ClientOperationRoute() {
           await refetch();
           toast.success(`Cierre de ${month.label.toLowerCase()} confirmado.`);
         }}
-        onOpenPlan={() => navigate(planId ? `/parrillas/${planId}` : '/parrillas')}
+        onOpenPlan={() => navigateFrom(planId ? `/parrillas/${planId}` : '/parrillas')}
+        onOpenPiece={(path) => navigateFrom(path)}
         onNewTask={() => setCreatingTask(true)}
-        onOpenWorkspace={() => navigate(`/cliente/${client.slug}`)}
-        onOpenTask={(task) => navigate(`/gestion?taskId=${task.id}`)}
+        onOpenWorkspace={() => navigateFrom(`/cliente/${client.slug}`)}
+        onOpenTask={(task) => navigateFrom(`/gestion?taskId=${task.id}`)}
         onUndoPublished={async (piece) => {
           try {
             await undoPublished.mutateAsync({ clientId: client.id, itemId: piece.id });
