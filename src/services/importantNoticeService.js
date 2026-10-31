@@ -35,10 +35,13 @@ const serialize = (notice) => ({
 const leadName = (lead) => lead?.company || lead?.contactName || null;
 // Los avisos de cartera (28 de octubre de 2026) son de un cliente de fee mensual o de una cuenta de un servicio puntual.
 const isCollectionNotice = (notice) => String(notice.kind || '').startsWith('CARTERA_');
+// De esos, los que hablan del cliente entero; el resto, de una cuenta suelta de un servicio puntual.
+const CLIENT_COLLECTION_KINDS = new Set(['CARTERA_MENSUAL', 'CARTERA_SUSPENSION']);
+const isClientCollectionNotice = (notice) => CLIENT_COLLECTION_KINDS.has(notice.kind);
 // De quién es el aviso, para nombrarlo en la traza: la oportunidad o el cliente.
 const readSubjectName = async (db, notice) => {
     try {
-        if (notice.kind === 'CARTERA_MENSUAL') return (await db.client.findUnique({ where: { id: notice.subjectId }, select: { name: true } }))?.name || null;
+        if (isClientCollectionNotice(notice)) return (await db.client.findUnique({ where: { id: notice.subjectId }, select: { name: true } }))?.name || null;
         if (isCollectionNotice(notice)) return (await db.accountsReceivable.findUnique({ where: { id: notice.subjectId }, select: { client: { select: { name: true } } } }))?.client?.name || null;
         return leadName(await db.crmLead.findUnique({ where: { id: notice.subjectId }, select: { company: true, contactName: true } }));
     } catch {
@@ -234,7 +237,7 @@ export const followUpNotice = async (db = prisma, id, body = {}, actor, { crm = 
     if (isCollectionNotice(notice)) {
         requireFinancial(actor);
         if (typeof db.collectionActivity?.create === 'function') {
-            const oneOff = notice.kind !== 'CARTERA_MENSUAL';
+            const oneOff = !isClientCollectionNotice(notice);
             const clientId = oneOff
                 ? (await db.accountsReceivable.findUnique({ where: { id: notice.subjectId }, select: { clientId: true } }))?.clientId
                 : notice.subjectId;

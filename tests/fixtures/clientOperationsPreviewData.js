@@ -184,6 +184,17 @@ export const clients = [
     current: { quota: 20, created: 6, stages: [6, 0, 0, 0, 0] },
     previous: month('Septiembre', 20, 20, delivered('2026-10-01')),
   }),
+  // Suspensión por cartera (30 de octubre de 2026): cumple la condición y todavía nadie la ha decidido. Las cifras y
+  // el botón solo los ve quien puede suspender, por eso `canSuspend`.
+  client('casa-verde', 'Casa Verde', {
+    communityManager: sara, complexity: 'MEDIA',
+    description: 'Restaurante de cocina de mercado. Lleva tres mensualidades sin pagar.',
+    contract: contract({ startDate: '2026-06-01', endDate: '2026-12-31', deliverables: deliver([4, 'Reel'], [4, 'Post']) }),
+    current: { quota: 8, created: 5, stages: [5, 3, 2, 0, 0] },
+    previous: month('Septiembre', 8, 8),
+    suspension: null, canSuspend: true,
+    suspensionCandidate: { since: '2026-07-15', days: 109, count: 3, balanceCents: 945_000_000, oldestPeriod: '2026-07', receivableIds: ['r1', 'r2', 'r3'] },
+  }),
   client('bonsai', 'Bonsai CTG', {
     communityManager: helen, complexity: 'BAJA', instagramUrl: 'https://www.instagram.com/bonsaictg/',
     contract: contract({ endDate: null, deliverables: deliver([4, 'Reel']), monthlyReport: false, notes: 'Algunos contenidos atemporales para no depender del mes.' }),

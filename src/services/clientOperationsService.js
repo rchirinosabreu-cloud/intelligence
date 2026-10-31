@@ -14,7 +14,11 @@ import {
 import { CLOSE_NOTE_MAX, canConfirmClose, closeSnapshot, reportProblem } from '../lib/monthlyClose.js';
 import { authorizationProblem } from '../lib/unbackedWork.js';
 import { asOperationPiece } from '../lib/externalPlan.js';
+import { suspensionCandidate } from '../lib/clientSuspension.js';
 import { userHasArea } from './teamAreaService.js';
+import { openSuspension } from './clientSuspensionGate.js';
+import { clientSuspensionService, createClientSuspensionService } from './clientSuspensionService.js';
+import { OPEN_CLIENT_RECEIVABLES, RECEIVABLE_FIELDS, readCollectionSettings } from './collectionState.js';
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { status, ...extra });
 
@@ -223,6 +227,8 @@ export const createClientOperationsService = ({
   updateItem = updateItemThroughContent,
   cancelItemPublications = cancelThroughPublishing,
   readExternalPlans = readThroughExternalPlan,
+  // Atado a la misma base que el resto del servicio: con un doble en las pruebas, la suspensión también es del doble.
+  suspensions = db === prisma ? clientSuspensionService : createClientSuspensionService({ db }),
 } = {}) => {
   const todayKey = () => bogotaDate(now());
 
@@ -273,6 +279,13 @@ export const createClientOperationsService = ({
     return rows;
   };
 
+  /** Lo que sustenta hoy una suspensión: las cuentas vencidas que pasan de dos meses y quince días. */
+  const readSuspensionCandidate = async (clientId, today) => {
+    if (typeof db.accountsReceivable?.findMany !== 'function') return null;
+    const receivables = await db.accountsReceivable.findMany({ where: { clientId, ...OPEN_CLIENT_RECEIVABLES }, select: RECEIVABLE_FIELDS });
+    return suspensionCandidate({ receivables, today, settings: await readCollectionSettings(db) });
+  };
+
   // Autorizar trabajo sin propuesta aprobada es de Dirección o Administrativa y contable (29 de octubre de 2026).
   const canAuthorizeWork = async (userId) => {
     if (!userId) return false;
@@ -287,6 +300,11 @@ export const createClientOperationsService = ({
     const reporters = await reporterNames([client]);
     const operation = buildOperation(client, { today, reporters, detail: true });
     if (viewerUserId) operation.canAuthorizeWork = await canAuthorizeWork(viewerUserId);
+    // La suspensión por cartera la ve todo el equipo que entra aquí: necesita saber que ese mes está congelado. Las
+    // cifras de la deuda, no: solo quien puede decidirla (28 de octubre de 2026, «sin revelar los valores económicos»).
+    operation.suspension = await openSuspension(db, client.id);
+    operation.canSuspend = viewerUserId ? await suspensions.canSuspend(viewerUserId) : false;
+    if (operation.canSuspend) operation.suspensionCandidate = await readSuspensionCandidate(client.id, today);
     return operation;
   };
 
@@ -304,6 +322,22 @@ export const createClientOperationsService = ({
     await db.clientWorkAuthorization.create({
       data: { clientId: client.id, until: String(until).trim(), reason: String(reason).trim(), authorizedById: actorUserId, authorizedByName: actor?.name || null },
     });
+    return getOperation(client.slug, { viewerUserId: actorUserId });
+  };
+
+  /**
+   * Suspende o levanta la suspensión por cartera y devuelve la operación actualizada, como autorizar trabajo. Los
+   * permisos, el motivo y quién lo autorizó los comprueba el servicio de suspensiones.
+   */
+  const suspendClient = async ({ clientId, authorizedBy, reason, actorUserId }) => {
+    await suspensions.suspendClient({ clientId, authorizedBy, reason, actorUserId, now: now() });
+    const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { slug: true } });
+    return getOperation(client.slug, { viewerUserId: actorUserId });
+  };
+
+  const liftSuspension = async ({ clientId, reason, actorUserId }) => {
+    await suspensions.liftSuspension({ clientId, reason, actorUserId, now: now() });
+    const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { slug: true } });
     return getOperation(client.slug, { viewerUserId: actorUserId });
   };
 
@@ -507,7 +541,7 @@ export const createClientOperationsService = ({
     return db.teamMember.update({ where: { id: member.id }, data: { highlightedAction: value } });
   };
 
-  return { listOperations, listOverduePlans, getOperation, authorizeWork, saveProfile, setMonthlyReport, confirmMonthlyClose, reopenMonthlyClose, refreshExternalPlan, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
+  return { listOperations, listOverduePlans, getOperation, authorizeWork, suspendClient, liftSuspension, saveProfile, setMonthlyReport, confirmMonthlyClose, reopenMonthlyClose, refreshExternalPlan, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
 };
 
 export const clientOperationsService = createClientOperationsService();

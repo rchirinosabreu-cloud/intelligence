@@ -6,13 +6,13 @@ import ClientAvatar from '@/components/ui/ClientAvatar';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 import {
-  CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_STATUSES, OPERATION_STAGES, SERVICE_TYPES, STORY_FREQUENCIES,
+  CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_STATUSES, MONTH_NAMES, OPERATION_STAGES, SERVICE_TYPES, STORY_FREQUENCIES,
   canMarkPublished, contractQuota, isMeasured, labelOf, shortDate,
 } from '@/lib/clientOperations';
 import { LEVEL_META, PIECE_STATUS, STAGE_TONE } from './operationTones';
 import CycleBar from './CycleBar';
 import ClientObservations from './ClientObservations';
-import { CloseDialog, ReportDialog, WorkAuthorizationDialog } from './MonthlyCloseDialogs';
+import { CloseDialog, ReportDialog, SuspensionDialog, WorkAuthorizationDialog } from './MonthlyCloseDialogs';
 import PiecePeekDialog from './PiecePeekDialog';
 import { unbackedWork } from '@/lib/unbackedWork';
 import { canConfirmClose, closeOpensOn, closeSummaryText, reportStatusLabel } from '@/lib/monthlyClose';
@@ -225,6 +225,44 @@ function History({ months, monthlyReport, today, onReport, onClose, onReopen }) 
   );
 }
 
+/**
+ * Suspensión por cartera (30 de octubre de 2026). Lo ve todo el que entra aquí —el equipo necesita saber que ese mes
+ * está congelado—, pero las cifras de la deuda y el botón solo quien puede decidirla. Cuando todavía no está
+ * suspendido y ya cumple la condición, se ofrece suspender: la plataforma propone, la persona decide.
+ */
+function Suspension({ client, onOpen }) {
+  const { suspension, suspensionCandidate: candidate, canSuspend } = client;
+  if (!suspension && !(canSuspend && candidate)) return null;
+  const monthLabel = (cycle) => {
+    const [year, month] = String(cycle || '').split('-').map(Number);
+    return month ? `${MONTH_NAMES[month - 1].toLowerCase()} de ${year}` : 'el mes siguiente';
+  };
+  return (
+    <div data-client-suspension={suspension ? 'active' : 'candidate'}
+      className={cn('mb-4 rounded-xl border p-3 text-sm', suspension
+        ? 'border-destructive/40 bg-destructive/10 text-zinc-800 dark:text-zinc-100'
+        : 'border-brand-yellow/40 bg-brand-yellow/10 text-zinc-800 dark:text-zinc-100')}>
+      <p className="font-semibold">{suspension ? 'Suspendido por cartera' : 'Cumple la condición para suspenderlo'}</p>
+      {suspension ? (
+        <>
+          <p className="mt-1">
+            Desde el {shortDate(suspension.suspendedOn)}, autorizado por {suspension.authorizedBy}: no se trabaja la parrilla de {monthLabel(suspension.fromCycle)} ni su producción.
+          </p>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{suspension.reason}</p>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Se levanta sola en cuanto se ponga al día.</p>
+        </>
+      ) : (
+        <p className="mt-1">Lleva {candidate.days} días vencido. El mes en curso se termina; desde el siguiente no se haría parrilla ni producción.</p>
+      )}
+      {canSuspend && onOpen && (
+        <button type="button" onClick={onOpen} data-client-suspension-open className={cn(TEXT_ACTION, '-ml-3 mt-1 min-h-9')}>
+          {suspension ? 'Levantar la suspensión' : 'Suspender'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 // Trabajo en curso sin propuesta aprobada (29 de octubre de 2026): qué pasa y, para Dirección o Administración, la
 // autorización para seguir. La salida normal es renovar el contrato con «Editar».
 function UnbackedWork({ client, today, onAuthorize }) {
@@ -284,7 +322,7 @@ function ExternalPlan({ client, onRefresh }) {
   );
 }
 
-function Profile({ client, canManage, onEdit, today, onAuthorizeWork, onRefreshExternalPlan }) {
+function Profile({ client, canManage, onEdit, today, onAuthorizeWork, onSuspension, onRefreshExternalPlan }) {
   const { contract } = client;
   const quota = contractQuota(contract);
   return (
@@ -293,6 +331,7 @@ function Profile({ client, canManage, onEdit, today, onAuthorizeWork, onRefreshE
         <h2 className={CARD_TITLE}>Ficha operativa</h2>
         {canManage && <button type="button" onClick={onEdit} className={cn(TEXT_ACTION, '-mr-2 -mt-2')}><Edit className="h-4 w-4" />Editar</button>}
       </div>
+      <Suspension client={client} onOpen={onSuspension} />
       <UnbackedWork client={client} today={today} onAuthorize={onAuthorizeWork} />
       <ExternalPlan client={client} onRefresh={onRefreshExternalPlan} />
       {client.description && <p className="mb-4 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{client.description}</p>}
@@ -368,7 +407,7 @@ function Tasks({ tasks, onNewTask, onOpenTask }) {
 
 export default function ClientOperationPage({
   client, evaluation, today, canManage, currentUserId, isAdmin,
-  onEditProfile, onMarkPublished, onUndoPublished, onSaveReport, onConfirmClose, onReopenClose, onRefreshExternalPlan, onAuthorizeWork, onOpenPlan, onOpenPiece, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
+  onEditProfile, onMarkPublished, onUndoPublished, onSaveReport, onConfirmClose, onReopenClose, onRefreshExternalPlan, onAuthorizeWork, onSuspend, onLiftSuspension, onOpenPlan, onOpenPiece, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
 }) {
   const measured = isMeasured(client);
   const { current } = client.cycles || {};
@@ -378,6 +417,7 @@ export default function ClientOperationPage({
   const [reportFor, setReportFor] = useState(null);
   const [closeFor, setCloseFor] = useState(null);
   const [authorizing, setAuthorizing] = useState(false);
+  const [suspending, setSuspending] = useState(false);
   // La pieza que se está mirando en la vista rápida.
   const [peeking, setPeeking] = useState(null);
   // Entrar a un cliente es entrar a una página: arriba del todo, no donde iba la lista.
@@ -404,7 +444,8 @@ export default function ClientOperationPage({
           {measured && history.length > 0 && <History months={history} monthlyReport={monthlyReport} today={today} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} />}
         </div>
         <div className="flex min-w-0 flex-col gap-6">
-          <Profile client={client} canManage={canManage} onEdit={onEditProfile} today={today} onAuthorizeWork={onAuthorizeWork ? () => setAuthorizing(true) : null} onRefreshExternalPlan={onRefreshExternalPlan} />
+          <Profile client={client} canManage={canManage} onEdit={onEditProfile} today={today} onAuthorizeWork={onAuthorizeWork ? () => setAuthorizing(true) : null}
+            onSuspension={onSuspend || onLiftSuspension ? () => setSuspending(true) : null} onRefreshExternalPlan={onRefreshExternalPlan} />
           {measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
         </div>
       </div>
@@ -416,6 +457,9 @@ export default function ClientOperationPage({
         onOpenFull={(path) => { setPeeking(null); onOpenPiece?.(path); }} />}
       {authorizing && <WorkAuthorizationDialog clientName={client.name} today={today} onClose={() => setAuthorizing(false)}
         onSave={async (data) => { await onAuthorizeWork(data); setAuthorizing(false); }} />}
+      {suspending && <SuspensionDialog clientName={client.name} suspension={client.suspension} candidate={client.suspensionCandidate}
+        onClose={() => setSuspending(false)}
+        onSave={async (data) => { await (client.suspension ? onLiftSuspension(data) : onSuspend(data)); setSuspending(false); }} />}
     </div>
   );
 }

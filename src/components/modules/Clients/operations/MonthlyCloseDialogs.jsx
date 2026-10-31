@@ -4,6 +4,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { cn } from '@/lib/utils';
 import { CLOSE_NOTE_MAX, REPORT_LINK_MAX, REPORT_STATUSES, closeSnapshot, closeSummaryText, reportProblem } from '@/lib/monthlyClose';
 import { AUTHORIZATION_REASON_MAX, authorizationProblem } from '@/lib/unbackedWork';
+import { SUSPENSION_AUTHORIZED_BY_MAX, SUSPENSION_REASON_MAX, liftProblem, suspensionProblem } from '@/lib/clientSuspension';
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
 
 // El informe del mes y el cierre del mes (punto 5 de la solicitud de Elisa, 29 de octubre de 2026).
@@ -100,6 +101,74 @@ export function WorkAuthorizationDialog({ clientName, today, onClose, onSave }) 
                 <DialogFooter>
                     <button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose} disabled={saving}>Cancelar</button>
                     <button type="button" onClick={save} disabled={saving} data-work-authorization-save className={PRIMARY}>{saving ? 'Guardando…' : 'Autorizar'}</button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
+/**
+ * Suspender por cartera y levantarla (30 de octubre de 2026). Suspender pide **quién lo autorizó** porque la regla de
+ * la empresa es que lo autoriza Francisco, y el motivo, que es lo que después explica una suspensión sin umbral.
+ * Levantarla a mano solo pide el motivo: cuando el cliente se pone al día se levanta sola.
+ */
+export function SuspensionDialog({ clientName, suspension, candidate, onClose, onSave }) {
+    const lifting = Boolean(suspension);
+    const [form, setForm] = useState({ authorizedBy: '', reason: '' });
+    const [problem, setProblem] = useState('');
+    const [saving, setSaving] = useState(false);
+    const set = (patch) => { setForm((current) => ({ ...current, ...patch })); setProblem(''); };
+    const save = async () => {
+        const invalid = lifting ? liftProblem(form) : suspensionProblem(form);
+        if (invalid) { setProblem(invalid); return; }
+        setSaving(true);
+        try {
+            await onSave(lifting ? { reason: form.reason } : form);
+        } catch (error) {
+            setProblem(error.message || (lifting ? 'No pudimos levantar la suspensión.' : 'No pudimos suspender al cliente.'));
+        } finally {
+            setSaving(false);
+        }
+    };
+    return (
+        <Dialog open onOpenChange={(next) => !next && !saving && onClose()}>
+            <DialogContent data-suspension-dialog={lifting ? 'lift' : 'suspend'} className="sm:max-w-md dark:bg-zinc-900"
+                onOpenAutoFocus={(event) => { event.preventDefault(); event.currentTarget.focus(); }}>
+                <DialogHeader>
+                    <DialogTitle>{lifting ? 'Levantar la suspensión' : 'Suspender por cartera'}</DialogTitle>
+                    <DialogDescription>
+                        {lifting
+                            ? `${clientName} vuelve a trabajarse en cuanto guardes. Si se pone al día, se levanta sola.`
+                            : `${clientName} termina el mes que va en curso y, desde el siguiente, no se trabaja parrilla ni producción.`}
+                    </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-4">
+                    {!lifting && candidate && (
+                        <p data-suspension-candidate className="rounded-lg bg-brand-yellow/10 p-3 text-sm text-zinc-800 dark:text-zinc-100">
+                            Lleva {candidate.days} días vencido y debe ${Math.round(candidate.balanceCents / 100).toLocaleString('es-CO')} en {candidate.count === 1 ? '1 cuenta' : `${candidate.count} cuentas`}.
+                        </p>
+                    )}
+                    {!lifting && (
+                        <label className="block space-y-1.5 text-sm"><span className="block">Quién lo autorizó</span>
+                            <input className={FIELD} maxLength={SUSPENSION_AUTHORIZED_BY_MAX} value={form.authorizedBy} data-suspension-authorized-by
+                                placeholder="Por ejemplo: Francisco Villa"
+                                onChange={(event) => set({ authorizedBy: event.target.value })} />
+                        </label>
+                    )}
+                    <label className="block space-y-1.5 text-sm"><span className="block">Motivo</span>
+                        <textarea className={cn(FIELD, 'min-h-20')} maxLength={SUSPENSION_REASON_MAX} value={form.reason} data-suspension-reason
+                            placeholder={lifting ? 'Por ejemplo: acuerdo de pago a tres cuotas' : 'Por ejemplo: no paga desde julio y no responde'}
+                            onChange={(event) => set({ reason: event.target.value })} />
+                    </label>
+                    {problem && <p role="alert" className="brain-destructive-text text-destructive text-sm">{problem}</p>}
+                </div>
+                <DialogFooter>
+                    <button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose} disabled={saving}>Cancelar</button>
+                    <button type="button" onClick={save} disabled={saving} data-suspension-save
+                        className={cn('min-h-11 rounded-lg px-4 text-sm font-semibold disabled:opacity-50',
+                            lifting ? 'bg-primary text-primary-foreground' : 'bg-destructive text-destructive-foreground')}>
+                        {saving ? 'Guardando…' : lifting ? 'Levantar' : 'Suspender'}
+                    </button>
                 </DialogFooter>
             </DialogContent>
         </Dialog>

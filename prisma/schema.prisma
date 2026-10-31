@@ -722,6 +722,7 @@ model Client {
   accountsReceivables AccountsReceivable[]
   monthlyCloses       ClientMonthlyClose[]
   workAuthorizations  ClientWorkAuthorization[]
+  suspensions         ClientSuspension[]
   // La parrilla de MIO en una hoja de Google (29 de octubre de 2026): la plataforma la lee, nunca escribe en ella.
   externalPlanUrl       String?
   externalPlanSnapshots ExternalPlanSnapshot[]
@@ -791,6 +792,32 @@ model ClientWorkAuthorization {
   authorizedByName String?
   createdAt        DateTime @default(now()) @db.Timestamptz(3)
   client           Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+}
+
+/// Suspensión de un cliente por cartera (30 de octubre de 2026): el mes en curso se termina y desde `fromCycle` no se
+/// trabaja parrilla ni producción. Exige quién la autorizó y por qué; nunca se borra, levantarla la cierra con su
+/// motivo (`liftKind`: PAGO cuando el cliente se puso al día, MANUAL cuando la levantó una persona). Un cliente solo
+/// puede tener una abierta: lo garantiza un índice único parcial que crea scripts/ensure-client-suspension-schema.js.
+/// Regla en src/lib/clientSuspension.js.
+model ClientSuspension {
+  id            String    @id @default(uuid())
+  clientId      String
+  fromCycle     String // AAAA-MM: el primer mes congelado
+  suspendedOn   String // AAAA-MM-DD, día de Bogotá
+  authorizedBy  String
+  reason        String
+  evidence      Json      @default("{}")
+  createdById   String?
+  createdByName String?
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  liftedAt      DateTime? @db.Timestamptz(3)
+  liftedById    String?
+  liftedByName  String?
+  liftKind      String?
+  liftReason    String?
+  client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@index([clientId, createdAt])
 }

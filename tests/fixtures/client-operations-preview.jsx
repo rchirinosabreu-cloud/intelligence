@@ -36,6 +36,12 @@ const dark = new URLSearchParams(location.search).has('dark');
 document.documentElement.classList.toggle('dark', dark);
 localStorage.setItem('theme', dark ? 'dark' : 'light');
 
+// El mes siguiente al de hoy, que es desde donde congela una suspensión por cartera.
+const nextCycleKey = (today) => {
+  const [year, month] = today.split('-').map(Number);
+  return month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, '0')}`;
+};
+
 const ClientsContext = createContext(null);
 
 function ClientsStore({ children }) {
@@ -151,6 +157,14 @@ function ClientPage() {
         onAuthorizeWork={async ({ until, reason }) => {
           update(client.id, (c) => ({ ...c, workAuthorization: { until, reason, byName: dashboardDemoUser.name, at: TODAY } }));
           toast.success('Autorización guardada.');
+        }}
+        onSuspend={async ({ authorizedBy, reason }) => {
+          update(client.id, (c) => ({ ...c, suspension: { id: 's-1', fromCycle: nextCycleKey(TODAY), suspendedOn: TODAY, authorizedBy, reason } }));
+          toast.success('Cliente suspendido por cartera.');
+        }}
+        onLiftSuspension={async () => {
+          update(client.id, (c) => ({ ...c, suspension: null }));
+          toast.success('Suspensión levantada.');
         }}
         onConfirmClose={async (month, note) => { confirmClose(month, note); toast.success(`Cierre de ${month.label.toLowerCase()} confirmado.`); }}
         onOpenPlan={() => navigateFrom(`/parrillas/plan-${client.slug}`)}

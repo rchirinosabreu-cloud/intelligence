@@ -4,6 +4,7 @@ import prisma from '../lib/prisma.js';
 import {
     DEFAULT_COLLECTION_SETTINGS, monthlyCollectionAlert, normalizeCollectionSettings, openBalanceCents
 } from '../lib/receivableCollections.js';
+import { suspensionCandidate } from '../lib/clientSuspension.js';
 import { hasCollectionActivitySince } from './collectionActivityService.js';
 
 const SETTINGS_ID = 'global';
@@ -49,6 +50,22 @@ export const collectionStillDue = async (db, notice, now = new Date()) => {
     const settings = await readCollectionSettings(db);
     // Como en el CRM (28 de octubre de 2026): una gestión de cobro registrada después del aviso lo saca de la banda.
     const handled = async (clientId, subject) => (await hasCollectionActivitySince(db, clientId, notice.createdAt) ? { reason: 'GESTION', subject } : null);
+    // La propuesta de suspender sale sola de la banda si ya se decidió —el cliente quedó suspendido— o si se puso al
+    // día. Es una propuesta: que nadie la atienda no la convierte en suspensión.
+    if (notice.kind === 'CARTERA_SUSPENSION') {
+        const client = await db.client.findUnique({
+            where: { id: notice.subjectId },
+            select: {
+                name: true,
+                suspensions: { where: { liftedAt: null }, select: { id: true }, take: 1 },
+                accountsReceivables: { where: OPEN_CLIENT_RECEIVABLES, select: RECEIVABLE_FIELDS }
+            }
+        });
+        if (!client) return { reason: 'AL_DIA', subject: null };
+        if (client.suspensions?.length) return { reason: 'YA_ATENDIDO', subject: client.name };
+        const still = suspensionCandidate({ receivables: client.accountsReceivables, today: bogotaToday(now), settings });
+        return still ? handled(notice.subjectId, client.name) : { reason: 'AL_DIA', subject: client.name };
+    }
     if (notice.kind === 'CARTERA_MENSUAL') {
         const client = await db.client.findUnique({
             where: { id: notice.subjectId },
