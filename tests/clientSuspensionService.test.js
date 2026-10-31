@@ -4,7 +4,7 @@ import { createClientSuspensionService } from '../src/services/clientSuspensionS
 import { suspensionBlock } from '../src/services/clientSuspensionGate.js';
 
 // Una base de mentira con lo justo: clientes, su cartera, las suspensiones y los avisos ya mandados.
-const buildDb = ({ receivables = [], suspensions = [], areas = {}, enabled = true } = {}) => {
+const buildDb = ({ receivables = [], suspensions = [], areas = {}, enabled = true, archived = false, contractStatus = 'ACTIVO' } = {}) => {
     const rows = { suspensions: [...suspensions], alerts: [] };
     const client = {
         id: 'cliente-1', name: 'Café Altura', slug: 'cafe-altura',
@@ -18,7 +18,13 @@ const buildDb = ({ receivables = [], suspensions = [], areas = {}, enabled = tru
         rows,
         client: {
             findFirst: async ({ where }) => (where.id === client.id || where.slug === client.slug ? client : null),
-            findMany: async () => (open(client.id) ? [] : [client])
+            // Solo los que se están trabajando: ni archivados ni sin contrato vigente, como pide la consulta real.
+            findMany: async ({ where } = {}) => {
+                if (open(client.id)) return [];
+                if (where?.isArchived === false && archived) return [];
+                if (where?.contracts?.some?.status === 'ACTIVO' && contractStatus !== 'ACTIVO') return [];
+                return [client];
+            }
         },
         clientSuspension: {
             findFirst: async ({ where }) => open(where.clientId),
@@ -186,6 +192,18 @@ test('la propuesta sale desde el día 15, una vez por cliente y mes congelado', 
     const segunda = await service.runClientSuspensions({ now: new Date('2026-10-16T15:00:00Z') });
     assert.equal(segunda.proposed, 0, 'no se repite todos los días');
     assert.equal(db.rows.alerts.length, 1);
+});
+
+test('no se propone suspender a quien no se está trabajando: archivado o sin contrato vigente', async () => {
+    const archivado = build({ receivables: vencida, areas: AREAS, archived: true });
+    assert.equal((await archivado.service.runClientSuspensions({ now: NOW })).proposed, 0);
+    assert.equal(archivado.banded.length, 0);
+
+    const terminado = build({ receivables: vencida, areas: AREAS, contractStatus: 'TERMINADO' });
+    assert.equal((await terminado.service.runClientSuspensions({ now: NOW })).proposed, 0);
+
+    // A mano sí se puede suspender a cualquiera: eso lo decide Administración.
+    assert.ok(await archivado.service.suspendClient({ clientId: 'cliente-1', authorizedBy: 'F', reason: 'x', actorUserId: 'u-elisa', now: NOW }));
 });
 
 test('con los avisos de cartera apagados no se proponen suspensiones', async () => {

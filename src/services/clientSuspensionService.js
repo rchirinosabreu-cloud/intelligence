@@ -166,8 +166,17 @@ export const createClientSuspensionService = ({
         const settings = await readCollectionSettings(db);
         if (!settings.enabled) return result;
         const administrative = await activeAreaUserIds(db, 'ADMINISTRATIVA');
+        // Solo se propone suspender a quien de verdad se está trabajando: una cuenta archivada o sin contrato vigente
+        // no tiene parrilla que congelar, y proponerlo sería el ruido del Excel de enero (la lectura de producción del
+        // 30 de octubre de 2026 dio 15 candidatos, 7 de ellos archivados con saldos de enero). A mano sí se puede
+        // suspender a cualquiera: eso lo decide Administración.
         const clients = await db.client.findMany({
-            where: { accountsReceivables: { some: OPEN_CLIENT_RECEIVABLES }, suspensions: { none: { liftedAt: null } } },
+            where: {
+                isArchived: false,
+                contracts: { some: { status: 'ACTIVO' } },
+                accountsReceivables: { some: OPEN_CLIENT_RECEIVABLES },
+                suspensions: { none: { liftedAt: null } }
+            },
             select: {
                 id: true, name: true, slug: true,
                 contracts: { orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }], take: 1, select: { cutDay: true } },
