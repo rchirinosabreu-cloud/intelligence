@@ -9,7 +9,7 @@ import mammoth from 'mammoth';
  * **El `?url` va dentro de la función, nunca arriba del archivo**: es una marca que solo entiende el empaquetador, y a
  * nivel de módulo rompe cualquier arnés que importe esto en Node.
  */
-const useWorker = async () => {
+const ensureWorker = async () => {
   if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
     pdfjsLib.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
   }
@@ -36,7 +36,7 @@ export const processDocument = async (file) => {
 
 const extractTextFromPDF = async (file) => {
   const arrayBuffer = await file.arrayBuffer();
-  await useWorker();
+  await ensureWorker();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   let fullText = '';
 
