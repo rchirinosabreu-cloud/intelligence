@@ -20,6 +20,7 @@ import { isPublicationTask } from '../lib/contentTaskReciprocity.js';
 import { publicationTaskCloseProblem } from '../lib/socialPublishing.js';
 import { assertTaskNotLocked } from './taskFocusService.js';
 import { assertTaskClientChange } from './taskClientChange.js';
+import { suspensionBlock } from './clientSuspensionGate.js';
 
 const gateError = (status, message, extra = {}) => Object.assign(new Error(message), { gateStatus: status, ...extra });
 
@@ -42,10 +43,25 @@ export const checkTaskUpdate = async ({ db = prisma, user, taskId, payload = {} 
       creatorId: true, status: true, title: true, clientId: true, contentItemId: true,
       assignee: { select: { userId: true } },
       collaborators: { select: { member: { select: { userId: true } } } },
-      contentItem: { select: { publishDate: true, publishTime: true, publications: { select: { status: true } } } }
+      contentItem: {
+        select: {
+          publishDate: true, publishTime: true, publications: { select: { status: true } },
+          plan: { select: { clientId: true, year: true, month: true, client: { select: { name: true } } } }
+        }
+      }
     }
   });
   if (!task) throw gateError(404, 'Task not found');
+  // Un cliente suspendido por cartera congela el mes entero, «no importa incluso si llega a estar realizada»: el
+  // pendiente que salió de esa parrilla tampoco se mueve. Solo el que nació de una pieza; los demás siguen su curso.
+  const suspendedPlan = task.contentItem?.plan;
+  if (suspendedPlan) {
+    const block = await suspensionBlock(db, {
+      clientId: suspendedPlan.clientId, year: suspendedPlan.year, month: suspendedPlan.month,
+      clientName: suspendedPlan.client?.name, forTask: true
+    });
+    if (block) throw gateError(409, block.reason);
+  }
   // Mientras la publicación esté armada, el estado de la pieza es de la cola: cerrar este pendiente a
   // mano la dejaba en PUBLICADO y el publicador cancelaba las dos redes al llegar la hora.
   if (String(payload?.status || '') === 'REALIZADA' && task.status !== 'REALIZADA' && isPublicationTask(task.title || '')) {

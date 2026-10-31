@@ -8,6 +8,7 @@ import { COVER_MAX_BYTES, coverFileProblem, publicCover, withPublicCover } from 
 import { randomBytes, randomUUID } from 'node:crypto';
 import { buildLinkedTaskUpdates } from '../lib/contentTaskReciprocity.js';
 import { nativePlanProblem } from '../lib/externalPlan.js';
+import { assertNotSuspended, suspensionBlock } from './clientSuspensionGate.js';
 import {
   FINAL_ASSET_MAX_BYTES, FINAL_ASSET_MAX_FILES, FINAL_ASSET_DIRECT_MAX_BYTES, FINAL_ASSETS_PER_ITEM,
   fileTooLargeMessage, tooManyFilesMessage
@@ -259,7 +260,12 @@ export const getContentPlanById = async (id) => {
     return {
       ...normalizeContentPlan(plan),
       contentItems: items,
-      items
+      items,
+      // Por qué esta parrilla está congelada por una suspensión de cartera, o null. La pantalla lo dice arriba en vez
+      // de dejar que la persona escriba media parrilla y se encuentre el 409 al guardar.
+      suspendedReason: (await suspensionBlock(prisma, {
+        clientId: plan.clientId, year: plan.year, month: plan.month, clientName: plan.client?.name
+      }))?.reason || null
     };
   }
 
@@ -309,6 +315,8 @@ export const createContentPlan = async (data) => {
   const owner = clientId ? await prisma.client.findUnique({ where: { id: clientId }, select: { name: true, externalPlanUrl: true } }) : null;
   const sheetProblem = nativePlanProblem(owner);
   if (sheetProblem) throw Object.assign(new Error(sheetProblem), { status: 409, code: 'PLAN_IN_SHEET' });
+  // Un cliente suspendido por cartera no estrena parrilla del mes congelado; el mes en curso se termina.
+  await assertNotSuspended(prisma, { clientId, year, month, clientName: owner?.name });
   const hasStrategicColumn = await hasStrategicObjectivesColumn();
 
   // Idempotency Shield: Check for existing plans for this period
@@ -477,6 +485,9 @@ export const sendItemToKanban = async (itemId, creatorId, executionData = {}) =>
 
   if (!item) throw new Error('Content item not found');
 
+  // Despachar a producción es justo lo que una suspensión frena.
+  await assertPlanNotSuspended(item.plan);
+
   // Check if there's already an active task
   if (item.tasks.length > 0) {
     throw new Error('Item already has an active task in Kanban');
@@ -559,7 +570,18 @@ export const getContentItemsByPlan = async (planId) => {
   return items.map(normalizeContentItem);
 };
 
+/** De qué cliente y de qué mes es una parrilla, para preguntar si está congelada por una suspensión. */
+const planCycle = async (planId) => (planId
+  ? prisma.contentPlan.findUnique({ where: { id: planId }, select: { clientId: true, year: true, month: true, client: { select: { name: true } } } })
+  : null);
+
+const assertPlanNotSuspended = async (plan) => {
+  if (!plan) return;
+  await assertNotSuspended(prisma, { clientId: plan.clientId, year: plan.year, month: plan.month, clientName: plan.client?.name });
+};
+
 export const createContentItem = async (data) => {
+  await assertPlanNotSuspended(await planCycle(data?.planId));
   const item = await prisma.contentItem.create({
     data: withoutRetiredFields(data),
     select: await getContentItemSelect()
@@ -571,6 +593,12 @@ export const createContentItem = async (data) => {
 };
 
 export const updateContentItem = async (id, data, { fromClientReview = false } = {}) => {
+  // La suspensión frena **nuestro** trabajo, no la revisión del cliente: el portal nunca puede decirle que está
+  // suspendido por cartera. Una pieza de un mes congelado que él apruebe no produce ni publica nada.
+  if (!fromClientReview) {
+    const plan = (await prisma.contentItem.findUnique({ where: { id }, select: { plan: { select: { clientId: true, year: true, month: true, client: { select: { name: true } } } } } }))?.plan;
+    await assertPlanNotSuspended(plan);
+  }
   const normalizedData = { ...data };
 
   // Ensure publishDate is handled correctly

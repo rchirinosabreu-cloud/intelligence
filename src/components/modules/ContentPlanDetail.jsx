@@ -2124,6 +2124,16 @@ const ContentPlanDetail = () => {
           </div>
       </div>
 
+      {/* Cliente suspendido por cartera (30 de octubre de 2026): se dice arriba, antes de que alguien escriba media
+          parrilla, porque el servidor rechaza cada guardado con esta misma frase. */}
+      {plan.suspendedReason && (
+        <div role="alert" data-plan-suspended
+          className="rounded-3xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-zinc-800 dark:text-zinc-100">
+          <p className="font-semibold">Esta parrilla está congelada</p>
+          <p className="mt-1">{plan.suspendedReason}</p>
+        </div>
+      )}
+
       <div className="bg-white/60 dark:bg-zinc-900/40 border border-zinc-200/60 dark:border-white/5 rounded-3xl p-6">
         <div className="flex items-start gap-3 mb-5">
           <div className="p-2 bg-brand-cyan/10 dark:bg-brand-cyan/15 text-brand-cyan-deep dark:text-brand-cyan rounded-xl">

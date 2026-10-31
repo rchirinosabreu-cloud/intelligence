@@ -67,6 +67,31 @@ export function useAuthorizeWork() {
   });
 }
 
+// Suspender por cartera y levantarla (Dirección o Administración). Las dos responden la operación ya actualizada.
+export function useSuspendClient() {
+  const refresh = useRefresh();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clientId, authorizedBy, reason }) => request(`/${clientId}/suspension`, { method: 'POST', body: JSON.stringify({ authorizedBy, reason }) }),
+    onSuccess: (saved) => {
+      if (saved?.slug) queryClient.setQueryData(clientKey(saved.slug), saved);
+      refresh();
+    },
+  });
+}
+
+export function useLiftSuspension() {
+  const refresh = useRefresh();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clientId, reason }) => request(`/${clientId}/suspension`, { method: 'DELETE', body: JSON.stringify({ reason }) }),
+    onSuccess: (saved) => {
+      if (saved?.slug) queryClient.setQueryData(clientKey(saved.slug), saved);
+      refresh();
+    },
+  });
+}
+
 // Reabrir un cierre confirmado y leer ahora la hoja de MIO; las dos responden la operación ya actualizada.
 function useOperationAction(path, method) {
   const refresh = useRefresh();

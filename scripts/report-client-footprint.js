@@ -30,6 +30,7 @@ export const CLIENT_RELATIONS = Object.freeze([
   { table: 'ClientMonthlyClose', label: 'cierres de mes confirmados', recent: 'closedAt' },
   { table: 'ClientWorkAuthorization', label: 'autorizaciones para trabajar sin propuesta', recent: 'createdAt' },
   { table: 'UnbackedWorkAlert', label: 'avisos de trabajo sin propuesta', recent: 'sentAt' },
+  { table: 'ClientSuspension', label: 'suspensiones por cartera', recent: 'createdAt' },
   { table: 'ExternalPlanSnapshot', label: 'lecturas de la hoja de MIO', recent: 'readAt' },
   { table: 'ClientObservation', label: 'observaciones', recent: 'createdAt' },
   { table: 'CollectionActivity', label: 'gestiones de cobro', recent: 'occurredAt' },

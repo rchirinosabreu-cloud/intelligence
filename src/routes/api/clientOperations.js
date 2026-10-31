@@ -42,6 +42,22 @@ export const createClientOperationsRouter = ({ service = clientOperationsService
     } catch (error) { return reply(res, error, logger); }
   });
 
+  // Suspender por cartera y levantarla (Administración o Dirección; lo comprueba el servicio). Suspender exige quién
+  // lo autorizó —la regla de la empresa es que lo autoriza Francisco— y por qué.
+  router.post('/:clientId/suspension', async (req, res) => {
+    try {
+      return res.status(201).json(await service.suspendClient({
+        clientId: req.params.clientId, authorizedBy: req.body?.authorizedBy, reason: req.body?.reason, actorUserId: req.user.userId
+      }));
+    } catch (error) { return reply(res, error, logger); }
+  });
+
+  router.delete('/:clientId/suspension', async (req, res) => {
+    try {
+      return res.json(await service.liftSuspension({ clientId: req.params.clientId, reason: req.body?.reason, actorUserId: req.user.userId }));
+    } catch (error) { return reply(res, error, logger); }
+  });
+
   router.put('/:clientId/profile', async (req, res) => {
     try {
       const body = req.body || {};
