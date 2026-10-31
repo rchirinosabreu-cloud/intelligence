@@ -7,23 +7,23 @@ y la política que lo verifica está en `scripts/license-policy.json` (AGENTS.md
 Incluye los binarios opcionales que npm instala según el sistema operativo (marcados «opcional»):
 en producción (Linux) solo se instala el que corresponde.
 
-**820 paquetes.**
+**823 paquetes.**
 
 ## Resumen por licencia
 
 | Licencia | Paquetes |
 | --- | ---: |
-| MIT | 647 |
+| MIT | 650 |
 | Apache-2.0 | 66 |
 | ISC | 45 |
 | BSD-2-Clause | 19 |
 | BSD-3-Clause | 11 |
 | LGPL-3.0-or-later | 10 |
 | BlueOak-1.0.0 | 5 |
-| MIT-0 | 4 |
 | Apache-2.0 AND LGPL-3.0-or-later | 3 |
+| MIT-0 | 3 |
 | (MIT AND Zlib) | 2 |
-| (MIT OR EUPL-1.1+) | 1 |
+| (MIT OR EUPL-1.1+) | 2 |
 | (MIT OR GPL-3.0-or-later) | 1 |
 | (MPL-2.0 OR Apache-2.0) | 1 |
 | 0BSD | 1 |
@@ -136,29 +136,29 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | @jridgewell/resolve-uri | 3.1.2 | MIT |  |
 | @jridgewell/sourcemap-codec | 1.5.5 | MIT |  |
 | @jridgewell/trace-mapping | 0.3.31 | MIT |  |
-| @napi-rs/canvas | 0.1.100 | MIT | opcional |
 | @napi-rs/canvas | 0.1.80 | MIT |  |
-| @napi-rs/canvas-android-arm64 | 0.1.100 | MIT | opcional |
+| @napi-rs/canvas | 1.0.13 | MIT | opcional |
 | @napi-rs/canvas-android-arm64 | 0.1.80 | MIT | opcional |
-| @napi-rs/canvas-darwin-arm64 | 0.1.100 | MIT | opcional |
+| @napi-rs/canvas-android-arm64 | 1.0.13 | MIT | opcional |
 | @napi-rs/canvas-darwin-arm64 | 0.1.80 | MIT | opcional |
-| @napi-rs/canvas-darwin-x64 | 0.1.100 | MIT | opcional |
+| @napi-rs/canvas-darwin-arm64 | 1.0.13 | MIT | opcional |
 | @napi-rs/canvas-darwin-x64 | 0.1.80 | MIT | opcional |
-| @napi-rs/canvas-linux-arm-gnueabihf | 0.1.100 | MIT | opcional |
+| @napi-rs/canvas-darwin-x64 | 1.0.13 | MIT | opcional |
 | @napi-rs/canvas-linux-arm-gnueabihf | 0.1.80 | MIT | opcional |
-| @napi-rs/canvas-linux-arm64-gnu | 0.1.100 | MIT | opcional |
+| @napi-rs/canvas-linux-arm-gnueabihf | 1.0.13 | MIT | opcional |
 | @napi-rs/canvas-linux-arm64-gnu | 0.1.80 | MIT | opcional |
-| @napi-rs/canvas-linux-arm64-musl | 0.1.100 | MIT | opcional |
+| @napi-rs/canvas-linux-arm64-gnu | 1.0.13 | MIT | opcional |
 | @napi-rs/canvas-linux-arm64-musl | 0.1.80 | MIT | opcional |
-| @napi-rs/canvas-linux-riscv64-gnu | 0.1.100 | MIT | opcional |
+| @napi-rs/canvas-linux-arm64-musl | 1.0.13 | MIT | opcional |
 | @napi-rs/canvas-linux-riscv64-gnu | 0.1.80 | MIT | opcional |
-| @napi-rs/canvas-linux-x64-gnu | 0.1.100 | MIT | opcional |
+| @napi-rs/canvas-linux-riscv64-gnu | 1.0.13 | MIT | opcional |
 | @napi-rs/canvas-linux-x64-gnu | 0.1.80 | MIT | opcional |
-| @napi-rs/canvas-linux-x64-musl | 0.1.100 | MIT | opcional |
+| @napi-rs/canvas-linux-x64-gnu | 1.0.13 | MIT | opcional |
 | @napi-rs/canvas-linux-x64-musl | 0.1.80 | MIT | opcional |
-| @napi-rs/canvas-win32-arm64-msvc | 0.1.100 | MIT | opcional |
-| @napi-rs/canvas-win32-x64-msvc | 0.1.100 | MIT | opcional |
+| @napi-rs/canvas-linux-x64-musl | 1.0.13 | MIT | opcional |
+| @napi-rs/canvas-win32-arm64-msvc | 1.0.13 | MIT | opcional |
 | @napi-rs/canvas-win32-x64-msvc | 0.1.80 | MIT | opcional |
+| @napi-rs/canvas-win32-x64-msvc | 1.0.13 | MIT | opcional |
 | @nodable/entities | 2.1.0 | MIT |  |
 | @nodelib/fs.scandir | 2.1.5 | MIT |  |
 | @nodelib/fs.stat | 2.0.5 | MIT |  |
@@ -272,6 +272,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | @ungap/structured-clone | 1.3.0 | ISC |  |
 | @xmldom/xmldom | 0.8.15 | MIT |  |
 | @zone-eu/mailsplit | 5.4.23 | (MIT OR EUPL-1.1+) |  |
+| @zone-eu/mailsplit | 5.4.29 | (MIT OR EUPL-1.1+) |  |
 | abort-controller | 3.0.0 | MIT |  |
 | accepts | 1.3.8 | MIT |  |
 | agent-base | 6.0.2 | MIT |  |
@@ -432,7 +433,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | fill-range | 7.1.1 | MIT |  |
 | finalhandler | 1.3.2 | MIT |  |
 | find-up | 4.1.0 | MIT |  |
-| follow-redirects | 1.16.1 | MIT |  |
+| follow-redirects | 1.16.2 | MIT |  |
 | foreground-child | 3.3.1 | ISC |  |
 | form-data | 2.5.6 | MIT |  |
 | form-data | 4.0.6 | MIT |  |
@@ -489,7 +490,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | inline-style-parser | 0.2.7 | MIT |  |
 | internmap | 2.0.3 | ISC |  |
 | iobuffer | 5.4.0 | MIT |  |
-| ip-address | 10.7.3 | MIT |  |
+| ip-address | 10.7.5 | MIT |  |
 | ipaddr.js | 1.9.1 | MIT |  |
 | is-alphabetical | 2.0.1 | MIT |  |
 | is-alphanumerical | 2.0.1 | MIT |  |
@@ -519,8 +520,11 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | jws | 4.0.1 | MIT |  |
 | leac | 0.7.0 | MIT |  |
 | libbase64 | 1.3.3 | MIT |  |
+| libbase64 | 1.4.1 | MIT |  |
 | libmime | 5.4.9 | MIT |  |
+| libmime | 5.6.3 | MIT |  |
 | libqp | 2.1.3 | MIT |  |
+| libqp | 3.0.1 | MIT |  |
 | lie | 3.3.0 | MIT |  |
 | lilconfig | 3.1.3 | MIT |  |
 | lines-and-columns | 1.2.4 | MIT |  |
@@ -540,7 +544,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | lop | 0.4.2 | BSD-2-Clause |  |
 | lru-cache | 10.4.3 | ISC |  |
 | lru-cache | 11.5.2 | BlueOak-1.0.0 |  |
-| mailparser | 3.9.40 | MIT |  |
+| mailparser | 3.14.1 | MIT |  |
 | mammoth | 1.13.0 | BSD-2-Clause |  |
 | markdown-table | 3.0.4 | MIT |  |
 | math-intrinsics | 1.1.0 | MIT |  |
@@ -613,8 +617,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | node-domexception | 1.0.0 | MIT |  |
 | node-fetch | 2.7.0 | MIT |  |
 | node-fetch | 3.3.2 | MIT |  |
-| nodemailer | 10.1.2 | MIT-0 |  |
-| nodemailer | 9.1.1 | MIT-0 |  |
+| nodemailer | 10.3.1 | MIT-0 |  |
 | normalize-path | 3.0.0 | MIT |  |
 | nth-check | 2.1.1 | BSD-2-Clause |  |
 | object-assign | 4.1.1 | MIT |  |
@@ -647,7 +650,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | path-to-regexp | 0.1.13 | MIT |  |
 | pdf-parse | 2.4.5 | Apache-2.0 |  |
 | pdfjs-dist | 5.4.296 | Apache-2.0 |  |
-| pdfjs-dist | 5.7.284 | Apache-2.0 |  |
+| pdfjs-dist | 6.2.108 | Apache-2.0 |  |
 | peberminta | 0.10.0 | MIT |  |
 | performance-now | 2.1.0 | MIT | opcional |
 | pg | 8.23.1 | MIT |  |
@@ -702,7 +705,7 @@ Estas licencias no son permisivas y **esperan una decisión**; no se dan por apr
 | punycode | 2.3.1 | MIT |  |
 | punycode.js | 2.3.1 | MIT |  |
 | qrcode | 1.5.4 | MIT |  |
-| qs | 6.16.0 | BSD-3-Clause |  |
+| qs | 6.16.2 | BSD-3-Clause |  |
 | queue-microtask | 1.2.3 | MIT |  |
 | quick-format-unescaped | 4.0.4 | MIT |  |
 | raf | 3.4.1 | MIT | opcional |
