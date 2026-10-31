@@ -9,7 +9,7 @@ import TaskSidePanel from '../../TaskSidePanel';
 import ClientOperationPage from './ClientOperationPage';
 import ClientOperationDialog from './ClientOperationDialog';
 import {
-  useAddObservation, useAuthorizeWork, useClientOperation, useConfirmMonthlyClose, useRefreshExternalPlan, useReopenMonthlyClose, useDeleteObservation, useMarkPiecePublished, useSaveOperationProfile, useSetMonthlyReport,
+  useAddObservation, useAuthorizeWork, useClientOperation, useConfirmMonthlyClose, useLiftSuspension, useRefreshExternalPlan, useReopenMonthlyClose, useDeleteObservation, useMarkPiecePublished, useSaveOperationProfile, useSetMonthlyReport, useSuspendClient,
   useUndoPiecePublished,
 } from './clientOperationsApi';
 import { bogotaDate } from '@/lib/colombiaBusinessDays';
@@ -42,6 +42,8 @@ export default function ClientOperationRoute() {
   const setReport = useSetMonthlyReport();
   const confirmClose = useConfirmMonthlyClose();
   const authorizeWork = useAuthorizeWork();
+  const suspendClient = useSuspendClient();
+  const liftSuspension = useLiftSuspension();
   const reopenClose = useReopenMonthlyClose();
   const refreshExternalPlan = useRefreshExternalPlan();
   const markPublished = useMarkPiecePublished();
@@ -124,6 +126,16 @@ export default function ClientOperationRoute() {
           await authorizeWork.mutateAsync({ clientId: client.id, ...data });
           await refetch();
           toast.success('Autorización guardada.');
+        }}
+        onSuspend={async (data) => {
+          await suspendClient.mutateAsync({ clientId: client.id, ...data });
+          await refetch();
+          toast.success('Cliente suspendido por cartera.');
+        }}
+        onLiftSuspension={async (data) => {
+          await liftSuspension.mutateAsync({ clientId: client.id, ...data });
+          await refetch();
+          toast.success('Suspensión levantada.');
         }}
         onConfirmClose={async (month, note) => {
           await confirmClose.mutateAsync({ clientId: client.id, year: month.year, month: month.month, note });

@@ -19,6 +19,7 @@ import { imageDerivativeService } from './socialImageDerivativeService.js';
 import { hasCover, kindAcceptsCover } from '../lib/videoCover.js';
 import { updateTask } from './nativeTaskService.js';
 import { isPublicationTask } from '../lib/contentTaskReciprocity.js';
+import { assertNotSuspended } from './clientSuspensionGate.js';
 import {
   MAX_PUBLICATION_ATTEMPTS, PUBLICATION_LEASE_MS, SOCIAL_PLATFORMS, SOCIAL_PLATFORM_LABELS,
   CHOOSE_ACCOUNT_FIRST, describeMetaMedia, facebookMedia, humanizeMetaError, isPublishInstantTooSoon, isRetryableMetaError,
@@ -36,7 +37,8 @@ const httpError = (status, message, extra = {}) => Object.assign(new Error(messa
 const itemInclude = {
   finalAssets: { orderBy: [{ position: 'asc' }, { createdAt: 'asc' }] },
   publications: true,
-  plan: { select: { id: true, clientId: true, deletedAt: true, client: { select: { id: true, name: true, socialAccounts: true } } } }
+  // `year` y `month` solo los usa la suspensión por cartera: dicen de qué parrilla es la pieza.
+  plan: { select: { id: true, clientId: true, year: true, month: true, deletedAt: true, client: { select: { id: true, name: true, socialAccounts: true } } } }
 };
 
 const isVideoAsset = (asset) => String(asset?.mimeType || '').toLowerCase().startsWith('video/');
@@ -165,6 +167,8 @@ export const createSocialPublishingService = ({
    */
   const schedulePublications = async ({ itemId, accountIds = null, platforms = [], actorUserId = null }) => {
     const item = await loadItem(itemId);
+    // Un cliente suspendido por cartera no publica el mes congelado: programar es la última parte de la producción.
+    await assertNotSuspended(db, { clientId: item.plan?.clientId, year: item.plan?.year, month: item.plan?.month, clientName: item.plan?.client?.name });
     const pool = pieceTargetAccounts(item, accountsOf(item));
     // Con varias cuentas y ninguna marcada no hay dónde programar: se pide elegir, nunca se asume una.
     if (pieceNeedsAccountChoice(item, accountsOf(item))) {

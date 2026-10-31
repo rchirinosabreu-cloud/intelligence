@@ -55,6 +55,9 @@ function NoticeBody({ notice, onDecided }) {
   // Cartera vencida (28 de octubre de 2026): la decide Elisa. «Ya le escribí» deja la gestión de cobro en la
   // trazabilidad y «Registrar pago» abre Cuentas por cobrar; el aviso sale solo cuando el cliente se pone al día.
   const isCollection = String(notice.kind || '').startsWith('CARTERA_');
+  // Propuesta de suspender (30 de octubre de 2026): lleva a la página del cliente, donde está «Suspender». La
+  // suspensión no se decide desde la banda porque exige decir quién la autorizó y por qué.
+  const isSuspension = notice.kind === 'CARTERA_SUSPENSION';
   // Parrilla con piezas sin publicar (30 de octubre de 2026): aquí no hay seguimiento que registrar. Se abre la
   // parrilla y se marcan las piezas una por una —que es mirarlas—, y el aviso se cae solo en cuanto están publicadas,
   // también el de la otra persona a cargo de la cuenta: por eso no hay «avisarle a la otra».
@@ -120,7 +123,9 @@ function NoticeBody({ notice, onDecided }) {
                   </NoticeButton>
                 )}
                 {isCollection && notice.url && (
-                  <NoticeButton disabled={busy} data-notice-action="pay" onClick={() => navigate(notice.url)}>Registrar pago</NoticeButton>
+                  <NoticeButton disabled={busy} data-notice-action={isSuspension ? 'suspend' : 'pay'} onClick={() => navigate(notice.url)}>
+                {isSuspension ? 'Revisar suspensión' : 'Registrar pago'}
+              </NoticeButton>
                 )}
                 {/* En la revisión, «No sigue» pregunta si quedó perdida o descartada, y no hay «Abrir» (Rodny, 26 de
                     octubre de 2026). «Cerrar» se confundía con cerrar el aviso y «Descartar» elegía una de las dos. */}
