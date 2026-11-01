@@ -23,6 +23,7 @@ import { reviewedResponse, approvalOptions, conversationalInvestigation } from '
 import { humanDate } from './briaDate.js';
 import { temporalRelation } from './briaTemporalEvidence.js';
 import { unsupportedFigures } from './briaFigures.js';
+import { notebookMessage } from './briaNotebook.js';
 export { humanDate } from './briaDate.js';
 
 export const MAX_TOOL_ROUNDS = 6;
@@ -301,6 +302,17 @@ export const runAssistant = async ({
       // Sin memoria se sigue respondiendo con las herramientas; el modelo no recibe una memoria vacía como si fuera ausencia de acuerdos.
       logger.error('[BriaAssistant] No se pudo recuperar la memoria para este turno:', describeError(error));
       failures.push({ tool: 'memoria_previa', message: describeError(error) });
+    }
+  }
+  // El cuaderno (31 de octubre de 2026): lo que los relojes de Bria ya vieron o dijeron hoy para esta persona,
+  // delante del modelo antes de responder, como la memoria. Sin cuaderno se responde igual.
+  if (context.notebook) {
+    try {
+      const message = notebookMessage(await context.notebook());
+      if (message) { input.splice(input.length - 1, 0, message); evidence.push(message.content); }
+    } catch (error) {
+      logger.error('[BriaAssistant] No se pudo leer el cuaderno para este turno:', describeError(error));
+      failures.push({ tool: 'cuaderno', message: describeError(error) });
     }
   }
 
