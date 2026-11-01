@@ -21,7 +21,7 @@ test('real PostgreSQL: memory survives service restart, keeps earlier obligation
   const service = () => createBriaAgencyFactService({ repository: repo(), db });
   const save = () => createAgencyFactTools(service()).find(tool => tool.name === 'guardar_en_memoria');
   const base = { request: { intent: 'TEACH' }, entidad: nativeClient.name, clientId, tipoEntidad: 'cliente', tema: 'acuerdo', afirmacion: 'Septiembre conserva dos entregas comprometidas.', certeza: 'CONFIRMADO', proposito: 'operacion', desde: '2026-09-01', hasta: '2026-09-30', reemplaza: [], respondeDuda: null };
-  const context = { user, question: 'Septiembre tiene dos entregas pendientes. Octubre no fue contratado.', memoryIntent: 'GUARDAR', today: '2026-10-26', selectionTurn: 'fictitious-chat:1' };
+  const context = { user, question: 'Septiembre tiene dos entregas pendientes. Octubre no fue contratado.', today: '2026-10-26', selectionTurn: 'fictitious-chat:1' };
   try {
     await pool.query(await readFile(new URL('../scripts/sql/bria-agency-facts.sql', import.meta.url), 'utf8'));
     await pool.query('INSERT INTO "Client"(id,name,slug) VALUES($1,$2,$3)', [clientId, nativeClient.name, `faro-${clientId}`]);
@@ -39,7 +39,7 @@ test('real PostgreSQL: memory survives service restart, keeps earlier obligation
     assert.equal(persisted.sources[0].fecha, '2026-10-26');
     assert.equal((await repo().history(factAccess(user), persisted.id)).length, 1);
     const correction = { ...octoberArgs, request: { intent: 'CORRECT' }, afirmacion: 'Se confirmó finalmente el alcance de octubre.', reemplaza: [{ id: persisted.id, revision: persisted.revision }] };
-    const newContext = { ...context, question: 'Al final sí acordamos octubre; conserva septiembre como estaba.', memoryIntent: 'CORREGIR', selectionTurn: 'fictitious-chat:3' };
+    const newContext = { ...context, question: 'Al final sí acordamos octubre; conserva septiembre como estaba.', selectionTurn: 'fictitious-chat:3' };
     const saved = await save().run(correction, newContext);
     const current = await service().consult(user, { clientId, consulta: 'compromisos' });
     assert.deepEqual(current.hechos.map(row => row.id).sort(), [september.data.hecho.id, saved.data.hecho.id].sort());

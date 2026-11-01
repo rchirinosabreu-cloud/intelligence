@@ -5,7 +5,6 @@ import { createPersistentMemoryFixture, runPersistentMemoryScenario } from './ev
 const fixtureFor = (correction = {}) => {
   let read = false, saved = false;
   return createPersistentMemoryFixture({ generate: async request => {
-    if (request.responseSchema?.properties.propositoMemoria) return { text: JSON.stringify({ investigar: false, continuar: false, actualidad: false, localizarTrabajo: false, guardarSeguimiento: false, prepararCambios: false, compararAlternativas: false, soloConversacion: false, propositoMemoria: 'CORREGIR', asunto: '', objetivo: '', areas: [], condiciones: [] }) };
     if (request.responseSchema?.properties.decisiones) {
       assert.match(request.prompt, /Octubre no se contrató/);
       assert.match(request.prompt, /septiembre/);

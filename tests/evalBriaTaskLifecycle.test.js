@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createTaskLifecycleFixture as createFixture, runTaskLifecycleScenario, historicalTaskFiles, runHistoricalTaskFilesScenario } from './evals/briaTaskLifecycleFixture.js';
-const createTaskLifecycleFixture = (ai, options) => createFixture(ai, { ...options, assistantOptions: { inquiryPlanner: null } });
+const createTaskLifecycleFixture = (ai, options) => createFixture(ai, options);
 
 const scripted = (close = 'A la orden.') => {
   const answers = [

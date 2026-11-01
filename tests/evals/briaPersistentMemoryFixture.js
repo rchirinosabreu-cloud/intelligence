@@ -1,6 +1,5 @@
 import assert from 'node:assert/strict';
 import { runAssistant } from '../../src/lib/briaAssistant.js';
-import { planInquiry } from '../../src/lib/briaInquiry.js';
 import { factKey, factVisible, validateFact } from '../../src/lib/briaAgencyFacts.js';
 import { createAgencyFactTools } from '../../src/services/briaAgencyFactTools.js';
 import { createBriaAgencyFactService } from '../../src/services/briaAgencyFactService.js';
@@ -50,7 +49,7 @@ export const createPersistentMemoryFixture = (ai, { runtimeEnv = process.env } =
     async teach() {
       const service = newService();
       const answer = await runAssistant({ question, history: [{ role: 'user', text: '¿Qué teníamos pendiente con Estudio Roble Ficticio?' }, { role: 'assistant', text: 'La lectura guardada considera nueve publicaciones de octubre pendientes, además de dos de septiembre.' }], user, person: { name: 'Marina Duarte', jobTitle: 'Dirección' }, today, tools: [...createAgencyFactTools(service), ...briaInvestigationTools], ai: runtime, maxRounds: 4,
-        context: { db, agencyFacts: service, inquiryPlanner: planInquiry, selectionTurn: 'fictional-chat-one:3', now: () => new Date('2026-10-26T15:00:00Z') }, logger: { error() {}, warn() {} } });
+        context: { db, agencyFacts: service, recallMemory: ({ question: current }) => service.recall(user, { texto: current }), selectionTurn: 'fictional-chat-one:3', now: () => new Date('2026-10-26T15:00:00Z') }, logger: { error() {}, warn() {} } });
       outcomes.push({ phase: 'conversation', question, answer });
       return answer;
     },

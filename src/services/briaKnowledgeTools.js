@@ -1,6 +1,6 @@
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { validateLearning, learningUsable, bogotaDay, knowledgeError } from '../lib/briaKnowledge.js';
-import { MEMORY_REQUEST_SCHEMA, memoryRequestProblem } from '../lib/briaMemoryIntent.js';
+import { MEMORY_REQUEST_SCHEMA, memoryRequestProblem, replacesMemory } from '../lib/briaMemoryIntent.js';
 export const createKnowledgeTools = (knowledge, { personalOnly = false } = {}) => [
   { name: 'consultar_aprendizajes', description: 'Consulta conocimiento enseñado por el equipo, con autor, vigencia y estado. Las propuestas y registros vencidos no son hechos actuales.', parameters: { type: 'object', properties: { consulta: { type: 'string' } }, required: ['consulta'], additionalProperties: false }, allowed: canUseBria,
     async run({ consulta }, { user, today }) {
@@ -13,7 +13,7 @@ export const createKnowledgeTools = (knowledge, { personalOnly = false } = {}) =
       const problem = memoryRequestProblem(args.request, context);
       if (problem) throw knowledgeError(problem);
       if (personalOnly && args.scope !== 'PERSONAL') throw knowledgeError('Los acuerdos y hechos del negocio se conservan con guardar_en_memoria; esta herramienta solo guarda preferencias personales.');
-      if (args.id && context.memoryIntent !== 'CORREGIR') throw knowledgeError('Guardar una enseñanza nueva no autoriza reemplazar otro recuerdo.');
+      if (args.id && !replacesMemory(args.request)) throw knowledgeError('Guardar una enseñanza nueva no autoriza reemplazar otro recuerdo.');
       if (args.id && (!Number.isSafeInteger(args.expectedRevision) || args.expectedRevision < 1)) throw knowledgeError('Consulta la revisión vigente antes de corregir el recuerdo.');
       const learning = validateLearning({ ...args, validFrom: args.validFrom || context.today || bogotaDay() });
       const saved = await knowledge.save(context.user, { ...learning, id: args.id || null, expectedRevision: args.expectedRevision, reason: `Enseñanza humana en conversación${context.selectionTurn ? ` (${context.selectionTurn})` : ''}` });
