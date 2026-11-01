@@ -6,6 +6,12 @@ Este plan amplía lo construido en [Ojos y cerebro](BRIA_OJOS_Y_CEREBRO.md), [au
 
 ## Punto de partida
 
+### El cuaderno: un solo sitio para lo que Bria ya vio hoy — 31 de octubre de 2026
+
+Rodny: «no es EN frente a LA, tampoco; es ambas». Bria tenía cinco vidas separadas: la foto de las 6:00, la lectura de las 6:30, el pulso cada 15 minutos, el cierre de las 17:00 y el aprendizaje de las 22:00, cada una con su tabla y su chat. Al abrir el chat, la Bria que conversa no tenía delante lo que la Bria del pulso acababa de ver, salvo que supiera qué herramienta llamar. Por eso se sentía como módulos y no como alguien que estuvo pendiente todo el día.
+
+`briaNotebookService.today(user)` reúne lo que ya se le entregó a esa persona —avisos del pulso del día con su desenlace, lectura de la mañana, cierre más reciente, foco de la semana, revisión del mes y sus decisiones de los últimos siete días— y `notebookMessage` lo pone delante del modelo antes de responder, como contexto recortado, igual que la memoria. No hay tabla nueva ni herramienta nueva: se leen las tablas de entrega y el primer turno de cada chat de plataforma. Una fuente que falla se anota y no esconde a las demás. Validación local: `tests/briaNotebook.test.js`; aceptación real: preguntarle a Bria por WhatsApp «¿qué notaste esta mañana?» y «¿qué me avisaste hoy?» un día hábil después de las 10:00.
+
 ### Sin planificador: el modelo conduce — 31 de octubre de 2026
 
 Rodny, al leer el informe de continuidad y el piloto de las 17:56–18:04: «un problema grave ha sido el haber usado plantillas de respuesta … en vez de entenderlo como principios globales que deben guiar el razonamiento de Bria». Los dos fallos del piloto tenían la misma causa. Antes de cada mensaje, una llamada aparte con razonamiento bajo (`planInquiry`) producía un plan de doce campos que decidía qué herramientas existían en el turno, qué escrituras de memoria se permitían y qué cálculos había que acreditar con recibo. «¿Qué recuerdas de Aristea?» quedó marcado como conversación sin herramientas y Bria contestó «no tengo nada en esta conversación» con el hecho guardado; seis minutos después salió «no pude comprobar el cálculo solicitado», el texto fijo del guardián de cálculos, para una pregunta que no pedía ninguna cifra: el plan le inventó un requisito y el bucle agotó sus rondas esperando un recibo imposible. Cada corrección de las dos semanas anteriores había añadido un contrato más sobre el modelo; juntos lo convirtieron en un oficinista dentro de una tubería, y la tubería no razona.

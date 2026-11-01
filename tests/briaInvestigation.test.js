@@ -142,7 +142,7 @@ test('activity reading uses the existing status service shape and excludes descr
 const user = { id: 'owner', userId: 'owner', role: 'ADMIN', name: 'Marina', isActive: true, sessionVersion: 0, modulePermissions: { bria: true, gestion: true, manager: true, activity: true, parrillas: true } };
 const setup = generate => createBriaAssistantService({
   db: { user: { findUnique: async () => ({ ...user, teamMember: { id: 'member', name: 'Marina', isActive: true } }) } },
-  ai: { generate }, tools: [], knowledge: null, taskDrafts: null, dispatchDrafts: null, deleteDrafts: null, actions: null, usage: null, platform: null, agencyFacts: null, vault: null, mail: null, permissions: null, dailyReading: null, serviceHealth: null
+  ai: { generate }, tools: [], knowledge: null, taskDrafts: null, dispatchDrafts: null, deleteDrafts: null, actions: null, usage: null, platform: null, agencyFacts: null, vault: null, mail: null, permissions: null, dailyReading: null, serviceHealth: null, notebook: null
 });
 
 test('the production assistant offers a structured investigation without an execution permission', async () => {

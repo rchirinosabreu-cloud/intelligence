@@ -41,6 +41,7 @@ import { teamLoadService } from './teamLoadService.js';
 import { createDailyReadingTools } from './dailyReadingTools.js';
 import { getDailyReadingService } from './dailyReadingService.js';
 import { briaInvestigationTools } from './briaInvestigationTools.js';
+import { getBriaNotebookService } from './briaNotebookService.js';
 
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
 const ACTION_ATTACHMENT_NAME = { TASK_CREATE: 'Borrador del pendiente', DISPATCH: 'Borrador del despacho a producción', TASK_DELETE: 'Eliminación de pendientes en preparación' };
@@ -64,7 +65,8 @@ export const createBriaAssistantService = ({
   mail = getMailboxService,
   permissions = getPermissionRequestService,
   dailyReading = getDailyReadingService,
-  serviceHealth = serviceHealthService
+  serviceHealth = serviceHealthService,
+  notebook = getBriaNotebookService
 } = {}) => {
   // Sin clave de cifrado la bóveda queda apagada, pero Bria sigue respondiendo con todo lo demás.
   const vaultFor = () => {
@@ -109,6 +111,7 @@ export const createBriaAssistantService = ({
       const person = await loadPerson(user);
       const facts = typeof agencyFacts === 'function' ? agencyFacts() : agencyFacts;
       const remembered = typeof knowledge === 'function' ? knowledge() : knowledge;
+      const diary = typeof notebook === 'function' ? notebook() : notebook;
       const revalidate = async () => { await loadPerson(user); await revalidateConversation?.(); };
       const result = await runAssistant({
         question: text,
@@ -129,6 +132,7 @@ export const createBriaAssistantService = ({
         // La memoria pertinente se pone delante del modelo antes de responder; la herramienta queda para ampliar.
         context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, agencyFacts: facts, knowledge: remembered, logger,
           ...(facts?.recall ? { recallMemory: ({ question: current, history: turns }) => facts.recall(user, { texto: [...turns.slice(-2).map(turn => turn.text), current].join('\n') }) } : {}),
+          ...(diary?.today ? { notebook: () => diary.today(user) } : {}),
           ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session, reviewRequested }
       });
       // El motivo técnico de un fallo se queda en el registro del servidor; al navegador solo va qué falló.

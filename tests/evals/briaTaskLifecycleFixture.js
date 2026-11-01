@@ -25,7 +25,7 @@ export const createTaskLifecycleFixture = (ai, { historicalFiles = [], assistant
   const assistant = createBriaAssistantService({ db, now, taskDrafts, tools: assistantTools, context: assistantContext,
     ai: { generate: async request => { modelRequests.push(structuredClone({ input: request.input, model: request.model, reasoningEffort: request.reasoningEffort, tools: request.tools?.map(tool => tool.name), planning: Boolean(request.responseSchema) })); return ai.generate(request); } },
     dispatchDrafts: null, deleteDrafts: null, actions: null, usage: null, platform: null, knowledge,
-    agencyFacts: null, vault: null, mail: null, permissions: null, dailyReading: null, serviceHealth: null, ...assistantOptions
+    agencyFacts: null, vault: null, mail: null, permissions: null, dailyReading: null, serviceHealth: null, notebook: null, ...assistantOptions
   });
   const repository = {
     get: async () => structuredClone(chat), attachments: async () => [...files.values()].reverse(),

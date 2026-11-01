@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBriaAssistantService as createService } from '../src/services/briaAssistantService.js';
 // Access tests isolate authorization: a memory service with nothing to recall, so nothing here touches a database.
-const createBriaAssistantService = options => createService({ agencyFacts: { recall: async () => ({ hechos: [] }) }, ...options });
+const createBriaAssistantService = options => createService({ agencyFacts: { recall: async () => ({ hechos: [] }) }, notebook: null, ...options });
 const actor = () => ({ userId: 'u', role: 'PROJECT_MANAGER', sessionVersion: 1, modulePermissions: { bria: true, gestion: true } });
 const row = () => ({ id: 'u', name: 'Persona', role: 'PROJECT_MANAGER', isActive: true, sessionVersion: 1, modulePermissions: { bria: true, gestion: true }, teamMember: { id: 'm', isActive: true } });
 
