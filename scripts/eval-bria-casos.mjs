@@ -166,10 +166,10 @@ if (!selected.length) throw new Error(`No hay un caso con id «${only}».`);
 const results = [];
 await mkdir(path.dirname(path.resolve(output)), { recursive: true });
 const summary = () => {
-  const passed = results.filter((row) => row.pass).length;
+  const ok = results.filter((row) => row.pass).length;
   const usd = results.reduce((sum, row) => sum + (row.usd || 0), 0);
   const ms = results.length ? Math.round(results.reduce((sum, row) => sum + row.ms, 0) / results.length) : 0;
-  return { passed, total: results.length, usd: Number(usd.toFixed(4)), committedUsd: budget ? Number(budget.committedUsd().toFixed(4)) : null, meanMs: ms, calls: results.reduce((sum, row) => sum + (row.usage?.calls || 0), 0) };
+  return { passed: ok, total: results.length, usd: Number(usd.toFixed(4)), committedUsd: budget ? Number(budget.committedUsd().toFixed(4)) : null, meanMs: ms, calls: results.reduce((sum, row) => sum + (row.usage?.calls || 0), 0) };
 };
 const save = () => writeFile(path.resolve(output), JSON.stringify({ createdAt: new Date().toISOString(), fictional: true, model: AI_MODELS.chat, effort: effort || 'medium (runAssistant)', maxUsd: budget ? maxUsd : null, today, summary: summary(), cases: selected.map(({ id, question, why }) => ({ id, question, why })), results, usage }, null, 2));
 
@@ -193,7 +193,12 @@ for (let repeat = 0; repeat < repetitions; repeat += 1) for (const item of selec
   }
   await save();
 }
-const { passed, total, usd, committedUsd, meanMs } = summary();
-console.log(`\n${passed} de ${total} respuestas pasaron · ${AI_MODELS.chat}/${effort || 'medium'} · ${meanMs} ms por caso${prices.every(Number.isFinite) ? ` · USD ${usd.toFixed(4)}${committedUsd !== null ? ` (reservado ${committedUsd.toFixed(4)} de ${maxUsd})` : ''}` : ''}. Informe: ${path.resolve(output)}`);
-process.exitCode = passed === total ? 0 : 1;
+{
+  const { usd, committedUsd, meanMs } = summary();
+  console.log(`\nModelo ${AI_MODELS.chat}/${effort || 'medium'} · ${meanMs} ms por caso${prices.every(Number.isFinite) ? ` · USD ${usd.toFixed(4)}${committedUsd !== null ? ` (reservado ${committedUsd.toFixed(4)} de ${maxUsd})` : ''}` : ''}`);
+}
+// Lo que sigue solo depende de `results` y `output`: tests/briaCaseEvalRuntime.test.js lo corre aislado.
+const passed = results.filter((row) => row.pass).length;
+console.log(`${passed} de ${results.length} respuestas pasaron. Informe: ${path.resolve(output)}`);
+process.exitCode = passed === results.length ? 0 : 1;
 setTimeout(() => process.exit(process.exitCode), 500).unref();
