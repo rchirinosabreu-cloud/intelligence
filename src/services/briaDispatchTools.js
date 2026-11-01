@@ -7,7 +7,7 @@ import { PREPARATION_REQUEST_SCHEMA } from '../lib/briaPreparation.js';
 // escribe «Despachar a producción» sobre el resumen guardado (ver briaConversationService).
 export const createBriaDispatchTools = (service) => service ? [{
   name: 'preparar_despacho',
-  description: 'Prepara o ajusta un despacho a producción: varias piezas de una misma parrilla, cada una con responsable, fecha de entrega y prioridad. NO crea tareas: muestra el resumen y la persona confirma. Úsala cuando la persona pida despachar, mandar a producción o preparar los pendientes de producción de una parrilla. Antes localiza la parrilla con parrilla_de_cliente y usa los ids de sus piezas; no incluyas las que ya están en producción ni las publicadas. Una corrección en el chat ajusta el mismo despacho.',
+  description: 'Prepara o ajusta un despacho a producción: varias piezas de una misma parrilla, cada una con el responsable que la persona dijo, la fecha de entrega y la prioridad. NO crea tareas: muestra el resumen y la persona confirma. Úsala cuando la persona pida despachar, mandar a producción o preparar los pendientes de producción de una parrilla. Antes localiza la parrilla con parrilla_de_cliente y usa los ids de sus piezas; no incluyas las que ya están en producción ni las publicadas. No inventes responsables: si no los dijo, pregúntale. Una corrección en el chat ajusta el mismo despacho. Nunca digas que despachaste: el servidor lo hace solo cuando la persona escribe «Despachar a producción» sobre el resumen. Para trabajo que no es una pieza de la parrilla usa preparar_pendiente.',
   allowed: canDispatch,
   parameters: { type: 'object', properties: {
     request: PREPARATION_REQUEST_SCHEMA,

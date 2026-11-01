@@ -100,7 +100,13 @@ test('the conversation keeps the access cards and the protected field, and Bria 
   const metadata = insert[1][5];
   assert.deepEqual(metadata.accessCards, [{ id: 'a1' }]);
   assert.equal(metadata.accessCapture.captureId, 'k1');
-  const text = buildInstructions({ person: { name: 'Rodny' }, today: '2026-10-09', tools: createVaultTools({}).map(({ name, description }) => ({ name, description })) });
-  assert.match(text, /campo protegido/);
-  assert.match(text, /nunca pides que la escriban en el chat/);
+  const tools = createVaultTools({}).map(({ name, description }) => ({ name, description }));
+  assert.match(buildInstructions({ person: { name: 'Rodny' }, today: '2026-10-09', tools }), /- buscar_acceso/);
+  // La guía vive en la descripción de cada herramienta (31 de octubre de 2026).
+  const byName = (name) => tools.find((tool) => tool.name === name).description;
+  assert.match(byName('preparar_acceso'), /campo protegido/);
+  assert.match(byName('preparar_acceso'), /nunca pides que la escriban en el chat/);
+  assert.match(byName('preparar_acceso'), /Si la persona ya la escribió en un mensaje, no la repitas/);
+  assert.match(byName('buscar_acceso'), /nunca pides que la escriban en el chat/);
+  assert.match(byName('buscar_acceso'), /Eres la bóveda de la agencia/);
 });

@@ -169,7 +169,8 @@ test('the tool only prepares, needs Bria and Gestión, and Bria is told never to
   assert.equal(out.data.stage, 'REASON');
   assert.deepEqual(out.quickReplies, ['Se creó por error', 'Ya no aplica', 'Está repetido']);
   assert.equal(createBriaDeleteTools(null).length, 0);
-  const text = buildInstructions({ person: { name: 'Kamila', jobTitle: 'PM' }, today: '2026-10-10', tools: [tool] });
-  assert.match(text, /Nunca digas que eliminaste/);
-  assert.match(text, /«Eliminar pendiente»/);
+  assert.match(buildInstructions({ person: { name: 'Kamila', jobTitle: 'PM' }, today: '2026-10-10', tools: [tool] }), /- preparar_eliminacion/);
+  // La guía vive en la descripción de la herramienta (31 de octubre de 2026).
+  assert.match(tool.description, /Nunca digas que eliminaste/);
+  assert.match(tool.description, /«Eliminar pendiente»/);
 });

@@ -284,9 +284,10 @@ test('the tool declares the filter, 50 items, owner and date, and Bria is told w
   assert.match(bulk.description, /hasta 50/);
   const search = toolByName('buscar_pendientes');
   assert.deepEqual(Object.keys(search.parameters.properties).sort(), ['cliente', 'estado', 'responsable', 'sinResponsable', 'vencidas']);
-  const text = buildInstructions({ person: { name: 'Rodny' }, today: TODAY, tools: [...tools, search] });
-  assert.match(text, /cambiar_pendientes con filtro/);
-  assert.match(text, /sin pedirle ids/);
-  assert.match(text, /buscar_pendientes/);
+  assert.match(buildInstructions({ person: { name: 'Rodny' }, today: TODAY, tools: [...tools, search] }), /- buscar_pendientes/);
+  // La guía vive en la descripción de la herramienta (31 de octubre de 2026).
+  assert.match(bulk.description, /cambiar_pendientes con filtro/);
+  assert.match(bulk.description, /sin pedirle ids/);
+  assert.match(bulk.description, /Para «cuántos…» o «cuáles…» usa buscar_pendientes/);
   assert.equal(toolProgressLabel('buscar_pendientes'), 'Buscando pendientes…');
 });

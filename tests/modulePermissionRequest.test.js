@@ -90,7 +90,9 @@ test('Bria asks on her own: the tool is offered only to whom lacks something, an
   answer = { alreadyHas: true };
   assert.match((await tool.run({ modulo: 'crm', para: null }, { user: camila })).data.instruccion, /ya tiene acceso/);
   const text = buildInstructions({ person: { name: 'Camila' }, today: '2026-10-15', tools: [{ name: 'pedir_permiso', description: tool.description }], user: camila });
-  assert.match(text, /22\. Si la persona pide algo de un módulo que su cuenta no tiene/);
+  assert.match(text, /- pedir_permiso/);
+  assert.match(tool.description, /módulo de la plataforma que la cuenta de esta persona no tiene/);
+  assert.match(tool.description, /última línea de tus instrucciones/, 'the description says where the per-person list arrives');
   assert.match(text.split('\n').at(-1), /Módulos que no tiene: .*Financiero/, 'the per-person list goes last, for the prompt cache');
   assert.doesNotMatch(buildInstructions({ person: { name: 'Rodny' }, today: '2026-10-15', tools: [], user: rodny }), /Módulos que no tiene/);
   assert.match(read('src/lib/briaAssistant.js'), /pedir_permiso: '/);

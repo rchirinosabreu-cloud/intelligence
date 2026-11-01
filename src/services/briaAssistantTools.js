@@ -79,7 +79,7 @@ const timeTotal = (rows, now) => {
 
 const buscarCliente = {
   name: 'buscar_cliente',
-  description: 'Busca clientes de la agencia por parte del nombre. Devuelve id, slug, estado, community manager y project manager. Úsala antes de cualquier consulta sobre un cliente.',
+  description: 'Busca clientes de la agencia por parte del nombre. Devuelve id, slug, estado, community manager y project manager. Antes de hablar de un cliente, búscalo aquí para tener su id y su slug; si hay varios parecidos, pregunta cuál.',
   parameters: { type: 'object', properties: { nombre: { type: 'string', description: 'Parte del nombre del cliente, como lo dijo la persona' } }, required: ['nombre'] },
   allowed: () => true,
   async run({ nombre } = {}, { db }) {
@@ -211,7 +211,7 @@ const buscarPendientes = {
 
 const parrillaDeCliente = {
   name: 'parrilla_de_cliente',
-  description: 'La parrilla de contenido de un cliente (por su id) en un mes: cada pieza con formato, fecha, estado, hasta qué etapa llegó (sin texto, redactada, diseñada, aprobada, programada, publicada), si el cliente la aprobó, lo último que el cliente pidió cambiar, si ya está en producción y con quién, y cuántas referencias tiene; el resumen cuenta piezas por formato para compararlas con el contrato. Sin mes y año, la del mes actual.',
+  description: 'La parrilla de contenido de un cliente (por su id) en un mes: cada pieza con formato, fecha, estado, hasta qué etapa llegó (sin texto, redactada, diseñada, aprobada, programada, publicada), si el cliente la aprobó, lo último que el cliente pidió cambiar, si ya está en producción y con quién, y cuántas referencias tiene; el resumen cuenta piezas por formato para compararlas con lo contratado en operacion_de_cliente, y así decir qué falta, qué pidió cambiar el cliente y qué ya está en producción. Sin mes y año, la del mes actual. La lectura incluye el contexto de la cuenta (memoria de la agencia): úsalo antes de recomendar, sin pedir otra llamada si ya es suficiente.',
   parameters: { type: 'object', properties: { clientId: { type: 'string' }, mes: { type: 'integer', minimum: 1, maximum: 12 }, anio: { type: 'integer' } }, required: ['clientId'] },
   allowed: (user) => hasModulePermission(user, 'parrillas'),
   async run({ clientId, mes, anio } = {}, context) {
@@ -276,7 +276,7 @@ const parrillaDeCliente = {
 
 const leerPiezasDeParrilla = {
   name: 'leer_piezas_de_parrilla',
-  description: 'Lee el detalle actual de piezas de una parrilla: aprobación vigente del material, presencia de archivo final, objetivos, guiones, textos, notas, pedidos del cliente y fecha/hora de publicación. Para comprobar un bloqueo concreto usa ids de las piezas pertinentes obtenidos en la parrilla o tarea vinculada; no hace falta recorrer todo el mes. Sin ids, pagina hasta seis piezas con nextOffset. Los ids no encontrados se declaran; nunca equivalen a piezas revisadas.',
+  description: 'Lee el detalle actual de piezas de una parrilla para revisar el contenido: aprobación vigente del material, presencia de archivo final, objetivos, guiones, textos, notas, pedidos del cliente y fecha/hora de publicación. Para investigar un foco concreto o comprobar un bloqueo usa ids de las piezas pertinentes obtenidos en la parrilla o en una tarea autorizada; no hace falta recorrer todo el mes. Sin ids, pagina hasta seis piezas con nextOffset; si el pedido exige revisar toda la parrilla, recorre nextOffset hasta cubrirla. Evalúa coherencia, claridad, variedad y fechas sobre lo leído y delimita el alcance. La presencia de un archivo no acredita calidad ni aprobación; no digas que revisaste imágenes o videos cuando solo dispones de texto y metadatos. Los ids no encontrados se declaran; nunca equivalen a piezas revisadas.',
   parameters: { type: 'object', properties: { planId: { type: 'string' }, desde: { type: 'integer', minimum: 0 }, ids: { type: 'array', minItems: 1, maxItems: 6, items: { type: 'string' }, description: 'Selección de piezas de esta parrilla para investigar; omitir para paginar el mes. No combinar con desde distinto de cero.' } }, required: ['planId'] },
   allowed: user => hasModulePermission(user, 'parrillas'),
   async run({ planId, desde = 0, ids }, { db, today, now }) {
@@ -292,7 +292,7 @@ const leerPiezasDeParrilla = {
 
 const operacionDeCliente = {
   name: 'operacion_de_cliente',
-  description: 'La operación de un cliente (por su slug): semáforo con sus motivos, contrato operativo (piezas por formato, historias por semana, jornadas por mes, notas; registrar el contrato aquí no prueba que esté firmado), avance del mes contra lo contratado, tareas abiertas y observaciones recientes del equipo. Solo administradores y project managers.',
+  description: 'La operación de un cliente (por su slug): semáforo con sus motivos, contrato operativo (piezas por formato, historias por semana, jornadas por mes, notas; registrar el contrato aquí no prueba que esté firmado: crúzalo con la memoria de la agencia), avance del mes contra lo contratado, tareas abiertas y observaciones recientes del equipo. Para cómo va una cuenta, compara lo contratado por formato con las piezas por formato de parrilla_de_cliente, y di qué falta, qué pidió cambiar el cliente y qué ya está en producción. La lectura incluye el contexto de la cuenta (memoria de la agencia): úsalo antes de recomendar, sin pedir otra llamada si ya es suficiente. Solo administradores y project managers.',
   parameters: { type: 'object', properties: { slug: { type: 'string' } }, required: ['slug'] },
   allowed: (user) => isManagerRole(user?.role),
   async run({ slug } = {}, context) {
@@ -338,7 +338,7 @@ const operacionDeCliente = {
 
 const carteraDeOperacion = {
   name: 'cartera_de_operacion',
-  description: 'Todas las cuentas activas de una vez, con su semáforo y sus motivos, PM, community manager, agencia (Brain o MIO), avance del mes y tareas vencidas; las rojas primero. Úsala para «qué cuentas están en riesgo», «cómo vamos este mes» o para ver la carga de un PM. Filtros opcionales por semáforo, agencia o responsable. Solo administradores y project managers.',
+  description: 'Todas las cuentas activas de una vez, con su semáforo y sus motivos, PM, community manager, agencia (Brain o MIO), contrato, avance del mes y tareas vencidas; las rojas primero. Úsala en una sola llamada para varias cuentas a la vez: «qué cuentas están en riesgo», «cómo vamos este mes» o la carga de un PM. Filtros opcionales por semáforo, agencia o responsable. La lectura incluye el contexto de cada cuenta (memoria de la agencia): úsalo antes de recomendar, sin pedir otra llamada si ya es suficiente. Solo administradores y project managers.',
   parameters: { type: 'object', properties: {
     semaforo: { type: ['string', 'null'], enum: ['rojo', 'amarillo', 'verde', 'gris', null] },
     agencia: { type: ['string', 'null'], description: 'BRAIN o MIO' },

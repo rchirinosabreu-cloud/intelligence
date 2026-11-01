@@ -20,7 +20,7 @@ const FOCUS_GUIDE = {
 
 export const briaClientUpdateTools = [{
   name: 'mensaje_para_cliente',
-  description: 'Lo que hace falta para escribirle a un cliente sobre su parrilla de un mes: qué piezas esperan su aprobación, qué se está ajustando según lo que pidió, qué salió publicado en la última semana (con sus enlaces), qué está programado en las próximas dos semanas y el enlace del portal que ya tiene. Solo trae lo que el cliente ve. Úsala cuando pidan escribirle, recordarle aprobar o contarle lo publicado; antes busca el cliente con buscar_cliente. Sin mes y año, el mes actual.',
+  description: 'Lo que hace falta para escribirle a un cliente sobre su parrilla de un mes: qué piezas esperan su aprobación, qué se está ajustando según lo que pidió, qué salió publicado en la última semana (con sus enlaces), qué está programado en las próximas dos semanas y el enlace del portal que ya tiene. Solo trae lo que el cliente ve. Úsala cuando pidan escribirle (contarle cómo va su parrilla, recordarle que apruebe, contarle lo publicado): antes busca el cliente con buscar_cliente, llámala con el canal y el enfoque que pidieron, y entrega el mensaje listo para copiar con lo que trae la herramienta y el enlace del portal. Habla del trabajo, nunca del equipo por dentro: ni guiones, ni notas internas, ni horas, ni quién lo hace. Tú nunca lo envías: la persona lo copia y lo manda. Si te dan un tono o un dato extra, úsalo sin inventar fechas ni compromisos. Sin mes y año, el mes actual.',
   parameters: { type: 'object', properties: {
     clientId: { type: 'string' },
     mes: { type: 'integer', minimum: 1, maximum: 12 },

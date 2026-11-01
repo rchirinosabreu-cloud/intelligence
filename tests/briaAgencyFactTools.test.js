@@ -71,12 +71,15 @@ test('the service finds the person by first name or something close, refuses any
 });
 
 test('Bria is told to use the fichas without reciting them and never to tell anyone what they say', () => {
-  const instructions = buildInstructions({ person: { name: 'Rodny' }, today: '2026-10-20', tools: [{ name: 'como_trabajar_con', description: 'x' }], user: { role: 'ADMIN' } });
-  assert.match(instructions, /25\. Conoces a cada persona del equipo/);
-  assert.match(instructions, /llama como_trabajar_con/);
-  assert.match(instructions, /Nunca la recites ni digas «según tu ficha»/);
-  assert.match(instructions, /nunca le cuentes a nadie —ni a la persona ni a un compañero— qué dice una ficha/);
-  assert.match(instructions, /cómo trabajar con alguien, no cómo es/);
+  // La guía vive en la descripción de la herramienta (31 de octubre de 2026): el modelo la ve solo cuando la tiene.
+  const { description } = byName(createAgencyFactTools(fakeService()), 'como_trabajar_con');
+  assert.match(description, /Conoces a cada persona del equipo/);
+  assert.match(description, /Llámala con su nombre antes de redactarle un mensaje/);
+  assert.match(description, /Nunca la recites ni digas «según tu ficha»/);
+  assert.match(description, /nunca le cuentes a nadie —ni a la persona ni a un compañero— qué dice una ficha/);
+  assert.match(description, /cómo trabajar con alguien, no cómo es/);
+  assert.match(description, /nunca guardes salud, motivos de ausencia, salarios/);
+  assert.match(buildInstructions({ person: { name: 'Rodny' }, today: '2026-10-20', tools: [{ name: 'como_trabajar_con', description }], user: { role: 'ADMIN' } }), /- como_trabajar_con/);
   assert.doesNotMatch(buildInstructions({ person: { name: 'Camila' }, today: '2026-10-20', tools: [{ name: 'memoria_de_la_agencia', description: 'x' }], user: { role: 'PROJECT_MANAGER' } }), /como_trabajar_con/);
 });
 
@@ -136,10 +139,15 @@ test('the service resolves the person again and hides purposes the account canno
 
 test('Bria weighs current records and remembered agreements by scope instead of absolute precedence', () => {
   const tools = createAgencyFactTools(fakeService()).map(({ name, description }) => ({ name, description }));
-  const text = buildInstructions({ person: { name: 'Camila' }, today: '2026-10-09', tools });
-  assert.match(text, /memoria_de_la_agencia/);
-  assert.match(text, /cuenta, periodo, certeza y procedencia/i);
-  assert.match(text, /memoria histórica tampoco anula un acuerdo posterior/i);
-  assert.match(text, /reconstruye el orden/i);
-  assert.match(text, /una sola duda/i);
+  assert.match(buildInstructions({ person: { name: 'Camila' }, today: '2026-10-09', tools }), /memoria_de_la_agencia/);
+  // La guía de cada herramienta vive en su descripción (31 de octubre de 2026).
+  const memory = byName(tools, 'memoria_de_la_agencia').description;
+  assert.match(memory, /cuenta, periodo, certeza y procedencia/i);
+  assert.match(memory, /memoria histórica tampoco anula un acuerdo posterior/i);
+  assert.match(memory, /reconstruye el orden/i);
+  const save = byName(tools, 'guardar_en_memoria').description;
+  assert.match(save, /una sola duda/i);
+  assert.match(save, /saved=true/);
+  assert.match(save, /«Sí, guárdalo»/);
+  assert.match(byName(tools, 'retirar_de_memoria').description, /ofrece retirarlo/i);
 });
