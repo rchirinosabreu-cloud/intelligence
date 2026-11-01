@@ -4,7 +4,6 @@ import { briaAssistantTools } from '../src/services/briaAssistantTools.js';
 import { createBriaAgencyFactService } from '../src/services/briaAgencyFactService.js';
 import { createBriaTurnAuthorizer } from '../src/services/briaTurnAuthorization.js';
 import { createDecisionContextFixture } from './evals/briaDecisionContextFixture.js';
-import { inquiryGaps } from '../src/lib/briaInquiry.js';
 
 const user = { id: 'u', role: 'ADMIN', isActive: true, sessionVersion: 0, modulePermissions: { bria: true }, teamMember: { isActive: true } };
 const tool = name => briaAssistantTools.find(row => row.name === name);
@@ -13,14 +12,6 @@ const rows = clients.map(client => ({ ...client, contract: { status: 'ACTIVE', s
 const fact = { id: 'correction', clientId: 'c1', entity: clients[0].name, topic: 'acuerdo', statement: 'Octubre no fue contratado; las piezas son una propuesta.', certainty: 'CONFIRMADO', purpose: 'operacion', sensitivity: 'normal', validFrom: '2026-10-01', sources: [], origin: 'EQUIPO', revision: 2, status: 'ACTIVE' };
 const context = () => ({ user, today: '2026-10-25', operations: { listOperations: async () => rows, getOperation: async () => rows[0] },
   agencyFacts: { contextForClients: async (_user, selected) => ({ cuentas: selected.map(client => ({ clientId: client.id, estado: 'CONSULTADO', parcial: false, hechos: client.id === 'c1' ? [{ id: fact.id, afirmacion: fact.statement }] : [] })), nota: 'Contrastar el periodo' }) } });
-
-test('a verified empty task search does not force a nonexistent detail or another model call', () => {
-  const plan = { investigar: true, localizarTrabajo: true, areas: ['TAREAS'], guardarSeguimiento: false };
-  const empty = { herramienta: 'tareas_de_cliente', area: 'TAREAS', taskCount: 0, partial: false };
-  assert.deepEqual(inquiryGaps(plan, null, [empty]), []);
-  assert.ok(inquiryGaps(plan, null, [{ ...empty, partial: true }]).length);
-  assert.ok(inquiryGaps(plan, null, [empty, { ...empty, taskCount: 1 }]).length, 'a candidate still requires its detail');
-});
 
 test('portfolio supplies current contract and account memory together before the model ranks clients', async () => {
   const ctx = context(); let selected;
@@ -92,7 +83,7 @@ test('memory sources are reauthorized when a conversation is reused', async () =
 test('a follow-up rereads context and delivers a later agreement even if the counters have not changed', async () => {
   let step = 0, turns = 0;
   const fixture = createDecisionContextFixture({ generate: async request => {
-    if (request.responseSchema) { step = 0; turns++; return { text: JSON.stringify({ investigar: true, continuar: false, actualidad: true, localizarTrabajo: false, guardarSeguimiento: false, prepararCambios: false, compararAlternativas: false, asunto: 'Cumplimiento editorial', objetivo: 'Priorizar', areas: [], condiciones: [] }) }; }
+    if (!request.input.some(row => row.type === 'function_call_output')) { step = 0; turns++; }
     if (step++ === 0) return { output: [], functionCalls: [{ id: `read-${turns}`, name: 'cartera_de_operacion', args: {} }] };
     const output = request.input.findLast(row => row.type === 'function_call_output').output;
     assert.match(output, turns === 1 ? /la pausa de septiembre terminó/ : /reprogramar esas siete piezas para noviembre/);

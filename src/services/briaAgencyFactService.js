@@ -80,6 +80,31 @@ export const createBriaAgencyFactService = ({ repository, db = prisma }) => {
       return new Set(rows.filter(row => factVisible(row, current.access)).map(row => row.id)).size === new Set(ids).size;
     },
 
+    /**
+     * Lo que conviene tener delante antes de responder este mensaje (31 de octubre de 2026): los hechos de las cuentas
+     * que nombra y los que hablan de lo mismo. Se busca por el nombre real de cada cuenta en el texto, no por frases;
+     * un nombre ambiguo entre dos fichas no hereda hechos sin vínculo. Solo lectura, con los permisos de la persona.
+     */
+    async recall(user, { texto = '', limit = 12 } = {}) {
+      const { access } = await resolve(user);
+      const key = ` ${factKey(texto)} `;
+      if (!key.trim()) return { hechos: [], cuentas: [], nota: NOTE };
+      const clients = db.client?.findMany ? await db.client.findMany({ select: { id: true, name: true, isArchived: true } }) : [];
+      const mentioned = clients.filter(client => { const name = factKey(client.name); return name.length >= 3 && key.includes(` ${name} `); }).slice(0, 4);
+      const rows = new Map();
+      for (const client of mentioned) {
+        const homonyms = clients.filter(row => factKey(row.name) === factKey(client.name));
+        for (const fact of await repository.search(access, { clientId: client.id, ...(homonyms.length === 1 ? { unlinkedEntity: client.name } : {}), limit: 6 })) rows.set(fact.id, fact);
+      }
+      for (const fact of await repository.search(access, { query: texto, limit: 8 })) if (!rows.has(fact.id)) rows.set(fact.id, fact);
+      const current = await resolve(user);
+      return {
+        cuentas: mentioned.map(client => ({ clientId: client.id, nombre: client.name })),
+        hechos: [...rows.values()].filter(row => factVisible(row, current.access)).slice(0, limit).map(presentFact),
+        nota: NOTE
+      };
+    },
+
     async consult(user, { consulta = '', clientId = null, entidad = null } = {}) {
       const { access } = await resolve(user);
       const client = clientId && db.client?.findUnique ? await db.client.findUnique({ where: { id: clientId }, select: { id: true, name: true } }) : null;

@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBriaAssistantService } from '../src/services/briaAssistantService.js';
 import { buildInvestigation, investigationReply } from '../src/lib/briaInvestigation.js';
-import { incompleteInquiry } from '../src/lib/briaInquiry.js';
 import { createBriaConversationService } from '../src/services/briaConversationService.js';
 import { createBriaTurnAuthorizer } from '../src/services/briaTurnAuthorization.js';
 import { createInvestigationFixture, runInvestigationScenario } from './evals/briaInvestigationFixture.js';
@@ -65,10 +64,6 @@ test('partial coverage remains visible and an incomplete workflow discards its p
   args.cobertura[0].motivo = 'Falta leer el documento adjunto.';
   const record = buildInvestigation(args, { receipts });
   assert.equal(record.cobertura[0].motivo, 'Falta leer el documento adjunto.');
-  const unfinished = incompleteInquiry({ investigar: true }, { record, receipts, gaps: ['Abrir el detalle autorizado.'] });
-  assert.deepEqual(unfinished.relato, []);
-  assert.match(investigationReply(unfinished), /incompleta/);
-  assert.doesNotMatch(investigationReply(unfinished), /Te recomiendo aclarar primero/);
 });
 
 test('evidence must come from this turn, partial or absent evidence cannot close the original issue', () => {
@@ -147,7 +142,7 @@ test('activity reading uses the existing status service shape and excludes descr
 const user = { id: 'owner', userId: 'owner', role: 'ADMIN', name: 'Marina', isActive: true, sessionVersion: 0, modulePermissions: { bria: true, gestion: true, manager: true, activity: true, parrillas: true } };
 const setup = generate => createBriaAssistantService({
   db: { user: { findUnique: async () => ({ ...user, teamMember: { id: 'member', name: 'Marina', isActive: true } }) } },
-  ai: { generate }, inquiryPlanner: null, tools: [], knowledge: null, taskDrafts: null, dispatchDrafts: null, deleteDrafts: null, actions: null, usage: null, platform: null, agencyFacts: null, vault: null, mail: null, permissions: null, dailyReading: null, serviceHealth: null
+  ai: { generate }, tools: [], knowledge: null, taskDrafts: null, dispatchDrafts: null, deleteDrafts: null, actions: null, usage: null, platform: null, agencyFacts: null, vault: null, mail: null, permissions: null, dailyReading: null, serviceHealth: null
 });
 
 test('the production assistant offers a structured investigation without an execution permission', async () => {
@@ -175,6 +170,6 @@ test('real conversation services investigate three areas and re-read before foll
     if (phase === 0) return { output: [], functionCalls: calls.map((call, index) => ({ ...call, id: `${step}:${index}` })) };
     if (phase === 1) return { output: [], functionCalls: [{ id: `save-${step}`, name: 'actualizar_seguimiento', args: data }] };
     return { text: 'Investigado.' };
-  } }, { inquiryPlanner: null });
+  } }, {});
   await runInvestigationScenario(fixture);
 });

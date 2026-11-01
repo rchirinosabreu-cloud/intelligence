@@ -4,7 +4,7 @@
 
 import { canUseBria } from '../lib/briaLivingMemory.js';
 import { factError, FACT_ENTITY_TYPES, FACT_PURPOSES } from '../lib/briaAgencyFacts.js';
-import { MEMORY_REQUEST_SCHEMA, memoryRequestProblem, memoryHumanContext } from '../lib/briaMemoryIntent.js';
+import { MEMORY_REQUEST_SCHEMA, memoryRequestProblem, memoryHumanContext, replacesMemory } from '../lib/briaMemoryIntent.js';
 const TEAM_CERTAINTIES = ['CONFIRMADO', 'PRACTICA', 'PROPUESTA', 'HISTORICO', 'NO_CONCLUYENTE'];
 
 export const createAgencyFactTools = (service) => service ? [
@@ -43,7 +43,7 @@ export const createAgencyFactTools = (service) => service ? [
     async run(args, context) {
       const problem = memoryRequestProblem(args.request, context);
       if (problem) throw factError(problem, 400, 'BRIA_FACT_NO_INTENT');
-      if (args.reemplaza?.length && context.memoryIntent !== 'CORREGIR') throw factError('Guardar un hecho nuevo no autoriza reemplazar otro recuerdo.', 400, 'BRIA_FACT_NO_INTENT');
+      if (args.reemplaza?.length && !replacesMemory(args.request)) throw factError('Guardar un hecho nuevo no autoriza reemplazar otro recuerdo.', 400, 'BRIA_FACT_NO_INTENT');
       if ((args.reemplaza || []).some(row => !row?.id || !Number.isSafeInteger(row.revision) || row.revision < 1)) throw factError('Consulta el identificador y la revisión vigente de cada recuerdo antes de corregirlo.', 400, 'BRIA_FACT_CHANGED');
       const result = await service.record(context.user, args, memoryHumanContext(context));
       return { data: { saved: true, hecho: { id: result.fact.id, entidad: result.fact.entity, revision: result.fact.revision }, reemplazados: result.replaced }, sources: [{ kind: 'hecho_agencia', id: result.fact.id, label: result.fact.entity || 'Memoria de la agencia' }] };

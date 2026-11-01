@@ -8,7 +8,7 @@ const scriptedModel = ({ inspect = () => {}, combinedCondition = false, initialT
   let turn = initialTurn, step = 0;
   const declared = new Map();
   return { generate: async request => {
-    if (request.responseSchema) { turn++; step = 0; declared.clear(); return { text: JSON.stringify(plan(turn > 1)) }; }
+    if (!(request.input || []).some(row => row.type === 'function_call_output')) { turn++; step = 0; declared.clear(); }
     const outputs = (request.input || []).filter(row => row.type === 'function_call_output').map(row => ({ name: declared.get(row.call_id), data: JSON.parse(row.output) })).filter(row => row.name);
     inspect(outputs, { turn, step });
     const call = rows => ({ output: [], functionCalls: rows.map(([name, args], index) => { const id = `${turn}-${step}-${index}`; declared.set(id, name); return { id, name, args }; }) });
@@ -64,8 +64,8 @@ test('the selective investigation reads the blocking piece and task, distinguish
   assert.equal(second.investigation.estado, 'MEJORA_PARCIAL');
   assert.deepEqual(second.investigation.alternativas, [], 'a progress update need not fabricate another decision');
   assert.equal(second.investigation.recomendada, null);
-  assert.equal(fixture.modelRequests.filter(row => row.planning).length, 2, 'reuse the existing purpose planner; no extra classifier');
-  assert.equal(fixture.modelRequests.length, 10, 'two plans and eight useful rounds, without a separate prose pass');
+  assert.equal(fixture.modelRequests.filter(row => row.planning).length, 0, 'no planner call: the model interprets the purpose inside the conversation');
+  assert.equal(fixture.modelRequests.length, 8, 'eight useful rounds, without a planner call or a separate prose pass');
 });
 
 // Exercise the real tool adapters even when the narrative model chooses a
@@ -74,7 +74,6 @@ const readWithFixture = async calls => {
   const outputs = new Map();
   let sent = false;
   const fixture = createDecisionInvestigationFixture({ generate: async request => {
-    if (request.responseSchema) return { text: JSON.stringify({ ...plan(false), investigar: false, actualidad: false, guardarSeguimiento: false, compararAlternativas: false, areas: [], condiciones: [] }) };
     for (const row of request.input || []) if (row.type === 'function_call_output') outputs.set(row.call_id, JSON.parse(row.output));
     if (!sent) { sent = true; return { output: [], functionCalls: calls.map(([name, args], index) => ({ id: `read-${index}`, name, args })) }; }
     return { text: 'Lecturas ficticias verificadas; no se preparó ningún cambio.' };

@@ -2,7 +2,6 @@ import { canUseBria } from '../lib/briaLivingMemory.js';
 import { findOperations, matchOperation, isExcludedOperation, platformFamilies, familyOperations } from '../lib/platformCatalog.js';
 import { actionReply, actionStage } from '../lib/briaActions.js';
 import { financialEvidence } from '../lib/briaFinancialEvidence.js';
-import { calculationBindingSchema } from '../lib/briaCalculationCoverage.js';
 
 // Las manos de Bria en toda la plataforma (Rodny, 10 de octubre de 2026). Tres herramientas:
 // - mapa_de_plataforma: busca qué operación existe para lo que piden (sin tocar nada);
@@ -29,8 +28,7 @@ export const createBriaPlatformTools = ({ actions, platform } = {}) => (actions 
   description: 'Lee cualquier dato de la plataforma por su ruta GET del mapa, con la sesión y los permisos de la persona: lo que ella vería en la pantalla. Úsala cuando ninguna herramienta propia traiga ese dato. Devuelve la respuesta tal cual (recortada si es muy larga).',
   parameters: { type: 'object', properties: {
     ruta: { type: 'string', description: 'Ruta GET completa con sus ids y su consulta, por ejemplo /crm/leads?stage=PROPUESTA_ENVIADA' },
-    idsParaSumar: { type: 'array', minItems: 1, maxItems: 100, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 128 }, description: 'Opcional para sumar un subconjunto de registros financieros: ids de las filas que ya identificaste en una consulta autorizada. Calcula sus importes exactos sobre la respuesta actual, sin cambiar los filtros de la ruta. Si falta una fila, el subtotal no se considera completo. Omite para consultar los totales de la fuente.' },
-    calculo: calculationBindingSchema
+    idsParaSumar: { type: 'array', minItems: 1, maxItems: 100, uniqueItems: true, items: { type: 'string', minLength: 1, maxLength: 128 }, description: 'Opcional para sumar un subconjunto de registros financieros: ids de las filas que ya identificaste en una consulta autorizada. Calcula sus importes exactos sobre la respuesta actual, sin cambiar los filtros de la ruta. Si falta una fila, el subtotal no se considera completo. Omite para consultar los totales de la fuente.' }
   }, required: ['ruta'] },
   allowed: canUseBria,
   async run({ ruta, idsParaSumar } = {}, ctx) {
