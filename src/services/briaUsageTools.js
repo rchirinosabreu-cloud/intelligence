@@ -4,7 +4,7 @@ import { canUseBria } from '../lib/briaLivingMemory.js';
 // «¿Cómo te han usado?» (10 de octubre de 2026): cifras de uso de Bria para administradores, para pulirla con el uso.
 export const createBriaUsageTools = (service) => service ? [{
   name: 'uso_de_bria',
-  description: 'Cómo se ha usado Bria en los últimos días: cuántas personas preguntaron y cuántas veces, qué herramientas se usaron, cuántas respuestas quedaron sin respuesta o con una herramienta fallida, cuántas recibieron pulgar arriba o abajo (y los motivos escritos al pulgar abajo), y cuántos tokens costó. Nunca trae el contenido de las conversaciones. Úsala cuando un administrador pregunte quién te usa, cuánto te usan, qué preguntan, qué tan bien respondes o cuánto cuestas.',
+  description: 'Cómo se ha usado Bria en los últimos días: cuántas personas preguntaron y cuántas veces, qué herramientas se usaron, cuántas respuestas quedaron sin respuesta o con una herramienta fallida, cuántas recibieron pulgar arriba o abajo (y los motivos escritos al pulgar abajo), y cuántos tokens costó. Nunca trae el contenido de las conversaciones. Úsala cuando un administrador pregunte cómo te han usado, quién te usa, cuánto te usan, qué preguntan, qué tan bien respondes o cuánto cuestas, y responde con cifras y sin juicios sobre las personas: es para pulirte con el uso, no para evaluar a nadie.',
   parameters: { type: 'object', properties: { dias: { type: 'integer', enum: USAGE_PERIODS, description: '7 por defecto.' } } },
   allowed: (user) => canUseBria(user) && user?.role === 'ADMIN',
   async run({ dias } = {}) {

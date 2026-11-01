@@ -27,7 +27,7 @@ const reply = (out, key) => {
 
 export const createPermissionRequestTools = (service) => service ? [{
   name: 'pedir_permiso',
-  description: 'Le pide a los administradores acceso a un módulo de la plataforma que la cuenta de esta persona no tiene (la lista va en «Módulos que no tiene», al final de tus instrucciones). Llámala sin que la persona lo pida cuando lo que pregunta o quiere hacer es de uno de esos módulos, con «para» en pocas palabras (por ejemplo «ver cuánto debe Aristea»). El administrador recibe un aviso con «Dar acceso» y «Denegar», y a ella le llega la respuesta.',
+  description: 'Le pide a los administradores acceso a un módulo de la plataforma que la cuenta de esta persona no tiene (la lista de módulos que le faltan llega en «Módulos que no tiene», en la última línea de tus instrucciones). Si la persona pide algo de uno de esos módulos, no lo deduzcas por otro camino ni le digas solo que no está disponible: llámala sin que ella lo pida, con el módulo y «para» en pocas palabras (por ejemplo «ver cuánto debe Aristea»), y dile en una frase que ya se lo pediste a un administrador. El administrador recibe un aviso con «Dar acceso» y «Denegar», y a ella le llega la respuesta. Lo que es solo de administración (Gobierno de IA, Salud operativa, el uso de Bria) no es un módulo: eso no se pide.',
   parameters: { type: 'object', properties: {
     modulo: { type: 'string', enum: [...MODULE_KEYS] },
     para: { type: ['string', 'null'], description: 'Para qué lo necesita, en pocas palabras; null si no se sabe.' }

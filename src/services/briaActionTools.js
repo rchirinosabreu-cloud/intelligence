@@ -7,6 +7,9 @@ import { hasFinancialPermission } from '../utils/financialPermissions.js';
 // Las herramientas solo preparan: el modelo no tiene forma de cambiar nada. El servidor ejecuta cuando la
 // persona escribe «Confirmar» sobre el resumen de la respuesta inmediatamente anterior (briaConversationService).
 const allowedFor = (type) => (user) => canUseBria(user) && hasModulePermission(user, ACTION_PERMISSION[type]);
+// Lo común a toda acción (31 de octubre de 2026): la guía de cada herramienta vive en su descripción, que el modelo ve
+// solo cuando la tiene en la mano; antes estaba repetida en las instrucciones fijas.
+const COMMON = 'Llámala con lo que la persona dijo: deduce lo que puedas, la herramienta pregunta lo que falta de a una cosa y arma el resumen. Si la persona responde lo que faltaba, vuelve a llamarla con todo lo que ya se sabía más lo nuevo. Nunca digas que cambiaste o creaste algo: el servidor lo hace solo cuando la persona escribe «Confirmar» sobre el resumen. Si la herramienta responde que no se puede, di por qué con sus palabras.';
 const run = (service, type) => async (args, ctx) => {
   const action = await service.prepare({ user: ctx.user, type, args, previous: ctx.pendingAction, attachments: ctx.chatAttachments || [] });
   const reply = actionReply(action);
@@ -15,7 +18,7 @@ const run = (service, type) => async (args, ctx) => {
 
 export const createBriaActionTools = (service) => service ? [{
   name: 'cambiar_pendiente',
-  description: 'Prepara un cambio en una tarea de Gestión: estado, responsable, fecha de entrega, prioridad, título o cliente. NO cambia nada: muestra el resumen y la persona confirma. Antes localiza la tarea y usa su id; si hay varias parecidas, pregunta cuál. Una tarea independiente puede cambiar de cliente; una vinculada a una pieza conserva el cliente de su parrilla. Devolver y reabrir piden motivo y nota. Una corrección en el chat ajusta el mismo cambio: vuelve a llamarla con lo nuevo.',
+  description: `Prepara un cambio en una tarea de Gestión: estado, responsable, fecha de entrega, prioridad, título o cliente. NO cambia nada: muestra el resumen y la persona confirma. Antes localiza la tarea y usa su id; si hay varias parecidas, pregunta cuál. Una tarea independiente puede cambiar de cliente; una vinculada a una pieza conserva el cliente de su parrilla. Devolver y reabrir piden motivo y nota. Una corrección en el chat ajusta el mismo cambio: vuelve a llamarla con lo nuevo. Para el mismo cambio en varias tareas usa cambiar_pendientes. Propón buenas prácticas sin imponerlas: una tarea que se cierra conviene que haya pasado por «En proceso». ${COMMON}`,
   allowed: allowedFor('TASK_UPDATE'),
   parameters: { type: 'object', properties: {
     tarea: { type: 'string', description: 'Id de la tarea.' },
@@ -32,7 +35,7 @@ export const createBriaActionTools = (service) => service ? [{
   run: run(service, 'TASK_UPDATE')
 }, {
   name: 'crear_parrilla',
-  description: 'Prepara la creación de la parrilla de contenido de un cliente para un mes, con buenas prácticas: pide quién será el responsable y cuál es el objetivo estratégico antes de crearla. NO crea nada: muestra el resumen y la persona confirma. Antes localiza el cliente con buscar_cliente y usa su id. Pasa el responsable y el objetivo si la persona ya los dijo; si no, la herramienta los pregunta.',
+  description: `Prepara la creación de la parrilla de contenido de un cliente para un mes, con buenas prácticas: una parrilla nace con responsable y objetivo estratégico, así que los pide antes de crearla, sin imponerlos. NO crea nada: muestra el resumen y la persona confirma. Antes localiza el cliente con buscar_cliente y usa su id. Pasa el responsable y el objetivo si la persona ya los dijo; si no, la herramienta los pregunta. ${COMMON}`,
   allowed: allowedFor('CREATE_PLAN'),
   parameters: { type: 'object', properties: {
     clientId: { type: 'string' },
@@ -45,7 +48,7 @@ export const createBriaActionTools = (service) => service ? [{
   run: run(service, 'CREATE_PLAN')
 }, {
   name: 'cambiar_pendientes',
-  description: 'Prepara el mismo cambio para varias tareas de Gestión a la vez (hasta 50): estado, responsable, fecha de entrega y/o cliente de destino para tareas independientes. NO cambia nada: muestra cuáles sí y cuáles no, conserva permisos y la persona confirma. Usa ids para una selección concreta o filtro para el conjunto solicitado; no extiendas una corrección a otras tareas solo por compartir cliente. filtro.cliente selecciona el origen; cliente indica el destino. Devolver o reabrir piden motivo por tarea: usa cambiar_pendiente de a una.',
+  description: `Prepara el mismo cambio para varias tareas de Gestión a la vez (hasta 50): estado, responsable, fecha de entrega y/o cliente de destino para tareas independientes. NO cambia nada: muestra cuáles sí y cuáles no, conserva permisos y la persona confirma. Para un pedido en lote por persona, cliente, sin responsable o vencidas («todos los pendientes de Jarlan, pónselos a Kamila», «los que no tienen asignación, a Francisco») llama cambiar_pendientes con filtro y el cambio (estado, responsable o fecha), sin pedirle ids a la persona ni listar antes: la herramienta resuelve el lote y dice cuáles sí y cuáles no. Usa ids solo para una selección concreta; no extiendas una corrección a otras tareas solo por compartir cliente. filtro.cliente selecciona el origen; cliente indica el destino. Para «cuántos…» o «cuáles…» usa buscar_pendientes. Devolver o reabrir piden motivo por tarea: usa cambiar_pendiente de a una. ${COMMON}`,
   allowed: allowedFor('TASKS_STATUS'),
   parameters: { type: 'object', properties: {
     tareas: { type: 'array', maxItems: 50, items: { type: 'string' }, description: 'Ids de las tareas; vacío si se usa filtro.' },
@@ -65,7 +68,7 @@ export const createBriaActionTools = (service) => service ? [{
   run: run(service, 'TASKS_STATUS')
 }, {
   name: 'crear_pieza',
-  description: 'Prepara una pieza nueva en la parrilla de un cliente: objetivo (el título que verá el equipo y el cliente), formato y día de publicación, con hora opcional. NO crea nada: muestra el resumen y la persona confirma. Pasa el id de la parrilla (de parrilla_de_cliente) o el id del cliente con el mes. Pasa lo que la persona dijo; lo que falte lo pregunta la herramienta. Avisa si ese día ya hay otra pieza o si la fecha cae fuera del mes.',
+  description: `Prepara una pieza nueva en la parrilla de un cliente: objetivo (el título que verá el equipo y el cliente), formato y día de publicación, con hora opcional. NO crea nada: muestra el resumen y la persona confirma. Pasa el id de la parrilla (de parrilla_de_cliente) o el id del cliente con el mes. Avisa si ese día ya hay otra pieza o si la fecha cae fuera del mes. ${COMMON}`,
   allowed: allowedFor('CREATE_ITEM'),
   parameters: { type: 'object', properties: {
     planId: { type: ['string', 'null'], description: 'Id de la parrilla, de parrilla_de_cliente.' },
@@ -81,7 +84,7 @@ export const createBriaActionTools = (service) => service ? [{
   run: run(service, 'CREATE_ITEM')
 }, {
   name: 'mover_pieza',
-  description: 'Prepara el cambio de fecha (y hora, si la dicen) de publicación de una pieza de la parrilla. NO cambia nada: muestra el resumen y la persona confirma. Antes localiza la pieza con parrilla_de_cliente y usa su id. Una pieza ya publicada no se mueve; si tiene una publicación programada en redes, se mueve con ella y la herramienta lo avisa.',
+  description: `Prepara el cambio de fecha (y hora, si la dicen) de publicación de una pieza de la parrilla. NO cambia nada: muestra el resumen y la persona confirma. Antes localiza la pieza con parrilla_de_cliente y usa su id. Una pieza ya publicada no se mueve; si tiene una publicación programada en redes, se mueve con ella y la herramienta lo avisa, igual que una fecha pasada o una pieza que el cliente ya aprobó. ${COMMON}`,
   allowed: allowedFor('MOVE_ITEM'),
   parameters: { type: 'object', properties: {
     pieza: { type: 'string', description: 'Id de la pieza.' },
@@ -93,7 +96,7 @@ export const createBriaActionTools = (service) => service ? [{
 }, {
   // Lo que más hace el equipo (22 de octubre de 2026): editar una pieza.
   name: 'editar_pieza',
-  description: 'Prepara un cambio en una pieza de la parrilla: el texto de la publicación (lo que ve el cliente), el guion (solo el equipo), el estado (borrador, en revisión, aprobado, devuelto, en producción, realizado), el objetivo, el formato o la nota interna. NO cambia nada: muestra un párrafo y la persona confirma. Antes localiza la pieza con parrilla_de_cliente (y lee su texto con leer_piezas_de_parrilla si te piden ajustarlo, no reemplazarlo) y pasa el texto completo como debe quedar, nunca solo el pedazo nuevo. Pasa solo lo que cambia; lo demás en null. Para mover la fecha usa mover_pieza. Programado y Publicado no se ponen a mano.',
+  description: `Prepara un cambio en una pieza de la parrilla: el texto de la publicación (lo que ve el cliente), el guion (solo el equipo), el estado (borrador, en revisión, aprobado, devuelto, en producción, realizado), el objetivo, el formato o la nota interna. NO cambia nada: muestra un párrafo y la persona confirma. Antes localiza la pieza con parrilla_de_cliente (y lee su texto con leer_piezas_de_parrilla si te piden ajustarlo, no reemplazarlo) y pasa el texto completo como debe quedar, nunca solo el pedazo nuevo. Pasa solo lo que cambia; lo demás en null. Para mover la fecha usa mover_pieza; para la foto o el video final, subir_pieza_final. Programado y Publicado no se ponen a mano. ${COMMON}`,
   allowed: allowedFor('EDIT_ITEM'),
   parameters: { type: 'object', properties: {
     pieza: { type: 'string', description: 'Id de la pieza.' },
@@ -109,7 +112,7 @@ export const createBriaActionTools = (service) => service ? [{
 }, {
   // La pieza final desde el chat o WhatsApp (22 de octubre de 2026).
   name: 'subir_pieza_final',
-  description: 'Prepara la subida de la pieza final de una pieza de la parrilla: la foto o el video que llegó en el chat (por la plataforma o por WhatsApp), o un enlace de Google Drive cuando el archivo pesa más de 20 MB. NO sube nada: muestra un párrafo y la persona confirma. Antes localiza la pieza con parrilla_de_cliente y usa su id. Si el archivo llegó con este mensaje, archivos va en null; si llegó antes, pasa su nombre (o varios, separados por coma) o «el último». Si te pegan un enlace de Drive, pásalo en enlace. Lo que falte lo pregunta la herramienta.',
+  description: `Prepara la subida de la pieza final de una pieza de la parrilla: la foto o el video que llegó en el chat (por la plataforma o por WhatsApp), o un enlace de Google Drive cuando el archivo pesa más de 20 MB. NO sube nada: muestra un párrafo y la persona confirma. Antes localiza la pieza con parrilla_de_cliente y usa su id. Si el archivo llegó con este mensaje, archivos va en null; si llegó antes, pasa su nombre (o varios, separados por coma) o «el último». Si te pegan un enlace de Drive, pásalo en enlace. ${COMMON}`,
   allowed: allowedFor('FINAL_ASSET'),
   parameters: { type: 'object', properties: {
     pieza: { type: 'string', description: 'Id de la pieza.' },
@@ -120,7 +123,7 @@ export const createBriaActionTools = (service) => service ? [{
   run: run(service, 'FINAL_ASSET')
 }, {
   name: 'registrar_observacion',
-  description: 'Prepara una observación en la ficha de un cliente (Operación de clientes): contexto que el equipo tiene que leer, como un acuerdo, una sensibilidad del cliente o un cambio de interlocutor. NO es un pendiente ni una tarea. NO escribe nada: muestra el resumen y la persona confirma. Antes localiza el cliente con buscar_cliente y usa su id. Pasa el texto con las palabras de la persona.',
+  description: `Prepara una observación en la ficha de un cliente (Operación de clientes): contexto que el equipo tiene que leer, como un acuerdo, una sensibilidad del cliente o un cambio de interlocutor. NO es un pendiente ni una tarea. NO escribe nada: muestra el resumen y la persona confirma. Antes localiza el cliente con buscar_cliente y usa su id. Pasa el texto con las palabras de la persona. ${COMMON}`,
   allowed: allowedFor('CLIENT_NOTE'),
   parameters: { type: 'object', properties: {
     clientId: { type: 'string' },
@@ -131,7 +134,7 @@ export const createBriaActionTools = (service) => service ? [{
 }, {
   // Registrar un movimiento conversando, con su comprobante (Rodny, 22 de octubre de 2026).
   name: 'registrar_movimiento',
-  description: 'Prepara un movimiento de Financiero (un ingreso o un egreso) con su comprobante. Úsala cuando la persona pida registrar un pago, un gasto, un cobro o un movimiento, sobre todo si manda la foto o el PDF de un comprobante, una factura o un recibo: léelo tú (valor, fecha, a quién o de quién, concepto, número de referencia) y pasa lo que viste junto con lo que dijo la persona. NO registra nada: muestra un párrafo y la persona confirma. Lo que falte (la cuenta, la categoría…) lo pregunta la herramienta de a una cosa, con botones: no lo inventes ni lo preguntes tú antes. Si dice el cliente, pásalo por su nombre. Para corregir algo del resumen, vuelve a llamarla con lo nuevo.',
+  description: `Prepara un movimiento de Financiero (un ingreso o un egreso) con su comprobante. Úsala cuando la persona pida registrar un pago, un gasto, un cobro o un movimiento, sobre todo si manda la foto o el PDF de un comprobante, una factura o un recibo: léelo tú (valor, fecha, a quién o de quién, concepto, número de referencia) y llámala en esa misma respuesta con lo que viste junto con lo que dijo la persona; no le describas el comprobante. Si el archivo no se lee, dilo y pide el dato. NO registra nada: muestra un párrafo y la persona confirma. Lo que falte (la cuenta, la categoría…) lo pregunta la herramienta de a una cosa, con botones: no lo inventes ni lo preguntes tú antes. Si dice el cliente, pásalo por su nombre. Para corregir algo del resumen, vuelve a llamarla con lo nuevo. Nunca digas que registraste el movimiento: el servidor lo hace solo cuando la persona escribe «Confirmar» sobre el resumen.`,
   allowed: (user) => allowedFor('FINANCIAL_RECORD')(user) && hasFinancialPermission(user, 'write'),
   parameters: { type: 'object', properties: {
     tipo: { type: ['string', 'null'], description: 'ingreso o egreso; deducido de lo que dijo la persona o del comprobante.' },
@@ -150,7 +153,7 @@ export const createBriaActionTools = (service) => service ? [{
 }, {
   // Los compromisos de una reunión, a pendientes (Rodny, 14 de octubre de 2026).
   name: 'pendientes_de_reunion',
-  description: 'Prepara los pendientes que salieron de una reunión: lee los compromisos de su minuta (tarea, responsable y fecha que anotó el análisis) y arma un pendiente por cada uno, con el responsable del equipo que corresponde y la fecha. NO crea nada: muestra el resumen numerado y la persona confirma. Pasa la reunión por su título (o su id, si lo tienes de memoria_de_reuniones); si la persona dijo el cliente o una fecha para los que no la tienen, pásalos; lo demás lo pregunta la herramienta de a una cosa. Para corregir un compromiso concreto usa ajustes con su número: otro responsable, otra fecha u omitirlo. Lo que ya es pendiente no se repite.',
+  description: `Convierte los compromisos de una reunión en pendientes («prepara los pendientes de la reunión con Endova»): lee los compromisos de su minuta (tarea, responsable y fecha que anotó el análisis) y arma un pendiente por cada uno, con el responsable del equipo que corresponde y la fecha. NO crea nada: muestra el resumen numerado y la persona confirma. Pasa la reunión por su título (o su id, si lo tienes de memoria_de_reuniones); si la persona dijo el cliente o una fecha para los que no la tienen, pásalos; lo demás lo pregunta la herramienta de a una cosa. Cada compromiso sale numerado y la persona corrige por número con ajustes: otro responsable, otra fecha u omitirlo. No inventes responsables ni fechas que la reunión no diga. Lo que ya es pendiente no se repite. ${COMMON}`,
   allowed: (user) => canUseBria(user) && actionModules('MINUTE_TASKS').every((module) => hasModulePermission(user, module)),
   parameters: { type: 'object', properties: {
     reunion: { type: ['string', 'null'], description: 'Título (o id) de la reunión. Null para seguir con la misma reunión que se estaba preparando.' },
@@ -168,7 +171,7 @@ export const createBriaActionTools = (service) => service ? [{
 }, {
   // La parrilla del mes en borrador (Rodny, 14 de octubre de 2026, opción 2: propuesta en el chat y «Confirmar» envía las elegidas).
   name: 'proponer_parrilla',
-  description: 'Propone la parrilla de un mes para un cliente: Bria lee el contrato (piezas por formato), el objetivo del mes, los criterios editoriales aprobados y la parrilla anterior, y arma las piezas (objetivo, formato, día, idea para el equipo y texto de publicación) siguiendo el énfasis que diga la persona («el cliente quiere énfasis en el lanzamiento», «nada de descuentos»). NO crea nada: muestra las piezas numeradas y la persona elige cuáles enviar a la parrilla como borrador y confirma. Antes localiza el cliente con buscar_cliente y usa su id. Para quitar piezas usa omitir con sus números; para quedarse solo con algunas, solo; para otra propuesta con más énfasis, rehacer. Si la parrilla del mes no existe, se crea al confirmar y la herramienta pide responsable y objetivo.',
+  description: `Propone la parrilla de un mes para un cliente («necesito la parrilla de Endova de noviembre, el cliente quiere énfasis en el lanzamiento»): Bria lee el contrato (piezas por formato), el objetivo del mes, los criterios editoriales aprobados y la parrilla anterior, y arma las piezas (objetivo, formato, día, idea para el equipo y texto de publicación) siguiendo el énfasis que diga la persona, con sus palabras («el cliente quiere énfasis en el lanzamiento», «nada de descuentos»). NO crea nada: muestra las piezas numeradas y la persona elige cuáles enviar a la parrilla como borrador y confirma. Antes localiza el cliente con buscar_cliente y usa su id. Para quitar piezas usa omitir con sus números; para quedarse solo con algunas, solo; para otra propuesta con más énfasis, rehacer; con «Confirmar» se envían en borrador solo las elegidas. Si la parrilla del mes no existe, se crea al confirmar y la herramienta pide responsable y objetivo. No describas tú las piezas antes de llamarla ni afirmes que ya están en la parrilla. ${COMMON}`,
   allowed: allowedFor('PLAN_DRAFT'),
   parameters: { type: 'object', properties: {
     clientId: { type: 'string' },

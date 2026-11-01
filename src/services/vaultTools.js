@@ -21,7 +21,7 @@ const text = (value, max) => (value == null ? null : String(value).trim().slice(
 export const createVaultTools = (service) => service ? [
   {
     name: 'buscar_acceso',
-    description: 'Busca en la bóveda los accesos de un cliente o de la agencia (Instagram, Meta Business, hosting, correo, Canva…) que esta persona puede ver. Úsala cuando pida un usuario o una contraseña. Devuelve solo nombre, plataforma y cliente: la plataforma muestra el acceso en una tarjeta bajo tu respuesta, nunca tú. Pásale el clientId de buscar_cliente si es de un cliente.',
+    description: 'Eres la bóveda de la agencia. Busca en la bóveda los accesos de un cliente o de la agencia (Instagram, Meta Business, hosting, correo, Canva…) que esta persona puede ver. Úsala cuando pida un usuario o una contraseña. Devuelve solo nombre, plataforma y cliente: la plataforma muestra el acceso en una tarjeta bajo tu respuesta, nunca tú. Tú nunca ves, escribes, repites ni inventas una contraseña, y nunca pides que la escriban en el chat. Pásale el clientId de buscar_cliente si es de un cliente. Para guardar o cambiar un acceso usa preparar_acceso. Retira, comparte o di quién vio un acceso solo cuando te lo pidan. Si un acceso existe pero la persona no puede verlo, se le pide a un administrador sin que ella tenga que pedirlo: esta herramienta lo hace sola con una coincidencia; con varias, elige cuál y usa pedir_acceso. Díselo en una frase y nunca muestres ni insinúes lo que guarda.',
     parameters: { type: 'object', properties: {
       clientId: { type: ['string', 'null'] },
       consulta: { type: 'string', description: 'Plataforma o nombre de la cuenta, por ejemplo «instagram» o «correo».' }
@@ -76,7 +76,7 @@ export const createVaultTools = (service) => service ? [
   },
   {
     name: 'preparar_acceso',
-    description: 'Prepara guardar un acceso nuevo en la bóveda, o cambiar uno existente (con accesoId de buscar_acceso), cuando la persona lo pide. Reúne conversando el cliente (clientId de buscar_cliente, o null si es de la agencia), la plataforma, un nombre corto y, si lo dice, el usuario o correo, el enlace y notas. NO recibe la contraseña: bajo tu respuesta aparece un campo protegido donde la persona la escribe, y se guarda directo en la bóveda. Pide solo lo que falte.',
+    description: 'Prepara guardar un acceso nuevo en la bóveda, o cambiar uno existente (con accesoId de buscar_acceso), cuando la persona lo pide. Reúne conversando el cliente (clientId de buscar_cliente, o null si es de la agencia), la plataforma, un nombre corto y, si lo dice, el usuario o correo, el enlace y notas. NO recibe la contraseña: bajo tu respuesta aparece un campo protegido donde la persona la escribe, y se guarda directo en la bóveda. Pide solo lo que falte. Tú nunca ves, escribes, repites ni inventas una contraseña, y nunca pides que la escriban en el chat. Si la persona ya la escribió en un mensaje, no la repitas: dile que la escriba en el campo protegido y que conviene cambiarla, porque quedó en la conversación.',
     parameters: { type: 'object', properties: {
       accesoId: { type: ['string', 'null'], description: 'Para cambiar un acceso que ya existe.' },
       clientId: { type: ['string', 'null'] },

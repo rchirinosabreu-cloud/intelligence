@@ -6,6 +6,10 @@ Este plan amplía lo construido en [Ojos y cerebro](BRIA_OJOS_Y_CEREBRO.md), [au
 
 ## Punto de partida
 
+### Principios, no incidentes — 31 de octubre de 2026
+
+Tercer incremento de la misma dirección. `buildInstructions` tenía 36.000 caracteres (unas 9.000 palabras) acumulados incidente por incidente: cada piloto fallido añadía un párrafo que decía «en este caso haz tal cosa», y más de la mitad del texto estaba condicionado a una herramienta concreta. Un modelo con 9.000 palabras de reglas particulares razona peor que con 1.500 de principios. Lo que es de una herramienta se movió a la descripción de esa herramienta —el modelo lo ve solo cuando la tiene en la mano— y el texto fijo quedó en siete bloques de criterio: cómo conversa, qué sabe, cómo elige fuentes, cómo decide, fechas y cifras, cómo actúa y lo que le enseñan. No se quitó ninguna regla: cambió de sitio o se dijo como principio. Las pruebas que comprobaban frases de una herramienta en las instrucciones ahora leen su descripción. Validación local: `briaAssistant`, `briaSelectiveInvestigation`, `briaGroundedResponse`, `briaTaskHours`, `briaPlatformPriority`, `briaInputs`, `briaAssistantAccess`, `briaResearchChat` y las pruebas de cada herramienta; aceptación real: las mismas conversaciones del piloto y el conjunto `npm run eval:bria-casos` con tope de gasto antes de generar.
+
 ### El cuaderno: un solo sitio para lo que Bria ya vio hoy — 31 de octubre de 2026
 
 Rodny: «no es EN frente a LA, tampoco; es ambas». Bria tenía cinco vidas separadas: la foto de las 6:00, la lectura de las 6:30, el pulso cada 15 minutos, el cierre de las 17:00 y el aprendizaje de las 22:00, cada una con su tabla y su chat. Al abrir el chat, la Bria que conversa no tenía delante lo que la Bria del pulso acababa de ver, salvo que supiera qué herramienta llamar. Por eso se sentía como módulos y no como alguien que estuvo pendiente todo el día.

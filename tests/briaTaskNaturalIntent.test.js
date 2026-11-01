@@ -51,7 +51,10 @@ test('the task tool forwards the semantic request without deriving permission fr
   assert.equal(typeof taskDraft.taskDraftRequestProblem({ request: calls[4].request, ongoing: true }), 'string', 'model evidence cannot replace a missing human message');
   assert.match(tool.description, /preparar.*ajustar/i);
   assert.match(tool.description, /negaci[oó]n.*consulta.*fuentes/i);
-  assert.match(buildInstructions({ user, tools: [tool], person: { name: 'Dirección' }, today: '2026-10-23' }), /request.*mensaje actual/i);
+  // La guía vive en la descripción de la herramienta (31 de octubre de 2026).
+  assert.match(tool.description, /request.*mensaje actual/i);
+  assert.match(tool.description, /nunca afirmes que creaste una tarea/i);
+  assert.match(buildInstructions({ user, tools: [tool], person: { name: 'Dirección' }, today: '2026-10-23' }), /- preparar_pendiente/);
 });
 
 test('only the exact UI starter bypasses interpretation; questions, negations and quotations do not', async () => {

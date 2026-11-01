@@ -155,8 +155,9 @@ test('the tool, the permission, the instruction and the progress line are wired'
   assert.equal(ACTION_PERMISSION.PLAN_DRAFT, 'parrillas');
   assert.equal(tool.allowed(pm), true);
   assert.equal(tool.allowed({ ...pm, modulePermissions: { bria: true, gestion: true } }), false);
-  const instructions = buildInstructions({ tools: [tool], user: pm, today: '2026-10-14' });
-  assert.match(instructions, /proponer_parrilla/);
-  assert.match(instructions, /énfasis/);
+  assert.match(buildInstructions({ tools: [tool], user: pm, today: '2026-10-14' }), /- proponer_parrilla/);
+  // La guía vive en la descripción de la herramienta (31 de octubre de 2026).
+  assert.match(tool.description, /énfasis/);
+  assert.match(tool.description, /No describas tú las piezas antes de llamarla ni afirmes que ya están en la parrilla/);
   assert.equal(toolProgressLabel('proponer_parrilla'), 'Armando la propuesta de la parrilla…');
 });
