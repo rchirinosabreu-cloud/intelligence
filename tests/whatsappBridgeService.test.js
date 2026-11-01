@@ -149,8 +149,9 @@ test('un vínculo vivo manda el mensaje al motor de Bria con la identidad de la 
   const result = await service.processMessage({ messageId: 'm1', from: '573001234567', profileName: 'Camila', type: 'text', text: '¿Qué tengo hoy?' });
   assert.equal(result.outcome, 'answered');
   const call = conversations.calls[0];
-  // Desde el 22 de octubre de 2026 cada mensaje lleva una sesión corta de la persona, para las manos de la plataforma.
-  assert.deepEqual([call.user.userId, call.user.role, call.user.sessionVersion, call.session, call.question], ['u-camila', 'PROJECT_MANAGER', 3, { token: 'sesion-corta-de-u-camila-v3' }, '¿Qué tengo hoy?']);
+  // Desde el 22 de octubre de 2026 cada mensaje lleva una sesión corta de la persona, para las manos de la plataforma,
+  // y desde el 1 de noviembre dice por dónde habla, para que Bria responda como se lee en un celular.
+  assert.deepEqual([call.user.userId, call.user.role, call.user.sessionVersion, call.session, call.question], ['u-camila', 'PROJECT_MANAGER', 3, { token: 'sesion-corta-de-u-camila-v3', channel: 'whatsapp' }, '¿Qué tengo hoy?']);
   assert.equal(repository.links.get('u-camila').conversationId, call.id, 'la conversación de WhatsApp se recuerda para seguirla');
   // Las opciones salen como botones (22 de octubre de 2026); tocarlos o escribir con sus palabras vale lo mismo.
   assert.equal(sent[0].body.status, 'read');
@@ -163,6 +164,17 @@ test('un vínculo vivo manda el mensaje al motor de Bria con la identidad de la 
   // Un aviso repetido de Meta no se responde dos veces.
   assert.deepEqual(await service.processMessage({ messageId: 'm2', from: '573001234567', type: 'text', text: 'Crear pendiente' }), { skipped: 'duplicate' });
   assert.equal(conversations.calls.length, 2);
+});
+
+test('sin sesión corta Bria sigue respondiendo y sigue sabiendo que habla por WhatsApp', async () => {
+  const repository = fakeRepository();
+  repository.links.set('u-camila', { userId: 'u-camila', waId: '573001234567', profileName: 'Camila', conversationId: null, linkedAt: new Date(), lastMessageAt: null });
+  const conversations = fakeConversations();
+  const db = { user: { findUnique: async () => camila } };
+  const service = createWhatsAppBridgeService({ repository, conversations: () => conversations, db, env: ENV, fetchImpl: async () => ({ ok: true, status: 200, json: async () => ({ messages: [{ id: 'wamid.out' }] }) }), now: () => new Date('2026-10-20T20:00:00Z'), logger: { warn() {}, error() {}, info() {} }, scheduleWork: (fn) => fn(), signSession: () => { throw new Error('sin clave'); }, batchWindowMs: 0 });
+  const result = await service.processMessage({ messageId: 'm1', from: '573001234567', profileName: 'Camila', type: 'text', text: 'Hola' });
+  assert.equal(result.outcome, 'answered');
+  assert.deepEqual(conversations.calls[0].session, { channel: 'whatsapp' });
 });
 
 test('quien ya no tiene Bria no habla por aquí; un audio se contesta en palabras; la bóveda nunca sale; un fallo del motor se dice', async () => {

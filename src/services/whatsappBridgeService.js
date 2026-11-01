@@ -127,10 +127,11 @@ export const createWhatsAppBridgeService = ({
     select: { id: true, name: true, email: true, role: true, isActive: true, modulePermissions: true, sessionVersion: true, hasFinancialAccess: true, financialRole: true, teamMember: { select: { isActive: true } } }
   });
   // La sesión corta de este mensaje (22 de octubre de 2026): sin ella Bria no tiene manos en la plataforma. Si no se
-  // puede firmar, Bria sigue respondiendo sin esas manos; nunca se cae el mensaje por esto.
+  // puede firmar, Bria sigue respondiendo sin esas manos; nunca se cae el mensaje por esto. El canal viaja aparte del
+  // token (1 de noviembre de 2026): Bria responde distinto en un celular, con o sin manos.
   const sessionFor = (row) => {
-    try { return { token: signSession(row) }; }
-    catch (failure) { logger.warn?.(`[WhatsApp] Sin sesión corta para este mensaje: ${failure.message}`); return null; }
+    try { return { token: signSession(row), channel: 'whatsapp' }; }
+    catch (failure) { logger.warn?.(`[WhatsApp] Sin sesión corta para este mensaje: ${failure.message}`); return { channel: 'whatsapp' }; }
   };
   const allowed = (row) => Boolean(row) && row.isActive !== false && row.teamMember?.isActive !== false && canUseBria(row);
   // La misma forma que deja `authenticateToken` en req.user: el motor de Bria no distingue por dónde llegó la persona.
