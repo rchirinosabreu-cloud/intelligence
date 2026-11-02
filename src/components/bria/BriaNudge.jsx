@@ -22,6 +22,31 @@ const decideAccess = ({ scope, requestId, decision }) => (scope === 'permission'
   ? requestBriaNudges(`/permission-requests/${requestId}/decision`, { method: 'POST', body: { decision } })
   : requestVault(`/requests/${requestId}/decision`, { method: 'POST', body: { decision } }));
 
+/** El bloque de la liga dentro del aviso (3 de noviembre de 2026): los puntos del mes, lo que subió hoy y la posición. Sin niveles, sin barras, sin reloj. */
+function NudgeProgress({ progress }) {
+  const delta = typeof progress.delta === 'number' ? progress.delta : null;
+  return (
+    <div data-bria-nudge-progress className="mt-2 flex items-center gap-3 rounded-xl border border-zinc-200/80 bg-white/60 px-3 py-2 dark:border-white/10 dark:bg-zinc-950/30">
+      <div className="flex h-11 min-w-11 shrink-0 flex-col items-center justify-center rounded-xl bg-brand-yellow/20 px-2 text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow" aria-hidden="true">
+        <span className="text-base font-semibold leading-none tabular-nums">{progress.score ?? '–'}</span>
+        <span className="mt-0.5 text-[9px] font-semibold uppercase tracking-wider">pts</span>
+      </div>
+      <div className="min-w-0 flex-1">
+        <p className="flex items-center gap-2 text-sm font-semibold leading-5 text-zinc-900 dark:text-zinc-100">
+          {progress.position || 'Liga del mes'}
+          {delta !== null && (
+            <span data-bria-nudge-delta className={cn('shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold tabular-nums', delta >= 0 ? 'bg-brand-green/15 text-brand-green-deep dark:text-brand-green' : 'bg-brand-coral/15 text-brand-coral-deep dark:text-brand-coral')}>
+              {delta >= 0 ? `+${delta}` : delta} hoy
+            </span>
+          )}
+        </p>
+        {progress.next && <p className="text-xs leading-4 text-zinc-600 dark:text-zinc-300">{progress.next}</p>}
+        {progress.detail && <p className="text-xs leading-4 text-zinc-500 dark:text-zinc-400">{progress.detail}</p>}
+      </div>
+    </div>
+  );
+}
+
 export default function BriaNudge({ userId, hidden = false, request = requestBriaNudges, decide = decideAccess, refreshMs = NUDGE_REFRESH_MS, className }) {
   const [nudges, setNudges] = useState([]), [busy, setBusy] = useState(false), mounted = useRef(true);
   // Ir a un sitio desde el aviso lleva de dónde se salió: allá se ofrece volver (30 de octubre de 2026).
@@ -73,6 +98,8 @@ export default function BriaNudge({ userId, hidden = false, request = requestBri
           {/* El seguimiento (14 de octubre de 2026): el desenlace del aviso en verde, o «sigue igual» en gris, escritos por el pulso. */}
           {nudge.resolution && <p data-bria-nudge-resolution className="mt-1.5 flex items-start gap-1.5 text-sm leading-5 text-status-positive-fg"><CheckCircle className="mt-0.5 h-4 w-4 shrink-0" />{nudge.resolution}</p>}
           {!nudge.resolution && nudge.followUp && <p data-bria-nudge-follow-up className="mt-1.5 text-sm leading-5 text-zinc-500 dark:text-zinc-400">{nudge.followUp}</p>}
+          {/* La liga del buen uso (27 de octubre de 2026): a las 3, el puntaje del mes en un anillo pequeño, el nivel y lo que se movió hoy. */}
+          {nudge.progress && <NudgeProgress progress={nudge.progress} />}
           {/* Los botones los decide la plataforma según el hecho: a dónde ir y qué pedirle a Bria (queda escrito, la persona lo envía). */}
           <div className="mt-2 -ml-2 flex flex-wrap items-center gap-x-1" data-bria-nudge-actions>
             {(nudge.actions || []).map((item) => item.decide

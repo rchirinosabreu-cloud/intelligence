@@ -144,6 +144,8 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
   // `?lectura` muestra su aviso encima de la mascota.
   const morningChat = { id: 'da11e000-0000-4000-8000-000000000003', ...morningPreview(), revision: 1, updatedAt: new Date().toISOString() };
   chats.set(morningChat.id, morningChat);
+  // La liga del buen uso (27 de octubre de 2026): a las 3 de la tarde, una vez al día, el puntaje del mes encima de la mascota. `?liga`.
+  const leagueNudge = { key: 'LIGA_DIA:2026-11-02', kind: 'LIGA_DIA', title: 'Llevas 3 de 5 hoy en la liga de noviembre.', body: 'Te falta documentar la tarea que cerraste y pausar el reloj antes de salir. Vas 60 puntos en el mes.', url: '/dashboard?carrera', taskIds: [], progress: { score: 60, position: 'Vas 6.º de 13', detail: 'Hoy 3 de 5 hábitos', delta: 15 }, actions: [{ label: 'Ver la carrera', to: '/dashboard?carrera' }, { label: 'Que Bria me diga qué mejorar', ask: '¿Qué me falta para subir en la liga de noviembre?' }] };
   const morningNudge = { key: 'LECTURA_DIA:2026-10-20', kind: 'LECTURA_DIA', title: 'Bria dejó tu lectura de la mañana.', body: 'Cómo amanecieron las cuentas y el equipo, lo que haría hoy y lo que no haría.', url: null, conversationId: morningChat.id, taskIds: [], actions: [{ label: 'Leer en Bria', conversationId: morningChat.id }] };
   let nudges = [
     { key: 'CIERRE_DIA:2026-10-13', kind: 'CIERRE_DIA', title: 'Bria dejó tu cierre del día.', body: 'Lo que cerraste, lo que queda en proceso, lo que vence mañana y cómo terminaron los avisos de hoy.', url: null, conversationId: closeChat.id, taskIds: [], actions: [{ label: 'Leer en Bria', conversationId: closeChat.id }] },
@@ -185,7 +187,7 @@ export async function createBriaPreview({ port = 3720, conversationService } = {
   // `?sinavisos` en la página deja a Bria sin tarjeta: solo la mascota, con el lápiz y el micrófono al pasar el cursor (la muestra lo lee del referer).
   api.get('/api/bria/nudges', (req, res) => {
     const referer = String(req.headers.referer || '');
-    res.json({ nudges: /sinavisos/.test(referer) ? [] : /lectura/.test(referer) ? [morningNudge] : (accessNudges(referer) ?? permissionNudges(referer) ?? nudges) });
+    res.json({ nudges: /sinavisos/.test(referer) ? [] : /liga/.test(referer) ? [leagueNudge] : /lectura/.test(referer) ? [morningNudge] : (accessNudges(referer) ?? permissionNudges(referer) ?? nudges) });
   });
   api.post('/api/bria/nudges/dismiss', (req, res) => { nudges = nudges.filter((row) => row.key !== req.body?.key); res.json({ key: req.body?.key, untilAt: new Date().toISOString() }); });
   // Buzones que lee Bria (11 de octubre de 2026): la contraseña «mala…» se rechaza como lo haría Gmail.

@@ -169,7 +169,10 @@ export const PLATFORM_OPERATIONS = {
   'PATCH /dashboard/announcements/:scope/:id': { que: 'Edita un anuncio del dashboard.', campos: 'content' },
   'DELETE /dashboard/announcements/:scope/:id': { que: 'Retira un anuncio del dashboard.' },
   'PATCH /dashboard/clients/:clientId/responsible': { que: 'Asigna el community manager de un cliente.', campos: 'responsibleId' },
-  'GET /dashboard/personal': { que: 'El dashboard personal de quien pregunta: tareas, reuniones, recordatorios.' },
+  'GET /dashboard/personal': { que: 'El dashboard personal de quien pregunta: tareas, reuniones y recordatorios.' },
+  // La liga del mes (2 y 3 de noviembre de 2026): el buen uso de la plataforma, en puntos que se suman.
+  'GET /league': { que: 'La liga del mes de quien pregunta: sus puntos (5 por cada hábito del día: reloj, al día, a tiempo, documentado, sin devolución; 5 por cada extra del día: primero en abrir la plataforma desde las 8:00, primero en la reunión; 10 por cada regalo del equipo), lo de hoy, su racha, su posición y la carrera de todo el equipo (de los demás, solo su puntaje).' },
+  'POST /league/kudos': { que: 'Regala los 10 puntos de bondad de la semana a una persona del equipo, con una línea de motivo; una vez por semana y nunca a uno mismo.', campos: 'memberId (ficha de Equipo de quien los recibe), note (una línea, hasta 120 caracteres)' },
   'GET /dashboard/operational-health': { que: 'Salud operativa de la plataforma.' },
   'GET /dashboard/operational-trace': { que: 'Historial de actividad (acciones humanas registradas).' },
   // Minutas y Drive

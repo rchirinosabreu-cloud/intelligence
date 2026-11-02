@@ -1,7 +1,8 @@
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
-import { dashboardDemoClients, dashboardDemoCompletedTasks, dashboardDemoDashboard, dashboardDemoKanbanTasks, dashboardDemoTaskComments, dashboardDemoTeam, dashboardDemoUser } from '../tests/fixtures/dashboardPreviewData.js';
+import { dashboardDemoClients, dashboardDemoCompletedTasks, dashboardDemoDashboard, dashboardDemoKanbanTasks, dashboardDemoLeague, dashboardDemoTaskComments, dashboardDemoTeam, dashboardDemoUser } from '../tests/fixtures/dashboardPreviewData.js';
+import { LEAGUE_ROSTER } from '../tests/fixtures/leaguePreviewData.js';
 
 // Local laboratory for the personal dashboard and the sidebar: the real App over a read-only mock API.
 // No dotenv, production server, database, storage, scheduler or proxy.
@@ -20,12 +21,25 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
     server: { host: '127.0.0.1', port, strictPort: true, proxy: {} },
     plugins: [{ name: 'isolated-dashboard-preview', configureServer(vite) {
       vite.middlewares.use((req, res, next) => {
-        res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws://127.0.0.1:*; worker-src 'self' blob:; frame-src 'none'");
+        // La tipografía del negocio (Roboto Condensed) viene de Google Fonts: sin permitirla aquí, la muestra se veía con la letra del sistema.
+        res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' ws://127.0.0.1:*; worker-src 'self' blob:; frame-src 'none'");
         const requestUrl = new URL(req.url, 'http://localhost');
         const pathname = requestUrl.pathname;
         if (pathname.startsWith('/api/')) {
           res.setHeader('Content-Type', 'application/json');
           res.setHeader('Cache-Control', 'no-store');
+          // El regalo de la semana de la liga (3 de noviembre de 2026): la muestra lo acepta y responde como el servidor, sin guardar nada.
+          if (req.method === 'POST' && pathname === '/api/league/kudos') {
+            let raw = '';
+            req.on('data', (chunk) => { raw += chunk; });
+            req.on('end', () => {
+              const body = (() => { try { return JSON.parse(raw || '{}'); } catch { return {}; } })();
+              const person = LEAGUE_ROSTER.find((row) => row.id === body.memberId);
+              if (!person) { res.statusCode = 404; res.end(JSON.stringify({ error: 'Esa persona no está en el equipo activo.' })); return; }
+              res.end(JSON.stringify({ id: 'kudos-demo', weekKey: '2026-W45', to: { id: person.id, name: person.name }, note: String(body.note || '').slice(0, 120) }));
+            });
+            return;
+          }
           if (req.method !== 'GET') {
             res.statusCode = 403;
             res.end(JSON.stringify({ error: 'Laboratorio de solo lectura: no se guardan cambios ni se contacta producción.' }));
@@ -35,6 +49,15 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
           const asEditor = /[?&]role=EDITOR/.test(req.headers.referer || '');
           // `?future` keeps the commitment from having expired, so the mandatory dialog stays closed.
           const focusFuture = /[?&]future/.test(req.headers.referer || '');
+          // La liga del buen uso (27 de octubre y 3 de noviembre de 2026): la copa asomada a la derecha lee `/api/league`.
+          // `?ganador` enseña a quien ganó el mes anterior, `?liga=completa` un mes perfecto y `?liga=no` una cuenta sin ficha (sin copa).
+          const referer = String(req.headers.referer || '');
+          const league = /[?&]liga=no\b/.test(referer) ? null : dashboardDemoLeague({ winner: /[?&]ganador/.test(referer), perfect: /[?&]liga=completa\b/.test(referer) });
+          if (pathname === '/api/league') {
+            if (!league) { res.statusCode = 404; res.end(JSON.stringify({ error: 'Esta cuenta no tiene ficha en Equipo.' })); return; }
+            res.end(JSON.stringify(league));
+            return;
+          }
           const demoUser = asEditor ? { ...dashboardDemoUser, role: 'EDITOR' } : dashboardDemoUser;
           const taskCommentsMatch = pathname.match(/^\/api\/tasks\/([^/]+)\/comments$/);
           if (taskCommentsMatch) { res.end(JSON.stringify(dashboardDemoTaskComments(taskCommentsMatch[1]))); return; }
