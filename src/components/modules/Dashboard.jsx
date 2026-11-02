@@ -309,6 +309,8 @@ const Dashboard = () => {
             ))}
           </motion.section>
 
+          {/* La liga del mes no vive aquí (Rodny, 3 de noviembre de 2026: «no quiero nada en el dashboard»): es la copa asomada a la derecha, en toda la plataforma. */}
+
           <div className={dashboardColumnsClass}>
             {/* Row 1: announcements across two columns, achievements beside them at the same height. */}
             <motion.div variants={item} className="min-w-0 xl:col-span-2">

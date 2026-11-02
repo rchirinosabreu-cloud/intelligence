@@ -1,4 +1,5 @@
 // Datos de ejemplo para la muestra local del dashboard. Nunca deciden nada en producción.
+import { leagueDemoPayload } from './leaguePreviewData.js';
 const hoursFromNow = (hours, now = new Date()) => new Date(now.getTime() + hours * 60 * 60 * 1000);
 const daysFromNow = (days, hour = 15, now = new Date()) => {
   const date = new Date(now);
@@ -33,6 +34,14 @@ const people = {
 export const dashboardDemoTeam = [dashboardDemoMember, ...Object.values(people).map((person) => ({ ...person, isActive: true, avatarUrl: null }))];
 
 const client = (key, name) => ({ id: `client-${key}`, name, slug: key, logoUrl: null });
+
+/**
+ * La liga de noviembre (27 de octubre, 2 y 3 de noviembre de 2026): lo que responde `/api/league` para la copa asomada a la
+ * derecha. Datos ficticios con la forma que manda el servidor; `winner` solo en los primeros días del mes (`?ganador`).
+ */
+export function dashboardDemoLeague(options = {}) {
+  return leagueDemoPayload(options);
+}
 
 export function dashboardDemoDashboard(now = new Date()) {
   // Los campos extra (tiempo, fechas, categoría, descripción) alimentan el detalle que abre el historial de logros.

@@ -68,6 +68,7 @@ import clientOperationsRouter from './api/clientOperations.js';
 import { createAiGovernanceRouter } from './api/aiGovernance.js';
 import { createIncidentReportRouter } from './api/incidentReports.js';
 import { createImportantNoticeRouter } from './api/importantNotices.js';
+import { createPlatformLeagueRouter } from './api/platformLeague.js';
 import { createServiceHealthRouter } from './api/serviceHealth.js';
 import { createClientProfitabilityRouter } from './api/clientProfitability.js';
 import { createTeamChatRouter, createTeamChatMediaRouter } from './api/teamChat.js';
@@ -363,6 +364,8 @@ router.use('/crm', requireModulePermission('crm'), crmRouter);
 router.use('/incident-reports', createIncidentReportRouter());
 // Avisos importantes: la banda de abajo, de cada persona (el servicio comprueba que el aviso sea suyo).
 router.use('/important-notices', createImportantNoticeRouter());
+// La liga del mes (2 de noviembre de 2026): la liga de la persona con la carrera del equipo, y el regalo semanal.
+router.use('/league', createPlatformLeagueRouter());
 router.use('/ai-governance', createAiGovernanceRouter());
 router.use('/service-health', createServiceHealthRouter());
 // Rentabilidad por cliente (22 de octubre de 2026): solo administradores, solo lectura.
