@@ -49,6 +49,75 @@ try {
     );
   `);
   await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ClientMonthlyReport_clientId_year_month_key" ON "ClientMonthlyReport"("clientId", "year", "month");`);
+  // Estados del informe (29 de octubre de 2026): lo que ya estaba marcado era un informe entregado, es decir, enviado.
+  await client.query(`ALTER TABLE "ClientMonthlyReport" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'ENVIADO';`);
+  await client.query(`ALTER TABLE "ClientMonthlyReport" ADD COLUMN IF NOT EXISTS "link" TEXT;`);
+  await client.query(`ALTER TABLE "ClientMonthlyReport" ADD COLUMN IF NOT EXISTS "note" TEXT;`);
+  await client.query(`ALTER TABLE "ClientMonthlyReport" ADD COLUMN IF NOT EXISTS "updatedAt" TIMESTAMPTZ(3);`);
+  await client.query(`ALTER TABLE "ClientMonthlyReport" ADD COLUMN IF NOT EXISTS "updatedById" TEXT;`);
+  // El cierre del mes que confirma el project manager, con lo que quedó pendiente (29 de octubre de 2026).
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS "ClientMonthlyClose" (
+      "id" TEXT PRIMARY KEY,
+      "clientId" TEXT NOT NULL REFERENCES "Client"("id") ON DELETE CASCADE,
+      "year" INTEGER NOT NULL,
+      "month" INTEGER NOT NULL,
+      "closedAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "closedById" TEXT,
+      "note" TEXT,
+      "snapshot" JSONB NOT NULL DEFAULT '{}'::jsonb
+    );
+  `);
+  await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ClientMonthlyClose_clientId_year_month_key" ON "ClientMonthlyClose"("clientId", "year", "month");`);
+  // Trabajo sin propuesta aprobada (29 de octubre de 2026): las autorizaciones para seguir trabajando, y lo ya avisado a
+  // Dirección, una vez por cliente y mes.
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS "ClientWorkAuthorization" (
+      "id" TEXT PRIMARY KEY,
+      "clientId" TEXT NOT NULL REFERENCES "Client"("id") ON DELETE CASCADE,
+      "until" TEXT NOT NULL,
+      "reason" TEXT NOT NULL,
+      "authorizedById" TEXT,
+      "authorizedByName" TEXT,
+      "createdAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
+    );
+  `);
+  await client.query(`CREATE INDEX IF NOT EXISTS "ClientWorkAuthorization_clientId_createdAt_idx" ON "ClientWorkAuthorization"("clientId", "createdAt");`);
+  // La parrilla de MIO en una hoja de Google y lo leído de ella (29 de octubre de 2026).
+  await client.query(`ALTER TABLE "Client" ADD COLUMN IF NOT EXISTS "externalPlanUrl" TEXT;`);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS "ExternalPlanSnapshot" (
+      "id" TEXT PRIMARY KEY,
+      "clientId" TEXT NOT NULL REFERENCES "Client"("id") ON DELETE CASCADE,
+      "year" INTEGER NOT NULL,
+      "month" INTEGER NOT NULL,
+      "tabName" TEXT,
+      "pieces" JSONB NOT NULL DEFAULT '[]'::jsonb,
+      "summary" JSONB NOT NULL DEFAULT '{}'::jsonb,
+      "problem" TEXT,
+      "readAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      "okAt" TIMESTAMPTZ(3)
+    );
+  `);
+  await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS "ExternalPlanSnapshot_clientId_year_month_key" ON "ExternalPlanSnapshot"("clientId", "year", "month");`);
+  // El espejo en Parrillas: pestaña, comentarios de Google y lo que cambió entre lecturas.
+  await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "gid" TEXT;`);
+  await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "comments" JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "commentsAt" TIMESTAMPTZ(3);`);
+  await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "changes" JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "changedAt" TIMESTAMPTZ(3);`);
+  // Escribir en la hoja desde la plataforma: columnas de la pestaña y lo que se cambió desde aquí.
+  await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "layout" JSONB;`);
+  await client.query(`ALTER TABLE "ExternalPlanSnapshot" ADD COLUMN IF NOT EXISTS "edits" JSONB NOT NULL DEFAULT '[]'::jsonb;`);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS "UnbackedWorkAlert" (
+      "id" TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+      "clientId" TEXT NOT NULL,
+      "monthKey" TEXT NOT NULL,
+      "sentAt" TIMESTAMPTZ(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE("clientId", "monthKey")
+    );
+  `);
   await client.query(`
     CREATE TABLE IF NOT EXISTS "ClientObservation" (
       "id" TEXT PRIMARY KEY,

@@ -1,4 +1,4 @@
-import React, { useLayoutEffect } from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import { CalendarDays, CheckCircle2, CheckSquare, Edit, ExternalLink, FileBarChart, Instagram, LayoutGrid, Plus, RotateCcw, Video } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -6,12 +6,16 @@ import ClientAvatar from '@/components/ui/ClientAvatar';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 import {
-  CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_STATUSES, OPERATION_STAGES, SERVICE_TYPES, STORY_FREQUENCIES,
-  contractQuota, isMeasured, labelOf, shortDate,
+  CLIENT_AGENCIES, CLIENT_COMPLEXITY, CONTRACT_STATUSES, MONTH_NAMES, OPERATION_STAGES, SERVICE_TYPES, STORY_FREQUENCIES,
+  canMarkPublished, contractQuota, isMeasured, labelOf, shortDate,
 } from '@/lib/clientOperations';
 import { LEVEL_META, PIECE_STATUS, STAGE_TONE } from './operationTones';
 import CycleBar from './CycleBar';
 import ClientObservations from './ClientObservations';
+import { CloseDialog, ReportDialog, SuspensionDialog, WorkAuthorizationDialog } from './MonthlyCloseDialogs';
+import PiecePeekDialog from './PiecePeekDialog';
+import { unbackedWork } from '@/lib/unbackedWork';
+import { canConfirmClose, closeOpensOn, closeSummaryText, reportStatusLabel } from '@/lib/monthlyClose';
 
 // Página completa de un cliente en «Operación» (borrador del 2 de octubre de 2026). Todo lo que la fila
 // del Excel tenía de ese cliente, más lo que se trabaja desde aquí: marcar lo publicado por fuera,
@@ -55,15 +59,60 @@ function Attention({ evaluation }) {
   );
 }
 
-function CurrentCycle({ cycle, today, onMarkPublished, onUndoPublished, onOpenPlan }) {
+// El informe del mes y su estado (29 de octubre de 2026): solo «Enviado» cuenta como entregado.
+function ReportStatus({ report }) {
+  const status = report?.status || 'PENDIENTE';
+  const sent = status === 'ENVIADO';
+  return (
+    <span className="inline-flex min-w-0 flex-wrap items-center gap-x-1.5" data-report-status={status}>
+      <span className={cn('rounded-md px-2 py-0.5 text-xs font-semibold', sent ? 'bg-status-positive/10 text-status-positive-fg' : 'bg-zinc-100 text-zinc-700 dark:bg-white/5 dark:text-zinc-200')}>{reportStatusLabel(status)}</span>
+      {sent && report?.deliveredAt && <span className="text-xs text-zinc-500">el {shortDate(report.deliveredAt)}{report.by ? ` · ${report.by}` : ''}</span>}
+      {!sent && report?.updatedAt && <span className="text-xs text-zinc-500">desde el {shortDate(report.updatedAt)}</span>}
+      {report?.link && <a href={report.link} target="_blank" rel="noreferrer" className="text-xs font-medium text-brand-cyan-deep hover:underline dark:text-brand-cyan">Ver informe</a>}
+    </span>
+  );
+}
+
+// El cierre del mes, confirmado o por confirmar (29 de octubre de 2026).
+function CloseStatus({ cycle, today, onClose, onReopen, compact = false }) {
+  if (cycle.close) {
+    const summary = closeSummaryText(cycle.close.snapshot);
+    return (
+      <span className="inline-flex flex-wrap items-center gap-x-1 text-xs text-zinc-600 dark:text-zinc-300" data-close-status="confirmed" title={compact ? summary : undefined}>
+        <span>
+          Cerrado el {shortDate(cycle.close.closedAt)}{cycle.close.by ? ` · ${cycle.close.by}` : ''}{compact ? '' : `. ${summary}`}
+          {!compact && cycle.close.note && <span className="text-zinc-500"> {cycle.close.note}</span>}
+        </span>
+        {/* Todo es editable (Rodny, 29 de octubre de 2026): un cierre confirmado por error se reabre. */}
+        {onReopen && <button type="button" onClick={() => onReopen(cycle)} data-close-reopen className="min-h-9 rounded-md px-1 font-medium text-brand-cyan-deep hover:underline dark:text-brand-cyan">Reabrir</button>}
+      </span>
+    );
+  }
+  if (canConfirmClose(cycle, today)) {
+    return <button type="button" onClick={() => onClose(cycle)} data-close-open className={cn(TEXT_ACTION, '-ml-3 min-h-9')}><CheckCircle2 className="h-4 w-4" />Confirmar cierre</button>;
+  }
+  return <span className="text-xs text-zinc-500" data-close-status="later">Se confirma desde el {shortDate(closeOpensOn(cycle))}</span>;
+}
+
+function CurrentCycle({ cycle, today, monthlyReport, onReport, onClose, onReopen, externalPlanUrl, onMarkPublished, onUndoPublished, onOpenPlan, onPeek }) {
+  // Sin parrilla aquí, el mes sale de la hoja de MIO: sus piezas se leen, no se marcan desde la plataforma.
+  const fromSheet = cycle.source?.kind === 'HOJA_MIO';
   return (
     <section className={CARD} aria-label={`Parrilla de ${cycle.label}`}>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-base font-semibold">{cycle.label}{cycle.start && !cycle.start.endsWith('-01') && <span className="ml-1.5 text-sm font-normal text-zinc-500">del {shortDate(cycle.start)} al {shortDate(cycle.end)}</span>}</h2>
           <p className={LABEL}>Día {cycle.day} de {cycle.length} · {cycle.reached.publicada} de {cycle.quota} publicadas</p>
+          {fromSheet && (
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400" data-cycle-source="HOJA_MIO">
+              Leído de la hoja de MIO{cycle.source.tab ? `, pestaña ${cycle.source.tab}` : ''}{cycle.source.readAt ? ` · ${shortDate(cycle.source.readAt)}` : ''}
+              {cycle.source.problem && <span className="text-zinc-600 dark:text-zinc-300"> · {cycle.source.problem}</span>}
+            </p>
+          )}
         </div>
-        {cycle.created > 0 && <button type="button" onClick={onOpenPlan} className={cn(TEXT_ACTION, '-mr-2 -mt-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5')}>Abrir parrilla <ExternalLink className="h-4 w-4" /></button>}
+        {fromSheet && externalPlanUrl
+          ? <a href={externalPlanUrl} target="_blank" rel="noreferrer" className={cn(TEXT_ACTION, '-mr-2 -mt-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5')}>Abrir la hoja <ExternalLink className="h-4 w-4" /></a>
+          : cycle.created > 0 && <button type="button" onClick={onOpenPlan} className={cn(TEXT_ACTION, '-mr-2 -mt-2 text-zinc-600 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-white/5')}>Abrir parrilla <ExternalLink className="h-4 w-4" /></button>}
       </div>
       <CycleBar cycle={cycle} className="mt-4 h-2.5" />
       <ul className="mt-4 grid gap-x-6 gap-y-2 sm:grid-cols-2">
@@ -88,14 +137,21 @@ function CurrentCycle({ cycle, today, onMarkPublished, onUndoPublished, onOpenPl
             <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
               {cycle.pieces.map((piece) => {
                 const late = piece.date < today && piece.status !== 'PUBLICADO';
+                const canMark = canMarkPublished(piece, today);
                 const status = PIECE_STATUS[piece.status];
                 return (
                   <tr key={piece.id} className={cn(late && 'bg-destructive/[0.04]')}>
                     <td className={cn('whitespace-nowrap px-3 py-2.5 tabular-nums', late ? 'font-semibold text-destructive' : 'text-zinc-600 dark:text-zinc-300')}>{shortDate(piece.date)}</td>
-                    <td className="px-3 py-2.5"><span className="text-zinc-500">{piece.format} · </span><span className="text-zinc-800 dark:text-zinc-100">{piece.title}</span></td>
+                    <td className="px-1 py-1">
+                      {/* La pieza se mira aquí mismo, sin cambiar de módulo (Rodny, 30 de octubre de 2026). */}
+                      <button type="button" onClick={() => onPeek(piece)} data-piece-peek-open={piece.id} title="Ver la pieza"
+                        className="flex min-h-9 w-full min-w-0 items-center rounded-lg px-2 text-left hover:bg-brand-cyan/10 hover:text-brand-cyan-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:hover:text-brand-cyan">
+                        <span className="min-w-0"><span className="text-zinc-500">{piece.format} · </span><span className="text-zinc-800 dark:text-zinc-100">{piece.title}</span></span>
+                      </button>
+                    </td>
                     <td className="px-3 py-2.5"><span className={cn('inline-flex rounded-md px-2 py-0.5 text-xs font-semibold', status.chip)}>{status.label}</span></td>
                     <td className="px-3 py-1 text-right">
-                      {late && <button type="button" onClick={() => onMarkPublished(piece)} className={cn(TEXT_ACTION, 'min-h-9 text-xs')}><CheckCircle2 className="h-4 w-4" />Ya se publicó</button>}
+                      {canMark && <button type="button" onClick={() => onMarkPublished(piece)} className={cn(TEXT_ACTION, 'min-h-9 text-xs')}><CheckCircle2 className="h-4 w-4" />Ya se publicó</button>}
                       {/* Lo marcado a mano se puede deshacer: vuelve al estado que tenía antes del clic. */}
                       {piece.markedByHand && onUndoPublished && (
                         <button type="button" onClick={() => onUndoPublished(piece)} title="Marcada a mano como publicada: vuelve al estado que tenía"
@@ -113,16 +169,32 @@ function CurrentCycle({ cycle, today, onMarkPublished, onUndoPublished, onOpenPl
       ) : (
         <p className="mt-6 rounded-xl border border-dashed border-zinc-300 p-4 text-sm text-zinc-500 dark:border-white/15">{cycle.label} todavía no tiene parrilla.</p>
       )}
+
+      <div className="mt-5 grid gap-3 border-t border-zinc-100 pt-4 sm:grid-cols-2 dark:border-white/5" data-cycle-close>
+        {monthlyReport && (
+          <div className="min-w-0">
+            <p className={LABEL}>Informe del mes</p>
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <ReportStatus report={cycle.report} />
+              <button type="button" onClick={() => onReport(cycle)} data-report-open className={cn(TEXT_ACTION, 'min-h-9 px-2 text-xs')}>Actualizar</button>
+            </div>
+          </div>
+        )}
+        <div className="min-w-0">
+          <p className={LABEL}>Cierre del mes</p>
+          <div className="mt-1"><CloseStatus cycle={cycle} today={today} onClose={onClose} onReopen={onReopen} /></div>
+        </div>
+      </div>
     </section>
   );
 }
 
-function History({ months, monthlyReport, onMarkReport }) {
+function History({ months, monthlyReport, today, onReport, onClose, onReopen }) {
   return (
     <section className={CARD} aria-label="Meses anteriores">
       <h2 className={cn(CARD_TITLE, 'mb-3')}>Meses anteriores</h2>
       <table className="w-full text-left text-sm">
-        <thead className="text-xs text-zinc-500"><tr><th className="py-2 font-medium">Mes</th><th className="py-2 font-medium">Publicadas</th>{monthlyReport && <th className="py-2 font-medium">Informe</th>}</tr></thead>
+        <thead className="text-xs text-zinc-500"><tr><th className="py-2 font-medium">Mes</th><th className="py-2 font-medium">Publicadas</th>{monthlyReport && <th className="py-2 font-medium">Informe</th>}<th className="py-2 font-medium">Cierre</th></tr></thead>
         <tbody className="divide-y divide-zinc-100 dark:divide-white/5">
           {months.map((month) => {
             const closed = month.reached.publicada >= month.quota;
@@ -135,12 +207,15 @@ function History({ months, monthlyReport, onMarkReport }) {
                   </span>
                 </td>
                 {monthlyReport && (
-                  <td className="py-1">
-                    {month.report?.deliveredAt
-                      ? <span className="text-zinc-600 dark:text-zinc-300">Entregado el {shortDate(month.report.deliveredAt)}{month.report.by && <span className="text-zinc-400"> · {month.report.by}</span>}</span>
-                      : <button type="button" onClick={() => onMarkReport(month)} className={cn(TEXT_ACTION, '-ml-3 min-h-9')}><FileBarChart className="h-4 w-4" />Marcar entregado</button>}
+                  <td className="py-1" data-history-report={month.label}>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <ReportStatus report={month.report} />
+                      <button type="button" onClick={() => onReport(month)} aria-label={`Actualizar el informe de ${month.label.toLowerCase()}`}
+                        className={cn(TEXT_ACTION, 'min-h-9 px-2 text-xs')}><FileBarChart className="h-4 w-4" />Actualizar</button>
+                    </div>
                   </td>
                 )}
+                <td className="py-1" data-history-close={month.label}><CloseStatus cycle={month} today={today} onClose={onClose} onReopen={onReopen} compact /></td>
               </tr>
             );
           })}
@@ -150,7 +225,104 @@ function History({ months, monthlyReport, onMarkReport }) {
   );
 }
 
-function Profile({ client, canManage, onEdit }) {
+/**
+ * Suspensión por cartera (30 de octubre de 2026). Lo ve todo el que entra aquí —el equipo necesita saber que ese mes
+ * está congelado—, pero las cifras de la deuda y el botón solo quien puede decidirla. Cuando todavía no está
+ * suspendido y ya cumple la condición, se ofrece suspender: la plataforma propone, la persona decide.
+ */
+function Suspension({ client, onOpen }) {
+  const { suspension, suspensionCandidate: candidate, canSuspend } = client;
+  if (!suspension && !(canSuspend && candidate)) return null;
+  const monthLabel = (cycle) => {
+    const [year, month] = String(cycle || '').split('-').map(Number);
+    return month ? `${MONTH_NAMES[month - 1].toLowerCase()} de ${year}` : 'el mes siguiente';
+  };
+  return (
+    <div data-client-suspension={suspension ? 'active' : 'candidate'}
+      className={cn('mb-4 rounded-xl border p-3 text-sm', suspension
+        ? 'border-destructive/40 bg-destructive/10 text-zinc-800 dark:text-zinc-100'
+        : 'border-brand-yellow/40 bg-brand-yellow/10 text-zinc-800 dark:text-zinc-100')}>
+      <p className="font-semibold">{suspension ? 'Suspendido por cartera' : 'Cumple la condición para suspenderlo'}</p>
+      {suspension ? (
+        <>
+          <p className="mt-1">
+            Desde el {shortDate(suspension.suspendedOn)}, autorizado por {suspension.authorizedBy}: no se trabaja la parrilla de {monthLabel(suspension.fromCycle)} ni su producción.
+          </p>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">{suspension.reason}</p>
+          <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Se levanta sola en cuanto se ponga al día.</p>
+        </>
+      ) : (
+        <p className="mt-1">Lleva {candidate.days} días vencido. El mes en curso se termina; desde el siguiente no se haría parrilla ni producción.</p>
+      )}
+      {canSuspend && onOpen && (
+        <button type="button" onClick={onOpen} data-client-suspension-open className={cn(TEXT_ACTION, '-ml-3 mt-1 min-h-9')}>
+          {suspension ? 'Levantar la suspensión' : 'Suspender'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// Trabajo en curso sin propuesta aprobada (29 de octubre de 2026): qué pasa y, para Dirección o Administración, la
+// autorización para seguir. La salida normal es renovar el contrato con «Editar».
+function UnbackedWork({ client, today, onAuthorize }) {
+  const finding = unbackedWork({ contract: client.contract, work: client.work, authorization: client.workAuthorization }, today);
+  if (!finding) return null;
+  return (
+    <div data-unbacked-work={finding.authorized ? 'authorized' : 'open'}
+      className={cn('mb-4 rounded-xl border p-3 text-sm', finding.authorized
+        ? 'border-zinc-200 bg-zinc-50 text-zinc-700 dark:border-white/10 dark:bg-white/5 dark:text-zinc-300'
+        : 'border-brand-yellow/40 bg-brand-yellow/10 text-zinc-800 dark:text-zinc-100')}>
+      <p className="font-semibold">{finding.authorized ? 'Trabajo autorizado sin propuesta' : 'Trabajo sin propuesta aprobada'}</p>
+      <p className="mt-1">{finding.text}</p>
+      {!finding.authorized && <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">Renueva el contrato con «Editar» o aprueba una cotización nueva.</p>}
+      {client.canAuthorizeWork && onAuthorize && (
+        <button type="button" onClick={onAuthorize} data-work-authorization-open className={cn(TEXT_ACTION, '-ml-3 mt-1 min-h-9')}>
+          {finding.authorized ? 'Cambiar la autorización' : 'Autorizar seguir'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+// La parrilla de MIO en su hoja de Google (29 de octubre de 2026): lo leído del mes en curso y del siguiente, que es el
+// que ya se está preparando. Solo lectura: lo que se cambia, se cambia en la hoja.
+function ExternalPlan({ client, onRefresh }) {
+  const [reading, setReading] = useState(false);
+  if (!client.externalPlanUrl) return null;
+  const refresh = async () => {
+    setReading(true);
+    try { await onRefresh(); } finally { setReading(false); }
+  };
+  return (
+    <div className="mb-4 rounded-xl border border-zinc-200 p-3 text-sm dark:border-white/10" data-external-plan>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="font-semibold">Parrilla de MIO</p>
+        <div className="flex items-center gap-1">
+          <a href={client.externalPlanUrl} target="_blank" rel="noreferrer" className={cn(TEXT_ACTION, 'min-h-9 px-2 text-xs')}>Abrir la hoja</a>
+          {onRefresh && <button type="button" onClick={refresh} disabled={reading} data-external-plan-refresh className={cn(TEXT_ACTION, 'min-h-9 px-2 text-xs disabled:opacity-50')}>{reading ? 'Leyendo…' : 'Leer ahora'}</button>}
+        </div>
+      </div>
+      <ul className="mt-2 space-y-1.5">
+        {(client.externalPlan || []).map((month) => {
+          const reached = month.summary?.reached || {};
+          return (
+            <li key={`${month.year}-${month.month}`} data-external-plan-month={month.label} className="text-xs text-zinc-700 dark:text-zinc-300">
+              <span className="font-semibold">{month.label}</span>
+              {month.summary?.created
+                ? `: ${month.summary.created} piezas · ${reached.disenada || 0} diseñadas · ${reached.aprobada || 0} aprobadas · ${reached.publicada || 0} publicadas`
+                : month.readAt ? ': sin piezas en la hoja' : ': todavía no se ha leído'}
+              {month.problem && <span className="block text-zinc-500 dark:text-zinc-400">{month.problem}</span>}
+            </li>
+          );
+        })}
+      </ul>
+      {client.externalPlan?.[0]?.readAt && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Leída el {shortDate(client.externalPlan[0].readAt)}. Se vuelve a leer cada dos horas.</p>}
+    </div>
+  );
+}
+
+function Profile({ client, canManage, onEdit, today, onAuthorizeWork, onSuspension, onRefreshExternalPlan }) {
   const { contract } = client;
   const quota = contractQuota(contract);
   return (
@@ -159,6 +331,9 @@ function Profile({ client, canManage, onEdit }) {
         <h2 className={CARD_TITLE}>Ficha operativa</h2>
         {canManage && <button type="button" onClick={onEdit} className={cn(TEXT_ACTION, '-mr-2 -mt-2')}><Edit className="h-4 w-4" />Editar</button>}
       </div>
+      <Suspension client={client} onOpen={onSuspension} />
+      <UnbackedWork client={client} today={today} onAuthorize={onAuthorizeWork} />
+      <ExternalPlan client={client} onRefresh={onRefreshExternalPlan} />
       {client.description && <p className="mb-4 text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">{client.description}</p>}
       {client.instagramUrl && (
         <a href={client.instagramUrl} target="_blank" rel="noreferrer" className="mb-4 inline-flex min-h-9 items-center gap-2 text-sm font-medium text-brand-cyan-deep hover:underline dark:text-brand-cyan">
@@ -232,11 +407,19 @@ function Tasks({ tasks, onNewTask, onOpenTask }) {
 
 export default function ClientOperationPage({
   client, evaluation, today, canManage, currentUserId, isAdmin,
-  onEditProfile, onMarkPublished, onUndoPublished, onMarkReport, onOpenPlan, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
+  onEditProfile, onMarkPublished, onUndoPublished, onSaveReport, onConfirmClose, onReopenClose, onRefreshExternalPlan, onAuthorizeWork, onSuspend, onLiftSuspension, onOpenPlan, onOpenPiece, onNewTask, onOpenTask, onOpenWorkspace, onAddObservation, onDeleteObservation,
 }) {
   const measured = isMeasured(client);
   const { current } = client.cycles || {};
   const history = client.history || [];
+  const monthlyReport = Boolean(client.contract?.monthlyReport);
+  // El mes cuyo informe o cierre se está editando; el diálogo se cierra solo cuando el servidor confirma.
+  const [reportFor, setReportFor] = useState(null);
+  const [closeFor, setCloseFor] = useState(null);
+  const [authorizing, setAuthorizing] = useState(false);
+  const [suspending, setSuspending] = useState(false);
+  // La pieza que se está mirando en la vista rápida.
+  const [peeking, setPeeking] = useState(null);
   // Entrar a un cliente es entrar a una página: arriba del todo, no donde iba la lista.
   useLayoutEffect(() => { window.scrollTo(0, 0); }, [client.id]);
   return (
@@ -255,15 +438,28 @@ export default function ClientOperationPage({
         <div className="flex min-w-0 flex-col gap-6 lg:col-span-2">
           <ClientObservations observations={client.observations || []} currentUserId={currentUserId} isAdmin={isAdmin}
             onAdd={onAddObservation} onDelete={onDeleteObservation} />
-          {measured && current && <CurrentCycle cycle={current} today={today} onMarkPublished={onMarkPublished} onUndoPublished={onUndoPublished} onOpenPlan={onOpenPlan} />}
+          {measured && current && <CurrentCycle cycle={current} today={today} monthlyReport={monthlyReport} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} externalPlanUrl={client.externalPlanUrl}
+            onMarkPublished={onMarkPublished} onUndoPublished={onUndoPublished} onOpenPlan={onOpenPlan} onPeek={setPeeking} />}
           {!measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
-          {measured && history.length > 0 && <History months={history} monthlyReport={client.contract.monthlyReport} onMarkReport={onMarkReport} />}
+          {measured && history.length > 0 && <History months={history} monthlyReport={monthlyReport} today={today} onReport={setReportFor} onClose={setCloseFor} onReopen={onReopenClose} />}
         </div>
         <div className="flex min-w-0 flex-col gap-6">
-          <Profile client={client} canManage={canManage} onEdit={onEditProfile} />
+          <Profile client={client} canManage={canManage} onEdit={onEditProfile} today={today} onAuthorizeWork={onAuthorizeWork ? () => setAuthorizing(true) : null}
+            onSuspension={onSuspend || onLiftSuspension ? () => setSuspending(true) : null} onRefreshExternalPlan={onRefreshExternalPlan} />
           {measured && <Tasks tasks={client.openTasks || []} onNewTask={onNewTask} onOpenTask={onOpenTask} />}
         </div>
       </div>
+      {reportFor && <ReportDialog month={reportFor} onClose={() => setReportFor(null)}
+        onSave={async (data) => { await onSaveReport(reportFor, data); setReportFor(null); }} />}
+      {closeFor && <CloseDialog month={closeFor} monthlyReport={monthlyReport} onClose={() => setCloseFor(null)}
+        onConfirm={async (note) => { await onConfirmClose(closeFor, note); setCloseFor(null); }} />}
+      {peeking && current && <PiecePeekDialog piece={peeking} cycle={current} clientSlug={client.slug} onClose={() => setPeeking(null)}
+        onOpenFull={(path) => { setPeeking(null); onOpenPiece?.(path); }} />}
+      {authorizing && <WorkAuthorizationDialog clientName={client.name} today={today} onClose={() => setAuthorizing(false)}
+        onSave={async (data) => { await onAuthorizeWork(data); setAuthorizing(false); }} />}
+      {suspending && <SuspensionDialog clientName={client.name} suspension={client.suspension} candidate={client.suspensionCandidate}
+        onClose={() => setSuspending(false)}
+        onSave={async (data) => { await (client.suspension ? onLiftSuspension(data) : onSuspend(data)); setSuspending(false); }} />}
     </div>
   );
 }

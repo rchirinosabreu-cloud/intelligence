@@ -22,7 +22,7 @@ const emptyContract = () => ({ serviceType: 'PARRILLA', status: 'ACTIVO', startD
 export default function ClientOperationDialog({ client, team, onClose, onSave }) {
   const base = client.contract || emptyContract();
   const [contract, setContract] = useState(() => ({ ...emptyContract(), ...base, deliverables: base.deliverables.map((row) => ({ ...row })) }));
-  const [profile, setProfile] = useState({ description: client.description || '', instagramUrl: client.instagramUrl || '', agency: client.agency || 'BRAIN', complexity: client.complexity || '', pmId: client.projectManager?.id || '', cmId: client.communityManager?.id || '' });
+  const [profile, setProfile] = useState({ description: client.description || '', instagramUrl: client.instagramUrl || '', agency: client.agency || 'BRAIN', complexity: client.complexity || '', pmId: client.projectManager?.id || '', cmId: client.communityManager?.id || '', externalPlanUrl: client.externalPlanUrl || '' });
   const [customCycle, setCustomCycle] = useState((base.cutDay || 1) !== 1);
   const [renew, setRenew] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -42,6 +42,7 @@ export default function ClientOperationDialog({ client, team, onClose, onSave })
     const input = {
       description: profile.description, instagramUrl: profile.instagramUrl, agency: profile.agency, complexity: profile.complexity,
       projectManagerId: profile.pmId, communityManagerId: profile.cmId,
+      externalPlanUrl: profile.externalPlanUrl,
       renew,
       contract: {
         ...contract,
@@ -113,6 +114,14 @@ export default function ClientOperationDialog({ client, team, onClose, onSave })
             </div>
           </div>
 
+          {/* La parrilla de MIO vive en una hoja de Google (29 de octubre de 2026): la plataforma la lee, nunca escribe. */}
+          <div className="space-y-1.5">
+            <label htmlFor={`${id}-sheet`} className={LABEL}>Parrilla en hoja de Google <span className="font-normal text-zinc-400">(clientes de MIO)</span></label>
+            <input id={`${id}-sheet`} type="url" value={profile.externalPlanUrl} onChange={(e) => setP({ externalPlanUrl: e.target.value })} data-external-plan-url
+              placeholder="https://docs.google.com/spreadsheets/d/…" className={FIELD} />
+            <p className="text-xs text-zinc-500">Si el mes no tiene parrilla aquí, el avance sale de la pestaña del mes de esa hoja.</p>
+          </div>
+
           <div className={SECTION}>
             <p className="text-sm font-semibold">Contrato</p>
             <div className="grid gap-4 sm:grid-cols-2">
@@ -136,6 +145,12 @@ export default function ClientOperationDialog({ client, team, onClose, onSave })
                 <span className={LABEL}>Fin</span>
                 <BrainDatePicker id={`${id}-end`} ariaLabel="Fin del contrato" value={contract.endDate || ''} onChange={(value) => setC({ endDate: value })} className={FIELD} isClearable placeholder="Sin fecha de cierre" />
               </div>
+              {contract.status === 'STAND_BY' && (
+                <div className="space-y-1.5">
+                  <span className={LABEL}>En stand by desde</span>
+                  <BrainDatePicker id={`${id}-standby`} ariaLabel="En stand by desde" value={contract.standBySince || ''} onChange={(value) => setC({ standBySince: value || null })} className={FIELD} isClearable placeholder="Sin fecha" />
+                </div>
+              )}
             </div>
 
             {parrilla && (

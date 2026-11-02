@@ -124,9 +124,11 @@ test('the tool, the permission, the instruction, the progress line and the Minut
   assert.deepEqual(ACTION_PERMISSION.MINUTE_TASKS, ['gestion', 'minutas']);
   assert.equal(tool.allowed(pm), true);
   assert.equal(tool.allowed({ ...pm, modulePermissions: { bria: true, gestion: true } }), false, 'without Minutas there is no meeting to read');
-  const instructions = buildInstructions({ tools: [tool], user: pm, today: '2026-10-13' });
-  assert.match(instructions, /pendientes_de_reunion/);
-  assert.match(instructions, /compromisos de una reunión/);
+  assert.match(buildInstructions({ tools: [tool], user: pm, today: '2026-10-13' }), /- pendientes_de_reunion/);
+  // La guía vive en la descripción de la herramienta (31 de octubre de 2026).
+  assert.match(tool.description, /compromisos de una reunión/);
+  assert.match(tool.description, /No inventes responsables ni fechas que la reunión no diga/);
+  assert.match(tool.description, /«Confirmar» sobre el resumen/);
   assert.equal(toolProgressLabel('pendientes_de_reunion'), 'Leyendo los compromisos de la reunión…');
   const panel = readFileSync('src/components/modules/Minutes/AutomaticMinutesPanel.jsx', 'utf8');
   assert.match(panel, /askBria\(`Prepara los pendientes de la reunión «\$\{minute\.title\}» \(id \$\{minute\.id\}\)`\)/, 'the panel leaves the request written for Bria; the person sends it');

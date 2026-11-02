@@ -9,6 +9,7 @@
 import { writeFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import { loadCaseEvalConfig, createCaseEvalProvider } from './lib/briaResearchRuntime.js';
+import { createSettledEvalFetch } from './lib/briaEvalBudget.js';
 import { EVAL_CASES, checkEvalAnswer } from '../tests/evals/briaCases.js';
 
 const root = new URL('../', import.meta.url).href;
@@ -23,7 +24,9 @@ const config = await loadCaseEvalConfig();
 if (!config.OPENAI_API_KEY) throw new Error('No hay OPENAI_API_KEY en el archivo de entorno.');
 // Solo la llave y el modelo: ninguna conexión a base de datos entra al proceso.
 process.env.OPENAI_API_KEY = config.OPENAI_API_KEY;
-if (config.OPENAI_MODEL_CHAT) process.env.OPENAI_MODEL_CHAT = config.OPENAI_MODEL_CHAT;
+// El modelo declarado en el presupuesto manda sobre el del archivo de entorno: así se compara otro modelo sin tocar `.env`.
+if (process.env.BRIA_EVAL_MODEL) process.env.OPENAI_MODEL_CHAT = process.env.BRIA_EVAL_MODEL;
+else if (config.OPENAI_MODEL_CHAT) process.env.OPENAI_MODEL_CHAT = config.OPENAI_MODEL_CHAT;
 if (config.OPENAI_MODEL) process.env.OPENAI_MODEL = config.OPENAI_MODEL;
 
 const { createReadingEvalFixture } = await import(root + 'tests/evals/briaReadingFixture.js');
@@ -144,12 +147,31 @@ const taskTools = createBriaTaskTools(taskDrafts).map((tool) => ({ ...tool, allo
 const baseTools = [...readTools, ...actionTools, ...clientTools, ...fichaTools, ...taskTools];
 
 const usage = [];
-const provider = await createCaseEvalProvider({ apiKey: config.OPENAI_API_KEY, models: AI_MODELS, usage });
+// Comparar modelos (1 de noviembre de 2026): el mismo conjunto de casos con otro modelo o esfuerzo, con tope en dólares
+// reservado antes de cada llamada (`createSettledEvalFetch`) y el costo real de cada respuesta en el informe. Sin tope
+// en dólares se corre como siempre, con los topes de llamadas, bytes y tokens.
+const effort = process.env.BRIA_EVAL_EFFORT || null;
+if (effort && !['low', 'medium', 'high'].includes(effort)) throw new Error('BRIA_EVAL_EFFORT: low, medium o high.');
+const prices = ['BRIA_EVAL_INPUT_USD_PER_MILLION', 'BRIA_EVAL_CACHED_INPUT_USD_PER_MILLION', 'BRIA_EVAL_CACHE_WRITE_USD_PER_MILLION', 'BRIA_EVAL_OUTPUT_USD_PER_MILLION'].map((key) => Number(process.env[key]));
+const maxUsd = Number(process.env.BRIA_EVAL_MAX_USD);
+const budget = Number.isFinite(maxUsd) && maxUsd > 0
+  ? createSettledEvalFetch({ model: process.env.BRIA_EVAL_MODEL, maxUsd, inputUsdPerMillion: prices[0], cachedInputUsdPerMillion: prices[1], cacheWriteUsdPerMillion: prices[2], outputUsdPerMillion: prices[3] })
+  : null;
+const usdOf = (u) => (!u || !prices.every(Number.isFinite) ? null
+  : ((u.inputTokens - (u.cachedTokens || 0) - (u.cacheWriteTokens || 0)) * prices[0] + (u.cachedTokens || 0) * prices[1] + (u.cacheWriteTokens || 0) * prices[2] + u.outputTokens * prices[3]) / 1e6);
+const provider = await createCaseEvalProvider({ apiKey: config.OPENAI_API_KEY, models: AI_MODELS, usage, ...(budget ? { fetchImpl: budget.fetch } : {}) });
+const ai = { generate: (request) => provider.generate({ ...request, ...(effort ? { reasoningEffort: effort } : {}) }) };
 const selected = EVAL_CASES.filter((item) => !only || item.id === only);
 if (!selected.length) throw new Error(`No hay un caso con id «${only}».`);
 const results = [];
 await mkdir(path.dirname(path.resolve(output)), { recursive: true });
-const save = () => writeFile(path.resolve(output), JSON.stringify({ createdAt: new Date().toISOString(), fictional: true, model: AI_MODELS.chat, today, cases: selected.map(({ id, question, why }) => ({ id, question, why })), results, usage }, null, 2));
+const summary = () => {
+  const ok = results.filter((row) => row.pass).length;
+  const usd = results.reduce((sum, row) => sum + (row.usd || 0), 0);
+  const ms = results.length ? Math.round(results.reduce((sum, row) => sum + row.ms, 0) / results.length) : 0;
+  return { passed: ok, total: results.length, usd: Number(usd.toFixed(4)), committedUsd: budget ? Number(budget.committedUsd().toFixed(4)) : null, meanMs: ms, calls: results.reduce((sum, row) => sum + (row.usage?.calls || 0), 0) };
+};
+const save = () => writeFile(path.resolve(output), JSON.stringify({ createdAt: new Date().toISOString(), fictional: true, model: AI_MODELS.chat, effort: effort || 'medium (runAssistant)', maxUsd: budget ? maxUsd : null, today, summary: summary(), cases: selected.map(({ id, question, why }) => ({ id, question, why })), results, usage }, null, 2));
 
 for (let repeat = 0; repeat < repetitions; repeat += 1) for (const item of selected) {
   const start = Date.now();
@@ -159,10 +181,11 @@ for (let repeat = 0; repeat < repetitions; repeat += 1) for (const item of selec
   const readingTools = createDailyReadingTools(readingFixture.service, { readingDay: item.readingDay || null });
   const tools = [...baseTools, ...readingTools].map((tool) => ({ ...tool, run: async (args, ctx) => { toolCalls.push({ name: tool.name, args }); return tool.run(args, ctx); } }));
   try {
-    const answer = await runWithAiContext({ actorId: user.userId, module: 'bria', route: 'MAINTENANCE FICTIONAL CASE EVAL' }, () => runAssistant({ question: item.question, attachments: item.attachments || [], user, person, tools, ai: provider, today }));
+    const answer = await runWithAiContext({ actorId: user.userId, module: 'bria', route: 'MAINTENANCE FICTIONAL CASE EVAL' }, () => runAssistant({ question: item.question, attachments: item.attachments || [], user, person, tools, ai, today }));
     const verdict = checkEvalAnswer(item, { answer: answer.answer, toolsUsed: answer.toolsUsed || [], toolCalls, decisionRecords: readingFixture.records, pendingAction: answer.pendingAction || null, today });
-    results.push({ case: item.id, repeat, ms: Date.now() - start, toolsUsed: answer.toolsUsed, toolCalls, decisionRecords: readingFixture.records, answer: answer.answer, ...verdict });
-    console.log(`${verdict.pass ? 'OK ' : 'FALLA'} ${item.id}${repetitions > 1 ? ` #${repeat + 1}` : ''} (${Date.now() - start} ms)${verdict.failures.length ? `\n   - ${verdict.failures.join('\n   - ')}` : ''}`);
+    const usd = usdOf(answer.usage);
+    results.push({ case: item.id, repeat, ms: Date.now() - start, usage: answer.usage || null, usd: usd === null ? null : Number(usd.toFixed(5)), toolsUsed: answer.toolsUsed, toolCalls, decisionRecords: readingFixture.records, answer: answer.answer, ...verdict });
+    console.log(`${verdict.pass ? 'OK ' : 'FALLA'} ${item.id}${repetitions > 1 ? ` #${repeat + 1}` : ''} (${Date.now() - start} ms${usd === null ? '' : `, USD ${usd.toFixed(4)}`})${verdict.failures.length ? `\n   - ${verdict.failures.join('\n   - ')}` : ''}`);
   } catch (error) {
     const errorText = `${error.code || error.status || error.name}: ${error.message}`.replaceAll(config.OPENAI_API_KEY, '[REDACTADO]').replace(/\bsk-[\w-]+\b/g, '[REDACTADO]');
     results.push({ case: item.id, repeat, ms: Date.now() - start, toolCalls, decisionRecords: readingFixture.records, pass: false, failures: [`error: ${errorText}`] });
@@ -170,7 +193,12 @@ for (let repeat = 0; repeat < repetitions; repeat += 1) for (const item of selec
   }
   await save();
 }
+{
+  const { usd, committedUsd, meanMs } = summary();
+  console.log(`\nModelo ${AI_MODELS.chat}/${effort || 'medium'} · ${meanMs} ms por caso${prices.every(Number.isFinite) ? ` · USD ${usd.toFixed(4)}${committedUsd !== null ? ` (reservado ${committedUsd.toFixed(4)} de ${maxUsd})` : ''}` : ''}`);
+}
+// Lo que sigue solo depende de `results` y `output`: tests/briaCaseEvalRuntime.test.js lo corre aislado.
 const passed = results.filter((row) => row.pass).length;
-console.log(`\n${passed} de ${results.length} respuestas pasaron. Informe: ${path.resolve(output)}`);
+console.log(`${passed} de ${results.length} respuestas pasaron. Informe: ${path.resolve(output)}`);
 process.exitCode = passed === results.length ? 0 : 1;
 setTimeout(() => process.exit(process.exitCode), 500).unref();

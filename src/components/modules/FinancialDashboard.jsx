@@ -38,10 +38,13 @@ import { isLoanReceivable, loanCounterpartyLabel } from '@/lib/receivableLoans';
 import ClientFinancialStatementDialog from './financial/ClientFinancialStatementDialog';
 import PayablesTab from './financial/PayablesTab';
 import DebtAgingSummary from './financial/DebtAgingSummary';
+import CollectionAlertSettings from './financial/CollectionAlertSettings';
+import { CollectionActivityPanel, useCollectionActivities } from './financial/CollectionActivities';
 import { FinancialSectionHeader, FinancialSubTabs } from './financial/FinancialSectionParts';
 import { financialTabOfView, viewForFinancialTab, visibleFinancialTabs } from '@/lib/financialTabs';
 import { agingBucketLabel, agingBucketOf, agingBucketTone } from '@/lib/debtAging';
 import ProfitabilityTab from './financial/ProfitabilityTab';
+import FormalizationsTab from './financial/FormalizationsTab';
 import ChatFilePreview from '@/components/chat/ChatFilePreview';
 import { hasFinancialPermission } from '@/utils/financialPermissions';
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
@@ -162,7 +165,9 @@ const FinancialDashboard = () => {
     const linkParams = new URLSearchParams(location.search);
     const linkedMonth = linkParams.get('tab') === 'rentabilidad' && /^\d{4}$/.test(linkParams.get('year') || '') && /^\d{1,2}$/.test(linkParams.get('month') || '')
         ? `${linkParams.get('year')}-${String(linkParams.get('month')).padStart(2, '0')}-01` : '';
-    const [activeTab, setActiveTab] = useState(() => (linkParams.get('tab') === 'rentabilidad' ? 'profitability' : 'records'));
+    // `?tab=cartera` (28 de octubre de 2026): los avisos de cartera vencida abren Cuentas por cobrar.
+    // `?tab=formalizacion` (29 de octubre de 2026): la solicitud de formalización abre su vista.
+    const [activeTab, setActiveTab] = useState(() => ({ rentabilidad: 'profitability', cartera: 'receivables', formalizacion: 'formalizations' }[linkParams.get('tab')] || 'records'));
     const [expandedClients, setExpandedClients] = useState({});
     // Filtros de Cuentas por cobrar (23 de octubre de 2026): a quién se le cobra y cuánto lleva esperando.
     const [receivableKind, setReceivableKind] = useState(null);
@@ -248,8 +253,19 @@ const FinancialDashboard = () => {
     const canWriteFinancials = hasFinancialPermission(currentUser, 'write');
     const canApproveFinancials = hasFinancialPermission(currentUser, 'approve');
     const isAdminUser = String(currentUser?.role || '').toUpperCase() === 'ADMIN';
+    // Gestiones de cobro de cada cliente, en su tarjeta de Cuentas por cobrar (28 de octubre de 2026).
+    const collectionActivities = useCollectionActivities(!!currentUser && canAccessFinancials && activeTab === 'receivables');
     // Quien no administra y llega con el enlace de la revisión del mes ve Movimientos, no una pestaña vacía.
     useEffect(() => { if (activeTab === 'profitability' && currentUser && !isAdminUser) setActiveTab('records'); }, [activeTab, currentUser, isAdminUser]);
+    // La formalización de proyectos la ven Dirección y Administrativa y contable (29 de octubre de 2026); lo decide el servidor.
+    const { data: formalizationAccess, isFetched: formalizationAccessChecked } = useQuery({
+        queryKey: ['financial-formalization-access'],
+        enabled: !!(currentUser && canAccessFinancials),
+        staleTime: 5 * 60_000,
+        queryFn: async () => (await axios.get(`${getApiBaseUrl()}/api/financials/formalizations/access`, { headers: { Authorization: `Bearer ${localStorage.getItem('authToken')}` } })).data
+    });
+    const canFormalize = formalizationAccess?.canManage === true;
+    useEffect(() => { if (activeTab === 'formalizations' && formalizationAccessChecked && !canFormalize) setActiveTab('receivables'); }, [activeTab, formalizationAccessChecked, canFormalize]);
 
     // Fetch analytical aggregation from protected backend endpoint
     const { data, isLoading, isFetching, error, refetch } = useQuery({
@@ -1122,7 +1138,7 @@ await invalidateFinancialQueries(queryClient);
         { key: 'CLIENTE', title: 'Clientes', groups: receivablesByClient.filter((group) => group.kind !== 'PRESTAMO') },
         { key: 'PRESTAMO', title: 'Préstamos a terceros', groups: receivablesByClient.filter((group) => group.kind === 'PRESTAMO') }
     ].filter((section) => section.groups.length > 0), [receivablesByClient]);
-    const financialTabs = useMemo(() => visibleFinancialTabs({ isAdmin: isAdminUser }), [isAdminUser]);
+    const financialTabs = useMemo(() => visibleFinancialTabs({ isAdmin: isAdminUser, canFormalize }), [isAdminUser, canFormalize]);
     const activeFinancialTab = financialTabOfView(activeTab);
     const activeTabViews = financialTabs.find((group) => group.key === activeFinancialTab)?.views || [];
 
@@ -1255,7 +1271,7 @@ await invalidateFinancialQueries(queryClient);
                 <div role="tablist" aria-label="Secciones de Financiero" className="flex items-center overflow-x-auto border-b border-zinc-200 pb-px dark:border-white/5">
                     {financialTabs.map((group) => (
                         <button key={group.key} type="button" role="tab" data-financial-tab={group.key} aria-selected={activeFinancialTab === group.key}
-                            onClick={() => setActiveTab(viewForFinancialTab(group.key, activeTab, { isAdmin: isAdminUser }))}
+                            onClick={() => setActiveTab(viewForFinancialTab(group.key, activeTab, { isAdmin: isAdminUser, canFormalize }))}
                             className={cn(
                                 "mr-2 whitespace-nowrap border-b-2 px-5 py-3 text-sm font-medium transition-all",
                                 activeFinancialTab === group.key ? "text-brand-cyan-deep border-brand-cyan dark:text-brand-cyan dark:border-brand-cyan" : "text-zinc-500 border-transparent hover:text-zinc-700 dark:hover:text-zinc-200"
@@ -1387,6 +1403,7 @@ await invalidateFinancialQueries(queryClient);
                     <div className="space-y-4 animate-in slide-in-from-left-4 duration-300">
                         <FinancialSectionHeader title="Cuentas por cobrar"
                             description="Lo que les deben a Brain Studio sus clientes y los terceros a quienes les prestó. Los pagos no alteran el valor original.">
+                            {isAdminUser && <CollectionAlertSettings />}
                             {canWriteFinancials && <>
                                 <button type="button" onClick={() => { setNoticeError(''); setIsLoanDialogOpen(true); }} className="min-h-11 rounded-lg border border-zinc-200 px-4 text-sm font-semibold text-zinc-700 transition hover:bg-zinc-100 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5">Registrar préstamo</button>
                                 <button type="button" onClick={openNewReceivable} className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground">Nueva cuenta por cobrar</button>
@@ -1469,6 +1486,9 @@ await invalidateFinancialQueries(queryClient);
                                                             </button>
                                                         )}
                                                     </div>
+                                                    {client.kind !== 'PRESTAMO' && client.clientId && !String(client.clientId).includes(':') && (
+                                                        <CollectionActivityPanel clientId={client.clientId} items={collectionActivities.get(client.clientId)} canWrite={canWriteFinancials} />
+                                                    )}
                                                     <div className="grid grid-cols-1 gap-4">
                                                         {client.debts?.map((debt) => (
                                                             <div key={debt.id} className="p-3 bg-zinc-50 dark:bg-white/5 rounded-xl border border-zinc-100 dark:border-white/5 flex flex-col justify-between gap-3">
@@ -1679,6 +1699,10 @@ await invalidateFinancialQueries(queryClient);
 
                 {/* PESTAÑA 3: NOMINA OPERATIVA */}
                 {/* Cuentas por pagar y terceros (Rodny, 20 de octubre de 2026): el espejo de Cartera. */}
+                {activeTab === 'formalizations' && canFormalize && (
+                    <FormalizationsTab enabled={!!currentUser} onOpenReceivables={() => setActiveTab('receivables')} />
+                )}
+
                 {activeTab === 'profitability' && isAdminUser && (
                     <ProfitabilityTab enabled={!!currentUser} initialMonth={linkedMonth} />
                 )}

@@ -34,7 +34,8 @@ export const PIECE_STATUS = {
   BORRADOR: { label: 'Borrador', chip: 'bg-zinc-100 text-zinc-600 dark:bg-white/10 dark:text-zinc-300' },
   EN_REVISION: { label: 'En revisión', chip: 'bg-brand-yellow-soft text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow' },
   EN_PRODUCCION: { label: 'En producción', chip: 'bg-brand-coral-soft text-brand-coral-deep dark:bg-brand-coral/15 dark:text-brand-coral' },
-  REALIZADO: { label: 'Diseñada', chip: 'bg-brand-coral-soft text-brand-coral-deep dark:bg-brand-coral/15 dark:text-brand-coral' },
+  // El mismo nombre que en la parrilla (Rodny, 29 de octubre de 2026); el color sigue siendo el de su etapa.
+  REALIZADO: { label: 'Realizada', chip: 'bg-brand-coral-soft text-brand-coral-deep dark:bg-brand-coral/15 dark:text-brand-coral' },
   APROBADO: { label: 'Aprobada', chip: 'bg-brand-cyan-soft text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan' },
   PROGRAMADO: { label: 'Programada', chip: 'bg-brand-magenta-soft text-brand-magenta-deep dark:bg-brand-magenta/25 dark:text-zinc-100' },
   PUBLICADO: { label: 'Publicada', chip: 'bg-brand-green-soft text-brand-green-deep dark:bg-brand-green/15 dark:text-brand-green' },

@@ -50,7 +50,7 @@ test('los colores salen de los tokens, en claro y en oscuro', () => {
 
 test('el aviso a administración se lee en español y abre los incidentes', async () => {
   const layout = read('src/components/layout/AppLayout.jsx');
-  assert.match(layout, /notif\.type === 'SECURITY_INCIDENT_REPORTED'\) \{[\s\S]*?navigate\('\/gobierno-ia\?tab=incidents'\)/);
+  assert.match(layout, /notif\.type === 'SECURITY_INCIDENT_REPORTED'\) \{[\s\S]*?navigate(?:From)?\('\/gobierno-ia\?tab=incidents'\)/);
   const { getNotificationDisplayParts } = await import('../src/utils/notificationUtils.js');
   const parts = getNotificationDisplayParts({ type: 'SECURITY_INCIDENT_REPORTED', message: 'Ana reportó un incidente de seguridad. Revísalo en Gobierno de IA.' });
   assert.equal(parts.title, 'Reportaron un incidente de seguridad');

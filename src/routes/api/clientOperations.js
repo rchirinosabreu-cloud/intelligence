@@ -5,7 +5,7 @@ import { clientOperationsService } from '../../services/clientOperationsService.
 // Operación de clientes (2 de octubre de 2026): el tablero global, la página de cada cliente, su ficha
 // operativa y el informe del mes. Solo administradores y project managers (Rodny, 1 de octubre de 2026).
 
-const PROFILE_FIELDS = ['description', 'instagramUrl', 'agency', 'complexity', 'projectManagerId', 'communityManagerId', 'contract', 'renew'];
+const PROFILE_FIELDS = ['description', 'instagramUrl', 'agency', 'complexity', 'projectManagerId', 'communityManagerId', 'externalPlanUrl', 'contract', 'renew'];
 
 const requireManager = (req, res, next) => {
   if (!req.user) return res.status(401).json({ error: 'Usuario no autenticado' });
@@ -32,7 +32,30 @@ export const createClientOperationsRouter = ({ service = clientOperationsService
   });
 
   router.get('/:slug', async (req, res) => {
-    try { return res.json(await service.getOperation(req.params.slug)); } catch (error) { return reply(res, error, logger); }
+    try { return res.json(await service.getOperation(req.params.slug, { viewerUserId: req.user.userId })); } catch (error) { return reply(res, error, logger); }
+  });
+
+  // Seguir trabajando sin propuesta aprobada hasta una fecha (Dirección o Administración; lo comprueba el servicio).
+  router.post('/:clientId/work-authorizations', async (req, res) => {
+    try {
+      return res.status(201).json(await service.authorizeWork({ clientId: req.params.clientId, until: req.body?.until, reason: req.body?.reason, actorUserId: req.user.userId }));
+    } catch (error) { return reply(res, error, logger); }
+  });
+
+  // Suspender por cartera y levantarla (Administración o Dirección; lo comprueba el servicio). Suspender exige quién
+  // lo autorizó —la regla de la empresa es que lo autoriza Francisco— y por qué.
+  router.post('/:clientId/suspension', async (req, res) => {
+    try {
+      return res.status(201).json(await service.suspendClient({
+        clientId: req.params.clientId, authorizedBy: req.body?.authorizedBy, reason: req.body?.reason, actorUserId: req.user.userId
+      }));
+    } catch (error) { return reply(res, error, logger); }
+  });
+
+  router.delete('/:clientId/suspension', async (req, res) => {
+    try {
+      return res.json(await service.liftSuspension({ clientId: req.params.clientId, reason: req.body?.reason, actorUserId: req.user.userId }));
+    } catch (error) { return reply(res, error, logger); }
   });
 
   router.put('/:clientId/profile', async (req, res) => {
@@ -43,11 +66,38 @@ export const createClientOperationsRouter = ({ service = clientOperationsService
     } catch (error) { return reply(res, error, logger); }
   });
 
+  // El informe del mes: su estado (pendiente, en elaboración, en revisión, enviado), el enlace y una nota. `delivered`
+  // sigue valiendo para quien lo marcaba como entregado.
   router.put('/:clientId/reports/:year/:month', async (req, res) => {
     try {
-      if (typeof req.body?.delivered !== 'boolean') return res.status(400).json({ error: 'Falta indicar si el informe se entregó.' });
+      const body = req.body || {};
+      if (body.status === undefined && typeof body.delivered !== 'boolean') return res.status(400).json({ error: 'Falta el estado del informe.' });
       return res.json(await service.setMonthlyReport({
-        clientId: req.params.clientId, year: Number(req.params.year), month: Number(req.params.month), delivered: req.body.delivered, actorUserId: req.user.userId,
+        clientId: req.params.clientId, year: Number(req.params.year), month: Number(req.params.month),
+        delivered: body.delivered, status: body.status, link: body.link, note: body.note, actorUserId: req.user.userId,
+      }));
+    } catch (error) { return reply(res, error, logger); }
+  });
+
+  // Reabrir un cierre confirmado por error.
+  router.delete('/:clientId/closes/:year/:month', async (req, res) => {
+    try {
+      return res.json(await service.reopenMonthlyClose({ clientId: req.params.clientId, year: Number(req.params.year), month: Number(req.params.month), viewerUserId: req.user.userId }));
+    } catch (error) { return reply(res, error, logger); }
+  });
+
+  // Leer ahora la parrilla de MIO del cliente desde su hoja de Google.
+  router.post('/:clientId/external-plan/refresh', async (req, res) => {
+    try {
+      return res.json(await service.refreshExternalPlan({ clientId: req.params.clientId, viewerUserId: req.user.userId }));
+    } catch (error) { return reply(res, error, logger); }
+  });
+
+  // El project manager confirma el cierre del mes; lo pendiente se conserva.
+  router.post('/:clientId/closes/:year/:month', async (req, res) => {
+    try {
+      return res.status(201).json(await service.confirmMonthlyClose({
+        clientId: req.params.clientId, year: Number(req.params.year), month: Number(req.params.month), note: req.body?.note, actorUserId: req.user.userId,
       }));
     } catch (error) { return reply(res, error, logger); }
   });

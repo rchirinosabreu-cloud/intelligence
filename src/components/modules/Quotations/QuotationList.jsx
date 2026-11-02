@@ -1,9 +1,10 @@
 import Select from '@/components/ui/Select';
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
     Search,
     Plus,
@@ -25,11 +26,84 @@ import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 
+// Comercial registra la aprobación (punto 3 de la solicitud de Elisa, 29 de octubre de 2026): el cliente aprobó por
+// WhatsApp, por correo o en una reunión. Es la misma aprobación que la del enlace y abre la formalización del proyecto.
+const quotationScenarios = (quotation) => {
+    const seen = new Map();
+    for (const item of Array.isArray(quotation?.items) ? quotation.items : []) {
+        if (item?.scenarioId && !seen.has(item.scenarioId)) seen.set(item.scenarioId, item.scenarioName || 'Escenario');
+    }
+    return [...seen].map(([id, name]) => ({ id, name }));
+};
+
+function RegisterApprovalDialog({ quotation, onClose }) {
+    const queryClient = useQueryClient();
+    const scenarios = quotationScenarios(quotation);
+    const [scenarioId, setScenarioId] = useState(scenarios.length === 1 ? scenarios[0].id : '');
+    const [saving, setSaving] = useState(false);
+    const [problem, setProblem] = useState('');
+    const confirm = async () => {
+        if (scenarios.length && !scenarioId) { setProblem('Elige el escenario que aprobó el cliente.'); return; }
+        setSaving(true);
+        try {
+            const response = await fetch(`${getApiBaseUrl()}/api/quotations/${quotation.id}/accept`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
+                body: JSON.stringify({ scenarioId: scenarioId || undefined, expectedUpdatedAt: quotation.updated_at })
+            });
+            const body = await response.json().catch(() => ({}));
+            if (!response.ok) {
+                console.error('[Cotizaciones] Aprobación no registrada:', body);
+                setProblem(body.error || 'No pudimos registrar la aprobación.');
+                return;
+            }
+            await queryClient.invalidateQueries({ queryKey: ['quotations-list'] });
+            toast.success('Aprobación registrada. Administración ya tiene la solicitud.');
+            onClose();
+        } catch (error) {
+            console.error('[Cotizaciones] Aprobación no registrada:', error);
+            setProblem('No pudimos registrar la aprobación.');
+        } finally {
+            setSaving(false);
+        }
+    };
+    return (
+        <Dialog open onOpenChange={(next) => !next && !saving && onClose()}>
+            <DialogContent data-register-approval className="sm:max-w-md dark:bg-zinc-900">
+                <DialogHeader>
+                    <DialogTitle>Registrar aprobación</DialogTitle>
+                    <DialogDescription>
+                        {quotation.client_company || quotation.client_name} aprobó la {quotation.consecutive_formatted} por fuera del enlace. Se abre la formalización del proyecto y Administración recibe la solicitud.
+                    </DialogDescription>
+                </DialogHeader>
+                {scenarios.length > 0 && (
+                    <label className="block space-y-1.5 text-sm"><span className="block">Escenario aprobado</span>
+                        <Select className="min-h-11 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm dark:border-white/10 dark:bg-zinc-950" value={scenarioId}
+                            onChange={(event) => { setScenarioId(event.target.value); setProblem(''); }} aria-label="Escenario aprobado">
+                            <option value="">Elige el escenario</option>
+                            {scenarios.map((scenario) => <option key={scenario.id} value={scenario.id}>{scenario.name}</option>)}
+                        </Select>
+                    </label>
+                )}
+                {problem && <p role="alert" className="brain-destructive-text text-destructive text-sm">{problem}</p>}
+                <DialogFooter>
+                    <button type="button" className="min-h-11 rounded-lg px-4 text-sm" onClick={onClose} disabled={saving}>Cancelar</button>
+                    <button type="button" onClick={confirm} disabled={saving} data-register-approval-confirm
+                        className="min-h-11 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground disabled:opacity-50">
+                        {saving ? 'Registrando…' : 'Registrar aprobación'}
+                    </button>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+    );
+}
+
 const QuotationList = () => {
     const navigate = useNavigate();
     const [searchTerm, setSearchTerm] = useState('');
     const [statusFilter, setStatusFilter] = useState('ALL');
     const [downloadingId, setDownloadingId] = useState(null);
+    const [approving, setApproving] = useState(null);
 
     const { data: quotations = [], isLoading } = useQuery({
         queryKey: ['quotations-list'],
@@ -226,6 +300,17 @@ const QuotationList = () => {
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-right">
                                             <div className="flex items-center justify-end gap-2">
+                                                {q.status === 'ACTIVA' && !q.isExpired && (
+                                                    <button
+                                                        onClick={() => setApproving(q)}
+                                                        data-register-approval-open={q.id}
+                                                        className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-zinc-500 transition-colors"
+                                                        title="Registrar aprobación"
+                                                        aria-label={`Registrar aprobación de ${q.consecutive_formatted}`}
+                                                    >
+                                                        <CheckCircle2 className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                                 {q.status !== 'APROBADA' && (
                                                     <button
                                                         onClick={() => navigate(`/cotizaciones/editar/${q.id}`)}
@@ -266,6 +351,7 @@ const QuotationList = () => {
                     </table>
                 </div>
             </Card>
+            {approving && <RegisterApprovalDialog quotation={approving} onClose={() => setApproving(null)} />}
         </div>
     );
 };

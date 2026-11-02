@@ -12,7 +12,9 @@ import ClientAvatar from '@/components/ui/ClientAvatar';
 import ClientsSection from '@/components/modules/Clients/operations/ClientsSection';
 import ClientOperationPage from '@/components/modules/Clients/operations/ClientOperationPage';
 import ClientOperationDialog from '@/components/modules/Clients/operations/ClientOperationDialog';
+import { useNavigateFrom, usePageLabel } from '@/components/layout/BackToOrigin';
 import { CLIENT_AGENCIES, OPERATION_LEVELS, evaluateClientOperation, labelOf } from '@/lib/clientOperations';
+import { closeSnapshot } from '@/lib/monthlyClose';
 import { markTaskTimingTutorialSeen, markTaskTimingTutorialAfternoonSeen } from '@/lib/taskTiming';
 import { dashboardDemoUser } from './dashboardPreviewData';
 import { TODAY, clients as demoClients, team } from './clientOperationsPreviewData';
@@ -33,6 +35,12 @@ markTaskTimingTutorialAfternoonSeen(localStorage, dashboardDemoUser.id);
 const dark = new URLSearchParams(location.search).has('dark');
 document.documentElement.classList.toggle('dark', dark);
 localStorage.setItem('theme', dark ? 'dark' : 'light');
+
+// El mes siguiente al de hoy, que es desde donde congela una suspensión por cartera.
+const nextCycleKey = (today) => {
+  const [year, month] = today.split('-').map(Number);
+  return month === 12 ? `${year + 1}-01` : `${year}-${String(month + 1).padStart(2, '0')}`;
+};
 
 const ClientsContext = createContext(null);
 
@@ -88,7 +96,9 @@ function ClientPage() {
   const { slug } = useParams();
   const { evaluated, update } = useContext(ClientsContext);
   const [editing, setEditing] = useState(false);
+  const navigateFrom = useNavigateFrom();
   const found = evaluated.find(({ client }) => client.slug === slug);
+  usePageLabel(found ? `Operación · ${found.client.name}` : null);
   if (!found) return <Navigate to="/clientes" replace />;
   const { client, evaluation } = found;
 
@@ -100,12 +110,20 @@ function ClientPage() {
     const lift = (n) => Math.max(n, published);
     return { ...c, cycles: { ...c.cycles, current: { ...c.cycles.current, pieces, overdueItems: overdue, reached: { redactada: lift(r.redactada), disenada: lift(r.disenada), aprobada: lift(r.aprobada), programada: lift(r.programada), publicada: published } } } };
   });
-  const markReport = (month) => update(client.id, (c) => {
-    const report = { deliveredAt: TODAY, by: dashboardDemoUser.name };
-    const history = c.history.map((m) => (m.label === month.label ? { ...m, report } : m));
-    const previous = c.cycles.previous?.label === month.label ? { ...c.cycles.previous, report } : c.cycles.previous;
-    return { ...c, history, cycles: { ...c.cycles, previous } };
+  // El informe y el cierre de un mes, en el mes en curso o en el historial (29 de octubre de 2026).
+  const patchMonth = (month, patch) => update(client.id, (c) => {
+    const apply = (m) => (m && m.label === month.label ? { ...m, ...patch(m) } : m);
+    return { ...c, history: (c.history || []).map(apply), cycles: { ...c.cycles, current: apply(c.cycles.current), previous: apply(c.cycles.previous) } };
   });
+  const saveReport = (month, data) => patchMonth(month, (m) => {
+    const sent = data.status === 'ENVIADO';
+    const already = m.report?.status === 'ENVIADO';
+    return { report: { status: data.status, link: data.link || null, note: data.note || null, updatedAt: TODAY,
+      deliveredAt: sent ? (already ? m.report.deliveredAt : TODAY) : null, by: dashboardDemoUser.name } };
+  });
+  const confirmClose = (month, note) => patchMonth(month, (m) => ({
+    close: { closedAt: TODAY, by: dashboardDemoUser.name, note: note || null, snapshot: closeSnapshot(m, { monthlyReport: Boolean(client.contract?.monthlyReport) }) },
+  }));
 
   return (
     <>
@@ -133,8 +151,24 @@ function ClientPage() {
           });
           toast.success(`«${piece.title}» volvió a su estado anterior (solo en la muestra).`);
         }}
-        onMarkReport={(month) => { markReport(month); toast.success(`Informe de ${month.label.toLowerCase()} marcado como entregado.`); }}
-        onOpenPlan={() => toast(`Abriría la parrilla de ${client.name}.`)}
+        onSaveReport={async (month, data) => { saveReport(month, data); toast.success(`Informe de ${month.label.toLowerCase()} actualizado.`); }}
+        onReopenClose={async (month) => { patchMonth(month, () => ({ close: null })); toast.success(`Cierre de ${month.label.toLowerCase()} reabierto.`); }}
+        onRefreshExternalPlan={async () => { toast.success('Hoja de MIO leída.'); }}
+        onAuthorizeWork={async ({ until, reason }) => {
+          update(client.id, (c) => ({ ...c, workAuthorization: { until, reason, byName: dashboardDemoUser.name, at: TODAY } }));
+          toast.success('Autorización guardada.');
+        }}
+        onSuspend={async ({ authorizedBy, reason }) => {
+          update(client.id, (c) => ({ ...c, suspension: { id: 's-1', fromCycle: nextCycleKey(TODAY), suspendedOn: TODAY, authorizedBy, reason } }));
+          toast.success('Cliente suspendido por cartera.');
+        }}
+        onLiftSuspension={async () => {
+          update(client.id, (c) => ({ ...c, suspension: null }));
+          toast.success('Suspensión levantada.');
+        }}
+        onConfirmClose={async (month, note) => { confirmClose(month, note); toast.success(`Cierre de ${month.label.toLowerCase()} confirmado.`); }}
+        onOpenPlan={() => navigateFrom(`/parrillas/plan-${client.slug}`)}
+        onOpenPiece={(path) => navigateFrom(path)}
         onNewTask={() => toast(`Abriría «Nueva tarea» con ${client.name} ya elegido.`)}
         onOpenWorkspace={() => toast('Abriría el espacio de trabajo del cliente, como hoy.')} />
       {editing && (
@@ -147,6 +181,17 @@ function ClientPage() {
           }} />
       )}
     </>
+  );
+}
+
+// El destino de un viaje (30 de octubre de 2026): en la muestra no hay editor de parrillas, solo una pantalla a la que
+// llegar para ver «Volver a …» arriba.
+function Destination() {
+  return (
+    <section data-preview-destination className="rounded-2xl border border-zinc-200 bg-white p-6 dark:border-white/10 dark:bg-zinc-900">
+      <h1 className="text-xl font-semibold">Parrilla (muestra)</h1>
+      <p className="mt-2 text-sm text-zinc-500">Aquí estaría el editor de la parrilla, con la pieza abierta.</p>
+    </section>
   );
 }
 
@@ -173,6 +218,7 @@ createRoot(document.getElementById('root')).render(
                       <Routes>
                         <Route path="/clientes" element={<ClientsPage />} />
                         <Route path="/clientes/operacion/:slug" element={<ClientPage />} />
+                        <Route path="/parrillas/*" element={<Destination />} />
                         <Route path="*" element={<Navigate to="/clientes" replace />} />
                       </Routes>
                     </AppLayout>

@@ -152,7 +152,6 @@ test('a refusal meant for the person reaches the model in words, is not a failur
   ]);
   const history = [{ role: 'user', text: 'Hola' }, { role: 'assistant', text: '¿Quieres que guarde esto en la memoria de Aristea?' }];
   const result = await runAssistant({ question: 'Listo', history, user, person, tools, ai, today: TODAY,
-    context: { inquiryPlanner: async () => ({ plan: { propositoMemoria: 'GUARDAR' } }) },
     logger: { error: () => assert.fail('no es un error del servidor'), warn: (...args) => warnings.push(args) } });
   const [output] = outputsOf(ai.calls[1]);
   assert.equal(output.error, 'Pregúntale a la persona si quiere que lo guardes.');

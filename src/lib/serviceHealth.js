@@ -50,6 +50,13 @@ export const SERVICE_CATALOG = Object.freeze([
     intervalMs: 5 * MIN
   },
   {
+    id: 'google-sheets',
+    label: 'Hojas de Google de MIO',
+    purpose: 'Lee las parrillas de los clientes de MIO, que se trabajan en hojas de Google.',
+    impact: 'Si falla, el avance de esos clientes en Operación se queda con la última lectura buena.',
+    intervalMs: 60 * MIN
+  },
+  {
     id: 'google-storage',
     label: 'Google Cloud Storage',
     purpose: 'Archivos de clientes, informes, tableros de inspiración y fotos de perfil.',

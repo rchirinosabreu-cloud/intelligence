@@ -136,7 +136,10 @@ export const createBriaTaskDraftService = ({ db, createTask, uploadFile, removeF
       }
       // Una cuenta expresamente pedida pero aún no resuelta debe seguir siendo una pregunta, también en el
       // siguiente turno. Reenviar desde el modelo el nombre heredado no lo convierte en elección explícita.
-      if (!draft.client && !draft.clientReference && !draft.clientCandidates?.length && defaults.client?.id) { draft.client = { id: defaults.client.id, name: defaults.client.name, slug: defaults.client.slug || null }; draft.clientInferred = true; }
+      // Un lote nuevo no hereda la cuenta de otra tarea: el cliente común debe pertenecer
+      // a este pedido. Las aclaraciones posteriores conservan el mismo lote incompleto.
+      const batch = (args.pendientes?.length || draft.items?.length || 0) > 1;
+      if (!batch && !draft.client && !draft.clientReference && !draft.clientCandidates?.length && defaults.client?.id) { draft.client = { id: defaults.client.id, name: defaults.client.name, slug: defaults.client.slug || null }; draft.clientInferred = true; }
       if (args.responsable != null) {
         const { chosen, candidates } = await findMember(bounded(args.responsable, 160, 'El nombre del responsable'), user);
         draft.assignee = chosen; draft.assigneeCandidates = candidates;

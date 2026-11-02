@@ -7,6 +7,8 @@ import axios from 'axios';
 import { AuthProvider } from '../../src/context/AuthContext';
 import FinancialDashboard from '../../src/components/modules/FinancialDashboard';
 import { buildClientProfitability } from '../../src/lib/clientProfitability.js';
+import { DEFAULT_COLLECTION_SETTINGS, normalizeCollectionSettings } from '../../src/lib/receivableCollections.js';
+import { formalizationState } from '../../src/lib/projectFormalization.js';
 import '../../src/index.css';
 import 'react-datepicker/dist/react-datepicker.css';
 
@@ -118,6 +120,36 @@ const team = [
 ];
 let payables = [{ id: 'payable-arriendo', thirdPartyId: 'tp-arrendador', concept: 'Arriendo de octubre', category: 'ADMINISTRATIVO', amount: 1500000, receivedAt: '2026-10-01T12:00:00Z', dueDate: '2026-10-05T12:00:00Z', documentNumber: 'F-2026-10', notes: null, status: 'POR_PAGAR', payments: [], documents: [] }];
 let prospectClientId = null;
+// Formalizaciones de muestra (29 de octubre de 2026): una con plan de pagos, una sin plan y una ya habilitada.
+const formalizations = [
+  { id: 'f-cafe', status: 'PENDIENTE', requestedAt: '2026-10-29T14:00:00Z', enabledAt: null, projectManagerNotified: false,
+    quotation: { id: 'q-42', code: 'COT-0042', clientName: 'Laura Gómez', company: 'Café Altura', total: 4000000, currency: 'COP', acceptedAt: '2026-10-29T14:00:00Z' },
+    client: { id: 'c-cafe', name: 'Café Altura', slug: 'cafe-altura', projectManager: 'Kamila del Toro' }, documents: [],
+    advance: { id: 'r-cafe-1', amount: 2000000, status: 'DEBE', number: null, currency: 'COP', payments: [] }, exception: null, clientReceivables: [] },
+  { id: 'f-norte', status: 'PENDIENTE', requestedAt: '2026-10-28T16:00:00Z', enabledAt: null, projectManagerNotified: false,
+    quotation: { id: 'q-39', code: 'COT-0039', clientName: 'Andrés Pardo', company: 'Estudio Norte', total: 2500000, currency: 'COP', acceptedAt: '2026-10-28T16:00:00Z' },
+    client: { id: 'c-norte', name: 'Estudio Norte', slug: 'estudio-norte', projectManager: null }, documents: [], advance: null, exception: null,
+    clientReceivables: [{ id: 'r-norte-1', amount: 1250000, number: null, label: 'Anticipo landing page', period: '2026-10-01T00:00:00Z' }] },
+  { id: 'f-bahia', status: 'HABILITADO', requestedAt: '2026-10-24T15:00:00Z', enabledAt: '2026-10-27T15:00:00Z', projectManagerNotified: true,
+    quotation: { id: 'q-35', code: 'COT-0035', clientName: 'Marta Ruiz', company: 'Hotel Bahía', total: 6000000, currency: 'COP', acceptedAt: '2026-10-24T15:00:00Z' },
+    client: { id: 'c-bahia', name: 'Hotel Bahía', slug: 'hotel-bahia', projectManager: 'Kamila del Toro' },
+    documents: [
+      { id: 'fd-bahia', kind: 'CONTRATO', note: null, name: 'Contrato Hotel Bahía firmado.pdf', mimeType: 'application/pdf', size: 1, uploadedAt: '2026-10-27T15:00:00Z', voidedAt: null },
+      { id: 'fd-bahia-anexo', kind: 'ANEXO', note: 'Cronograma de producción de noviembre', name: 'Anexo cronograma.pdf', mimeType: 'application/pdf', size: 1, uploadedAt: '2026-10-28T15:00:00Z', voidedAt: null }
+    ],
+    advance: { id: 'r-bahia-1', amount: 3000000, status: 'PAGADO', number: 401, currency: 'COP', payments: [] }, exception: null, clientReceivables: [] }
+];
+// Un cliente de siempre que suma un servicio (29 de octubre de 2026): ahí se ajusta lo que se pide.
+formalizations.splice(2, 0, { id: 'f-foobe', status: 'PENDIENTE', requestedAt: '2026-10-29T13:00:00Z', enabledAt: null, projectManagerNotified: false,
+  quotation: { id: 'q-44', code: 'COT-0044', clientName: 'Equipo Foobespain', company: 'Foobespain', total: 1800000, currency: 'COP', acceptedAt: '2026-10-29T13:00:00Z' },
+  client: { id: 'c-foobe', name: 'Foobespain', slug: 'foobespain', projectManager: 'Kamila del Toro' }, documents: [],
+  advance: { id: 'r-foobe-1', amount: 900000, status: 'DEBE', number: null, currency: 'COP', payments: [] }, exception: null, clientReceivables: [] });
+for (const item of formalizations) item.requirements ||= { requiresContract: true, requiresAdvance: true, note: null, changedAt: null, changedByName: null };
+const serializeFormalization = (item) => ({ ...item, state: formalizationState({ documents: item.documents, advance: item.advance, exceptionAt: item.exception?.at || null, ...item.requirements }) });
+const enableIfReady = (item) => {
+  if (item.status === 'HABILITADO' || !serializeFormalization(item).state.ready) return;
+  Object.assign(item, { status: 'HABILITADO', enabledAt: '2026-10-29T15:00:00Z', projectManagerNotified: Boolean(item.client?.projectManager) });
+};
 const createdReceivables = window.__createdReceivables = [];
 const deletedReceivables = window.__deletedReceivables = [];
 axios.defaults.adapter = async config => {
@@ -152,6 +184,55 @@ axios.defaults.adapter = async config => {
       sessions: [...work('c-aristea', 36), ...work('c-endova', 34), ...work('c-wine', 40), ...work('c-nuva', 8), ...work('c-pablo', 14), ...work('c-brain', 20), ...work(null, 22)],
       closedTasks: [...Array(12).fill({ clientId: 'c-aristea', measuredMs: 3_600_000 }), ...Array(3).fill({ clientId: 'c-endova', measuredMs: 0 }), { clientId: 'c-endova', measuredMs: 3_600_000 }, ...Array(10).fill({ clientId: 'c-wine', measuredMs: 3_600_000 })]
     });
+  }
+  // Gestiones de cobro (28 de octubre de 2026): una ya registrada desde el aviso de la banda.
+  else if (path === '/api/financials/collection-activities' && config.method === 'get') {
+    window.__collectionActivities ||= [{ id: 'ga-1', clientId: client.id, receivableId: null, channel: 'WHATSAPP', channelLabel: 'WhatsApp', source: 'AVISO', authorName: 'Elisa Mestra', occurredAt: '2026-10-27T15:00:00.000Z' }];
+    data = { items: window.__collectionActivities };
+  } else if (path === '/api/financials/collection-activities' && config.method === 'post') {
+    const item = { id: `ga-${Date.now()}`, clientId: body.clientId, receivableId: null, channel: body.channel, source: 'MANUAL', authorName: 'Demo', occurredAt: '2026-10-28T15:00:00.000Z' };
+    window.__collectionActivities = [item, ...(window.__collectionActivities || [])];
+    data = item;
+  }
+  // Los plazos de los avisos de cartera (28 de octubre de 2026), con la misma regla del servidor.
+  else if (path === '/api/financials/collection-alerts' && config.method === 'get') data = window.__collectionSettings || DEFAULT_COLLECTION_SETTINGS;
+  else if (path === '/api/financials/collection-alerts' && config.method === 'put') {
+    const { value, problem } = normalizeCollectionSettings(body);
+    if (problem) throw Object.assign(new Error(problem), { response: { status: 400, data: { error: problem } } });
+    data = window.__collectionSettings = value;
+  }
+  // Formalización de proyectos (29 de octubre de 2026), con la misma regla del servidor. `?viewer=reader` no la ve.
+  else if (path === '/api/financials/formalizations/access') data = { canManage: !viewer };
+  else if (path === '/api/financials/formalizations' && config.method === 'get') data = { items: formalizations.map(serializeFormalization) };
+  else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/documents')) {
+    const item = formalizations.find((row) => path.includes(row.id));
+    const form = config.data instanceof FormData ? config.data : null;
+    const file = form?.get('file');
+    item.documents = [...item.documents, { id: `fd-${Date.now()}`, kind: form?.get('kind') || 'CONTRATO', note: form?.get('note') || null, name: file?.name || 'contrato.pdf', mimeType: 'application/pdf', size: file?.size || 1, uploadedAt: '2026-10-29T15:00:00Z', voidedAt: null }];
+    enableIfReady(item);
+    data = { document: item.documents.at(-1), status: item.status };
+  } else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/void')) {
+    const item = formalizations.find((row) => path.includes(row.id));
+    const document = item.documents.find((row) => path.includes(`/documents/${row.id}/`));
+    Object.assign(document, { voidedAt: '2026-10-29T15:30:00Z', voidReason: body.reason });
+    data = document;
+  } else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/exception')) {
+    const item = formalizations.find((row) => path.includes(row.id));
+    item.exception = { at: '2026-10-29T15:00:00Z', byName: 'Elisa Mestra', reason: body.reason, conditions: body.conditions || null, paymentDate: body.paymentDate };
+    enableIfReady(item);
+    data = item;
+  } else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/requirements')) {
+    const item = formalizations.find((row) => path.includes(row.id));
+    item.requirements = { requiresContract: body.requiresContract, requiresAdvance: body.requiresAdvance, note: body.note || null, changedAt: '2026-10-29T15:00:00Z', changedByName: 'Elisa Mestra' };
+    enableIfReady(item);
+    data = item;
+  } else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/advance')) {
+    const item = formalizations.find((row) => path.includes(row.id));
+    const receivable = item.clientReceivables.find((row) => row.id === body.receivableId);
+    item.advance = { id: receivable.id, amount: receivable.amount, status: 'DEBE', number: receivable.number, currency: 'COP', payments: [] };
+    data = item;
+  } else if (path.startsWith('/api/financials/formalizations/') && path.endsWith('/file')) {
+    data = new Blob([samplePdf('Contrato firmado (muestra)')], { type: 'application/pdf' });
   }
   else if (path === '/api/financials/clients' && config.method === 'get') data = { clients: directoryClients };
   else if (path === '/api/financials/clients' && config.method === 'post') {

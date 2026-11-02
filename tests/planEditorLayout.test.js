@@ -47,7 +47,9 @@ test('cada campo dice si lo ve el cliente o solo el equipo', async () => {
   const editor = await read('src/components/modules/ContentPlanDetail.jsx');
 
   // El origen del problema: nadie sabía qué salía del portal. Ahora lo dice el propio campo.
-  assert.match(editor, /Solo el equipo/, 'el guion se marca como interno');
+  // Desde el 30 de octubre de 2026 el cliente ve el guion en el portal: los dos campos lo dicen.
+  assert.doesNotMatch(editor, /Solo el equipo/, 'el guion ya no se marca como interno');
+  assert.equal((editor.match(/Lo ve el cliente/g) || []).length, 2, 'guion y texto de la publicación se marcan como visibles');
   // La etiqueta se acortó a «Lo ve el cliente» al rediseñar la tarjeta (25 de septiembre de 2026):
   // va pegada al rótulo del campo y una frase entera lo empujaba a dos líneas.
   assert.match(editor, /Lo ve el cliente/, 'el texto de la publicación se marca como visible');

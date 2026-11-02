@@ -27,5 +27,8 @@ test('la herramienta está conectada a Bria, con su frase de avance y su instruc
   assert.match(service, /createServiceHealthTools\(/);
   const assistant = readFileSync(new URL('../src/lib/briaAssistant.js', import.meta.url), 'utf8');
   assert.match(assistant, /estado_de_servicios: '/);
-  assert.match(assistant, /tool\.name === 'estado_de_servicios'/);
+  // La guía vive en la descripción de la herramienta (31 de octubre de 2026), no en las instrucciones fijas.
+  const [tool] = createServiceHealthTools({ getSummary: async () => ({}) });
+  assert.match(tool.description, /Nunca avises una caída sin que te pregunten/);
+  assert.match(tool.description, /responde con lo que dice el semáforo/);
 });

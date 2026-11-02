@@ -203,6 +203,7 @@ export const updateExistingTask = async (req, res) => {
     } catch (error) {
         console.error('[TaskController] Failed to update task:', error.response?.data || error);
         if (error.statusCode === 400) return res.status(400).json({ error: error.message });
+        if (error.statusCode === 409) return res.status(409).json({ error: error.message });
         res.status(500).json({ error: "Failed to update task", details: error.message });
     }
 };

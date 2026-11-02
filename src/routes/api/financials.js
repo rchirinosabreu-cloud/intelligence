@@ -54,8 +54,16 @@ import {
     voidFinancialRecordDocumentHandler,
     voidFinancialRecordHandler
 } from '../../controllers/financialRecordController.js';
-import { FINANCIAL_DOCUMENT_MAX_BYTES } from '../../services/financialRecordDocumentService.js';
+import { FINANCIAL_DOCUMENT_MAX_BYTES, financialEvidenceStorage } from '../../services/financialRecordDocumentService.js';
 import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
+import prisma from '../../lib/prisma.js';
+import { readCollectionSettings, saveCollectionSettings } from '../../services/collectionState.js';
+import { listCollectionActivities, recordCollectionActivity } from '../../services/collectionActivityService.js';
+import { contentDisposition } from '../../controllers/financialRecordController.js';
+import {
+    attachFormalizationDocument, canManageFormalizations, linkFormalizationAdvance, listFormalizations, openFormalizationDocument,
+    registerFormalizationException, requireFormalizationAccess, setFormalizationRequirements, voidFormalizationDocument
+} from '../../services/projectFormalizationService.js';
 
 import {
     createDirectoryClientHandler,
@@ -141,6 +149,122 @@ router.post('/receivables/:id/settlements', requireFinancialWrite, settleReceiva
 // Resumen de ajustes de cartera (Rodny, 20 de octubre de 2026): cierres sin dinero y
 // diferencia en cambio del periodo. Solo lee.
 router.get('/receivable-adjustments', requireFinancialAccess, listReceivableAdjustmentsHandler);
+// Los plazos de los avisos de cartera (punto 7 de la solicitud de Elisa, 28 de octubre de 2026): los ve quien entra a
+// Financiero y los cambia solo un administrador (lo comprueba el servicio).
+router.get('/collection-alerts', requireFinancialAccess, async (_req, res) => {
+    try {
+        res.json(await readCollectionSettings(prisma));
+    } catch (error) {
+        console.error('[Cartera] Plazos no leídos:', error?.message || error);
+        res.status(500).json({ error: 'No pudimos cargar los plazos de los avisos de cartera.' });
+    }
+});
+// Gestiones de cobro (28 de octubre de 2026): las ve quien entra a Financiero; las registra quien puede escribir.
+router.get('/collection-activities', requireFinancialAccess, async (_req, res) => {
+    try {
+        res.json(await listCollectionActivities(prisma));
+    } catch (error) {
+        console.error('[Cartera] Gestiones no leídas:', error?.message || error);
+        res.status(500).json({ error: 'No pudimos cargar las gestiones de cobro.' });
+    }
+});
+router.post('/collection-activities', requireFinancialWrite, async (req, res) => {
+    try {
+        res.status(201).json(await recordCollectionActivity(prisma, { clientId: req.body?.clientId, channel: req.body?.channel }, req.user));
+    } catch (error) {
+        if (!error.statusCode) console.error('[Cartera] Gestión no guardada:', error?.message || error);
+        res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No pudimos guardar la gestión de cobro.' });
+    }
+});
+router.put('/collection-alerts', requireFinancialAccess, async (req, res) => {
+    try {
+        res.json(await saveCollectionSettings(prisma, req.body, req.user));
+    } catch (error) {
+        if (!error.statusCode) console.error('[Cartera] Plazos no guardados:', error?.message || error);
+        res.status(error.statusCode || 500).json({ error: error.statusCode ? error.message : 'No pudimos guardar los plazos de los avisos de cartera.' });
+    }
+});
+// Formalización de proyectos (punto 3 de la solicitud de Elisa, 29 de octubre de 2026): solo Dirección y Administrativa
+// y contable ven el contrato y las condiciones económicas, y solo ellas autorizan empezar sin el anticipo.
+const formalizationAccess = requireFormalizationAccess(prisma);
+const formalizationError = (res, error, fallback) => {
+    if (!error.statusCode) console.error('[Formalización]', fallback, error?.message || error);
+    const message = error.statusCode ? error.message : fallback;
+    return res.status(error.statusCode || 500).json({ error: message, message });
+};
+router.get('/formalizations/access', requireFinancialAccess, async (req, res) => {
+    try {
+        res.json({ canManage: await canManageFormalizations(prisma, req.user) });
+    } catch (error) {
+        formalizationError(res, error, 'No pudimos comprobar tu acceso.');
+    }
+});
+router.get('/formalizations', requireFinancialAccess, formalizationAccess, async (_req, res) => {
+    try {
+        res.json(await listFormalizations(prisma));
+    } catch (error) {
+        formalizationError(res, error, 'No pudimos cargar las formalizaciones.');
+    }
+});
+// El contrato, un otrosí o un anexo: el tipo y la nota viajan como campos del formulario junto al archivo.
+router.post('/formalizations/:id/documents', requireFinancialAccess, formalizationAccess, receiveFinancialDocument, async (req, res) => {
+    try {
+        if (!req.file) return res.status(400).json({ error: 'Selecciona el documento: PDF, JPG o PNG.', message: 'Selecciona el documento: PDF, JPG o PNG.' });
+        const details = { kind: req.body?.kind, note: req.body?.note };
+        res.status(201).json(await attachFormalizationDocument(prisma, financialEvidenceStorage(), req.params.id, req.file, details, req.user));
+    } catch (error) {
+        formalizationError(res, error, 'No pudimos guardar el documento.');
+    }
+});
+router.post('/formalizations/:id/documents/:documentId/void', requireFinancialAccess, formalizationAccess, async (req, res) => {
+    try {
+        res.json(await voidFormalizationDocument(prisma, req.params.id, req.params.documentId, req.body?.reason, req.user));
+    } catch (error) {
+        formalizationError(res, error, 'No pudimos anular el documento.');
+    }
+});
+router.get('/formalizations/:id/documents/:documentId/file', requireFinancialAccess, formalizationAccess, async (req, res) => {
+    try {
+        const { document, object } = await openFormalizationDocument(prisma, financialEvidenceStorage(), req.params.id, req.params.documentId);
+        res.setHeader('Access-Control-Expose-Headers', 'Content-Disposition');
+        res.setHeader('Content-Type', document.mimeType);
+        res.setHeader('Content-Disposition', contentDisposition(req.query?.download === '1' ? 'attachment' : 'inline', document.name));
+        res.setHeader('Cache-Control', 'private, no-store');
+        res.setHeader('X-Content-Type-Options', 'nosniff');
+        if (object.ContentLength) res.setHeader('Content-Length', String(object.ContentLength));
+        object.Body.on('error', (error) => {
+            console.error('[Formalización] Contrato no enviado:', error?.message || error);
+            if (!res.headersSent) res.status(500).json({ error: 'No se pudo cargar el contrato.' });
+            else res.destroy(error);
+        });
+        return object.Body.pipe(res);
+    } catch (error) {
+        if (error?.name === 'NoSuchKey') return res.status(404).json({ error: 'El archivo no está disponible en el almacenamiento.' });
+        return formalizationError(res, error, 'No pudimos abrir el contrato.');
+    }
+});
+router.post('/formalizations/:id/exception', requireFinancialAccess, formalizationAccess, async (req, res) => {
+    try {
+        res.json(await registerFormalizationException(prisma, req.params.id, req.body || {}, req.user));
+    } catch (error) {
+        formalizationError(res, error, 'No pudimos guardar la autorización.');
+    }
+});
+router.put('/formalizations/:id/requirements', requireFinancialAccess, formalizationAccess, async (req, res) => {
+    try {
+        const body = req.body || {};
+        res.json(await setFormalizationRequirements(prisma, req.params.id, { requiresContract: body.requiresContract, requiresAdvance: body.requiresAdvance, note: body.note }, req.user));
+    } catch (error) {
+        formalizationError(res, error, 'No pudimos guardar lo que se pide.');
+    }
+});
+router.put('/formalizations/:id/advance', requireFinancialAccess, formalizationAccess, async (req, res) => {
+    try {
+        res.json(await linkFormalizationAdvance(prisma, req.params.id, req.body?.receivableId, req.user));
+    } catch (error) {
+        formalizationError(res, error, 'No pudimos ligar la cuenta del anticipo.');
+    }
+});
 // Préstamos a terceros (Rodny, 20 de octubre de 2026): el egreso y la cuenta por cobrar de
 // una vez; la devolución entra como reintegro por «Registrar pago» de siempre.
 router.post('/loans', requireFinancialWrite, createLoanHandler);

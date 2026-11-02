@@ -16,8 +16,9 @@ test('Financiero tiene cuatro pestañas y cada vista vive en una sola', () => {
     // Terceros llegó el mismo día, como su propia pestaña (el modelo que mandó Elisa).
     assert.deepEqual(FINANCIAL_TAB_GROUPS.map((group) => group.label), ['Movimientos', 'Cuentas por cobrar', 'Cuentas por pagar', 'Terceros', 'Análisis']);
     const views = FINANCIAL_TAB_GROUPS.flatMap((group) => group.views.map((view) => view.key));
-    assert.deepEqual(views.sort(), ['flow', 'parties', 'payables', 'payroll', 'profitability', 'receivables', 'records']);
+    assert.deepEqual(views.sort(), ['flow', 'formalizations', 'parties', 'payables', 'payroll', 'profitability', 'receivables', 'records']);
     assert.equal(new Set(views).size, views.length);
+    assert.equal(financialTabOfView('formalizations'), 'cobrar', 'la formalización vive en Cuentas por cobrar');
     assert.equal(financialTabOfView('payroll'), 'pagar', 'la nómina va dentro de Cuentas por pagar');
     assert.equal(financialTabOfView('parties'), 'terceros');
     assert.equal(financialTabOfView('profitability'), 'analisis');
@@ -29,6 +30,13 @@ test('Rentabilidad solo aparece para administración, y tocar una pestaña abre 
     assert.equal(viewForFinancialTab('pagar', 'records'), 'payables');
     assert.equal(viewForFinancialTab('pagar', 'payroll'), 'payroll', 'si ya se está en una vista de esa pestaña, se queda');
     assert.equal(viewForFinancialTab('analisis', 'records', { isAdmin: false }), 'flow');
+});
+
+test('Formalización solo aparece para Dirección y Administrativa (29 de octubre de 2026)', () => {
+    const cobrar = (options) => visibleFinancialTabs(options).find((group) => group.key === 'cobrar').views.map((view) => view.key);
+    assert.deepEqual(cobrar({ isAdmin: true }), ['receivables'], 'ser administrador no basta: lo decide el área');
+    assert.deepEqual(cobrar({ canFormalize: true }), ['receivables', 'formalizations']);
+    assert.equal(viewForFinancialTab('cobrar', 'records', { canFormalize: true }), 'receivables', 'la pestaña abre en Cuentas por cobrar');
 });
 
 test('la antigüedad es la del documento: desde la emisión, o el periodo; en lo que se paga, desde que llegó', () => {
@@ -87,7 +95,7 @@ const dashboard = fs.readFileSync(new URL('../src/components/modules/FinancialDa
 const payables = fs.readFileSync(new URL('../src/components/modules/financial/PayablesTab.jsx', import.meta.url), 'utf8');
 
 test('la pantalla pinta las pestañas de la regla, no una lista escrita a mano', () => {
-    assert.match(dashboard, /visibleFinancialTabs\(\{ isAdmin: isAdminUser \}\)/);
+    assert.match(dashboard, /visibleFinancialTabs\(\{ isAdmin: isAdminUser, canFormalize \}\)/);
     assert.match(dashboard, /<FinancialSubTabs views=\{activeTabViews\}/);
     assert.doesNotMatch(dashboard, />\s*Nómina Operativa\s*</);
     assert.doesNotMatch(dashboard, />\s*Por pagar\s*</);

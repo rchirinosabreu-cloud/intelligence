@@ -71,12 +71,15 @@ test('the service finds the person by first name or something close, refuses any
 });
 
 test('Bria is told to use the fichas without reciting them and never to tell anyone what they say', () => {
-  const instructions = buildInstructions({ person: { name: 'Rodny' }, today: '2026-10-20', tools: [{ name: 'como_trabajar_con', description: 'x' }], user: { role: 'ADMIN' } });
-  assert.match(instructions, /25\. Conoces a cada persona del equipo/);
-  assert.match(instructions, /llama como_trabajar_con/);
-  assert.match(instructions, /Nunca la recites ni digas «según tu ficha»/);
-  assert.match(instructions, /nunca le cuentes a nadie —ni a la persona ni a un compañero— qué dice una ficha/);
-  assert.match(instructions, /cómo trabajar con alguien, no cómo es/);
+  // La guía vive en la descripción de la herramienta (31 de octubre de 2026): el modelo la ve solo cuando la tiene.
+  const { description } = byName(createAgencyFactTools(fakeService()), 'como_trabajar_con');
+  assert.match(description, /Conoces a cada persona del equipo/);
+  assert.match(description, /Llámala con su nombre antes de redactarle un mensaje/);
+  assert.match(description, /Nunca la recites ni digas «según tu ficha»/);
+  assert.match(description, /nunca le cuentes a nadie —ni a la persona ni a un compañero— qué dice una ficha/);
+  assert.match(description, /cómo trabajar con alguien, no cómo es/);
+  assert.match(description, /nunca guardes salud, motivos de ausencia, salarios/);
+  assert.match(buildInstructions({ person: { name: 'Rodny' }, today: '2026-10-20', tools: [{ name: 'como_trabajar_con', description }], user: { role: 'ADMIN' } }), /- como_trabajar_con/);
   assert.doesNotMatch(buildInstructions({ person: { name: 'Camila' }, today: '2026-10-20', tools: [{ name: 'memoria_de_la_agencia', description: 'x' }], user: { role: 'PROJECT_MANAGER' } }), /como_trabajar_con/);
 });
 
@@ -92,9 +95,10 @@ test('saving needs a correction, confirmation or teaching in the human message i
   const service = fakeService();
   const save = byName(createAgencyFactTools(service), 'guardar_en_memoria');
   const args = { request: { intent: 'TEACH' }, afirmacion: 'Caribbean Drive terminó en agosto de 2026.', entidad: 'Caribbean Drive', clientId: null, tema: 'relacion', tipoEntidad: 'cliente', proposito: 'operacion', certeza: 'CONFIRMADO', desde: '2026-08-31', hasta: null, reemplaza: [], respondeDuda: null };
-  await assert.rejects(() => save.run(args, { user: pm, question: '¿Caribbean sigue activo?', memoryIntent: 'NINGUNO' }), { code: 'BRIA_FACT_NO_INTENT' });
+  await assert.rejects(() => save.run({ ...args, request: undefined }, { user: pm, question: 'Ya no trabajamos con Caribbean, terminó en agosto' }), { code: 'BRIA_FACT_NO_INTENT' });
+  await assert.rejects(() => save.run(args, { user: pm, question: '' }), { code: 'BRIA_FACT_NO_INTENT' });
   assert.equal(service.calls.length, 0);
-  const out = await save.run(args, { user: pm, question: 'Ya no trabajamos con Caribbean, terminó en agosto', memoryIntent: 'GUARDAR' });
+  const out = await save.run(args, { user: pm, question: 'Ya no trabajamos con Caribbean, terminó en agosto' });
   assert.equal(out.data.saved, true);
   assert.equal(service.calls[0][0], 'record');
 });
@@ -105,17 +109,16 @@ test('acceptance uses the actual previous offer, not an affirmative-word detecto
   const args = { afirmacion: 'Aristea no confirmará el contrato de octubre por falta de flujo de caja.', entidad: 'Aristea', clientId: 'c1', tema: 'acuerdo', tipoEntidad: 'cliente', proposito: 'operacion', certeza: 'CONFIRMADO', desde: '2026-10-09', hasta: null, reemplaza: [], respondeDuda: null };
   const offer = 'Lo dejo así en la memoria de Aristea: el contrato de octubre no se confirmará. ¿Quieres que lo guarde?';
   args.request = { intent: 'ACCEPT', offerEvidence: offer };
-  assert.equal((await save.run(args, { user: pm, question: 'Listo', previousAnswer: offer, memoryIntent: 'GUARDAR' })).data.saved, true);
-  await assert.rejects(() => save.run(args, { user: pm, question: 'Listo', previousAnswer: 'Aristea está en rojo por dos frentes.', memoryIntent: 'GUARDAR' }), { code: 'BRIA_FACT_NO_INTENT' });
-  await assert.rejects(() => save.run(args, { user: pm, question: 'Listo', memoryIntent: 'GUARDAR' }), { code: 'BRIA_FACT_NO_INTENT' });
-  await assert.rejects(() => save.run(args, { user: pm, question: 'No, mejor no', previousAnswer: offer, memoryIntent: 'NINGUNO' }), { code: 'BRIA_FACT_NO_INTENT' });
+  assert.equal((await save.run(args, { user: pm, question: 'Listo', previousAnswer: offer })).data.saved, true);
+  await assert.rejects(() => save.run(args, { user: pm, question: 'Listo', previousAnswer: 'Aristea está en rojo por dos frentes.' }), { code: 'BRIA_FACT_NO_INTENT' });
+  await assert.rejects(() => save.run(args, { user: pm, question: 'Listo' }), { code: 'BRIA_FACT_NO_INTENT' });
 });
 
 test('forgetting needs an explicit request to forget', async () => {
   const service = fakeService();
   const retire = byName(createAgencyFactTools(service), 'retirar_de_memoria');
-  await assert.rejects(() => retire.run({ id: 'x', revision: 1, request: { intent: 'RETIRE' } }, { user: admin, question: 'Revisa esto', memoryIntent: 'NINGUNO' }), { code: 'BRIA_FACT_NO_INTENT' });
-  assert.equal((await retire.run({ id: 'x', revision: 1, request: { intent: 'RETIRE' } }, { user: admin, question: 'Olvida ese dato, ya no aplica', memoryIntent: 'RETIRAR' })).data.retired, true);
+  await assert.rejects(() => retire.run({ id: 'x', revision: 1, request: { intent: 'TEACH' } }, { user: admin, question: 'Revisa esto' }), { code: 'BRIA_FACT_NO_INTENT' });
+  assert.equal((await retire.run({ id: 'x', revision: 1, request: { intent: 'RETIRE' } }, { user: admin, question: 'Olvida ese dato, ya no aplica' })).data.retired, true);
 });
 
 test('the service resolves the person again and hides purposes the account cannot read', async () => {
@@ -136,10 +139,15 @@ test('the service resolves the person again and hides purposes the account canno
 
 test('Bria weighs current records and remembered agreements by scope instead of absolute precedence', () => {
   const tools = createAgencyFactTools(fakeService()).map(({ name, description }) => ({ name, description }));
-  const text = buildInstructions({ person: { name: 'Camila' }, today: '2026-10-09', tools });
-  assert.match(text, /memoria_de_la_agencia/);
-  assert.match(text, /cuenta, periodo, certeza y procedencia/i);
-  assert.match(text, /memoria histórica tampoco anula un acuerdo posterior/i);
-  assert.match(text, /reconstruye el orden/i);
-  assert.match(text, /una sola duda/i);
+  assert.match(buildInstructions({ person: { name: 'Camila' }, today: '2026-10-09', tools }), /memoria_de_la_agencia/);
+  // La guía de cada herramienta vive en su descripción (31 de octubre de 2026).
+  const memory = byName(tools, 'memoria_de_la_agencia').description;
+  assert.match(memory, /cuenta, periodo, certeza y procedencia/i);
+  assert.match(memory, /memoria histórica tampoco anula un acuerdo posterior/i);
+  assert.match(memory, /reconstruye el orden/i);
+  const save = byName(tools, 'guardar_en_memoria').description;
+  assert.match(save, /una sola duda/i);
+  assert.match(save, /saved=true/);
+  assert.match(save, /«Sí, guárdalo»/);
+  assert.match(byName(tools, 'retirar_de_memoria').description, /ofrece retirarlo/i);
 });

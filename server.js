@@ -25,6 +25,13 @@ import { initPlatformLeagueScheduler } from './src/services/platformLeagueServic
 import { initDailyReadingScheduler } from './src/services/dailyReadingService.js';
 import { initConversationLearningScheduler } from './src/services/conversationLearningService.js';
 import { initCrmFollowUpAlertScheduler } from './src/services/crmFollowUpAlertService.js';
+import { initCollectionAlertScheduler } from './src/services/collectionAlertService.js';
+import { initFormalizationScheduler } from './src/services/projectFormalizationService.js';
+import { initContractCycleAlertScheduler } from './src/services/contractCycleAlertService.js';
+import { initPlanCloseNoticeScheduler } from './src/services/planCloseNoticeService.js';
+import { initClientSuspensionScheduler } from './src/services/clientSuspensionService.js';
+import { initUnbackedWorkAlertScheduler } from './src/services/unbackedWorkAlertService.js';
+import { initExternalPlanScheduler } from './src/services/externalPlanService.js';
 import { getAIHealth } from './src/services/aiService.js';
 import { configureS3Cors } from './src/services/s3Service.js';
 import { loggerMiddleware } from './src/middlewares/logger.js';
@@ -235,6 +242,13 @@ async function bootstrap() {
         initPlatformLeagueScheduler();
         initConversationLearningScheduler();
         initCrmFollowUpAlertScheduler();
+        initCollectionAlertScheduler();
+        initFormalizationScheduler();
+        initContractCycleAlertScheduler();
+        initPlanCloseNoticeScheduler();
+        initClientSuspensionScheduler();
+        initUnbackedWorkAlertScheduler();
+        initExternalPlanScheduler();
         startTaskAttachmentRetention();
         startTempUploadSweep();
         console.log("[Service: Cron] Tareas en segundo plano inicializadas.");

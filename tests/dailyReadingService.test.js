@@ -563,11 +563,13 @@ test('the morning message shows above the mascot after the close and before the 
 });
 
 test('Bria is told how to use its memory of time, and the platform runs it on its own', () => {
-  const instructions = buildInstructions({ person: { name: 'Rodny' }, today: '2026-10-20', tools: [{ name: 'lectura_de_la_agencia', description: 'x' }], user: { role: 'ADMIN' } });
-  assert.match(instructions, /24\. Eres los ojos de la dirección/);
-  assert.match(instructions, /aplícalo al recomendar sin recitarlo ni citar números de regla/);
-  assert.match(instructions, /Nunca recomiendes contra una regla, y si la persona te corrige o precisa algo que una regla dice, no cambies la regla por tu cuenta/);
-  assert.match(instructions, /lo que conviene no hacer y por qué/);
+  // La guía vive en la descripción de la herramienta (31 de octubre de 2026); las instrucciones solo la nombran.
+  const { description } = createDailyReadingTools({ explain: async () => ({}) })[0];
+  assert.match(description, /Eres los ojos de la dirección/);
+  assert.match(description, /aplícalo al recomendar sin recitarlo ni citar números de regla/);
+  assert.match(description, /Nunca recomiendes contra una regla, y si la persona te corrige o precisa algo que una regla dice, no cambies la regla por tu cuenta/);
+  assert.match(description, /lo que conviene no hacer y por qué/);
+  assert.match(buildInstructions({ person: { name: 'Rodny' }, today: '2026-10-20', tools: [{ name: 'lectura_de_la_agencia', description }], user: { role: 'ADMIN' } }), /- lectura_de_la_agencia/);
   assert.equal(toolProgressLabel('lectura_de_la_agencia'), 'Repasando cómo viene la agencia…');
   assert.match(readFileSync('server.js', 'utf8'), /initDailyReadingScheduler\(\);/);
   assert.match(readFileSync('src/utils/notificationUtils.js', 'utf8'), /BRIA_LECTURA_MANANA[\s\S]*Tu lectura de la mañana está lista/);

@@ -8,7 +8,12 @@ export const FINANCIAL_TAB_GROUPS = Object.freeze([
     {
         key: 'cobrar',
         label: 'Cuentas por cobrar',
-        views: [{ key: 'receivables', label: 'Cuentas por cobrar' }]
+        views: [
+            { key: 'receivables', label: 'Cuentas por cobrar' },
+            // Formalización de proyectos (29 de octubre de 2026): solo Dirección y Administrativa y contable; el servidor
+            // también lo exige.
+            { key: 'formalizations', label: 'Formalización', formalizationOnly: true }
+        ]
     },
     {
         key: 'pagar',
@@ -34,9 +39,9 @@ export const FINANCIAL_TAB_GROUPS = Object.freeze([
 ]);
 
 /** Las pestañas que ve esta persona, sin las vistas que su rol no abre. */
-export const visibleFinancialTabs = ({ isAdmin = false } = {}) => FINANCIAL_TAB_GROUPS.map((group) => ({
+export const visibleFinancialTabs = ({ isAdmin = false, canFormalize = false } = {}) => FINANCIAL_TAB_GROUPS.map((group) => ({
     ...group,
-    views: group.views.filter((view) => !view.adminOnly || isAdmin)
+    views: group.views.filter((view) => (!view.adminOnly || isAdmin) && (!view.formalizationOnly || canFormalize))
 }));
 
 export const financialTabOfView = (viewKey) => FINANCIAL_TAB_GROUPS.find((group) => group.views.some((view) => view.key === viewKey))?.key || 'movimientos';

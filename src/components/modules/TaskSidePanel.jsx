@@ -24,6 +24,7 @@ import { TIME_CORRECTION_EVENT_TYPE } from '@/lib/taskWorkCorrection';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { useAuth } from '@/context/AuthContext';
 import { canChangeTaskPrivacy, canCreatePrivateTask } from '@/lib/taskPrivacy';
+import { canUpdateTask } from '@/lib/taskEditPermissions';
 import TaskShareControl from '@/components/tasks/TaskShareControl';
 import TaskCollaboratorsPicker from '@/components/tasks/TaskCollaboratorsPicker';
 import TaskTeamTime from '@/components/tasks/TaskTeamTime';
@@ -874,6 +875,10 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
     };
 
     const canSetFocusDeadline = ['ADMIN', 'PROJECT_MANAGER'].includes(currentUser?.role);
+    const canEditClient = !isEdition || (!formData.contentItemId && canUpdateTask(currentUser, {
+        creatorId: taskData?.creatorId || taskData?.creator?.id,
+        assignee: { userId: taskData?.assignee?.userId || taskData?.assigneeUserId }
+    }));
     // Crear un pendiente privado es cosa de quien dirige; cambiar la privacidad de uno
     // que ya existe, solo de quien lo creó. Si el control no se puede usar, no se pinta:
     // el servidor lo rechazaría igual y enseñarlo sería prometer algo que no se cumple.
@@ -951,11 +956,12 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                 onSuccess();
                 onClose();
             } else {
-                throw new Error("Failed to save task");
+                const failure = await res.json().catch(() => null);
+                throw new Error(res.status < 500 && failure?.error ? failure.error : 'No se pudo guardar la tarea.');
             }
         } catch (err) {
             console.error("Save failed:", err);
-            toast({ title: 'Error', description: 'No se pudo guardar la tarea.', variant: 'destructive' });
+            toast({ title: 'Error', description: err.message || 'No se pudo guardar la tarea.', variant: 'destructive' });
         } finally {
             setIsSubmitting(false);
         }
@@ -2183,12 +2189,13 @@ const TaskSidePanel = ({ isOpen, onClose, onSuccess, clientsList, taskData = nul
                                     aria-label="Cliente"
                                     value={formData.clientId}
                                     onChange={e => setFormData({...formData, clientId: e.target.value})}
-                                    disabled={isEdition || !!defaultClientId}
+                                    disabled={!canEditClient || (!isEdition && !!defaultClientId)}
                                     className={`${taskComposerFieldClass} h-12 sm:h-[38px] cursor-pointer disabled:opacity-80`}
                                 >
                                     <option value="">Seleccionar cliente...</option>
                                     {clientsList.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                                 </Select>
+                                {isEdition && formData.contentItemId && <p className="text-xs text-muted-foreground">El cliente corresponde a la pieza de parrilla vinculada.</p>}
                             </div>
 
                             {/* Responsable y co-responsables (Rodny, 5 de octubre de 2026): el «+» al lado añade

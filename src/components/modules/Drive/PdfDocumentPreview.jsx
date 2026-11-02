@@ -1,7 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, FileText, Loader2 } from '@/components/ui/icons';
-
-const PDF_WORKER_URL = '/pdf.worker.min.js';
+/**
+ * El worker sale de la versión instalada de pdf.js, no de una copia suelta en `public/` (30 de octubre de 2026): esa
+ * copia se quedó en la 5.x y pdf.js se niega a trabajar si el worker y la librería no son de la misma versión, así que
+ * al subir de versión el visor se habría roto en producción sin que nada lo avisara al compilar.
+ *
+ * **El `?url` va aquí dentro, nunca arriba del archivo**: es una marca que solo entiende el empaquetador, y a nivel de
+ * módulo rompe cualquier arnés que importe esta pantalla en Node (el del chat lo hace con `packages: 'external'`).
+ */
+const workerUrl = async () => (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
 
 const PdfPage = ({ document, pageNumber, name }) => {
   const canvasRef = useRef(null);
@@ -73,7 +80,7 @@ const PdfDocumentPreview = ({ data, name }) => {
           throw Object.assign(new Error('El archivo llegó vacío al visor (0 bytes).'), { name: 'EmptyBufferError' });
         }
         const pdfjsLib = await import('pdfjs-dist');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = PDF_WORKER_URL;
+        pdfjsLib.GlobalWorkerOptions.workerSrc = await workerUrl();
         loadingTask = pdfjsLib.getDocument({ data: bytes });
         loadedDocument = await loadingTask.promise;
         if (active) setDocument(loadedDocument);

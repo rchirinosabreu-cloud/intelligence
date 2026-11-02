@@ -4,6 +4,9 @@
 // las piezas, sus fechas y las tareas. Lo único que se escribe es lo que nadie más sabe: el contrato.
 // Las mismas reglas las usan la pantalla y el servidor.
 
+import { unbackedWork } from './unbackedWork.js';
+import { sheetIdFromUrl } from './externalPlan.js';
+
 // Etapas de una pieza, en orden. Cada una cuenta las piezas que llegaron *al menos* hasta ahí.
 export const OPERATION_STAGES = [
   { key: 'redactada', label: 'Redactada', hint: 'Tiene guion y texto escritos' },
@@ -29,7 +32,15 @@ export const STORY_FREQUENCIES = [
 export const labelOf = (list, value) => list.find((option) => option.value === value)?.label || '';
 
 export const OPERATION_LEVELS = ['red', 'yellow', 'green', 'gray'];
+/**
+ * El hueco mínimo que se avisa, pase lo que pase. **Lo que decide de verdad es el contrato**
+ * (`maxGapBetweenPosts`): con cuatro piezas al mes, once días entre publicaciones es el ritmo
+ * contratado, no un atraso (Rodny, 30 de octubre de 2026, viendo a Finas Asesores en amarillo por
+ * cumplir: «la plataforma allí no está haciendo una lectura integrada»).
+ */
 export const MAX_DAYS_BETWEEN_POSTS = 3;
+/** Un contrato que da para una pieza casi diaria no se mide igual: ahí dos el mismo día es lo normal. */
+export const SAME_DAY_MIN_SPACING = 2;
 export const CONTRACT_WARNING_DAYS = 30;
 export const NO_PLAN_RED_FROM_DAY = 5;
 
@@ -52,6 +63,22 @@ export function contractQuota(contract) {
 }
 
 export const isMeasured = (client) => client.contract?.serviceType === 'PARRILLA' && contractQuota(client.contract) > 0;
+
+/**
+ * Cada cuántos días toca una pieza según el contrato: los días del ciclo entre las piezas contratadas.
+ * Con 4 piezas en 31 días, una cada 7,75; con 20, una cada día y medio. `null` si no hay contra qué medir.
+ */
+export function expectedSpacing(cycle) {
+  const quota = Number(cycle?.quota) || 0;
+  const length = Number(cycle?.length) || 0;
+  return quota > 0 && length > 0 ? length / quota : null;
+}
+
+/** A partir de cuántos días un hueco entre publicaciones sí es un hueco: el doble del ritmo contratado. */
+export function maxGapBetweenPosts(cycle) {
+  const spacing = expectedSpacing(cycle);
+  return spacing ? Math.max(MAX_DAYS_BETWEEN_POSTS, Math.round(spacing * 2)) : MAX_DAYS_BETWEEN_POSTS;
+}
 
 /** Cuántas piezas deberían ir publicadas a esta altura del ciclo, repartidas de forma pareja. */
 export function expectedPublished(cycle) {
@@ -79,17 +106,28 @@ function finish(reasons) {
  */
 export function evaluateClientOperation(client, { today }) {
   const { contract } = client;
-  if (!contract) return { level: 'gray', reasons: [{ level: 'gray', text: 'Sin contrato cargado: no hay contra qué medir el avance.' }] };
+  // Trabajo en curso sin propuesta aprobada (29 de octubre de 2026): un motivo propio, nunca un gris callado.
+  const unbacked = unbackedWork({ contract, work: client.work, authorization: client.workAuthorization }, today);
+  const unbackedReason = unbacked && { level: unbacked.authorized ? 'gray' : 'yellow', text: unbacked.text };
+  if (!contract) {
+    if (unbackedReason) return { level: unbackedReason.level, reasons: [unbackedReason] };
+    return { level: 'gray', reasons: [{ level: 'gray', text: 'Sin contrato cargado: no hay contra qué medir el avance.' }] };
+  }
   if (contract.status === 'STAND_BY') {
     return { level: 'gray', reasons: [{ level: 'gray', text: contract.standBySince ? `En stand by desde el ${shortDate(contract.standBySince)}.` : 'En stand by.' }] };
   }
-  if (contract.status === 'TERMINADO') return { level: 'gray', reasons: [{ level: 'gray', text: 'Contrato terminado.' }] };
+  if (contract.status === 'TERMINADO') {
+    if (unbackedReason) return { level: unbackedReason.level, reasons: [unbackedReason] };
+    return { level: 'gray', reasons: [{ level: 'gray', text: 'Contrato terminado.' }] };
+  }
 
   const reasons = [];
+  if (unbacked && !unbacked.authorized) reasons.push(unbackedReason);
   if (contract.endDate) {
     const left = daysBetween(today, contract.endDate);
-    if (left < 0) reasons.push({ level: 'yellow', text: `El contrato venció el ${shortDate(contract.endDate)}: renovarlo o cerrarlo.` });
-    else if (left <= CONTRACT_WARNING_DAYS) reasons.push({ level: 'yellow', text: `El contrato vence el ${shortDate(contract.endDate)}.` });
+    // Vencido y con trabajo lo dice el motivo de arriba; con autorización vigente, no se insiste.
+    if (left < 0 && !unbacked) reasons.push({ level: 'yellow', text: `El contrato venció el ${shortDate(contract.endDate)}: renovarlo o cerrarlo.` });
+    else if (left >= 0 && left <= CONTRACT_WARNING_DAYS) reasons.push({ level: 'yellow', text: `El contrato vence el ${shortDate(contract.endDate)}.` });
   }
 
   // Servicios: sin cupo de piezas, lo que dice si va bien son sus tareas.
@@ -105,7 +143,9 @@ export function evaluateClientOperation(client, { today }) {
     reasons.push({ level: 'red', text: `${previous.label} cerró con ${previous.reached.publicada} de ${previous.quota} publicadas: faltaron ${pieces(missing)}.` });
   }
   if (contract.monthlyReport && previous && !previous.report?.deliveredAt) {
-    reasons.push({ level: 'yellow', text: `Falta entregar el informe de ${previous.label.toLowerCase()}.` });
+    // Con los estados del informe (29 de octubre de 2026) se dice en qué va, si ya empezó.
+    const stage = { EN_ELABORACION: 'va en elaboración', EN_REVISION: 'va en revisión' }[previous.report?.status];
+    reasons.push({ level: 'yellow', text: `Falta enviar el informe de ${previous.label.toLowerCase()}${stage ? `: ${stage}` : ''}.` });
   }
 
   if (current) {
@@ -121,7 +161,8 @@ export function evaluateClientOperation(client, { today }) {
     if (current.created && expected - current.reached.publicada >= 2 && !current.overdueItems) {
       reasons.push({ level: 'red', text: `Van ${current.reached.publicada} publicadas; a esta fecha deberían ir ${expected}.` });
     }
-    if (current.longestGap && current.longestGap.days > MAX_DAYS_BETWEEN_POSTS) {
+    // El hueco ya viene medido contra el contrato: si está, es que de verdad se pasó.
+    if (current.longestGap) {
       reasons.push({ level: 'yellow', text: `${current.longestGap.days} días entre publicaciones (del ${shortDate(current.longestGap.from)} al ${shortDate(current.longestGap.to)}).` });
     }
     for (const day of current.sameDay || []) {
@@ -214,6 +255,17 @@ export function pieceStage(item) {
   return stage;
 }
 
+/**
+ * Si una pieza se puede marcar «Ya se publicó»: desde el mismo día de su publicación, no solo cuando ya pasó (Rodny,
+ * 29 de octubre de 2026). Lo que Meta tiene programado para hoy no: marcarlo cancelaría una publicación que todavía va
+ * a salir. Las piezas de la hoja de MIO se marcan en la hoja.
+ */
+export function canMarkPublished(piece, today) {
+  if (!piece?.date || piece.external || piece.status === 'PUBLICADO') return false;
+  if (piece.date > today) return false;
+  return !(piece.date === today && piece.status === 'PROGRAMADO');
+}
+
 const STAGE_KEYS = ['redactada', 'disenada', 'aprobada', 'programada', 'publicada'];
 
 /** Resume las piezas de una parrilla contra lo contratado. `items` llevan `date` como «YYYY-MM-DD». */
@@ -223,20 +275,28 @@ export function summarizeCycle(cycle, items, { quota, today }) {
   const reached = Object.fromEntries(STAGE_KEYS.map((key, index) => [key, stages.filter((s) => s >= index + 1).length]));
   const overdueItems = sorted.filter((item) => item.date && item.date < today && item.status !== 'PUBLICADO').length;
 
+  const length = daysBetween(cycle.start, cycle.end) + 1;
+  // El ritmo sale del contrato, no de un número fijo: un cliente de cuatro piezas al mes publica cada
+  // ocho días y eso es cumplir (Rodny, 30 de octubre de 2026).
+  const maxGap = maxGapBetweenPosts({ quota, length });
+  const spacing = expectedSpacing({ quota, length });
+
   const dates = [...new Set(sorted.map((item) => item.date).filter(Boolean))];
   let longestGap = null;
   for (let i = 1; i < dates.length; i += 1) {
     const days = daysBetween(dates[i - 1], dates[i]);
-    if (days > MAX_DAYS_BETWEEN_POSTS && (!longestGap || days > longestGap.days)) longestGap = { days, from: dates[i - 1], to: dates[i] };
+    if (days > maxGap && (!longestGap || days > longestGap.days)) longestGap = { days, from: dates[i - 1], to: dates[i] };
   }
   const perDay = new Map();
   for (const item of sorted) if (item.date) perDay.set(item.date, (perDay.get(item.date) || 0) + 1);
-  const sameDay = [...perDay].filter(([, count]) => count > 1).map(([date, count]) => ({ date, count }));
+  // Con un contrato que da para una pieza casi diaria, dos el mismo día no dice nada.
+  const sameDay = spacing !== null && spacing < SAME_DAY_MIN_SPACING
+    ? []
+    : [...perDay].filter(([, count]) => count > 1).map(([date, count]) => ({ date, count }));
 
-  const length = daysBetween(cycle.start, cycle.end) + 1;
   const day = Math.min(length, Math.max(0, daysBetween(cycle.start, today) + 1));
   return {
-    ...cycle, quota, created: sorted.length, reached, overdueItems, longestGap, sameDay, day, length,
+    ...cycle, quota, created: sorted.length, reached, overdueItems, longestGap, sameDay, day, length, maxGap,
     pieces: sorted.map((item) => ({ id: item.id, date: item.date, format: item.format, title: item.title, status: item.status, planId: item.planId, markedByHand: Boolean(item.markedByHand) })),
   };
 }
@@ -260,9 +320,12 @@ export function normalizeOperationProfile(input = {}) {
     complexity: input.complexity ? String(input.complexity) : null,
     projectManagerId: optionalId(input.projectManagerId),
     communityManagerId: optionalId(input.communityManagerId),
+    externalPlanUrl: optionalText(input.externalPlanUrl, 500),
     contract: null,
   };
   if (value.instagramUrl && !/^https?:\/\/\S+$/i.test(value.instagramUrl)) errors.instagramUrl = 'Escribe un enlace que empiece por https://.';
+  // La parrilla de MIO en una hoja de Google (29 de octubre de 2026): solo se aceptan hojas de Google.
+  if (value.externalPlanUrl && !sheetIdFromUrl(value.externalPlanUrl)) errors.externalPlanUrl = 'Pega el enlace de la hoja de Google (docs.google.com/spreadsheets/…).';
   if (value.agency && !CLIENT_AGENCIES.some((o) => o.value === value.agency)) errors.agency = 'Elige Brain Studio o MIO Agencia.';
   if (value.complexity && !CLIENT_COMPLEXITY.some((o) => o.value === value.complexity)) errors.complexity = 'Elige alta, media o baja.';
 

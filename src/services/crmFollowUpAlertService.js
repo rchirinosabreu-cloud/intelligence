@@ -9,8 +9,9 @@ import { CRM_ACTIVITY_TYPES } from '../lib/crmRules.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
 import {
     DEFAULT_FOLLOW_UP_ALERT_DAYS, FOLLOW_UP_ALERT_STAGES, FOLLOW_UP_DIGEST_THRESHOLD, dueFollowUpAlert, followUpAlertMessage,
-    followUpDigest, followUpRecipients, isCommercialRole, normalizeFollowUpAlertDays
+    followUpDigest, followUpRecipients, normalizeFollowUpAlertDays
 } from '../lib/crmFollowUpAlerts.js';
+import { activeAreaUserIds } from './teamAreaService.js';
 import { followUpNoticeText } from '../lib/importantNotices.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription } from '../lib/importantNoticeTrace.js';
 import { queueImportantNotice, reassignCrmNotices } from './importantNoticeService.js';
@@ -42,11 +43,8 @@ export const saveFollowUpAlertDays = async (db, input, actor) => {
     return value;
 };
 
-// Las cuentas activas cuyo rol de Equipo es comercial: las únicas que reciben alertas comerciales.
-const activeCommercialIds = async (db) => (await db.user.findMany({
-    where: { isActive: true, teamMember: { is: { isActive: true } } },
-    select: { id: true, teamMember: { select: { role: true } } }
-})).filter((user) => isCommercialRole(user.teamMember?.role)).map((user) => user.id);
+// Las cuentas activas del área comercial de Equipo: las únicas que reciben alertas comerciales.
+const activeCommercialIds = (db) => activeAreaUserIds(db, 'COMERCIAL');
 
 // Lo ya avisado del ciclo más reciente, en la forma que lee la regla.
 const sentInLatestCycle = (log = []) => {

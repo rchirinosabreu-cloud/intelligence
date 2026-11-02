@@ -148,10 +148,13 @@ test('the tools only prepare, open with the module of their screen, and Bria is 
   assert.equal(out.data.stage, 'READY');
   assert.deepEqual(out.quickReplies, ['Confirmar', 'Cancelar']);
   assert.equal(createBriaActionTools(null).length, 0);
-  const text = buildInstructions({ person: { name: 'Kamila', jobTitle: 'PM' }, today: '2026-10-10', tools });
-  assert.match(text, /Nunca digas que cambiaste o creaste algo/);
-  assert.match(text, /«Confirmar» sobre el resumen/);
-  assert.match(text, /cambiar_pendientes para varias a la vez/);
+  assert.match(buildInstructions({ person: { name: 'Kamila', jobTitle: 'PM' }, today: '2026-10-10', tools }), /- cambiar_pendiente\n/);
+  // La guía vive en la descripción de cada herramienta (31 de octubre de 2026): toda acción dice que nunca se afirma el cambio.
+  for (const tool of tools) {
+    assert.match(tool.description, /«Confirmar» sobre el resumen/, `${tool.name} dice cuándo ejecuta el servidor`);
+    assert.match(tool.description, /Nunca digas que (cambiaste o creaste algo|registraste)/, `${tool.name} nunca afirma el cambio`);
+  }
+  assert.match(tools[0].description, /Para el mismo cambio en varias tareas usa cambiar_pendientes/);
 });
 
 // Las cuatro acciones que siguieron (10 de octubre de 2026, «sigue con las acciones que vienen, todas»).

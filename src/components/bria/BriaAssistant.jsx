@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useNavigate } from 'react-router-dom';
+import { useNavigateFrom } from '@/components/layout/BackToOrigin';
 import { Edit2, Mic } from '@/components/ui/icons';
 import { canUseBria } from '@/lib/briaLivingMemory';
 import { onBriaAsk, onBriaOpen, onBriaQuickAsk } from '@/lib/briaAsk';
@@ -13,7 +13,7 @@ import BriaQuickAsk from './BriaQuickAsk';
 
 // Mounted once in AppLayout: navigating modules never resets the conversation.
 export default function BriaAssistant({ currentUser, initialOpen = false, onDockWidthChange, onOpenChange }) {
-  const navigate = useNavigate(), trigger = useRef(null);
+  const navigate = useNavigateFrom(), trigger = useRef(null);
   const available = !!currentUser?.id && canUseBria(currentUser), key = `bria:panel:${currentUser?.id}`;
   const [open, setOpen] = useState(() => initialOpen || sessionStorage.getItem(key) === 'open');
   const [mascotActivity, setMascotActivity] = useState({ working: false, completionId: null });

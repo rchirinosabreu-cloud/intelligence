@@ -18,7 +18,7 @@ import {
   MoreVertical, CheckCircle2, Circle, Clock, Loader2,
   Calendar, User, LayoutGrid, FileText, Instagram, Facebook, Video, Image as ImageIcon,
   Edit2, Check, AlertCircle, Sparkles, Users, UserCheck, StickyNote, ChevronUp, Share2,
-  MessageSquare, Table2, UploadCloud, Link2, Lock, Eye
+  MessageSquare, Table2, UploadCloud, Link2, Eye
 } from '@/components/ui/icons';
 import PageHeader from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/button';
@@ -1133,8 +1133,9 @@ const ContentItemCard = ({
           <div className="flex min-w-0 flex-col gap-2">
             <div className="flex flex-wrap items-center gap-2">
               <label htmlFor={`guion-${item.id}`} className={FIELD_LABEL}>Guion</label>
-              <span className="inline-flex items-center gap-1.5 rounded-md bg-zinc-100 px-2 py-0.5 text-[11px] font-bold text-zinc-600 dark:bg-white/10 dark:text-zinc-300">
-                <Lock className="h-3 w-3" /> Solo el equipo
+              {/* El cliente ve el guion en el portal desde el 30 de octubre de 2026: se escribe sabiendo que lo lee. */}
+              <span className="inline-flex items-center gap-1.5 rounded-md bg-brand-cyan-soft px-2 py-0.5 text-[11px] font-bold text-brand-cyan-deep dark:bg-brand-cyan/15 dark:text-brand-cyan">
+                <Eye className="h-3 w-3" /> Lo ve el cliente
               </span>
             </div>
             {isEditing ? (
@@ -2122,6 +2123,16 @@ const ContentPlanDetail = () => {
             </Select>
           </div>
       </div>
+
+      {/* Cliente suspendido por cartera (30 de octubre de 2026): se dice arriba, antes de que alguien escriba media
+          parrilla, porque el servidor rechaza cada guardado con esta misma frase. */}
+      {plan.suspendedReason && (
+        <div role="alert" data-plan-suspended
+          className="rounded-3xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-zinc-800 dark:text-zinc-100">
+          <p className="font-semibold">Esta parrilla está congelada</p>
+          <p className="mt-1">{plan.suspendedReason}</p>
+        </div>
+      )}
 
       <div className="bg-white/60 dark:bg-zinc-900/40 border border-zinc-200/60 dark:border-white/5 rounded-3xl p-6">
         <div className="flex items-start gap-3 mb-5">

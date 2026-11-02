@@ -52,5 +52,4 @@ export const hasCurrentApprovalReview = (turn, action) => Boolean(turn?.approval
   && turn.approvalReview.actionId === action?.id && turn.approvalReview.state === reviewState(action)
   && actionReviewText(action) && String(turn.text || '').endsWith(actionReviewText(action)));
 
-export const conversationalInvestigation = record => record?.relato?.length && !record.pendientesDelRecorrido?.length
-  ? record.relato.map(row => row.texto).join('\n\n') : '';
+export const conversationalInvestigation = record => record?.relato?.length ? record.relato.map(row => row.texto).join('\n\n') : '';

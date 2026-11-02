@@ -72,6 +72,28 @@ export const fetchReceivablePaymentDocumentBlob = async (paymentId, document) =>
     return response.data instanceof Blob ? response.data : new Blob([response.data], { type: document.mimeType });
 };
 
-export const recordDocumentsApi = { upload: uploadRecordDocument, fetchBlob: fetchRecordDocumentBlob, label: 'comprobante' };
+// El contrato firmado de una formalización (29 de octubre de 2026): solo lo ven Dirección y Administración.
+const formalizationUrl = (formalizationId, path = '') => `${getApiBaseUrl()}/api/financials/formalizations/${encodeURIComponent(formalizationId)}${path}`;
+
+// El contrato, un otrosí o un anexo, con su nota opcional.
+export const uploadFormalizationDocument = async (formalizationId, file, { kind, note } = {}) => {
+    const body = new FormData();
+    body.append('kind', kind || 'CONTRATO');
+    if (note) body.append('note', note);
+    body.append('file', file, file.name);
+    const { data } = await axios.post(formalizationUrl(formalizationId, '/documents'), body, { headers: authHeaders() });
+    return data?.document;
+};
+
+export const voidFormalizationDocument = async (formalizationId, documentId, reason) => (
+    (await axios.post(formalizationUrl(formalizationId, `/documents/${encodeURIComponent(documentId)}/void`), { reason }, { headers: authHeaders() })).data
+);
+
+export const fetchFormalizationContractBlob = async (formalizationId, document) => {
+    const response = await axios.get(formalizationUrl(formalizationId, `/documents/${document.id}/file`), { headers: authHeaders(), responseType: 'blob' });
+    return response.data instanceof Blob ? response.data : new Blob([response.data], { type: document.mimeType });
+};
+
+export const recordDocumentsApi ={ upload: uploadRecordDocument, fetchBlob: fetchRecordDocumentBlob, label: 'comprobante' };
 export const retentionCertificateApi = { upload: uploadReceivablePaymentDocument, fetchBlob: fetchReceivablePaymentDocumentBlob, label: 'certificado' };
 export const payableDocumentsApi = { upload: uploadPayableDocument, fetchBlob: fetchPayableDocumentBlob, label: 'soporte' };

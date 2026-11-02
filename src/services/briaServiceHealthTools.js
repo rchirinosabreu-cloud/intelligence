@@ -6,7 +6,7 @@ const COLOR = { GREEN: 'verde', YELLOW: 'amarillo', RED: 'rojo', GRAY: 'gris' };
 
 export const createServiceHealthTools = (service) => service ? [{
   name: 'estado_de_servicios',
-  description: 'El semáforo de los servicios externos de la plataforma (OpenAI, Fireflies, Google, Meta, almacenamiento, correo, avisos al celular, WhatsApp, TRM): el color general y cuáles fallan, con su motivo. Úsala solo cuando un administrador pregunte si algo está caído, si un servicio funciona o por qué algo no anda. Solo administradores.',
+  description: 'El semáforo de los servicios externos de la plataforma (OpenAI, Fireflies, Google, Meta, almacenamiento, correo, avisos al celular, WhatsApp, TRM): el color general y cuáles fallan, con su motivo. Úsala solo cuando un administrador pregunte si algo está caído, si un servicio funciona o por qué algo no anda, y responde con lo que dice el semáforo. Nunca avises una caída sin que te pregunten. Solo administradores.',
   parameters: { type: 'object', properties: {} },
   allowed: (user) => canUseBria(user) && user?.role === 'ADMIN',
   async run() {

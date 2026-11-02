@@ -34,7 +34,6 @@ test('an explicit conversational teaching persists a proposal and returns a rece
   let writes = 0, calls = 0;
   const knowledge = { list: async () => [], save: async (_user, input) => { writes++; return { ...input, id: 'remembered', revision: 1, author: 'Rodny' }; } };
   const ai = { generate: async request => {
-    if (request.responseSchema) return { text: JSON.stringify({ investigar: false, continuar: false, actualidad: false, localizarTrabajo: false, guardarSeguimiento: false, prepararCambios: false, compararAlternativas: false, soloConversacion: false, propositoMemoria: 'GUARDAR', asunto: '', objetivo: '', areas: [], condiciones: [] }) };
     assert.ok(request.tools.some(tool => tool.name === 'recordar_aprendizaje'));
     return calls++ === 0 ? { output: [], functionCalls: [{ id: 'proposal', name: 'recordar_aprendizaje', args: { request: { intent: 'TEACH' }, scope: 'ACCOUNT', entity: 'Cuenta de prueba', topic: 'Revisión', text: 'El responsable confirma antes de enviar.', kind: 'PROPOSAL', validFrom: '2026-10-07', validUntil: null } }] } : { text: 'Guardé la propuesta.' };
   } };

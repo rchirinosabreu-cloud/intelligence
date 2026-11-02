@@ -2,8 +2,8 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createBriaPlatformClient, PLATFORM_RESPONSE_LIMIT } from '../src/lib/briaPlatformClient.js';
 import { createBriaPlatformTools } from '../src/services/briaPlatformTools.js';
-import { calculationReceipt } from '../src/lib/briaCalculationCoverage.js';
 import { runAssistant } from '../src/lib/briaAssistant.js';
+import { unsupportedFigures } from '../src/lib/briaFigures.js';
 
 const route = '/financials/receivables-ledger?year=2026';
 const ledger = {
@@ -16,11 +16,18 @@ const ledger = {
 };
 const response = body => ({ status: 200, headers: { get: () => 'application/json' }, json: async () => body });
 const readTool = platform => createBriaPlatformTools({ actions: {}, platform }).find(tool => tool.name === 'consultar_plataforma');
-const receipt = (data, ids) => calculationReceipt({
-  now: new Date('2026-10-27T22:00:00Z'),
-  requirements: [{ id: 'amount', objetivo: 'Saldos solicitados', alcance: ids ? 'SELECCION' : 'TOTAL' }],
-  call: { name: 'consultar_plataforma', args: { ruta: route, idsParaSumar: ids, calculo: { id: 'amount', campo: 'outstandingTotal', moneda: 'COP' } } }, data
-});
+// El importe exacto que la evidencia numérica acredita para el campo pedido: null si la fuente está recortada,
+// la selección incompleta o el campo no está. Es lo que antes comprobaba el recibo del planificador.
+const receipt = (data, ids) => {
+  const evidence = data?.evidenciaNumerica;
+  if (!evidence || evidence.alcance?.recortada || !evidence.operacion) return null;
+  if (ids) {
+    const selection = evidence.seleccion;
+    if (!selection?.completa || selection.idsNoDisponibles?.length || selection.idsEncontrados?.length !== ids.length) return null;
+    return selection.sumasExactas.find(row => row.campo === 'outstandingTotal' && row.moneda === 'COP') || null;
+  }
+  return evidence.totalesFuente.find(row => row.campo === 'outstandingTotal' && row.moneda === 'COP') || null;
+};
 
 test('complete native JSON supports exact totals and selections beyond a bounded model preview', async () => {
   const calls = [];
@@ -69,33 +76,27 @@ test('the catalog exposes native ledger filters so a clipped preview can be narr
   for (const field of ['year', 'month', 'quarter', 'q']) assert.ok(ledgerOperation.campos?.includes(field));
 });
 
-test('the assistant completes both current calculation requirements using large native reads without forwarding the full ledger', async () => {
+test('the assistant answers a total and a subtotal from large native reads without forwarding the full ledger, and its figures trace to them', async () => {
   const client = createBriaPlatformClient({ fetchFn: async () => response(ledger) });
-  const requirements = [
-    { id: 'total', objetivo: 'Total de cartera', alcance: 'TOTAL' },
-    { id: 'subset', objetivo: 'Saldo de la cuenta identificada', alcance: 'SELECCION' }
-  ];
   let step = 0;
+  const outputs = [];
   const result = await runAssistant({
     question: 'Total y saldo de la cuenta identificada', today: '2026-10-27',
     user: { role: 'ADMIN', modulePermissions: { bria: true } },
-    context: { session: { token: 'test' }, inquiryPlanner: async () => ({ plan: { investigar: false, continuar: false, actualidad: true,
-      localizarTrabajo: false, guardarSeguimiento: false, prepararCambios: false, compararAlternativas: false,
-      soloConversacion: false, propositoMemoria: 'NINGUNO', asunto: '', objetivo: '', areas: [], condiciones: [], calculosFinancieros: requirements } }) },
+    context: { session: { token: 'test' } },
     tools: [...createBriaPlatformTools({ actions: {}, platform: client }),
       { name: 'actualizar_seguimiento', allowed: () => true, parameters: {}, run: async () => assert.fail('no write requested') }],
     ai: { generate: async request => {
-      if (step++ === 0) return { functionCalls: requirements.map(item => ({ id: item.id, name: 'consultar_plataforma',
-        args: { ruta: route, ...(item.id === 'subset' ? { idsParaSumar: ['last'] } : {}), calculo: { id: item.id, campo: 'outstandingTotal', moneda: 'COP' } } })) };
-      const outputs = request.input.filter(row => row.type === 'function_call_output').map(row => JSON.parse(row.output));
+      if (step++ === 0) return { functionCalls: [{ id: 'total', name: 'consultar_plataforma', args: { ruta: route } }, { id: 'subset', name: 'consultar_plataforma', args: { ruta: route, idsParaSumar: ['last'] } }] };
+      outputs.push(...request.input.filter(row => row.type === 'function_call_output').map(row => JSON.parse(row.output)));
       assert.equal(outputs.length, 2);
-      assert.ok(outputs.every(row => row.comprobanteCalculo), JSON.stringify(outputs.map(row => ({ keys: Object.keys(row), error: row.error }))));
-      assert.deepEqual(outputs.map(row => row.comprobanteCalculo.importe), ['301.00', '200.75']);
+      assert.deepEqual([receipt(outputs[0])?.importe, receipt(outputs[1], ['last'])?.importe], ['301.00', '200.75']);
       assert.ok(outputs.every(row => JSON.stringify(row).length < PLATFORM_RESPONSE_LIMIT + 6000));
-      return { text: 'Total: COP 301. La cuenta seleccionada: COP 200,75.' };
+      return { text: 'Total: COP 301. La cuenta seleccionada: COP 200,75. Juntas no llegan a 1.000.' };
     } }
   });
-  assert.equal(result.calculos.length, 2);
-  assert.equal(result.answer, 'Total: COP 301. La cuenta seleccionada: COP 200,75.');
-  assert.equal(step, 2);
+  assert.equal(result.answer, 'Total: COP 301. La cuenta seleccionada: COP 200,75. Juntas no llegan a 1.000.');
+  assert.equal(step, 2, 'figures that come from the reads are delivered without another generation');
+  assert.deepEqual(unsupportedFigures(result.answer, outputs.map(row => JSON.stringify(row))), []);
+  assert.deepEqual(unsupportedFigures('Juntas suman 50.175.', outputs.map(row => JSON.stringify(row))), ['50.175'], 'an invented subtotal is detectable');
 });

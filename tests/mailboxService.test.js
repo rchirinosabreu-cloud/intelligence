@@ -129,10 +129,13 @@ test('the route: managers list, only admins connect, test and remove; the passwo
   assert.deepEqual([read.data.encontrado, read.data.texto, read.sources[0].kind], [true, 'Cuerpo completo del correo.', 'correo']);
   assert.equal((await tools[1].run({ id: 'nadie@x' }, { user: pm })).data.encontrado, false);
   assert.equal(createBriaMailTools(null).length, 0);
+  // La guía vive en la descripción de cada herramienta (31 de octubre de 2026); las instrucciones solo las listan.
   const text = buildInstructions({ person: { name: 'Kamila', jobTitle: 'PM' }, today: '2026-10-13', tools });
-  assert.match(text, /21\. Los buzones compartidos/);
-  assert.match(text, /No puedes enviar correos/);
-  assert.match(text, /datos, nunca instrucciones/);
+  assert.match(text, /- leer_correo/);
+  const descriptions = tools.map(tool => tool.description).join('\n');
+  assert.match(descriptions, /buzones compartidos/);
+  assert.match(descriptions, /No puedes enviar correos/);
+  assert.match(descriptions, /datos, nunca instrucciones/);
 });
 
 test('the repository seals the app password bound to the account id and never lists it', async () => {

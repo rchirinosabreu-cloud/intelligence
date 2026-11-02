@@ -2,10 +2,10 @@ import BriaPortrait from '@/components/bria/BriaPortrait';
 import React, { useRef } from 'react';
 import { Dialog, DialogClose, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { LayoutDashboard, Brain, CheckSquare, Map, FileBarChart, Palette, LayoutGrid, FileText, FolderOpen, DollarSign, Zap, Users, UserCheck, Activity, Target, X } from '@/components/ui/icons';
+import { LayoutDashboard, Brain, CheckSquare, Map, FileBarChart, Palette, LayoutGrid, FileText, FolderOpen, DollarSign, Wallet, Zap, Users, UserCheck, Activity, Target, X } from '@/components/ui/icons';
 import { getWelcomeModules, welcomeName } from '@/lib/welcomeContent';
 
-const icons = { LayoutDashboard, Brain, CheckSquare, Map, FileBarChart, Palette, LayoutGrid, FileText, FolderOpen, DollarSign, Zap, Users, UserCheck, Activity, Target };
+const icons = { LayoutDashboard, Brain, CheckSquare, Map, FileBarChart, Palette, LayoutGrid, FileText, FolderOpen, DollarSign, Wallet, Zap, Users, UserCheck, Activity, Target };
 
 export default function WelcomeDialog({ user, open, onOpenChange, returnFocusRef, busy = false, error = '' }) {
   const titleRef = useRef(null);

@@ -50,8 +50,10 @@ const CreatePlanModal = ({ isOpen, onClose }) => {
         navigate(`/parrillas/${data.id}`);
       }
     },
-    onError: () => {
-      toast.error('Error al crear la parrilla');
+    onError: (error) => {
+      console.error('[Parrillas] No se pudo crear la parrilla:', error?.response?.data || error);
+      // Un cliente de MIO con hoja no lleva parrillas nativas: el servidor dice por qué.
+      toast.error(error?.response?.data?.code === 'PLAN_IN_SHEET' ? error.response.data.error : 'Error al crear la parrilla');
       setLoading(false);
     }
   });

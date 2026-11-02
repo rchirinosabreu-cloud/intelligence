@@ -109,7 +109,7 @@ try {
       };
     });
 
-    assert.equal(editing.internal, true, 'el guion se marca como interno');
+    assert.equal(editing.internal, false, 'el guion ya no es interno: el cliente lo ve en el portal (30 de octubre de 2026)');
     assert.equal(editing.visible, true, 'el texto de publicación se marca como visible para el cliente');
     assert.equal(editing.renamed, true, '«Caption (Post)» pasa a llamarse por lo que es');
     assert.equal(editing.glance, false, 'la vista del cliente ya no está dentro del editor');

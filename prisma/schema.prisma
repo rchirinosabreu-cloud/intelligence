@@ -720,6 +720,12 @@ model Client {
   observations        ClientObservation[]
   financialRecords    FinancialRecord[]
   accountsReceivables AccountsReceivable[]
+  monthlyCloses       ClientMonthlyClose[]
+  workAuthorizations  ClientWorkAuthorization[]
+  suspensions         ClientSuspension[]
+  // La parrilla de MIO en una hoja de Google (29 de octubre de 2026): la plataforma la lee, nunca escribe en ella.
+  externalPlanUrl       String?
+  externalPlanSnapshots ExternalPlanSnapshot[]
   metricReports       MetricReport[]
   crmLeads            CrmLead[]
 
@@ -763,7 +769,112 @@ model ClientMonthlyReport {
   deliveredAt   DateTime @default(now()) @db.Timestamptz(3)
   deliveredById String?
   createdAt     DateTime @default(now())
+  // Estados del informe (29 de octubre de 2026): PENDIENTE, EN_ELABORACION, EN_REVISION o ENVIADO; solo ENVIADO es
+  // entregado y `deliveredAt` es cuándo se envió. `link` es el soporte de entrega. Regla en src/lib/monthlyClose.js.
+  status        String    @default("ENVIADO")
+  link          String?
+  note          String?
+  updatedAt     DateTime? @db.Timestamptz(3)
+  updatedById   String?
   client        Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, year, month])
+}
+
+/// Autorización para seguir trabajando con un cliente sin propuesta aprobada (29 de octubre de 2026): hasta una fecha,
+/// con motivo y quién la dio. Vale la más reciente; las anteriores se conservan. Regla en src/lib/unbackedWork.js.
+model ClientWorkAuthorization {
+  id               String   @id @default(uuid())
+  clientId         String
+  until            String // AAAA-MM-DD
+  reason           String
+  authorizedById   String?
+  authorizedByName String?
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  client           Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+}
+
+/// Suspensión de un cliente por cartera (30 de octubre de 2026): el mes en curso se termina y desde `fromCycle` no se
+/// trabaja parrilla ni producción. Exige quién la autorizó y por qué; nunca se borra, levantarla la cierra con su
+/// motivo (`liftKind`: PAGO cuando el cliente se puso al día, MANUAL cuando la levantó una persona). Un cliente solo
+/// puede tener una abierta: lo garantiza un índice único parcial que crea scripts/ensure-client-suspension-schema.js.
+/// Regla en src/lib/clientSuspension.js.
+model ClientSuspension {
+  id            String    @id @default(uuid())
+  clientId      String
+  fromCycle     String // AAAA-MM: el primer mes congelado
+  suspendedOn   String // AAAA-MM-DD, día de Bogotá
+  authorizedBy  String
+  reason        String
+  evidence      Json      @default("{}")
+  createdById   String?
+  createdByName String?
+  createdAt     DateTime  @default(now()) @db.Timestamptz(3)
+  liftedAt      DateTime? @db.Timestamptz(3)
+  liftedById    String?
+  liftedByName  String?
+  liftKind      String?
+  liftReason    String?
+  client        Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@index([clientId, createdAt])
+}
+
+/// Lo leído de la parrilla de MIO de un cliente (29 de octubre de 2026): una fila por cliente y mes, con las piezas de la
+/// pestaña del mes y su etapa. `problem` dice por qué la última lectura no se pudo; `okAt`, cuándo fue la última buena.
+/// Regla en src/lib/externalPlan.js; lectura en src/services/externalPlanService.js.
+model ExternalPlanSnapshot {
+  id       String    @id @default(uuid())
+  clientId String
+  year     Int
+  month    Int
+  tabName  String?
+  pieces   Json      @default("[]")
+  summary  Json      @default("{}")
+  problem  String?
+  readAt   DateTime  @default(now()) @db.Timestamptz(3)
+  okAt     DateTime? @db.Timestamptz(3)
+  /// La pestaña de Google (gid): con ella «Abrir en la hoja» llega a la fila de cada pieza.
+  gid        String?
+  /// Los comentarios de Google (los de burbuja) de este mes; `commentsAt` dice que se leyeron por la API.
+  comments   Json      @default("[]")
+  commentsAt DateTime? @db.Timestamptz(3)
+  /// Lo que cambió en la última lectura que trajo algo nuevo, y cuándo.
+  changes    Json      @default("[]")
+  changedAt  DateTime? @db.Timestamptz(3)
+  /// Dónde está cada columna en la pestaña y las opciones del desplegable de ESTADO: con esto se escribe en la hoja.
+  layout     Json?
+  /// Lo que se cambió en la hoja desde la plataforma (estado y respuestas), quién y cuándo; los 50 últimos.
+  edits      Json      @default("[]")
+  client   Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, year, month])
+}
+
+/// Lo ya avisado a Dirección por trabajo sin propuesta aprobada: una vez por cliente y mes. La fila única es la cerradura.
+model UnbackedWorkAlert {
+  id       String   @id @default(uuid())
+  clientId String
+  monthKey String
+  sentAt   DateTime @default(now()) @db.Timestamptz(3)
+
+  @@unique([clientId, monthKey])
+}
+
+/// El cierre de un mes que confirma el project manager (29 de octubre de 2026). Confirmar no borra nada: `snapshot`
+/// guarda lo que quedó pendiente en ese momento (piezas, vencidas, estado del informe).
+model ClientMonthlyClose {
+  id         String   @id @default(uuid())
+  clientId   String
+  year       Int
+  month      Int
+  closedAt   DateTime @default(now()) @db.Timestamptz(3)
+  closedById String?
+  note       String?
+  snapshot   Json     @default("{}")
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
   @@unique([clientId, year, month])
 }
@@ -1158,6 +1269,9 @@ model TeamMember {
   id                 String        @id @default(uuid())
   name               String
   role               String
+  // Áreas del equipo (28 de octubre de 2026): lista cerrada de `src/lib/teamAreas.js`, lo que leen las reglas;
+  // `role` es el cargo libre que se muestra. Vacía = se deduce del cargo. Aditiva con ensure-team-areas-schema.js.
+  areas              String[]      @default([])
   email              String?
   avatarUrl          String?
   isActive           Boolean       @default(true)
@@ -2722,6 +2836,122 @@ model CrmFollowUpAlert {
 
   @@unique([leadId, cycleStart, step])
   @@index([leadId], map: "CrmFollowUpAlert_lead_idx")
+}
+
+// Avisos de cartera (punto 7 de la solicitud de Elisa, 28 de octubre de 2026): lo ya avisado, una fila por asunto
+// —el cliente de fee mensual o la cuenta de un servicio puntual—, ciclo y paso. La fila única es la cerradura contra
+// avisar dos veces. Regla en src/lib/receivableCollections.js; tablas aditivas en scripts/ensure-collection-alerts-schema.js.
+model CollectionAlert {
+  id        String   @id @default(uuid())
+  subjectId String
+  kind      String // MENSUAL o UNICO
+  cycle     String
+  step      Int
+  sentAt    DateTime @default(now()) @db.Timestamptz()
+
+  @@unique([subjectId, cycle, step])
+  @@index([subjectId], map: "CollectionAlert_subject_idx")
+}
+
+// Gestiones de cobro (28 de octubre de 2026: «debe haber un registro»): lo que se hizo para cobrarle a un cliente,
+// desde el aviso de la banda (`source` AVISO, una por aviso) o a mano desde Cuentas por cobrar (MANUAL).
+model CollectionActivity {
+  id           String   @id @default(uuid())
+  clientId     String
+  receivableId String?
+  channel      String
+  source       String   @default("MANUAL")
+  noticeId     String?  @unique
+  authorId     String?
+  authorName   String?
+  occurredAt   DateTime @default(now()) @db.Timestamptz()
+
+  @@index([clientId, occurredAt], map: "CollectionActivity_client_idx")
+}
+
+// Los plazos de los avisos de cartera, que cambia un administrador (Rodny: «dejar las fechas flexibles»).
+// Nacen apagados: un administrador los enciende cuando Administración haya revisado la cartera.
+model CollectionSetting {
+  id                   String   @id @default("global")
+  enabled              Boolean  @default(false)
+  paymentTermDays      Int      @default(15)
+  monthlyAlertCount    Int      @default(2)
+  oneOffFirstAlertDays Int      @default(15)
+  repeatDays           Int      @default(7)
+  updatedById          String?
+  updatedAt            DateTime @default(now()) @updatedAt @db.Timestamptz()
+}
+
+// Formalización de un proyecto (punto 3 de la solicitud de Elisa; Rodny, 29 de octubre de 2026): una por cotización
+// aprobada. Administración carga el contrato firmado y se confirma el anticipo —o Dirección o Administración autorizan
+// empezar sin él—; con las dos cosas el proyecto queda habilitado y se le avisa al project manager. Regla en
+// src/lib/projectFormalization.js; tablas aditivas en scripts/ensure-project-formalization-schema.js.
+model ProjectFormalization {
+  id                     String    @id @default(uuid())
+  quotationId            String    @unique
+  clientId               String?
+  // La cuenta por cobrar del anticipo: la primera cuota del plan de pagos, o la que Administración ligue a mano.
+  advanceReceivableId    String?
+  status                 String    @default("PENDIENTE") // PENDIENTE o HABILITADO
+  requestedAt            DateTime  @default(now()) @db.Timestamptz()
+  requestedById          String?
+  exceptionAt            DateTime? @db.Timestamptz()
+  exceptionById          String?
+  exceptionByName        String?
+  exceptionReason        String?
+  exceptionConditions    String?
+  exceptionPaymentDate   String? // AAAA-MM-DD, la fecha de pago acordada
+  enabledAt              DateTime? @db.Timestamptz()
+  projectManagerNotified Boolean   @default(false)
+  // Qué se pide en este proyecto (Rodny, 29 de octubre de 2026): a un cliente de siempre que suma un servicio quizá no
+  // se le pide anticipo ni contrato nuevo. Lo cambian Dirección o Administración; queda quién, cuándo y una nota.
+  requiresContract          Boolean   @default(true)
+  requiresAdvance           Boolean   @default(true)
+  requirementsNote          String?
+  requirementsChangedAt     DateTime? @db.Timestamptz()
+  requirementsChangedById   String?
+  requirementsChangedByName String?
+  updatedAt              DateTime  @default(now()) @updatedAt @db.Timestamptz()
+
+  @@index([status], map: "ProjectFormalization_status_idx")
+  @@index([clientId], map: "ProjectFormalization_client_idx")
+}
+
+// El contrato firmado o el soporte verificable de una formalización. Mismo bucket y mismas reglas que los comprobantes:
+// se detecta por bytes, se sirve solo por la API a Dirección y Administración, y nunca se borra.
+model ProjectFormalizationDocument {
+  id              String   @id @default(uuid())
+  formalizationId String
+  storageKey      String   @unique
+  name            String
+  mimeType        String
+  size            Int
+  sha256          String
+  uploadedById    String?
+  uploadedAt      DateTime @default(now()) @db.Timestamptz()
+  // CONTRATO, OTROSI o ANEXO (29 de octubre de 2026), con una nota opcional. Un archivo subido por error se anula con
+  // motivo: sigue guardado, deja de contar.
+  kind            String    @default("CONTRATO")
+  note            String?
+  voidedAt        DateTime? @db.Timestamptz()
+  voidReason      String?
+  voidedById      String?
+
+  @@index([formalizationId, uploadedAt], map: "ProjectFormalizationDocument_formalization_idx")
+}
+
+// Avisos de cierre mensual y renovación (punto 5 de la solicitud de Elisa, 29 de octubre de 2026): lo ya avisado, una
+// fila por contrato, mes (`cycleKey`, el inicio del mes del cliente, o `R:<fin>` para la renovación) y paso. La fila
+// única es la cerradura. Regla en src/lib/contractCycleAlerts.js; tabla aditiva en scripts/ensure-contract-cycle-alerts-schema.js.
+model ContractCycleAlert {
+  id         String   @id @default(uuid())
+  contractId String
+  cycleKey   String
+  step       String
+  sentAt     DateTime @default(now()) @db.Timestamptz()
+
+  @@unique([contractId, cycleKey, step])
+  @@index([contractId], map: "ContractCycleAlert_contract_idx")
 }
 
 // Ajustes del CRM que cambia un administrador: los días de las alertas comerciales.

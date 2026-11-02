@@ -132,7 +132,9 @@ test('the tools: the map searches, reading goes straight to the API with the ses
   assert.equal(prepared.data.done, false);
   assert.equal(calls.length, 1, 'preparing never calls the API');
   assert.equal(createBriaPlatformTools({ actions: null, platform }).length, 0);
-  const text = buildInstructions({ person: { name: 'Rodny', jobTitle: 'Director' }, today: '2026-10-10', tools });
+  assert.match(buildInstructions({ person: { name: 'Rodny', jobTitle: 'Director' }, today: '2026-10-10', tools }), /- operar_en_plataforma/);
+  // La guía vive en la descripción de la herramienta (31 de octubre de 2026).
+  const text = tools[2].description;
   assert.match(text, /operaciones expuestas de la plataforma con los permisos de la persona/);
   assert.match(text, /verifica la cobertura de cada efecto solicitado/);
   assert.match(text, /Nunca digas que hiciste un cambio/);
@@ -140,6 +142,7 @@ test('the tools: the map searches, reading goes straight to the API with the ses
   // operar_en_plataforma, y Rodny tuvo que confirmar dos veces.
   assert.match(text, /en esa misma respuesta/);
   assert.match(text, /nunca escribas tú el resumen ni pidas «Confirmar»/);
+  assert.match(tools[0].description, /una búsqueda vacía no prueba que una capacidad no exista/i);
 });
 
 test('in conversation, the session travels with the question and with the confirmation, and is never stored in a turn', async () => {

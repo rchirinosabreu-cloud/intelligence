@@ -96,7 +96,9 @@ test('asking for a password she cannot see already sends the request: at once wi
   assert.deepEqual(calls.at(-1), ['request', 'cred-2', 'Para editar un reel']);
   assert.deepEqual(out.data.administradores, ['Rodny Chirinos']);
   assert.match(read('src/lib/briaAssistant.js'), /pedir_acceso: '/, 'the tool has its progress phrase');
-  assert.match(read('src/lib/briaAssistant.js'), /se le pide a un administrador sin que ella tenga que pedirlo/);
+  // La guía vive en la descripción de la herramienta (31 de octubre de 2026).
+  assert.match(search.description, /se le pide a un administrador sin que ella tenga que pedirlo/);
+  assert.match(search.description, /con varias, elige cuál y usa pedir_acceso/);
 });
 
 const fakeDb = (users) => ({

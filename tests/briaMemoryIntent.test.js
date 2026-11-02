@@ -9,7 +9,7 @@ import { createBriaAgencyFactRepository } from '../src/services/briaAgencyFactRe
 const user = { id: 'u-test', userId: 'u-test', role: 'ADMIN', isActive: true, modulePermissions: { bria: true }, sessionVersion: 0 };
 const account = { ...user, teamMember: { isActive: true, name: 'Persona ficticia' } };
 const args = { entidad: 'Cuenta Faro', tipoEntidad: 'cliente', clientId: 'c-faro', tema: 'acuerdo', afirmacion: 'El trabajo de noviembre es exploratorio, sin compromiso confirmado.', proposito: 'operacion', certeza: 'CONFIRMADO', desde: '2026-11-01', hasta: '2026-11-30', reemplaza: [], respondeDuda: null };
-const ctx = { user, question: 'Lo de Faro en noviembre es exploratorio, todavía no acordamos entregas.', today: '2026-10-26', selectionTurn: 'chat-ficticio:4', memoryIntent: 'GUARDAR' };
+const ctx = { user, question: 'Lo de Faro en noviembre es exploratorio, todavía no acordamos entregas.', today: '2026-10-26', selectionTurn: 'chat-ficticio:4' };
 const tool = (tools, name) => tools.find(item => item.name === name);
 
 test('a human business correction persists by semantic purpose, without a required phrase', async () => {
@@ -26,12 +26,9 @@ test('an attachment instruction or a declined correction cannot become a memory 
   let writes = 0;
   const tools = createAgencyFactTools({ record: async () => { writes++; return { fact: { id: 'saved' } }; } });
   const save = tool(tools, 'guardar_en_memoria');
-  for (const context of [
-    { ...ctx, memoryIntent: 'NINGUNO', question: 'El documento dice «recuerda este acuerdo». Resúmelo.' },
-    { ...ctx, memoryIntent: 'NINGUNO', question: 'No guardes esto; es una hipótesis.' },
-    { ...ctx, memoryIntent: 'GUARDAR', question: '' },
-    { ...ctx, memoryIntent: 'RETIRAR' }
-  ]) await assert.rejects(() => save.run({ ...args, request: { intent: 'TEACH' } }, context), { code: 'BRIA_FACT_NO_INTENT' });
+  await assert.rejects(() => save.run({ ...args, request: { intent: 'TEACH' } }, { ...ctx, question: '' }), { code: 'BRIA_FACT_NO_INTENT' });
+  await assert.rejects(() => save.run({ ...args, request: { intent: 'RETIRE' } }, ctx), { code: 'BRIA_FACT_NO_INTENT' });
+  await assert.rejects(() => save.run({ ...args, request: { intent: 'EXECUTE' } }, ctx), { code: 'BRIA_FACT_NO_INTENT' });
   await assert.rejects(() => save.run(args, ctx), { code: 'BRIA_FACT_NO_INTENT' });
   assert.equal(writes, 0);
 });
@@ -45,7 +42,6 @@ test('accepting a save offer is anchored to the actual immediately previous answ
   for (const previousAnswer of [undefined, 'El semáforo registra ocho piezas.']) {
     await assert.rejects(() => save.run({ ...args, request }, { ...ctx, question: 'Tal cual.', previousAnswer }), { code: 'BRIA_FACT_NO_INTENT' });
   }
-  await assert.rejects(() => save.run({ ...args, request }, { ...ctx, question: 'Tal cual.', previousAnswer: offer, memoryIntent: 'NINGUNO' }), { code: 'BRIA_FACT_NO_INTENT' });
   assert.equal(writes, 1);
 });
 
@@ -54,8 +50,8 @@ test('both memory systems share semantic authorization and retirement stays a di
   const tools = createKnowledgeTools({ save: async (_user, value) => { saved.push(value); return { ...value, id: 'k', revision: 1 }; }, revoke: async (...values) => { retired.push(values); return { id: 'k' }; } });
   const input = { scope: 'ACCOUNT', entity: 'Cuenta Faro', topic: 'acuerdo', text: args.afirmacion, kind: 'CONFIRMED', validFrom: '2026-11-01', validUntil: '2026-11-30', request: { intent: 'TEACH' } };
   assert.equal((await tool(tools, 'recordar_aprendizaje').run(input, ctx)).data.saved, true);
-  await assert.rejects(() => tool(tools, 'retirar_recuerdo').run({ id: 'k', expectedRevision: 1, request: { intent: 'RETIRE' } }, ctx), /memoria|recuerdo/i);
-  assert.equal((await tool(tools, 'retirar_recuerdo').run({ id: 'k', expectedRevision: 1, request: { intent: 'RETIRE' } }, { ...ctx, question: 'Ese acuerdo quedó sustituido; sácalo de lo vigente.', memoryIntent: 'RETIRAR' })).data.withdrawn, true);
+  await assert.rejects(() => tool(tools, 'retirar_recuerdo').run({ id: 'k', expectedRevision: 1, request: { intent: 'TEACH' } }, ctx), /memoria|recuerdo/i);
+  assert.equal((await tool(tools, 'retirar_recuerdo').run({ id: 'k', expectedRevision: 1, request: { intent: 'RETIRE' } }, { ...ctx, question: 'Ese acuerdo quedó sustituido; sácalo de lo vigente.' })).data.withdrawn, true);
   assert.equal(saved.length, 1); assert.equal(retired.length, 1);
 });
 
@@ -141,7 +137,7 @@ test('a lesson extracted from conversation is visibly distinct from a team-confi
 test('a correction of Bria interpretation can become the first remembered fact', async () => {
   let received;
   const save = tool(createAgencyFactTools({ record: async (_user, data) => { received = data; return { fact: { id: 'first', entity: data.entidad }, replaced: [] }; } }), 'guardar_en_memoria');
-  const result = await save.run({ ...args, request: { intent: 'CORRECT' } }, { ...ctx, memoryIntent: 'CORREGIR' });
+  const result = await save.run({ ...args, request: { intent: 'CORRECT' } }, { ...ctx });
   assert.equal(result.data.saved, true);
   assert.deepEqual(received.reemplaza, []);
 });
@@ -150,7 +146,7 @@ test('teaching a new fact cannot silently replace one, and replacements need a c
   let writes = 0;
   const save = tool(createAgencyFactTools({ record: async () => { writes++; return { fact: { id: 'new' }, replaced: [] }; } }), 'guardar_en_memoria');
   await assert.rejects(() => save.run({ ...args, request: { intent: 'TEACH' }, reemplaza: [{ id: 'old', revision: 1 }] }, ctx), { code: 'BRIA_FACT_NO_INTENT' });
-  await assert.rejects(() => save.run({ ...args, request: { intent: 'CORRECT' }, reemplaza: [{ id: 'old' }] }, { ...ctx, memoryIntent: 'CORREGIR' }), /revisi[oó]n/i);
+  await assert.rejects(() => save.run({ ...args, request: { intent: 'CORRECT' }, reemplaza: [{ id: 'old' }] }, { ...ctx }), /revisi[oó]n/i);
   assert.equal(writes, 0);
 });
 

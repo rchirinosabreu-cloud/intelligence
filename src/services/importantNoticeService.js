@@ -12,8 +12,12 @@ import * as crmService from './crmService.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
 import { hasModulePermission } from '../config/security.js';
 import { CRM_ACTIVITY_TYPES } from '../lib/crmRules.js';
-import { FOLLOW_UP_ALERT_STAGES, followUpRecipients, isCommercialRole } from '../lib/crmFollowUpAlerts.js';
+import { FOLLOW_UP_ALERT_STAGES, followUpRecipients } from '../lib/crmFollowUpAlerts.js';
+import { userHasArea } from './teamAreaService.js';
+import { collectionStillDue } from './collectionState.js';
+import { recordCollectionActivity } from './collectionActivityService.js';
 import { isFollowUpChannel, isReviewOutcome, pickCurrentNotice, snoozeUntil } from '../lib/importantNotices.js';
+import { isPlanNotice, parsePlanSubject } from '../lib/planCloseNotices.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription, noticeTraceMetadata } from '../lib/importantNoticeTrace.js';
 
 const CONTACT_TYPES = CRM_ACTIVITY_TYPES.filter((type) => type.contact).map((type) => type.value);
@@ -29,9 +33,17 @@ const serialize = (notice) => ({
 });
 
 const leadName = (lead) => lead?.company || lead?.contactName || null;
-const readLeadName = async (db, id) => {
+// Los avisos de cartera (28 de octubre de 2026) son de un cliente de fee mensual o de una cuenta de un servicio puntual.
+const isCollectionNotice = (notice) => String(notice.kind || '').startsWith('CARTERA_');
+// De esos, los que hablan del cliente entero; el resto, de una cuenta suelta de un servicio puntual.
+const CLIENT_COLLECTION_KINDS = new Set(['CARTERA_MENSUAL', 'CARTERA_SUSPENSION']);
+const isClientCollectionNotice = (notice) => CLIENT_COLLECTION_KINDS.has(notice.kind);
+// De quién es el aviso, para nombrarlo en la traza: la oportunidad o el cliente.
+const readSubjectName = async (db, notice) => {
     try {
-        return leadName(await db.crmLead.findUnique({ where: { id }, select: { company: true, contactName: true } }));
+        if (isClientCollectionNotice(notice)) return (await db.client.findUnique({ where: { id: notice.subjectId }, select: { name: true } }))?.name || null;
+        if (isCollectionNotice(notice)) return (await db.accountsReceivable.findUnique({ where: { id: notice.subjectId }, select: { client: { select: { name: true } } } }))?.client?.name || null;
+        return leadName(await db.crmLead.findUnique({ where: { id: notice.subjectId }, select: { company: true, contactName: true } }));
     } catch {
         return null;
     }
@@ -71,8 +83,35 @@ export const queueImportantNotice = async (db, data, now = new Date()) => db.$tr
     });
 });
 
+/**
+ * Los avisos de parrilla (30 de octubre de 2026) se caen solos en cuanto las piezas quedan publicadas: por eso el
+ * community manager y el project manager reciben el mismo aviso y ninguno tiene que avisarle al otro. Se relee con las
+ * mismas reglas de Operación —incluidas las hojas de MIO—, así que el aviso y el semáforo nunca dicen cosas distintas.
+ * El resumen de varias cuentas lo cierra el reloj, no la banda: comprobarlo aquí serían diez consultas por sondeo.
+ */
+const readOverduePlans = async (args) => (await import('./clientOperationsService.js')).clientOperationsService.listOverduePlans(args);
+const planStillPending = async (db, notice, overduePlans) => {
+    const subject = parsePlanSubject(notice.subjectId);
+    if (!subject) return null;
+    let rows;
+    try {
+        rows = await overduePlans({ clientId: subject.clientId });
+    } catch (error) {
+        console.error('[Avisos importantes] Parrilla no releída:', error?.message || error);
+        return null;
+    }
+    if (rows.some((row) => row.cycle?.year === subject.year && row.cycle?.month === subject.month)) return null;
+    const name = typeof db.client?.findUnique === 'function'
+        ? (await db.client.findUnique({ where: { id: subject.clientId }, select: { name: true } }).catch(() => null))?.name
+        : null;
+    return { reason: 'PUBLICADAS', subject: name || null };
+};
+
 // ¿La oportunidad sigue esperando al cliente y nadie registró una gestión desde que salió el aviso? Si no, por qué.
-const whyNotNeeded = async (db, notice) => {
+// En cartera: ¿el cliente sigue con lo vencido? En parrillas: ¿quedan piezas sin publicar?
+const whyNotNeeded = async (db, notice, now, { overduePlans = readOverduePlans } = {}) => {
+    if (isPlanNotice(notice)) return planStillPending(db, notice, overduePlans);
+    if (isCollectionNotice(notice)) return collectionStillDue(db, notice, now);
     const lead = await db.crmLead.findUnique({
         where: { id: notice.subjectId },
         select: {
@@ -89,25 +128,26 @@ const whyNotNeeded = async (db, notice) => {
 
 // Los avisos del CRM son del equipo comercial (Rodny, 28 de octubre de 2026). A quien no lo es la banda no se los
 // muestra; el reloj de alertas se los pasa a los comerciales en su siguiente pase.
+// Los de cartera, del área Administrativa y contable (Rodny, 28 de octubre de 2026: «esas bandas y decisiones las toma Elisa»).
 const isCrmNotice = (notice) => String(notice.kind || '').startsWith('CRM_');
-const seesCrmNotices = async (db, userId) => {
-    if (typeof db.teamMember?.findFirst !== 'function') return true;
-    const member = await db.teamMember.findFirst({ where: { userId }, select: { role: true } });
-    return isCommercialRole(member?.role);
-};
+const seesCrmNotices = (db, userId) => userHasArea(db, userId, 'COMERCIAL');
+const seesCollectionNotices = (db, userId) => userHasArea(db, userId, 'ADMINISTRATIVA');
 
 /** El aviso que le toca ver a esa persona ahora y cuándo volver a preguntar. `who` nombra a la persona en la traza. */
-export const currentImportantNotice = async (db = prisma, userId, now = new Date(), { who = null, log } = {}) => {
-    const [pending, lastDecision, commercial] = await Promise.all([
+export const currentImportantNotice = async (db = prisma, userId, now = new Date(), { who = null, log, overduePlans = readOverduePlans } = {}) => {
+    const [pending, lastDecision, commercial, administrative] = await Promise.all([
         db.importantNotice.findMany({ where: { userId, resolvedAt: null } }),
         db.importantNotice.findFirst({ where: { userId, decidedAt: { not: null } }, orderBy: { decidedAt: 'desc' }, select: { decidedAt: true } }),
-        seesCrmNotices(db, userId)
+        seesCrmNotices(db, userId),
+        seesCollectionNotices(db, userId)
     ]);
-    let candidates = commercial ? pending : pending.filter((notice) => !isCrmNotice(notice));
+    let candidates = pending
+        .filter((notice) => commercial || !isCrmNotice(notice))
+        .filter((notice) => administrative || !isCollectionNotice(notice));
     for (let discarded = 0; discarded <= MAX_STALE_PER_READ; discarded += 1) {
         const { notice, nextAt } = pickCurrentNotice(candidates, lastDecision?.decidedAt || null, now);
         if (!notice) return { notice: null, nextAt };
-        const cleared = await whyNotNeeded(db, notice);
+        const cleared = await whyNotNeeded(db, notice, now, { overduePlans });
         if (!cleared) return { notice: serialize(notice), nextAt };
         await db.importantNotice.update({ where: { id: notice.id }, data: { resolvedAt: now, resolution: 'YA_ATENDIDO' } });
         await traceNotice(db, NOTICE_TRACE_EVENTS.CLEARED, { notice, subject: cleared.subject, subjectName: who, extra: { reason: cleared.reason }, now, log });
@@ -126,6 +166,9 @@ const ownOpenNotice = async (db, id, actor) => {
 
 const requireCrm = (actor) => {
     if (!hasModulePermission(actor, 'crm')) throw httpError(403, 'Para registrar la gestión necesitas acceso al CRM.');
+};
+const requireFinancial = (actor) => {
+    if (!hasModulePermission(actor, 'financiero')) throw httpError(403, 'Para registrar la gestión de cobro necesitas acceso a Financiero.');
 };
 
 // Decidir cierra el aviso y deja leída su notificación de la campana: es el mismo asunto.
@@ -180,7 +223,7 @@ export const markNoticeShown = async (db = prisma, id, actor, { now = new Date()
     if (snoozed && snoozed > now) throw httpError(409, 'Ese aviso está pospuesto.');
     const appearance = snoozed ? snoozed.toISOString() : 'inicial';
     const traceId = createHash('sha256').update(`${notice.id}:SHOWN:${appearance}`).digest('hex');
-    const subject = await readLeadName(db, notice.subjectId);
+    const subject = await readSubjectName(db, notice);
     const recorded = await traceNotice(db, NOTICE_TRACE_EVENTS.SHOWN, { notice, subject, subjectName: actor?.name, id: traceId, now, log });
     return { ok: true, recorded };
 };
@@ -189,10 +232,23 @@ export const markNoticeShown = async (db = prisma, id, actor, { now = new Date()
 export const followUpNotice = async (db = prisma, id, body = {}, actor, { crm = crmService, now = new Date(), log } = {}) => {
     const notice = await ownOpenNotice(db, id, actor);
     if (!isFollowUpChannel(body.channel)) throw httpError(400, 'Elige cómo hiciste el seguimiento.');
-    requireCrm(actor);
-    await crm.addActivity(db, notice.subjectId, { type: body.channel, note: 'Registrado desde el aviso de seguimiento.', requestId: `aviso-${notice.id}` }, actor, now);
+    // En cartera queda como gestión de cobro del cliente (28 de octubre de 2026: «debe haber un registro»), que se ve en
+    // Cuentas por cobrar; en el CRM, como gestión de la oportunidad. Las dos, además, en la trazabilidad.
+    if (isCollectionNotice(notice)) {
+        requireFinancial(actor);
+        if (typeof db.collectionActivity?.create === 'function') {
+            const oneOff = !isClientCollectionNotice(notice);
+            const clientId = oneOff
+                ? (await db.accountsReceivable.findUnique({ where: { id: notice.subjectId }, select: { clientId: true } }))?.clientId
+                : notice.subjectId;
+            await recordCollectionActivity(db, { clientId, receivableId: oneOff ? notice.subjectId : null, channel: body.channel, noticeId: notice.id, source: 'AVISO' }, actor, { now });
+        }
+    } else {
+        requireCrm(actor);
+        await crm.addActivity(db, notice.subjectId, { type: body.channel, note: 'Registrado desde el aviso de seguimiento.', requestId: `aviso-${notice.id}` }, actor, now);
+    }
     await resolve(db, notice, 'SEGUIMIENTO', now);
-    const subject = await readLeadName(db, notice.subjectId);
+    const subject = await readSubjectName(db, notice);
     await traceNotice(db, NOTICE_TRACE_EVENTS.FOLLOWED_UP, { notice, subject, actor, extra: { channel: body.channel }, now, log });
     return { ok: true };
 };
@@ -203,7 +259,7 @@ export const snoozeNotice = async (db = prisma, id, body = {}, actor, { now = ne
     const until = snoozeUntil(body.option, now);
     if (!until) throw httpError(400, 'Elige cuándo te lo recuerdo.');
     await db.importantNotice.update({ where: { id: notice.id }, data: { snoozedUntil: until, decidedAt: now } });
-    const subject = await readLeadName(db, notice.subjectId);
+    const subject = await readSubjectName(db, notice);
     await traceNotice(db, NOTICE_TRACE_EVENTS.SNOOZED, { notice, subject, actor, extra: { option: body.option, until: until.toISOString() }, now, log });
     return { ok: true, snoozedUntil: until };
 };
@@ -226,7 +282,7 @@ export const closeReviewNotice = async (db = prisma, id, body = {}, actor, { crm
     const { payload, resolution } = CLOSE_STAGES[body.outcome];
     await crm.changeStage(db, notice.subjectId, payload, actor, now);
     await resolve(db, notice, resolution, now);
-    const subject = await readLeadName(db, notice.subjectId);
+    const subject = await readSubjectName(db, notice);
     await traceNotice(db, NOTICE_TRACE_EVENTS.CLOSED, { notice, subject, actor, extra: { outcome: body.outcome }, now, log });
     return { ok: true };
 };

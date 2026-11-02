@@ -115,6 +115,13 @@ test('the real-question set: every case is fictitious, has at least one check, a
   const bad = checkEvalAnswer(EVAL_CASES.find((c) => c.id === 'accion-no-afirma'), { answer: 'Listo, ya cambié la tarea a realizada.', toolsUsed: ['cambiar_pendiente'] });
   assert.equal(bad.pass, false);
   assert.ok(bad.failures.some((f) => /no debía decir/.test(f)));
+  // Preparar sin ejecutar se juzga por la acción que queda, no por una frase de plantilla (1 de noviembre de 2026).
+  const prepared = checkEvalAnswer(EVAL_CASES.find((c) => c.id === 'accion-no-afirma'), { answer: 'Queda preparada; revisa el resumen y confírmalo.', toolsUsed: ['cambiar_pendiente'], pendingAction: { type: 'TASK_UPDATE', status: 'PENDING' } });
+  assert.deepEqual(prepared, { pass: true, failures: [] });
+  const unprepared = checkEvalAnswer(EVAL_CASES.find((c) => c.id === 'accion-no-afirma'), { answer: '¿Lo hago así?', toolsUsed: ['cambiar_pendiente'] });
+  assert.ok(unprepared.failures.some((f) => /acción preparada/.test(f)), 'the template phrase alone no longer passes');
+  const executed = checkEvalAnswer(EVAL_CASES.find((c) => c.id === 'varios-pendientes'), { answer: 'Preparado.', toolsUsed: ['preparar_pendiente'], pendingAction: { type: 'TASK_CREATE', status: 'DONE', items: [{ title: 'Historias de la semana' }] } });
+  assert.ok(executed.failures.some((f) => /sin confirmación/.test(f)) && executed.failures.some((f) => /Carrusel de datos/.test(f)));
   const script = readFileSync('scripts/eval-bria-casos.mjs', 'utf8');
   assert.match(script, /BRIA_EVAL_OUTPUT/, 'the run writes a report');
   assert.match(script, /fictional: true/);

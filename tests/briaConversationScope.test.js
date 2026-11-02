@@ -130,10 +130,8 @@ test('an unpublished answer is not inserted as a previous message to the person 
 test('full conversation fixture preserves the scope across a detour and applies only a reviewed approval', async () => {
   let turn = 0, step = 0;
   const fixture = createConversationScopeFixture({ generate: async request => {
-    if (request.responseSchema) {
-      turn++; step = 0;
-      return { text: JSON.stringify({ investigar: false, continuar: false, actualidad: false, localizarTrabajo: false, guardarSeguimiento: false, prepararCambios: false, compararAlternativas: false, asunto: '', objetivo: '', areas: [], condiciones: [] }) };
-    }
+    // Un turno nuevo empieza sin resultados de herramientas en la entrada.
+    if (!request.input.some(row => row.type === 'function_call_output')) { turn++; step = 0; }
     const calls = list => ({ output: [], functionCalls: list.map(([name, args], i) => ({ id: `${turn}-${step}-${i}`, name, args })) });
     if (step++ === 0 && turn === 1) return calls([['cartera_de_operacion', {}]]);
     if (step === 1 && [2, 4].includes(turn)) return calls([['preparar_eliminacion', { request: { intent: turn === 2 ? 'PREPARE' : 'ADJUST' }, ...(turn === 2 ? { filtro: { responsable: 'Alex Rivera' } } : {}), motivo: 'Encargos fuera de la operación porque Alex salió del equipo' }]]);

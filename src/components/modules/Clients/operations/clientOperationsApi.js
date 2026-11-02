@@ -45,11 +45,78 @@ export function useSaveOperationProfile() {
   });
 }
 
+// El informe del mes: estado, enlace y nota (29 de octubre de 2026).
 export function useSetMonthlyReport() {
   const refresh = useRefresh();
   return useMutation({
-    mutationFn: ({ clientId, year, month, delivered }) => request(`/${clientId}/reports/${year}/${month}`, { method: 'PUT', body: JSON.stringify({ delivered }) }),
+    mutationFn: ({ clientId, year, month, status, link, note }) => request(`/${clientId}/reports/${year}/${month}`, { method: 'PUT', body: JSON.stringify({ status, link, note }) }),
     onSuccess: refresh,
+  });
+}
+
+// Seguir trabajando sin propuesta aprobada hasta una fecha (Dirección o Administración).
+export function useAuthorizeWork() {
+  const refresh = useRefresh();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clientId, until, reason }) => request(`/${clientId}/work-authorizations`, { method: 'POST', body: JSON.stringify({ until, reason }) }),
+    onSuccess: (saved) => {
+      if (saved?.slug) queryClient.setQueryData(clientKey(saved.slug), saved);
+      refresh();
+    },
+  });
+}
+
+// Suspender por cartera y levantarla (Dirección o Administración). Las dos responden la operación ya actualizada.
+export function useSuspendClient() {
+  const refresh = useRefresh();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clientId, authorizedBy, reason }) => request(`/${clientId}/suspension`, { method: 'POST', body: JSON.stringify({ authorizedBy, reason }) }),
+    onSuccess: (saved) => {
+      if (saved?.slug) queryClient.setQueryData(clientKey(saved.slug), saved);
+      refresh();
+    },
+  });
+}
+
+export function useLiftSuspension() {
+  const refresh = useRefresh();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clientId, reason }) => request(`/${clientId}/suspension`, { method: 'DELETE', body: JSON.stringify({ reason }) }),
+    onSuccess: (saved) => {
+      if (saved?.slug) queryClient.setQueryData(clientKey(saved.slug), saved);
+      refresh();
+    },
+  });
+}
+
+// Reabrir un cierre confirmado y leer ahora la hoja de MIO; las dos responden la operación ya actualizada.
+function useOperationAction(path, method) {
+  const refresh = useRefresh();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (args) => request(path(args), { method }),
+    onSuccess: (saved) => {
+      if (saved?.slug) queryClient.setQueryData(clientKey(saved.slug), saved);
+      refresh();
+    },
+  });
+}
+export const useReopenMonthlyClose = () => useOperationAction(({ clientId, year, month }) => `/${clientId}/closes/${year}/${month}`, 'DELETE');
+export const useRefreshExternalPlan = () => useOperationAction(({ clientId }) => `/${clientId}/external-plan/refresh`, 'POST');
+
+// El project manager confirma el cierre del mes; responde la operación ya actualizada.
+export function useConfirmMonthlyClose() {
+  const refresh = useRefresh();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ clientId, year, month, note }) => request(`/${clientId}/closes/${year}/${month}`, { method: 'POST', body: JSON.stringify({ note }) }),
+    onSuccess: (saved) => {
+      if (saved?.slug) queryClient.setQueryData(clientKey(saved.slug), saved);
+      refresh();
+    },
   });
 }
 

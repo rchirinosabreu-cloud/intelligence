@@ -118,9 +118,11 @@ test('Bria notices a client sitting on approvals this week and offers to write t
 
 test('Bria knows when to use it, the reminder notice points to it, and the tool is wired in', () => {
   const [tool] = briaClientUpdateTools;
+  // La guía vive en la descripción de la herramienta (31 de octubre de 2026); las instrucciones solo la listan.
   const text = buildInstructions({ person: { name: 'Rodny' }, today, tools: [{ name: tool.name, description: tool.description }] });
-  assert.match(text, /23\. Cuando te pidan escribirle a un cliente/);
-  assert.match(text, /nunca lo envías/);
+  assert.match(text, /- mensaje_para_cliente/);
+  assert.match(tool.description, /escribirle a un cliente/);
+  assert.match(tool.description, /nunca lo envías/);
   const [, remind] = nudgeActions({ kind: 'PIEZA_SIN_APROBAR', clientName: 'Aristea', title: 'Reel de lanzamiento', day: 'miércoles 22 de octubre', url: '/parrillas/p?item=i' });
   assert.equal(remind.label, 'Recordarle al cliente');
   assert.match(remind.ask, /WhatsApp/);

@@ -90,6 +90,18 @@ export const buildInvestigation = (args, { previous, receipts = [], now = new Da
   };
 };
 
+// Las citas de actualizar_seguimiento solo pueden ser recibos de lecturas de este turno: el esquema las
+// acota a esos ids. structuredClone conserva aliases: se reemplaza el campo, no se muta el esquema compartido.
+export const inquiryDeclarations = (declarations, receipts) => declarations.map(tool => {
+  if (tool.name !== 'actualizar_seguimiento' || !receipts.length) return tool;
+  const bound = structuredClone(tool);
+  for (const field of ['cobertura', 'hallazgos', 'alternativas', 'comprobaciones', 'relato']) {
+    const properties = bound.parameters?.properties?.[field]?.items?.properties;
+    if (properties) properties.consultas = { ...properties.consultas, items: { type: 'string', enum: receipts.map(row => row.id) } };
+  }
+  return bound;
+});
+
 // La redacción del modelo es la respuesta. Un recorrido sin evidencia suficiente
 // conserva un aviso técnico recuperable; nunca se publica una conclusión prematura.
 export const investigationReply = record => record.pendientesDelRecorrido?.length

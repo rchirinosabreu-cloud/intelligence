@@ -46,8 +46,7 @@ test('a saved investigation answers in its authored voice without a fixed closin
   const record = { id: 'case', estado: 'ABIERTO', relato: [{ texto: prose }], cobertura: [], consultas: [], comprobaciones: [], proximaRevision: 'al recibir la aprobación', sources: [] };
   const result = await runAssistant({ question: 'Guarda lo que encontramos', user,
     ai: { generate: async () => { calls++; return { output: [], functionCalls: [{ id: 'save', name: 'actualizar_seguimiento', args: {} }] }; } },
-    tools: [tool('actualizar_seguimiento', { data: { estado: 'ABIERTO' }, investigation: record })],
-    context: { inquiryPlanner: async () => ({ plan: { investigar: true, guardarSeguimiento: true, prepararCambios: false, areas: [] } }) }
+    tools: [tool('actualizar_seguimiento', { data: { estado: 'ABIERTO' }, investigation: record })]
   });
   assert.equal(result.answer, prose);
   assert.equal(result.investigation.estado, 'ABIERTO');

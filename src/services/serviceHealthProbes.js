@@ -213,6 +213,21 @@ export const createServiceHealthProbes = ({
       return result('OK', `${plural(active.length, 'cuenta conectada', 'cuentas conectadas')} y sincronizando.`);
     },
 
+    // Las hojas de MIO (29 de octubre de 2026): se mira lo que dejó la última lectura de cada cliente, sin volver a
+    // pedirle nada a Google.
+    async 'google-sheets'() {
+      const clients = await db.client.findMany({ where: { isArchived: false, externalPlanUrl: { not: null } }, select: { name: true } });
+      if (!clients.length) return notConfigured('Ningún cliente tiene su parrilla en una hoja de Google.');
+      const rows = await db.externalPlanSnapshot.findMany({
+        where: { readAt: { gte: new Date(now().getTime() - 6 * 60 * 60 * 1000) } },
+        select: { problem: true, okAt: true, readAt: true, client: { select: { name: true } } }
+      });
+      if (!rows.length) return result('WARN', 'Las hojas de MIO no se han leído en las últimas 6 horas.');
+      const failing = [...new Set(rows.filter((row) => row.problem && (!row.okAt || row.okAt < row.readAt)).map((row) => row.client?.name).filter(Boolean))];
+      if (failing.length) return result('WARN', `No se pudo leer la hoja de ${failing.join(', ')}.`);
+      return result('OK', `${plural(clients.length, 'hoja leída', 'hojas leídas')} sin problema.`);
+    },
+
     async 'google-storage'() {
       if (!env.GOOGLE_APPLICATION_CREDENTIALS_JSON || !env.GOOGLE_CLOUD_PROJECT) return notConfigured('Faltan las credenciales de Google Cloud.');
       let credentials;

@@ -1,6 +1,7 @@
 import { resetSystemStreak, processSystemStreakDailyIncrement, recordQualityStreakTransition } from './qualityStreakService.js';
 import prisma from '../lib/prisma.js';
 import { assertActiveTeamMembers } from './teamRosterService.js';
+import { assertTaskClientChange } from './taskClientChange.js';
 import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, attachTaskRecognitions, recordPlanRecognition } from './recognitionService.js';
 import { createNotification, processMentionsAndNotifications } from './notificationService.js';
 import { notifyTeamCompletion } from './teamCompletionNoticeService.js';
@@ -521,6 +522,7 @@ export const updateTask = async (id, data, updaterId = null) => {
                 assigneeId: true,
                 creatorId: true,
                 contentItemId: true,
+                clientId: true,
                 contentItem: {
                     select: {
                         id: true,
@@ -547,6 +549,7 @@ export const updateTask = async (id, data, updaterId = null) => {
         }
 
         const updateData = pickAllowedTaskUpdates(data);
+        await assertTaskClientChange(tx, currentTask, updateData);
         await assertActiveTeamMembers(tx, [updateData.assigneeId], [currentTask.assigneeId]);
 
         // Colaboradores (5 de octubre de 2026): tabla propia, fuera de `updateData`. Se revisa

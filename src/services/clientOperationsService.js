@@ -9,8 +9,16 @@ import prisma from '../lib/prisma.js';
 import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 import {
   cycleForDate, cycleOf, previousCycle, summarizeCycle, evaluateClientOperation, isMeasured,
-  normalizeOperationProfile,
+  normalizeOperationProfile, contractQuota, MONTH_NAMES,
 } from '../lib/clientOperations.js';
+import { CLOSE_NOTE_MAX, canConfirmClose, closeSnapshot, reportProblem } from '../lib/monthlyClose.js';
+import { authorizationProblem } from '../lib/unbackedWork.js';
+import { asOperationPiece } from '../lib/externalPlan.js';
+import { suspensionCandidate } from '../lib/clientSuspension.js';
+import { userHasArea } from './teamAreaService.js';
+import { openSuspension } from './clientSuspensionGate.js';
+import { clientSuspensionService, createClientSuspensionService } from './clientSuspensionService.js';
+import { OPEN_CLIENT_RECEIVABLES, RECEIVABLE_FIELDS, readCollectionSettings } from './collectionState.js';
 
 const httpError = (status, message, extra = {}) => Object.assign(new Error(message), { status, ...extra });
 
@@ -18,7 +26,8 @@ const OPEN_TASK_STATUSES = ['PENDIENTE', 'EN_CURSO', 'DEVUELTA'];
 const ACTIVE_PUBLICATION = new Set(['SCHEDULED', 'PUBLISHING', 'PUBLISHED']);
 const HISTORY_MONTHS = 3;
 const PERSON = { select: { id: true, name: true, avatarUrl: true } };
-const TEAM_PERSON = { select: { id: true, name: true, avatarUrl: true, role: true, highlightedAction: true } };
+// `userId` e `isActive` no salen hacia el navegador (`teamPerson` no los copia): son para saber a quién avisar.
+const TEAM_PERSON = { select: { id: true, name: true, avatarUrl: true, role: true, highlightedAction: true, userId: true, isActive: true } };
 const OBSERVATION_MAX = 2000;
 const OBSERVATIONS_SHOWN = 100;
 
@@ -26,8 +35,9 @@ const OBSERVATIONS_SHOWN = 100;
 // parrilla en curso puede ser la del mes pasado, así que se lee un mes más.
 function monthWindow(todayKey) {
   const [year, month] = todayKey.split('-').map(Number);
-  return Array.from({ length: HISTORY_MONTHS + 2 }, (_, back) => {
-    const index = year * 12 + (month - 1) - back;
+  // Desde el mes siguiente: una parrilla ya armada para el próximo mes también es trabajo en curso.
+  return Array.from({ length: HISTORY_MONTHS + 3 }, (_, offset) => {
+    const index = year * 12 + (month - 1) + 1 - offset;
     return { year: Math.floor(index / 12), month: (index % 12) + 1 };
   });
 }
@@ -40,6 +50,10 @@ const clientSelect = (window) => ({
   observations: { orderBy: { createdAt: 'desc' }, take: OBSERVATIONS_SHOWN, select: { id: true, text: true, source: true, sourceLabel: true, authorId: true, createdAt: true } },
   contracts: { orderBy: [{ startDate: 'desc' }, { createdAt: 'desc' }], take: 1 },
   monthlyReports: { where: { OR: window } },
+  monthlyCloses: { where: { OR: window } },
+  workAuthorizations: { orderBy: { createdAt: 'desc' }, take: 1 },
+  externalPlanUrl: true,
+  externalPlanSnapshots: { where: { OR: window } },
   contentPlans: {
     where: { deletedAt: null, OR: window },
     select: {
@@ -91,14 +105,67 @@ function pieceFacts(planId, item) {
 }
 
 function cycleSummary(client, cycle, quota, today, reporters) {
-  const items = client.contentPlans
+  let items = client.contentPlans
     .filter((plan) => plan.year === cycle.year && plan.month === cycle.month)
     .flatMap((plan) => plan.contentItems.map((item) => pieceFacts(plan.id, item)));
+  // La hoja de MIO (29 de octubre de 2026), contada con las mismas reglas. Con hoja vinculada y pestaña del mes, la hoja
+  // manda aunque haya una parrilla en la plataforma: las que se crearon a mano para Verona y Casa Bella se quedaron
+  // congeladas mientras el equipo seguía en la hoja (Rodny: «deja solamente las que están alimentándose del excel»).
+  // Después, Rodny: «quedémonos solamente con las hojas … no parrillas nativas»: con hoja vinculada no cuenta ninguna.
+  const sheet = (client.externalPlanSnapshots || []).find((row) => row.year === cycle.year && row.month === cycle.month);
+  if (client.externalPlanUrl) items = [];
+  const external = sheet && (client.externalPlanUrl || !items.length) ? sheet : null;
+  if (external) items = (Array.isArray(external.pieces) ? external.pieces : []).map(asOperationPiece);
   const summary = summarizeCycle(cycle, items, { quota, today });
+  if (external) summary.source = { kind: 'HOJA_MIO', tab: external.tabName || null, readAt: external.okAt ? bogotaDate(external.okAt) : null, problem: external.problem || null };
   const report = client.monthlyReports.find((r) => r.year === cycle.year && r.month === cycle.month);
-  summary.report = report ? { deliveredAt: dayKey(report.deliveredAt), by: reporters.get(report.deliveredById) || null } : null;
+  // Solo «enviado» es entregado: `deliveredAt` sigue diciendo cuándo se envió, como antes de los estados.
+  const sent = report && (report.status || 'ENVIADO') === 'ENVIADO';
+  summary.report = report ? {
+    status: report.status || 'ENVIADO',
+    deliveredAt: sent ? dayKey(report.deliveredAt) : null,
+    by: reporters.get(sent ? report.deliveredById : (report.updatedById || report.deliveredById)) || null,
+    link: report.link ?? null,
+    note: report.note ?? null,
+    updatedAt: report.updatedAt ? bogotaDate(report.updatedAt) : dayKey(report.deliveredAt),
+  } : null;
+  const close = (client.monthlyCloses || []).find((row) => row.year === cycle.year && row.month === cycle.month);
+  summary.close = close ? { closedAt: bogotaDate(close.closedAt), by: reporters.get(close.closedById) || null, note: close.note ?? null, snapshot: close.snapshot || null } : null;
   return summary;
 }
+
+// Las parrillas con piezas del mes en curso o del siguiente (mes calendario), y las tareas abiertas.
+function currentWork(client, today) {
+  const [year, month] = today.split('-').map(Number);
+  const next = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+  const plans = (client.contentPlans || [])
+    .filter((plan) => (plan.year === year && plan.month === month) || (plan.year === next.year && plan.month === next.month))
+    .filter((plan) => (plan.contentItems || []).length > 0)
+    .sort((a, b) => a.year - b.year || a.month - b.month)
+    .map((plan) => MONTH_NAMES[plan.month - 1].toLowerCase());
+  return { openTasks: (client.nativeTasks || []).length, plans: [...new Set(plans)] };
+}
+
+// Lo leído de la hoja de MIO para el mes en curso y el siguiente: cuántas piezas y en qué etapa.
+function externalPlanMonths(client, today) {
+  if (!client.externalPlanUrl) return null;
+  const [year, month] = today.split('-').map(Number);
+  const next = month === 12 ? { year: year + 1, month: 1 } : { year, month: month + 1 };
+  return [{ year, month }, next].map(({ year: y, month: m }) => {
+    const row = (client.externalPlanSnapshots || []).find((item) => item.year === y && item.month === m);
+    return {
+      year: y, month: m, label: MONTH_NAMES[m - 1],
+      tab: row?.tabName ?? null,
+      summary: row?.summary && typeof row.summary === 'object' ? row.summary : null,
+      problem: row?.problem ?? null,
+      readAt: row?.okAt ? bogotaDate(row.okAt) : null,
+    };
+  });
+}
+
+const publicAuthorization = (row) => (row ? {
+  until: row.until, reason: row.reason, byName: row.authorizedByName ?? null, at: row.createdAt ? bogotaDate(row.createdAt) : null,
+} : null);
 
 function buildOperation(client, { today, reporters, detail }) {
   const observations = (client.observations || []).map((row) => publicObservation(row, reporters));
@@ -115,6 +182,12 @@ function buildOperation(client, { today, reporters, detail }) {
     }),
     cycles: {},
     history: [],
+    // Lo que se está trabajando, con o sin contrato: tareas abiertas y parrillas del mes en curso o del siguiente.
+    work: currentWork(client, today),
+    workAuthorization: publicAuthorization(client.workAuthorizations?.[0]),
+    // La hoja de MIO y lo último leído de ella, mes a mes (29 de octubre de 2026).
+    externalPlanUrl: client.externalPlanUrl ?? null,
+    externalPlan: externalPlanMonths(client, today),
     observations,
     latestObservation: observations[0] ? { text: observations[0].text, date: observations[0].date, by: observations[0].by } : null,
   };
@@ -145,6 +218,7 @@ function buildOperation(client, { today, reporters, detail }) {
 // «Ya se publicó» pasa por el mismo camino que el selector de estado de la parrilla, con todo lo que este
 // hace después (cerrar la parrilla cuando todo salió); nunca por una escritura paralela.
 const updateItemThroughContent = async (id, data) => (await import('./contentService.js')).updateContentItem(id, data);
+const readThroughExternalPlan = async (...args) => (await import('./externalPlanService.js')).refreshClientExternalPlan(...args);
 const cancelThroughPublishing = async (args) => (await import('./socialPublishingService.js')).cancelItemPublications(args);
 
 export const createClientOperationsService = ({
@@ -152,12 +226,16 @@ export const createClientOperationsService = ({
   now = () => new Date(),
   updateItem = updateItemThroughContent,
   cancelItemPublications = cancelThroughPublishing,
+  readExternalPlans = readThroughExternalPlan,
+  // Atado a la misma base que el resto del servicio: con un doble en las pruebas, la suspensión también es del doble.
+  suspensions = db === prisma ? clientSuspensionService : createClientSuspensionService({ db }),
 } = {}) => {
   const todayKey = () => bogotaDate(now());
 
   const reporterNames = async (clients) => {
     const ids = [...new Set([
-      ...clients.flatMap((c) => c.monthlyReports || []).map((r) => r.deliveredById),
+      ...clients.flatMap((c) => c.monthlyReports || []).flatMap((r) => [r.deliveredById, r.updatedById]),
+      ...clients.flatMap((c) => c.monthlyCloses || []).map((r) => r.closedById),
       ...clients.flatMap((c) => c.observations || []).map((o) => o.authorId),
     ].filter(Boolean))];
     if (!ids.length) return new Map();
@@ -172,12 +250,95 @@ export const createClientOperationsService = ({
     return clients.map((client) => buildOperation(client, { today, reporters, detail: false }));
   };
 
-  const getOperation = async (slug) => {
+  /**
+   * Las cuentas con piezas que pasaron su fecha y siguen sin publicar, para los avisos de la banda
+   * (Rodny, 30 de octubre de 2026). Se lee con las mismas reglas de la pantalla —incluidas las hojas de
+   * MIO— para que el aviso y el semáforo nunca digan cosas distintas. `clientId` acota a una sola cuenta,
+   * que es lo que la banda comprueba antes de volver a mostrar un aviso.
+   */
+  const listOverduePlans = async ({ clientId = null } = {}) => {
+    const today = todayKey();
+    const where = { isArchived: false, ...(clientId ? { id: String(clientId) } : {}) };
+    const clients = await db.client.findMany({ where, orderBy: { name: 'asc' }, select: clientSelect(monthWindow(today)) });
+    const rows = [];
+    for (const client of clients) {
+      const contract = publicContract(client.contracts?.[0]);
+      if (!contract || contract.status !== 'ACTIVO') continue;
+      if (!isMeasured({ contract })) continue;
+      const cycle = cycleForDate(today, contract.cutDay);
+      const summary = cycleSummary(client, cycle, contractQuota(contract), today, new Map());
+      if (!summary.overdueItems) continue;
+      const member = (person) => (person?.userId && person.isActive !== false ? { userId: person.userId, name: person.name } : null);
+      rows.push({
+        clientId: client.id, clientName: client.name, slug: client.slug, cycle,
+        overdue: summary.overdueItems,
+        communityManager: member(client.responsible),
+        projectManager: member(client.projectManager),
+      });
+    }
+    return rows;
+  };
+
+  /** Lo que sustenta hoy una suspensión: las cuentas vencidas que pasan de dos meses y quince días. */
+  const readSuspensionCandidate = async (clientId, today) => {
+    if (typeof db.accountsReceivable?.findMany !== 'function') return null;
+    const receivables = await db.accountsReceivable.findMany({ where: { clientId, ...OPEN_CLIENT_RECEIVABLES }, select: RECEIVABLE_FIELDS });
+    return suspensionCandidate({ receivables, today, settings: await readCollectionSettings(db) });
+  };
+
+  // Autorizar trabajo sin propuesta aprobada es de Dirección o Administrativa y contable (29 de octubre de 2026).
+  const canAuthorizeWork = async (userId) => {
+    if (!userId) return false;
+    for (const area of ['DIRECCION', 'ADMINISTRATIVA']) if (await userHasArea(db, userId, area)) return true;
+    return false;
+  };
+
+  const getOperation = async (slug, { viewerUserId = null } = {}) => {
     const today = todayKey();
     const client = await db.client.findFirst({ where: { slug: String(slug || '') }, select: clientSelect(monthWindow(today)) });
     if (!client) throw httpError(404, 'No encontramos ese cliente.');
     const reporters = await reporterNames([client]);
-    return buildOperation(client, { today, reporters, detail: true });
+    const operation = buildOperation(client, { today, reporters, detail: true });
+    if (viewerUserId) operation.canAuthorizeWork = await canAuthorizeWork(viewerUserId);
+    // La suspensión por cartera la ve todo el equipo que entra aquí: necesita saber que ese mes está congelado. Las
+    // cifras de la deuda, no: solo quien puede decidirla (28 de octubre de 2026, «sin revelar los valores económicos»).
+    operation.suspension = await openSuspension(db, client.id);
+    operation.canSuspend = viewerUserId ? await suspensions.canSuspend(viewerUserId) : false;
+    if (operation.canSuspend) operation.suspensionCandidate = await readSuspensionCandidate(client.id, today);
+    return operation;
+  };
+
+  /**
+   * Autoriza seguir trabajando sin propuesta aprobada hasta una fecha, con motivo. Queda quién y cuándo; una
+   * autorización nueva no borra las anteriores.
+   */
+  const authorizeWork = async ({ clientId, until, reason, actorUserId }) => {
+    if (!(await canAuthorizeWork(actorUserId))) throw httpError(403, 'Autorizar trabajo sin propuesta aprobada es de Dirección o Administración.');
+    const problem = authorizationProblem({ until, reason }, todayKey());
+    if (problem) throw httpError(422, problem);
+    const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { id: true, slug: true } });
+    if (!client) throw httpError(404, 'No encontramos ese cliente.');
+    const actor = await db.user.findUnique({ where: { id: actorUserId }, select: { name: true } }).catch(() => null);
+    await db.clientWorkAuthorization.create({
+      data: { clientId: client.id, until: String(until).trim(), reason: String(reason).trim(), authorizedById: actorUserId, authorizedByName: actor?.name || null },
+    });
+    return getOperation(client.slug, { viewerUserId: actorUserId });
+  };
+
+  /**
+   * Suspende o levanta la suspensión por cartera y devuelve la operación actualizada, como autorizar trabajo. Los
+   * permisos, el motivo y quién lo autorizó los comprueba el servicio de suspensiones.
+   */
+  const suspendClient = async ({ clientId, authorizedBy, reason, actorUserId }) => {
+    await suspensions.suspendClient({ clientId, authorizedBy, reason, actorUserId, now: now() });
+    const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { slug: true } });
+    return getOperation(client.slug, { viewerUserId: actorUserId });
+  };
+
+  const liftSuspension = async ({ clientId, reason, actorUserId }) => {
+    await suspensions.liftSuspension({ clientId, reason, actorUserId, now: now() });
+    const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { slug: true } });
+    return getOperation(client.slug, { viewerUserId: actorUserId });
   };
 
   const saveProfile = async ({ clientId, input = {}, actorUserId }) => {
@@ -204,6 +365,8 @@ export const createClientOperationsService = ({
         data: {
           description: profile.description, instagramUrl: profile.instagramUrl, agency: profile.agency, complexity: profile.complexity,
           projectManagerId: profile.projectManagerId, responsibleId: profile.communityManagerId,
+          // La hoja de MIO solo cambia si el formulario la manda: quien edita la ficha por otro camino no la borra.
+          ...(Object.hasOwn(input, 'externalPlanUrl') ? { externalPlanUrl: profile.externalPlanUrl } : {}),
         },
       });
       if (profile.contract) {
@@ -213,25 +376,100 @@ export const createClientOperationsService = ({
         else await tx.clientContract.create({ data: { ...data, clientId: client.id, createdById: actorUserId || null } });
       }
     });
-    return getOperation(client.slug);
+    // Con la hoja de MIO recién puesta, se lee en el acto; si Google falla, la ficha ya quedó guardada.
+    if (Object.hasOwn(input, 'externalPlanUrl') && profile.externalPlanUrl) {
+      await readExternalPlans(db, { id: client.id, externalPlanUrl: profile.externalPlanUrl }, { now: now() })
+        .catch((error) => console.error('[ClientOperations] No se pudo leer la hoja de MIO:', error?.message || error));
+    }
+    return getOperation(client.slug, { viewerUserId: actorUserId });
   };
 
-  const setMonthlyReport = async ({ clientId, year, month, delivered, actorUserId }) => {
+  const validMonth = (year, month) => {
     const y = Number(year);
     const m = Number(month);
     if (!Number.isInteger(y) || y < 2020 || y > 2100 || !Number.isInteger(m) || m < 1 || m > 12) throw httpError(400, 'El mes no es válido.');
+    return { y, m };
+  };
+
+  /**
+   * El informe del mes (29 de octubre de 2026): pendiente, en elaboración, en revisión o enviado, con su enlace como
+   * soporte y una nota. Pasar a «enviado» fija cuándo y quién lo envió. `delivered` sigue valiendo: true es enviado y
+   * false lo devuelve a pendiente, como el botón de antes.
+   */
+  const setMonthlyReport = async ({ clientId, year, month, delivered, status, link, note, actorUserId }) => {
+    const { y, m } = validMonth(year, month);
     const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { id: true } });
     if (!client) throw httpError(404, 'No encontramos ese cliente.');
-    if (delivered) {
-      await db.clientMonthlyReport.upsert({
-        where: { clientId_year_month: { clientId: client.id, year: y, month: m } },
-        create: { clientId: client.id, year: y, month: m, deliveredById: actorUserId || null },
-        update: {},
-      });
-    } else {
+    const label = cycleOf(y, m).label;
+    if (status === undefined && delivered === false) {
       await db.clientMonthlyReport.deleteMany({ where: { clientId: client.id, year: y, month: m } });
+      return { clientId: client.id, year: y, month: m, status: 'PENDIENTE', delivered: false, label };
     }
-    return { clientId: client.id, year: y, month: m, delivered: Boolean(delivered), label: cycleOf(y, m).label };
+    const input = { status: status === undefined ? 'ENVIADO' : status, link, note };
+    const problem = reportProblem(input);
+    if (problem) throw httpError(422, problem);
+    const current = await db.clientMonthlyReport.findFirst({ where: { clientId: client.id, year: y, month: m } });
+    const at = now();
+    const changes = {
+      status: input.status,
+      updatedAt: at,
+      updatedById: actorUserId || null,
+      ...(link !== undefined ? { link: String(link ?? '').trim() || null } : {}),
+      ...(note !== undefined ? { note: String(note ?? '').trim() || null } : {}),
+    };
+    // Enviar fija la fecha y quién; volver a guardarlo enviado no la mueve.
+    const sentNow = input.status === 'ENVIADO' && (current?.status || null) !== 'ENVIADO';
+    if (sentNow) Object.assign(changes, { deliveredAt: at, deliveredById: actorUserId || null });
+    if (current) await db.clientMonthlyReport.update({ where: { id: current.id }, data: changes });
+    else await db.clientMonthlyReport.create({ data: { clientId: client.id, year: y, month: m, deliveredById: actorUserId || null, ...changes } });
+    return { clientId: client.id, year: y, month: m, status: input.status, delivered: input.status === 'ENVIADO', label };
+  };
+
+  // Leer ahora la hoja de MIO del cliente, sin esperar al reloj (29 de octubre de 2026).
+  const refreshExternalPlan = async ({ clientId, viewerUserId = null }) => {
+    const client = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { id: true, slug: true, name: true, externalPlanUrl: true } });
+    if (!client) throw httpError(404, 'No encontramos ese cliente.');
+    if (!client.externalPlanUrl) throw httpError(409, 'Este cliente no tiene el enlace de su parrilla en una hoja de Google.');
+    await readExternalPlans(db, client, { now: now() });
+    return getOperation(client.slug, { viewerUserId });
+  };
+
+  // Reabrir un cierre confirmado por error (Rodny, 29 de octubre de 2026: «100 % editable todo»). Se puede volver a
+  // confirmar cuando se quiera.
+  const reopenMonthlyClose = async ({ clientId, year, month, viewerUserId = null }) => {
+    const { y, m } = validMonth(year, month);
+    const row = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { id: true, slug: true } });
+    if (!row) throw httpError(404, 'No encontramos ese cliente.');
+    const { count } = await db.clientMonthlyClose.deleteMany({ where: { clientId: row.id, year: y, month: m } });
+    if (!count) throw httpError(404, 'Ese mes no tenía el cierre confirmado.');
+    return getOperation(row.slug, { viewerUserId });
+  };
+
+  /**
+   * El project manager confirma el cierre de un mes (29 de octubre de 2026), desde tres días antes de que termine.
+   * Nada se borra: lo que quedó pendiente se guarda en el cierre y sigue perteneciendo a ese mes.
+   */
+  const confirmMonthlyClose = async ({ clientId, year, month, note, actorUserId }) => {
+    const { y, m } = validMonth(year, month);
+    if (String(note ?? '').trim().length > CLOSE_NOTE_MAX) throw httpError(422, `La nota admite como máximo ${CLOSE_NOTE_MAX} caracteres.`);
+    const row = await db.client.findFirst({ where: { id: String(clientId || '') }, select: { slug: true } });
+    if (!row) throw httpError(404, 'No encontramos ese cliente.');
+    const operation = await getOperation(row.slug);
+    const cycles = [operation.cycles?.current, ...(operation.history || [])].filter(Boolean);
+    const cycle = cycles.find((item) => item.year === y && item.month === m);
+    if (!cycle) throw httpError(404, 'Ese mes no está entre los que se pueden cerrar.');
+    if (cycle.close) throw httpError(409, `El cierre de ${cycle.label.toLowerCase()} ya se confirmó.`);
+    if (!canConfirmClose(cycle, todayKey())) throw httpError(409, `El cierre de ${cycle.label.toLowerCase()} se confirma desde tres días antes de que termine.`);
+    const snapshot = closeSnapshot(cycle, { monthlyReport: Boolean(operation.contract?.monthlyReport) });
+    try {
+      await db.clientMonthlyClose.create({
+        data: { clientId, year: y, month: m, closedById: actorUserId || null, note: String(note ?? '').trim() || null, snapshot },
+      });
+    } catch (error) {
+      if (error?.code === 'P2002') throw httpError(409, `El cierre de ${cycle.label.toLowerCase()} ya se confirmó.`);
+      throw error;
+    }
+    return getOperation(row.slug);
   };
 
   const findClientPiece = (clientId, itemId) => db.contentItem.findFirst({
@@ -303,7 +541,7 @@ export const createClientOperationsService = ({
     return db.teamMember.update({ where: { id: member.id }, data: { highlightedAction: value } });
   };
 
-  return { listOperations, getOperation, saveProfile, setMonthlyReport, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
+  return { listOperations, listOverduePlans, getOperation, authorizeWork, suspendClient, liftSuspension, saveProfile, setMonthlyReport, confirmMonthlyClose, reopenMonthlyClose, refreshExternalPlan, markPiecePublished, undoPiecePublished, addObservation, deleteObservation, setTeamHighlight };
 };
 
 export const clientOperationsService = createClientOperationsService();

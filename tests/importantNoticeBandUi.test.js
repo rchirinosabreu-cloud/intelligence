@@ -44,7 +44,27 @@ test('los botones: seguimiento primero, «Abrir» como botón y «Recordarme» s
     assert.match(base, />\s*No sigue\s*</);
     assert.match(band, /¿Cómo la cerramos\?/);
     assert.match(band, /mode === 'close' && REVIEW_OUTCOMES\.map/);
-    assert.match(base, /\{!isReview && notice\.url && \(/);
+    assert.match(base, /\{!isReview && !isCollection && !isPlan && notice\.url && \(/);
+
+    // Un aviso de parrilla no tiene seguimiento que registrar: su botón principal abre la parrilla y las piezas se
+    // marcan una por una, que es mirarlas (Rodny, 30 de octubre de 2026). «Recordarme» sigue al final.
+    assert.match(base, /\{isPlan \? \(/);
+    assert.ok(base.indexOf('data-notice-action="open-plan"') < base.indexOf('data-notice-action="snooze"'));
+    assert.match(band, /const openLabel = notice\.kind === 'PARRILLA_RESUMEN' \? 'Abrir Operación' : 'Abrir la parrilla'/);
+});
+
+test('cartera vencida: «Ya le escribí», «Registrar pago» y «Recordarme», sin «Abrir» (28 de octubre de 2026)', () => {
+    const base = band.slice(band.indexOf("{mode === 'base' && ("), band.indexOf("{mode === 'channels' && FOLLOW_UP_CHANNELS"));
+    assert.match(band, /const isCollection = String\(notice\.kind \|\| ''\)\.startsWith\('CARTERA_'\)/);
+    assert.match(base, /isCollection \? 'Ya le escribí' : 'Ya hice seguimiento'/);
+    // El segundo botón de un aviso de cartera abre Cuentas por cobrar y, en la propuesta de suspender (30 de octubre
+    // de 2026), la página del cliente: la suspensión no se decide desde la banda, exige quién la autorizó.
+    const second = base.indexOf("data-notice-action={isSuspension ? 'suspend' : 'pay'}");
+    assert.ok(second > base.indexOf('data-notice-action="follow-up"'));
+    assert.ok(second > -1 && second < base.indexOf('data-notice-action="snooze"'), '«Recordarme» sigue al final');
+    assert.match(base, /isSuspension \? 'Revisar suspensión' : 'Registrar pago'/);
+    assert.match(band, /const isSuspension = notice\.kind === 'CARTERA_SUSPENSION'/);
+    assert.match(band, /'Gestión de cobro registrada'/);
 });
 
 test('Esc o tocar fuera devuelve a los botones, y el éxito se dice después de la respuesta del servidor', () => {

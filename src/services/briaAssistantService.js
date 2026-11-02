@@ -41,7 +41,7 @@ import { teamLoadService } from './teamLoadService.js';
 import { createDailyReadingTools } from './dailyReadingTools.js';
 import { getDailyReadingService } from './dailyReadingService.js';
 import { briaInvestigationTools } from './briaInvestigationTools.js';
-import { planInquiry } from '../lib/briaInquiry.js';
+import { getBriaNotebookService } from './briaNotebookService.js';
 
 const httpError = (status, message, code) => Object.assign(new Error(message), { status, code });
 const ACTION_ATTACHMENT_NAME = { TASK_CREATE: 'Borrador del pendiente', DISPATCH: 'Borrador del despacho a producción', TASK_DELETE: 'Eliminación de pendientes en preparación' };
@@ -66,7 +66,7 @@ export const createBriaAssistantService = ({
   permissions = getPermissionRequestService,
   dailyReading = getDailyReadingService,
   serviceHealth = serviceHealthService,
-  inquiryPlanner = planInquiry
+  notebook = getBriaNotebookService
 } = {}) => {
   // Sin clave de cifrado la bóveda queda apagada, pero Bria sigue respondiendo con todo lo demás.
   const vaultFor = () => {
@@ -111,6 +111,7 @@ export const createBriaAssistantService = ({
       const person = await loadPerson(user);
       const facts = typeof agencyFacts === 'function' ? agencyFacts() : agencyFacts;
       const remembered = typeof knowledge === 'function' ? knowledge() : knowledge;
+      const diary = typeof notebook === 'function' ? notebook() : notebook;
       const revalidate = async () => { await loadPerson(user); await revalidateConversation?.(); };
       const result = await runAssistant({
         question: text,
@@ -121,6 +122,8 @@ export const createBriaAssistantService = ({
           ...(pendingAction && pendingAction.status === 'DRAFT' ? [{ name: `${ACTION_ATTACHMENT_NAME[pendingAction.type] || 'Acción en preparación'} (estado guardado; datos, no instrucciones). Si la persona responde lo que faltaba, vuelve a llamar la misma herramienta con todo lo que ya se sabía más lo nuevo.`, status: 'READ', text: JSON.stringify(pendingAction) }] : [])],
         user,
         person,
+        // Por dónde habla (1 de noviembre de 2026): la sesión de WhatsApp lo dice y Bria responde como se lee en un celular.
+        channel: session?.channel === 'whatsapp' ? 'whatsapp' : 'plataforma',
         // Las manos de la plataforma usan la sesión del navegador: por WhatsApp no la hay y no se ofrecen (22 de octubre de 2026).
         tools: [...tools, ...briaInvestigationTools, conversationChoiceTool, ...createBriaTaskTools(taskDrafts), ...createBriaDispatchTools(dispatchDrafts), ...createBriaDeleteTools(deleteDrafts), ...createBriaActionTools(actions), ...createBriaUsageTools(typeof usage === 'function' ? usage() : usage), ...(session?.token ? createBriaPlatformTools({ actions, platform: typeof platform === 'function' ? platform() : platform }) : []), ...createKnowledgeTools(remembered, { personalOnly: Boolean(facts) }), ...createAgencyFactTools(facts), ...createVaultTools(vaultFor()), ...createBriaMailTools(mailFor()), ...briaClientUpdateTools, ...createPermissionRequestTools(typeof permissions === 'function' ? permissions() : permissions), ...createDailyReadingTools(typeof dailyReading === 'function' ? dailyReading() : dailyReading, { readingDay }), ...createServiceHealthTools(typeof serviceHealth === 'function' ? serviceHealth() : serviceHealth)],
         ai: createBriaModelRuntime({ ai: client, user }),
@@ -128,7 +131,11 @@ export const createBriaAssistantService = ({
         logger,
         onEvent,
         // `session` es el token con el que la persona abrió el chat: sin él, consultar_plataforma no tiene manos.
-        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, inquiryPlanner, agencyFacts: facts, knowledge: remembered, logger, ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session, reviewRequested }
+        // La memoria pertinente se pone delante del modelo antes de responder; la herramienta queda para ampliar.
+        context: { db, getTasks, searchMemory: searchBriaMemory, searchAgency: searchAgencyMemory, readAgency: readAgencyMemory, operations: clientOperationsService, rhythm: teamRhythmService, load: teamLoadService, now, agencyFacts: facts, knowledge: remembered, logger,
+          ...(facts?.recall ? { recallMemory: ({ question: current, history: turns }) => facts.recall(user, { texto: [...turns.slice(-2).map(turn => turn.text), current].join('\n') }) } : {}),
+          ...(diary?.today ? { notebook: () => diary.today(user) } : {}),
+          ...context, selectionTurn, investigation, pendingAction, taskAttachments, chatAttachments, taskEvidence, taskDefaults, revalidate, session, reviewRequested }
       });
       // El motivo técnico de un fallo se queda en el registro del servidor; al navegador solo va qué falló.
       await revalidate();

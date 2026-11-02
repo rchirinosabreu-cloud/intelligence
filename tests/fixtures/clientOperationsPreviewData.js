@@ -48,15 +48,22 @@ function piecesFor(slug, cycle, deliverables) {
       : addDays(futureFrom, Math.round((futureDays * (i - pastCount)) / Math.max(1, cycle.created - pastCount)));
     const format = formats[i % formats.length] || 'Post';
     used[format] = (used[format] || 0) + 1;
-    return { id: `${slug}-${i}`, date, format, title: TITLES[format][(used[format] - 1) % TITLES[format].length], status };
+    return { id: `${slug}-${i}`, planId: `plan-${slug}`, date, format, title: TITLES[format][(used[format] - 1) % TITLES[format].length], status };
   });
 }
 
-const month = (label, quota, published, report) => ({ label, quota, created: quota, reached: reached([quota, quota, quota, published, published]), report });
-const delivered = (deliveredAt, by = 'Kamila Ortiz') => ({ deliveredAt, by });
+// Cada mes lleva su año, número y último día, como los manda el servidor: el cierre del mes los necesita.
+const MONTH_INDEX = { Enero: 1, Febrero: 2, Marzo: 3, Abril: 4, Mayo: 5, Junio: 6, Julio: 7, Agosto: 8, Septiembre: 9, Octubre: 10, Noviembre: 11, Diciembre: 12 };
+const monthBounds = (label) => {
+  const m = MONTH_INDEX[label];
+  return { year: 2026, month: m, start: `2026-${String(m).padStart(2, '0')}-01`, end: new Date(Date.UTC(2026, m, 0)).toISOString().slice(0, 10) };
+};
+const month = (label, quota, published, report) => ({ label, ...monthBounds(label), quota, created: quota, reached: reached([quota, quota, quota, published, published]), report, close: null });
+const delivered = (deliveredAt, by = 'Kamila Ortiz') => ({ status: 'ENVIADO', deliveredAt, by });
 
 function cycleOf({ label = 'Octubre', start = '2026-10-01', end = '2026-10-31', quota, created, stages, overdueItems = 0, longestGap = null, sameDay = [] }) {
-  return { label, start, end, day: span(start, TODAY) + 1, length: span(start, end) + 1, quota, created, reached: reached(stages), overdueItems, longestGap, sameDay };
+  const [year, monthNumber] = start.split('-').map(Number);
+  return { label, year, month: monthNumber, start, end, day: span(start, TODAY) + 1, length: span(start, end) + 1, quota, created, reached: reached(stages), overdueItems, longestGap, sameDay, report: null, close: null };
 }
 
 const task = (id, title, assignee, dueDate, overdue = false) => ({ id, title, assignee, dueDate, overdue });
@@ -177,6 +184,17 @@ export const clients = [
     current: { quota: 20, created: 6, stages: [6, 0, 0, 0, 0] },
     previous: month('Septiembre', 20, 20, delivered('2026-10-01')),
   }),
+  // Suspensión por cartera (30 de octubre de 2026): cumple la condición y todavía nadie la ha decidido. Las cifras y
+  // el botón solo los ve quien puede suspender, por eso `canSuspend`.
+  client('casa-verde', 'Casa Verde', {
+    communityManager: sara, complexity: 'MEDIA',
+    description: 'Restaurante de cocina de mercado. Lleva tres mensualidades sin pagar.',
+    contract: contract({ startDate: '2026-06-01', endDate: '2026-12-31', deliverables: deliver([4, 'Reel'], [4, 'Post']) }),
+    current: { quota: 8, created: 5, stages: [5, 3, 2, 0, 0] },
+    previous: month('Septiembre', 8, 8),
+    suspension: null, canSuspend: true,
+    suspensionCandidate: { since: '2026-07-15', days: 109, count: 3, balanceCents: 945_000_000, oldestPeriod: '2026-07', receivableIds: ['r1', 'r2', 'r3'] },
+  }),
   client('bonsai', 'Bonsai CTG', {
     communityManager: helen, complexity: 'BAJA', instagramUrl: 'https://www.instagram.com/bonsaictg/',
     contract: contract({ endDate: null, deliverables: deliver([4, 'Reel']), monthlyReport: false, notes: 'Algunos contenidos atemporales para no depender del mes.' }),
@@ -247,5 +265,22 @@ export const clients = [
     contract: contract({ serviceType: 'SERVICIOS', startDate: '2026-01-19', endDate: '2026-11-18', deliverables: [], storiesPerWeek: 0, monthlyReport: false, notes: 'Sin cupo fijo: lo que salga en el mes. Elisa hace el arqueo del fee contra las jornadas.' }),
     openTasks: [task('t22', 'Recibir el contenido que debe enviar el cliente', helen, '2026-10-05')],
   }),
-  client('promo-group', 'Promo Group · Endova', { communityManager: sara, complexity: 'ALTA', contract: null }),
+  // Trabajo sin propuesta aprobada (29 de octubre de 2026): sin contrato cargado y con tareas y parrilla del mes.
+  client('promo-group', 'Promo Group · Endova', {
+    communityManager: sara, complexity: 'ALTA', contract: null, work: { openTasks: 9, plans: ['octubre'] }, workAuthorization: null, canAuthorizeWork: true,
+    openTasks: [task('pg1', 'Diseñar los carruseles de Endova', sara, '2026-10-05'), task('pg2', 'Programar las piezas de la semana', sara, '2026-10-06')],
+  }),
 ];
+
+// La parrilla de MIO leída de su hoja de Google (29 de octubre de 2026): Lettufresh no tiene parrilla aquí; su octubre
+// sale de la pestaña OCTUBRE de la hoja, y noviembre ya se está preparando allá.
+{
+  const lettufresh = clients.find((c) => c.slug === 'lettufresh');
+  lettufresh.externalPlanUrl = 'https://docs.google.com/spreadsheets/d/1WfyHG3noiWBeMwwMRBCO4U_S6hwvjhtznUYOjPHfSZY/edit';
+  lettufresh.externalPlan = [
+    { year: 2026, month: 10, label: 'Octubre', tab: 'OCTUBRE', readAt: TODAY, problem: null, summary: { created: 13, reached: { redactada: 13, disenada: 13, aprobada: 13, programada: 0, publicada: 0 } } },
+    { year: 2026, month: 11, label: 'Noviembre', tab: 'NOVIEMBRE', readAt: TODAY, problem: null, summary: { created: 12, reached: { redactada: 12, disenada: 12, aprobada: 0, programada: 0, publicada: 0 } } },
+  ];
+  lettufresh.cycles.current.source = { kind: 'HOJA_MIO', tab: 'OCTUBRE', readAt: TODAY, problem: null };
+  lettufresh.cycles.current.pieces = lettufresh.cycles.current.pieces.map((piece, index) => ({ ...piece, external: true, planId: null, row: index + 3 }));
+}

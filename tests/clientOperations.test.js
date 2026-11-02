@@ -57,8 +57,35 @@ test('el resumen del ciclo cuenta etapas acumuladas, atrasos, huecos y días rep
 
 test('un hueco de tres días o menos no es hueco', () => {
   const items = [{ date: '2026-10-01', status: 'BORRADOR' }, { date: '2026-10-04', status: 'BORRADOR' }];
-  const cycle = summarizeCycle({ year: 2026, month: 10, start: '2026-10-01', end: '2026-10-31', label: 'Octubre' }, items, { quota: 2, today: '2026-10-01' });
+  const cycle = summarizeCycle({ year: 2026, month: 10, start: '2026-10-01', end: '2026-10-31', label: 'Octubre' }, items, { quota: 20, today: '2026-10-01' });
   assert.equal(cycle.longestGap, null);
+});
+
+// Rodny, 30 de octubre de 2026, viendo a Finas Asesores en amarillo por «11 días entre publicaciones»: «su ficha dice
+// precisamente que son solo 4 contenidos. Entonces la plataforma allí no está haciendo una lectura integrada».
+test('el hueco se mide contra lo contratado, no contra un número fijo', () => {
+  const mes = { year: 2026, month: 10, start: '2026-10-01', end: '2026-10-31', label: 'Octubre' };
+  const items = [{ date: '2026-10-16', status: 'PUBLICADO' }, { date: '2026-10-27', status: 'REALIZADO' }];
+
+  // Cuatro piezas en 31 días son uná cada 7,75: once días es su ritmo, no un atraso.
+  const pocas = summarizeCycle(mes, items, { quota: 4, today: '2026-10-30' });
+  assert.equal(pocas.longestGap, null);
+  assert.equal(pocas.maxGap, 16, 'el doble del espaciado contratado');
+
+  // Veinte piezas en 31 días son casi una diaria: ahí once días sí es un hueco.
+  const muchas = summarizeCycle(mes, items, { quota: 20, today: '2026-10-30' });
+  assert.deepEqual(muchas.longestGap, { days: 11, from: '2026-10-16', to: '2026-10-27' });
+  assert.equal(muchas.maxGap, 3, 'nunca baja del mínimo de siempre');
+
+  // Sin cupo no hay contra qué medir: se conserva el mínimo de siempre.
+  assert.equal(summarizeCycle(mes, items, { quota: 0, today: '2026-10-30' }).maxGap, 3);
+});
+
+test('dos piezas el mismo día solo se avisan si el contrato no da para una casi diaria', () => {
+  const mes = { year: 2026, month: 10, start: '2026-10-01', end: '2026-10-31', label: 'Octubre' };
+  const items = [{ date: '2026-10-07', status: 'BORRADOR' }, { date: '2026-10-07', status: 'BORRADOR' }];
+  assert.deepEqual(summarizeCycle(mes, items, { quota: 4, today: '2026-10-08' }).sameDay, [{ date: '2026-10-07', count: 2 }]);
+  assert.deepEqual(summarizeCycle(mes, items, { quota: 20, today: '2026-10-08' }).sameDay, [], 'con veinte al mes, dos el mismo día es lo normal');
 });
 
 const base = (extra = {}) => ({
@@ -91,7 +118,7 @@ test('el mes anterior sin cerrar es rojo y el informe sin entregar es amarillo',
   assert.equal(result.level, 'red');
   assert.deepEqual(result.reasons.map((r) => r.text), [
     'Septiembre cerró con 10 de 12 publicadas: faltaron 2 piezas.',
-    'Falta entregar el informe de septiembre.',
+    'Falta enviar el informe de septiembre.',
   ]);
 });
 
@@ -161,4 +188,17 @@ test('la ficha operativa se valida igual en la pantalla y en el servidor', () =>
   assert.equal(inverted.errors['contract.endDate'], 'El fin no puede ser antes del inicio.');
 
   assert.equal(normalizeOperationProfile({ contract: null }).valid, true, 'se puede guardar la ficha sin contrato');
+});
+
+test('«Ya se publicó» se ofrece desde el mismo día de la publicación, pero no sobre lo que Meta va a publicar hoy', async () => {
+  const { canMarkPublished } = await import('../src/lib/clientOperations.js');
+  const today = '2026-10-29';
+  assert.equal(canMarkPublished({ date: '2026-10-28', status: 'APROBADO' }, today), true, 'una pieza atrasada');
+  assert.equal(canMarkPublished({ date: '2026-10-29', status: 'APROBADO' }, today), true, 'la de hoy, ya no hay que esperar a mañana');
+  assert.equal(canMarkPublished({ date: '2026-10-29', status: 'PROGRAMADO' }, today), false, 'Meta la publica hoy: marcarla cancelaría esa publicación');
+  assert.equal(canMarkPublished({ date: '2026-10-28', status: 'PROGRAMADO' }, today), true, 'programada y con la fecha pasada: no salió');
+  assert.equal(canMarkPublished({ date: '2026-10-30', status: 'APROBADO' }, today), false);
+  assert.equal(canMarkPublished({ date: '2026-10-28', status: 'PUBLICADO' }, today), false);
+  assert.equal(canMarkPublished({ date: '2026-10-28', status: 'APROBADO', external: true }, today), false, 'lo de la hoja de MIO se marca en la hoja');
+  assert.equal(canMarkPublished({ date: null, status: 'APROBADO' }, today), false);
 });

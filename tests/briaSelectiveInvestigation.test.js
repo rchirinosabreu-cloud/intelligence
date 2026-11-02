@@ -111,28 +111,22 @@ test('memory readings accept optional or nullable selectors without certifying a
   assert.equal(results[3].comprobanteConsulta, undefined);
 });
 
-test('the final recording round keeps only the follow-up tool when current reads are complete and no other effect is pending', async () => {
-  const basePlan = { investigar: true, guardarSeguimiento: true, localizarTrabajo: true, prepararCambios: false, propositoMemoria: 'NINGUNO', asunto: 'Entrega', objetivo: 'Verificar entrega', areas: ['TAREAS'], condiciones: ['Entrega verificada'] };
-  const scope = [];
-  for (const variant of [{}, { partial: true }, { prepararCambios: true }, { propositoMemoria: 'GUARDAR' }, { guardarSeguimiento: false }]) {
-    const offered = [];
-    let round = 0;
-    await runAssistant({ user, question: 'Revisa el caso', maxRounds: 2,
-      context: { now, inquiryPlanner: async () => ({ plan: { ...basePlan, ...variant } }) },
-      tools: [briaInvestigationTools.find(tool => tool.name === 'actualizar_seguimiento'),
-        { name: 'leer_pendiente', allowed: () => true, parameters: {}, run: async () => ({ data: { tarea: { id: 'task' }, recortada: Boolean(variant.partial) }, sources: [{ kind: 'tarea', id: 'task' }] }) },
-        { name: 'guardar_en_memoria', allowed: () => true, parameters: {}, run: async () => assert.fail('no memory write was requested by the model') }],
-      ai: { generate: async request => {
-        offered.push(request.tools.map(tool => tool.name));
-        const advertised = [...request.instructions.matchAll(/^- ([a-z_]+)$/gm)].map(match => match[1]);
-        assert.deepEqual(advertised, request.tools.map(tool => tool.name), 'instructions must advertise the catalog actually offered in this round');
-        return round++ === 0 ? { output: [], functionCalls: [{ id: 'read', name: 'leer_pendiente', args: { id: 'task' } }] } : { text: 'El caso sigue abierto; falta verificar la entrega.' };
-      } }, logger: { error() {}, warn() {} }
-    });
-    scope.push(offered[1]);
-  }
-  assert.deepEqual(scope[0], ['actualizar_seguimiento']);
-  for (const names of scope.slice(1)) assert.ok(names.includes('leer_pendiente'), 'partial reads, preparation, memory or general analysis must keep their capabilities');
+test('the instructions advertise exactly the catalog offered in each round, and no round narrows it', async () => {
+  const offered = [];
+  let round = 0;
+  await runAssistant({ user, question: 'Revisa el caso', maxRounds: 2, context: { now },
+    tools: [briaInvestigationTools.find(tool => tool.name === 'actualizar_seguimiento'),
+      { name: 'leer_pendiente', allowed: () => true, parameters: {}, run: async () => ({ data: { tarea: { id: 'task' } }, sources: [{ kind: 'tarea', id: 'task' }] }) },
+      { name: 'guardar_en_memoria', allowed: () => true, parameters: {}, run: async () => assert.fail('no memory write was requested by the model') }],
+    ai: { generate: async request => {
+      offered.push(request.tools.map(tool => tool.name));
+      const advertised = [...request.instructions.matchAll(/^- ([a-z_]+)$/gm)].map(match => match[1]);
+      assert.deepEqual(advertised, request.tools.map(tool => tool.name), 'instructions must advertise the catalog actually offered in this round');
+      return round++ === 0 ? { output: [], functionCalls: [{ id: 'read', name: 'leer_pendiente', args: { id: 'task' } }] } : { text: 'El caso sigue abierto; falta verificar la entrega.' };
+    } }, logger: { error() {}, warn() {} }
+  });
+  assert.deepEqual(offered[1], offered[0]);
+  assert.ok(offered[1].includes('leer_pendiente') && offered[1].includes('guardar_en_memoria'));
 });
 
 test('a final answer with no tools does not infer missing permissions or instruct another preparation', async () => {

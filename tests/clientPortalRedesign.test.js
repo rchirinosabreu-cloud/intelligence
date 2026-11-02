@@ -8,18 +8,17 @@ const read = (path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8');
 // solamente el caption para las redes. Y no me gusta la estructura.» El portal del cliente pasa a ser
 // el mes en mosaico y, al entrar en una pieza, la pieza en grande con el texto que se va a publicar.
 
-test('el guion no sale de la agencia: ni en la respuesta ni en la pantalla', async () => {
+// Rodny, 30 de octubre de 2026: «cuando envío la parrilla al cliente … hay algo que el cliente no ve, y son los
+// guiones. Necesito que el cliente también pueda verlo». Sustituye a la regla del 24 de septiembre.
+test('el cliente ve el guion: llega en la respuesta y se muestra junto al texto de la publicación', async () => {
   const controller = await read('src/controllers/publicController.js');
   const portal = await read('src/components/public/SharedContentPlan.jsx');
-
-  // Esconderlo en la pantalla no habría servido: viajaba en el cuerpo de la respuesta y se leía
-  // abriendo las herramientas del navegador. Se quita en el servidor, que es donde está la cerradura.
-  // El campo, no la palabra: el comentario que explica por qué se quitó sí lo nombra.
-  assert.doesNotMatch(controller, /copyText:/, 'el guion ya no se envía al portal público');
-  assert.doesNotMatch(portal, /copyText/, 'y la pantalla tampoco lo conoce');
-
-  // El texto que sí es del cliente sigue llegando.
+  assert.match(controller, /copyText: item\.copyText/, 'el guion se envía al portal público');
   assert.match(controller, /captionText: item\.captionText/);
+  assert.match(portal, /item\.copyText/, 'y la pantalla lo muestra');
+  assert.ok(portal.indexOf('>Guion<') < portal.indexOf('>Texto de la publicación<'), 'el guion va antes del texto de la publicación');
+  // La nota interna sigue siendo del equipo.
+  assert.doesNotMatch(controller, /internalNotes/);
 });
 
 test('el mes se ve entero antes de entrar en una pieza', async () => {

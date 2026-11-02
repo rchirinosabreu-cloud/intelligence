@@ -81,12 +81,23 @@ const reasonFrom = (catalog, value) => {
 };
 
 const TASK_SELECT = {
-  id: true, title: true, status: true, dueDate: true, focusDeadlineAt: true, priority: true, isPriority: true, creatorId: true, isPrivate: true,
+  id: true, title: true, clientId: true, contentItemId: true, status: true, dueDate: true, focusDeadlineAt: true, priority: true, isPriority: true, creatorId: true, isPrivate: true,
   client: { select: { name: true } }, assignee: { select: { id: true, name: true, userId: true } },
   collaborators: { select: { member: { select: { userId: true, name: true } } } }, viewers: { select: { userId: true } }
 };
 const dayOf = (value) => (value ? bogotaDate(value) : null);
 const gateAsError = (gate) => knowledgeError(gate.message, gate.gateStatus, 'BRIA_ACTION_GATE');
+
+const resolveTaskDestination = async (db, reference, missing) => {
+  if (!reference) return null;
+  const found = await findClientByTerm(db, reference);
+  if (!found.chosen || found.approximate) {
+    missing.push({ field: 'cliente', question: '¿A cuál cliente debe quedar asociada la tarea?', options: found.rows.filter(row => !row.isArchived).map(row => row.name) });
+    return null;
+  }
+  if (found.chosen.isArchived) throw knowledgeError('El cliente de destino está archivado. Selecciona un cliente activo.', 400, 'BRIA_ACTION_CLIENT');
+  return found.chosen;
+};
 
 /* ---------------------------------------------------------------- Cambiar un pendiente */
 
@@ -99,12 +110,22 @@ const prepareTaskUpdate = async ({ db, user, args, previous, today, gate }) => {
 
   // Lo que ya se sabía más lo nuevo: una corrección en el chat ajusta la misma acción.
   const wanted = { ...(previous?.wanted || {}) };
-  for (const key of ['estado', 'responsable', 'fecha', 'prioridad', 'motivo', 'nota']) if (args[key] != null && tidy(args[key])) wanted[key] = tidy(args[key]);
+  for (const key of ['estado', 'responsable', 'fecha', 'prioridad', 'motivo', 'nota', 'cliente', 'titulo']) if (args[key] != null && tidy(args[key])) wanted[key] = tidy(args[key]);
 
   const payload = {}, summary = [], warnings = [], missing = [], changes = [];
   const options = {};
   summary.push(`Tarea: **${task.title}**${task.client?.name ? ` · ${task.client.name}` : ''} (hoy ${STATUS_LABEL[task.status] || task.status}${task.assignee?.name ? `, de ${task.assignee.name}` : ''})`);
 
+  const client = await resolveTaskDestination(db, wanted.cliente, missing);
+  if (client && client.id !== task.clientId) {
+    payload.clientId = client.id;
+    changes.push(`Cliente: ${task.client?.name || 'sin cliente'} → ${client.name}`);
+  }
+  if (wanted.titulo && wanted.titulo !== task.title) {
+    if (wanted.titulo.length > 180) throw knowledgeError('El título admite hasta 180 caracteres.', 400, 'BRIA_ACTION_TITLE');
+    payload[task.contentItemId ? 'contentObjective' : 'title'] = wanted.titulo;
+    changes.push(`${task.contentItemId ? 'Objetivo de la pieza vinculada' : 'Título'} → ${wanted.titulo}`);
+  }
   if (wanted.estado) {
     const status = STATUS[fold(wanted.estado)] || STATUS[wanted.estado];
     if (!status) throw knowledgeError(`No entendí el estado «${wanted.estado}». Puede ser pendiente, en proceso, realizada o devuelta.`, 400, 'BRIA_ACTION_STATUS');
@@ -162,13 +183,16 @@ const prepareTaskUpdate = async ({ db, user, args, previous, today, gate }) => {
   }
   return {
     id: previous?.id || randomUUID(), ownerId: user.userId || user.id, type: 'TASK_UPDATE', status: 'DRAFT',
-    title: `Cambiar «${task.title}»`, target: { taskId, title: task.title }, wanted, payload,
+    title: `Cambiar «${task.title}»`, target: { taskId, title: task.title, ...(payload.clientId ? { clientId: task.clientId } : {}) }, wanted, payload,
     summary: [...summary, ...changes], warnings, missing
   };
 };
 
 const executeTaskUpdate = async ({ db, user, action, updateTask, gate }) => {
   const { taskId } = action.target;
+  const current = await db.task.findUnique({ where: { id: taskId }, select: TASK_SELECT });
+  if (!current || !canOpenTask(current, user.userId || user.id)) throw knowledgeError('La tarea ya no está disponible para ti.', 403, 'BRIA_ACTION_PRIVATE');
+  if (action.payload.clientId && current.clientId !== action.target.clientId) throw knowledgeError('El cliente de la tarea cambió desde el resumen. Revisa una versión nueva antes de confirmar.', 409, 'BRIA_ACTION_CHANGED');
   try { await gate({ db, user, taskId, payload: action.payload }); }
   catch (refusal) { if (refusal.gateStatus) throw gateAsError(refusal); throw refusal; }
   await updateTask(taskId, action.payload, user.userId || user.id);
@@ -270,14 +294,16 @@ const quoteTitles = (titles) => {
   return `${shown.join(', ')}${rest > 0 ? ` y ${rest} más` : ''}`;
 };
 // Lo que le falta a cada tarea para quedar como se pidió: lo que ya está así no se vuelve a escribir.
-const bulkChangesFor = (task, { status, assigneeId, dueDate }) => {
+const bulkChangesFor = (task, { status, assigneeId, dueDate, clientId }) => {
   const payload = {};
+  if (clientId && task.clientId !== clientId) payload.clientId = clientId;
   if (status && task.status !== status) payload.status = status;
   if (assigneeId && task.assignee?.id !== assigneeId) payload.assigneeId = assigneeId;
   if (dueDate && dayOf(task.dueDate) !== dueDate.slice(0, 10)) payload.dueDate = dueDate;
   return payload;
 };
-const bulkChangeLines = ({ status, assigneeName, dueDate }) => [
+const bulkChangeLines = ({ status, assigneeName, dueDate, clientName }) => [
+  ...(clientName ? [`Cliente → ${clientName}`] : []),
   ...(status ? [`Estado → ${STATUS_LABEL[status]}`] : []),
   ...(assigneeName ? [`Responsable → ${assigneeName}`] : []),
   ...(dueDate ? [`Entrega → ${humanDate(dueDate.slice(0, 10))}`] : [])
@@ -286,7 +312,7 @@ const bulkChangeLines = ({ status, assigneeName, dueDate }) => [
 const prepareTasksStatus = async ({ db, user, args, previous, today, gate }) => {
   const viewer = user.userId || user.id;
   const wanted = { ...(previous?.wanted || {}) };
-  for (const key of ['estado', 'responsable', 'fecha']) if (args[key] != null && tidy(args[key])) wanted[key] = tidy(args[key]);
+  for (const key of ['estado', 'responsable', 'fecha', 'cliente']) if (args[key] != null && tidy(args[key])) wanted[key] = tidy(args[key]);
   const newFilter = tidyFilter(args.filtro);
   if (newFilter) wanted.filtro = newFilter;
   const missing = [], warnings = [];
@@ -331,10 +357,12 @@ const prepareTasksStatus = async ({ db, user, args, previous, today, gate }) => 
     if (!day) missing.push({ field: 'fecha', question: `No entendí la fecha «${wanted.fecha}». Dime un día concreto, como «viernes» o «15 de octubre».` });
     else dueDate = `${day}T12:00:00.000Z`;
   }
-  const change = { status, assigneeId: assignee?.id || null, assigneeName: assignee?.name || null, dueDate };
-  const anyChange = Boolean(status || wanted.responsable || wanted.fecha);
+  const client = await resolveTaskDestination(db, wanted.cliente, missing);
+  const clientChange = client ? { clientId: client.id, clientName: client.name } : {};
+  const change = { status, assigneeId: assignee?.id || null, assigneeName: assignee?.name || null, dueDate, ...clientChange };
+  const anyChange = Boolean(status || wanted.responsable || wanted.fecha || wanted.cliente);
   if (!anyChange) missing.push({ field: 'estado', question: `¿A qué estado paso ${ids.length === 1 ? 'esta tarea' : `estas ${ids.length} tareas`}?`, options: ['En proceso', 'Realizada', 'Pendiente'] });
-  const statusOnly = Boolean(status) && !wanted.responsable && !wanted.fecha;
+  const statusOnly = Boolean(status) && !wanted.responsable && !wanted.fecha && !wanted.cliente;
 
   // Cada tarea por la misma puerta que la pantalla; lo que no puede se dice y no frena a las demás.
   const rows = found ? found.rows : (ids.length ? await db.task.findMany({ where: { id: { in: ids } }, select: TASK_SELECT }) : []);
@@ -342,7 +370,7 @@ const prepareTasksStatus = async ({ db, user, args, previous, today, gate }) => 
   const items = [];
   for (const taskId of ids) {
     const task = byId.get(taskId);
-    const item = { taskId, title: task?.title || 'Pendiente', client: task?.client?.name || null, assignee: task?.assignee?.name || null, status: task?.status || null };
+    const item = { taskId, ...(client ? { clientId: task?.clientId } : {}), title: task?.title || 'Pendiente', client: task?.client?.name || null, assignee: task?.assignee?.name || null, status: task?.status || null };
     if (!task) item.skip = 'Ya no existe.';
     else if (!canOpenTask(task, viewer)) item.skip = 'Es un pendiente privado que no puedes abrir.';
     else if (status && task.status === 'REALIZADA' && status === 'PENDIENTE') item.skip = 'Reabrir una cerrada pide motivo y nota: hazlo de a una.';
@@ -397,20 +425,22 @@ const prepareTasksStatus = async ({ db, user, args, previous, today, gate }) => 
   return {
     id: previous?.id || randomUUID(), ownerId: viewer, type: 'TASKS_STATUS', status: 'DRAFT',
     title, target: { taskIds: ids, ...(descripcion ? { descripcion } : {}), ...(wanted.filtro ? { filtro: wanted.filtro } : {}) }, wanted,
-    payload: { status, assigneeId: change.assigneeId, assigneeName: change.assigneeName, dueDate, items: active.map(({ taskId, title: taskTitle }) => ({ taskId, title: taskTitle })) },
+    payload: { status, assigneeId: change.assigneeId, assigneeName: change.assigneeName, dueDate, ...clientChange, items: active.map(({ taskId, title: taskTitle, clientId }) => ({ taskId, title: taskTitle, ...(client ? { clientId } : {}) })) },
     summary, warnings, missing
   };
 };
 
 const executeTasksStatus = async ({ db, user, action, updateTask, gate }) => {
   const { status, items } = action.payload;
-  const statusOnly = Boolean(status) && !action.payload.assigneeId && !action.payload.dueDate;
+  const statusOnly = Boolean(status) && !action.payload.assigneeId && !action.payload.dueDate && !action.payload.clientId;
   const done = [], failed = [];
   for (const item of items) {
     try {
       // Se vuelve a mirar cada tarea justo antes: un permiso que cambió se respeta y lo ya cambiado no falla.
       const task = await db.task.findUnique({ where: { id: item.taskId }, select: TASK_SELECT });
       if (!task) { failed.push({ ...item, reason: 'Ya no existe.' }); continue; }
+      if (!canOpenTask(task, user.userId || user.id)) { failed.push({ ...item, reason: 'La tarea ya no está disponible para ti.' }); continue; }
+      if (action.payload.clientId && task.clientId !== item.clientId) { failed.push({ ...item, reason: 'El cliente cambió desde el resumen; necesita otra revisión.' }); continue; }
       const payload = bulkChangesFor(task, action.payload);
       if (!Object.keys(payload).length) { done.push({ ...item, already: true }); continue; }
       await gate({ db, user, taskId: item.taskId, payload });

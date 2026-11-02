@@ -2,8 +2,18 @@
 import * as pdfjsLib from 'pdfjs-dist';
 import mammoth from 'mammoth';
 
-// Configure PDF.js worker to use local build from public folder to avoid MIME type and CORS issues
-pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.js';
+/**
+ * El worker lo resuelve el empaquetador desde la versión instalada de pdf.js, nunca una copia suelta en `public/`:
+ * pdf.js exige que worker y librería sean de la misma versión, y una copia congelada rompe el lector al actualizar.
+ *
+ * **El `?url` va dentro de la función, nunca arriba del archivo**: es una marca que solo entiende el empaquetador, y a
+ * nivel de módulo rompe cualquier arnés que importe esto en Node.
+ */
+const ensureWorker = async () => {
+  if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+  }
+};
 
 export const processDocument = async (file) => {
   const fileType = file.type;
@@ -26,6 +36,7 @@ export const processDocument = async (file) => {
 
 const extractTextFromPDF = async (file) => {
   const arrayBuffer = await file.arrayBuffer();
+  await ensureWorker();
   const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
   let fullText = '';
 

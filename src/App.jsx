@@ -24,6 +24,7 @@ const Team = lazyWithRecovery(() => import('./components/modules/Team'));
 const Profile = lazyWithRecovery(() => import('./components/modules/Profile'));
 const ContentGrids = lazyWithRecovery(() => import('./components/modules/ContentGrids'));
 const ContentPlanDetail = lazyWithRecovery(() => import('./components/modules/ContentPlanDetail'));
+const ExternalPlanView = lazyWithRecovery(() => import('./components/modules/ContentGrids/ExternalPlanView'));
 const FinancialDashboard = lazyWithRecovery(() => import('./components/modules/FinancialDashboard'));
 const TalentRadar = lazyWithRecovery(() => import('./components/modules/TalentRadar'));
 const ManagerTaskAnalytics = lazyWithRecovery(() => import('./components/modules/ManagerTaskAnalytics'));
@@ -224,6 +225,14 @@ function AppContent() {
                       element={
                         <ModuleGuard module="parrillas">
                           <ContentGrids />
+                        </ModuleGuard>
+                      }
+                    />
+                    <Route
+                      path="/parrillas/hoja/:clientSlug/:period"
+                      element={
+                        <ModuleGuard module="parrillas">
+                          <ExternalPlanView />
                         </ModuleGuard>
                       }
                     />

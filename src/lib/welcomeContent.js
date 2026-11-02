@@ -14,7 +14,7 @@ export const welcomeCatalog = [
   { id: 'drive', title: 'Drive', description: 'Encuentra los documentos y archivos compartidos del trabajo.', icon: 'FolderOpen' },
   { id: 'crm', title: 'CRM', description: 'Sigue las oportunidades comerciales, desde la solicitud hasta la propuesta.', icon: 'Target' },
   { id: 'cotizaciones', title: 'Cotizaciones', description: 'Consulta propuestas, servicios y condiciones comerciales en un mismo lugar.', icon: 'DollarSign' },
-  { id: 'financiero', title: 'Financiero', description: 'Consulta ingresos, gastos y compromisos de pago según tus permisos.', icon: 'DollarSign' },
+  { id: 'financiero', title: 'Financiero', description: 'Consulta ingresos, gastos y compromisos de pago según tus permisos.', icon: 'Wallet' },
   { id: 'radar', title: 'Radar de Mérito', description: 'Conoce las métricas y señales de reconocimiento del trabajo del equipo.', icon: 'Zap' },
   { id: 'clientes', title: 'Clientes', description: 'Encuentra la información, los responsables y los enlaces de cada cliente.', icon: 'Users' },
   { id: 'equipo', title: 'Equipo', description: 'Conoce a las personas con quienes trabajas y sus roles en Brainstudio.', icon: 'UserCheck' },

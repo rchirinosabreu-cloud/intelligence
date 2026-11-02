@@ -1,5 +1,55 @@
 # Bria: modelo, archivos y borrado definitivo
 
+## Comparación sin planificador — 1 de noviembre de 2026
+
+Tras retirar el planificador y las plantillas (31 de octubre), Rodny pidió comparar
+modelos «sin gastar demasiado». Se corrió el conjunto de preguntas reales con datos
+ficticios (`npm run eval:bria-casos`, 23 casos, dos repeticiones, 46 respuestas por
+configuración) con el mismo motor y las mismas instrucciones de producción, con tope
+en dólares reservado antes de cada llamada (`BRIA_EVAL_MAX_USD` y las tarifas por
+millón; `BRIA_EVAL_EFFORT` fija el esfuerzo de razonamiento). Tarifas verificadas ese
+día en la página de precios de OpenAI (estándar, contexto corto; entrada / caché /
+escritura de caché / salida por millón): GPT-6 Luna 0,10 / 0,01 / 0,125 / 0,50;
+GPT-6.1 Terra 1 / 0,05 / 1,25 / 5; GPT-6.1 Sol 2 / 0,10 / 2,50 / 10.
+
+| Configuración | Respuestas correctas | Latencia media por caso | Costo de las 46 | Costo por caso |
+| --- | --- | --- | --- | --- |
+| gpt-6-luna, low (producción) | 42/46 | 4,3 s | USD 0,028 | USD 0,0006 |
+| gpt-6-luna, medium | 43/46 | 5,8 s | USD 0,036 | USD 0,0008 |
+| gpt-6.1-terra, low | 45/46 | 4,8 s | USD 0,112 | USD 0,0024 |
+| gpt-6.1-sol, low | 46/46 | 5,6 s | USD 0,347 | USD 0,0075 |
+
+Las cuatro configuraciones hacen el mismo número de llamadas por caso (tres) y leen el
+mismo contexto (unos 37.000 tokens de entrada por caso, el 95 % servido de caché).
+El gasto total de la comparación, con la primera pasada incluida, fue de USD 1,6.
+
+Lo que distingue a los modelos no es el volumen sino un caso: **«Escríbele a Helen que
+el video de Gema salió con la versión vieja»**. Luna, con cualquier esfuerzo, buscó a
+Helen como cliente y no consultó cómo trabajar con ella (`como_trabajar_con`) en las
+cuatro respuestas; Terra y Sol lo hicieron bien las cuatro veces. El otro fallo repetido
+(«¿cómo viene Aristea?» sin decir desde cuándo está en rojo) aparece en Luna, Luna
+medium y Terra, una o dos veces de cuatro, y en Sol ninguna. Subir el razonamiento de
+Luna a medium no cambia el resultado y cuesta un segundo y medio más por caso.
+
+**Lo que no mide esta comparación:** las preguntas del piloto de WhatsApp (cartera,
+panorama, memoria de una cuenta) no están en este conjunto, y 23 casos por dos no
+distinguen diferencias pequeñas. Sí distingue un fallo sistemático, y el de la ficha
+del equipo lo es.
+
+Proyección mensual con el uso real de la semana del 25 de octubre al 1 de noviembre
+(673 llamadas del asistente, 18,1 millones de tokens de entrada y 175.000 de salida),
+suponiendo la misma proporción de caché que en la evaluación y, entre paréntesis, sin
+caché: Luna USD 2 (8), Terra 6.1 USD 15 (80), Sol 6.1 USD 30 (165).
+
+**Un hallazgo del evaluador:** cinco casos exigían la frase exacta de la plantilla
+retirada («¿Lo hago así?», «¿Los creo así?») y en la primera pasada hicieron fallar
+del 30 % al 43 % de las respuestas de los cuatro modelos, que preparaban bien la acción
+y lo decían con otras palabras. Desde este día esos casos exigen lo que importa
+(`expectPendingAction`: la acción queda preparada, con su tipo y sus datos, sin
+ejecutar), no una frase. Repetir: `scripts/eval-bria-casos.mjs` con `BRIA_EVAL_MODEL`,
+`BRIA_EVAL_EFFORT`, `BRIA_EVAL_MAX_USD` y las cuatro tarifas; los informes de esta
+corrida se guardaron fuera del repositorio.
+
 ## Selección del chat — 7 de octubre de 2026
 
 Modelo elegido: **gpt-6-luna**, `reasoning.effort=low`. La configuración es

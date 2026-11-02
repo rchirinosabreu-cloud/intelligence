@@ -1,28 +1,8 @@
 {
   "$comentario": "Avisos altos o críticos de npm audit que hoy no tienen un arreglo sin cambio de versión mayor. Los lee scripts/security-audit-gate.mjs. Cada uno lleva su motivo y una fecha «revisarAntesDe»: vencida, la puerta de CI vuelve a fallar. Anotados el 12 de octubre de 2026 al crear la puerta; ninguno es una aprobación definitiva.",
-  "GHSA-v53p-9fqp-m79j": {
-    "paquete": "nodemailer",
-    "motivo": "Denegación de servicio en el analizador de direcciones. El arreglo está en nodemailer 10 (versión mayor); la plataforma solo envía a direcciones propias o del equipo. Probar la 10 con los correos transaccionales y de recuperación antes de subir.",
-    "revisarAntesDe": "2026-11-30"
-  },
-  "GHSA-prgh-xp8r-p3m5": {
-    "paquete": "nodemailer",
-    "motivo": "Mismo analizador de direcciones que el anterior; se arregla con el mismo salto a nodemailer 10.",
-    "revisarAntesDe": "2026-11-30"
-  },
-  "GHSA-hq66-cqwq-w95j": {
-    "paquete": "pdfjs-dist",
-    "motivo": "Ejecución de JavaScript al abrir un PDF malicioso. El arreglo está en pdfjs-dist 6 (versión mayor). Se usa en el navegador para sacar el texto de un PDF que sube la propia persona (src/utils/documentProcessor.js). Probar la 6 con ese flujo antes de subir.",
-    "revisarAntesDe": "2026-11-30"
-  },
   "GHSA-ggr8-5vv4-36mx": {
     "paquete": "deepmerge-ts (vía prisma)",
     "motivo": "Llega por la configuración de la CLI de Prisma, que solo combina la configuración del propio repositorio, nunca datos de usuarios. El arreglo exige otra versión mayor de Prisma.",
-    "revisarAntesDe": "2026-11-30"
-  },
-  "GHSA-vfj7-8cjw-p6xm": {
-    "paquete": "braces (vía tailwindcss)",
-    "motivo": "Llega por Tailwind CSS 3, que solo corre al compilar los estilos con patrones del propio repositorio; no está en el servidor que atiende a usuarios. El arreglo es Tailwind 4 (versión mayor, migración de estilos).",
     "revisarAntesDe": "2026-11-30"
   }
 }

@@ -2,7 +2,6 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createGroundedAnswersFixture, runGroundedAnswersScenario, assertGroundedAnswer, assertGroundedRecovery, runGroundedReadPreflight, GROUNDED_QUESTIONS, GROUNDED_RECOVERY_QUESTION } from './evals/briaGroundedAnswersFixture.js';
 
-const plan = () => ({ investigar: false, continuar: false, actualidad: true, localizarTrabajo: false, guardarSeguimiento: false, prepararCambios: false, compararAlternativas: true, soloConversacion: false, propositoMemoria: 'NINGUNO', asunto: '', objetivo: '', areas: [], condiciones: [] });
 const answers = [
   'Yo usaría los 30 minutos para la revisión de Cobalto: vence hoy, lunes 26 de octubre, y una comprobación de 20 minutos libera la entrega de las 11:00. Cometa también importa: la memoria decía que el mes estaba listo, pero el registro actual no demuestra publicación; su tarea interna venció el 23 y la publicación está prevista para el 27. No confundiría material listo con publicado. Después comprobaría esa publicación. No he cambiado nada.',
   'Son seis cobros pendientes, por un total de $6.612.000 COP. Cometa y Órbita suman $3.575.500; ese es un subtotal, no toda la cartera. Las fechas registradas son de emisión: ninguna cuenta tiene vencimiento informado, así que no puedo clasificarlas como vencidas. No registré pagos ni contacté a nadie.',
@@ -12,7 +11,7 @@ const answers = [
 const scripted = ({ directMemory = false, skipAlternative = false, skipServerSubtotal = false, firstAnswer = answers[0], financeAnswer = answers[1], initialTurn = 0, recovery = false, recoveryAnswer = `Cometa y Órbita juntas suman $3.575.500 COP. ${answers[2]}` } = {}) => {
   let turn = initialTurn - 1, step = 0;
   return { generate: async request => {
-    if (request.responseSchema) { turn++; step = 0; return { text: JSON.stringify(plan()) }; }
+    if (!request.input.some(row => row.type === 'function_call_output')) { turn++; step = 0; }
     const call = rows => ({ functionCalls: rows.map(([name, args], index) => ({ id: `${turn}-${step}-${index}`, name, args })) });
     if (turn === 1) {
       if (step++ === 0) return call([['consultar_plataforma', { ruta: '/financials/receivables-ledger' }]]);
@@ -84,7 +83,8 @@ test('contrasting remembered readiness does not require a prescribed memory labe
   const fixture = createGroundedAnswersFixture(scripted({ firstAnswer: 'Usaría los 30 minutos para Cobalto: la entrega es hoy a las 11:00 y la revisión está estimada en 20 minutos. En Cometa, octubre sí aparece listo en cuanto a materiales: la pieza está aprobada y tiene material final. Pero eso no confirma que esté programada ni publicada; su publicación es mañana, martes 27 de octubre. Dejaríamos esperando comprobar su programación.' }));
   await runGroundedAnswersScenario(fixture);
   const withoutMemory = structuredClone(fixture.outcomes[0]);
-  withoutMemory.reads = withoutMemory.reads.filter(row => row.name !== 'account-memory');
+  // Ni la memoria que llega con la cartera ni la que se pone delante del modelo al empezar el turno.
+  withoutMemory.reads = withoutMemory.reads.filter(row => !['account-memory', 'memory'].includes(row.name));
   assert.throws(() => assertGroundedAnswer(withoutMemory, fixture, 0), /remembered claim must be available/iu);
 });
 
@@ -130,7 +130,7 @@ test('a saved interruption can resume only the remaining phase without paying ag
 });
 
 test('unexpected writes stay inside the fictional boundary and calls stop before the configured cap', async () => {
-  const fixture = createGroundedAnswersFixture({ generate: async request => request.responseSchema ? { text: JSON.stringify(plan()) } : { functionCalls: [{ id: 'unsafe', name: 'operar_en_plataforma', args: { metodo: 'POST', ruta: '/financials/receivables', cuerpo: { amount: 99 }, que_hace: 'Crear un cobro' } }] } }, { maxCalls: 3 });
+  const fixture = createGroundedAnswersFixture({ generate: async () => ({ functionCalls: [{ id: 'unsafe', name: 'operar_en_plataforma', args: { metodo: 'POST', ruta: '/financials/receivables', cuerpo: { amount: 99 }, que_hace: 'Crear un cobro' } }] }) }, { maxCalls: 3 });
   await assert.rejects(() => fixture.send(GROUNDED_QUESTIONS[1]));
   assert.ok(fixture.writes.length || fixture.calls.some(call => call.name === 'operar_en_plataforma'));
   assert.equal(fixture.created.length, 0);
@@ -214,7 +214,6 @@ test('cash read evidence does not invent a currency absent from the native proje
 test('all six receivable accounts resolve through the native directory with the same identity', async () => {
   let sent = false;
   const fixture = createGroundedAnswersFixture({ generate: async request => {
-    if (request.responseSchema) return { text: JSON.stringify(plan()) };
     if (!sent) {
       sent = true;
       const reads = fixture.financial.ledger.items.map(row => ['buscar_cliente', { nombre: row.client.name }]);

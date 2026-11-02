@@ -35,6 +35,7 @@ import {
 } from '../../services/briaContentPlanReviewService.js';
 import { runContentPlanReviewJob } from '../../services/briaContentPlanReviewScheduler.js';
 import { createClientCriteriaRouter } from './clientCriteria.js';
+import { createExternalPlansRouter } from './externalPlans.js';
 import { uploadMemoryStorage } from '../../lib/uploadStorage.js';
 import {
   FINAL_ASSET_MAX_BYTES,
@@ -47,6 +48,7 @@ import {
 
 const router = express.Router();
 router.use('/plans/:planId/criteria', createClientCriteriaRouter());
+router.use('/external-plans', createExternalPlansRouter());
 const upload = multer({
   storage: uploadMemoryStorage(),
   limits: { fileSize: FINAL_ASSET_MAX_BYTES, files: 1 }
@@ -197,6 +199,7 @@ router.post('/plans', async (req, res) => {
     const plan = await createContentPlan(req.body);
     return res.status(201).json(plan);
   } catch (error) {
+    if (error?.code === 'PLAN_IN_SHEET') return res.status(409).json({ error: error.message, code: error.code });
     console.error('[API] Error creating content plan:', error);
     return res.status(500).json({ error: 'Failed to create content plan', details: error.message });
   }

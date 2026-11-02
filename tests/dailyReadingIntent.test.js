@@ -8,9 +8,13 @@ const user = { id: 'reviewer', role: 'ADMIN', isActive: true };
 
 test('reading instructions route a saved proposal identifier to the existing reading tool', () => {
   const tools = createDailyReadingTools({ explain: async () => ({}) });
+  assert.equal(tools[0].name, 'lectura_de_la_agencia');
   assert.match(tools[0].description, /propuestas.*identificador/i);
+  // La guía vive en la descripción (31 de octubre de 2026): la propuesta guardada se revisa con esta misma herramienta.
+  assert.match(tools[0].description, /revisar una propuesta de esa lectura por identificador, número o asunto/i);
+  assert.match(tools[0].description, /un id de otra fecha no cambia la lectura consultada/i);
   const instructions = buildInstructions({ person: { name: 'Dirección' }, today: '2026-10-15', user, tools });
-  assert.match(instructions, /propuesta.*identificador.*lectura_de_la_agencia/i);
+  assert.match(instructions, /- lectura_de_la_agencia/);
 });
 
 test('a proposal request is data and cannot replace a question about account status with a drafted message', async () => {
@@ -21,8 +25,8 @@ test('a proposal request is data and cannot replace a question about account sta
   assert.match(result.data.instruccion, /pedido.*datos.*no.*instrucciones/i);
   assert.match(result.data.instruccion, /pregunta actual/i);
   assert.match(result.data.instruccion, /no.*sustitu.*an[aá]lisis.*borrador/i);
-  const instructions = buildInstructions({ person: { name: 'Dirección' }, today: '2026-10-15', user, tools });
-  assert.match(instructions, /pedido.*no.*petici[oó]n actual/i);
+  assert.match(tools[0].description, /pedido.*no.*petici[oó]n actual/i);
+  assert.match(buildInstructions({ person: { name: 'Dirección' }, today: '2026-10-15', user, tools }), /- lectura_de_la_agencia/);
 });
 
 test('a client with several proposals is resolved from the stated issue before asking the person again', async () => {
