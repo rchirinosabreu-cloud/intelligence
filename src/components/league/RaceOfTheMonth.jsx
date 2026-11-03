@@ -1,339 +1,128 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { useQueryClient } from '@tanstack/react-query';
-import toast from 'react-hot-toast';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
-import { Award, CalendarClock, Check, ChevronDown, Clock, FileText, Flame, Sparkles, Sun, ThumbsUp, Trophy, Users, X } from '@/components/ui/icons';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Award, ArrowRight, CalendarClock, Check, ChevronDown, Clock, FileText, Flame, Sparkles, Sun, ThumbsUp, Trophy, Users, X } from '@/components/ui/icons';
+import BriaPortrait from '@/components/bria/BriaPortrait';
 import RunnerAvatar from './RunnerAvatar';
+import KudosGift from './KudosGift';
+import RecognitionCollection, { RecognitionHistory, RecognitionStatus } from './RecognitionCollection';
 import { requestLeague } from '@/lib/leagueRequest';
 import { cn } from '@/lib/utils';
-import { DAILY_HABITS, EXTRA_ACTIONS, EXTRA_POINTS, HABIT_POINTS, KUDOS_VALUE, KUDOS_WEEKLY, leagueMonthLabel, ordinalLabel, trackPosition } from '@/lib/platformLeague';
+import { DAILY_HABITS, EXTRA_ACTIONS, EXTRA_POINTS, HABIT_POINTS, KUDOS_VALUE, KUDOS_WEEKLY, leagueMonthLabel, ordinalLabel } from '@/lib/platformLeague';
 
-// «La carrera del mes» (Rodny, 2 y 3 de noviembre de 2026): un panel acoplado a la derecha, como el de Bria, que se
-// abre desde la copa asomada al borde y no tapa la pantalla ni roba el clic de lo que hay detrás; se cierra con la X
-// o con Escape. Sin niveles ni barras de progreso (Rodny los quitó): el puntaje, la posición y la pista. La pista va
-// primero y compacta: un carril corto por persona en orden fijo, sin nombres —el nombre y los puntos aparecen al
-// pasar el cursor o al enfocar con el teclado—, cada avatar en su puntaje sobre la escala que manda el servidor.
-// Los personajes se mueven siempre (RunnerAvatar). Todo lo que se pinta viene del servidor.
-
+// El nombre de archivo conserva compatibilidad con el dock y ?carrera.
+// Las tres vistas muestran datos guardados; ningún logro añade puntos desde la interfaz.
 const HABIT_ICON = { RELOJ: Clock, AL_DIA: Sparkles, A_TIEMPO: CalendarClock, DOCUMENTADO: FileText, SIN_DEVOLUCION: ThumbsUp };
 const EXTRA_ICON = { PRIMERO_EN_ABRIR: Sun, PRIMERO_EN_REUNION: Users };
-const PODIUM_TONE = ['bg-brand-yellow text-zinc-900', 'bg-brand-cyan text-white', 'bg-brand-coral text-white'];
-const LANE_HEIGHT = 28;
-const RUNNER_SIZE = 26;
+const surface = 'rounded-2xl border border-zinc-200/80 bg-white dark:border-white/10 dark:bg-zinc-900';
+const muted = 'text-zinc-500 dark:text-zinc-400';
 
-const points = (value) => (typeof value === 'number' ? `${value} ${value === 1 ? 'punto' : 'puntos'}` : 'sin puntos');
-
-function StatTile({ icon: Icon, tone, value, label, marker }) {
-  return (
-    <div data-league-stat={marker} className="flex min-w-0 flex-col items-center rounded-2xl border border-zinc-200/80 bg-white px-2 py-2.5 text-center dark:border-white/10 dark:bg-zinc-900">
-      <span className={cn('flex h-8 w-8 items-center justify-center rounded-full', tone)}><Icon className="h-4 w-4" /></span>
-      <span className="mt-1.5 text-lg font-semibold leading-none text-zinc-950 dark:text-white">{value}</span>
-      <span className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">{label}</span>
-    </div>
-  );
+function Habits({ today }) {
+  const items = [...DAILY_HABITS.map(item => ({ ...item, icon: HABIT_ICON[item.key], value: today.habits?.[item.key], points: HABIT_POINTS })),
+    ...EXTRA_ACTIONS.map(item => ({ ...item, extra: true, icon: EXTRA_ICON[item.key], value: today.extras?.[item.key], points: EXTRA_POINTS }))];
+  return <details className={cn(surface, 'group px-4')}>
+    <summary className="flex min-h-14 cursor-pointer list-none items-center gap-2 rounded-lg text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan [&::-webkit-details-marker]:hidden">
+      <Check className="h-4 w-4 text-brand-green-deep dark:text-brand-green" /><span className="flex-1">Tus hábitos de hoy</span><span className={cn('text-xs font-normal', muted)}>{today.earned} de {today.possible}</span><ChevronDown className="h-4 w-4 group-open:rotate-180" />
+    </summary>
+    <ul className="divide-y divide-zinc-100 pb-2 dark:divide-white/5">{items.map(item => {
+      const Icon = item.icon;
+      const unavailable = item.extra && !item.source;
+      const earned = item.value === true;
+      return <li key={item.key} className="py-3" {...{ [item.extra ? 'data-race-today-extra' : 'data-race-today-habit']: item.key }} data-race-today-state={earned ? 'earned' : item.value === false ? 'missed' : 'idle'}>
+        <div className="flex items-center gap-2"><Icon className={cn('h-4 w-4', earned ? 'text-brand-green-deep dark:text-brand-green' : muted)} /><span className="flex-1 text-sm font-medium">{item.label}</span><span className={cn('text-xs', earned ? 'text-brand-green-deep dark:text-brand-green' : muted)}>{unavailable ? 'Próximamente' : earned ? `+${item.points} hoy` : item.value === false ? 'Sin sumar hoy' : 'Sin evaluar'}</span></div>
+        <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>{unavailable ? 'Se activará cuando podamos verificar la asistencia.' : item.key === 'PRIMERO_EN_ABRIR' ? 'Se toma la primera actividad registrada desde las 8:00 a. m. de Bogotá.' : item.hint}</p>
+      </li>;
+    })}</ul>
+  </details>;
 }
 
-function Chip({ icon: Icon, label, hint, state, marker, value, extra = false }) {
-  return (
-    <li
-      {...{ [extra ? 'data-race-today-extra' : 'data-race-today-habit']: marker }}
-      data-race-today-state={state}
-      title={hint}
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs font-semibold',
-        state === 'earned' && 'border-brand-green/40 bg-brand-green/15 text-brand-green-deep dark:bg-brand-green/20 dark:text-brand-green',
-        state === 'missed' && 'border-zinc-200 bg-white text-zinc-500 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-400',
-        state === 'idle' && 'border-dashed border-zinc-300 text-zinc-400 dark:border-white/15'
-      )}
-    >
-      <Icon className="h-3.5 w-3.5" />
-      {label}
-      <span className="text-[10px] font-medium opacity-80">+{value}</span>
-      {state === 'earned' && <Check className="h-3 w-3" aria-label="Ganado" />}
-    </li>
-  );
+function Rules() {
+  return <details className="group text-xs">
+    <summary className={cn('flex min-h-10 cursor-pointer list-none items-center justify-center gap-1 rounded-lg font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan [&::-webkit-details-marker]:hidden', muted)}>Cómo se cuentan los puntos<ChevronDown className="h-3.5 w-3.5 group-open:rotate-180" /></summary>
+    <ul className={cn(surface, 'mt-2 space-y-2 p-4 leading-5', muted)}>
+      <li>Cada hábito cumplido en un día hábil suma {HABIT_POINTS} puntos. Los hábitos sin evaluar no suman ni restan.</li>
+      <li>La primera actividad registrada desde las 8:00 a. m. de Bogotá suma {EXTRA_POINTS} puntos a una persona. No equivale necesariamente a abrir una pestaña.</li>
+      <li>El extra de la reunión todavía no está activo.</li>
+      <li>Cada semana tienes {KUDOS_WEEKLY} puntos para regalar a otra persona. Cada regalo recibido suma {KUDOS_VALUE} puntos.</li>
+      <li>Las insignias de Logros no añaden puntos al puntaje mensual. El resultado se valida al cierre del mes.</li>
+    </ul>
+  </details>;
 }
 
-/** Las líneas de salida y meta y el punteado de las marcas, en cada carril (alineadas con la escala). */
-function TrackGuides({ marks, max }) {
-  return (
-    <span aria-hidden="true" className="pointer-events-none absolute inset-y-0 left-3 right-3 block">
-      {marks.slice(1, -1).map((mark) => (
-        <span key={mark} className="absolute inset-y-0 w-px border-l border-dashed border-zinc-400/40 dark:border-white/15" style={{ left: `${trackPosition(mark, max)}%` }} />
-      ))}
-      <span className="absolute inset-y-0 left-0 w-0.5 bg-zinc-700 dark:bg-zinc-200" />
-      <span className="absolute inset-y-0 right-0 w-1.5" style={{ backgroundImage: 'repeating-conic-gradient(rgb(63 63 70) 0 25%, rgb(244 244 245) 0 50%)', backgroundSize: '6px 6px' }} />
-    </span>
-  );
-}
-
-/** Un carril corto: el corredor en su puntaje; el nombre y los puntos solo al pasar el cursor o enfocar. */
-function Lane({ lane, index, track }) {
-  const position = trackPosition(lane.score, track.max);
-  const tipSide = position < 18 ? 'left' : position > 82 ? 'right' : 'center';
-  return (
-    <div
-      data-race-lane={lane.id}
-      data-race-lane-self={lane.isSelf ? 'true' : 'false'}
-      className={cn('relative w-full', lane.isSelf && 'bg-brand-cyan/10 dark:bg-brand-cyan/15', index % 2 === 1 && !lane.isSelf && 'bg-zinc-900/[0.03] dark:bg-white/[0.03]')}
-      style={{ height: LANE_HEIGHT }}
-    >
-      <TrackGuides marks={track.marks} max={track.max} />
-      <div className="absolute inset-y-0 left-3 right-3">
-        <button
-          type="button"
-          aria-label={`${lane.name}: ${points(lane.score)}`}
-          data-race-runner={lane.id}
-          className="group absolute bottom-0 flex -translate-x-1/2 flex-col items-center rounded-md outline-none transition-[left] duration-700 ease-out focus-visible:ring-2 focus-visible:ring-brand-cyan motion-reduce:transition-none"
-          style={{ left: `${position}%` }}
-        >
-          <span
-            data-race-lane-tip
-            className={cn(
-              'pointer-events-none absolute bottom-full z-10 mb-0.5 whitespace-nowrap rounded-md bg-zinc-900 px-2 py-0.5 text-[11px] font-semibold text-white opacity-0 shadow-sm transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100 dark:bg-white dark:text-zinc-900',
-              tipSide === 'center' && 'left-1/2 -translate-x-1/2',
-              tipSide === 'left' && 'left-0 -translate-x-2',
-              tipSide === 'right' && 'right-0 translate-x-2'
-            )}
-          >
-            {lane.name} · {points(lane.score)}
-          </span>
-          {lane.isSelf && <span aria-hidden="true" className="absolute bottom-0 h-1.5 w-6 rounded-full bg-brand-cyan/40 blur-[1px]" />}
-          <RunnerAvatar person={lane} size={RUNNER_SIZE} phase={index} className="relative" />
-        </button>
-      </div>
-    </div>
-  );
-}
-
-/** Regalar los 10 puntos de la semana: a una sola persona, con una línea. El servidor decide; la pantalla solo dice lo que respondió. */
-function KudosGift({ lanes, selfId, given, onGiven }) {
-  const [open, setOpen] = useState(false);
-  const [to, setTo] = useState('');
-  const [note, setNote] = useState('');
-  const [busy, setBusy] = useState(false);
-  const others = lanes.filter((lane) => lane.id !== selfId);
-  if (given) {
-    return <p data-race-kudos-given className="text-sm leading-5 text-zinc-700 dark:text-zinc-200">Esta semana le diste tus {KUDOS_WEEKLY} puntos a <span className="font-semibold">{given.name}</span>.</p>;
-  }
-  if (!open) {
-    return (
-      <Button type="button" className="w-full rounded-xl bg-brand-magenta text-white hover:bg-brand-magenta-deep" onClick={() => setOpen(true)} data-race-kudos-open>
-        <Award className="h-4 w-4" />
-        Regalar mis {KUDOS_WEEKLY} puntos
-      </Button>
-    );
-  }
-  const submit = async (event) => {
-    event.preventDefault();
-    const lane = others.find((row) => row.id === to);
-    if (!lane || busy) return;
-    setBusy(true);
-    try {
-      const saved = await requestLeague('/kudos', { method: 'POST', body: { memberId: lane.id, note } });
-      onGiven({ id: saved?.to?.id || lane.id, name: saved?.to?.name || lane.name, note: saved?.note ?? note });
-      toast.success(`Tus ${KUDOS_WEEKLY} puntos ya son de ${saved?.to?.name || lane.name}.`);
-    } catch (error) {
-      console.error('[Liga] No se pudo regalar:', error);
-      toast.error(error.message || 'No pudimos registrar el regalo.');
-    } finally { setBusy(false); }
-  };
-  return (
-    <form data-race-kudos-form className="space-y-2" onSubmit={submit}>
-      <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">¿A quién?</p>
-      <div className="grid max-h-44 grid-cols-2 gap-1 overflow-y-auto">
-        {others.map((lane, index) => (
-          <label key={lane.id} className={cn('flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1 text-sm hover:bg-zinc-100 dark:hover:bg-white/5', to === lane.id && 'bg-brand-magenta/10 dark:bg-brand-magenta/15')}>
-            <input type="radio" name="kudos-to" value={lane.id} checked={to === lane.id} onChange={() => setTo(lane.id)} className="accent-brand-magenta" />
-            <RunnerAvatar person={lane} size={24} phase={index} />
-            <span className="truncate text-zinc-800 dark:text-zinc-100">{lane.name}</span>
-          </label>
-        ))}
-      </div>
-      <label className="block">
-        <span className="sr-only">Motivo</span>
-        <input type="text" value={note} onChange={(event) => setNote(event.target.value.slice(0, 120))} placeholder="Una línea: por qué" className="h-10 w-full rounded-lg border border-zinc-200 bg-white px-3 text-sm text-zinc-900 placeholder:text-zinc-400 focus:outline-none focus:ring-2 focus:ring-brand-magenta/40 dark:border-white/10 dark:bg-zinc-900 dark:text-zinc-100" />
-      </label>
-      <div className="flex gap-2">
-        <Button type="submit" className="flex-1 rounded-lg bg-brand-magenta text-white hover:bg-brand-magenta-deep" disabled={!to || busy}>Regalar</Button>
-        <Button type="button" variant="ghost" className="rounded-lg" onClick={() => setOpen(false)}>Cancelar</Button>
-      </div>
-    </form>
-  );
-}
-
-export default function RaceOfTheMonth({ open, onOpenChange, league }) {
+export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRetry, returnFocusRef }) {
   const queryClient = useQueryClient();
-  const lanes = useMemo(() => league?.race?.lanes || [], [league]);
-  const track = useMemo(() => league?.race?.track || { max: 100, marks: [0, 25, 50, 75, 100] }, [league]);
-  const self = useMemo(() => lanes.find((lane) => lane.isSelf) || null, [lanes]);
-  const podium = useMemo(() => [...lanes].filter((lane) => typeof lane.score === 'number').sort((a, b) => b.score - a.score).slice(0, 3), [lanes]);
+  const panelRef = useRef(null);
+  const [activeTab, setActiveTab] = useState('month');
   const [given, setGiven] = useState(null);
-  const [showRules, setShowRules] = useState(false);
+  const lanes = useMemo(() => league?.race?.lanes || [], [league]);
+  const self = lanes.find(lane => lane.isSelf);
+  const ranked = useMemo(() => [...lanes].filter(lane => typeof lane.score === 'number').sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'es')), [lanes]);
+  const podium = ranked.slice(0, 3);
   const month = leagueMonthLabel(league?.month);
-  const score = typeof league?.score === 'number' ? league.score : null;
   const today = league?.today;
+  const history = useQuery({ queryKey: ['league', 'recognitions', league?.month], queryFn: () => requestLeague('/recognitions'), enabled: open && Boolean(league), staleTime: 60000, retry: false });
+  const currentGift = given && given.month === league?.month && given.day === today?.day ? given.gift : null;
 
-  return (
-    <DialogPrimitive.Root open={open} onOpenChange={onOpenChange} modal={false}>
-      <DialogPrimitive.Portal>
-        {/* Acoplado a la derecha como el panel de Bria: no tapa nada, no roba el clic de lo que hay detrás. Encima del menú lateral (60). */}
-        <DialogPrimitive.Content
-          data-league-panel
-          aria-label="La carrera del mes"
-          onInteractOutside={(event) => event.preventDefault()}
-          onOpenAutoFocus={(event) => { event.preventDefault(); event.currentTarget.focus(); }}
-          className="fixed bottom-3 right-3 top-20 z-[70] flex w-[min(400px,calc(100vw-24px))] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-zinc-50 text-zinc-900 shadow-xl shadow-zinc-950/10 outline-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:slide-out-to-right-4 data-[state=open]:slide-in-from-right-4 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
-        >
-          <div className="flex shrink-0 items-center gap-3 border-b border-zinc-200/80 px-4 py-3 dark:border-white/10">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-brand-yellow/25 text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow"><Trophy className="h-[18px] w-[18px]" /></span>
-            <div className="min-w-0 flex-1">
-              <DialogPrimitive.Title className="text-base font-semibold leading-tight text-zinc-950 dark:text-white">La carrera del mes</DialogPrimitive.Title>
-              <DialogPrimitive.Description className="truncate text-xs capitalize text-zinc-500 dark:text-zinc-400">{month || 'Liga'}{league?.closesOn ? <span className="normal-case"> · cierra el {league.closesOn}</span> : null}</DialogPrimitive.Description>
-            </div>
-            <DialogPrimitive.Close aria-label="Cerrar la carrera" className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-zinc-500 hover:bg-zinc-200/60 hover:text-zinc-800 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:hover:bg-white/10 dark:hover:text-zinc-100">
-              <X className="h-4 w-4" />
-            </DialogPrimitive.Close>
+  return <DialogPrimitive.Root open={open} onOpenChange={onOpenChange} modal={false}>
+    <DialogPrimitive.Portal>
+      <DialogPrimitive.Content ref={panelRef} data-league-panel aria-label="Reconocimientos"
+        onInteractOutside={event => event.preventDefault()}
+        onOpenAutoFocus={event => { event.preventDefault(); panelRef.current?.focus(); }}
+        onCloseAutoFocus={event => { if (returnFocusRef?.current) { event.preventDefault(); returnFocusRef.current.focus(); } }}
+        className="fixed bottom-3 right-3 top-20 z-[70] flex w-[min(400px,calc(100vw-24px))] flex-col overflow-hidden rounded-3xl border border-zinc-200 bg-zinc-50 text-zinc-900 shadow-xl shadow-zinc-950/10 outline-none duration-200 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:slide-in-from-right-4 motion-reduce:animate-none dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100">
+        <header className="flex shrink-0 items-center gap-3 px-5 pb-3 pt-5">
+          <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-brand-yellow/20 text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow"><Trophy className="h-5 w-5" /></span>
+          <div className="min-w-0 flex-1"><DialogPrimitive.Title className="text-lg font-bold leading-tight">Reconocimientos</DialogPrimitive.Title><DialogPrimitive.Description className={cn('mt-1 text-xs', muted)}><span className="capitalize">{month || 'Tu mes'}</span>{league?.closesOn && ` · cierra el ${league.closesOn}`}</DialogPrimitive.Description></div>
+          <DialogPrimitive.Close aria-label="Cerrar reconocimientos" className="flex h-9 w-9 items-center justify-center rounded-full text-zinc-500 hover:bg-zinc-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:text-zinc-400 dark:hover:bg-white/10"><X className="h-4 w-4" /></DialogPrimitive.Close>
+        </header>
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="flex min-h-0 flex-1 flex-col">
+          <TabsList aria-label="Vistas de reconocimientos" className="mx-5 mb-1 grid h-11 shrink-0 grid-cols-3 rounded-2xl bg-zinc-200/60 p-1 dark:bg-zinc-900">
+            {[['month', 'Mi mes', Sparkles], ['achievements', 'Logros', Award], ['team', 'Equipo', Users]].map(([value, label, Icon]) => <TabsTrigger key={value} value={value} className="gap-1.5 rounded-xl text-zinc-600 data-[state=active]:bg-white data-[state=active]:text-zinc-950 dark:text-zinc-400 dark:data-[state=active]:bg-zinc-800 dark:data-[state=active]:text-white"><Icon className="h-4 w-4" />{label}</TabsTrigger>)}
+          </TabsList>
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 pb-4 custom-scrollbar">
+            {error ? <div role="alert" className="py-8 text-center text-destructive"><p className="text-sm">No pudimos actualizar tu mes.</p><Button variant="ghost" onClick={onRetry} className="mt-2">Reintentar</Button></div> : !league ? <p role="status" className={cn('py-8 text-center text-sm', muted)}>Preparando tu mes…</p> : <>
+              <TabsContent value="month" className="space-y-4 pt-3">
+                {league.winner && <p data-race-winner className="flex items-center gap-2 rounded-2xl bg-brand-yellow/10 p-3 text-sm dark:bg-brand-yellow/10"><RunnerAvatar person={league.winner} size={38} /><span><strong>{league.winner.name}</strong> ganó la liga de {leagueMonthLabel(league.winner.month)} con {league.winner.score} puntos.</span></p>}
+                {self && <section data-race-hero className="relative overflow-hidden rounded-3xl border border-brand-cyan/20 bg-brand-cyan/10 p-5 dark:border-brand-cyan/25 dark:bg-brand-cyan/10">
+                  <Sparkles aria-hidden="true" className="absolute right-4 top-4 h-5 w-5 text-brand-cyan-deep/40 dark:text-brand-cyan/50" />
+                  <div className="flex items-center gap-5">
+                    <div className="relative flex h-28 w-24 shrink-0 items-end justify-center pb-2"><span aria-hidden="true" className="absolute bottom-1 h-16 w-24 rounded-[50%] bg-brand-cyan/15 dark:bg-brand-cyan/20" /><RunnerAvatar person={self} size={104} className="relative" /></div>
+                    <div className="min-w-0"><p className="text-sm font-medium">¡Vamos, {self.name}!</p><p data-race-panel-score className="mt-1 flex items-baseline gap-1.5 text-5xl font-bold tracking-tight">{league.score ?? '–'}<span className="text-sm font-medium tracking-normal">puntos</span></p>{typeof today?.points === 'number' && <p data-race-today-points className="mt-2 inline-flex items-center gap-1 rounded-full bg-brand-green/15 px-2.5 py-1 text-xs font-semibold text-brand-green-deep dark:bg-brand-green/20 dark:text-brand-green"><Sparkles className="h-3 w-3" />+{today.points} hoy</p>}</div>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between gap-2 border-t border-brand-cyan/20 pt-3 text-xs"><span data-race-position className="font-semibold">{league.position ? `Vas ${ordinalLabel(league.position.rank, league.gender)} de ${league.position.of}` : 'Tu mes está comenzando'}</span><span className={muted}>{typeof league.daysLeft === 'number' && `${league.daysLeft} días para el cierre`}</span></div>
+                </section>}
+                {league.nextStep && <section className={cn(surface, 'relative overflow-hidden p-4')}>
+                  <span aria-hidden="true" className="brain-gradient-primary absolute inset-x-0 top-0 h-1" />
+                  <div className="flex items-start gap-3"><BriaPortrait className="h-12 w-12 shrink-0" /><div><p className="text-xs font-semibold text-brand-cyan-deep dark:text-brand-cyan">UN PASO PARA HOY</p><h3 className="mt-1 text-base font-bold">{league.nextStep.label}</h3><p className="mt-1 text-sm leading-5 text-zinc-600 dark:text-zinc-300">{league.nextStep.text}</p></div></div>
+                  <a href={league.nextStepUrl || '/gestion'} className="mt-3 flex min-h-10 items-center justify-center gap-2 rounded-xl bg-primary px-3 text-sm font-semibold text-primary-foreground hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan">Ir a mis tareas<ArrowRight className="h-4 w-4" /></a>
+                </section>}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className={cn(surface, 'flex items-center gap-2.5 px-3 py-3')}><Flame className="h-5 w-5 shrink-0 text-brand-coral-deep dark:text-brand-coral" /><div><p className="text-lg font-bold leading-none">{league.streak?.days ?? 0}</p><p className={cn('mt-1 text-xs', muted)}>días cumplidos</p></div></div>
+                  <div className={cn(surface, 'flex items-center gap-2.5 px-3 py-3')}><Award className="h-5 w-5 shrink-0 text-brand-magenta-deep dark:text-brand-coral" /><div><p className="text-lg font-bold leading-none">{league.kudos?.score ?? 0} <span className="text-xs font-normal">pts</span></p><p className={cn('mt-1 text-xs', muted)}>del equipo</p></div></div>
+                </div>
+                <section><div className="flex items-center justify-between"><h3 className="text-sm font-semibold">Tus últimas victorias</h3><button onClick={() => setActiveTab('achievements')} className="min-h-9 rounded-lg px-2 text-xs font-semibold text-brand-cyan-deep focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:text-brand-cyan">Ver logros →</button></div><RecognitionStatus query={history}>{data => <RecognitionHistory data={data} compact />}</RecognitionStatus></section>
+                {today && <Habits today={today} />}
+                <section className="flex items-center gap-3 rounded-2xl border border-brand-yellow/30 bg-brand-yellow/10 p-4 dark:bg-brand-yellow/5"><Trophy className="h-7 w-7 shrink-0 text-brand-yellow-deep dark:text-brand-yellow" /><div><h3 className="text-sm font-semibold">Premio del mes</h3><p className={cn('mt-0.5 text-xs', muted)}>{league.prize || 'Por confirmar'}</p></div></section>
+                <Rules />
+              </TabsContent>
+              <TabsContent value="achievements" className="space-y-5 pt-4"><RecognitionStatus query={history}>{data => <RecognitionCollection data={data} />}</RecognitionStatus></TabsContent>
+              <TabsContent value="team" className="space-y-4 pt-3">
+                <div><h3 className="text-xl font-bold">Así va el equipo</h3><p className={cn('mt-1 text-sm', muted)}>Cada buen hábito cuenta. El mes sigue abierto.</p></div>
+                {podium.length === 3 && <section data-race-podium aria-label="Primeras posiciones del mes" className="grid grid-cols-3 items-end gap-2 rounded-3xl bg-brand-yellow/10 px-3 pt-4 dark:bg-brand-yellow/5">
+                  {[podium[1], podium[0], podium[2]].map((person, index) => { const rank = [2, 1, 3][index]; return <div key={person.id} className="flex min-w-0 flex-col items-center">
+                    {rank === 1 && <Trophy aria-hidden="true" className="mb-1 h-5 w-5 text-brand-yellow-deep dark:text-brand-yellow" />}<RunnerAvatar person={person} size={rank === 1 ? 76 : 60} phase={index} /><p className="mt-2 max-w-full truncate text-sm font-semibold">{person.name}</p><p className={cn('text-xs', muted)}>{person.score} pts</p><span className={cn('mt-2 flex w-full items-center justify-center rounded-t-xl text-lg font-bold', rank === 1 ? 'h-12 bg-brand-yellow/40 text-brand-yellow-deep dark:text-brand-yellow' : rank === 2 ? 'h-8 bg-brand-cyan/15 text-brand-cyan-deep dark:text-brand-cyan' : 'h-6 bg-brand-coral/20 text-brand-coral-deep dark:text-brand-coral')}>{rank}</span>
+                  </div>; })}
+                </section>}
+                <section className={cn(surface, 'overflow-hidden px-3')} aria-label="Clasificación del mes"><ol className="divide-y divide-zinc-100 dark:divide-white/5">{ranked.map((person, index) => <li key={person.id} data-league-member={person.id} className={cn('flex min-h-14 items-center gap-3 rounded-lg px-1 py-2', person.isSelf && 'bg-brand-cyan/10 dark:bg-brand-cyan/10')}><span className={cn('w-5 text-center text-xs tabular-nums', muted)}>{index + 1}</span><span className="flex w-9 shrink-0 justify-center"><RunnerAvatar person={person} size={38} phase={index} /></span><span className="min-w-0 flex-1 truncate text-sm font-medium">{person.name}{person.isSelf && <span className="ml-1.5 text-xs text-brand-cyan-deep dark:text-brand-cyan">Tú</span>}</span><span className="text-sm font-bold tabular-nums">{person.score} <span className={cn('text-xs font-normal', muted)}>pts</span></span></li>)}</ol></section>
+                {self && <section data-race-kudos className="rounded-2xl border border-brand-magenta/20 bg-brand-magenta/5 p-4 dark:bg-brand-magenta/10"><h3 className="flex items-center gap-2 text-base font-bold"><Award className="h-5 w-5 text-brand-magenta-deep dark:text-brand-coral" />Un aplauso para alguien</h3><p className="mb-3 mt-1 text-sm text-zinc-600 dark:text-zinc-300">Tienes {KUDOS_WEEKLY} puntos por semana para agradecer una buena mano.</p><KudosGift lanes={lanes} selfId={self.id} given={currentGift || league.kudos?.givenThisWeek} onGiven={gift => { setGiven({ month: league.month, day: today?.day, gift }); queryClient.invalidateQueries({ queryKey: ['league'] }); }} />{league.kudos?.received?.map((gift, index) => <p key={index} className="mt-3 border-t border-brand-magenta/10 pt-3 text-xs leading-5 text-zinc-600 dark:text-zinc-300"><strong>{gift.from}</strong>{gift.note ? `: «${gift.note}»` : ' te regaló puntos esta semana.'}</p>)}</section>}
+                <p className={cn('text-center text-xs', muted)}>El resultado se valida al cierre del mes.</p>
+              </TabsContent>
+            </>}
           </div>
-
-          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto p-4 custom-scrollbar">
-            {!league && <p className="text-sm text-zinc-500 dark:text-zinc-400">Cargando la liga…</p>}
-
-            {/* Quien ganó el mes anterior, los primeros días del mes. */}
-            {league?.winner && (
-              <p data-race-winner className="flex items-center gap-3 rounded-2xl border border-brand-yellow/40 bg-brand-yellow/10 px-3 py-2 text-sm text-zinc-800 dark:bg-brand-yellow/10 dark:text-zinc-100">
-                <RunnerAvatar person={league.winner} size={36} />
-                <span><span className="font-semibold">{league.winner.name}</span> ganó la liga de {leagueMonthLabel(league.winner.month)} con {league.winner.score} puntos.{league.winner.note ? ` ${league.winner.note}` : ''}</span>
-              </p>
-            )}
-
-            {/* Tu recorrido: puntos y posición, sin niveles ni barras. */}
-            {self && (
-              <section data-race-hero className="brain-gradient-primary relative overflow-hidden rounded-3xl p-4 text-white">
-                <div className="flex items-center gap-4">
-                  <span className="flex h-24 w-24 shrink-0 items-end justify-center overflow-hidden rounded-2xl bg-white/20 pt-2">
-                    <RunnerAvatar person={self} size={88} title={self.name} />
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-sm font-semibold text-white/90">{self.name}</p>
-                    <p className="mt-0.5 flex items-baseline gap-1.5 text-4xl font-semibold leading-none tracking-tight" data-race-panel-score>{score ?? '–'}<span className="text-base font-medium text-white/80">{score === 1 ? 'punto' : 'puntos'}</span></p>
-                    {league?.position?.rank && <p className="mt-2 text-sm font-semibold text-white/95" data-race-position>Vas {ordinalLabel(league.position.rank, league.gender)} de {league.position.of}</p>}
-                    {typeof today?.points === 'number' && <p className="mt-1 inline-flex items-center rounded-full bg-white/20 px-2.5 py-0.5 text-xs font-semibold" data-race-today-points>+{today.points} hoy</p>}
-                  </div>
-                </div>
-                <p className="mt-3 text-[11px] text-white/85">{typeof league?.daysLeft === 'number' ? `Quedan ${league.daysLeft} días · ` : ''}El resultado se valida al cierre del mes.</p>
-              </section>
-            )}
-
-            {/* La pista: un carril corto por persona, en orden fijo; el nombre, al pasar el cursor. */}
-            {lanes.length > 0 && (
-              <section>
-                <p className="mb-2 flex items-center justify-between text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
-                  La pista
-                  <span className="normal-case tracking-normal text-zinc-400 dark:text-zinc-500">{lanes.length} integrantes · hasta {track.max}</span>
-                </p>
-                <div data-race-track className="rounded-2xl border border-zinc-200/80 bg-brand-yellow/5 pb-1 dark:border-white/10 dark:bg-brand-yellow/10">
-                  <div className="relative mx-3 h-5 border-b border-zinc-200/70 dark:border-white/10">
-                    {track.marks.map((mark) => <span key={mark} className="absolute top-0.5 -translate-x-1/2 text-[10px] font-semibold tabular-nums text-zinc-500 dark:text-zinc-400" style={{ left: `${trackPosition(mark, track.max)}%` }}>{mark}</span>)}
-                  </div>
-                  <div className="mt-1 overflow-hidden rounded-b-xl">
-                    {lanes.map((lane, index) => <Lane key={lane.id} lane={lane} index={index} track={track} />)}
-                  </div>
-                </div>
-              </section>
-            )}
-
-            {/* Hoy: los hábitos y los extras, y los puntos que suman. */}
-            {today && (
-              <section>
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Hoy <span className="normal-case tracking-normal text-zinc-700 dark:text-zinc-200" data-race-today>· {today.earned} de {today.possible} hábitos · {points(today.points)}</span></p>
-                <ul className="mt-2 flex flex-wrap gap-1.5">
-                  {DAILY_HABITS.map((habit) => {
-                    const value = today.habits?.[habit.key];
-                    return <Chip key={habit.key} icon={HABIT_ICON[habit.key] || Sparkles} label={habit.label} hint={habit.hint} marker={habit.key} value={HABIT_POINTS} state={value === true ? 'earned' : value === false ? 'missed' : 'idle'} />;
-                  })}
-                  {EXTRA_ACTIONS.map((extra) => {
-                    const value = today.extras?.[extra.key];
-                    return <Chip key={extra.key} extra icon={EXTRA_ICON[extra.key] || Sparkles} label={extra.label} hint={extra.source ? extra.hint : `${extra.hint} Todavía sin fuente en la plataforma.`} marker={extra.key} value={EXTRA_POINTS} state={value === true ? 'earned' : value === false ? 'missed' : 'idle'} />;
-                  })}
-                </ul>
-                {league?.nextStep && <p className="mt-2 text-xs leading-5 text-zinc-600 dark:text-zinc-300"><span className="font-semibold text-brand-cyan-deep dark:text-brand-cyan">Lo que más te sube:</span> {league.nextStep.text}</p>}
-              </section>
-            )}
-
-            {league && (
-              <div className="grid grid-cols-3 gap-2">
-                <StatTile marker="hoy" icon={Sparkles} tone="bg-brand-cyan/15 text-brand-cyan-deep dark:text-brand-cyan" value={typeof today?.points === 'number' ? `+${today.points}` : '–'} label="hoy" />
-                <StatTile marker="racha" icon={Flame} tone="bg-brand-coral/15 text-brand-coral-deep dark:text-brand-coral" value={league?.streak?.days ?? 0} label={league?.streak?.days === 1 ? 'día con los 5' : 'días con los 5'} />
-                <StatTile marker="regalos" icon={Award} tone="bg-brand-magenta/15 text-brand-magenta-deep dark:text-brand-magenta" value={league?.kudos?.score ?? 0} label="del equipo" />
-              </div>
-            )}
-
-            {/* El podio de hoy. */}
-            {podium.length === 3 && (
-              <section data-race-podium className="rounded-3xl border border-zinc-200/80 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">Podio de hoy</p>
-                <div className="mt-3 grid grid-cols-3 items-end gap-2">
-                  {[podium[1], podium[0], podium[2]].map((lane, column) => {
-                    const rank = column === 1 ? 1 : column === 0 ? 2 : 3;
-                    return (
-                      <div key={lane.id} className="flex flex-col items-center">
-                        <RunnerAvatar person={lane} size={rank === 1 ? 56 : 44} phase={rank} />
-                        <span className={cn('mt-1 flex h-6 w-6 items-center justify-center rounded-full text-[11px] font-semibold', PODIUM_TONE[rank - 1])}>{rank}</span>
-                        <span className="mt-1 max-w-full truncate text-xs font-semibold text-zinc-800 dark:text-zinc-100">{lane.name}</span>
-                        <span className="text-[11px] text-zinc-500 dark:text-zinc-400">{lane.score} pts</span>
-                        <span aria-hidden="true" className={cn('mt-2 w-full rounded-t-lg', rank === 1 ? 'h-6 bg-brand-yellow/40' : rank === 2 ? 'h-4 bg-brand-cyan/25' : 'h-3 bg-brand-coral/25')} />
-                      </div>
-                    );
-                  })}
-                </div>
-              </section>
-            )}
-
-            {/* La bondad: regalar los 10 de la semana y lo que te regalaron. */}
-            {self && (
-              <section data-race-kudos className="rounded-3xl border border-brand-magenta/25 bg-brand-magenta/5 p-4 dark:border-brand-magenta/25 dark:bg-brand-magenta/10">
-                <p className="text-[11px] font-semibold uppercase tracking-wider text-brand-magenta-deep dark:text-brand-magenta">Bondad del equipo</p>
-                <p className="mt-1 text-sm text-zinc-800 dark:text-zinc-100">
-                  <span className="text-xl font-semibold">{league?.kudos?.score ?? 0}</span> puntos
-                  {league?.kudos?.received?.length ? <span className="text-zinc-500 dark:text-zinc-400"> · {league.kudos.received.length} {league.kudos.received.length === 1 ? 'regalo' : 'regalos'}</span> : null}
-                </p>
-                {league?.kudos?.received?.slice(0, 2).map((gift, index) => (
-                  <p key={index} className="mt-1 text-xs leading-5 text-zinc-600 dark:text-zinc-300"><span className="font-semibold">{gift.from}:</span> «{gift.note}»</p>
-                ))}
-                <div className="mt-3"><KudosGift lanes={lanes} selfId={self.id} given={given || league?.kudos?.givenThisWeek} onGiven={(gift) => { setGiven(gift); queryClient.invalidateQueries({ queryKey: ['league'] }); }} /></div>
-              </section>
-            )}
-
-            {league && (
-              <section className="flex items-center gap-3 rounded-3xl border border-zinc-200/80 bg-white p-4 dark:border-white/10 dark:bg-zinc-900">
-                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-brand-yellow/25 text-brand-yellow-deep dark:bg-brand-yellow/15 dark:text-brand-yellow"><Trophy className="h-5 w-5" /></span>
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-semibold text-zinc-900 dark:text-zinc-100">Premio del mes</p>
-                  <p className="text-xs text-zinc-500 dark:text-zinc-400">{league?.prize || 'Por confirmar'}</p>
-                </div>
-              </section>
-            )}
-
-            <section>
-              <button type="button" onClick={() => setShowRules((value) => !value)} aria-expanded={showRules} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 text-xs font-semibold text-zinc-600 hover:bg-zinc-200/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:text-zinc-300 dark:hover:bg-white/10">
-                Ver cómo se cuenta
-                <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', showRules && 'rotate-180')} />
-              </button>
-              {showRules && (
-                <ul className="mt-2 space-y-1.5 px-2 text-xs leading-5 text-zinc-600 dark:text-zinc-300">
-                  <li>Cada día hábil tiene cinco hábitos en juego y cada uno vale {HABIT_POINTS} puntos. Un día en que no cerraste nada no resta. Nunca cuenta cuántas tareas.</li>
-                  {DAILY_HABITS.map((habit) => <li key={habit.key}><span className="font-semibold text-zinc-800 dark:text-zinc-100">{habit.label}:</span> {habit.hint}</li>)}
-                  <li>Los extras del día valen {EXTRA_POINTS} y son de una sola persona: {EXTRA_ACTIONS.map((extra) => extra.label.toLowerCase()).join(' y ')}.</li>
-                  <li>Cada lunes cada persona tiene {KUDOS_WEEKLY} puntos para regalar a una sola persona; cada regalo que recibes vale {KUDOS_VALUE}.</li>
-                  <li>Quien dirige elige al ganador con estos datos a la vista.</li>
-                </ul>
-              )}
-            </section>
-          </div>
-        </DialogPrimitive.Content>
-      </DialogPrimitive.Portal>
-    </DialogPrimitive.Root>
-  );
+        </Tabs>
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal>
+  </DialogPrimitive.Root>;
 }

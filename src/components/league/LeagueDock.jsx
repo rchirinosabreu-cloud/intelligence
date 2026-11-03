@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trophy } from '@/components/ui/icons';
 import { requestLeague } from '@/lib/leagueRequest';
@@ -8,16 +8,17 @@ import RaceOfTheMonth from './RaceOfTheMonth';
 // La copa de la liga (Rodny, 3 de noviembre de 2026: «no quiero nada en el dashboard, solo quiero un icono de la copa
 // por ahí medio asomándose a la mitad de la pantalla derecha, y ahí se abre el panel»): una pestaña pequeña pegada al
 // borde derecho de la ventana, a media altura, que se asoma a medias y termina de salir al pasar el cursor o al
-// tocarla. Está en toda la plataforma (se monta en el AppLayout), nunca en una pantalla concreta. Tocarla abre «La
-// carrera del mes»; `?carrera` en cualquier ruta la abre de una vez (es a donde mandan los avisos de Bria). Si la
+// tocarla. Está en toda la plataforma (se monta en el AppLayout), nunca en una pantalla concreta. Tocarla abre
+// «Reconocimientos»; `?carrera` en cualquier ruta la abre de una vez (es a donde mandan los avisos de Bria). Si la
 // cuenta no tiene ficha en Equipo, no hay copa. Sin reloj aquí: la liga la calcula el servidor.
 export const LEAGUE_QUERY_KEY = ['league', 'month'];
 const STALE_MS = 5 * 60 * 1000;
 
 export default function LeagueDock({ enabled = true }) {
   const queryClient = useQueryClient();
+  const dockRef = useRef(null);
   const [open, setOpen] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('carrera'));
-  const { data: league, error } = useQuery({
+  const { data: league, error, refetch } = useQuery({
     queryKey: LEAGUE_QUERY_KEY,
     queryFn: () => requestLeague(''),
     enabled,
@@ -31,10 +32,11 @@ export default function LeagueDock({ enabled = true }) {
   return (
     <>
       <button
+        ref={dockRef}
         type="button"
         data-league-dock
-        aria-label="Abrir la carrera del mes"
-        title="La carrera del mes"
+        aria-label="Abrir reconocimientos"
+        title="Reconocimientos"
         aria-expanded={open}
         onClick={() => setOpen(true)}
         className={cn(
@@ -44,7 +46,7 @@ export default function LeagueDock({ enabled = true }) {
       >
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-yellow/25 dark:bg-brand-yellow/15"><Trophy className="h-5 w-5" /></span>
       </button>
-      <RaceOfTheMonth open={open} onOpenChange={setOpen} league={league || null} />
+      <RaceOfTheMonth open={open} onOpenChange={setOpen} league={league || null} error={error} onRetry={refetch} returnFocusRef={dockRef} />
     </>
   );
 }

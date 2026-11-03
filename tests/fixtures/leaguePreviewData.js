@@ -4,13 +4,12 @@
 // puntajes y los regalos son inventados.
 import { DAILY_HABITS, leagueNextStep, leagueScore, summarizeDays, todayPoints, trackScale } from '../../src/lib/platformLeague.js';
 
-const avatar = (id) => `/tests/fixtures/league-avatars/${id}.png`;
 
 export const LEAGUE_ROSTER = [
   ['jesu', 'Jesu', 'M'], ['keila', 'Keila', 'F'], ['sara', 'Sara', 'F'], ['kamila', 'Kamila', 'F'], ['brayan', 'Brayan', 'M'],
   ['rodny', 'Rodny', 'M'], ['francisco', 'Francisco', 'M'], ['melissa', 'Melissa', 'F'], ['elisa', 'Elisa', 'F'],
   ['helen', 'Helen', 'F'], ['francys', 'Francys', 'F'], ['david', 'David', 'M'], ['mariceth', 'Mariceth', 'F']
-].map(([id, name, gender]) => ({ id, name, gender, pixelAvatarUrl: avatar(id), avatarUrl: null }));
+].map(([id, name, gender]) => ({ id, name, gender, pixelAvatarKey: id, avatarUrl: null }));
 
 /** Puntos ficticios de los demás al tercer día hábil del mes (hasta 75 por hábitos y extras, más regalos). */
 const SCORES = { jesu: 35, keila: 65, sara: 50, kamila: 70, brayan: 45, rodny: 60, francisco: 55, melissa: 95, elisa: 40, helen: 80, francys: 50, david: 20, mariceth: 60 };
@@ -55,8 +54,19 @@ export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 
     kudos: { ...kudos, score: kudos.received.length * 10 },
     position: { rank: ranked.findIndex((lane) => lane.isSelf) + 1, of: lanes.length },
     nextStepUrl: '/gestion',
-    podium: ranked.slice(0, 3).map((lane) => ({ id: lane.id, name: lane.name, pixelAvatarUrl: lane.pixelAvatarUrl, avatarUrl: null, score: lane.score })),
+    podium: ranked.slice(0, 3).map((lane) => ({ id: lane.id, name: lane.name, pixelAvatarKey: lane.pixelAvatarKey, avatarUrl: null, score: lane.score })),
     winner: winner ? { ...melissa, score: 610, month: '2026-10', note: 'El bono se entrega esta semana.' } : null,
     race: { lanes, track: trackScale(lanes.map((lane) => lane.score)) }
   };
 }
+
+export const leagueDemoRecognitions = {
+  month: '2026-11', total: 4,
+  counts: { FIRST_TASK: 2, EARLY_DELIVERY: 1, DAILY_EIGHT: 1 },
+  recent: [
+    { id: 'award-4', kind: 'DAILY_EIGHT', occurredAt: '2026-11-04T20:10:00Z' },
+    { id: 'award-3', kind: 'EARLY_DELIVERY', occurredAt: '2026-11-04T15:30:00Z' },
+    { id: 'award-2', kind: 'FIRST_TASK', occurredAt: '2026-11-03T13:20:00Z' },
+    { id: 'award-1', kind: 'FIRST_TASK', occurredAt: '2026-11-02T13:15:00Z' },
+  ], hasMore: false,
+};

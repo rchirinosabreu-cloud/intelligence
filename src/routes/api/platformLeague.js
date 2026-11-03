@@ -24,6 +24,7 @@ export function createPlatformLeagueRouter({ service = getPlatformLeagueService 
     }
   };
   router.get('/', handle('No pudimos cargar la liga.', (req) => svc().leagueFor({ userId: req.user.userId })));
+  router.get('/recognitions', handle('No pudimos cargar tus logros.', (req) => svc().recognitionsFor({ userId: req.user.userId })));
   router.post('/kudos', handle('No pudimos registrar el regalo.', (req) => svc().giveKudos({ userId: req.user.userId, memberId: req.body?.memberId, note: req.body?.note })));
   return router;
 }

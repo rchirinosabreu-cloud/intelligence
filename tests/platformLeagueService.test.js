@@ -14,6 +14,7 @@ const members = [
 ];
 
 const fakeDb = () => ({
+  recognitionAward: { groupBy: async () => [], findMany: async () => [] },
   teamMember: {
     findMany: async () => members,
     findUnique: async ({ where }) => members.find((m) => m.user.id === where.userId) || null
@@ -48,6 +49,50 @@ const fakeDb = () => ({
   }
 });
 
+test('league sends bundled avatar keys for known people without altering the points', async () => {
+  const service = createPlatformLeagueService({ db: fakeDb(), repository: fakeRepo(), snapshots, now: () => at(`${DAY}T19:00:00.000Z`) });
+  const league = await service.leagueFor({ userId: 'u-rodny' });
+  assert.equal(league.race.lanes.find(p => p.isSelf).pixelAvatarKey, 'rodny');
+  assert.equal(league.score, 25);
+});
+
+test('recognition collection reads only the current recipient and Bogotá month, without task details or writes', async () => {
+  const db = fakeDb();
+  const calls = [];
+  db.recognitionAward = {
+    groupBy: async (args) => { calls.push(args); return [{ kind: 'FIRST_TASK', _count: { _all: 2 } }]; },
+    findMany: async (args) => { calls.push(args); return [{ id: 'award-1', kind: 'FIRST_TASK', occurredAt: at('2026-11-02T14:00:00Z') }]; }
+  };
+  const service = createPlatformLeagueService({ db, repository: fakeRepo(), snapshots, now: () => at(`${DAY}T19:00:00.000Z`) });
+  const result = await service.recognitionsFor({ userId: 'u-rodny' });
+  assert.equal(result.month, '2026-11');
+  assert.deepEqual(result.counts, { FIRST_TASK: 2 });
+  assert.equal(result.total, 2);
+  assert.equal(result.recent[0].id, 'award-1');
+  assert.equal(result.hasMore, false);
+  for (const call of calls) {
+    assert.equal(call.where.recipientId, 'u-rodny');
+    assert.equal(call.where.occurredAt.gte.toISOString(), '2026-11-01T05:00:00.000Z');
+    assert.equal(call.where.occurredAt.lt.toISOString(), '2026-12-01T05:00:00.000Z');
+    assert.ok(call.where.kind.in.includes('FIRST_TASK'));
+  }
+  assert.deepEqual(calls[1].select, { id: true, kind: true, occurredAt: true }, 'no private task/client/title data');
+});
+
+test('collection respects module permissions and marks a limited recent list as partial', async () => {
+  const db = fakeDb();
+  db.teamMember.findUnique = async () => ({ id: 'm', isActive: true, user: { role: 'EDITOR', isActive: true, modulePermissions: { liga: true, parrillas: true, gestion: false } } });
+  db.recognitionAward.groupBy = async ({ where }) => { assert.deepEqual(where.kind.in, ['PLAN_APPROVED']); return [{ kind: 'PLAN_APPROVED', _count: { _all: 18 } }]; };
+  db.recognitionAward.findMany = async ({ take }) => Array.from({ length: take }, (_, i) => ({ id: `a-${i}`, kind: 'PLAN_APPROVED', occurredAt: new Date() }));
+  const service = createPlatformLeagueService({ db, repository: fakeRepo(), snapshots, now: () => at(`${DAY}T19:00:00.000Z`) });
+  const result = await service.recognitionsFor({ userId: 'u' });
+  assert.equal(result.recent.length, 12);
+  assert.equal(result.hasMore, true);
+  assert.equal(result.total, 18);
+  db.teamMember.findUnique = async () => ({ id: 'm', isActive: false, user: { isActive: true, modulePermissions: { liga: true } } });
+  await assert.rejects(service.recognitionsFor({ userId: 'u' }), e => e.statusCode === 404);
+});
+
 const fakeRepo = (seed = []) => {
   const days = new Map(seed.map((row) => [`${row.day_key}:${row.member_id}`, row]));
   const kudos = [];
@@ -66,6 +111,22 @@ const fakeRepo = (seed = []) => {
 };
 
 const snapshots = { snapshot: async (dayKey) => (dayKey === DAY ? { people: [{ id: 'm-rodny', metrics: { overdue: 0 } }, { id: 'm-helen', metrics: { overdue: 2 } }, { id: 'm-jesu', metrics: { overdue: 0 } }] } : { people: [] }) };
+
+test('the collection changes month at Bogotá midnight and handles a new year', async () => {
+  for (const [instant, start, end] of [
+    ['2026-11-01T04:59:00Z', '2026-10-01T05:00:00.000Z', '2026-11-01T05:00:00.000Z'],
+    ['2027-01-01T04:59:00Z', '2026-12-01T05:00:00.000Z', '2027-01-01T05:00:00.000Z'],
+  ]) {
+    const db = fakeDb();
+    db.recognitionAward.groupBy = async ({ where }) => {
+      assert.equal(where.occurredAt.gte.toISOString(), start);
+      assert.equal(where.occurredAt.lt.toISOString(), end);
+      return [];
+    };
+    const service = createPlatformLeagueService({ db, repository: fakeRepo(), snapshots, now: () => at(instant) });
+    assert.equal((await service.recognitionsFor({ userId: 'u-rodny' })).month, start.slice(0, 7));
+  }
+});
 
 test('a day is evaluated for every active person from the real sources, and saved with its evidence', async () => {
   const repo = fakeRepo();

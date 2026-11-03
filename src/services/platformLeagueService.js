@@ -13,6 +13,8 @@ import { evaluateLeagueDay, isoWeekKey, openWindowOf } from '../lib/leagueDay.js
 import { kudosScore, leagueNextStep, leagueScore, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { canUseLeague } from '../lib/leagueVisibility.js';
+import { resolveLeagueAvatarKeys } from '../lib/leagueAvatarIdentity.js';
+import { hasModulePermission } from '../config/security.js';
 import { createDailyReadingRepository } from './dailyReadingRepository.js';
 import { createPlatformLeagueRepository } from './platformLeagueRepository.js';
 
@@ -47,8 +49,8 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
   // Quién ve la liga: la casilla «Liga del mes» de Equipo, persona por persona (también un administrador). Sin ella,
   // 404 y la copa no se dibuja. El cálculo de cada día corre para todo el equipo igual: al encenderla, el mes ya está contado.
   const memberAllowed = async (userId) => {
-    const me = await db.teamMember.findUnique({ where: { userId }, select: { id: true, name: true, user: { select: { role: true, isActive: true, modulePermissions: true } } } });
-    if (!me) throw fail(404, 'Esta cuenta no tiene ficha en Equipo.');
+    const me = await db.teamMember.findUnique({ where: { userId }, select: { id: true, name: true, isActive: true, user: { select: { role: true, isActive: true, modulePermissions: true } } } });
+    if (!me || me.isActive === false) throw fail(404, 'Esta cuenta no tiene ficha activa en Equipo.');
     if (!canUseLeague(me.user)) throw fail(404, 'La liga todavía no está activada para esta cuenta.', 'LEAGUE_NOT_OPEN');
     return me;
   };
@@ -153,10 +155,10 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const receivedBy = new Map();
       for (const gift of gifts) receivedBy.set(gift.receiver_member_id, [...(receivedBy.get(gift.receiver_member_id) || []), gift]);
       const scoreOf = (memberId) => leagueScore({ days: daysByMember.get(memberId) || [], kudos: receivedBy.get(memberId) || [] });
+      const avatarKeys = resolveLeagueAvatarKeys(members);
       const lanes = members.map((member) => {
         const score = scoreOf(member.id);
-        // `pixelAvatarUrl` llegará cuando existan los diseños de OpenAI por persona; mientras tanto la carrera usa la foto.
-        return { id: member.id, name: firstName(member.name), fullName: member.name, avatarUrl: member.avatarUrl || null, pixelAvatarUrl: null, score, isSelf: member.id === me.id };
+        return { id: member.id, name: firstName(member.name), fullName: member.name, avatarUrl: member.avatarUrl || null, pixelAvatarKey: avatarKeys[member.id] || null, score, isSelf: member.id === me.id };
       });
       const ranked = lanes.filter((lane) => typeof lane.score === 'number').sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'es'));
       const myDays = daysByMember.get(me.id) || [];
@@ -177,10 +179,31 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         kudos: { received, score: kudosScore(received), givenThisWeek: givenThisWeek ? { id: givenThisWeek.receiver_member_id, name: firstName(nameOf.get(givenThisWeek.receiver_member_id) || ''), note: givenThisWeek.note } : null, weeklyBudget: 10 },
         position: rank ? { rank, of: ranked.length } : null,
         nextStepUrl: '/gestion',
-        podium: ranked.slice(0, 3).map((lane) => ({ id: lane.id, name: lane.name, avatarUrl: lane.avatarUrl, pixelAvatarUrl: lane.pixelAvatarUrl, score: lane.score })),
+        podium: ranked.slice(0, 3).map((lane) => ({ id: lane.id, name: lane.name, avatarUrl: lane.avatarUrl, pixelAvatarKey: lane.pixelAvatarKey, score: lane.score })),
         winner: null,
         race: { lanes, track: trackScale(lanes.map((lane) => lane.score)) }
       };
+    },
+
+    /** Colección personal del mes. No reclama premios, no los marca vistos y no expone tareas ni clientes. */
+    async recognitionsFor({ userId }) {
+      const me = await memberAllowed(userId);
+      const month = monthOf(bogotaDate(now()));
+      const [year, monthNumber] = month.split('-').map(Number);
+      const kinds = [];
+      if (hasModulePermission(me.user, 'gestion')) kinds.push('FIRST_TASK', 'EARLY_DELIVERY', 'DAILY_EIGHT', 'CAUGHT_UP', 'WEEKLY_FIFTY');
+      if (hasModulePermission(me.user, 'parrillas')) kinds.push('PLAN_APPROVED');
+      if (!kinds.length) return { month, counts: {}, total: 0, recent: [], hasMore: false };
+      const where = { recipientId: userId, kind: { in: kinds }, occurredAt: {
+        gte: new Date(`${month}-01T05:00:00.000Z`),
+        lt: new Date(Date.UTC(year, monthNumber, 1, 5)),
+      } };
+      const [groups, rows] = await Promise.all([
+        db.recognitionAward.groupBy({ by: ['kind'], where, _count: { _all: true } }),
+        db.recognitionAward.findMany({ where, select: { id: true, kind: true, occurredAt: true }, orderBy: [{ occurredAt: 'desc' }, { id: 'asc' }], take: 13 }),
+      ]);
+      const counts = Object.fromEntries(groups.map((row) => [row.kind, row._count._all]));
+      return { month, counts, total: Object.values(counts).reduce((sum, count) => sum + count, 0), recent: rows.slice(0, 12), hasMore: rows.length > 12 };
     },
 
     /** Regalar los 10 puntos de la semana: a una sola persona del equipo, una vez por semana, con una línea. */

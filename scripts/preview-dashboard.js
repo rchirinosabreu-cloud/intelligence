@@ -2,7 +2,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
 import { dashboardDemoClients, dashboardDemoCompletedTasks, dashboardDemoDashboard, dashboardDemoKanbanTasks, dashboardDemoLeague, dashboardDemoTaskComments, dashboardDemoTeam, dashboardDemoUser } from '../tests/fixtures/dashboardPreviewData.js';
-import { LEAGUE_ROSTER } from '../tests/fixtures/leaguePreviewData.js';
+import { LEAGUE_ROSTER, leagueDemoRecognitions } from '../tests/fixtures/leaguePreviewData.js';
 
 // Local laboratory for the personal dashboard and the sidebar: the real App over a read-only mock API.
 // No dotenv, production server, database, storage, scheduler or proxy.
@@ -58,6 +58,7 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
             res.end(JSON.stringify(league));
             return;
           }
+          if (pathname === '/api/league/recognitions') { res.end(JSON.stringify(leagueDemoRecognitions)); return; }
           const demoUser = asEditor ? { ...dashboardDemoUser, role: 'EDITOR' } : dashboardDemoUser;
           const taskCommentsMatch = pathname.match(/^\/api\/tasks\/([^/]+)\/comments$/);
           if (taskCommentsMatch) { res.end(JSON.stringify(dashboardDemoTaskComments(taskCommentsMatch[1]))); return; }
