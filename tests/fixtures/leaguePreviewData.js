@@ -31,8 +31,8 @@ export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 
     received: perfect
       ? [{ from: 'Helen', note: 'Siempre responde primero.', week: '2026-W45' }, { from: 'Melissa', note: 'Me salvó con el reel.', week: '2026-W45' }]
       : [{ from: 'Helen', note: 'Me salvó con el reel de Nutresa.', week: '2026-W45' }],
-    givenThisWeek: null,
-    weeklyBudget: 10
+    availability: 'coming_soon',
+    monthlyBudget: 10
   };
   const allDays = [...days, today];
   const score = leagueScore({ days: allDays, kudos: kudos.received });

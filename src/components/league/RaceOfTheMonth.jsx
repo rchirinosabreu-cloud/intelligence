@@ -1,6 +1,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Award, ArrowRight, CalendarClock, Check, ChevronDown, Clock, FileText, Flame, Sparkles, Sun, ThumbsUp, Trophy, Users, X } from '@/components/ui/icons';
@@ -10,7 +10,7 @@ import KudosGift from './KudosGift';
 import RecognitionCollection, { RecognitionHistory, RecognitionStatus } from './RecognitionCollection';
 import { requestLeague } from '@/lib/leagueRequest';
 import { cn } from '@/lib/utils';
-import { DAILY_HABITS, EXTRA_ACTIONS, EXTRA_POINTS, HABIT_POINTS, KUDOS_VALUE, KUDOS_WEEKLY, leagueMonthLabel, ordinalLabel } from '@/lib/platformLeague';
+import { DAILY_HABITS, EXTRA_ACTIONS, EXTRA_POINTS, HABIT_POINTS, KUDOS_MONTHLY, leagueMonthLabel, ordinalLabel } from '@/lib/platformLeague';
 
 // El nombre de archivo conserva compatibilidad con el dock y ?carrera.
 // Las tres vistas muestran datos guardados; ningún logro añade puntos desde la interfaz.
@@ -45,17 +45,15 @@ function Rules() {
       <li>Cada hábito cumplido en un día hábil suma {HABIT_POINTS} puntos. Los hábitos sin evaluar no suman ni restan.</li>
       <li>La primera actividad registrada desde las 8:00 a. m. de Bogotá suma {EXTRA_POINTS} puntos a una persona. No equivale necesariamente a abrir una pestaña.</li>
       <li>El extra de la reunión todavía no está activo.</li>
-      <li>Cada semana tienes {KUDOS_WEEKLY} puntos para regalar a otra persona. Cada regalo recibido suma {KUDOS_VALUE} puntos.</li>
+      <li>Próximamente podrás regalar {KUDOS_MONTHLY} puntos al mes a alguien del equipo.</li>
       <li>Las insignias de Logros no añaden puntos al puntaje mensual. El resultado se valida al cierre del mes.</li>
     </ul>
   </details>;
 }
 
 export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRetry, returnFocusRef }) {
-  const queryClient = useQueryClient();
   const panelRef = useRef(null);
   const [activeTab, setActiveTab] = useState('month');
-  const [given, setGiven] = useState(null);
   const lanes = useMemo(() => league?.race?.lanes || [], [league]);
   const self = lanes.find(lane => lane.isSelf);
   const ranked = useMemo(() => [...lanes].filter(lane => typeof lane.score === 'number').sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'es')), [lanes]);
@@ -63,7 +61,6 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
   const month = leagueMonthLabel(league?.month);
   const today = league?.today;
   const history = useQuery({ queryKey: ['league', 'recognitions', league?.month, league?.startsAt], queryFn: () => requestLeague('/recognitions'), enabled: open && Boolean(league), staleTime: 60000, retry: false });
-  const currentGift = given && given.startsAt === league?.startsAt && given.month === league?.month && given.day === today?.day ? given.gift : null;
 
   return <DialogPrimitive.Root open={open} onOpenChange={onOpenChange} modal={false}>
     <DialogPrimitive.Portal>
@@ -116,7 +113,7 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
                   </div>; })}
                 </section>}
                 <section className={cn(surface, 'overflow-hidden px-3')} aria-label="Clasificación del mes"><ol className="divide-y divide-zinc-100 dark:divide-white/5">{ranked.map((person, index) => <li key={person.id} data-league-member={person.id} className={cn('flex min-h-14 items-center gap-3 rounded-lg px-1 py-2', person.isSelf && 'bg-brand-cyan/10 dark:bg-brand-cyan/10')}><span className={cn('w-5 text-center text-xs tabular-nums', muted)}>{person.score > 0 ? index + 1 : '–'}</span><span className="flex w-9 shrink-0 justify-center"><RunnerAvatar person={person} size={38} phase={index} /></span><span className="min-w-0 flex-1 truncate text-sm font-medium">{person.name}{person.isSelf && <span className="ml-1.5 text-xs text-brand-cyan-deep dark:text-brand-cyan">Tú</span>}</span><span className="text-sm font-bold tabular-nums">{person.score} <span className={cn('text-xs font-normal', muted)}>pts</span></span></li>)}</ol></section>
-                {self && <section data-race-kudos className="rounded-2xl border border-brand-magenta/20 bg-brand-magenta/5 p-4 dark:bg-brand-magenta/10"><h3 className="flex items-center gap-2 text-base font-bold"><Award className="h-5 w-5 text-brand-magenta-deep dark:text-brand-coral" />10 puntos para…</h3><p className="mb-3 mt-1 text-sm text-zinc-600 dark:text-zinc-300">Cada semana podrás regalar diez puntos a algún miembro del equipo para agradecerle por alguna ayuda o reconocer su trabajo</p><KudosGift lanes={lanes} selfId={self.id} given={currentGift || league.kudos?.givenThisWeek} onGiven={gift => { setGiven({ startsAt: league.startsAt, month: league.month, day: today?.day, gift }); queryClient.invalidateQueries({ queryKey: ['league'] }); }} />{league.kudos?.received?.map((gift, index) => <p key={index} className="mt-3 border-t border-brand-magenta/10 pt-3 text-xs leading-5 text-zinc-600 dark:text-zinc-300"><strong>{gift.from}</strong>{gift.note ? `: «${gift.note}»` : ' te regaló puntos esta semana.'}</p>)}</section>}
+                {self && <section data-race-kudos className="rounded-2xl border border-brand-magenta/20 bg-brand-magenta/5 p-4 dark:bg-brand-magenta/10"><h3 className="flex items-center gap-2 text-base font-bold"><Award className="h-5 w-5 text-brand-magenta-deep dark:text-brand-coral" />10 puntos para…</h3><p className="mb-3 mt-1 text-sm text-zinc-600 dark:text-zinc-300">Cada mes podrás regalar diez puntos a algún miembro del equipo para agradecerle por alguna ayuda o reconocer su trabajo</p><KudosGift /></section>}
                 <p className={cn('text-center text-xs', muted)}>El resultado se valida al cierre del mes.</p>
               </TabsContent>
             </>}

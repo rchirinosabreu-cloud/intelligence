@@ -254,22 +254,24 @@ test('the league of a person: the month so far plus today live, the lanes of the
   assert.match(league.closesOn, /lunes 30/);
   assert.equal(league.winner, null);
   const helen = await service.leagueFor({ userId: 'u-helen' });
-  assert.equal(helen.kudos.givenThisWeek.name, 'Rodny');
+  assert.equal(helen.kudos.availability, 'coming_soon');
   assert.equal(helen.nextStep.key, 'RELOJ');
   assert.deepEqual(helen.today.extrasEarned, ['PRIMERO_EN_ABRIR']);
   assert.equal(helen.today.points, 10);
 });
 
-test('the weekly gift: to one other person, once per week, with a short note; the errors say why', async () => {
+test('the monthly gift is coming soon and cannot award points, including from an old client', async () => {
   const repo = fakeRepo();
-  const service = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`) });
-  const gift = await service.giveKudos({ userId: 'u-rodny', memberId: 'm-helen', note: 'Resolvió el carrusel.' });
-  assert.equal(gift.weekKey, '2026-W45');
-  assert.equal(gift.to.name, 'Helen');
-  await assert.rejects(() => service.giveKudos({ userId: 'u-rodny', memberId: 'm-jesu', note: 'otra' }), (error) => error.statusCode === 409 && /ya regalaste/.test(error.message));
-  await assert.rejects(() => service.giveKudos({ userId: 'u-helen', memberId: 'm-helen', note: '' }), (error) => error.statusCode === 400 && /a ti/.test(error.message));
-  await assert.rejects(() => service.giveKudos({ userId: 'u-helen', memberId: 'm-nadie', note: '' }), (error) => error.statusCode === 404);
-  await assert.rejects(() => service.giveKudos({ userId: 'u-helen', memberId: 'm-rodny', note: 'x'.repeat(121) }), (error) => error.statusCode === 400 && /120/.test(error.message));
+  let writes = 0;
+  repo.giveKudos = async () => { writes++; return { id: 'unexpected-gift' }; };
+  const service = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => at(DAY + 'T19:00:00Z') });
+  await assert.rejects(service.giveKudos({ userId: 'u-rodny', memberId: 'm-helen', note: 'Gracias' }), error => error.statusCode === 409 && error.code === 'LEAGUE_KUDOS_COMING_SOON');
+  assert.equal(writes, 0);
+  const league = await service.leagueFor({ userId: 'u-rodny' });
+  assert.equal(league.kudos.availability, 'coming_soon');
+  assert.equal(league.kudos.monthlyBudget, 10);
+  assert.ok(!('weeklyBudget' in league.kudos));
+  assert.ok(!('givenThisWeek' in league.kudos));
 });
 
 test('the pilot: only the accounts with the «Liga del mes» box in Equipo get the league and the gift; the rest get 404 and the trophy stays hidden; an administrator without the box is out too; the daily computation still runs for everyone', async () => {

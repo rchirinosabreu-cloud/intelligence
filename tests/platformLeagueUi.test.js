@@ -21,7 +21,8 @@ test('the collection and team replace the track without changing score calculati
   assert.doesNotMatch(panel, /data-race-track|trackPosition|leagueScore\(/);
   assert.match(panel, /requestLeague\('\/recognitions'\)/);
   assert.match(panel, /data-race-panel-score/);
-  assert.match(read('src/components/league/KudosGift.jsx'), /requestLeague\('\/kudos'/);
+  assert.doesNotMatch(read('src/components/league/KudosGift.jsx'), /requestLeague|<form|<Button/);
+  assert.match(read('src/components/league/KudosGift.jsx'), /Próximamente/);
 });
 
 test('production bundles the avatars, supports fallback and honors reduced motion', () => {

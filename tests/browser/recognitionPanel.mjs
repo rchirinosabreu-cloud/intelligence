@@ -54,22 +54,14 @@ try {
   await tab('Equipo').click();
   assert.equal(await panel.locator('[data-league-member]').count(), 13);
   await panel.getByText('10 puntos para…', { exact: true }).waitFor();
-  assert.match(await panel.locator('[data-race-kudos]').innerText(), /Cada semana podrás regalar diez puntos/);
+  assert.match(await panel.locator('[data-race-kudos]').innerText(), /Cada mes podrás regalar diez puntos/);
   assert.equal(await panel.locator('[data-league-member] [data-runner-avatar="pixel"]').count(), 13);
   assert.match(await panel.locator('[data-league-member="mariceth"]').innerText(), /Mariceth/);
   await shot('equipo-claro');
-  await panel.locator('[data-race-kudos-open]').click();
-  await panel.locator('input[name="kudos-to"][value="helen"]').check();
-  await panel.getByPlaceholder('Una línea: por qué').fill('Gracias por ayudarme con la entrega.');
-  const [request] = await Promise.all([
-    page.waitForRequest(req => req.url().endsWith('/api/league/kudos') && req.method() === 'POST'),
-    panel.getByRole('button', { name: 'Regalar', exact: true }).click(),
-  ]);
-  assert.deepEqual(request.postDataJSON(), { memberId: 'helen', note: 'Gracias por ayudarme con la entrega.' });
-  await panel.locator('[data-race-kudos-given]').waitFor();
-  await tab('Mi mes').click();
-  await tab('Equipo').click();
-  assert.match(await panel.locator('[data-race-kudos-given]').innerText(), /Helen/);
+  await panel.locator('[data-race-kudos-coming-soon]').waitFor();
+  assert.equal(await panel.locator('[data-race-kudos] button, [data-race-kudos] form').count(), 0);
+  assert.match(await panel.locator('[data-race-kudos]').innerText(), /Próximamente/);
+  await panel.locator('[data-race-kudos]').screenshot({ path: path.join(output, 'regalo-mensual-claro.png') });
   await page.keyboard.press('Escape');
   await panel.waitFor({ state: 'hidden' });
   assert.equal(await dock.evaluate(el => el === document.activeElement), true, 'closing returns focus to the dock');
@@ -84,6 +76,7 @@ try {
   await shot('logros-oscuro');
   await tab('Equipo').click();
   await shot('equipo-oscuro');
+  await panel.locator('[data-race-kudos]').screenshot({ path: path.join(output, 'regalo-mensual-oscuro.png') });
   await page.emulateMedia({ reducedMotion: 'reduce' });
   assert.equal(await panel.locator('[data-runner-avatar]').first().evaluate(el => getComputedStyle(el).animationName), 'none');
   await page.setViewportSize({ width: 390, height: 844 });
@@ -118,7 +111,7 @@ try {
     const league = await response.json();
     league.score = 0; league.position = null; league.podium = []; league.nextStep = null;
     league.startsAt = '2026-11-03T13:00:00Z';
-    league.streak = { days: 0 }; league.kudos = { score: 0, received: [], givenThisWeek: null, weeklyBudget: 10 };
+    league.streak = { days: 0 }; league.kudos = { score: 0, received: [], availability: 'coming_soon', monthlyBudget: 10 };
     league.race.lanes = league.race.lanes.map(person => ({ ...person, score: 0 }));
     league.today = { day: '2026-11-03', habits: {}, extras: {}, earned: 0, possible: 0, points: 0 };
     await route.fulfill({ response, json: league });
