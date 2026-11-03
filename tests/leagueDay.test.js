@@ -69,7 +69,7 @@ test('documented and returns', () => {
   assert.match(out.evidence.SIN_DEVOLUCION, /1 tarea devuelta/);
 });
 
-test('the extras: first to open from 8:00 goes to one person with the time; the meeting is declared without a source', () => {
+test('the extras: first to open from 8:00 goes to one person with the time; meeting points are supplied by the separate admin register', () => {
   const opener = { memberId: 'm-helen', name: 'Helen', at: `${DAY}T13:04:00.000Z` }; // 8:04 Bogotá
   const helen = evaluateLeagueDay({ day: DAY, memberId: 'm-helen', firstOpener: opener });
   assert.equal(helen.extras.PRIMERO_EN_ABRIR, true);
@@ -80,7 +80,7 @@ test('the extras: first to open from 8:00 goes to one person with the time; the 
   assert.equal(evaluateLeagueDay({ day: DAY, memberId: 'm-rodny', firstOpener: null }).extras.PRIMERO_EN_ABRIR, null, 'nobody opened: not played');
   assert.equal(evaluateLeagueDay({ day: DAY, memberId: 'm-rodny' }).extras.PRIMERO_EN_ABRIR, null, 'no reading: nothing assumed');
   assert.equal(helen.extras.PRIMERO_EN_REUNION, null);
-  assert.match(helen.evidence.PRIMERO_EN_REUNION, /todavía no ve/);
+  assert.match(helen.evidence.PRIMERO_EN_REUNION, /administrador/);
   assert.deepEqual(openWindowOf(DAY), { start: new Date(`${DAY}T13:00:00.000Z`), end: new Date('2026-11-04T05:00:00.000Z') }, 'from 8:00 Bogotá to midnight');
   assert.equal(bogotaTimeOf(`${DAY}T13:04:00.000Z`), '08:04');
 });

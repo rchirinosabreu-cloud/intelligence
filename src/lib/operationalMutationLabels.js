@@ -4,7 +4,7 @@ const moduleLabels = {
   dashboard: 'Dashboard', feedback: 'Feedback', financials: 'Financiero', integrations: 'Integraciones',
   notifications: 'Notificaciones', quotations: 'Cotizaciones', reports: 'Reportes', tasks: 'Gestión de tareas',
   team: 'Equipo', user: 'Perfil', users: 'Usuarios', fireflies: 'Minutas', minutes: 'Minutas',
-  'report-pdf': 'Minutas', drive: 'Minutas', recognitions: 'Logros recientes',
+  'report-pdf': 'Minutas', drive: 'Minutas', recognitions: 'Logros recientes', league: 'Liga del mes',
 };
 const routePath = value => String(value || '').split('?')[0].replace(/\/+$/, '');
 const entry = (method, path, label, phrase) => ({ method, path: path.replace(/:[a-zA-Z]+/g, ':id'), label, phrase,
@@ -15,6 +15,8 @@ const crud = (path, label, noun, updateMethod = 'PATCH') => [
   entry('DELETE', path + '/:id', label, 'eliminó ' + noun),
 ];
 export const humanMutationCatalog = [
+  entry('POST', '/api/league/kudos', 'Reconocimiento al equipo', 'regaló puntos de la liga a alguien del equipo'),
+  entry('POST', '/api/league/meetings', 'Reunión de tráfico', 'registró quién llegó primero a la reunión de tráfico'),
   entry('DELETE', '/api/tasks/:id', 'Tarea eliminada', 'eliminó una tarea'),
   entry('POST', '/api/tasks/reorder', 'Tareas organizadas', 'cambió el orden de las tareas'),
   entry('POST', '/api/tasks/:id/toggle-follow', 'Seguimiento de tarea', 'cambió el seguimiento de una tarea'),

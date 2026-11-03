@@ -34,7 +34,7 @@ try {
   await dock.click();
   await tab('Mi mes').waitFor({ timeout: 10000 });
   assert.equal(await tab('Mi mes').getAttribute('aria-selected'), 'true');
-  assert.match(await panel.locator('[data-race-panel-score]').innerText(), /70\s*puntos/);
+  assert.match(await panel.locator('[data-race-panel-score]').innerText(), /85\s*puntos/);
   assert.equal(await panel.locator('[data-race-track]').count(), 0);
   const avatar = panel.locator('[data-race-hero] [data-runner-avatar="pixel"]');
   await avatar.waitFor();
@@ -61,8 +61,8 @@ try {
   await shot('logros-claro');
   await tab('Equipo').click();
   assert.equal(await panel.locator('[data-league-member]').count(), 13);
-  await panel.getByText('10 puntos para…', { exact: true }).waitFor();
-  assert.match(await panel.locator('[data-race-kudos]').innerText(), /Cada mes podrás regalar diez puntos/);
+  await panel.getByText('5 puntos para…', { exact: true }).waitFor();
+  assert.match(await panel.locator('[data-race-kudos]').innerText(), /Cada semana podrás regalar cinco puntos/);
   assert.equal(await panel.locator('[data-league-member] [data-runner-avatar="pixel"]').count(), 13);
   assert.match(await panel.locator('[data-league-member="mariceth"]').innerText(), /Mariceth/);
   await shot('equipo-claro');
@@ -77,7 +77,7 @@ try {
   await panel.locator('[data-race-kudos-given]').waitFor();
   await tab('Mi mes').click();
   await tab('Equipo').click();
-  assert.match(await panel.locator('[data-race-kudos-given]').innerText(), /Este mes.*Helen/);
+  assert.match(await panel.locator('[data-race-kudos-given]').innerText(), /esta semana.*Helen/);
   await panel.locator('[data-race-kudos]').screenshot({ path: path.join(output, 'regalo-mensual.png') });
   await page.keyboard.press('Escape');
   await panel.waitFor({ state: 'hidden' });
@@ -143,7 +143,7 @@ try {
     const league = await response.json();
     league.score = 0; league.position = null; league.podium = []; league.nextStep = null;
     league.startsAt = '2026-11-03T13:00:00Z';
-    league.streak = { days: 0 }; league.kudos = { score: 0, received: [], givenThisMonth: null, monthlyBudget: 10 };
+    league.streak = { days: 0 }; league.kudos = { score: 0, received: [], givenThisWeek: null, weeklyBudget: 5, weekKey: '2026-W45' };
     league.race.lanes = league.race.lanes.map(person => ({ ...person, score: 0 }));
     league.today = { day: '2026-11-03', habits: {}, extras: {}, earned: 0, possible: 0, points: 0 };
     await route.fulfill({ response, json: league });

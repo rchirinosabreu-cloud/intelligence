@@ -84,3 +84,10 @@ test('existing comment paths with normalized ids still use the human vocabulary'
   assert.equal(labels.presentPlatformMutation(metadata, 'Helen').description, 'Helen editó un comentario.');
   assert.ok(JSON.stringify(labels.humanMutationWhere()).includes('"/api/tasks/:id/comments/:id"'));
 });
+
+
+test('league gifts and manual traffic awards have explicit human descriptions, guide reads do not',()=>{
+ assert.equal(labels.presentPlatformMutation({method:'POST',path:'/api/league/meetings'},'Admin').description,'Admin registró quién llegó primero a la reunión de tráfico.');
+ assert.equal(labels.presentPlatformMutation({method:'POST',path:'/api/league/kudos'}).visible,true);
+ assert.equal(labels.presentPlatformMutation({method:'POST',path:'/api/user/onboarding'}).visible,false);
+});

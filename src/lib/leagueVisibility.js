@@ -2,7 +2,7 @@
 // persona, como cuando activo Bria o algún acceso a los módulos»). Es la casilla «Liga del mes» de la ventana de
 // Equipo, guardada en `modulePermissions.liga` como la de Bria. Nadie la tiene por su cargo, tampoco un
 // administrador: se enciende persona por persona. El cálculo del servidor corre para todo el equipo de todas formas:
-// cuando se encienda, noviembre ya estará contado desde el 1.
+// cuando se encienda, el mes ya estará contado desde el inicio persistido de la liga.
 import { hasModuleAccess } from './platformModules.js';
 
 export const LEAGUE_PERMISSION_KEY = 'liga';

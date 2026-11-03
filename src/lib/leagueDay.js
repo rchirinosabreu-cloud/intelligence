@@ -119,9 +119,9 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], crea
     evidence.PRIMERO_EN_ABRIR = mine ? `Abrió primero${at ? `, a las ${at}` : ''}.` : `${firstOpener.name || 'Otra persona'} abrió primero${at ? `, a las ${at}` : ''}.`;
   }
 
-  // Primero en la reunión: declarado, todavía sin fuente. Nunca se inventa.
+  // Tráfico se suma desde su registro administrativo separado; no duplicarlo en las fotos diarias.
   extras.PRIMERO_EN_REUNION = null;
-  evidence.PRIMERO_EN_REUNION = 'La plataforma todavía no ve quién entra primero a la reunión.';
+  evidence.PRIMERO_EN_REUNION = 'El administrador confirma quién llegó primero a tráfico.';
 
   for (const habit of DAILY_HABITS) if (!(habit.key in habits)) habits[habit.key] = null;
   for (const extra of EXTRA_ACTIONS) if (!(extra.key in extras)) extras[extra.key] = null;

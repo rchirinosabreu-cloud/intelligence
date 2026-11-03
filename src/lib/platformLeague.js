@@ -1,13 +1,6 @@
-// La liga del buen uso de la plataforma (27 de octubre, 2 y 3 de noviembre de 2026): el reconocimiento mensual que
-// pidió la dirección para que el equipo use bien Brain Studio. Regla pura, compartida por la copa que se asoma a la
-// derecha, el panel «La carrera del mes», el aviso de las 3 y el cálculo del servidor.
-//
-// Los puntos se suman y no tienen techo (Rodny, 3 de noviembre de 2026: «serían cinco puntos por cada una de esas
-// acciones … seguiré pensando más»): cada hábito de un día hábil vale 5, cada extra del día vale 5 para una sola
-// persona (quien abre primero la plataforma desde las 8:00, quien entra primero a la reunión del equipo) y cada
-// regalo de bondad que el equipo te hace vale 10 (cada mes cada quien tendrá 10 para una sola persona; todavía en expectativa). Un día en
-// que un hábito no se pudo jugar (no cerró nada) no resta ni suma. Nunca cuenta cuántas tareas: así no gana quien
-// tiene más trabajo. Sin niveles ni barras: el puntaje, la posición y la pista.
+// Liga mensual: 5 por hábito, 5 por primera actividad, 10 por tráfico registrado,
+// 5 por reconocimiento nativo y regalos semanales de 5. Los regalos históricos conservan su valor.
+// Los empates comparten puesto. Una lectura nunca concede premios.
 
 /** Los cinco hábitos de cada día hábil. Son hábitos de uso, dichos como hábitos y nunca como juicio. */
 export const DAILY_HABITS = [
@@ -20,15 +13,18 @@ export const DAILY_HABITS = [
 
 /** Los extras del día: los gana una sola persona cada día. `source` dice de dónde los lee la plataforma. */
 export const EXTRA_ACTIONS = [
-  { key: 'PRIMERO_EN_ABRIR', label: 'Primero en abrir', hint: 'Fuiste el primero en ingresar a la plataforma desde las 8:00 am', source: 'La primera huella en la plataforma desde las 8:00 de Bogotá.' },
-  { key: 'PRIMERO_EN_REUNION', label: 'Primero en la reunión', hint: 'Fuiste el primero en ingresar a la reunión semanal', source: null }
+  { key: 'PRIMERO_EN_ABRIR', label: 'Primero en abrir', hint: 'Fuiste el primero en ingresar a la plataforma desde las 8:00 am', points: 5, source: 'La primera huella en la plataforma desde las 8:00 de Bogotá.' },
+  { key: 'PRIMERO_EN_REUNION', label: 'Primero en la reunión', hint: 'Fuiste el primero en ingresar a la reunión semanal', points: 10, source: 'Registro de un administrador para la reunión de tráfico.' }
 ];
 
 /** Cuánto vale cada cosa. */
 export const HABIT_POINTS = 5;
 export const EXTRA_POINTS = 5;
-export const KUDOS_MONTHLY = 10;
-export const KUDOS_VALUE = 10;
+export const KUDOS_WEEKLY = 5;
+export const KUDOS_VALUE = 5;
+export const MEETING_POINTS = 10;
+export const RECOGNITION_POINTS = 5;
+export const LEAGUE_RECOGNITION_KINDS = ['FIRST_TASK', 'EARLY_DELIVERY', 'DAILY_EIGHT', 'CAUGHT_UP', 'PLAN_APPROVED', 'WEEKLY_FIFTY'];
 
 /** Una insignia se enciende desde el 90 % de los días en que ese hábito se jugó. */
 export const BADGE_THRESHOLD = 0.9;
@@ -57,7 +53,7 @@ export function summarizeDays(days = []) {
     earned += dayEarned; possible += dayPossible;
     if (dayPossible > 0 && dayEarned === dayPossible) fullDays += 1;
   }
-  return { earned, possible, fullDays, extras, perHabit, perExtra, points: earned * HABIT_POINTS + extras * EXTRA_POINTS };
+  return { earned, possible, fullDays, extras, perHabit, perExtra, points: earned * HABIT_POINTS + EXTRA_ACTIONS.reduce((sum, extra) => sum + perExtra[extra.key] * extra.points, 0) };
 }
 
 /** Lo que pone la plataforma: hábitos y extras, en puntos. `null` si todavía no se jugó nada. */
@@ -67,18 +63,24 @@ export function habitsScore(days = []) {
   return points;
 }
 
-/** Lo que pone el equipo: cada regalo recibido vale 10, sin techo. */
+/** Lo que pone el equipo: cada regalo recibido conserva su valor, sin techo. */
 export function kudosScore(received = []) {
-  const count = Array.isArray(received) ? received.length : Number(received) || 0;
-  return count * KUDOS_VALUE;
+  if (Array.isArray(received)) return received.reduce((sum, gift) => sum + (Number.isFinite(gift.points) ? gift.points : KUDOS_VALUE), 0);
+  return (Number(received) || 0) * KUDOS_VALUE;
 }
 
-/** El puntaje del mes, entero. Sin días jugados y sin regalos, `null`. */
-export function leagueScore({ days = [], kudos = [] } = {}) {
+/** El puntaje del mes: hábitos, regalos, registros de tráfico y reconocimientos. */
+export function leagueScore({ days = [], kudos = [], meetings = 0, recognitions = 0 } = {}) {
   const habits = habitsScore(days);
   const team = kudosScore(kudos);
-  if (habits === null && !team) return null;
-  return Math.round((habits || 0) + team);
+  const awards = meetings * MEETING_POINTS + recognitions * RECOGNITION_POINTS;
+  if (habits === null && !team && !awards) return null;
+  return Math.round((habits || 0) + team + awards);
+}
+
+/** Shared competition rank: 1, 2, 2, 4. Alphabetical display never breaks a tie. */
+export function leagueRank(score, lanes = []) {
+  return score > 0 ? 1 + lanes.filter(lane => lane.score > score).length : null;
 }
 
 /** La tasa de cada hábito en el mes (días ganados sobre días jugados), con su insignia. */
@@ -116,7 +118,7 @@ export function todayPoints(entry) {
   }
   // `extrasEarned`, no `extras`: el día ya trae `extras` como objeto y esto se mezcla encima de él.
   const extrasEarned = EXTRA_ACTIONS.filter((extra) => entry?.extras?.[extra.key] === true).map((extra) => extra.key);
-  return { earned, possible, extrasEarned, points: earned * HABIT_POINTS + extrasEarned.length * EXTRA_POINTS };
+  return { earned, possible, extrasEarned, points: earned * HABIT_POINTS + EXTRA_ACTIONS.filter(extra => extrasEarned.includes(extra.key)).reduce((sum, extra) => sum + extra.points, 0) };
 }
 
 /** La escala de la pista: de 0 al techo redondo que cubre al puntero (nunca menos de 100), con cuatro marcas. */

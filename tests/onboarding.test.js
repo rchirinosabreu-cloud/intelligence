@@ -64,3 +64,18 @@ test('membership and mandatory password changes gate onboarding', async () => {
     await assert.rejects(() => acknowledgeOnboarding('u1', { guideId: 'welcome', version: 1, status: 'COMPLETED' }, db));
   }
 });
+
+
+test('league introduction is enabled explicitly for existing users and persists across sessions', async () => {
+  const { db, person, rows } = setup({ onboardingEligible: false, modulePermissions: { liga: true } });
+  assert.equal((await getOnboarding('u1', db)).progress.liga, undefined);
+  await acknowledgeOnboarding('u1', { guideId: 'liga', version: 1, status: 'COMPLETED' }, db);
+  await acknowledgeOnboarding('u1', { guideId: 'liga', version: 1, status: 'SKIPPED' }, db);
+  assert.equal((await getOnboarding('u1', db)).progress.liga, 'COMPLETED');
+  assert.equal((await getOnboarding('other', db)).progress.liga, undefined);
+  person.modulePermissions.liga = false;
+  await assert.rejects(acknowledgeOnboarding('u1', { guideId: 'liga', version: 1, status: 'COMPLETED' }, db), e => e.statusCode === 403);
+  person.role = 'ADMIN';
+  await assert.rejects(acknowledgeOnboarding('u1', { guideId: 'liga', version: 1, status: 'SKIPPED' }, db), e => e.statusCode === 403);
+  assert.equal(rows.size, 1);
+});

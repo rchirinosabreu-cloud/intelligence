@@ -33,17 +33,32 @@ export const createPlatformLeagueRepository = ({ pool }) => ({
   /** Los regalos recibidos en el mes de Bogotá, dentro de esta edición. */
   async kudosOfMonth(monthKey) {
     const [year, month] = monthKey.split('-').map(Number);
-    const { rows } = await pool.query(`SELECT id, week_key, giver_member_id, receiver_member_id, note, created_at
+    const { rows } = await pool.query(`SELECT id, week_key, giver_member_id, receiver_member_id, note, points, created_at
       FROM bria_memory.league_run_kudos WHERE run_id = $1 AND created_at >= $2 AND created_at < $3 ORDER BY created_at`,
     [LEAGUE_RUN_ID, new Date(`${monthKey}-01T05:00:00.000Z`), new Date(Date.UTC(year, month, 1, 5))]);
     return rows;
   },
 
-  /** Un regalo del mes de Bogotá; la base rechaza el segundo de la misma persona (23505). */
+  async givenInWeek(memberId, weekKey) {
+    const { rows } = await pool.query(`SELECT receiver_member_id, note, points FROM bria_memory.league_run_kudos
+      WHERE run_id=$1 AND giver_member_id=$2 AND week_key=$3 ORDER BY created_at LIMIT 1`, [LEAGUE_RUN_ID, memberId, weekKey]);
+    return rows[0] || null;
+  },
+  async meetingsOfMonth(monthKey) {
+    const { rows } = await pool.query(`SELECT id, week_key, day_key, member_id, awarded_by FROM bria_memory.league_meeting_awards
+      WHERE run_id=$1 AND day_key LIKE $2 ORDER BY day_key`, [LEAGUE_RUN_ID, `${monthKey}-%`]);
+    return rows;
+  },
+  async awardMeeting({ week_key, day_key, member_id, awarded_by }) {
+    const { rows } = await pool.query(`INSERT INTO bria_memory.league_meeting_awards(run_id,week_key,day_key,member_id,awarded_by)
+      VALUES($1,$2,$3,$4,$5) RETURNING id`, [LEAGUE_RUN_ID, week_key, day_key, member_id, awarded_by]);
+    return rows[0];
+  },
+  /** Un regalo de cinco puntos por semana de Bogotá; la base rechaza el segundo (23505). */
   async giveKudos({ giver_member_id, receiver_member_id, note, created_at = new Date() }) {
     const { rows } = await pool.query(`INSERT INTO bria_memory.league_run_kudos(run_id, week_key, giver_member_id, receiver_member_id, note, created_at)
       VALUES ($1, to_char($2::timestamptz AT TIME ZONE 'America/Bogota', 'IYYY-"W"IW'), $3, $4, $5, $2)
-      RETURNING id, week_key, giver_member_id, receiver_member_id, note, created_at`, [LEAGUE_RUN_ID, created_at, giver_member_id, receiver_member_id, note]);
+      RETURNING id, week_key, giver_member_id, receiver_member_id, note, points, created_at`, [LEAGUE_RUN_ID, created_at, giver_member_id, receiver_member_id, note]);
     return rows[0];
   }
 });

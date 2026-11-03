@@ -7,48 +7,32 @@ import { briaTestDatabaseUrl } from './support/briaTestDatabase.js';
 import { createPlatformLeagueRepository } from '../src/services/platformLeagueRepository.js';
 
 const connectionString = briaTestDatabaseUrl();
-test('PostgreSQL: restart preserves launch, pilot remains separate, monthly gift is atomic', { skip: !connectionString }, async () => {
-  const database = new pg.Pool({ connectionString, max: 3 });
-  const schema = `league_test_${randomUUID().replaceAll('-', '')}`;
-  const sql = (await readFile(new URL('../scripts/sql/bria-league.sql', import.meta.url), 'utf8')).replaceAll('bria_memory', schema);
-  const pool = { query: (text, args) => database.query(text.replaceAll('bria_memory', schema), args) };
-  const repo = createPlatformLeagueRepository({ pool });
-  try {
-    // Upgrade a real weekly schema containing two historical gifts in the same month.
-    await database.query(sql.split('-- El cupo mensual')[0]);
-    await pool.query(`INSERT INTO bria_memory.league_run_kudos(run_id,week_key,giver_member_id,receiver_member_id,created_at)
-      VALUES ('fresh-start-2026-11','2000-W02','previous','person','2000-01-10T15:00:00Z'),
-             ('fresh-start-2026-11','2000-W03','previous','person','2000-01-17T15:00:00Z')`);
-    await database.query(sql);
-    assert.equal((await repo.kudosOfMonth('2000-01')).length, 2, 'upgrade preserves all existing gifts');
-    await assert.rejects(repo.giveKudos({ giver_member_id: 'previous', receiver_member_id: 'person', note: '', created_at: new Date('2000-01-24T15:00:00Z') }), e => e.code === '23505');
-    const launch = await repo.startedAt();
-    await database.query(sql);
-    assert.equal((await repo.startedAt()).getTime(), launch.getTime());
-    const month = new Date(launch.getTime() - 5 * 3600000).toISOString().slice(0, 7);
-    const day = `${month}-01`;
-    await pool.query("INSERT INTO bria_memory.league_days(day_key,member_id,habits) VALUES ($1,'person','{\"RELOJ\":true}')", [day]);
-    await pool.query("INSERT INTO bria_memory.league_kudos(week_key,giver_member_id,receiver_member_id) VALUES ('2026-W45','giver','person')");
-    assert.deepEqual(await repo.computedDays(month), []);
-    assert.deepEqual(await repo.daysOfMonth(month, { before: `${month}-31` }), []);
-    assert.deepEqual(await repo.kudosOfMonth(month), []);
-    await repo.saveDays([{ day_key: day, member_id: 'person', habits: { RELOJ: false }, evidence: {}, extras: {} }]);
-    await repo.saveDays([{ day_key: day, member_id: 'person', habits: { RELOJ: true }, evidence: {}, extras: {} }]);
-    assert.deepEqual(await repo.computedDays(month), [day]);
-    assert.equal((await repo.daysOfMonth(month, { before: `${month}-31` })).length, 1);
-    const attempts = await Promise.allSettled([3, 17].map(day => repo.giveKudos({ created_at: new Date(`${month}-${String(day).padStart(2, '0')}T15:00:00Z`), giver_member_id: 'giver', receiver_member_id: 'person', note: 'Gracias' })));
-    assert.equal(attempts.filter(r => r.status === 'fulfilled').length, 1);
-    assert.equal(attempts.find(r => r.status === 'rejected').reason.code, '23505');
-    assert.equal((await repo.kudosOfMonth(month)).length, 1);
-    // November 30 and December 1 share an ISO week; UTC December 1 before 05:00 is still November.
-    await repo.giveKudos({ giver_member_id: 'boundary', receiver_member_id: 'person', note: '', created_at: new Date('2026-11-30T15:00:00Z') });
-    await assert.rejects(repo.giveKudos({ giver_member_id: 'boundary', receiver_member_id: 'person', note: '', created_at: new Date('2026-12-01T04:59:59Z') }), e => e.code === '23505');
-    await repo.giveKudos({ giver_member_id: 'boundary', receiver_member_id: 'person', note: '', created_at: new Date('2026-12-01T05:00:00Z') });
-    await database.query(sql);
-    await assert.rejects(repo.giveKudos({ giver_member_id: 'boundary', receiver_member_id: 'person', note: '', created_at: new Date('2026-12-15T15:00:00Z') }), e => e.code === '23505');
-    assert.equal((await pool.query('SELECT count(*)::int AS n FROM bria_memory.league_kudos')).rows[0].n, 1, 'pilot remains intact');
-  } finally {
-    await database.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);
-    await database.end();
-  }
+test('PostgreSQL: weekly gifts and meeting winners are atomic, old points and the launch survive the upgrade', { skip: !connectionString }, async () => {
+ const database=new pg.Pool({connectionString,max:3});const schema='league_test_'+randomUUID().replaceAll('-','');
+ const sql=(await readFile(new URL('../scripts/sql/bria-league.sql',import.meta.url),'utf8')).replaceAll('bria_memory',schema);
+ const pool={query:(text,args)=>database.query(text.replaceAll('bria_memory',schema),args)};
+ const repo=createPlatformLeagueRepository({pool});
+ try {
+  await database.query(sql.split('-- Cupo semanal')[0]);
+  await pool.query(`INSERT INTO bria_memory.league_run_kudos(run_id,week_key,giver_member_id,receiver_member_id,created_at)
+   VALUES('fresh-start-2026-11','2026-W49','legacy','person','2026-11-30T15:00:00Z'),('fresh-start-2026-11','2026-W49','legacy','person','2026-12-01T15:00:00Z')`);
+  const launch=await repo.startedAt();await database.query(sql);await database.query(sql);
+  assert.equal((await repo.startedAt()).getTime(),launch.getTime());
+  assert.equal((await repo.kudosOfMonth('2026-11'))[0].points,10,'historical ten-point gifts keep their value');
+  assert.equal((await repo.kudosOfMonth('2026-12')).length,1);
+  const give=(who,date)=>repo.giveKudos({giver_member_id:who,receiver_member_id:'person',note:'Gracias',created_at:new Date(date)});
+  await assert.rejects(give('legacy','2026-12-02T15:00:00Z'),e=>e.code==='23505');
+  const gifts=await Promise.allSettled(['2026-11-03T15:00:00Z','2026-11-04T15:00:00Z'].map(date=>give('giver',date)));
+  assert.equal(gifts.filter(r=>r.status==='fulfilled').length,1);assert.equal(gifts.find(r=>r.status==='fulfilled').value.points,5);
+  assert.equal(gifts.find(r=>r.status==='rejected').reason.code,'23505');
+  await assert.rejects(give('giver','2026-11-09T04:59:59Z'),e=>e.code==='23505');
+  await give('giver','2026-11-09T05:00:00Z');
+  assert.equal((await repo.givenInWeek('giver','2026-W46')).points,5);
+  const meetings=await Promise.allSettled(['person','other'].map(member_id=>repo.awardMeeting({week_key:'2026-W45',day_key:'2026-11-03',member_id,awarded_by:'admin'})));
+  assert.equal(meetings.filter(r=>r.status==='fulfilled').length,1);
+  assert.equal(meetings.find(r=>r.status==='rejected').reason.code,'23505');
+  assert.equal((await repo.meetingsOfMonth('2026-11'))[0].awarded_by,'admin');
+  await database.query(sql);
+  assert.equal((await repo.kudosOfMonth('2026-11')).length,3);
+ } finally {await database.query(`DROP SCHEMA IF EXISTS ${schema} CASCADE`);await database.end();}
 });

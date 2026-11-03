@@ -8,7 +8,9 @@ const avatar = read('src/components/league/RunnerAvatar.jsx');
 
 test('recognition remains an opt-in side panel, outside the dashboard', () => {
   const layout = read('src/components/layout/AppLayout.jsx');
-  assert.match(layout, /canUseLeague\(currentUser\)/);
+  assert.match(layout, /<LeagueInvitation/);
+  assert.match(read('src/components/onboarding/OnboardingProvider.jsx'), /available: canUseLeague\(user\)/);
+  assert.match(read('src/components/league/LeagueInvitation.jsx'), /!welcome\?\.available/);
   assert.match(layout, /enabled=\{!isOnboardingBlocking\}/);
   assert.doesNotMatch(read('src/components/modules/Dashboard.jsx'), /DashboardLeague|RaceOfTheMonth|dashboard\.league/);
   assert.match(dock, /has\('carrera'\)/);
