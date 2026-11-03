@@ -152,3 +152,15 @@ Las capturas quedan en `output/recognitions`. `real-api-popup.png` procede de un
 ## Fuentes
 
 Fuentes primarias consultadas: Motion, repositorio `motiondivision/motion` y guía de accesibilidad; `catdad/canvas-confetti`, README y licencia; Rive, documentación de React, runtimes y renderer; LottieFiles, SDK React, formato dotLottie, interactividad y licencia de recursos; GSAP, integración React y licencia estándar; Anime.js, documentación técnica. Los enlaces aparecen junto a cada afirmación para distinguir capacidades documentadas de recomendaciones para Brain.
+
+## Panel mensual de reconocimientos (2 de noviembre de 2026)
+
+El panel de la copa ahora tiene tres pestañas: **Mi mes**, **Logros** y **Equipo**. Sustituye la pista por una clasificación con nombres visibles, podio y personajes grandes. Conserva el acceso opt-in de Equipo, el enlace `?carrera`, el comportamiento no modal, el foco al cerrar, los temas claro/oscuro y el movimiento reducido. Los regalos semanales conservan su API y su valor.
+
+Los trece personajes aprobados, incluida Mariceth, viven en `src/assets/team-pixel` y se importan desde `pixelAvatars.js`; Vite los empaqueta con hash. El servicio entrega `pixelAvatarKey` desde la plantilla activa: solo se asigna un personaje si su nombre de presentación coincide exactamente con un alias conocido y es único. No modifica fichas ni permisos. Un nombre nuevo, ambiguo o una imagen que falla conserva el avatar habitual. Si cambian los nombres del equipo, se debe revisar `leagueAvatarIdentity.js`; no se infieren identidades por parecido.
+
+`GET /api/league/recognitions` consulta exclusivamente reconocimientos persistidos del usuario autenticado en el mes de Bogotá, con los permisos de Gestión/Parrillas. Devuelve conteos por categoría y los doce eventos más recientes, con indicador de lista parcial. Solo expone id, categoría y fecha: no abre títulos, tareas ni clientes, no reclama avisos, no marca entregas vistas y no guarda premios. Carga y error de esta colección están separados del puntaje; un fallo no se presenta como una colección vacía.
+
+El rediseño **no cambia las fórmulas del mes ni añade puntos por insignias**. El extra de reunión se muestra como próximo porque no tiene fuente. «Primero en abrir» explica su fuente real: primera actividad registrada desde las 8:00 a. m., que no demuestra por sí sola una apertura de pestaña. No se inventa el premio del mes.
+
+Verificación local: `tests/leagueAvatarIdentity.test.js`, `tests/platformLeagueService.test.js`, `tests/platformLeagueRoutes.test.js`, `tests/platformLeagueUi.test.js` y los contratos existentes de puntajes/reconocimientos. `node tests/browser/platformLeague.mjs` recorre componentes reales contra API simulada, prueba pestañas, los trece PNG empaquetados, regalos, errores y recuperación, vacío, teclado, movimiento reducido, móvil, ambos temas y el enlace del aviso de Bria. Capturas: `output/recognition-panel`. No acredita datos ni despliegue de producción.

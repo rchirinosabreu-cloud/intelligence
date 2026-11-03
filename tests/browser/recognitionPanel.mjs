@@ -1,0 +1,115 @@
+// Real components, isolated API, no production database.
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import path from 'node:path';
+import { chromium } from 'playwright-core';
+import { createDashboardPreview } from '../../scripts/preview-dashboard.js';
+
+const output = process.env.SCREENSHOT_DIR || 'output/recognition-panel';
+await mkdir(output, { recursive: true });
+const preview = await createDashboardPreview({ port: 3261 });
+const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe' });
+const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+page.setDefaultNavigationTimeout(90000);
+const errors = [];
+page.on('pageerror', error => errors.push(error.message));
+const panel = page.locator('[data-league-panel]');
+const tab = name => panel.getByRole('tab', { name, exact: true });
+const shot = async name => {
+  await page.waitForFunction(() => document.fonts.status === 'loaded');
+  await page.waitForTimeout(250);
+  await panel.screenshot({ path: path.join(output, `${name}.png`) });
+};
+try {
+  await page.goto(`${preview.origin}/`);
+  const dock = page.locator('[data-league-dock]');
+  await dock.click();
+  await tab('Mi mes').waitFor({ timeout: 10000 });
+  assert.equal(await tab('Mi mes').getAttribute('aria-selected'), 'true');
+  assert.match(await panel.locator('[data-race-panel-score]').innerText(), /70\s*puntos/);
+  assert.equal(await panel.locator('[data-race-track]').count(), 0);
+  const avatar = panel.locator('[data-race-hero] [data-runner-avatar="pixel"]');
+  await avatar.waitFor();
+  assert.match(await avatar.getAttribute('src'), /assets\/team-pixel\/rodny/);
+  await page.waitForFunction(() => [...document.querySelectorAll('[data-league-panel] img')].every(img => img.complete && img.naturalWidth > 0));
+  assert.ok((await panel.boundingBox()).width <= 400);
+  assert.equal(await page.locator('[data-dashboard-league]').count(), 0);
+  assert.ok(await page.getByRole('heading', { name: 'Anuncios' }).isVisible());
+  await shot('mi-mes-claro');
+  await tab('Logros').click();
+  await panel.locator('[data-recognition-collection]').waitFor();
+  assert.equal(await panel.locator('[data-recognition-badge]').count(), 6);
+  assert.equal(await panel.locator('[data-recognition-badge="FIRST_TASK"]').getAttribute('data-earned'), 'true');
+  assert.equal(await panel.locator('[data-recognition-badge="WEEKLY_FIFTY"]').getAttribute('data-earned'), 'false');
+  assert.equal(await panel.locator('[data-recognition-history] li').count(), 4);
+  await shot('logros-claro');
+  await tab('Equipo').click();
+  assert.equal(await panel.locator('[data-league-member]').count(), 13);
+  assert.equal(await panel.locator('[data-league-member] [data-runner-avatar="pixel"]').count(), 13);
+  assert.match(await panel.locator('[data-league-member="mariceth"]').innerText(), /Mariceth/);
+  await shot('equipo-claro');
+  await panel.locator('[data-race-kudos-open]').click();
+  await panel.locator('input[name="kudos-to"][value="helen"]').check();
+  await panel.getByPlaceholder('Una línea: por qué').fill('Gracias por ayudarme con la entrega.');
+  const [request] = await Promise.all([
+    page.waitForRequest(req => req.url().endsWith('/api/league/kudos') && req.method() === 'POST'),
+    panel.getByRole('button', { name: 'Regalar', exact: true }).click(),
+  ]);
+  assert.deepEqual(request.postDataJSON(), { memberId: 'helen', note: 'Gracias por ayudarme con la entrega.' });
+  await panel.locator('[data-race-kudos-given]').waitFor();
+  await tab('Mi mes').click();
+  await tab('Equipo').click();
+  assert.match(await panel.locator('[data-race-kudos-given]').innerText(), /Helen/);
+  await page.keyboard.press('Escape');
+  await panel.waitFor({ state: 'hidden' });
+  assert.equal(await dock.evaluate(el => el === document.activeElement), true, 'closing returns focus to the dock');
+
+  await page.goto(`${preview.origin}/?carrera&dark`);
+  await tab('Mi mes').waitFor();
+  await shot('mi-mes-oscuro');
+  await tab('Mi mes').focus();
+  await page.keyboard.press('ArrowRight');
+  assert.equal(await tab('Logros').getAttribute('aria-selected'), 'true');
+  await shot('logros-oscuro');
+  await tab('Equipo').click();
+  await shot('equipo-oscuro');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  assert.equal(await panel.locator('[data-runner-avatar]').first().evaluate(el => getComputedStyle(el).animationName), 'none');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${preview.origin}/?carrera`);
+  await tab('Mi mes').waitFor();
+  await shot('mi-mes-movil');
+  const box = await panel.boundingBox();
+  assert.ok(box.x >= 0 && box.x + box.width <= 390);
+  for (const name of ['Mi mes', 'Logros', 'Equipo']) {
+    await tab(name).click();
+    assert.equal(await panel.evaluate(el => el.scrollWidth <= el.clientWidth), true);
+  }
+  await shot('equipo-movil');
+
+  await page.route('**/api/league/recognitions', route => route.fulfill({ status: 500, contentType: 'application/json', body: '{"error":"No pudimos cargar tus logros."}' }));
+  await page.goto(`${preview.origin}/?carrera`);
+  await tab('Logros').click();
+  await panel.getByText('No pudimos cargar tus logros.').waitFor();
+  assert.equal(await panel.locator('[data-recognition-badge]').count(), 0, 'failed history is not an empty collection');
+  await page.unroute('**/api/league/recognitions');
+  await panel.getByRole('button', { name: 'Reintentar logros' }).click();
+  await panel.locator('[data-recognition-collection]').waitFor();
+
+  await page.route('**/api/league/recognitions', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ month: '2026-11', total: 0, counts: {}, recent: [], hasMore: false }) }));
+  await page.goto(`${preview.origin}/?carrera`);
+  await tab('Logros').click();
+  await panel.getByText('Tu colección de noviembre está por comenzar.').waitFor();
+  assert.equal(await panel.locator('[data-earned="true"]').count(), 0);
+  await page.unroute('**/api/league/recognitions');
+  await page.goto(`${preview.origin}/?liga=no`);
+  await page.getByRole('heading', { name: 'Anuncios' }).waitFor();
+  await page.waitForTimeout(600);
+  assert.equal(await dock.count(), 0);
+  assert.deepEqual(errors, []);
+  console.log(JSON.stringify({ passed: true, output, simulatedApi: true, realComponents: true }));
+} catch (error) {
+  console.error({ pageErrors: errors, body: (await page.locator('body').innerText()).slice(0, 2500) });
+  await page.screenshot({ path: path.join(output, 'failure.png') });
+  throw error;
+} finally { await browser.close(); await preview.close(); }
