@@ -21,7 +21,13 @@ window.fetch = async () => new Response(JSON.stringify(user), { headers: { 'Cont
 const client = { id: 'demo-client', name: 'Cliente de muestra', slug: 'cliente-muestra' };
 // Un cliente archivado que sigue debiendo: tiene que poder elegirse, marcado.
 const archivedClient = { id: 'demo-archived', name: 'Cliente archivado', slug: 'cliente-archivado', isArchived: true };
-const account = { id: 'demo-account', name: 'Banco de muestra', type: 'BANK', currency: 'COP', balance: 4000000 };
+const account = { id: 'demo-account', name: 'Banco de muestra', type: 'BANK', currency: 'COP', balance: 4000000, institution: 'Bancolombia', holderName: 'Brain Studio Agencia Creativa S.A.S.', holderType: 'COMPANY', identificationType: 'NIT', identificationNumber: '901533409-4', lastFour: '3251', isThirdPartyHeld: false, isActive: true, openingBalance: 905350, openingBalanceDate: '2025-12-31T12:00:00.000Z' };
+// Una cuenta que no es de la empresa: el caso real de la plata que está en la cuenta
+// personal de un socio. La tarjeta lo dice sin que haya que abrir nada.
+const heldAccount = { id: 'demo-account-wise', name: 'Wise', type: 'BANK', currency: 'COP', balance: 2500000, institution: 'Wise', holderName: 'Francisco Villa', holderType: 'PERSON', identificationType: 'CC', identificationNumber: '73.123.456', lastFour: '0345', isThirdPartyHeld: true, isActive: true, openingBalance: 2500000, openingBalanceDate: '2026-11-03T12:00:00.000Z' };
+// Y una sin detalles, para ver que la tarjeta sigue diciendo al menos qué clase de cuenta es.
+const plainAccount = { id: 'demo-account-caja', name: 'Caja menor', type: 'CASH', currency: 'COP', balance: 150000, institution: null, holderName: null, holderType: 'COMPANY', identificationType: null, identificationNumber: null, lastFour: null, isThirdPartyHeld: false, isActive: true, openingBalance: 150000, openingBalanceDate: '2026-01-01T12:00:00.000Z' };
+const accounts = [account, heldAccount, plainAccount];
 let debt = { id: 'demo-debt', clientId: client.id, clientName: client.name, clientSlug: client.slug, sourceLabel: client.name, amount: 1200000, outstanding: 800000, paidAmount: 400000, status: 'PROMESADO', year: 2026, month: 9, period: '2026-09-01T00:00:00Z', dueDate: null, payments: [], comments: 'Promesa de pago acordada. Datos ficticios.' };
 if (new URLSearchParams(location.search).has('legacyPaid')) debt = { ...debt, outstanding: null, paidAmount: 0, status: 'PAGADO', balanceReviewRequired: true };
 // ?usd: la cuenta de Foobspain (19 de octubre de 2026): USD 300 a TRM 4.000 = 1.200.000 en cartera, sin abonos.
@@ -303,7 +309,23 @@ axios.defaults.adapter = async config => {
   else if (path.includes('/records/') && path.includes('/documents/') && path.endsWith('/file')) {
     data = new Blob([samplePdf('Comprobante de pago (muestra)')], { type: 'application/pdf' });
   }
-  else if (path.endsWith('/accounts')) data = { accounts: [account] };
+  // Crear y corregir una cuenta (3 de noviembre de 2026): la misma ventana, POST o PATCH.
+  else if (path.endsWith('/accounts') && config.method === 'post') {
+    const created = { id: `account-${accounts.length + 1}`, balance: Number(body.openingBalance) || 0, currency: 'COP', isActive: true, ...body };
+    accounts.push(created);
+    (window.__accountWrites ||= []).push({ method: 'post', body });
+    data = { message: 'Cuenta creada correctamente.', account: created };
+  }
+  else if (path.includes('/accounts/') && config.method === 'patch') {
+    const id = path.split('/accounts/')[1];
+    const index = accounts.findIndex((item) => item.id === id);
+    // Como el servidor: no se toca ni la moneda ni si la cuenta está activa.
+    const { currency, isActive, ...rest } = body;
+    accounts[index] = { ...accounts[index], ...rest, balance: Number(body.openingBalance) || accounts[index].balance };
+    (window.__accountWrites ||= []).push({ method: 'patch', id, body });
+    data = { message: 'Cuenta actualizada correctamente.', account: accounts[index] };
+  }
+  else if (path.endsWith('/accounts')) data = { accounts };
   // TRM oficial ficticia, como la devuelve el servidor.
   else if (path.endsWith('/exchange-rate')) data = { rate: 3912.45, source: 'SUPERFINANCIERA_TRM', validFrom: '2026-09-30T00:00:00.000', validTo: '2026-09-30T00:00:00.000' };
   else if (path === '/api/clients') data = url.searchParams.get('isArchived') === 'all' ? [client, archivedClient] : [client];

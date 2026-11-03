@@ -47,6 +47,7 @@ import { buildMovementDraft, clearMovementDraft, draftMatchesRecord, readMovemen
 import { invalidateFinancialQueries } from '@/utils/financialQueryCache';
 import { clientOptions } from '@/utils/financialClients';
 import { FINANCIAL_CATEGORY_OPTIONS, financialCategoryLabel } from '@/lib/financialCategories';
+import { PARTY_DOCUMENT_TYPES } from '@/lib/partyIdentity';
 
 const PAGE_SIZE = 25;
 
@@ -103,19 +104,50 @@ const emptyForm = (year) => ({
     accountId: ''
 });
 
+// Una cuenta es su nombre, de quién es y con cuánto arranca. Todo lo que no sea el
+// nombre, el tipo y el saldo es opcional: una caja menor no tiene titular ni banco.
 const emptyAccountForm = (year) => ({
     name: '',
     type: 'BANK',
-    currency: 'COP',
+    institution: '',
+    holderName: '',
+    holderType: 'COMPANY',
+    identificationType: '',
+    identificationNumber: '',
+    lastFour: '',
+    isThirdPartyHeld: false,
     openingBalance: '0',
     openingBalanceDate: `${year}-01-01`
 });
+
+/** La misma ventana sirve para crear y para corregir: se abre con lo que ya tiene la cuenta. */
+const accountFormFrom = (account) => ({
+    name: account.name || '',
+    type: account.type || 'BANK',
+    institution: account.institution || '',
+    holderName: account.holderName || '',
+    holderType: account.holderType || 'COMPANY',
+    identificationType: account.identificationType || '',
+    identificationNumber: account.identificationNumber || '',
+    lastFour: account.lastFour || '',
+    isThirdPartyHeld: account.isThirdPartyHeld === true,
+    openingBalance: String(Number(account.openingBalance) || 0),
+    openingBalanceDate: String(account.openingBalanceDate || '').slice(0, 10)
+});
+
+/** «Wise · ••0345», lo que hace falta para reconocerla en un extracto. */
+export const accountSubtitle = (account) => [
+    account.institution,
+    account.lastFour ? `••${account.lastFour}` : null,
+    account.isThirdPartyHeld && account.holderName ? `a nombre de ${account.holderName}` : null
+].filter(Boolean).join(' · ');
 
 const authHeaders = () => ({
     Authorization: `Bearer ${localStorage.getItem('authToken')}`
 });
 
-const inputClass = 'w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-violet-500 focus:ring-2 focus:ring-violet-500/10 dark:border-white/10 dark:bg-zinc-950 dark:text-white';
+// El foco usa el cian de la marca, no el morado heredado (paleta oficial, 18 de septiembre de 2026).
+const inputClass = 'w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 outline-none transition focus:border-brand-cyan focus:ring-2 focus:ring-brand-cyan/10 dark:border-white/10 dark:bg-zinc-950 dark:text-white';
 
 const scenarioTone = {
     ACTUAL: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-500/10 dark:text-emerald-300',
@@ -169,6 +201,8 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
     const documentInputRef = useRef(null);
     const [isAccountEditorOpen, setIsAccountEditorOpen] = useState(false);
     const [accountForm, setAccountForm] = useState(() => emptyAccountForm(selectedYear));
+    // Null mientras se crea una cuenta; la cuenta que se está corrigiendo si no.
+    const [editingAccount, setEditingAccount] = useState(null);
     const [isSavingAccount, setIsSavingAccount] = useState(false);
     const [isClosePeriodOpen, setIsClosePeriodOpen] = useState(false);
     const [closePeriodNotes, setClosePeriodNotes] = useState('');
@@ -502,22 +536,37 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
         }
     };
 
+    const openNewAccount = () => {
+        setEditingAccount(null);
+        setAccountForm(emptyAccountForm(selectedYear));
+        setIsAccountEditorOpen(true);
+    };
+
+    const openAccountEditor = (account) => {
+        setEditingAccount(account);
+        setAccountForm(accountFormFrom(account));
+        setIsAccountEditorOpen(true);
+    };
+
     const saveAccount = async (event) => {
         event.preventDefault();
         setIsSavingAccount(true);
+        const isEditing = Boolean(editingAccount?.id);
         try {
             const baseUrl = getApiBaseUrl();
-            const response = await axios.post(`${baseUrl}/api/financials/accounts`, {
-                ...accountForm,
-                openingBalance: Number(accountForm.openingBalance)
-            }, { headers: authHeaders() });
+            const payload = { ...accountForm, openingBalance: Number(accountForm.openingBalance) };
+            const response = isEditing
+                ? await axios.patch(`${baseUrl}/api/financials/accounts/${editingAccount.id}`, payload, { headers: authHeaders() })
+                : await axios.post(`${baseUrl}/api/financials/accounts`, payload, { headers: authHeaders() });
             await queryClient.invalidateQueries({ queryKey: ['financial-accounts'] });
-            setField('accountId', response.data.account.id);
+            // Corregir una cuenta no debe cambiar la cuenta elegida en el movimiento que se esté escribiendo.
+            if (!isEditing) setField('accountId', response.data.account.id);
             setIsAccountEditorOpen(false);
-            toast.success('Cuenta financiera creada');
+            setEditingAccount(null);
+            toast.success(isEditing ? 'Cuenta actualizada' : 'Cuenta financiera creada');
         } catch (requestError) {
-            console.error('Error creating financial account:', requestError.response?.data || requestError);
-            toast.error(requestError.response?.data?.message || 'No fue posible crear la cuenta.');
+            console.error('Error saving financial account:', requestError.response?.data || requestError);
+            toast.error(requestError.response?.data?.message || (isEditing ? 'No fue posible actualizar la cuenta.' : 'No fue posible crear la cuenta.'));
         } finally {
             setIsSavingAccount(false);
         }
@@ -633,7 +682,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                     {canApprove && (
                         <button
                             type="button"
-                            onClick={() => { setAccountForm(emptyAccountForm(selectedYear)); setIsAccountEditorOpen(true); }}
+                            onClick={openNewAccount}
                             className="inline-flex h-10 items-center justify-center gap-2 rounded-lg border border-zinc-200 px-4 text-sm font-medium text-zinc-700 transition hover:bg-zinc-50 dark:border-white/10 dark:text-zinc-200 dark:hover:bg-white/5"
                         >
                             <Wallet className="h-4 w-4" />
@@ -671,7 +720,7 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                     {accounts.map((account) => {
                         const isActive = selectedAccountId === account.id;
                         return (
-                            <div key={account.id} className="flex items-center justify-between border-b border-zinc-200 py-3 dark:border-white/10">
+                            <div key={account.id} data-account-card={account.id} className="flex items-center justify-between gap-2 border-b border-zinc-200 py-3 dark:border-white/10">
                                 <div className="flex min-w-0 items-center gap-3">
                                     {/* Tocar la cuenta filtra el libro por ella; tocarla de nuevo lo suelta. */}
                                     <button
@@ -684,17 +733,32 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                                             'grid h-9 w-9 shrink-0 place-items-center rounded-lg transition focus:outline-none focus-visible:ring-2 focus-visible:ring-[#009EB9]/40',
                                             isActive
                                                 ? 'bg-[#009EB9] text-white'
-                                                : 'bg-violet-50 text-violet-600 hover:bg-violet-100 dark:bg-violet-500/10 dark:text-violet-300 dark:hover:bg-violet-500/20'
+                                                : 'bg-brand-cyan-soft text-brand-cyan-deep hover:bg-brand-cyan/20 dark:bg-brand-cyan/10 dark:text-brand-cyan dark:hover:bg-brand-cyan/20'
                                         )}
                                     >
                                         <Wallet className="h-4 w-4" />
                                     </button>
                                     <div className="min-w-0">
                                         <p className={cn('truncate text-sm font-medium', isActive ? 'text-[#009EB9]' : 'text-zinc-900 dark:text-white')}>{account.name}</p>
-                                        <p className="text-xs text-zinc-500">{isActive ? 'Filtrando por esta cuenta' : account.type === 'BANK' ? 'Banco' : account.type === 'CASH' ? 'Caja' : 'Otra cuenta'}</p>
+                                        {/* Lo que hace falta para reconocerla en un extracto; si no se dijo, al menos qué clase de cuenta es. */}
+                                        <p data-account-subtitle className="truncate text-xs text-zinc-500">{isActive ? 'Filtrando por esta cuenta' : accountSubtitle(account) || (account.type === 'BANK' ? 'Banco' : account.type === 'CASH' ? 'Caja' : 'Otra cuenta')}</p>
                                     </div>
                                 </div>
-                                <div className="text-right"><p className="text-xs text-zinc-500">Saldo total de la cuenta</p><p className="text-sm font-semibold text-zinc-900 dark:text-white">{formatCurrency(Number(account.balance))}</p></div>
+                                <div className="flex shrink-0 items-center gap-1">
+                                    <div className="text-right"><p className="text-xs text-zinc-500">Saldo total de la cuenta</p><p className="text-sm font-semibold text-zinc-900 dark:text-white">{formatCurrency(Number(account.balance))}</p></div>
+                                    {canApprove && (
+                                        <button
+                                            type="button"
+                                            data-account-edit={account.id}
+                                            onClick={() => openAccountEditor(account)}
+                                            aria-label={`Editar la cuenta ${account.name}`}
+                                            title="Corregir los datos de esta cuenta"
+                                            className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-zinc-400 transition hover:bg-zinc-100 hover:text-zinc-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#009EB9]/40 dark:hover:bg-white/5 dark:hover:text-white"
+                                        >
+                                            <Edit className="h-4 w-4" />
+                                        </button>
+                                    )}
+                                </div>
                             </div>
                         );
                     })}
@@ -947,17 +1011,46 @@ const FinancialLedger = ({ selectedYear, filters = { scenario: 'ACTUAL', month: 
                 </DialogContent>
             </Dialog>
 
-            <Dialog open={isAccountEditorOpen} onOpenChange={setIsAccountEditorOpen}>
-                <DialogContent className="sm:max-w-md dark:bg-zinc-900">
-                    <DialogHeader><DialogTitle>Nueva cuenta</DialogTitle><DialogDescription>Registra una cuenta bancaria o caja para controlar el saldo real.</DialogDescription></DialogHeader>
+            <Dialog open={isAccountEditorOpen} onOpenChange={(next) => { setIsAccountEditorOpen(next); if (!next) setEditingAccount(null); }}>
+                <DialogContent data-account-dialog className="max-h-[90vh] overflow-y-auto sm:max-w-lg dark:bg-zinc-900">
+                    <DialogHeader>
+                        <DialogTitle>{editingAccount ? 'Editar cuenta' : 'Nueva cuenta'}</DialogTitle>
+                        <DialogDescription>Dónde está la plata: una cuenta de banco o una caja, con su saldo real. Se lleva en pesos; una cuenta en dólares se registra convertida a la tasa del día.</DialogDescription>
+                    </DialogHeader>
                     <form onSubmit={saveAccount} className="space-y-4">
-                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Nombre<input required className={inputClass} value={accountForm.name} onChange={(event) => setAccountForm((current) => ({ ...current, name: event.target.value }))} placeholder="Ej. Bancolombia principal" /></label>
-                        <div className="grid gap-4 sm:grid-cols-2">
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Tipo<Select className={inputClass} value={accountForm.type} onChange={(event) => setAccountForm((current) => ({ ...current, type: event.target.value }))}><option value="BANK">Banco</option><option value="CASH">Caja</option><option value="OTHER">Otra</option></Select></label>
-                            <label className="space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Saldo inicial<MoneyInput required allowNegative className={inputClass} value={accountForm.openingBalance} onChange={(openingBalance) => setAccountForm((current) => ({ ...current, openingBalance }))} /></label>
-                        </div>
-                        <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200">Fecha del saldo inicial<BrainDatePicker ariaLabel="Fecha del saldo inicial" value={accountForm.openingBalanceDate} onChange={(value) => setAccountForm((current) => ({ ...current, openingBalanceDate: value }))} className={inputClass} /></label>
-                        <DialogFooter><button type="button" onClick={() => setIsAccountEditorOpen(false)} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingAccount} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingAccount && <Loader2 className="h-4 w-4 animate-spin" />}Crear cuenta</button></DialogFooter>
+                        <fieldset disabled={isSavingAccount} className="space-y-4">
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Nombre</span><input required maxLength={80} className={inputClass} value={accountForm.name} onChange={(event) => setAccountForm((current) => ({ ...current, name: event.target.value }))} placeholder="Ej. Bancolombia principal" /></label>
+                                <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Tipo</span><Select className={inputClass} value={accountForm.type} onChange={(event) => setAccountForm((current) => ({ ...current, type: event.target.value }))}><option value="BANK">Banco</option><option value="CASH">Caja</option><option value="OTHER">Otra</option></Select></label>
+                            </div>
+                            {accountForm.type !== 'CASH' && (
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Institución <span className="text-zinc-400">(opcional)</span></span><input maxLength={80} className={inputClass} value={accountForm.institution} onChange={(event) => setAccountForm((current) => ({ ...current, institution: event.target.value }))} placeholder="Ej. Bancolombia, Wise, Nequi" /></label>
+                                    {/* Los cuatro dígitos con que se reconoce la cuenta en un extracto. */}
+                                    <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Últimos cuatro dígitos <span className="text-zinc-400">(opcional)</span></span><input inputMode="numeric" maxLength={4} className={inputClass} value={accountForm.lastFour} onChange={(event) => setAccountForm((current) => ({ ...current, lastFour: event.target.value.replace(/\D/g, '') }))} placeholder="0345" /></label>
+                                </div>
+                            )}
+
+                            <div className="space-y-4 rounded-lg border border-zinc-200 p-3 dark:border-white/10">
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">A nombre de <span className="text-zinc-400">(opcional)</span></span><input maxLength={200} className={inputClass} value={accountForm.holderName} onChange={(event) => setAccountForm((current) => ({ ...current, holderName: event.target.value }))} placeholder="Brain Studio Agencia Creativa S.A.S." /></label>
+                                    <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">El titular es</span><Select className={inputClass} value={accountForm.holderType} onChange={(event) => setAccountForm((current) => ({ ...current, holderType: event.target.value }))}><option value="COMPANY">Una empresa</option><option value="PERSON">Una persona</option></Select></label>
+                                </div>
+                                <div className="grid gap-4 sm:grid-cols-2">
+                                    <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Documento del titular <span className="text-zinc-400">(opcional)</span></span><Select className={inputClass} value={accountForm.identificationType} onChange={(event) => setAccountForm((current) => ({ ...current, identificationType: event.target.value }))}><option value="">Sin definir</option>{PARTY_DOCUMENT_TYPES.map((type) => <option key={type.value} value={type.value}>{type.name}</option>)}</Select></label>
+                                    <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Número</span><input maxLength={30} className={inputClass} value={accountForm.identificationNumber} onChange={(event) => setAccountForm((current) => ({ ...current, identificationNumber: event.target.value }))} /></label>
+                                </div>
+                                {/* El caso de Francisco: la plata está en una cuenta que no es de la empresa. */}
+                                <label className="flex items-start gap-2 text-sm text-zinc-700 dark:text-zinc-200"><input type="checkbox" data-account-third-party className="mt-1 h-4 w-4" checked={accountForm.isThirdPartyHeld} onChange={(event) => setAccountForm((current) => ({ ...current, isThirdPartyHeld: event.target.checked }))} /><span>La cuenta no es de Brain Studio. Se sigue igual, pero queda dicho a nombre de quién está.</span></label>
+                            </div>
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Saldo inicial</span><MoneyInput required allowNegative className={inputClass} value={accountForm.openingBalance} onChange={(openingBalance) => setAccountForm((current) => ({ ...current, openingBalance }))} /></label>
+                                <label className="block space-y-1.5 text-sm text-zinc-700 dark:text-zinc-200"><span className="block">Fecha del saldo inicial</span><BrainDatePicker ariaLabel="Fecha del saldo inicial" value={accountForm.openingBalanceDate} onChange={(value) => setAccountForm((current) => ({ ...current, openingBalanceDate: value }))} className={inputClass} /></label>
+                            </div>
+                            <p className="text-xs text-zinc-500 dark:text-zinc-400">El saldo de la cuenta es este saldo inicial más los movimientos registrados desde esa fecha.</p>
+                        </fieldset>
+                        <DialogFooter><button type="button" onClick={() => { setIsAccountEditorOpen(false); setEditingAccount(null); }} className="rounded-lg border border-zinc-200 px-4 py-2 text-sm font-medium dark:border-white/10">Cancelar</button><button type="submit" disabled={isSavingAccount} className="inline-flex items-center justify-center gap-2 rounded-lg bg-[#009EB9] px-4 py-2 text-sm font-semibold text-white hover:bg-[#008CA4] disabled:opacity-50">{isSavingAccount && <Loader2 className="h-4 w-4 animate-spin" />}{editingAccount ? 'Guardar cambios' : 'Crear cuenta'}</button></DialogFooter>
                     </form>
                 </DialogContent>
             </Dialog>

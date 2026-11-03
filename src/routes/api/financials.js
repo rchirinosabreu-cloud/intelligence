@@ -22,6 +22,7 @@ import {
     closeFinancialPeriodHandler,
     approvePayrollTransactionHandler,
     createFinancialAccountHandler,
+    updateFinancialAccountHandler,
     createReceivableHandler,
     createReceivablePaymentHandler,
     createLoanHandler,
@@ -103,6 +104,7 @@ const receiveFinancialDocument = receivesFiles((req, res, next) => documentUploa
 router.get('/dashboard', requireFinancialAccess, getFinancialDashboard);
 router.get('/accounts', requireFinancialAccess, listFinancialAccountsHandler);
 router.post('/accounts', requireFinancialApproval, createFinancialAccountHandler);
+router.patch('/accounts/:accountId', requireFinancialApproval, updateFinancialAccountHandler);
 router.get('/records', requireFinancialAccess, listFinancialRecordsHandler);
 router.post('/records', requireFinancialWrite, createFinancialRecordHandler);
 router.patch('/records/:id', requireFinancialWrite, updateFinancialRecordHandler);
