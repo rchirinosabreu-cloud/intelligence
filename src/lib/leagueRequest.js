@@ -1,5 +1,5 @@
 import { getApiBaseUrl } from './apiBaseUrl.js';
-// La liga del mes (3 de noviembre de 2026): leer la liga de quien pregunta y regalar los 10 puntos de la semana.
+// La liga del mes (3 de noviembre de 2026): leer la liga de quien pregunta y regalar los cinco puntos de la semana.
 // Misma sesión que el resto de la plataforma. Un error trae su `status`, para que la copa sepa que no hay ficha (404).
 export const requestLeague = async (suffix = '', { method = 'GET', body } = {}) => {
   const token = globalThis.localStorage?.getItem('authToken'), base = import.meta.env ? getApiBaseUrl() : '';

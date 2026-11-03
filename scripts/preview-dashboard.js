@@ -36,7 +36,7 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
               const body = (() => { try { return JSON.parse(raw || '{}'); } catch { return {}; } })();
               const person = LEAGUE_ROSTER.find((row) => row.id === body.memberId);
               if (!person) { res.statusCode = 404; res.end(JSON.stringify({ error: 'Esa persona no está en el equipo activo.' })); return; }
-              res.end(JSON.stringify({ id: 'kudos-demo', monthKey: '2026-11', to: { id: person.id, name: person.name }, note: String(body.note || '').slice(0, 120) }));
+              res.end(JSON.stringify({ id: 'kudos-demo', weekKey: '2026-W45', points: 5, to: { id: person.id, name: person.name }, note: String(body.note || '').slice(0, 120) }));
             });
             return;
           }
@@ -53,6 +53,10 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
           // `?ganador` enseña a quien ganó el mes anterior, `?liga=completa` un mes perfecto y `?liga=no` una cuenta sin ficha (sin copa).
           const referer = String(req.headers.referer || '');
           const league = /[?&]liga=no\b/.test(referer) ? null : dashboardDemoLeague({ winner: /[?&]ganador/.test(referer), perfect: /[?&]liga=completa\b/.test(referer) });
+          if (pathname === '/api/user/onboarding') {
+            res.end(JSON.stringify({ user: dashboardDemoUser, autoOnboarding: false, progress: { liga: 'COMPLETED' } }));
+            return;
+          }
           if (pathname === '/api/league') {
             if (!league) { res.statusCode = 404; res.end(JSON.stringify({ error: 'Esta cuenta no tiene ficha en Equipo.' })); return; }
             res.end(JSON.stringify(league));

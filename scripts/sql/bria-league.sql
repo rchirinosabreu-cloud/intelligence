@@ -87,3 +87,42 @@ DO $$ BEGIN
     SELECT DISTINCT run_id, to_char(created_at AT TIME ZONE 'America/Bogota', 'YYYY-MM'), giver_member_id
     FROM bria_memory.league_run_kudos ON CONFLICT DO NOTHING;
 END $$;
+
+-- Cupo semanal de cinco puntos (decisión del 3 de noviembre). Conserva los regalos de diez ya entregados.
+ALTER TABLE bria_memory.league_run_kudos ADD COLUMN IF NOT EXISTS points SMALLINT NOT NULL DEFAULT 10 CHECK (points IN (5,10));
+ALTER TABLE bria_memory.league_run_kudos ALTER COLUMN points SET DEFAULT 5;
+CREATE TABLE IF NOT EXISTS bria_memory.league_kudos_weeks (
+  run_id TEXT NOT NULL REFERENCES bria_memory.league_runs(id),
+  week_key TEXT NOT NULL CHECK (week_key ~ '^[0-9]{4}-W[0-9]{2}$'),
+  giver_member_id TEXT NOT NULL,
+  PRIMARY KEY (run_id, week_key, giver_member_id)
+);
+CREATE OR REPLACE FUNCTION bria_memory.claim_league_week() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  NEW.week_key := to_char(NEW.created_at AT TIME ZONE 'America/Bogota', 'IYYY-"W"IW');
+  NEW.points := 5;
+  INSERT INTO bria_memory.league_kudos_weeks(run_id, week_key, giver_member_id)
+    VALUES(NEW.run_id, NEW.week_key, NEW.giver_member_id);
+  RETURN NEW;
+END;
+$$;
+DO $$ BEGIN
+  LOCK TABLE bria_memory.league_run_kudos IN ACCESS EXCLUSIVE MODE;
+  DROP TRIGGER IF EXISTS league_monthly_budget ON bria_memory.league_run_kudos;
+  DROP TRIGGER IF EXISTS league_weekly_budget ON bria_memory.league_run_kudos;
+  CREATE TRIGGER league_weekly_budget BEFORE INSERT ON bria_memory.league_run_kudos
+    FOR EACH ROW EXECUTE FUNCTION bria_memory.claim_league_week();
+  INSERT INTO bria_memory.league_kudos_weeks(run_id,week_key,giver_member_id)
+    SELECT DISTINCT run_id,week_key,giver_member_id FROM bria_memory.league_run_kudos ON CONFLICT DO NOTHING;
+END $$;
+
+CREATE TABLE IF NOT EXISTS bria_memory.league_meeting_awards (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  run_id TEXT NOT NULL REFERENCES bria_memory.league_runs(id),
+  week_key TEXT NOT NULL CHECK (week_key ~ '^[0-9]{4}-W[0-9]{2}$'),
+  day_key TEXT NOT NULL CHECK (day_key ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}$'),
+  member_id TEXT NOT NULL,
+  awarded_by TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (run_id, week_key)
+);

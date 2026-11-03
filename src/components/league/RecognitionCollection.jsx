@@ -1,7 +1,7 @@
 import React from 'react';
 import { Award, CalendarClock, Check, Flame, Sparkles, Sun } from '@/components/ui/icons';
 import { recognitionLabels, recognitionMessages } from '@/lib/recognitionPresentation';
-import { leagueMonthLabel } from '@/lib/platformLeague';
+import { leagueMonthLabel, RECOGNITION_POINTS } from '@/lib/platformLeague';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 
@@ -35,7 +35,7 @@ export function RecognitionHistory({ data, compact = false }) {
       {rows.map(row => <li key={row.id} className="flex items-center gap-3 py-3">
         <RecognitionMedal kind={row.kind} small />
         <div className="min-w-0 flex-1"><p className="text-sm font-semibold">{recognitionLabels[row.kind]}</p><time dateTime={row.occurredAt} className="text-xs text-zinc-500 dark:text-zinc-400">{dateLabel(row.occurredAt)}</time></div>
-        <Check aria-label="Obtenido" className="h-4 w-4 text-brand-green-deep dark:text-brand-green" />
+        <span className="text-sm font-semibold text-brand-green-deep dark:text-brand-green">+{RECOGNITION_POINTS} pts</span>
       </li>)}
     </ul>}
     {!compact && data.hasMore && <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400">Mostrando los 12 más recientes de {data.total} reconocimientos del mes.</p>}
@@ -64,7 +64,7 @@ export default function RecognitionCollection({ data }) {
         </details>;
       })}
     </div>
-    <p className="text-xs leading-5 text-zinc-500 dark:text-zinc-400">Estas insignias celebran tus logros. Por ahora no añaden puntos al puntaje mensual.</p>
+    <p className="text-xs leading-5 text-zinc-500 dark:text-zinc-400">Cada reconocimiento obtenido suma {RECOGNITION_POINTS} puntos al mes. Volver a ver una insignia no vuelve a sumar.</p>
     <section><h3 className="text-sm font-semibold">Tus últimos logros</h3><RecognitionHistory data={data} /></section>
   </>;
 }

@@ -5,8 +5,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DAILY_HABITS, EXTRA_ACTIONS, BADGE_THRESHOLD, HABIT_POINTS, EXTRA_POINTS, KUDOS_VALUE, KUDOS_MONTHLY,
-  summarizeDays, habitsScore, kudosScore, leagueScore, habitRates, leagueNextStep, todayPoints, trackScale, trackPosition, leagueMonthLabel, ordinalLabel
+  DAILY_HABITS, EXTRA_ACTIONS, BADGE_THRESHOLD, HABIT_POINTS, EXTRA_POINTS, KUDOS_VALUE, KUDOS_WEEKLY,
+  summarizeDays, habitsScore, kudosScore, leagueScore, habitRates, leagueNextStep, todayPoints, trackScale, trackPosition, leagueMonthLabel, ordinalLabel, leagueRank
 } from '../src/lib/platformLeague.js';
 
 const day = (values, extras = {}) => ({ day: '2026-11-03', habits: Object.fromEntries(DAILY_HABITS.map((h, i) => [h.key, values[i]])), extras });
@@ -21,9 +21,9 @@ test('five daily habits and two extras, each one described as a habit and never 
   }
   assert.equal(HABIT_POINTS, 5);
   assert.equal(EXTRA_POINTS, 5, 'five points per extra action');
-  assert.equal(KUDOS_MONTHLY, 10);
-  assert.equal(KUDOS_VALUE, 10, 'a gift of the week is worth the ten points the giver had');
-  assert.equal(EXTRA_ACTIONS[1].source, null, 'the meeting has no source yet: it is declared, not pretended');
+  assert.equal(KUDOS_WEEKLY, 5);
+  assert.equal(KUDOS_VALUE, 5);
+  assert.equal(EXTRA_ACTIONS[1].points, 10);
 });
 
 test('the platform part adds 5 per habit earned and 5 per extra; a day without closings does not subtract', () => {
@@ -38,12 +38,12 @@ test('the platform part adds 5 per habit earned and 5 per extra; a day without c
   assert.equal(habitsScore([day([null, null, null, null, null], { PRIMERO_EN_ABRIR: false })]), null, 'losing the extra to someone else is not playing');
 });
 
-test('the team part counts gifts received at 10 each without a cap, and the month score adds both', () => {
+test('the team part counts new gifts at five and preserves recorded historical values, and the month score adds both', () => {
   assert.equal(kudosScore([]), 0);
-  assert.equal(kudosScore([{}, {}, {}]), 30);
-  assert.equal(leagueScore({ days: full(true, 10), kudos: [{}, {}] }), 270);
+  assert.equal(kudosScore([{}, {}, {}]), 15);
+  assert.equal(leagueScore({ days: full(true, 10), kudos: [{}, {}] }), 260);
   assert.equal(leagueScore({ days: [], kudos: [] }), null);
-  assert.equal(leagueScore({ days: [], kudos: [{}] }), 10, 'a gift counts even before the first played day');
+  assert.equal(leagueScore({ days: [], kudos: [{}] }), 5, 'a gift counts even before the first played day');
 });
 
 test('badges light from 90 % of the played days, and the next step is the habit that lost the most points', () => {
@@ -81,4 +81,11 @@ test('today’s points, the track scale, the month label and the ordinal', () =>
   assert.equal(leagueMonthLabel('2026-11'), 'noviembre');
   assert.equal(ordinalLabel(2), '2.º');
   assert.equal(ordinalLabel(2, 'F'), '2.ª');
+});
+
+ test('meeting, awards and historical gifts count once and equal scores share a position', () => {
+ assert.equal(leagueScore({ days: full(true, 1), kudos: [{points:10},{points:5}], meetings:1, recognitions:2 }),60);
+ assert.equal(todayPoints(day([true,true,true,true,true],{PRIMERO_EN_REUNION:true})).points,35);
+ const scores=[{score:20},{score:10},{score:10},{score:0}];
+ assert.equal(leagueRank(10,scores),2); assert.equal(leagueRank(0,scores),null);
 });

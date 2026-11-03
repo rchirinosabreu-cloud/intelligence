@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useRef, useState } from 'r
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button } from '@/components/ui/button';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
+import { canUseLeague } from '@/lib/leagueVisibility';
 import WelcomeDialog from './WelcomeDialog';
 import QuotationGuide from './QuotationGuide';
 
@@ -30,7 +31,7 @@ export function OnboardingProvider({ userId, pathname, blocked = false, onBlocki
   const [otherDialog, setOtherDialog] = useState(false);
   const { data, isPending, isError } = useQuery({
     queryKey: ['onboarding', userId], queryFn: () => requestProgress(), enabled: Boolean(userId),
-    staleTime: 0, refetchInterval: 60000, refetchIntervalInBackground: false, retry: 1,
+    staleTime: 0, refetchOnWindowFocus: true, refetchInterval: 60000, refetchIntervalInBackground: false, retry: 1,
   });
   const user = !isError && data?.user?.id === userId ? data.user : null;
   const autoOnboarding = data?.autoOnboarding === true;
@@ -70,9 +71,11 @@ export function OnboardingProvider({ userId, pathname, blocked = false, onBlocki
       if (guideId === 'welcome') setWelcomeDismissedPath(pathname);
       else setManualGuide(false);
       client.setQueryData(['onboarding', userId], previous => previous ? { ...previous, progress: { ...previous.progress, [guideId]: result.status } } : previous);
+      return true;
     } catch (failure) {
       console.error('[Onboarding] Guardado no confirmado:', failure);
       if (alive.current) setError(failure.message);
+      return false;
     } finally {
       saving.current = false;
       if (alive.current) setBusy(false);
@@ -82,13 +85,18 @@ export function OnboardingProvider({ userId, pathname, blocked = false, onBlocki
     returnFocus.current = event.currentTarget;
     setError(''); setManualGuide(true);
   }
-  return <GuideContext.Provider value={{ canGuide: canGuide && atQuotations && !needsWelcome, openGuide }}>
+  return <GuideContext.Provider value={{ canGuide: canGuide && atQuotations && !needsWelcome, openGuide,
+    league: { userId, available: canUseLeague(user), pending: !data?.progress?.liga, blocked: otherDialog,
+      busy, error, acknowledge: status => acknowledge('liga', status) } }}>
     <div ref={fallbackFocus} tabIndex={-1} className="outline-none">{children}</div>
     <WelcomeDialog user={user} open={welcomeOpen} busy={busy} error={error} returnFocusRef={fallbackFocus}
       onOpenChange={open => { if (!open && !busy) acknowledge('welcome', 'COMPLETED'); }} />
     {guideOpen && <QuotationGuide open busy={busy} error={error} returnFocusRef={returnFocus.current ? returnFocus : fallbackFocus}
       onDismiss={status => acknowledge('cotizaciones', status === 'completed' ? 'COMPLETED' : 'SKIPPED')} />}
   </GuideContext.Provider>;
+}
+export function useLeagueIntroduction() {
+  return useContext(GuideContext)?.league;
 }
 export function QuotationGuideButton() {
   const guide = useContext(GuideContext);

@@ -173,7 +173,8 @@ export const PLATFORM_OPERATIONS = {
   // La liga del mes (2 y 3 de noviembre de 2026): el buen uso de la plataforma, en puntos que se suman.
   'GET /league': { que: 'La liga del mes de quien pregunta: sus puntos (5 por cada hábito del día: reloj, al día, a tiempo, documentado, sin devolución; 5 por cada extra del día: primero en abrir la plataforma desde las 8:00, primero en la reunión; 10 por cada regalo del equipo), lo de hoy, su racha, su posición y la carrera de todo el equipo (de los demás, solo su puntaje).' },
   'GET /league/recognitions': { que: 'Los reconocimientos guardados de quien pregunta en el mes actual de Bogotá: conteos por categoría y hasta doce eventos recientes, con indicador de lista parcial. Solo devuelve categoría y fecha, sin tareas ni clientes. Respeta los permisos de Gestión y Parrillas; no añade puntos ni marca avisos como vistos.' },
-  'POST /league/kudos': { que: 'Regala diez puntos a otra persona activa del equipo. Una vez por persona y mes de Bogotá; repetir devuelve LEAGUE_KUDOS_ALREADY.', campos: 'memberId (ficha de Equipo de quien los recibe), note (una línea, hasta 120 caracteres)' },
+  'POST /league/meetings': { que: 'Un administrador registra quién llegó primero a la reunión de tráfico: diez puntos, una persona por semana. Rechaza semanas repetidas, fechas futuras o fuera del mes vigente y personas inactivas.', campos: 'memberId (ficha de Equipo), day (fecha YYYY-MM-DD de la reunión, Bogotá)' },
+  'POST /league/kudos': { que: 'Regala cinco puntos a otra persona activa del equipo. Una vez por persona y semana ISO de Bogotá; repetir devuelve LEAGUE_KUDOS_ALREADY.', campos: 'memberId (ficha de Equipo de quien los recibe), note (una línea, hasta 120 caracteres)' },
   'GET /dashboard/operational-health': { que: 'Salud operativa de la plataforma.' },
   'GET /dashboard/operational-trace': { que: 'Historial de actividad (acciones humanas registradas).' },
   // Minutas y Drive

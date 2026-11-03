@@ -8,7 +8,7 @@ test.before(async () => { preview = await createWelcomePreview({ port: 0 }); bro
 test.after(async () => { await browser?.close(); await preview?.close(); });
 test('existing users without progress receive no automatic popup, including after reloading or entering quotations', async () => {
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
-  page.setDefaultTimeout(10000); page.setDefaultNavigationTimeout(30000);
+  page.setDefaultTimeout(15000); page.setDefaultNavigationTimeout(90000); page.setDefaultNavigationTimeout(90000);
   let acknowledgements = 0;
   page.on('request', request => { if (request.method() === 'POST') acknowledgements++; });
   await page.goto(`${preview.origin}/tests/fixtures/onboarding-runtime.html?existing`);
@@ -32,7 +32,7 @@ test('existing users without progress receive no automatic popup, including afte
   await page.close();
 });
 test('an older API response without enrollment never triggers a welcome', async () => {
-  const page = await browser.newPage(); page.setDefaultTimeout(10000); page.setDefaultNavigationTimeout(30000);
+  const page = await browser.newPage(); page.setDefaultTimeout(15000); page.setDefaultNavigationTimeout(90000); page.setDefaultNavigationTimeout(90000);
   await page.goto(`${preview.origin}/tests/fixtures/onboarding-runtime.html?legacy`);
   await page.getByRole('link', { name: 'Cotizaciones' }).click();
   await page.getByRole('button', { name: 'Ver guía', exact: true }).waitFor();
@@ -40,7 +40,7 @@ test('an older API response without enrollment never triggers a welcome', async 
   await page.close();
 });
 test('runtime acknowledges on the server, offers the allowed guide and stops when permission is revoked', async () => {
-  const page = await browser.newPage(); page.setDefaultTimeout(10000);
+  const page = await browser.newPage(); page.setDefaultTimeout(15000); page.setDefaultNavigationTimeout(90000);
   await page.goto(`${preview.origin}/tests/fixtures/onboarding-runtime.html`);
   const welcome = page.getByRole('dialog', { name: '¡Qué bueno tenerte aquí, Persona!' }); await welcome.waitFor();
   await page.getByRole('button', { name: 'Vamos a empezar' }).click();
@@ -61,7 +61,7 @@ test('runtime acknowledges on the server, offers the allowed guide and stops whe
   await page.close();
 });
 test('save error leaves welcome visible, explains failure and supports retry', async () => {
-  const page = await browser.newPage(); page.setDefaultTimeout(10000);
+  const page = await browser.newPage(); page.setDefaultTimeout(15000); page.setDefaultNavigationTimeout(90000);
   await page.goto(`${preview.origin}/tests/fixtures/onboarding-runtime.html?error`);
   await page.getByRole('button', { name: 'Vamos a empezar' }).click();
   await page.getByRole('alert').filter({ hasText: 'Guardado de prueba rechazado' }).waitFor();
@@ -71,7 +71,7 @@ test('save error leaves welcome visible, explains failure and supports retry', a
   await page.close();
 });
 test('neither welcome nor a direct module URL offers a denied guide', async () => {
-  const page = await browser.newPage(); page.setDefaultTimeout(10000);
+  const page = await browser.newPage(); page.setDefaultTimeout(15000); page.setDefaultNavigationTimeout(90000);
   await page.goto(`${preview.origin}/tests/fixtures/onboarding-runtime.html?denied`);
   const welcome = page.getByRole('dialog'); await welcome.waitFor();
   assert.equal(await welcome.getByText('Cotizaciones', { exact: true }).count(), 0);

@@ -2,7 +2,7 @@
 // en píxel (los diseños de OpenAI, recortados de su lámina para la muestra) y puntajes ficticios. Nunca decide nada
 // en producción. Los nombres son los del equipo real porque la muestra es para que Rodny vea cómo se verá; los
 // puntajes y los regalos son inventados.
-import { DAILY_HABITS, leagueNextStep, leagueScore, summarizeDays, todayPoints, trackScale } from '../../src/lib/platformLeague.js';
+import { DAILY_HABITS, leagueNextStep, leagueScore, kudosScore, leagueRank, summarizeDays, todayPoints, trackScale } from '../../src/lib/platformLeague.js';
 
 
 export const LEAGUE_ROSTER = [
@@ -31,11 +31,11 @@ export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 
     received: perfect
       ? [{ from: 'Helen', note: 'Siempre responde primero.', week: '2026-W45' }, { from: 'Melissa', note: 'Me salvó con el reel.', week: '2026-W45' }]
       : [{ from: 'Helen', note: 'Me salvó con el reel de Nutresa.', week: '2026-W45' }],
-    givenThisMonth: null,
-    monthlyBudget: 10
+    givenThisWeek: null,
+    weeklyBudget: 5, weekKey: '2026-W45'
   };
   const allDays = [...days, today];
-  const score = leagueScore({ days: allDays, kudos: kudos.received });
+  const score = leagueScore({ days: allDays, kudos: kudos.received, recognitions: leagueDemoRecognitions.total });
   const lanes = LEAGUE_ROSTER.map((person) => {
     const laneScore = person.id === viewerId ? score : SCORES[person.id];
     return { ...person, score: laneScore, isSelf: person.id === viewerId };
@@ -48,11 +48,13 @@ export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 
     daysLeft: 26,
     score,
     gender: 'M',
-    today: { ...today, ...todayPoints(today) },
+    today: { ...today, ...todayPoints(today), points: todayPoints(today).points + 10 },
+    recognitionPoints: 20,
+    meetings: { canManage: true, minDate: "2026-11-03", maxDate: "2026-11-04", entries: [] },
     nextStep: leagueNextStep(allDays),
     streak: { days: summarizeDays(allDays).fullDays, label: 'con los 5 hábitos' },
-    kudos: { ...kudos, score: kudos.received.length * 10 },
-    position: { rank: ranked.findIndex((lane) => lane.isSelf) + 1, of: lanes.length },
+    kudos: { ...kudos, score: kudosScore(kudos.received) },
+    position: { rank: leagueRank(score, ranked), of: lanes.length },
     nextStepUrl: '/gestion',
     podium: ranked.slice(0, 3).map((lane) => ({ id: lane.id, name: lane.name, pixelAvatarKey: lane.pixelAvatarKey, avatarUrl: null, score: lane.score })),
     winner: winner ? { ...melissa, score: 610, month: '2026-10', note: 'El bono se entrega este mes.' } : null,
