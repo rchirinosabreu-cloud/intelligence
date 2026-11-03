@@ -18,7 +18,10 @@ test('nothing in the dashboard: the league is the trophy peeking from the right 
   assert.ok(!existsSync('src/components/modules/dashboard/DashboardLeague.jsx'), 'the dashboard card is gone');
   assert.doesNotMatch(dashboard, /DashboardLeague|RaceOfTheMonth|dashboard\.league/, 'the dashboard neither draws nor reads the league');
   assert.match(layout, /import LeagueDock from '@\/components\/league\/LeagueDock'/);
-  assert.match(layout, /<LeagueDock key=\{`league-\$\{currentUser\.id\}`\} enabled=\{!isOnboardingBlocking\} \/>/);
+  assert.match(layout, /currentUser\?\.id && canUseLeague\(currentUser\) && <LeagueDock key=\{`league-\$\{currentUser\.id\}`\} enabled=\{!isOnboardingBlocking\} \/>/, 'the trophy exists only for whom Equipo turned the league on');
+  const team = readFileSync('src/components/modules/Team.jsx', 'utf8');
+  assert.match(team, /data-team-league-toggle/, 'the box lives in the team form, beside Bria’s');
+  assert.match(team, /Activar la liga del mes para esta persona/);
   assert.match(dock, /data-league-dock/);
   assert.match(dock, /fixed right-0 top-1\/2 z-\[45\]/, 'pinned to the right edge, mid-height, under the header and the sidebar');
   assert.match(dock, /rounded-l-2xl border-r-0/, 'a tab that grows out of the edge');

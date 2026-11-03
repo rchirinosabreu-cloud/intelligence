@@ -20,7 +20,7 @@ export const dashboardDemoUser = {
   role: 'ADMIN',
   teamRole: 'Director',
   avatarUrl: dashboardDemoAvatar,
-  modulePermissions: { dashboard: true, gestion: true, actividad: true, crm: true, clientes: true, equipo: true }
+  modulePermissions: { dashboard: true, gestion: true, actividad: true, crm: true, clientes: true, equipo: true, liga: true }
 };
 
 export const dashboardDemoMember = { id: 'dashboard-demo-member', userId: dashboardDemoUser.id, name: dashboardDemoUser.name, role: 'Director · Muestra local', avatarUrl: dashboardDemoAvatar, isActive: true };

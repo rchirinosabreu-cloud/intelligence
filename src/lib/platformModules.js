@@ -34,14 +34,20 @@ export const PLATFORM_MODULES = Object.freeze([
 
 export const MODULE_KEYS = Object.freeze(PLATFORM_MODULES.map((module) => module.key));
 
-// Bria no es un módulo del menú, pero viaja en el mismo objeto con su propia casilla.
+// Casillas sin módulo del menú, que viajan en el mismo objeto: Bria y la liga del mes
+// (Rodny, 3 de noviembre de 2026: «activa más bien la posibilidad de activar la liga para
+// cierta persona, como cuando activo Bria»). La liga se enciende persona por persona, también
+// a un administrador: nadie la tiene por su cargo (`EXPLICIT_KEYS`).
 const BRIA_KEY = 'bria';
+const LEAGUE_KEY = 'liga';
+export const EXTRA_KEYS = Object.freeze([BRIA_KEY, LEAGUE_KEY]);
+const EXPLICIT_KEYS = new Set([LEAGUE_KEY]);
 
 const KEY_BY_NAME = new Map(PLATFORM_MODULES.flatMap((module) => [
     [module.key, module.key],
     ...(module.aliases || []).map((alias) => [alias, module.key])
 ]));
-KEY_BY_NAME.set(BRIA_KEY, BRIA_KEY);
+for (const key of EXTRA_KEYS) KEY_BY_NAME.set(key, key);
 
 const parse = (raw) => {
     if (!raw) return {};
@@ -65,7 +71,7 @@ export const readModulePermissions = (raw) => {
         if (!key) continue;
         explicit[key] = explicit[key] === true || value === true;
     }
-    const result = { [BRIA_KEY]: explicit[BRIA_KEY] === true };
+    const result = Object.fromEntries(EXTRA_KEYS.map((key) => [key, explicit[key] === true]));
     for (const module of PLATFORM_MODULES) result[module.key] = explicit[module.key] === true;
     for (const module of PLATFORM_MODULES) {
         if (module.inheritsFrom && !(module.key in explicit)) result[module.key] = result[module.inheritsFrom];
@@ -88,9 +94,11 @@ export const presetModulePermissions = (role) => {
 // La misma decisión en la pantalla (menú, rutas, consejos) y en el servidor (guardianes).
 export const hasModuleAccess = (user, key) => {
     if (!user) return false;
-    if (String(user.role || '').toUpperCase() === 'ADMIN') return true;
     const name = String(key || '').toLowerCase();
     const target = KEY_BY_NAME.get(name);
+    // Lo explícito no viene con el cargo: un administrador también necesita su casilla marcada.
+    if (target && EXPLICIT_KEYS.has(target)) return readModulePermissions(user.modulePermissions)[target] === true;
+    if (String(user.role || '').toUpperCase() === 'ADMIN') return true;
     if (target) return readModulePermissions(user.modulePermissions)[target] === true;
     // Fuera del catálogo se lee tal cual estaba guardado, como antes de esta lista.
     return Object.entries(parse(user.modulePermissions))

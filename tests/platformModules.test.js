@@ -28,6 +28,7 @@ test('el catálogo tiene claves únicas, nombre visible y ruta', () => {
     assert.ok(MODULE_KEYS.includes('drive'), 'Drive tiene su propia casilla');
     assert.ok(MODULE_KEYS.includes('crm'));
     assert.ok(!MODULE_KEYS.includes('bria'), 'Bria no es un módulo del menú: va en su propia casilla');
+    assert.ok(!MODULE_KEYS.includes('liga'), 'la liga del mes tampoco: es una casilla como la de Bria');
     assert.ok(!MODULE_KEYS.includes('dashboard'), 'el dashboard lo tiene todo el mundo');
 });
 
@@ -46,7 +47,7 @@ test('los permisos viejos se leen igual: claves con mayúscula, «Tareas», text
     assert.equal(read.manager, true);
     assert.equal(read.clientes, true);
     assert.equal(read.crm, false);
-    assert.deepEqual(Object.keys(readModulePermissions(null)).sort(), [...MODULE_KEYS, 'bria'].sort());
+    assert.deepEqual(Object.keys(readModulePermissions(null)).sort(), [...MODULE_KEYS, 'bria', 'liga'].sort(), 'Bria y la liga del mes viajan como casillas sin módulo');
     assert.equal(readModulePermissions('{roto').gestion, false);
     assert.equal(readModulePermissions({ bria: 'true' }).bria, false, 'Bria solo con un true de verdad');
     assert.equal(readModulePermissions({ bria: true }).bria, true);

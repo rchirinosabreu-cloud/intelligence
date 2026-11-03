@@ -39,12 +39,12 @@ export default function Team() {
   const [financialRole, setFinancialRole] = useState('NONE');
   // Las casillas salen de la lista única de módulos (src/lib/platformModules.js): un módulo
   // nuevo aparece aquí solo, con los roles que lo traen marcado.
-  const [modulePermissions, setModulePermissions] = useState(() => ({ ...presetModulePermissions('VIEWER'), bria: false }));
+  const [modulePermissions, setModulePermissions] = useState(() => ({ ...presetModulePermissions('VIEWER'), bria: false, liga: false }));
 
   const handleRolePresetChange = (selectedRole) => {
     setSystemRole(selectedRole);
     setFinancialRole(selectedRole === 'ADMIN' ? 'ADMIN' : 'NONE');
-    setModulePermissions({ ...presetModulePermissions(selectedRole), bria: false });
+    setModulePermissions({ ...presetModulePermissions(selectedRole), bria: false, liga: false });
   };
 
   const fetchTeam = async () => {
@@ -92,7 +92,7 @@ export default function Team() {
       setAvatarUrl('');
       setSystemRole('VIEWER');
       setFinancialRole('NONE');
-      setModulePermissions({ ...presetModulePermissions('VIEWER'), bria: false });
+      setModulePermissions({ ...presetModulePermissions('VIEWER'), bria: false, liga: false });
     }
     setIsModalOpen(true);
   };
@@ -392,6 +392,8 @@ export default function Team() {
                     })}
                   </div>
                   {['ADMIN', 'PROJECT_MANAGER'].includes(systemRole) && <label className="mt-3 flex min-h-11 items-center gap-3 rounded-xl border border-brand-cyan/30 bg-brand-cyan/5 p-3 text-sm text-zinc-700 dark:text-zinc-200"><input type="checkbox" checked={modulePermissions.bria === true} onChange={(event) => setModulePermissions((prev) => ({ ...prev, bria: event.target.checked }))} className="h-4 w-4 text-primary focus:ring-primary" /><span>Activar Bria para esta persona</span></label>}
+                  {/* La liga del mes (3 de noviembre de 2026): se enciende persona por persona, a cualquier rol; un administrador también la necesita marcada. */}
+                  <label className="mt-3 flex min-h-11 items-center gap-3 rounded-xl border border-brand-yellow/40 bg-brand-yellow/10 p-3 text-sm text-zinc-700 dark:text-zinc-200"><input type="checkbox" data-team-league-toggle checked={modulePermissions.liga === true} onChange={(event) => setModulePermissions((prev) => ({ ...prev, liga: event.target.checked }))} className="h-4 w-4 text-primary focus:ring-primary" /><span>Activar la liga del mes para esta persona</span></label>
                 </div>
                 {(systemRole === 'ADMIN' || modulePermissions.financiero) && (
                   <div>

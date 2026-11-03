@@ -1,18 +1,14 @@
-// Quién ve la liga (Rodny, 3 de noviembre de 2026: «quiero que lo despleguemos pero que solo rodny lo vea en este
-// momento»). `LEAGUE_VISIBLE_TO` es una lista de correos separados por comas; `*` abre la liga a todo el equipo y
-// vacía no se la enseña a nadie. El cálculo del servidor corre para todo el equipo de todas formas: cuando se abra,
-// noviembre ya estará contado desde el 1.
+// Quién ve la liga (Rodny, 3 de noviembre de 2026: «activa más bien la posibilidad de activar la liga para cierta
+// persona, como cuando activo Bria o algún acceso a los módulos»). Es la casilla «Liga del mes» de la ventana de
+// Equipo, guardada en `modulePermissions.liga` como la de Bria. Nadie la tiene por su cargo, tampoco un
+// administrador: se enciende persona por persona. El cálculo del servidor corre para todo el equipo de todas formas:
+// cuando se encienda, noviembre ya estará contado desde el 1.
+import { hasModuleAccess } from './platformModules.js';
 
-export const LEAGUE_VISIBLE_TO_ALL = '*';
+export const LEAGUE_PERMISSION_KEY = 'liga';
 
-const normalize = (value) => String(value || '').trim().toLowerCase();
-
-/** `true` si esa cuenta puede ver la liga con el valor de `LEAGUE_VISIBLE_TO`. */
-export function leagueVisibleTo(setting, email) {
-  const raw = String(setting || '').trim();
-  if (!raw) return false;
-  if (raw === LEAGUE_VISIBLE_TO_ALL) return true;
-  const mine = normalize(email);
-  if (!mine) return false;
-  return raw.split(',').map(normalize).filter(Boolean).includes(mine);
+/** `true` si esa cuenta activa tiene la liga encendida en Equipo. */
+export function canUseLeague(user) {
+  if (!user || user.isActive === false) return false;
+  return hasModuleAccess(user, LEAGUE_PERMISSION_KEY);
 }
