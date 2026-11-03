@@ -9,7 +9,7 @@ import prisma from '../lib/prisma.js';
 import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
 import { bogotaClock } from '../lib/briaNudges.js';
 import { evaluateLeagueDay, isoWeekKey, openWindowOf } from '../lib/leagueDay.js';
-import { KUDOS_WEEKLY, MEETING_POINTS, RECOGNITION_POINTS, LEAGUE_RECOGNITION_KINDS, kudosScore, leagueRank, leagueNextStep, leagueScore, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
+import { KUDOS_WEEKLY, MEETING_POINTS, RECOGNITION_POINTS, LEAGUE_RECOGNITION_KINDS, kudosScore, leagueRank, leaguePodiumGroups, leagueNextStep, leagueScore, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { canUseLeague } from '../lib/leagueVisibility.js';
 import { resolveLeagueAvatarKeys } from '../lib/leagueAvatarIdentity.js';
@@ -160,19 +160,25 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const weekKey = isoWeekKey(today);
       const [year, monthNumber] = monthKey.split('-').map(Number);
       const [{ members, byMember }, saved, gifts, given, meetings, awards] = await Promise.all([
-        this.readDay(today), repo.daysOfMonth(monthKey, { before: today }), repo.kudosOfMonth(monthKey), repo.givenInWeek(me.id, weekKey), repo.meetingsOfMonth(monthKey),
+        this.readDay(today), repo.daysOfMonth(monthKey, { before: bogotaDate(dayWindow(today).end) }), repo.kudosOfMonth(monthKey), repo.givenInWeek(me.id, weekKey), repo.meetingsOfMonth(monthKey),
         db.recognitionAward.findMany({ where: { kind: { in: LEAGUE_RECOGNITION_KINDS }, occurredAt: {
           gte: new Date(Math.max(Date.parse(`${monthKey}-01T05:00:00Z`), startedAt.getTime())), lt: new Date(Date.UTC(year, monthNumber, 1, 5))
         } }, select: { id: true, recipientId: true, occurredAt: true } })
       ]);
       const nameOf = new Map(members.map((member) => [member.id, member.name]));
       const daysByMember = new Map(members.map((member) => [member.id, []]));
-      for (const row of saved) daysByMember.get(row.member_id)?.push({ day: row.day_key, habits: row.habits, extras: row.extras || {} });
+      const savedToday = new Map();
+      for (const row of saved) {
+        const entry = { day: row.day_key, habits: row.habits, extras: row.extras || {}, evidence: row.evidence || {} };
+        daysByMember.get(row.member_id)?.push(entry);
+        if (row.day_key === today) savedToday.set(row.member_id, entry);
+      }
       const todayByMember = new Map();
       for (const member of members) {
-        const live = evaluateLeagueDay({ day: today, ...(isBusinessDay(today) ? byMember.get(member.id) : {}) });
-        todayByMember.set(member.id, live);
-        daysByMember.get(member.id).push(live);
+        const closed = savedToday.get(member.id);
+        const current = closed || evaluateLeagueDay({ day: today, ...(isBusinessDay(today) ? byMember.get(member.id) : {}) });
+        todayByMember.set(member.id, { ...current, isProvisional: isBusinessDay(today) && !closed, isConfirmed: Boolean(closed) });
+        if (!closed) daysByMember.get(member.id).push(current);
       }
       const receivedBy = new Map();
       for (const gift of gifts) receivedBy.set(gift.receiver_member_id, [...(receivedBy.get(gift.receiver_member_id) || []), gift]);
@@ -183,7 +189,10 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const avatarKeys = resolveLeagueAvatarKeys(members);
       const lanes = members.map((member) => {
         const score = scoreOf(member.id);
-        return { id: member.id, name: firstName(member.name), fullName: member.name, avatarUrl: member.avatarUrl || null, pixelAvatarKey: avatarKeys[member.id] || null, score, isSelf: member.id === me.id };
+        const current = todayByMember.get(member.id);
+        const provisional = current.isProvisional ? summarizeDays([current]).points : 0;
+        return { id: member.id, name: firstName(member.name), fullName: member.name, avatarUrl: member.avatarUrl || null, pixelAvatarKey: avatarKeys[member.id] || null, score,
+          scoreBreakdown: { confirmed: score - provisional, provisional }, isSelf: member.id === me.id };
       });
       const ranked = lanes.filter((lane) => typeof lane.score === 'number').sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'es'));
       const myDays = daysByMember.get(me.id) || [];
@@ -206,6 +215,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         closesOn: weekdayLabel(lastDay),
         daysLeft: Math.max(0, Math.round((Date.parse(`${lastDay}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / DAY_MS)),
         score,
+        scoreBreakdown: lanes.find(lane => lane.isSelf)?.scoreBreakdown,
         today: myToday ? { ...myToday, ...todaySummary, points: todaySummary.points + todayAwardPoints + todayGiftPoints } : null,
         recognitionPoints: awardsOf(me.id).length * RECOGNITION_POINTS,
         meetings: { canManage: me.user.role === 'ADMIN', minDate: [bogotaDate(startedAt), `${monthKey}-01`].sort().at(-1), maxDate: today,
@@ -215,7 +225,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         kudos: { received, score: kudosScore(received), weekKey, givenThisWeek: given ? { id: given.receiver_member_id, name: firstName(nameOf.get(given.receiver_member_id) || 'Alguien del equipo'), note: given.note } : null, weeklyBudget: KUDOS_WEEKLY },
         position: score > 0 && rank ? { rank, of: ranked.length } : null,
         nextStepUrl: '/gestion',
-        podium: ranked.filter(lane => lane.score > 0).slice(0, 3).map((lane) => ({ id: lane.id, name: lane.name, avatarUrl: lane.avatarUrl, pixelAvatarKey: lane.pixelAvatarKey, score: lane.score })),
+        podium: leaguePodiumGroups(ranked).flatMap(group => group.people.map(lane => ({ id: lane.id, name: lane.name, avatarUrl: lane.avatarUrl, pixelAvatarKey: lane.pixelAvatarKey, score: lane.score, rank: group.rank }))),
         winner: null,
         race: { lanes, track: trackScale(lanes.map((lane) => lane.score)) }
       };

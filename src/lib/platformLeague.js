@@ -83,6 +83,21 @@ export function leagueRank(score, lanes = []) {
   return score > 0 ? 1 + lanes.filter(lane => lane.score > score).length : null;
 }
 
+/** All people occupying ranks 1–3, including ties; zero never creates a podium. */
+export function leaguePodiumGroups(lanes = []) {
+  const ranked = lanes.filter(lane => isNumber(lane.score) && lane.score > 0)
+    .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'es'));
+  const groups = [];
+  for (const person of ranked) {
+    const rank = leagueRank(person.score, ranked);
+    if (rank > 3) break;
+    const previous = groups.at(-1);
+    if (previous?.rank === rank) previous.people.push(person);
+    else groups.push({ rank, score: person.score, people: [person] });
+  }
+  return groups;
+}
+
 /** La tasa de cada hábito en el mes (días ganados sobre días jugados), con su insignia. */
 export function habitRates(days = []) {
   const { perHabit } = summarizeDays(days);
