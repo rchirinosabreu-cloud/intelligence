@@ -25,7 +25,10 @@ await page.route('**/api/league', async route => {
   data.today.points = 10;
   data.race.lanes = data.race.lanes.map((p, i) => ({ ...p, score: i < 2 ? 15 : 10,
     scoreBreakdown: { confirmed: closed ? (i < 2 ? 15 : 10) : 0, provisional: closed ? 0 : (i < 2 ? 15 : 10) } }));
-  if (standings !== 'tied') data.race.lanes = data.race.lanes.map((p, i) => ({ ...p, score: standings === 'zero' ? 0 : Math.max(0, 30 - i * 10) }));
+  if (standings !== 'tied') data.race.lanes = data.race.lanes.map((p, i) => {
+    const score = standings === 'zero' ? 0 : Math.max(0, 30 - i * 10);
+    return { ...p, score, scoreBreakdown: { confirmed: closed ? score : 0, provisional: closed ? 0 : score } };
+  });
   await route.fulfill({ json: data });
 });
 const panel = page.locator('[data-league-panel]');
