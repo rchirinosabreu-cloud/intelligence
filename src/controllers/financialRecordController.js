@@ -29,7 +29,7 @@ import { clientSuspensionService } from '../services/clientSuspensionService.js'
 import { issueReceivableDocument, correctReceivableDocument } from '../services/receivableDocumentService.js';
 import { openReceivablePdf, RECEIVABLE_PDF_MIME } from '../services/receivablePdfService.js';
 import { fetchOfficialUsdCopRate } from '../services/exchangeRateService.js';
-import { createFinancialAccount, listFinancialAccounts } from '../services/financialAccountService.js';
+import { createFinancialAccount, listFinancialAccounts, updateFinancialAccount } from '../services/financialAccountService.js';
 import {
     approvePayrollTransaction,
     generatePayrollPeriod,
@@ -80,6 +80,18 @@ export const createFinancialAccountHandler = async (req, res, dependencies = {})
     } catch (error) {
         console.error('[Financial accounts API] Create failed:', error.response?.data || error);
         return respondWithError(res, error, 'FINANCIAL_ACCOUNT_CREATE_FAILED', 'No fue posible crear la cuenta financiera.');
+    }
+};
+
+export const updateFinancialAccountHandler = async (req, res, dependencies = {}) => {
+    const prismaClient = dependencies.prismaClient || prisma;
+    const updateAccount = dependencies.updateAccount || updateFinancialAccount;
+    try {
+        const account = await updateAccount(prismaClient, req.params?.accountId, req.body || {}, req.user);
+        return res.json({ message: 'Cuenta actualizada correctamente.', account });
+    } catch (error) {
+        console.error('[Financial accounts API] Update failed:', error.response?.data || error);
+        return respondWithError(res, error, 'FINANCIAL_ACCOUNT_UPDATE_FAILED', 'No fue posible actualizar la cuenta financiera.');
     }
 };
 

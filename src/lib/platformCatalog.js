@@ -292,7 +292,8 @@ export const PLATFORM_OPERATIONS = {
   // Financiero
   'GET /financials/dashboard': { que: 'Indicadores y gráficas del financiero.', campos: 'year, month, category (consulta)' },
   'GET /financials/accounts': { que: 'Las cuentas bancarias y de caja.' },
-  'POST /financials/accounts': { que: 'Crea una cuenta financiera.', campos: 'name, type, currency, openingBalance, openingDate' },
+  'POST /financials/accounts': { que: 'Crea una cuenta de banco o caja. Siempre en pesos.', campos: 'name, type (BANK|CASH|OTHER), institution, holderName, holderType (COMPANY|PERSON), identificationType, identificationNumber, lastFour, isThirdPartyHeld, openingBalance, openingBalanceDate' },
+  'PATCH /financials/accounts/:accountId': { que: 'Corrige los datos de una cuenta de banco o caja.', campos: 'name, type, institution, holderName, holderType, identificationType, identificationNumber, lastFour, isThirdPartyHeld, openingBalance, openingBalanceDate' },
   'GET /financials/records': { que: 'El libro de movimientos.', campos: 'year, month, type, category, accountId (consulta)' },
   'POST /financials/records': { que: 'Registra un movimiento (ingreso o egreso).', campos: 'type (INGRESO|EGRESO), amount, date (YYYY-MM-DD), concept, category, accountId, clientId, requestId' },
   'PATCH /financials/records/:id': { que: 'Edita un movimiento no vinculado a pagos.', campos: 'amount, date, concept, category, accountId, clientId' },

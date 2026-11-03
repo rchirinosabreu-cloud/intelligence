@@ -65,6 +65,44 @@ test('financial ledger uses canonical record endpoints and server-confirmed muta
     assert.doesNotMatch(ledgerSource, /from 'react-datepicker'|type="date"/);
 });
 
+// Rodny, 3 de noviembre de 2026, viendo el formulario con cuatro campos: «nueva cuenta
+// es muy básico, faltaría añadir detalles». El modelo ya guardaba de quién es la cuenta
+// y cómo reconocerla; la ventana no lo preguntaba y el servicio lo descartaba.
+test('una cuenta dice de quién es, cómo reconocerla, y se puede corregir', () => {
+    const ledgerSource = fs.readFileSync(
+        new URL('../src/components/modules/financial/FinancialLedger.jsx', import.meta.url),
+        'utf8'
+    );
+
+    // Los datos que el modelo guarda y la ventana ahora sí pregunta.
+    for (const field of ['institution', 'holderName', 'holderType', 'identificationType', 'identificationNumber', 'lastFour', 'isThirdPartyHeld']) {
+        assert.match(ledgerSource, new RegExp(`accountForm\\.${field}`), `la ventana de cuenta no pregunta ${field}`);
+    }
+    assert.match(ledgerSource, /La cuenta no es de Brain Studio/);
+    // El documento del titular sale del catálogo compartido, no de una lista copiada.
+    assert.match(ledgerSource, /PARTY_DOCUMENT_TYPES \} from '@\/lib\/partyIdentity'/);
+
+    // La misma ventana crea y corrige; corregir va por PATCH y conserva el id.
+    assert.match(ledgerSource, /editingAccount \? 'Editar cuenta' : 'Nueva cuenta'/);
+    assert.match(ledgerSource, /axios\.patch\(`\$\{baseUrl\}\/api\/financials\/accounts\/\$\{editingAccount\.id\}`/);
+    assert.match(ledgerSource, /data-account-edit=\{account\.id\}/);
+    assert.match(ledgerSource, /canApprove && \(\s*\r?\n?\s*<button[\s\S]{0,400}?data-account-edit/);
+
+    // La tarjeta enseña lo que sirve para reconocer la cuenta en un extracto.
+    assert.match(ledgerSource, /data-account-subtitle/);
+    assert.match(ledgerSource, /export const accountSubtitle/);
+
+    // El financiero se lleva en pesos: la ventana no ofrece elegir moneda.
+    assert.doesNotMatch(ledgerSource, /accountForm\.currency/);
+    // La etiqueta va envuelta: un nodo de texto suelto no es hijo de elemento.
+    assert.doesNotMatch(ledgerSource, />Saldo inicial<MoneyInput/);
+    // El morado heredado de lo que se tocó se migró a la paleta oficial: la tarjeta de
+    // la cuenta y el anillo de foco de los campos. Los tonos de escenario siguen como estaban.
+    assert.doesNotMatch(ledgerSource, /bg-violet-50 text-violet-600/);
+    assert.match(ledgerSource, /focus:border-brand-cyan focus:ring-2 focus:ring-brand-cyan\/10/);
+    assert.match(ledgerSource, /bg-brand-cyan-soft text-brand-cyan-deep/);
+});
+
 test('financial operational payment dates use the shared calendar', () => {
     assert.doesNotMatch(dashboardSource, /required type="date" value=\{paymentForm\.paidAt\}/);
     assert.doesNotMatch(dashboardSource, /required type="date" value=\{payrollPaymentForm\.paidAt\}/);
