@@ -45,7 +45,8 @@ try {
   await page.reload();
   await panel.getByRole('tab', { name: 'Equipo', exact: true }).click();
   await panel.getByRole('button', { name: 'Registrar primero en tráfico' }).click();
-  await panel.getByLabel('Fecha de la reunión').fill('2026-11-03');
+  await panel.getByLabel('Fecha de la reunión').fill('03/11/2026');
+  await panel.getByLabel('Fecha de la reunión').press('Tab');
   await panel.getByRole('combobox', { name: 'Quién llegó primero' }).click();
   await page.getByRole('option', { name: 'Helen', exact: true }).click();
   await panel.locator('[data-league-meetings]').screenshot({ path: 'output/recognition-panel/trafico-admin.png' });
