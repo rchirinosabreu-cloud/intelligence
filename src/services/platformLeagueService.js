@@ -8,8 +8,8 @@
 import prisma from '../lib/prisma.js';
 import { bogotaDate, isBusinessDay } from '../lib/colombiaBusinessDays.js';
 import { bogotaClock } from '../lib/briaNudges.js';
-import { evaluateLeagueDay, isoWeekKey, openWindowOf } from '../lib/leagueDay.js';
-import { kudosScore, leagueNextStep, leagueScore, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
+import { evaluateLeagueDay, openWindowOf } from '../lib/leagueDay.js';
+import { KUDOS_MONTHLY, kudosScore, leagueNextStep, leagueScore, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
 import { canUseLeague } from '../lib/leagueVisibility.js';
 import { resolveLeagueAvatarKeys } from '../lib/leagueAvatarIdentity.js';
@@ -19,10 +19,10 @@ import { createPlatformLeagueRepository } from './platformLeagueRepository.js';
 
 export const LEAGUE_COMPUTE_MINUTES = 18 * 60 + 5;
 export const LEAGUE_CHECK_MS = 10 * 60 * 1000;
-export const KUDOS_NOTE_MAX = 120;
 /** Una huella humana en la traza operativa: lo que deja una persona al usar la plataforma (nunca un reloj ni una réplica). */
 export const PRESENCE_EVENTS = ['SESSION_STARTED', 'TASK_OPENED', 'TASK_LIST_SYNCED', 'TASK_CREATED', 'TASK_ASSIGNED', 'TASK_UPDATED', 'NOTIFICATION_READ', 'PLATFORM_MUTATION'];
 
+const KUDOS_NOTE_MAX = 120;
 const DAY_MS = 86_400_000;
 const dayWindow = (dayKey) => { const start = new Date(`${dayKey}T05:00:00.000Z`); return { start, end: new Date(start.getTime() + DAY_MS) }; };
 const monthOf = (dayKey) => dayKey.slice(0, 7);
@@ -179,7 +179,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const myDays = daysByMember.get(me.id) || [];
       const myToday = todayByMember.get(me.id);
       const received = (receivedBy.get(me.id) || []).map((gift) => ({ from: firstName(nameOf.get(gift.giver_member_id) || 'Alguien del equipo'), note: gift.note, week: gift.week_key }));
-      const givenThisWeek = gifts.find((gift) => gift.giver_member_id === me.id && gift.week_key === isoWeekKey(today));
+      const given = gifts.find(gift => gift.giver_member_id === me.id);
       const score = scoreOf(me.id);
       const rank = ranked.findIndex((lane) => lane.id === me.id) + 1;
       const lastDay = lastDayOfMonth(monthKey);
@@ -192,7 +192,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         today: myToday ? { ...myToday, ...todayPoints(myToday) } : null,
         nextStep: leagueNextStep(myDays),
         streak: { days: summarizeDays(myDays).fullDays, label: 'con los 5 hábitos' },
-        kudos: { received, score: kudosScore(received), givenThisWeek: givenThisWeek ? { id: givenThisWeek.receiver_member_id, name: firstName(nameOf.get(givenThisWeek.receiver_member_id) || ''), note: givenThisWeek.note } : null, weeklyBudget: 10 },
+        kudos: { received, score: kudosScore(received), givenThisMonth: given ? { id: given.receiver_member_id, name: firstName(nameOf.get(given.receiver_member_id) || 'Alguien del equipo'), note: given.note } : null, monthlyBudget: KUDOS_MONTHLY },
         position: score > 0 && rank ? { rank, of: ranked.length } : null,
         nextStepUrl: '/gestion',
         podium: ranked.filter(lane => lane.score > 0).slice(0, 3).map((lane) => ({ id: lane.id, name: lane.name, avatarUrl: lane.avatarUrl, pixelAvatarKey: lane.pixelAvatarKey, score: lane.score })),
@@ -223,7 +223,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       return { month, counts, total: Object.values(counts).reduce((sum, count) => sum + count, 0), recent: rows.slice(0, 12), hasMore: rows.length > 12 };
     },
 
-    /** Regalar los 10 puntos de la semana: a una sola persona del equipo, una vez por semana, con una línea. */
+    /** Regalar los 10 puntos del mes: a una sola persona del equipo, una vez por mes, con una línea. */
     async giveKudos({ userId, memberId, note = '' }) {
       const at = now();
       const text = String(note || '').trim();
@@ -233,12 +233,12 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const members = await activeMembers();
       const receiver = members.find((member) => member.id === memberId);
       if (!receiver) throw fail(404, 'Esa persona no está en el equipo activo.');
-      const weekKey = isoWeekKey(bogotaDate(at));
+      const monthKey = monthOf(bogotaDate(at));
       try {
-        const saved = await repo.giveKudos({ week_key: weekKey, giver_member_id: giver.id, receiver_member_id: receiver.id, note: text });
-        return { id: saved.id, weekKey, to: { id: receiver.id, name: firstName(receiver.name) }, note: text };
+        const saved = await repo.giveKudos({ created_at: at, giver_member_id: giver.id, receiver_member_id: receiver.id, note: text });
+        return { id: saved.id, monthKey, to: { id: receiver.id, name: firstName(receiver.name) }, note: text };
       } catch (error) {
-        if (error?.code === '23505') throw fail(409, 'Esta semana ya regalaste tus 10 puntos. El lunes tienes otros.', 'LEAGUE_KUDOS_ALREADY');
+        if (error?.code === '23505') throw fail(409, 'Este mes ya regalaste tus 10 puntos. Tendrás otros al comenzar el próximo mes.', 'LEAGUE_KUDOS_ALREADY');
         throw error;
       }
     }

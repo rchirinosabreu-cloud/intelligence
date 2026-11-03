@@ -5,7 +5,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  DAILY_HABITS, EXTRA_ACTIONS, BADGE_THRESHOLD, HABIT_POINTS, EXTRA_POINTS, KUDOS_VALUE, KUDOS_WEEKLY,
+  DAILY_HABITS, EXTRA_ACTIONS, BADGE_THRESHOLD, HABIT_POINTS, EXTRA_POINTS, KUDOS_VALUE, KUDOS_MONTHLY,
   summarizeDays, habitsScore, kudosScore, leagueScore, habitRates, leagueNextStep, todayPoints, trackScale, trackPosition, leagueMonthLabel, ordinalLabel
 } from '../src/lib/platformLeague.js';
 
@@ -21,7 +21,7 @@ test('five daily habits and two extras, each one described as a habit and never 
   }
   assert.equal(HABIT_POINTS, 5);
   assert.equal(EXTRA_POINTS, 5, 'five points per extra action');
-  assert.equal(KUDOS_WEEKLY, 10);
+  assert.equal(KUDOS_MONTHLY, 10);
   assert.equal(KUDOS_VALUE, 10, 'a gift of the week is worth the ten points the giver had');
   assert.equal(EXTRA_ACTIONS[1].source, null, 'the meeting has no source yet: it is declared, not pretended');
 });

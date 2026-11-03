@@ -5,7 +5,7 @@
 // Los puntos se suman y no tienen techo (Rodny, 3 de noviembre de 2026: «serían cinco puntos por cada una de esas
 // acciones … seguiré pensando más»): cada hábito de un día hábil vale 5, cada extra del día vale 5 para una sola
 // persona (quien abre primero la plataforma desde las 8:00, quien entra primero a la reunión del equipo) y cada
-// regalo de bondad que el equipo te hace vale 10 (cada lunes cada quien tiene 10 para una sola persona). Un día en
+// regalo de bondad que el equipo te hace vale 10 (cada mes cada quien tendrá 10 para una sola persona; todavía en expectativa). Un día en
 // que un hábito no se pudo jugar (no cerró nada) no resta ni suma. Nunca cuenta cuántas tareas: así no gana quien
 // tiene más trabajo. Sin niveles ni barras: el puntaje, la posición y la pista.
 
@@ -27,7 +27,7 @@ export const EXTRA_ACTIONS = [
 /** Cuánto vale cada cosa. */
 export const HABIT_POINTS = 5;
 export const EXTRA_POINTS = 5;
-export const KUDOS_WEEKLY = 10;
+export const KUDOS_MONTHLY = 10;
 export const KUDOS_VALUE = 10;
 
 /** Una insignia se enciende desde el 90 % de los días en que ese hábito se jugó. */

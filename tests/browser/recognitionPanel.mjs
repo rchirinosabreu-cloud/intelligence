@@ -23,6 +23,14 @@ const shot = async name => {
 try {
   await page.goto(`${preview.origin}/`);
   const dock = page.locator('[data-league-dock]');
+  await dock.waitFor();
+  await page.waitForTimeout(300);
+  const hiddenDock = await dock.boundingBox();
+  assert.ok(Math.abs(hiddenDock.x + hiddenDock.width / 2 - 1440) < 2, 'half of the trophy tab stays outside the viewport');
+  await page.screenshot({ path: path.join(output, 'copa-pestana-claro.png'), clip: { x: 1320, y: 420, width: 120, height: 160 } });
+  await dock.hover({ position: { x: 5, y: 20 } });
+  await page.waitForTimeout(350);
+  assert.ok(Math.abs((await dock.boundingBox()).x + hiddenDock.width - 1440) < 2, 'hover reveals the whole tab');
   await dock.click();
   await tab('Mi mes').waitFor({ timeout: 10000 });
   assert.equal(await tab('Mi mes').getAttribute('aria-selected'), 'true');
@@ -54,7 +62,7 @@ try {
   await tab('Equipo').click();
   assert.equal(await panel.locator('[data-league-member]').count(), 13);
   await panel.getByText('10 puntos para…', { exact: true }).waitFor();
-  assert.match(await panel.locator('[data-race-kudos]').innerText(), /Cada semana podrás regalar diez puntos/);
+  assert.match(await panel.locator('[data-race-kudos]').innerText(), /Cada mes podrás regalar diez puntos/);
   assert.equal(await panel.locator('[data-league-member] [data-runner-avatar="pixel"]').count(), 13);
   assert.match(await panel.locator('[data-league-member="mariceth"]').innerText(), /Mariceth/);
   await shot('equipo-claro');
@@ -69,7 +77,8 @@ try {
   await panel.locator('[data-race-kudos-given]').waitFor();
   await tab('Mi mes').click();
   await tab('Equipo').click();
-  assert.match(await panel.locator('[data-race-kudos-given]').innerText(), /Helen/);
+  assert.match(await panel.locator('[data-race-kudos-given]').innerText(), /Este mes.*Helen/);
+  await panel.locator('[data-race-kudos]').screenshot({ path: path.join(output, 'regalo-mensual.png') });
   await page.keyboard.press('Escape');
   await panel.waitFor({ state: 'hidden' });
   assert.equal(await dock.evaluate(el => el === document.activeElement), true, 'closing returns focus to the dock');
@@ -86,7 +95,23 @@ try {
   await shot('equipo-oscuro');
   await page.emulateMedia({ reducedMotion: 'reduce' });
   assert.equal(await panel.locator('[data-runner-avatar]').first().evaluate(el => getComputedStyle(el).animationName), 'none');
+  await page.keyboard.press('Escape');
+  await dock.evaluate(el => el.blur());
+  await page.mouse.move(10, 10);
+  const reducedDock = await dock.boundingBox();
+  assert.ok(Math.abs(reducedDock.x + reducedDock.width / 2 - 1440) < 2, 'reduced motion preserves the half-hidden position');
+  assert.equal(await dock.evaluate(el => getComputedStyle(el).transitionDuration), '0s');
+  await page.screenshot({ path: path.join(output, 'copa-pestana-oscuro.png'), clip: { x: 1320, y: 420, width: 120, height: 160 } });
+  await page.keyboard.press('Tab');
+  await dock.focus();
+  assert.ok(Math.abs((await dock.boundingBox()).x + reducedDock.width - 1440) < 2, 'keyboard focus reveals the tab');
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(preview.origin);
+  await dock.waitFor();
+  await page.mouse.move(10, 10);
+  const mobileDock = await dock.boundingBox();
+  assert.ok(Math.abs(mobileDock.x + mobileDock.width / 2 - 390) < 2);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   await page.goto(`${preview.origin}/?carrera`);
   await tab('Mi mes').waitFor();
   await shot('mi-mes-movil');
@@ -118,7 +143,7 @@ try {
     const league = await response.json();
     league.score = 0; league.position = null; league.podium = []; league.nextStep = null;
     league.startsAt = '2026-11-03T13:00:00Z';
-    league.streak = { days: 0 }; league.kudos = { score: 0, received: [], givenThisWeek: null, weeklyBudget: 10 };
+    league.streak = { days: 0 }; league.kudos = { score: 0, received: [], givenThisMonth: null, monthlyBudget: 10 };
     league.race.lanes = league.race.lanes.map(person => ({ ...person, score: 0 }));
     league.today = { day: '2026-11-03', habits: {}, extras: {}, earned: 0, possible: 0, points: 0 };
     await route.fulfill({ response, json: league });

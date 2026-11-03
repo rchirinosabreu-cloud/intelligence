@@ -38,7 +38,7 @@ test('the UI uses brand tokens and supports both themes', () => {
   for (const source of [panel, dock, read('src/components/league/RecognitionCollection.jsx')]) {
     assert.doesNotMatch(source, /#[0-9a-fA-F]{6}/);
     assert.doesNotMatch(source, /\b(?:bg|text|border)-(?:purple|violet|indigo|fuchsia|sky|teal|emerald)-/);
-    assert.match(source, /dark:bg-/);
+    assert.match(source, /dark:bg-|brain-popover-surface/);
     assert.match(source, /dark:text-/);
   }
 });

@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Trophy } from '@/components/ui/icons';
 import { requestLeague } from '@/lib/leagueRequest';
-import { cn } from '@/lib/utils';
 import RaceOfTheMonth from './RaceOfTheMonth';
 import { LeaguePoseContext } from './LeaguePoseContext';
 import { nextLeaguePose } from '@/lib/leaguePose';
@@ -46,12 +45,9 @@ export default function LeagueDock({ enabled = true }) {
         title="Reconocimientos"
         aria-expanded={open}
         onClick={() => changeOpen(true)}
-        className={cn(
-          'league-dock brain-popover-surface fixed right-0 top-1/2 z-[45] flex h-14 w-16 -translate-y-1/2 items-center justify-start rounded-l-2xl border-r-0 pl-3 text-brand-yellow-deep shadow-md shadow-zinc-950/10 outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:text-brand-yellow',
-          open && 'league-dock-open'
-        )}
+        className="league-dock brain-popover-surface fixed top-1/2 z-[45] flex h-12 w-10 items-center justify-center rounded-l-xl border-r-0 text-brand-yellow-deep outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:text-brand-yellow"
       >
-        <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-yellow/25 dark:bg-brand-yellow/15"><Trophy className="h-5 w-5" /></span>
+        <Trophy className="h-5 w-5 shrink-0" />
       </button>
       <LeaguePoseContext.Provider value={pose}>
         <RaceOfTheMonth open={open} onOpenChange={changeOpen} league={league || null} error={error} onRetry={refetch} returnFocusRef={dockRef} />

@@ -31,8 +31,8 @@ export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 
     received: perfect
       ? [{ from: 'Helen', note: 'Siempre responde primero.', week: '2026-W45' }, { from: 'Melissa', note: 'Me salvó con el reel.', week: '2026-W45' }]
       : [{ from: 'Helen', note: 'Me salvó con el reel de Nutresa.', week: '2026-W45' }],
-    givenThisWeek: null,
-    weeklyBudget: 10
+    givenThisMonth: null,
+    monthlyBudget: 10
   };
   const allDays = [...days, today];
   const score = leagueScore({ days: allDays, kudos: kudos.received });
@@ -55,7 +55,7 @@ export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 
     position: { rank: ranked.findIndex((lane) => lane.isSelf) + 1, of: lanes.length },
     nextStepUrl: '/gestion',
     podium: ranked.slice(0, 3).map((lane) => ({ id: lane.id, name: lane.name, pixelAvatarKey: lane.pixelAvatarKey, avatarUrl: null, score: lane.score })),
-    winner: winner ? { ...melissa, score: 610, month: '2026-10', note: 'El bono se entrega esta semana.' } : null,
+    winner: winner ? { ...melissa, score: 610, month: '2026-10', note: 'El bono se entrega este mes.' } : null,
     race: { lanes, track: trackScale(lanes.map((lane) => lane.score)) }
   };
 }

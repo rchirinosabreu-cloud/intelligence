@@ -28,7 +28,7 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
         if (pathname.startsWith('/api/')) {
           res.setHeader('Content-Type', 'application/json');
           res.setHeader('Cache-Control', 'no-store');
-          // El regalo de la semana de la liga (3 de noviembre de 2026): la muestra lo acepta y responde como el servidor, sin guardar nada.
+          // El regalo del mes de la liga (3 de noviembre de 2026): la muestra lo acepta y responde como el servidor, sin guardar nada.
           if (req.method === 'POST' && pathname === '/api/league/kudos') {
             let raw = '';
             req.on('data', (chunk) => { raw += chunk; });
@@ -36,7 +36,7 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
               const body = (() => { try { return JSON.parse(raw || '{}'); } catch { return {}; } })();
               const person = LEAGUE_ROSTER.find((row) => row.id === body.memberId);
               if (!person) { res.statusCode = 404; res.end(JSON.stringify({ error: 'Esa persona no está en el equipo activo.' })); return; }
-              res.end(JSON.stringify({ id: 'kudos-demo', weekKey: '2026-W45', to: { id: person.id, name: person.name }, note: String(body.note || '').slice(0, 120) }));
+              res.end(JSON.stringify({ id: 'kudos-demo', monthKey: '2026-11', to: { id: person.id, name: person.name }, note: String(body.note || '').slice(0, 120) }));
             });
             return;
           }

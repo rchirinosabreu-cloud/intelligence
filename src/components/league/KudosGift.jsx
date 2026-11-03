@@ -5,7 +5,7 @@ import { Award } from '@/components/ui/icons';
 import RunnerAvatar from './RunnerAvatar';
 import { requestLeague } from '@/lib/leagueRequest';
 import { cn } from '@/lib/utils';
-import { KUDOS_WEEKLY } from '@/lib/platformLeague';
+import { KUDOS_MONTHLY } from '@/lib/platformLeague';
 export default function KudosGift({ lanes, selfId, given, onGiven }) {
   const [open, setOpen] = useState(false);
   const [to, setTo] = useState('');
@@ -13,13 +13,13 @@ export default function KudosGift({ lanes, selfId, given, onGiven }) {
   const [busy, setBusy] = useState(false);
   const others = lanes.filter((lane) => lane.id !== selfId);
   if (given) {
-    return <p data-race-kudos-given className="text-sm leading-5 text-zinc-700 dark:text-zinc-200">Esta semana le diste tus {KUDOS_WEEKLY} puntos a <span className="font-semibold">{given.name}</span>.</p>;
+    return <p data-race-kudos-given className="text-sm leading-5 text-zinc-700 dark:text-zinc-200">Este mes le diste tus {KUDOS_MONTHLY} puntos a <span className="font-semibold">{given.name}</span>.</p>;
   }
   if (!open) {
     return (
       <Button type="button" className="w-full rounded-xl bg-brand-magenta text-white hover:bg-brand-magenta-deep" onClick={() => setOpen(true)} data-race-kudos-open>
         <Award className="h-4 w-4" />
-        Regalar mis {KUDOS_WEEKLY} puntos
+        Regalar mis {KUDOS_MONTHLY} puntos
       </Button>
     );
   }
@@ -31,7 +31,7 @@ export default function KudosGift({ lanes, selfId, given, onGiven }) {
     try {
       const saved = await requestLeague('/kudos', { method: 'POST', body: { memberId: lane.id, note } });
       onGiven({ id: saved?.to?.id || lane.id, name: saved?.to?.name || lane.name, note: saved?.note ?? note });
-      toast.success(`Tus ${KUDOS_WEEKLY} puntos ya son de ${saved?.to?.name || lane.name}.`);
+      toast.success(`Tus ${KUDOS_MONTHLY} puntos ya son de ${saved?.to?.name || lane.name}.`);
     } catch (error) {
       console.error('[Liga] No se pudo regalar:', error);
       toast.error(error.message || 'No pudimos registrar el regalo.');

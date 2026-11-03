@@ -108,8 +108,9 @@ const fakeRepo = (seed = []) => {
     async daysOfMonth(monthKey, { before }) { return [...days.values()].filter((r) => r.day_key.startsWith(monthKey) && r.day_key < before); },
     async kudosOfMonth(monthKey) { return kudos.filter((k) => k.month_key === monthKey); },
     async giveKudos(row) {
-      if (kudos.some((k) => k.week_key === row.week_key && k.giver_member_id === row.giver_member_id)) { const error = new Error('dup'); error.code = '23505'; throw error; }
-      const saved = { id: `k${kudos.length + 1}`, ...row, month_key: row.week_key.startsWith('2026-W4') ? '2026-11' : '2026-11', created_at: new Date() };
+      const monthKey = new Date(new Date(row.created_at || `${DAY}T19:00:00Z`).getTime() - 5 * 3600000).toISOString().slice(0, 7);
+      if (kudos.some((k) => k.month_key === monthKey && k.giver_member_id === row.giver_member_id)) { const error = new Error('dup'); error.code = '23505'; throw error; }
+      const saved = { id: `k${kudos.length + 1}`, ...row, month_key: monthKey, created_at: new Date() };
       kudos.push(saved); return saved;
     }
   };
@@ -254,22 +255,31 @@ test('the league of a person: the month so far plus today live, the lanes of the
   assert.match(league.closesOn, /lunes 30/);
   assert.equal(league.winner, null);
   const helen = await service.leagueFor({ userId: 'u-helen' });
-  assert.equal(helen.kudos.givenThisWeek.name, 'Rodny');
+  assert.equal(helen.kudos.givenThisMonth.name, 'Rodny');
   assert.equal(helen.nextStep.key, 'RELOJ');
   assert.deepEqual(helen.today.extrasEarned, ['PRIMERO_EN_ABRIR']);
   assert.equal(helen.today.points, 10);
 });
 
-test('the weekly gift: to one other person, once per week, with a short note; the errors say why', async () => {
+test('monthly gifts are live, remain spent across weeks and renew at Bogotá midnight', async () => {
   const repo = fakeRepo();
-  const service = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`) });
-  const gift = await service.giveKudos({ userId: 'u-rodny', memberId: 'm-helen', note: 'Resolvió el carrusel.' });
-  assert.equal(gift.weekKey, '2026-W45');
-  assert.equal(gift.to.name, 'Helen');
-  await assert.rejects(() => service.giveKudos({ userId: 'u-rodny', memberId: 'm-jesu', note: 'otra' }), (error) => error.statusCode === 409 && /ya regalaste/.test(error.message));
-  await assert.rejects(() => service.giveKudos({ userId: 'u-helen', memberId: 'm-helen', note: '' }), (error) => error.statusCode === 400 && /a ti/.test(error.message));
-  await assert.rejects(() => service.giveKudos({ userId: 'u-helen', memberId: 'm-nadie', note: '' }), (error) => error.statusCode === 404);
-  await assert.rejects(() => service.giveKudos({ userId: 'u-helen', memberId: 'm-rodny', note: 'x'.repeat(121) }), (error) => error.statusCode === 400 && /120/.test(error.message));
+  let time = at('2026-11-03T19:00:00Z');
+  const service = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => time });
+  const gift = await service.giveKudos({ userId: 'u-rodny', memberId: 'm-helen', note: ' Gracias ' });
+  assert.equal(gift.monthKey, '2026-11');
+  assert.equal(gift.note, 'Gracias');
+  assert.equal(gift.to.id, 'm-helen');
+  assert.equal((await service.leagueFor({ userId: 'u-rodny' })).kudos.givenThisMonth.name, 'Helen');
+  time = at('2026-11-17T19:00:00Z');
+  await assert.rejects(service.giveKudos({ userId: 'u-rodny', memberId: 'm-jesu' }), e => e.statusCode === 409);
+  time = at('2026-12-01T04:59:59Z');
+  await assert.rejects(service.giveKudos({ userId: 'u-rodny', memberId: 'm-jesu' }), e => e.statusCode === 409);
+  time = at('2026-12-01T05:00:00Z');
+  assert.equal((await service.giveKudos({ userId: 'u-rodny', memberId: 'm-jesu' })).monthKey, '2026-12');
+  assert.equal(repo.kudos.length, 2);
+  await assert.rejects(service.giveKudos({ userId: 'u-helen', memberId: 'm-helen' }), e => e.statusCode === 400);
+  await assert.rejects(service.giveKudos({ userId: 'u-helen', memberId: 'missing' }), e => e.statusCode === 404);
+  await assert.rejects(service.giveKudos({ userId: 'u-helen', memberId: 'm-rodny', note: 'a'.repeat(121) }), e => e.statusCode === 400);
 });
 
 test('the pilot: only the accounts with the «Liga del mes» box in Equipo get the league and the gift; the rest get 404 and the trophy stays hidden; an administrator without the box is out too; the daily computation still runs for everyone', async () => {

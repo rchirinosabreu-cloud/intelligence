@@ -413,19 +413,19 @@
 
 /* La copa de la liga (Rodny, 3 de noviembre de 2026: «un icono de la copa por ahí medio asomándose a la mitad de la
    pantalla derecha»): pegada al borde derecho, a media altura, asomada a medias; termina de salir al pasar el
-   cursor, con el teclado o mientras el panel está abierto. */
+   cursor o con el teclado. */
 .league-dock {
-  transform: translate(45%, -50%);
-  transition: transform 260ms cubic-bezier(0.34, 1.45, 0.64, 1), box-shadow 200ms ease;
+  right: -20px;
+  transform: translateY(-50%);
+  transition: right 240ms ease-in-out;
 }
 @media (hover: hover) {
   .league-dock:hover {
-    transform: translate(0, -50%);
+    right: 0;
   }
 }
-.league-dock:focus-visible,
-.league-dock.league-dock-open {
-  transform: translate(0, -50%);
+.league-dock:focus-visible {
+  right: 0;
 }
 /* Liga, 3 de noviembre de 2026: respiración suave de un píxel cada cuatro segundos, sin saltos.
    Reposo, saludo y celebración cambian solo al reabrir el panel. */
@@ -438,12 +438,8 @@
   animation: league-pixel-idle 4s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
-  .league-dock,
-  .league-dock:hover,
-  .league-dock:focus-visible,
-  .league-dock.league-dock-open {
+  .league-dock {
     transition: none;
-    transform: translate(0, -50%);
   }
   .league-pixel {
     animation: none;
