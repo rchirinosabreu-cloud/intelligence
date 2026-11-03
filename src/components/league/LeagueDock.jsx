@@ -46,7 +46,7 @@ export default function LeagueDock({ enabled = true, userId, welcome }) {
   return (
     <>
       {invite && <div data-league-invitation className="league-invitation brain-popover-surface fixed right-8 top-1/2 z-[46] flex w-[min(260px,calc(100vw-64px))] -translate-y-1/2 items-start rounded-2xl border p-3 text-zinc-900 dark:text-zinc-100">
-        <button type="button" aria-label="¡Hey, por aquí! Conoce tu liga" onClick={() => changeOpen(true)} className="min-w-0 flex-1 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan">
+        <button type="button" aria-label="¡Hey, por aquí! Conoce la liga" onClick={() => changeOpen(true)} className="min-w-0 flex-1 rounded-lg text-left outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan">
           <span role="status" className="block text-base font-bold">¡Hey, por aquí!</span>
         </button>
         <button type="button" aria-label="Ocultar invitación" onClick={() => setInvitationDismissed(true)} className="ml-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-zinc-500 outline-none hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-brand-cyan dark:text-zinc-400 dark:hover:bg-white/10"><X className="h-4 w-4" /></button>
