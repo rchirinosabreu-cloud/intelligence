@@ -43,7 +43,7 @@ export function RecognitionHistory({ data, compact = false }) {
 }
 
 export function RecognitionStatus({ query, children }) {
-  if (query.isError) return <div role="alert" className="rounded-2xl border border-zinc-200 p-4 text-sm dark:border-white/10"><p>No pudimos cargar tus logros.</p><Button variant="ghost" className="mt-2" onClick={() => query.refetch()}>Reintentar logros</Button></div>;
+  if (query.isError) return <div role="alert" className="rounded-2xl border border-destructive/25 bg-destructive/5 p-4 text-sm text-destructive dark:border-destructive/30 dark:bg-destructive/10"><p>No pudimos cargar tus logros.</p><Button variant="ghost" className="mt-2" onClick={() => query.refetch()}>Reintentar logros</Button></div>;
   if (!query.data) return <p role="status" className="py-4 text-sm text-zinc-500 dark:text-zinc-400">Cargando tus logros…</p>;
   return children(query.data);
 }

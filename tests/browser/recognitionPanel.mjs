@@ -69,6 +69,7 @@ try {
   await shot('mi-mes-oscuro');
   await tab('Mi mes').focus();
   await page.keyboard.press('ArrowRight');
+  await panel.getByRole('tab', { name: 'Logros', selected: true }).waitFor();
   assert.equal(await tab('Logros').getAttribute('aria-selected'), 'true');
   await shot('logros-oscuro');
   await tab('Equipo').click();
@@ -92,6 +93,7 @@ try {
   await tab('Logros').click();
   await panel.getByText('No pudimos cargar tus logros.').waitFor();
   assert.equal(await panel.locator('[data-recognition-badge]').count(), 0, 'failed history is not an empty collection');
+  await shot('logros-error');
   await page.unroute('**/api/league/recognitions');
   await panel.getByRole('button', { name: 'Reintentar logros' }).click();
   await panel.locator('[data-recognition-collection]').waitFor();
