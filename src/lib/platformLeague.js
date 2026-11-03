@@ -11,17 +11,17 @@
 
 /** Los cinco hábitos de cada día hábil. Son hábitos de uso, dichos como hábitos y nunca como juicio. */
 export const DAILY_HABITS = [
-  { key: 'RELOJ', label: 'Reloj', hint: 'Todo lo que cerraste tenía cronómetro, sin sesiones olvidadas ni encimadas.', step: 'Arranca el reloj al tomar la próxima tarea y páusalo antes de salir.' },
+  { key: 'RELOJ', label: 'Reloj', hint: 'Registraste tu tiempo correctamente, sin sesiones olvidadas.', step: 'Arranca el reloj al tomar la próxima tarea y páusalo antes de salir.' },
   { key: 'AL_DIA', label: 'Al día', hint: 'Amaneciste sin tareas vencidas.', step: 'Saca las vencidas de tu tablero: ciérralas o acuerda una fecha nueva.' },
-  { key: 'A_TIEMPO', label: 'A tiempo', hint: 'Lo que cerraste hoy iba antes de la fecha con la que nació.', step: 'Cierra hoy lo que vence hoy, o pide mover la fecha antes de que pase.' },
-  { key: 'DOCUMENTADO', label: 'Documentado', hint: 'Lo que cerraste hoy llevaba un avance escrito o un archivo tuyo.', step: 'Deja un comentario de avance o sube el archivo antes de cerrar la tarea.' },
-  { key: 'SIN_DEVOLUCION', label: 'Sin devolución', hint: 'Nada tuyo volvió devuelto hoy.', step: 'Revisa el pendiente contra lo que pidió el cliente antes de marcarlo realizado.' }
+  { key: 'A_TIEMPO', label: 'A tiempo', hint: 'Terminaste pendientes antes de la fecha de entrega.', step: 'Cierra hoy lo que vence hoy, o pide mover la fecha antes de que pase.' },
+  { key: 'DOCUMENTADO', label: 'Documentado', hint: 'Las tareas que has creado tienen un comentario o un archivo que da mejor contexto.', step: 'Añade un comentario o un archivo que dé contexto a las tareas que creaste hoy.' },
+  { key: 'SIN_DEVOLUCION', label: 'Sin devolución', hint: 'Nadie te devolvió un pendiente', step: 'Revisa el pendiente contra lo que pidió el cliente antes de marcarlo realizado.' }
 ];
 
 /** Los extras del día: los gana una sola persona cada día. `source` dice de dónde los lee la plataforma. */
 export const EXTRA_ACTIONS = [
-  { key: 'PRIMERO_EN_ABRIR', label: 'Primero en abrir', hint: 'Fuiste la primera persona del equipo en abrir la plataforma desde las 8:00.', source: 'La primera huella en la plataforma desde las 8:00 de Bogotá.' },
-  { key: 'PRIMERO_EN_REUNION', label: 'Primero en la reunión', hint: 'Fuiste la primera persona en conectarse a la reunión del equipo.', source: null }
+  { key: 'PRIMERO_EN_ABRIR', label: 'Primero en abrir', hint: 'Fuiste el primero en ingresar a la plataforma desde las 8:00 am', source: 'La primera huella en la plataforma desde las 8:00 de Bogotá.' },
+  { key: 'PRIMERO_EN_REUNION', label: 'Primero en la reunión', hint: 'Fuiste el primero en ingresar a la reunión semanal', source: null }
 ];
 
 /** Cuánto vale cada cosa. */

@@ -42,12 +42,13 @@ export const openWindowOf = (dayKey) => ({
 
 /**
  * Evalúa un día. `closedTasks`: lo que la persona cerró ese día como responsable, con `measuredMs` (solo sesiones
- * medidas, nunca declaradas), `declared`, `documented` y su fecha original. `sessions`: sus relojes de ese día.
+ * medidas, nunca declaradas), `declared` y su fecha original. `createdTasks`: sus creaciones con `documented`.
+ * `sessions`: sus relojes de ese día.
  * `overdueAtDawn`: las vencidas con que amaneció (null sin foto). `returnedToday`: cuántas le devolvieron (null sin lectura).
  * `firstOpener`: quién dejó la primera huella en la plataforma desde las 8:00 (`{ memberId, name, at }`; `null` si
  * nadie; `undefined` sin lectura) y `memberId`, para saber si fue esta persona.
  */
-export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], sessions = [], overdueAtDawn = null, returnedToday = null, firstOpener } = {}) {
+export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], createdTasks = [], sessions = [], overdueAtDawn = null, returnedToday = null, firstOpener } = {}) {
   const habits = {}, evidence = {}, extras = {};
 
   // Reloj: se juega si cerró algo o si tuvo sesiones. Lo pierde una tarea sin medir, un reloj olvidado, dos relojes a la vez o una corrección.
@@ -85,14 +86,14 @@ export function evaluateLeagueDay({ day, memberId = null, closedTasks = [], sess
     evidence.A_TIEMPO = `${onTime.length} de ${dated.length} a tiempo.`;
   }
 
-  // Documentado: cada cierre con un avance escrito o un archivo propio antes de cerrar.
-  if (!closedTasks.length) {
+  // Documentado: las tareas creadas por esta persona ese día tienen contexto humano o un archivo.
+  if (!createdTasks.length) {
     habits.DOCUMENTADO = null;
-    evidence.DOCUMENTADO = 'Sin cierres ese día.';
+    evidence.DOCUMENTADO = 'Sin tareas creadas ese día.';
   } else {
-    const documented = closedTasks.filter((task) => task.documented);
-    habits.DOCUMENTADO = documented.length === closedTasks.length;
-    evidence.DOCUMENTADO = `${documented.length} de ${closedTasks.length} con avance o archivo.`;
+    const documented = createdTasks.filter((task) => task.documented);
+    habits.DOCUMENTADO = documented.length === createdTasks.length;
+    evidence.DOCUMENTADO = `${documented.length} de ${createdTasks.length} tareas creadas con comentario o archivo.`;
   }
 
   // Sin devolución.

@@ -427,16 +427,15 @@
 .league-dock.league-dock-open {
   transform: translate(0, -50%);
 }
-/* El personaje en píxel se mueve siempre (Rodny, 3 de noviembre de 2026: «el icono de la persona debe estar siempre
-   con movimiento como de píxel»): un balanceo de dos cuadros, a saltos, como un sprite en reposo; cada corredor
-   arranca en un cuadro distinto (`animation-delay`) para que la pista no respire al unísono. */
+/* Liga, 3 de noviembre de 2026: respiración suave de un píxel cada cuatro segundos, sin saltos.
+   Reposo, saludo y celebración cambian solo al reabrir el panel. */
 @keyframes league-pixel-idle {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
+  50% { transform: translateY(-1px); }
 }
 .league-pixel {
   image-rendering: pixelated;
-  animation: league-pixel-idle 0.9s steps(1, end) infinite;
+  animation: league-pixel-idle 4s ease-in-out infinite;
 }
 @media (prefers-reduced-motion: reduce) {
   .league-dock,

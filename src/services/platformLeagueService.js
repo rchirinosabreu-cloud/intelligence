@@ -1,7 +1,6 @@
 // La liga del mes en el servidor (2 de noviembre de 2026). Cada día hábil a las 18:05 de Bogotá se evalúan los cinco
 // puntos de cada persona con lo que la plataforma ya registra (`src/lib/leagueDay.js`) y se guardan en la base
-// lateral; los días que falten del mes se completan solos, así noviembre cuenta desde el 1 aunque el cálculo se
-// estrene después. Los extras del día (3 de noviembre de 2026) se leen de la traza operativa: la primera huella
+// lateral; solo se completan días desde el nuevo inicio persistido. Los extras del día se leen de la traza operativa: la primera huella
 // humana desde las 8:00 es «primero en abrir»; «primero en la reunión» no tiene fuente todavía y queda sin jugar.
 // La copa lee el mes guardado más «hoy» en vivo, la carrera de todo el equipo, la posición y la bondad. Solo lee y
 // cuenta: no cambia nada en la plataforma ni le escribe a nadie.
@@ -63,39 +62,49 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
   const service = {
     /** Todo lo que hace falta para evaluar un día, leído una sola vez: por persona, sus cierres, relojes, foto y devoluciones. */
     async readDay(dayKey) {
-      const { start, end } = dayWindow(dayKey);
+      const startedAt = await repo.startedAt();
+      const window = dayWindow(dayKey);
+      if (window.end <= startedAt) throw new Error('El día es anterior al inicio de la liga.');
+      const start = new Date(Math.max(window.start.getTime(), startedAt.getTime())), end = window.end;
+      const launchDay = bogotaDate(startedAt) === dayKey;
       const members = await activeMembers();
-      const userOf = new Map(members.map((member) => [member.id, member.user.id]));
       const memberOfUser = new Map(members.map((member) => [member.user.id, member]));
       const open = openWindowOf(dayKey);
-      const [closed, daySessions, returned, snapshot, firstTrace] = await Promise.all([
+      const [closed, daySessions, returned, snapshot, firstTrace, created] = await Promise.all([
         db.task.findMany({ where: { status: 'REALIZADA', completedAt: { gte: start, lt: end } }, select: { id: true, title: true, assigneeId: true, completedAt: true, dueDate: true } }),
-        db.taskWorkSession.findMany({ where: { OR: [{ endedAt: { gte: start, lt: end } }, { endedAt: null, startedAt: { lt: end } }] }, select: { workerId: true, durationMs: true, isOverlapping: true, correctedAt: true, closeReason: true, startedAt: true, endedAt: true } }),
+        db.taskWorkSession.findMany({ where: { OR: [{ endedAt: { gte: start, lt: end } }, { endedAt: null, startedAt: { gte: startedAt, lt: end } }] }, select: { workerId: true, durationMs: true, isOverlapping: true, correctedAt: true, closeReason: true, startedAt: true, endedAt: true } }),
         db.task.findMany({ where: { returnedAt: { gte: start, lt: end } }, select: { assigneeId: true } }),
-        snaps.snapshot(dayKey).catch((error) => { logger.error('[Liga] Sin la foto de las 6:00:', error?.message || error); return null; }),
+        startedAt > new Date(`${dayKey}T11:00:00Z`) ? null : snaps.snapshot(dayKey).catch((error) => { logger.error('[Liga] Sin la foto de las 6:00:', error?.message || error); return null; }),
         // Primero en abrir: la primera huella humana en la traza operativa desde las 8:00 de Bogotá. Sin lectura, nada se asume.
         db.operationalTraceEvent.findFirst({ where: { occurredAt: { gte: open.start, lt: open.end }, actorId: { in: [...memberOfUser.keys()] }, eventType: { in: PRESENCE_EVENTS } }, orderBy: { occurredAt: 'asc' }, select: { actorId: true, occurredAt: true } })
-          .catch((error) => { logger.error('[Liga] Sin lectura de quién abrió primero:', error?.message || error); return undefined; })
+          .catch((error) => { logger.error('[Liga] Sin lectura de quién abrió primero:', error?.message || error); return undefined; }),
+        db.task.findMany({ where: { createdAt: { gte: start, lt: end }, creatorId: { in: [...memberOfUser.keys()] } }, select: {
+          id: true, creatorId: true, comments: true,
+          taskComments: { where: { type: 'human', createdAt: { lt: end } }, select: { content: true } },
+          taskAttachments: { where: { purgeState: 'ACTIVE', createdAt: { lt: end } }, select: { id: true } }
+        } })
       ]);
-      const opener = firstTrace === undefined ? undefined : firstTrace ? (() => { const member = memberOfUser.get(firstTrace.actorId); return member ? { memberId: member.id, name: firstName(member.name), at: firstTrace.occurredAt } : null; })() : null;
+      // Un primero anterior al reinicio no convierte al segundo en ganador.
+      const opener = firstTrace === undefined ? undefined : firstTrace && new Date(firstTrace.occurredAt) >= startedAt ? (() => { const member = memberOfUser.get(firstTrace.actorId); return member ? { memberId: member.id, name: firstName(member.name), at: firstTrace.occurredAt } : null; })() : null;
       const closedIds = closed.map((task) => task.id);
-      const [states, taskSessions, comments] = closedIds.length ? await Promise.all([
+      const [states, taskSessions] = closedIds.length ? await Promise.all([
         db.recognitionTaskState.findMany({ where: { taskId: { in: closedIds } }, select: { taskId: true, originalDueDate: true } }),
-        db.taskWorkSession.findMany({ where: { taskId: { in: closedIds }, isCollaborator: false }, select: { taskId: true, workerId: true, durationMs: true, closeReason: true } }),
-        db.taskComment.findMany({ where: { taskId: { in: closedIds }, type: 'human' }, select: { taskId: true, authorId: true, createdAt: true } })
-      ]) : [[], [], []];
+        db.taskWorkSession.findMany({ where: { taskId: { in: closedIds }, isCollaborator: false }, select: { taskId: true, workerId: true, durationMs: true, closeReason: true } })
+      ]) : [[], []];
       const originalDue = new Map(states.map((row) => [row.taskId, row.originalDueDate]));
       const overdueAtDawn = new Map((snapshot?.people || []).map((person) => [person.id, Number(person.metrics?.overdue ?? 0)]));
-      const byMember = new Map(members.map((member) => [member.id, { memberId: member.id, closedTasks: [], sessions: [], overdueAtDawn: snapshot ? (overdueAtDawn.has(member.id) ? overdueAtDawn.get(member.id) : null) : null, returnedToday: 0, firstOpener: opener }]));
+      const byMember = new Map(members.map((member) => [member.id, { memberId: member.id, closedTasks: [], createdTasks: [], sessions: [], overdueAtDawn: snapshot ? (overdueAtDawn.has(member.id) ? overdueAtDawn.get(member.id) : null) : null, returnedToday: 0, firstOpener: opener }]));
+      for (const task of created) {
+        const bucket = byMember.get(memberOfUser.get(task.creatorId)?.id);
+        if (bucket) bucket.createdTasks.push({ id: task.id, documented: Boolean(String(task.comments || '').trim()) || task.taskComments.some(comment => String(comment.content || '').trim()) || task.taskAttachments.length > 0 });
+      }
       for (const task of closed) {
         const bucket = byMember.get(task.assigneeId);
         if (!bucket) continue;
         const mine = taskSessions.filter((session) => session.taskId === task.id && session.workerId === task.assigneeId);
         const measuredMs = mine.filter((session) => session.closeReason !== 'DECLARED').reduce((sum, session) => sum + Number(session.durationMs || 0), 0);
         const declared = mine.some((session) => session.closeReason === 'DECLARED');
-        const authorId = userOf.get(task.assigneeId);
-        const documented = comments.some((comment) => comment.taskId === task.id && comment.authorId === authorId && new Date(comment.createdAt) <= new Date(task.completedAt));
-        bucket.closedTasks.push({ id: task.id, title: task.title, completedAt: task.completedAt, dueDate: task.dueDate, originalDueDate: originalDue.get(task.id) || task.dueDate, measuredMs, declared, documented });
+        bucket.closedTasks.push({ id: task.id, title: task.title, completedAt: task.completedAt, dueDate: task.dueDate, originalDueDate: originalDue.get(task.id) || task.dueDate, measuredMs, declared });
       }
       for (const session of daySessions) {
         const bucket = byMember.get(session.workerId);
@@ -104,6 +113,10 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         bucket.sessions.push({ durationMs, isOverlapping: session.isOverlapping, correctedAt: session.correctedAt, closeReason: session.closeReason });
       }
       for (const task of returned) { const bucket = byMember.get(task.assigneeId); if (bucket) bucket.returnedToday += 1; }
+      // El primer día necesita actividad nueva para no conceder puntos al instante del reinicio.
+      if (launchDay) for (const bucket of byMember.values()) {
+        if (!bucket.closedTasks.length && !bucket.createdTasks.length && !bucket.sessions.length && !bucket.returnedToday) bucket.returnedToday = null;
+      }
       return { dayKey, members, byMember };
     },
 
@@ -122,15 +135,16 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
     async runAutomatic() {
       const at = now();
       const today = bogotaDate(at), monthKey = monthOf(today);
+      const firstDay = bogotaDate(await repo.startedAt());
       const computed = new Set(await repo.computedDays(monthKey));
       const backfilled = [];
       for (const dayKey of daysOfMonthUntil(monthKey, today)) {
-        if (!isBusinessDay(dayKey) || computed.has(dayKey)) continue;
+        if (dayKey < firstDay || !isBusinessDay(dayKey) || computed.has(dayKey)) continue;
         try { await this.computeAndSave(dayKey); backfilled.push(dayKey); }
         catch (error) { logger.error(`[Liga] No se pudo calcular el ${dayKey}:`, error?.message || error); }
       }
       let computedToday = null;
-      if (isBusinessDay(today) && bogotaClock(at).minutes >= LEAGUE_COMPUTE_MINUTES && !computed.has(today)) {
+      if (today >= firstDay && isBusinessDay(today) && bogotaClock(at).minutes >= LEAGUE_COMPUTE_MINUTES && !computed.has(today)) {
         try { await this.computeAndSave(today); computedToday = today; }
         catch (error) { logger.error('[Liga] No se pudo calcular hoy:', error?.message || error); }
       }
@@ -142,19 +156,20 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const at = now();
       const today = bogotaDate(at), monthKey = monthOf(today);
       const me = await memberAllowed(userId);
+      const startedAt = await repo.startedAt();
       const [{ members, byMember }, saved, gifts] = await Promise.all([this.readDay(today), repo.daysOfMonth(monthKey, { before: today }), repo.kudosOfMonth(monthKey)]);
       const nameOf = new Map(members.map((member) => [member.id, member.name]));
       const daysByMember = new Map(members.map((member) => [member.id, []]));
       for (const row of saved) daysByMember.get(row.member_id)?.push({ day: row.day_key, habits: row.habits, extras: row.extras || {} });
       const todayByMember = new Map();
       for (const member of members) {
-        const live = evaluateLeagueDay({ day: today, ...byMember.get(member.id) });
+        const live = evaluateLeagueDay({ day: today, ...(isBusinessDay(today) ? byMember.get(member.id) : {}) });
         todayByMember.set(member.id, live);
         daysByMember.get(member.id).push(live);
       }
       const receivedBy = new Map();
       for (const gift of gifts) receivedBy.set(gift.receiver_member_id, [...(receivedBy.get(gift.receiver_member_id) || []), gift]);
-      const scoreOf = (memberId) => leagueScore({ days: daysByMember.get(memberId) || [], kudos: receivedBy.get(memberId) || [] });
+      const scoreOf = (memberId) => leagueScore({ days: daysByMember.get(memberId) || [], kudos: receivedBy.get(memberId) || [] }) ?? 0;
       const avatarKeys = resolveLeagueAvatarKeys(members);
       const lanes = members.map((member) => {
         const score = scoreOf(member.id);
@@ -170,6 +185,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const lastDay = lastDayOfMonth(monthKey);
       return {
         month: monthKey,
+        startsAt: startedAt.toISOString(),
         closesOn: weekdayLabel(lastDay),
         daysLeft: Math.max(0, Math.round((Date.parse(`${lastDay}T12:00:00Z`) - Date.parse(`${today}T12:00:00Z`)) / DAY_MS)),
         score,
@@ -177,9 +193,9 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         nextStep: leagueNextStep(myDays),
         streak: { days: summarizeDays(myDays).fullDays, label: 'con los 5 hábitos' },
         kudos: { received, score: kudosScore(received), givenThisWeek: givenThisWeek ? { id: givenThisWeek.receiver_member_id, name: firstName(nameOf.get(givenThisWeek.receiver_member_id) || ''), note: givenThisWeek.note } : null, weeklyBudget: 10 },
-        position: rank ? { rank, of: ranked.length } : null,
+        position: score > 0 && rank ? { rank, of: ranked.length } : null,
         nextStepUrl: '/gestion',
-        podium: ranked.slice(0, 3).map((lane) => ({ id: lane.id, name: lane.name, avatarUrl: lane.avatarUrl, pixelAvatarKey: lane.pixelAvatarKey, score: lane.score })),
+        podium: ranked.filter(lane => lane.score > 0).slice(0, 3).map((lane) => ({ id: lane.id, name: lane.name, avatarUrl: lane.avatarUrl, pixelAvatarKey: lane.pixelAvatarKey, score: lane.score })),
         winner: null,
         race: { lanes, track: trackScale(lanes.map((lane) => lane.score)) }
       };
@@ -189,13 +205,14 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
     async recognitionsFor({ userId }) {
       const me = await memberAllowed(userId);
       const month = monthOf(bogotaDate(now()));
+      const startedAt = await repo.startedAt();
       const [year, monthNumber] = month.split('-').map(Number);
       const kinds = [];
       if (hasModulePermission(me.user, 'gestion')) kinds.push('FIRST_TASK', 'EARLY_DELIVERY', 'DAILY_EIGHT', 'CAUGHT_UP', 'WEEKLY_FIFTY');
       if (hasModulePermission(me.user, 'parrillas')) kinds.push('PLAN_APPROVED');
       if (!kinds.length) return { month, counts: {}, total: 0, recent: [], hasMore: false };
       const where = { recipientId: userId, kind: { in: kinds }, occurredAt: {
-        gte: new Date(`${month}-01T05:00:00.000Z`),
+        gte: new Date(Math.max(Date.parse(`${month}-01T05:00:00.000Z`), startedAt.getTime())),
         lt: new Date(Date.UTC(year, monthNumber, 1, 5)),
       } };
       const [groups, rows] = await Promise.all([
