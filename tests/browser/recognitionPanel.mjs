@@ -142,10 +142,11 @@ try {
     const response = await route.fetch();
     const league = await response.json();
     league.score = 0; league.position = null; league.podium = []; league.nextStep = null;
+    league.scoreBreakdown = { confirmed: 0, provisional: 0 };
     league.startsAt = '2026-11-03T13:00:00Z';
     league.streak = { days: 0 }; league.kudos = { score: 0, received: [], givenThisWeek: null, weeklyBudget: 5, weekKey: '2026-W45' };
-    league.race.lanes = league.race.lanes.map(person => ({ ...person, score: 0 }));
-    league.today = { day: '2026-11-03', habits: {}, extras: {}, earned: 0, possible: 0, points: 0 };
+    league.race.lanes = league.race.lanes.map(person => ({ ...person, score: 0, scoreBreakdown: league.scoreBreakdown }));
+    league.today = { day: '2026-11-03', habits: {}, extras: {}, earned: 0, possible: 0, points: 0, isProvisional: true, isConfirmed: false };
     await route.fulfill({ response, json: league });
   });
   await page.setViewportSize({ width: 1440, height: 1000 });

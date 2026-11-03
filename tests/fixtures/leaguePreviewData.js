@@ -38,7 +38,8 @@ export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 
   const score = leagueScore({ days: allDays, kudos: kudos.received, recognitions: leagueDemoRecognitions.total });
   const lanes = LEAGUE_ROSTER.map((person) => {
     const laneScore = person.id === viewerId ? score : SCORES[person.id];
-    return { ...person, score: laneScore, isSelf: person.id === viewerId };
+    const provisional = person.id === viewerId ? todayPoints(today).points : Math.min(10, laneScore);
+    return { ...person, score: laneScore, scoreBreakdown: { confirmed: laneScore - provisional, provisional }, isSelf: person.id === viewerId };
   });
   const ranked = [...lanes].sort((a, b) => b.score - a.score);
   const melissa = LEAGUE_ROSTER.find((person) => person.id === 'melissa');
@@ -47,8 +48,9 @@ export function leagueDemoPayload({ winner = false, perfect = false, viewerId = 
     closesOn: 'lunes 30',
     daysLeft: 26,
     score,
+    scoreBreakdown: lanes.find(lane => lane.isSelf).scoreBreakdown,
     gender: 'M',
-    today: { ...today, ...todayPoints(today), points: todayPoints(today).points + 10 },
+    today: { ...today, ...todayPoints(today), isProvisional: true, isConfirmed: false, points: todayPoints(today).points + 10 },
     recognitionPoints: 20,
     meetings: { canManage: true, minDate: "2026-11-03", maxDate: "2026-11-04", entries: [] },
     nextStep: leagueNextStep(allDays),

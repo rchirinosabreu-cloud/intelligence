@@ -12,7 +12,7 @@ import MeetingAward from './MeetingAward';
 import RecognitionCollection, { RecognitionHistory, RecognitionStatus } from './RecognitionCollection';
 import { requestLeague } from '@/lib/leagueRequest';
 import { cn } from '@/lib/utils';
-import { DAILY_HABITS, EXTRA_ACTIONS, EXTRA_POINTS, HABIT_POINTS, MEETING_POINTS, RECOGNITION_POINTS, KUDOS_WEEKLY, leagueMonthLabel, leagueRank } from '@/lib/platformLeague';
+import { DAILY_HABITS, EXTRA_ACTIONS, EXTRA_POINTS, HABIT_POINTS, MEETING_POINTS, RECOGNITION_POINTS, KUDOS_WEEKLY, leagueMonthLabel, leagueRank, leaguePodiumGroups } from '@/lib/platformLeague';
 
 // El nombre de archivo conserva compatibilidad con el dock y ?carrera.
 // Las tres vistas muestran datos guardados; ningún logro añade puntos desde la interfaz.
@@ -45,6 +45,7 @@ function Habits({ today }) {
     <summary className="flex min-h-14 cursor-pointer list-none items-center gap-2 rounded-lg text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan [&::-webkit-details-marker]:hidden">
       <Check className="h-4 w-4 text-brand-green-deep dark:text-brand-green" /><span className="flex-1">Tus hábitos de hoy</span><span className={cn('text-xs font-normal', muted)}>{today.earned} de {today.possible}</span><ChevronDown className="h-4 w-4 group-open:rotate-180" />
     </summary>
+    <p className={cn('pb-2 text-xs leading-5', muted)}>{today.isProvisional ? 'Avance provisional: los hábitos pueden cambiar durante el día.' : today.isConfirmed ? 'Cierre confirmado: estos hábitos ya quedaron registrados.' : 'Los hábitos se evalúan en días hábiles.'}</p>
     <ul className="divide-y divide-zinc-100 pb-2 dark:divide-white/5">{items.map(item => {
       const Icon = item.icon;
       const unavailable = item.extra && !item.source;
@@ -52,6 +53,7 @@ function Habits({ today }) {
       return <li key={item.key} className="py-3" {...{ [item.extra ? 'data-race-today-extra' : 'data-race-today-habit']: item.key }} data-race-today-state={earned ? 'earned' : item.value === false ? 'missed' : 'idle'}>
         <div className="flex items-center gap-2"><Icon className={cn('h-4 w-4', earned ? 'text-brand-green-deep dark:text-brand-green' : muted)} /><span className="flex-1 text-sm font-medium">{item.label}</span><span className={cn('text-xs', earned ? 'text-brand-green-deep dark:text-brand-green' : muted)}>{unavailable ? 'Próximamente' : earned ? `+${item.points} hoy` : item.value === false ? 'Sin sumar hoy' : 'Sin evaluar'}</span></div>
         <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>{item.hint}</p>
+        {today.evidence?.[item.key] && <p className={cn('mt-1 pl-6 text-xs leading-5', muted)}>{today.evidence[item.key]}</p>}
       </li>;
     })}</ul>
   </details>;
@@ -78,7 +80,7 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
   const lanes = useMemo(() => league?.race?.lanes || [], [league]);
   const self = lanes.find(lane => lane.isSelf);
   const ranked = useMemo(() => [...lanes].filter(lane => typeof lane.score === 'number').sort((a, b) => b.score - a.score || a.name.localeCompare(b.name, 'es')), [lanes]);
-  const podium = ranked.filter(person => person.score > 0).slice(0, 3);
+  const podium = leaguePodiumGroups(ranked);
   const month = leagueMonthLabel(league?.month);
   const today = league?.today;
   const positionMessage = POSITION_MESSAGES[league?.position?.rank - 1];
@@ -109,8 +111,10 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
                   <Sparkles aria-hidden="true" className="absolute right-4 top-4 h-5 w-5 text-brand-cyan-deep/40 dark:text-brand-cyan/50" />
                   <div className="flex items-center gap-5">
                     <div className="relative flex h-28 w-24 shrink-0 items-end justify-center pb-2"><span aria-hidden="true" className="absolute bottom-1 h-16 w-24 rounded-[50%] bg-brand-cyan/15 dark:bg-brand-cyan/20" /><RunnerAvatar person={self} size={104} className="relative" /></div>
-                    <div className="min-w-0"><p className="text-sm font-medium">¡Vamos, {self.name}!</p><p data-race-panel-score className="mt-1 flex items-baseline gap-1.5 text-5xl font-bold tracking-tight">{league.score ?? '–'}<span className="text-sm font-medium tracking-normal">puntos</span></p>{typeof today?.points === 'number' && <p data-race-today-points className="mt-2 inline-flex items-center gap-1 rounded-full bg-brand-green/15 px-2.5 py-1 text-xs font-semibold text-brand-green-deep dark:bg-brand-green/20 dark:text-brand-green"><Sparkles className="h-3 w-3" />+{today.points} hoy</p>}</div>
+                    <div className="min-w-0"><p className="text-sm font-medium">¡Vamos, {self.name}!</p><p data-race-panel-score className="mt-1 flex items-baseline gap-1.5 text-5xl font-bold tracking-tight">{league.score ?? '–'}<span className="text-sm font-medium tracking-normal">puntos</span></p><p className={cn('mt-1 text-xs', muted)}>Total hasta ahora</p></div>
                   </div>
+                  {league.scoreBreakdown && <div data-league-score-breakdown className="mt-3 flex flex-wrap gap-x-3 gap-y-1 text-xs font-semibold"><span className="text-brand-green-deep dark:text-brand-green">{league.scoreBreakdown.confirmed} confirmados</span><span className="text-brand-cyan-deep dark:text-brand-cyan">+{league.scoreBreakdown.provisional} provisionales de hoy</span></div>}
+                  <p className={cn('mt-2 text-xs leading-5', muted)}>{today?.isProvisional ? 'Los provisionales pueden subir o bajar según los hábitos de hoy. Se confirman en el cierre diario, a partir de las 6:05 p. m. (Bogotá).' : today?.isConfirmed ? 'El cierre de hoy ya está confirmado.' : 'Los hábitos se evalúan en días hábiles.'}</p>
                   <div className="mt-4 border-t border-brand-cyan/20 pt-3 text-xs">
                     <div className="flex flex-wrap items-center justify-between gap-2"><span data-race-position className="font-semibold">{league.position ? `Vas en el puesto ${league.position.rank}` : 'Tu mes está comenzando'}</span><span className={muted}>{typeof league.daysLeft === 'number' && `${league.daysLeft} días para el cierre`}</span></div>
                     {positionMessage && <p data-race-position-message className="mt-2 text-sm leading-5 text-zinc-600 dark:text-zinc-300">{positionMessage}</p>}
@@ -132,13 +136,23 @@ export default function RaceOfTheMonth({ open, onOpenChange, league, error, onRe
               </TabsContent>
               <TabsContent value="achievements" className="space-y-5 pt-4"><RecognitionStatus query={history}>{data => <RecognitionCollection data={data} />}</RecognitionStatus></TabsContent>
               <TabsContent value="team" className="space-y-4 pt-3">
-                <div><h3 className="text-xl font-bold">Así va el equipo</h3><p className={cn('mt-1 text-sm', muted)}>Cada buen hábito cuenta. El mes sigue abierto.</p></div>
-                {podium.length === 3 && podium.every(person => ranked.filter(other => other.score === person.score).length === 1) && <section data-race-podium aria-label="Primeras posiciones del mes" className="grid grid-cols-3 items-end gap-2 rounded-3xl bg-brand-yellow/10 px-3 pt-4 dark:bg-brand-yellow/5">
-                  {[podium[1], podium[0], podium[2]].map((person, index) => { const rank = [2, 1, 3][index]; return <div key={person.id} className="flex min-w-0 flex-col items-center">
-                    {rank === 1 && <Trophy aria-hidden="true" className="mb-1 h-5 w-5 text-brand-yellow-deep dark:text-brand-yellow" />}<RunnerAvatar person={person} size={rank === 1 ? 76 : 60} phase={index} /><p className="mt-2 max-w-full truncate text-sm font-semibold">{person.name}</p><p className={cn('text-xs', muted)}>{person.score} pts</p><span className={cn('mt-2 flex w-full items-center justify-center rounded-t-xl text-lg font-bold', rank === 1 ? 'h-12 bg-brand-yellow/40 text-brand-yellow-deep dark:text-brand-yellow' : rank === 2 ? 'h-8 bg-brand-cyan/15 text-brand-cyan-deep dark:text-brand-cyan' : 'h-6 bg-brand-coral/20 text-brand-coral-deep dark:text-brand-coral')}>{rank}</span>
-                  </div>; })}
+                <div><h3 className="text-xl font-bold">Así va el equipo</h3><p className={cn('mt-1 text-sm', muted)}>La clasificación incluye el avance provisional de hoy. Los empates comparten puesto.</p></div>
+                {podium.length > 0 && <section data-race-podium aria-label="Primeras posiciones del mes" className="space-y-3 rounded-3xl bg-brand-yellow/10 p-3 dark:bg-brand-yellow/5">
+                  <h4 className="flex items-center gap-2 text-sm font-semibold"><Trophy className="h-4 w-4 text-brand-yellow-deep dark:text-brand-yellow" />Podio del mes</h4>
+                  {podium.every(group => group.people.length === 1) ? <div className="grid grid-cols-3 items-end gap-2">
+                    {[2, 1, 3].map(rank => {
+                      const person = podium.find(group => group.rank === rank)?.people[0];
+                      if (!person) return <div key={rank} aria-hidden="true" />;
+                      return <div key={rank} data-podium-rank={rank} data-podium-member={person.id} className="flex min-w-0 flex-col items-center">
+                        <RunnerAvatar person={person} size={rank === 1 ? 76 : 60} /><p className="mt-2 max-w-full break-words text-center text-sm font-semibold">{person.name}</p><p className={cn('text-xs', muted)}>{person.score} pts</p><span className={cn('mt-2 flex w-full items-center justify-center rounded-t-xl text-lg font-bold', rank === 1 ? 'h-12 bg-brand-yellow/40 text-brand-yellow-deep dark:text-brand-yellow' : rank === 2 ? 'h-8 bg-brand-cyan/15 text-brand-cyan-deep dark:text-brand-cyan' : 'h-6 bg-brand-coral/20 text-brand-coral-deep dark:text-brand-coral')}>{rank}</span>
+                      </div>;
+                    })}
+                  </div> : podium.map(({ rank, score, people }) => <div key={rank} data-podium-rank={rank} className={cn(surface, 'p-3')}>
+                    <div className="flex items-center gap-2"><span className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-xl font-bold', rank === 1 ? 'bg-brand-yellow/25 text-brand-yellow-deep dark:text-brand-yellow' : rank === 2 ? 'bg-brand-cyan/15 text-brand-cyan-deep dark:text-brand-cyan' : 'bg-brand-coral/15 text-brand-coral-deep dark:text-brand-coral')}>{rank}</span><div className="min-w-0 flex-1"><p className="text-xs font-semibold">{people.length > 1 ? 'Puesto compartido' : `Puesto ${rank}`}</p></div><span className="text-sm font-bold">{score} <span className="text-xs font-normal">pts</span></span></div>
+                    <div className="mt-3 grid grid-cols-3 gap-x-2 gap-y-3">{people.map(person => <div key={person.id} data-podium-member={person.id} className="flex min-w-0 flex-col items-center"><RunnerAvatar person={person} size={rank === 1 ? 64 : 48} /><p className="mt-1 max-w-full break-words text-center text-xs font-medium">{person.name}</p></div>)}</div>
+                  </div>)}
                 </section>}
-                <section className={cn(surface, 'overflow-hidden px-3')} aria-label="Clasificación del mes"><ol className="divide-y divide-zinc-100 dark:divide-white/5">{ranked.map((person, index) => <li key={person.id} data-league-member={person.id} className={cn('flex min-h-14 items-center gap-3 rounded-lg px-1 py-2', person.isSelf && 'bg-brand-cyan/10 dark:bg-brand-cyan/10')}><span className={cn('w-5 text-center text-xs tabular-nums', muted)}>{leagueRank(person.score, ranked) ?? '–'}</span><span className="flex w-9 shrink-0 justify-center"><RunnerAvatar person={person} size={38} phase={index} /></span><span className="min-w-0 flex-1 truncate text-sm font-medium">{person.name}{person.isSelf && <span className="ml-1.5 text-xs text-brand-cyan-deep dark:text-brand-cyan">Tú</span>}</span><span className="text-sm font-bold tabular-nums">{person.score} <span className={cn('text-xs font-normal', muted)}>pts</span></span></li>)}</ol></section>
+                <section className={cn(surface, 'overflow-hidden px-3')} aria-label="Clasificación del mes"><ol className="divide-y divide-zinc-100 dark:divide-white/5">{ranked.map((person, index) => <li key={person.id} data-league-member={person.id} className={cn('flex min-h-14 items-center gap-3 rounded-lg px-1 py-2', person.isSelf && 'bg-brand-cyan/10 dark:bg-brand-cyan/10')}><span className={cn('w-5 text-center text-xs tabular-nums', muted)}>{leagueRank(person.score, ranked) ?? '–'}</span><span className="flex w-9 shrink-0 justify-center"><RunnerAvatar person={person} size={38} phase={index} /></span><span className="min-w-0 flex-1 truncate text-sm font-medium">{person.name}{person.isSelf && <span className="ml-1.5 text-xs text-brand-cyan-deep dark:text-brand-cyan">Tú</span>}</span><div className="shrink-0 text-right tabular-nums"><p className="text-sm font-bold">{person.score} <span className={cn('text-xs font-normal', muted)}>pts</span></p>{person.scoreBreakdown && <p className={cn('mt-0.5 text-[11px] leading-4', muted)}>{person.scoreBreakdown.confirmed} confirmados<br />+{person.scoreBreakdown.provisional} provisionales</p>}</div></li>)}</ol></section>
                 {league.meetings && <MeetingAward meetings={league.meetings} lanes={lanes} />}
                 {self && <section data-race-kudos className="rounded-2xl border border-brand-magenta/20 bg-brand-magenta/5 p-4 dark:bg-brand-magenta/10"><h3 className="flex items-center gap-2 text-base font-bold"><Award className="h-5 w-5 text-brand-magenta-deep dark:text-brand-coral" />5 puntos para…</h3><p className="mb-3 mt-1 text-sm text-zinc-600 dark:text-zinc-300">Cada semana podrás regalar cinco puntos a algún miembro del equipo para agradecerle por alguna ayuda o reconocer su trabajo</p><KudosGift lanes={lanes} selfId={self.id} given={currentGift || league.kudos?.givenThisWeek} onGiven={gift => { setGiven({ startsAt: league.startsAt, week: league.kudos.weekKey, gift }); queryClient.invalidateQueries({ queryKey: ['league'] }); }} />{league.kudos?.received?.map((gift, index) => <p key={index} className="mt-3 border-t border-brand-magenta/10 pt-3 text-xs leading-5 text-zinc-600 dark:text-zinc-300"><strong>{gift.from}</strong>{gift.note ? `: «${gift.note}»` : ' te regaló puntos.'}</p>)}</section>}
                 <p className={cn('text-center text-xs', muted)}>El resultado se valida al cierre del mes.</p>

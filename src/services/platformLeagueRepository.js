@@ -26,7 +26,7 @@ export const createPlatformLeagueRepository = ({ pool }) => ({
 
   /** Todas las filas del mes anteriores a un día: [{ day_key, member_id, habits, extras }]. */
   async daysOfMonth(monthKey, { before }) {
-    const { rows } = await pool.query('SELECT day_key, member_id, habits, extras FROM bria_memory.league_run_days WHERE day_key LIKE $1 AND day_key < $2 AND run_id = $3 ORDER BY day_key', [`${monthKey}-%`, before, LEAGUE_RUN_ID]);
+    const { rows } = await pool.query('SELECT day_key, member_id, habits, extras, evidence FROM bria_memory.league_run_days WHERE day_key LIKE $1 AND day_key < $2 AND run_id = $3 ORDER BY day_key', [`${monthKey}-%`, before, LEAGUE_RUN_ID]);
     return rows;
   },
 

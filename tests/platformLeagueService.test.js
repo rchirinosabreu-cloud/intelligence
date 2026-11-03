@@ -122,6 +122,39 @@ const fakeRepo = (seed = []) => {
 
 const snapshots = { snapshot: async (dayKey) => (dayKey === DAY ? { people: [{ id: 'm-rodny', metrics: { overdue: 0 } }, { id: 'm-helen', metrics: { overdue: 2 } }, { id: 'm-jesu', metrics: { overdue: 0 } }] } : { people: [] }) };
 
+test('live habits can change without reducing confirmed points, including gifts and awards received today', async () => {
+  const repo = fakeRepo([{ day_key: '2026-11-02', member_id: 'm-rodny', habits: { RELOJ: true }, extras: {} }]);
+  await repo.giveKudos({ week_key: '2026-W45', giver_member_id: 'm-helen', receiver_member_id: 'm-rodny' });
+  repo.meetings.push({ day_key: DAY, member_id: 'm-rodny', week_key: '2026-W45' });
+  const db = fakeDb();
+  db.recognitionAward.findMany = async () => [{ id: 'award', recipientId: 'u-rodny', occurredAt: at(`${DAY}T19:00:00Z`) }];
+  const service = createPlatformLeagueService({ db, repository: repo, snapshots, now: () => at(`${DAY}T22:00:00Z`) });
+  const before = await service.leagueFor({ userId: 'u-rodny' });
+  assert.deepEqual(before.scoreBreakdown, { confirmed: 25, provisional: 25 });
+  assert.equal(before.today.isProvisional, true);
+  const find = db.task.findMany;
+  db.task.findMany = async args => args.where.returnedAt ? [{ assigneeId: 'm-rodny' }] : find(args);
+  const after = await service.leagueFor({ userId: 'u-rodny' });
+  assert.deepEqual(after.scoreBreakdown, { confirmed: 25, provisional: 20 });
+  assert.equal(after.score, 45);
+  assert.deepEqual(after.race.lanes.find(lane => lane.isSelf).scoreBreakdown, after.scoreBreakdown);
+});
+
+test('a saved daily close confirms today once and survives later source changes', async () => {
+  const repo = fakeRepo();
+  const db = fakeDb();
+  const service = createPlatformLeagueService({ db, repository: repo, snapshots, now: () => at(`${DAY}T23:15:00Z`) });
+  await service.computeAndSave(DAY);
+  const find = db.task.findMany;
+  db.task.findMany = async args => args.where.returnedAt ? [{ assigneeId: 'm-rodny' }] : find(args);
+  const result = await service.leagueFor({ userId: 'u-rodny' });
+  assert.deepEqual(result.scoreBreakdown, { confirmed: 25, provisional: 0 });
+  assert.equal(result.score, 25);
+  assert.equal(result.today.isProvisional, false);
+  assert.equal(result.today.habits.SIN_DEVOLUCION, true);
+  assert.equal(result.today.evidence.SIN_DEVOLUCION, 'Nada devuelto.');
+});
+
 test('a fresh league starts at zero, excludes old daily evidence and never backfills before launch', async () => {
   const cutoff = at(`${DAY}T22:00:00Z`);
   const repo = fakeRepo();
@@ -159,6 +192,9 @@ test('a weekend does not add live habit points that disappear when the month is 
   const league = await service.leagueFor({ userId: 'u-rodny' });
   assert.equal(league.score, 0);
   assert.equal(league.today.points, 0);
+  assert.deepEqual(league.scoreBreakdown, { confirmed: 0, provisional: 0 });
+  assert.equal(league.today.isProvisional, false);
+  assert.equal(league.today.isConfirmed, false, 'a weekend is not a recorded daily close');
 });
 
 test('created context credits the creator, accepts human comments or active files and excludes later context', async () => {
