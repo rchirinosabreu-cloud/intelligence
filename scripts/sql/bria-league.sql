@@ -1,6 +1,6 @@
 -- La liga del buen uso de la plataforma (2 de noviembre de 2026). Aditivo e idempotente.
 -- Cada día hábil, a las 18:05 de Bogotá, la plataforma escribe los cinco puntos de cada persona con su evidencia;
--- los lunes cada persona puede regalar sus 10 puntos de bondad a una sola persona. Nada se borra: un mes cerrado
+-- cada mes una persona puede regalar sus 10 puntos a alguien del equipo. Nada se borra: un mes cerrado
 -- se queda tal cual para poder volver a leerlo.
 CREATE SCHEMA IF NOT EXISTS bria_memory;
 
@@ -58,3 +58,32 @@ CREATE TABLE IF NOT EXISTS bria_memory.league_run_kudos (
   CHECK (giver_member_id <> receiver_member_id)
 );
 CREATE INDEX IF NOT EXISTS league_run_kudos_month ON bria_memory.league_run_kudos(run_id, created_at);
+
+-- El cupo mensual conserva todos los regalos anteriores, aunque hubiera varios en un mes.
+-- El trigger protege también a servidores antiguos durante un despliegue gradual.
+CREATE TABLE IF NOT EXISTS bria_memory.league_kudos_months (
+  run_id TEXT NOT NULL REFERENCES bria_memory.league_runs(id),
+  month_key TEXT NOT NULL CHECK (month_key ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'),
+  giver_member_id TEXT NOT NULL,
+  PRIMARY KEY (run_id, month_key, giver_member_id)
+);
+CREATE OR REPLACE FUNCTION bria_memory.claim_league_month() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  INSERT INTO bria_memory.league_kudos_months(run_id, month_key, giver_member_id)
+    VALUES (NEW.run_id, to_char(NEW.created_at AT TIME ZONE 'America/Bogota', 'YYYY-MM'), NEW.giver_member_id);
+  RETURN NEW;
+END;
+$$;
+-- La restricción semanal impediría regalar en dos meses que comparten semana ISO.
+-- Este bloque toma el mismo bloqueo que los escritores antes de sustituir el límite.
+DO $$ BEGIN
+  LOCK TABLE bria_memory.league_run_kudos IN ACCESS EXCLUSIVE MODE;
+  ALTER TABLE bria_memory.league_run_kudos
+    DROP CONSTRAINT IF EXISTS league_run_kudos_run_id_week_key_giver_member_id_key;
+  DROP TRIGGER IF EXISTS league_monthly_budget ON bria_memory.league_run_kudos;
+  CREATE TRIGGER league_monthly_budget BEFORE INSERT ON bria_memory.league_run_kudos
+    FOR EACH ROW EXECUTE FUNCTION bria_memory.claim_league_month();
+  INSERT INTO bria_memory.league_kudos_months(run_id, month_key, giver_member_id)
+    SELECT DISTINCT run_id, to_char(created_at AT TIME ZONE 'America/Bogota', 'YYYY-MM'), giver_member_id
+    FROM bria_memory.league_run_kudos ON CONFLICT DO NOTHING;
+END $$;

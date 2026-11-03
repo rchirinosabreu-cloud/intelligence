@@ -14,7 +14,7 @@ Lo que sí se exige:
 ### `bria_memory` (Bria)
 | Tabla | Qué guarda | Archivo | Acceso |
 |---|---|---|---|
-| `league_runs`, `league_run_days`, `league_run_kudos` | Inicio persistido de la liga, puntos diarios y regalos semanales desde ese inicio; el piloto queda separado, sin borrar sus registros | `scripts/sql/bria-league.sql` | `platformLeagueRepository.js` |
+| `league_runs`, `league_run_days`, `league_run_kudos`, `league_kudos_months` | Inicio persistido de la liga, puntos diarios y regalos mensuales desde ese inicio, con cupo único por persona y mes de Bogotá (trigger, también para clientes antiguos); el piloto queda separado, sin borrar sus registros | `scripts/sql/bria-league.sql` | `platformLeagueRepository.js` |
 | `learnings`, `learning_events` | Aprendizajes y preferencias enseñados conversando, con su historial | `scripts/sql/bria-knowledge.sql` | `briaKnowledgeRepository.js` |
 | `sources`, `source_versions`, `source_search`, `import_runs` | Archivo importado de Drive y correo (solo lectura para administradores designados) | `scripts/sql/bria-knowledge.sql` | `briaKnowledgeRepository.js` |
 | `conversations`, `conversation_turns`, `conversation_attachments`, `conversation_purges` | Conversaciones con Bria, sus adjuntos y el borrado pendiente de archivos | `scripts/sql/bria-conversations.sql` | `briaConversationRepository.js` |

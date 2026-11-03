@@ -39,10 +39,11 @@ export const createPlatformLeagueRepository = ({ pool }) => ({
     return rows;
   },
 
-  /** Un regalo de la semana; la base rechaza el segundo de la misma persona (23505). */
-  async giveKudos({ week_key, giver_member_id, receiver_member_id, note }) {
-    const { rows } = await pool.query(`INSERT INTO bria_memory.league_run_kudos(run_id, week_key, giver_member_id, receiver_member_id, note)
-      VALUES ($1, $2, $3, $4, $5) RETURNING id, week_key, giver_member_id, receiver_member_id, note, created_at`, [LEAGUE_RUN_ID, week_key, giver_member_id, receiver_member_id, note]);
+  /** Un regalo del mes de Bogotá; la base rechaza el segundo de la misma persona (23505). */
+  async giveKudos({ giver_member_id, receiver_member_id, note, created_at = new Date() }) {
+    const { rows } = await pool.query(`INSERT INTO bria_memory.league_run_kudos(run_id, week_key, giver_member_id, receiver_member_id, note, created_at)
+      VALUES ($1, to_char($2::timestamptz AT TIME ZONE 'America/Bogota', 'IYYY-"W"IW'), $3, $4, $5, $2)
+      RETURNING id, week_key, giver_member_id, receiver_member_id, note, created_at`, [LEAGUE_RUN_ID, created_at, giver_member_id, receiver_member_id, note]);
     return rows[0];
   }
 });

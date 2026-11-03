@@ -2,7 +2,7 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createServer } from 'vite';
 import { dashboardDemoClients, dashboardDemoCompletedTasks, dashboardDemoDashboard, dashboardDemoKanbanTasks, dashboardDemoLeague, dashboardDemoTaskComments, dashboardDemoTeam, dashboardDemoUser } from '../tests/fixtures/dashboardPreviewData.js';
-import { leagueDemoRecognitions } from '../tests/fixtures/leaguePreviewData.js';
+import { LEAGUE_ROSTER, leagueDemoRecognitions } from '../tests/fixtures/leaguePreviewData.js';
 
 // Local laboratory for the personal dashboard and the sidebar: the real App over a read-only mock API.
 // No dotenv, production server, database, storage, scheduler or proxy.
@@ -28,10 +28,16 @@ export async function createDashboardPreview({ port = 3200 } = {}) {
         if (pathname.startsWith('/api/')) {
           res.setHeader('Content-Type', 'application/json');
           res.setHeader('Cache-Control', 'no-store');
-          // Expectativa mensual: la muestra también rechaza envíos de clientes antiguos.
+          // El regalo del mes de la liga (3 de noviembre de 2026): la muestra lo acepta y responde como el servidor, sin guardar nada.
           if (req.method === 'POST' && pathname === '/api/league/kudos') {
-            res.statusCode = 409;
-            res.end(JSON.stringify({ error: 'Los diez puntos mensuales estarán disponibles próximamente.', code: 'LEAGUE_KUDOS_COMING_SOON' }));
+            let raw = '';
+            req.on('data', (chunk) => { raw += chunk; });
+            req.on('end', () => {
+              const body = (() => { try { return JSON.parse(raw || '{}'); } catch { return {}; } })();
+              const person = LEAGUE_ROSTER.find((row) => row.id === body.memberId);
+              if (!person) { res.statusCode = 404; res.end(JSON.stringify({ error: 'Esa persona no está en el equipo activo.' })); return; }
+              res.end(JSON.stringify({ id: 'kudos-demo', monthKey: '2026-11', to: { id: person.id, name: person.name }, note: String(body.note || '').slice(0, 120) }));
+            });
             return;
           }
           if (req.method !== 'GET') {

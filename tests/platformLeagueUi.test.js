@@ -21,8 +21,7 @@ test('the collection and team replace the track without changing score calculati
   assert.doesNotMatch(panel, /data-race-track|trackPosition|leagueScore\(/);
   assert.match(panel, /requestLeague\('\/recognitions'\)/);
   assert.match(panel, /data-race-panel-score/);
-  assert.doesNotMatch(read('src/components/league/KudosGift.jsx'), /requestLeague|<form|<Button/);
-  assert.match(read('src/components/league/KudosGift.jsx'), /Próximamente/);
+  assert.match(read('src/components/league/KudosGift.jsx'), /requestLeague\('\/kudos'/);
 });
 
 test('production bundles the avatars, supports fallback and honors reduced motion', () => {
@@ -39,7 +38,7 @@ test('the UI uses brand tokens and supports both themes', () => {
   for (const source of [panel, dock, read('src/components/league/RecognitionCollection.jsx')]) {
     assert.doesNotMatch(source, /#[0-9a-fA-F]{6}/);
     assert.doesNotMatch(source, /\b(?:bg|text|border)-(?:purple|violet|indigo|fuchsia|sky|teal|emerald)-/);
-    assert.match(source, /dark:bg-/);
+    assert.match(source, /dark:bg-|brain-popover-surface/);
     assert.match(source, /dark:text-/);
   }
 });

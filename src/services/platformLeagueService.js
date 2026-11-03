@@ -22,6 +22,7 @@ export const LEAGUE_CHECK_MS = 10 * 60 * 1000;
 /** Una huella humana en la traza operativa: lo que deja una persona al usar la plataforma (nunca un reloj ni una réplica). */
 export const PRESENCE_EVENTS = ['SESSION_STARTED', 'TASK_OPENED', 'TASK_LIST_SYNCED', 'TASK_CREATED', 'TASK_ASSIGNED', 'TASK_UPDATED', 'NOTIFICATION_READ', 'PLATFORM_MUTATION'];
 
+const KUDOS_NOTE_MAX = 120;
 const DAY_MS = 86_400_000;
 const dayWindow = (dayKey) => { const start = new Date(`${dayKey}T05:00:00.000Z`); return { start, end: new Date(start.getTime() + DAY_MS) }; };
 const monthOf = (dayKey) => dayKey.slice(0, 7);
@@ -178,6 +179,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       const myDays = daysByMember.get(me.id) || [];
       const myToday = todayByMember.get(me.id);
       const received = (receivedBy.get(me.id) || []).map((gift) => ({ from: firstName(nameOf.get(gift.giver_member_id) || 'Alguien del equipo'), note: gift.note, week: gift.week_key }));
+      const given = gifts.find(gift => gift.giver_member_id === me.id);
       const score = scoreOf(me.id);
       const rank = ranked.findIndex((lane) => lane.id === me.id) + 1;
       const lastDay = lastDayOfMonth(monthKey);
@@ -190,7 +192,7 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
         today: myToday ? { ...myToday, ...todayPoints(myToday) } : null,
         nextStep: leagueNextStep(myDays),
         streak: { days: summarizeDays(myDays).fullDays, label: 'con los 5 hábitos' },
-        kudos: { received, score: kudosScore(received), availability: 'coming_soon', monthlyBudget: KUDOS_MONTHLY },
+        kudos: { received, score: kudosScore(received), givenThisMonth: given ? { id: given.receiver_member_id, name: firstName(nameOf.get(given.receiver_member_id) || 'Alguien del equipo'), note: given.note } : null, monthlyBudget: KUDOS_MONTHLY },
         position: score > 0 && rank ? { rank, of: ranked.length } : null,
         nextStepUrl: '/gestion',
         podium: ranked.filter(lane => lane.score > 0).slice(0, 3).map((lane) => ({ id: lane.id, name: lane.name, avatarUrl: lane.avatarUrl, pixelAvatarKey: lane.pixelAvatarKey, score: lane.score })),
@@ -221,10 +223,24 @@ export const createPlatformLeagueService = ({ db = prisma, repository, snapshots
       return { month, counts, total: Object.values(counts).reduce((sum, count) => sum + count, 0), recent: rows.slice(0, 12), hasMore: rows.length > 12 };
     },
 
-    /** Expectativa mensual: incluso un cliente antiguo debe pasar por este cierre. */
-    async giveKudos({ userId }) {
-      await memberAllowed(userId);
-      throw fail(409, 'Los diez puntos mensuales estarán disponibles próximamente.', 'LEAGUE_KUDOS_COMING_SOON');
+    /** Regalar los 10 puntos del mes: a una sola persona del equipo, una vez por mes, con una línea. */
+    async giveKudos({ userId, memberId, note = '' }) {
+      const at = now();
+      const text = String(note || '').trim();
+      if (text.length > KUDOS_NOTE_MAX) throw fail(400, `El motivo va en una línea de hasta ${KUDOS_NOTE_MAX} caracteres.`);
+      const giver = await memberAllowed(userId);
+      if (!memberId || memberId === giver.id) throw fail(400, 'Los 10 puntos se regalan a otra persona, no a ti.');
+      const members = await activeMembers();
+      const receiver = members.find((member) => member.id === memberId);
+      if (!receiver) throw fail(404, 'Esa persona no está en el equipo activo.');
+      const monthKey = monthOf(bogotaDate(at));
+      try {
+        const saved = await repo.giveKudos({ created_at: at, giver_member_id: giver.id, receiver_member_id: receiver.id, note: text });
+        return { id: saved.id, monthKey, to: { id: receiver.id, name: firstName(receiver.name) }, note: text };
+      } catch (error) {
+        if (error?.code === '23505') throw fail(409, 'Este mes ya regalaste tus 10 puntos. Tendrás otros al comenzar el próximo mes.', 'LEAGUE_KUDOS_ALREADY');
+        throw error;
+      }
     }
   };
   return service;
