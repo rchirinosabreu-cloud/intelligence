@@ -21,6 +21,10 @@ const fakeDb = () => ({
   },
   task: {
     findMany: async ({ where, select }) => {
+      if (where.createdAt) return [
+        { id: 'created-r', creatorId: 'u-rodny', taskComments: [{ content: 'Contexto' }], taskAttachments: [] },
+        { id: 'created-h', creatorId: 'u-helen', taskComments: [], taskAttachments: [] }
+      ];
       if (where.returnedAt) return [{ assigneeId: 'm-jesu' }];
       // Lo cerrado el 3: Rodny con reloj y avance, a tiempo; Helen con tiempo declarado y sin avance, tarde.
       return [
@@ -98,6 +102,7 @@ const fakeRepo = (seed = []) => {
   const kudos = [];
   return {
     days, kudos,
+    startedAt: async () => at("2026-10-01T05:00:00Z"),
     async saveDays(rows) { for (const row of rows) days.set(`${row.day_key}:${row.member_id}`, { ...row, computed_at: new Date() }); return rows.length; },
     async computedDays(monthKey) { return [...new Set([...days.values()].filter((r) => r.day_key.startsWith(monthKey)).map((r) => r.day_key))]; },
     async daysOfMonth(monthKey, { before }) { return [...days.values()].filter((r) => r.day_key.startsWith(monthKey) && r.day_key < before); },
@@ -111,6 +116,65 @@ const fakeRepo = (seed = []) => {
 };
 
 const snapshots = { snapshot: async (dayKey) => (dayKey === DAY ? { people: [{ id: 'm-rodny', metrics: { overdue: 0 } }, { id: 'm-helen', metrics: { overdue: 2 } }, { id: 'm-jesu', metrics: { overdue: 0 } }] } : { people: [] }) };
+
+test('a fresh league starts at zero, excludes old daily evidence and never backfills before launch', async () => {
+  const cutoff = at(`${DAY}T22:00:00Z`);
+  const repo = fakeRepo();
+  repo.startedAt = async () => cutoff;
+  const db = fakeDb();
+  const windows = [];
+  db.task.findMany = async ({ where }) => { windows.push(where); return []; };
+  db.taskWorkSession.findMany = async () => [];
+  const service = createPlatformLeagueService({ db, repository: repo, snapshots, now: () => cutoff });
+  const league = await service.leagueFor({ userId: 'u-rodny' });
+  assert.equal(league.score, 0);
+  assert.ok(league.race.lanes.every(person => person.score === 0));
+  assert.equal(league.streak.days, 0);
+  assert.equal(league.position, null, 'zero points must not create a winner by alphabetical order');
+  assert.equal(league.startsAt, cutoff.toISOString());
+  assert.ok(windows.every(where => (where.createdAt || where.completedAt || where.returnedAt).gte.getTime() === cutoff.getTime()));
+  const savedDays = [];
+  service.computeAndSave = async day => savedDays.push(day);
+  await service.runAutomatic();
+  assert.ok(savedDays.every(day => day >= DAY));
+  await assert.rejects(service.readDay('2026-11-02'), /inicio/i);
+});
+
+test('the recognition collection starts at the same durable cutoff', async () => {
+  const cutoff = at(`${DAY}T22:00:00Z`);
+  const repo = fakeRepo(); repo.startedAt = async () => cutoff;
+  const db = fakeDb();
+  db.recognitionAward.groupBy = async ({ where }) => { assert.equal(where.occurredAt.gte.getTime(), cutoff.getTime()); return []; };
+  const service = createPlatformLeagueService({ db, repository: repo, snapshots, now: () => cutoff });
+  assert.equal((await service.recognitionsFor({ userId: 'u-rodny' })).total, 0);
+});
+
+test('a weekend does not add live habit points that disappear when the month is saved', async () => {
+  const service = createPlatformLeagueService({ db: fakeDb(), repository: fakeRepo(), snapshots, now: () => at('2026-11-07T19:00:00Z') });
+  const league = await service.leagueFor({ userId: 'u-rodny' });
+  assert.equal(league.score, 0);
+  assert.equal(league.today.points, 0);
+});
+
+test('created context credits the creator, accepts human comments or active files and excludes later context', async () => {
+  const db = fakeDb();
+  const originalFind = db.task.findMany;
+  db.task.findMany = async args => {
+    if (!args.where.createdAt) return originalFind(args);
+    assert.deepEqual(args.select.taskComments.where, { type: 'human', createdAt: { lt: at('2026-11-04T05:00:00Z') } });
+    assert.deepEqual(args.select.taskAttachments.where, { purgeState: 'ACTIVE', createdAt: { lt: at('2026-11-04T05:00:00Z') } });
+    return [
+      { id: 'new-r', creatorId: 'u-rodny', taskComments: [{ content: 'Contexto del encargo' }], taskAttachments: [] },
+      { id: 'new-h', creatorId: 'u-helen', taskComments: [], taskAttachments: [{ id: 'file' }] },
+      { id: 'new-j', creatorId: 'u-jesu', taskComments: [{ content: '  ' }], taskAttachments: [] },
+    ];
+  };
+  const service = createPlatformLeagueService({ db, repository: fakeRepo(), snapshots, now: () => at(`${DAY}T22:00:00Z`) });
+  const rows = await service.evaluateDay(DAY);
+  assert.equal(rows.find(r => r.memberId === 'm-rodny').habits.DOCUMENTADO, true);
+  assert.equal(rows.find(r => r.memberId === 'm-helen').habits.DOCUMENTADO, true);
+  assert.equal(rows.find(r => r.memberId === 'm-jesu').habits.DOCUMENTADO, false);
+});
 
 test('the collection changes month at Bogotá midnight and handles a new year', async () => {
   for (const [instant, start, end] of [

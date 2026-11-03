@@ -1,16 +1,32 @@
-import React, { useState } from 'react';
+import React, { useContext, useState } from 'react';
 import TeamAvatar from '@/components/ui/TeamAvatar';
 import { cn } from '@/lib/utils';
 import { pixelAvatars } from './pixelAvatars';
+import { pixelPoseSheets, poseFrames } from './pixelPoseSheets';
+import { LeaguePoseContext } from './LeaguePoseContext';
+import { LEAGUE_POSES } from '@/lib/leaguePose';
 
-// El personaje de la carrera del mes (2 y 3 de noviembre de 2026): el avatar en píxel que diseñó OpenAI para cada
-// persona (`pixelAvatarKey`, un PNG empaquetado transparente a la misma escala para todo el equipo), siempre en movimiento como
-// un sprite en reposo (`league-pixel`, en `index.css`; quieto con `prefers-reduced-motion`), y, mientras alguien no
-// tenga el suyo, su foto de siempre (`avatarUrl`, redonda, como en el resto de la plataforma). `size` es el alto en
-// píxeles de pantalla; el ancho del píxel lo da la imagen. `phase` desfasa el balanceo entre corredores.
+// Tres poses por persona, elegidas al abrir la liga. La hoja original se recorta solo al renderizar;
+// el PNG conserva su alfa. Si falla, usa el avatar anterior y después la foto. `size` es el alto visible.
 export default function RunnerAvatar({ person, size = 40, className, title, phase = 0 }) {
+  const pose = useContext(LeaguePoseContext);
+  const [failedSheet, setFailedSheet] = useState(null);
   const [failedUrl, setFailedUrl] = useState(null);
+  const key = person?.pixelAvatarKey;
+  const sheet = Object.hasOwn(pixelPoseSheets, key) ? pixelPoseSheets[key] : null;
+  const frame = poseFrames[key];
   const url = (Object.hasOwn(pixelAvatars, person?.pixelAvatarKey) && pixelAvatars[person.pixelAvatarKey]) || person?.pixelAvatarUrl;
+  if (sheet && frame && sheet !== failedSheet) {
+    const scale = size / frame.height;
+    const cellWidth = frame.width / 3;
+    return <span data-runner-avatar="pixel" data-avatar-pose={LEAGUE_POSES[pose]}
+      className={cn('league-pixel relative block shrink-0 overflow-hidden select-none', className)}
+      style={{ width: cellWidth * scale, height: size, animationDelay: `${-(phase % 6) * 0.6}s` }}>
+      <img src={sheet} alt={title || person.name || ''} draggable={false} decoding="async"
+        onError={() => setFailedSheet(sheet)} className="absolute max-w-none"
+        style={{ width: frame.width * scale, height: frame.imageHeight * scale, left: -pose * cellWidth * scale, top: -frame.top * scale }} />
+    </span>;
+  }
   if (url && url !== failedUrl) {
     return (
       <img

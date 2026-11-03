@@ -4,6 +4,8 @@ import { Trophy } from '@/components/ui/icons';
 import { requestLeague } from '@/lib/leagueRequest';
 import { cn } from '@/lib/utils';
 import RaceOfTheMonth from './RaceOfTheMonth';
+import { LeaguePoseContext } from './LeaguePoseContext';
+import { nextLeaguePose } from '@/lib/leaguePose';
 
 // La copa de la liga (Rodny, 3 de noviembre de 2026: «no quiero nada en el dashboard, solo quiero un icono de la copa
 // por ahí medio asomándose a la mitad de la pantalla derecha, y ahí se abre el panel»): una pestaña pequeña pegada al
@@ -18,6 +20,11 @@ export default function LeagueDock({ enabled = true }) {
   const queryClient = useQueryClient();
   const dockRef = useRef(null);
   const [open, setOpen] = useState(() => typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('carrera'));
+  const [pose, setPose] = useState(() => Math.floor(Math.random() * 3));
+  const changeOpen = value => {
+    if (value && !open) setPose(previous => nextLeaguePose(previous));
+    setOpen(value);
+  };
   const { data: league, error, refetch } = useQuery({
     queryKey: LEAGUE_QUERY_KEY,
     queryFn: () => requestLeague(''),
@@ -38,7 +45,7 @@ export default function LeagueDock({ enabled = true }) {
         aria-label="Abrir reconocimientos"
         title="Reconocimientos"
         aria-expanded={open}
-        onClick={() => setOpen(true)}
+        onClick={() => changeOpen(true)}
         className={cn(
           'league-dock brain-popover-surface fixed right-0 top-1/2 z-[45] flex h-14 w-16 -translate-y-1/2 items-center justify-start rounded-l-2xl border-r-0 pl-3 text-brand-yellow-deep shadow-md shadow-zinc-950/10 outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan dark:text-brand-yellow',
           open && 'league-dock-open'
@@ -46,7 +53,9 @@ export default function LeagueDock({ enabled = true }) {
       >
         <span className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-yellow/25 dark:bg-brand-yellow/15"><Trophy className="h-5 w-5" /></span>
       </button>
-      <RaceOfTheMonth open={open} onOpenChange={setOpen} league={league || null} error={error} onRetry={refetch} returnFocusRef={dockRef} />
+      <LeaguePoseContext.Provider value={pose}>
+        <RaceOfTheMonth open={open} onOpenChange={changeOpen} league={league || null} error={error} onRetry={refetch} returnFocusRef={dockRef} />
+      </LeaguePoseContext.Provider>
     </>
   );
 }

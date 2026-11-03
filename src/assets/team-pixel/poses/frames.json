@@ -1,0 +1,80 @@
+{
+  "brayan": {
+    "top": 182,
+    "height": 664,
+    "width": 1536,
+    "imageHeight": 1024
+  },
+  "david": {
+    "top": 206,
+    "height": 628,
+    "width": 1536,
+    "imageHeight": 1024
+  },
+  "elisa": {
+    "top": 205,
+    "height": 630,
+    "width": 1536,
+    "imageHeight": 1024
+  },
+  "francisco": {
+    "top": 203,
+    "height": 656,
+    "width": 1536,
+    "imageHeight": 1024
+  },
+  "francys": {
+    "top": 195,
+    "height": 670,
+    "width": 1536,
+    "imageHeight": 1024
+  },
+  "helen": {
+    "top": 205,
+    "height": 663,
+    "width": 1536,
+    "imageHeight": 1024
+  },
+  "jesu": {
+    "top": 210,
+    "height": 654,
+    "width": 1536,
+    "imageHeight": 1024
+  },
+  "kamila": {
+    "top": 198,
+    "height": 650,
+    "width": 1536,
+    "imageHeight": 1024
+  },
+  "keila": {
+    "top": 204,
+    "height": 627,
+    "width": 1536,
+    "imageHeight": 1024
+  },
+  "mariceth": {
+    "top": 202,
+    "height": 627,
+    "width": 1536,
+    "imageHeight": 1024
+  },
+  "melissa": {
+    "top": 218,
+    "height": 629,
+    "width": 1536,
+    "imageHeight": 1024
+  },
+  "rodny": {
+    "top": 219,
+    "height": 611,
+    "width": 1536,
+    "imageHeight": 1024
+  },
+  "sara": {
+    "top": 220,
+    "height": 600,
+    "width": 1536,
+    "imageHeight": 1024
+  }
+}

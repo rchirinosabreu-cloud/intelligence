@@ -18,6 +18,7 @@ datasource db {
 //                mail_accounts, mail_seen, permission_requests, agency_snapshots, daily_readings,
 //                morning_brief_deliveries, decision_log, decision_events, conversation_learning_runs,
 //                whatsapp_links, whatsapp_link_codes, whatsapp_inbound, whatsapp_alerts, league_days, league_kudos
+//                league_runs, league_run_days, league_run_kudos
 //   vault:      credentials, credential_events, reveal_events, access_requests
 
 enum SystemRole {

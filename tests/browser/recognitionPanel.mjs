@@ -30,12 +30,20 @@ try {
   assert.equal(await panel.locator('[data-race-track]').count(), 0);
   const avatar = panel.locator('[data-race-hero] [data-runner-avatar="pixel"]');
   await avatar.waitFor();
-  assert.match(await avatar.getAttribute('src'), /assets\/team-pixel\/rodny/);
+  assert.match(await avatar.locator('img').getAttribute('src'), /assets\/team-pixel\/poses\/rodny/);
+  const firstPose = await avatar.getAttribute('data-avatar-pose');
   await page.waitForFunction(() => [...document.querySelectorAll('[data-league-panel] img')].every(img => img.complete && img.naturalWidth > 0));
   assert.ok((await panel.boundingBox()).width <= 400);
   assert.equal(await page.locator('[data-dashboard-league]').count(), 0);
   assert.ok(await page.getByRole('heading', { name: 'Anuncios' }).isVisible());
   await shot('mi-mes-claro');
+  assert.equal(await avatar.evaluate(el => getComputedStyle(el).animationDuration), '4s');
+  await page.keyboard.press('Escape');
+  await panel.waitFor({ state: 'hidden' });
+  await dock.click();
+  await avatar.waitFor();
+  assert.notEqual(await avatar.getAttribute('data-avatar-pose'), firstPose);
+  await shot('pose-al-reabrir');
   await tab('Logros').click();
   await panel.locator('[data-recognition-collection]').waitFor();
   assert.equal(await panel.locator('[data-recognition-badge]').count(), 6);
@@ -45,6 +53,8 @@ try {
   await shot('logros-claro');
   await tab('Equipo').click();
   assert.equal(await panel.locator('[data-league-member]').count(), 13);
+  await panel.getByText('10 puntos para…', { exact: true }).waitFor();
+  assert.match(await panel.locator('[data-race-kudos]').innerText(), /Cada semana podrás regalar diez puntos/);
   assert.equal(await panel.locator('[data-league-member] [data-runner-avatar="pixel"]').count(), 13);
   assert.match(await panel.locator('[data-league-member="mariceth"]').innerText(), /Mariceth/);
   await shot('equipo-claro');
@@ -103,6 +113,37 @@ try {
   await tab('Logros').click();
   await panel.getByText('Tu colección de noviembre está por comenzar.').waitFor();
   assert.equal(await panel.locator('[data-earned="true"]').count(), 0);
+  await page.route('**/api/league', async route => {
+    const response = await route.fetch();
+    const league = await response.json();
+    league.score = 0; league.position = null; league.podium = []; league.nextStep = null;
+    league.startsAt = '2026-11-03T13:00:00Z';
+    league.streak = { days: 0 }; league.kudos = { score: 0, received: [], givenThisWeek: null, weeklyBudget: 10 };
+    league.race.lanes = league.race.lanes.map(person => ({ ...person, score: 0 }));
+    league.today = { day: '2026-11-03', habits: {}, extras: {}, earned: 0, possible: 0, points: 0 };
+    await route.fulfill({ response, json: league });
+  });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${preview.origin}/?carrera`);
+  await panel.getByText('Tu mes está comenzando', { exact: true }).waitFor();
+  assert.match(await panel.locator('[data-race-panel-score]').innerText(), /^0\s*puntos/);
+  await shot('inicio-cero');
+  await panel.getByText('Tus hábitos de hoy', { exact: true }).click();
+  for (const description of [
+    'Registraste tu tiempo correctamente, sin sesiones olvidadas.',
+    'Terminaste pendientes antes de la fecha de entrega.',
+    'Las tareas que has creado tienen un comentario o un archivo que da mejor contexto.',
+    'Nadie te devolvió un pendiente',
+    'Fuiste el primero en ingresar a la plataforma desde las 8:00 am',
+    'Fuiste el primero en ingresar a la reunión semanal',
+  ]) assert.ok(await panel.getByText(description, { exact: true }).isVisible());
+  await shot('habitos-corregidos');
+  await tab('Equipo').click();
+  assert.equal(await panel.locator('[data-race-podium]').count(), 0);
+  assert.equal(await panel.locator('[data-league-member]').count(), 13);
+  for (const member of await panel.locator('[data-league-member]').all()) assert.match(await member.innerText(), /0\s*pts/);
+  await shot('equipo-cero');
+  await page.unroute('**/api/league');
   await page.unroute('**/api/league/recognitions');
   await page.goto(`${preview.origin}/?liga=no`);
   await page.getByRole('heading', { name: 'Anuncios' }).waitFor();

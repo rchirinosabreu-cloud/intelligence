@@ -9,8 +9,16 @@ const DAY = '2026-11-03';
 const task = (over = {}) => ({ id: 't1', title: 'Reel', completedAt: `${DAY}T20:10:00.000Z`, originalDueDate: `${DAY}T12:00:00.000Z`, measuredMs: 45 * 60_000, declared: false, documented: true, ...over });
 const session = (over = {}) => ({ durationMs: 45 * 60_000, isOverlapping: false, correctedAt: null, closeReason: 'PAUSED', ...over });
 
+test('Documentado belongs to tasks created with context, independently of closing tasks', () => {
+  assert.equal(evaluateLeagueDay({ day: DAY, createdTasks: [{ documented: true }] }).habits.DOCUMENTADO, true);
+  assert.equal(evaluateLeagueDay({ day: DAY, closedTasks: [task()] }).habits.DOCUMENTADO, null);
+  const mixed = evaluateLeagueDay({ day: DAY, createdTasks: [{ documented: true }, { documented: false }], closedTasks: [task()] });
+  assert.equal(mixed.habits.DOCUMENTADO, false);
+  assert.match(mixed.evidence.DOCUMENTADO, /1 de 2 tareas creadas/);
+});
+
 test('a clean day earns the five points, each with its evidence in Spanish', () => {
-  const out = evaluateLeagueDay({ day: DAY, closedTasks: [task()], sessions: [session()], overdueAtDawn: 0, returnedToday: 0 });
+  const out = evaluateLeagueDay({ day: DAY, createdTasks: [{ documented: true }], closedTasks: [task()], sessions: [session()], overdueAtDawn: 0, returnedToday: 0 });
   assert.deepEqual(out.habits, { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true });
   assert.deepEqual(out.extras, { PRIMERO_EN_ABRIR: null, PRIMERO_EN_REUNION: null }, 'the extras travel beside the habits');
   assert.match(out.evidence.RELOJ, /1 cierre con cronómetro/);
@@ -55,7 +63,7 @@ test('on time compares the Bogotá day of the closing with the date the task was
 });
 
 test('documented and returns', () => {
-  const out = evaluateLeagueDay({ day: DAY, closedTasks: [task({ documented: false })], sessions: [session()], overdueAtDawn: 0, returnedToday: 1 });
+  const out = evaluateLeagueDay({ day: DAY, createdTasks: [{ documented: false }], closedTasks: [task({ documented: false })], sessions: [session()], overdueAtDawn: 0, returnedToday: 1 });
   assert.equal(out.habits.DOCUMENTADO, false);
   assert.equal(out.habits.SIN_DEVOLUCION, false);
   assert.match(out.evidence.SIN_DEVOLUCION, /1 tarea devuelta/);
