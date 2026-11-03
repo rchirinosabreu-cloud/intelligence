@@ -36,18 +36,16 @@ try {
   allowed = true;
   await page.clock.fastForward(60001);
   await bubble.getByText('¡Hey, por aquí!', { exact: true }).waitFor();
+  assert.equal((await bubble.innerText()).trim(), '¡Hey, por aquí!');
   await page.clock.resume();
   assert.equal(await page.locator('[data-league-panel]').count(), 0, 'invitation does not automatically open a window');
   await page.screenshot({ path: `${output}/bienvenida-invitacion.png` });
   await bubble.getByRole('button', { name: /Hey/ }).click();
   await guide.getByRole('heading', { name: /Tu buen trabajo/ }).waitFor();
   await guide.screenshot({ path: `${output}/bienvenida-1.png` });
-  await guide.getByRole('button', { name: 'Siguiente' }).click();
-  await guide.getByRole('heading', { name: 'Así sumas puntos' }).waitFor();
-  assert.match(await guide.innerText(), /25 puntos/);
-  await guide.screenshot({ path: `${output}/bienvenida-2.png` });
-  await guide.getByRole('button', { name: 'Siguiente' }).click();
-  await guide.getByRole('heading', { name: '5 puntos para…' }).waitFor();
+  assert.equal(await guide.getByRole('button', { name: 'Siguiente' }).count(), 0);
+  assert.equal(await guide.locator('li').count(), 5, 'all five scoring rules appear in the same view');
+  assert.doesNotMatch(await guide.innerText(), /Tu avatar te acompaña|1 de 3/);
   await guide.getByRole('button', { name: '¡Vamos a sumar!' }).click();
   await guide.getByRole('alert').waitFor();
   assert.equal(writes, 1); assert.deepEqual(progress, {});
@@ -61,7 +59,7 @@ try {
   assert.equal(await guide.count(), 0);
   await page.getByRole('button', { name: 'Ver bienvenida' }).click();
   await guide.waitFor();
-  await guide.getByRole('button', { name: 'Ver mi mes' }).click();
+  await guide.getByRole('button', { name: '¡Vamos a sumar!' }).click();
   await guide.waitFor({ state: 'hidden' });
   assert.equal(writes, 2, 'replaying the guide does not overwrite completion');
 
@@ -75,11 +73,8 @@ try {
   await bubble.getByRole('button', { name: /Hey/ }).click();
   await guide.waitFor();
   await guide.screenshot({ path: `${output}/bienvenida-movil-oscuro.png` });
-  for (let step = 0; step < 2; step++) {
-    assert.equal(await guide.evaluate(el => el.scrollWidth <= el.clientWidth), true);
-    await guide.getByRole('button', { name: 'Siguiente' }).click();
-  }
-  await guide.screenshot({ path: `${output}/bienvenida-3.png` });
+  assert.equal(await guide.evaluate(el => el.scrollWidth <= el.clientWidth), true);
+  assert.equal(await guide.locator('[data-welcome-content]').evaluate(el => el.scrollHeight <= el.clientHeight), true, 'the explanation fits in one mobile view');
   allowed = false;
   await page.evaluate(() => window.dispatchEvent(new Event('visibilitychange')));
   await dock.waitFor({ state: 'hidden' });
