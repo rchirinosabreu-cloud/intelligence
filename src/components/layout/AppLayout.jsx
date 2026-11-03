@@ -19,6 +19,7 @@ import PushNotificationControl from '@/components/notifications/PushNotification
 import TeamCompletionsControl from '@/components/notifications/TeamCompletionsControl';
 import ImportantNoticeBand from '@/components/notifications/ImportantNoticeBand';
 import LeagueDock from '@/components/league/LeagueDock';
+import { canUseLeague } from '@/lib/leagueVisibility';
 import { notificationPanelControls } from '@/lib/teamNotifications';
 import ExcessiveTaskAlertDialog from '@/components/tasks/ExcessiveTaskAlertDialog';
 import DeclaredTimeDialog from '@/components/tasks/DeclaredTimeDialog';
@@ -662,8 +663,8 @@ const AppLayout = ({ children }) => {
       </main>
       {/* Avisos importantes: abajo, de borde a borde, por encima del menú y por debajo de los diálogos (z 65). */}
       {currentUser?.id && <ImportantNoticeBand key={`notice-${currentUser.id}`} enabled={!isOnboardingBlocking} onVisibleChange={setHasImportantNotice} />}
-      {/* La copa de la liga (3 de noviembre de 2026): asomada al borde derecho en toda la plataforma; abre «La carrera del mes». */}
-      {currentUser?.id && <LeagueDock key={`league-${currentUser.id}`} enabled={!isOnboardingBlocking} />}
+      {/* La copa de la liga (3 de noviembre de 2026): asomada al borde derecho en toda la plataforma, solo para quien tiene la casilla «Liga del mes» en Equipo; abre «La carrera del mes». */}
+      {currentUser?.id && canUseLeague(currentUser) && <LeagueDock key={`league-${currentUser.id}`} enabled={!isOnboardingBlocking} />}
       {currentUser?.id && <TeamChat key={currentUser.id} currentUser={displayUser} onDockWidthChange={setChatDockWidth} triggerContainer={chatTriggerContainer}
         blocked={isSidebarOpen || isNotificationsOpen || isOnboardingBlocking || isReturnedTaskAlertBlocking} />}
     </div>

@@ -12,7 +12,7 @@ import { bogotaClock } from '../lib/briaNudges.js';
 import { evaluateLeagueDay, isoWeekKey, openWindowOf } from '../lib/leagueDay.js';
 import { kudosScore, leagueNextStep, leagueScore, summarizeDays, todayPoints, trackScale } from '../lib/platformLeague.js';
 import { getSidecarPool } from '../lib/sidecarPool.js';
-import { leagueVisibleTo } from '../lib/leagueVisibility.js';
+import { canUseLeague } from '../lib/leagueVisibility.js';
 import { createDailyReadingRepository } from './dailyReadingRepository.js';
 import { createPlatformLeagueRepository } from './platformLeagueRepository.js';
 
@@ -41,16 +41,15 @@ const weekdayLabel = (dayKey) => new Intl.DateTimeFormat('es-CO', { weekday: 'lo
 const fail = (statusCode, message, code) => Object.assign(new Error(message), { statusCode, code });
 const firstName = (name = '') => String(name).trim().split(/\s+/)[0] || name;
 
-export const createPlatformLeagueService = ({ db = prisma, repository, snapshots, now = () => new Date(), logger = console, visibleTo = () => process.env.LEAGUE_VISIBLE_TO } = {}) => {
+export const createPlatformLeagueService = ({ db = prisma, repository, snapshots, now = () => new Date(), logger = console } = {}) => {
   const repo = repository || createPlatformLeagueRepository({ pool: getSidecarPool() });
   const snaps = snapshots || createDailyReadingRepository({ pool: getSidecarPool() });
-  // Quién ve la liga (`LEAGUE_VISIBLE_TO`): mientras el piloto es solo de Rodny, los demás reciben 404 y no ven la copa.
-  // El cálculo de cada día corre para todo el equipo igual: cuando se abra, el mes ya está contado.
+  // Quién ve la liga: la casilla «Liga del mes» de Equipo, persona por persona (también un administrador). Sin ella,
+  // 404 y la copa no se dibuja. El cálculo de cada día corre para todo el equipo igual: al encenderla, el mes ya está contado.
   const memberAllowed = async (userId) => {
-    const me = await db.teamMember.findUnique({ where: { userId }, select: { id: true, name: true, user: { select: { email: true } } } });
+    const me = await db.teamMember.findUnique({ where: { userId }, select: { id: true, name: true, user: { select: { role: true, isActive: true, modulePermissions: true } } } });
     if (!me) throw fail(404, 'Esta cuenta no tiene ficha en Equipo.');
-    const setting = typeof visibleTo === 'function' ? visibleTo() : visibleTo;
-    if (!leagueVisibleTo(setting, me.user?.email)) throw fail(404, 'La liga todavía no está abierta para esta cuenta.', 'LEAGUE_NOT_OPEN');
+    if (!canUseLeague(me.user)) throw fail(404, 'La liga todavía no está activada para esta cuenta.', 'LEAGUE_NOT_OPEN');
     return me;
   };
   // El orden de los carriles es fijo, por nombre, nunca por puntaje: se ordena aquí y no se le fía a la consulta.

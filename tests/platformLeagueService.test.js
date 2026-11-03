@@ -8,12 +8,10 @@ import { createPlatformLeagueService, LEAGUE_COMPUTE_MINUTES } from '../src/serv
 const DAY = '2026-11-03';
 const at = (iso) => new Date(iso);
 const members = [
-  { id: 'm-rodny', name: 'Rodny', avatarUrl: null, user: { id: 'u-rodny', role: 'ADMIN', isActive: true, email: 'rodny@brainstudio.test' } },
-  { id: 'm-helen', name: 'Helen', avatarUrl: null, user: { id: 'u-helen', role: 'EDITOR', isActive: true, email: 'helen@brainstudio.test' } },
-  { id: 'm-jesu', name: 'Jesu', avatarUrl: null, user: { id: 'u-jesu', role: 'EDITOR', isActive: true, email: 'jesu@brainstudio.test' } }
+  { id: 'm-rodny', name: 'Rodny', avatarUrl: null, user: { id: 'u-rodny', role: 'ADMIN', isActive: true, modulePermissions: { liga: true } } },
+  { id: 'm-helen', name: 'Helen', avatarUrl: null, user: { id: 'u-helen', role: 'EDITOR', isActive: true, modulePermissions: { liga: true } } },
+  { id: 'm-jesu', name: 'Jesu', avatarUrl: null, user: { id: 'u-jesu', role: 'EDITOR', isActive: true, modulePermissions: { liga: true } } }
 ];
-// Las pruebas de abajo abren la liga a todo el equipo; el piloto de solo Rodny tiene su propia prueba.
-const forAll = { visibleTo: '*' };
 
 const fakeDb = () => ({
   teamMember: {
@@ -71,7 +69,7 @@ const snapshots = { snapshot: async (dayKey) => (dayKey === DAY ? { people: [{ i
 
 test('a day is evaluated for every active person from the real sources, and saved with its evidence', async () => {
   const repo = fakeRepo();
-  const service = createPlatformLeagueService({ ...forAll, db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T23:30:00.000Z`) });
+  const service = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T23:30:00.000Z`) });
   const rows = await service.evaluateDay(DAY);
   const by = Object.fromEntries(rows.map((row) => [row.memberId, row.habits]));
   assert.deepEqual(by['m-rodny'], { RELOJ: true, AL_DIA: true, A_TIEMPO: true, DOCUMENTADO: true, SIN_DEVOLUCION: true });
@@ -89,16 +87,16 @@ test('a day is evaluated for every active person from the real sources, and save
 
 test('the automatic run computes today from 18:05 on business days and backfills the missing days of the month, never a weekend', async () => {
   const repo = fakeRepo([{ day_key: '2026-11-02', member_id: 'm-rodny', habits: {}, evidence: {} }]);
-  const early = createPlatformLeagueService({ ...forAll, db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T15:00:00.000Z`) }); // 10:00 Bogotá
+  const early = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T15:00:00.000Z`) }); // 10:00 Bogotá
   const first = await early.runAutomatic();
   assert.equal(first.today, null, 'too early for today');
   assert.deepEqual(first.backfilled, [], 'the 2nd is already there; the 1st is Sunday');
-  const late = createPlatformLeagueService({ ...forAll, db: fakeDb(), repository: repo, snapshots, now: () => at('2026-11-04T23:10:00.000Z') }); // miércoles 18:10 Bogotá
+  const late = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => at('2026-11-04T23:10:00.000Z') }); // miércoles 18:10 Bogotá
   const second = await late.runAutomatic();
   assert.equal(second.today, '2026-11-04');
   assert.deepEqual(second.backfilled, [DAY], 'the 3rd was missing');
   assert.equal(LEAGUE_COMPUTE_MINUTES, 18 * 60 + 5);
-  const weekend = createPlatformLeagueService({ ...forAll, db: fakeDb(), repository: repo, snapshots, now: () => at('2026-11-07T23:10:00.000Z') });
+  const weekend = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => at('2026-11-07T23:10:00.000Z') });
   assert.equal((await weekend.runAutomatic()).today, null, 'Saturday computes nothing new');
 });
 
@@ -108,7 +106,7 @@ test('the league of a person: the month so far plus today live, the lanes of the
     { day_key: '2026-11-02', member_id: 'm-helen', habits: { RELOJ: false, AL_DIA: true, A_TIEMPO: null, DOCUMENTADO: null, SIN_DEVOLUCION: true }, evidence: {} }
   ]);
   await repo.giveKudos({ week_key: '2026-W45', giver_member_id: 'm-helen', receiver_member_id: 'm-rodny', note: 'Por el reel.' });
-  const service = createPlatformLeagueService({ ...forAll, db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`) }); // 14:00 Bogotá del 3
+  const service = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`) }); // 14:00 Bogotá del 3
   const league = await service.leagueFor({ userId: 'u-rodny' });
   assert.equal(league.month, '2026-11');
   assert.equal(league.score, 60, 'ten habits at 5 each, plus one gift at 10');
@@ -139,7 +137,7 @@ test('the league of a person: the month so far plus today live, the lanes of the
 
 test('the weekly gift: to one other person, once per week, with a short note; the errors say why', async () => {
   const repo = fakeRepo();
-  const service = createPlatformLeagueService({ ...forAll, db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`) });
+  const service = createPlatformLeagueService({ db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`) });
   const gift = await service.giveKudos({ userId: 'u-rodny', memberId: 'm-helen', note: 'Resolvió el carrusel.' });
   assert.equal(gift.weekKey, '2026-W45');
   assert.equal(gift.to.name, 'Helen');
@@ -149,14 +147,20 @@ test('the weekly gift: to one other person, once per week, with a short note; th
   await assert.rejects(() => service.giveKudos({ userId: 'u-helen', memberId: 'm-rodny', note: 'x'.repeat(121) }), (error) => error.statusCode === 400 && /120/.test(error.message));
 });
 
-test('the pilot: with LEAGUE_VISIBLE_TO set to one email, only that account gets the league and the gift; the rest get 404 and the trophy stays hidden; the daily computation still runs for everyone', async () => {
+test('the pilot: only the accounts with the «Liga del mes» box in Equipo get the league and the gift; the rest get 404 and the trophy stays hidden; an administrator without the box is out too; the daily computation still runs for everyone', async () => {
   const repo = fakeRepo();
-  const service = createPlatformLeagueService({ visibleTo: () => 'rodny@brainstudio.test', db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`) });
+  // Solo Rodny tiene la casilla; Helen no, y el administrador Jesu tampoco.
+  const boxes = { 'u-rodny': { liga: true }, 'u-helen': { gestion: true }, 'u-jesu': {} };
+  const db = fakeDb();
+  db.teamMember.findUnique = async ({ where }) => {
+    const member = members.find((m) => m.user.id === where.userId);
+    return member ? { ...member, user: { ...member.user, role: member.user.id === 'u-jesu' ? 'ADMIN' : member.user.role, modulePermissions: boxes[member.user.id] } } : null;
+  };
+  const service = createPlatformLeagueService({ db, repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`) });
   const league = await service.leagueFor({ userId: 'u-rodny' });
   assert.equal(league.race.lanes.length, 3, 'Rodny sees the whole team');
   await assert.rejects(() => service.leagueFor({ userId: 'u-helen' }), (error) => error.statusCode === 404 && error.code === 'LEAGUE_NOT_OPEN');
   await assert.rejects(() => service.giveKudos({ userId: 'u-helen', memberId: 'm-rodny', note: '' }), (error) => error.statusCode === 404 && error.code === 'LEAGUE_NOT_OPEN');
+  await assert.rejects(() => service.leagueFor({ userId: 'u-jesu' }), (error) => error.code === 'LEAGUE_NOT_OPEN', 'an administrator without the box does not see it either');
   assert.equal(await service.computeAndSave(DAY), 3, 'the three people are evaluated and saved regardless');
-  const closed = createPlatformLeagueService({ visibleTo: '', db: fakeDb(), repository: repo, snapshots, now: () => at(`${DAY}T19:00:00.000Z`) });
-  await assert.rejects(() => closed.leagueFor({ userId: 'u-rodny' }), (error) => error.code === 'LEAGUE_NOT_OPEN', 'empty: nobody, not even an administrator');
 });
