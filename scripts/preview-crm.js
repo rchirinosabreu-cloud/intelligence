@@ -10,23 +10,39 @@ import { createImportantNoticeRouter } from '../src/routes/api/importantNotices.
 
 // Two notices for the demo user: the coral review goes first; the green follow-up comes five minutes after deciding.
 // With `cartera`, the demo user is the administrative area and sees a collection notice (28 de octubre de 2026) instead.
-const createImportantNoticeMemory = (crmDb, userId, { cartera = false } = {}) => {
+const createImportantNoticeMemory = (crmDb, userId, { cartera = false, now = null } = {}) => {
   let offset = 0;
-  const clock = () => new Date(Date.now() + offset);
+  const fixedNow = now === null ? null : new Date(now).getTime();
+  const clock = () => new Date((fixedNow ?? Date.now()) + offset);
   const rows = (cartera ? [
-    { id: 'aviso-cartera', kind: 'CARTERA_MENSUAL', level: 'IMPORTANTE', subjectId: 'cliente-nuva', label: 'Cartera vencida', message: 'Muebles Nuva tiene 2 mensualidades vencidas desde agosto: $3.200.000 pendientes', url: '/financiero?tab=cartera' },
-    { id: 'aviso-puntual', kind: 'CARTERA_UNICO', level: 'SEGUIMIENTO', subjectId: 'cuenta-grit', label: 'Cartera · servicio puntual', message: 'Fundación Grit lleva 22 días vencida la cuenta de cobro No. 0395: $1.500.000 pendientes', url: '/financiero?tab=cartera' }
+    { id: 'aviso-cartera', kind: 'CARTERA_MENSUAL', level: 'IMPORTANTE', subjectId: 'cliente-nuva', label: 'Cartera vencida', message: 'Cliente de prueba A tiene 2 cuentas vencidas en 2 períodos desde agosto: $3.200.000 pendientes', url: '/financiero?tab=cartera' },
+    { id: 'aviso-puntual', kind: 'CARTERA_UNICO', level: 'SEGUIMIENTO', subjectId: 'cuenta-grit', label: 'Cartera · cuenta vencida', message: 'Cliente de prueba B lleva 22 días vencida la cuenta de cobro No. 0395: $1.500.000 pendientes', url: '/financiero?tab=cartera' }
   ] : [
     { id: 'aviso-revision', kind: 'CRM_REVIEW', level: 'IMPORTANTE', subjectId: 'lead-centro', label: 'Revisión · 30 días', message: 'Centro Andino lleva 30 días sin responder: ¿sigue o no?' },
     { id: 'aviso-seguimiento', kind: 'CRM_FOLLOW_UP', level: 'SEGUIMIENTO', subjectId: 'lead-calzado', label: 'Seguimiento comercial', message: 'Calzado Andino lleva 10 días sin responder la propuesta' }
   ]).map((row) => ({ userId, url: `/crm/oportunidades/${row.subjectId}`, createdAt: clock(), snoozedUntil: null, decidedAt: null, resolvedAt: null, resolution: null, notificationId: null, ...row }));
-  // Two overdue months for Muebles Nuva and an open one-off account for Grit, so the notices are still due.
+  // Two overdue periods and an individual obligation, all fictitious. The live service recalculates their notices.
   const owed = (id, period) => ({ id, kind: 'CLIENTE', status: 'DEBE', amount: 1600000, period, issuedAt: null, dueDate: null, number: null, payments: [] });
+  const collectionClients = [
+    { id: 'cliente-nuva', name: 'Cliente de prueba A', contracts: [{ serviceType: 'PARRILLA', startDate: '2026-08-01' }], accountsReceivables: [owed('n-ago', '2026-08-01'), owed('n-sep', '2026-09-01')] },
+    { id: 'cliente-grit', name: 'Cliente de prueba B', contracts: [], accountsReceivables: [] }
+  ];
+  const collectionActivities = [];
   const collection = cartera ? {
     teamMember: { findFirst: async () => ({ role: 'Coordinadora Administrativa y Contable', areas: ['ADMINISTRATIVA', 'COMERCIAL'] }) },
     collectionSetting: { findUnique: async () => null },
-    client: { findUnique: async () => ({ name: 'Muebles Nuva', accountsReceivables: [owed('n-ago', '2026-08-01'), owed('n-sep', '2026-09-01')] }) },
-    accountsReceivable: { findUnique: async () => ({ ...owed('cuenta-grit', '2026-09-01'), number: 395, client: { name: 'Fundación Grit' } }) }
+    client: { findUnique: async ({ where }) => collectionClients.find(client => client.id === where.id) || null },
+    accountsReceivable: { findUnique: async ({ where }) => where.id === 'cuenta-grit'
+      ? { ...owed('cuenta-grit', '2026-09-01'), amount: 1500000, number: 395, clientId: 'cliente-grit', client: collectionClients[1] } : null },
+    collectionActivity: {
+      findFirst: async ({ where }) => collectionActivities.find(activity => activity.clientId === where.clientId && activity.occurredAt > where.occurredAt.gt) || null,
+      create: async ({ data }) => {
+        if (data.noticeId && collectionActivities.some(activity => activity.noticeId === data.noticeId)) throw Object.assign(new Error('Gestión ya registrada'), { code: 'P2002' });
+        const activity = { id: `gestion-${collectionActivities.length + 1}`, ...data };
+        collectionActivities.push(activity);
+        return activity;
+      }
+    }
   } : {};
   const matches = (row, where = {}) => Object.entries(where).every(([key, value]) => (value && typeof value === 'object' && 'not' in value ? row[key] !== value.not : row[key] === value));
   const contact = new Set(['LLAMADA', 'CORREO', 'WHATSAPP', 'MENSAJE_LINKEDIN', 'REUNION', 'PROPUESTA_ENVIADA', 'RESPUESTA_CLIENTE']);
@@ -55,7 +71,7 @@ const createImportantNoticeMemory = (crmDb, userId, { cartera = false } = {}) =>
 
 // Local laboratory for the CRM screens: the real router and service run over an in-memory store.
 // No dotenv, no database, no production server, no external calls.
-export async function createCrmPreview({ port = 3100, cartera = false } = {}) {
+export async function createCrmPreview({ port = 3100, cartera = false, now = null } = {}) {
   // The real catalog, so «Crear borrador» prices the lines exactly as production would.
   const catalog = JSON.parse(await readFile(path.resolve(import.meta.dirname, '../data/service_catalog_2026.json'), 'utf8'))
     .map((service, index) => ({ id: `svc-${index + 1}`, category: service.category, name: service.name, description: service.description, costo_real_estimado: service.estimatedCost, valor_neto: service.finalPrice, activo: true }));
@@ -69,7 +85,7 @@ export async function createCrmPreview({ port = 3100, cartera = false } = {}) {
   api.use('/api/crm', createCrmRouter({ db }));
   // La banda de avisos importantes, con el servicio real sobre la misma memoria. El reloj se puede adelantar
   // (POST /api/__preview/clock?minutes=5) para ver salir el siguiente aviso sin esperar los cinco minutos.
-  const notices = createImportantNoticeMemory(db, crmDemoUser.id, { cartera });
+  const notices = createImportantNoticeMemory(db, crmDemoUser.id, { cartera, now });
   api.post('/api/__preview/clock', (req, res) => { notices.advance(Number(req.query.minutes || 0)); res.json({ now: notices.clock() }); });
   api.use('/api/important-notices', createImportantNoticeRouter({ db: notices.db, clock: notices.clock }));
   api.get('/api/auth/me', (_req, res) => res.json(crmDemoUser));

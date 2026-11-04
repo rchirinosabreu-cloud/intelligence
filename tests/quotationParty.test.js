@@ -228,7 +228,7 @@ test('quotations link their party on create, update and acceptance, and a failur
 test('the quotation form says which party it belongs to, and Terceros shows potential clients', () => {
     const form = read('../src/components/modules/Quotations/QuotationForm.jsx');
     assert.match(form, /data-quotation-party=\{party\?\.kind \|\| 'NONE'\}/);
-    assert.match(form, /if \(data\.party\) setParty\(data\.party\)/);
+    assert.match(form, /localDraft\.commit\([\s\S]*?party: data\.party \|\| party/, 'el guardado confirmado conserva el tercero devuelto por el servidor');
     const directory = read('../src/components/modules/financial/FinancialPartiesDirectory.jsx');
     assert.match(directory, /data-prospect-card/);
     assert.match(directory, /data-party-quotations/);

@@ -21,7 +21,8 @@ const invoice = {
 
 async function readPdf(receivable) {
     const data = new Uint8Array(generateReceivablePdfBuffer(receivable, issuer));
-    const pdf = await getDocument({ data, useSystemFonts: true, isEvalSupported: false }).promise;
+    const loading = getDocument({ data, useSystemFonts: true, isEvalSupported: false });
+    const pdf = await loading.promise;
     try {
         const pages = [];
         for (let number = 1; number <= pdf.numPages; number += 1) {
@@ -32,7 +33,7 @@ async function readPdf(receivable) {
         }
         return pages;
     } finally {
-        await pdf.destroy();
+        await loading.destroy();
     }
 }
 
