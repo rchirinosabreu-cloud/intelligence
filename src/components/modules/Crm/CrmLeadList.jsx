@@ -9,11 +9,11 @@ import CrmFilters from './CrmFilters';
 import { useCrmLeads, useArchiveLeads } from './crmApi';
 import { StageBadge, TrafficLightBadge, PriorityBadge, FollowUpLabel, OriginBadge, RequestBadge, SilenceBadge, ArchivedBadge, leadTitle, leadSubtitle } from './crmPresentation';
 
-const Empty = ({ onCreate, filtered }) => (
+const Empty = ({ onCreate, filtered, archived }) => (
   <div className="px-6 py-14 text-center">
-    <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{filtered ? 'Ninguna oportunidad coincide con estos filtros.' : 'Todavía no hay oportunidades registradas.'}</p>
-    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{filtered ? 'Prueba limpiando los filtros.' : 'Registra la primera y el CRM empieza a medir desde hoy.'}</p>
-    {!filtered && onCreate && (
+    <p className="text-sm font-medium text-zinc-700 dark:text-zinc-200">{archived ? 'No hay oportunidades archivadas.' : filtered ? 'Ninguna oportunidad coincide con estos filtros.' : 'Todavía no hay oportunidades registradas.'}</p>
+    <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">{archived ? 'Las que archives desde la lista o desde su ficha aparecen aquí.' : filtered ? 'Prueba limpiando los filtros.' : 'Registra la primera y el CRM empieza a medir desde hoy.'}</p>
+    {!filtered && !archived && onCreate && (
       <button type="button" onClick={onCreate} className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl bg-primary px-4 text-sm font-semibold text-white shadow-sm transition-transform hover:shadow-md active:scale-95">
         <Plus className="h-4 w-4" /> Nueva oportunidad
       </button>
@@ -44,7 +44,7 @@ const CrmLeadList = ({ filters, onFiltersChange, team, onOpenLead, onCreate }) =
     const count = selected.length;
     const accepted = await confirm({
       title: count === 1 ? 'Archivar 1 oportunidad' : `Archivar ${count} oportunidades`,
-      description: 'Salen de las listas, de las métricas y de los avisos. Sus datos y su historial se conservan y se pueden desarchivar desde el filtro «Archivadas».',
+      description: 'Salen de las listas, de las métricas y de los avisos. Sus datos y su historial se conservan y se pueden desarchivar desde «Ver archivadas».',
       confirmLabel: 'Archivar',
       tone: 'neutral'
     });
@@ -63,13 +63,7 @@ const CrmLeadList = ({ filters, onFiltersChange, team, onOpenLead, onCreate }) =
       <CrmFilters filters={filters} onChange={onFiltersChange} team={team} />
 
       <div className="flex flex-wrap items-center justify-between gap-3 px-1 text-xs text-zinc-500 dark:text-zinc-400">
-        <span className="flex flex-wrap items-center gap-3">
-          <span>{isLoading ? 'Cargando…' : `${data?.total ?? 0} ${data?.total === 1 ? 'oportunidad' : 'oportunidades'} · ${viewingArchived ? 'archivadas, la más reciente primero' : 'ordenadas por urgencia'}`}</span>
-          {/* Un solo botón que alterna (Rodny, 4 de noviembre de 2026: «quiero un botón sencillo que me muestre las archivadas y ya»). */}
-          <button type="button" onClick={() => onFiltersChange({ ...filters, archived: viewingArchived ? '' : 'SOLO' })} aria-pressed={viewingArchived} data-crm-toggle-archived className={cn('inline-flex min-h-9 items-center gap-1.5 rounded-lg border px-2.5 font-semibold transition-colors', viewingArchived ? 'border-primary/40 bg-primary/10 text-primary' : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900')}>
-            <Archive className="h-3.5 w-3.5" /> {viewingArchived ? 'Volver a las vigentes' : 'Ver archivadas'}
-          </button>
-        </span>
+        <span>{isLoading ? 'Cargando…' : `${data?.total ?? 0} ${data?.total === 1 ? 'oportunidad' : 'oportunidades'} · ${viewingArchived ? 'archivadas, la más reciente primero' : 'ordenadas por urgencia'}`}</span>
         {selected.length > 0 && (
           <div className="flex items-center gap-2 rounded-xl border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-800 dark:bg-zinc-950" data-crm-selection>
             <span className="font-semibold text-zinc-700 dark:text-zinc-200">{selected.length} {selected.length === 1 ? 'seleccionada' : 'seleccionadas'}</span>
@@ -111,7 +105,7 @@ const CrmLeadList = ({ filters, onFiltersChange, team, onOpenLead, onCreate }) =
               {isLoading ? (
                 <tr><td colSpan="9" className="px-6 py-12 text-center text-zinc-400">Cargando oportunidades…</td></tr>
               ) : items.length === 0 ? (
-                <tr><td colSpan="9"><Empty onCreate={onCreate} filtered={filtered} /></td></tr>
+                <tr><td colSpan="9"><Empty onCreate={onCreate} filtered={filtered} archived={viewingArchived} /></td></tr>
               ) : items.map(lead => (
                 <tr key={lead.id} onClick={() => onOpenLead?.(lead.id)} className={cn('group cursor-pointer transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-800/50', lead.archivedAt && 'opacity-70')}>
                   <td className="px-4 py-3" onClick={event => event.stopPropagation()}>
@@ -148,7 +142,7 @@ const CrmLeadList = ({ filters, onFiltersChange, team, onOpenLead, onCreate }) =
           {isLoading ? (
             <li className="px-6 py-12 text-center text-sm text-zinc-400">Cargando oportunidades…</li>
           ) : items.length === 0 ? (
-            <li><Empty onCreate={onCreate} filtered={filtered} /></li>
+            <li><Empty onCreate={onCreate} filtered={filtered} archived={viewingArchived} /></li>
           ) : items.map(lead => (
             <li key={lead.id} className="flex items-start gap-2 px-3">
               {!lead.archivedAt && (

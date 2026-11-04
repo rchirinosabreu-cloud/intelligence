@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import Select from '@/components/ui/Select';
 import { BrainDatePicker } from '@/components/ui/BrainDatePicker';
-import { Search, X, Filter, ChevronDown } from '@/components/ui/icons';
+import { Search, X, Filter, ChevronDown, Archive } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { CRM_STAGES, CRM_ORIGINS, CRM_PRIORITIES, CRM_TRAFFIC_LIGHTS, inputClass } from './crmPresentation';
 import { defaultCrmFilters } from '@/lib/crmFilterSession';
@@ -19,7 +19,7 @@ const selectClass = 'w-full rounded-xl border border-zinc-200 bg-white px-3 py-2
  * Shared filter bar for the dashboard, the list and the follow-ups.
  * `show` limits which controls render; the same `filters` object feeds every CRM query.
  */
-const CrmFilters = ({ filters, onChange, team = [], show = ['search', 'stage', 'origin', 'priority', 'ownerId', 'trafficLight', 'request', 'silence', 'dates'], className }) => {
+const CrmFilters = ({ filters, onChange, team = [], show = ['search', 'stage', 'origin', 'priority', 'ownerId', 'trafficLight', 'request', 'silence', 'dates', 'archived'], className }) => {
   const [expanded, setExpanded] = useState(false);
   const set = (key, value) => onChange({ ...filters, [key]: value });
   const has = key => show.includes(key);
@@ -119,6 +119,21 @@ const CrmFilters = ({ filters, onChange, team = [], show = ['search', 'stage', '
               <BrainDatePicker ariaLabel="Ingreso hasta" value={filters.to || ''} min={filters.from || undefined} onChange={value => set('to', value)} isClearable />
             </Field>
           </>
+        )}
+        {/* Un solo botón que alterna, al lado de «Ingreso hasta» (Rodny, 4 de noviembre de 2026: «quiero un botón
+            sencillo que me muestre las archivadas y ya»). No es un filtro de la barra: no cuenta ni se limpia con ellos. */}
+        {has('archived') && (
+          <div className="flex min-w-0 flex-col justify-end">
+            <button
+              type="button"
+              onClick={() => set('archived', filters.archived === 'SOLO' ? '' : 'SOLO')}
+              aria-pressed={filters.archived === 'SOLO'}
+              data-crm-toggle-archived
+              className={cn('inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition-colors', filters.archived === 'SOLO' ? 'border-primary/40 bg-primary/10 text-primary' : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900')}
+            >
+              <Archive className="h-4 w-4" /> {filters.archived === 'SOLO' ? 'Volver a las vigentes' : 'Ver archivadas'}
+            </button>
+          </div>
         )}
       </div>
       {active > 0 && (

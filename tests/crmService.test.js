@@ -165,8 +165,7 @@ test('listLeads filters by stage, origin, owner, traffic light, bucket and free 
   assert.deepEqual((await listLeads(db, { search: 'marta' }, NOW)).items.map(lead => lead.id), ['B']);
   assert.deepEqual((await listLeads(db, { group: 'ABIERTO' }, NOW)).items.map(lead => lead.id), ['A', 'B']);
   assert.deepEqual((await listLeads(db, { includeArchived: true }, NOW)).items.map(lead => lead.id).sort(), ['A', 'B', 'C', 'D']);
-  assert.deepEqual((await listLeads(db, { archived: 'TODAS' }, NOW)).items.map(lead => lead.id).sort(), ['A', 'B', 'C', 'D']);
-  assert.deepEqual((await listLeads(db, { archived: 'SOLO' }, NOW)).items.map(lead => lead.id), ['D'], 'el filtro «Archivadas» muestra dónde quedaron');
+  assert.deepEqual((await listLeads(db, { archived: 'SOLO' }, NOW)).items.map(lead => lead.id), ['D'], '«Ver archivadas» muestra dónde quedaron');
 });
 
 test('archivar conserva los datos, saca de la lista y se deshace con desarchivar; en lote desde la lista filtrada', async () => {

@@ -532,14 +532,13 @@ const fetchLeads = async (db, { includeArchived = false, onlyArchived = false } 
   return db.crmLead.findMany({ where, include: leadInclude, orderBy: { enteredAt: 'desc' } });
 };
 
-// `archived`: «SOLO» lista las archivadas, «TODAS» las mezcla con las vigentes; sin el filtro, solo vigentes.
-// Las archivadas se ordenan por fecha de archivo, la última primero: es lo que se busca al querer desarchivar.
+// `archived=SOLO` lista las archivadas; sin él, solo vigentes. Se ordenan por fecha de archivo, la última primero: es lo
+// que se busca al querer desarchivar.
 const archivedSort = (a, b) => new Date(b.archivedAt || 0) - new Date(a.archivedAt || 0);
 
 export const listLeads = async (db, query = {}, now = new Date()) => {
-  const archived = text(query.archived);
-  const onlyArchived = archived === 'SOLO';
-  const includeArchived = archived === 'TODAS' || query.includeArchived === true || query.includeArchived === 'true';
+  const onlyArchived = text(query.archived) === 'SOLO';
+  const includeArchived = query.includeArchived === true || query.includeArchived === 'true';
   const raw = await fetchLeads(db, { includeArchived, onlyArchived });
   const alertDays = await readFollowUpAlertDays(db);
   const items = raw.map(lead => serializeLead(lead, now)).filter(lead => matchesFilters(lead, query, alertDays)).sort(onlyArchived ? archivedSort : urgencySort);
