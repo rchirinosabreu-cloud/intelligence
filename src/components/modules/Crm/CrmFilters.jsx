@@ -112,11 +112,12 @@ const CrmFilters = ({ filters, onChange, team = [], show = ['search', 'stage', '
         )}
         {has('dates') && (
           <>
+            {/* Un solo alto en la fila: el `Select` compartido mide 44 px y la fecha, sola, 38. */}
             <Field label="Ingreso desde">
-              <BrainDatePicker ariaLabel="Ingreso desde" value={filters.from || ''} max={filters.to || undefined} onChange={value => set('from', value)} isClearable />
+              <BrainDatePicker ariaLabel="Ingreso desde" className="min-h-11" value={filters.from || ''} max={filters.to || undefined} onChange={value => set('from', value)} isClearable />
             </Field>
             <Field label="Ingreso hasta">
-              <BrainDatePicker ariaLabel="Ingreso hasta" value={filters.to || ''} min={filters.from || undefined} onChange={value => set('to', value)} isClearable />
+              <BrainDatePicker ariaLabel="Ingreso hasta" className="min-h-11" value={filters.to || ''} min={filters.from || undefined} onChange={value => set('to', value)} isClearable />
             </Field>
           </>
         )}
@@ -129,7 +130,7 @@ const CrmFilters = ({ filters, onChange, team = [], show = ['search', 'stage', '
               onClick={() => set('archived', filters.archived === 'SOLO' ? '' : 'SOLO')}
               aria-pressed={filters.archived === 'SOLO'}
               data-crm-toggle-archived
-              className={cn('inline-flex min-h-10 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition-colors', filters.archived === 'SOLO' ? 'border-primary/40 bg-primary/10 text-primary' : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900')}
+              className={cn('inline-flex min-h-11 w-full items-center justify-center gap-1.5 rounded-xl border px-3 text-sm font-semibold transition-colors', filters.archived === 'SOLO' ? 'border-primary/40 bg-primary/10 text-primary' : 'border-zinc-200 bg-white text-zinc-700 hover:bg-zinc-50 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900')}
             >
               <Archive className="h-4 w-4" /> {filters.archived === 'SOLO' ? 'Volver a las vigentes' : 'Ver archivadas'}
             </button>

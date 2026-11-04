@@ -34,7 +34,7 @@ export const NOTICE_TRACE_LABELS = Object.freeze({
 
 const CHANNEL_PHRASES = { WHATSAPP: 'por WhatsApp', LLAMADA: 'por llamada', CORREO: 'por correo', REUNION: 'en una reunión' };
 const SNOOZE_PHRASES = { '10m': 'por 10 minutos', '1h': 'por 1 hora', tomorrow: 'hasta mañana a las 8:00' };
-const OUTCOME_PHRASES = { PERDIDO: 'perdida', DESCARTADO: 'descartada' };
+const OUTCOME_PHRASES = { PERDIDO: 'perdida', DESCARTADO: 'descartada', GANADO: 'ganada' };
 const CLEARED_REASONS = {
     GESTION: 'ya se registró una gestión con el cliente en el CRM',
     ETAPA: 'la oportunidad ya no espera respuesta del cliente',
@@ -100,7 +100,9 @@ export const noticeTraceDescription = (eventType, metadata = {}, { actor = 'Algu
                 ? `${actor} anotó desde el aviso que ${who} respondió.`
                 : `${actor} registró un seguimiento${CHANNEL_PHRASES[meta.channel] ? ` ${CHANNEL_PHRASES[meta.channel]}` : ''} desde el aviso de ${who}.`;
         case NOTICE_TRACE_EVENTS.SNOOZED: return `${actor} pospuso el aviso de ${who} ${SNOOZE_PHRASES[meta.option] || 'para más tarde'}.`;
-        case NOTICE_TRACE_EVENTS.CLOSED: return `${actor} marcó ${who} como ${OUTCOME_PHRASES[meta.outcome] || 'cerrada'} desde el aviso de revisión.`;
+        case NOTICE_TRACE_EVENTS.CLOSED:
+            if (meta.outcome === 'ARCHIVAR') return `${actor} archivó ${who} desde el aviso.`;
+            return `${actor} marcó ${who} como ${OUTCOME_PHRASES[meta.outcome] || 'cerrada'} desde el aviso de revisión${meta.outcome === 'GANADO' ? ': ya es cliente' : ''}.`;
         case NOTICE_TRACE_EVENTS.CLEARED: {
             const reason = isCollectionNotice(meta) && meta.reason === 'GESTION' ? 'ya se registró una gestión de cobro con el cliente' : CLEARED_REASONS[meta.reason];
             return `Salió de la banda de ${subject} el aviso de ${who}: ${reason || 'ya no hacía falta'}.`;

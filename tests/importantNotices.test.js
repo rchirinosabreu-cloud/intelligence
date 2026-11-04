@@ -1,7 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
-    DECISION_GAP_MS, FOLLOW_UP_CHANNELS, NOTICE_LEVELS, REVIEW_OUTCOMES, SNOOZE_OPTIONS, followUpNoticeText, pickCurrentNotice, snoozeUntil
+    DECISION_GAP_MS, FOLLOW_UP_CHANNELS, NOTICE_ARCHIVE_OUTCOME, NOTICE_LEVELS, REVIEW_OUTCOMES, SNOOZE_OPTIONS, followUpNoticeText,
+    isReviewOutcome, noticeTitleHref, pickCurrentNotice, snoozeUntil
 } from '../src/lib/importantNotices.js';
 
 // El segundo nivel de avisos (Rodny, 26 de octubre de 2026): una banda abajo, de borde a borde, con un aviso a la vez.
@@ -83,9 +84,17 @@ test('el aviso dice quién, cuántos días y qué cotización, sin la orden del 
     );
 });
 
-test('«No sigue» ofrece perder, descartar, marcar ganada porque ya es cliente, o archivar', () => {
+test('«No sigue» ofrece perder, descartar o marcar ganada; archivar va a la vista, fuera de esa lista', () => {
     assert.deepEqual(REVIEW_OUTCOMES.map((outcome) => [outcome.value, outcome.label]), [
-        ['PERDIDO', 'Perdida'], ['DESCARTADO', 'Descartada'], ['GANADO', 'Ya es cliente'], ['ARCHIVAR', 'Archivar']
+        ['PERDIDO', 'Perdida'], ['DESCARTADO', 'Descartada'], ['GANADO', 'Ya es cliente']
     ]);
     assert.ok(REVIEW_OUTCOMES.every((outcome) => outcome.done), 'cada salida dice en palabras qué pasó, para el aviso de la pantalla');
+    assert.equal(isReviewOutcome(NOTICE_ARCHIVE_OUTCOME), false);
+});
+
+test('el título lleva a lo que nombra solo con una dirección interna de la plataforma', () => {
+    assert.equal(noticeTitleHref({ url: '/crm/oportunidades/l1' }), '/crm/oportunidades/l1');
+    assert.equal(noticeTitleHref({ url: null }), null);
+    assert.equal(noticeTitleHref({ url: 'https://otro.sitio/x' }), null);
+    assert.equal(noticeTitleHref({ url: '//otro.sitio/x' }), null);
 });

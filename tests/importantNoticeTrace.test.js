@@ -40,6 +40,10 @@ test('cada evento se dice en una frase, con la persona y la oportunidad', () => 
         'Francys Caballero marcó Centro Andino como perdida desde el aviso de revisión.');
     assert.equal(noticeTraceDescription(E.CLOSED, { subject: 'Centro Andino', outcome: 'DESCARTADO' }, who),
         'Francys Caballero marcó Centro Andino como descartada desde el aviso de revisión.');
+    assert.equal(noticeTraceDescription(E.CLOSED, { subject: 'Andy', outcome: 'GANADO' }, who),
+        'Francys Caballero marcó Andy como ganada desde el aviso de revisión: ya es cliente.');
+    assert.equal(noticeTraceDescription(E.CLOSED, { subject: 'Centro Andino', outcome: 'ARCHIVAR' }, who),
+        'Francys Caballero archivó Centro Andino desde el aviso.');
     assert.equal(noticeTraceDescription(E.CLEARED, { subject: 'Café Altura', reason: 'GESTION' }, who),
         'Salió de la banda de Francys Caballero el aviso de Café Altura: ya se registró una gestión con el cliente en el CRM.');
     assert.equal(noticeTraceDescription(E.CLEARED, { subject: 'ARISTEA', reason: 'REASIGNADO' }, { subject: 'Rodny Chirinos' }),

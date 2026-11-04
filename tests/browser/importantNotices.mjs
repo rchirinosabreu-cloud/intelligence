@@ -42,7 +42,7 @@ test('la revisión sale primero, se decide sin salir de la pantalla y el seguimi
     assert.equal(await band(page).getAttribute('data-level'), 'IMPORTANTE');
     assert.match(await band(page).innerText(), /Centro Andino lleva 30 días sin responder: ¿sigue o no\?/);
     const labels = await band(page).locator('[data-notice-action]').allInnerTexts();
-    assert.deepEqual(labels.map((label) => label.trim()), ['Ya hice seguimiento', 'No sigue', 'Recordarme']);
+    assert.deepEqual(labels.map((label) => label.trim()), ['Ya hice seguimiento', 'No sigue', 'Archivar', 'Recordarme']);
     // Encima del menú lateral y de borde a borde; debajo de los diálogos.
     const box = await band(page).evaluate((node) => ({ z: getComputedStyle(node).zIndex, left: node.getBoundingClientRect().left, width: node.getBoundingClientRect().width }));
     assert.deepEqual(box, { z: '65', left: 0, width: 1440 });
@@ -75,7 +75,7 @@ test('la revisión sale primero, se decide sin salir de la pantalla y el seguimi
     await page.reload();
     await band(page).waitFor();
     assert.equal(await band(page).getAttribute('data-level'), 'SEGUIMIENTO');
-    assert.deepEqual((await band(page).locator('[data-notice-action]').allInnerTexts()).map((t) => t.trim()), ['Ya hice seguimiento', 'Abrir', 'Recordarme']);
+    assert.deepEqual((await band(page).locator('[data-notice-action]').allInnerTexts()).map((t) => t.trim()), ['Ya hice seguimiento', 'Abrir', 'Archivar', 'Recordarme']);
     await page.getByText('Calzado Andino').locator('visible=true').first().waitFor();
     await settled(page);
     await page.screenshot({ path: `${OUT}/4-seguimiento-claro.png` });
@@ -101,7 +101,7 @@ test('«No sigue» pregunta cómo se cierra y la oportunidad pasa a Perdido o De
     await band(page).waitFor();
     await band(page).locator('[data-notice-action="close"]').click();
     assert.match(await band(page).innerText(), /¿Cómo la cerramos\?/);
-    assert.deepEqual((await band(page).locator('[data-notice-outcome]').allInnerTexts()).map((t) => t.trim()), ['Perdida', 'Descartada']);
+    assert.deepEqual((await band(page).locator('[data-notice-outcome]').allInnerTexts()).map((t) => t.trim()), ['Perdida', 'Descartada', 'Ya es cliente']);
     await settled(page);
     await page.screenshot({ path: `${OUT}/7-no-sigue.png` });
     // Esc vuelve a los botones sin cerrar nada.
