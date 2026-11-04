@@ -5,7 +5,8 @@ import toast from 'react-hot-toast';
 import { ChevronDown } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
 import { getApiBaseUrl } from '@/lib/apiBaseUrl';
-import { FOLLOW_UP_CHANNELS, REVIEW_OUTCOMES, SNOOZE_OPTIONS } from '@/lib/importantNotices';
+import { useNavigateFrom } from '@/components/layout/BackToOrigin';
+import { FOLLOW_UP_CHANNELS, NOTICE_ARCHIVE_OUTCOME, REVIEW_OUTCOMES, SNOOZE_OPTIONS, noticeTitleHref } from '@/lib/importantNotices';
 
 // Avisos importantes (Rodny, 26 de octubre de 2026): la banda de abajo, de borde a borde y por encima del menú. Un aviso
 // a la vez; el siguiente sale cinco minutos después de decidir. Verde para el seguimiento, salmón solo para lo más
@@ -48,10 +49,14 @@ const NoticeButton = ({ primary = false, className, ...props }) => (
 
 function NoticeBody({ notice, onDecided }) {
   const navigate = useNavigate();
+  const navigateFrom = useNavigateFrom();
   const [mode, setMode] = useState('base'); // base | channels | close | snooze
   const [busy, setBusy] = useState(false);
   const contentRef = useRef(null);
   const isReview = notice.kind === 'CRM_REVIEW';
+  // Un aviso de una oportunidad: se puede archivar a la vista (Rodny, 4 de noviembre de 2026).
+  const isCrm = String(notice.kind || '').startsWith('CRM_');
+  const titleHref = noticeTitleHref(notice);
   // Cartera vencida (28 de octubre de 2026): la decide Elisa. «Ya le escribí» deja la gestión de cobro en la
   // trazabilidad y «Registrar pago» abre Cuentas por cobrar; el aviso sale solo cuando el cliente se pone al día.
   const isCollection = String(notice.kind || '').startsWith('CARTERA_');
@@ -100,13 +105,27 @@ function NoticeBody({ notice, onDecided }) {
     }
   };
 
+  // Mirar no es decidir (Rodny, 4 de noviembre de 2026): el título lleva a lo que nombra y el aviso sigue ahí. Con Ctrl o
+  // Cmd se abre en otra pestaña, como cualquier enlace.
+  const openTitle = (event) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+    event.preventDefault();
+    navigateFrom(titleHref);
+  };
+
   return (
     <div className="brain-notice-band" data-important-notice={notice.id} data-level={notice.level} data-mode={mode === 'base' ? 'base' : 'choose'}>
       <div className="brain-notice-wash" aria-hidden="true" />
       <div className="brain-notice-content">
         <section ref={contentRef} role="region" aria-label="Aviso importante" aria-live="polite" className="mx-auto max-w-3xl">
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-white/90">{notice.label}</p>
-          <p className="brain-notice-title mb-4 text-[22px] font-bold leading-tight text-white">{notice.message}</p>
+          <p className="brain-notice-title mb-4 text-[22px] font-bold leading-tight text-white">
+            {titleHref ? (
+              <a href={titleHref} data-notice-title-link onClick={openTitle} className="rounded underline decoration-white/50 decoration-1 underline-offset-4 transition-colors hover:decoration-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white">
+                {notice.message}
+              </a>
+            ) : notice.message}
+          </p>
           {mode === 'channels' && <p className="-mt-1.5 mb-3 text-[15px] font-medium text-white/95">{isCollection ? '¿Cómo le escribiste?' : '¿Cómo hiciste el seguimiento?'}</p>}
           {mode === 'snooze' && <p className="-mt-1.5 mb-3 text-[15px] font-medium text-white/95">¿Cuándo te lo recuerdo?</p>}
           {mode === 'close' && <p className="-mt-1.5 mb-3 text-[15px] font-medium text-white/95">¿Cómo la cerramos?</p>}
@@ -136,6 +155,11 @@ function NoticeBody({ notice, onDecided }) {
                 )}
                 {!isReview && !isCollection && !isPlan && notice.url && (
                   <NoticeButton disabled={busy} data-notice-action="open" onClick={() => navigate(notice.url)}>Abrir</NoticeButton>
+                )}
+                {isCrm && (
+                  <NoticeButton disabled={busy} data-notice-action="archive" onClick={() => decide('close', { outcome: NOTICE_ARCHIVE_OUTCOME }, 'Oportunidad archivada: la encuentras en «Ver archivadas»')}>
+                    Archivar
+                  </NoticeButton>
                 )}
                 <NoticeButton disabled={busy} data-notice-action="snooze" aria-haspopup="true" onClick={() => setMode('snooze')}>
                   Recordarme <ChevronDown className="h-4 w-4" aria-hidden="true" />

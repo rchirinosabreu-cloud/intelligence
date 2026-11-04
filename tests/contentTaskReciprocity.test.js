@@ -228,7 +228,7 @@ test('content and task services apply reciprocal updates inside their existing t
 
   assert.match(contentService, /buildLinkedTaskUpdates/);
   assert.match(contentService, /prisma\.\$transaction\(async \(tx\) =>/);
-  assert.match(contentService, /tx\.task\.update/);
+  assert.match(contentService, /updateOrderedTask\(tx,/);
   assert.match(taskService, /buildContentItemUpdateFromTask/);
   assert.match(taskService, /buildLinkedTaskUpdates/);
   assert.match(taskService, /excludedTaskIds:\s*\[id\]/);

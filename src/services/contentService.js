@@ -1,6 +1,7 @@
 import prisma from '../lib/prisma.js';
 import { assertActiveTeamMembers } from './teamRosterService.js';
 import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, recordPlanRecognition } from './recognitionService.js';
+import { updateOrderedTask } from './taskOrderService.js';
 import { createTask } from './nativeTaskService.js';
 import { uploadToS3, deleteFromS3, createSignedUpload, headS3Object, getS3ObjectBuffer } from './s3Service.js';
 import { derivedKeyFor } from './socialImageDerivativeService.js';
@@ -685,10 +686,10 @@ export const updateContentItem = async (id, data, { fromClientReview = false } =
 
     for (const { id: taskId, data: taskData } of linkedTaskUpdates) {
       const before = await prepareTaskRecognition(tx, taskId);
-      const after = await tx.task.update({
+      const after = await updateOrderedTask(tx, {
         where: { id: taskId },
         data: taskData,
-      });
+      }, before.task);
       await finishTaskRecognition(tx, before, after);
     }
 

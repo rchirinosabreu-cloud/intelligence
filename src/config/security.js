@@ -111,6 +111,7 @@ const TASK_UPDATE_FIELDS = new Set([
   'contentInputs',
   'specialType',
   'sortOrder',
+  'orderBeforeId',
   'newAttachment',
   'deleteAttachmentId',
   'returnReason',

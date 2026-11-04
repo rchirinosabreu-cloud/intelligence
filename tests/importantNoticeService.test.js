@@ -116,11 +116,19 @@ test('«No sigue» solo existe en la revisión y cierra la oportunidad como perd
     await closeReviewNotice(won, 'n1', { outcome: 'GANADO' }, crmUser, { crm, now: NOW });
     assert.deepEqual(calls.at(-1).slice(1, 3), ['l1', { stage: 'GANADO', note: 'Ya es cliente: marcada como ganada desde el aviso de revisión.' }]);
     assert.equal(won.rows[0].resolution, 'GANADA');
-    // Archivar: no es una etapa, se conservan los datos y no vuelve a avisar.
+    // Archivar: no es una etapa, se conservan los datos y no vuelve a avisar. Vale en la revisión y en el recordatorio
+    // (Rodny, 4 de noviembre de 2026: «debe aparecer la opción de archivar»).
     const filed = review();
     await closeReviewNotice(filed, 'n1', { outcome: 'ARCHIVAR' }, crmUser, { crm, now: NOW });
     assert.deepEqual(archived, ['l1']);
     assert.equal(filed.rows[0].resolution, 'ARCHIVADA');
+    const reminder = fakeDb({ notices: [notice()] });
+    await closeReviewNotice(reminder, 'n1', { outcome: 'ARCHIVAR' }, crmUser, { crm, now: NOW });
+    assert.deepEqual(archived, ['l1', 'l1']);
+    assert.equal(reminder.rows[0].resolution, 'ARCHIVADA');
+    // Un aviso de cartera o de parrilla no es una oportunidad: no hay nada que archivar.
+    await assert.rejects(closeReviewNotice(fakeDb({ notices: [notice({ kind: 'CARTERA_MENSUAL' })] }), 'n1', { outcome: 'ARCHIVAR' }, crmUser, { crm, now: NOW }), { statusCode: 409 });
+    await assert.rejects(closeReviewNotice(fakeDb({ notices: [notice()] }), 'n1', { outcome: 'ARCHIVAR' }, { userId: 'u-francys', role: 'EDITOR', modulePermissions: {} }, { crm, now: NOW }), { statusCode: 403 });
     calls.length = 0;
     // Perdida: el cliente no la tomó, con el motivo que el CRM exige para Perdido.
     const lost = review();

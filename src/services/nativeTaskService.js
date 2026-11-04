@@ -1,5 +1,6 @@
 import { resetSystemStreak, processSystemStreakDailyIncrement, recordQualityStreakTransition } from './qualityStreakService.js';
 import prisma from '../lib/prisma.js';
+import { nextTaskOrder, updateOrderedTask } from './taskOrderService.js';
 import { assertActiveTeamMembers } from './teamRosterService.js';
 import { assertTaskClientChange } from './taskClientChange.js';
 import { recognitionTransaction, prepareTaskRecognition, finishTaskRecognition, attachTaskRecognitions, recordPlanRecognition } from './recognitionService.js';
@@ -220,6 +221,7 @@ export const createTask = async ({
                     creatorId,
                     comments,
                     status: mappedStatus,
+                    sortOrder: await nextTaskOrder(tx, mappedStatus),
                     clientId,
                     isPriority,
                     priority: priority || null,
@@ -683,10 +685,10 @@ export const updateTask = async (id, data, updaterId = null) => {
 
             for (const { id: taskId, data: taskData } of siblingTaskUpdates) {
                 const siblingBefore = await prepareTaskRecognition(tx, taskId);
-                const siblingAfter = await tx.task.update({
+                const siblingAfter = await updateOrderedTask(tx, {
                     where: { id: taskId },
                     data: taskData,
-                });
+                }, siblingBefore.task);
                 await finishTaskRecognition(tx, siblingBefore, siblingAfter);
             }
         }
@@ -931,6 +933,7 @@ export const updateTask = async (id, data, updaterId = null) => {
                                     assigneeId: linkedItem.plan.ownerId,
                                     creatorId: updaterId || currentTask.creatorId,
                                     status: 'PENDIENTE',
+                                    sortOrder: await nextTaskOrder(tx, 'PENDIENTE'),
                                     clientId: linkedItem.plan.clientId,
                                     contentItemId: linkedItem.id, // Linked to the same item
                                     comments: `Pieza lista para publicar. Referencia: ${referenceText}`
@@ -1002,7 +1005,7 @@ export const updateTask = async (id, data, updaterId = null) => {
 
         console.log(`[nativeTaskService] FINAL updateData being sent to Prisma for ${id}:`, JSON.stringify(updateData, null, 2));
 
-        const updatedTask = await tx.task.update({
+        const updatedTask = await updateOrderedTask(tx, {
             where: { id },
             data: updateData,
             include: {
@@ -1027,7 +1030,7 @@ export const updateTask = async (id, data, updaterId = null) => {
                     }
                 }
             }
-        });
+        }, recognitionBefore.task);
 
         if (currentTask.status === 'DEVUELTA' && updatedTask.status !== 'DEVUELTA') {
             await recordQualityStreakTransition(tx, currentTask, updatedTask);

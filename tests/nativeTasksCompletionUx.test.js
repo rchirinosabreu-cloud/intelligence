@@ -7,11 +7,12 @@ const readNativeTasks = () => readFile(
   'utf8'
 );
 
-test('the optimistic completed task remains visible while the server confirms it', async () => {
+test('task moves preserve the visible state until the server confirms and reloads it', async () => {
   const source = await readNativeTasks();
-
-  assert.match(source, /movedTask\.completedAt\s*=\s*new Date\(\)\.toISOString\(\)/);
-  assert.match(source, /if \(newStatusEnum !== 'REALIZADA'\) movedTask\.completedAt = null/);
+  const transition = source.slice(source.indexOf('// 2. Dragged to a different column'), source.indexOf('const handle', source.indexOf('// 2. Dragged to a different column')));
+  assert.doesNotMatch(transition, /setQueryData|completedAt\s*=/);
+  assert.match(transition, /const savedTask = await response\.json\(\)/);
+  assert.match(transition, /await queryClient\.invalidateQueries\(\{ queryKey: \['nativeTasks'\] \}\)/);
 });
 
 test('completion confetti runs only after a successful backend response', async () => {

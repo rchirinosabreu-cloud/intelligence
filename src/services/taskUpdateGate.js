@@ -25,7 +25,7 @@ import { suspensionBlock } from './clientSuspensionGate.js';
 const gateError = (status, message, extra = {}) => Object.assign(new Error(message), { gateStatus: status, ...extra });
 
 export const checkTaskUpdate = async ({ db = prisma, user, taskId, payload = {} }) => {
-  if ('sortOrder' in payload && !['ADMIN', 'PROJECT_MANAGER', 'PM'].includes(user?.role)) {
+  if (('sortOrder' in payload || 'orderBeforeId' in payload) && !['ADMIN', 'PROJECT_MANAGER', 'PM'].includes(user?.role)) {
     throw gateError(403, 'No tienes permisos de Project Manager o Administrador para reordenar tareas');
   }
   if ('focusDeadlineAt' in payload && !isManagerRole(user?.role)) {

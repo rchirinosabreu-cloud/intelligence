@@ -16,7 +16,7 @@ import { FOLLOW_UP_ALERT_STAGES, followUpRecipients } from '../lib/crmFollowUpAl
 import { userHasArea } from './teamAreaService.js';
 import { collectionStillDue } from './collectionState.js';
 import { hasCollectionActivitySince, recordCollectionActivity } from './collectionActivityService.js';
-import { isFollowUpChannel, isReviewOutcome, pickCurrentNotice, snoozeUntil } from '../lib/importantNotices.js';
+import { NOTICE_ARCHIVE_OUTCOME, isFollowUpChannel, isReviewOutcome, pickCurrentNotice, snoozeUntil } from '../lib/importantNotices.js';
 import { isPlanNotice, parsePlanSubject } from '../lib/planCloseNotices.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription, noticeTraceMetadata } from '../lib/importantNoticeTrace.js';
 
@@ -296,12 +296,17 @@ const CLOSE_STAGES = {
 
 /**
  * «No sigue», solo en la revisión: la oportunidad pasa a Perdido (el cliente no la tomó), a Descartado (no sigue por
- * decisión nuestra) o a Ganado (ya es cliente), o se archiva, por el mismo camino del CRM (Rodny, 26 de octubre de 2026).
+ * decisión nuestra) o a Ganado (ya es cliente), por el mismo camino del CRM (Rodny, 26 de octubre de 2026). «Archivar»
+ * vale en cualquier aviso de una oportunidad, también en los recordatorios (4 de noviembre de 2026).
  */
 export const closeReviewNotice = async (db = prisma, id, body = {}, actor, { crm = crmService, now = new Date(), log } = {}) => {
     const notice = await ownOpenNotice(db, id, actor);
-    if (notice.kind !== 'CRM_REVIEW') throw httpError(409, 'Solo la revisión de una oportunidad se cierra desde el aviso.');
-    if (!isReviewOutcome(body.outcome)) throw httpError(400, 'Elige qué pasa con la oportunidad: perdida, descartada, ya es cliente o archivarla.');
+    if (body.outcome === NOTICE_ARCHIVE_OUTCOME) {
+        if (!isCrmNotice(notice)) throw httpError(409, 'Solo una oportunidad del CRM se archiva desde el aviso.');
+    } else {
+        if (notice.kind !== 'CRM_REVIEW') throw httpError(409, 'Solo la revisión de una oportunidad se cierra desde el aviso.');
+        if (!isReviewOutcome(body.outcome)) throw httpError(400, 'Elige qué pasa con la oportunidad: perdida, descartada o ya es cliente.');
+    }
     requireCrm(actor);
     const { payload, archive, resolution } = CLOSE_STAGES[body.outcome];
     if (archive) await crm.archiveLead(db, notice.subjectId, actor, now);
