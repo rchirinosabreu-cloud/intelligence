@@ -28,6 +28,7 @@ test('las tareas cerradas de un mes traen el tiempo de cada una y el total que s
   assert.deepEqual(data.tareas.map((row) => row.id), ['t1', 't2', 't3', 't5'], 'solo lo cerrado en octubre, en reloj de Bogotá');
   assert.deepEqual(data.tareas.map((row) => row.tiempoRegistrado), ['8 h 15 min', '5 h 10 min', '1 h', 'sin tiempo registrado']);
   assert.equal(data.tareas[0].cerrada, '2026-10-16');
+  assert.equal(data.tareas.at(-1).cerrada, '2026-10-31', 'el cierre es un instante de Bogotá, no una fecha de entrega');
   // 8 h 15 + 5 h 10 + 1 h + 30 s: el total es la suma exacta, redondeada al minuto.
   assert.deepEqual([data.total, data.tiempoTotal, data.minutosTotales, data.sinTiempo], [4, '14 h 26 min', 866, 1]);
   assert.match(data.instruccion, /mismas cifras/);

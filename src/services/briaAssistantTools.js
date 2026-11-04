@@ -20,6 +20,7 @@ import { searchTasks, statusesFor } from './taskSearch.js';
 import { profilePredictionProblem, RHYTHM_POLICY } from '../lib/workPrediction.js';
 import { readDecisionContext, decisionContract } from './briaDecisionContext.js';
 import { taskCalendarDay, taskTemporalEvidence, publicationTemporalEvidence } from '../lib/briaTemporalEvidence.js';
+import { bogotaDate } from '../lib/colombiaBusinessDays.js';
 
 const STAGE_LABELS = ['sin texto', 'redactada', 'diseñada', 'aprobada', 'programada', 'publicada'];
 const LEVEL_LABELS = { red: 'rojo', yellow: 'amarillo', green: 'verde', gray: 'gris' };
@@ -67,7 +68,7 @@ const compactTask = (task, today, now = new Date()) => {
     vencida: Boolean(vence && vence < today && task.status !== 'REALIZADA'),
     plazos: taskTemporalEvidence({ dueDate: task.dueDate, focusDeadlineAt: task.focusDeadlineAt, status: task.status }, { today, now }),
     privada: Boolean(task.isPrivate),
-    ...(task.completedAt ? { cerrada: dayOf(task.completedAt) } : {}),
+    ...(task.completedAt ? { cerrada: bogotaDate(task.completedAt) } : {}),
     ...(ms === null ? {} : { tiempoRegistrado: ms >= 60_000 ? formatDuration(ms) : 'sin tiempo registrado', minutosRegistrados: Math.round(ms / 60_000) })
   };
 };
@@ -157,7 +158,7 @@ const tareasDeCliente = {
     const month = Number.isInteger(mes) ? `${Number.isInteger(anio) ? anio : Number(today.slice(0, 4))}-${String(mes).padStart(2, '0')}` : null;
     const wanted = new Set(statusesFor(month ? 'realizadas' : estado));
     // Misma lectura que el tablero: la reserva de los pendientes privados se aplica en el servidor.
-    const all = (await getTasks(id, user?.userId || user?.id || null)).filter((task) => wanted.has(task.status) && (!month || dayOf(task.completedAt)?.startsWith(month)));
+    const all = (await getTasks(id, user?.userId || user?.id || null)).filter((task) => wanted.has(task.status) && (!month || (task.completedAt && bogotaDate(task.completedAt)?.startsWith(month))));
     const rows = all.slice(0, TASK_LIST_MAX);
     return {
       data: {
