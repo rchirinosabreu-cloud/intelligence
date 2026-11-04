@@ -64,6 +64,10 @@ export function createCrmMemoryDb({ leads = [], activities = [], members = [], u
         state.activities.push(activity);
         return activity;
       },
+      createMany: async ({ data }) => {
+        data.forEach(row => state.activities.push({ id: nextId('act'), createdAt: new Date(), ...row }));
+        return { count: data.length };
+      },
       update: async ({ where, data }) => {
         const activity = state.activities.find(item => item.id === where.id);
         Object.assign(activity, data);

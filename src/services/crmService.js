@@ -432,21 +432,28 @@ export const setTrafficLight = async (db, id, payload = {}, actor = {}, now = ne
   return serializeLead(updated, now);
 };
 
-export const archiveLead = async (db, id, actor = {}, now = new Date()) => {
-  await loadLead(db, id);
-  const updated = await db.crmLead.update({ where: { id }, data: { archivedAt: now, updatedAt: now }, include: leadInclude });
+// Quién archivó queda en la bitácora a su nombre (Rodny, 4 de noviembre de 2026: «debe decir quién decidió archivar»),
+// sin pedirle nada a la persona. Es una nota y no una gestión: no reinicia la cuenta de días ni mueve el semáforo, por
+// eso no toca `lastActivityAt`.
+const archiveNote = (leadId, note, actor, now) => ({ leadId, type: 'NOTA', occurredAt: now, note, authorId: actor.userId || actor.id || null });
+
+export const archiveLead = async (db, id, actor = {}, now = new Date()) => db.$transaction(async tx => {
+  await loadLead(tx, id);
+  await tx.crmActivity.create({ data: archiveNote(id, 'Oportunidad archivada.', actor, now) });
+  const updated = await tx.crmLead.update({ where: { id }, data: { archivedAt: now, updatedAt: now }, include: leadInclude });
   return serializeLead(updated, now);
-};
+});
 
 // Archivar no borra ni cierra (reunión del 4 de noviembre de 2026, Pacho: «que la opción sea como archivar y queden
 // sus datos»): la oportunidad sale de listas, métricas y avisos, y vuelve tal cual con «Desarchivar».
-export const unarchiveLead = async (db, id, actor = {}, now = new Date()) => {
-  const lead = await db.crmLead.findUnique({ where: { id }, include: leadInclude });
+export const unarchiveLead = async (db, id, actor = {}, now = new Date()) => db.$transaction(async tx => {
+  const lead = await tx.crmLead.findUnique({ where: { id }, include: leadInclude });
   if (!lead) throw notFound();
   if (!lead.archivedAt) return serializeLead(lead, now);
-  const updated = await db.crmLead.update({ where: { id }, data: { archivedAt: null, updatedAt: now }, include: leadInclude });
+  await tx.crmActivity.create({ data: archiveNote(id, 'Oportunidad desarchivada.', actor, now) });
+  const updated = await tx.crmLead.update({ where: { id }, data: { archivedAt: null, updatedAt: now }, include: leadInclude });
   return serializeLead(updated, now);
-};
+});
 
 export const ARCHIVE_BATCH_MAX = 200;
 
@@ -455,12 +462,15 @@ export const archiveLeads = async (db, ids = [], actor = {}, now = new Date()) =
   const wanted = [...new Set((Array.isArray(ids) ? ids : []).map(value => String(value || '').trim()).filter(Boolean))];
   if (!wanted.length) throw new CrmValidationError('Elige al menos una oportunidad.');
   if (wanted.length > ARCHIVE_BATCH_MAX) throw new CrmValidationError(`Como máximo ${ARCHIVE_BATCH_MAX} oportunidades de una vez.`);
-  const found = await db.crmLead.findMany({ where: { id: { in: wanted }, archivedAt: null }, select: { id: true } });
-  const archivable = found.map(lead => lead.id);
-  if (archivable.length) {
-    await db.crmLead.updateMany({ where: { id: { in: archivable }, archivedAt: null }, data: { archivedAt: now, updatedAt: now } });
-  }
-  return { archived: archivable.length, skipped: wanted.length - archivable.length, ids: archivable };
+  return db.$transaction(async tx => {
+    const found = await tx.crmLead.findMany({ where: { id: { in: wanted }, archivedAt: null }, select: { id: true } });
+    const archivable = found.map(lead => lead.id);
+    if (archivable.length) {
+      await tx.crmActivity.createMany({ data: archivable.map(id => archiveNote(id, 'Oportunidad archivada.', actor, now)) });
+      await tx.crmLead.updateMany({ where: { id: { in: archivable }, archivedAt: null }, data: { archivedAt: now, updatedAt: now } });
+    }
+    return { archived: archivable.length, skipped: wanted.length - archivable.length, ids: archivable };
+  });
 };
 
 // ---- lists and aggregates -------------------------------------------------------------------------------
