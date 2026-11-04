@@ -356,7 +356,7 @@ const AppLayout = ({ children }) => {
               <input
                 type="text"
                 placeholder="Buscar tareas…"
-                aria-label="Buscar tareas"
+                aria-label="Buscar en Brainstudio"
                 title="Busca entre las tareas. Las oportunidades del CRM se buscan en su propio módulo."
                 onChange={(e) => {
                     window.dispatchEvent(new CustomEvent('global-search-changed', { detail: { query: e.target.value } }));
