@@ -67,6 +67,7 @@ export const PLATFORM_OPERATIONS = {
   'POST /quotations': { que: 'Crea una cotización en borrador.', campos: 'clientName, items[{serviceId, quantity, billingType}], durationMonths, notes' },
   'PUT /quotations/:id': { que: 'Actualiza una cotización (precios, líneas, estado).', campos: 'los mismos de crear; status para emitirla' },
   'POST /quotations/:id/accept': { que: 'Registra que el cliente aprobó la cotización por fuera de su enlace (WhatsApp, correo, reunión) y abre la formalización del proyecto.', campos: 'scenarioId (si tiene escenarios), expectedUpdatedAt' },
+  'POST /quotations/:id/send': { que: 'Reenvía una propuesta emitida por correo al cliente con el enlace para aceptar y el PDF, o registra que se mandó por WhatsApp.', campos: 'channel (CORREO o WHATSAPP)' },
   'GET /quotations/:id/pdf': { que: 'El PDF de una cotización (archivo).' },
   'GET /quotations/:id': { que: 'Una cotización con sus líneas y escenarios.' },
   'GET /quotations': { que: 'La lista de cotizaciones.' },
@@ -363,7 +364,9 @@ export const PLATFORM_OPERATIONS = {
   'POST /crm/leads/:leadId/activities': { que: 'Registra una actividad (llamada, reunión, correo).', campos: 'type, note, happenedAt, nextFollowUpAt' },
   'PATCH /crm/leads/:leadId/activities/:activityId': { que: 'Edita una actividad.', campos: 'note, happenedAt' },
   'POST /crm/leads/:leadId/traffic-light': { que: 'Fija el semáforo a mano.', campos: 'light, reason' },
-  'POST /crm/leads/:leadId/archive': { que: 'Archiva una oportunidad.', campos: 'reason' },
+  'POST /crm/leads/:leadId/archive': { que: 'Archiva una oportunidad: sale de listas, métricas y avisos con sus datos intactos.', campos: 'reason' },
+  'POST /crm/leads/:leadId/unarchive': { que: 'Desarchiva una oportunidad: vuelve tal cual estaba, con su etapa y su bitácora.' },
+  'POST /crm/leads/archive': { que: 'Archiva varias oportunidades de una vez (hasta 200).', campos: 'ids (lista de ids)' },
   'POST /crm/leads/:leadId/quotations': { que: 'Crea un borrador de cotización desde la oportunidad.' },
   // Gobierno de IA
   'GET /ai-governance/options': { que: 'Opciones del gobierno de IA.' },

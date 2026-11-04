@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   CrmValidationError, createLead, addActivity, changeStage, setTrafficLight, updateLead,
-  listLeads, followUps, metricsFor, serializeLead, normalizeCompanyKey
+  listLeads, followUps, metricsFor, serializeLead, normalizeCompanyKey, archiveLead, unarchiveLead, archiveLeads
 } from '../src/services/crmService.js';
 
 const NOW = new Date('2026-09-18T15:00:00-05:00');
@@ -21,9 +21,15 @@ const fakeDb = ({ leads = [], activities = [], members = [{ id: 'tm1', isActive:
     crmLead: {
       findUnique: async ({ where }) => withRelations(findLead(where)),
       findFirst: async ({ where }) => withRelations(state.leads.find(lead => lead.legacyCode === where?.legacyCode) || null),
-      findMany: async ({ where = {} } = {}) => state.leads.filter(lead => !lead.archivedAt || where.archivedAt !== null).map(withRelations),
+      findMany: async ({ where = {} } = {}) => state.leads.filter(lead => {
+        if (where.id?.in && !where.id.in.includes(lead.id)) return false;
+        if (where.archivedAt === null) return !lead.archivedAt;
+        if (where.archivedAt && typeof where.archivedAt === 'object' && 'not' in where.archivedAt) return Boolean(lead.archivedAt);
+        return true;
+      }).map(withRelations),
       create: async ({ data }) => { const lead = { id: `lead-${state.leads.length + 1}`, consecutive: state.leads.length + 1, createdAt: NOW, updatedAt: NOW, ...data }; state.leads.push(lead); state.calls.push(['lead.create', data]); return withRelations(lead); },
-      update: async ({ where, data }) => { const lead = findLead(where); Object.assign(lead, data); state.calls.push(['lead.update', data]); return withRelations(lead); }
+      update: async ({ where, data }) => { const lead = findLead(where); Object.assign(lead, data); state.calls.push(['lead.update', data]); return withRelations(lead); },
+      updateMany: async ({ where, data }) => { const hit = state.leads.filter(lead => where.id.in.includes(lead.id) && !lead.archivedAt); hit.forEach(lead => Object.assign(lead, data)); state.calls.push(['lead.updateMany', where.id.in]); return { count: hit.length }; }
     },
     crmActivity: {
       findUnique: async ({ where }) => state.activities.find(item => item.authorId === where.authorId_requestId?.authorId && item.requestId === where.authorId_requestId?.requestId) || null,
@@ -159,6 +165,42 @@ test('listLeads filters by stage, origin, owner, traffic light, bucket and free 
   assert.deepEqual((await listLeads(db, { search: 'marta' }, NOW)).items.map(lead => lead.id), ['B']);
   assert.deepEqual((await listLeads(db, { group: 'ABIERTO' }, NOW)).items.map(lead => lead.id), ['A', 'B']);
   assert.deepEqual((await listLeads(db, { includeArchived: true }, NOW)).items.map(lead => lead.id).sort(), ['A', 'B', 'C', 'D']);
+  assert.deepEqual((await listLeads(db, { archived: 'SOLO' }, NOW)).items.map(lead => lead.id), ['D'], '«Ver archivadas» muestra dónde quedaron');
+});
+
+test('archivar conserva los datos, saca de la lista y se deshace con desarchivar; en lote desde la lista filtrada', async () => {
+  const db = fakeDb({ leads: [
+    { id: 'A', company: 'Alfa', stage: 'PROPUESTA_ENVIADA', origin: 'LINKEDIN', priority: 'MEDIA', enteredAt: NOW },
+    { id: 'B', company: 'Beta', stage: 'CONTACTADO', origin: 'OTRO', priority: 'MEDIA', enteredAt: NOW },
+    { id: 'C', company: 'Gamma', stage: 'CONTACTADO', origin: 'OTRO', priority: 'MEDIA', enteredAt: NOW, archivedAt: new Date('2026-10-01T12:00:00Z') }
+  ] });
+  const filed = await archiveLead(db, 'A', actor, NOW);
+  assert.equal(filed.archivedAt.toISOString(), NOW.toISOString());
+  assert.equal(filed.stage, 'PROPUESTA_ENVIADA', 'archivar no es una etapa: la oportunidad queda como estaba');
+  assert.deepEqual((await listLeads(db, {}, NOW)).items.map(lead => lead.id), ['B']);
+  assert.deepEqual((await listLeads(db, { archived: 'SOLO' }, NOW)).items.map(lead => lead.id), ['C', 'A'], 'la última archivada primero (C se archivó el 1 de octubre, A el 18 de septiembre)');
+  const back = await unarchiveLead(db, 'A', actor, NOW);
+  assert.equal(back.archivedAt, null);
+  assert.deepEqual((await listLeads(db, {}, NOW)).items.map(lead => lead.id).sort(), ['A', 'B']);
+  await assert.rejects(unarchiveLead(db, 'missing', actor, NOW), /encontrada/);
+  // En lote: las que ya estaban archivadas o no existen se cuentan aparte, nada falla por ellas.
+  const batch = await archiveLeads(db, ['A', 'B', 'C', 'missing', 'A'], actor, NOW);
+  assert.deepEqual(batch, { archived: 2, skipped: 2, ids: ['A', 'B'] });
+  assert.deepEqual((await listLeads(db, {}, NOW)).items, []);
+  await assert.rejects(archiveLeads(db, [], actor, NOW), /al menos una/);
+  await assert.rejects(archiveLeads(db, Array.from({ length: 201 }, (_, index) => `L${index}`), actor, NOW), /200/);
+});
+
+test('el tablero lista lo recién registrado a mano sin primer contacto, aparte de lo urgente y del formulario', async () => {
+  const db = fakeDb({ leads: [
+    { id: 'A', company: 'Naro', stage: 'POR_GESTIONAR', origin: 'LINKEDIN', priority: 'MEDIA', enteredAt: NOW },
+    { id: 'B', company: 'Ecuador', stage: 'POR_GESTIONAR', origin: 'LINKEDIN', priority: 'MEDIA', enteredAt: new Date('2026-09-17T15:00:00-05:00') },
+    { id: 'C', company: 'Vieja', stage: 'POR_GESTIONAR', origin: 'OTRO', priority: 'MEDIA', enteredAt: NOW, firstContactAt: NOW },
+    { id: 'D', company: 'Formulario', stage: 'POR_GESTIONAR', origin: 'FORMULARIO', priority: 'MEDIA', enteredAt: NOW, request: { id: 'r1' } }
+  ] });
+  const metrics = await metricsFor(db, {}, NOW);
+  assert.equal(metrics.fresh, 2);
+  assert.deepEqual(metrics.recentFresh.map(lead => lead.id), ['A', 'B'], 'la de hoy primero; la contactada y la del formulario no');
 });
 
 test('followUps groups actionable leads into the four daily buckets', async () => {

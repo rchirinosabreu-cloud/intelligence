@@ -42,6 +42,12 @@ router.put('/:id', quotationController.updateQuotation);
 router.post('/:id/accept', quotationController.acceptQuotationInternally);
 
 /**
+ * POST /api/quotations/:id/send  { channel: 'CORREO' | 'WHATSAPP' }
+ * Reenvía la propuesta por correo, o registra que se mandó por WhatsApp desde el teléfono.
+ */
+router.post('/:id/send', quotationController.sendQuotation);
+
+/**
  * GET /api/quotations/:id/pdf
  * Generates and downloads the PDF version
  */

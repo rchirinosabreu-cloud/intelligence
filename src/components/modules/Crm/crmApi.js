@@ -70,5 +70,7 @@ export const useChangeStage = options => useCrmMutation(({ id, ...payload }) => 
 export const useAddActivity = options => useCrmMutation(({ id, ...payload }) => crmRequest(`/leads/${id}/activities`, { method: 'POST', body: payload }), options);
 export const useSetTrafficLight = options => useCrmMutation(({ id, ...payload }) => crmRequest(`/leads/${id}/traffic-light`, { method: 'POST', body: payload }), options);
 export const useArchiveLead = options => useCrmMutation(({ id }) => crmRequest(`/leads/${id}/archive`, { method: 'POST' }), options);
+export const useUnarchiveLead = options => useCrmMutation(({ id }) => crmRequest(`/leads/${id}/unarchive`, { method: 'POST' }), options);
+export const useArchiveLeads = options => useCrmMutation(({ ids }) => crmRequest('/leads/archive', { method: 'POST', body: { ids } }), options);
 export const useSaveFollowUpAlertDays = options => useCrmMutation(payload => crmRequest('/follow-up-alerts', { method: 'PUT', body: payload }), options);
 export const useCreateQuotationDraft =options => useCrmMutation(({ id }) => crmRequest(`/leads/${id}/quotations`, { method: 'POST' }), options);

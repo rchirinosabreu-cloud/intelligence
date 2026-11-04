@@ -23,7 +23,13 @@ export function createCrmMemoryDb({ leads = [], activities = [], members = [], u
     request: state.requests.find(item => item.leadId === lead.id) || null,
     quotations: state.quotations.filter(item => item.lead_id === lead.id)
   });
-  const matchWhere = (lead, where = {}) => Object.entries(where).every(([key, value]) => (value === undefined ? true : (lead[key] ?? null) === value));
+  // The few Prisma shapes the service uses: equality, `{ not: null }` (archived) and `{ in: [...] }` (batches).
+  const matchWhere = (lead, where = {}) => Object.entries(where).every(([key, value]) => {
+    if (value === undefined) return true;
+    if (value && typeof value === 'object' && 'in' in value) return value.in.includes(lead[key]);
+    if (value && typeof value === 'object' && 'not' in value) return (lead[key] ?? null) !== value.not;
+    return (lead[key] ?? null) === value;
+  });
 
   const tx = {
     crmLead: {
@@ -40,6 +46,11 @@ export function createCrmMemoryDb({ leads = [], activities = [], members = [], u
         if (!lead) throw Object.assign(new Error('Record not found'), { code: 'P2025' });
         Object.assign(lead, data);
         return relations(lead);
+      },
+      updateMany: async ({ where = {}, data }) => {
+        const hit = state.leads.filter(lead => matchWhere(lead, where));
+        hit.forEach(lead => Object.assign(lead, data));
+        return { count: hit.length };
       }
     },
     crmActivity: {

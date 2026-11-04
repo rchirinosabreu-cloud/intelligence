@@ -264,23 +264,28 @@ export const snoozeNotice = async (db = prisma, id, body = {}, actor, { now = ne
     return { ok: true, snoozedUntil: until };
 };
 
-// Cómo queda la oportunidad en el CRM según lo que se eligió en «No sigue».
+// Cómo queda la oportunidad en el CRM según lo que se eligió en «No sigue». Archivar no es una etapa: la oportunidad
+// sale de listas, métricas y avisos con sus datos intactos (reunión del 4 de noviembre de 2026).
+const WON_NOTE = 'Ya es cliente: marcada como ganada desde el aviso de revisión.';
 const CLOSE_STAGES = {
     PERDIDO: { payload: { stage: 'PERDIDO', lostReason: LOST_REASON }, resolution: 'PERDIDA' },
-    DESCARTADO: { payload: { stage: 'DESCARTADO', note: DISCARD_NOTE }, resolution: 'DESCARTADA' }
+    DESCARTADO: { payload: { stage: 'DESCARTADO', note: DISCARD_NOTE }, resolution: 'DESCARTADA' },
+    GANADO: { payload: { stage: 'GANADO', note: WON_NOTE }, resolution: 'GANADA' },
+    ARCHIVAR: { archive: true, resolution: 'ARCHIVADA' }
 };
 
 /**
- * «No sigue», solo en la revisión: la oportunidad pasa a Perdido (el cliente no la tomó) o a Descartado (no sigue por
- * decisión nuestra), por el mismo camino del CRM (Rodny, 26 de octubre de 2026).
+ * «No sigue», solo en la revisión: la oportunidad pasa a Perdido (el cliente no la tomó), a Descartado (no sigue por
+ * decisión nuestra) o a Ganado (ya es cliente), o se archiva, por el mismo camino del CRM (Rodny, 26 de octubre de 2026).
  */
 export const closeReviewNotice = async (db = prisma, id, body = {}, actor, { crm = crmService, now = new Date(), log } = {}) => {
     const notice = await ownOpenNotice(db, id, actor);
     if (notice.kind !== 'CRM_REVIEW') throw httpError(409, 'Solo la revisión de una oportunidad se cierra desde el aviso.');
-    if (!isReviewOutcome(body.outcome)) throw httpError(400, 'Elige si quedó perdida o descartada.');
+    if (!isReviewOutcome(body.outcome)) throw httpError(400, 'Elige qué pasa con la oportunidad: perdida, descartada, ya es cliente o archivarla.');
     requireCrm(actor);
-    const { payload, resolution } = CLOSE_STAGES[body.outcome];
-    await crm.changeStage(db, notice.subjectId, payload, actor, now);
+    const { payload, archive, resolution } = CLOSE_STAGES[body.outcome];
+    if (archive) await crm.archiveLead(db, notice.subjectId, actor, now);
+    else await crm.changeStage(db, notice.subjectId, payload, actor, now);
     await resolve(db, notice, resolution, now);
     const subject = await readSubjectName(db, notice);
     await traceNotice(db, NOTICE_TRACE_EVENTS.CLOSED, { notice, subject, actor, extra: { outcome: body.outcome }, now, log });

@@ -104,12 +104,24 @@ test('«Recordarme» lo pospone sin cerrarlo, y vuelve a su hora', async () => {
     await assert.rejects(snoozeNotice(db, 'n1', { option: 'para siempre' }, crmUser, { now: NOW }), { statusCode: 400 });
 });
 
-test('«No sigue» solo existe en la revisión y cierra la oportunidad como perdida o descartada', async () => {
+test('«No sigue» solo existe en la revisión y cierra la oportunidad como perdida, descartada, ganada o archivada', async () => {
     const calls = [];
-    const crm = { changeStage: async (...args) => { calls.push(args); return {}; } };
+    const archived = [];
+    const crm = { changeStage: async (...args) => { calls.push(args); return {}; }, archiveLead: async (_db, id) => { archived.push(id); return {}; } };
     const review = () => fakeDb({ notices: [notice({ kind: 'CRM_REVIEW', level: 'IMPORTANTE' })] });
     await assert.rejects(closeReviewNotice(fakeDb({ notices: [notice()] }), 'n1', { outcome: 'PERDIDO' }, crmUser, { crm, now: NOW }), { statusCode: 409 });
-    await assert.rejects(closeReviewNotice(review(), 'n1', { outcome: 'GANADO' }, crmUser, { crm, now: NOW }), { statusCode: 400 });
+    await assert.rejects(closeReviewNotice(review(), 'n1', { outcome: 'INVENTADO' }, crmUser, { crm, now: NOW }), { statusCode: 400 });
+    // Ya es cliente (con Andy «sí se hizo», reunión del 4 de noviembre de 2026): pasa a Ganado, nunca a Perdido.
+    const won = review();
+    await closeReviewNotice(won, 'n1', { outcome: 'GANADO' }, crmUser, { crm, now: NOW });
+    assert.deepEqual(calls.at(-1).slice(1, 3), ['l1', { stage: 'GANADO', note: 'Ya es cliente: marcada como ganada desde el aviso de revisión.' }]);
+    assert.equal(won.rows[0].resolution, 'GANADA');
+    // Archivar: no es una etapa, se conservan los datos y no vuelve a avisar.
+    const filed = review();
+    await closeReviewNotice(filed, 'n1', { outcome: 'ARCHIVAR' }, crmUser, { crm, now: NOW });
+    assert.deepEqual(archived, ['l1']);
+    assert.equal(filed.rows[0].resolution, 'ARCHIVADA');
+    calls.length = 0;
     // Perdida: el cliente no la tomó, con el motivo que el CRM exige para Perdido.
     const lost = review();
     await closeReviewNotice(lost, 'n1', { outcome: 'PERDIDO' }, crmUser, { crm, now: NOW });

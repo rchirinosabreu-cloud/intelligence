@@ -31,6 +31,7 @@ export const CRM_STAGE_GROUP_LABELS = Object.freeze({
 
 export const CRM_ORIGINS = Object.freeze([
   { value: 'LINKEDIN', label: 'LinkedIn' },
+  { value: 'INSTAGRAM', label: 'Instagram' },
   { value: 'CONTACTO_DIRECTO', label: 'Contacto directo' },
   { value: 'REFERIDO', label: 'Referido' },
   { value: 'CLIENTE_ANTERIOR', label: 'Cliente anterior' },

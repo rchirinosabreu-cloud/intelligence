@@ -20,9 +20,12 @@ import {
     Download,
     Filter,
     Loader2,
-    Pencil
+    Pencil,
+    MessageCircle,
+    Send
 } from '@/components/ui/icons';
 import { cn } from '@/lib/utils';
+import { proposalWhatsAppText, whatsAppLink } from '@/lib/quotationDelivery';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 
@@ -169,6 +172,46 @@ const QuotationList = () => {
         const link = `${window.location.origin}/cotizaciones/ver/${uuid}`;
         navigator.clipboard.writeText(link);
         toast.success("Enlace copiado al portapapeles");
+    };
+
+    // Enviar la propuesta (reunión del 4 de noviembre de 2026): por correo la manda el servidor con el enlace y el PDF;
+    // por WhatsApp la manda la persona desde su teléfono con el mensaje ya escrito, y el servidor solo lo registra.
+    const [sendingId, setSendingId] = useState(null);
+    const recordSend = async (quotation, channel) => {
+        const response = await fetch(`${getApiBaseUrl()}/api/quotations/${quotation.id}/send`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${localStorage.getItem('authToken')}` },
+            body: JSON.stringify({ channel })
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) throw new Error(data.error || 'No pudimos enviar la propuesta');
+        return data;
+    };
+    const emailQuotation = async (quotation) => {
+        setSendingId(quotation.id);
+        try {
+            const result = await recordSend(quotation, 'CORREO');
+            if (result.sent) toast.success('Propuesta enviada por correo al cliente');
+            else toast.error(result.message || 'El correo no salió');
+        } catch (error) {
+            console.error('[QuotationList] Email failed:', error);
+            toast.error(error.message);
+        } finally {
+            setSendingId(null);
+        }
+    };
+    const whatsAppQuotation = async (quotation) => {
+        const link = `${window.location.origin}/cotizaciones/ver/${quotation.uuid_slug}`;
+        const url = whatsAppLink(quotation.client_phone, proposalWhatsAppText({ consecutive: quotation.consecutive, clientName: quotation.client_name, clientCompany: quotation.client_company, link }));
+        if (!url) { toast.error('La cotización no tiene un celular del cliente'); return; }
+        window.open(url, '_blank', 'noopener');
+        try {
+            const result = await recordSend(quotation, 'WHATSAPP');
+            toast.success(result.recorded ? 'Registrado en el CRM como enviada por WhatsApp' : 'WhatsApp abierto; sin oportunidad en el CRM');
+        } catch (error) {
+            console.error('[QuotationList] WhatsApp record failed:', error);
+            toast.error(error.message);
+        }
     };
 
     const formatCurrency = (val, currency) => {
@@ -335,6 +378,29 @@ const QuotationList = () => {
                                                 >
                                                     <Copy className="w-4 h-4" />
                                                 </button>
+                                                {q.status !== 'BORRADOR' && q.client_email && (
+                                                    <button
+                                                        onClick={() => emailQuotation(q)}
+                                                        disabled={sendingId === q.id}
+                                                        data-quotation-send-email={q.id}
+                                                        className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-zinc-500 transition-colors disabled:opacity-50"
+                                                        title={`Enviar por correo a ${q.client_email}`}
+                                                        aria-label={`Enviar ${q.consecutive_formatted} por correo a ${q.client_email}`}
+                                                    >
+                                                        {sendingId === q.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                                                    </button>
+                                                )}
+                                                {q.status !== 'BORRADOR' && q.client_phone && (
+                                                    <button
+                                                        onClick={() => whatsAppQuotation(q)}
+                                                        data-quotation-send-whatsapp={q.id}
+                                                        className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-zinc-500 transition-colors"
+                                                        title={`Enviar por WhatsApp al ${q.client_phone}`}
+                                                        aria-label={`Enviar ${q.consecutive_formatted} por WhatsApp`}
+                                                    >
+                                                        <MessageCircle className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                                 <button
                                                     onClick={() => navigate(`/cotizaciones/ver/${q.uuid_slug}`)}
                                                     className="p-2 hover:bg-zinc-200 dark:hover:bg-zinc-700 rounded-lg text-zinc-500 transition-colors"
