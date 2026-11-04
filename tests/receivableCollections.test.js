@@ -82,6 +82,28 @@ test('servicio puntual: avisa 15 días después del vencimiento y luego cada 7, 
     assert.equal(oneOffCollectionAlerts({ receivables: list, today: '2026-10-08', settings: S })[0].step, 1);
 });
 
+test('dos cuentas del mismo período no son dos mensualidades vencidas', () => {
+    const list = [rec({ id: 'a', period: '2026-08-01' }), rec({ id: 'b', period: '2026-08-01', dueDate: '2026-09-01' })];
+    assert.equal(monthlyCollectionAlert({ clientId: 'c1', receivables: list, today: '2026-10-01', settings: S }), null);
+});
+
+test('la cuenta adicional de un período suma saldo sin abrir otro ciclo ni reiniciar la repetición', () => {
+    const list = [rec({ id: 'a', period: '2026-08-01' }), rec({ id: 'b', period: '2026-09-01' })];
+    const args = { clientId: 'c1', today: '2026-10-01', settings: S };
+    const before = monthlyCollectionAlert({ ...args, receivables: list });
+    const after = monthlyCollectionAlert({ ...args, receivables: [...list, rec({ id: 'extra', period: '2026-09-01', dueDate: '2026-09-25' })] });
+    assert.equal(after.count, 2);
+    assert.equal(after.cycle, before.cycle);
+    assert.equal(after.step, before.step);
+    assert.equal(after.balanceCents, 300000000);
+    assert.deepEqual(after.receivableIds, ['a', 'b', 'extra']);
+});
+
+test('sin período identificado una cuenta no acredita otra mensualidad', () => {
+    const list = [rec({ id: 'a', period: '2026-08-01' }), rec({ id: 'b', period: null, dueDate: '2026-09-01' })];
+    assert.equal(monthlyCollectionAlert({ clientId: 'c1', receivables: list, today: '2026-10-01', settings: S }), null);
+});
+
 test('la banda lleva las cifras; la campana no, y al project manager no se le dicen ni las mensualidades', () => {
     const monthly = { kind: 'MENSUAL', count: 2, balanceCents: 320000000, oldestPeriod: '2026-04', unissued: 0 };
     const band = collectionNoticeText(monthly, 'Muebles Nuva');

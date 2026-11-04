@@ -164,13 +164,14 @@ export default function FinancialPartiesDirectory({
         await afterSave(client?.id, message || 'Ficha del cliente guardada.');
     };
 
-    const saveThirdParty = async (form) => {
+    const saveThirdParty = async (form, onCommitted) => {
         setSaving(true); setDialogError('');
         try {
             const { data } = form.id
                 ? await axios.patch(apiUrl(`/third-parties/${form.id}`), form, authed())
                 : await axios.post(apiUrl('/third-parties'), form, authed());
             const saved = data?.thirdParty;
+            onCommitted?.();
             closeDialog();
             await afterSave(saved?.clientId || (saved?.id ? `tercero:${saved.id}` : null), data?.message || 'Tercero guardado.');
         } catch (saveError) {

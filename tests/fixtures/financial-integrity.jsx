@@ -29,6 +29,7 @@ const heldAccount = { id: 'demo-account-wise', name: 'Wise', type: 'BANK', curre
 const plainAccount = { id: 'demo-account-caja', name: 'Caja menor', type: 'CASH', currency: 'COP', balance: 150000, institution: null, holderName: null, holderType: 'COMPANY', identificationType: null, identificationNumber: null, lastFour: null, isThirdPartyHeld: false, isActive: true, openingBalance: 150000, openingBalanceDate: '2026-01-01T12:00:00.000Z' };
 const accounts = [account, heldAccount, plainAccount];
 let debt = { id: 'demo-debt', clientId: client.id, clientName: client.name, clientSlug: client.slug, sourceLabel: client.name, amount: 1200000, outstanding: 800000, paidAmount: 400000, status: 'PROMESADO', year: 2026, month: 9, period: '2026-09-01T00:00:00Z', dueDate: null, payments: [], comments: 'Promesa de pago acordada. Datos ficticios.' };
+if (new URLSearchParams(location.search).has('draftRemoteChange')) debt = { ...debt, outstanding: 750000, paidAmount: 450000 };
 if (new URLSearchParams(location.search).has('legacyPaid')) debt = { ...debt, outstanding: null, paidAmount: 0, status: 'PAGADO', balanceReviewRequired: true };
 // ?usd: la cuenta de Foobspain (19 de octubre de 2026): USD 300 a TRM 4.000 = 1.200.000 en cartera, sin abonos.
 if (new URLSearchParams(location.search).has('usd')) debt = { ...debt, clientName: 'Foobspain', sourceLabel: 'Foobspain', currency: 'USD', foreignAmount: 300, documentTotal: 300, exchangeRate: 4000, exchangeRateSource: 'MANUAL', amount: 1200000, outstanding: 1200000, paidAmount: 0, status: 'DEBE', exchangeAdjustments: [] };
@@ -511,6 +512,7 @@ axios.defaults.adapter = async config => {
     data = { message: 'Soporte guardado.', document: target.supportDocuments.at(-1) };
   } else if (path.endsWith('/loans')) {
     // Como el servidor: el egreso (o el ya registrado) y la cuenta por cobrar de clase PRESTAMO, de una vez.
+    if (new URLSearchParams(location.search).has('loanError')) throw Object.assign(new Error('Préstamo no guardado (simulado)'), { response: { data: { message: 'Préstamo no guardado (simulado)' } } });
     if (!body.counterpartyName && !body.clientId) throw Object.assign(new Error('Sin nombre'), { response: { data: { message: 'Escribe el nombre de la persona o empresa a la que se le presta.' } } });
     const name = body.clientId ? client.name : body.counterpartyName;
     let recordId = body.financialRecordId;

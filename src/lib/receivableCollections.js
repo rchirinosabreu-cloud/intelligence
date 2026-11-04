@@ -88,12 +88,15 @@ export const overdueReceivables = (receivables = [], today, settings = DEFAULT_C
 /** El aviso de un cliente de fee mensual, o null si todavía no toca. */
 export const monthlyCollectionAlert = ({ clientId, receivables = [], today, settings = DEFAULT_COLLECTION_SETTINGS }) => {
     const overdue = overdueReceivables(receivables, today, settings);
-    if (overdue.length < settings.monthlyAlertCount) return null;
-    // El ciclo empieza el día en que se venció la última de las que hoy están vencidas.
-    const start = addDays(overdue[overdue.length - 1].dueDate, 1);
+    // Varias cuentas o cuotas del mismo mes no acreditan varias mensualidades. La primera cuenta vencida de cada
+    // período fija su inicio: añadir otra de ese mes no reinicia el reloj ni abre un aviso nuevo.
+    const periods = new Map();
+    for (const item of overdue) if (item.period && !periods.has(item.period)) periods.set(item.period, item.dueDate);
+    if (periods.size < settings.monthlyAlertCount) return null;
+    const start = addDays([...periods.values()].sort().at(-1), 1);
     return {
-        kind: 'MENSUAL', subjectId: clientId, count: overdue.length,
-        cycle: `M${overdue.length}:${start}`, step: Math.floor(daysBetween(start, today) / settings.repeatDays),
+        kind: 'MENSUAL', subjectId: clientId, count: periods.size, accountCount: overdue.length,
+        cycle: `M${periods.size}:${start}`, step: Math.floor(daysBetween(start, today) / settings.repeatDays),
         balanceCents: overdue.reduce((sum, item) => sum + item.balanceCents, 0),
         oldestPeriod: overdue[0].period, unissued: overdue.filter((item) => !item.issued).length,
         receivableIds: overdue.map((item) => item.id)
@@ -113,6 +116,24 @@ export const oneOffCollectionAlerts = ({ receivables = [], today, settings = DEF
     })
     .filter(Boolean);
 
+/**
+ * Una cuota del plan aprobado es una obligación individual, no prueba una mensualidad de la parrilla del cliente.
+ * La modalidad del resto de cuentas todavía no está estructurada: el contrato solo conserva la cadencia heredada,
+ * nunca acredita qué servicio cobra una cuenta. Los avisos reales dicen «cuentas», sin interpretar conceptos.
+ * Filtrar un saldo por verificar aquí no modifica su obligación ni la regla separada de suspensiones.
+ */
+export const clientCollectionAlerts = ({ clientId, receivables = [], monthly = false, today, settings = DEFAULT_COLLECTION_SETTINGS }) => {
+    const eligible = receivables.filter((item) => item.balanceReviewRequired !== true && item.metadata?.balanceReviewRequired !== true);
+    const installment = (item) => item.metadata?.origin === 'FORMALIZACION' && Boolean(item.metadata.quotationId && item.metadata.installmentId);
+    const grouped = monthly ? eligible.filter((item) => !installment(item)) : [];
+    const individual = monthly ? eligible.filter(installment) : eligible;
+    const aggregate = monthly ? monthlyCollectionAlert({ clientId, receivables: grouped, today, settings }) : null;
+    return [
+        ...(aggregate ? [aggregate] : []),
+        ...oneOffCollectionAlerts({ receivables: individual, today, settings })
+    ].map((alert) => ({ ...alert, unclassified: true }));
+};
+
 const money = (cents) => `$${String(Math.round(cents / 100)).replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`;
 const monthName = (period) => (period ? MONTHS[Number(period.slice(5, 7)) - 1] : null);
 const plural = (count, one, many) => `${count} ${count === 1 ? one : many}`;
@@ -127,11 +148,13 @@ export const collectionNoticeText = (alert, clientName) => {
         const since = monthName(alert.oldestPeriod);
         return {
             kind: 'CARTERA_MENSUAL', level: 'IMPORTANTE', label: 'Cartera vencida',
-            message: `${who} tiene ${plural(alert.count, 'mensualidad vencida', 'mensualidades vencidas')}${since ? ` desde ${since}` : ''}: ${money(alert.balanceCents)} pendientes`
+            message: `${who} tiene ${alert.unclassified
+                ? `${plural(alert.accountCount, 'cuenta vencida', 'cuentas vencidas')} en ${plural(alert.count, 'período', 'períodos')}`
+                : plural(alert.count, 'mensualidad vencida', 'mensualidades vencidas')}${since ? ` desde ${since}` : ''}: ${money(alert.balanceCents)} pendientes`
         };
     }
     return {
-        kind: 'CARTERA_UNICO', level: 'SEGUIMIENTO', label: 'Cartera · servicio puntual',
+        kind: 'CARTERA_UNICO', level: 'SEGUIMIENTO', label: alert.unclassified ? 'Cartera · cuenta vencida' : 'Cartera · servicio puntual',
         message: `${who} lleva ${plural(alert.daysOverdue, 'día', 'días')} vencida ${whichAccount(alert)}: ${money(alert.balanceCents)} pendientes`
     };
 };
@@ -143,6 +166,8 @@ export const collectionNoticeText = (alert, clientName) => {
 export const collectionBellText = (alert, clientName, audience) => {
     const who = clientName || 'Un cliente';
     if (audience === 'PM') return `${who} tiene pagos atrasados: puede pausarse la producción de contenidos.`;
-    if (alert.kind === 'MENSUAL') return `${who} tiene ${plural(alert.count, 'mensualidad vencida', 'mensualidades vencidas')}. Hay riesgo de suspender el servicio.`;
+    if (alert.kind === 'MENSUAL') return alert.unclassified
+        ? `${who} tiene ${plural(alert.accountCount, 'cuenta vencida', 'cuentas vencidas')} en ${plural(alert.count, 'período', 'períodos')}. Revisa su cartera.`
+        : `${who} tiene ${plural(alert.count, 'mensualidad vencida', 'mensualidades vencidas')}. Hay riesgo de suspender el servicio.`;
     return `${who} lleva ${plural(alert.daysOverdue, 'día', 'días')} con ${whichAccount(alert)} vencida.`;
 };

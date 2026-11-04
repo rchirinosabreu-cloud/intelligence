@@ -60,7 +60,9 @@ export default function BriaAssistant({ currentUser, initialOpen = false, onDock
       </div>
       <button ref={trigger} type="button" aria-label="Preguntarle a Bria" title="Preguntarle a Bria" aria-expanded={open} aria-controls="bria-assistant-panel" aria-hidden={open || undefined} tabIndex={open ? -1 : undefined} data-bria-assistant-trigger onClick={() => setOpen(true)} className="flex h-20 w-20 items-center justify-center rounded-xl bg-transparent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-cyan sm:h-24 sm:w-24"><BriaMascot {...mascotActivity} gesture={gesture} className="h-20 w-20 sm:h-24 sm:w-24" /></button>
     </div>
-    <aside id="bria-assistant-panel" aria-label="Asistente Bria" data-bria-assistant-panel data-bria-mode={fullScreen ? 'fullscreen' : 'docked'} className={cn('fixed z-[230] overflow-hidden border border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100', !open && 'hidden', fullScreen ? 'inset-0' : 'bottom-3 right-3 top-20 w-[min(440px,calc(100vw-24px))] rounded-3xl')}>
+    {/* Encima de la navegación (60), debajo de los formularios compartidos (70/71).
+        El panel permanece montado: abrir un formulario no cierra el chat ni pierde su borrador. */}
+    <aside id="bria-assistant-panel" aria-label="Asistente Bria" data-bria-assistant-panel data-bria-mode={fullScreen ? 'fullscreen' : 'docked'} className={cn('fixed z-[65] overflow-hidden border border-zinc-200 bg-white text-zinc-900 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100', !open && 'hidden', fullScreen ? 'inset-0' : 'bottom-3 right-3 top-20 w-[min(440px,calc(100vw-24px))] rounded-3xl')}>
       <BriaConversation key={currentUser.id} userId={currentUser.id} userName={currentUser.name} userRole={currentUser.role} fullScreen={fullScreen} visible={open} onActivityChange={setMascotActivity} onFullScreen={() => setFullScreen(value => !value)} onClose={close} onOpenSource={source => { setFullScreen(false); navigate(source.url); }} />
     </aside>
   </>, document.body);

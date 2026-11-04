@@ -381,26 +381,63 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
         y += 3;
         const valueWidth = 34;
         const descriptionWidth = CONTENT_WIDTH - valueWidth;
-        const row = (label, value, { bold = false, head = false } = {}) => {
+        const rowLineHeight = 4.6;
+        const prepareRow = (label, value, { bold = false, head = false } = {}) => {
+            setText(doc, { size: 10, style: bold || head ? 'bold' : 'normal' });
+            const lines = doc.splitTextToSize(label, descriptionWidth - 5);
+            return { lines, value, bold, head, height: 7 + (lines.length - 1) * rowLineHeight };
+        };
+        const drawRow = ({ lines, value, bold, head, height }) => {
             doc.setFillColor(...(head ? COLORS.headRow : COLORS.white));
             doc.setDrawColor(...COLORS.border);
-            doc.rect(PAGE.left, y, descriptionWidth, 7, 'FD');
-            doc.rect(PAGE.left + descriptionWidth, y, valueWidth, 7, 'FD');
+            doc.rect(PAGE.left, y, descriptionWidth, height, 'FD');
+            doc.rect(PAGE.left + descriptionWidth, y, valueWidth, height, 'FD');
             setText(doc, { size: 10, style: bold || head ? 'bold' : 'normal' });
-            doc.text(label, PAGE.left + 2.5, y + 4.8);
+            lines.forEach((line, index) => doc.text(line, PAGE.left + 2.5, y + 4.8 + index * rowLineHeight));
             doc.text(value, PAGE.left + descriptionWidth + valueWidth - 2.5, y + 4.8, { align: 'right' });
-            y += 7;
+            y += height;
         };
-        row('Descripción', 'Valor', { head: true });
-        for (const item of model.items) row(item.description, item.formatted);
-        row('Total', model.formattedTotal, { bold: true });
+        const header = prepareRow('Descripción', 'Valor', { head: true });
+        const rows = model.items.map(item => prepareRow(item.description, item.formatted));
+        const total = prepareRow('Total', model.formattedTotal, { bold: true });
+        // La cabecera nunca queda sola al pie de una página. Cada continuación la
+        // repite y conserva juntos la última fila y su total.
+        y = ensureSpace(doc, y, header.height + rows[0].height);
+        drawRow(header);
+        for (const [index, row] of rows.entries()) {
+            const needed = row.height + (index === rows.length - 1 ? total.height : 0);
+            if (y + needed > PAGE.height - PAGE.bottom) {
+                y = ensureSpace(doc, y, header.height + needed);
+                drawRow(header);
+            }
+            drawRow(row);
+        }
+        drawRow(total);
     }
 
+    // El concepto ya paginaba, pero el resto seguía dibujándose por debajo del
+    // borde. Medimos el cierre completo antes de colocarlo, sin reducir la letra
+    // ni perder la firma cuando el concepto termina cerca del margen inferior.
+    const bodyLineHeight = 10.5 * 0.42 + 1.1;
+    setText(doc, { size: 10.5, style: 'bold' });
+    const periodLabelWidth = doc.getTextWidth('Periodo: ');
+    setText(doc, { size: 10.5 });
+    const periodLines = doc.splitTextToSize(String(model.servicePeriod || ''), CONTENT_WIDTH - periodLabelWidth);
+    const bankLines = doc.splitTextToSize(model.bankLine, CONTENT_WIDTH);
+    setText(doc, { size: 10.5, style: 'bold' });
+    const nameLines = doc.splitTextToSize(model.issuer.name.replace(/\b\p{Lu}\p{Lu}+\b/gu, word => word.charAt(0) + word.slice(1).toLowerCase()), CONTENT_WIDTH);
+    setText(doc, { size: 9.5, color: COLORS.muted });
+    const signatureLines = [model.issuer.role, model.issuer.signatureLine, model.issuer.email]
+        .flatMap(line => doc.splitTextToSize(line, CONTENT_WIDTH));
+    const closingHeight = 22 + nameLines.length * 5 + signatureLines.length * 4.6;
+    const footerHeight = (periodLines.length - 1) * bodyLineHeight + 10 + bankLines.length * bodyLineHeight + 10 + closingHeight;
     y += 9;
+    y = ensureSpace(doc, y, footerHeight);
     setText(doc, { size: 10.5, style: 'bold' });
     doc.text('Periodo:', PAGE.left, y);
     setText(doc, { size: 10.5 });
-    doc.text(` ${model.servicePeriod}`, PAGE.left + doc.getTextWidth('Periodo:'), y);
+    periodLines.forEach((line, index) => doc.text(line, PAGE.left + periodLabelWidth, y + index * bodyLineHeight));
+    y += (periodLines.length - 1) * bodyLineHeight;
 
     y += 10;
     y = paragraph(doc, model.bankLine, y);
@@ -423,10 +460,12 @@ export const generateReceivablePdfBuffer = (receivable, env = {}) => {
     }
     y += 22;
     setText(doc, { size: 10.5, style: 'bold' });
-    doc.text(model.issuer.name.replace(/\b\p{Lu}\p{Lu}+\b/gu, (word) => word.charAt(0) + word.slice(1).toLowerCase()), PAGE.left, y);
-    y += 5;
+    for (const line of nameLines) {
+        doc.text(line, PAGE.left, y);
+        y += 5;
+    }
     setText(doc, { size: 9.5, color: COLORS.muted });
-    for (const line of [model.issuer.role, model.issuer.signatureLine, model.issuer.email]) {
+    for (const line of signatureLines) {
         doc.text(line, PAGE.left, y);
         y += 4.6;
     }

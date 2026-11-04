@@ -148,6 +148,33 @@ test('un aviso nuevo de la misma oportunidad reemplaza al que seguía abierto', 
     assert.deepEqual(db.rows.map((row) => [row.id, row.resolution]), [['n1', 'REEMPLAZADO'], ['n2', null]]);
 });
 
+test('repetir un aviso de cartera conserva su identidad, antigüedad y Recordarme aunque cambie el saldo', async () => {
+    const until = at('2026-10-27T13:00:00Z');
+    const original = notice({ userId: 'u-elisa', kind: 'CARTERA_MENSUAL', subjectId: 'c1', label: 'Cartera vencida',
+        message: 'Dos cuentas pendientes', url: '/financiero?tab=cartera', snoozedUntil: until, decidedAt: NOW });
+    const db = fakeDb({ notices: [original] });
+    const result = await queueImportantNotice(db, { ...original, message: 'Dos cuentas pendientes con un abono nuevo', notificationId: 'bell-new' }, at('2026-10-26T15:30:00Z'));
+    assert.equal(result.id, original.id);
+    assert.equal(db.rows.length, 1);
+    assert.equal(result.message, 'Dos cuentas pendientes con un abono nuevo');
+    assert.equal(result.notificationId, 'bell-new');
+    assert.equal(result.createdAt, original.createdAt);
+    assert.equal(result.snoozedUntil, until);
+    assert.equal(result.decidedAt, NOW);
+    assert.equal(result.resolvedAt, null);
+});
+
+test('un nuevo recordatorio de cartera tras una gestión no reutiliza un aviso que ya quedó atendido', async () => {
+    const original = notice({ userId: 'u-elisa', kind: 'CARTERA_MENSUAL', subjectId: 'c1', label: 'Cartera vencida' });
+    const db = fakeDb({ notices: [original] });
+    // La persona registró la gestión en otra pantalla y todavía no volvió a leer la banda.
+    db.collectionActivity = { findFirst: async () => ({ id: 'gestion' }) };
+    const result = await queueImportantNotice(db, original, at('2026-11-04T15:00:00Z'));
+    assert.notEqual(result.id, original.id);
+    assert.equal(result.createdAt.toISOString(), '2026-11-04T15:00:00.000Z');
+    assert.equal(db.rows[0].resolution, 'REEMPLAZADO');
+});
+
 // Rodny, 28 de octubre de 2026: «la alerta del CRM solo debe aparecerle a Francys o a quien tenga rol textual de
 // Comercial, Relaciones Públicas o Comercial y Relaciones Públicas». La banda de quien no es comercial no muestra avisos
 // del CRM, y lo que la dirección tenía abierto pasa al equipo comercial en el siguiente pase.

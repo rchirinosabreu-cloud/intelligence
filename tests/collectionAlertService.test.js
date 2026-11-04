@@ -38,6 +38,7 @@ const fakeDb = ({ people = team, settings = ON } = {}) => {
         },
         client: { findMany: async () => clients() },
         collectionAlert: {
+            findFirst: async ({ where }) => [...db.logged].reverse().find((row) => row.subjectId === where.subjectId && row.kind === where.kind) || null,
             create: async ({ data }) => {
                 const key = `${data.subjectId}|${data.cycle}|${data.step}`;
                 if (taken.has(key)) throw Object.assign(new Error('duplicada'), { code: 'P2002' });
@@ -81,7 +82,7 @@ test('Elisa recibe la banda con cifras; Dirección y el project manager, la camp
 
     const byUser = (userId) => bells.filter((bell) => bell.userId === userId).map((bell) => bell.message);
     assert.equal(byUser('u-elisa').length, 2);
-    assert.deepEqual(byUser('u-francisco'), ['Muebles Nuva tiene 2 mensualidades vencidas. Hay riesgo de suspender el servicio.']);
+    assert.deepEqual(byUser('u-francisco'), ['Muebles Nuva tiene 2 cuentas vencidas en 2 períodos. Revisa su cartera.']);
     assert.deepEqual(byUser('u-rodny'), byUser('u-francisco'), 'Rodny marcó Dirección en Equipo');
     assert.deepEqual(byUser('u-kamila'), ['Muebles Nuva tiene pagos atrasados: puede pausarse la producción de contenidos.']);
     assert.deepEqual(byUser('u-francys'), [], 'Comercial no recibe cartera');
@@ -104,6 +105,85 @@ test('lo que ya se avisó no se repite en el mismo ciclo y paso', async () => {
     assert.equal(again.result.sent, 0);
     assert.equal(again.bells.length, 0);
     assert.equal(again.bands.length, 0);
+});
+
+test('reducir de tres períodos vencidos a dos no dispara otra alerta antes del intervalo', async () => {
+    const db = fakeDb();
+    let accounts = [...clients()[0].accountsReceivables, rec({ id: 'n-jul', period: '2026-07-01' })];
+    db.client.findMany = async () => [{ ...clients()[0], accountsReceivables: accounts }];
+    assert.equal((await run(db)).result.sent, 1);
+    accounts = clients()[0].accountsReceivables;
+    assert.equal((await run(db, { now: new Date('2026-10-01T15:30:00Z') })).result.sent, 0);
+    assert.equal((await run(db, { now: new Date('2026-10-08T15:00:00Z') })).result.sent, 1);
+});
+
+test('corregir el vencimiento de una cuenta ya avisada no duplica el recordatorio en el mismo día', async () => {
+    const db = fakeDb();
+    let dueDate = '2026-09-01';
+    db.client.findMany = async () => [{ ...clients()[1], accountsReceivables: [rec({ id: 'g-1', dueDate })] }];
+    assert.equal((await run(db)).result.sent, 1);
+    dueDate = '2026-09-02';
+    assert.equal((await run(db, { now: new Date('2026-10-01T15:30:00Z') })).result.sent, 0);
+});
+
+test('registrar seguimiento espera el intervalo antes de volver a pedir la misma gestión', async () => {
+    const db = fakeDb();
+    db.client.findMany = async () => [clients()[0]];
+    const contacted = new Date('2026-09-30T15:00:00Z');
+    db.collectionActivity = { findFirst: async ({ where }) => contacted > where.occurredAt.gt ? { id: 'contacto' } : null };
+    assert.equal((await run(db)).result.sent, 0);
+    assert.equal(db.logged.length, 0, 'posponer el aviso no consume su paso');
+    assert.equal((await run(db, { now: new Date('2026-10-07T15:00:00Z') })).result.sent, 1);
+});
+
+test('una parrilla vigente no convierte las cuotas de una formalización en mensualidades', async () => {
+    const db = fakeDb();
+    db.client.findMany = async () => [{ ...clients()[0], accountsReceivables: [
+        rec({ id: 'fee', period: '2026-08-01' }),
+        rec({ id: 'cuota', period: '2026-09-01', dueDate: '2026-09-01', metadata: { origin: 'FORMALIZACION', quotationId: 'q1', installmentId: 'i1' } })
+    ] }];
+    const { bands, bells } = await run(db);
+    assert.deepEqual(bands.map((band) => [band.kind, band.subjectId]), [['CARTERA_UNICO', 'cuota']]);
+    for (const item of [...bands, ...bells]) assert.doesNotMatch(item.message, /mensualidad/i);
+    assert.ok(bells.some((bell) => bell.userId === 'u-kamila'), 'el PM conserva el aviso operativo sin cifras');
+});
+
+test('varias cuotas de una misma cuenta generan un solo riesgo para su project manager', async () => {
+    const db = fakeDb();
+    db.client.findMany = async () => [{ ...clients()[0], accountsReceivables: Array.from({ length: 4 }, (_, index) =>
+        rec({ id: `cuota-${index}`, period: '2026-09-01', dueDate: '2026-09-01',
+            metadata: { origin: 'FORMALIZACION', quotationId: 'q1', installmentId: `i${index}` } }))
+    }];
+    const { bands, bells } = await run(db);
+    assert.equal(bands.length, 4, 'Administración conserva cada obligación y su decisión');
+    const risks = bells.filter((bell) => bell.userId === 'u-kamila');
+    assert.equal(risks.length, 1);
+    assert.equal(risks[0].relatedId, 'c-nuva');
+    assert.equal(risks[0].message, 'Muebles Nuva tiene pagos atrasados: puede pausarse la producción de contenidos.');
+});
+
+test('la cartera sin modalidad demostrada dice cuentas y períodos, no presume mensualidades', async () => {
+    const db = fakeDb();
+    db.client.findMany = async () => [{ ...clients()[0], accountsReceivables: [
+        ...clients()[0].accountsReceivables,
+        rec({ id: 'n-sep-extra', period: '2026-09-01' })
+    ] }];
+    const { bands, bells } = await run(db);
+    assert.match(bands[0].message, /3 cuentas vencidas.*2 períodos/);
+    for (const item of [...bands, ...bells]) assert.doesNotMatch(item.message, /mensualidad/i);
+});
+
+test('las cuotas sin hito exigible y los saldos expresamente por verificar no generan cobro', async () => {
+    const db = fakeDb();
+    db.client.findMany = async () => [{ ...clients()[0], accountsReceivables: [
+        rec({ id: 'hito', period: '2026-07-01', metadata: { origin: 'FORMALIZACION', quotationId: 'q1', installmentId: 'i2', waitsForMilestone: true } }),
+        rec({ id: 'revisar', period: '2026-08-01', metadata: { balanceReviewRequired: true } }),
+        rec({ id: 'fee', period: '2026-09-01' })
+    ] }];
+    const { result, bells, bands } = await run(db);
+    assert.equal(result.sent, 0);
+    assert.equal(bells.length, 0);
+    assert.equal(bands.length, 0);
 });
 
 test('sin nadie en Administrativa y contable, Dirección igual se entera y queda dicho en los registros', async () => {
@@ -143,13 +223,39 @@ const noticeDb = ({ receivables = clients()[0].accountsReceivables, role = 'Coor
         notification: { updateMany: async () => ({ count: 0 }) },
         teamMember: { findFirst: async () => ({ role, areas: [] }) },
         collectionSetting: { findUnique: async () => null },
-        client: { findUnique: async () => ({ name: 'Muebles Nuva', accountsReceivables: receivables }) }
+        client: { findUnique: async () => ({ name: 'Muebles Nuva', contracts: clients()[0].contracts, accountsReceivables: receivables }) }
     };
 };
 
 test('la banda de cartera solo se le muestra a Administrativa y contable', async () => {
     assert.equal((await currentImportantNotice(noticeDb(), 'u-x', NOW)).notice?.kind, 'CARTERA_MENSUAL');
     assert.equal((await currentImportantNotice(noticeDb({ role: 'Comercial y Relaciones Públicas' }), 'u-x', NOW)).notice, null);
+});
+
+test('la banda guardada se actualiza con saldo vigente y texto neutral sin reemplazar el aviso', async () => {
+    const db = noticeDb({ receivables: [
+        { ...clients()[0].accountsReceivables[0], payments: [{ amount: 600000 }] }, clients()[0].accountsReceivables[1]
+    ] });
+    const { notice } = await currentImportantNotice(db, 'u-x', NOW);
+    assert.equal(notice.id, 'aviso-1');
+    assert.match(notice.message, /2 cuentas vencidas en 2 períodos/);
+    assert.match(notice.message, /\$2\.600\.000/);
+    assert.ok(db.updates.every((data) => !('snoozedUntil' in data) && !('createdAt' in data) && !('resolvedAt' in data)));
+});
+
+test('una alerta guardada no sostiene dos períodos sumando una cuota de formalización', async () => {
+    const db = noticeDb({ receivables: [clients()[0].accountsReceivables[0],
+        { ...clients()[0].accountsReceivables[1], metadata: { origin: 'FORMALIZACION', quotationId: 'q1', installmentId: 'i1' } }
+    ] });
+    assert.equal((await currentImportantNotice(db, 'u-x', NOW, { log: () => {} })).notice, null);
+});
+
+test('el aviso individual deja de insistir si el vencimiento se corrigió al futuro', async () => {
+    const db = noticeDb();
+    const previousRead = db.importantNotice.findMany;
+    db.importantNotice.findMany = async (...args) => (await previousRead(...args)).map((notice) => ({ ...notice, kind: 'CARTERA_UNICO', subjectId: 'r1' }));
+    db.accountsReceivable = { findUnique: async () => rec({ id: 'r1', clientId: 'c-nuva', client: { name: 'Muebles Nuva' }, dueDate: '2026-11-01' }) };
+    assert.equal((await currentImportantNotice(db, 'u-x', NOW, { log: () => {} })).notice, null);
 });
 
 test('si el cliente se pone al día, el aviso sale solo y no cuenta como decisión', async () => {
