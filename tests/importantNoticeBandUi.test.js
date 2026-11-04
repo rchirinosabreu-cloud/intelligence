@@ -32,7 +32,7 @@ test('cúpula radial sin borde, de borde a borde, encima del menú y debajo de l
 
 test('los botones: seguimiento primero, «Abrir» como botón y «Recordarme» siempre al final', () => {
     const base = band.slice(band.indexOf("{mode === 'base' && ("), band.indexOf("{mode === 'channels' && FOLLOW_UP_CHANNELS"));
-    const order = ['data-notice-action="follow-up"', 'data-notice-action="close"', 'data-notice-action="open"', 'data-notice-action="snooze"']
+    const order = ['data-notice-action="follow-up"', 'data-notice-action="close"', 'data-notice-action="open"', 'data-notice-action="archive"', 'data-notice-action="snooze"']
         .map((marker) => base.indexOf(marker));
     assert.ok(order.every((index) => index >= 0));
     assert.deepEqual([...order].sort((a, b) => a - b), order);
@@ -65,6 +65,19 @@ test('cartera vencida: «Ya le escribí», «Registrar pago» y «Recordarme», 
     assert.match(base, /isSuspension \? 'Revisar suspensión' : 'Registrar pago'/);
     assert.match(band, /const isSuspension = notice\.kind === 'CARTERA_SUSPENSION'/);
     assert.match(band, /'Gestión de cobro registrada'/);
+});
+
+test('«Archivar» a la vista en todo aviso del CRM y el título lleva a lo que nombra sin quitar el aviso (4 de noviembre de 2026)', () => {
+    const base = band.slice(band.indexOf("{mode === 'base' && ("), band.indexOf("{mode === 'channels' && FOLLOW_UP_CHANNELS"));
+    assert.match(band, /const isCrm = String\(notice\.kind \|\| ''\)\.startsWith\('CRM_'\)/);
+    assert.match(base, /\{isCrm && \(\s*<NoticeButton disabled=\{busy\} data-notice-action="archive"/);
+    assert.match(base, /decide\('close', \{ outcome: NOTICE_ARCHIVE_OUTCOME \}/);
+    // El título es un enlace de verdad: abrir en otra pestaña funciona, y viajar lleva de dónde viene.
+    assert.match(band, /<a href=\{titleHref\} data-notice-title-link/);
+    assert.match(band, /useNavigateFrom\(\)/);
+    const open = band.slice(band.indexOf('const openTitle'), band.indexOf('return (', band.indexOf('const openTitle')));
+    assert.match(open, /event\.metaKey \|\| event\.ctrlKey \|\| event\.shiftKey/);
+    assert.doesNotMatch(open, /post\(|decide\(|onDecided/, 'mirar la oportunidad no decide nada: el aviso se queda');
 });
 
 test('Esc o tocar fuera devuelve a los botones, y el éxito se dice después de la respuesta del servidor', () => {

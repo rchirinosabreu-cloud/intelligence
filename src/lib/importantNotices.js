@@ -34,16 +34,24 @@ export const isFollowUpChannel = (value) => FOLLOW_UP_CHANNELS.some((channel) =>
 
 // «No sigue», en la revisión: las dos etapas de cierre del CRM. Perdida, el cliente no la tomó; descartada, no sigue por
 // decisión nuestra (Rodny, 26 de octubre de 2026). Reunión del 4 de noviembre de 2026: con Andy «sí se hizo» —la
-// propuesta terminó en trabajo— y faltaba poder decirlo; y Pacho pidió archivar lo que ya no contesta tras cinco
-// llamadas, conservando sus datos. Las dos salidas nuevas salen de la banda sin volver a avisar.
+// propuesta terminó en trabajo— y faltaba poder decirlo.
 export const REVIEW_OUTCOMES = Object.freeze([
     Object.freeze({ value: 'PERDIDO', label: 'Perdida', stage: 'Perdido', done: 'La oportunidad pasó a Perdido' }),
     Object.freeze({ value: 'DESCARTADO', label: 'Descartada', stage: 'Descartado', done: 'La oportunidad pasó a Descartado' }),
-    Object.freeze({ value: 'GANADO', label: 'Ya es cliente', stage: 'Ganado', done: 'La oportunidad pasó a Ganado' }),
-    Object.freeze({ value: 'ARCHIVAR', label: 'Archivar', stage: 'archivada', done: 'La oportunidad quedó archivada; sus datos se conservan' })
+    Object.freeze({ value: 'GANADO', label: 'Ya es cliente', stage: 'Ganado', done: 'La oportunidad pasó a Ganado' })
 ]);
 
 export const isReviewOutcome = (value) => REVIEW_OUTCOMES.some((outcome) => outcome.value === value);
+
+// «Archivar» va a la vista en todo aviso del CRM, no dentro de «No sigue» (Rodny, 4 de noviembre de 2026): es guardar lo
+// que ya no contesta, conservando sus datos, y vale también en los recordatorios de antes de la revisión.
+export const NOTICE_ARCHIVE_OUTCOME = 'ARCHIVAR';
+
+/** A dónde lleva el título del aviso: solo una dirección interna de la plataforma. */
+export const noticeTitleHref = (notice) => {
+    const url = notice?.url;
+    return typeof url === 'string' && url.startsWith('/') && !url.startsWith('//') ? url : null;
+};
 
 const toDate = (value) => {
     if (!value) return null;
