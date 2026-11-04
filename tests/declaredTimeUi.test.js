@@ -22,7 +22,12 @@ test('only a server answer that asks for it opens the question', () => {
 test('one dialog for the whole app, opened after the server confirms the close, from the board and the panel', () => {
   assert.match(read('src/components/layout/AppLayout.jsx'), /<DeclaredTimeDialog \/>/);
   const board = read('src/components/modules/NativeTasks.jsx');
-  assert.match(board, /destinationColumnId === 'realizado'\) \{\s*triggerConfetti[\s\S]{0,200}askDeclaredTimeIfNeeded\(await response\.json\(\)/);
+  const responseGuard = board.indexOf('if (!response.ok)');
+  const savedResponse = board.indexOf('const savedTask = await response.json();', responseGuard);
+  const question = board.indexOf('askDeclaredTimeIfNeeded(savedTask)', savedResponse);
+  assert.ok(responseGuard >= 0 && savedResponse > responseGuard && question > savedResponse,
+    'the dialog uses the saved server response, after validating success');
+  assert.match(board, /destinationColumnId === 'realizado'\) \{\s*triggerConfetti[\s\S]{0,200}askDeclaredTimeIfNeeded\(savedTask\)/);
   const panel = read('src/components/modules/TaskSidePanel.jsx');
   assert.match(panel, /if \(cierraLaTarea\) askDeclaredTimeIfNeeded\(updatedTask\)/);
   const dialog = read('src/components/tasks/DeclaredTimeDialog.jsx');
