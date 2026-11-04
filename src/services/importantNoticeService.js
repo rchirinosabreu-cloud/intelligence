@@ -15,7 +15,7 @@ import { CRM_ACTIVITY_TYPES } from '../lib/crmRules.js';
 import { FOLLOW_UP_ALERT_STAGES, followUpRecipients } from '../lib/crmFollowUpAlerts.js';
 import { userHasArea } from './teamAreaService.js';
 import { collectionStillDue } from './collectionState.js';
-import { recordCollectionActivity } from './collectionActivityService.js';
+import { hasCollectionActivitySince, recordCollectionActivity } from './collectionActivityService.js';
 import { isFollowUpChannel, isReviewOutcome, pickCurrentNotice, snoozeUntil } from '../lib/importantNotices.js';
 import { isPlanNotice, parsePlanSubject } from '../lib/planCloseNotices.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription, noticeTraceMetadata } from '../lib/importantNoticeTrace.js';
@@ -71,6 +71,22 @@ const traceNotice = async (db, eventType, { notice, subject, actor = null, subje
 
 /** Un aviso nuevo de la misma oportunidad reemplaza al que esa persona tenía abierto: la banda dice siempre lo último. */
 export const queueImportantNotice = async (db, data, now = new Date()) => db.$transaction(async (tx) => {
+    // Un recordatorio de cartera actualiza el mismo asunto abierto. Recrearlo borraba «Recordarme», la antigüedad y
+    // la decisión de la persona cada vez que cambiaba el saldo o tocaba otro paso del reloj. Una escalada de tipo
+    // (por ejemplo, proponer suspensión) mantiene el recorrido explícito de reemplazo.
+    if (isCollectionNotice(data)) {
+        const existing = await tx.importantNotice.findFirst({
+            where: { userId: data.userId, subjectId: data.subjectId, kind: data.kind, resolvedAt: null }
+        });
+        const clientId = existing && (isClientCollectionNotice(existing) ? existing.subjectId
+            : (await tx.accountsReceivable.findUnique({ where: { id: existing.subjectId }, select: { clientId: true } }))?.clientId);
+        const handled = existing && await hasCollectionActivitySince(tx, clientId, existing.createdAt);
+        if (existing && !handled) return tx.importantNotice.update({
+            where: { id: existing.id },
+            data: { level: data.level, label: data.label, message: data.message, url: data.url || null,
+                notificationId: data.notificationId || existing.notificationId || null }
+        });
+    }
     await tx.importantNotice.updateMany({
         where: { userId: data.userId, subjectId: data.subjectId, resolvedAt: null },
         data: { resolvedAt: now, resolution: 'REEMPLAZADO' }
@@ -149,6 +165,10 @@ export const currentImportantNotice = async (db = prisma, userId, now = new Date
         if (!notice) return { notice: null, nextAt };
         const cleared = await whyNotNeeded(db, notice, now, { overduePlans });
         if (!cleared) return { notice: serialize(notice), nextAt };
+        if (cleared.refresh) {
+            const refreshed = await db.importantNotice.update({ where: { id: notice.id }, data: cleared.refresh });
+            return { notice: serialize(refreshed), nextAt };
+        }
         await db.importantNotice.update({ where: { id: notice.id }, data: { resolvedAt: now, resolution: 'YA_ATENDIDO' } });
         await traceNotice(db, NOTICE_TRACE_EVENTS.CLEARED, { notice, subject: cleared.subject, subjectName: who, extra: { reason: cleared.reason }, now, log });
         candidates = candidates.filter((row) => row.id !== notice.id);

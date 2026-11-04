@@ -79,7 +79,7 @@ test('«Ya le escribí» queda guardado en la cuenta del cliente, una sola vez',
 test('una gestión registrada a mano después del aviso lo saca de la banda, como en el CRM', async () => {
     const notice = { id: 'aviso-3', userId: 'u-elisa', kind: 'CARTERA_MENSUAL', subjectId: 'c-nuva', createdAt: new Date('2026-10-27T15:00:00Z'), resolvedAt: null };
     const db = bandDb(notice);
-    db.client.findUnique = async () => ({ id: 'c-nuva', name: 'Muebles Nuva', accountsReceivables: [
+    db.client.findUnique = async () => ({ id: 'c-nuva', name: 'Muebles Nuva', contracts: [{ serviceType: 'PARRILLA', startDate: '2026-01-01' }], accountsReceivables: [
         { id: 'a', kind: 'CLIENTE', status: 'DEBE', amount: 100, period: '2026-08-01', payments: [] },
         { id: 'b', kind: 'CLIENTE', status: 'DEBE', amount: 100, period: '2026-09-01', payments: [] }
     ] });

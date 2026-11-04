@@ -1,4 +1,6 @@
 import Select from '@/components/ui/Select';
+import { useFormDraft } from '@/hooks/useFormDraft';
+import DraftNotice from '@/components/ui/DraftNotice';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { quotationSaveTarget } from '@/lib/quotationSaveTarget';
 import { useQuery } from '@tanstack/react-query';
@@ -20,86 +22,94 @@ import { catalogServiceHtml } from '@/services/serviceCatalogDescription';
 import { calculateQuotationEconomics, calculateQuotationTotals, normalizeQuotationItemTitle, quotationTaxExemptionReason } from '@/services/quotationDomainService';
 import { matchesServiceSearch } from '@/utils/serviceCatalogSearch';
 
+const emptyQuotationForm = () => ({
+    emisorType: 'BRAIN_STUDIO',
+    clientCompany: '',
+    clientName: '',
+    clientEmail: '',
+    clientPhone: '',
+    clientType: 'EMPRESA',
+    currency: 'COP',
+    isTaxExempt: false,
+    durationMonths: 3,
+    discountType: '',
+    discountValue: '',
+    discountLabel: '',
+    selectedItems: [],
+    proposalDetails: null,
+    savedQuotationId: null,
+    party: null,
+    wasExpired: false,
+    issuedAt: null,
+    exchangeRate: '',
+    exchangeRateSource: null,
+    exchangeRateDate: null,
+    contractTermsText: '',
+    quotationMode: 'STANDARD',
+    scenarios: [],
+    activeScenarioId: null,
+});
+
 const QuotationForm = () => {
     const { id } = useParams();
     const navigate = useNavigate();
     const isEditing = !!id;
 
+    const [draftForm, setDraftForm, localDraft] = useFormDraft({ scope: `quotation:${id || 'new'}`, initial: emptyQuotationForm(), defer: isEditing });
+    const { emisorType, clientCompany, clientName, clientEmail, clientPhone, clientType, currency, isTaxExempt, durationMonths, discountType, discountValue, discountLabel, selectedItems, proposalDetails, savedQuotationId, party, wasExpired, issuedAt, exchangeRate, exchangeRateSource, exchangeRateDate, contractTermsText, quotationMode, scenarios, activeScenarioId } = draftForm;
+    const setEmisorType = value => setDraftForm(current => ({ ...current, emisorType: typeof value === 'function' ? value(current.emisorType) : value }));
+    const setClientCompany = value => setDraftForm(current => ({ ...current, clientCompany: typeof value === 'function' ? value(current.clientCompany) : value }));
+    const setClientName = value => setDraftForm(current => ({ ...current, clientName: typeof value === 'function' ? value(current.clientName) : value }));
+    const setClientEmail = value => setDraftForm(current => ({ ...current, clientEmail: typeof value === 'function' ? value(current.clientEmail) : value }));
+    const setClientPhone = value => setDraftForm(current => ({ ...current, clientPhone: typeof value === 'function' ? value(current.clientPhone) : value }));
+    const setClientType = value => setDraftForm(current => ({ ...current, clientType: typeof value === 'function' ? value(current.clientType) : value }));
+    const setCurrency = value => setDraftForm(current => ({ ...current, currency: typeof value === 'function' ? value(current.currency) : value }));
+    const setIsTaxExempt = value => setDraftForm(current => ({ ...current, isTaxExempt: typeof value === 'function' ? value(current.isTaxExempt) : value }));
+    const setDurationMonths = value => setDraftForm(current => ({ ...current, durationMonths: typeof value === 'function' ? value(current.durationMonths) : value }));
+    const setDiscountType = value => setDraftForm(current => ({ ...current, discountType: typeof value === 'function' ? value(current.discountType) : value }));
+    const setDiscountValue = value => setDraftForm(current => ({ ...current, discountValue: typeof value === 'function' ? value(current.discountValue) : value }));
+    const setDiscountLabel = value => setDraftForm(current => ({ ...current, discountLabel: typeof value === 'function' ? value(current.discountLabel) : value }));
+    const setSelectedItems = value => setDraftForm(current => ({ ...current, selectedItems: typeof value === 'function' ? value(current.selectedItems) : value }));
+    const setProposalDetails = value => setDraftForm(current => ({ ...current, proposalDetails: typeof value === 'function' ? value(current.proposalDetails) : value }));
+    const setExchangeRate = value => setDraftForm(current => ({ ...current, exchangeRate: typeof value === 'function' ? value(current.exchangeRate) : value }));
+    const setExchangeRateSource = value => setDraftForm(current => ({ ...current, exchangeRateSource: typeof value === 'function' ? value(current.exchangeRateSource) : value }));
+    const setExchangeRateDate = value => setDraftForm(current => ({ ...current, exchangeRateDate: typeof value === 'function' ? value(current.exchangeRateDate) : value }));
+    const setContractTermsText = value => setDraftForm(current => ({ ...current, contractTermsText: typeof value === 'function' ? value(current.contractTermsText) : value }));
+    const setQuotationMode = value => setDraftForm(current => ({ ...current, quotationMode: typeof value === 'function' ? value(current.quotationMode) : value }));
+    const setScenarios = value => setDraftForm(current => ({ ...current, scenarios: typeof value === 'function' ? value(current.scenarios) : value }));
+    const setActiveScenarioId = value => setDraftForm(current => ({ ...current, activeScenarioId: typeof value === 'function' ? value(current.activeScenarioId) : value }));
+
     // State
-    const [emisorType, setEmisorType] = useState('BRAIN_STUDIO');
-    const [clientCompany, setClientCompany] = useState('');
-    const [clientName, setClientName] = useState('');
-    const [clientEmail, setClientEmail] = useState('');
-    const [clientPhone, setClientPhone] = useState('');
-    const [clientType, setClientType] = useState('EMPRESA');
-    const [currency, setCurrency] = useState('COP');
-    const [isTaxExempt, setIsTaxExempt] = useState(false);
-    const [durationMonths, setDurationMonths] = useState(3);
-    const [discountType, setDiscountType] = useState('');
-    const [discountValue, setDiscountValue] = useState('');
-    const [discountLabel, setDiscountLabel] = useState('');
-    const [selectedItems, setSelectedItems] = useState([]);
-    const [proposalDetails, setProposalDetails] = useState(null);
     const [searchTerm, setSearchText] = useState('');
     const [isSaving, setIsSaving] = useState(false);
     // La cotización que este formulario creó en su primer guardado: desde ahí se actualiza.
-    const [savedQuotationId, setSavedQuotationId] = useState(null);
     // El tercero de la cotización: el cliente que ya existe o su ficha de cliente potencial (lo decide el servidor).
-    const [party, setParty] = useState(null);
     const savingRef = useRef(false);
     const [generatedLink, setGeneratedLink] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isServiceModalOpen, setIsServiceModalOpen] = useState(false);
     const [isLoadingData, setIsLoadingData] = useState(false);
-    const [wasExpired, setWasExpired] = useState(false);
-    const [issuedAt, setIssuedAt] = useState(null);
-    const [exchangeRate, setExchangeRate] = useState('');
-    const [exchangeRateSource, setExchangeRateSource] = useState(null);
-    const [exchangeRateDate, setExchangeRateDate] = useState(null);
     const [isLoadingRate, setIsLoadingRate] = useState(false);
     const [exchangeRateError, setExchangeRateError] = useState('');
-    const [contractTermsText, setContractTermsText] = useState('');
-    const [quotationMode, setQuotationMode] = useState('STANDARD');
-    const [scenarios, setScenarios] = useState([]);
-    const [activeScenarioId, setActiveScenarioId] = useState(null);
 
     const createScenario = (position, name = `Opción ${position + 1}`) => ({
         id: crypto.randomUUID(), name, description: '', externalBudget: '', externalBudgetNote: '', order: position,
         discountType: '', discountValue: '', discountLabel: ''
     });
 
-    const fetchQuotation = useCallback(async () => {
+    const fetchQuotation = useCallback(async (signal) => {
         setIsLoadingData(true);
         try {
             // Using admin endpoint for authenticated edit
             const res = await fetch(`${getApiBaseUrl()}/api/quotations/${id}`, {
+                signal,
                 headers: {
                     'Authorization': `Bearer ${localStorage.getItem('authToken')}`
                 }
             });
             if (!res.ok) throw new Error("Failed to load quotation");
             const data = await res.json();
-            setEmisorType(data.emisor_type);
-            setClientCompany(data.client_company || '');
-            setClientName(data.client_name);
-            setClientEmail(data.client_email);
-            setClientPhone(data.client_phone);
-            setClientType(data.client_company ? 'EMPRESA' : 'PERSONA_NATURAL');
-            setCurrency(data.currency);
-            setIsTaxExempt(data.is_tax_exempt);
-            setDurationMonths(Number(data.duration_months) || 1);
-            setDiscountType(data.discount_type || '');
-            setDiscountValue(data.discount_value ? Number(data.discount_value) : '');
-            setDiscountLabel(data.discount_label || '');
-            setWasExpired(Boolean(data.isExpired));
-            setIssuedAt(data.issued_at || data.created_at);
-            setExchangeRate(data.exchange_rate ? Number(data.exchange_rate) : '');
-            setExchangeRateSource(data.exchange_rate_source || null);
-            setExchangeRateDate(data.exchange_rate_date || null);
-            setContractTermsText(data.terms_and_conditions || '');
-            setProposalDetails(data.proposal_details || null);
-            setParty(data.party || null);
-
+            if (signal.aborted) return;
             // Robust parsing for items to prevent crash
             let parsedItems = [];
             if (Array.isArray(data.items)) {
@@ -112,7 +122,7 @@ const QuotationForm = () => {
                     parsedItems = [];
                 }
             }
-            setSelectedItems(Array.isArray(parsedItems) ? parsedItems : []);
+            if (!Array.isArray(parsedItems)) parsedItems = [];
             const scenarioMap = new Map();
             parsedItems.forEach((item) => {
                 if (item?.scenarioId && !scenarioMap.has(item.scenarioId)) scenarioMap.set(item.scenarioId, {
@@ -128,22 +138,34 @@ const QuotationForm = () => {
                 });
             });
             const loadedScenarios = [...scenarioMap.values()].sort((a, b) => a.order - b.order);
-            if (loadedScenarios.length > 0) {
-                setQuotationMode('SCENARIOS');
-                setScenarios(loadedScenarios);
-                setActiveScenarioId(loadedScenarios[0].id);
-            }
+            localDraft.initialize({
+                ...emptyQuotationForm(), emisorType: data.emisor_type, clientCompany: data.client_company || '',
+                clientName: data.client_name || '', clientEmail: data.client_email || '', clientPhone: data.client_phone || '',
+                clientType: data.client_type || (data.client_company ? 'EMPRESA' : 'PERSONA_NATURAL'), currency: data.currency,
+                isTaxExempt: data.is_tax_exempt, durationMonths: Number(data.duration_months) || 1,
+                discountType: data.discount_type || '', discountValue: data.discount_value ? Number(data.discount_value) : '',
+                discountLabel: data.discount_label || '', wasExpired: Boolean(data.isExpired), issuedAt: data.issued_at || data.created_at,
+                exchangeRate: data.exchange_rate ? Number(data.exchange_rate) : '', exchangeRateSource: data.exchange_rate_source || null,
+                exchangeRateDate: data.exchange_rate_date || null, contractTermsText: data.terms_and_conditions || '',
+                proposalDetails: data.proposal_details || null, party: data.party || null, selectedItems: parsedItems,
+                quotationMode: loadedScenarios.length ? 'SCENARIOS' : 'STANDARD', scenarios: loadedScenarios,
+                activeScenarioId: loadedScenarios[0]?.id || null
+            }, { fingerprint: JSON.stringify([data.updated_at, data.status, data.accepted_at, data.items, data.proposal_details, data.terms_and_conditions]) });
         } catch (error) {
+            if (signal.aborted) return;
             toast.error("No se pudo cargar la cotización");
             navigate('/cotizaciones');
         } finally {
-            setIsLoadingData(false);
+            if (!signal.aborted) setIsLoadingData(false);
         }
-    }, [id, navigate]);
+    }, [id, navigate, localDraft.initialize]);
 
     // Fetch existing data if editing
     useEffect(() => {
-        if (isEditing) fetchQuotation();
+        if (!isEditing) return;
+        const controller = new AbortController();
+        fetchQuotation(controller.signal);
+        return () => controller.abort();
     }, [fetchQuotation, isEditing]);
 
     // Por qué el IVA no se puede tocar (dólares o Francisco Villa como emisor), o null si lo
@@ -151,10 +173,12 @@ const QuotationForm = () => {
     const taxLockReason = quotationTaxExemptionReason({ currency, emisorType });
     const effectiveTaxExempt = Boolean(taxLockReason) || isTaxExempt;
 
+    const previousClientType = useRef(clientType);
     // Al crear, la propuesta para persona natural arranca exenta y la de empresa con IVA; quien
     // cotiza puede cambiarlo con el interruptor. Al editar se respeta lo guardado.
     useEffect(() => {
-        if (!isEditing) setIsTaxExempt(clientType === 'PERSONA_NATURAL');
+        if (!isEditing && previousClientType.current !== clientType) setIsTaxExempt(clientType === 'PERSONA_NATURAL');
+        previousClientType.current = clientType;
     }, [clientType, isEditing]);
 
     // Fetch catalog
@@ -318,9 +342,7 @@ const QuotationForm = () => {
     };
 
     const updateItem = (index, field, value) => {
-        const newItems = [...selectedItems];
-        newItems[index][field] = value;
-        setSelectedItems(newItems);
+        setSelectedItems(items => items.map((item, position) => position === index ? { ...item, [field]: value } : item));
     };
 
     const removeItem = (index) => {
@@ -359,6 +381,7 @@ const QuotationForm = () => {
     );
 
     const handleSubmit = async (targetStatus = 'ACTIVA') => {
+        if (localDraft.conflict) return;
         if (targetStatus === 'ACTIVA' && (!clientName || !clientPhone || selectedItems.length === 0)) {
             toast.error("Por favor completa los campos obligatorios para emitir");
             return;
@@ -430,8 +453,7 @@ const QuotationForm = () => {
 
             const data = await res.json().catch(() => ({}));
             if (!res.ok) throw new Error(data.error || "Error al guardar la cotización");
-            if (!wasExisting && data.id) setSavedQuotationId(data.id);
-            if (data.party) setParty(data.party);
+
 
             const shouldShare = targetStatus === 'ACTIVA';
             if (shouldShare) {
@@ -444,11 +466,11 @@ const QuotationForm = () => {
             }
 
             const wasReactivated = wasExpired && shouldShare;
-            setWasExpired(false);
-            setIssuedAt(data.issued_at || issuedAt);
-            setExchangeRate(data.exchange_rate ? Number(data.exchange_rate) : '');
-            setExchangeRateSource(data.exchange_rate_source || null);
-            setExchangeRateDate(data.exchange_rate_date || null);
+            localDraft.commit({ ...draftForm, savedQuotationId: savedQuotationId || data.id || null,
+                party: data.party || party, wasExpired: false, issuedAt: data.issued_at || issuedAt,
+                exchangeRate: data.exchange_rate ? Number(data.exchange_rate) : '',
+                exchangeRateSource: data.exchange_rate_source || null, exchangeRateDate: data.exchange_rate_date || null
+            }, { fingerprint: isEditing ? JSON.stringify([data.updated_at, data.status, data.accepted_at, data.items, data.proposal_details, data.terms_and_conditions]) : null });
             toast.success(
                 wasReactivated
                     ? "Cotización reactivada por 15 días"
@@ -461,6 +483,7 @@ const QuotationForm = () => {
                 if (data.delivery.sent) toast.success('Enviada por correo al cliente con el PDF');
                 else if (data.delivery.reason !== 'sin-correo') toast.error(data.delivery.message || 'El correo al cliente no salió');
             }
+            if (!id && data.id) navigate(`/cotizaciones/editar/${data.id}`, { replace: true });
         } catch (error) {
             console.error("[QuotationForm] Save failed:", error);
             toast.error(error.message || "Fallo al guardar la cotización");
@@ -498,7 +521,7 @@ const QuotationForm = () => {
         : null;
     const displayIssueDate = wasExpired ? new Date() : new Date(issuedAt || Date.now());
 
-    if (isEditing && isLoadingData) {
+    if (isEditing && (!localDraft.ready || isLoadingData)) {
         return (
             <div className="w-full h-[400px] flex items-center justify-center">
                 <div className="flex flex-col items-center gap-3">
@@ -510,7 +533,8 @@ const QuotationForm = () => {
     }
 
     return (
-        <div className="space-y-8 pb-20">
+        <div className="space-y-8 pb-20" inert={isSaving ? '' : undefined} aria-busy={isSaving}>
+            <DraftNotice draft={localDraft} disabled={isSaving} />
             <SuccessModal
                 isOpen={isModalOpen}
                 onClose={() => setIsModalOpen(false)}
@@ -540,7 +564,7 @@ const QuotationForm = () => {
                 </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8" inert={localDraft.conflict ? '' : undefined}>
                 {/* Form Column */}
                 <div className="lg:col-span-2 space-y-6">
                     <Card className="p-6">
@@ -746,7 +770,7 @@ const QuotationForm = () => {
                                                 </div>
                                                 <div className="mt-2 flex justify-end gap-3 text-[10px] text-zinc-400">
                                                     <span>Costo de producción {formatCatalogPrice(service.costo_real_estimado)}</span>
-                                                    <span className="text-emerald-600 dark:text-emerald-400">
+                                                    <span className="text-status-positive-fg">
                                                         Ganancia {service.ganancia_estimada === null ? 'sin costo' : formatCop(service.ganancia_estimada)}
                                                     </span>
                                                 </div>
@@ -843,7 +867,7 @@ const QuotationForm = () => {
                                                 {item.estimatedCost !== null && item.estimatedCost !== undefined && (
                                                     <div className="flex flex-wrap justify-end gap-x-4 gap-y-1 text-[10px] text-zinc-400">
                                                         <span>Costo estimado {formatCop(Number(item.estimatedCost) * Number(item.quantity || 0))}</span>
-                                                        <span className="font-semibold text-emerald-600 dark:text-emerald-400">
+                                                        <span className="font-semibold text-status-positive-fg">
                                                             Ganancia {formatCop((((Number(item.price) * (currency === 'USD' ? Number(exchangeRate) : 1)) - Number(item.estimatedCost)) * Number(item.quantity || 0)))}
                                                         </span>
                                                         <span>
@@ -861,12 +885,13 @@ const QuotationForm = () => {
 
                             <ProposalDetailsEditor value={proposalDetails} onChange={setProposalDetails} totalsByScenario={proposalTotals} currency={currency} />
                             <QuotationTermsEditor
+                                key={`${id || 'new'}:${localDraft.revision}`}
                                 paymentPlanEnabled={Boolean(proposalDetails?.paymentPlans?.length)}
                                 services={selectedItems}
                                 currency={currency}
                                 isTaxExempt={effectiveTaxExempt}
                                 existingText={contractTermsText}
-                                isEditing={isEditing}
+                                isEditing={isEditing || localDraft.restored}
                                 onChange={setContractTermsText}
                             />
                         </div>
@@ -900,27 +925,27 @@ const QuotationForm = () => {
                             </div>
                         </div>}
                         {quotationMode === 'STANDARD' && (
-                            <div className="space-y-3 rounded-xl border border-violet-200 bg-violet-50/60 p-4 dark:border-violet-900/50 dark:bg-violet-950/20">
-                                <p className="text-[10px] font-bold uppercase text-violet-700 dark:text-violet-300">Descuento comercial</p>
+                            <div className="space-y-3 rounded-xl border border-brand-magenta/20 bg-brand-magenta/5 p-4 dark:border-brand-magenta/30 dark:bg-brand-magenta/10">
+                                <p className="text-[10px] font-bold uppercase text-brand-magenta-deep dark:text-brand-magenta-soft">Descuento comercial</p>
                                 <div className="grid gap-2 sm:grid-cols-2">
-                                    <Select value={discountType} onChange={(e) => { setDiscountType(e.target.value); if (!e.target.value) setDiscountValue(''); }} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs outline-none dark:border-violet-800 dark:bg-zinc-950">
+                                    <Select value={discountType} onChange={(e) => { setDiscountType(e.target.value); if (!e.target.value) setDiscountValue(''); }} className="rounded-lg border border-brand-magenta/20 bg-white px-3 py-2 text-xs outline-none dark:border-brand-magenta/30 dark:bg-zinc-950">
                                         <option value="">Sin descuento</option>
                                         <option value="PERCENTAGE">Porcentaje</option>
                                         <option value="FIXED">Valor fijo</option>
                                     </Select>
                                     {discountType === 'PERCENTAGE'
-                                        ? <input type="number" min="0" max={100} value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-right text-xs outline-none disabled:opacity-50 dark:border-violet-800 dark:bg-zinc-950" placeholder="Porcentaje" />
-                                        : <MoneyInput min="0" aria-label="Valor del descuento" value={discountValue} onChange={setDiscountValue} disabled={!discountType} className="rounded-lg border border-violet-200 bg-white px-3 py-2 text-right text-xs outline-none disabled:opacity-50 dark:border-violet-800 dark:bg-zinc-950" placeholder="Valor" />}
+                                        ? <input type="number" min="0" max={100} value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} className="rounded-lg border border-brand-magenta/20 bg-white px-3 py-2 text-right text-xs outline-none disabled:opacity-50 dark:border-brand-magenta/30 dark:bg-zinc-950" placeholder="Porcentaje" />
+                                        : <MoneyInput min="0" aria-label="Valor del descuento" value={discountValue} onChange={setDiscountValue} disabled={!discountType} className="rounded-lg border border-brand-magenta/20 bg-white px-3 py-2 text-right text-xs outline-none disabled:opacity-50 dark:border-brand-magenta/30 dark:bg-zinc-950" placeholder="Valor" />}
                                 </div>
-                                <input value={discountLabel} onChange={(e) => setDiscountLabel(e.target.value)} disabled={!discountType} className="w-full rounded-lg border border-violet-200 bg-white px-3 py-2 text-xs outline-none disabled:opacity-50 dark:border-violet-800 dark:bg-zinc-950" placeholder="Etiqueta visible en la propuesta" />
+                                <input value={discountLabel} onChange={(e) => setDiscountLabel(e.target.value)} disabled={!discountType} className="w-full rounded-lg border border-brand-magenta/20 bg-white px-3 py-2 text-xs outline-none disabled:opacity-50 dark:border-brand-magenta/30 dark:bg-zinc-950" placeholder="Etiqueta visible en la propuesta" />
                             </div>
                         )}
 
                         {currency === 'USD' && (
-                            <div className="rounded-lg border border-violet-200 bg-violet-50/70 p-4 dark:border-violet-900/50 dark:bg-violet-950/20">
+                            <div className="rounded-lg border border-brand-magenta/20 bg-brand-magenta/5 p-4 dark:border-brand-magenta/30 dark:bg-brand-magenta/10">
                                 <div className="flex items-start justify-between gap-3">
                                     <div>
-                                        <p className="text-[10px] font-bold uppercase text-violet-700 dark:text-violet-300">Tasa USD/COP</p>
+                                        <p className="text-[10px] font-bold uppercase text-brand-magenta-deep dark:text-brand-magenta-soft">Tasa USD/COP</p>
                                         <p className="mt-1 text-[11px] text-zinc-500 dark:text-zinc-400">
                                             {exchangeRateSource === 'SUPERFINANCIERA_TRM' ? 'TRM oficial' : 'Tasa manual'}
                                             {exchangeRateDate ? ` · ${new Date(exchangeRateDate).toLocaleDateString('es-CO')}` : ''}
@@ -932,7 +957,7 @@ const QuotationForm = () => {
                                         disabled={isLoadingRate}
                                         title="Actualizar TRM oficial"
                                         aria-label="Actualizar TRM oficial"
-                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-violet-200 bg-white text-violet-700 transition-colors hover:bg-violet-100 disabled:opacity-50 dark:border-violet-800 dark:bg-zinc-900 dark:text-violet-300 dark:hover:bg-violet-950"
+                                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-brand-magenta/20 bg-white text-brand-magenta-deep transition-colors hover:bg-brand-magenta/10 disabled:opacity-50 dark:border-brand-magenta/30 dark:bg-zinc-900 dark:text-brand-magenta-soft dark:hover:bg-brand-magenta/20"
                                     >
                                         <RefreshCw className={cn('h-4 w-4', isLoadingRate && 'animate-spin')} />
                                     </button>
@@ -948,7 +973,7 @@ const QuotationForm = () => {
                                             setExchangeRateDate(new Date().toISOString());
                                             setExchangeRateError('');
                                         }}
-                                        className="min-w-0 flex-1 rounded-md border border-violet-200 bg-white px-3 py-2 text-right text-sm font-bold outline-none focus:ring-2 focus:ring-violet-500/20 dark:border-violet-800 dark:bg-zinc-950"
+                                        className="min-w-0 flex-1 rounded-md border border-brand-magenta/20 bg-white px-3 py-2 text-right text-sm font-bold outline-none focus:ring-2 focus:ring-brand-magenta/20 dark:border-brand-magenta/30 dark:bg-zinc-950"
                                     />
                                     <span className="text-xs font-semibold text-zinc-500">COP</span>
                                 </div>
@@ -966,7 +991,7 @@ const QuotationForm = () => {
                                     {activeScenarioTotals.monthlySubtotal > 0 && <div className="flex justify-between"><span className="text-zinc-500">Mensual</span><span>{formatCurrency(activeScenarioTotals.monthlySubtotal)}</span></div>}
                                     {activeScenarioTotals.monthlySubtotal > 0 && durationMonths > 1 && <div className="flex justify-between"><span className="text-zinc-500">{durationMonths} meses × mensualidad</span><span>{formatCurrency(activeScenarioTotals.monthlySubtotal * durationMonths)}</span></div>}
                                     {activeScenarioTotals.oneTimeSubtotal > 0 && <div className="flex justify-between"><span className="text-zinc-500">Pagos únicos</span><span>{formatCurrency(activeScenarioTotals.oneTimeSubtotal)}</span></div>}
-                                    {activeScenarioTotals.discountAmount > 0 && <div className="flex justify-between text-violet-700 dark:text-violet-300"><span>{activeScenario?.discountLabel || 'Descuento'}</span><span>-{formatCurrency(activeScenarioTotals.discountAmount)}</span></div>}
+                                    {activeScenarioTotals.discountAmount > 0 && <div className="flex justify-between text-brand-magenta-deep dark:text-brand-magenta-soft"><span>{activeScenario?.discountLabel || 'Descuento'}</span><span>-{formatCurrency(activeScenarioTotals.discountAmount)}</span></div>}
                                     <div className="flex justify-between font-semibold"><span>Subtotal contractual</span><span>{formatCurrency(activeScenarioTotals.subtotal)}</span></div>
                                     {!effectiveTaxExempt && <div className="flex justify-between"><span className="text-zinc-500">IVA (19%)</span><span>{formatCurrency(activeScenarioTotals.taxAmount)}</span></div>}
                                     {taxLockReason === 'ISSUER' && <p data-quotation-tax-locked="ISSUER" className="text-[11px] leading-4 text-zinc-500">Exenta de IVA: Francisco Villa emite como persona natural.</p>}
@@ -980,7 +1005,7 @@ const QuotationForm = () => {
                             </div>
                             {totals.monthlySubtotal > 0 && durationMonths > 1 && <div className="flex justify-between text-xs"><span className="text-zinc-500">{durationMonths} meses × mensualidad</span><span className="font-medium">{formatCurrency(totals.monthlySubtotal * durationMonths)}</span></div>}
                             {totals.oneTimeSubtotal > 0 && <div className="flex justify-between text-xs"><span className="text-zinc-500">Servicios de pago único</span><span className="font-medium">{formatCurrency(totals.oneTimeSubtotal)}</span></div>}
-                            {totals.discountAmount > 0 && <div className="flex justify-between text-xs text-violet-700 dark:text-violet-300"><span>{discountLabel || 'Descuento'}</span><span className="font-medium">-{formatCurrency(totals.discountAmount)}</span></div>}
+                            {totals.discountAmount > 0 && <div className="flex justify-between text-xs text-brand-magenta-deep dark:text-brand-magenta-soft"><span>{discountLabel || 'Descuento'}</span><span className="font-medium">-{formatCurrency(totals.discountAmount)}</span></div>}
                             <div className="flex justify-between border-t border-zinc-100 pt-3 text-xs dark:border-zinc-800"><span className="text-zinc-500">Subtotal contractual</span><span className="font-medium">{formatCurrency(totals.subtotal)}</span></div>
                             {taxLockReason === 'ISSUER' && (
                                 <div className="text-xs" data-quotation-tax-locked="ISSUER">
@@ -1020,28 +1045,28 @@ const QuotationForm = () => {
                         </div>}
 
                         {selectedItems.length > 0 && (
-                            <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-4 dark:border-emerald-900/50 dark:bg-emerald-950/20">
+                            <div className="rounded-lg border border-brand-green/20 bg-brand-green/5 p-4 dark:border-brand-green/30 dark:bg-brand-green/10">
                                 <div className="flex items-center justify-between gap-3">
                                     <div>
-                                        <p className="text-[10px] font-bold uppercase text-emerald-700 dark:text-emerald-400">Margen estimado</p>
+                                        <p className="text-[10px] font-bold uppercase text-status-positive-fg">Margen estimado</p>
                                         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Solo visible dentro de Brainstudio</p>
                                     </div>
                                     {profitabilityAvailable && profitability.pricedItems > 0 && (
-                                        <span className="text-xl font-black text-emerald-700 dark:text-emerald-400">
+                                        <span className="text-xl font-black text-status-positive-fg">
                                             {profitability.estimatedMargin}%
                                         </span>
                                     )}
                                 </div>
 
                                 {profitabilityAvailable && profitability.pricedItems > 0 ? (
-                                    <div className="mt-4 space-y-2 border-t border-emerald-200/70 pt-3 text-xs dark:border-emerald-900/40">
+                                    <div className="mt-4 space-y-2 border-t border-brand-green/20 pt-3 text-xs dark:border-brand-green/30">
                                         <div className="flex justify-between">
                                             <span className="text-zinc-500">Costo estimado</span>
                                             <span className="font-semibold">{formatCop(profitability.estimatedCost)}</span>
                                         </div>
                                         <div className="flex justify-between">
                                             <span className="text-zinc-500">Ganancia estimada</span>
-                                            <span className="font-bold text-emerald-700 dark:text-emerald-400">{formatCop(profitability.estimatedProfit)}</span>
+                                            <span className="font-bold text-status-positive-fg">{formatCop(profitability.estimatedProfit)}</span>
                                         </div>
                                         {!profitability.hasCompleteCostData && (
                                             <p className="pt-1 text-[10px] leading-relaxed text-amber-700 dark:text-amber-400">
@@ -1050,7 +1075,7 @@ const QuotationForm = () => {
                                         )}
                                     </div>
                                 ) : (
-                                    <p className="mt-3 border-t border-emerald-200/70 pt-3 text-[10px] leading-relaxed text-amber-700 dark:border-emerald-900/40 dark:text-amber-400">
+                                    <p className="mt-3 border-t border-brand-green/20 pt-3 text-[10px] leading-relaxed text-amber-700 dark:border-brand-green/30 dark:text-amber-400">
                                         {profitabilityAvailable ? "Sin costos registrados: no se puede estimar el margen de estos servicios." : "Registra una tasa USD/COP para calcular el margen estimado."}
                                     </p>
                                 )}
@@ -1076,19 +1101,19 @@ const QuotationForm = () => {
                         </div>
 
                         {generatedLink && (
-                            <div className="p-4 bg-green-500/10 border border-green-500/20 rounded-xl space-y-3">
-                                <p className="text-[10px] font-bold text-green-600 dark:text-green-400 uppercase flex items-center gap-2">
+                            <div className="p-4 bg-status-positive/10 border border-status-positive/20 rounded-xl space-y-3">
+                                <p className="text-[10px] font-bold text-status-positive-fg uppercase flex items-center gap-2">
                                     <Globe className="w-3 h-3" /> Enlace Público Generado
                                 </p>
                                 <div className="flex gap-2">
                                     <input
                                         readOnly
                                         value={generatedLink}
-                                        className="flex-1 bg-white dark:bg-zinc-950 text-[10px] border border-green-500/20 rounded-lg px-2 py-1.5 outline-none"
+                                        className="flex-1 bg-white dark:bg-zinc-950 text-[10px] border border-status-positive/20 rounded-lg px-2 py-1.5 outline-none"
                                     />
                                     <button
                                         onClick={copyToClipboard}
-                                        className="p-1.5 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"
+                                        className="p-1.5 bg-brand-green-deep text-white rounded-lg hover:bg-brand-green-deep/90 transition-colors"
                                     >
                                         <Copy className="w-3.5 h-3.5" />
                                     </button>

@@ -188,12 +188,6 @@ export const computeTrafficLight = (lead = {}, activities = [], now = new Date()
 
 // ---- Metrics -----------------------------------------------------------------------------------
 
-const toNumber = value => {
-  if (value === null || value === undefined || value === '') return 0;
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
-};
-
 const count = (items, pick) => items.reduce((acc, item) => {
   const key = pick(item);
   if (key === null || key === undefined) return acc;
@@ -234,6 +228,26 @@ export const computeMetrics = (leads = [], now = new Date()) => {
   const daysToContact = measurable.filter(lead => lead.firstContactAt).map(lead => daysBetween(lead.enteredAt, lead.firstContactAt));
   const daysToWin = measurable.filter(lead => lead.stage === 'GANADO' && lead.closedAt).map(lead => daysBetween(lead.enteredAt, lead.closedAt));
 
+  // Cada oportunidad conserva su moneda. Los campos anteriores siguen siendo COP para sus
+  // consumidores; la pantalla y las lecturas nuevas reciben todas las monedas por separado.
+  // La ausencia de moneda es el COP del registro anterior, no una tasa de cambio implícita.
+  const emptyValues = () => ({ quotedOpenValue: 0, quotedTotalValue: 0, wonValue: 0 });
+  const centsByCurrency = { COP: emptyValues() };
+  for (const lead of leads) {
+    if (lead.quotedValue === null || lead.quotedValue === undefined || lead.quotedValue === '') continue;
+    const value = Number(lead.quotedValue);
+    if (!Number.isFinite(value)) continue;
+    const currency = String(lead.currency || 'COP').toUpperCase();
+    const values = centsByCurrency[currency] ||= emptyValues();
+    const cents = Math.round(value * 100);
+    values.quotedTotalValue += cents;
+    if (isOpenStage(lead.stage)) values.quotedOpenValue += cents;
+    if (lead.stage === 'GANADO') values.wonValue += cents;
+  }
+  const valuesByCurrency = Object.fromEntries(Object.entries(centsByCurrency).map(([currency, values]) => [
+    currency, Object.fromEntries(Object.entries(values).map(([key, cents]) => [key, cents / 100]))
+  ]));
+
   return {
     total: leads.length,
     linkedin: leads.filter(lead => lead.origin === 'LINKEDIN').length,
@@ -251,9 +265,9 @@ export const computeMetrics = (leads = [], now = new Date()) => {
       counts: { entered: leads.length, contacted: contacted.length, meeting: meeting.length, proposal: proposal.length, won: won.length },
       rates: { contacted: rate(contacted.length), meeting: rate(meeting.length), proposal: rate(proposal.length), won: rate(won.length) }
     },
-    quotedOpenValue: leads.filter(lead => isOpenStage(lead.stage)).reduce((sum, lead) => sum + toNumber(lead.quotedValue), 0),
-    quotedTotalValue: leads.reduce((sum, lead) => sum + toNumber(lead.quotedValue), 0),
-    wonValue: won.reduce((sum, lead) => sum + toNumber(lead.quotedValue), 0),
+    ...valuesByCurrency.COP,
+    valueCurrency: 'COP',
+    valuesByCurrency,
     avgDaysToFirstContact: round(average(daysToContact)),
     avgDaysToWin: round(average(daysToWin)),
     followUps

@@ -8,11 +8,12 @@
 import prisma from '../lib/prisma.js';
 import { createNotification } from './notificationService.js';
 import { isWorkingTime } from '../lib/briaNudges.js';
-import { collectionBellText, collectionNoticeText, monthlyCollectionAlert, oneOffCollectionAlerts } from '../lib/receivableCollections.js';
+import { clientCollectionAlerts, collectionBellText, collectionNoticeText } from '../lib/receivableCollections.js';
 import { NOTICE_TRACE_EVENTS, noticeTraceDescription } from '../lib/importantNoticeTrace.js';
 import { queueImportantNotice } from './importantNoticeService.js';
 import { recordOperationalTrace } from './operationalTraceService.js';
 import { activeAreaUserIds } from './teamAreaService.js';
+import { hasCollectionActivitySince } from './collectionActivityService.js';
 import { OPEN_CLIENT_RECEIVABLES, RECEIVABLE_FIELDS, bogotaToday, isMonthlyClient, readCollectionSettings } from './collectionState.js';
 
 export const COLLECTION_ALERT_TYPE = 'CARTERA_VENCIDA';
@@ -72,15 +73,28 @@ export const runCollectionAlerts = async (db = prisma, { now = new Date(), notif
     const outbox = new Map();
     const queue = (userId, type, item) => {
         if (!outbox.has(userId)) outbox.set(userId, { [COLLECTION_ALERT_TYPE]: [], [COLLECTION_RISK_TYPE]: [] });
+        // El PM recibe el riesgo del cliente, no cada cuota: su resumen también debe contar clientes distintos.
+        if (type === COLLECTION_RISK_TYPE && outbox.get(userId)[type].some((queued) => queued.subjectId === item.subjectId)) return;
         outbox.get(userId)[type].push(item);
     };
     let sent = 0;
     for (const client of clients) {
+        // La gestión registrada ya atiende los avisos de ese cliente en la banda. El reloj también la respeta: no
+        // vuelve a pedirle el mismo seguimiento antes de cumplirse el intervalo elegido por Administración.
+        if (await hasCollectionActivitySince(db, client.id, new Date(now.getTime() - settings.repeatDays * 86400000))) continue;
         const monthly = isMonthlyClient(client.contracts);
-        const alerts = monthly
-            ? [monthlyCollectionAlert({ clientId: client.id, receivables: client.accountsReceivables, today, settings })].filter(Boolean)
-            : oneOffCollectionAlerts({ receivables: client.accountsReceivables, today, settings });
+        const alerts = clientCollectionAlerts({ clientId: client.id, receivables: client.accountsReceivables, monthly, today, settings });
         for (const alert of alerts) {
+            // Un pago que baja el número de períodos o corregir una fecha cambia la clave del ciclo, pero no es otra
+            // urgencia. Respeta el intervalo desde el último aviso real, incluso con claves anteriores al ajuste.
+            // Un período vencido adicional sí conserva el aviso inmediato que ya tenía el protocolo.
+            const previous = await db.collectionAlert.findFirst({
+                where: { subjectId: alert.subjectId, kind: alert.kind }, orderBy: { sentAt: 'desc' },
+                select: { cycle: true, sentAt: true }
+            });
+            const previousCount = Number(/^M(\d+):/.exec(previous?.cycle || '')?.[1]);
+            const increased = alert.kind === 'MENSUAL' && Number.isFinite(previousCount) && alert.count > previousCount;
+            if (previous && !increased && now.getTime() - new Date(previous.sentAt).getTime() < settings.repeatDays * 86400000) continue;
             try {
                 await db.collectionAlert.create({ data: { subjectId: alert.subjectId, kind: alert.kind, cycle: alert.cycle, step: alert.step, sentAt: now } });
             } catch (error) {
@@ -98,7 +112,7 @@ export const runCollectionAlerts = async (db = prisma, { now = new Date(), notif
             }
             const pm = client.projectManager?.userId;
             if (pm && !administrative.includes(pm) && !direction.includes(pm)) {
-                queue(pm, COLLECTION_RISK_TYPE, { subjectId: alert.subjectId, who: client.name, message: collectionBellText(alert, client.name, 'PM'), url: client.slug ? `/clientes/operacion/${client.slug}` : '/clientes' });
+                queue(pm, COLLECTION_RISK_TYPE, { subjectId: client.id, who: client.name, message: collectionBellText(alert, client.name, 'PM'), url: client.slug ? `/clientes/operacion/${client.slug}` : '/clientes' });
             }
         }
     }

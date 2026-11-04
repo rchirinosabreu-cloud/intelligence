@@ -61,10 +61,11 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
   const thirdParties = thirdPartiesData?.thirdParties || [];
 
   const close = () => { setDialog(null); setError(''); };
-  const run = async (request, { success, keepOpen = false } = {}) => {
+  const run = async (request, { success, keepOpen = false, onCommitted } = {}) => {
     setSaving(true); setError('');
     try {
       const { data } = await request();
+      onCommitted?.();
       await invalidateFinancialQueries(queryClient);
       toast.success(data?.message || success);
       if (!keepOpen) close();
@@ -76,9 +77,9 @@ export default function PayablesTab({ filterQuery, formatCurrency, accounts = []
     } finally { setSaving(false); }
   };
 
-  const saveThirdParty = (form) => run(() => (form.id ? axios.patch(apiUrl(`/third-parties/${form.id}`), form, authed()) : axios.post(apiUrl('/third-parties'), form, authed())), { success: 'Tercero guardado.' })
+  const saveThirdParty = (form, onCommitted) => run(() => (form.id ? axios.patch(apiUrl(`/third-parties/${form.id}`), form, authed()) : axios.post(apiUrl('/third-parties'), form, authed())), { success: 'Tercero guardado.', onCommitted })
     .then((data) => { if (data?.thirdParty && dialog?.returnTo === 'payable') setDialog({ kind: 'payable', defaultThirdPartyId: data.thirdParty.id }); });
-  const savePayable = (form) => run(() => (dialog?.payable ? axios.patch(apiUrl(`/payables/${dialog.payable.id}`), form, authed()) : axios.post(apiUrl('/payables'), form, authed())), { success: 'Cuenta por pagar registrada.' });
+  const savePayable = (form, onCommitted) => run(() => (dialog?.payable ? axios.patch(apiUrl(`/payables/${dialog.payable.id}`), form, authed()) : axios.post(apiUrl('/payables'), form, authed())), { success: 'Cuenta por pagar registrada.', onCommitted });
   const pay = async (form) => {
     const { file, ...payload } = form;
     const data = await run(() => axios.post(apiUrl(`/payables/${dialog.payable.id}/payments`), payload, authed()), { success: 'Pago registrado.' });

@@ -133,3 +133,29 @@ test('metrics: counts, funnel, values, averages and follow-up buckets', () => {
   assert.equal(metrics.avgDaysToWin, 20);
   assert.deepEqual(metrics.followUps, { VENCIDO: 1, HOY: 1, SEMANA: 0, SIN_FECHA: 1 });
 });
+
+test('metrics keep COP and USD separate, including decimals and existing COP consumers', () => {
+  const metrics = computeMetrics([
+    { stage: 'GANADO', currency: 'COP', quotedValue: '1000000' },
+    { stage: 'GANADO', currency: 'USD', quotedValue: '1000.25' },
+    { stage: 'PROPUESTA_ENVIADA', currency: 'USD', quotedValue: '12.10' },
+    { stage: 'PROPUESTA_ENVIADA', currency: 'USD', quotedValue: '0.20' },
+    { stage: 'PROPUESTA_ENVIADA', quotedValue: '250000' },
+    { stage: 'POR_GESTIONAR', currency: 'USD', quotedValue: null }
+  ], NOW);
+  assert.equal(metrics.quotedTotalValue, 1250000, 'the compatible total is COP only, never pesos plus dollars');
+  assert.equal(metrics.quotedOpenValue, 250000);
+  assert.equal(metrics.wonValue, 1000000);
+  assert.equal(metrics.valueCurrency, 'COP');
+  assert.deepEqual(metrics.valuesByCurrency, {
+    COP: { quotedOpenValue: 250000, quotedTotalValue: 1250000, wonValue: 1000000 },
+    USD: { quotedOpenValue: 12.3, quotedTotalValue: 1012.55, wonValue: 1000.25 }
+  });
+  assert.equal(metrics.won, 2, 'counts still cover both currencies');
+});
+
+test('metrics do not create dollar totals for an unpriced opportunity', () => {
+  assert.deepEqual(computeMetrics([{ stage: 'POR_GESTIONAR', currency: 'USD', quotedValue: null }], NOW).valuesByCurrency, {
+    COP: { quotedOpenValue: 0, quotedTotalValue: 0, wonValue: 0 }
+  });
+});

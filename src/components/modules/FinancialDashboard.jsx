@@ -440,7 +440,7 @@ const FinancialDashboard = () => {
         }
     };
 
-    const handleCreateLoan = async (payload) => {
+    const handleCreateLoan = async (payload, onCommitted) => {
         if (isSavingLoan || !canWriteFinancials) return;
         setIsSavingLoan(true);
         setNoticeError('');
@@ -449,6 +449,7 @@ const FinancialDashboard = () => {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
             const { data: result } = await axios.post(`${baseUrl}/api/financials/loans`, payload, { headers: { Authorization: `Bearer ${token}` } });
+            onCommitted?.();
             await invalidateFinancialQueries(queryClient);
             setIsLoanDialogOpen(false);
             setNoticeSuccess(result?.message || 'Préstamo registrado en Cuentas por cobrar.');
@@ -486,7 +487,7 @@ const FinancialDashboard = () => {
         setSettlementDebt(debt);
     };
 
-    const handleReceivableSettlement = async (payload) => {
+    const handleReceivableSettlement = async (payload, onCommitted) => {
         if (!settlementDebt?.id || isSavingSettlement || !canWriteFinancials) return;
         setIsSavingSettlement(true);
         setNoticeError('');
@@ -495,6 +496,7 @@ const FinancialDashboard = () => {
             const baseUrl = getApiBaseUrl();
             const token = localStorage.getItem('authToken');
             const { data: result } = await axios.post(`${baseUrl}/api/financials/receivables/${settlementDebt.id}/settlements`, payload, { headers: { Authorization: `Bearer ${token}` } });
+            onCommitted?.();
             await invalidateFinancialQueries(queryClient);
             setSettlementDebt(null);
             setNoticeSuccess(result?.message || 'Ajuste registrado. No se creó ningún ingreso.');

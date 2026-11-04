@@ -2,7 +2,7 @@
 // un aviso sigue haciendo falta. Aparte del reloj que avisa para que la banda lo pueda consultar sin depender de él.
 import prisma from '../lib/prisma.js';
 import {
-    DEFAULT_COLLECTION_SETTINGS, monthlyCollectionAlert, normalizeCollectionSettings, openBalanceCents
+    DEFAULT_COLLECTION_SETTINGS, clientCollectionAlerts, collectionNoticeText, normalizeCollectionSettings, openBalanceCents
 } from '../lib/receivableCollections.js';
 import { suspensionCandidate } from '../lib/clientSuspension.js';
 import { hasCollectionActivitySince } from './collectionActivityService.js';
@@ -36,20 +36,25 @@ export const RECEIVABLE_FIELDS = Object.freeze({
     payments: { select: { amount: true, reversedAt: true, kind: true } }
 });
 
-/** ¿Fee mensual? Si el contrato más reciente del cliente es de parrilla. Sin contrato, o de servicios, es puntual. */
+/** Cadencia heredada del cliente. No acredita la modalidad de cada cuenta ni de las cuotas de una propuesta. */
 export const isMonthlyClient = (contracts = []) => {
     const latest = [...contracts].sort((a, b) => String(b.startDate).localeCompare(String(a.startDate)))[0];
     return latest?.serviceType === 'PARRILLA';
 };
 
 /**
- * ¿Sigue haciendo falta el aviso de cartera? null si sí; si no, por qué. Una mensualidad que se pagó y deja al cliente
- * por debajo del umbral, o la cuenta puntual que ya no debe nada, salen solas de la banda.
+ * ¿Sigue haciendo falta el aviso? null si está vigente y actualizado; `refresh` corrige solo su texto y nivel sin
+ * reemplazarlo ni perder la pausa; `reason` lo retira. La banda usa exactamente el mismo cálculo que el reloj.
  */
 export const collectionStillDue = async (db, notice, now = new Date()) => {
     const settings = await readCollectionSettings(db);
     // Como en el CRM (28 de octubre de 2026): una gestión de cobro registrada después del aviso lo saca de la banda.
     const handled = async (clientId, subject) => (await hasCollectionActivitySince(db, clientId, notice.createdAt) ? { reason: 'GESTION', subject } : null);
+    const currentText = (alert, subject) => {
+        const { message, label, level } = collectionNoticeText(alert, subject);
+        return notice.message === message && notice.label === label && notice.level === level
+            ? null : { refresh: { message, label, level } };
+    };
     // La propuesta de suspender sale sola de la banda si ya se decidió —el cliente quedó suspendido— o si se puso al
     // día. Es una propuesta: que nadie la atienda no la convierte en suspensión.
     if (notice.kind === 'CARTERA_SUSPENSION') {
@@ -69,15 +74,19 @@ export const collectionStillDue = async (db, notice, now = new Date()) => {
     if (notice.kind === 'CARTERA_MENSUAL') {
         const client = await db.client.findUnique({
             where: { id: notice.subjectId },
-            select: { name: true, accountsReceivables: { where: OPEN_CLIENT_RECEIVABLES, select: RECEIVABLE_FIELDS } }
+            select: { name: true, contracts: { select: { serviceType: true, startDate: true } }, accountsReceivables: { where: OPEN_CLIENT_RECEIVABLES, select: RECEIVABLE_FIELDS } }
         });
-        const still = client && monthlyCollectionAlert({ clientId: notice.subjectId, receivables: client.accountsReceivables, today: bogotaToday(now), settings });
-        return still ? handled(notice.subjectId, client.name) : { reason: 'AL_DIA', subject: client?.name || null };
+        const still = client && clientCollectionAlerts({ clientId: notice.subjectId, monthly: isMonthlyClient(client.contracts),
+            receivables: client.accountsReceivables, today: bogotaToday(now), settings }).find((alert) => alert.kind === 'MENSUAL');
+        if (!still) return { reason: 'RECALCULADO', subject: client?.name || null };
+        return (await handled(notice.subjectId, client.name)) || currentText(still, client.name);
     }
     const receivable = await db.accountsReceivable.findUnique({
         where: { id: notice.subjectId }, select: { ...RECEIVABLE_FIELDS, clientId: true, client: { select: { name: true } } }
     });
-    return receivable && openBalanceCents(receivable) > 0
-        ? handled(receivable.clientId, receivable.client?.name || null)
-        : { reason: 'AL_DIA', subject: receivable?.client?.name || null };
+    const subject = receivable?.client?.name || null;
+    if (!receivable || openBalanceCents(receivable) <= 0) return { reason: 'AL_DIA', subject };
+    const still = clientCollectionAlerts({ receivables: [receivable], today: bogotaToday(now), settings })[0];
+    if (!still) return { reason: 'RECALCULADO', subject };
+    return (await handled(receivable.clientId, subject)) || currentText(still, subject);
 };

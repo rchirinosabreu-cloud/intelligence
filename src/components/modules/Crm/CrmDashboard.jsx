@@ -7,7 +7,7 @@ import CrmStatCard from './CrmStatCard';
 import CrmFilters from './CrmFilters';
 import { useCrmMetrics } from './crmApi';
 import {
-  StageBadge, TrafficLightBadge, TrafficLightDot, FollowUpLabel, formatCurrency, formatCompact, formatPercent, formatDays,
+  StageBadge, TrafficLightBadge, TrafficLightDot, FollowUpLabel, formatPercent, formatDays,
   formatDate, originLabel, stageLabel, leadTitle, leadSubtitle, trafficLightLabel
 } from './crmPresentation';
 
@@ -40,6 +40,15 @@ const Bar = ({ label, value, total, tone = 'bg-brand-cyan', suffix }) => {
 };
 
 const lightTones = { VERDE: 'bg-status-positive', AMARILLO: 'bg-status-attention', ROJO: 'bg-destructive' };
+
+// El código de moneda siempre acompaña a la cifra: $ por sí solo no distingue pesos de dólares.
+const moneyValues = (metrics, key) => Object.entries(metrics.valuesByCurrency || { COP: metrics })
+  .map(([currency, values]) => ({ currency, text: `${currency} ${new Intl.NumberFormat('es-CO', {
+    minimumFractionDigits: currency === 'USD' ? 2 : 0, maximumFractionDigits: 2
+  }).format(Number(values[key]) || 0)}` }));
+const MoneyValues = ({ metrics, metric }) => <span data-crm-value={metric} className="block text-right">
+  {moneyValues(metrics, metric).map(({ currency, text }) => <span key={currency} className="block">{text}</span>)}
+</span>;
 
 const Skeleton = () => (
   <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
@@ -95,7 +104,7 @@ const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab })
               </div>
               <ul className="grid gap-2 md:grid-cols-2">
                 {metrics.recentRequests.map(lead => (
-                  <li key={lead.id}>
+                  <li key={lead.id} className="min-w-0">
                     <button type="button" onClick={() => onOpenLead?.(lead.id)} className="flex w-full items-start justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left transition-colors hover:border-brand-magenta/40 dark:border-zinc-800 dark:bg-zinc-950">
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{leadTitle(lead)}</span>
@@ -120,7 +129,7 @@ const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab })
               </div>
               <ul className="grid gap-2 md:grid-cols-2">
                 {metrics.recentFresh.map(lead => (
-                  <li key={lead.id}>
+                  <li key={lead.id} className="min-w-0">
                     <button type="button" onClick={() => onOpenLead?.(lead.id)} className="flex w-full items-start justify-between gap-3 rounded-xl border border-zinc-200 bg-white px-4 py-3 text-left transition-colors hover:border-brand-cyan/40 dark:border-zinc-800 dark:bg-zinc-950">
                       <span className="min-w-0">
                         <span className="block truncate text-sm font-semibold text-zinc-900 dark:text-zinc-50">{leadTitle(lead)}</span>
@@ -136,9 +145,9 @@ const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab })
 
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Números principales">
             <CrmStatCard tone="hero" icon={Users} label="Total de leads" value={total} detail={`LinkedIn ${metrics.linkedin} · Brain Studio ${metrics.brainStudio}`} />
-            <CrmStatCard icon={Target} label="Oportunidades abiertas" value={metrics.open} detail={`${formatCurrency(metrics.quotedOpenValue)} cotizado en pipeline`} onClick={() => onShowTab?.('oportunidades')} />
+            <CrmStatCard icon={Target} label="Oportunidades abiertas" value={metrics.open} detail={`${moneyValues(metrics, 'quotedOpenValue').map(value => value.text).join(' · ')} cotizado en pipeline`} onClick={() => onShowTab?.('oportunidades')} />
             <CrmStatCard tone="positive" icon={CheckCircle2} label="Aprobadas por formalizar" value={metrics.approved} detail="Contrato, pago inicial y onboarding pendientes" />
-            <CrmStatCard tone="magenta" icon={Trophy} label="Ganadas" value={metrics.won} detail={`${formatCurrency(metrics.wonValue)} · ${metrics.lost} perdidas o descartadas`} />
+            <CrmStatCard tone="magenta" icon={Trophy} label="Ganadas" value={metrics.won} detail={`${moneyValues(metrics, 'wonValue').map(value => value.text).join(' · ')} · ${metrics.lost} perdidas o descartadas`} />
           </section>
 
           <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Semáforo y seguimientos">
@@ -179,20 +188,20 @@ const CrmDashboard = ({ filters, onFiltersChange, team, onOpenLead, onShowTab })
 
             <Panel title="Valor" description="Lo cotizado y lo ganado dentro del filtro actual.">
               <dl className="space-y-4">
-                <div className="flex items-end justify-between gap-3">
+                <div className="flex flex-wrap items-end justify-between gap-3">
                   <dt className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Pipeline abierto</dt>
-                  <dd className="text-2xl font-bold tabular-nums text-zinc-950 dark:text-zinc-50" title={formatCurrency(metrics.quotedOpenValue)}>{formatCompact(metrics.quotedOpenValue)}</dd>
+                  <dd className="ml-auto text-lg font-bold tabular-nums text-zinc-950 dark:text-zinc-50"><MoneyValues metrics={metrics} metric="quotedOpenValue" /></dd>
                 </div>
-                <div className="flex items-end justify-between gap-3">
+                <div className="flex flex-wrap items-end justify-between gap-3">
                   <dt className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Cotizado total</dt>
-                  <dd className="text-2xl font-bold tabular-nums text-zinc-950 dark:text-zinc-50" title={formatCurrency(metrics.quotedTotalValue)}>{formatCompact(metrics.quotedTotalValue)}</dd>
+                  <dd className="ml-auto text-lg font-bold tabular-nums text-zinc-950 dark:text-zinc-50"><MoneyValues metrics={metrics} metric="quotedTotalValue" /></dd>
                 </div>
-                <div className="flex items-end justify-between gap-3 rounded-xl bg-brand-green/10 px-3 py-2">
+                <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl bg-brand-green/10 px-3 py-2">
                   <dt className="flex items-center gap-1.5 text-xs font-semibold text-brand-green-deep dark:text-brand-green"><DollarSign className="h-3.5 w-3.5" /> Ganado</dt>
-                  <dd className="text-2xl font-bold tabular-nums text-brand-green-deep dark:text-brand-green" title={formatCurrency(metrics.wonValue)}>{formatCompact(metrics.wonValue)}</dd>
+                  <dd className="ml-auto text-lg font-bold tabular-nums text-brand-green-deep dark:text-brand-green"><MoneyValues metrics={metrics} metric="wonValue" /></dd>
                 </div>
               </dl>
-              <p className="mt-4 text-[11px] leading-5 text-zinc-500 dark:text-zinc-400">Valores en COP. Solo cuentan los leads con valor cotizado registrado.</p>
+              <p className="mt-4 text-[11px] leading-5 text-zinc-500 dark:text-zinc-400">Valores cotizados por moneda, sin conversión. Solo cuentan las oportunidades con valor registrado; no son pagos recibidos.</p>
             </Panel>
           </section>
 

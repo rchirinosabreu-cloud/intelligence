@@ -1,0 +1,82 @@
+import assert from 'node:assert/strict';
+import { chromium } from 'playwright-core';
+
+const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+const base = process.env.QUOTATION_DEMO_URL || 'http://127.0.0.1:3007/tests/fixtures/quotation-proposal.html';
+try {
+  const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+  page.setDefaultNavigationTimeout(90000); // El primer acceso compila la muestra local de Vite.
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await page.addInitScript(() => localStorage.setItem('currentUser', JSON.stringify({ id: 'draft-test-user' })));
+  await page.goto(`${base}?view=new`, { waitUntil: 'domcontentloaded' });
+  await page.getByPlaceholder('Ej: Acme Corp SAS').fill('Empresa del borrador');
+  await page.getByRole('button', { name: 'Añadir servicio personalizado', exact: true }).click();
+  await page.getByLabel('Nombre del servicio 1').fill('Servicio sin guardar');
+  await page.getByPlaceholder('Escribe una condición específica...').fill('Condición que debe sobrevivir');
+  await page.getByRole('button', { name: 'Añadir cláusula personalizada' }).click();
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  assert.equal(await page.getByPlaceholder('Ej: Acme Corp SAS').inputValue(), 'Empresa del borrador', 'recupera la propuesta tras recargar');
+  assert.match(await page.getByLabel('Nombre del servicio 1').inputValue(), /^Servicio sin guardar$/i);
+  assert.ok((await page.locator('textarea').evaluateAll(nodes => nodes.map(node => node.value))).includes('Condición que debe sobrevivir'), 'recupera las condiciones de la propuesta');
+  assert.deepEqual(await page.evaluate(() => window.__quotationDemoCalls()), [], 'recuperar no escribe en el servidor');
+  await page.getByRole('button', { name: 'Guardar como Borrador' }).click();
+  await page.getByText('Borrador guardado', { exact: true }).waitFor();
+  await page.getByPlaceholder('Ej: Acme Corp SAS').fill('Empresa corregida');
+  assert.equal(await page.evaluate(() => localStorage.getItem('brain.formDraft.v1.draft-test-user.quotation%3Anew')), null, 'los efectos de navegación no recrean el borrador nuevo que ya se guardó');
+  // La aplicación cambia a /cotizaciones/editar/:id. El MemoryRouter de esta muestra
+  // abre esa misma cotización al entrar sin view=new.
+  await page.goto(base, { waitUntil: 'domcontentloaded' });
+  await page.getByPlaceholder('Ej: Acme Corp SAS').waitFor();
+  assert.equal(await page.getByPlaceholder('Ej: Acme Corp SAS').inputValue(), 'Empresa corregida');
+  await page.getByRole('button', { name: 'Guardar como Borrador' }).click();
+  await page.getByText('Borrador guardado', { exact: true }).waitFor();
+  assert.deepEqual(await page.evaluate(() => window.__quotationDemoCalls()), ['PUT /api/quotations/local-sunpartners'], 'recuperar conserva la identidad ya guardada');
+  await page.getByPlaceholder('Escribe para buscar un servicio...').fill('Servicio por terminar');
+  await page.getByRole('button', { name: /Crear .* como nuevo servicio/ }).click();
+  const service = page.getByRole('dialog');
+  await service.getByPlaceholder('220.000').fill('123456');
+  await service.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await page.getByRole('button', { name: /Crear .* como nuevo servicio/ }).click();
+  assert.equal(await service.getByPlaceholder('220.000').inputValue(), '123.456', 'el servicio conserva el borrador al cerrar');
+  await service.getByRole('button', { name: 'Cancelar', exact: true }).click();
+  await page.getByPlaceholder('Escribe una condición específica...').fill('Cláusula que voy a descartar');
+  await page.getByRole('button', { name: 'Añadir cláusula personalizada' }).click();
+  await page.getByRole('button', { name: 'Descartar borrador', exact: true }).click();
+  assert.ok(!(await page.locator('textarea').evaluateAll(nodes => nodes.map(node => node.value))).includes('Cláusula que voy a descartar'), 'descartar también retira los términos locales');
+  await page.getByPlaceholder('Ej: Acme Corp SAS').fill('Cambio local pendiente');
+  const originalDraft = await page.evaluate(() => {
+    const remote = JSON.parse(sessionStorage.getItem('quotation-proposal-demo'));
+    remote.updated_at = '2026-11-04T18:00:00Z'; remote.client_company = 'Cambio remoto confirmado';
+    sessionStorage.setItem('quotation-proposal-demo', JSON.stringify(remote));
+    return localStorage.getItem('brain.formDraft.v1.draft-test-user.quotation%3Alocal-sunpartners');
+  });
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByRole('button', { name: 'Recuperar borrador', exact: true }).waitFor();
+  assert.equal(await page.getByPlaceholder('Ej: Acme Corp SAS').inputValue(), 'Cambio remoto confirmado', 'el borrador anterior no se aplica automáticamente sobre la revisión remota');
+  assert.equal(await page.getByPlaceholder('Ej: Acme Corp SAS').evaluate(node => !!node.closest('[inert]')), true, 'se elige la copia antes de editar');
+  assert.equal(await page.evaluate(() => localStorage.getItem('brain.formDraft.v1.draft-test-user.quotation%3Alocal-sunpartners')), originalDraft, 'los efectos del formulario no borran el trabajo en conflicto');
+  await page.getByRole('button', { name: 'Recuperar borrador', exact: true }).click();
+  assert.equal(await page.getByPlaceholder('Ej: Acme Corp SAS').inputValue(), 'Cambio local pendiente');
+  assert.deepEqual(await page.evaluate(() => window.__quotationDemoCalls()), [], 'elegir recuperar no confirma cambios remotos');
+  await page.getByRole('button', { name: 'Descartar borrador', exact: true }).click();
+  assert.equal(await page.getByPlaceholder('Ej: Acme Corp SAS').inputValue(), 'Cambio remoto confirmado', 'descartar vuelve a la revisión vigente');
+  await page.getByPlaceholder('Ej: Acme Corp SAS').fill('Texto después de un error');
+  await page.evaluate(() => history.replaceState(null, '', `${location.pathname}?saveError=1`));
+  await page.getByRole('button', { name: 'Guardar como Borrador' }).click();
+  await page.getByText('Error de guardado simulado', { exact: true }).waitFor();
+  await page.reload({ waitUntil: 'domcontentloaded' });
+  await page.getByPlaceholder('Ej: Acme Corp SAS').waitFor();
+  assert.equal(await page.getByPlaceholder('Ej: Acme Corp SAS').inputValue(), 'Texto después de un error', 'un rechazo del servidor conserva lo escrito');
+  await page.goto(`${base}?view=new`, { waitUntil: 'domcontentloaded' });
+  await page.getByPlaceholder('Ej: Acme Corp SAS').fill('Nueva propuesta emitida');
+  await page.getByPlaceholder('Ej: Juan Pérez').fill('Contacto de prueba');
+  await page.getByPlaceholder('+57 300 0000000').fill('3000000000');
+  await page.getByRole('button', { name: 'Añadir servicio personalizado', exact: true }).click();
+  await page.getByLabel('Nombre del servicio 1').fill('Servicio emitido');
+  await page.getByRole('button', { name: 'Emitir Propuesta', exact: true }).click();
+  await page.getByRole('heading', { name: 'Propuesta Generada', exact: true }).waitFor();
+  assert.deepEqual(await page.evaluate(() => window.__quotationDemoCalls()), ['POST /api/quotations'], 'la nueva dirección conserva la confirmación de emisión');
+  assert.deepEqual(errors, []);
+  console.log('OK: recuperación de propuesta sin duplicar ni emitir');
+} finally { await browser.close(); }
